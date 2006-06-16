@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
---- iam.orig/fs/ext3/Makefile	2006-06-08 21:50:42.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-06-08 21:50:42.000000000 +0400
+--- iam.orig/fs/ext3/Makefile	2006-06-16 14:39:59.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-06-16 14:40:00.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -13,8 +13,8 @@ Index: iam/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
 Index: iam/fs/ext3/file.c
 ===================================================================
---- iam.orig/fs/ext3/file.c	2006-06-08 21:50:42.000000000 +0400
-+++ iam/fs/ext3/file.c	2006-06-08 21:50:42.000000000 +0400
+--- iam.orig/fs/ext3/file.c	2006-06-16 14:39:59.000000000 +0400
++++ iam/fs/ext3/file.c	2006-06-16 14:40:00.000000000 +0400
 @@ -23,6 +23,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -50,8 +50,8 @@ Index: iam/fs/ext3/file.c
 Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
 --- iam.orig/fs/ext3/iam-uapi.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam-uapi.c	2006-06-08 21:50:42.000000000 +0400
-@@ -0,0 +1,349 @@
++++ iam/fs/ext3/iam-uapi.c	2006-06-16 14:40:00.000000000 +0400
+@@ -0,0 +1,348 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -126,8 +126,7 @@ Index: iam/fs/ext3/iam-uapi.c
 +                        result = iam_it_get(it, itop->iui_op.iul_key);
 +                break;
 +        case IAM_IOC_IT_NEXT:
-+                if (st == IAM_IT_ATTACHED ||
-+                    st == IAM_IT_BEFORE || st == IAM_IT_EMPTY)
++                if (st == IAM_IT_ATTACHED || st == IAM_IT_SKEWED)
 +                        result = iam_it_next(it);
 +                else
 +                        result = -EBUSY;
@@ -139,7 +138,7 @@ Index: iam/fs/ext3/iam-uapi.c
 +                break;
 +        }
 +        st = it->ii_state;
-+        if (st == IAM_IT_ATTACHED || st == IAM_IT_BEFORE)
++        if (st == IAM_IT_ATTACHED || st == IAM_IT_SKEWED)
 +                iam_keycpy0(&ipi->ipi_bag, itop->iui_op.iul_key,
 +                            iam_it_key_get(it, itop->iui_op.iul_key));
 +        if (st == IAM_IT_ATTACHED)
@@ -403,8 +402,8 @@ Index: iam/fs/ext3/iam-uapi.c
 +}
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- iam.orig/include/linux/lustre_iam.h	2006-06-08 21:50:42.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-06-08 21:50:42.000000000 +0400
+--- iam.orig/include/linux/lustre_iam.h	2006-06-16 14:39:59.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-06-16 14:40:00.000000000 +0400
 @@ -30,9 +30,6 @@
  #ifndef __LINUX_LUSTRE_IAM_H__
  #define __LINUX_LUSTRE_IAM_H__
@@ -443,10 +442,13 @@ Index: iam/include/linux/lustre_iam.h
  typedef __u64 iam_ptr_t;
  
  /*
-@@ -123,6 +124,21 @@ struct iam_leaf {
+@@ -123,6 +124,27 @@ struct iam_leaf {
  	void               *il_descr_data;
  };
  
++/*
++ * Return values of ->lookup() operation from struct iam_leaf_operations.
++ */
 +enum iam_lookup_t {
 +        /*
 +         * lookup positioned leaf on some record
@@ -462,10 +464,13 @@ Index: iam/include/linux/lustre_iam.h
 +        IAM_LOOKUP_BEFORE
 +};
 +
++/*
++ * Format-specific container operations. These are called by generic iam code.
++ */
  struct iam_operations {
  	/*
  	 * Returns pointer (in the same sense as pointer in index entry) to
-@@ -131,11 +147,15 @@ struct iam_operations {
+@@ -131,11 +153,15 @@ struct iam_operations {
  	__u32 (*id_root_ptr)(struct iam_container *c);
  
  	/*
@@ -483,8 +488,12 @@ Index: iam/include/linux/lustre_iam.h
  	 * Initialize new node (stored in @bh) that is going to be added into
  	 * tree.
  	 */
-@@ -155,6 +175,10 @@ struct iam_operations {
- 	 * contains single record with the smallest possible key.
+@@ -152,15 +178,25 @@ struct iam_operations {
+ 	 * Create new container.
+ 	 *
+ 	 * Newly created container has a root node and a single leaf. Leaf
+-	 * contains single record with the smallest possible key.
++	 * contains single record with the least possible key.
  	 */
  	int (*id_create)(struct iam_container *c);
 +	/*
@@ -494,7 +503,19 @@ Index: iam/include/linux/lustre_iam.h
          /*
           * Format name.
           */
-@@ -226,7 +250,8 @@ struct iam_leaf_operations {
+         char id_name[DX_FMT_NAME_LEN];
+ };
+ 
++/*
++ * Another format-specific operation vector, consisting of methods to access
++ * leaf nodes. This is separated from struct iam_operations, because it is
++ * assumed that there will be many formats with different format of leaf
++ * nodes, yes the same struct iam_operations.
++ */
+ struct iam_leaf_operations {
+         /*
+          * leaf operations.
+@@ -226,7 +262,8 @@ struct iam_leaf_operations {
           * split leaf node, moving some entries into @bh (the latter currently
           * is assumed to be empty).
           */
@@ -504,22 +525,134 @@ Index: iam/include/linux/lustre_iam.h
  };
  
  struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
-@@ -347,7 +372,13 @@ enum iam_it_state {
+@@ -264,6 +301,9 @@ struct iam_descr {
+         struct iam_leaf_operations      *id_leaf_ops;
+ };
+ 
++/*
++ * An instance of iam container.
++ */
+ struct iam_container {
+ 	/*
+ 	 * Underlying flat file. IO against this object is issued to
+@@ -347,7 +387,9 @@ enum iam_it_state {
  	/* initial state */
  	IAM_IT_DETACHED,
  	/* iterator is above particular record in the container */
 -	IAM_IT_ATTACHED
 +	IAM_IT_ATTACHED,
-+        /* iterator landed into empty leaf */
-+        IAM_IT_EMPTY,
-+        /* iterator is positioned before first record in the leaf */
-+        IAM_IT_BEFORE,
-+        /* end of container reached */
-+        IAM_IT_EOC
++        /* iterator is positioned before record  */
++        IAM_IT_SKEWED
  };
  
  /*
-@@ -468,7 +499,7 @@ int iam_it_next(struct iam_iterator *it)
+@@ -355,7 +397,7 @@ enum iam_it_state {
+  */
+ enum iam_it_flags {
+ 	/*
+-	 * this iterator will move (iam_it_{prev,next}() will be called on it)
++	 * this iterator will move (iam_it_next() will be called on it)
+ 	 */
+ 	IAM_IT_MOVE  = (1 << 0),
+ 	/*
+@@ -372,15 +414,26 @@ enum iam_it_flags {
+  * doesn't point to any particular record in this container.
+  *
+  * After successful call to iam_it_get() and until corresponding call to
+- * iam_it_put() iterator is in "attached" state (IAM_IT_ATTACHED).
++ * iam_it_put() iterator is in one of "active" states: IAM_IT_ATTACHED or
++ * IAM_IT_SKEWED.
+  *
+- * Attached iterator can move through records in a container (provided
++ * Active iterator can move through records in a container (provided
+  * IAM_IT_MOVE permission) in a key order, can get record and key values as it
+  * passes over them, and can modify container (provided IAM_IT_WRITE
+  * permission).
+  *
++ * Iteration may reach the end of container, at which point iterator switches
++ * into IAM_IT_DETACHED state.
++ *
+  * Concurrency: iterators are supposed to be local to thread. Interfaces below
+- * do no internal serialization.
++ * do no internal serialization of access to the iterator fields.
++ *
++ * When in non-detached state, iterator keeps some container nodes pinned in
++ * memory and locked (that locking may be implemented at the container
++ * granularity though). In particular, clients may assume that pointers to
++ * records and keys obtained through iterator interface as valid until
++ * iterator is detached (except that they may be invalidated by sub-sequent
++ * operations done through the same iterator).
+  *
+  */
+ struct iam_iterator {
+@@ -390,7 +443,8 @@ struct iam_iterator {
+ 	__u32                 ii_flags;
+ 	enum iam_it_state     ii_state;
+ 	/*
+-	 * path to the record. Valid in IAM_IT_ATTACHED state.
++	 * path to the record. Valid in IAM_IT_ATTACHED, and IAM_IT_SKEWED
++	 * states.
+ 	 */
+ 	struct iam_path       ii_path;
+ };
+@@ -420,27 +474,37 @@ int  iam_it_init(struct iam_iterator *it
+ void iam_it_fini(struct iam_iterator *it);
+ 
+ /*
+- * Attach iterator. After successful completion, @it points to record with the
+- * largest key not larger than @k. Semantics of ->id_create() method guarantee
+- * that such record will always be found.
++ * Attach iterator. After successful completion, @it points to record with
++ * smallest key not larger than @k.
+  *
+  * Return value: 0: positioned on existing record,
+  *             -ve: error.
+  *
+  * precondition:  it_state(it) == IAM_IT_DETACHED
+- * postcondition: ergo(result == 0,
+- *                     (it_state(it) == IAM_IT_ATTACHED &&
+- *                      it_keycmp(it, iam_it_key_get(it, *), k) < 0))
++ * postcondition: ergo(result == 0 && it_state(it) == IAM_IT_ATTACHED,
++ *                     it_keycmp(it, iam_it_key_get(it, *), k) <= 0)
+  */
+ int iam_it_get(struct iam_iterator *it, const struct iam_key *k);
+ 
+ /*
++ * Attach iterator, and assure it points to the record (not skewed).
++ *
++ * Return value: 0: positioned on existing record,
++ *             -ve: error.
++ *
++ * precondition:  it_state(it) == IAM_IT_DETACHED &&
++ *                !(it->ii_flags&IAM_IT_WRITE)
++ * postcondition: ergo(result == 0, it_state(it) == IAM_IT_ATTACHED)
++ */
++int iam_it_get_at(struct iam_iterator *it, const struct iam_key *k);
++
++/*
+  * Duplicates iterator.
+  *
+  * postcondition: it_state(dst) == it_state(src) &&
+  *                iam_it_container(dst) == iam_it_container(src) &&
+  *                dst->ii_flags = src->ii_flags &&
+- *                ergo(it_state(it) == IAM_IT_ATTACHED,
++ *                ergo(it_state(src) == IAM_IT_ATTACHED,
+  *                     iam_it_rec_get(dst) == iam_it_rec_get(src) &&
+  *                     iam_it_key_get(dst, *1) == iam_it_key_get(src, *2))
+  */
+@@ -460,15 +524,17 @@ void iam_it_put(struct iam_iterator *it)
+  *              +1: end of container reached
+  *             -ve: error
+  *
+- * precondition:  it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_MOVE
+- * postcondition: ergo(result >= 0, it_state(it) == IAM_IT_ATTACHED)
++ * precondition:  (it_state(it) == IAM_IT_ATTACHED ||
++ *                 it_state(it) == IAM_IT_SKEWED) && it->ii_flags&IAM_IT_MOVE
++ * postcondition: ergo(result == 0, it_state(it) == IAM_IT_ATTACHED) &&
++ *                ergo(result >  0, it_state(it) == IAM_IT_DETACHED)
+  */
+ int iam_it_next(struct iam_iterator *it);
+ 
  /*
   * Return pointer to the record under iterator.
   *
@@ -528,58 +661,82 @@ Index: iam/include/linux/lustre_iam.h
   * postcondition: it_state(it) == IAM_IT_ATTACHED
   */
  struct iam_rec *iam_it_rec_get(const struct iam_iterator *it);
-@@ -476,7 +507,9 @@ struct iam_rec *iam_it_rec_get(const str
+@@ -476,14 +542,15 @@ struct iam_rec *iam_it_rec_get(const str
  /*
   * Replace contents of record under iterator.
   *
 - * precondition:  it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_WRITE
 + * precondition:  it_state(it) == IAM_IT_ATTACHED &&
-+ *                it->ii_flags&IAM_IT_WRITE &&
-+ *                it_at_rec(it)
++ *                it->ii_flags&IAM_IT_WRITE
   * postcondition: it_state(it) == IAM_IT_ATTACHED &&
   *                ergo(result == 0, !memcmp(iam_it_rec_get(it), r, ...))
   */
-@@ -485,7 +518,7 @@ int iam_it_rec_set(handle_t *h, struct i
+ int iam_it_rec_set(handle_t *h, struct iam_iterator *it, struct iam_rec *r);
+ 
  /*
-  * Place key under iterator in @k, return @k
+- * Place key under iterator in @k, return @k
++ * Return pointer to the key under iterator.
   *
-- * precondition:  it_state(it) == IAM_IT_ATTACHED
-+ * precondition:  it_state(it) == IAM_IT_ATTACHED && it_at_rec(it)
+  * precondition:  it_state(it) == IAM_IT_ATTACHED
   * postcondition: it_state(it) == IAM_IT_ATTACHED
-  */
- struct iam_key *iam_it_key_get(const struct iam_iterator *it,
-@@ -497,7 +530,8 @@ struct iam_key *iam_it_key_get(const str
+@@ -495,11 +562,17 @@ struct iam_key *iam_it_key_get(const str
+  * Insert new record with key @k and contents from @r, shifting records to the
+  * right.
   *
-  * precondition:  it_state(it) == IAM_IT_ATTACHED &&
-  *                it->ii_flags&IAM_IT_WRITE &&
+- * precondition:  it_state(it) == IAM_IT_ATTACHED &&
+- *                it->ii_flags&IAM_IT_WRITE &&
 - *                it_keycmp(it, iam_it_key_get(it, *), k) < 0
-+ *                ergo(it_at_rec(it),
-+ *                     it_keycmp(it, iam_it_key_get(it, *), k) < 0)
-  * postcondition: it_state(it) == IAM_IT_ATTACHED &&
-  *                ergo(result == 0,
+- * postcondition: it_state(it) == IAM_IT_ATTACHED &&
+- *                ergo(result == 0,
++ * precondition: it->ii_flags&IAM_IT_WRITE &&
++ *               (it_state(it) == IAM_IT_ATTACHED ||
++ *                it_state(it) == IAM_IT_SKEWED) &&
++ *               ergo(it_state(it) == IAM_IT_ATTACHED,
++ *                    it_keycmp(it, iam_it_key_get(it, it_scratch_key(it, 0)),
++ *                              k) < 0) &&
++ *               ergo(it_before(it),
++ *                    it_keycmp(it, iam_it_key_get(it, it_scratch_key(it, 0)),
++ *                              k) > 0));
++ * postcondition: ergo(result == 0,
++ *                     it_state(it) == IAM_IT_ATTACHED &&
   *                     it_keycmp(it, iam_it_key_get(it, *), k) == 0 &&
-@@ -508,7 +542,9 @@ int iam_it_rec_insert(handle_t *h, struc
+  *                     !memcmp(iam_it_rec_get(it), r, ...))
+  */
+@@ -508,8 +581,10 @@ int iam_it_rec_insert(handle_t *h, struc
  /*
   * Delete record under iterator.
   *
 - * precondition:  it_state(it) == IAM_IT_ATTACHED && it->ii_flags&IAM_IT_WRITE
+- * postcondition: it_state(it) == IAM_IT_ATTACHED
 + * precondition:  it_state(it) == IAM_IT_ATTACHED &&
 + *                it->ii_flags&IAM_IT_WRITE &&
 + *                it_at_rec(it)
-  * postcondition: it_state(it) == IAM_IT_ATTACHED
++ * postcondition: it_state(it) == IAM_IT_ATTACHED || it_state(it) == IAM_IT_EOC
   */
  int iam_it_rec_delete(handle_t *h, struct iam_iterator *it);
-@@ -519,7 +555,8 @@ typedef __u64 iam_pos_t;
+ 
+@@ -519,7 +594,7 @@ typedef __u64 iam_pos_t;
   * Convert iterator to cookie.
   *
   * precondition:  it_state(it) == IAM_IT_ATTACHED &&
 - *                path_descr(it->ii_path)->id_key_size <= sizeof(iam_pos_t)
-+ *                path_descr(it->ii_path)->id_key_size <= sizeof(iam_pos_t) &&
-+ *                it_at_rec(it)
++ *                iam_path_descr(it->ii_path)->id_key_size <= sizeof(iam_pos_t)
   * postcondition: it_state(it) == IAM_IT_ATTACHED
   */
  iam_pos_t iam_it_store(const struct iam_iterator *it);
-@@ -583,6 +620,17 @@ static inline void iam_keycpy(const stru
+@@ -527,8 +602,9 @@ iam_pos_t iam_it_store(const struct iam_
+ /*
+  * Restore iterator from cookie.
+  *
+- * precondition:  it_state(it) == IAM_IT_DETACHED && it->ii_flags&IAM_IT_MOVE &&
+- *                path_descr(it->ii_path)->id_key_size <= sizeof(iam_pos_t)
++ * precondition:  it_state(it) == IAM_IT_DETACHED &&
++ *                it->ii_flags&IAM_IT_MOVE &&
++ *                iam_path_descr(it->ii_path)->id_key_size <= sizeof(iam_pos_t)
+  * postcondition: ergo(result == 0, it_state(it) == IAM_IT_ATTACHED &&
+  *                                  iam_it_store(it) == pos)
+  */
+@@ -583,6 +659,17 @@ static inline void iam_keycpy(const stru
  	memcpy(k1, k2, c->ic_descr->id_key_size);
  }
  
@@ -597,7 +754,7 @@ Index: iam/include/linux/lustre_iam.h
  static inline int iam_keycmp(const struct iam_container *c,
  			     const struct iam_key *k1, const struct iam_key *k2)
  {
-@@ -650,6 +698,15 @@ static inline unsigned dx_node_limit(str
+@@ -650,6 +737,15 @@ static inline unsigned dx_node_limit(str
  	return entry_space / (param->id_key_size + param->id_ptr_size);
  }
  
@@ -613,7 +770,7 @@ Index: iam/include/linux/lustre_iam.h
  static inline struct iam_entry *dx_get_entries(struct iam_path *path,
  					       void *data, int root)
  {
-@@ -702,6 +759,8 @@ void iam_insert_key(struct iam_path *pat
+@@ -702,6 +798,8 @@ void iam_insert_key(struct iam_path *pat
  
  int  iam_leaf_at_end(const struct iam_leaf *l);
  void iam_leaf_next(struct iam_leaf *folio);
@@ -622,7 +779,31 @@ Index: iam/include/linux/lustre_iam.h
  
  struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
  struct iam_container *iam_leaf_container(const struct iam_leaf *leaf);
-@@ -718,5 +777,48 @@ void iam_format_register(struct iam_form
+@@ -709,8 +807,23 @@ struct iam_descr *iam_leaf_descr(const s
+ struct iam_leaf_operations *iam_leaf_ops(const struct iam_leaf *leaf);
+ 
+ 
++/*
++ * Container format.
++ */
+ struct iam_format {
++        /*
++         * Method called to recognize container format. Should return true iff
++         * container @c conforms to this format. This method may do IO to read
++         * container pages.
++         *
++         * If container is recognized, this method sets operation vectors
++         * ->id_ops and ->id_leaf_ops in container description (c->ic_descr),
++         * and fills other description fields.
++         */
+         int (*if_guess)(struct iam_container *c);
++        /*
++         * Linkage into global list of container formats.
++         */
+         struct list_head if_linkage;
+ };
+ 
+@@ -718,5 +831,48 @@ void iam_format_register(struct iam_form
  
  void iam_lfix_format_init(void);
  
