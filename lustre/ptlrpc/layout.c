@@ -169,17 +169,17 @@ static const struct req_msg_field *ldlm_intent_unlink_client[] = {
         &RMF_NAME
 };
 
-static const struct req_msg_field * mds_getxattr_client[] = {
+static const struct req_msg_field *mds_getxattr_client[] = {
         &RMF_MDT_BODY,
         &RMF_NAME
 };
 
-static const struct req_msg_field * mds_getxattr_server[] = {
+static const struct req_msg_field *mds_getxattr_server[] = {
         &RMF_MDT_BODY,
         &RMF_EADATA
 };
 
-static const struct req_msg_field * mds_setxattr_client[] = {
+static const struct req_msg_field *mds_setxattr_client[] = {
         &RMF_MDT_BODY,
         &RMF_NAME,
         &RMF_EADATA
@@ -233,22 +233,22 @@ struct req_capsule;
         .rmf_swabber = (void (*)(void*))(swabber)       \
 }
 
-const struct req_msg_field RMF_SEQ_OPC = 
+const struct req_msg_field RMF_SEQ_OPC =
         DEFINE_MSGF("seq_query_opc", 0,
                     sizeof(__u32), lustre_swab_generic_32s);
 EXPORT_SYMBOL(RMF_SEQ_OPC);
 
-const struct req_msg_field RMF_SEQ_RANGE = 
+const struct req_msg_field RMF_SEQ_RANGE =
         DEFINE_MSGF("seq_query_range", 0,
                     sizeof(struct lu_range), lustre_swab_lu_range);
 EXPORT_SYMBOL(RMF_SEQ_RANGE);
 
-const struct req_msg_field RMF_FLD_OPC = 
+const struct req_msg_field RMF_FLD_OPC =
         DEFINE_MSGF("fld_query_opc", 0,
                     sizeof(__u32), lustre_swab_generic_32s);
 EXPORT_SYMBOL(RMF_FLD_OPC);
 
-const struct req_msg_field RMF_FLD_MDFLD = 
+const struct req_msg_field RMF_FLD_MDFLD =
         DEFINE_MSGF("fld_query_mdfld", 0,
                     sizeof(struct md_fld), lustre_swab_md_fld);
 EXPORT_SYMBOL(RMF_FLD_MDFLD);
@@ -309,7 +309,7 @@ const struct req_msg_field RMF_LDLM_INTENT =
 EXPORT_SYMBOL(RMF_LDLM_INTENT);
 
 
-/* FIXME XXX by Huang Hua 
+/* FIXME XXX by Huang Hua
  * to make sure about the size. Refer to MDS.
  */
 
@@ -404,7 +404,8 @@ const struct req_format RQF_MDS_GETATTR =
 EXPORT_SYMBOL(RQF_MDS_GETATTR);
 
 const struct req_format RQF_MDS_GETXATTR =
-        DEFINE_REQ_FMT0("MDS_GETXATTR", mds_getxattr_client, mds_getxattr_server);
+        DEFINE_REQ_FMT0("MDS_GETXATTR",
+                        mds_getxattr_client, mds_getxattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETXATTR);
 
 const struct req_format RQF_MDS_SETXATTR =
@@ -680,9 +681,7 @@ int req_capsule_get_size(const struct req_capsule *pill,
                          enum req_location loc)
 {
         LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
-        if (loc == RCL_SERVER)
-                return pill->rc_area[__req_capsule_offset(pill, field, loc)];
-        /* else */
+
         return lustre_msg_buflen(__req_msg(pill, loc),
                                  __req_capsule_offset(pill, field, loc));
 }
