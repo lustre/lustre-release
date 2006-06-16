@@ -187,7 +187,7 @@ foreach my $mds (@{$objs{"mds"}}) {
         $mkfs_options = " --param=\"$mkfs_options\"";
     }
 
-    printf "%s,%s,%s,$MOUNTPT/%s,mgs|mdt,,,,--device-size=%s --noformat%s\n", 
+    printf "%s,%s,%s,$MOUNTPT/%s,mgs|mdt,,,,--device-size=%s --noformat%s,,noauto\n", 
         $mds->{"node"},
         lnet_options($net),
         $mds->{"dev"},
@@ -200,6 +200,10 @@ foreach my $mds (@{$objs{"mds"}}) {
 
 foreach my $ost (@{$objs{"ost"}}) {
     # find the net for this node
+    my $mount_opts="noauto";
+    if (defined($ost->{"mountfsoptions"})) {
+        $mount_opts .= "," . $ost->{"mountfsoptions"};
+    }
     my $net = find_obj("net", "node", $ost->{"node"}, @{$objs{"net"}});
     printf "%s,%s,%s,$MOUNTPT/%s,ost,,\"%s\",,--device-size=%s --noformat,,\"%s\"\n", 
     $ost->{"node"},
@@ -208,5 +212,5 @@ foreach my $ost (@{$objs{"ost"}}) {
     $ost->{"ost"},
     join(",", @mgses),
     $ost->{"size"},
-    $ost->{"mountfsoptions"};
+    $mount_opts;
 }
