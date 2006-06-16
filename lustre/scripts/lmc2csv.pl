@@ -197,7 +197,7 @@ foreach my $mds (@{$objs{"mds"}}) {
 foreach my $ost (@{$objs{"ost"}}) {
     # find the net for this node
     my $net = find_obj("net", "node", $ost->{"node"}, @{$objs{"net"}});
-    printf "%s,%s,%s,$MOUNTPT/%s,ost,,\"%s\",,--device-size=%s --noformat,\"%s\"\n", 
+    printf "%s,%s,%s,$MOUNTPT/%s,ost,,\"%s\",,--device-size=%s --noformat,,\"%s\"\n", 
     $ost->{"node"},
     lnet_options($net),
     $ost->{"dev"},
