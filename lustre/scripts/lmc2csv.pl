@@ -184,16 +184,17 @@ foreach my $mds (@{$objs{"mds"}}) {
     }
     chop($mkfs_options);
     if ($mkfs_options ne "") {
-        $mkfs_options = "--param=\"$mkfs_options\"";
+        $mkfs_options = " --param=\"$mkfs_options\"";
     }
 
-    printf "%s,%s,%s,$MOUNTPT/%s,mgs|mdt,,,,--device-size=%s --noformat,%s\n", 
+    printf "%s,%s,%s,$MOUNTPT/%s,mgs|mdt,,,,--device-size=%s --noformat%s\n", 
         $mds->{"node"},
         lnet_options($net),
         $mds->{"dev"},
         $mds->{"mds"},
         $mds->{"size"},
         $mkfs_options;
+
     push(@mgses, $net->{"nid"});
 }
 
