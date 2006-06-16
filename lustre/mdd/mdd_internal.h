@@ -16,6 +16,7 @@ struct llog_handle;
 struct mdd_device {
         struct md_device                 mdd_md_dev;
         struct dt_device                *mdd_child;
+        struct dt_device                 mdd_lov_dev; 
         int                              mdd_max_mddize;
         int                              mdd_max_cookiesize;
         struct file                     *mdd_rcvd_filp;
