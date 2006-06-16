@@ -40,6 +40,7 @@ struct fld_cache {
         __u64             fld_mds;
         __u64             fld_seq;
 };
+
 struct fld_cache_info {
         struct hlist_head *fld_hash;
         spinlock_t fld_lock;
@@ -61,7 +62,7 @@ struct fld_item {
 enum fld_op {
         FLD_CREATE = 0,
         FLD_DELETE = 1,
-        FLD_GET    = 2
+        FLD_LOOKUP = 2
 };
 
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)

@@ -85,9 +85,6 @@ int fld_client_create(struct lu_client_fld *fld,
 int fld_client_delete(struct lu_client_fld *fld,
                       __u64 seq, __u64 mds);
 
-int fld_client_get(struct lu_client_fld *fld,
-                   __u64 seq, __u64 *mds);
-
 int fld_client_lookup(struct lu_client_fld *fld,
                       __u64 seq, __u64 *mds);
 
