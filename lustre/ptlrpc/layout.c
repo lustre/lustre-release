@@ -181,7 +181,7 @@ static const struct req_msg_field * mds_getxattr_server[] = {
 
 static const struct req_msg_field * mds_setxattr_client[] = {
         &RMF_MDT_BODY,
-        &RMF_NAME
+        &RMF_NAME,
         &RMF_EADATA
 };
 
@@ -405,11 +405,11 @@ EXPORT_SYMBOL(RQF_MDS_GETATTR);
 
 const struct req_format RQF_MDS_GETXATTR =
         DEFINE_REQ_FMT0("MDS_GETXATTR", mds_getxattr_client, mds_getxattr_server);
-EXPORT_SYMBOL(RQF_MDS_GETATTR);
+EXPORT_SYMBOL(RQF_MDS_GETXATTR);
 
 const struct req_format RQF_MDS_SETXATTR =
         DEFINE_REQ_FMT0("MDS_SETXATTR", mds_setxattr_client, empty);
-EXPORT_SYMBOL(RQF_MDS_GETATTR);
+EXPORT_SYMBOL(RQF_MDS_SETXATTR);
 
 const struct req_format RQF_MDS_GETATTR_NAME =
         DEFINE_REQ_FMT0("MDS_GETATTR_NAME",
@@ -679,7 +679,7 @@ int req_capsule_get_size(const struct req_capsule *pill,
                          const struct req_msg_field *field,
                          enum req_location loc)
 {
-        LASSERT(location == RCL_SERVER || location == RCL_CLIENT);
+        LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
         if (loc == RCL_SERVER)
                 return pill->rc_area[__req_capsule_offset(pill, field, loc)];
         /* else */
