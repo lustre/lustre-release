@@ -23,7 +23,7 @@ LYXFILES= $(filter-out $(patsubst %.lin,%.lyx,$(wildcard *.lin)),\
 
 CLEANFILES = *.aux *.tex *.log *.pdf
 
-EXTRA_DIST = tex2pdf $(man_MANS) \
+EXTRA_DIST = tex2pdf lustre.7 mount.lustre.8 mkfs.lustre.8 tunefs.lustre.8 \
 	$(LYXFILES) lfs.1 lctl.8	
 
 all:
