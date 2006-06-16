@@ -62,14 +62,14 @@ enum {
         FLD_HTABLE_MASK = FLD_HTABLE_SIZE - 1
 };
 
-static __u32 fld_cache_hash(__u64 lu_seq)
+static __u32 fld_cache_hash(__u64 seq)
 {
-        return lu_seq;
+        return seq;
 }
 
 static int
 fld_cache_insert(struct fld_cache_info *fld_cache,
-                 __u64 lu_seq, __u64 mds_num)
+                 __u64 seq, __u64 mds)
 {
         struct fld_cache *fld;
         struct hlist_head *bucket;
@@ -77,7 +77,7 @@ fld_cache_insert(struct fld_cache_info *fld_cache,
         int rc = 0;
         ENTRY;
 
-        bucket = fld_cache->fld_hash + (fld_cache_hash(lu_seq) &
+        bucket = fld_cache->fld_hash + (fld_cache_hash(seq) &
                                         fld_cache->fld_hash_mask);
 
         OBD_ALLOC_PTR(fld);
@@ -85,12 +85,12 @@ fld_cache_insert(struct fld_cache_info *fld_cache,
                 RETURN(-ENOMEM);
 
         INIT_HLIST_NODE(&fld->fld_list);
-        fld->fld_mds = mds_num;
-        fld->fld_seq = lu_seq;
+        fld->fld_mds = mds;
+        fld->fld_seq = seq;
 
         spin_lock(&fld_cache->fld_lock);
         hlist_for_each_entry(fld, scan, bucket, fld_list) {
-                if (fld->fld_seq == lu_seq) {
+                if (fld->fld_seq == seq) {
                         spin_unlock(&fld_cache->fld_lock);
                         GOTO(exit, rc = -EEXIST);
                 }
@@ -104,19 +104,19 @@ exit:
 }
 
 static struct fld_cache *
-fld_cache_lookup(struct fld_cache_info *fld_cache, __u64 lu_seq)
+fld_cache_lookup(struct fld_cache_info *fld_cache, __u64 seq)
 {
         struct hlist_head *bucket;
         struct hlist_node *scan;
         struct fld_cache *fld;
         ENTRY;
 
-        bucket = fld_cache->fld_hash + (fld_cache_hash(lu_seq) &
+        bucket = fld_cache->fld_hash + (fld_cache_hash(seq) &
                                         fld_cache->fld_hash_mask);
 
         spin_lock(&fld_cache->fld_lock);
         hlist_for_each_entry(fld, scan, bucket, fld_list) {
-                if (fld->fld_seq == lu_seq) {
+                if (fld->fld_seq == seq) {
                         spin_unlock(&fld_cache->fld_lock);
                         RETURN(fld);
                 }
@@ -127,25 +127,26 @@ fld_cache_lookup(struct fld_cache_info *fld_cache, __u64 lu_seq)
 }
 
 static void
-fld_cache_delete(struct fld_cache_info *fld_cache, __u64 lu_seq)
+fld_cache_delete(struct fld_cache_info *fld_cache, __u64 seq)
 {
         struct hlist_head *bucket;
         struct hlist_node *scan;
         struct fld_cache *fld;
         ENTRY;
 
-        bucket = fld_cache->fld_hash + (fld_cache_hash(lu_seq) &
+        bucket = fld_cache->fld_hash + (fld_cache_hash(seq) &
                                         fld_cache->fld_hash_mask);
 
         spin_lock(&fld_cache->fld_lock);
         hlist_for_each_entry(fld, scan, bucket, fld_list) {
-                if (fld->fld_seq == lu_seq) {
+                if (fld->fld_seq == seq) {
                         hlist_del_init(&fld->fld_list);
-                        spin_unlock(&fld_cache->fld_lock);
-                        EXIT;
-                        return;
+                        GOTO(out_unlock, 0);
                 }
         }
+
+        EXIT;
+out_unlock:
         spin_unlock(&fld_cache->fld_lock);
         return;
 }
@@ -162,7 +163,7 @@ static int fld_dht_hash(struct lu_client_fld *fld, __u64 seq)
         return do_div(seq, fld->fld_count);
 }
 
-static struct lu_fld_hash fld_hash[2] = {
+static struct lu_fld_hash fld_hash[3] = {
         {
                 .fh_name = "DHT",
                 .fh_func = fld_dht_hash
@@ -170,7 +171,10 @@ static struct lu_fld_hash fld_hash[2] = {
         {
                 .fh_name = "Round Robin",
                 .fh_func = fld_rrb_hash
-        }        
+        },
+        {
+                0,
+        }
 };
 
 static struct obd_export *
@@ -183,7 +187,7 @@ fld_client_get_exp(struct lu_client_fld *fld, __u64 seq)
         hash = fld->fld_hash->fh_func(fld, seq);
 
         spin_lock(&fld->fld_lock);
-        list_for_each_entry(fld_exp, &fld->fld_exports, exp_obd_chain) {
+        list_for_each_entry(fld_exp, &fld->fld_exports, exp_fld_chain) {
                 if (count == hash)
                         break;
                 count++;
@@ -201,8 +205,10 @@ int fld_client_add_export(struct lu_client_fld *fld,
         struct obd_export *fld_exp;
         ENTRY;
 
+        LASSERT(exp != NULL);
+
         spin_lock(&fld->fld_lock);
-        list_for_each_entry(fld_exp, &fld->fld_exports, exp_obd_chain) {
+        list_for_each_entry(fld_exp, &fld->fld_exports, exp_fld_chain) {
                 if (obd_uuid_equals(&fld_exp->exp_client_uuid,
                                     &exp->exp_client_uuid))
                 {
@@ -212,7 +218,7 @@ int fld_client_add_export(struct lu_client_fld *fld,
         }
         
         fld_exp = class_export_get(exp);
-        list_add_tail(&exp->exp_obd_chain,
+        list_add_tail(&exp->exp_fld_chain,
                       &fld->fld_exports);
         fld->fld_count++;
         
@@ -220,6 +226,7 @@ int fld_client_add_export(struct lu_client_fld *fld,
         
         RETURN(0);
 }
+EXPORT_SYMBOL(fld_client_add_export);
 
 /* remove export from FLD */
 int fld_client_del_export(struct lu_client_fld *fld,
@@ -230,12 +237,12 @@ int fld_client_del_export(struct lu_client_fld *fld,
         ENTRY;
 
         spin_lock(&fld->fld_lock);
-        list_for_each_entry_safe(fld_exp, tmp, &fld->fld_exports, exp_obd_chain) {
+        list_for_each_entry_safe(fld_exp, tmp, &fld->fld_exports, exp_fld_chain) {
                 if (obd_uuid_equals(&fld_exp->exp_client_uuid,
                                     &exp->exp_client_uuid))
                 {
                         fld->fld_count--;
-                        list_del(&fld_exp->exp_obd_chain);
+                        list_del(&fld_exp->exp_fld_chain);
                         class_export_get(fld_exp);
 
                         spin_unlock(&fld->fld_lock);
@@ -246,6 +253,7 @@ int fld_client_del_export(struct lu_client_fld *fld,
         
         RETURN(-ENOENT);
 }
+EXPORT_SYMBOL(fld_client_del_export);
 
 int fld_client_init(struct lu_client_fld *fld, int hash)
 {
@@ -268,6 +276,7 @@ int fld_client_init(struct lu_client_fld *fld, int hash)
                fld->fld_hash->fh_name);
         RETURN(rc);
 }
+EXPORT_SYMBOL(fld_client_init);
 
 void fld_client_fini(struct lu_client_fld *fld)
 {
@@ -276,15 +285,17 @@ void fld_client_fini(struct lu_client_fld *fld)
         ENTRY;
 
         spin_lock(&fld->fld_lock);
-        list_for_each_entry_safe(fld_exp, tmp, &fld->fld_exports, exp_obd_chain) {
+        list_for_each_entry_safe(fld_exp, tmp,
+                                 &fld->fld_exports, exp_fld_chain) {
                 fld->fld_count--;
-                list_del(&fld_exp->exp_obd_chain);
+                list_del(&fld_exp->exp_fld_chain);
                 class_export_get(fld_exp);
         }
         spin_unlock(&fld->fld_lock);
         CDEBUG(D_INFO, "Client FLD finalized\n");
         EXIT;
 }
+EXPORT_SYMBOL(fld_client_fini);
 
 static int
 fld_client_rpc(struct obd_export *exp,
@@ -325,8 +336,9 @@ out_req:
 
 int
 fld_client_create(struct lu_client_fld *fld,
-                  __u64 seq, __u64 mds_num)
+                  __u64 seq, __u64 mds)
 {
+#if 0
         struct obd_export *fld_exp;
         struct md_fld      md_fld;
         __u32 rc;
@@ -337,20 +349,23 @@ fld_client_create(struct lu_client_fld *fld,
                 RETURN(-EINVAL);
         
         md_fld.mf_seq = seq;
-        md_fld.mf_mds = mds_num;
+        md_fld.mf_mds = mds;
 
         rc = fld_client_rpc(fld_exp, &md_fld, FLD_CREATE);
         
 #ifdef __KERNEL__
-        fld_cache_insert(fld_cache, seq, mds_num);
+        fld_cache_insert(fld_cache, seq, mds);
 #endif
         
         RETURN(rc);
+#endif
+        return 0;
 }
+EXPORT_SYMBOL(fld_client_create);
 
 int
 fld_client_delete(struct lu_client_fld *fld,
-                  __u64 seq, __u64 mds_num)
+                  __u64 seq, __u64 mds)
 {
         struct obd_export *fld_exp;
         struct md_fld      md_fld;
@@ -365,30 +380,31 @@ fld_client_delete(struct lu_client_fld *fld,
                 RETURN(-EINVAL);
 
         md_fld.mf_seq = seq;
-        md_fld.mf_mds = mds_num;
+        md_fld.mf_mds = mds;
 
         rc = fld_client_rpc(fld_exp, &md_fld, FLD_DELETE);
         RETURN(rc);
 }
+EXPORT_SYMBOL(fld_client_delete);
 
 int
 fld_client_get(struct lu_client_fld *fld,
-               __u64 lu_seq, __u64 *mds_num)
+               __u64 seq, __u64 *mds)
 {
         struct obd_export *fld_exp;
         struct md_fld      md_fld;
         int    vallen, rc;
 
-        fld_exp = fld_client_get_exp(fld, lu_seq);
+        fld_exp = fld_client_get_exp(fld, seq);
         if (!fld_exp);
                 RETURN(-EINVAL);
 
-        md_fld.mf_seq = lu_seq;
+        md_fld.mf_seq = seq;
         vallen = sizeof(struct md_fld);
 
         rc = fld_client_rpc(fld_exp, &md_fld, FLD_GET);
         if (rc == 0)
-                *mds_num = md_fld.mf_mds;
+                *mds = md_fld.mf_mds;
 
         RETURN(rc);
 }
@@ -396,32 +412,39 @@ fld_client_get(struct lu_client_fld *fld,
 /* lookup fid in the namespace of pfid according to the name */
 int
 fld_client_lookup(struct lu_client_fld *fld,
-                  __u64 lu_seq, __u64 *mds_num)
+                  __u64 seq, __u64 *mds)
 {
+#if 0
+#ifdef __KERNEL__
         struct fld_cache *fld_entry;
+#endif
         int rc;
         ENTRY;
 
 #ifdef __KERNEL__
         /* lookup it in the cache */
-        fld_entry = fld_cache_lookup(fld_cache, lu_seq);
+        fld_entry = fld_cache_lookup(fld_cache, seq);
         if (fld_entry != NULL) {
-                *mds_num = fld_entry->fld_mds;
+                *mds = fld_entry->fld_mds;
                 RETURN(0);
         }
 #endif
         
         /* can not find it in the cache */
-        rc = fld_client_get(fld, lu_seq, mds_num);
+        rc = fld_client_get(fld, seq, mds);
         if (rc)
                 RETURN(rc);
 
 #ifdef __KERNEL__
-        rc = fld_cache_insert(fld_cache, lu_seq, *mds_num);
+        rc = fld_cache_insert(fld_cache, seq, *mds);
 #endif
         
         RETURN(rc);
+#endif
+        *mds = 0;
+        return 0;
 }
+EXPORT_SYMBOL(fld_client_lookup);
 
 #ifdef __KERNEL__
 static int fld_init(void)
@@ -438,6 +461,9 @@ static int fld_init(void)
                   sizeof fld_cache->fld_hash[0]);
         spin_lock_init(&fld_cache->fld_lock);
 
+        CDEBUG(D_INFO, "Client FLD, cache size %d\n",
+               FLD_HTABLE_SIZE);
+        
         RETURN(0);
 }
 

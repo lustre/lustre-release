@@ -197,6 +197,7 @@ seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                         
                         *fid = seq->seq_fid;
                         seq->seq_fid.f_oid += 1;
+                        rc = -ERESTART;
                 }
         }
         LASSERT(fid_is_sane(fid));

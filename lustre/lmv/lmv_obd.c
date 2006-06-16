@@ -337,6 +337,8 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         }
 
         mdc_exp = class_conn2export(&conn);
+        fld_client_add_export(&lmv->lmv_fld, mdc_exp);
+
         mdc_data = &class_exp2cliimp(mdc_exp)->imp_connect_data;
 
         rc = obd_register_observer(mdc_obd, obd);
@@ -725,6 +727,18 @@ static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
 
         /* asking underlaying tgt layer to allocate new fid */
         rc = obd_fid_alloc(lmv->tgts[mds].ltd_exp, fid, hint);
+
+        /* client switches to new sequence, setup fld */
+        if (rc == -ERESTART) {
+                rc = fld_client_create(&lmv->lmv_fld,
+                                       fid_seq(fid),
+                                       mds);
+                if (rc) {
+                        CERROR("can't create fld entry, "
+                               "rc %d\n", rc);
+                }
+        }
+
         RETURN(rc);
 }
 
@@ -790,7 +804,6 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("Can't setup LMV object manager, "
                        "error %d.\n", rc);
                 GOTO(out_free_datas, rc);
-                RETURN(rc);
         }
 
         lprocfs_init_vars(lmv, &lvars);
@@ -807,6 +820,13 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 }
        }
 #endif
+        rc = fld_client_init(&lmv->lmv_fld, LUSTRE_CLI_FLD_HASH_RRB);
+        if (rc) {
+                CERROR("can't init FLD, err %d\n",
+                       rc);
+                GOTO(out_free_datas, rc);
+        }
+
         RETURN(0);
 
 out_free_datas:        
@@ -825,6 +845,7 @@ static int lmv_cleanup(struct obd_device *obd)
 
         lprocfs_obd_cleanup(obd);
         lmv_mgr_cleanup(obd);
+        fld_client_fini(&lmv->lmv_fld);
         OBD_FREE(lmv->datas, lmv->datas_size);
         OBD_FREE(lmv->tgts, lmv->tgts_size);
         

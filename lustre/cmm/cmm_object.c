@@ -37,13 +37,23 @@
 #include "mdc_internal.h"
 
 #ifdef CMM_CODE
-static int cmm_fld_lookup(const struct lu_fid *fid)
+static int cmm_fld_lookup(struct cmm_device *cm,
+                          const struct lu_fid *fid)
 {
+        __u64 mds;
         int rc;
-        /* temporary hack for proto mkdir */
-        rc = (unsigned long)fid_seq(fid) / LUSTRE_SEQ_SUPER_CHUNK;
-        CWARN("Get MDS %d for sequence: "LPU64"\n", rc, fid_seq(fid));
-        RETURN(rc);
+        ENTRY;
+        
+        LASSERT(fid_is_sane(fid));
+        rc = fld_client_lookup(&cm->cmm_fld, fid_seq(fid), &mds);
+        if (rc) {
+                CERROR("can't find mds by seq "LPU64", rc %d\n",
+                       fid_seq(fid), rc);
+                RETURN(rc);
+        }
+        CWARN("CMM: got MDS "LPU64" for sequence: "LPU64"\n",
+              mds, fid_seq(fid));
+        RETURN((int)mds);
 }
 
 static struct md_object_operations cml_mo_ops;
@@ -64,7 +74,7 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
         ENTRY;
 
         /* get object location */
-        mdsnum = cmm_fld_lookup(fid);
+        mdsnum = cmm_fld_lookup(lu2cmm_dev(ld), fid);
 
         /* select the proper set of operations based on object location */
         if (mdsnum == lu2cmm_dev(ld)->cmm_local_num) {
@@ -617,16 +627,26 @@ static struct md_object_operations cmm_mo_ops;
 static struct md_dir_operations    cmm_dir_ops;
 static struct lu_object_operations cmm_obj_ops;
 
-static int cmm_fld_lookup(const struct lu_fid *fid)
+static int cmm_fld_lookup(struct cmm_device *cm,
+                          const struct lu_fid *fid)
 {
+        __u64 mds;
         int rc;
-        /* temporary hack for proto mkdir */
-        rc = (unsigned long)fid_seq(fid) / LUSTRE_SEQ_SUPER_CHUNK;
-        CWARN("Get MDS %d for sequence: "LPU64"\n", rc, fid_seq(fid));
-        RETURN(rc);
+        ENTRY;
+        
+        LASSERT(fid_is_sane(fid));
+        rc = fld_client_lookup(&cm->cmm_fld, fid_seq(fid), &mds);
+        if (rc) {
+                CERROR("can't find mds by seq "LPU64", rc %d\n",
+                       fid_seq(fid), rc);
+                RETURN(rc);
+        }
+        CWARN("CMM: got MDS "LPU64" for sequence: "LPU64"\n",
+              mds, fid_seq(fid));
+        RETURN((int)mds);
 }
 
-/* get child device by mdsnum*/
+/* get child device by mdsnum */
 static struct lu_device *cmm_get_child(struct cmm_device *d, __u32 num)
 {
         struct lu_device *next = NULL;
@@ -684,7 +704,7 @@ static int cmm_object_init(const struct lu_context *ctx, struct lu_object *lo)
         ENTRY;
 
         /* under device can be MDD or MDC */
-        mdsnum = cmm_fld_lookup(fid);
+        mdsnum = cmm_fld_lookup(cd, fid);
         c_dev = cmm_get_child(cd, mdsnum);
         if (c_dev == NULL) {
                 rc = -ENOENT;

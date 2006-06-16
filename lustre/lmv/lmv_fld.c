@@ -45,16 +45,21 @@
 #include <lprocfs_status.h>
 #include "lmv_internal.h"
 
-/* dummy function for a while */
-int lmv_fld_lookup(struct obd_device *obd, struct lu_fid *fid)
+int lmv_fld_lookup(struct obd_device *obd, const struct lu_fid *fid)
 {
+        struct lmv_obd *lmv = &obd->u.lmv;
+        __u64 mds;
         int rc;
         ENTRY;
 
         LASSERT(fid_is_sane(fid));
-
-        /* temporary hack until fld will works */
-        rc = (unsigned long)fid_seq(fid) / LUSTRE_SEQ_SUPER_CHUNK;
-        CWARN("LMV: got MDS %d for sequence: "LPU64"\n", rc, fid_seq(fid));
-        RETURN(rc);
+        rc = fld_client_lookup(&lmv->lmv_fld, fid_seq(fid), &mds);
+        if (rc) {
+                CERROR("can't find mds by seq "LPU64", rc %d\n",
+                       fid_seq(fid), rc);
+                RETURN(rc);
+        }
+        CWARN("LMV: got MDS "LPU64" for sequence: "LPU64"\n",
+              mds, fid_seq(fid));
+        RETURN((int)mds);
 }

@@ -31,6 +31,7 @@
 #include <lustre_lib.h>
 #include <lustre_export.h>
 #include <lustre_quota.h>
+#include <lustre_fld.h>
 #include <lu_object.h>
 
 /* this is really local to the OSC */
@@ -506,6 +507,7 @@ struct lmv_tgt_desc {
 
 struct lmv_obd {
         int                     refcount;
+        struct lu_client_fld    lmv_fld;
         spinlock_t              lmv_lock;
         struct lmv_desc         desc;
         struct obd_uuid         cluuid;

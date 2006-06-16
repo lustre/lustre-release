@@ -102,7 +102,7 @@ static struct lu_context_key fld_thread_key = {
 };
 
 static struct dt_key *fld_key(const struct lu_context *ctx,
-                              const fidseq_t seq_num)
+                              const fidseq_t seq)
 {
         struct fld_thread_info *info;
         ENTRY;
@@ -110,12 +110,12 @@ static struct dt_key *fld_key(const struct lu_context *ctx,
         info = lu_context_key_get(ctx, &fld_thread_key);
         LASSERT(info != NULL);
 
-        info->fti_key = cpu_to_be64(seq_num);
+        info->fti_key = cpu_to_be64(seq);
         RETURN((void *)&info->fti_key);
 }
 
 static struct dt_rec *fld_rec(const struct lu_context *ctx,
-                              const mdsno_t mds_num)
+                              const mdsno_t mds)
 {
         struct fld_thread_info *info;
         ENTRY;
@@ -123,13 +123,13 @@ static struct dt_rec *fld_rec(const struct lu_context *ctx,
         info = lu_context_key_get(ctx, &fld_thread_key);
         LASSERT(info != NULL);
 
-        info->fti_rec = cpu_to_be64(mds_num);
+        info->fti_rec = cpu_to_be64(mds);
         RETURN((void *)&info->fti_rec);
 }
 
 int fld_handle_insert(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
-                      fidseq_t seq_num, mdsno_t mds_num)
+                      fidseq_t seq, mdsno_t mds)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
@@ -144,8 +144,8 @@ int fld_handle_insert(struct lu_server_fld *fld,
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
 
         rc = dt_obj->do_index_ops->dio_insert(ctx, dt_obj,
-                                              fld_rec(ctx, mds_num),
-                                              fld_key(ctx, seq_num), th);
+                                              fld_rec(ctx, mds),
+                                              fld_key(ctx, seq), th);
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
@@ -153,7 +153,7 @@ int fld_handle_insert(struct lu_server_fld *fld,
 
 int fld_handle_delete(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
-                      fidseq_t seq_num)
+                      fidseq_t seq)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
@@ -165,7 +165,7 @@ int fld_handle_delete(struct lu_server_fld *fld,
         txn.tp_credits = FLD_TXN_INDEX_DELETE_CREDITS;
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
         rc = dt_obj->do_index_ops->dio_delete(ctx, dt_obj,
-                                              fld_key(ctx, seq_num), th);
+                                              fld_key(ctx, seq), th);
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
@@ -173,7 +173,7 @@ int fld_handle_delete(struct lu_server_fld *fld,
 
 int fld_handle_lookup(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
-                      fidseq_t seq_num, mdsno_t *mds_num)
+                      fidseq_t seq, mdsno_t *mds)
 {
         struct dt_object *dt_obj = fld->fld_obj;
         struct dt_rec    *rec = fld_rec(ctx, 0);
@@ -181,9 +181,9 @@ int fld_handle_lookup(struct lu_server_fld *fld,
         ENTRY;
 
         rc = dt_obj->do_index_ops->dio_lookup(ctx, dt_obj, rec,
-                                              fld_key(ctx, seq_num));
+                                              fld_key(ctx, seq));
         if (rc == 0)
-                *mds_num = be64_to_cpu(*(__u64 *)rec);
+                *mds = be64_to_cpu(*(__u64 *)rec);
         RETURN(rc);
 }
 

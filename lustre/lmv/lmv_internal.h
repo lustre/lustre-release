@@ -127,7 +127,7 @@ int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
 int lmv_handle_split(struct obd_export *, struct lu_fid *);
 int lmv_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 		     void *, int);
-int lmv_fld_lookup(struct obd_device *obd, struct lu_fid *fid);
+int lmv_fld_lookup(struct obd_device *obd, const struct lu_fid *fid);
 
 static inline struct lmv_stripe_md * 
 lmv_get_mea(struct ptlrpc_request *req, int offset)

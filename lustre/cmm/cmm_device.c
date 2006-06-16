@@ -96,7 +96,7 @@ extern struct lu_device_type mdc_device_type;
 /* --- cmm_lu_operations --- */
 /* add new MDC to the CMM, create MDC lu_device and connect it to mdc_obd */
 static int cmm_add_mdc(const struct lu_context *ctx,
-                       struct cmm_device * cm, struct lustre_cfg *cfg)
+                       struct cmm_device *cm, struct lustre_cfg *cfg)
 {
         struct lu_device_type *ldt = &mdc_device_type;
         struct lu_device *ld;
@@ -140,6 +140,9 @@ static int cmm_add_mdc(const struct lu_context *ctx,
                 spin_unlock(&cm->cmm_tgt_guard);
 #endif                
                 lu_device_get(cmm2lu_dev(cm));
+
+                fld_client_add_export(&cm->cmm_fld,
+                                      mc->mc_desc.cl_exp);
         }
         RETURN(rc);
 }
@@ -233,6 +236,12 @@ static int cmm_device_init(const struct lu_context *ctx,
         m->cmm_tgt_count = 0;
         m->cmm_child = lu2md_dev(next);
 
+        err = fld_client_init(&m->cmm_fld, LUSTRE_CLI_FLD_HASH_RRB);
+        if (err) {
+                CERROR("can't init FLD, err %d\n",
+                       err);
+        }
+
         RETURN(err);
 }
 
@@ -243,6 +252,8 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
         struct mdc_device *mc, *tmp;
         ENTRY;
 
+        fld_client_fini(&cm->cmm_fld);
+        
         /* finish all mdc devices */
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
                 struct lu_device *ld_m = mdc2lu_dev(mc);

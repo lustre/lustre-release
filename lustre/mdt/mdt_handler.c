@@ -1508,6 +1508,7 @@ static int mdt_seq_fini(const struct lu_context *ctx,
         RETURN(0);
 }
 
+/* XXX: this is ugly, should be something else */
 static int mdt_controller_init(struct mdt_device *m,
                                struct lustre_cfg *cfg)
 {

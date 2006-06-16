@@ -26,18 +26,22 @@
 #if defined(__KERNEL__)
 
 #include <obd.h>
+#include <lustre_fld.h>
 #include <md_object.h>
 
 #ifdef CMM_CODE
 struct cmm_device {
-        struct md_device cmm_md_dev;
+        struct md_device      cmm_md_dev;
         /* underlaying device in MDS stack, usually MDD */
-        struct md_device *cmm_child;
+        struct md_device     *cmm_child;
         /* other MD servers in cluster */
-        __u32            cmm_local_num;
-        __u32            cmm_tgt_count;
-        struct list_head cmm_targets;
-        spinlock_t       cmm_tgt_guard;
+        __u32                 cmm_local_num;
+        __u32                 cmm_tgt_count;
+        struct list_head      cmm_targets;
+        spinlock_t            cmm_tgt_guard;
+
+        /* client FLD interface */
+        struct lu_client_fld  cmm_fld;
 };
 
 static inline struct md_device_operations *cmm_child_ops(struct cmm_device *d)
@@ -112,13 +116,15 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
 #else
 
 struct cmm_device {
-        struct md_device cmm_md_dev;
+        struct md_device      cmm_md_dev;
         /* underlaying device in MDS stack, usually MDD */
-        struct md_device *cmm_child;
+        struct md_device     *cmm_child;
         /* other MD servers in cluster */
-        __u32            cmm_local_num;
-        __u32            cmm_tgt_count;
-        struct list_head cmm_targets;
+        __u32                 cmm_local_num;
+        __u32                 cmm_tgt_count;
+        struct list_head      cmm_targets;
+        /* client FLD interface */
+        struct lu_client_fld  cmm_fld;
 };
 
 static inline struct md_device_operations *cmm_child_ops(struct cmm_device *d)
