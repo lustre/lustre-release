@@ -71,7 +71,13 @@ load_module() {
     module=$1
     shift
     BASE=`basename $module $EXT`
-    lsmod | grep ${BASE} > /dev/null || insmod ${LUSTRE}/${module}${EXT} $@
+    lsmod | grep -q ${BASE} || \
+      if [ -f ${LUSTRE}/${module}${EXT} ]; then
+        insmod ${LUSTRE}/${module}${EXT} $@
+    else
+        # must be testing a "make install" or "rpm" installation
+        modprobe $module $@
+    fi
 }
 
 load_modules() {
