@@ -65,6 +65,12 @@ enum fld_op {
         FLD_LOOKUP = 2
 };
 
+enum {
+        FLD_HTABLE_BITS = 8,
+        FLD_HTABLE_SIZE = (1 << FLD_HTABLE_BITS),
+        FLD_HTABLE_MASK = FLD_HTABLE_SIZE - 1
+};
+
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
 int fld_handle_insert(struct lu_server_fld *fld,
