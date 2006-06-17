@@ -100,7 +100,7 @@ seq_client_alloc_super(struct lu_client_seq *seq)
         rc = seq_client_rpc(seq, &seq->seq_cl_range,
                             SEQ_ALLOC_SUPER);
         if (rc == 0) {
-                CDEBUG(D_INFO, "SEQ-MGR(cli): allocated super-sequence "
+                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated super-sequence "
                        "["LPX64"-"LPX64"]\n", seq->seq_cl_range.lr_start,
                        seq->seq_cl_range.lr_end);
         }
@@ -119,7 +119,7 @@ seq_client_alloc_meta(struct lu_client_seq *seq)
         rc = seq_client_rpc(seq, &seq->seq_cl_range,
                             SEQ_ALLOC_META);
         if (rc == 0) {
-                CDEBUG(D_INFO, "SEQ-MGR(cli): allocated meta-sequence "
+                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated meta-sequence "
                        "["LPX64"-"LPX64"]\n", seq->seq_cl_range.lr_start,
                        seq->seq_cl_range.lr_end);
         }
@@ -160,7 +160,7 @@ seq_client_alloc_seq(struct lu_client_seq *seq, __u64 *seqnr)
         up(&seq->seq_sem);
 
         if (rc == 0) {
-                CDEBUG(D_INFO, "SEQ-MGR(cli): allocated sequence "
+                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated sequence "
                        "["LPX64"]\n", *seqnr);
         }
         RETURN(rc);
@@ -266,7 +266,7 @@ out:
         if (rc)
                 seq_client_fini(seq);
         else
-                CDEBUG(D_INFO, "Client Sequence Manager initialized\n");
+                CDEBUG(D_INFO|D_WARNING, "Client Sequence Manager initialized\n");
         return rc;
 }
 EXPORT_SYMBOL(seq_client_init);
@@ -278,7 +278,7 @@ void seq_client_fini(struct lu_client_seq *seq)
                 class_export_put(seq->seq_exp);
                 seq->seq_exp = NULL;
         }
-        CDEBUG(D_INFO, "Client Sequence Manager finalized\n");
+        CDEBUG(D_INFO|D_WARNING, "Client Sequence Manager finalized\n");
         EXIT;
 }
 EXPORT_SYMBOL(seq_client_fini);
@@ -347,9 +347,8 @@ seq_server_alloc_super(struct lu_server_seq *seq,
         }
 
         if (rc == 0) {
-                CDEBUG(D_INFO, "SEQ-MGR(srv): allocated super-sequence "
-                       "["LPX64"-"LPX64"]\n", range->lr_start,
-                       range->lr_end);
+                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): allocated super-sequence "
+                       "["LPX64"-"LPX64"]\n", range->lr_start, range->lr_end);
         }
         
         RETURN(rc);
@@ -396,9 +395,8 @@ seq_server_alloc_meta(struct lu_server_seq *seq,
         range->lr_end = ms_range->lr_start;
 
         if (rc == 0) {
-                CDEBUG(D_INFO, "SEQ-MGR(srv): allocated meta-sequence "
-                       "["LPX64"-"LPX64"]\n", range->lr_start,
-                       range->lr_end);
+                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): allocated meta-sequence "
+                       "["LPX64"-"LPX64"]\n", range->lr_start, range->lr_end);
         }
 
         RETURN(rc);
@@ -601,7 +599,7 @@ out:
 	if (rc)
 		seq_server_fini(seq, ctx);
         else
-                CDEBUG(D_INFO, "Server Sequence Manager initialized\n");
+                CDEBUG(D_INFO|D_WARNING, "Server Sequence Manager initialized\n");
 	return rc;
 } 
 EXPORT_SYMBOL(seq_server_init);
@@ -627,14 +625,14 @@ seq_server_fini(struct lu_server_seq *seq,
                 seq->seq_dev = NULL;
         }
         
-        CDEBUG(D_INFO, "Server Sequence Manager finalized\n");
+        CDEBUG(D_INFO|D_WARNING, "Server Sequence Manager finalized\n");
 }
 EXPORT_SYMBOL(seq_server_fini);
 
 static int fid_init(void)
 {
 	ENTRY;
-        CDEBUG(D_INFO, "Lustre Sequence Manager\n");
+        CDEBUG(D_INFO|D_WARNING, "Lustre Sequence Manager\n");
 	RETURN(0);
 }
 

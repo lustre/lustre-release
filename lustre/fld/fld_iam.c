@@ -101,6 +101,8 @@ static struct lu_context_key fld_thread_key = {
         .lct_fini = fld_key_fini
 };
 
+/* XXX: disabled until IAM is ready */
+#if 0
 static struct dt_key *fld_key(const struct lu_context *ctx,
                               const fidseq_t seq)
 {
@@ -126,11 +128,13 @@ static struct dt_rec *fld_rec(const struct lu_context *ctx,
         info->fti_rec = cpu_to_be64(mds);
         RETURN((void *)&info->fti_rec);
 }
+#endif
 
 int fld_handle_insert(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
                       fidseq_t seq, mdsno_t mds)
 {
+#if 0
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
         struct txn_param txn;
@@ -149,12 +153,16 @@ int fld_handle_insert(struct lu_server_fld *fld,
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
+#endif
+        /* XXX: stub until IAM is ready */
+        return 0;
 }
 
 int fld_handle_delete(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
                       fidseq_t seq)
 {
+#if 0
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
         struct txn_param txn;
@@ -169,12 +177,16 @@ int fld_handle_delete(struct lu_server_fld *fld,
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
+#endif
+        /* XXX: stub until IAM is ready */
+        return 0;
 }
 
 int fld_handle_lookup(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
                       fidseq_t seq, mdsno_t *mds)
 {
+#if 0
         struct dt_object *dt_obj = fld->fld_obj;
         struct dt_rec    *rec = fld_rec(ctx, 0);
         int rc;
@@ -185,6 +197,10 @@ int fld_handle_lookup(struct lu_server_fld *fld,
         if (rc == 0)
                 *mds = be64_to_cpu(*(__u64 *)rec);
         RETURN(rc);
+#endif
+        /* XXX: stub until IAM is ready */
+        *mds = 0;
+        return 0;
 }
 
 int fld_iam_init(struct lu_server_fld *fld,

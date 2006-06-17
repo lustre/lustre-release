@@ -725,6 +725,7 @@ static int osd_build_fid(struct osd_device *osd,
 {
         struct inode *inode = dentry->d_inode;
         int result;
+        
         /*
          * Build fid from inode.
          */
@@ -812,79 +813,79 @@ static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
                             struct dt_rec *rec, const struct dt_key *key)
 {
         struct osd_object     *obj = osd_dt_obj(dt);
-if (!S_ISDIR(obj->oo_inode->i_mode)) {
-        struct iam_path_descr *ipd;
-        int rc;
+        if (!S_ISDIR(obj->oo_inode->i_mode)) {
+                struct iam_path_descr *ipd;
+                int rc;
 
-        ENTRY;
+                ENTRY;
 
-        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
-        LASSERT(obj->oo_container.ic_object == obj->oo_inode);
+                LASSERT(lu_object_exists(ctxt, &dt->do_lu));
+                LASSERT(obj->oo_container.ic_object == obj->oo_inode);
 
-        ipd = lu_context_key_get(ctxt, obj->oo_cookie_key);
-        LASSERT(ipd != NULL);
+                ipd = lu_context_key_get(ctxt, obj->oo_cookie_key);
+                LASSERT(ipd != NULL);
 
-        rc = iam_lookup(&obj->oo_container, (const struct iam_key *)key,
-                        (struct iam_rec *)rec, ipd);
+                rc = iam_lookup(&obj->oo_container, (const struct iam_key *)key,
+                                (struct iam_rec *)rec, ipd);
 
-        RETURN(rc);
-} else {
-        struct osd_object      *obj  = osd_dt_obj(dt);
-        struct osd_device      *osd  = osd_obj2dev(obj);
-        struct osd_thread_info *info = lu_context_key_get(ctxt, &osd_key);
-        struct inode           *dir;
+                RETURN(rc);
+        } else {
+                struct osd_object      *obj  = osd_dt_obj(dt);
+                struct osd_device      *osd  = osd_obj2dev(obj);
+                struct osd_thread_info *info = lu_context_key_get(ctxt, &osd_key);
+                struct inode           *dir;
 
-        int result;
-
-        /*
-         * XXX temporary solution.
-         */
-        struct dentry *dentry;
-        struct dentry *parent;
-
-        LASSERT(osd_has_index(obj));
-        LASSERT(osd->od_obj_area != NULL);
-
-        info->oti_str.name = (const char *)key;
-        info->oti_str.len  = strlen((const char *)key);
-
-        dir = obj->oo_inode;
-        LASSERT(dir->i_op != NULL && dir->i_op->lookup != NULL);
-
-        parent = d_alloc_root(dir);
-        if (parent == NULL)
-                return -ENOMEM;
-
-        dentry = d_alloc(parent, &info->oti_str);
-        if (dentry != NULL) {
-                struct dentry *d;
+                int result;
 
                 /*
-                 * XXX passing NULL for nameidata should work for
-                 * ext3/ldiskfs.
+                 * XXX temporary solution.
                  */
-                d = dir->i_op->lookup(dir, dentry, NULL);
-                if (d == NULL) {
+                struct dentry *dentry;
+                struct dentry *parent;
+
+                LASSERT(osd_has_index(obj));
+                LASSERT(osd->od_obj_area != NULL);
+
+                info->oti_str.name = (const char *)key;
+                info->oti_str.len  = strlen((const char *)key);
+
+                dir = obj->oo_inode;
+                LASSERT(dir->i_op != NULL && dir->i_op->lookup != NULL);
+
+                parent = d_alloc_root(dir);
+                if (parent == NULL)
+                        return -ENOMEM;
+
+                dentry = d_alloc(parent, &info->oti_str);
+                if (dentry != NULL) {
+                        struct dentry *d;
+
                         /*
-                         * normal case, result is in @dentry.
+                         * XXX passing NULL for nameidata should work for
+                         * ext3/ldiskfs.
                          */
-                        if (dentry->d_inode != NULL)
-                                result = osd_build_fid(osd, dentry,
-                                                       (struct lu_fid *)rec);
-                        else
-                                result = -ENOENT;
-                } else {
-                        /* What? Disconnected alias? Ppheeeww... */
-                        CERROR("Aliasing where not expected\n");
-                        result = -EIO;
-                        dput(d);
-                }
-                dput(dentry);
-        } else
-                result = -ENOMEM;
-        dput(parent);
-        return result;
-}
+                        d = dir->i_op->lookup(dir, dentry, NULL);
+                        if (d == NULL) {
+                                /*
+                                 * normal case, result is in @dentry.
+                                 */
+                                if (dentry->d_inode != NULL)
+                                        result = osd_build_fid(osd, dentry,
+                                                               (struct lu_fid *)rec);
+                                else
+                                        result = -ENOENT;
+                        } else {
+                                /* What? Disconnected alias? Ppheeeww... */
+                                CERROR("Aliasing where not expected\n");
+                                result = -EIO;
+                                dput(d);
+                        }
+                        dput(dentry);
+                } else
+                        result = -ENOMEM;
+                dput(parent);
+                return result;
+        }
 }
 
 static int osd_add_rec(struct osd_thread_info *info, struct osd_device *dev,

@@ -36,6 +36,15 @@
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
+/* XXX: fix layter this hack. It exists because OSD produces fids with like
+   this: seq = ROOT_SEQ + 1, etc. */
+static int cmm_special_fid(const struct lu_fid *fid)
+{
+        if (fid_seq(fid) < LUSTRE_SEQ_SPACE_START)
+                return 1;
+        return 0;
+}
+
 #ifdef CMM_CODE
 static int cmm_fld_lookup(struct cmm_device *cm,
                           const struct lu_fid *fid)
@@ -43,7 +52,7 @@ static int cmm_fld_lookup(struct cmm_device *cm,
         __u64 mds;
         int rc;
         ENTRY;
-        
+
         LASSERT(fid_is_sane(fid));
         rc = fld_client_lookup(&cm->cmm_fld, fid_seq(fid), &mds);
         if (rc) {
@@ -73,8 +82,13 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
         int mdsnum, rc;
         ENTRY;
 
-        /* get object location */
-        mdsnum = cmm_fld_lookup(lu2cmm_dev(ld), fid);
+        /* XXX: is this correct? We need this to prevent FLD lookups while CMM
+         * did not initialized yet all MDCs. */
+        if (cmm_special_fid(fid))
+                mdsnum = 0;
+        else
+                /* get object location */
+                mdsnum = cmm_fld_lookup(lu2cmm_dev(ld), fid);
 
         /* select the proper set of operations based on object location */
         if (mdsnum == lu2cmm_dev(ld)->cmm_local_num) {
@@ -703,8 +717,14 @@ static int cmm_object_init(const struct lu_context *ctx, struct lu_object *lo)
 
         ENTRY;
 
+        /* XXX: is this correct? We need this to prevent FLD lookups while CMM
+         * did not initialized yet all MDCs. */
+        if (cmm_special_fid(fid))
+                mdsnum = 0;
+        else
+                mdsnum = cmm_fld_lookup(cd, fid);
+
         /* under device can be MDD or MDC */
-        mdsnum = cmm_fld_lookup(cd, fid);
         c_dev = cmm_get_child(cd, mdsnum);
         if (c_dev == NULL) {
                 rc = -ENOENT;

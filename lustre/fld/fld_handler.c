@@ -211,6 +211,8 @@ int fld_client_add_export(struct lu_client_fld *fld,
 
         LASSERT(exp != NULL);
 
+        CWARN("adding export %s\n", exp->exp_client_uuid.uuid);
+        
         spin_lock(&fld->fld_lock);
         list_for_each_entry(fld_exp, &fld->fld_exports, exp_fld_chain) {
                 if (obd_uuid_equals(&fld_exp->exp_client_uuid,
@@ -397,17 +399,14 @@ fld_client_get(struct lu_client_fld *fld,
         ENTRY;
 
         fld_exp = fld_client_get_export(fld, seq);
-        if (!fld_exp) {
-                /* XXX: hack, should be fixed later */
-                rc = 0;
-                *mds = 0;
-        } else {
-                md_fld.mf_seq = seq;
-                rc = fld_client_rpc(fld_exp,
-                                    &md_fld, FLD_LOOKUP);
-                if (rc == 0)
-                        *mds = md_fld.mf_mds;
-        }
+        if (!fld_exp)
+                RETURN(-EINVAL);
+                
+        md_fld.mf_seq = seq;
+        rc = fld_client_rpc(fld_exp,
+                            &md_fld, FLD_LOOKUP);
+        if (rc == 0)
+                *mds = md_fld.mf_mds;
 
         RETURN(rc);
 }
