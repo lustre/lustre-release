@@ -1092,6 +1092,18 @@ mass_config() {
             return 1    
         fi
 
+        # create the mount point on the node
+        COMMAND="mkdir -p ${MOUNT_POINT[i]}"
+        verbose_output "Creating the mount point ${MOUNT_POINT[i]} on" \
+                       "${HOST_NAME[i]}"
+        ${REMOTE} ${HOST_NAME[i]} "${COMMAND}" >&2 
+        if [ $? -ne 0 ]; then
+            echo >&2 "`basename $0`: mass_config() error:"\
+                 "Failed to execute remote command to"\
+                 "create the mountpoint on ${HOST_NAME[i]}!"
+            return 1
+        fi
+
         if ! is_mgs_node ${HOST_NAME[i]}; then
             # Execute remote command to add lnet options lines to 
             # modprobe.conf/modules.conf
