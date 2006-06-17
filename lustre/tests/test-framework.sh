@@ -133,12 +133,12 @@ start() {
     shift
     device=$1
     shift
-    echo "Starting ${facet}: $@ ${device} /mnt/${facet}"
-    do_facet ${facet} mkdir -p /mnt/${facet}
-    do_facet ${facet} mount -t lustre $@ ${device} /mnt/${facet} 
+    echo "Starting ${facet}: $@ ${device} ${MOUNT%/*}/${facet}"
+    do_facet ${facet} mkdir -p ${MOUNT%/*}/${facet}
+    do_facet ${facet} mount -t lustre $@ ${device} ${MOUNT%/*}/${facet} 
     RC=${PIPESTATUS[0]}
     if [ $RC -ne 0 ]; then
-        echo mount -t lustre $@ ${device} /mnt/${facet} 
+        echo mount -t lustre $@ ${device} ${MOUNT%/*}/${facet} 
         echo Start of ${device} on ${facet} failed ${RC}
     else 
         do_facet ${facet} sync
@@ -159,10 +159,10 @@ stop() {
     HOST=`facet_active_host $facet`
     [ -z $HOST ] && echo stop: no host for $facet && return 0
 
-    running=`do_facet ${facet} "grep -c /mnt/${facet}' ' /proc/mounts" | grep -v "CMD: "`
+    running=`do_facet ${facet} "grep -c ${MOUNT%/*}/${facet}' ' /proc/mounts" | grep -v "CMD: "`
     if [ ${running} -ne 0 ]; then
-        echo "Stopping /mnt/${facet} (opts:$@)"
-        do_facet ${facet} umount -d $@ /mnt/${facet}
+        echo "Stopping ${MOUNT%/*}/${facet} (opts:$@)"
+        do_facet ${facet} umount -d $@ ${MOUNT%/*}/${facet}
     fi
 
     [ -e /proc/fs/lustre ] && grep "ST " /proc/fs/lustre/devices && echo "service didn't stop" && exit 1
