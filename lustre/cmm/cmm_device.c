@@ -207,6 +207,7 @@ static void cmm_device_free(const struct lu_context *ctx, struct lu_device *d)
         struct cmm_device *m = lu2cmm_dev(d);
 
 	LASSERT(atomic_read(&d->ld_ref) == 0);
+        LASSERT(m->cmm_tgt_count == 0);
 	md_device_fini(&m->cmm_md_dev);
         OBD_FREE_PTR(m);
 }
@@ -262,6 +263,7 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
                 lu_device_put(cmm2lu_dev(cm));
                 ld->ld_type->ldt_ops->ldto_device_fini(ctx, ld_m);
                 ld->ld_type->ldt_ops->ldto_device_free(ctx, ld_m);
+                cm->cmm_tgt_count--;
         }
 
         EXIT;
@@ -312,7 +314,7 @@ static void __exit cmm_mod_exit(void)
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Clustered Meta-data Manager Prototype ("LUSTRE_CMM0_NAME")");
+MODULE_DESCRIPTION("Lustre Clustered Metadata Manager ("LUSTRE_CMM0_NAME")");
 MODULE_LICENSE("GPL");
 
-cfs_module(cmm, "0.0.3", cmm_mod_init, cmm_mod_exit);
+cfs_module(cmm, "0.1.0", cmm_mod_init, cmm_mod_exit);

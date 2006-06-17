@@ -149,7 +149,7 @@ static struct lu_device *mdc_device_fini(const struct lu_context *ctx,
                                          struct lu_device *ld)
 {
 	struct mdc_device *mc = lu2mdc_dev(ld);
-        //TODO: disconnect from MDC OBD, finalize all other things.
+
         ENTRY;
 
         mdc_del_obd(mc);

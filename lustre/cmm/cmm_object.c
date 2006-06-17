@@ -548,7 +548,7 @@ static int cmr_create(const struct lu_context *ctx,
 
         ENTRY;
 
-        //TODO: check the name isn't exist
+        //XXX: make sure that MDT checks name isn't exist
 
         /* remote object creation and local name insert */
         rc = mo_object_create(ctx, cmm2child_obj(md2cmm_obj(mo_c)), attr);
@@ -566,7 +566,7 @@ static int cmr_link(const struct lu_context *ctx, struct md_object *mo_p,
         int rc;
         ENTRY;
 
-        //TODO: check the name isn't exist
+        //XXX: make sure that MDT checks name isn't exist
 
         rc = mo_ref_add(ctx, cmm2child_obj(md2cmm_obj(mo_s)));
         if (rc == 0) {
@@ -608,7 +608,7 @@ static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
         rc = mdo_rename_tgt(ctx, c_pn, NULL/* mo_t */, lf, t_name);
         /* only old name is removed localy */
         if (rc == 0) 
-                rc = mdo_name_destroy(ctx, c_po, s_name); 
+                rc = mdo_name_remove(ctx, c_po, s_name); 
 
         RETURN(rc);
 }
