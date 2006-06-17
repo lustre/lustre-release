@@ -41,7 +41,7 @@ EOF
 
 #****************************** Global variables ******************************#
 # Scripts to be called
-SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"/usr/local/sbin"}
+SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"$(cd `dirname $0`; echo $PWD)"}
 SCRIPT_VERIFY_SRVIP=${SCRIPTS_PATH}/lc_servip.sh
 SCRIPT_GEN_MONCF=${SCRIPTS_PATH}/lc_mon.sh		# create mon.cf file
 

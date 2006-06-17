@@ -160,7 +160,7 @@ LCTL=${LCTL:-"$CMD_PATH/lctl"}
 EXPORT_PATH=${EXPORT_PATH:-"PATH=\$PATH:/sbin:/usr/sbin;"}
 
 # Some scripts to be called
-SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"/usr/local/sbin"}
+SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"$(cd `dirname $0`; echo $PWD)"}
 MODULE_CONFIG=${SCRIPTS_PATH}/lc_modprobe.sh
 VERIFY_CLUSTER_NET=${SCRIPTS_PATH}/lc_net.sh
 GEN_HB_CONFIG=${SCRIPTS_PATH}/lc_hb.sh
