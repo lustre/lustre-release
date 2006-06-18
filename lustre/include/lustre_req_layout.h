@@ -29,9 +29,6 @@
 #ifndef _LUSTRE_REQ_LAYOUT_H__
 #define _LUSTRE_REQ_LAYOUT_H__
 
-/* struct ptlrpc_request, lustre_msg* */
-#include <lustre_net.h>
-
 struct req_msg_field;
 struct req_format;
 struct req_capsule;
@@ -51,6 +48,11 @@ struct req_capsule {
         enum req_location        rc_loc;
         int                     *rc_area;
 };
+
+#if !defined(__REQ_LAYOUT_USER__)
+
+/* struct ptlrpc_request, lustre_msg* */
+#include <lustre_net.h>
 
 void req_capsule_init(struct req_capsule *pill, struct ptlrpc_request *req,
                       enum req_location location, int *area);
@@ -81,6 +83,9 @@ int req_capsule_field_present(const struct req_capsule *pill,
 
 int  req_layout_init(void);
 void req_layout_fini(void);
+
+/* __REQ_LAYOUT_USER__ */
+#endif
 
 extern const struct req_format RQF_SEQ_QUERY;
 extern const struct req_format RQF_FLD_QUERY;

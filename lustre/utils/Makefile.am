@@ -17,7 +17,7 @@ rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest \
 	mount_lustre mkfs_lustre mkfs.lustre \
 	tunefs_lustre tunefs.lustre l_getgroups
-bin_PROGRAMS = lfs llog_reader create_iam
+bin_PROGRAMS = lfs llog_reader create_iam req_layout
 lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)
 bin_SCRIPTS = $(bin_scripts)
@@ -45,6 +45,7 @@ wiretest_SOURCES = wiretest.c
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 create_iam_SOURCES = create_iam.c
+req_layout_SOURCES = create-iam.c
 
 llog_reader_SOURCES = llog_reader.c
 llog_reader_LDADD := $(LIBPTLCTL)

@@ -26,6 +26,8 @@
  *   license text for more details.
  */
 
+#if !defined(__REQ_LAYOUT_USER__)
+
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
@@ -45,6 +47,9 @@
 #include <lustre/lustre_idl.h>
 /* obd2cli_tgt() (required by DEBUG_REQ()) */
 #include <obd.h>
+
+/* __REQ_LAYOUT_USER__ */
+#endif
 
 /* struct ptlrpc_request, lustre_msg* */
 #include <lustre_req_layout.h>
@@ -480,6 +485,8 @@ const struct req_format RQF_LDLM_INTENT_UNLINK =
                         ldlm_intent_unlink_client, ldlm_intent_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_UNLINK);
 
+#if !defined(__REQ_LAYOUT_USER__)
+
 int req_layout_init(void)
 {
         int i;
@@ -738,3 +745,6 @@ int req_capsule_field_present(const struct req_capsule *pill,
         return __req_msg(pill, loc)->bufcount > offset;
 }
 EXPORT_SYMBOL(req_capsule_field_present);
+
+/* __REQ_LAYOUT_USER__ */
+#endif
