@@ -205,7 +205,8 @@ int fld_client_add_export(struct lu_client_fld *fld,
 
         LASSERT(exp != NULL);
 
-        CWARN("adding export %s\n", exp->exp_client_uuid.uuid);
+        CDEBUG(D_INFO|D_WARNING, "adding export %s\n",
+	       exp->exp_client_uuid.uuid);
         
         spin_lock(&fld->fld_lock);
         list_for_each_entry(fld_exp, &fld->fld_exports, exp_fld_chain) {
@@ -271,7 +272,7 @@ int fld_client_init(struct lu_client_fld *fld, int hash)
         fld->fld_hash = &fld_hash[hash];
         fld->fld_count = 0;
         
-        CDEBUG(D_INFO, "Client FLD initialized, using %s\n",
+        CDEBUG(D_INFO|D_WARNING, "Client FLD initialized, using %s\n",
                fld->fld_hash->fh_name);
         RETURN(rc);
 }
@@ -291,7 +292,7 @@ void fld_client_fini(struct lu_client_fld *fld)
                 class_export_get(fld_exp);
         }
         spin_unlock(&fld->fld_lock);
-        CDEBUG(D_INFO, "Client FLD finalized\n");
+        CDEBUG(D_INFO|D_WARNING, "Client FLD finalized\n");
         EXIT;
 }
 EXPORT_SYMBOL(fld_client_fini);

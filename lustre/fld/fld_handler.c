@@ -256,7 +256,7 @@ fld_server_init(struct lu_server_fld *fld,
         if (rc != 0)
                 fld_server_fini(fld, ctx);
         else
-                CDEBUG(D_INFO, "Server FLD initialized\n");
+                CDEBUG(D_INFO|D_WARNING, "Server FLD initialized\n");
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_server_init);
@@ -286,7 +286,7 @@ fld_server_fini(struct lu_server_fld *fld,
                 fld_iam_fini(fld, ctx);
                 fld->fld_dt = NULL;
         }
-        CDEBUG(D_INFO, "Server FLD finalized\n");
+        CDEBUG(D_INFO|D_WARNING, "Server FLD finalized\n");
         EXIT;
 }
 EXPORT_SYMBOL(fld_server_fini);
