@@ -235,8 +235,8 @@ static int mdt_getattr_name_internal(struct mdt_thread_info *info,
                 mdt_pack_attr2body(body, &info->mti_attr);
                 body->fid1 = *mdt_object_fid(child);
                 body->valid |= OBD_MD_FLID;
-               
-                /* pack MD here */ 
+
+                /* pack MD here */
                 body->eadatasize = 0;
         } else
                 mdt_object_unlock(info->mti_mdt->mdt_namespace, child, lhc);
@@ -1233,7 +1233,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         struct mdt_lock_handle lhc = {{0}};
 
         ENTRY;
-        
+
         switch (opcode) {
         case MDT_IT_LOOKUP:
                 child_bits = MDS_INODELOCK_LOOKUP;
@@ -1438,14 +1438,6 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         RETURN(rc);
 }
 
-static int mdt_config(const struct lu_context *ctx, struct mdt_device *m,
-                      const char *name, void *buf, int size, int mode)
-{
-        struct md_device *child = m->mdt_child;
-        ENTRY;
-        RETURN(child->md_ops->mdo_config(ctx, child, name, buf, size, mode));
-}
-
 /*
  * Seq wrappers
  */
@@ -1485,8 +1477,8 @@ static int mdt_seq_init(const struct lu_context *ctx,
                                      0, ctx);
         } else
                 rc = -ENOMEM;
-        
-        if (rc) 
+
+        if (rc)
                 mdt_seq_fini(ctx, m);
         RETURN(rc);
 }
@@ -1547,7 +1539,7 @@ static int mdt_controller_init(const struct lu_context *ctx,
                                 RETURN(rc);
 
                         LASSERT(ls->ls_server_seq != NULL);
-                        
+
                         rc = seq_server_controller(ls->ls_server_seq,
                                                    ls->ls_client_seq,
                                                    ctx);
@@ -1557,19 +1549,22 @@ static int mdt_controller_init(const struct lu_context *ctx,
         RETURN(rc);
 }
 
-static int mdt_controller_fini(struct mdt_device *m)
+static void mdt_controller_fini(struct mdt_device *m)
 {
         struct lu_site *ls;
-        int rc;
+
         ENTRY;
 
         ls = m->mdt_md_dev.md_lu_dev.ld_site;
         if (ls && ls->ls_controller) {
+                int rc;
+
                 rc = obd_disconnect(ls->ls_controller);
                 ls->ls_controller = NULL;
+                if (rc != 0)
+                        CERROR("Failure to disconnect obd: %d\n", rc);
         }
-
-        RETURN(rc);
+        EXIT;
 }
 
 /*
