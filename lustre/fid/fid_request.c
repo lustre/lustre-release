@@ -96,13 +96,12 @@ seq_client_alloc_super(struct lu_client_seq *seq)
         int rc;
         ENTRY;
 
-        LASSERT(seq->seq_flags & LUSTRE_CLI_SEQ_SERVER);
-        rc = seq_client_rpc(seq, &seq->seq_cl_range,
+        rc = seq_client_rpc(seq, &seq->seq_range,
                             SEQ_ALLOC_SUPER);
         if (rc == 0) {
                 CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated super-sequence "
-                       "["LPX64"-"LPX64"]\n", seq->seq_cl_range.lr_start,
-                       seq->seq_cl_range.lr_end);
+                       "["LPX64"-"LPX64"]\n", seq->seq_range.lr_start,
+                       seq->seq_range.lr_end);
         }
         RETURN(rc);
 }
@@ -115,13 +114,12 @@ seq_client_alloc_meta(struct lu_client_seq *seq)
         int rc;
         ENTRY;
 
-        LASSERT(seq->seq_flags & LUSTRE_CLI_SEQ_CLIENT);
-        rc = seq_client_rpc(seq, &seq->seq_cl_range,
+        rc = seq_client_rpc(seq, &seq->seq_range,
                             SEQ_ALLOC_META);
         if (rc == 0) {
                 CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated meta-sequence "
-                       "["LPX64"-"LPX64"]\n", seq->seq_cl_range.lr_start,
-                       seq->seq_cl_range.lr_end);
+                       "["LPX64"-"LPX64"]\n", seq->seq_range.lr_start,
+                       seq->seq_range.lr_end);
         }
         RETURN(rc);
 }
@@ -135,15 +133,13 @@ seq_client_alloc_seq(struct lu_client_seq *seq, __u64 *seqnr)
         ENTRY;
 
         down(&seq->seq_sem);
-
-        LASSERT(seq->seq_flags & LUSTRE_CLI_SEQ_CLIENT);
-        LASSERT(range_is_sane(&seq->seq_cl_range));
+        LASSERT(range_is_sane(&seq->seq_range));
 
         /* if we still have free sequences in meta-sequence we allocate new seq
          * from given range. */
-        if (seq->seq_cl_range.lr_end > seq->seq_cl_range.lr_start) {
-                *seqnr = seq->seq_cl_range.lr_start;
-                seq->seq_cl_range.lr_start += 1;
+        if (seq->seq_range.lr_end > seq->seq_range.lr_start) {
+                *seqnr = seq->seq_range.lr_start;
+                seq->seq_range.lr_start += 1;
                 rc = 0;
         } else {
                 /* meta-sequence is exhausted, request MDT to allocate new
@@ -154,8 +150,8 @@ seq_client_alloc_seq(struct lu_client_seq *seq, __u64 *seqnr)
                                "rc %d\n", rc);
                 }
                 
-                *seqnr = seq->seq_cl_range.lr_start;
-                seq->seq_cl_range.lr_start += 1;
+                *seqnr = seq->seq_range.lr_start;
+                seq->seq_range.lr_start += 1;
         }
         up(&seq->seq_sem);
 
@@ -170,36 +166,42 @@ EXPORT_SYMBOL(seq_client_alloc_seq);
 int
 seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
 {
+        __u64 seqnr = 0;
         int rc;
         ENTRY;
 
         LASSERT(fid != NULL);
-        LASSERT(fid_is_sane(&seq->seq_fid));
-        LASSERT(seq->seq_flags & LUSTRE_CLI_SEQ_CLIENT);
 
         down(&seq->seq_sem);
-        if (fid_oid(&seq->seq_fid) < LUSTRE_SEQ_WIDTH) {
-                *fid = seq->seq_fid;
-                seq->seq_fid.f_oid += 1;
-                rc = 0;
-        } else {
-                __u64 seqnr = 0;
-                
+
+        if (!fid_is_sane(&seq->seq_fid) ||
+            fid_oid(&seq->seq_fid) >= LUSTRE_SEQ_WIDTH)
+        {
+                /* allocate new sequence for case client hass no sequence at all
+                 * or sequnece is exhausted and should be switched. */
+                up(&seq->seq_sem);
                 rc = seq_client_alloc_seq(seq, &seqnr);
+                down(&seq->seq_sem);
                 if (rc) {
                         CERROR("can't allocate new sequence, "
                                "rc %d\n", rc);
                         GOTO(out, rc);
-                } else {
-                        seq->seq_fid.f_oid = LUSTRE_FID_INIT_OID;
-                        seq->seq_fid.f_seq = seqnr;
-                        seq->seq_fid.f_ver = 0;
-                        
-                        *fid = seq->seq_fid;
-                        seq->seq_fid.f_oid += 1;
-                        rc = -ERESTART;
                 }
+
+                /* init new fid */
+                seq->seq_fid.f_oid = LUSTRE_FID_INIT_OID;
+                seq->seq_fid.f_seq = seqnr;
+                seq->seq_fid.f_ver = 0;
+
+                /* inform caller that sequnece switch is performed to allow it
+                 * to setup FLD for it. */
+                rc = -ERESTART;
+        } else {
+                seq->seq_fid.f_oid += 1;
+                rc = 0;
         }
+
+        *fid = seq->seq_fid;
         LASSERT(fid_is_sane(fid));
         
         CDEBUG(D_INFO, "SEQ-MGR(cli): allocated FID "DFID3"\n",
@@ -217,57 +219,23 @@ seq_client_init(struct lu_client_seq *seq,
                 struct obd_export *exp,
                 int flags)
 {
-        int rc;
         ENTRY;
 
-        LASSERT(flags & (LUSTRE_CLI_SEQ_CLIENT |
-                         LUSTRE_CLI_SEQ_SERVER));
-
+        LASSERT(exp != NULL);
+        
         seq->seq_flags = flags;
         fid_zero(&seq->seq_fid);
         sema_init(&seq->seq_sem, 1);
         
-        seq->seq_cl_range.lr_end = 0;
-        seq->seq_cl_range.lr_start = 0;
+        seq->seq_range.lr_end = 0;
+        seq->seq_range.lr_start = 0;
 	
         if (exp != NULL)
                 seq->seq_exp = class_export_get(exp);
 
-        if (seq->seq_flags & LUSTRE_CLI_SEQ_CLIENT) {
-                __u64 seqnr = 0;
-                
-                /* client (llite or MDC) init case, we need new sequence from
-                 * MDT. This will allocate new meta-sequemce first, because seq
-                 * range in init state and looks the same as exhausted. */
-                rc = seq_client_alloc_seq(seq, &seqnr);
-                if (rc) {
-                        CERROR("can't allocate new sequence, rc %d\n", rc);
-                        GOTO(out, rc);
-                } else {
-                        seq->seq_fid.f_oid = LUSTRE_FID_INIT_OID;
-                        seq->seq_fid.f_seq = seqnr;
-                        seq->seq_fid.f_ver = 0;
-                }
-
-                LASSERT(fid_is_sane(&seq->seq_fid));
-        } else {
-                /* check if this is controller node is trying to init client. */
-                if (seq->seq_exp) {
-                        /* MDT uses client seq manager to talk to sequence
-                         * controller, and thus, we need super-sequence. */
-                        rc = seq_client_alloc_super(seq);
-                } else {
-                        rc = 0;
-                }
-        }
-
-        EXIT;
-out:
-        if (rc)
-                seq_client_fini(seq);
-        else
-                CDEBUG(D_INFO|D_WARNING, "Client Sequence Manager initialized\n");
-        return rc;
+        CDEBUG(D_INFO|D_WARNING, "Client Sequence "
+               "Manager initialized\n");
+        RETURN(0);
 }
 EXPORT_SYMBOL(seq_client_init);
 

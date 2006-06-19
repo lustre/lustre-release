@@ -1458,31 +1458,12 @@ static int mdt_seq_init(const struct lu_context *ctx,
 
         ls = m->mdt_md_dev.md_lu_dev.ld_site;
 
-        OBD_ALLOC_PTR(ls->ls_client_seq);
-
-        if (ls->ls_client_seq != NULL) {
-                rc = seq_client_init(ls->ls_client_seq,
-                                     ls->ls_controller,
-                                     LUSTRE_CLI_SEQ_SERVER);
-        } else
-                rc = -ENOMEM;
-
-        if (rc)
-                RETURN(rc);
-
         OBD_ALLOC_PTR(ls->ls_server_seq);
 
         if (ls->ls_server_seq != NULL) {
-                int flags;
-
-                flags = (ls->ls_node_id == 0) ?
-                        LUSTRE_SRV_SEQ_CONTROLLER :
-                        LUSTRE_SRV_SEQ_REGULAR;
-
                 rc = seq_server_init(ls->ls_server_seq,
-                                     ls->ls_client_seq,
-                                     ctx, m->mdt_bottom,
-                                     flags);
+                                     m->mdt_bottom,
+                                     0, ctx);
         } else
                 rc = -ENOMEM;
 
@@ -1509,18 +1490,22 @@ static int mdt_seq_fini(const struct lu_context *ctx,
 }
 
 /* XXX: this is ugly, should be something else */
-static int mdt_controller_init(struct mdt_device *m,
+static int mdt_controller_init(const struct lu_context *ctx,
+                               struct mdt_device *m,
                                struct lustre_cfg *cfg)
 {
+        struct lu_site *ls = m->mdt_md_dev.md_lu_dev.ld_site;
         struct obd_device *mdc;
         struct obd_uuid uuid;
-        struct lu_site *ls;
         char *uuid_str;
         int rc, index;
         ENTRY;
 
         index = simple_strtol(lustre_cfg_string(cfg, 2), NULL, 10);
-        if (index != 0)
+
+        /* check if this is first MDC add and controller is not yet
+         * initialized. */
+        if (index != 0 || ls->ls_controller)
                 RETURN(0);
 
         uuid_str = lustre_cfg_string(cfg, 1);
@@ -1545,8 +1530,25 @@ static int mdt_controller_init(struct mdt_device *m,
                         CERROR("target %s connect error %d\n",
                                mdc->obd_name, rc);
                 } else {
-                        ls = m->mdt_md_dev.md_lu_dev.ld_site;
                         ls->ls_controller = class_conn2export(&conn);
+
+                        OBD_ALLOC_PTR(ls->ls_client_seq);
+
+                        if (ls->ls_client_seq != NULL) {
+                                rc = seq_client_init(ls->ls_client_seq,
+                                                     ls->ls_controller,
+                                                     0);
+                        } else
+                                rc = -ENOMEM;
+
+                        if (rc)
+                                RETURN(rc);
+
+                        LASSERT(ls->ls_server_seq != NULL);
+                        
+                        rc = seq_server_controller(ls->ls_server_seq,
+                                                   ls->ls_client_seq,
+                                                   ctx);
                 }
         }
 
@@ -1922,7 +1924,7 @@ static int mdt_process_config(const struct lu_context *ctx,
         case LCFG_ADD_MDC:
                 /* add mdc hook to get first MDT uuid and connect it to
                  * ls->controller to use for seq manager. */
-                err = mdt_controller_init(mdt_dev(d), cfg);
+                err = mdt_controller_init(ctx, mdt_dev(d), cfg);
                 if (err) {
                         CERROR("can't initialize controller export, "
                                "rc %d\n", err);

@@ -45,7 +45,7 @@ wiretest_SOURCES = wiretest.c
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 create_iam_SOURCES = create_iam.c
-req_layout_SOURCES = create-iam.c
+req_layout_SOURCES = req-layout.c
 
 llog_reader_SOURCES = llog_reader.c
 llog_reader_LDADD := $(LIBPTLCTL)

@@ -1067,8 +1067,7 @@ static int mdc_fid_init(struct obd_export *exp)
                 RETURN(-ENOMEM);
 
         /* init client side of sequence-manager */
-        rc = seq_client_init(cli->cl_seq, exp,
-                             LUSTRE_CLI_SEQ_CLIENT);
+        rc = seq_client_init(cli->cl_seq, exp, 0);
         if (rc) {
                 OBD_FREE_PTR(cli->cl_seq);
                 cli->cl_seq = NULL;

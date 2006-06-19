@@ -49,12 +49,12 @@
 
 #ifdef __KERNEL__
 /* server side seq mgr stuff */
-static const struct lu_range LUSTRE_SEQ_SUPER_INIT = {
+static const struct lu_range LUSTRE_SEQ_SPACE_INIT = {
         LUSTRE_SEQ_SPACE_START,
-        LUSTRE_SEQ_SPACE_LIMIT
+        LUSTRE_SEQ_SPACE_END
 };
 
-static const struct lu_range LUSTRE_SEQ_META_INIT = {
+static const struct lu_range LUSTRE_SEQ_SUPER_INIT = {
         0,
         0
 };
@@ -85,28 +85,32 @@ seq_server_read_state(struct lu_server_seq *seq,
 	RETURN(rc);
 }
 
+/* on controller node, allocate new super sequence for regular sequnece
+ * server. */
 static int
 seq_server_alloc_super(struct lu_server_seq *seq,
                        struct lu_range *range)
 {
-        struct lu_range *ss_range = &seq->seq_ss_range;
+        struct lu_range *space = &seq->seq_space;
         int rc;
         ENTRY;
 
-        if (ss_range->lr_end - ss_range->lr_start < LUSTRE_SEQ_SUPER_CHUNK) {
-                CWARN("super-sequence is going to exhauste soon. "
+        LASSERT(range_is_sane(space));
+        
+        if (space->lr_end - space->lr_start < LUSTRE_SEQ_SUPER_CHUNK) {
+                CWARN("sequences space is going to exhauste soon. "
                       "Only can allocate "LPU64" sequences\n",
-                      ss_range->lr_end - ss_range->lr_start);
-                *range = *ss_range;
-                ss_range->lr_start = ss_range->lr_end;
+                      space->lr_end - space->lr_start);
+                *range = *space;
+                space->lr_start = space->lr_end;
                 rc = 0;
-        } else if (ss_range->lr_start >= ss_range->lr_end) {
-                CERROR("super-sequence is exhausted\n");
+        } else if (space->lr_start == space->lr_end) {
+                CERROR("sequences space is exhausted\n");
                 rc = -ENOSPC;
         } else {
-                range->lr_start = ss_range->lr_start;
-                ss_range->lr_start += LUSTRE_SEQ_SUPER_CHUNK;
-                range->lr_end = ss_range->lr_start;
+                range->lr_start = space->lr_start;
+                space->lr_start += LUSTRE_SEQ_SUPER_CHUNK;
+                range->lr_end = space->lr_start;
                 rc = 0;
         }
 
@@ -122,41 +126,37 @@ static int
 seq_server_alloc_meta(struct lu_server_seq *seq,
                       struct lu_range *range)
 {
-        struct lu_range *ms_range = &seq->seq_ms_range;
+        struct lu_range *super = &seq->seq_super;
         int rc;
         ENTRY;
 
-        LASSERT(range_is_sane(ms_range));
-        
+        LASSERT(range_is_sane(super));
+
         /* XXX: here should avoid cascading RPCs using kind of async
          * preallocation when meta-sequence is close to exhausting. */
-        if (ms_range->lr_start == ms_range->lr_end) {
-                if (seq->seq_flags & LUSTRE_SRV_SEQ_CONTROLLER) {
-                        /* allocate new range of meta-sequences to allocate new
-                         * meta-sequence from it. */
-                        rc = seq_server_alloc_super(seq, ms_range);
-                } else {
-                        /* request controller to allocate new super-sequence for
-                         * us.*/
-                        rc = seq_client_alloc_super(seq->seq_cli);
-                        if (rc) {
-                                CERROR("can't allocate new super-sequence, "
-                                       "rc %d\n", rc);
-                                RETURN(rc);
-                        }
-
-                        /* saving new range into allocation space. */
-                        *ms_range = seq->seq_cli->seq_cl_range;
+        if (super->lr_start == super->lr_end) {
+                if (!seq->seq_cli) {
+                        CERROR("no seq-controller client is setup\n");
+                        RETURN(-EOPNOTSUPP);
+                }
+                
+                /* request controller to allocate new super-sequence for us.*/
+                rc = seq_client_alloc_super(seq->seq_cli);
+                if (rc) {
+                        CERROR("can't allocate new super-sequence, "
+                               "rc %d\n", rc);
+                        RETURN(rc);
                 }
 
-                LASSERT(ms_range->lr_start != 0);
-                LASSERT(ms_range->lr_end > ms_range->lr_start);
+                /* saving new range into allocation space. */
+                *super = seq->seq_cli->seq_range;
+                LASSERT(range_is_sane(super));
         } else {
                 rc = 0;
         }
-        range->lr_start = ms_range->lr_start;
-        ms_range->lr_start += LUSTRE_SEQ_META_CHUNK;
-        range->lr_end = ms_range->lr_start;
+        range->lr_start = super->lr_start;
+        super->lr_start += LUSTRE_SEQ_META_CHUNK;
+        range->lr_end = super->lr_start;
 
         if (rc == 0) {
                 CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): allocated meta-sequence "
@@ -282,12 +282,61 @@ out:
         return 0;
 } 
 
+/* assigns client to sequence controller node */
+int
+seq_server_controller(struct lu_server_seq *seq,
+                      struct lu_client_seq *cli,
+                      const struct lu_context *ctx)
+{
+        int rc;
+        ENTRY;
+        
+        LASSERT(cli != NULL);
+
+        if (seq->seq_cli) {
+                CERROR("SEQ-MGR(srv): sequence-controller "
+                       "is already assigned\n");
+                RETURN(-EINVAL);
+        }
+
+        CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): assign "
+               "sequence controller client %s\n",
+               cli->seq_exp->exp_client_uuid.uuid);
+
+        /* assign controller */
+        seq->seq_cli = cli;
+
+        /* allocate new super-sequence */
+        rc = seq_client_alloc_super(cli);
+        if (rc) {
+                CERROR("can't allocate super-sequence, "
+                       "rc %d\n", rc);
+                RETURN(rc);
+        }
+
+        /* take super-seq from client seq mgr */
+        LASSERT(range_is_sane(&cli->seq_range));
+
+        down(&seq->seq_sem);
+        seq->seq_super = cli->seq_range;
+
+        /* save init seq to backing store. */
+        rc = seq_server_write_state(seq, ctx);
+        if (rc) {
+                CERROR("can't write sequence state, "
+                       "rc = %d\n", rc);
+        }
+
+        up(&seq->seq_sem);
+        
+        RETURN(rc);
+}
+EXPORT_SYMBOL(seq_server_controller);
+
 int
 seq_server_init(struct lu_server_seq *seq,
-                struct lu_client_seq *cli,
-                const struct lu_context  *ctx,
-                struct dt_device *dev,
-                int flags) 
+                struct dt_device *dev, int flags,
+                const struct lu_context *ctx) 
 {
         int rc; 
         struct ptlrpc_service_conf seq_conf = { 
@@ -303,49 +352,28 @@ seq_server_init(struct lu_server_seq *seq,
         ENTRY;
 
 	LASSERT(dev != NULL);
-	LASSERT(cli != NULL);
-        
-        LASSERT(flags & (LUSTRE_SRV_SEQ_CONTROLLER |
-                         LUSTRE_SRV_SEQ_REGULAR));
 
         seq->seq_dev = dev;
-        seq->seq_cli = cli;
+        seq->seq_cli = NULL;
         seq->seq_flags = flags;
         sema_init(&seq->seq_sem, 1);
 
+        seq->seq_space = LUSTRE_SEQ_SPACE_INIT;
+        seq->seq_super = LUSTRE_SEQ_SUPER_INIT;
+        
         lu_device_get(&seq->seq_dev->dd_lu_dev);
 
         /* request backing store for saved sequence info */
         rc = seq_server_read_state(seq, ctx);
         if (rc == -ENODATA) {
-                /* first run, no state on disk, init all seqs */
-                if (seq->seq_flags & LUSTRE_SRV_SEQ_CONTROLLER) {
-                        /* init super seq by start values on sequence-controller
-                         * node.*/
-                        seq->seq_ss_range = LUSTRE_SEQ_SUPER_INIT;
-                } else {
-                        /* take super-seq from client seq mgr */
-                        LASSERT(range_is_sane(&cli->seq_cl_range));
-                        seq->seq_ss_range = cli->seq_cl_range;
-                }
-
-                /* init meta-sequence by start values and get ready for
-                 * allocating it for clients. */
-                seq->seq_ms_range = LUSTRE_SEQ_META_INIT;
-
-                /* save init seq to backing store. */
-                rc = seq_server_write_state(seq, ctx);
-                if (rc) {
-                        CERROR("can't write sequence state, "
-                               "rc = %d\n", rc);
-			GOTO(out, rc);
-                }
+                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): no data on "
+                       "disk found, waiting for controller assign\n");
         } else if (rc) {
 		CERROR("can't read sequence state, rc = %d\n",
 		       rc);
 		GOTO(out, rc);
 	}
-
+        
 	seq->seq_service =  ptlrpc_init_svc_conf(&seq_conf,
 						 seq_req_handle,
 						 LUSTRE_SEQ0_NAME,
@@ -363,7 +391,8 @@ out:
 	if (rc)
 		seq_server_fini(seq, ctx);
         else
-                CDEBUG(D_INFO|D_WARNING, "Server Sequence Manager initialized\n");
+                CDEBUG(D_INFO|D_WARNING, "Server Sequence "
+                       "Manager initialized\n");
 	return rc;
 } 
 EXPORT_SYMBOL(seq_server_init);
@@ -372,7 +401,7 @@ void
 seq_server_fini(struct lu_server_seq *seq,
                 const struct lu_context *ctx) 
 {
-	int rc;
+        ENTRY;
 
         if (seq->seq_service != NULL) {
                 ptlrpc_unregister_service(seq->seq_service);
@@ -380,16 +409,13 @@ seq_server_fini(struct lu_server_seq *seq,
         }
 
         if (seq->seq_dev != NULL) {
-                rc = seq_server_write_state(seq, ctx);
-		if (rc) {
-			CERROR("can't save sequence state, "
-			       "rc = %d\n", rc);
-		}
                 lu_device_put(&seq->seq_dev->dd_lu_dev);
                 seq->seq_dev = NULL;
         }
         
-        CDEBUG(D_INFO|D_WARNING, "Server Sequence Manager finalized\n");
+        CDEBUG(D_INFO|D_WARNING, "Server Sequence "
+               "Manager finalized\n");
+        EXIT;
 }
 EXPORT_SYMBOL(seq_server_fini);
 
@@ -427,5 +453,5 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre FID Module");
 MODULE_LICENSE("GPL");
 
-cfs_module(fid, "0.0.3", fid_mod_init, fid_mod_exit);
+cfs_module(fid, "0.0.4", fid_mod_init, fid_mod_exit);
 #endif

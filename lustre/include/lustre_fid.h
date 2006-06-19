@@ -38,7 +38,7 @@ struct lu_context;
 #define LUSTRE_SEQ_SPACE_START  0x400
 
 /* maximal posible seq number */
-#define LUSTRE_SEQ_SPACE_LIMIT  ((__u64)~0ULL)
+#define LUSTRE_SEQ_SPACE_END  ((__u64)~0ULL)
 
 /* this is how may FIDs may be allocated in one sequence. */
 #define LUSTRE_SEQ_WIDTH 0x00000000000002800
@@ -64,7 +64,7 @@ struct lu_client_seq {
         /* range of allowed for allocation sequeces. When using lu_client_seq on
          * clients, this contains meta-sequence range. And for servers this
          * contains super-sequence range. */
-        struct lu_range         seq_cl_range;
+        struct lu_range         seq_range;
 
         /* seq related proc */
         struct proc_dir_entry  *seq_proc_entry;
@@ -76,14 +76,13 @@ struct lu_client_seq {
 #ifdef __KERNEL__
 /* server sequence manager interface */
 struct lu_server_seq {
+        /* available sequence space */
+        struct lu_range         seq_space;
+
         /* super-sequence range, all super-sequences for other servers are
          * allocated from it. */
-        struct lu_range         seq_ss_range;
-        
-        /* meta-sequence range, all meta-sequences for clients are allocated
-         * from it. */
-        struct lu_range         seq_ms_range;
-
+        struct lu_range         seq_super;
+       
         /* device for server side seq manager needs (saving sequences to backing
          * store). */
         struct dt_device       *seq_dev;
@@ -105,23 +104,17 @@ struct lu_server_seq {
 };
 #endif
 
-/* client seq mgr flags */
-#define LUSTRE_CLI_SEQ_CLIENT     (1 << 0)
-#define LUSTRE_CLI_SEQ_SERVER     (1 << 1)
-
 #ifdef __KERNEL__
-/* server seq mgr flags */
-#define LUSTRE_SRV_SEQ_CONTROLLER (1 << 0)
-#define LUSTRE_SRV_SEQ_REGULAR    (1 << 1)
-
 int seq_server_init(struct lu_server_seq *seq,
-                    struct lu_client_seq *cli,
-                    const struct lu_context  *ctx,
-                    struct dt_device *dev,
-                    int flags);
+                    struct dt_device *dev, int flags,
+                    const struct lu_context *ctx);
 
 void seq_server_fini(struct lu_server_seq *seq,
-                     const struct lu_context *ctx) ;
+                     const struct lu_context *ctx);
+
+int seq_server_controller(struct lu_server_seq *seq,
+                          struct lu_client_seq *cli,
+                          const struct lu_context *ctx);
 #endif
 
 int seq_client_init(struct lu_client_seq *seq, 
