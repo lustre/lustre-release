@@ -33,112 +33,39 @@
 #include <lustre_dlm.h>
 #include <lustre_lib.h>
 
-/* invariants:
- - only the owner of the lock changes l_owner/l_depth
- - if a non-owner changes or checks the variables a spin lock is taken
-*/
-
-void l_lock_init(struct lustre_lock *lock)
+/*
+ * ldlm locking uses resource to serialize access to locks
+ * but there is a case when we change resource of lock upon
+ * enqueue reply. we rely on that lock->l_resource = new_res
+ * is atomic
+ */
+struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock)
 {
-        sema_init(&lock->l_sem, 1);
-        spin_lock_init(&lock->l_spin);
+        struct ldlm_resource *res = lock->l_resource;
+
+        if (!res->lr_namespace->ns_client) {
+                /* on server-side resource of lock doesn't change */
+                lock_res(res);
+                return res;
+        } 
+
+        lock_bitlock(lock);
+        res = lock->l_resource;
+        lock_res(res);
+        return res;
 }
 
-void l_lock(struct lustre_lock *lock)
+void unlock_res_and_lock(struct ldlm_lock *lock)
 {
-        int owner = 0;
+        struct ldlm_resource *res = lock->l_resource;
 
-        spin_lock(&lock->l_spin);
-        if (lock->l_owner == cfs_current())
-                owner = 1;
-        spin_unlock(&lock->l_spin);
-
-        /* This is safe to increment outside the spinlock because we
-         * can only have 1 CPU running on the current task
-         * (i.e. l_owner == current), regardless of the number of CPUs.
-         */
-        if (owner) {
-                ++lock->l_depth;
-        } else {
-                mutex_down(&lock->l_sem);
-                spin_lock(&lock->l_spin);
-                lock->l_owner = cfs_current();
-                lock->l_depth = 0;
-                spin_unlock(&lock->l_spin);
-        }
-}
-
-void l_unlock(struct lustre_lock *lock)
-{
-        LASSERTF(lock->l_owner == cfs_current(), "lock %p, current %p\n",
-                 lock->l_owner, cfs_current());
-        LASSERTF(lock->l_depth >= 0, "depth %d\n", lock->l_depth);
-
-        spin_lock(&lock->l_spin);
-        if (--lock->l_depth < 0) {
-                lock->l_owner = NULL;
-                spin_unlock(&lock->l_spin);
-                mutex_up(&lock->l_sem);
+        if (!res->lr_namespace->ns_client) {
+                /* on server-side resource of lock doesn't change */
+                unlock_res(res);
                 return;
         }
-        spin_unlock(&lock->l_spin);
+
+        unlock_res(res);
+        unlock_bitlock(lock);
 }
 
-int l_has_lock(struct lustre_lock *lock)
-{
-        int depth = -1, owner = 0;
-
-        spin_lock(&lock->l_spin);
-        if (lock->l_owner == cfs_current()) {
-                depth = lock->l_depth;
-                owner = 1;
-        }
-        spin_unlock(&lock->l_spin);
-
-        if (depth >= 0)
-                CDEBUG(D_INFO, "lock_depth: %d\n", depth);
-        return owner;
-}
-
-#ifdef __KERNEL__
-void l_check_ns_lock(struct ldlm_namespace *ns)
-{
-        static cfs_time_t next_msg;
-
-        if (!l_has_lock(&ns->ns_lock) && cfs_time_after(cfs_time_current(), next_msg)) {
-                CERROR("namespace %s lock not held when it should be; tell "
-                       "phil\n", ns->ns_name);
-                libcfs_debug_dumpstack(NULL);
-                next_msg = cfs_time_shift(60);
-        }
-}
-
-void l_check_no_ns_lock(struct ldlm_namespace *ns)
-{
-        static cfs_time_t next_msg;
-
-        if (l_has_lock(&ns->ns_lock) && cfs_time_after(cfs_time_current(), next_msg)) {
-                CERROR("namespace %s lock held illegally; tell phil\n",
-                       ns->ns_name);
-                libcfs_debug_dumpstack(NULL);
-                next_msg = cfs_time_shift(60);
-        }
-}
-
-#else
-void l_check_ns_lock(struct ldlm_namespace *ns)
-{
-        if (!l_has_lock(&ns->ns_lock)) {
-                CERROR("namespace %s lock not held when it should be; tell "
-                       "phil\n", ns->ns_name);
-        }
-}
-
-void l_check_no_ns_lock(struct ldlm_namespace *ns)
-{
-        if (l_has_lock(&ns->ns_lock)) {
-                CERROR("namespace %s lock held illegally; tell phil\n",
-                       ns->ns_name);
-        }
-}
-#endif /* __KERNEL__ */

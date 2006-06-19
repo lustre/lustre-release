@@ -2726,7 +2726,7 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
                 CERROR("lockh %p, data %p - client evicted?\n", lockh, data);
                 return;
         }
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock_res_and_lock(lock);
 #ifdef __KERNEL__
 #ifdef __LINUX__
         /* Liang XXX: Darwin and Winnt checking should be added */
@@ -2746,7 +2746,7 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
 #endif
         lock->l_ast_data = data;
         lock->l_flags |= (flags & LDLM_FL_NO_LRU);
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res_and_lock(lock);
         LDLM_LOCK_PUT(lock);
 }
 

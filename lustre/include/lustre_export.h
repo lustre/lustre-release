@@ -34,6 +34,7 @@ struct osc_creator {
 
 struct ldlm_export_data {
         struct list_head       led_held_locks; /* protected by namespace lock */
+        spinlock_t             led_lock;
 };
 
 struct ec_export_data { /* echo client */

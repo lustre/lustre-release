@@ -515,20 +515,20 @@ static int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         }
 
         /* XXX layering violation!  -phil */
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock_res_and_lock(lock);
         /* Get this: if mds_blocking_ast is racing with mds_intent_policy,
          * such that mds_blocking_ast is called just before l_i_p takes the
          * ns_lock, then by the time we get the lock, we might not be the
          * correct blocking function anymore.  So check, and return early, if
          * so. */
         if (lock->l_blocking_ast != ost_blocking_ast) {
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                unlock_res_and_lock(lock);
                 RETURN(0);
         }
 
         lock->l_flags |= LDLM_FL_CBPENDING;
         do_ast = (!lock->l_readers && !lock->l_writers);
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res_and_lock(lock);
 
         if (do_ast) {
                 struct lustre_handle lockh;

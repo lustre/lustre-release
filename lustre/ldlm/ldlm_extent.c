@@ -174,7 +174,8 @@ static void ldlm_extent_policy(struct ldlm_resource *res,
  */
 static int
 ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
-                         int send_cbs, int *flags, ldlm_error_t *err)
+                         int *flags, ldlm_error_t *err,
+                         struct list_head *work_list)
 {
         struct list_head *tmp;
         struct ldlm_lock *lock;
@@ -298,18 +299,18 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                         continue;
                 }
 
-                if (!send_cbs)
+                if (!work_list)
                         RETURN(0);
 
                 compat = 0;
                 if (lock->l_blocking_ast)
-                        ldlm_add_ast_work_item(lock, req, NULL, 0);
+                        ldlm_add_ast_work_item(lock, req, work_list);
         }
 
         RETURN(compat);
 destroylock:
         list_del_init(&req->l_res_link);
-        ldlm_lock_destroy(req);
+        ldlm_lock_destroy_nolock(req);
         *err = compat;
         RETURN(compat);
 }
@@ -324,7 +325,7 @@ destroylock:
   *   - the caller has NOT initialized req->lr_tmp, so we must
   *   - must call this function with the ns lock held once */
 int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
-                             ldlm_error_t *err)
+                             ldlm_error_t *err, struct list_head *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
         struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
@@ -332,6 +333,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         ENTRY;
 
         LASSERT(list_empty(&res->lr_converting));
+        check_res_locked(res);
         *err = ELDLM_OK;
 
         if (!first_enq) {
@@ -341,12 +343,11 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                  * flags should always be zero here, and if that ever stops
                  * being true, we want to find out. */
                 LASSERT(*flags == 0);
-                LASSERT(res->lr_tmp != NULL);
-                rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 0, flags,
-                                              err);
+                rc = ldlm_extent_compat_queue(&res->lr_granted, lock, flags,
+                                              err, NULL);
                 if (rc == 1) {
-                        rc = ldlm_extent_compat_queue(&res->lr_waiting, lock, 0,
-                                                      flags, err);
+                        rc = ldlm_extent_compat_queue(&res->lr_waiting, lock,
+                                                      flags, err, NULL);
                 }
                 if (rc == 0)
                         RETURN(LDLM_ITER_STOP);
@@ -354,31 +355,26 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 ldlm_resource_unlink_lock(lock);
 
                 ldlm_extent_policy(res, lock, flags);
-                ldlm_grant_lock(lock, NULL, 0, 1);
+                ldlm_grant_lock(lock, work_list);
                 RETURN(LDLM_ITER_CONTINUE);
         }
 
  restart:
-        LASSERT(res->lr_tmp == NULL);
-        res->lr_tmp = &rpc_list;
-        rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 1, flags, err);
+        rc = ldlm_extent_compat_queue(&res->lr_granted, lock, flags, err, &rpc_list);
         if (rc < 0)
                 GOTO(out, rc); /* lock was destroyed */
-        if (rc == 2) {
-                res->lr_tmp = NULL;
+        if (rc == 2)
                 goto grant;
-        }
 
-        rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock, 1, flags, err);
+        rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock, flags, err, &rpc_list);
         if (rc2 < 0)
                 GOTO(out, rc = rc2); /* lock was destroyed */
-        res->lr_tmp = NULL;
 
         if (rc + rc2 == 2) {
         grant:
                 ldlm_extent_policy(res, lock, flags);
                 ldlm_resource_unlink_lock(lock);
-                ldlm_grant_lock(lock, NULL, 0, 0);
+                ldlm_grant_lock(lock, NULL);
         } else {
                 /* If either of the compat_queue()s returned failure, then we
                  * have ASTs to send and must go onto the waiting list.
@@ -388,9 +384,9 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                  * re-ordered!  Causes deadlock, because ASTs aren't sent! */
                 if (list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
-                l_unlock(&res->lr_namespace->ns_lock);
-                rc = ldlm_run_ast_work(res->lr_namespace, &rpc_list);
-                l_lock(&res->lr_namespace->ns_lock);
+                unlock_res(res);
+                rc = ldlm_run_bl_ast_work(&rpc_list);
+                lock_res(res);
                 if (rc == -ERESTART)
                         GOTO(restart, -ERESTART);
                 *flags |= LDLM_FL_BLOCK_GRANTED;
@@ -401,7 +397,6 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         }
         rc = 0;
 out:
-        res->lr_tmp = NULL;
         RETURN(rc);
 }
 

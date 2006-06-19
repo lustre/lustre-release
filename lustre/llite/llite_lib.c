@@ -1019,7 +1019,8 @@ struct cache_definition ll_cache_definition = {
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {
         struct inode *inode = NULL;
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        /* NOTE: we depend on atomic igrab() -bzzz */
+        lock_res_and_lock(lock);
         if (lock->l_ast_data) {
                 struct ll_inode_info *lli = ll_i2info(lock->l_ast_data);
                 if (lli->lli_inode_magic == LLI_INODE_MAGIC) {
@@ -1033,7 +1034,7 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
                         inode = NULL;
                 }
         }
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res_and_lock(lock);
         return inode;
 }
 

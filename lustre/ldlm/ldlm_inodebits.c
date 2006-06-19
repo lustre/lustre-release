@@ -35,7 +35,7 @@
 /* Determine if the lock is compatible with all locks on the queue. */
 static int
 ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
-                            int send_cbs)
+                            struct list_head *work_list)
 {
         struct list_head *tmp;
         struct ldlm_lock *lock;
@@ -61,12 +61,12 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                 if (!(lock->l_policy_data.l_inodebits.bits & req_bits))
                         continue;
 
-                if (!send_cbs)
+                if (!work_list)
                         RETURN(0);
 
                 compat = 0;
                 if (lock->l_blocking_ast)
-                        ldlm_add_ast_work_item(lock, req, NULL, 0);
+                        ldlm_add_ast_work_item(lock, req, work_list);
         }
 
         RETURN(compat);
@@ -82,7 +82,8 @@ ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
   *   - the caller has NOT initialized req->lr_tmp, so we must
   *   - must call this function with the ns lock held once */
 int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
-                                int first_enq, ldlm_error_t *err)
+                                int first_enq, ldlm_error_t *err,
+                                struct list_head *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
         struct list_head rpc_list = CFS_LIST_HEAD_INIT(rpc_list);
@@ -90,27 +91,25 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
         ENTRY;
 
         LASSERT(list_empty(&res->lr_converting));
+        check_res_locked(res);
 
         if (!first_enq) {
-                LASSERT(res->lr_tmp != NULL);
-                rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, 0);
+                LASSERT(work_list != NULL);
+                rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, NULL);
                 if (!rc)
                         RETURN(LDLM_ITER_STOP);
-                rc = ldlm_inodebits_compat_queue(&res->lr_waiting, lock, 0);
+                rc = ldlm_inodebits_compat_queue(&res->lr_waiting, lock, NULL);
                 if (!rc)
                         RETURN(LDLM_ITER_STOP);
 
                 ldlm_resource_unlink_lock(lock);
-                ldlm_grant_lock(lock, NULL, 0, 1);
+                ldlm_grant_lock(lock, work_list);
                 RETURN(LDLM_ITER_CONTINUE);
         }
 
  restart:
-        LASSERT(res->lr_tmp == NULL);
-        res->lr_tmp = &rpc_list;
-        rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, 1);
-        rc += ldlm_inodebits_compat_queue(&res->lr_waiting, lock, 1);
-        res->lr_tmp = NULL;
+        rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, &rpc_list);
+        rc += ldlm_inodebits_compat_queue(&res->lr_waiting, lock, &rpc_list);
 
         if (rc != 2) {
                 /* If either of the compat_queue()s returned 0, then we
@@ -121,15 +120,15 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
                  * re-ordered!  Causes deadlock, because ASTs aren't sent! */
                 if (list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
-                l_unlock(&res->lr_namespace->ns_lock);
-                rc = ldlm_run_ast_work(res->lr_namespace, &rpc_list);
-                l_lock(&res->lr_namespace->ns_lock);
+                unlock_res(res);
+                rc = ldlm_run_bl_ast_work(&rpc_list);
+                lock_res(res);
                 if (rc == -ERESTART)
                         GOTO(restart, -ERESTART);
                 *flags |= LDLM_FL_BLOCK_GRANTED;
         } else {
                 ldlm_resource_unlink_lock(lock);
-                ldlm_grant_lock(lock, NULL, 0, 0);
+                ldlm_grant_lock(lock, NULL);
         }
         RETURN(0);
 }

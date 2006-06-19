@@ -1165,25 +1165,25 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         lock->l_req_mode = LCK_PR;
 
         LASSERT(ns == res->lr_namespace);
-        l_lock(&ns->ns_lock);
-
-        res->lr_tmp = &rpc_list;
-        rc = policy(lock, &tmpflags, 0, &err);
-        res->lr_tmp = NULL;
+        lock_res(res);
+        rc = policy(lock, &tmpflags, 0, &err, &rpc_list);
+        check_res_locked(res);
 
         /* FIXME: we should change the policy function slightly, to not make
          * this list at all, since we just turn around and free it */
         while (!list_empty(&rpc_list)) {
-                struct ldlm_ast_work *w =
-                        list_entry(rpc_list.next, struct ldlm_ast_work, w_list);
-                list_del(&w->w_list);
-                LDLM_LOCK_PUT(w->w_lock);
-                OBD_FREE(w, sizeof(*w));
+                struct ldlm_lock *wlock =
+                        list_entry(rpc_list.next, struct ldlm_lock, l_cp_ast);
+                LASSERT((lock->l_flags & LDLM_FL_AST_SENT) == 0);
+                LASSERT(lock->l_flags & LDLM_FL_CP_REQD);
+                lock->l_flags &= ~LDLM_FL_CP_REQD;
+                list_del_init(&wlock->l_cp_ast);
+                LDLM_LOCK_PUT(wlock);
         }
 
         /* The lock met with no resistance; we're finished. */
         if (rc == LDLM_ITER_CONTINUE) {
-                l_unlock(&ns->ns_lock);
+                unlock_res(res);
                 /*
                  * do not grant locks to the liblustre clients: they cannot
                  * handle ASTs robustly.
@@ -1199,11 +1199,9 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
          * policy nicely created a list of all PW locks for us.  We will choose
          * the highest of those which are larger than the size in the LVB, if
          * any, and perform a glimpse callback. */
-        down(&res->lr_lvb_sem);
         res_lvb = res->lr_lvb_data;
         LASSERT(res_lvb != NULL);
         *reply_lvb = *res_lvb;
-        up(&res->lr_lvb_sem);
 
         list_for_each(tmp, &res->lr_granted) {
                 struct ldlm_lock *tmplock =
@@ -1242,7 +1240,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 LDLM_LOCK_PUT(l);
                 l = LDLM_LOCK_GET(tmplock);
         }
-        l_unlock(&ns->ns_lock);
+        unlock_res(res);
 
         /* There were no PW locks beyond the size in the LVB; finished. */
         if (l == NULL) {
@@ -1287,9 +1285,9 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         if (rc != 0 && ns->ns_lvbo && ns->ns_lvbo->lvbo_update)
                 ns->ns_lvbo->lvbo_update(res, NULL, 0, 1);
 
-        down(&res->lr_lvb_sem);
+        lock_res(res);
         *reply_lvb = *res_lvb;
-        up(&res->lr_lvb_sem);
+        unlock_res(res);
 
  out:
         LDLM_LOCK_PUT(l);

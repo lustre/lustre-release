@@ -1039,7 +1039,7 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
         CDEBUG(D_DLMTRACE, "lock order: "LPU64"/"LPU64"\n",
                res_id[0]->name[0], res_id[1]->name[0]);
 
-        flags = LDLM_FL_LOCAL_ONLY;
+        flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
         rc = ldlm_cli_enqueue_local(obd->obd_namespace, *res_id[0],
                                     LDLM_IBITS, policies[0], lock_modes[0],
                                     &flags, ldlm_blocking_ast, 
@@ -1054,7 +1054,7 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                 memcpy(handles[1], handles[0], sizeof(*(handles[1])));
                 ldlm_lock_addref(handles[1], lock_modes[1]);
         } else if (res_id[1]->name[0] != 0) {
-                flags = LDLM_FL_LOCAL_ONLY;
+                flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
                 rc = ldlm_cli_enqueue_local(obd->obd_namespace, *res_id[1],
                                             LDLM_IBITS, policies[1],
                                             lock_modes[1], &flags, 
@@ -1149,7 +1149,7 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
 
         /* XXX we could send ASTs on all these locks first before blocking? */
         for (i = 0; i < 4; i++) {
-                flags = 0;
+                flags = LDLM_FL_ATOMIC_CB;
                 if (res_id[i]->name[0] == 0)
                         break;
                 if (i && res_eq(res_id[i], res_id[i-1])) {
@@ -1241,7 +1241,7 @@ static int mds_verify_child(struct obd_device *obd,
         *dchildp = dchild = vchild;
 
         if (dchild->d_inode) {
-                int flags = 0;
+                int flags = LDLM_FL_ATOMIC_CB;
                 child_res_id->name[0] = dchild->d_inode->i_ino;
                 child_res_id->name[1] = dchild->d_inode->i_generation;
 

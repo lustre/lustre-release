@@ -174,7 +174,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
         struct mds_obd *mds = &obd->u.mds;
         struct dentry *de = mds_fid2dentry(mds, fid, mnt), *retval = de;
         struct ldlm_res_id res_id = { .name = {0} };
-        int flags = 0, rc;
+        int flags = LDLM_FL_ATOMIC_CB, rc;
         ldlm_policy_data_t policy = { .l_inodebits = { lockpart} }; 
         ENTRY;
 
@@ -2244,7 +2244,7 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
         if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))
                 return;
 
-        l_lock(&obd->obd_namespace->ns_lock);
+        spin_lock(&obd->obd_namespace->ns_hash_lock);
         list_for_each(iter, &exp->exp_ldlm_data.led_held_locks) {
                 struct ldlm_lock *lock;
                 lock = list_entry(iter, struct ldlm_lock, l_export_chain);
@@ -2257,11 +2257,11 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req, int offset,
                                   lockh->cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
-                        l_unlock(&obd->obd_namespace->ns_lock);
+                        spin_unlock(&obd->obd_namespace->ns_hash_lock);
                         return;
                 }
         }
-        l_unlock(&obd->obd_namespace->ns_lock);
+        spin_unlock(&obd->obd_namespace->ns_hash_lock);
 
         /* If the xid matches, then we know this is a resent request,
          * and allow it. (It's probably an OPEN, for which we don't
@@ -2451,7 +2451,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         }
 
         /* Fixup the lock to be given to the client */
-        l_lock(&new_lock->l_resource->lr_namespace->ns_lock);
+        lock_res_and_lock(new_lock);
         new_lock->l_readers = 0;
         new_lock->l_writers = 0;
 
@@ -2467,8 +2467,8 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
         new_lock->l_flags &= ~LDLM_FL_LOCAL;
 
+        unlock_res_and_lock(new_lock);
         LDLM_LOCK_PUT(new_lock);
-        l_unlock(&new_lock->l_resource->lr_namespace->ns_lock);
 
         RETURN(ELDLM_LOCK_REPLACED);
 }

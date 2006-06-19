@@ -166,20 +166,20 @@ int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 RETURN(0);
         }
 
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock_res_and_lock(lock);
         /* Get this: if ldlm_blocking_ast is racing with intent_policy, such
          * that ldlm_blocking_ast is called just before intent_policy method
          * takes the ns_lock, then by the time we get the lock, we might not
          * be the correct blocking function anymore.  So check, and return
          * early, if so. */
         if (lock->l_blocking_ast != ldlm_blocking_ast) {
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                unlock_res_and_lock(lock);
                 RETURN(0);
         }
 
         lock->l_flags |= LDLM_FL_CBPENDING;
         do_ast = (!lock->l_readers && !lock->l_writers);
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res_and_lock(lock);
 
         if (do_ast) {
                 struct lustre_handle lockh;
@@ -251,8 +251,12 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns, struct ldlm_res_id res_id,
 
         ldlm_lock_addref_internal(lock, mode);
         ldlm_lock2handle(lock, lockh);
+        lock_res_and_lock(lock);
         lock->l_flags |= LDLM_FL_LOCAL;
+        if (*flags & LDLM_FL_ATOMIC_CB)
+                lock->l_flags |= LDLM_FL_ATOMIC_CB;
         lock->l_lvb_swabber = lvb_swabber;
+        unlock_res_and_lock(lock);
         if (policy != NULL)
                 lock->l_policy_data = *policy;
         if (type == LDLM_EXTENT)
@@ -286,10 +290,10 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
                                 struct lustre_handle *lockh, int mode)
 {
         /* Set a flag to prevent us from sending a CANCEL (bug 407) */
-        l_lock(&ns->ns_lock);
+        lock_res_and_lock(lock);
         lock->l_flags |= LDLM_FL_LOCAL_ONLY;
+        unlock_res_and_lock(lock);
         LDLM_DEBUG(lock, "setting FL_LOCAL_ONLY");
-        l_unlock(&ns->ns_lock);
 
         ldlm_lock_decref_and_cancel(lockh, mode);
 
@@ -353,14 +357,14 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
         /* lock enqueued on the server */
         cleanup_phase = 0;
 
-        l_lock(&ns->ns_lock);
+        lock_res_and_lock(lock);
         lock->l_remote_handle = reply->lock_handle;
         *flags = reply->lock_flags;
         lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
         /* move NO_TIMEOUT flag to the lock to force ldlm_lock_match()
          * to wait with no timeout as well */
         lock->l_flags |= reply->lock_flags & LDLM_FL_NO_TIMEOUT;
-        l_unlock(&ns->ns_lock);
+        unlock_res_and_lock(lock);
 
         CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: 0x%x\n",
                lock, reply->lock_handle.cookie, *flags);
@@ -406,9 +410,9 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
              * because it cannot handle asynchronous ASTs robustly (see
              * bug 7311). */
             (LIBLUSTRE_CLIENT && type == LDLM_EXTENT)) {
-                l_lock(&ns->ns_lock);
+                lock_res_and_lock(lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
-                l_unlock(&ns->ns_lock);
+                unlock_res_and_lock(lock);
                 LDLM_DEBUG(lock, "enqueue reply includes blocking AST");
         }
 
@@ -703,12 +707,12 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 
                 LDLM_DEBUG(lock, "client-side cancel");
                 /* Set this flag to prevent others from getting new references*/
-                l_lock(&lock->l_resource->lr_namespace->ns_lock);
+                lock_res_and_lock(lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
                 local_only = (lock->l_flags &
                               (LDLM_FL_LOCAL_ONLY|LDLM_FL_CANCEL_ON_BLOCK));
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 ldlm_cancel_callback(lock);
+                unlock_res_and_lock(lock);
 
                 if (local_only) {
                         CDEBUG(D_INFO, "not sending request (at caller's "
@@ -797,16 +801,31 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
         sync = LDLM_SYNC; /* force to be sync in user space */
 #endif
 
-        l_lock(&ns->ns_lock);
+        spin_lock(&ns->ns_unused_lock);
         count = ns->ns_nr_unused - ns->ns_max_unused;
 
         if (count <= 0) {
-                l_unlock(&ns->ns_lock);
+                spin_unlock(&ns->ns_unused_lock);
                 RETURN(0);
         }
 
-        list_for_each_entry_safe(lock, next, &ns->ns_unused_list, l_lru) {
+        while (!list_empty(&ns->ns_unused_list)) {
+                struct list_head *tmp = ns->ns_unused_list.next;
+                lock = list_entry(tmp, struct ldlm_lock, l_lru);
                 LASSERT(!lock->l_readers && !lock->l_writers);
+
+                LDLM_LOCK_GET(lock); /* dropped by bl thread */
+                spin_unlock(&ns->ns_unused_lock);
+
+                lock_res_and_lock(lock);
+                if (ldlm_lock_remove_from_lru(lock) == 0) {
+                        /* other thread is removing lock from lru */
+                        unlock_res_and_lock(lock);
+                        LDLM_LOCK_PUT(lock);
+                        spin_lock(&ns->ns_unused_lock);
+                        continue;
+
+                }
 
                 /* If we have chosen to canecl this lock voluntarily, we better
                    send cancel notification to server, so that it frees
@@ -822,32 +841,34 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
                  * won't see this flag and call l_blocking_ast */
                 lock->l_flags |= LDLM_FL_CBPENDING;
 
-                LDLM_LOCK_GET(lock); /* dropped by bl thread */
-                ldlm_lock_remove_from_lru(lock);
-
                 /* We can't re-add to l_lru as it confuses the refcounting in
                  * ldlm_lock_remove_from_lru() if an AST arrives after we drop
-                 * ns_lock below.  Use l_export_chain as that is unused on
-                 * client, and lru is client-only (l_pending_chain is used by
-                 * ldlm_chain_lock_for_replay() on client).  bug 5666 */
-                if (sync != LDLM_ASYNC || ldlm_bl_to_thread(ns, NULL, lock)) {
-                        LASSERTF(list_empty(&lock->l_export_chain),
-                                 "lock %p next %p prev %p\n",
-                                 lock, &lock->l_export_chain.next,
-                                 &lock->l_export_chain.prev);
-                        __LDLM_DEBUG(D_INFO, lock, "adding to LRU clear list");
-                        list_add(&lock->l_export_chain, &cblist);
+                 * ns_lock below. We use l_tmp and can't use l_pending_chain as
+                 * it is used both on server and client nevertheles bug 5666
+                 * says it is used only on server. --umka */
+                list_add(&lock->l_tmp, &cblist);
+                unlock_res_and_lock(lock);
+
+                LDLM_LOCK_GET(lock); /* to hold lock after bl thread */
+                if (sync == LDLM_ASYNC && (ldlm_bl_to_thread(ns, NULL, lock) == 0)) {
+                        lock_res_and_lock(lock);
+                        list_del_init(&lock->l_tmp);
+                        unlock_res_and_lock(lock);
                 }
+                LDLM_LOCK_PUT(lock);
+
+                spin_lock(&ns->ns_unused_lock);
 
                 if (--count == 0)
                         break;
         }
-        l_unlock(&ns->ns_lock);
+        spin_unlock(&ns->ns_unused_lock);
 
-        list_for_each_entry_safe(lock, next, &cblist, l_export_chain) {
-                list_del_init(&lock->l_export_chain);
+        list_for_each_entry_safe(lock, next, &cblist, l_tmp) {
+                list_del_init(&lock->l_tmp);
                 ldlm_handle_bl_callback(ns, NULL, lock);
         }
+
         RETURN(rc);
 }
 
@@ -855,9 +876,9 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                                            struct ldlm_res_id res_id, int flags,
                                            void *opaque)
 {
-        struct ldlm_resource *res;
         struct list_head *tmp, *next, list = CFS_LIST_HEAD_INIT(list);
-        struct ldlm_ast_work *w;
+        struct ldlm_resource *res;
+        struct ldlm_lock *lock;
         ENTRY;
 
         res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
@@ -867,9 +888,8 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                 RETURN(0);
         }
 
-        l_lock(&ns->ns_lock);
+        lock_res(res);
         list_for_each(tmp, &res->lr_granted) {
-                struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
                 if (opaque != NULL && lock->l_ast_data != opaque) {
@@ -890,36 +910,44 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                 /* See CBPENDING comment in ldlm_cancel_lru */
                 lock->l_flags |= LDLM_FL_CBPENDING;
 
-                OBD_ALLOC(w, sizeof(*w));
-                LASSERT(w);
-
-                w->w_lock = LDLM_LOCK_GET(lock);
-
-                list_add(&w->w_list, &list);
+                LASSERT(list_empty(&lock->l_bl_ast));
+                list_add(&lock->l_bl_ast, &list);
+                LDLM_LOCK_GET(lock);
         }
-        l_unlock(&ns->ns_lock);
+        unlock_res(res);
 
         list_for_each_safe(tmp, next, &list) {
                 struct lustre_handle lockh;
                 int rc;
-                w = list_entry(tmp, struct ldlm_ast_work, w_list);
+                lock = list_entry(tmp, struct ldlm_lock, l_bl_ast);
 
                 if (flags & LDLM_FL_LOCAL_ONLY) {
-                        ldlm_lock_cancel(w->w_lock);
+                        ldlm_lock_cancel(lock);
                 } else {
-                        ldlm_lock2handle(w->w_lock, &lockh);
+                        ldlm_lock2handle(lock, &lockh);
                         rc = ldlm_cli_cancel(&lockh);
                         if (rc != ELDLM_OK)
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
                 }
-                list_del(&w->w_list);
-                LDLM_LOCK_PUT(w->w_lock);
-                OBD_FREE(w, sizeof(*w));
+                list_del_init(&lock->l_bl_ast);
+                LDLM_LOCK_PUT(lock);
         }
 
         ldlm_resource_putref(res);
 
         RETURN(0);
+}
+
+static inline int have_no_nsresource(struct ldlm_namespace *ns)
+{
+        int no_resource = 0;
+
+        spin_lock(&ns->ns_hash_lock);
+        if (ns->ns_resources == 0)
+                no_resource = 1;
+        spin_unlock(&ns->ns_hash_lock);
+
+        RETURN(no_resource);
 }
 
 /* Cancel all locks on a namespace (or a specific resource, if given)
@@ -941,14 +969,17 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
                 RETURN(ldlm_cli_cancel_unused_resource(ns, *res_id, flags,
                                                        opaque));
 
-        l_lock(&ns->ns_lock);
+        spin_lock(&ns->ns_hash_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
-                struct list_head *tmp, *pos;
-                list_for_each_safe(tmp, pos, &(ns->ns_hash[i])) {
-                        int rc;
+                struct list_head *tmp;
+                tmp = ns->ns_hash[i].next;
+                while (tmp != &(ns->ns_hash[i])) {
                         struct ldlm_resource *res;
+                        int rc;
+
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
                         ldlm_resource_getref(res);
+                        spin_unlock(&ns->ns_hash_lock);
 
                         rc = ldlm_cli_cancel_unused_resource(ns, res->lr_name,
                                                              flags, opaque);
@@ -956,10 +987,13 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
                         if (rc)
                                 CERROR("cancel_unused_res ("LPU64"): %d\n",
                                        res->lr_name.name[0], rc);
-                        ldlm_resource_putref(res);
+
+                        spin_lock(&ns->ns_hash_lock);
+                        tmp = tmp->next;
+                        ldlm_resource_putref_locked(res);
                 }
         }
-        l_unlock(&ns->ns_lock);
+        spin_unlock(&ns->ns_hash_lock);
 
         RETURN(ELDLM_OK);
 }
@@ -980,7 +1014,7 @@ int ldlm_cli_join_lru(struct ldlm_namespace *ns,
                 RETURN(count);
         LASSERT(res->lr_type == LDLM_EXTENT);
 
-        l_lock(&ns->ns_lock);
+        lock_res(res);
         if (!join)
                 goto split;
 
@@ -989,9 +1023,11 @@ int ldlm_cli_join_lru(struct ldlm_namespace *ns,
                     !lock->l_readers && !lock->l_writers &&
                     !(lock->l_flags & LDLM_FL_LOCAL) &&
                     !(lock->l_flags & LDLM_FL_CBPENDING)) {
+                        spin_lock(&ns->ns_unused_lock);
                         LASSERT(ns->ns_nr_unused >= 0);
                         list_add_tail(&lock->l_lru, &ns->ns_unused_list);
                         ns->ns_nr_unused++;
+                        spin_unlock(&ns->ns_unused_lock);
                         lock->l_flags &= ~LDLM_FL_NO_LRU;
                         LDLM_DEBUG(lock, "join lock to lru");
                         count++;
@@ -999,16 +1035,18 @@ int ldlm_cli_join_lru(struct ldlm_namespace *ns,
         }
         goto unlock;
 split:
+        spin_lock(&ns->ns_unused_lock);
         list_for_each_entry_safe (lock, n, &ns->ns_unused_list, l_lru) {
                 if (lock->l_resource == res) {
-                        ldlm_lock_remove_from_lru(lock);
+                        ldlm_lock_remove_from_lru_nolock(lock);
                         lock->l_flags |= LDLM_FL_NO_LRU;
                         LDLM_DEBUG(lock, "split lock from lru");
                         count++;
                 }
         }
+        spin_unlock(&ns->ns_unused_lock);
 unlock:
-        l_unlock(&ns->ns_lock);
+        unlock_res(res);
         ldlm_resource_putref(res);
         RETURN(count);
 }
@@ -1021,15 +1059,13 @@ int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
         struct list_head *tmp, *next;
         struct ldlm_lock *lock;
         int rc = LDLM_ITER_CONTINUE;
-        struct ldlm_namespace *ns;
 
         ENTRY;
 
         if (!res)
                 RETURN(LDLM_ITER_CONTINUE);
 
-        ns = res->lr_namespace;
-        l_lock(&ns->ns_lock);
+        lock_res(res);
         list_for_each_safe(tmp, next, &res->lr_granted) {
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
@@ -1051,7 +1087,7 @@ int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
                         GOTO(out, rc = LDLM_ITER_STOP);
         }
  out:
-        l_unlock(&ns->ns_lock);
+        unlock_res(res);
         RETURN(rc);
 }
 
@@ -1082,24 +1118,29 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
                                ldlm_res_iterator_t iter, void *closure)
 {
         int i, rc = LDLM_ITER_CONTINUE;
+        struct ldlm_resource *res;
+        struct list_head *tmp;
 
         ENTRY;
-        l_lock(&ns->ns_lock);
+        spin_lock(&ns->ns_hash_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
-                struct list_head *tmp, *next;
-                list_for_each_safe(tmp, next, &(ns->ns_hash[i])) {
-                        struct ldlm_resource *res =
-                                list_entry(tmp, struct ldlm_resource, lr_hash);
-
+                tmp = ns->ns_hash[i].next;
+                while (tmp != &(ns->ns_hash[i])) {
+                        res = list_entry(tmp, struct ldlm_resource, lr_hash);
                         ldlm_resource_getref(res);
+                        spin_unlock(&ns->ns_hash_lock);
+
                         rc = iter(res, closure);
-                        ldlm_resource_putref(res);
+
+                        spin_lock(&ns->ns_hash_lock);
+                        tmp = tmp->next;
+                        ldlm_resource_putref_locked(res);
                         if (rc == LDLM_ITER_STOP)
                                 GOTO(out, rc);
                 }
         }
  out:
-        l_unlock(&ns->ns_lock);
+        spin_unlock(&ns->ns_hash_lock);
         RETURN(rc);
 }
 
@@ -1121,9 +1162,7 @@ void ldlm_resource_iterate(struct ldlm_namespace *ns, struct ldlm_res_id *res_id
                 return;
         }
 
-        l_lock(&ns->ns_lock);
         ldlm_resource_foreach(res, iter, data);
-        l_unlock(&ns->ns_lock);
         ldlm_resource_putref(res);
         EXIT;
 }
@@ -1262,7 +1301,6 @@ int ldlm_replay_locks(struct obd_import *imp)
         /* ensure this doesn't fall to 0 before all have been queued */
         atomic_inc(&imp->imp_replay_inflight);
 
-        l_lock(&ns->ns_lock);
         (void)ldlm_namespace_foreach(ns, ldlm_chain_lock_for_replay, &list);
 
         list_for_each_entry_safe(lock, next, &list, l_pending_chain) {
@@ -1271,7 +1309,6 @@ int ldlm_replay_locks(struct obd_import *imp)
                         continue; /* or try to do the rest? */
                 rc = replay_one_lock(imp, lock);
         }
-        l_unlock(&ns->ns_lock);
 
         atomic_dec(&imp->imp_replay_inflight);
 
