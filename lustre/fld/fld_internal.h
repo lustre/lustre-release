@@ -26,14 +26,10 @@
 #ifndef _FLD_INTERNAL_H
 #define _FLD_INTERNAL_H
 
-#define mdsno_t  __u64
-#define fidseq_t __u64
+#include <linux/types.h>
 
-#define key_cmp(e1, e2) ({                              \
-        typeof(e1) __e1 = (e1);                         \
-        typeof(e2) __e2 = (e2);                         \
-        __e1 > __e2 ? +1 : (__e1 < __e2 ? -1 : 0);      \
-})
+typedef __u64 mdsno_t;
+typedef __u64 fidseq_t;
 
 struct fld_cache {
         struct hlist_node fld_list;
