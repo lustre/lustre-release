@@ -381,7 +381,8 @@ int main(int argc, char *const argv[])
                 if (errno == ENOTBLK)
                         fprintf(stderr, "Do you need -o loop?\n");
                 if (errno == ENOMEDIUM)
-                        fprintf(stderr,"This filesystem needs at least 1 OST\n");
+                        fprintf(stderr, 
+                                "This filesystem needs at least 1 OST\n");
                 if (errno == ENOENT)
                         fprintf(stderr, "Is the MGS specification correct? Is "
                                 "the filesystem name correct?\n");
@@ -398,12 +399,14 @@ int main(int argc, char *const argv[])
                         fprintf(stderr, "The target service's index is already "
                                 "in use. (%s)\n", source);
                 if (errno == EINVAL) {
-                        char *ptr = strchr(source, '/');
-                        fprintf(stderr, "This may have multiple causes.\n"
-                                "Is '%s' the correct filesystem name?\n"
-                                "Are the mount options correct?\n",
-                                ptr ? ptr + 1 : source);
-                        fprintf(stderr, "Check the syslog for more info\n");
+                        char *ptr = strrchr(source, ':');
+                        fprintf(stderr, "This may have multiple causes.\n");
+                        if (ptr && (strlen(ptr) > 2)) 
+                                /* client */
+                                fprintf(stderr, "Is '%s' the correct filesystem"
+                                        " name?\n", ptr + 2);
+                        fprintf(stderr, "Are the mount options correct?\n");
+                        fprintf(stderr, "Check the syslog for more info.\n");
                 }
                 rc = errno;
         } else if (!nomtab) {
