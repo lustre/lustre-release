@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  create_iam.c
+ *  req_layout.c
  *  User-level tool for printing request layouts
  *
  *  Copyright (c) 2006 Cluster File Systems, Inc.
