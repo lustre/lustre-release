@@ -360,6 +360,7 @@ case $BACKINGFS in
 		case $LINUXRELEASE in
 		2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
 		2.6.9*) LDISKFS_SERIES="2.6-rhel4.series" ;;
+		2.6.10-ac*) LDISKFS_SERIES="2.6-fc3.series" ;;
 		2.6.10*) LDISKFS_SERIES="2.6-rhel4.series" ;;
 		2.6.12*) LDISKFS_SERIES="2.6.12-vanilla.series" ;;
 		2.6.15*) LDISKFS_SERIES="2.6-fc5.series";;
