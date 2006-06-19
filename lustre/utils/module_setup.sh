@@ -1,6 +1,7 @@
 #!/bin/sh
 
 MDIR=/lib/modules/`uname -r`/lustre
+/bin/rm -rf $MDIR
 mkdir -p $MDIR
 
 KVER=24
@@ -42,6 +43,7 @@ cp -u ../../lustre/obdclass/obdclass.ko $MDIR
 cp -u ../../lustre/mdd/mdd.ko $MDIR
 cp -u ../../lustre/fld/fld.ko $MDIR
 cp -u ../../lustre/fid/fid.ko $MDIR
+cp -u ../../lustre/lmv/lmv.ko $MDIR
 cp -u ../../lnet/libcfs/libcfs.ko $MDIR
 cp -u ../../lnet/tests/pingcli.ko $MDIR
 cp -u ../../lnet/tests/spingsrv.ko $MDIR

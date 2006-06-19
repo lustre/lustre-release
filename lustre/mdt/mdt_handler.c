@@ -170,6 +170,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
  *            (2)intent request will grant it to client.
  */
 static int mdt_getattr_name_internal(struct mdt_thread_info *info,
+                                      struct mdt_lock_handle *lhc,
                                      __u64 child_bits)
 {
         struct mdt_object *parent = info->mti_object;
@@ -179,14 +180,12 @@ static int mdt_getattr_name_internal(struct mdt_thread_info *info,
         const char *name;
         int result;
         struct mdt_lock_handle *lhp;
-        struct mdt_lock_handle *lhc;
         struct ldlm_reply *ldlm_rep;
 
         ENTRY;
 
         lhp = &info->mti_lh[MDT_LH_PARENT];
         lhp->mlh_mode = LCK_CR;
-        lhc = &info->mti_lh[MDT_LH_CHILD];
         lhc->mlh_mode = LCK_CR;
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
 
@@ -196,7 +195,7 @@ static int mdt_getattr_name_internal(struct mdt_thread_info *info,
 
         body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
-        if (name == NULL)
+        if (body == 0 || name == NULL)
                 RETURN(-EFAULT);
 
         /*step 1: lock parent */
@@ -236,6 +235,9 @@ static int mdt_getattr_name_internal(struct mdt_thread_info *info,
                 mdt_pack_attr2body(body, &info->mti_attr);
                 body->fid1 = *mdt_object_fid(child);
                 body->valid |= OBD_MD_FLID;
+               
+                /* pack MD here */ 
+                body->eadatasize = 0;
         } else
                 mdt_object_unlock(info->mti_mdt->mdt_namespace, child, lhc);
 
@@ -249,16 +251,14 @@ out_parent:
 /* see the above function */
 static int mdt_getattr_name(struct mdt_thread_info *info)
 {
-        struct mdt_lock_handle *lhc;
+        struct mdt_lock_handle lhc = {{0}};
         int rc;
 
         ENTRY;
-        lhc = &info->mti_lh[MDT_LH_CHILD];
-        lhc->mlh_mode = LCK_CR;
 
-        rc = mdt_getattr_name_internal(info, MDS_INODELOCK_UPDATE);
-        if (rc == 0 && lustre_handle_is_used(&lhc->mlh_lh))
-                ldlm_lock_decref(&lhc->mlh_lh, lhc->mlh_mode);
+        rc = mdt_getattr_name_internal(info, &lhc, MDS_INODELOCK_UPDATE);
+        if (rc == 0 && lustre_handle_is_used(&lhc.mlh_lh))
+                ldlm_lock_decref(&lhc.mlh_lh, lhc.mlh_mode);
         RETURN(rc);
 }
 
@@ -742,9 +742,9 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
 {
         struct req_capsule *pill;
-
         int result;
 
+        ENTRY;
         pill = &info->mti_pill;
 
         if (req_capsule_has_field(pill, &RMF_MDT_BODY))
@@ -755,7 +755,7 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
         if (result == 0 && (flags & HABEO_REFERO))
                 result = req_capsule_pack(pill);
 
-        return result;
+        RETURN(result);
 }
 
 /*
@@ -1228,12 +1228,12 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         __u64 child_bits;
         struct ldlm_lock *old_lock = *lockp;
         struct ldlm_lock *new_lock = NULL;
-        struct mdt_lock_handle *lhc;
         struct ptlrpc_request *req = mdt_info_req(info);
         struct ldlm_reply *ldlm_rep;
+        struct mdt_lock_handle lhc = {{0}};
 
         ENTRY;
-
+        
         switch (opcode) {
         case MDT_IT_LOOKUP:
                 child_bits = MDS_INODELOCK_LOOKUP;
@@ -1249,8 +1249,9 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
-        /* lock on child object is returned @info->mti_lh[MDT_LH_CHILD] */
+
         ldlm_rep->lock_policy_res2 = mdt_getattr_name_internal(info,
+                                                               &lhc,
                                                                child_bits);
 
         if (intent_disposition(ldlm_rep, DISP_LOOKUP_NEG))
@@ -1260,8 +1261,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                 RETURN(ELDLM_LOCK_ABORTED);
         }
 
-        lhc = &info->mti_lh[MDT_LH_CHILD];
-        new_lock = ldlm_handle2lock(&lhc->mlh_lh);
+        new_lock = ldlm_handle2lock(&lhc.mlh_lh);
         if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
                 RETURN(0);
 
@@ -1283,7 +1283,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         new_lock->l_flags &= ~LDLM_FL_LOCAL;
 
-        LDLM_LOCK_PUT(old_lock);
+        LDLM_LOCK_PUT(new_lock);
         l_unlock(&new_lock->l_resource->lr_namespace->ns_lock);
 
         RETURN(ELDLM_LOCK_REPLACED);

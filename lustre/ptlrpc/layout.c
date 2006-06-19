@@ -154,6 +154,7 @@ static const struct req_msg_field *ldlm_intent_getattr_client[] = {
 static const struct req_msg_field *ldlm_intent_create_client[] = {
         &RMF_DLM_REQ,
         &RMF_LDLM_INTENT,
+        &RMF_REINT_OPC,
         &RMF_REC_CREATE,    /* coincides with mds_reint_create_client[] */
         &RMF_NAME,
         &RMF_EADATA
@@ -162,6 +163,7 @@ static const struct req_msg_field *ldlm_intent_create_client[] = {
 static const struct req_msg_field *ldlm_intent_open_client[] = {
         &RMF_DLM_REQ,
         &RMF_LDLM_INTENT,
+        &RMF_REINT_OPC,
         &RMF_REC_CREATE,    /* coincides with mds_reint_open_client[] */
         &RMF_NAME,
         &RMF_SYMTGT
@@ -170,6 +172,7 @@ static const struct req_msg_field *ldlm_intent_open_client[] = {
 static const struct req_msg_field *ldlm_intent_unlink_client[] = {
         &RMF_DLM_REQ,
         &RMF_LDLM_INTENT,
+        &RMF_REINT_OPC,
         &RMF_REC_UNLINK,    /* coincides with mds_reint_unlink_client[] */
         &RMF_NAME
 };
