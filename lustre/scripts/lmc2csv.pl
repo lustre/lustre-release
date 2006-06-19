@@ -175,11 +175,11 @@ foreach my $mds (@{$objs{"mds"}}) {
         $mkfs_options .= "default_stripe_size=" . $lov->{"stripe_sz"} . ",";
     }
     if (defined($lov->{"stripe_cnt"})) {
-        $mkfs_options .= "default_stripe_count=" .
+        $mkfs_options .= "lov.stripe.count=" .
                          $lov->{"stripe_cnt"} . ",";
     }
     if (defined($lov->{"stripe_pattern"})) {
-        $mkfs_options .= "default_stripe_pattern=" .
+        $mkfs_options .= "lov.stripe.pattern=" .
                          $lov->{"stripe_pattern"} . ",";
     }
     chop($mkfs_options);
