@@ -183,6 +183,13 @@ static inline int mo_attr_get(const struct lu_context *cx, struct md_object *m,
         return m->mo_ops->moo_attr_get(cx, m, at);
 }
 
+static inline int mo_attr_set(const struct lu_context *cx, struct md_object *m,
+                              struct lu_attr *at)
+{
+        LASSERT(m->mo_ops->moo_attr_set);
+        return m->mo_ops->moo_attr_set(cx, m, at);
+}
+
 static inline int mo_xattr_get(const struct lu_context *cx,
                                struct md_object *m,
                                void *buf, int buf_len, const char *name)
@@ -190,6 +197,7 @@ static inline int mo_xattr_get(const struct lu_context *cx,
         LASSERT(m->mo_ops->moo_xattr_get);
         return m->mo_ops->moo_xattr_get(cx, m, buf, buf_len, name);
 }
+
 static inline int mo_xattr_del(const struct lu_context *cx,
                                struct md_object *m,
                                const char *name)
@@ -206,6 +214,7 @@ static inline int mo_xattr_set(const struct lu_context *cx,
         LASSERT(m->mo_ops->moo_xattr_set);
         return m->mo_ops->moo_xattr_set(cx, m, buf, buf_len, name);
 }
+
 static inline int mo_xattr_list(const struct lu_context *cx,
                                struct md_object *m,
                                void *buf, int buf_len)
@@ -215,11 +224,16 @@ static inline int mo_xattr_list(const struct lu_context *cx,
         return m->mo_ops->moo_xattr_get(cx, m, buf, buf_len, NULL);
 }
 
-
 static inline int mo_open(const struct lu_context *cx, struct md_object *m)
 {
         LASSERT(m->mo_ops->moo_open);
         return m->mo_ops->moo_open(cx, m);
+}
+
+static inline int mo_close(const struct lu_context *cx, struct md_object *m)
+{
+        LASSERT(m->mo_ops->moo_close);
+        return m->mo_ops->moo_close(cx, m);
 }
 
 static inline int mo_object_create(const struct lu_context *cx,
@@ -227,6 +241,20 @@ static inline int mo_object_create(const struct lu_context *cx,
 {
         LASSERT(m->mo_ops->moo_object_create);
         return m->mo_ops->moo_object_create(cx, m, at);
+}
+
+static inline int mo_ref_add(const struct lu_context *cx,
+                             struct md_object *m)
+{
+        LASSERT(m->mo_ops->moo_ref_add);
+        return m->mo_ops->moo_ref_add(cx, m);
+}
+
+static inline int mo_ref_del(const struct lu_context *cx,
+                             struct md_object *m)
+{
+        LASSERT(m->mo_ops->moo_ref_del);
+        return m->mo_ops->moo_ref_del(cx, m);
 }
 
 static inline int mdo_lookup(const struct lu_context *cx, struct md_object *p,
