@@ -821,15 +821,14 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
                                 /* continue parsing other params */
                                 continue;
                         }
-                        *sval = 0;
                         val = simple_strtol(sval + 1, NULL, 0);
-                        if (strcmp(key, PARAM_D_STRIPE_SIZE) == 0)
+                        if (class_match_param(key, PARAM_LOV_STRIPE_SIZE,0) == 0)
                                 desc->ld_default_stripe_size = val;
-                        else if (strcmp(key, PARAM_D_STRIPE_COUNT) == 0)
+                        else if (class_match_param(key, PARAM_LOV_STRIPE_COUNT, 0) == 0)
                                 desc->ld_default_stripe_count = val;
-                        else if (strcmp(key, PARAM_D_STRIPE_OFFSET) == 0)
+                        else if (class_match_param(key, PARAM_LOV_STRIPE_OFFSET, 0) == 0)
                                 desc->ld_default_stripe_offset = val;
-                        else if (strcmp(key, PARAM_D_STRIPE_PATTERN) == 0)
+                        else if (class_match_param(key, PARAM_LOV_STRIPE_PATTERN, 0) == 0)
                                 desc->ld_pattern = val;
                         else {
                                 CERROR("Unknown param %s\n", key);

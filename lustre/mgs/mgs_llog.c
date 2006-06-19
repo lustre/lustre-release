@@ -1227,7 +1227,7 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         GOTO(end_while, rc);
                 }
 
-                if (class_match_param(ptr, PARAM_OBD_TIMEOUT, &endptr) == 0) {
+                if (class_match_param(ptr, PARAM_SYS_TIMEOUT, &endptr) == 0) {
                         /* Change obd timeout */
                         int timeout;
                         timeout = simple_strtoul(endptr, &endptr, 0);
@@ -1243,7 +1243,7 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         GOTO(end_while, rc);
                 }
 
-                if (class_match_param(ptr, PARAM_DEFAULT_STRIPE, &endptr) == 0){
+                if (class_match_param(ptr, PARAM_LOV_STRIPE, &endptr) == 0){
                         /* Change lov default stripe params */
                         char *logname;
                         CDEBUG(D_MGS, "lov param %s\n", ptr);

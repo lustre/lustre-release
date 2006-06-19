@@ -26,10 +26,11 @@
 #ifndef _LUSTRE_PARAM_H
 #define _LUSTRE_PARAM_H
 
-/* obd_mount.c */
+/* obd_config.c */
 int class_find_param(char *buf, char *key, char **valp);
 int class_match_param(char *buf, char *key, char **valp);
 int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh);
+/* obd_mount.c */
 int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
             char *s1, char *s2, char *s3, char *s4);
 
@@ -37,14 +38,14 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 
 /****************** User-settable parameter keys *********************/
 
-#define PARAM_MGSNODE          "mgsnode="
-#define PARAM_FAILNODE         "failnode="
-#define PARAM_FAILMODE         "failmode="
-#define PARAM_OBD_TIMEOUT      "obd_timeout="
-#define PARAM_DEFAULT_STRIPE   "default_stripe_"
-#define PARAM_D_STRIPE_SIZE    PARAM_DEFAULT_STRIPE"size"
-#define PARAM_D_STRIPE_COUNT   PARAM_DEFAULT_STRIPE"count"
-#define PARAM_D_STRIPE_OFFSET  PARAM_DEFAULT_STRIPE"offset"
-#define PARAM_D_STRIPE_PATTERN PARAM_DEFAULT_STRIPE"pattern"
+#define PARAM_SYS_TIMEOUT        "sys.timeout="
+#define PARAM_MGSNODE            "mgsnode="
+#define PARAM_FAILNODE           "failover.node="
+#define PARAM_FAILMODE           "failover.mode="
+#define PARAM_LOV_STRIPE         "lov.stripe."
+#define PARAM_LOV_STRIPE_SIZE    PARAM_LOV_STRIPE"size="
+#define PARAM_LOV_STRIPE_COUNT   PARAM_LOV_STRIPE"count="
+#define PARAM_LOV_STRIPE_OFFSET  PARAM_LOV_STRIPE"offset="
+#define PARAM_LOV_STRIPE_PATTERN PARAM_LOV_STRIPE"pattern="
 
 #endif // _LUSTRE_PARAM_H

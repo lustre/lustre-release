@@ -42,76 +42,6 @@
                       
 static int (*client_fill_super)(struct super_block *sb) = NULL;
 
-/*********** string parsing utils *********/
-
-/* returns 0 if we find this key in the buffer, else 1 */
-int class_find_param(char *buf, char *key, char **valp)
-{
-        char *ptr;
-
-        if (!buf) 
-                return 1;
-
-        if ((ptr = strstr(buf, key)) == NULL) 
-                return 1;
-
-        if (valp) 
-                *valp = ptr + strlen(key);
-        
-        return 0;
-}
-
-/* returns 0 if this is the first key in the buffer, else 1 */
-int class_match_param(char *buf, char *key, char **valp)
-{
-        if (!buf) 
-                return 1;
-
-        if (memcmp(buf, key, strlen(key)) != 0) 
-                return 1;
-
-        if (valp) 
-                *valp = buf + strlen(key);
-        
-        return 0;
-}
-
-/* 0 is good nid, 
-   1 not found
-   < 0 error
-   endh is set to next separator */
-int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
-{
-        char tmp, *endp;
-
-        if (!buf) 
-                return 1;
-        while (*buf == ',' || *buf == ':') 
-                buf++;
-        if (*buf == ' ' || *buf == '/' || *buf == '\0') 
-                return 1;
-
-        /* nid separators or end of nids */
-        endp = strpbrk(buf, ",: /");
-        if (endp == NULL) 
-                endp = buf + strlen(buf);
-
-        tmp = *endp;
-        *endp = '\0';
-        *nid = libcfs_str2nid(buf);
-        if (*nid == LNET_NID_ANY) {
-                LCONSOLE_ERROR("Can't parse NID '%s'\n", buf);
-                *endp = tmp;
-                return -EINVAL;
-        }
-        *endp = tmp;
-
-        if (endh) 
-                *endh = endp;
-        CDEBUG(D_MOUNT, "Nid %s\n", libcfs_nid2str(*nid));
-        return 0;
-}
-
 /*********** mount lookup *********/
 
 DECLARE_MUTEX(lustre_mount_info_lock);
@@ -1970,9 +1900,6 @@ EXPORT_SYMBOL(server_put_mount);
 EXPORT_SYMBOL(server_register_target);
 EXPORT_SYMBOL(server_name2index);
 EXPORT_SYMBOL(server_mti_print);
-EXPORT_SYMBOL(class_find_param);
-EXPORT_SYMBOL(class_match_param);
-EXPORT_SYMBOL(class_parse_nid);
 EXPORT_SYMBOL(do_lcfg);
 
 
