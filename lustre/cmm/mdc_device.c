@@ -48,7 +48,6 @@ static inline int lu_device_is_mdc(struct lu_device *ld)
                     ld->ld_ops == &mdc_lu_ops);
 }
 
-#ifdef CMM_CODE
 static struct md_device_operations mdc_md_ops = { 0 };
 
 static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
@@ -68,8 +67,8 @@ static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
                 CERROR("No such OBD %s\n", srv);
                 LBUG();
         }
-        obd_str2uuid(&desc->mc_cli_uuid, uuid_str);
-        mdc = class_find_client_obd(&desc->mc_cli_uuid, LUSTRE_MDC_NAME,
+        obd_str2uuid(&desc->cl_cli_uuid, uuid_str);
+        mdc = class_find_client_obd(&desc->cl_cli_uuid, LUSTRE_MDC_NAME,
                                     &mdt->obd_uuid);
         if (!mdc) {
                 CERROR("Cannot find MDC OBD connected to %s\n", uuid_str);
@@ -105,9 +104,9 @@ static int mdc_del_obd(struct mdc_device *mc)
         ENTRY;
 
         CDEBUG(D_CONFIG, "disconnect from %s(%s)\n",
-               mdc->obd_name, mdc->obd_uuid.uuid);
+               class_exp2obd(desc->cl_exp)->obd_name, desc->cl_cli_uuid.uuid);
 
-        rc = obd_disconnect(desc->cli_exp);
+        rc = obd_disconnect(desc->cl_exp);
         if (rc) {
                 CERROR("target %s disconnect error %d\n",
                        class_exp2obd(desc->cl_exp)->obd_name, rc);
@@ -189,10 +188,10 @@ void mdc_device_free(const struct lu_context *ctx, struct lu_device *ld)
 
 /* context key constructor/destructor */
 
-static void *mdÓ_thread_init(const struct lu_context *ctx,
+static void *mdc_thread_init(const struct lu_context *ctx,
                              struct lu_context_key *key)
 {
-        struct mdÓ_thread_info *info;
+        struct mdc_thread_info *info;
 
         CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
         OBD_ALLOC_PTR(info);
@@ -222,7 +221,7 @@ int mdc_type_init(struct lu_device_type *ldt)
 
 void mdc_type_fini(struct lu_device_type *ldt)
 {
-        lu_context_key_deregister(&mdc_thread_key);
+        lu_context_key_degister(&mdc_thread_key);
 }
 
 static struct lu_device_type_operations mdc_device_type_ops = {
@@ -241,184 +240,4 @@ struct lu_device_type mdc_device_type = {
         .ldt_name = LUSTRE_MDC0_NAME,
         .ldt_ops  = &mdc_device_type_ops
 };
-#else
-static int mdc_root_get(const struct lu_context *ctx, struct md_device *md,
-                        struct lu_fid *fid)
-{
-        //struct mdc_device *mdc_dev = md2mdc_dev(md);
 
-        return -EOPNOTSUPP;
-}
-
-static int mdc_config(const struct lu_context *ctx,
-                      struct md_device *md, const char *name,
-                      void *buf, int size, int mode)
-{
-        //struct mdc_device *mdc_dev = md2mdc_dev(md);
-        int rc;
-        ENTRY;
-        rc = -EOPNOTSUPP;
-        RETURN(rc);
-}
-
-static int mdc_statfs(const struct lu_context *ctx,
-                      struct md_device *md, struct kstatfs *sfs) {
-        //struct mdc_device *mdc_dev = md2mdc_dev(md);
-	int rc;
-
-        ENTRY;
-        rc = -EOPNOTSUPP;
-        RETURN (rc);
-}
-
-static struct md_device_operations mdc_md_ops = {
-        .mdo_root_get       = mdc_root_get,
-        .mdo_config         = mdc_config,
-        .mdo_statfs         = mdc_statfs,
-};
-
-static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
-{
-        struct mdc_cli_desc *desc = &mc->mc_desc;
-        struct obd_device *mdc, *mdt;
-        const char *srv = lustre_cfg_string(cfg, 0);
-        const char *uuid_str = lustre_cfg_string(cfg, 1);
-        const char *index = lustre_cfg_string(cfg, 2);
-        struct obd_uuid uuid;
-        int rc = 0;
-
-        //find mdt obd to get group uuid
-        mdt = class_name2obd(srv);
-        if (mdt == NULL) {
-                CERROR("No such OBD %s\n", srv);
-                LBUG();
-        }
-        obd_str2uuid(&uuid, uuid_str);
-        mdc = class_find_client_obd(&uuid, LUSTRE_MDC_NAME, &mdt->obd_uuid);
-        if (!mdc) {
-                CERROR("Cannot find MDC OBD connected to %s\n", uuid_str);
-                rc = -ENOENT;
-        } else if (!mdc->obd_set_up) {
-                CERROR("target %s not set up\n", mdc->obd_name);
-                rc = -EINVAL;
-        } else {
-                struct lustre_handle conn = {0, };
-
-                CDEBUG(D_CONFIG, "connect to %s(%s)\n",
-                       mdc->obd_name, mdc->obd_uuid.uuid);
-
-                rc = obd_connect(&conn, mdc, &mdt->obd_uuid, NULL);
-
-                if (rc) {
-                        CERROR("target %s connect error %d\n",
-                               mdc->obd_name, rc);
-                } else {
-                        desc->cl_exp = class_conn2export(&conn);
-                        mc->mc_num = simple_strtol(index, NULL, 10);
-                }
-        }
-
-        RETURN(rc);
-}
-
-static int mdc_process_config(const struct lu_context *ctx,
-                              struct lu_device *ld, struct lustre_cfg *cfg)
-{
-        struct mdc_device *mc = lu2mdc_dev(ld);
-        int rc;
-
-        ENTRY;
-        switch (cfg->lcfg_command) {
-        case LCFG_ADD_MDC:
-                rc = mdc_add_obd(mc, cfg);
-                break;
-        default:
-                rc = -EOPNOTSUPP;
-        }
-        RETURN(rc);
-}
-
-static struct lu_device_operations mdc_lu_ops = {
-	.ldo_object_alloc   = mdc_object_alloc,
-
-        .ldo_process_config = mdc_process_config
-};
-
-static int mdc_device_init(const struct lu_context *ctx,
-                           struct lu_device *ld, struct lu_device *next)
-{
-        /* struct mdc_device *mc = lu2mdc_dev(ld); */
-        int rc = 0;
-
-        ENTRY;
-
-        RETURN(rc);
-}
-
-static struct lu_device *mdc_device_fini(const struct lu_context *ctx,
-                                         struct lu_device *ld)
-{
-	/* struct mdc_device *mc = lu2mdc_dev(ld); */
-
-        ENTRY;
-
-        RETURN (NULL);
-}
-
-struct lu_device *mdc_device_alloc(const struct lu_context *ctx,
-                                   struct lu_device_type *ldt,
-                                   struct lustre_cfg *cfg)
-{
-        struct lu_device  *ld;
-        struct mdc_device *mc;
-
-        ENTRY;
-
-        OBD_ALLOC_PTR(mc);
-        if (mc == NULL) {
-                ld = ERR_PTR(-ENOMEM);
-        } else {
-                md_device_init(&mc->mc_md_dev, ldt);
-                mc->mc_md_dev.md_ops = &mdc_md_ops;
-	        ld = mdc2lu_dev(mc);
-                ld->ld_ops = &mdc_lu_ops;
-        }
-
-        RETURN (ld);
-}
-void mdc_device_free(const struct lu_context *ctx, struct lu_device *ld)
-{
-        struct mdc_device *mc = lu2mdc_dev(ld);
-
-	LASSERT(atomic_read(&ld->ld_ref) == 0);
-	md_device_fini(&mc->mc_md_dev);
-        OBD_FREE_PTR(mc);
-}
-
-int mdc_type_init(struct lu_device_type *ldt)
-{
-        return 0;
-}
-
-void mdc_type_fini(struct lu_device_type *ldt)
-{
-        return;
-}
-
-static struct lu_device_type_operations mdc_device_type_ops = {
-        .ldto_init = mdc_type_init,
-        .ldto_fini = mdc_type_fini,
-
-        .ldto_device_alloc = mdc_device_alloc,
-        .ldto_device_free  = mdc_device_free,
-
-        .ldto_device_init = mdc_device_init,
-        .ldto_device_fini = mdc_device_fini
-};
-
-struct lu_device_type mdc_device_type = {
-        .ldt_tags = LU_DEVICE_MD,
-        .ldt_name = LUSTRE_MDC0_NAME,
-        .ldt_ops  = &mdc_device_type_ops
-};
-#endif /* CMM_CODE */

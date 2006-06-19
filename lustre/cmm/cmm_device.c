@@ -63,17 +63,6 @@ static int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
                                                     cmm_dev->cmm_child, fid);
 }
 
-static int cmm_config(const struct lu_context *ctxt, struct md_device *md,
-               const char *name, void *buf, int size, int mode)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(md);
-        int rc;
-        ENTRY;
-        rc = cmm_child_ops(cmm_dev)->mdo_config(ctxt, cmm_dev->cmm_child,
-                                                    name, buf, size, mode);
-        RETURN(rc);
-}
-
 static int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
                struct kstatfs *sfs) {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
@@ -87,7 +76,6 @@ static int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
 
 static struct md_device_operations cmm_md_ops = {
         .mdo_root_get       = cmm_root_get,
-        .mdo_config         = cmm_config,
         .mdo_statfs         = cmm_statfs,
 };
 
@@ -101,14 +89,11 @@ static int cmm_add_mdc(const struct lu_context *ctx,
         struct lu_device_type *ldt = &mdc_device_type;
         struct lu_device *ld;
         struct mdc_device *mc;
-#ifdef CMM_CODE
         struct mdc_device *tmp;
         __u32 mdc_num;
-#endif
         int rc;
         ENTRY;
 
-#ifdef CMM_CODE
         /* find out that there is no such mdc */
         LASSERT(lustre_cfg_string(cfg, 2));
         mdc_num = simple_strtol(lustre_cfg_string(cfg, 2), NULL, 10);
@@ -119,7 +104,6 @@ static int cmm_add_mdc(const struct lu_context *ctx,
                         RETURN(-EEXIST);
         }
         spin_unlock(&cm->cmm_tgt_guard);
-#endif        
         ld = ldt->ldt_ops->ldto_device_alloc(ctx, ldt, cfg);
         ld->ld_site = cmm2lu_dev(cm)->ld_site;
 
@@ -131,14 +115,11 @@ static int cmm_add_mdc(const struct lu_context *ctx,
         rc = ld->ld_ops->ldo_process_config(ctx, ld, cfg);
         if (rc == 0) {
                 mc = lu2mdc_dev(ld);
-#ifdef CMM_CODE
                 spin_lock(&cm->cmm_tgt_guard);
-#endif
                 list_add_tail(&mc->mc_linkage, &cm->cmm_targets);
                 cm->cmm_tgt_count++;
-#ifdef CMM_CODE
                 spin_unlock(&cm->cmm_tgt_guard);
-#endif                
+               
                 lu_device_get(cmm2lu_dev(cm));
 
                 fld_client_add_export(&cm->cmm_fld,
@@ -230,19 +211,15 @@ static int cmm_device_init(const struct lu_context *ctx,
 
         ENTRY;
         
-#ifdef CMM_CODE
         spin_lock_init(&m->cmm_tgt_guard);
-#endif
         INIT_LIST_HEAD(&m->cmm_targets);
         m->cmm_tgt_count = 0;
         m->cmm_child = lu2md_dev(next);
 
         err = fld_client_init(&m->cmm_fld, LUSTRE_CLI_FLD_HASH_RRB);
         if (err) {
-                CERROR("can't init FLD, err %d\n",
-                       err);
+                CERROR("can't init FLD, err %d\n",  err);
         }
-
         RETURN(err);
 }
 
@@ -252,9 +229,8 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
 	struct cmm_device *cm = lu2cmm_dev(ld);
         struct mdc_device *mc, *tmp;
         ENTRY;
-
-        fld_client_fini(&cm->cmm_fld);
         
+        fld_client_fini(&cm->cmm_fld);
         /* finish all mdc devices */
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
                 struct lu_device *ld_m = mdc2lu_dev(mc);

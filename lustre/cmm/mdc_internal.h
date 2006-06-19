@@ -28,7 +28,6 @@
 #include <lustre_net.h>
 #include <obd.h>
 #include <md_object.h>
-
 struct mdc_cli_desc {
         struct obd_connect_data  cl_conn_data;
         struct obd_uuid          cl_cli_uuid;
@@ -43,13 +42,11 @@ struct mdc_device {
         struct mdc_cli_desc     mc_desc;
 };
 
-#ifdef CMM_CODE
 struct mdc_thread_info {
         const struct lu_context *mci_ctxt;
         struct md_op_data       mci_opdata;
         struct ptlrpc_request   *mci_req;
 };
-#endif
 
 struct mdc_object {
 	struct md_object        mco_obj;
