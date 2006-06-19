@@ -512,10 +512,48 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
         return result;
 }
 
+static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
+                     struct lu_attr *attr, struct thandle *th)
+{
+        int result;
+        struct osd_device *osd = osd_obj2dev(obj);
+        struct inode      *dir;
+
+        /*
+         * XXX temporary solution.
+         */
+        struct dentry     *dentry;
+
+        LASSERT(obj->oo_inode == NULL);
+        LASSERT(S_ISDIR(attr->la_mode));
+        LASSERT(osd->od_obj_area != NULL);
+
+        dir = osd->od_obj_area->d_inode;
+        LASSERT(dir->i_op != NULL && dir->i_op->create != NULL);
+
+        osd_fid_build_name(lu_object_fid(&obj->oo_dt.do_lu), info->oti_name);
+        info->oti_str.name = info->oti_name;
+        info->oti_str.len  = strlen(info->oti_name);
+
+        dentry = d_alloc(osd->od_obj_area, &info->oti_str);
+        if (dentry != NULL) {
+                result = dir->i_op->create(dir, dentry,
+                                          attr->la_mode & (S_IRWXUGO|S_ISVTX), NULL);
+                if (result == 0) {
+                        LASSERT(dentry->d_inode != NULL);
+                        obj->oo_inode = dentry->d_inode;
+                        igrab(obj->oo_inode);
+                        obj->oo_dt.do_index_ops = &osd_index_ops;
+                }
+                dput(dentry);
+        } else
+                result = -ENOMEM;
+        return result;
+}
+
 typedef int (*osd_obj_type_f)(struct osd_thread_info *, struct osd_object *,
                               struct lu_attr *, struct thandle *);
 
-osd_obj_type_f osd_mkreg = NULL;
 osd_obj_type_f osd_mksym = NULL;
 osd_obj_type_f osd_mknod = NULL;
 
@@ -1288,9 +1326,9 @@ static int osd_fid_lookup(const struct lu_context *ctx,
 static int osd_inode_getattr(const struct lu_context *ctx,
                              struct inode *inode, struct lu_attr *attr)
 {
-        //attr->la_atime      = inode->i_atime;
-        //attr->la_mtime      = inode->i_mtime;
-        //attr->la_ctime      = inode->i_ctime;
+        attr->la_atime      = LTIME_S(inode->i_atime);
+        attr->la_mtime      = LTIME_S(inode->i_mtime);
+        attr->la_ctime      = LTIME_S(inode->i_ctime);
         attr->la_mode       = inode->i_mode;
         attr->la_size       = inode->i_size;
         attr->la_blocks     = inode->i_blocks;
