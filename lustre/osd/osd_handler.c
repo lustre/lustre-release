@@ -296,19 +296,6 @@ static int osd_object_print(const struct lu_context *ctx,
                           o->oo_inode ? o->oo_inode->i_generation : 0);
 }
 
-static int osd_config(const struct lu_context *ctx,
-                      struct dt_device *d, const char *name,
-                      void *buf, int size, int mode)
-{
-        if (mode == LUSTRE_CONFIG_GET) {
-                /* to be continued */
-                return 0;
-        } else {
-                /* to be continued */
-                return 0;
-        }
-}
-
 static int osd_statfs(const struct lu_context *ctx,
                       struct dt_device *d, struct kstatfs *sfs)
 {
@@ -406,7 +393,6 @@ static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
 
 static struct dt_device_operations osd_dt_ops = {
         .dt_root_get    = osd_root_get,
-        .dt_config      = osd_config,
         .dt_statfs      = osd_statfs,
         .dt_trans_start = osd_trans_start,
         .dt_trans_stop  = osd_trans_stop,

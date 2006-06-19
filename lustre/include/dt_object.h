@@ -67,15 +67,6 @@ enum dt_lock_mode {
  */
 struct dt_device_operations {
         /*
-         * Method for getting/setting device wide back stored config data,
-         * like last used meta-sequence, etc.
-         *
-         * XXX this is ioctl()-like interface we want to get rid of.
-         */
-        int (*dt_config) (const struct lu_context *ctx,
-                          struct dt_device *dev, const char *name,
-                          void *buf, int size, int mode);
-        /*
          * Return device-wide statistics.
          */
         int   (*dt_statfs)(const struct lu_context *ctx,

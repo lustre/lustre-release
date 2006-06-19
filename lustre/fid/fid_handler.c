@@ -97,14 +97,14 @@ seq_server_alloc_super(struct lu_server_seq *seq,
 
         LASSERT(range_is_sane(space));
         
-        if (space->lr_end - space->lr_start < LUSTRE_SEQ_SUPER_CHUNK) {
+        if (range_space(space) < LUSTRE_SEQ_SUPER_CHUNK) {
                 CWARN("sequences space is going to exhauste soon. "
                       "Only can allocate "LPU64" sequences\n",
                       space->lr_end - space->lr_start);
                 *range = *space;
                 space->lr_start = space->lr_end;
                 rc = 0;
-        } else if (space->lr_start == space->lr_end) {
+        } else if (range_is_exhausted(space)) {
                 CERROR("sequences space is exhausted\n");
                 rc = -ENOSPC;
         } else {
@@ -132,9 +132,9 @@ seq_server_alloc_meta(struct lu_server_seq *seq,
 
         LASSERT(range_is_sane(super));
 
-        /* XXX: here should avoid cascading RPCs using kind of async
+        /* XXX: here we should avoid cascading RPCs using kind of async
          * preallocation when meta-sequence is close to exhausting. */
-        if (super->lr_start == super->lr_end) {
+        if (range_is_exhausted(super)) {
                 if (!seq->seq_cli) {
                         CERROR("no seq-controller client is setup\n");
                         RETURN(-EOPNOTSUPP);
@@ -288,7 +288,7 @@ seq_server_controller(struct lu_server_seq *seq,
                       struct lu_client_seq *cli,
                       const struct lu_context *ctx)
 {
-        int rc;
+        int rc = 0;
         ENTRY;
         
         LASSERT(cli != NULL);
@@ -303,32 +303,39 @@ seq_server_controller(struct lu_server_seq *seq,
                "sequence controller client %s\n",
                cli->seq_exp->exp_client_uuid.uuid);
 
+        down(&seq->seq_sem);
+        
         /* assign controller */
         seq->seq_cli = cli;
 
-        /* allocate new super-sequence */
-        rc = seq_client_alloc_super(cli);
-        if (rc) {
-                CERROR("can't allocate super-sequence, "
-                       "rc %d\n", rc);
-                RETURN(rc);
+        /* get new range from controller only if super-sequence is not yet
+         * initialized from backing store or something else. */
+        if (range_is_zero(&seq->seq_super)) {
+                /* release sema to avoid deadlock for case we're asking our
+                 * selves. */
+                up(&seq->seq_sem);
+                rc = seq_client_alloc_super(cli);
+                down(&seq->seq_sem);
+                
+                if (rc) {
+                        CERROR("can't allocate super-sequence, "
+                               "rc %d\n", rc);
+                        RETURN(rc);
+                }
+
+                /* take super-seq from client seq mgr */
+                LASSERT(range_is_sane(&cli->seq_range));
+
+                seq->seq_super = cli->seq_range;
+
+                /* save init seq to backing store. */
+                rc = seq_server_write_state(seq, ctx);
+                if (rc) {
+                        CERROR("can't write sequence state, "
+                               "rc = %d\n", rc);
+                }
         }
-
-        /* take super-seq from client seq mgr */
-        LASSERT(range_is_sane(&cli->seq_range));
-
-        down(&seq->seq_sem);
-        seq->seq_super = cli->seq_range;
-
-        /* save init seq to backing store. */
-        rc = seq_server_write_state(seq, ctx);
-        if (rc) {
-                CERROR("can't write sequence state, "
-                       "rc = %d\n", rc);
-        }
-
         up(&seq->seq_sem);
-        
         RETURN(rc);
 }
 EXPORT_SYMBOL(seq_server_controller);

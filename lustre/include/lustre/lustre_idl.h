@@ -129,11 +129,31 @@ struct lu_range {
         __u64 lr_end;
 };
 
+static inline __u64 range_space(struct lu_range *r)
+{
+        return r->lr_end - r->lr_start;
+}
+
+static inline void range_zero(struct lu_range *r)
+{
+        r->lr_start = r->lr_end = 0;
+}
+
 static inline int range_is_sane(struct lu_range *r)
 {
         if (r->lr_end >= r->lr_start)
                 return 1;
         return 0;
+}
+
+static inline int range_is_zero(struct lu_range *r)
+{
+        return (r->lr_start == 0 && r->lr_end == 0);
+}
+
+static inline int range_is_exhausted(struct lu_range *r)
+{
+        return range_space(r) == 0;
 }
 
 struct lu_fid {

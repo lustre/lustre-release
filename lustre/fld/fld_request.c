@@ -324,6 +324,7 @@ fld_client_rpc(struct obd_export *exp,
 
         req->rq_replen = lustre_msg_size(1, &mf_size);
         req->rq_request_portal = MDS_FLD_PORTAL;
+
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out_req, rc);

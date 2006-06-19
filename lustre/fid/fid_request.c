@@ -53,6 +53,7 @@ seq_client_rpc(struct lu_client_seq *seq,
                struct lu_range *range,
                __u32 opc)
 {
+        struct obd_export *exp = seq->seq_exp;
         int repsize = sizeof(struct lu_range);
         int rc, reqsize = sizeof(__u32);
         struct ptlrpc_request *req;
@@ -60,9 +61,10 @@ seq_client_rpc(struct lu_client_seq *seq,
         __u32 *op;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(seq->seq_exp), 
-			      LUSTRE_MDS_VERSION, SEQ_QUERY,
-			      1, &reqsize, NULL);
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), 
+			      LUSTRE_MDS_VERSION,
+                              SEQ_QUERY, 1, &reqsize,
+                              NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -71,6 +73,7 @@ seq_client_rpc(struct lu_client_seq *seq,
 
         req->rq_replen = lustre_msg_size(1, &repsize);
         req->rq_request_portal = MDS_SEQ_PORTAL;
+
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out_req, rc);
@@ -90,14 +93,13 @@ out_req:
 }
 
 /* request sequence-controller node to allocate new super-sequence. */
-int
-seq_client_alloc_super(struct lu_client_seq *seq)
+static int
+__seq_client_alloc_super(struct lu_client_seq *seq)
 {
         int rc;
         ENTRY;
 
-        rc = seq_client_rpc(seq, &seq->seq_range,
-                            SEQ_ALLOC_SUPER);
+        rc = seq_client_rpc(seq, &seq->seq_range, SEQ_ALLOC_SUPER);
         if (rc == 0) {
                 CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated super-sequence "
                        "["LPX64"-"LPX64"]\n", seq->seq_range.lr_start,
@@ -105,17 +107,29 @@ seq_client_alloc_super(struct lu_client_seq *seq)
         }
         RETURN(rc);
 }
+
+int
+seq_client_alloc_super(struct lu_client_seq *seq)
+{
+        int rc;
+        ENTRY;
+        
+        down(&seq->seq_sem);
+        rc = __seq_client_alloc_super(seq);
+        up(&seq->seq_sem);
+
+        RETURN(rc);
+}
 EXPORT_SYMBOL(seq_client_alloc_super);
 
 /* request sequence-controller node to allocate new meta-sequence. */
-int
-seq_client_alloc_meta(struct lu_client_seq *seq)
+static int
+__seq_client_alloc_meta(struct lu_client_seq *seq)
 {
         int rc;
         ENTRY;
 
-        rc = seq_client_rpc(seq, &seq->seq_range,
-                            SEQ_ALLOC_META);
+        rc = seq_client_rpc(seq, &seq->seq_range, SEQ_ALLOC_META);
         if (rc == 0) {
                 CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated meta-sequence "
                        "["LPX64"-"LPX64"]\n", seq->seq_range.lr_start,
@@ -123,42 +137,60 @@ seq_client_alloc_meta(struct lu_client_seq *seq)
         }
         RETURN(rc);
 }
-EXPORT_SYMBOL(seq_client_alloc_meta);
 
-/* allocate new sequence for client (llite or MDC are expected to use this) */
 int
-seq_client_alloc_seq(struct lu_client_seq *seq, __u64 *seqnr)
+seq_client_alloc_meta(struct lu_client_seq *seq)
 {
         int rc;
         ENTRY;
 
         down(&seq->seq_sem);
+        rc = __seq_client_alloc_meta(seq);
+        up(&seq->seq_sem);
+
+        RETURN(rc);
+}
+EXPORT_SYMBOL(seq_client_alloc_meta);
+
+/* allocate new sequence for client (llite or MDC are expected to use this) */
+static int
+__seq_client_alloc_seq(struct lu_client_seq *seq, __u64 *seqnr)
+{
+        int rc = 0;
+        ENTRY;
+
         LASSERT(range_is_sane(&seq->seq_range));
 
         /* if we still have free sequences in meta-sequence we allocate new seq
-         * from given range. */
-        if (seq->seq_range.lr_end > seq->seq_range.lr_start) {
-                *seqnr = seq->seq_range.lr_start;
-                seq->seq_range.lr_start += 1;
-                rc = 0;
-        } else {
-                /* meta-sequence is exhausted, request MDT to allocate new
-                 * meta-sequence for us. */
-                rc = seq_client_alloc_meta(seq);
+         * from given range, if not - allocate new meta-sequence. */
+        if (range_space(&seq->seq_range) == 0) {
+                rc = __seq_client_alloc_meta(seq);
                 if (rc) {
                         CERROR("can't allocate new meta-sequence, "
                                "rc %d\n", rc);
                 }
-                
-                *seqnr = seq->seq_range.lr_start;
-                seq->seq_range.lr_start += 1;
         }
+        
+        *seqnr = seq->seq_range.lr_start;
+        seq->seq_range.lr_start += 1;
+        
+        if (rc == 0) {
+                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated "
+                       "sequence ["LPX64"]\n", *seqnr);
+        }
+        RETURN(rc);
+}
+
+int
+seq_client_alloc_seq(struct lu_client_seq *seq, __u64 *seqnr)
+{
+        int rc = 0;
+        ENTRY;
+
+        down(&seq->seq_sem);
+        rc = __seq_client_alloc_seq(seq, seqnr);
         up(&seq->seq_sem);
 
-        if (rc == 0) {
-                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated sequence "
-                       "["LPX64"]\n", *seqnr);
-        }
         RETURN(rc);
 }
 EXPORT_SYMBOL(seq_client_alloc_seq);
@@ -179,9 +211,7 @@ seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
         {
                 /* allocate new sequence for case client hass no sequence at all
                  * or sequnece is exhausted and should be switched. */
-                up(&seq->seq_sem);
-                rc = seq_client_alloc_seq(seq, &seqnr);
-                down(&seq->seq_sem);
+                rc = __seq_client_alloc_seq(seq, &seqnr);
                 if (rc) {
                         CERROR("can't allocate new sequence, "
                                "rc %d\n", rc);
@@ -225,13 +255,9 @@ seq_client_init(struct lu_client_seq *seq,
         
         seq->seq_flags = flags;
         fid_zero(&seq->seq_fid);
+        range_zero(&seq->seq_range);
         sema_init(&seq->seq_sem, 1);
-        
-        seq->seq_range.lr_end = 0;
-        seq->seq_range.lr_start = 0;
-	
-        if (exp != NULL)
-                seq->seq_exp = class_export_get(exp);
+        seq->seq_exp = class_export_get(exp);
 
         CDEBUG(D_INFO|D_WARNING, "Client Sequence "
                "Manager initialized\n");

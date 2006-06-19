@@ -887,18 +887,6 @@ static int mdd_root_get(const struct lu_context *ctx,
         RETURN(0);
 }
 
-static int mdd_config(const struct lu_context *ctx, struct md_device *m,
-                      const char *name, void *buf, int size, int mode)
-{
-        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
-        int rc;
-        ENTRY;
-
-        rc = mdd_child_ops(mdd)->dt_config(ctx, mdd->mdd_child,
-                                           name, buf, size, mode);
-        RETURN(rc);
-}
-
 static int mdd_statfs(const struct lu_context *ctx,
                       struct md_device *m, struct kstatfs *sfs) {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
@@ -973,7 +961,6 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj)
 
 struct md_device_operations mdd_ops = {
         .mdo_root_get       = mdd_root_get,
-        .mdo_config         = mdd_config,
         .mdo_statfs         = mdd_statfs,
 };
 

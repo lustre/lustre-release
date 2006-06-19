@@ -1066,13 +1066,24 @@ static int mdc_fid_init(struct obd_export *exp)
         if (cli->cl_seq == NULL)
                 RETURN(-ENOMEM);
 
-        /* init client side of sequence-manager */
+        /* init client side sequence-manager */
         rc = seq_client_init(cli->cl_seq, exp, 0);
+        if (rc)
+                GOTO(out_free_seq, rc);
+
+        /* pre-allocate meta-sequence */
+        rc = seq_client_alloc_meta(cli->cl_seq);
         if (rc) {
-                OBD_FREE_PTR(cli->cl_seq);
-                cli->cl_seq = NULL;
+                CERROR("can't allocate new mata-sequence, "
+                       "rc %d\n", rc);
+                GOTO(out_free_seq, rc);
         }
         RETURN(rc);
+
+out_free_seq:
+        OBD_FREE_PTR(cli->cl_seq);
+        cli->cl_seq = NULL;
+        return rc;
 }
 
 static int mdc_fid_fini(struct obd_export *exp)
