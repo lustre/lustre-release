@@ -96,9 +96,8 @@ static int mdt_md_mkdir(struct mdt_thread_info *info)
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(parent);
 
-                result = mdo_mkdir(info->mti_ctxt, &info->mti_attr, next,
-                                   info->mti_rr.rr_name,
-                                   mdt_object_child(child));
+                result = mdo_create(info->mti_ctxt, next, info->mti_rr.rr_name,
+                                    mdt_object_child(child), &info->mti_attr);
                 mdt_object_put(info->mti_ctxt, child);
         } else
                 result = PTR_ERR(child);
@@ -261,7 +260,7 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                 intent_set_disposition(ldlm_rep, DISP_OPEN_CREATE);
                 if (result != 0)
                         GOTO(out_child, result);
-                created = 1; 
+                created = 1;
         } else if (info->mti_rr.rr_flags & MDS_OPEN_EXCL &&
                    info->mti_rr.rr_flags & MDS_OPEN_CREAT) {
                         GOTO(out_child, result = -EEXIST);
@@ -281,7 +280,7 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         lmm = req_capsule_server_get(&info->mti_pill,
                                      &RMF_MDT_MD);
 
-        result = mo_xattr_get(info->mti_ctxt, mdt_object_child(child), 
+        result = mo_xattr_get(info->mti_ctxt, mdt_object_child(child),
                               lmm, MAX_MD_SIZE, "lov");
         if (result <= 0)
                 GOTO(destroy_child, result = -EINVAL);

@@ -77,10 +77,6 @@ struct md_dir_operations {
         int (*mdo_lookup)(const struct lu_context *, struct md_object *,
                           const char *, struct lu_fid *);
 
-        int (*mdo_mkdir)(const struct lu_context *, struct lu_attr *,
-                         struct md_object *, const char *,
-                         struct md_object *);
-
         int (*mdo_create)(const struct lu_context *, struct md_object *,
                           const char *, struct md_object *,
                           struct lu_attr *);
@@ -262,14 +258,6 @@ static inline int mdo_lookup(const struct lu_context *cx, struct md_object *p,
 {
         LASSERT(p->mo_dir_ops->mdo_lookup);
         return p->mo_dir_ops->mdo_lookup(cx, p, name, f);
-}
-
-static inline int mdo_mkdir(const struct lu_context *cx, struct lu_attr *at,
-                            struct md_object *p, const char *name,
-                            struct md_object *c)
-{
-        LASSERT(p->mo_dir_ops->mdo_mkdir);
-        return p->mo_dir_ops->mdo_mkdir(cx, at, p, name, c);
 }
 
 static inline int mdo_create(const struct lu_context *cx,
