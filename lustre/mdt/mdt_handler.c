@@ -1449,27 +1449,6 @@ static int mdt_config(const struct lu_context *ctx, struct mdt_device *m,
 /*
  * Seq wrappers
  */
-static int mdt_seq_init(const struct lu_context *ctx,
-                        struct mdt_device *m)
-{
-        struct lu_site *ls;
-        int rc;
-        ENTRY;
-
-        ls = m->mdt_md_dev.md_lu_dev.ld_site;
-
-        OBD_ALLOC_PTR(ls->ls_server_seq);
-
-        if (ls->ls_server_seq != NULL) {
-                rc = seq_server_init(ls->ls_server_seq,
-                                     m->mdt_bottom,
-                                     0, ctx);
-        } else
-                rc = -ENOMEM;
-
-        RETURN(rc);
-}
-
 static int mdt_seq_fini(const struct lu_context *ctx,
                         struct mdt_device *m)
 {
@@ -1487,6 +1466,29 @@ static int mdt_seq_fini(const struct lu_context *ctx,
                 ls->ls_client_seq = NULL;
         }
         RETURN(0);
+}
+
+static int mdt_seq_init(const struct lu_context *ctx,
+                        struct mdt_device *m)
+{
+        struct lu_site *ls;
+        int rc;
+        ENTRY;
+
+        ls = m->mdt_md_dev.md_lu_dev.ld_site;
+
+        OBD_ALLOC_PTR(ls->ls_server_seq);
+
+        if (ls->ls_server_seq != NULL) {
+                rc = seq_server_init(ls->ls_server_seq,
+                                     m->mdt_bottom,
+                                     0, ctx);
+        } else
+                rc = -ENOMEM;
+        
+        if (rc) 
+                mdt_seq_fini(ctx, m);
+        RETURN(rc);
 }
 
 /* XXX: this is ugly, should be something else */
@@ -1855,33 +1857,32 @@ static int mdt_init0(struct mdt_device *m,
                 CERROR("can't init device stack, rc %d\n", rc);
                 GOTO(err_fini_ctx, rc);
         }
+        lu_context_exit(&ctx);
+        if (rc)
+                GOTO(err_fini_ctx, rc);
 
         /* set server index */
         LASSERT(num);
         s->ls_node_id = simple_strtol(num, NULL, 10);
 
+        lu_context_enter(&ctx);
+        rc = mdt_fld_init(&ctx, m);
         lu_context_exit(&ctx);
         if (rc)
                 GOTO(err_fini_stack, rc);
 
         lu_context_enter(&ctx);
-        rc = mdt_fld_init(&ctx, m);
-        lu_context_exit(&ctx);
-        if (rc)
-                GOTO(err_fini_fld, rc);
-
-        lu_context_enter(&ctx);
         rc = mdt_seq_init(&ctx, m);
         lu_context_exit(&ctx);
         if (rc)
-                GOTO(err_fini_seq, rc);
+                GOTO(err_fini_fld, rc);
 
         lu_context_fini(&ctx);
 
         snprintf(ns_name, sizeof ns_name, LUSTRE_MDT0_NAME"-%p", m);
         m->mdt_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (m->mdt_namespace == NULL)
-                GOTO(err_fini_site, rc = -ENOMEM);
+                GOTO(err_fini_seq, rc = -ENOMEM);
 
         ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
 
@@ -1901,11 +1902,10 @@ err_fini_seq:
         mdt_seq_fini(&ctx, m);
 err_fini_fld:
         mdt_fld_fini(&ctx, m);
-err_fini_ctx:
-        lu_context_exit(&ctx);
-        lu_context_fini(&ctx);
 err_fini_stack:
         mdt_stack_fini(&ctx, m, md2lu_dev(m->mdt_child));
+err_fini_ctx:
+        lu_context_fini(&ctx);
 err_fini_site:
         lu_site_fini(s);
         OBD_FREE_PTR(s);
