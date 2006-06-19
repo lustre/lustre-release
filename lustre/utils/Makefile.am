@@ -6,19 +6,18 @@ AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
-sbin_scripts = llanalyze llstat.pl llobdstat.pl lactive lrun 
-bin_scripts = lfind lstripe
+sbin_scripts = llstat.pl llobdstat.pl lrun 
 
 if UTILS
+noinst_PROGRAMS = mount_lustre mkfs_lustre tunefs_lustre \
+	llog_reader wirecheck wiretest lload obdio obdbarrier
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
-sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest \
-	mount_lustre mkfs_lustre mkfs.lustre \
-	tunefs_lustre tunefs.lustre l_getgroups llverfs llverdev
-bin_PROGRAMS = lfs llog_reader
+sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
+	l_getgroups llverfs llverdev
+bin_PROGRAMS = lfs
 lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)
-bin_SCRIPTS = $(bin_scripts)
 endif # UTILS
 
 lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h platform.h
@@ -79,7 +78,7 @@ tunefs_lustre_CPPFLAGS = -DTUNEFS $(AM_CPPFLAGS)
 tunefs_lustre_LDADD := $(mkfs_lustre_LDADD)
 tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
 
-EXTRA_DIST = $(bin_scripts) $(sbin_scripts)
+EXTRA_DIST = $(sbin_scripts)
 
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck

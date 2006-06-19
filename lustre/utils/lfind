@@ -1,9 +1,0 @@
-#!/bin/bash
-PATH=`dirname $0`:$PATH
-
-if [ $# -eq 0 ] || [ "$1" == "-h" -o "$1" == "--help" ]; then
-	lfs help find 2>&1 | sed "s/find/lfind/g"
-	exit 0
-fi
-
-lfs find "$@"
