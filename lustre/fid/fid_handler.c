@@ -399,7 +399,7 @@ out:
 		seq_server_fini(seq, ctx);
         else
                 CDEBUG(D_INFO|D_WARNING, "Server Sequence "
-                       "Manager initialized\n");
+                       "Manager\n");
 	return rc;
 } 
 EXPORT_SYMBOL(seq_server_init);
@@ -421,7 +421,7 @@ seq_server_fini(struct lu_server_seq *seq,
         }
         
         CDEBUG(D_INFO|D_WARNING, "Server Sequence "
-               "Manager finalized\n");
+               "Manager\n");
         EXIT;
 }
 EXPORT_SYMBOL(seq_server_fini);
@@ -429,7 +429,6 @@ EXPORT_SYMBOL(seq_server_fini);
 static int fid_init(void)
 {
 	ENTRY;
-        CDEBUG(D_INFO|D_WARNING, "Lustre Sequence Manager\n");
 	RETURN(0);
 }
 
