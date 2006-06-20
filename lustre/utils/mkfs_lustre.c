@@ -1217,12 +1217,8 @@ int main(int argc, char *const argv[])
                         /* use the defaults unless old opts exist */
 #endif
                 {
-                        if (default_mountopts[0]) 
-                                sprintf(ldd->ldd_mount_opts, "%s,%s", 
-                                        always_mountopts, default_mountopts);
-                        else
-                                strcpy(ldd->ldd_mount_opts,
-                                       always_mountopts);
+                        sprintf(ldd->ldd_mount_opts, "%s%s", 
+                                always_mountopts, default_mountopts);
                 }
         }
 
