@@ -66,7 +66,7 @@ struct mkfs_opts {
 };
 
 static char *progname;
-static int verbose = 1;
+static int verbose = 0;
 static int print_only = 0;
 
 
@@ -111,6 +111,7 @@ void usage(FILE *out)
 }
 
 #define vprint if (verbose > 0) printf
+#define verrprint if (verbose >= 0) printf
 
 static void fatal(void)
 {
@@ -362,12 +363,16 @@ static int file_in_dev(char *file_name, char *dev_name)
         }
         i = fread(debugfs_cmd, 1, sizeof(debugfs_cmd), fp);
         if (i) {
-                /* Filesystem has unsupported feature */
-                vprint("%.*s", i, debugfs_cmd);
-                /* in all likelihood, the "unsupported feature" is
-                  'extents', which older debugfs does not understand.  
-                  Use e2fsprogs-1.38-cfs1 or later, available from 
-                  ftp://ftp.lustre.org/pub/lustre/other/e2fsprogs/ */
+                debugfs_cmd[i] = 0;
+                fprintf(stderr, "%s", debugfs_cmd);
+                if (strstr(debugfs_cmd, "unsupported feature")) {
+                        fprintf(stderr, "In all likelihood, the "
+                                "'unsupported feature' is 'extents', which "
+                                "older debugfs does not understand.\n"  
+                                "Use e2fsprogs-1.38-cfs1 or later, available "
+                                "from ftp://ftp.lustre.org/pub/lustre/other/"
+                                "e2fsprogs/\n");
+                }
                 return -1;
         }
         pclose(fp);
@@ -731,7 +736,7 @@ int read_local_files(struct mkfs_opts *mop)
                 /* COMPAT_146 */
                 /* Try to read pre-1.6 config from last_rcvd */
                 struct lr_server_data lsd;
-                vprint("%s: Unable to read %s, trying last_rcvd\n",
+                verrprint("%s: Unable to read %s, trying last_rcvd\n",
                        progname, MOUNT_DATA_FILE);
 
                 /* Construct debugfs command line. */
@@ -740,7 +745,7 @@ int read_local_files(struct mkfs_opts *mop)
                         "debugfs -c -R 'dump /%s %s/%s' %s",
                         LAST_RCVD, tmpdir, LAST_RCVD, dev);
 
-                ret=run_command(cmd);
+                ret = run_command(cmd);
                 if (ret) {
                         fprintf(stderr, "%s: Unable to dump %s file\n",
                                 progname, LAST_RCVD);
@@ -807,7 +812,7 @@ int read_local_files(struct mkfs_opts *mop)
                                         /* The index may not be correct */
                                         mop->mo_ldd.ldd_flags =
                                         LDD_F_SV_TYPE_OST | LDD_F_NEED_INDEX;
-                                        vprint("OST with unknown index\n");
+                                        verrprint("OST with unknown index\n");
 
                                 }
                         }
@@ -1132,6 +1137,8 @@ int main(int argc, char *const argv[])
                         mop.mo_device);
                 goto out;
         }
+        if (strstr(mop.mo_ldd.ldd_params, PARAM_MGSNODE))
+            mop.mo_mgs_failnodes++;
 
         if (verbose > 0) 
                 print_ldd("Read previous values", &(mop.mo_ldd));
@@ -1151,8 +1158,8 @@ int main(int argc, char *const argv[])
         }
 
         if (IS_MDT(ldd) && !IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
-                vprint("No management node specified, adding MGS to this "
-                       "MDT\n");
+                verrprint("No management node specified, adding MGS to this "
+                          "MDT\n");
                 ldd->ldd_flags |= LDD_F_SV_TYPE_MGS;
         }
 
@@ -1222,7 +1229,7 @@ int main(int argc, char *const argv[])
         server_make_name(ldd->ldd_flags, ldd->ldd_svindex,
                          ldd->ldd_fsname, ldd->ldd_svname);
 
-        if (verbose > 0)
+        if (verbose >= 0)
                 print_ldd("Permanent disk data", ldd);
 
         if (print_only) {
