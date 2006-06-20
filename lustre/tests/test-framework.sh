@@ -113,12 +113,13 @@ load_modules() {
 }
 
 unload_modules() {
-    lsmod | grep lnet > /dev/null && $LCTL dk $TMP/debug
+    lsmod | grep lnet > /dev/null && $LCTL dl && $LCTL dk $TMP/debug
     local MODULES=`$LCTL modules | awk '{ print $2 }'`
     rmmod $MODULES >/dev/null 2>&1 
      # do it again, in case we tried to unload ksocklnd too early
     lsmod | grep lnet > /dev/null && rmmod $MODULES >/dev/null 2>&1 
     lsmod | grep lnet && echo "modules still loaded" && return 1
+    HAVE_MODULES=false
 
     LEAK_LUSTRE=`dmesg | tail -n 30 | grep "obd mem.*leaked"`
     LEAK_PORTALS=`dmesg | tail -n 20 | grep "Portals memory leaked"`
@@ -129,7 +130,7 @@ unload_modules() {
         echo "Memory leaks detected"
         return 254
     fi
-    HAVE_MODULES=false
+    return 0
 }
 
 # Facet functions
