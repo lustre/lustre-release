@@ -148,7 +148,7 @@ static int mdt_reint_create(struct mdt_thread_info *info)
         }
         case S_IFDIR:{
                 if (strlen(info->mti_rr.rr_name) > 0)
-                        rc = mdt_md_mkdir(info);
+                        rc = mdt_md_create(info);
                 else
                         rc = mdt_md_mkobj(info);
 
@@ -280,11 +280,12 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         lmm = req_capsule_server_get(&info->mti_pill,
                                      &RMF_MDT_MD);
 
+        /* not supported yet in MDD
         result = mo_xattr_get(info->mti_ctxt, mdt_object_child(child),
                               lmm, MAX_MD_SIZE, "lov");
         if (result <= 0)
                 GOTO(destroy_child, result = -EINVAL);
-
+        */
         if (S_ISDIR(info->mti_attr.la_mode))
                 body->valid |= OBD_MD_FLDIREA;
         else
@@ -309,8 +310,10 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         /*TODO add permission checking here */
         if (S_ISREG(mode))
                 ;
-        /* Open it now. */
+        
+        /* TODO: not supported yet
         result = mdt_md_open(info, child);
+        */ 
 
 destroy_child:
         if (result != 0 && created)
