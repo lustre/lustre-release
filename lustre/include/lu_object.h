@@ -173,7 +173,7 @@ struct lu_object_operations {
 
         /*
          * Called when last active reference to the object is released (and
-         * object returns to the cache).
+         * object returns to the cache). This method is optional.
          */
         void (*loo_object_release)(const struct lu_context *ctx,
                                    struct lu_object *o);
@@ -783,6 +783,5 @@ void lu_context_enter(struct lu_context *ctx);
  * Called after exiting from @ctx
  */
 void lu_context_exit(struct lu_context *ctx);
-
 
 #endif /* __LUSTRE_LU_OBJECT_H */

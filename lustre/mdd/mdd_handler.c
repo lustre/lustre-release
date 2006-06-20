@@ -329,11 +329,6 @@ mdd_object_destroy(const struct lu_context *ctxt, struct md_object *obj)
         RETURN(rc);
 }
 
-static void mdd_object_release(const struct lu_context *ctxt,
-                               struct lu_object *o)
-{
-}
-
 static int mdd_object_print(const struct lu_context *ctxt,
                             struct seq_file *f, const struct lu_object *o)
 {
@@ -469,7 +464,6 @@ static struct lu_device_operations mdd_lu_ops = {
 
 static struct lu_object_operations mdd_lu_obj_ops = {
 	.loo_object_init    = mdd_object_init,
-	.loo_object_release = mdd_object_release,
 	.loo_object_free    = mdd_object_free,
 	.loo_object_print   = mdd_object_print,
 	.loo_object_exists  = mdd_object_exists,

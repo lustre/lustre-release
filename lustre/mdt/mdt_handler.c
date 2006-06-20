@@ -1983,11 +1983,6 @@ static void mdt_object_free(const struct lu_context *ctxt, struct lu_object *o)
         EXIT;
 }
 
-static void mdt_object_release(const struct lu_context *ctxt,
-                               struct lu_object *o)
-{
-}
-
 static int mdt_object_exists(const struct lu_context *ctx, struct lu_object *o)
 {
         return lu_object_exists(ctx, lu_object_next(o));
@@ -2006,7 +2001,6 @@ static struct lu_device_operations mdt_lu_ops = {
 
 static struct lu_object_operations mdt_obj_ops = {
         .loo_object_init    = mdt_object_init,
-        .loo_object_release = mdt_object_release,
         .loo_object_free    = mdt_object_free,
         .loo_object_print   = mdt_object_print,
         .loo_object_exists  = mdt_object_exists

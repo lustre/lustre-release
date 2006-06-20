@@ -77,11 +77,6 @@ static int mdc_object_init(const struct lu_context *ctx, struct lu_object *lo)
         RETURN(0);
 }
 
-static void mdc_object_release(const struct lu_context *ctx,
-                               struct lu_object *lo)
-{
-}
-
 static int mdc_object_exists(const struct lu_context *ctx, struct lu_object *lo)
 {
         /* we don't know does it exists or not - but suppose that it does*/
@@ -96,7 +91,6 @@ static int mdc_object_print(const struct lu_context *ctx,
 
 static struct lu_object_operations mdc_obj_ops = {
         .loo_object_init    = mdc_object_init,
-	.loo_object_release = mdc_object_release,
         .loo_object_free    = mdc_object_free,
 	.loo_object_print   = mdc_object_print,
 	.loo_object_exists  = mdc_object_exists
