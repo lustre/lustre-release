@@ -119,7 +119,7 @@ static int cmm_add_mdc(const struct lu_context *ctx,
                 list_add_tail(&mc->mc_linkage, &cm->cmm_targets);
                 cm->cmm_tgt_count++;
                 spin_unlock(&cm->cmm_tgt_guard);
-               
+
                 lu_device_get(cmm2lu_dev(cm));
 
                 fld_client_add_export(&cm->cmm_fld,
@@ -210,7 +210,7 @@ static int cmm_device_init(const struct lu_context *ctx,
         int err = 0;
 
         ENTRY;
-        
+
         spin_lock_init(&m->cmm_tgt_guard);
         INIT_LIST_HEAD(&m->cmm_targets);
         m->cmm_tgt_count = 0;
@@ -219,7 +219,8 @@ static int cmm_device_init(const struct lu_context *ctx,
         err = fld_client_init(&m->cmm_fld, LUSTRE_CLI_FLD_HASH_RRB);
         if (err) {
                 CERROR("can't init FLD, err %d\n",  err);
-        }
+        } else
+                m->cmm_flags |= CMM_INITIALIZED;
         RETURN(err);
 }
 
@@ -229,7 +230,7 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
 	struct cmm_device *cm = lu2cmm_dev(ld);
         struct mdc_device *mc, *tmp;
         ENTRY;
-        
+
         fld_client_fini(&cm->cmm_fld);
         /* finish all mdc devices */
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {

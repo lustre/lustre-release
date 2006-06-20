@@ -31,6 +31,8 @@
 
 struct cmm_device {
         struct md_device      cmm_md_dev;
+        /* device flags, taken from enum cmm_flags */
+        __u32                 cmm_flags;
         /* underlaying device in MDS stack, usually MDD */
         struct md_device     *cmm_child;
         /* other MD servers in cluster */
@@ -41,6 +43,13 @@ struct cmm_device {
 
         /* client FLD interface */
         struct lu_client_fld  cmm_fld;
+};
+
+enum cmm_flags {
+        /*
+         * Device initialization complete.
+         */
+        CMM_INITIALIZED = 1 << 0
 };
 
 static inline struct md_device_operations *cmm_child_ops(struct cmm_device *d)

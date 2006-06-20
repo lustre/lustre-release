@@ -86,14 +86,26 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
 {
         struct lu_object  *lo = NULL;
         const struct lu_fid *fid = &loh->loh_fid;
+        struct cmm_device *cd;
         int mdsnum;
         ENTRY;
 
-        /* get object location */
-        mdsnum = cmm_fld_lookup(lu2cmm_dev(ld), fid);
+        cd = lu2cmm_dev(ld);
+        if (cd->cmm_flags & CMM_INITIALIZED) {
+                /* get object location */
+                mdsnum = cmm_fld_lookup(lu2cmm_dev(ld), fid);
+                if (mdsnum < 0)
+                        RETURN(ERR_PTR(mdsnum));
+        } else
+                /*
+                 * Device is not yet initialized, cmm_object is being created
+                 * as part of early bootstrap procedure (it is /ROOT, or /fld,
+                 * etc.). Such object *has* to be local.
+                 */
+                mdsnum = cd->cmm_local_num;
 
         /* select the proper set of operations based on object location */
-        if (mdsnum == lu2cmm_dev(ld)->cmm_local_num) {
+        if (mdsnum == cd->cmm_local_num) {
                 struct cml_object *clo;
 
                 OBD_ALLOC_PTR(clo);
@@ -107,7 +119,7 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                 }
         } else {
                 struct cmr_object *cro;
-                
+
                 OBD_ALLOC_PTR(cro);
 	        if (cro != NULL) {
 		        lo = &cro->cmm_obj.cmo_obj.mo_lu;
@@ -123,7 +135,7 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
 }
 
 /*
- * CMM has two types of objects - local and remote. They have different set 
+ * CMM has two types of objects - local and remote. They have different set
  * of operations so we are avoiding multiple checks in code.
  */
 
@@ -354,7 +366,7 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
         }
 
         rc = mdo_rename(ctx, cmm2child_obj(md2cmm_obj(mo_po)),
-                        cmm2child_obj(md2cmm_obj(mo_pn)), lf, s_name, 
+                        cmm2child_obj(md2cmm_obj(mo_pn)), lf, s_name,
                         cmm2child_obj(md2cmm_obj(mo_t)), t_name);
 
         RETURN(rc);
@@ -402,7 +414,7 @@ static struct lu_device *cmr_child_dev(struct cmm_device *d, __u32 num)
 {
         struct lu_device *next = NULL;
         struct mdc_device *mdc;
-        
+
         spin_lock(&d->cmm_tgt_guard);
         list_for_each_entry(mdc, &d->cmm_targets, mc_linkage) {
                 if (mdc->mc_num == num) {
@@ -431,7 +443,7 @@ static int cmr_object_init(const struct lu_context *ctx, struct lu_object *lo)
         int rc;
 
         ENTRY;
-        
+
         c_dev = cmr_child_dev(cd, lu2cmr_obj(lo)->cmo_num);
         if (c_dev == NULL) {
                 rc = -ENOENT;
@@ -538,7 +550,7 @@ static int cmr_lookup(const struct lu_context *ctx, struct md_object *mo_p,
 {
         /*this can happens while rename()
          * If new parent is remote dir, lookup will happens here */
-        
+
         RETURN(-EREMOTE);
 }
 
@@ -610,9 +622,9 @@ static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
         rc = mdo_rename_tgt(ctx, cmm2child_obj(md2cmm_obj(mo_pn)), NULL/* mo_t */,
                             lf, t_name);
         /* only old name is removed localy */
-        if (rc == 0) 
+        if (rc == 0)
                 rc = mdo_name_remove(ctx, cmm2child_obj(md2cmm_obj(mo_po)),
-                                     s_name); 
+                                     s_name);
 
         RETURN(rc);
 }
