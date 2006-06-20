@@ -66,7 +66,7 @@ struct mkfs_opts {
 };
 
 static char *progname;
-static int verbose = 0;
+static int verbose = 1;
 static int print_only = 0;
 
 
