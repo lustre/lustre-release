@@ -511,7 +511,7 @@ static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
         struct dentry     *dentry;
 
         LASSERT(obj->oo_inode == NULL);
-        LASSERT(S_ISDIR(attr->la_mode));
+        LASSERT(S_ISREG(attr->la_mode));
         LASSERT(osd->od_obj_area != NULL);
 
         dir = osd->od_obj_area->d_inode;
@@ -932,7 +932,7 @@ static int osd_add_rec(struct osd_thread_info *info, struct osd_device *dev,
                 if (parent != NULL) {
                         new = d_alloc(parent, &info->oti_str);
                         if (new != NULL) {
-                                result = inode->i_op->link(old, dir, new);
+                                result = dir->i_op->link(old, dir, new);
                                 dput(new);
                         }
                         dput(parent);
