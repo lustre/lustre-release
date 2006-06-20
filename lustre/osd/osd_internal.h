@@ -41,36 +41,6 @@
 struct inode;
 struct dentry;
 
-struct osd_object {
-        struct dt_object       oo_dt;
-        /*
-         * Inode for file system object represented by this osd_object. This
-         * inode is pinned for the whole duration of lu_object life.
-         */
-        struct inode          *oo_inode;
-        struct rw_semaphore    oo_sem;
-        struct iam_container   oo_container;
-        struct iam_descr       oo_descr;
-        struct lu_context_key *oo_cookie_key;
-};
-
-/*
- * osd device.
- */
-struct osd_device {
-        /* super-class */
-        struct dt_device          od_dt_dev;
-        /* information about underlying file system */
-        struct lustre_mount_info *od_mount;
-        /* object index */
-        struct osd_oi             od_oi;
-        /*
-         * XXX temporary stuff for object index: directory where every object
-         * is named by its fid.
-         */
-        struct dentry            *od_obj_area;
-};
-
 struct dentry *osd_lookup(struct dentry *parent, const char *name);
 struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode);
 

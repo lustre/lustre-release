@@ -66,6 +66,36 @@
 
 #include "osd_internal.h"
 
+struct osd_object {
+        struct dt_object       oo_dt;
+        /*
+         * Inode for file system object represented by this osd_object. This
+         * inode is pinned for the whole duration of lu_object life.
+         */
+        struct inode          *oo_inode;
+        struct rw_semaphore    oo_sem;
+        struct iam_container   oo_container;
+        struct iam_descr       oo_descr;
+        struct lu_context_key *oo_cookie_key;
+};
+
+/*
+ * osd device.
+ */
+struct osd_device {
+        /* super-class */
+        struct dt_device          od_dt_dev;
+        /* information about underlying file system */
+        struct lustre_mount_info *od_mount;
+        /* object index */
+        struct osd_oi             od_oi;
+        /*
+         * XXX temporary stuff for object index: directory where every object
+         * is named by its fid.
+         */
+        struct dentry            *od_obj_area;
+};
+
 static int   osd_root_get      (const struct lu_context *ctxt,
                                 struct dt_device *dev, struct lu_fid *f);
 static int   osd_statfs        (const struct lu_context *ctxt,
@@ -288,12 +318,15 @@ static int osd_object_exists(const struct lu_context *ctx, struct lu_object *o)
 static int osd_object_print(const struct lu_context *ctx,
                             struct seq_file *f, const struct lu_object *l)
 {
-        struct osd_object  *o = osd_obj(l);
+        struct osd_object *o = osd_obj(l);
+        struct iam_descr  *d;
 
-        return seq_printf(f, LUSTRE_OSD0_NAME"-object@%p(i:%p:%lu/%u)",
+        d = o->oo_container.ic_descr;
+        return seq_printf(f, LUSTRE_OSD0_NAME"-object@%p(i:%p:%lu/%u)[%s]",
                           o, o->oo_inode,
                           o->oo_inode ? o->oo_inode->i_ino : 0UL,
-                          o->oo_inode ? o->oo_inode->i_generation : 0);
+                          o->oo_inode ? o->oo_inode->i_generation : 0,
+                          d ? d->id_ops->id_name : "plain");
 }
 
 static int osd_statfs(const struct lu_context *ctx,
@@ -618,7 +651,7 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
         return result;
 }
 
-static void osd_inode_inc_link(const struct lu_context *ctxt, 
+static void osd_inode_inc_link(const struct lu_context *ctxt,
                                struct inode *inode, struct thandle *th)
 {
         inode->i_nlink ++;
@@ -626,14 +659,14 @@ static void osd_inode_inc_link(const struct lu_context *ctxt,
 }
 
 
-static void osd_inode_dec_link(const struct lu_context *ctxt, 
+static void osd_inode_dec_link(const struct lu_context *ctxt,
                                struct inode *inode, struct thandle *th)
 {
         inode->i_nlink --;
         mark_inode_dirty(inode);
 }
 
-static int osd_object_ref_add(const struct lu_context *ctxt, 
+static int osd_object_ref_add(const struct lu_context *ctxt,
                               struct dt_object *dt, struct thandle *th)
 {
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
@@ -641,7 +674,7 @@ static int osd_object_ref_add(const struct lu_context *ctxt,
         return 0;
 }
 
-static int osd_object_ref_del(const struct lu_context *ctxt, 
+static int osd_object_ref_del(const struct lu_context *ctxt,
                               struct dt_object *dt, struct thandle *th)
 {
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
@@ -749,7 +782,7 @@ static int osd_build_fid(struct osd_device *osd,
 {
         struct inode *inode = dentry->d_inode;
         int result;
-        
+
         /*
          * Build fid from inode.
          */
