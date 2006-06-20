@@ -731,8 +731,26 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
 
         llap->llap_ignore_quota = capable(CAP_SYS_RESOURCE);
 
-        /* queue a write for some time in the future the first time we
-         * dirty the page */
+        /*
+         * queue a write for some time in the future the first time we
+         * dirty the page.
+         *
+         * This is different from what other file systems do: they usually
+         * just mark page (and some of its buffers) dirty and rely on
+         * balance_dirty_pages() to start a write-back. Lustre wants write-back
+         * to be started earlier for the following reasons:
+         *
+         *     (1) with a large number of clients we need to limit the amount
+         *     of cached data on the clients a lot;
+         *
+         *     (2) large compute jobs generally want compute-only then io-only
+         *     and the IO should complete as quickly as possible;
+         *
+         *     (3) IO is batched up to the RPC size and is async until the
+         *     client max cache is hit
+         *     (/proc/fs/lustre/osc/OSC.../max_dirty_mb)
+         *
+         */
         if (!PageDirty(page)) {
                 lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
                                      LPROC_LL_DIRTY_MISSES);
