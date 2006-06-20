@@ -400,7 +400,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
 {
         struct inode *inode;
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock_res_and_lock(lock);
 
         if (lock->l_ast_data) {
                 inode = (struct inode *)lock->l_ast_data;
@@ -408,7 +408,7 @@ struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
         } else
                 inode = NULL;
 
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res_and_lock(lock);
         return inode;
 }
 
