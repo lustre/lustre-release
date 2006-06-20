@@ -951,6 +951,8 @@ struct obd_ops {
                             struct niobuf_remote *remote);
         int (*o_init_export)(struct obd_export *exp);
         int (*o_destroy_export)(struct obd_export *exp);
+        int (*o_extent_calc)(struct obd_export *, struct lov_stripe_md *,
+                             int cmd, obd_off *);
 
         /* llog related obd_methods */
         int (*o_llog_init)(struct obd_device *obd, struct obd_device *disk_obd,
@@ -1018,6 +1020,10 @@ static inline struct lsm_operations *lsm_op_find(int magic)
 }
 
 int lvfs_check_io_health(struct obd_device *obd, struct file *file);
+
+/* Requests for obd_extent_calc() */
+#define OBD_CALC_STRIPE_START   1
+#define OBD_CALC_STRIPE_END     2
 
 static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                                          int error)

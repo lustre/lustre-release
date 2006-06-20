@@ -338,6 +338,27 @@ static int ll_wr_checksum(struct file *file, const char *buffer,
         return count;
 }
 
+static int ll_rd_max_rw_chunk(char *page, char **start, off_t off,
+                          int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+
+        return snprintf(page, count, "%lu\n", ll_s2sbi(sb)->ll_max_rw_chunk);
+}
+
+static int ll_wr_max_rw_chunk(struct file *file, const char *buffer,
+                          unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        int rc, val;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+        ll_s2sbi(sb)->ll_max_rw_chunk = val;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -355,6 +376,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
                                      ll_wr_max_read_ahead_whole_mb, 0 },
         { "max_cached_mb", ll_rd_max_cached_mb, ll_wr_max_cached_mb, 0 },
         { "checksum_pages", ll_rd_checksum, ll_wr_checksum, 0 },
+        { "max_rw_chunk", ll_rd_max_rw_chunk, ll_wr_max_rw_chunk, 0 },
         { 0 }
 };
 

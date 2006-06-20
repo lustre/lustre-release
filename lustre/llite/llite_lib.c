@@ -185,6 +185,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
         sbi->ll_namelen = osfs.os_namelen;
+        sbi->ll_max_rw_chunk = LL_DEFAULT_MAX_RW_CHUNK;
 
         if ((sbi->ll_flags & LL_SBI_USER_XATTR) &&
             !(data->ocd_connect_flags & OBD_CONNECT_XATTR)) {
@@ -643,6 +644,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 {
         sema_init(&lli->lli_open_sem, 1);
         sema_init(&lli->lli_size_sem, 1);
+        sema_init(&lli->lli_write_sem, 1);
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);

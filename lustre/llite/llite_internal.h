@@ -79,6 +79,7 @@ struct ll_inode_info {
         struct semaphore        lli_size_sem;
         void                   *lli_size_sem_owner;
         struct semaphore        lli_open_sem;
+        struct semaphore        lli_write_sem;
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
         __u64                   lli_maxbytes;
@@ -207,7 +208,12 @@ struct ll_sb_info {
 
         struct list_head          ll_deathrow; /* inodes to be destroyed (b1443) */
         spinlock_t                ll_deathrow_lock;
+        /* =0 - hold lock over whole read/write
+         * >0 - max. chunk to be read/written w/o lock re-acquiring */
+        unsigned long             ll_max_rw_chunk;
 };
+
+#define LL_DEFAULT_MAX_RW_CHUNK         (32 * 1024 * 1024)
 
 struct ll_ra_read {
         pgoff_t             lrr_start;

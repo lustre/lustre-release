@@ -646,6 +646,17 @@ static inline int obd_destroy_export(struct obd_export *exp)
         RETURN(0);
 }
 
+static inline int obd_extent_calc(struct obd_export *exp,
+                                  struct lov_stripe_md *md,
+                                  int cmd, obd_off *offset)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_OP(exp, extent_calc);
+        rc = OBP(exp->exp_obd, extent_calc)(exp, md, cmd, offset);
+        RETURN(rc);
+}
+
 static inline struct dentry *
 obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
 {

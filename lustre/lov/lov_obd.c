@@ -2437,6 +2437,31 @@ int lov_test_and_clear_async_rc(struct lov_stripe_md *lsm)
 }
 EXPORT_SYMBOL(lov_test_and_clear_async_rc);
 
+
+static int lov_extent_calc(struct obd_export *exp, struct lov_stripe_md *lsm,
+                           int cmd, obd_off *offset)
+{
+        unsigned long ssize  = lsm->lsm_stripe_size;
+        obd_off start;
+
+        start = *offset;
+        do_div(start, ssize);
+        start = start * ssize;
+
+        CDEBUG(D_DLMTRACE, "offset %Lu, stripe %lu, start %Lu, end %Lu\n", 
+               *offset, ssize, start, start + ssize - 1);
+        if (cmd == OBD_CALC_STRIPE_END) {
+                *offset = start + ssize - 1;
+        } else if (cmd == OBD_CALC_STRIPE_START) {
+                *offset = start;
+        } else {
+                LBUG();
+        }
+
+        RETURN(0);
+}
+
+
 #if 0
 struct lov_multi_wait {
         struct ldlm_lock *lock;
@@ -2583,6 +2608,7 @@ struct obd_ops lov_obd_ops = {
         .o_iocontrol           = lov_iocontrol,
         .o_get_info            = lov_get_info,
         .o_set_info_async      = lov_set_info_async,
+        .o_extent_calc         = lov_extent_calc,
         .o_llog_init           = lov_llog_init,
         .o_llog_finish         = lov_llog_finish,
         .o_notify              = lov_notify,

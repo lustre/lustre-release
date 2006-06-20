@@ -1076,12 +1076,15 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_lock_tree tree;
         struct ll_lock_tree_node *node;
         struct ost_lvb lvb;
         struct ll_ra_read bead;
-        int rc;
-        ssize_t retval;
+        int rc, ra = 0;
+        loff_t end;
+        ssize_t retval, chunk, sum = 0;
+
         __u64 kms;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
@@ -1121,12 +1124,29 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
                 RETURN(count);
         }
 
-        node = ll_node_from_inode(inode, *ppos, *ppos + count - 1, LCK_PR);
+repeat:
+        if (sbi->ll_max_rw_chunk != 0) {
+                /* first, let's know the end of the current stripe */
+                end = *ppos;
+                obd_extent_calc(sbi->ll_osc_exp, lsm, OBD_CALC_STRIPE_END, &end);
+
+                /* correct, the end is beyond the request */
+                if (end > *ppos + count - 1)
+                        end = *ppos + count - 1;
+
+                /* and chunk shouldn't be too large even if striping is wide */
+                if (end - *ppos > sbi->ll_max_rw_chunk)
+                        end = *ppos + sbi->ll_max_rw_chunk - 1;
+        } else {
+                end = *ppos + count - 1;
+        }
+       
+        node = ll_node_from_inode(inode, *ppos, end, LCK_PR);
         tree.lt_fd = LUSTRE_FPRIVATE(file);
         rc = ll_tree_lock(&tree, node, buf, count,
                           file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
         if (rc != 0)
-                RETURN(rc);
+                GOTO(out, retval = rc);
 
         ll_inode_size_lock(inode, 1);
         /*
@@ -1164,8 +1184,9 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
                 ll_inode_size_unlock(inode, 1);
         }
 
+        chunk = end - *ppos + 1;
         CDEBUG(D_INFO, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
-               inode->i_ino, count, *ppos, inode->i_size);
+               inode->i_ino, chunk, *ppos, inode->i_size);
 
         /* turn off the kernel's read-ahead */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -1173,16 +1194,32 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
 #else
         file->f_ra.ra_pages = 0;
 #endif
-        bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
-        bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        ll_ra_read_in(file, &bead);
+        /* initialize read-ahead window once per syscall */
+        if (ra == 0) {
+                ra = 1;
+                bead.lrr_start = *ppos >> CFS_PAGE_SHIFT;
+                bead.lrr_count = (count + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+                ll_ra_read_in(file, &bead);
+        }
+
         /* BUG: 5972 */
         file_accessed(file);
-        retval = generic_file_read(file, buf, count, ppos);
-        ll_ra_read_ex(file, &bead);
+        retval = generic_file_read(file, buf, chunk, ppos);
+
+        ll_tree_unlock(&tree);
+
+        if (retval > 0) {
+                buf += retval;
+                count -= retval;
+                sum += retval;
+                if (retval == chunk && count > 0)
+                        goto repeat;
+        }
 
  out:
-        ll_tree_unlock(&tree);
+        if (ra != 0)
+                ll_ra_read_ex(file, &bead);
+        retval = (sum > 0) ? sum : retval;
         RETURN(retval);
 }
 
@@ -1193,10 +1230,13 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
                              loff_t *ppos)
 {
         struct inode *inode = file->f_dentry->d_inode;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
         struct ll_lock_tree tree;
         struct ll_lock_tree_node *node;
         loff_t maxbytes = ll_file_maxbytes(inode);
-        ssize_t retval;
+        loff_t lock_start, lock_end, end;
+        ssize_t retval, chunk, sum = 0;
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
@@ -1216,25 +1256,50 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
 
         LASSERT(ll_i2info(inode)->lli_smd != NULL);
 
-        if (file->f_flags & O_APPEND)
-                node = ll_node_from_inode(inode, 0, OBD_OBJECT_EOF, LCK_PW);
-        else
-                node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1,
-                                          LCK_PW);
+        down(&ll_i2info(inode)->lli_write_sem);
+
+repeat:
+        chunk = 0; /* just to fix gcc's warning */
+        end = *ppos + count - 1;
+
+        if (file->f_flags & O_APPEND) {
+                lock_start = 0;
+                lock_end = OBD_OBJECT_EOF;
+        } else if (sbi->ll_max_rw_chunk != 0) {
+                /* first, let's know the end of the current stripe */
+                end = *ppos;
+                obd_extent_calc(sbi->ll_osc_exp, lsm, OBD_CALC_STRIPE_END, &end);
+
+                /* correct, the end is beyond the request */
+                if (end > *ppos + count - 1)
+                        end = *ppos + count - 1;
+
+                /* and chunk shouldn't be too large even if striping is wide */
+                if (end - *ppos > sbi->ll_max_rw_chunk)
+                        end = *ppos + sbi->ll_max_rw_chunk - 1;
+                lock_start = *ppos;
+                lock_end = end;
+        } else {
+                lock_start = *ppos;
+                lock_end = *ppos + count - 1;
+        }
+        node = ll_node_from_inode(inode, lock_start, lock_end, LCK_PW);
 
         if (IS_ERR(node))
-                RETURN(PTR_ERR(node));
+                GOTO(out, retval = PTR_ERR(node));
 
         tree.lt_fd = LUSTRE_FPRIVATE(file);
         rc = ll_tree_lock(&tree, node, buf, count,
                           file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
         if (rc != 0)
-                RETURN(rc);
+                GOTO(out, retval = rc);
 
         /* this is ok, g_f_w will overwrite this under i_mutex if it races
          * with a local truncate, it just makes our maxbyte checking easier */
-        if (file->f_flags & O_APPEND)
+        if (file->f_flags & O_APPEND) {
                 *ppos = inode->i_size;
+                end = *ppos + count - 1;
+        }
 
         if (*ppos >= maxbytes) {
                 send_sig(SIGXFSZ, current, 0);
@@ -1243,14 +1308,26 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         if (*ppos + count > maxbytes)
                 count = maxbytes - *ppos;
 
-        CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
-               inode->i_ino, count, *ppos);
-
         /* generic_file_write handles O_APPEND after getting i_mutex */
-        retval = generic_file_write(file, buf, count, ppos);
+        chunk = end - *ppos + 1;
+        CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
+               inode->i_ino, chunk, *ppos);
+        retval = generic_file_write(file, buf, chunk, ppos);
 
 out:
         ll_tree_unlock(&tree);
+
+        if (retval > 0) {
+                buf += retval;
+                count -= retval;
+                sum += retval;
+                if (retval == chunk && count > 0)
+                        goto repeat;
+        }
+
+        up(&ll_i2info(inode)->lli_write_sem);
+
+        retval = (sum > 0) ? sum : retval;
         lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_WRITE_BYTES,
                             retval > 0 ? retval : 0);
         RETURN(retval);
