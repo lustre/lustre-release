@@ -72,7 +72,7 @@ lmv_obj_alloc(struct obd_device *obd,
                 return NULL;
 
         atomic_inc(&obj_cache_count);
-        
+
         obj->lo_fid = *fid;
         obj->lo_obd = obd;
         obj->lo_state = 0;
@@ -84,7 +84,7 @@ lmv_obj_alloc(struct obd_device *obd,
 
         obj_size = sizeof(struct lmv_inode) *
                 lmv->desc.ld_tgt_count;
-        
+
         OBD_ALLOC(obj->lo_inodes, obj_size);
         if (!obj->lo_inodes)
                 goto err_obj;
@@ -100,7 +100,7 @@ lmv_obj_alloc(struct obd_device *obd,
         }
 
         return obj;
-        
+
 err_obj:
         OBD_FREE(obj, sizeof(*obj));
         return NULL;
@@ -112,12 +112,12 @@ lmv_obj_free(struct lmv_obj *obj)
 {
         struct lmv_obd *lmv = &obj->lo_obd->u.lmv;
         unsigned int obj_size;
-        
+
         LASSERT(!atomic_read(&obj->lo_count));
-        
+
         obj_size = sizeof(struct lmv_inode) *
                 lmv->desc.ld_tgt_count;
-        
+
         OBD_FREE(obj->lo_inodes, obj_size);
         OBD_SLAB_FREE(obj, obj_cache, sizeof(*obj));
         atomic_dec(&obj_cache_count);
@@ -205,7 +205,7 @@ __lmv_obj_grab(struct obd_device *obd, struct lu_fid *fid)
                 if (obj->lo_state & O_FREEING)
                         continue;
 
-                /* 
+                /*
                  * we should make sure, that we have found object belong to
                  * passed obd. It is possible that, object manager will have two
                  * objects with the same fid belong to different obds, if client
@@ -228,11 +228,11 @@ lmv_obj_grab(struct obd_device *obd, struct lu_fid *fid)
 {
         struct lmv_obj *obj;
         ENTRY;
-        
+
         spin_lock(&obj_list_lock);
         obj = __lmv_obj_grab(obd, fid);
         spin_unlock(&obj_list_lock);
-        
+
         RETURN(obj);
 }
 
@@ -267,14 +267,14 @@ __lmv_obj_create(struct obd_device *obd, struct lu_fid *fid,
 
         __lmv_obj_add(new);
         __lmv_obj_get(new);
-        
+
         spin_unlock(&obj_list_lock);
 
         CDEBUG(D_OTHER, "new obj in lmv cache: "DFID3"\n",
                PFID3(fid));
 
         RETURN(new);
-        
+
 }
 
 /* creates object from passed @fid and @mea. If @mea is NULL, it will be
@@ -298,15 +298,17 @@ lmv_obj_create(struct obd_export *exp, struct lu_fid *fid,
 	
         if (mea == NULL) {
                 __u64 valid;
-                
+
                 CDEBUG(D_OTHER, "mea isn't passed in, get it now\n");
                 mealen = MEA_SIZE_LMV(lmv);
-                
+
                 /* time to update mea of parent fid */
                 md.mea = NULL;
                 valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
 
                 mds = lmv_fld_lookup(obd, fid);
+                if (mds < 0)
+                        GOTO(cleanup, obj = ERR_PTR(mds));
 
                 rc = md_getattr(lmv->tgts[mds].ltd_exp, fid, valid, mealen, &req);
                 if (rc) {
@@ -322,7 +324,7 @@ lmv_obj_create(struct obd_export *exp, struct lu_fid *fid,
 
                 if (md.mea == NULL)
                         GOTO(cleanup, obj = ERR_PTR(-ENODATA));
-                        
+
                 mea = md.mea;
         }
 
@@ -336,7 +338,7 @@ lmv_obj_create(struct obd_export *exp, struct lu_fid *fid,
 	
 	if (md.mea != NULL)
 		obd_free_memmd(exp, (struct lov_stripe_md **)&md.mea);
-        
+
 	EXIT;
 cleanup:
         if (req)
@@ -376,7 +378,7 @@ lmv_mgr_setup(struct obd_device *obd)
 {
         ENTRY;
         LASSERT(obd != NULL);
-        
+
         CDEBUG(D_INFO, "LMV object manager setup (%s)\n",
                obd->obd_uuid.uuid);
 
@@ -392,11 +394,11 @@ lmv_mgr_cleanup(struct obd_device *obd)
 
         CDEBUG(D_INFO, "LMV object manager cleanup (%s)\n",
                obd->obd_uuid.uuid);
-        
+
         spin_lock(&obj_list_lock);
         list_for_each_safe(cur, tmp, &obj_list) {
                 obj = list_entry(cur, struct lmv_obj, lo_list);
-                
+
                 if (obj->lo_obd != obd)
                         continue;
 
