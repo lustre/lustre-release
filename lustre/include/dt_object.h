@@ -52,7 +52,6 @@ struct txn_param;
 struct dt_device;
 struct dt_object;
 struct dt_index_features;
-struct dt_index_cookie;
 
 /*
  * Lock mode for DT objects.
@@ -87,17 +86,6 @@ struct dt_device_operations {
          */
         int   (*dt_root_get)(const struct lu_context *ctx,
                              struct dt_device *dev, struct lu_fid *f);
-        /*
-         * This method has to be called by any module that is going to use
-         * indexing capabilities of dt interface.
-         */
-        struct dt_index_cookie *(*dt_index_init)
-                (const struct lu_context *, const struct dt_index_features *);
-        /*
-         * Dual to ->dt_index_init().
-         */
-        void (*dt_index_fini)(const struct lu_context *ctx,
-                              struct dt_index_cookie *cookie);
 };
 
 struct dt_index_features {
@@ -203,31 +191,23 @@ struct dt_object_operations {
          * installs appropriate dt_index_operations vector on success.
          *
          * Also probes for features. Operation is successful if all required
-         * features are supported. In this case, value of @cookie key is used
-         * as an opaque datum with format required by the underlying indexing
-         * implementation. Value of this key has to be allocated through
-         * ->dt_index_cookie().
+         * features are supported.
          */
         int   (*do_object_index_try)(const struct lu_context *ctxt,
                                      struct dt_object *dt,
-                                     const struct dt_index_features *feat,
-                                     struct dt_index_cookie *cookie);
+                                     const struct dt_index_features *feat);
         /*
          * Add nlink of the object
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
-        
-        int   (*do_object_ref_add)(const struct lu_context *ctxt, 
+        int   (*do_object_ref_add)(const struct lu_context *ctxt,
                                    struct dt_object *dt, struct thandle *th);
-
         /*
          * Del nlink of the object
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
-        
-        int   (*do_object_ref_del)(const struct lu_context *ctxt, 
+        int   (*do_object_ref_del)(const struct lu_context *ctxt,
                                    struct dt_object *dt, struct thandle *th);
-
 };
 
 /*

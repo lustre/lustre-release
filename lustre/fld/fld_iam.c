@@ -108,7 +108,7 @@ static struct dt_key *fld_key(const struct lu_context *ctx,
 {
         struct fld_thread_info *info;
         ENTRY;
-        
+
         info = lu_context_key_get(ctx, &fld_thread_key);
         LASSERT(info != NULL);
 
@@ -121,7 +121,7 @@ static struct dt_rec *fld_rec(const struct lu_context *ctx,
 {
         struct fld_thread_info *info;
         ENTRY;
-        
+
         info = lu_context_key_get(ctx, &fld_thread_key);
         LASSERT(info != NULL);
 
@@ -224,16 +224,11 @@ int fld_iam_init(struct lu_server_fld *fld,
          */
         LASSERT(fld->fld_service == NULL);
 
-        fld->fld_cookie = dt->dd_ops->dt_index_init(ctx, &fld_index_features);
-        if (IS_ERR(fld->fld_cookie) != 0)
-                return PTR_ERR(fld->fld_cookie);
-
         dt_obj = dt_store_open(ctx, dt, "fld", &fld->fld_fid);
         if (!IS_ERR(dt_obj)) {
                 fld->fld_obj = dt_obj;
                 rc = dt_obj->do_ops->do_object_index_try(ctx, dt_obj,
-                                                         &fld_index_features,
-                                                         fld->fld_cookie);
+                                                         &fld_index_features);
                 if (rc == 0)
                         LASSERT(dt_obj->do_index_ops != NULL);
                 else
@@ -250,10 +245,6 @@ void fld_iam_fini(struct lu_server_fld *fld,
                   const struct lu_context *ctx)
 {
         ENTRY;
-        if (!IS_ERR(fld->fld_cookie) && fld->fld_cookie != NULL) {
-                fld->fld_dt->dd_ops->dt_index_fini(ctx, fld->fld_cookie);
-                fld->fld_cookie = NULL;
-        }
         if (fld->fld_obj != NULL) {
                 lu_object_put(ctx, &fld->fld_obj->do_lu);
                 fld->fld_obj = NULL;

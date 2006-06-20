@@ -76,7 +76,7 @@ struct osd_object {
         struct rw_semaphore    oo_sem;
         struct iam_container   oo_container;
         struct iam_descr       oo_descr;
-        struct lu_context_key *oo_cookie_key;
+        struct iam_path_descr *oo_ipd;
 };
 
 /*
@@ -149,14 +149,7 @@ static int   osd_index_probe   (const struct lu_context *ctxt,
                                 const struct dt_index_features *feat);
 static int   osd_index_try     (const struct lu_context *ctx,
                                 struct dt_object *dt,
-                                const struct dt_index_features *feat,
-                                struct dt_index_cookie *cookie);
-static void *osd_index_key_init(const struct lu_context *ctx,
-                                struct lu_context_key *key);
-static void  osd_index_key_fini(const struct lu_context *ctx,
-                                struct lu_context_key *key, void *data);
-static void  osd_index_fini    (const struct lu_context *ctx,
-                                struct dt_index_cookie *cookie);
+                                const struct dt_index_features *feat);
 
 static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
@@ -177,9 +170,6 @@ static struct inode       *osd_iget         (struct osd_thread_info *info,
                                              const struct osd_inode_id *id);
 static struct super_block *osd_sb           (const struct osd_device *dev);
 static journal_t          *osd_journal      (const struct osd_device *dev);
-
-static struct dt_index_cookie *osd_index_init(const struct lu_context *ctx,
-                                        const struct dt_index_features *feat);
 
 static struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
@@ -281,6 +271,7 @@ static int osd_object_init(const struct lu_context *ctxt, struct lu_object *l)
 static void osd_object_free(const struct lu_context *ctx, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
+
         dt_object_fini(&obj->oo_dt);
         OBD_FREE_PTR(obj);
 }
@@ -289,6 +280,10 @@ static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
 {
         struct osd_object *o = osd_obj(l);
 
+        if (o->oo_ipd != NULL) {
+                LASSERT(o->oo_descr.id_ops->id_ipd_free != NULL);
+                o->oo_descr.id_ops->id_ipd_free(&o->oo_container, o->oo_ipd);
+        }
         if (o->oo_inode != NULL) {
                 if (o->oo_container.ic_object == o->oo_inode)
                         iam_container_fini(&o->oo_container);
@@ -428,9 +423,7 @@ static struct dt_device_operations osd_dt_ops = {
         .dt_root_get    = osd_root_get,
         .dt_statfs      = osd_statfs,
         .dt_trans_start = osd_trans_start,
-        .dt_trans_stop  = osd_trans_stop,
-        .dt_index_init  = osd_index_init,
-        .dt_index_fini  = osd_index_fini
+        .dt_trans_stop  = osd_trans_stop
 };
 
 static void osd_object_lock(const struct lu_context *ctx, struct dt_object *dt,
@@ -699,67 +692,6 @@ static struct dt_body_operations osd_body_ops = {
  * Index operations.
  */
 
-struct osd_index_cookie {
-        struct lu_context_key oic_key;
-        int                   oic_size;
-};
-
-static void *osd_index_key_init(const struct lu_context *ctx,
-                                struct lu_context_key *key)
-{
-        struct osd_index_cookie *cookie;
-        void *area;
-
-        cookie = container_of(key, struct osd_index_cookie, oic_key);
-        area = iam_ipd_alloc(cookie->oic_size);
-        if (area == NULL)
-                area = ERR_PTR(-ENOMEM);
-        return area;
-}
-
-static void osd_index_key_fini(const struct lu_context *ctx,
-                               struct lu_context_key *key, void *data)
-{
-        iam_ipd_free(data);
-}
-
-static struct dt_index_cookie *osd_index_init(const struct lu_context *ctx,
-                                          const struct dt_index_features *feat)
-{
-        struct osd_index_cookie *cookie;
-
-        OBD_ALLOC_PTR(cookie);
-        if (cookie != NULL) {
-                int result;
-                int keysize;
-
-                keysize = feat->dif_keysize_max;
-                /*
-                 * XXX Variable keysize is not yet supported.
-                 */
-                LASSERT((feat->dif_flags & (DT_IND_VARKEY|DT_IND_VARREC|
-                                            DT_IND_NONUNQ)) == 0);
-                LASSERT(keysize > 0);
-                cookie->oic_key.lct_init = osd_index_key_init;
-                cookie->oic_key.lct_fini = osd_index_key_fini;
-                cookie->oic_size = keysize;
-                result = lu_context_key_register(&cookie->oic_key);
-                if (result != 0)
-                        cookie = ERR_PTR(result);
-        } else
-                cookie = ERR_PTR(-ENOMEM);
-        return (struct dt_index_cookie *)cookie;
-}
-
-static void osd_index_fini(const struct lu_context *ctx,
-                           struct dt_index_cookie *dcook)
-{
-        struct osd_index_cookie *cookie = (void *)dcook;
-
-        lu_context_key_degister(&cookie->oic_key);
-        OBD_FREE_PTR(cookie);
-}
-
 #if OI_IN_MEMORY
 
 /*
@@ -810,30 +742,35 @@ static int osd_index_probe(const struct lu_context *ctxt, struct osd_object *o,
 }
 
 static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
-                         const struct dt_index_features *feat,
-                         struct dt_index_cookie *dcook)
+                         const struct dt_index_features *feat)
 {
         int result;
-        struct osd_object *obj = osd_dt_obj(dt);
-        struct osd_index_cookie *cookie = (void *)dcook;
+        struct osd_object    *obj = osd_dt_obj(dt);
+        struct iam_container *bag;
 
         LASSERT(lu_object_exists(ctx, &dt->do_lu));
 
-        if (!osd_has_index(obj)) {
-                result = iam_container_init(&obj->oo_container,
-                                            &obj->oo_descr, obj->oo_inode);
+        if (osd_has_index(obj))
+                return 0;
+
+        bag = &obj->oo_container;
+        result = iam_container_init(bag, &obj->oo_descr, obj->oo_inode);
+        if (result == 0) {
+                result = iam_container_setup(bag);
                 if (result == 0) {
-                        result = iam_container_setup(&obj->oo_container);
+                        result = osd_index_probe(ctx, obj, feat);
                         if (result == 0) {
-                                result = osd_index_probe(ctx, obj, feat);
-                                if (result == 0) {
+                                struct iam_path_descr *ipd;
+
+                                ipd = obj->oo_descr.id_ops->id_ipd_alloc(bag);
+                                if (ipd != NULL) {
+                                        obj->oo_ipd = ipd;
                                         dt->do_index_ops = &osd_index_ops;
-                                        obj->oo_cookie_key = &cookie->oic_key;
-                                }
+                                } else
+                                        result = -ENOMEM;
                         }
                 }
-        } else
-                result = 0;
+        }
         return result;
 }
 
@@ -842,22 +779,19 @@ static int osd_index_delete(const struct lu_context *ctxt, struct dt_object *dt,
 {
         struct osd_object     *obj = osd_dt_obj(dt);
         struct osd_thandle    *oh;
-        struct iam_path_descr *ipd;
         int rc;
 
         ENTRY;
 
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
         LASSERT(obj->oo_container.ic_object == obj->oo_inode);
-
-        ipd = lu_context_key_get(ctxt, obj->oo_cookie_key);
-        LASSERT(ipd != NULL);
+        LASSERT(obj->oo_ipd != NULL);
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
 
         rc = iam_delete(oh->ot_handle, &obj->oo_container,
-                        (const struct iam_key *)key, ipd);
+                        (const struct iam_key *)key, obj->oo_ipd);
 
         RETURN(rc);
 }
@@ -869,27 +803,25 @@ static int osd_index_delete(const struct lu_context *ctxt, struct dt_object *dt,
 static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
                             struct dt_rec *rec, const struct dt_key *key)
 {
-        struct osd_object     *obj = osd_dt_obj(dt);
+        struct osd_object *obj = osd_dt_obj(dt);
         if (!S_ISDIR(obj->oo_inode->i_mode)) {
-                struct iam_path_descr *ipd;
                 int rc;
 
                 ENTRY;
 
                 LASSERT(lu_object_exists(ctxt, &dt->do_lu));
                 LASSERT(obj->oo_container.ic_object == obj->oo_inode);
-
-                ipd = lu_context_key_get(ctxt, obj->oo_cookie_key);
-                LASSERT(ipd != NULL);
+                LASSERT(obj->oo_ipd != NULL);
 
                 rc = iam_lookup(&obj->oo_container, (const struct iam_key *)key,
-                                (struct iam_rec *)rec, ipd);
+                                (struct iam_rec *)rec, obj->oo_ipd);
 
                 RETURN(rc);
         } else {
                 struct osd_object      *obj  = osd_dt_obj(dt);
                 struct osd_device      *osd  = osd_obj2dev(obj);
-                struct osd_thread_info *info = lu_context_key_get(ctxt, &osd_key);
+                struct osd_thread_info *info = lu_context_key_get(ctxt,
+                                                                  &osd_key);
                 struct inode           *dir;
 
                 int result;
@@ -986,22 +918,19 @@ static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
         struct osd_object     *obj = osd_dt_obj(dt);
 if (!S_ISDIR(obj->oo_inode->i_mode)) {
         struct osd_thandle    *oh;
-        struct iam_path_descr *ipd;
         int rc;
 
         ENTRY;
 
         LASSERT(lu_object_exists(ctx, &dt->do_lu));
         LASSERT(obj->oo_container.ic_object == obj->oo_inode);
-
-        ipd = lu_context_key_get(ctx, obj->oo_cookie_key);
-        LASSERT(ipd != NULL);
+        LASSERT(obj->oo_ipd != NULL);
 
         oh = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
         rc = iam_insert(oh->ot_handle, &obj->oo_container,
                         (const struct iam_key *)key,
-                        (struct iam_rec *)rec, ipd);
+                        (struct iam_rec *)rec, obj->oo_ipd);
 
         RETURN(rc);
 } else {

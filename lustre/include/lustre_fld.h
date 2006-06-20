@@ -34,7 +34,7 @@ enum {
         LUSTRE_CLI_FLD_HASH_RRB,
         LUSTRE_CLI_FLD_HASH_LAST
 };
-        
+
 typedef int (*fld_hash_func_t) (struct lu_client_fld *, __u64);
 
 struct lu_fld_hash {
@@ -48,7 +48,6 @@ struct lu_server_fld {
         struct dt_device        *fld_dt;
         struct dt_object        *fld_obj;
         struct lu_fid            fld_fid; /* used during initialization */
-        struct dt_index_cookie  *fld_cookie;
 };
 
 struct lu_client_fld {
@@ -61,7 +60,7 @@ struct lu_client_fld {
 
 /* server methods */
 int fld_server_init(struct lu_server_fld *fld,
-                    const struct lu_context *ctx, 
+                    const struct lu_context *ctx,
                     struct dt_device *dt);
 
 void fld_server_fini(struct lu_server_fld *fld,
