@@ -158,6 +158,31 @@ enum op {
         OP_IT_STOP
 };
 
+unsigned char hex2dec(unsigned char hex)
+{
+        if ('0' <= hex && hex <= '9')
+                return hex - '0';
+        else if ('a' <= hex && hex <= 'f')
+                return hex - 'a';
+        else {
+                fprintf(stderr, "Wrong hex digit '%c'\n", hex);
+                exit(1);
+        }
+}
+
+unsigned char *packdigit(unsigned char *number)
+{
+        unsigned char *area;
+        unsigned char *scan;
+
+        area = calloc(strlen(number) / 2 + 2, sizeof area[0]);
+        if (area != NULL) {
+                for (scan = area; *number; number += 2, scan++)
+                        *scan = (hex2dec(number[0]) << 4) | hex2dec(number[1]);
+        }
+        return area;
+}
+
 int main(int argc, char **argv)
 {
         int i;
@@ -188,17 +213,23 @@ int main(int argc, char **argv)
         op = OP_TEST;
 
         do {
-                opt = getopt(argc, argv, "vilk:N:r:dsSn");
+                opt = getopt(argc, argv, "vilk:K:N:r:R:dsSn");
                 switch (opt) {
                 case 'v':
                         verbose++;
                 case -1:
+                        break;
+                case 'K':
+                        key_opt = packdigit(optarg);
                         break;
                 case 'k':
                         key_opt = optarg;
                         break;
                 case 'N':
                         N = atoi(optarg);
+                        break;
+                case 'R':
+                        rec_opt = packdigit(optarg);
                         break;
                 case 'r':
                         rec_opt = optarg;
@@ -257,12 +288,12 @@ int main(int argc, char **argv)
         rec = calloc(recsize + 1, sizeof rec[0]);
 
         if (key == NULL || rec == NULL) {
-                fprintf(stderr, "cannot allocte memory\n");
+                fprintf(stderr, "cannot allocate memory\n");
                 return 1;
         }
 
-        strncpy(key, key_opt ? : "RIVERRUN", keysize + 1);
-        strncpy(rec, rec_opt ? : "PALEFIRE", recsize + 1);
+        memcpy(key, key_opt ? : "RIVERRUN", keysize + 1);
+        memcpy(rec, rec_opt ? : "PALEFIRE", recsize + 1);
 
         if (op == OP_INSERT)
                 return doop(0, key, rec, IAM_IOC_INSERT, "IAM_IOC_INSERT");
