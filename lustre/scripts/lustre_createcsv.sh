@@ -108,7 +108,7 @@ OST_DEFAULT_MNTOPTS=${OST_DEFAULT_MNTOPTS:-",extents,mballoc"}
 
 # User-settable parameter keys
 PARAM_MGSNODE=${PARAM_MGSNODE:-"mgsnode="}
-PARAM_FAILNODE=${PARAM_FAILNODE:-"failnode="}
+PARAM_FAILNODE=${PARAM_FAILNODE:-"failover.node="}
 
 # Block size
 L_BLOCK_SIZE=4096
@@ -1146,7 +1146,7 @@ get_failnids() {
 	local ldd_params="$*"
 
 	for param in ${ldd_params}; do
-		if [ -n "`echo ${param}|awk '/failnode=/ {print $0}'`" ]; then
+		if [ -n "`echo ${param}|awk '/failover.node=/ {print $0}'`" ]; then
 			fail_nids=`echo ${param#${PARAM_FAILNODE}}`
 			fail_nids=$(ip2hostname ${fail_nids})
 			if [ $? -ne 0 ]; then
@@ -1181,7 +1181,7 @@ get_fmtopts() {
 
 	for param in ${ldd_params}; do
 		[ -n "`echo ${param}|awk '/mgsnode=/ {print $0}'`" ] && continue
-		[ -n "`echo ${param}|awk '/failnode=/ {print $0}'`" ] && continue
+		[ -n "`echo ${param}|awk '/failover.node=/ {print $0}'`" ] && continue
 
 		if [ -n "${param}" ]; then
 			if [ -n "${fmt_opts}" ]; then
