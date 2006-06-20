@@ -560,6 +560,10 @@ static inline void init_MUTEX (struct semaphore *sem)
 {
         sema_init(sem, 1);
 }
+static inline void init_MUTEX_LOCKED (struct semaphore *sem)
+{
+        sema_init(sem, 0);
+}
 
 #define init_mutex(s)   init_MUTEX(s)
 
@@ -704,6 +708,7 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_read(a) ((a)->counter)
 #define atomic_set(a,b) do {(a)->counter = b; } while (0)
 #define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
+#define atomic_dec_and_lock(a,b) ((--((a)->counter)) == 0)
 #define atomic_inc(a)  (((a)->counter)++)
 #define atomic_dec(a)  do { (a)->counter--; } while (0)
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)

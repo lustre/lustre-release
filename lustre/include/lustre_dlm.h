@@ -690,6 +690,16 @@ static inline void unlock_bitlock(struct ldlm_lock *lock)
         lock->l_pidb = 0;
         bit_spin_unlock(LDLM_FL_LOCK_PROTECT_BIT, (void *) &lock->l_flags);
 }
+#else
+static inline void lock_bitlock(struct ldlm_lock *lock)
+{
+        lock->l_flags |= 1 << LDLM_FL_LOCK_PROTECT_BIT;
+}
+
+static inline void unlock_bitlock(struct ldlm_lock *lock)
+{
+        lock->l_flags &= ~(1 << LDLM_FL_LOCK_PROTECT_BIT);
+}
 #endif
 struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock);
 void unlock_res_and_lock(struct ldlm_lock *lock);
