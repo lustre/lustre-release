@@ -735,10 +735,22 @@ static int osd_build_fid(struct osd_device *osd,
 static int osd_index_probe(const struct lu_context *ctxt, struct osd_object *o,
                            const struct dt_index_features *feat)
 {
+        struct iam_descr *descr;
+
+        descr = o->oo_container.ic_descr;
         if (feat == &dt_directory_features)
-                return 1;
+                return descr == &htree_compat_param;
         else
-                return 0; /* nothing yet is supported */
+                return
+                        feat->dif_keysize_min <= descr->id_key_size &&
+                        descr->id_key_size <= feat->dif_keysize_max &&
+                        feat->dif_recsize_min <= descr->id_rec_size &&
+                        descr->id_rec_size <= feat->dif_recsize_max &&
+                        !(feat->dif_flags & (DT_IND_VARKEY |
+                                             DT_IND_VARREC | DT_IND_NONUNQ)) &&
+                        ergo(feat->dif_flags & DT_IND_UPDATE,
+                             1 /* XXX check that object (and file system) is
+                                * writable */);
 }
 
 static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
@@ -758,8 +770,7 @@ static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
         if (result == 0) {
                 result = iam_container_setup(bag);
                 if (result == 0) {
-                        result = osd_index_probe(ctx, obj, feat);
-                        if (result == 0) {
+                        if (osd_index_probe(ctx, obj, feat)) {
                                 struct iam_path_descr *ipd;
 
                                 ipd = obj->oo_descr.id_ops->id_ipd_alloc(bag);
@@ -768,7 +779,8 @@ static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
                                         dt->do_index_ops = &osd_index_ops;
                                 } else
                                         result = -ENOMEM;
-                        }
+                        } else
+                                result = -EINVAL;
                 }
         }
         return result;
