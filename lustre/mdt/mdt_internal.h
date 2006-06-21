@@ -135,6 +135,8 @@ struct mdt_reint_reply {
         struct llog_cookie *mrr_cookie;
 };
 
+#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
+
 /*
  * Common data shared by mdt-level handlers. This is allocated per-thread to
  * reduce stack consumption.

@@ -208,7 +208,6 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         int                     result;
         struct ldlm_reply      *ldlm_rep;
         struct ptlrpc_request  *req = mdt_info_req(info);
-        __u32                   mode = info->mti_attr.la_mode; /*save a backup*/
         struct mdt_body        *body = info->mti_reint_rep.mrr_body;
         struct lov_mds_md      *lmm  = info->mti_reint_rep.mrr_md;
         int                     created = 0;
@@ -283,7 +282,7 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         /* not supported yet in MDD
         result = mo_xattr_get(info->mti_ctxt, mdt_object_child(child),
                               lmm, MAX_MD_SIZE, "lov");
-        if (result <= 0)
+        if (result < 0)
                 GOTO(destroy_child, result = -EINVAL);
         */
         if (S_ISDIR(info->mti_attr.la_mode))
@@ -307,10 +306,7 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         lmm->lmm_objects[0].l_ost_idx   = 0;    /* OST index in LOV (lov_tgt_desc->tgts) */
         body->eadatasize = sizeof(struct lov_mds_md) + sizeof(struct lov_ost_data);
 
-        /*TODO add permission checking here */
-        if (S_ISREG(mode))
-                ;
-        
+        /* Open it now. */
         /* TODO: not supported yet
         result = mdt_md_open(info, child);
         */ 

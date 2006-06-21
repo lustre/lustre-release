@@ -141,7 +141,8 @@ static const struct req_msg_field *ldlm_intent_client[] = {
 static const struct req_msg_field *ldlm_intent_server[] = {
         &RMF_DLM_REP,
         &RMF_MDT_BODY,
-        &RMF_MDT_MD
+        &RMF_MDT_MD,
+        &RMF_EADATA
 };
 
 static const struct req_msg_field *ldlm_intent_getattr_client[] = {
@@ -188,6 +189,14 @@ static const struct req_msg_field *mds_setxattr_client[] = {
         &RMF_MDT_BODY,
         &RMF_NAME,
         &RMF_EADATA
+};
+
+static const struct req_msg_field *mds_getattr_server[] = {
+        &RMF_MDT_BODY,
+        &RMF_MDT_MD,
+#ifdef CONFIG_FS_POSIX_ACL
+        &RMF_EADATA
+#endif
 };
 
 static const struct req_format *req_formats[] = {
@@ -347,7 +356,7 @@ const struct req_msg_field RMF_REC_SETATTR =
                     lustre_swab_mdt_rec_setattr);
 EXPORT_SYMBOL(RMF_REC_SETATTR);
 
-const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, 0, NULL);
+const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, 16, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
 const struct req_msg_field RMF_LOGCOOKIES =
@@ -405,7 +414,7 @@ const struct req_format RQF_MDS_STATFS =
 EXPORT_SYMBOL(RQF_MDS_STATFS);
 
 const struct req_format RQF_MDS_GETATTR =
-        DEFINE_REQ_FMT0("MDS_GETATTR", mdt_body_only, mdt_body_only);
+        DEFINE_REQ_FMT0("MDS_GETATTR", mdt_body_only, mds_getattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETATTR);
 
 const struct req_format RQF_MDS_GETXATTR =
@@ -419,7 +428,7 @@ EXPORT_SYMBOL(RQF_MDS_SETXATTR);
 
 const struct req_format RQF_MDS_GETATTR_NAME =
         DEFINE_REQ_FMT0("MDS_GETATTR_NAME",
-                        mds_getattr_name_client, mdt_body_only);
+                        mds_getattr_name_client, mds_getattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETATTR_NAME);
 
 const struct req_format RQF_MDS_REINT =

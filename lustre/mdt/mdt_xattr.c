@@ -90,9 +90,6 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         rc2 = req_capsule_pack(pill);
         if (rc2)
                 return rc2;
-
-        if (rc < 0)
-                req->rq_status = rc;
         return rc;
 }
 
@@ -173,7 +170,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
 /*        if (req->rq_reqmsg->bufcount < 2)
  *                RETURN(-EFAULT);
  */
-        DEBUG_REQ(D_INODE, req, "setxattr "DFID3,
+        DEBUG_REQ(D_INODE, req, "setxattr "DFID3"\n",
                   PFID3(&info->mti_body->fid1));
 
 /*        MDS_CHECK_RESENT(req, mds_reconstruct_generic(req)); */
@@ -201,8 +198,6 @@ int mdt_setxattr(struct mdt_thread_info *info)
                 GOTO(out, rc = -EOPNOTSUPP);
         }
 
-#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
-
         if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
                 lockpart |= MDS_INODELOCK_LOOKUP;
 
@@ -221,8 +216,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
                 xattr_len = req_capsule_get_size(&info->mti_pill, 
                                                  &RMF_EADATA, RCL_CLIENT);
-                if (xattr_len)
-                {
+                if (xattr_len) {
                         xattr = req_capsule_client_get(&info->mti_pill, 
                                                        &RMF_EADATA);
 
