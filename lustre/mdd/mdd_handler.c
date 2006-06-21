@@ -373,11 +373,13 @@ static int mdd_mount(const struct lu_context *ctx, struct mdd_device *mdd)
 
 static int mdd_fs_setup(const struct lu_context *ctx, struct mdd_device *mdd)
 {
+        /*create PENDING and OBJECTS dir for open and llog*/
         return 0;
 }
 
 static int mdd_fs_cleanup(struct mdd_device *mdd)
 {
+        /*create PENDING and OBJECTS dir for open and llog*/
         return 0;
 }
 
@@ -407,6 +409,8 @@ static struct lu_device *mdd_device_fini(const struct lu_context *ctx,
 	struct mdd_device *m = lu2mdd_dev(d);
         struct lu_device *next = &m->mdd_child->dd_lu_dev;
 
+        dt_device_fini(&m->mdd_lov_dev);
+        
         return next;
 }
 
@@ -790,7 +794,6 @@ mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
-        /*TODO: if (mdd_tobj != NULL)*/
         rc = __mdd_index_delete(ctxt, mdd, mdd_tpobj, tname, handle);
         if (rc)
                 GOTO(cleanup, rc);
@@ -805,7 +808,7 @@ mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                         GOTO(cleanup, rc);
         }
 cleanup:
-       /*FIXME: error handling*/
+       /*FIXME: should we do error handling here?*/
         mdd_rename_unlock(mdd, mdd_spobj, mdd_tpobj, /*mdd_sobj,*/ mdd_tobj);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
@@ -824,7 +827,7 @@ static int mdd_create(const struct lu_context *ctxt,
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdo = mdo2mddo(pobj);
         struct thandle *handle;
-        int rc = 0;
+        int rc = 0, rc1, created = 0;
         ENTRY;
 
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
@@ -838,11 +841,15 @@ static int mdd_create(const struct lu_context *ctxt,
         if (rc)
                 GOTO(cleanup, rc);
 
+        created = 1;
         rc = __mdd_index_insert(ctxt, mdo, lu_object_fid(&child->mo_lu),
                                 name, handle);
         if (rc)
                 GOTO(cleanup, rc);
 cleanup:
+        if (rc && created) 
+               rc1 = __mdd_object_destroy(ctxt, mdo, handle); 
+        
         mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
