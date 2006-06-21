@@ -36,13 +36,12 @@
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
-/* XXX: fix layter this hack. It exists because OSD produces fids with like
-   this: seq = ROOT_SEQ + 1, etc. */
+/* XXX: fix later this hack. It exists because OSD produces fids with like this:
+   seq = ROOT_SEQ + 1, etc. */
 static int cmm_special_fid(const struct lu_fid *fid)
 {
-        if (fid_seq(fid) < LUSTRE_SEQ_SPACE_START)
-                return 1;
-        return 0;
+        struct lu_range *space = (struct lu_range *)&LUSTRE_SEQ_SPACE_RANGE;
+        return !range_within(space, fid_seq(fid));
 }
 
 static int cmm_fld_lookup(struct cmm_device *cm,

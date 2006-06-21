@@ -1,5 +1,5 @@
 MODULES := fld 
-fld-objs := fld_handler.o fld_request.o fld_iam.o
+fld-objs := fld_handler.o fld_request.o fld_index.o
 
 EXTRA_PRE_CFLAGS := -I@LUSTRE@ -I@LUSTRE@/ldiskfs
 

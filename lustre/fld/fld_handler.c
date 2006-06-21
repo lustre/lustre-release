@@ -121,13 +121,15 @@ fld_server_handle(struct lu_server_fld *fld,
 
         switch (opts) {
         case FLD_CREATE:
-                rc = fld_handle_insert(fld, ctx, mf->mf_seq, mf->mf_mds);
+                rc = fld_index_handle_insert(fld, ctx,
+                                             mf->mf_seq, mf->mf_mds);
                 break;
         case FLD_DELETE:
-                rc = fld_handle_delete(fld, ctx, mf->mf_seq);
+                rc = fld_index_handle_delete(fld, ctx, mf->mf_seq);
                 break;
         case FLD_LOOKUP:
-                rc = fld_handle_lookup(fld, ctx, mf->mf_seq, &mf->mf_mds);
+                rc = fld_index_handle_lookup(fld, ctx,
+                                             mf->mf_seq, &mf->mf_mds);
                 break;
         default:
                 rc = -EINVAL;
@@ -239,7 +241,7 @@ fld_server_init(struct lu_server_fld *fld,
         INIT_LIST_HEAD(&fld_list_head.fld_list);
         spin_lock_init(&fld_list_head.fld_lock);
 
-        rc = fld_iam_init(fld, ctx);
+        rc = fld_index_init(fld, ctx);
 
         if (rc == 0) {
                 fld->fld_service =
@@ -283,7 +285,7 @@ fld_server_fini(struct lu_server_fld *fld,
         spin_unlock(&fld_list_head.fld_lock);
         if (fld->fld_dt != NULL) {
                 lu_device_put(&fld->fld_dt->dd_lu_dev);
-                fld_iam_fini(fld, ctx);
+                fld_index_fini(fld, ctx);
                 fld->fld_dt = NULL;
         }
         CDEBUG(D_INFO|D_WARNING, "Server FLD\n");

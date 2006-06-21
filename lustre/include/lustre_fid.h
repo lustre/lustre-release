@@ -34,23 +34,20 @@
 struct lu_site;
 struct lu_context;
 
-/* start seq number */
-#define LUSTRE_SEQ_SPACE_START  0x400
-
-/* maximal posible seq number */
-#define LUSTRE_SEQ_SPACE_END  ((__u64)~0ULL)
+/* whole sequences space range and zero range definitions */
+extern const struct lu_range LUSTRE_SEQ_SPACE_RANGE;
+extern const struct lu_range LUSTRE_SEQ_ZERO_RANGE;
 
 /* this is how may FIDs may be allocated in one sequence. */
-#define LUSTRE_SEQ_WIDTH 0x00000000000002800
+#define LUSTRE_SEQ_WIDTH      0x00000000000002800
 
 /* how many sequences may be allocate for meta-sequence (this is 10240
  * sequences). */
-#define LUSTRE_SEQ_META_CHUNK 0x00000000000002800
+#define LUSTRE_SEQ_META_WIDTH 0x00000000000002800
 
-/* how many sequences may be allocate for super-sequence (this is 10240 * 10240
- * sequences), what means that one alloaction for super-sequence allows to
- * allocate 10240 meta-sequences and each of them may have 10240 sequences. */
-#define LUSTRE_SEQ_SUPER_CHUNK (LUSTRE_SEQ_META_CHUNK * LUSTRE_SEQ_META_CHUNK)
+/* this is how many sequneces (10240 * 10240) may be in one super-sequence
+ * allocated to MDTs. */
+#define LUSTRE_SEQ_SUPER_WIDTH (LUSTRE_SEQ_META_WIDTH * LUSTRE_SEQ_META_WIDTH)
 
 /* client sequence manager interface */
 struct lu_client_seq {

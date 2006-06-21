@@ -48,16 +48,20 @@
 #include "fid_internal.h"
 
 #ifdef __KERNEL__
-/* server side seq mgr stuff */
-static const struct lu_range LUSTRE_SEQ_SPACE_INIT = {
-        LUSTRE_SEQ_SPACE_START,
-        LUSTRE_SEQ_SPACE_END
+/* sequence space, starts from 0x400 to have first 0x400 sequences used for
+ * special purposes. */
+const struct lu_range LUSTRE_SEQ_SPACE_RANGE = {
+        (0x400),
+        ((__u64)~0ULL)
 };
+EXPORT_SYMBOL(LUSTRE_SEQ_SPACE_RANGE);
 
-static const struct lu_range LUSTRE_SEQ_SUPER_INIT = {
+/* zero range, used for init and other purposes */
+const struct lu_range LUSTRE_SEQ_ZERO_RANGE = {
         0,
         0
 };
+EXPORT_SYMBOL(LUSTRE_SEQ_ZERO_RANGE);
 
 static int
 seq_server_write_state(struct lu_server_seq *seq,
@@ -97,7 +101,7 @@ seq_server_alloc_super(struct lu_server_seq *seq,
 
         LASSERT(range_is_sane(space));
         
-        if (range_space(space) < LUSTRE_SEQ_SUPER_CHUNK) {
+        if (range_space(space) < LUSTRE_SEQ_SUPER_WIDTH) {
                 CWARN("sequences space is going to exhauste soon. "
                       "Only can allocate "LPU64" sequences\n",
                       space->lr_end - space->lr_start);
@@ -108,9 +112,7 @@ seq_server_alloc_super(struct lu_server_seq *seq,
                 CERROR("sequences space is exhausted\n");
                 rc = -ENOSPC;
         } else {
-                range->lr_start = space->lr_start;
-                space->lr_start += LUSTRE_SEQ_SUPER_CHUNK;
-                range->lr_end = space->lr_start;
+                range_alloc(range, space, LUSTRE_SEQ_SUPER_WIDTH);
                 rc = 0;
         }
 
@@ -127,7 +129,7 @@ seq_server_alloc_meta(struct lu_server_seq *seq,
                       struct lu_range *range)
 {
         struct lu_range *super = &seq->seq_super;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         LASSERT(range_is_sane(super));
@@ -151,12 +153,8 @@ seq_server_alloc_meta(struct lu_server_seq *seq,
                 /* saving new range into allocation space. */
                 *super = seq->seq_cli->seq_range;
                 LASSERT(range_is_sane(super));
-        } else {
-                rc = 0;
         }
-        range->lr_start = super->lr_start;
-        super->lr_start += LUSTRE_SEQ_META_CHUNK;
-        range->lr_end = super->lr_start;
+        range_alloc(range, super, LUSTRE_SEQ_META_WIDTH);
 
         if (rc == 0) {
                 CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): allocated meta-sequence "
@@ -365,8 +363,8 @@ seq_server_init(struct lu_server_seq *seq,
         seq->seq_flags = flags;
         sema_init(&seq->seq_sem, 1);
 
-        seq->seq_space = LUSTRE_SEQ_SPACE_INIT;
-        seq->seq_super = LUSTRE_SEQ_SUPER_INIT;
+        seq->seq_space = LUSTRE_SEQ_SPACE_RANGE;
+        seq->seq_super = LUSTRE_SEQ_ZERO_RANGE;
         
         lu_device_get(&seq->seq_dev->dd_lu_dev);
 

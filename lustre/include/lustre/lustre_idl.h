@@ -139,6 +139,21 @@ static inline void range_zero(struct lu_range *r)
         r->lr_start = r->lr_end = 0;
 }
 
+static inline int range_within(struct lu_range *r,
+                               __u64 s)
+{
+        return s >= r->lr_start && s <= r->lr_end;
+}
+
+static inline void range_alloc(struct lu_range *r,
+                               struct lu_range *s,
+                               __u64 w)
+{
+        r->lr_start = s->lr_start;
+        r->lr_end = s->lr_start + w;
+        s->lr_start += w;
+}
+
 static inline int range_is_sane(struct lu_range *r)
 {
         if (r->lr_end >= r->lr_start)

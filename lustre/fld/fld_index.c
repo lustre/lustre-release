@@ -1,10 +1,11 @@
 /* -*- MODE: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  fld/fld.c
+ *  fld/fld_index.c
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
  *   Author: WangDi <wangdi@clusterfs.com>
+ *           Yury Umanets <umka@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -127,9 +128,9 @@ static struct dt_rec *fld_rec(const struct lu_context *ctx,
         RETURN((void *)&info->fti_rec);
 }
 
-int fld_handle_insert(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
-                      fidseq_t seq, mdsno_t mds)
+int fld_index_handle_insert(struct lu_server_fld *fld,
+                            const struct lu_context *ctx,
+                            fidseq_t seq, mdsno_t mds)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
@@ -153,9 +154,9 @@ int fld_handle_insert(struct lu_server_fld *fld,
         return 0;
 }
 
-int fld_handle_delete(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
-                      fidseq_t seq)
+int fld_index_handle_delete(struct lu_server_fld *fld,
+                            const struct lu_context *ctx,
+                            fidseq_t seq)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
@@ -175,9 +176,9 @@ int fld_handle_delete(struct lu_server_fld *fld,
         return 0;
 }
 
-int fld_handle_lookup(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
-                      fidseq_t seq, mdsno_t *mds)
+int fld_index_handle_lookup(struct lu_server_fld *fld,
+                            const struct lu_context *ctx,
+                            fidseq_t seq, mdsno_t *mds)
 {
         struct dt_object *dt_obj = fld->fld_obj;
         struct dt_rec    *rec = fld_rec(ctx, 0);
@@ -194,8 +195,8 @@ int fld_handle_lookup(struct lu_server_fld *fld,
         return 0;
 }
 
-int fld_iam_init(struct lu_server_fld *fld,
-                 const struct lu_context *ctx)
+int fld_index_init(struct lu_server_fld *fld,
+                   const struct lu_context *ctx)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj;
@@ -232,8 +233,8 @@ int fld_iam_init(struct lu_server_fld *fld,
         RETURN(rc);
 }
 
-void fld_iam_fini(struct lu_server_fld *fld,
-                  const struct lu_context *ctx)
+void fld_index_fini(struct lu_server_fld *fld,
+                    const struct lu_context *ctx)
 {
         ENTRY;
         if (fld->fld_obj != NULL) {
