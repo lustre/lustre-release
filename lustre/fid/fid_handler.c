@@ -175,9 +175,19 @@ __seq_server_alloc_meta(struct lu_server_seq *seq,
                         RETURN(rc);
                 }
 
-                /* saving new range into allocation space. */
-                *super = seq->seq_cli->seq_range;
-                LASSERT(range_is_sane(super));
+                if (seq->seq_cli->seq_range.lr_start > super->lr_start) {
+                        /* saving new range into allocation space. */
+                        *super = seq->seq_cli->seq_range;
+                        LASSERT(range_is_sane(super));
+                } else {
+                        /* XXX: race is catched, ignore what we have from
+                         * controller node. The only issue is that controller
+                         * node has now this super-sequence lost, what makes
+                         * sequences space smaller. */
+                        CWARN("SEQ-MGR(srv): race is cached, reject "
+                              "allocated super-sequence\n");
+                        RETURN(0);
+                }
         }
         range_alloc(range, super, LUSTRE_SEQ_META_WIDTH);
 
