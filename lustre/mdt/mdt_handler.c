@@ -61,11 +61,48 @@
  */
 unsigned long mdt_num_threads;
 
+struct mdt_handler {
+        const char *mh_name;
+        int         mh_fail_id;
+        __u32       mh_opc;
+        __u32       mh_flags;
+        int (*mh_act)(struct mdt_thread_info *info);
+
+        const struct req_format *mh_fmt;
+};
+
+enum mdt_handler_flags {
+        /*
+         * struct mdt_body is passed in the incoming message, and object
+         * identified by this fid exists on disk.
+         */
+        HABEO_CORPUS = (1 << 0),
+        /*
+         * struct ldlm_request is passed in the incoming message.
+         */
+        HABEO_CLAVIS = (1 << 1),
+        /*
+         * this request has fixed reply format, so that reply message can be
+         * packed by generic code.
+         */
+        HABEO_REFERO = (1 << 2)
+};
+
+struct mdt_opc_slice {
+        __u32               mos_opc_start;
+        int                 mos_opc_end;
+        struct mdt_handler *mos_hs;
+};
+
+static struct mdt_opc_slice mdt_handlers[];
+
 static int                    mdt_handle    (struct ptlrpc_request *req);
 static struct mdt_device     *mdt_dev       (struct lu_device *d);
+static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
 
 static struct lu_context_key       mdt_thread_key;
 static struct lu_object_operations mdt_obj_ops;
+
 
 static int mdt_getstatus(struct mdt_thread_info *info)
 {
@@ -137,8 +174,10 @@ void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr)
 
 static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
 {
+#ifdef MDT_CODE
         const struct mdt_body *body = info->mti_body;
         struct req_capsule *pill = &info->mti_pill;
+#endif
         struct md_object *next = mdt_object_child(info->mti_object);
         struct lu_attr *la = &info->mti_attr;
         int rc;
@@ -214,8 +253,10 @@ static int mdt_getattr_internal(struct mdt_thread_info *info)
         struct mdt_body  *repbody;
         struct lu_attr *la = &info->mti_attr;
         int rc;
+#ifdef MDT_CODE
         void *buffer;
         int length;
+#endif
         ENTRY;
 
         rc = mo_attr_get(info->mti_ctxt, next, la);
@@ -556,6 +597,61 @@ static int mdt_sync(struct mdt_thread_info *info)
         return -EOPNOTSUPP;
 }
 
+#ifdef MDT_CODE
+static int mdt_device_sync(struct mdt_device *mdt)
+{
+        return 0;
+}
+
+static int mdt_object_sync(struct mdt_object *m)
+{
+        return 0;
+}
+
+static int mdt_sync(struct mdt_thread_info *info)
+{
+        struct mdt_body *body;
+        struct req_capsule *pill = &info->mti_pill;
+        int rc;
+        ENTRY;
+        
+        req_capsule_set(pill, &RQF_MDS_SYNC);
+
+        body = req_capsule_client_get(pill, &RMF_MDT_BODY);
+        if (body == NULL)
+                RETURN(-EINVAL);
+
+        if (fid_seq(&body->fid1) == 0) {
+                /* sync the whole device */
+                rc = req_capsule_pack(pill);
+                if (rc == 0)
+                        rc = mdt_device_sync(info->mti_mdt);
+        } else {
+                /* sync an object */
+                rc = mdt_unpack_req_pack_rep(info, HABEO_CORPUS | HABEO_REFERO);
+                if (rc != 0) 
+                        RETURN(rc);
+
+                rc = mdt_object_sync(info->mti_object);
+                if (rc != 0)
+                        RETURN(rc);
+
+                rc = mo_attr_get(info->mti_ctxt, 
+                                 mdt_object_child(info->mti_object), 
+                                 &info->mti_attr);
+                if (rc != 0)
+                        RETURN(rc);
+
+                body = req_capsule_server_get(pill, &RMF_MDT_BODY);
+                mdt_pack_attr2body(body, &info->mti_attr);
+                body->fid1 = *mdt_object_fid(info->mti_object);
+                body->valid |= OBD_MD_FLID;
+        }
+        RETURN(rc);
+}
+#endif
+
+
 static int mdt_handle_quotacheck(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
@@ -769,40 +865,6 @@ struct mdt_object *mdt_object_find_lock(const struct lu_context *ctxt,
         return o;
 }
 
-struct mdt_handler {
-        const char *mh_name;
-        int         mh_fail_id;
-        __u32       mh_opc;
-        __u32       mh_flags;
-        int (*mh_act)(struct mdt_thread_info *info);
-
-        const struct req_format *mh_fmt;
-};
-
-enum mdt_handler_flags {
-        /*
-         * struct mdt_body is passed in the incoming message, and object
-         * identified by this fid exists on disk.
-         */
-        HABEO_CORPUS = (1 << 0),
-        /*
-         * struct ldlm_request is passed in the incoming message.
-         */
-        HABEO_CLAVIS = (1 << 1),
-        /*
-         * this request has fixed reply format, so that reply message can be
-         * packed by generic code.
-         */
-        HABEO_REFERO = (1 << 2)
-};
-
-struct mdt_opc_slice {
-        __u32               mos_opc_start;
-        int                 mos_opc_end;
-        struct mdt_handler *mos_hs;
-};
-
-static struct mdt_opc_slice mdt_handlers[];
 
 static struct mdt_handler *mdt_handler_find(__u32 opc)
 {
@@ -2433,7 +2495,7 @@ DEF_MDT_HNDL_F(0,                         REINT,        mdt_reint),
 DEF_MDT_HNDL_0(HABEO_CORPUS,              CLOSE,        mdt_close),
 DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),
 DEF_MDT_HNDL_0(0,                         PIN,          mdt_pin),
-DEF_MDT_HNDL_0(HABEO_CORPUS,              SYNC,         mdt_sync),
+DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),
 DEF_MDT_HNDL_0(0,                         QUOTACHECK,   mdt_handle_quotacheck),
 DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_handle_quotactl)
 };

@@ -91,6 +91,7 @@ extern const struct req_format RQF_SEQ_QUERY;
 extern const struct req_format RQF_FLD_QUERY;
 extern const struct req_format RQF_MDS_GETSTATUS;
 extern const struct req_format RQF_MDS_STATFS;
+extern const struct req_format RQF_MDS_SYNC;
 extern const struct req_format RQF_MDS_GETXATTR;
 extern const struct req_format RQF_MDS_SETXATTR;
 extern const struct req_format RQF_MDS_GETATTR;

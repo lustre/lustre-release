@@ -413,6 +413,10 @@ const struct req_format RQF_MDS_STATFS =
         DEFINE_REQ_FMT0("MDS_STATFS", empty, mds_statfs_server);
 EXPORT_SYMBOL(RQF_MDS_STATFS);
 
+const struct req_format RQF_MDS_SYNC =
+        DEFINE_REQ_FMT0("MDS_SYNC", mdt_body_only, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_SYNC);
+
 const struct req_format RQF_MDS_GETATTR =
         DEFINE_REQ_FMT0("MDS_GETATTR", mdt_body_only, mds_getattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETATTR);
