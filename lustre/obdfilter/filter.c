@@ -2396,11 +2396,6 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                 }
         }
 
-        if (locked) {
-                UNLOCK_INODE_MUTEX(inode);
-                locked = 0;
-        }
-
         rc = filter_finish_transno(exp, oti, rc);
 
         err = fsfilt_commit(exp->exp_obd, inode, handle, 0);
@@ -2409,6 +2404,19 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                 if (!rc)
                         rc = err;
         }
+
+        if (locked) {
+                /* Let's flush truncated page on disk immediately, then we can
+                 * avoid need to search for page aliases before directio writes
+                 * and this sort of stuff at expense of somewhat slower
+                 * truncates not on a page boundary. I believe this is the only
+                 * place in filter code that can lead to pages getting to
+                 * pagecache so far. */
+                filter_clear_truncated_page(inode);
+                UNLOCK_INODE_MUTEX(inode);
+                locked = 0;
+        }
+
         EXIT;
 out_unlock:
         if (locked)

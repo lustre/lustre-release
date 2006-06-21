@@ -109,13 +109,9 @@ static void dump_page(int rw, unsigned long block, struct page *page)
  * free the buffers and drop the page from cache.  The buffers should not
  * be dirty, because we already called fdatasync/fdatawait on them.
  */
-static int filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
+static int filter_sync_inode_data(struct inode *inode)
 {
-        struct page *page;
-        int i, rc, rc2;
-
-        check_pending_bhs(KIOBUF_GET_BLOCKS(iobuf), iobuf->nr_pages,
-                          inode->i_dev, 1 << inode->i_blkbits);
+        int rc, rc2;
 
         /* This is nearly generic_osync_inode, without the waiting on the inode
         rc = generic_osync_inode(inode, inode->i_mapping,
@@ -128,6 +124,19 @@ static int filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
         rc2 = filemap_fdatawait(inode->i_mapping);
         if (rc == 0)
                 rc = rc2;
+
+        return rc;
+}
+
+static int filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
+{
+        struct page *page;
+        int i, rc;
+
+        check_pending_bhs(KIOBUF_GET_BLOCKS(iobuf), iobuf->nr_pages,
+                          inode->i_dev, 1 << inode->i_blkbits);
+
+        rc = filter_sync_inode_data(inode);
         if (rc != 0)
                 RETURN(rc);
 
@@ -138,6 +147,39 @@ static int filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
                                       iobuf->maplist[i]->index);
                 if (page == NULL)
                         continue;
+                if (page->mapping != NULL) {
+                        /* Now that the only source of such pages in truncate
+                         * path flushes these pages to disk and and then
+                         * discards, this is error condition */
+                        CERROR("Data page in page cache during write!\n");
+                        ll_truncate_complete_page(page);
+                }
+
+                unlock_page(page);
+                page_cache_release(page);
+        }
+
+        return 0;
+}
+
+int filter_clear_truncated_page(struct inode *inode)
+{
+        struct page *page;
+        int rc;
+
+        /* Truncate on page boundary, so nothing to flush? */
+        if (!(inode->i_size & (PAGE_CACHE_SIZE-1)))
+                return 0;
+
+        rc = filter_sync_inode_data(inode);
+        if (rc != 0)
+                RETURN(rc);
+
+        /* be careful to call this after fsync_inode_data_buffers has waited
+         * for IO to complete before we evict it from the cache */
+        page = find_lock_page(inode->i_mapping,
+                              inode->i_size >> PAGE_CACHE_SHIFT);
+        if (page) {
                 if (page->mapping != NULL)
                         ll_truncate_complete_page(page);
 

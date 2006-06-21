@@ -729,6 +729,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         struct lvfs_run_ctxt saved;
         struct lvfs_ucred ucred = { 0 };
         char fidname[LL_FID_NAMELEN];
+        struct inode *inode = NULL;
         struct dentry *de;
         void *handle;
         int err, namelen, rc = 0;
@@ -762,6 +763,10 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         if (IS_ERR(handle))
                 GOTO(out_dput, rc = PTR_ERR(handle));
 
+        /* take a reference to protect inode from truncation within
+           vfs_unlink() context. bug 10409 */
+        inode = de->d_inode;
+        atomic_inc(&inode->i_count);
         rc = vfs_unlink(mds->mds_objects_dir->d_inode, de);
         if (rc)
                 CERROR("error destroying object "LPU64":%u: rc %d\n",
@@ -774,6 +779,9 @@ out_dput:
         if (de != NULL)
                 l_dput(de);
         UNLOCK_INODE_MUTEX(parent_inode);
+
+        if (inode)
+                iput(inode);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
         RETURN(rc);

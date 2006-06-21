@@ -116,7 +116,6 @@ static int osc_rd_max_dirty_mb(char *page, char **start, off_t off, int count,
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
         val = cli->cl_dirty_max;
-        spin_unlock(&cli->cl_loi_list_lock);
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 
         mult = 1 << 20;

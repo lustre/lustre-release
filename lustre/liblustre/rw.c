@@ -377,6 +377,18 @@ static void llu_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         EXIT;
 }
 
+static void llu_ap_update_obdo(void *data, int cmd, struct obdo *oa,
+                               obd_valid valid)
+{
+        struct ll_async_page *llap;
+        ENTRY;
+
+        llap = LLAP_FROM_COOKIE(data);
+        obdo_from_inode(oa, llap->llap_inode, valid);
+
+        EXIT;
+}
+
 /* called for each page in a completed rpc.*/
 static int llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
@@ -400,6 +412,7 @@ static struct obd_async_page_ops llu_async_page_ops = {
         .ap_make_ready =        NULL,
         .ap_refresh_count =     NULL,
         .ap_fill_obdo =         llu_ap_fill_obdo,
+        .ap_update_obdo =       llu_ap_update_obdo,
         .ap_completion =        llu_ap_completion,
 };
 

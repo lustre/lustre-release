@@ -378,6 +378,23 @@ Description: support up to 1024 configured devices on one node
 Details    : change obd_dev array from statically allocated to dynamically
 	     allocated structs as they are first used to reduce memory usage
 
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 10437
+Description: Flush dirty partially truncated pages during truncate
+Details    : Immediatelly flush partially truncated pages in filter_setattr,
+	     this way we completely avoid having any pages in page cache on OST
+	     and can retire ugly workarounds during writes to flush such pages.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 10409
+Description: i_sem vs transaction deadlock in mds_obd_destroy during unlink.
+Details    : protect inode from truncation within vfs_unlink() context
+             just take a reference before calling vfs_unlink() and release it
+             when parent's i_sem is free.
+
+
 ------------------------------------------------------------------------------
 
 02-14-2006  Cluster File Systems, Inc. <info@clusterfs.com>
