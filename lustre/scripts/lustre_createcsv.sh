@@ -113,6 +113,9 @@ PARAM_FAILNODE=${PARAM_FAILNODE:-"failover.node="}
 # Block size
 L_BLOCK_SIZE=4096
 
+# Option string of mkfs.lustre
+OPTSTR_STRIPE_COUNT=${OPTSTR_STRIPE_COUNT:-"--stripe-count-hint="}
+
 
 # Get and check the positional parameters
 VERBOSE_OUTPUT=false
@@ -1196,6 +1199,65 @@ get_fmtopts() {
 	return 0
 }
 
+# get_stripecount host_name target_fsname
+# Get the stripe count for @target_fsname
+get_stripecount() {
+	local host_name=$1
+	local target_fsname=$2
+	local stripe_count=
+	local stripecount_file
+	local ret_str
+
+	# Get the stripe count
+	stripecount_file=${LUSTRE_PROC}/lov/${target_fsname}-mdtlov/stripecount
+	ret_str=`${REMOTE} ${host_name} "cat ${stripecount_file}" 2>&1`
+	if [ $? -ne 0 -a -n "${ret_str}" ]; then
+		echo "`basename $0`: get_stripecount() error:" \
+		"remote command to ${host_name} error: ${ret_str}"
+		return 1
+	fi
+
+	if is_pdsh; then
+		stripe_count=`echo ${ret_str} | awk '{print $2}'`
+	else
+		stripe_count=`echo ${ret_str} | awk '{print $1}'`
+	fi
+
+	if [ -z "`echo ${stripe_count}|awk '/^[[:digit:]]/ {print $0}'`" ]
+	then
+		echo "`basename $0`: get_stripecount() error: can't" \
+		"get stripe count of ${target_fsname} in ${host_name}!"
+		return 1
+	fi
+
+	echo ${stripe_count}
+	return 0
+}
+
+# get_stripecount_opt host_name target_fsname
+# Get the stripe count option for lustre mdt target
+get_stripecount_opt() {
+	local host_name=$1
+	local target_fsname=$2
+	local stripe_count=
+	local stripecount_opt=
+
+	# Get the stripe count
+	[ -z "${target_fsname}" ] && target_fsname="lustre"
+	stripe_count=$(get_stripecount ${host_name} ${target_fsname})
+	if [ $? -ne 0 ]; then
+		echo "${stripe_count}"
+		return 1
+	fi
+	
+	if [ "${stripe_count}" != "1" ]; then
+		stripecount_opt=${OPTSTR_STRIPE_COUNT}${stripe_count}
+	fi
+
+	echo ${stripecount_opt}
+	return 0
+}
+
 # get_ldds hostname
 # Get the lustre target disk data from the node @hostname
 get_ldds(){
@@ -1203,6 +1265,7 @@ get_ldds(){
 	local host_name=$1
 	local ret_line line
 	local flags mnt_opts params
+	local stripecount_opt
 
         # Initialize the arrays
 	unset TARGET_DEVTYPES TARGET_FSNAMES TARGET_MGSNIDS TARGET_INDEXES
@@ -1214,6 +1277,7 @@ get_ldds(){
 		flags=
 		mnt_opts=
 		params=
+		stripecount_opt=
 		[ -z "${TARGET_DEVNAMES[i]}" ] && continue
 
 		# Execute remote command to read MOUNT_DATA_FILE
@@ -1311,6 +1375,23 @@ get_ldds(){
 				TARGET_FMTOPTS[i]=${TARGET_FMTOPTS[i]}" "${FAILOVER_FMTOPTS[i]}
 			else
 				TARGET_FMTOPTS[i]=${FAILOVER_FMTOPTS[i]}
+			fi
+		fi
+
+		if is_target "mdt" ${flags}; then
+			# Get the stripe count option
+			stripecount_opt=$(get_stripecount_opt ${host_name} ${TARGET_FSNAMES[i]})
+			if [ $? -ne 0 ]; then
+				echo >&2 "${stripecount_opt}"
+				return 1
+			fi
+
+			if [ -n "${stripecount_opt}" ]; then
+				if [ -n "${TARGET_FMTOPTS[i]}" ]; then
+					TARGET_FMTOPTS[i]=${TARGET_FMTOPTS[i]}" "${stripecount_opt}
+				else
+					TARGET_FMTOPTS[i]=${stripecount_opt}
+				fi
 			fi
 		fi
 
@@ -1614,16 +1695,51 @@ get_isize() {
 	return 0
 }
 
-# get_default_isize target_devtype
+# get_mdt_default_isize host_name target_fsname
+# Calculate the default inode size of lustre mdt target
+get_mdt_default_isize() {
+	local host_name=$1
+	local target_fsname=$2
+	declare -i stripe_count
+	local inode_size=
+
+	# Get the stripe count
+	stripe_count=$(get_stripecount ${host_name} ${target_fsname})
+	if [ $? -ne 0 ]; then
+		echo "${stripe_count}"
+		return 1
+	fi
+
+	if ((stripe_count > 77)); then
+		inode_size=512
+	elif ((stripe_count > 34)); then
+		inode_size=2048
+	elif ((stripe_count > 13)); then
+		inode_size=1024
+	else
+		inode_size=512
+	fi
+
+	echo ${inode_size}
+	return 0
+}
+
+# get_default_isize host_name target_devtype target_fsname
 # Calculate the default inode size of lustre target type @target_devtype
 get_default_isize() {
-	local target_devtype=$1
+	local host_name=$1
+	local target_devtype=$2
+	local target_fsname=$3
 	local inode_size=
 
 	case "${target_devtype}" in
 	"mdt" | "mgs|mdt" | "mdt|mgs")
-		# FIXME: How to get the value of "--stripe-count-hint=#N" option
-		inode_size=512;;
+		inode_size=$(get_mdt_default_isize ${host_name} ${target_fsname})
+		if [ $? -ne 0 ]; then
+			echo "${inode_size}"
+			return 1
+		fi
+		;;
 	"ost")
 		inode_size=256;;
 	esac
@@ -1634,13 +1750,14 @@ get_default_isize() {
 	return 0
 }
 
-# get_I_opt hostname target_devname target_devtype
+# get_I_opt hostname target_devname target_devtype target_fsname
 # Get the mkfs -I option of lustre target @target_devname 
 # from the node @hostname
 get_I_opt() {
 	local host_name=$1
 	local target_devname=$2
 	local target_devtype=$3
+	local target_fsname=$4
 	local isize=
 	local default_isize=
 	local isize_opt=
@@ -1653,7 +1770,13 @@ get_I_opt() {
 	fi
 
 	# Get the default inode size of lustre target
-	default_isize=$(get_default_isize ${target_devtype})
+	[ -z "${target_fsname}" ] && target_fsname="lustre"
+	default_isize=$(get_default_isize ${host_name} ${target_devtype} \
+			${target_fsname})
+	if [ $? -ne 0 ]; then
+		echo "${default_isize}"
+		return 1
+	fi
 
 	if [ "${isize}" != "${default_isize}" ]; then
 		isize_opt="-I ${isize}"
@@ -1727,7 +1850,7 @@ get_mkfsopts(){
 
 		# Get the inode size option
 		inode_size_opt=$(get_I_opt ${host_name} ${TARGET_DEVNAMES[i]} \
-				 ${TARGET_DEVTYPES[i]})
+				 ${TARGET_DEVTYPES[i]} ${TARGET_FSNAMES[i]})
 		if [ $? -ne 0 ]; then
 			echo >&2 "${inode_size_opt}"
 			return 1
