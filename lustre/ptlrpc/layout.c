@@ -220,7 +220,8 @@ static const struct req_format *req_formats[] = {
         &RQF_SEQ_QUERY,
         &RQF_FLD_QUERY,
         &RQF_MDS_GETXATTR,
-        &RQF_MDS_SETXATTR
+        &RQF_MDS_SETXATTR,
+        &RQF_MDS_SYNC
 };
 
 struct req_msg_field {
