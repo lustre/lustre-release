@@ -623,7 +623,8 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
 
         result = osd_create_pre(info, obj, attr, th);
         if (result == 0) {
-                osd_create_type_f(attr->la_mode & S_IFMT)(info, obj, attr, th);
+                result = osd_create_type_f(attr->la_mode & S_IFMT)(info, obj,
+                                                                   attr, th);
                 if (result == 0)
                         result = osd_create_post(info, obj, attr, th);
         }
