@@ -707,9 +707,9 @@ static int qslave_recovery_main(void *arg)
                 struct dquot_id *dqid, *tmp;
                 int ret;
 
-                down(&dqopt->dqonoff_sem);
+                LOCK_DQONOFF_MUTEX(dqopt);
                 if (!sb_has_quota_enabled(qctxt->lqc_sb, type)) {
-                        up(&dqopt->dqonoff_sem);
+                        UNLOCK_DQONOFF_MUTEX(dqopt);
                         break;
                 }
 
@@ -720,7 +720,7 @@ static int qslave_recovery_main(void *arg)
 #else
                 rc = fsfilt_qids(obd, NULL, dqopt->files[type], type, &id_list);
 #endif
-                up(&dqopt->dqonoff_sem);
+                UNLOCK_DQONOFF_MUTEX(dqopt);
                 if (rc)
                         CERROR("Get ids from quota file failed. (rc:%d)\n", rc);
 

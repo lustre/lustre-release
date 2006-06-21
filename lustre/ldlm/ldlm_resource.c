@@ -757,7 +757,6 @@ void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
         check_res_locked(lock->l_resource);
         list_del_init(&lock->l_res_link);
 }
-EXPORT_SYMBOL(ldlm_resource_unlink_lock);
 
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
 {

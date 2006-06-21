@@ -77,6 +77,15 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define TRYLOCK_INODE_MUTEX(inode) (!down_trylock(&(inode)->i_sem))
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,17)
+#define UNLOCK_DQONOFF_MUTEX(dqopt) do {mutex_unlock(&(dqopt)->dqonoff_mutex); } while(0)
+#define LOCK_DQONOFF_MUTEX(dqopt) do {mutex_lock(&(dqopt)->dqonoff_mutex); } while(0)
+#else
+#define UNLOCK_DQONOFF_MUTEX(dqopt) do {up(&(dqopt)->dqonoff_sem); } while(0)
+#define LOCK_DQONOFF_MUTEX(dqopt) do {down(&(dqopt)->dqonoff_sem); } while(0)
+#endif
+
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
 #define NGROUPS_SMALL           NGROUPS
 #define NGROUPS_PER_BLOCK       ((int)(EXEC_PAGESIZE / sizeof(gid_t)))

@@ -225,7 +225,11 @@ int obd_proc_read_kernel_version(char *page, char **start, off_t off, int count,
                                  int *eof, void *data)
 {
         *eof = 1;
+#ifdef LUSTRE_KERNEL_VERSION
         return snprintf(page, count, "%u\n", LUSTRE_KERNEL_VERSION);
+#else
+        return snprintf(page, count, "%u\n", "patchless");
+#endif
 }
 
 int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
@@ -431,11 +435,13 @@ int class_procfs_clean(void)
 /* Check that we're building against the appropriate version of the Lustre
  * kernel patch */
 #include <linux/lustre_version.h>
+#ifdef LUSTRE_KERNEL_VERSION
 #define LUSTRE_MIN_VERSION 37
 #define LUSTRE_MAX_VERSION 47
 #if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
 # error Cannot continue: Your Lustre kernel patch is older than the sources
 #elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)
 # error Cannot continue: Your Lustre sources are older than the kernel patch
+#endif
 #endif
 #endif

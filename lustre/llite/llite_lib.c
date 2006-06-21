@@ -1673,7 +1673,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         }
         case EXT3_IOC_SETFLAGS: {
                 struct mdc_op_data op_data;
-                struct ll_iattr_struct attr = { 0 };
+                struct ll_iattr_struct attr = { { 0 } };
                 struct obd_info oinfo = { { { 0 } } };
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
 
