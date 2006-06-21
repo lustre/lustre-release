@@ -1306,7 +1306,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,struct obd_device *obd,
 
                 if (req != NULL && req->rq_repmsg != NULL &&
                     (reply_body->valid & OBD_MD_FLEASIZE) &&
-                    mds_log_op_unlink(obd, pending_child->d_inode, lmm,
+                    mds_log_op_unlink(obd, lmm,
                              lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF+1),
                              lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF+2, 0),
                              lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF+2))

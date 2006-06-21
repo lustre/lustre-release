@@ -463,6 +463,11 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
         if (!req)
                 RETURN(-ENOMEM);
 
+        /* FIXME bug 249. Also see bug 7198 */
+        if (class_exp2cliimp(exp)->imp_connect_data.ocd_connect_flags &
+            OBD_CONNECT_REQPORTAL)
+                req->rq_request_portal = OST_IO_PORTAL;
+
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
 
@@ -557,6 +562,11 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                               OST_DESTROY, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
+
+        /* FIXME bug 249. Also see bug 7198 */
+        if (class_exp2cliimp(exp)->imp_connect_data.ocd_connect_flags &
+            OBD_CONNECT_REQPORTAL)
+                req->rq_request_portal = OST_IO_PORTAL;
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
 
@@ -814,9 +824,10 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         opc = ((cmd & OBD_BRW_WRITE) != 0) ? OST_WRITE : OST_READ;
         pool = ((cmd & OBD_BRW_WRITE) != 0) ? imp->imp_rq_pool : NULL;
 
-        for (niocount = i = 1; i < page_count; i++)
+        for (niocount = i = 1; i < page_count; i++) {
                 if (!can_merge_pages(pga[i - 1], pga[i]))
                         niocount++;
+        }
 
         size[REQ_REC_OFF + 1] = sizeof(*ioobj);
         size[REQ_REC_OFF + 2] = niocount * sizeof(*niobuf);
@@ -1672,6 +1683,14 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
                 CERROR("prep_req failed: %d\n", rc);
                 GOTO(out, req = ERR_PTR(rc));
         }
+
+        /* Need to update the timestamps after the request is built in case
+         * we race with setattr (locally or in queue at OST).  If OST gets
+         * later setattr before earlier BRW (as determined by the request xid),
+         * the OST will not use BRW timestamps.  Sadly, there is no obvious
+         * way to do this in a single call.  bug 10150 */
+        ops->ap_update_obdo(caller_data, cmd, oa,
+                            OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLATIME);
 
         LASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
         aa = (struct osc_brw_async_args *)&req->rq_async_args;
@@ -2687,7 +2706,7 @@ out_req:
         RETURN(rc);
 }
 
-static int sanosc_brw(int cmd, struct obd_export *exp, struct obd_infl *oinfo,
+static int sanosc_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
                       obd_count page_count, struct brw_page *pga,
                       struct obd_trans_info *oti)
 {
@@ -3056,7 +3075,7 @@ out:
 }
 
 static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
-                            unsigned long max_age,
+                            cfs_time_t max_age,
                             struct ptlrpc_request_set *rqset)
 {
         struct ptlrpc_request *req;

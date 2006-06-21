@@ -69,7 +69,7 @@ struct ll_sb_info *ll_init_sbi(void)
                 sbi->ll_async_page_max = (num_physpages / 4) * 3;
         sbi->ll_ra_info.ra_max_pages = min(num_physpages / 8,
                                            SBI_DEFAULT_READAHEAD_MAX);
-        sbi->ll_ra_info.ra_max_read_ahead_whole_pages = 
+        sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
                                            SBI_DEFAULT_READAHEAD_WHOLE_MAX;
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
@@ -140,25 +140,22 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                         CERROR("could not register mount in /proc/lustre");
         }
 
-        /* indicate that inodebits locking is supported by this client */
-        data->ocd_connect_flags |= OBD_CONNECT_IBITS | OBD_CONNECT_NODEVOH;
+        /* indicate the features supported by this client */
+        data->ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_NODEVOH |
+                                  OBD_CONNECT_ACL | OBD_CONNECT_JOIN |
+                                  OBD_CONNECT_ATTRFID | OBD_CONNECT_VERSION;
         data->ocd_ibits_known = MDS_INODELOCK_FULL;
+        data->ocd_version = LUSTRE_VERSION_CODE;
 
         if (sb->s_flags & MS_RDONLY)
                 data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
         if (sbi->ll_flags & LL_SBI_USER_XATTR)
                 data->ocd_connect_flags |= OBD_CONNECT_XATTR;
-        data->ocd_connect_flags |= OBD_CONNECT_ACL | OBD_CONNECT_JOIN | 
-                OBD_CONNECT_ATTRFID;
 
-        if (sbi->ll_flags & LL_SBI_FLOCK) {
+        if (sbi->ll_flags & LL_SBI_FLOCK)
                 sbi->ll_fop = &ll_file_operations_flock;
-        } else {
+        else
                 sbi->ll_fop = &ll_file_operations;
-        }
-
-        data->ocd_connect_flags |= OBD_CONNECT_VERSION;
-        data->ocd_version = LUSTRE_VERSION_CODE;
 
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
@@ -172,11 +169,12 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
         sbi->ll_mdc_exp = class_conn2export(&mdc_conn);
 
-        err = obd_statfs(obd, &osfs, jiffies - HZ);
+        err = obd_statfs(obd, &osfs, get_jiffies_64() - HZ);
         if (err)
                 GOTO(out_mdc, err);
 
-        /* MDC connect is surely finished by now */
+        /* MDC connect is surely finished by now because we actually sent
+         * a statfs RPC, otherwise obd_connect() is asynchronous. */
         *data = class_exp2cliimp(sbi->ll_mdc_exp)->imp_connect_data;
 
         LASSERT(osfs.os_bsize);
@@ -190,7 +188,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         if ((sbi->ll_flags & LL_SBI_USER_XATTR) &&
             !(data->ocd_connect_flags & OBD_CONNECT_XATTR)) {
                 LCONSOLE_INFO("Disabling user_xattr feature because "
-                              "it is not supported on the server\n"); 
+                              "it is not supported on the server\n");
                 sbi->ll_flags &= ~LL_SBI_USER_XATTR;
         }
 
@@ -221,8 +219,8 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_mdc, err = -ENODEV);
         }
 
-        data->ocd_connect_flags =
-                OBD_CONNECT_GRANT | OBD_CONNECT_VERSION | OBD_CONNECT_REQPORTAL;
+        data->ocd_connect_flags = OBD_CONNECT_GRANT | OBD_CONNECT_VERSION |
+                                  OBD_CONNECT_REQPORTAL;
 
         CDEBUG(D_RPCTRACE, "ocd_connect_flags: "LPX64" ocd_version: %d "
                "ocd_grant: %d\n", data->ocd_connect_flags,
@@ -352,11 +350,11 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 
         *lmmsize = obd_size_diskmd(sbi->ll_osc_exp, NULL);
         size = sizeof(int);
-        rc = obd_get_info(sbi->ll_mdc_exp, strlen("max_easize"), "max_easize", 
+        rc = obd_get_info(sbi->ll_mdc_exp, strlen("max_easize"), "max_easize",
                           &size, lmmsize);
-        if (rc) 
+        if (rc)
                 CERROR("Get max mdsize error rc %d \n", rc);
-        
+
         RETURN(rc);
 }
 
@@ -766,6 +764,7 @@ static int old_lustre_process_log(struct super_block *sb, char *newprofile,
         if (rc)
                 GOTO(out_cleanup, rc);
 
+        /* If we don't have this then an ACL MDS will refuse the connection */
         ocd.ocd_connect_flags = OBD_CONNECT_ACL;
 
         rc = obd_connect(&mdc_conn, obd, &mdc_uuid, &ocd);
@@ -1069,7 +1068,7 @@ void ll_clear_inode(struct inode *inode)
         LASSERT(!lli->lli_open_fd_write_count);
         LASSERT(!lli->lli_open_fd_read_count);
         LASSERT(!lli->lli_open_fd_exec_count);
-        
+
         if (lli->lli_mds_write_och)
                 ll_mdc_real_close(inode, FMODE_WRITE);
         if (lli->lli_mds_exec_och) {
@@ -1341,7 +1340,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 }
 
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
-                       unsigned long max_age)
+                       __u64 max_age)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_statfs obd_osfs;
@@ -1398,14 +1397,18 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
         /* For now we will always get up-to-date statfs values, but in the
          * future we may allow some amount of caching on the client (e.g.
          * from QOS or lprocfs updates). */
-        rc = ll_statfs_internal(sb, &osfs, jiffies - 1);
+        rc = ll_statfs_internal(sb, &osfs, get_jiffies_64() - 1);
         if (rc)
                 return rc;
 
         statfs_unpack(sfs, &osfs);
 
-        if (sizeof(sfs->f_blocks) == 4) {
-                while (osfs.os_blocks > ~0UL) {
+        /* We need to downshift for all 32-bit kernels, because we can't
+         * tell if the kernel is being called via sys_statfs64() or not.
+         * Stop before overflowing f_bsize - in which case it is better
+         * to just risk EOVERFLOW if caller is using old sys_statfs(). */
+        if (sizeof(long) < 8) {
+                while (osfs.os_blocks > ~0UL && sfs->f_bsize < 0x40000000) {
                         sfs->f_bsize <<= 1;
 
                         osfs.os_blocks >>= 1;
@@ -1457,10 +1460,10 @@ void ll_inode_size_unlock(struct inode *inode, int unlock_lsm)
 static void ll_replace_lsm(struct inode *inode, struct lov_stripe_md *lsm)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
- 
+
         dump_lsm(D_INODE, lsm);
-        dump_lsm(D_INODE, lli->lli_smd); 
-        LASSERTF(lsm->lsm_magic == LOV_MAGIC_JOIN, 
+        dump_lsm(D_INODE, lli->lli_smd);
+        LASSERTF(lsm->lsm_magic == LOV_MAGIC_JOIN,
                  "lsm must be joined lsm %p\n", lsm);
         obd_free_memmd(ll_i2obdexp(inode), &lli->lli_smd);
         CDEBUG(D_INODE, "replace lsm %p to lli_smd %p for inode %lu%u(%p)\n",
@@ -1480,7 +1483,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
                 if (lli->lli_smd == NULL) {
-                        if (lsm->lsm_magic != LOV_MAGIC && 
+                        if (lsm->lsm_magic != LOV_MAGIC &&
                             lsm->lsm_magic != LOV_MAGIC_JOIN) {
                                 dump_lsm(D_ERROR, lsm);
                                 LBUG();
@@ -1496,7 +1499,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
                         if (lli->lli_smd->lsm_magic == lsm->lsm_magic &&
-                             lli->lli_smd->lsm_stripe_count == 
+                             lli->lli_smd->lsm_stripe_count ==
                                         lsm->lsm_stripe_count) {
                                 if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
                                         CERROR("lsm mismatch for inode %ld\n",
@@ -1507,7 +1510,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                         dump_lsm(D_ERROR, lsm);
                                         LBUG();
                                 }
-                        } else 
+                        } else
                                 ll_replace_lsm(inode, lsm);
                 }
                 if (lli->lli_smd != lsm)
@@ -1699,7 +1702,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 oinfo.oi_oa->o_flags = flags;
                 oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
 
-                obdo_from_inode(oinfo.oi_oa, inode, 
+                obdo_from_inode(oinfo.oi_oa, inode,
                                 OBD_MD_FLFID | OBD_MD_FLGENER);
                 rc = obd_setattr_rqset(sbi->ll_osc_exp, &oinfo, NULL);
                 obdo_free(oinfo.oi_oa);
@@ -1898,7 +1901,7 @@ int ll_obd_statfs(struct inode *inode, void *arg)
         if (!client_obd)
                 GOTO(out_statfs, rc = -EINVAL);
 
-        rc = obd_statfs(client_obd, &stat_buf, jiffies - 1);
+        rc = obd_statfs(client_obd, &stat_buf, get_jiffies_64() - 1);
         if (rc)
                 GOTO(out_statfs, rc);
 

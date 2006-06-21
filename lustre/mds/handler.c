@@ -1017,7 +1017,7 @@ out_ucred:
 }
 
 static int mds_obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                          unsigned long max_age)
+                          cfs_time_t max_age)
 {
         int rc;
 
@@ -1050,7 +1050,7 @@ static int mds_statfs(struct ptlrpc_request *req)
         /* We call this so that we can cache a bit - 1 jiffie worth */
         rc = mds_obd_statfs(obd, lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                                 size[REPLY_REC_OFF]),
-                            jiffies - HZ);
+                            cfs_time_current() - HZ);
         if (rc) {
                 CERROR("mds_obd_statfs failed: rc %d\n", rc);
                 GOTO(out, rc);

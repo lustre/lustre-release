@@ -878,9 +878,11 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
                         RETURN(-EINVAL);
 
                 if (*((int *)val)) {
+                        imp->imp_connect_flags_orig |= OBD_CONNECT_RDONLY;
                         imp->imp_connect_data.ocd_connect_flags |=
                                 OBD_CONNECT_RDONLY;
                 } else {
+                        imp->imp_connect_flags_orig &= ~OBD_CONNECT_RDONLY;
                         imp->imp_connect_data.ocd_connect_flags &=
                                 ~OBD_CONNECT_RDONLY;
                 }
@@ -899,6 +901,7 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
                         rc = ptlrpc_queue_wait(req);
                         ptlrpc_req_finished(req);
                 }
+
                 RETURN(rc);
         }
 
@@ -913,7 +916,7 @@ int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
         if (keylen == strlen("max_easize") &&
             memcmp(key, "max_easize", strlen("max_easize")) == 0) {
                 int mdsize, *max_easize;
-                
+
                 if (*vallen != sizeof(int))
                         RETURN(-EINVAL);
                 mdsize = *(int*)val;

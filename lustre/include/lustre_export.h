@@ -50,6 +50,8 @@ struct filter_export_data {
         int                        fed_lr_idx;
         long                       fed_dirty;    /* in bytes */
         long                       fed_grant;    /* in bytes */
+        struct list_head           fed_mod_list; /* files being modified */
+        int                        fed_mod_count;/* items in fed_writing list */
         long                       fed_pending;  /* bytes just being written */
 };
 

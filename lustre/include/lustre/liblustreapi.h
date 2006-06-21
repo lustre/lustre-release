@@ -17,8 +17,36 @@ extern int llapi_file_create(const char *name, long stripe_size,
 extern int llapi_file_get_stripe(char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
-extern int llapi_find(char *path, struct obd_uuid *obduuid, int recursive,
-                      int verbose, int quiet);
+ 
+struct find_param {
+        unsigned int maxdepth;
+        time_t atime;
+        time_t mtime;
+        time_t ctime;
+        int asign;
+        int csign;
+        int msign;
+        int zeroend;
+
+        int     recursive;
+        int     verbose;
+        int     quiet;
+
+        struct  obd_uuid        *obduuid;
+        int     obdindex;
+
+        int     lumlen;
+        struct  lov_user_mds_data *lmd;
+
+        /* In-precess parameters. */
+        unsigned int depth;
+        int     got_uuids;
+        dev_t   st_dev;
+};
+
+extern int llapi_getstripe(char *path, struct find_param *param);
+extern int llapi_find(char *path, struct find_param *param);
+
 extern int llapi_obd_statfs(char *path, __u32 type, __u32 index,
                      struct obd_statfs *stat_buf,
                      struct obd_uuid *uuid_buf);

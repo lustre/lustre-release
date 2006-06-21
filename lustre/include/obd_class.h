@@ -42,8 +42,8 @@
 #endif
 
 /* OBD Device Declarations */
-#define MAX_OBD_DEVICES 520
-extern struct obd_device obd_dev[MAX_OBD_DEVICES];
+#define MAX_OBD_DEVICES 1024
+extern struct obd_device *obd_devs[MAX_OBD_DEVICES];
 extern spinlock_t obd_dev_lock;
 
 /* OBD Operations Declarations */
@@ -52,24 +52,26 @@ extern struct obd_device *class_exp2obd(struct obd_export *);
 
 /* genops.c */
 struct obd_export *class_conn2export(struct lustre_handle *);
-int class_register_type(struct obd_ops *ops, struct lprocfs_vars *, char *nm);
-int class_unregister_type(char *nm);
+int class_register_type(struct obd_ops *ops, struct lprocfs_vars *,
+                        const char *nm);
+int class_unregister_type(const char *nm);
 
-struct obd_device *class_newdev(struct obd_type *type, char *name);
+struct obd_device *class_newdev(const char *type_name, const char *name);
 void class_release_dev(struct obd_device *obd);
 
-int class_name2dev(char *name);
-struct obd_device *class_name2obd(char *name);
+int class_name2dev(const char *name);
+struct obd_device *class_name2obd(const char *name);
 int class_uuid2dev(struct obd_uuid *uuid);
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
 void class_obd_list(void);
 struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
-                                          char * typ_name,
+                                          const char * typ_name,
                                           struct obd_uuid *grp_uuid);
 struct obd_device * class_find_client_notype(struct obd_uuid *tgt_uuid,
                                              struct obd_uuid *grp_uuid);
 struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid,
                                            int *next);
+struct obd_device * class_num2obd(int num);
 
 int oig_init(struct obd_io_group **oig);
 void oig_add_one(struct obd_io_group *oig,
@@ -163,8 +165,8 @@ void class_import_put(struct obd_import *);
 struct obd_import *class_new_import(struct obd_device *obd);
 void class_destroy_import(struct obd_import *exp);
 
-struct obd_type *class_search_type(char *name);
-struct obd_type *class_get_type(char *name);
+struct obd_type *class_search_type(const char *name);
+struct obd_type *class_get_type(const char *name);
 void class_put_type(struct obd_type *type);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid);
@@ -261,6 +263,11 @@ do {                                                            \
                 RETURN(err);                                    \
         }                                                       \
 } while (0)
+
+static inline int class_devno_max(void)
+{
+        return MAX_OBD_DEVICES;
+}
 
 static inline int obd_get_info(struct obd_export *exp, __u32 keylen,
                                void *key, __u32 *vallen, void *val)
@@ -626,6 +633,18 @@ static inline int obd_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
+static inline int obd_ping(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_OP(exp->exp_obd, ping, 0);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, ping);
+
+        rc = OBP(exp->exp_obd, ping)(exp);
+        RETURN(rc);
+}
+
 static inline int obd_init_export(struct obd_export *exp)
 {
         int rc = 0;
@@ -670,12 +689,16 @@ obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
 #define time_before(t1, t2) ((long)t2 - (long)t1 > 0)
 #endif
 
+#ifndef time_before_64
+#define time_before_64(t1, t2) ((__s64)t2 - (__s64)t1 > 0)
+#endif
+
 /* @max_age is the oldest time in jiffies that we accept using a cached data.
  * If the cache is older than @max_age we will get a new value from the
- * target.  Use a value of "jiffies + HZ" to guarantee freshness. */
+ * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */
 static inline int obd_statfs_async(struct obd_device *obd,
                                    struct obd_info *oinfo,
-                                   unsigned long max_age,
+                                   cfs_time_t max_age,
                                    struct ptlrpc_request_set *rqset)
 {
         int rc = 0;
@@ -687,8 +710,9 @@ static inline int obd_statfs_async(struct obd_device *obd,
         OBD_CHECK_OP(obd, statfs, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
-        CDEBUG(D_SUPER, "osfs %lu, max_age %lu\n", obd->obd_osfs_age, max_age);
-        if (time_before(obd->obd_osfs_age, max_age)) {
+        CDEBUG(D_SUPER, "osfs "CFS_TIME_T", max_age "CFS_TIME_T"\n", 
+               obd->obd_osfs_age, max_age);
+        if (time_before_64(obd->obd_osfs_age, max_age)) {
                 rc = OBP(obd, statfs_async)(obd, oinfo, max_age, rqset);
         } else {
                 CDEBUG(D_SUPER, "using cached obd_statfs data\n");
@@ -703,7 +727,7 @@ static inline int obd_statfs_async(struct obd_device *obd,
 
 static inline int obd_statfs_rqset(struct obd_device *obd,
                                    struct obd_statfs *osfs,
-                                   unsigned long max_age)
+                                   cfs_time_t max_age)
 {
         struct ptlrpc_request_set *set = NULL;
         struct obd_info oinfo = { { { 0 } } };
@@ -724,7 +748,7 @@ static inline int obd_statfs_rqset(struct obd_device *obd,
 
 /* @max_age is the oldest time in jiffies that we accept using a cached data.
  * If the cache is older than @max_age we will get a new value from the
- * target.  Use a value of "jiffies + HZ" to guarantee freshness. */
+ * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */
 static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                              cfs_time_t max_age)
 {

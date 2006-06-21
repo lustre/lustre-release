@@ -1104,8 +1104,7 @@ static int llu_iop_rename_raw(struct pnode *old, struct pnode *new)
 
 #ifdef _HAVE_STATVFS
 static int llu_statfs_internal(struct llu_sb_info *sbi,
-                               struct obd_statfs *osfs,
-                               unsigned long max_age)
+                               struct obd_statfs *osfs, __u64 max_age)
 {
         struct obd_statfs obd_osfs;
         int rc;
@@ -1158,7 +1157,7 @@ static int llu_statfs(struct llu_sb_info *sbi, struct statfs *sfs)
         /* For now we will always get up-to-date statfs values, but in the
          * future we may allow some amount of caching on the client (e.g.
          * from QOS or lprocfs updates). */
-        rc = llu_statfs_internal(sbi, &osfs, jiffies - 1);
+        rc = llu_statfs_internal(sbi, &osfs, get_jiffies_64() - HZ);
         if (rc)
                 return rc;
 
@@ -1777,7 +1776,7 @@ llu_fsswop_mount(const char *source,
         obd_set_info_async(obd->obd_self_export, strlen("async"), "async",
                            sizeof(async), &async, NULL);
 
-        ocd.ocd_connect_flags = OBD_CONNECT_IBITS|OBD_CONNECT_VERSION;
+        ocd.ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_VERSION;
         ocd.ocd_ibits_known = MDS_INODELOCK_FULL;
         ocd.ocd_version = LUSTRE_VERSION_CODE;
 
@@ -1809,8 +1808,8 @@ llu_fsswop_mount(const char *source,
         obd->obd_upcall.onu_owner = &sbi->ll_lco;
         obd->obd_upcall.onu_upcall = ll_ocd_update;
 
-        ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK|OBD_CONNECT_REQPORTAL|
-                                OBD_CONNECT_VERSION|OBD_CONNECT_TRUNCLOCK;
+        ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK | OBD_CONNECT_REQPORTAL |
+                                OBD_CONNECT_VERSION | OBD_CONNECT_TRUNCLOCK;
         ocd.ocd_version = LUSTRE_VERSION_CODE;
         err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, &ocd);
         if (err) {

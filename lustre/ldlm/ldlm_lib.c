@@ -436,6 +436,11 @@ int client_disconnect_export(struct obd_export *exp)
         if (cli->cl_conn_count)
                 GOTO(out_no_disconnect, rc = 0);
 
+        /* Mark import deactivated now, so we don't try to reconnect if any
+         * of the cleanup RPCs fails (e.g. ldlm cancel, etc).  We don't
+         * fully deactivate the import, or that would drop all requests. */
+        imp->imp_deactive = 1;
+
         /* Some non-replayable imports (MDS's OSCs) are pinged, so just
          * delete it regardless.  (It's safe to delete an import that was
          * never added.) */
@@ -455,7 +460,6 @@ int client_disconnect_export(struct obd_export *exp)
                 rc = ptlrpc_disconnect_import(imp);
 
         ptlrpc_invalidate_import(imp);
-        imp->imp_deactive = 1;
         ptlrpc_free_rq_pool(imp->imp_rq_pool);
         class_destroy_import(imp);
         cli->cl_import = NULL;
@@ -1409,6 +1413,7 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
 int target_handle_ping(struct ptlrpc_request *req)
 {
+        obd_ping(req->rq_export);
         return lustre_pack_reply(req, 1, NULL, NULL);
 }
 

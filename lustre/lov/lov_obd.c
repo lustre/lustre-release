@@ -174,7 +174,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                 char name[MAX_STRING_SIZE];
 
                 LASSERT(osc_obd != NULL);
-                LASSERT(osc_obd->obd_type != NULL);
+                LASSERT(osc_obd->obd_magic == OBD_DEVICE_MAGIC);
                 LASSERT(osc_obd->obd_type->typ_name != NULL);
                 snprintf(name, MAX_STRING_SIZE, "../../../%s/%s",
                          osc_obd->obd_type->typ_name,
@@ -1049,7 +1049,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                 if (oa->o_valid & OBD_MD_FLCOOKIE)
                         oti->oti_logcookies = set->set_cookies + req->rq_stripe;
 
-                err = obd_destroy(lov->tgts[req->rq_idx].ltd_exp, 
+                err = obd_destroy(lov->tgts[req->rq_idx].ltd_exp,
                                   req->rq_oi.oi_oa, NULL, oti, NULL);
                 err = lov_update_common_set(set, req, err);
                 if (err) {
@@ -1591,6 +1591,14 @@ static void lov_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         oa->o_stripe_idx = lap->lap_stripe;
 }
 
+static void lov_ap_update_obdo(void *data, int cmd, struct obdo *oa,
+                               obd_valid valid)
+{
+        struct lov_async_page *lap = LAP_FROM_COOKIE(data);
+
+        lap->lap_caller_ops->ap_update_obdo(lap->lap_caller_data, cmd,oa,valid);
+}
+
 static int lov_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct lov_async_page *lap = LAP_FROM_COOKIE(data);
@@ -1606,6 +1614,7 @@ static struct obd_async_page_ops lov_async_page_ops = {
         .ap_make_ready =        lov_ap_make_ready,
         .ap_refresh_count =     lov_ap_refresh_count,
         .ap_fill_obdo =         lov_ap_fill_obdo,
+        .ap_update_obdo =       lov_ap_update_obdo,
         .ap_completion =        lov_ap_completion,
 };
 
@@ -2064,8 +2073,7 @@ static int lov_statfs_interpret(struct ptlrpc_request_set *rqset,
 }
 
 static int lov_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
-                            unsigned long max_age,
-                            struct ptlrpc_request_set *rqset)
+                            cfs_time_t max_age, struct ptlrpc_request_set *rqset)
 {
         struct lov_request_set *set;
         struct lov_request *req;
@@ -2123,8 +2131,8 @@ static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                         continue;
                 }
 
-                err = obd_statfs(class_exp2obd(lov->tgts[i].ltd_exp), &lov_sfs,
-                                 max_age);
+                err = obd_statfs(class_exp2obd(lov->tgts[i].ltd_exp), 
+                                 &lov_sfs, max_age);
                 if (err) {
                         if (lov->tgts[i].ltd_active && !rc)
                                 rc = err;

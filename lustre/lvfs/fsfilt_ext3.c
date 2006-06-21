@@ -533,12 +533,6 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
                 RETURN(-EPERM);
         }
 
-        /* FIXME: Can't do this because of nested transaction deadlock */
-        if (cmd == EXT3_IOC_SETFLAGS && (*(int *)arg) & EXT3_JOURNAL_DATA_FL) {
-                CERROR("can't set data journal flag on file\n");
-                RETURN(-EPERM);
-        }
-
         if (inode->i_fop->ioctl)
                 rc = inode->i_fop->ioctl(inode, file, cmd, arg);
         else
@@ -676,7 +670,7 @@ static ssize_t fsfilt_ext3_readpage(struct file *file, char *buf, size_t count,
 
                                 CDEBUG(D_EXT2, "fake %u@%llu\n", blksize, *off);
                                 memset(fake, 0, sizeof(*fake));
-                                fake->rec_len = cpu_to_le32(blksize);
+                                fake->rec_len = cpu_to_le16(blksize);
                         }
                         count -= blksize;
                         buf += blksize;

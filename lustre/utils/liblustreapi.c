@@ -145,42 +145,27 @@ out:
         return rc;
 }
 
-struct find_param {
-        int     recursive;
-        int     verbose;
-        int     quiet;
-        struct  obd_uuid        *obduuid;
-        int     lumlen;
-        struct  lov_user_mds_data *lmd;
-/*        struct  lov_user_md     *lum;*/
-        int     got_uuids;
-        int     obdindex;
-        int     (* process_file)(DIR *dir, char *dname, char *fname,
-                        struct find_param *param);
-};
+typedef int (semantic_func_t)(char *path, DIR *parent, DIR *d, void *data);
 
 #define MAX_LOV_UUID_COUNT      max(LOV_MAX_STRIPE_COUNT, 1000)
 #define OBD_NOT_FOUND           (-1)
 
-static int prepare_find(struct find_param *param)
+static int common_param_init(struct find_param *param)
 {
         param->lumlen = lov_mds_md_size(MAX_LOV_UUID_COUNT);
         if ((param->lmd = malloc(sizeof(lstat_t) + param->lumlen)) == NULL) {
                 err_msg("error: allocation of %d bytes for ioctl",
                         sizeof(lstat_t) + param->lumlen);
-                return ENOMEM;
+                return -ENOMEM;
         }
 
         param->got_uuids = 0;
         param->obdindex = OBD_NOT_FOUND;
-
         return 0;
 }
 
-static void cleanup_find(struct find_param *param)
+static void find_param_fini(struct find_param *param)
 {
-        if (param->obduuid)
-                free(param->obduuid);
         if (param->lmd)
                 free(param->lmd);
 }
@@ -249,19 +234,19 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
         FILE *fp;
         int rc = 0, index;
 
-        param->got_uuids = 1;
-
         /* Get the lov name */
         rc = ioctl(dirfd(dir), OBD_IOC_GETNAME, (void *)uuid);
         if (rc) {
-                rc = errno;
-                if (rc == -ENOTTY)
-                        fprintf(stderr, "error: %s does not appear to be in "
-                                "a Lustre filesystem\n", dname);
-                else
-                        err_msg("error: can't get lov name: %s");
+                if (errno != ENOTTY) {
+                        err_msg("error: can't get lov name: %s", uuid);
+                        rc = errno;
+                } else {
+                        rc = 0;
+                }
                 return rc;
         }
+
+        param->got_uuids = 1;
 
         /* Now get the ost uuids from /proc */
         snprintf(buf, sizeof(buf), "/proc/fs/lustre/lov/%s/target_obd",
@@ -293,35 +278,36 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
 
         fclose(fp);
 
-        if (param->obduuid && (param->obdindex == OBD_NOT_FOUND)) {
+        if (!param->quiet && param->obduuid && 
+            (param->obdindex == OBD_NOT_FOUND)) {
                 fprintf(stderr, "error: %s: unknown obduuid: %s\n",
                         __FUNCTION__, param->obduuid->uuid);
-                rc = EINVAL;
+                //rc = EINVAL;
         }
 
         return (rc);
 }
 
-void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
+void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *path, int is_dir,
                           int obdindex, int quiet, int header, int body)
 {
         int i, obdstripe = 0;
 
         if (obdindex != OBD_NOT_FOUND) {
-                for (i = 0; fname[0] && i < lum->lmm_stripe_count; i++) {
+                for (i = 0; !is_dir && i < lum->lmm_stripe_count; i++) {
                         if (obdindex == lum->lmm_objects[i].l_ost_idx) {
-                                printf("%s/%s\n", dname, fname);
+                                printf("%s\n", path);
                                 obdstripe = 1;
                                 break;
                         }
                 }
         } else if (!quiet) {
-                printf("%s/%s\n", dname, fname);
+                printf("%s\n", path);
                 obdstripe = 1;
         }
 
         /* if it's a directory */
-        if (*fname == '\0') {
+        if (is_dir) {
                 if (obdstripe == 1) {
                         printf("default stripe_count: %d stripe_size: %u "
                                "stripe_offset: %d\n",
@@ -360,8 +346,8 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
         }
 }
 
-void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *dname,
-                            char *fname, int obdindex, int quiet,
+void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *path,
+                            int is_dir, int obdindex, int quiet,
                             int header, int body)
 {
         struct lov_user_md_join *lumj = (struct lov_user_md_join *)lum;
@@ -370,13 +356,13 @@ void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *dname,
         if (obdindex != OBD_NOT_FOUND) {
                 for (i = 0; i < lumj->lmm_stripe_count; i++) {
                         if (obdindex == lumj->lmm_objects[i].l_ost_idx) {
-                                printf("%s/%s\n", dname, fname);
+                                printf("%s\n", path);
                                 obdstripe = 1;
                                 break;
                         }
                 }
         } else if (!quiet) {
-                printf("%s/%s\n", dname, fname);
+                printf("%s\n", path);
                 obdstripe = 1;
         }
 
@@ -420,17 +406,18 @@ void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *dname,
         }
 }
 
-void llapi_lov_dump_user_lmm(struct find_param *param, char *dname, char *fname)
+void llapi_lov_dump_user_lmm(struct find_param *param, 
+                             char *path, int is_dir)
 {
         switch(*(__u32 *)&param->lmd->lmd_lmm) { /* lum->lmm_magic */
         case LOV_USER_MAGIC_V1:
-                lov_dump_user_lmm_v1(&param->lmd->lmd_lmm, dname, fname,
+                lov_dump_user_lmm_v1(&param->lmd->lmd_lmm, path, is_dir,
                                       param->obdindex, param->quiet,
                                       param->verbose,
                                       (param->verbose || !param->obduuid));
                 break;
         case LOV_USER_MAGIC_JOIN:
-                lov_dump_user_lmm_join(&param->lmd->lmd_lmm, dname, fname,
+                lov_dump_user_lmm_join(&param->lmd->lmd_lmm, path, is_dir,
                                        param->obdindex, param->quiet,
                                        param->verbose,
                                        (param->verbose || !param->obduuid));
@@ -471,7 +458,7 @@ int llapi_file_get_stripe(char *path, struct lov_user_md *lum)
         }
 
         strcpy((char *)lum, fname);
-        if (ioctl(fd, IOC_MDC_GETSTRIPE, (void *)lum) == -1) {
+        if (ioctl(fd, IOC_MDC_GETFILESTRIPE, (void *)lum) == -1) {
                 close(fd);
                 free(dname);
                 return errno;
@@ -511,51 +498,11 @@ int llapi_file_lookup(int dirfd, const char *name)
         return ioctl(dirfd, IOC_MDC_LOOKUP, buf);
 }
 
-static int find_process_file(DIR *dir, char *dname, char *fname,
-                        struct find_param *param)
-{
-        int rc;
-
-        strncpy((char *)&param->lmd->lmd_lmm, fname, param->lumlen);
-
-        rc = ioctl(dirfd(dir), IOC_MDC_GETSTRIPE, (void *)&param->lmd->lmd_lmm);
-        if (rc) {
-                if (errno == ENODATA) {
-                        if (!param->obduuid && !param->quiet)
-                                fprintf(stderr, "%s/%s has no stripe info\n",
-                                        dname, fname);
-                        rc = 0;
-                } else if (errno == ENOTTY) {
-                        fprintf(stderr, "error: %s/%s is not a Lustre fs?\n",
-                                dname, fname);
-                } else if (errno == EISDIR) {
-                        err_msg("error: %s: directory %s/%s",
-                                __FUNCTION__, dname, fname);
-                        /* add fname to directory list; */
-                        rc = errno;
-                } else {
-                        err_msg("error: IOC_MDC_GETSTRIPE failed for '%s/%s'",
-                                dname, fname);
-                        rc = errno;
-                }
-                return rc;
-        }
-
-        llapi_lov_dump_user_lmm(param, dname, fname);
-
-        return 0;
-}
-
 /* some 64bit libcs implement readdir64() by calling sys_getdents().  the
  * kernel's sys_getdents() doesn't return d_type.  */
-unsigned char handle_dt_unknown(char *parent, char *entry)
+unsigned char handle_dt_unknown(char *path)
 {
-        char path[PATH_MAX + 1];
-        int fd, ret;
-
-        ret = snprintf(path, PATH_MAX, "%s/%s", parent, entry);
-        if (ret >= PATH_MAX)
-                return DT_UNKNOWN;
+        int fd;
 
         fd = open(path, O_DIRECTORY|O_RDONLY);
         if (fd < 0) {
@@ -567,162 +514,429 @@ unsigned char handle_dt_unknown(char *parent, char *entry)
         return DT_DIR;
 }
 
-static int process_dir(DIR *dir, char *dname, struct find_param *param)
+static DIR *opendir_parent(char *path)
 {
-        struct dirent64 *dirp;
-        DIR *subdir;
-        char path[1024];
-        int rc;
+        DIR *parent;
+        char *fname;
+        char c;
+        
+        fname = strrchr(path, '/');
+        if (fname == NULL)
+                return opendir(".");
+        
+        c = fname[1];
+        fname[1] = '\0';
+        parent = opendir(path);
+        fname[1] = c;
+        return parent;
+}
 
-        if (!param->got_uuids) {
-                rc = setup_obd_uuids(dir, dname, param);
-                if (rc)
-                        return rc;
+static int llapi_semantic_traverse(char *path, DIR *parent,
+                                   semantic_func_t sem_init,
+                                   semantic_func_t sem_fini, void *data)
+{
+        struct dirent64 *dent;
+        int len, ret;
+        DIR *d, *p;
+        
+        ret = 0;
+        p = NULL;
+        len = strlen(path);
+
+        d = opendir(path);
+        if (!d && errno != ENOTDIR) {
+                fprintf(stderr, "%s: Failed to open '%s': %s.", 
+                        __FUNCTION__, path, strerror(errno));
+                return -EINVAL;
+        } else if (!d && !parent) {
+                /* ENOTDIR. Open the parent dir. */
+                p = opendir_parent(path);
+                if (!p)
+                        return -EINVAL;
         }
 
-        /* retrieve dir's stripe info */
-        strncpy((char *)&param->lmd->lmd_lmm, dname, param->lumlen);
-        rc = ioctl(dirfd(dir), LL_IOC_LOV_GETSTRIPE, (void *)&param->lmd->lmd_lmm);
-        if (rc) {
-                if (errno == ENODATA) {
-                        if (!param->obduuid && param->verbose)
-                                printf("%s has no stripe info\n", dname);
-                        rc = 0;
-                } else if (errno == ENOTTY) {
-                        fprintf(stderr, "error: %s: %s not on a Lustre fs?\n",
-                                __FUNCTION__, dname);
-                } else {
-                        err_msg("error: %s: LL_IOC_LOV_GETSTRIPE failed for %s",
-                                __FUNCTION__, dname);
-                }
-        } else {
-               llapi_lov_dump_user_lmm(param, dname, "");
-        }
+        if (sem_init && (ret = sem_init(path, parent ? parent : p, d, data)))
+                goto err;
 
-        /* Handle the contents of the directory */
-        while ((dirp = readdir64(dir)) != NULL) {
-                if (!strcmp(dirp->d_name, ".") || !strcmp(dirp->d_name, ".."))
+        if (!d)
+                GOTO(out, ret = 0);
+
+        while((dent = readdir64(d)) != NULL) {
+                if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
                         continue;
+                
+                path[len] = 0;
+                strcat(path, "/");
+                strcat(path, dent->d_name);
 
-                if (dirp->d_type == DT_UNKNOWN)
-                        dirp->d_type = handle_dt_unknown(dname, dirp->d_name);
+                if (dent->d_type == DT_UNKNOWN)
+                        dent->d_type = handle_dt_unknown(path);
 
-                switch (dirp->d_type) {
+                switch (dent->d_type) {
                 case DT_UNKNOWN:
                         fprintf(stderr, "error: %s: '%s' is UNKNOWN type %d",
-                                __FUNCTION__, dirp->d_name, dirp->d_type);
+                                __FUNCTION__, dent->d_name, dent->d_type);
                         /* If we cared we could stat the file to determine
                          * type and continue on here, but we don't since we
                          * know d_type should be valid for lustre and this
                          * tool only makes sense for lustre filesystems. */
                         break;
                 case DT_DIR:
-                        if (!param->recursive)
-                                break;
-                        strcpy(path, dname);
-                        strcat(path, "/");
-                        strcat(path, dirp->d_name);
-                        subdir = opendir(path);
-                        if (subdir == NULL) {
-                                err_msg("error: %s: opendir '%.40s'",
-                                        __FUNCTION__, path);
-                                return errno;
-                        }
-                        rc = process_dir(subdir, path, param);
-                        closedir(subdir);
-                        break;
-                case DT_REG:
-                        rc = param->process_file(dir,dname,dirp->d_name,param);
+                        ret = llapi_semantic_traverse(path, d, sem_init,
+                                                      sem_fini, data);
+                        if (ret < 0)
+                                goto out;
                         break;
                 default:
-                        break;
+                        ret = 0;
+                        if (sem_init) {
+                                ret = sem_init(path, d, NULL, data);
+                                if (ret < 0)
+                                        goto out;
+                        }
+                        if (sem_fini && ret == 0)
+                                sem_fini(path, d, NULL, data);
                 }
         }
 
-        return 0;
+out:
+        path[len] = 0;
+                
+        if (sem_fini)
+                sem_fini(path, parent, d, data);
+err:
+        if (d) 
+                closedir(d);
+        if (p)
+                closedir(p);
+        return ret;
 }
 
-static int process_path(char *path, struct find_param *param)
+/* Check if the file time matches 1 of the given criteria (e.g. --atime +/-N).
+ * @mds indicates if this is MDS timestamps and there are attributes on OSTs.
+ * 
+ * The result is -1 if it does not match, 0 if not yet clear, 1 if matches.
+ * The table bolow gives the answers for the specified parameters (time and 
+ * sign), 1st column is the answer for the MDS time, the 2nd is for the OST:
+ * --------------------------------------
+ * 1 | file > limit; sign > 0 | -1 / -1 |
+ * 2 | file = limit; sign > 0 |  ? /  1 |
+ * 3 | file < limit; sign > 0 |  ? /  1 |
+ * 4 | file > limit; sign = 0 | -1 / -1 |
+ * 5 | file = limit; sign = 0 |  ? /  1 |  <- (see the Note below)
+ * 6 | file < limit; sign = 0 |  ? / -1 |
+ * 7 | file > limit; sign < 0 |  1 /  1 |
+ * 8 | file = limit; sign < 0 |  ? / -1 |
+ * 9 | file < limit; sign < 0 |  ? / -1 |
+ * --------------------------------------
+ * Note: 5th actually means that the file time stamp is within the interval 
+ * (limit - 24hours, limit]. */
+static int find_time_cmp(time_t file, time_t limit, int sign, int mds) {
+        if (sign > 0) {
+                if (file <= limit)
+                        return mds ? 0 : 1;
+        }
+
+        if (sign == 0) {
+                if (file <= limit && file + 24 * 60 * 60 > limit)
+                        return mds ? 0 : 1;
+                if (file + 24 * 60 * 60 <= limit)
+                        return mds ? 0 : -1;
+        }
+
+        if (sign < 0) {
+                if (file > limit)
+                        return 1;
+                if (mds)
+                        return 0;
+        }
+
+        return -1;
+}
+
+/* Check if the file time matches all the given criteria (e.g. --atime +/-N).
+ * Return -1 or 1 if file timestamp does not or does match the given criteria
+ * correspondingly. Return 0 if the MDS time is being checked and there are 
+ * attributes on OSTs and it is not yet clear if the timespamp matches.
+ * 
+ * If 0 is returned, we need to do another RPC to the OSTs to obtain the 
+ * updated timestamps. */
+static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 {
-        char *fname, *dname;
-        DIR *dir;
+        int ret;
         int rc = 0;
 
-        fname = strrchr(path, '/');
-        if (fname != NULL && fname[1] == '\0') {
-                /* Trailing '/', it must be a dir */
-                if (strlen(path) > 1)
-                        *fname = '\0';
+        /* Check if file is accepted. */
+        if (param->atime) {
+                ret = find_time_cmp(st->st_atime, param->atime, 
+                                    param->asign, mds);
+                if (ret < 0)
+                        return ret;
+                rc = ret;
+        }
+        
+        if (param->mtime) {
+                ret = find_time_cmp(st->st_mtime, param->mtime, 
+                                    param->msign, mds);
+                if (ret < 0)
+                        return ret;
 
-                dir = opendir(path);
-                if (dir == NULL) {
-                        err_msg("error: %s: '%.40s' opendir",__FUNCTION__,path);
-                        rc = errno;
-                } else {
-                        rc = process_dir(dir, path, param);
-                        closedir(dir);
-                }
-        } else if ((dir = opendir(path)) != NULL) {
-                /* No trailing '/', but it is still a dir */
-                rc = process_dir(dir, path, param);
-                closedir(dir);
-        } else {
-                /* It must be a file (or other non-directory) */
-                if (fname == NULL) {
-                        dname = ".";
-                        fname = path;
-                } else {
-                        *fname = '\0';
-                        fname++;
-                        dname = path;
-                        if (dname[0] == '\0')
-                                dname = "/";
-                }
-                dir = opendir(dname);
-                if (dir == NULL) {
-                        err_msg("error: %s: '%.40s' open failed",
-                                __FUNCTION__, dname);
-                        rc = errno;
-                } else {
-                        if (!param->got_uuids)
-                                rc = setup_obd_uuids(dir, dname, param);
-                        if (rc == 0)
-                                rc = param->process_file(dir, dname, fname, param);
-                        closedir(dir);
-                }
+                /* If the previous check matches, but this one is not yet clear,
+                 * we should return 0 to do an RPC on OSTs. */
+                if (rc == 1)
+                        rc = ret;
+        }
+        
+        if (param->ctime) {
+                ret = find_time_cmp(st->st_ctime, param->ctime,
+                                    param->csign, mds);
+                if (ret < 0)
+                        return ret;
+                
+                /* If the previous check matches, but this one is not yet clear,
+                 * we should return 0 to do an RPC on OSTs. */
+                if (rc == 1)
+                        rc = ret;
         }
 
         return rc;
 }
 
-int llapi_find(char *path, struct obd_uuid *obduuid, int recursive,
-               int verbose, int quiet)
+static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
 {
-        struct find_param param;
+        struct find_param *param = (struct find_param *)data;
+        int decision = 1; /* 1 is accepted; -1 is rejected. */
+        lstat_t *st = &param->lmd->lmd_st;
+        int lustre_fs = 1;
         int ret = 0;
 
-        memset(&param, 0, sizeof(param));
-        param.recursive = recursive;
-        param.verbose = verbose;
-        param.quiet = quiet;
-        param.process_file = find_process_file;
-        if (obduuid) {
-                param.obduuid = malloc(sizeof(*obduuid));
-                if (param.obduuid == NULL) {
-                        ret = ENOMEM;
-                        goto out;
+        LASSERT(parent != NULL || dir != NULL);
+        
+        param->lmd->lmd_lmm.lmm_stripe_count = 0;
+
+        /* If a time or OST should be checked, the decision is not taken yet. */
+        if (param->atime || param->ctime || param->mtime || param->obduuid)
+                decision = 0;
+
+        /* Request MDS for the stat info. */
+        if (!decision && dir) {
+                /* retrieve needed file info */
+                ret = ioctl(dirfd(dir), LL_IOC_MDC_GETINFO, 
+                            (void *)param->lmd);
+        } else if (!decision && parent) {
+                char *fname = strrchr(path, '/') + 1;
+                
+                /* retrieve needed file info */
+                strncpy((char *)param->lmd, fname, param->lumlen);
+                ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, 
+                           (void *)param->lmd);
+        }
+ 
+        if (ret) {
+                if (errno == ENOTTY) {
+                        /* ioctl is not supported, it is not a lustre fs.
+                         * Do the regular lstat(2) instead. */
+                        lustre_fs = 0;
+                        ret = lstat_f(path, st);
+                        if (ret) {
+                                err_msg("error: %s: lstat failed for %s",
+                                        __FUNCTION__, path);
+                                return ret;
+                        }
+                } else {
+                        err_msg("error: %s: %s failed for %s", __FUNCTION__,
+                                dir ? "LL_IOC_MDC_GETINFO" : 
+                                "IOC_MDC_GETFILEINFO", path);
+                        return ret;
                 }
-                memcpy(param.obduuid, obduuid, sizeof(*obduuid));
         }
 
-        ret = prepare_find(&param);
-        if (ret)
-                goto out;
+        /* Prepare odb. */
+        if (param->obduuid) {
+                if (lustre_fs && param->got_uuids && 
+                    param->st_dev != st->st_dev) {
+                        /* A lustre/lustre mount point is crossed. */
+                        param->got_uuids = 0;
+                        param->obdindex = OBD_NOT_FOUND;
+                }
+                
+                if (lustre_fs && !param->got_uuids) {
+                        ret = setup_obd_uuids(dir ? dir : parent, path, param);
+                        if (ret)
+                                return ret;
+                        param->st_dev = st->st_dev;
+                } else if (!lustre_fs && param->got_uuids) {
+                        /* A lustre/non-lustre mount point is crossed. */
+                        param->got_uuids = 0;
+                        param->obdindex = OBD_NOT_FOUND;
+                }
+        }
 
-        process_path(path, &param);
+        /* If an OBD UUID is specified but no one matches, skip this file. */
+        if (param->obduuid && param->obdindex == OBD_NOT_FOUND)
+                decision = -1;
+
+        /* If a OST UUID is given, and some OST matches, check it here. */
+        if (decision != -1 && param->obdindex != OBD_NOT_FOUND) {
+                /* Only those files should be accepted, which have a strip on 
+                 * the specified OST. */
+                if (!param->lmd->lmd_lmm.lmm_stripe_count) {
+                        decision = -1;
+                } else {
+                        int i;
+                        for (i = 0; 
+                             i < param->lmd->lmd_lmm.lmm_stripe_count;
+                             i++) {
+                                if (param->obdindex == 
+                                    param->lmd->lmd_lmm.lmm_objects[i].l_ost_idx)
+                                        break;
+                        }
+                        
+                        if (i == param->lmd->lmd_lmm.lmm_stripe_count)
+                                decision = -1;
+                }
+        }
+        
+        /* Check the time on mds. */
+        if (!decision) {
+                int for_mds;
+                
+                for_mds = lustre_fs ? param->lmd->lmd_lmm.lmm_stripe_count : 0;
+                decision = find_time_check(st, param, for_mds);
+        }
+        
+        /* If file still fits the request, ask osd for updated info.
+           The regulat stat is almost of the same speed as some new 
+           'glimpse-size-ioctl'. */
+        if (!decision && param->lmd->lmd_lmm.lmm_stripe_count) {
+                if (dir) {
+                        ret = ioctl(dirfd(dir), IOC_LOV_GETINFO,
+                                    (void *)param->lmd);
+                } else if (parent) {
+                        ret = ioctl(dirfd(parent), IOC_LOV_GETINFO, 
+                                    (void *)param->lmd);
+                } 
+
+                if (ret) {
+                        fprintf(stderr, "%s: IOC_LOV_GETINFO on %s failed: "
+                                "%s.\n", __FUNCTION__, path, strerror(errno));
+                        return -EINVAL;
+                }
+
+                /* Check the time on osc. */
+                if (!decision)
+                        decision = find_time_check(st, param, 0);
+        }
+
+        if (decision != -1) {
+                printf("%s", path);
+                if (param->zeroend)
+                        printf("%c", '\0');
+                else 
+                        printf("\n");
+        }
+
+        /* Do not get down anymore? */
+        if (param->depth == param->maxdepth)
+                return 1;
+
+        param->depth++;
+        return 0;
+}
+
+static int cb_common_fini(char *path, DIR *parent, DIR *d, void *data)
+{
+        struct find_param *param = (struct find_param *)data;
+        param->depth--;
+        return 0;
+}
+
+int llapi_find(char *path, struct find_param *param)
+{
+        char buf[PATH_MAX + 1];
+        int ret;
+        
+        ret = common_param_init(param);
+        if (ret)
+                return ret;
+
+        param->depth = 0;
+        strncpy(buf, path, strlen(path));
+        buf[strlen(path)] = '\0';
+        
+        ret = llapi_semantic_traverse(buf, NULL, cb_find_init, 
+                                      cb_common_fini, param);
+
+        find_param_fini(param);
+        return ret < 0 ? ret : 0;
+}
+
+static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data)
+{
+        struct find_param *param = (struct find_param *)data;
+        int ret = 0;
+
+        LASSERT(parent != NULL || d != NULL);
+        
+        /* Prepare odb. */
+        if (!param->got_uuids) {
+                ret = setup_obd_uuids(d ? d : parent, path, param);
+                if (ret)
+                        return ret;
+        }
+        
+        if (d) {
+                ret = ioctl(dirfd(d), LL_IOC_LOV_GETSTRIPE, 
+                            (void *)&param->lmd->lmd_lmm);
+        } else if (parent) {
+                char *fname = strrchr(path, '/') + 1;
+                
+                strncpy((char *)&param->lmd->lmd_lmm, fname, param->lumlen);
+                ret = ioctl(dirfd(parent), IOC_MDC_GETFILESTRIPE,
+                            (void *)&param->lmd->lmd_lmm);
+        } 
+
+        if (ret) {
+                if (errno == ENODATA) {
+                        if (!param->obduuid && !param->quiet)
+                                printf("%s has no stripe info\n", 
+                                        path);
+                        goto out;
+                } else if (errno == ENOTTY) {
+                        fprintf(stderr, "%s: '%s' not on a Lustre fs?\n",
+                                __FUNCTION__, path);
+                } else {
+                        err_msg("error: %s: %s failed for %s", __FUNCTION__,
+                                d ? "LL_IOC_LOV_GETSTRIPE" : 
+                                "IOC_MDC_GETFILESTRIPE", path);
+                }
+
+                return ret;
+        }
+
+        llapi_lov_dump_user_lmm(param, path, d ? 1 : 0);
 out:
-        cleanup_find(&param);
-        return ret;
+        /* Do not get down anymore? */
+        if (param->depth == param->maxdepth)
+                return 1;
+
+        param->depth++;
+        return 0;
+}
+
+int llapi_getstripe(char *path, struct find_param *param)
+{
+        int ret = 0;
+
+        ret = common_param_init(param);
+        if (ret)
+                return ret;
+
+        param->depth = 0;
+        ret = llapi_semantic_traverse(path, NULL, cb_getstripe, 
+                                      cb_common_fini, param);
+        find_param_fini(param);
+        return ret < 0 ? ret : 0;
 }
 
 int llapi_obd_statfs(char *path, __u32 type, __u32 index,
@@ -758,7 +972,7 @@ int llapi_obd_statfs(char *path, __u32 type, __u32 index,
                 err_msg("error: %s: opening '%s'", __FUNCTION__, path);
                 return rc;
         }
-        rc = ioctl(fd, LL_IOC_OBD_STATFS, (void *)rawbuf);
+        rc = ioctl(fd, IOC_OBD_STATFS, (void *)rawbuf);
         if (rc)
                 rc = -errno;
 
@@ -968,40 +1182,51 @@ int llapi_quotactl(char *mnt, struct if_quotactl *qctl)
         return rc;
 }
 
-static int quotachown_process_file(DIR *dir, char *dname, char *fname,
-                        struct find_param *param)
+static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data)
 {
+        struct find_param *param = (struct find_param *)data;
         lstat_t *st;
-        char pathname[PATH_MAX + 1] = "";
         int rc;
+        
+        LASSERT(parent != NULL || d != NULL);
 
-        strncpy((char *)param->lmd, fname, param->lumlen);
+        if (d) {
+                rc = ioctl(dirfd(d), LL_IOC_MDC_GETINFO, 
+                           (void *)param->lmd);
+        } else if (parent) {
+                char *fname = strrchr(path, '/') + 1;
 
-        rc = ioctl(dirfd(dir), IOC_MDC_GETFILEINFO, (void *)param->lmd);
+                strncpy((char *)param->lmd, fname, param->lumlen);
+                rc = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, 
+                           (void *)param->lmd);
+        } else {
+                return 0;
+        }
+
         if (rc) {
                 if (errno == ENODATA) {
                         if (!param->obduuid && !param->quiet)
-                                fprintf(stderr,
-                                        "%s/%s has no stripe info\n",
-                                        dname, fname);
+                                fprintf(stderr, "%s has no stripe info\n",
+                                        path);
                         rc = 0;
                 } else if (errno != EISDIR) {
-                        err_msg("IOC_MDC_GETFILEINFO ioctl failed");
+                        err_msg("%s ioctl failed for %s.",
+                                d ? "LL_IOC_MDC_GETINFO" : 
+                                "IOC_MDC_GETFILEINFO", path);
                         rc = errno;
                 }
                 return rc;
         }
 
         st = &param->lmd->lmd_st;
-        snprintf(pathname, sizeof(pathname), "%s/%s", dname, fname);
 
         /* libc chown() will do extra check, and if the real owner is
          * the same as the ones to set, it won't fall into kernel, so
          * invoke syscall directly. */
-        rc = syscall(SYS_chown, pathname, st->st_uid, st->st_gid);
+        rc = syscall(SYS_chown, path, st->st_uid, st->st_gid);
         if (rc)
                 err_msg("error: chown %s (%u,%u)",
-                        pathname, st->st_uid, st->st_gid);
+                        path, st->st_uid, st->st_gid);
         return rc;
 }
 
@@ -1014,14 +1239,14 @@ int llapi_quotachown(char *path, int flag)
         param.recursive = 1;
         param.verbose = 0;
         param.quiet = 1;
-        param.process_file = quotachown_process_file;
 
-        ret = prepare_find(&param);
+        ret = common_param_init(&param);
         if (ret)
                 goto out;
 
-        process_path(path, &param);
+        ret = llapi_semantic_traverse(path, NULL, cb_quotachown,
+                                      NULL, &param);
 out:
-        cleanup_find(&param);
+        find_param_fini(&param);
         return ret;
 }

@@ -1678,7 +1678,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 if (!(body->valid & OBD_MD_FLEASIZE)) {
                         body->valid |=(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                        OBD_MD_FLATIME | OBD_MD_FLMTIME);
-                } else if (mds_log_op_unlink(obd, child_inode,
+                } else if (mds_log_op_unlink(obd,
                                 lustre_msg_buf(req->rq_repmsg, offset + 1, 0),
                                 lustre_msg_buflen(req->rq_repmsg, offset + 1),
                                 lustre_msg_buf(req->rq_repmsg, offset + 2, 0),
@@ -2224,7 +2224,7 @@ no_unlink:
                 if (!(body->valid & OBD_MD_FLEASIZE)) {
                         body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                         OBD_MD_FLATIME | OBD_MD_FLMTIME);
-                } else if (mds_log_op_unlink(obd, new_inode,
+                } else if (mds_log_op_unlink(obd,
                                              lustre_msg_buf(req->rq_repmsg,
                                                             offset + 1, 0),
                                              lustre_msg_buflen(req->rq_repmsg,

@@ -118,10 +118,9 @@ EXPORT_SYMBOL(class_parse_nid);
  */
 int class_attach(struct lustre_cfg *lcfg)
 {
-        struct obd_type *type;
         struct obd_device *obd = NULL;
-        char *typename, *name, *namecopy, *uuid;
-        int rc, len, cleanup_phase = 0;
+        char *typename, *name, *uuid;
+        int rc, len;
         ENTRY;
 
         if (!LUSTRE_CFG_BUFLEN(lcfg, 1)) {
@@ -144,10 +143,10 @@ int class_attach(struct lustre_cfg *lcfg)
 
         CDEBUG(D_IOCTL, "attach type %s name: %s uuid: %s\n",
                MKSTR(typename), MKSTR(name), MKSTR(uuid));
-        
+
         /* Mountconf transitional hack, should go away after 1.6.
-           1.4.7 uses the old names, so translate back if the 
-           mountconf flag is set. 
+           1.4.7 uses the old names, so translate back if the
+           mountconf flag is set.
            1.6 should set this flag, and translate the other way here
            if not set. */
         if (lcfg->lcfg_flags & LCFG_FLG_MOUNTCONF){
@@ -165,33 +164,29 @@ int class_attach(struct lustre_cfg *lcfg)
                 }
         }
 
-        /* find the type */
-        type = class_get_type(typename);
-        if (!type) {
-                CERROR("OBD: unknown type: %s\n", typename);
-                RETURN(-ENODEV);
-        }
-        cleanup_phase = 1;  /* class_put_type */
-
-        len = strlen(name) + 1;
-        OBD_ALLOC(namecopy, len);
-        if (!namecopy)
-                GOTO(out, rc = -ENOMEM);
-        memcpy(namecopy, name, len);
-        cleanup_phase = 2; /* free obd_name */
-
-        obd = class_newdev(type, namecopy);
-        if (obd == NULL) {
+        obd = class_newdev(typename, name);
+        if (IS_ERR(obd)) {
                 /* Already exists or out of obds */
-                CERROR("Can't create device %s\n", name);
-                GOTO(out, rc = -EEXIST);
+                rc = PTR_ERR(obd);
+                obd = NULL;
+                CERROR("Cannot create device %s of type %s : %d\n",
+                       name, typename, rc);
+                GOTO(out, rc);
         }
-        cleanup_phase = 3;  /* class_release_dev */
+        LASSERTF(obd != NULL, "Cannot get obd device %s of type %s\n",
+                 name, typename);
+        LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC, 
+                 "obd %p obd_magic %08X != %08X\n",
+                 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
+        LASSERTF(strncmp(obd->obd_name, name, strlen(name)) == 0, "%p obd_name %s != %s\n",
+                 obd, obd->obd_name, name);
 
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         spin_lock_init(&obd->obd_dev_lock);
         spin_lock_init(&obd->obd_osfs_lock);
+        /* obd->obd_osfs_age must be set to a value in the distant
+         * past to guarantee a fresh statfs is fetched on mount. */
         obd->obd_osfs_age = cfs_time_shift(-1000);
 
         /* XXX belongs in setup not attach  */
@@ -221,21 +216,17 @@ int class_attach(struct lustre_cfg *lcfg)
         }
 
         /* Detach drops this */
+        spin_lock(&obd->obd_dev_lock);
         atomic_set(&obd->obd_refcount, 1);
+        spin_unlock(&obd->obd_dev_lock);
 
         obd->obd_attached = 1;
-        type->typ_refcnt++;
         CDEBUG(D_IOCTL, "OBD: dev %d attached type %s with refcount %d\n",
                obd->obd_minor, typename, atomic_read(&obd->obd_refcount));
         RETURN(0);
  out:
-        switch (cleanup_phase) {
-        case 3:
+        if (obd != NULL) {
                 class_release_dev(obd);
-        case 2:
-                OBD_FREE(namecopy, strlen(namecopy) + 1);
-        case 1:
-                class_put_type(type);
         }
         return rc;
 }
@@ -246,7 +237,11 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         struct obd_export *exp;
         ENTRY;
 
-        LASSERT(obd == (obd_dev + obd->obd_minor));
+        LASSERT(obd != NULL);
+        LASSERTF(obd == class_num2obd(obd->obd_minor), "obd %p != obd_devs[%d] %p\n", 
+                 obd, obd->obd_minor, class_num2obd(obd->obd_minor));
+        LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC, "obd %p obd_magic %08x != %08x\n", 
+                 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
 
         /* have we attached a type to this device? */
         if (!obd->obd_attached) {
@@ -284,7 +279,6 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (err)
                 GOTO(err_exp, err);
 
-        obd->obd_type->typ_refcnt++;
         obd->obd_set_up = 1;
         spin_lock(&obd->obd_dev_lock);
         /* cleanup drops this */
@@ -301,32 +295,6 @@ err_exp:
         class_unlink_export(obd->obd_self_export);
         obd->obd_self_export = NULL;
         obd->obd_starting = 0;
-        RETURN(err);
-}
-
-static int __class_detach(struct obd_device *obd)
-{
-        int err = 0;
-        ENTRY;
-
-        CDEBUG(D_CONFIG, "destroying obd %d (%s)\n",
-               obd->obd_minor, obd->obd_name);
-
-        if (OBP(obd, detach))
-                err = OBP(obd,detach)(obd);
-
-        if (obd->obd_name) {
-                OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
-                obd->obd_name = NULL;
-        } else {
-                CERROR("device %d: no name at detach\n", obd->obd_minor);
-        }
-
-        LASSERT(OBT(obd));
-        /* Attach took type refcount */
-        obd->obd_type->typ_refcnt--;
-        class_put_type(obd->obd_type);
-        class_release_dev(obd);
         RETURN(err);
 }
 
@@ -455,7 +423,6 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         class_decref(obd);
         obd->obd_set_up = 0;
-        obd->obd_type->typ_refcnt--;
 
         RETURN(0);
 out:
@@ -515,9 +482,12 @@ void class_decref(struct obd_device *obd)
                                 CERROR("Cleanup %s returned %d\n",
                                        obd->obd_name, err);
                 }
-                err = __class_detach(obd);
-                if (err)
-                        CERROR("Detach returned %d\n", err);
+                if (OBP(obd, detach)) {
+                        err = OBP(obd,detach)(obd);
+                        if (err)
+                                CERROR("Detach returned %d\n", err);
+                }
+                class_release_dev(obd);
         }
 }
 

@@ -430,6 +430,8 @@ int ll_extent_unlock(struct ll_file_data *, struct inode *,
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
+int ll_glimpse_ioctl(struct ll_sb_info *sbi, 
+                     struct lov_stripe_md *lsm, lstat_t *st);
 int ll_glimpse_size(struct inode *inode, int ast_flags);
 int ll_local_open(struct file *file,
                   struct lookup_intent *it, struct ll_file_data *fd,
@@ -475,7 +477,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr);
 int ll_setattr(struct dentry *de, struct iattr *attr);
 int ll_statfs(struct super_block *sb, struct kstatfs *sfs);
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
-                       unsigned long maxage);
+                       __u64 max_age);
 void ll_update_inode(struct inode *inode, struct lustre_md *md);
 void ll_read_inode2(struct inode *inode, void *opaque);
 int ll_iocontrol(struct inode *inode, struct file *file,

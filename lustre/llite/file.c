@@ -916,6 +916,51 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         return rc;
 }
 
+int ll_glimpse_ioctl(struct ll_sb_info *sbi, struct lov_stripe_md *lsm,
+                     lstat_t *st)
+{
+        struct lustre_handle lockh = { 0 };
+        struct obd_enqueue_info einfo = { 0 };
+        struct obd_info oinfo = { { { 0 } } };
+        struct ost_lvb lvb;
+        int rc;
+        
+        ENTRY;
+        
+        einfo.ei_type = LDLM_EXTENT;
+        einfo.ei_mode = LCK_PR;
+        einfo.ei_flags = LDLM_FL_HAS_INTENT;
+        einfo.ei_cb_bl = ll_extent_lock_callback;
+        einfo.ei_cb_cp = ldlm_completion_ast;
+        einfo.ei_cb_gl = ll_glimpse_callback;
+        einfo.ei_cbdata = NULL;
+
+        oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
+        oinfo.oi_lockh = &lockh;
+        oinfo.oi_md = lsm;
+
+        rc = obd_enqueue_rqset(sbi->ll_osc_exp, &oinfo, &einfo);
+        if (rc == -ENOENT)
+                RETURN(rc);
+        if (rc != 0) {
+                CERROR("obd_enqueue returned rc %d, "
+                       "returning -EIO\n", rc);
+                RETURN(rc > 0 ? -EIO : rc);
+        }
+        
+        lov_stripe_lock(lsm);
+        memset(&lvb, 0, sizeof(lvb));
+        obd_merge_lvb(sbi->ll_osc_exp, lsm, &lvb, 0);
+        st->st_size = lvb.lvb_size;
+        st->st_blocks = lvb.lvb_blocks;
+        st->st_mtime = lvb.lvb_mtime;
+        st->st_atime = lvb.lvb_atime;
+        st->st_ctime = lvb.lvb_ctime;
+        lov_stripe_unlock(lsm);
+        
+        RETURN(rc);
+}
+
 /* NB: obd_merge_lvb will prefer locally cached writes if they extend the
  * file (because it prefers KMS over RSS when larger) */
 int ll_glimpse_size(struct inode *inode, int ast_flags)
@@ -1920,7 +1965,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 RETURN(ll_get_grouplock(inode, file, arg));
         case LL_IOC_GROUP_UNLOCK:
                 RETURN(ll_put_grouplock(inode, file, arg));
-        case LL_IOC_OBD_STATFS:
+        case IOC_OBD_STATFS:
                 RETURN(ll_obd_statfs(inode, (void *)arg));
 
         /* We need to special case any other ioctls we want to handle,
@@ -2198,9 +2243,9 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 ll_prepare_mdc_op_data(&op_data, dentry->d_parent->d_inode,
                                        dentry->d_inode, NULL, 0, 0);
                 rc = mdc_intent_lock(exp, &op_data, NULL, 0,
-                                     /* we are not interested in name 
+                                     /* we are not interested in name
                                         based lookup */
-                                     &oit, 0, &req, 
+                                     &oit, 0, &req,
                                      ll_mdc_blocking_ast, 0);
                 if (rc < 0) {
                         rc = ll_inode_revalidate_fini(inode, rc);

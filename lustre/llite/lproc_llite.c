@@ -46,7 +46,7 @@ static int ll_rd_blksize(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, get_jiffies_64() - HZ);
         if (!rc) {
               *eof = 1;
               rc = snprintf(page, count, "%u\n", osfs.os_bsize);
@@ -63,7 +63,7 @@ static int ll_rd_kbytestotal(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, get_jiffies_64() - HZ);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_blocks;
@@ -86,7 +86,7 @@ static int ll_rd_kbytesfree(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, get_jiffies_64() - HZ);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_bfree;
@@ -108,7 +108,7 @@ static int ll_rd_kbytesavail(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, get_jiffies_64() - HZ);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_bavail;
@@ -130,7 +130,7 @@ static int ll_rd_filestotal(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, get_jiffies_64() - HZ);
         if (!rc) {
                  *eof = 1;
                  rc = snprintf(page, count, LPU64"\n", osfs.os_files);
@@ -146,7 +146,7 @@ static int ll_rd_filesfree(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, get_jiffies_64() - HZ);
         if (!rc) {
                  *eof = 1;
                  rc = snprintf(page, count, LPU64"\n", osfs.os_ffree);
@@ -516,7 +516,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         obd = class_name2obd(mdc);
 
         LASSERT(obd != NULL);
-        LASSERT(obd->obd_type != NULL);
+        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
         LASSERT(obd->obd_type->typ_name != NULL);
 
         snprintf(name, MAX_STRING_SIZE, "%s/common_name",
@@ -536,7 +536,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         obd = class_name2obd(osc);
 
         LASSERT(obd != NULL);
-        LASSERT(obd->obd_type != NULL);
+        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
         LASSERT(obd->obd_type->typ_name != NULL);
 
         snprintf(name, MAX_STRING_SIZE, "%s/common_name",

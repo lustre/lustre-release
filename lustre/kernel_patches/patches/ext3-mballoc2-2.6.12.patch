@@ -345,7 +345,7 @@ Index: linux-2.6.12.6-bull/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.12.6-bull.orig/fs/ext3/mballoc.c	2006-04-22 17:31:47.543334750 +0400
 +++ linux-2.6.12.6-bull/fs/ext3/mballoc.c	2006-04-30 01:24:11.000000000 +0400
-@@ -0,0 +1,2702 @@
+@@ -0,0 +1,2701 @@
 +/*
 + * Copyright (c) 2003-2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -2096,7 +2096,6 @@ Index: linux-2.6.12.6-bull/fs/ext3/mballoc.c
 +static int ext3_mb_seq_groups_show(struct seq_file *seq, void *v)
 +{
 +	struct super_block *sb = seq->private;
-+	struct ext3_sb_info *sbi = EXT3_SB(sb);
 +	int group = (int) v, i;
 +	struct sg {
 +		struct ext3_group_info info;

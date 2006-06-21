@@ -160,9 +160,9 @@ obd_size filter_grant_space_left(struct obd_export *exp)
 
         LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
 
-        if (time_before(obd->obd_osfs_age, jiffies - HZ)) {
+        if (time_before_64(obd->obd_osfs_age, get_jiffies_64() - HZ)) {
 restat:
-                rc = fsfilt_statfs(obd, obd->u.obt.obt_sb, jiffies + 1);
+                rc = fsfilt_statfs(obd, obd->u.obt.obt_sb, get_jiffies_64() + HZ);
                 if (rc) /* N.B. statfs can't really fail */
                         RETURN(0);
                 statfs_done = 1;
@@ -509,6 +509,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         struct niobuf_remote *rnb;
         struct niobuf_local *lnb = res;
         struct fsfilt_objinfo fso;
+        struct filter_mod_data *fmd;
         struct dentry *dentry = NULL;
         void *iobuf;
         obd_size left;
@@ -541,11 +542,22 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         fsfilt_check_slow(exp->exp_obd, now, obd_timeout, "preprw_write setup");
 
+        /* Don't update inode timestamps if this write is older than a
+         * setattr which modifies the timestamps. b=10150 */
+        /* XXX when we start having persistent reservations this needs to
+         * be changed to filter_fmd_get() to create the fmd if it doesn't
+         * already exist so we can store the reservation handle there. */
+        fmd = filter_fmd_find(exp, obj->ioo_id, obj->ioo_gr);
+
         spin_lock(&exp->exp_obd->obd_osfs_lock);
         if (oa) {
                 filter_grant_incoming(exp, oa);
-                obdo_to_inode(dentry->d_inode, oa,
-                              OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
+                        oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                                         OBD_MD_FLATIME);
+                else
+                        obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME |
+                                      OBD_MD_FLMTIME | OBD_MD_FLCTIME);
         }
         cleanup_phase = 3;
 
@@ -562,6 +574,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         }
 
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
+        filter_fmd_put(exp, fmd);
 
         if (rc)
                 GOTO(cleanup, rc);

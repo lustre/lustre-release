@@ -244,7 +244,7 @@ Description: MDS crash when receiving packet with unknown intent.
 Details    : Do not LBUG in unknown intent case, just return -EFAULT
 
 Severity   : enhancement
-Bugzilla   : 9293
+Bugzilla   : 9293, 9385
 Description: MDS RPCs are serialised on client. This is unnecessary for some.
 Details    : Do not serialize getattr (non-intent version) and statfs.
 
@@ -354,6 +354,30 @@ Description: parallel glimpse, setattr, statfs, punch, destroy requests
 Details    : Sends glimpse, setattr, statfs, punch, destroy requests to OSTs in
 	     parallel, not waiting for response from every OST before sending
 	     a rpc to the next OST.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 10150
+Description: setattr vs write race when updating file timestamps
+Details    : Client processes that update a file timestamp into the past
+	     right after writing to the file (e.g. tar) it is possible that
+	     the updated file modification time can be reset to the current
+	     time due to a race between processing the setattr and write RPC.
+
+Severity   : enhancement
+Bugzilla   : 10318
+Description: Bring 'lfs find' closer in line with regular Linux find.
+Details    : lfs find util supports -atime, -mtime, -ctime, -maxdepth, -print,
+	     -print0 options and obtains all the needed info through the lustre
+	     ioctls.
+
+Severity   : enhancement
+Frequency  : nodes with more than 520 OBD devices
+Bugzilla   : 6221
+Description: support up to 1024 configured devices on one node
+Details    : change obd_dev array from statically allocated to dynamically
+	     allocated structs as they are first used to reduce memory usage
+
 ------------------------------------------------------------------------------
 
 02-14-2006  Cluster File Systems, Inc. <info@clusterfs.com>

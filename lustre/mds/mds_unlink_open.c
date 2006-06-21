@@ -45,7 +45,7 @@
 #include "mds_internal.h"
 
 static int mds_osc_destroy_orphan(struct obd_device *obd,
-                                  struct inode *inode,
+                                  umode_t mode,
                                   struct lov_mds_md *lmm,
                                   int lmm_size,
                                   struct llog_cookie *logcookies,
@@ -78,7 +78,7 @@ static int mds_osc_destroy_orphan(struct obd_device *obd,
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
         oa->o_id = lsm->lsm_object_id;
-        oa->o_mode = inode->i_mode & S_IFMT;
+        oa->o_mode = mode & S_IFMT;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
 
         if (log_unlink && logcookies) {
@@ -103,14 +103,16 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         struct llog_cookie *logcookies = NULL;
         int lmm_size, log_unlink = 0, cookie_size = 0;
         void *handle = NULL;
+        umode_t mode;
         int rc, err;
         ENTRY;
 
         LASSERT(mds->mds_osc_obd != NULL);
-
+        
         /* We don't need to do any of these other things for orhpan dirs,
          * especially not mds_get_md (may get a default LOV EA, bug 4554) */
-        if (S_ISDIR(inode->i_mode)) {
+        mode = inode->i_mode;
+        if (S_ISDIR(mode)) {
                 rc = vfs_rmdir(pending_dir, dchild);
                 if (rc)
                         CERROR("error %d unlinking dir %*s from PENDING\n",
@@ -145,7 +147,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 OBD_ALLOC(logcookies, cookie_size);
                 if (logcookies == NULL)
                         rc = -ENOMEM;
-                else if (mds_log_op_unlink(obd, inode, lmm,lmm_size,logcookies,
+                else if (mds_log_op_unlink(obd, lmm,lmm_size,logcookies,
                                            cookie_size) > 0)
                         log_unlink = 1;
         }
@@ -156,7 +158,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 if (!rc)
                         rc = err;
         } else if (!rc) {
-                rc = mds_osc_destroy_orphan(obd, inode, lmm, lmm_size,
+                rc = mds_osc_destroy_orphan(obd, mode, lmm, lmm_size,
                                             logcookies, log_unlink);
         }
 

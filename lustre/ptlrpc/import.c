@@ -382,6 +382,9 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
                 }
         }
 
+        /* Reset connect flags to the originally requested flags, in case
+         * the server is updated on-the-fly we will get the new features. */
+        imp->imp_connect_data.ocd_connect_flags = imp->imp_connect_flags_orig;
         rc = obd_reconnect(imp->imp_obd->obd_self_export, obd,
                            &obd->obd_uuid, &imp->imp_connect_data);
         if (rc)

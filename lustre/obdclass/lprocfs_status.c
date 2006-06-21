@@ -416,7 +416,7 @@ int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list)
         int rc = 0;
 
         LASSERT(obd != NULL);
-        LASSERT(obd->obd_type != NULL);
+        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
         LASSERT(obd->obd_type->typ_procroot != NULL);
 
         obd->obd_proc_entry = lprocfs_register(obd->obd_name,
@@ -646,8 +646,8 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LASSERT(obd->obd_proc_entry != NULL);
         LASSERT(obd->obd_cntr_base == 0);
 
-        num_stats = 1 + OBD_COUNTER_OFFSET(quotactl) +
-                num_private_stats;
+        num_stats = (sizeof(*obd->obd_type->typ_ops) / sizeof(void *)) +
+                num_private_stats - 1 /* o_owner */;
         stats = lprocfs_alloc_stats(num_stats);
         if (stats == NULL)
                 return -ENOMEM;
@@ -715,6 +715,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, health_check);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotacheck);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, quotactl);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, ping);
 
         for (i = num_private_stats; i < num_stats; i++) {
                 /* If this LBUGs, it is likely that an obd
@@ -722,12 +723,9 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
                  * <obd.h>, and that the corresponding line item
                  * LPROCFS_OBD_OP_INIT(.., .., opname)
                  * is missing from the list above. */
-                if (stats->ls_percpu[0]->lp_cntr[i].lc_name == NULL) {
-                        CERROR("Missing obd_stat initializer obd_op "
-                               "operation at offset %d. Aborting.\n",
-                               i - num_private_stats);
-                        LBUG();
-                }
+                LASSERTF(stats->ls_percpu[0]->lp_cntr[i].lc_name != NULL,
+                         "Missing obd_stat initializer obd_op "
+                         "operation at offset %d.\n", i - num_private_stats);
         }
         rc = lprocfs_register_stats(obd->obd_proc_entry, "stats", stats);
         if (rc < 0) {

@@ -2,19 +2,17 @@ Index: linux-2.4.29/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.4.29.orig/fs/ext3/ialloc.c	2005-05-03 15:56:43.831530296 +0300
 +++ linux-2.4.29/fs/ext3/ialloc.c	2005-05-03 16:07:32.990843080 +0300
-@@ -576,6 +576,12 @@
- 	insert_inode_hash(inode);
+@@ -576,6 +576,10 @@
  	inode->i_generation = sb->u.ext3_sb.s_next_generation++;
  
-+	if (EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) {
-+		inode->u.ext3_i.i_extra_isize = sizeof(__u16)	/* i_extra_isize */
-+				+ sizeof(__u16);	/* i_pad1 */
-+	} else
-+		inode->u.ext3_i.i_extra_isize = 0;
-+
  	inode->u.ext3_i.i_state = EXT3_STATE_NEW;
++	inode->u.ext3_i.i_extra_isize =
++		(EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) ?
++		sizeof(struct ext3_inode) - EXT3_GOOD_OLD_INODE_SIZE : 0;
++
  	err = ext3_get_inode_loc_new(inode, &iloc, 1);
  	if (err) goto fail;
+ 	BUFFER_TRACE(iloc->bh, "get_write_access");
 Index: linux-2.4.29/fs/ext3/inode.c
 ===================================================================
 --- linux-2.4.29.orig/fs/ext3/inode.c	2005-05-03 15:58:30.758274960 +0300

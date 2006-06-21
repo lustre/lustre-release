@@ -121,6 +121,7 @@ cleanup() {
     zconf_umount $CLIENTS $MOUNT
     stopall
     stop mds -f
+    cleanup_check
 }
 
 trap exit INT

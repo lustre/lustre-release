@@ -131,6 +131,20 @@ check_ptlrpc_body(void)
 }
 
 static void
+check_obd_connect(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(obd_connect_data);
+        CHECK_MEMBER(obd_connect_data, ocd_connect_flags);
+        CHECK_MEMBER(obd_connect_data, ocd_version);
+        CHECK_MEMBER(obd_connect_data, ocd_grant);
+        CHECK_MEMBER(obd_connect_data, ocd_index);
+        CHECK_MEMBER(obd_connect_data, ocd_ibits_known);
+        CHECK_MEMBER(obd_connect_data, ocd_nllu);
+        CHECK_MEMBER(obd_connect_data, ocd_nllg);
+}
+
+static void
 check_obdo(void)
 {
         BLANK_LINE();
@@ -1117,6 +1131,7 @@ main(int argc, char **argv)
         CHECK_CDEFINE(OBD_CONNECT_JOIN);
         CHECK_CDEFINE(OBD_CONNECT_ATTRFID);
         CHECK_CDEFINE(OBD_CONNECT_NODEVOH);
+        CHECK_CDEFINE(OBD_CONNECT_LCL_CLIENT);
         CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT);
 
         COMMENT("Sizes and Offsets");
@@ -1128,6 +1143,7 @@ main(int argc, char **argv)
         printf("        LASSERT(offsetof(struct lustre_msg_v1, lm_magic) == "
                "offsetof(struct lustre_msg_v2, lm_magic));\n");
         check_ptlrpc_body();
+        check_obd_connect();
         check_obdo();
         check_lov_mds_md_v1();
         check_lov_mds_md_join();

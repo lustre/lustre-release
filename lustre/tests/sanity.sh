@@ -1558,6 +1558,54 @@ test_36e() {
 }
 run_test 36e "utime on non-owned file (should return error) ===="
 
+export TIMEOUT_OLD=`sysctl -n lustre.timeout`
+export TIMEOUT_NEW=16
+sysctl -w lustre.timeout=$TIMEOUT_NEW
+
+export FMD_MAX_AGE=`cat $LPROC/obdfilter/*/client_cache_seconds | head -n 1`
+for F in $LPROC/obdfilter/*/client_cache_seconds; do
+	echo 12 > $F
+done
+test_36f() {
+	export LANG=C LC_LANG=C # for date language
+
+	DATESTR="Dec 20  2000"
+	[ ! -d $DIR/d36 ] && mkdir $DIR/d36
+	#define OBD_FAIL_OST_BRW_PAUSE_BULK 0x214
+        sysctl -w lustre.fail_loc=0x80000214
+	date; date +%s
+	cp /etc/hosts $DIR/d36/$tfile
+	sync & # write RPC generated with "current" inode timestamp, but delayed
+	sleep 1
+	touch --date="$DATESTR" $DIR/d36/$tfile # setattr with timestamp in past
+	LS_BEFORE="`ls -l $DIR/d36/$tfile`" # "old" timestamp from client cache
+	cancel_lru_locks OSC
+	LS_AFTER="`ls -l $DIR/d36/$tfile`"  # timestamp from OST object
+	date; date +%s
+	[ "$LS_BEFORE" != "$LS_AFTER" ] && \
+		echo "BEFORE: $LS_BEFORE" && \
+		echo "AFTER : $LS_AFTER" && \
+		echo "WANT  : $DATESTR" && \
+		error "$DIR/d36/$tfile timestamps changed" || true
+}
+run_test 36f "utime on file racing with OST BRW write =========="
+
+test_36g() {
+	FMD_BEFORE="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
+	touch $DIR/d36/$tfile
+	sleep $((TIMEOUT_NEW + 10))
+	FMD_AFTER="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
+	[ "$FMD_AFTER" -gt "$FMD_BEFORE" ] && \
+		echo "AFTER : $FMD_AFTER > BEFORE $FMD_BEFORE" && \
+		error "fmd didn't expire after ping" || true
+}
+run_test 36g "filter mod data cache expiry ====================="
+
+sysctl -w lustre.timeout=$TIMEOUT_OLD
+for F in $LPROC/obdfilter/*/client_cache_seconds; do
+	echo $FMD_MAX_AGE > $F
+done
+
 test_37() {
 	mkdir -p $DIR/dextra
 	echo f > $DIR/dextra/fbugfile

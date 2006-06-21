@@ -49,6 +49,30 @@ struct filter_fid {
         __u64           ff_group;
 };
 
+/* per-client-per-object persistent state (LRU) */
+struct filter_mod_data {
+        struct list_head fmd_list;      /* linked to fed_mod_list */
+        __u64            fmd_id;        /* object being written to */
+        __u64            fmd_gr;        /* group being written to */
+        __u64            fmd_mactime_xid;/* xid highest {m,a,c}time setattr */
+        unsigned long    fmd_expire;    /* jiffies when it should expire */
+        int              fmd_refcount;  /* reference counter - list holds 1 */
+};
+
+#ifdef BGL_SUPPORT
+#define FILTER_FMD_MAX_NUM_DEFAULT 128 /* many active files per client on BGL */
+#else
+#define FILTER_FMD_MAX_NUM_DEFAULT  32
+#endif
+#define FILTER_FMD_MAX_AGE_DEFAULT ((obd_timeout + 10) * HZ)
+
+struct filter_mod_data *filter_fmd_find(struct obd_export *exp,
+                                        obd_id objid, obd_gr group);
+struct filter_mod_data *filter_fmd_get(struct obd_export *exp,
+                                       obd_id objid, obd_gr group);
+void filter_fmd_put(struct obd_export *exp, struct filter_mod_data *fmd);
+void filter_fmd_expire(struct obd_export *exp);
+
 enum {
         LPROC_FILTER_READ_BYTES = 0,
         LPROC_FILTER_WRITE_BYTES = 1,
@@ -73,7 +97,7 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_next_id(struct filter_obd *, struct obdo *);
-__u64 filter_last_id(struct filter_obd *, struct obdo *);
+__u64 filter_last_id(struct filter_obd *, obd_gr group);
 int filter_update_fidea(struct obd_export *exp, struct inode *inode,
                         void *handle, struct obdo *oa);
 int filter_update_server_data(struct obd_device *, struct file *,

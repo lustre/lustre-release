@@ -254,7 +254,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_JOIN      0x2000ULL /* files can be concatenated */
 #define OBD_CONNECT_ATTRFID   0x4000ULL /* Server supports GetAttr By Fid */
 #define OBD_CONNECT_NODEVOH   0x8000ULL /* No open handle for special nodes */
-#define OBD_CONNECT_RMT_CLIENT 0x10000ULL /* Remote client */
+#define OBD_CONNECT_LCL_CLIENT 0x10000ULL /* local 1.6 client */
+#define OBD_CONNECT_RMT_CLIENT 0x20000ULL /* Remote client */
 
 #define OBD_CONNECT_EMPTY 0x80000000ULL /* fake: these are empty connect flags*/
 
@@ -288,11 +289,12 @@ struct obd_connect_data {
         __u32 ocd_index;                /* LOV index to connect to */
         __u32 ocd_unused;
         __u64 ocd_ibits_known;          /* inode bits this client understands */
+        __u32 ocd_nllu;                 /* non-local-lustre-user */
+        __u32 ocd_nllg;                 /* non-local-lustre-group */
+        __u64 padding1;                 /* also fix lustre_swab_connect */
         __u64 padding2;                 /* also fix lustre_swab_connect */
         __u64 padding3;                 /* also fix lustre_swab_connect */
         __u64 padding4;                 /* also fix lustre_swab_connect */
-        __u64 padding5;                 /* also fix lustre_swab_connect */
-        __u64 padding6;                 /* also fix lustre_swab_connect */
 };
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);

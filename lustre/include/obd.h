@@ -187,6 +187,7 @@ struct obd_type {
         cfs_proc_dir_entry_t *typ_procroot;
         char *typ_name;
         int  typ_refcnt;
+        spinlock_t obd_type_lock;
 };
 
 struct brw_page {
@@ -213,6 +214,8 @@ struct obd_async_page_ops {
         int  (*ap_make_ready)(void *data, int cmd);
         int  (*ap_refresh_count)(void *data, int cmd);
         void (*ap_fill_obdo)(void *data, int cmd, struct obdo *oa);
+        void (*ap_update_obdo)(void *data, int cmd, struct obdo *oa,
+                               obd_valid valid);
         int  (*ap_completion)(void *data, int cmd, struct obdo *oa, int rc);
 };
 
@@ -337,6 +340,9 @@ struct filter_obd {
         struct lustre_quota_ctxt fo_quota_ctxt;
         spinlock_t               fo_quotacheck_lock;
         atomic_t                 fo_quotachecking;
+
+        int                      fo_fmd_max_num; /* per exp filter_mod_data */
+        int                      fo_fmd_max_age; /* jiffies to fmd expiry */
 };
 
 #define OSC_MAX_RIF_DEFAULT       8
@@ -604,6 +610,7 @@ struct niobuf_local {
 
 struct obd_trans_info {
         __u64                    oti_transno;
+        __u64                    oti_xid;
         __u64                   *oti_objid;
         /* Only used on the server side for tracking acks. */
         struct oti_req_ack_lock {
@@ -628,6 +635,8 @@ static inline void oti_init(struct obd_trans_info *oti,
 
         if (req == NULL)
                 return;
+
+        oti->oti_xid = req->rq_xid;
 
         if (req->rq_repmsg && req->rq_reqmsg != 0)
                 oti->oti_transno = lustre_msg_get_transno(req->rq_repmsg);
@@ -708,10 +717,14 @@ struct obd_notify_upcall {
 };
 
 /* corresponds to one of the obd's */
+#define MAX_OBD_NAME 128
+#define OBD_DEVICE_MAGIC        0XAB5CD6EF
 struct obd_device {
         struct obd_type        *obd_type;
+        __u32                   obd_magic;
+
         /* common and UUID name of this device */
-        char                   *obd_name;
+        char                    obd_name[MAX_OBD_NAME];
         struct obd_uuid         obd_uuid;
 
         int                     obd_minor;
@@ -848,7 +861,7 @@ struct obd_ops {
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
                         cfs_time_t max_age);
         int (*o_statfs_async)(struct obd_device *obd, struct obd_info *oinfo,
-                              unsigned long max_age,
+                              cfs_time_t max_age,
                               struct ptlrpc_request_set *set);
         int (*o_packmd)(struct obd_export *exp, struct lov_mds_md **disk_tgt,
                         struct lov_stripe_md *mem_src);
@@ -976,15 +989,11 @@ struct obd_ops {
         int (*o_quotacheck)(struct obd_export *, struct obd_quotactl *);
         int (*o_quotactl)(struct obd_export *, struct obd_quotactl *);
 
+        int (*o_ping)(struct obd_export *exp);
         /*
          * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
          * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
-         * Also, add a wrapper function in include/linux/obd_class.h.
-         *
-         * Also note that if you add it to the END, you also have to change
-         * the num_stats calculation.
-         *
-         */
+         * Also, add a wrapper function in include/linux/obd_class.h. */
 };
 
 struct lsm_operations {

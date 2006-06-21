@@ -237,6 +237,62 @@ static int lprocfs_filter_wr_itune(struct file *file, const char *buffer,
 }
 #endif
 
+int lprocfs_filter_rd_fmd_max_num(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int rc;
+
+        rc = snprintf(page, count, "%u\n", obd->u.filter.fo_fmd_max_num);
+        return rc;
+}
+
+int lprocfs_filter_wr_fmd_max_num(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val;
+        int rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val > 65536 || val < 1)
+                return -EINVAL;
+
+        obd->u.filter.fo_fmd_max_num = val;
+        return count;
+}
+
+int lprocfs_filter_rd_fmd_max_age(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int rc;
+
+        rc = snprintf(page, count, "%u\n", obd->u.filter.fo_fmd_max_age / HZ);
+        return rc;
+}
+
+int lprocfs_filter_wr_fmd_max_age(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val;
+        int rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val > 65536 || val < 1)
+                return -EINVAL;
+
+        obd->u.filter.fo_fmd_max_age = val * HZ;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -268,6 +324,10 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "quota_itune_sz", lprocfs_filter_rd_itune,
                             lprocfs_filter_wr_itune, 0},
 #endif
+        { "client_cache_count", lprocfs_filter_rd_fmd_max_num,
+                          lprocfs_filter_wr_fmd_max_num, 0 },
+        { "client_cache_seconds", lprocfs_filter_rd_fmd_max_age,
+                          lprocfs_filter_wr_fmd_max_age, 0 },
         { 0 }
 };
 

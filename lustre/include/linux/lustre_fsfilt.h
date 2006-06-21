@@ -332,15 +332,16 @@ static inline int fsfilt_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
 
 /* very similar to obd_statfs(), but caller already holds obd_osfs_lock */
 static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
-                                unsigned long max_age)
+                                cfs_time_t max_age)
 {
         int rc = 0;
 
-        CDEBUG(D_SUPER, "osfs %lu, max_age %lu\n", obd->obd_osfs_age, max_age);
-        if (time_before(obd->obd_osfs_age, max_age)) {
+        CDEBUG(D_SUPER, "osfs "CFS_TIME_T", max_age "CFS_TIME_T"\n", 
+                obd->obd_osfs_age, max_age);
+        if (time_before_64(obd->obd_osfs_age, max_age)) {
                 rc = obd->obd_fsops->fs_statfs(sb, &obd->obd_osfs);
                 if (rc == 0) /* N.B. statfs can't really fail */
-                        obd->obd_osfs_age = jiffies;
+                        obd->obd_osfs_age = get_jiffies_64();
         } else {
                 CDEBUG(D_SUPER, "using cached obd_statfs data\n");
         }

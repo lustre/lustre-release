@@ -381,26 +381,24 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
  * not be dirty, because we already called fdatasync/fdatawait on them.
  */
 static int filter_clear_page_cache(struct inode *inode,
-                                    struct filter_iobuf *iobuf)
+                                   struct filter_iobuf *iobuf)
 {
         struct page *page;
-        int i, rc, rc2;
+        int i, rc = 0;
 
-        /* This is nearly generic_osync_inode, without the waiting on the inode
-        rc = generic_osync_inode(inode, inode->i_mapping,
-                                 OSYNC_DATA|OSYNC_METADATA);
-         */
+        /* This is nearly do_fsync(), without the waiting on the inode */
+        /* XXX: in 2.6.16 (at least) we don't need to hold i_mutex over
+         * filemap_fdatawrite() and filemap_fdatawait(), so we may no longer
+         * need this lock here at all. */
         LOCK_INODE_MUTEX(inode);
-        current->flags |= PF_SYNCWRITE;
-        rc = filemap_fdatawrite(inode->i_mapping);
-        rc2 = sync_mapping_buffers(inode->i_mapping);
-        if (rc == 0)
-                rc = rc2;
-        rc2 = filemap_fdatawait(inode->i_mapping);
-        current->flags &= ~PF_SYNCWRITE;
+        if (inode->i_mapping->nrpages) {
+                current->flags |= PF_SYNCWRITE;
+                rc = filemap_fdatawrite(inode->i_mapping);
+                if (rc == 0)
+                        rc = filemap_fdatawait(inode->i_mapping);
+                current->flags &= ~PF_SYNCWRITE;
+        }
         UNLOCK_INODE_MUTEX(inode);
-        if (rc == 0)
-                rc = rc2;
         if (rc != 0)
                 RETURN(rc);
 

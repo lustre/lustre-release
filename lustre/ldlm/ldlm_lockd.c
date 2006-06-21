@@ -59,9 +59,12 @@ inline cfs_time_t round_timeout(cfs_time_t timeout)
 }
 
 /* timeout for initial callback (AST) reply */
-static inline unsigned int ldlm_get_rq_timeout(unsigned int ldlm_timeout, unsigned int obd_timeout)
+static inline unsigned int ldlm_get_rq_timeout(unsigned int ldlm_timeout,
+                                               unsigned int obd_timeout)
 {
-        return max(min(ldlm_timeout, obd_timeout / 3), 1U);
+        unsigned int timeout = min(ldlm_timeout, obd_timeout / 3);
+
+        return timeout < 1 ? 1 : timeout;
 }
 
 #ifdef __KERNEL__
@@ -535,7 +538,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         }
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        req->rq_timeout = ldlm_get_rq_timeout(ldlm_timeout, obd_timeout); /* timeout for initial AST reply */
+        req->rq_timeout = ldlm_get_rq_timeout(ldlm_timeout, obd_timeout);
         if (unlikely(instant_cancel)) {
                 rc = ptl_send_rpc(req, 1);
         } else {
@@ -608,7 +611,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         ptlrpc_req_set_repsize(req, 1, NULL);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        req->rq_timeout = ldlm_get_rq_timeout(ldlm_timeout, obd_timeout); /* timeout for initial AST reply */
+        req->rq_timeout = ldlm_get_rq_timeout(ldlm_timeout, obd_timeout);
 
         /* We only send real blocking ASTs after the lock is granted */
         lock_res_and_lock(lock);
@@ -675,7 +678,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         ptlrpc_req_set_repsize(req, 2, size);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
-        req->rq_timeout = ldlm_get_rq_timeout(ldlm_timeout, obd_timeout); /* timeout for initial AST reply */
+        req->rq_timeout = ldlm_get_rq_timeout(ldlm_timeout, obd_timeout);
 
         rc = ptlrpc_queue_wait(req);
         if (rc == -ELDLM_NO_LOCK_DATA)

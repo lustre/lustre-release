@@ -382,8 +382,6 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
         free(a);
         return 0;
 }
-#define kmem_cache_alloc(cache, prio) malloc(cache->size)
-#define kmem_cache_free(cache, obj) free(obj)
 
 #define PAGE_CACHE_SIZE  PAGE_SIZE
 #define PAGE_CACHE_SHIFT PAGE_SHIFT
@@ -668,6 +666,7 @@ static inline int schedule_timeout(signed long t)
                 _ret = tv.tv_sec;               \
         _ret;                                   \
 })
+#define get_jiffies_64()  (__u64)jiffies
 #define time_after(a, b) ((long)(b) - (long)(a) < 0)
 #define time_before(a, b) time_after(b,a)
 #define time_after_eq(a,b)      ((long)(a) - (long)(b) >= 0)

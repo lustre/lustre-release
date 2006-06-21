@@ -8,19 +8,17 @@
 
 --- linux-2.4.22-ac1/fs/ext3/ialloc.c~ext3-ea-in-inode-2.4.22-rh	2003-10-08 13:57:56.000000000 +0400
 +++ linux-2.4.22-ac1-alexey/fs/ext3/ialloc.c	2003-10-08 15:13:31.000000000 +0400
-@@ -715,6 +715,12 @@ have_bit_and_group:
- 	insert_inode_hash(inode);
+@@ -715,6 +715,10 @@ have_bit_and_group:
  	inode->i_generation = sb->u.ext3_sb.s_next_generation++;
  
-+	if (EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) {
-+		inode->u.ext3_i.i_extra_isize = sizeof(__u16)	/* i_extra_isize */
-+				+ sizeof(__u16);	/* i_pad1 */
-+	} else
-+		inode->u.ext3_i.i_extra_isize = 0;
-+
  	inode->u.ext3_i.i_state = EXT3_STATE_NEW;
++	inode->u.ext3_i.i_extra_isize =
++		(EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) ?
++		sizeof(struct ext3_inode) - EXT3_GOOD_OLD_INODE_SIZE : 0;
++
  	err = ext3_get_inode_loc_new(inode, &iloc, 1);
  	if (err) goto fail;
+ 	BUFFER_TRACE(iloc->bh, "get_write_access");
 --- linux-2.4.22-ac1/fs/ext3/inode.c~ext3-ea-in-inode-2.4.22-rh	2003-10-08 13:57:57.000000000 +0400
 +++ linux-2.4.22-ac1-alexey/fs/ext3/inode.c	2003-10-08 15:14:57.000000000 +0400
 @@ -2229,6 +2229,12 @@ void ext3_read_inode(struct inode * inod

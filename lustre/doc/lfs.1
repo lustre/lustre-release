@@ -5,9 +5,13 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs
 .br
-.B lfs find [--obd <uuid>] [--quiet | --verbose] [--recursive] <dir|file>
+.B lfs find [--atime|-A N] [--mtime|-M N] [--ctime|-C N] [--maxdepth|-D N]
+         \fB[--print0|-P] [--print|-p] [--obd|-O <uuid>] <dir/file>\fR
 .br
-.B lfs getstripe <filename> 
+.B lfs find [--quiet|-q] [--verbose|-v] [--recursive|-r] <dir|file>
+.br
+.B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
+              \fB[--recursive|-r] <dir/file>\fR
 .br
 .B lfs setstripe <filename> <stripe-size> <start-ost> <stripe-cnt>
 .br
@@ -19,7 +23,8 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotaoff [-ug] <filesystem>
 .br
-.B lfs setquota [-u|-g] <name> <block-softlimit> <block-hardlimit> <inode-softlimit> <inode-hardlimit> <filesystem>
+.B lfs setquota [-u|-g] <name> <block-softlimit> <block-hardlimit> 
+             \fB<inode-softlimit> <inode-hardlimit> <filesystem>\fR
 .br
 .B lfs quota [-o obd_uuid] [-u|-g] <name> <filesystem>
 .br
@@ -40,10 +45,13 @@ The various options supported by lctl are listed and explained below:
 To create a new file with a specific striping pattern
 .TP
 .B find 
-To list the extended attributes for a given filename or files in a directory or recursively for all files in a directory tree. It can also be used to list the files that have objects on a specific OST. 
+To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST). The option \fB--maxdepth\fR allows find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline and null character correspondingly.
+.TP
+.B find
+To list the striping info for a given filename or files in a directory or recursively for all files in a directory tree use one of the following options: \fB[--quiet|-q] [--verbose|-v] [--recursive|-r]\fR. If one of these options is given find works in old (obsolete, please use getstripe instead) mode.
 .TP
 .B getstripe 
-To list the striping pattern for given filename
+To list the striping info for given filename or files in a directory or recursively for all files in a directory tree. It can also be used to list the files that have objects on a specific OST.
 .TP
 .B quotachown
 To change files' owner and group on OSTs of the specified filesystem

@@ -93,7 +93,7 @@ static char rawbuf[8192];
 static char *buf = rawbuf;
 static int max = sizeof(rawbuf);
 
-static int cur_device = MAX_OBD_DEVICES;
+static int cur_device = -1;
 
 union lsm_buffer {
         char                 space [4096];
@@ -449,7 +449,7 @@ static int get_verbose(char *func, const char *arg)
 
 int do_disconnect(char *func, int verbose)
 {
-        cur_device = MAX_OBD_DEVICES;
+        cur_device = -1;
         return 0;
 }
 

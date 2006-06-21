@@ -3,15 +3,13 @@ Index: linux-2.6.0/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.6.0.orig/fs/ext3/ialloc.c	2004-01-14 18:54:11.000000000 +0300
 +++ linux-2.6.0/fs/ext3/ialloc.c	2004-01-14 18:54:12.000000000 +0300
-@@ -627,6 +627,11 @@
+@@ -627,6 +627,9 @@
  	inode->i_generation = EXT3_SB(sb)->s_next_generation++;
  
  	ei->i_state = EXT3_STATE_NEW;
-+	if (EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) {
-+		ei->i_extra_isize = sizeof(__u16)	/* i_extra_isize */
-+				+ sizeof(__u16);	/* i_pad1 */
-+	} else
-+		ei->i_extra_isize = 0;
++	ei->i_extra_isize =
++		(EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) ?
++		sizeof(struct ext3_inode) - EXT3_GOOD_OLD_INODE_SIZE : 0;
  
  	ret = inode;
  	if(DQUOT_ALLOC_INODE(inode)) {

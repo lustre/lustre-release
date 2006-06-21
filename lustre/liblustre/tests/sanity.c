@@ -766,8 +766,6 @@ int t23(char *name)
 {
         char path[MAX_PATH_LENGTH];
         int fd;
-        char *str = "1234567890";
-        char buf[100];
         long long ret;
         loff_t off;
 
@@ -974,7 +972,7 @@ int t50b(char *name)
 {
         loff_t off_array[] = {1, 17, 255, 258, 4095, 4097, 8191,
                               1024*1024*1024*1024ULL};
-        int np = 1, i;
+        int i;
         loff_t offset;
 
         ENTRY("4k un-aligned i/o sanity");
@@ -1001,7 +999,6 @@ int t51(char *name)
 {
         char file[MAX_PATH_LENGTH] = "";
         int fd;
-        struct stat statbuf;
         off_t size;
         int result;
 

@@ -387,10 +387,23 @@ static void ll_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         EXIT;
 }
 
+static void ll_ap_update_obdo(void *data, int cmd, struct obdo *oa,
+                              obd_valid valid)
+{
+        struct ll_async_page *llap;
+        ENTRY;
+
+        llap = LLAP_FROM_COOKIE(data);
+        obdo_from_inode(oa, llap->llap_page->mapping->host, valid);
+
+        EXIT;
+}
+
 static struct obd_async_page_ops ll_async_page_ops = {
         .ap_make_ready =        ll_ap_make_ready,
         .ap_refresh_count =     ll_ap_refresh_count,
         .ap_fill_obdo =         ll_ap_fill_obdo,
+        .ap_update_obdo =       ll_ap_update_obdo,
         .ap_completion =        ll_ap_completion,
 };
 

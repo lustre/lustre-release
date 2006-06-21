@@ -254,7 +254,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd;
 
-                obd = &obd_dev[i];
+                obd = obd_devs[i];
                 if (obd->obd_type == NULL)
                         continue;
 
@@ -320,7 +320,7 @@ static void *obd_device_list_seq_start(struct seq_file *p, loff_t*pos)
 {
         if (*pos >= MAX_OBD_DEVICES)
                 return NULL;
-        return &obd_dev[*pos];
+        return obd_devs[*pos];
 }
 
 static void obd_device_list_seq_stop(struct seq_file *p, void *v)
@@ -332,13 +332,13 @@ static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
         ++*pos;
         if (*pos >= MAX_OBD_DEVICES)
                 return NULL;
-        return &obd_dev[*pos];
+        return obd_devs[*pos];
 }
 
 static int obd_device_list_seq_show(struct seq_file *p, void *v)
 {
         struct obd_device *obd = (struct obd_device *)v;
-        int index = obd - &obd_dev[0];
+        int index = obd - obd_devs[0];
         char *status;
 
         if (!obd->obd_type)

@@ -466,9 +466,9 @@ revalidate_finish:
 
  out:
         /* We do not free request as it may be reused during following lookup
-          (see comment in mdc/mdc_locks.c::mdc_intent_lock()), request will
-           be freed in ll_lookup_it or in ll_intent_release. But if
-           request was not completed, we need to free it. (bug 5154) */
+         * (see comment in mdc/mdc_locks.c::mdc_intent_lock()), request will
+         * be freed in ll_lookup_it or in ll_intent_release. But if
+         * request was not completed, we need to free it. (bug 5154, 9903) */
         if (req != NULL && !it_disposition(it, DISP_ENQ_COMPLETE))
                 ptlrpc_req_finished(req);
         if (rc == 0) {

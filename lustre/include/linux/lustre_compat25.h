@@ -202,6 +202,9 @@ static inline int cleanup_group_info(void)
 #define unlock_24kernel()       unlock_kernel()
 #define ll_kernel_locked()      (current->lock_depth >= 0)
 
+/* 2.4 kernels have HZ=100 on i386/x86_64, this should be reasonably safe */
+#define get_jiffies_64()        (__u64)jiffies
+
 #ifdef HAVE_MM_INLINE
 #include <linux/mm_inline.h>
 #endif

@@ -179,7 +179,7 @@ int mds_cleanup_pending(struct obd_device *obd);
 
 
 /* mds/mds_log.c */
-int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
+int mds_log_op_unlink(struct obd_device *obd,
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size);
 int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
