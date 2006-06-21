@@ -92,8 +92,9 @@ seq_server_read_state(struct lu_server_seq *seq,
 /* on controller node, allocate new super sequence for regular sequnece
  * server. */
 static int
-seq_server_alloc_super(struct lu_server_seq *seq,
-                       struct lu_range *range)
+__seq_server_alloc_super(struct lu_server_seq *seq,
+                         struct lu_range *range,
+                         const struct lu_context *ctx)
 {
         struct lu_range *space = &seq->seq_space;
         int rc;
@@ -116,6 +117,12 @@ seq_server_alloc_super(struct lu_server_seq *seq,
                 rc = 0;
         }
 
+        rc = seq_server_write_state(seq, ctx);
+        if (rc) {
+                CERROR("can't save state, rc = %d\n",
+		       rc);
+        }
+
         if (rc == 0) {
                 CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): allocated super-sequence "
                        "["LPX64"-"LPX64"]\n", range->lr_start, range->lr_end);
@@ -125,8 +132,24 @@ seq_server_alloc_super(struct lu_server_seq *seq,
 }
 
 static int
-seq_server_alloc_meta(struct lu_server_seq *seq,
-                      struct lu_range *range)
+seq_server_alloc_super(struct lu_server_seq *seq,
+                       struct lu_range *range,
+                       const struct lu_context *ctx)
+{
+        int rc;
+        ENTRY;
+
+        down(&seq->seq_sem);
+        rc = __seq_server_alloc_super(seq, range, ctx);
+        up(&seq->seq_sem);
+        
+        RETURN(rc);
+}
+
+static int
+__seq_server_alloc_meta(struct lu_server_seq *seq,
+                        struct lu_range *range,
+                        const struct lu_context *ctx)
 {
         struct lu_range *super = &seq->seq_super;
         int rc = 0;
@@ -141,9 +164,11 @@ seq_server_alloc_meta(struct lu_server_seq *seq,
                         CERROR("no seq-controller client is setup\n");
                         RETURN(-EOPNOTSUPP);
                 }
-                
-                /* request controller to allocate new super-sequence for us.*/
+
+                /* allocate new super-sequence. */
+                up(&seq->seq_sem);
                 rc = seq_client_alloc_super(seq->seq_cli);
+                down(&seq->seq_sem);
                 if (rc) {
                         CERROR("can't allocate new super-sequence, "
                                "rc %d\n", rc);
@@ -156,11 +181,32 @@ seq_server_alloc_meta(struct lu_server_seq *seq,
         }
         range_alloc(range, super, LUSTRE_SEQ_META_WIDTH);
 
+        rc = seq_server_write_state(seq, ctx);
+        if (rc) {
+                CERROR("can't save state, rc = %d\n",
+		       rc);
+        }
+
         if (rc == 0) {
                 CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): allocated meta-sequence "
                        "["LPX64"-"LPX64"]\n", range->lr_start, range->lr_end);
         }
 
+        RETURN(rc);
+}
+
+static int
+seq_server_alloc_meta(struct lu_server_seq *seq,
+                      struct lu_range *range,
+                      const struct lu_context *ctx)
+{
+        int rc;
+        ENTRY;
+
+        down(&seq->seq_sem);
+        rc = __seq_server_alloc_meta(seq, range, ctx);
+        up(&seq->seq_sem);
+        
         RETURN(rc);
 }
 
@@ -173,33 +219,19 @@ seq_server_handle(struct lu_server_seq *seq,
         int rc;
         ENTRY;
 
-        down(&seq->seq_sem);
-
         switch (opc) {
         case SEQ_ALLOC_SUPER:
-                rc = seq_server_alloc_super(seq, range);
+                rc = seq_server_alloc_super(seq, range, ctx);
                 break;
         case SEQ_ALLOC_META:
-                rc = seq_server_alloc_meta(seq, range);
+                rc = seq_server_alloc_meta(seq, range, ctx);
                 break;
         default:
                 rc = -EINVAL;
                 break;
         }
 
-        if (rc)
-                GOTO(out, rc);
-
-        rc = seq_server_write_state(seq, ctx);
-        if (rc) {
-                CERROR("can't save state, rc = %d\n",
-		       rc);
-        }
-
-        EXIT;
-out:
-        up(&seq->seq_sem);
-        return rc;
+        RETURN(rc);
 }
 
 static int

@@ -86,6 +86,10 @@ seq_client_rpc(struct lu_client_seq *seq,
                 GOTO(out_req, rc = -EPROTO);
         }
         *range = *ran;
+        
+        LASSERT(range_is_sane(range));
+        LASSERT(!range_is_exhausted(range));
+        
         EXIT;
 out_req:
         ptlrpc_req_finished(req); 
