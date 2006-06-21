@@ -371,6 +371,12 @@ int main(int argc, char *const argv[])
                 rc = mount(source, target, "lustre", flags, (void *)optcopy);
 
         if (rc) {
+                char *cli = strrchr(source, ':');
+                if (cli && (strlen(cli) > 2)) 
+                        cli += 2;
+                else
+                        cli = NULL;
+
                 fprintf(stderr, "%s: mount %s at %s failed: %s\n", progname, 
                         source, target, strerror(errno));
                 if (errno == ENODEV)
@@ -383,9 +389,12 @@ int main(int argc, char *const argv[])
                 if (errno == ENOMEDIUM)
                         fprintf(stderr, 
                                 "This filesystem needs at least 1 OST\n");
-                if (errno == ENOENT)
-                        fprintf(stderr, "Is the MGS specification correct? Is "
-                                "the filesystem name correct?\n");
+                if (errno == ENOENT) {
+                        fprintf(stderr, "Is the MGS specification correct?\n");
+                        fprintf(stderr, "Is the filesystem name correct?\n");
+                        fprintf(stderr, "If upgrading, is the copied client log"
+                                " valid? (see upgrade docs)\n");
+                }
                 if (errno == EALREADY)
                         fprintf(stderr, "The target service is already running."
                                 " (%s)\n", source);
@@ -399,12 +408,10 @@ int main(int argc, char *const argv[])
                         fprintf(stderr, "The target service's index is already "
                                 "in use. (%s)\n", source);
                 if (errno == EINVAL) {
-                        char *ptr = strrchr(source, ':');
                         fprintf(stderr, "This may have multiple causes.\n");
-                        if (ptr && (strlen(ptr) > 2)) 
-                                /* client */
+                        if (cli) 
                                 fprintf(stderr, "Is '%s' the correct filesystem"
-                                        " name?\n", ptr + 2);
+                                        " name?\n", cli);
                         fprintf(stderr, "Are the mount options correct?\n");
                         fprintf(stderr, "Check the syslog for more info.\n");
                 }

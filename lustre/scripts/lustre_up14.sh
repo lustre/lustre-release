@@ -4,7 +4,7 @@
 #
 ###############################################################################
 
-TMP=/tmp/logs
+TMP=${TMP:-/tmp/logs}
 
 # Usage
 usage() {
@@ -15,9 +15,13 @@ Usage:  `basename $0` <mdsdev> <newfsname>
 	<mdsdev>		the MDS disk device (e.g. /dev/sda1)
 	<newfsname>		the name of the new filesystem (e.g. testfs)
 
-	This program will copy old config logs from an MDS device to 
-	a temporary location ($TMP), from where they can be added to 
-	the CONFIGS directory on an MGS during the upgrade procedure.
+	This script will extract old config logs from an MDS device to a
+	temporary location ($TMP). During the upgrade procedure, mount the
+	MGS disk as type ldiskfs (e.g. mount -t ldiskfs /dev/sda
+	/mnt/temp), then copy these logs into the CONFIGS directory on the
+	MGS (e.g. /mnt/temp/CONFIGS).  Logs from many MDS's can be added
+	in this way.  When done, unmount the MGS, and then re-mount it as
+	type lustre to start the service.
 
 EOF
 	exit 1
@@ -36,13 +40,19 @@ FILES=`$DEBUGFS "ls -l LOGS" $DEV | awk '{print $9}' | awk '/[a-z]/ {print $1}'`
 
 for FILE in ${FILES}; do 
     $DEBUGFS "dump LOGS/$FILE $TMP/temp" $DEV 2> /dev/null
-    CLI=`strings $TMP/temp | grep MDC`
-    if [ -n "$CLI" ]; then
+    MDC=`strings $TMP/temp | grep MDC`
+    LOV=`strings $TMP/temp | grep lov`
+    if [ -n "$MDC" ]; then
 	TYPE=client
     else
-	TYPE=MDT0000
+	if [ -n "$LOV" ]; then
+	    TYPE=MDT0000
+	else
+	    echo "Can't determine type for log '$FILE', skipping"
+	    continue 
+	fi
     fi
-    echo -n "Copying log $FILE to ${FSNAME}-${TYPE}. Okay [y/n]?"
+    echo -n "Copying log '$FILE' to '${FSNAME}-${TYPE}'. Okay [y/n]?"
     read OK
     if [ "$OK" = "y" ]; then
 	mv $TMP/temp $TMP/${FSNAME}-${TYPE}
