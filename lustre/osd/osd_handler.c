@@ -120,7 +120,7 @@ static void *osd_key_init      (const struct lu_context *ctx,
                                 struct lu_context_key *key);
 static void  osd_key_fini      (const struct lu_context *ctx,
                                 struct lu_context_key *key, void *data);
-static int   osd_has_index     (struct osd_object *obj);
+static int   osd_has_index     (const struct osd_object *obj);
 static void  osd_object_init0  (struct osd_object *obj);
 static int   osd_device_init   (const struct lu_context *ctx,
                                 struct lu_device *d, struct lu_device *);
@@ -155,8 +155,8 @@ static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
 static struct osd_device  *osd_dt_dev       (const struct dt_device *d);
 static struct osd_object  *osd_dt_obj       (const struct dt_object *d);
-static struct osd_device  *osd_obj2dev      (struct osd_object *o);
-static struct lu_device   *osd2lu_dev       (struct osd_device * osd);
+static struct osd_device  *osd_obj2dev      (const struct osd_object *o);
+static struct lu_device   *osd2lu_dev       (struct osd_device *osd);
 static struct lu_device   *osd_device_fini  (const struct lu_context *ctx,
                                              struct lu_device *d);
 static struct lu_device   *osd_device_alloc (const struct lu_context *ctx,
@@ -187,6 +187,27 @@ struct osd_thandle {
         struct thandle  ot_super;
         handle_t       *ot_handle;
 };
+
+/*
+ * Invariants, assertions.
+ */
+
+#define OSD_INVARIANT_CHECKS (0)
+
+#if OSD_INVARIANT_CHECKS
+static int osd_invariant(const struct osd_object *obj)
+{
+        return
+                obj != NULL &&
+                ergo(obj->oo_inode != NULL,
+                     obj->oo_inode->i_sb == osd_sb(osd_obj2dev(obj)) &&
+                     atomic_read(&obj->oo_inode->i_count) > 0) &&
+                ergo(obj->oo_container.ic_object != NULL,
+                     obj->oo_container.ic_object == obj->oo_inode);
+}
+#else
+#define osd_invariant(obj) (1)
+#endif
 
 /*
  * DT methods.
@@ -260,17 +281,22 @@ static int osd_object_init(const struct lu_context *ctxt, struct lu_object *l)
         struct osd_object *obj = osd_obj(l);
         int result;
 
+        LASSERT(osd_invariant(obj));
+
         result = osd_fid_lookup(ctxt, obj, lu_object_fid(l));
         if (result == 0) {
                 if (obj->oo_inode != NULL)
                         osd_object_init0(obj);
         }
+        LASSERT(osd_invariant(obj));
         return result;
 }
 
 static void osd_object_free(const struct lu_context *ctx, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
+
+        LASSERT(osd_invariant(obj));
 
         dt_object_fini(&obj->oo_dt);
         OBD_FREE_PTR(obj);
@@ -280,6 +306,8 @@ static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
 {
         struct osd_object *o = osd_obj(l);
 
+        LASSERT(osd_invariant(o));
+
         if (o->oo_ipd != NULL) {
                 LASSERT(o->oo_descr.id_ops->id_ipd_free != NULL);
                 o->oo_descr.id_ops->id_ipd_free(&o->oo_container, o->oo_ipd);
@@ -288,6 +316,7 @@ static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
                 if (o->oo_container.ic_object == o->oo_inode)
                         iam_container_fini(&o->oo_container);
                 iput(o->oo_inode);
+                o->oo_inode = (void *)0xdeaddead;
         }
 }
 
@@ -301,12 +330,14 @@ static void osd_object_release(const struct lu_context *ctxt,
 {
         struct osd_object *o = osd_obj(l);
 
+        LASSERT(!lu_object_is_dying(l->lo_header));
         if (o->oo_inode != NULL && osd_inode_unlinked(o->oo_inode))
                 set_bit(LU_OBJECT_HEARD_BANSHEE, &l->lo_header->loh_flags);
 }
 
 static int osd_object_exists(const struct lu_context *ctx, struct lu_object *o)
 {
+        LASSERT(osd_invariant(osd_obj(o)));
         return osd_obj(o)->oo_inode != NULL;
 }
 
@@ -432,6 +463,8 @@ static void osd_object_lock(const struct lu_context *ctx, struct dt_object *dt,
         struct osd_object *obj = osd_dt_obj(dt);
 
         LASSERT(mode == DT_WRITE_LOCK || mode == DT_READ_LOCK);
+        LASSERT(osd_invariant(obj));
+
         if (mode == DT_WRITE_LOCK)
                 down_write(&obj->oo_sem);
         else
@@ -444,6 +477,8 @@ static void osd_object_unlock(const struct lu_context *ctx,
         struct osd_object *obj = osd_dt_obj(dt);
 
         LASSERT(mode == DT_WRITE_LOCK || mode == DT_READ_LOCK);
+        LASSERT(osd_invariant(obj));
+
         if (mode == DT_WRITE_LOCK)
                 up_write(&obj->oo_sem);
         else
@@ -453,8 +488,10 @@ static void osd_object_unlock(const struct lu_context *ctx,
 static int osd_attr_get(const struct lu_context *ctxt, struct dt_object *dt,
                         struct lu_attr *attr)
 {
+        struct osd_object *obj = osd_dt_obj(dt);
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
-        return osd_inode_getattr(ctxt, osd_dt_obj(dt)->oo_inode, attr);
+        LASSERT(osd_invariant(obj));
+        return osd_inode_getattr(ctxt, obj->oo_inode, attr);
 }
 
 /*
@@ -497,6 +534,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
          */
         struct dentry     *dentry;
 
+        LASSERT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
         LASSERT(S_ISDIR(attr->la_mode));
         LASSERT(osd->od_obj_area != NULL);
@@ -521,6 +559,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
                 dput(dentry);
         } else
                 result = -ENOMEM;
+        LASSERT(osd_invariant(obj));
         return result;
 }
 
@@ -536,6 +575,7 @@ static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
          */
         struct dentry     *dentry;
 
+        LASSERT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
         LASSERT(S_ISREG(attr->la_mode));
         LASSERT(osd->od_obj_area != NULL);
@@ -560,6 +600,7 @@ static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
                 dput(dentry);
         } else
                 result = -ENOMEM;
+        LASSERT(osd_invariant(obj));
         return result;
 }
 
@@ -607,6 +648,7 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
 
         ENTRY;
 
+        LASSERT(osd_invariant(obj));
         LASSERT(!lu_object_exists(ctx, &dt->do_lu));
 
         /*
@@ -642,6 +684,7 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
         }
 
         LASSERT(ergo(result == 0, lu_object_exists(ctx, &dt->do_lu)));
+        LASSERT(osd_invariant(obj));
         return result;
 }
 
@@ -663,16 +706,24 @@ static void osd_inode_dec_link(const struct lu_context *ctxt,
 static int osd_object_ref_add(const struct lu_context *ctxt,
                               struct dt_object *dt, struct thandle *th)
 {
+        struct osd_object *obj = osd_dt_obj(dt);
+
+        LASSERT(osd_invariant(obj));
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
-        osd_inode_inc_link(ctxt, osd_dt_obj(dt)->oo_inode, th);
+        osd_inode_inc_link(ctxt, obj->oo_inode, th);
+        LASSERT(osd_invariant(obj));
         return 0;
 }
 
 static int osd_object_ref_del(const struct lu_context *ctxt,
                               struct dt_object *dt, struct thandle *th)
 {
+        struct osd_object *obj = osd_dt_obj(dt);
+
+        LASSERT(osd_invariant(obj));
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
-        osd_inode_dec_link(ctxt, osd_dt_obj(dt)->oo_inode, th);
+        osd_inode_dec_link(ctxt, obj->oo_inode, th);
+        LASSERT(osd_invariant(obj));
         return 0;
 }
 
@@ -740,7 +791,7 @@ static int osd_index_probe(const struct lu_context *ctxt, struct osd_object *o,
 
         descr = o->oo_container.ic_descr;
         if (feat == &dt_directory_features)
-                return descr == &htree_compat_param;
+                return descr == &iam_htree_compat_param;
         else
                 return
                         feat->dif_keysize_min <= descr->id_key_size &&
@@ -761,6 +812,7 @@ static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
         struct osd_object    *obj = osd_dt_obj(dt);
         struct iam_container *bag;
 
+        LASSERT(osd_invariant(obj));
         LASSERT(lu_object_exists(ctx, &dt->do_lu));
 
         if (osd_has_index(obj))
@@ -784,6 +836,7 @@ static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
                                 result = -EINVAL;
                 }
         }
+        LASSERT(osd_invariant(obj));
         return result;
 }
 
@@ -796,6 +849,7 @@ static int osd_index_delete(const struct lu_context *ctxt, struct dt_object *dt,
 
         ENTRY;
 
+        LASSERT(osd_invariant(obj));
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
         LASSERT(obj->oo_container.ic_object == obj->oo_inode);
         LASSERT(obj->oo_ipd != NULL);
@@ -806,6 +860,7 @@ static int osd_index_delete(const struct lu_context *ctxt, struct dt_object *dt,
         rc = iam_delete(oh->ot_handle, &obj->oo_container,
                         (const struct iam_key *)key, obj->oo_ipd);
 
+        LASSERT(osd_invariant(obj));
         RETURN(rc);
 }
 
@@ -817,6 +872,9 @@ static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
                             struct dt_rec *rec, const struct dt_key *key)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+
+        LASSERT(osd_invariant(obj));
+
         if (!S_ISDIR(obj->oo_inode->i_mode)) {
                 int rc;
 
@@ -829,6 +887,7 @@ static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
                 rc = iam_lookup(&obj->oo_container, (const struct iam_key *)key,
                                 (struct iam_rec *)rec, obj->oo_ipd);
 
+                LASSERT(osd_invariant(obj));
                 RETURN(rc);
         } else {
                 struct osd_object      *obj  = osd_dt_obj(dt);
@@ -886,6 +945,7 @@ static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
                 } else
                         result = -ENOMEM;
                 dput(parent);
+                LASSERT(osd_invariant(obj));
                 return result;
         }
 }
@@ -902,21 +962,33 @@ static int osd_add_rec(struct osd_thread_info *info, struct osd_device *dev,
         info->oti_str.name = name;
         info->oti_str.len  = strlen(name);
 
+        LASSERT(atomic_read(&dir->i_count) > 0);
         result = -ENOMEM;
         old = d_alloc(dev->od_obj_area, &info->oti_str);
-        d_instantiate(old, inode);
         if (old != NULL) {
+                d_instantiate(old, inode);
+                igrab(inode);
+                LASSERT(atomic_read(&dir->i_count) > 0);
                 parent = d_alloc_root(dir);
                 if (parent != NULL) {
+                        igrab(dir);
+                        LASSERT(atomic_read(&dir->i_count) > 1);
                         new = d_alloc(parent, &info->oti_str);
+                        LASSERT(atomic_read(&dir->i_count) > 1);
                         if (new != NULL) {
+                                LASSERT(atomic_read(&dir->i_count) > 1);
                                 result = dir->i_op->link(old, dir, new);
+                                LASSERT(atomic_read(&dir->i_count) > 1);
                                 dput(new);
+                                LASSERT(atomic_read(&dir->i_count) > 1);
                         }
+                        LASSERT(atomic_read(&dir->i_count) > 1);
                         dput(parent);
+                        LASSERT(atomic_read(&dir->i_count) > 0);
                 }
                 dput(old);
         }
+        LASSERT(atomic_read(&dir->i_count) > 0);
         return result;
 }
 
@@ -929,6 +1001,9 @@ static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
                             struct thandle *th)
 {
         struct osd_object     *obj = osd_dt_obj(dt);
+
+        LASSERT(osd_invariant(obj));
+
 if (!S_ISDIR(obj->oo_inode->i_mode)) {
         struct osd_thandle    *oh;
         int rc;
@@ -945,12 +1020,12 @@ if (!S_ISDIR(obj->oo_inode->i_mode)) {
                         (const struct iam_key *)key,
                         (struct iam_rec *)rec, obj->oo_ipd);
 
+        LASSERT(osd_invariant(obj));
         RETURN(rc);
 } else {
         const struct lu_fid *fid  = (const struct lu_fid *)rec;
         const char          *name = (const char *)key;
 
-        struct osd_object   *dir   = osd_dt_obj(dt);
         struct lu_device    *ludev = dt->do_lu.lo_dev;
         struct lu_object    *luch;
 
@@ -966,13 +1041,15 @@ if (!S_ISDIR(obj->oo_inode->i_mode)) {
                         child = osd_obj(lu_object_locate(luch->lo_header,
                                                          ludev->ld_type));
                         if (child != NULL)
-                                result = osd_add_rec(info, osd_obj2dev(dir),
-                                                     dir->oo_inode,
+                                result = osd_add_rec(info, osd_obj2dev(obj),
+                                                     obj->oo_inode,
                                                      child->oo_inode, name);
                         else {
                                 CERROR("No osd slice.\n");
                                 result = -ENOENT;
                         }
+                        LASSERT(osd_invariant(obj));
+                        LASSERT(osd_invariant(child));
                 } else {
                         CERROR("Sorry.\n");
                         result = -ENOENT;
@@ -980,6 +1057,7 @@ if (!S_ISDIR(obj->oo_inode->i_mode)) {
                 lu_object_put(ctx, luch);
         } else
                 result = PTR_ERR(luch);
+        LASSERT(osd_invariant(obj));
         return result;
 }
 }
@@ -1257,6 +1335,7 @@ static int osd_fid_lookup(const struct lu_context *ctx,
         struct inode           *inode;
         int                     result;
 
+        LASSERT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
         LASSERT(fid_is_sane(fid));
         LASSERT(fid_is_local(ldev->ld_site, fid));
@@ -1275,12 +1354,14 @@ static int osd_fid_lookup(const struct lu_context *ctx,
                 inode = osd_iget(info, dev, &id);
                 if (!IS_ERR(inode)) {
                         obj->oo_inode = inode;
+                        LASSERT(obj->oo_inode->i_sb == osd_sb(dev));
                         result = 0;
                 } else
                         result = PTR_ERR(inode);
         } else if (result == -ENOENT)
                 result = 0;
         osd_oi_read_unlock(&dev->od_oi);
+        LASSERT(osd_invariant(obj));
         RETURN(result);
 }
 
@@ -1335,12 +1416,12 @@ static struct osd_object *osd_dt_obj(const struct dt_object *d)
         return osd_obj(&d->do_lu);
 }
 
-static struct osd_device *osd_obj2dev(struct osd_object *o)
+static struct osd_device *osd_obj2dev(const struct osd_object *o)
 {
         return osd_dev(o->oo_dt.do_lu.lo_dev);
 }
 
-static struct lu_device *osd2lu_dev(struct osd_device * osd)
+static struct lu_device *osd2lu_dev(struct osd_device *osd)
 {
         return &osd->od_dt_dev.dd_lu_dev;
 }
@@ -1355,18 +1436,24 @@ static journal_t *osd_journal(const struct osd_device *dev)
 	return LDISKFS_SB(osd_sb(dev))->s_journal;
 }
 
-static int osd_has_index(struct osd_object *obj)
+static int osd_has_index(const struct osd_object *obj)
 {
         return obj->oo_dt.do_index_ops != NULL;
 }
 
+static int osd_object_invariant(const struct lu_object *l)
+{
+        return osd_invariant(osd_obj(l));
+}
+
 static struct lu_object_operations osd_lu_obj_ops = {
-        .loo_object_init    = osd_object_init,
-        .loo_object_delete  = osd_object_delete,
-        .loo_object_release = osd_object_release,
-        .loo_object_free    = osd_object_free,
-        .loo_object_print   = osd_object_print,
-        .loo_object_exists  = osd_object_exists
+        .loo_object_init      = osd_object_init,
+        .loo_object_delete    = osd_object_delete,
+        .loo_object_release   = osd_object_release,
+        .loo_object_free      = osd_object_free,
+        .loo_object_print     = osd_object_print,
+        .loo_object_invariant = osd_object_invariant,
+        .loo_object_exists    = osd_object_exists
 };
 
 static struct lu_device_operations osd_lu_ops = {
