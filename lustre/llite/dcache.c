@@ -236,18 +236,17 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
 
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 {
-        struct ll_sb_info *sbi;
-
         LASSERT(it != NULL);
         LASSERT(dentry != NULL);
 
-        sbi = ll_i2sbi(dentry->d_inode);
-
         if (it->d.lustre.it_lock_mode && dentry->d_inode != NULL) {
                 struct inode *inode = dentry->d_inode;
+                struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
+
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
-                md_set_lock_data(sbi->ll_md_exp, &it->d.lustre.it_lock_handle, inode);
+                md_set_lock_data(sbi->ll_md_exp, &it->d.lustre.it_lock_handle,
+                                 inode);
         }
 
         /* drop lookup or getattr locks immediately */
