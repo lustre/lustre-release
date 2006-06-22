@@ -689,10 +689,6 @@ obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
 #define time_before(t1, t2) ((long)t2 - (long)t1 > 0)
 #endif
 
-#ifndef time_before_64
-#define time_before_64(t1, t2) ((__s64)t2 - (__s64)t1 > 0)
-#endif
-
 /* @max_age is the oldest time in jiffies that we accept using a cached data.
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */
@@ -712,7 +708,7 @@ static inline int obd_statfs_async(struct obd_device *obd,
 
         CDEBUG(D_SUPER, "osfs "CFS_TIME_T", max_age "CFS_TIME_T"\n", 
                obd->obd_osfs_age, max_age);
-        if (time_before_64(obd->obd_osfs_age, max_age)) {
+        if (cfs_time_before(obd->obd_osfs_age, max_age)) {
                 rc = OBP(obd, statfs_async)(obd, oinfo, max_age, rqset);
         } else {
                 CDEBUG(D_SUPER, "using cached obd_statfs data\n");
