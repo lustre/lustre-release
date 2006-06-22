@@ -487,6 +487,22 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+AC_DEFUN([LC_BIT_SPINLOCK_H],
+[LB_CHECK_FILE([$LINUX/include/linux/bit_spinlock.h],[
+	AC_MSG_CHECKING([if bit_spinlock.h can be compiled])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/spinlock.h>
+		#include <linux/bit_spinlock.h>
+	],[],[
+		AC_MSG_RESULT([yes])
+		AC_DEFINE(HAVE_BIT_SPINLOCK_H, 1, [Kernel has bit_spinlock.h])
+	],[
+		AC_MSG_RESULT([no])
+	])
+],
+[])
+])
+
 #
 # LC_POSIX_ACL_XATTR
 #
@@ -591,6 +607,7 @@ LC_FUNC_PAGE_MAPPED
 LC_STRUCT_FILE_OPS_UNLOCKED_IOCTL
 LC_FILEMAP_POPULATE
 LC_D_ADD_UNIQUE
+LC_BIT_SPINLOCK_H
 LC_XATTR_ACL
 LC_STRUCT_INTENT_FILE
 LC_POSIX_ACL_XATTR_H

@@ -12,7 +12,9 @@
 
 #ifdef __KERNEL__
 # include <linux/proc_fs.h>
-# include <linux/bit_spinlock.h>
+# ifdef HAVE_BIT_SPINLOCK_H
+#  include <linux/bit_spinlock.h>
+# endif
 #endif
 
 #endif
