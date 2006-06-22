@@ -75,3 +75,6 @@ with varying queue depth.  If the series (varying numbers of concurrent
 regions) all seem to land on top of each other, it shows the device is
 phased by seeks at the given record size.
 
+
+The included script, parse.pl will process output files and create .csv files fo spreadsheet import
+

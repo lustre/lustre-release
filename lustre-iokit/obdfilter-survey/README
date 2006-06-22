@@ -139,3 +139,6 @@ numbers of I/Os in flight.
 It is also extremely useful to record average disk I/O sizes during each
 test.  These numbers help find pathologies in file the file system block
 allocator and the block device elevator.
+
+The included obparse.pl script is an example of processing the output files to
+a .csv format.
