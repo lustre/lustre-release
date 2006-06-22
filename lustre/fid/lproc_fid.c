@@ -66,11 +66,11 @@ seq_proc_write_range(struct file *file, const char *buffer,
 	if (rc != 2 || !range_is_sane(&tmp) || range_is_zero(&tmp)) {
 		CERROR("can't parse input string or "
 		       "input is not correct\n");
-		RETURN(count);
+		RETURN(-EINVAL);
 	}
 
 	*range = tmp;
-        RETURN(count);
+        RETURN(0);
 }
 
 static int
@@ -92,17 +92,19 @@ seq_proc_write_space(struct file *file, const char *buffer,
 		     unsigned long count, void *data)
 {
         struct lu_server_seq *seq = (struct lu_server_seq *)data;
+	int rc;
 	ENTRY;
 
         LASSERT(seq != NULL);
 
 	down(&seq->seq_sem);
-	seq_proc_write_range(file, buffer, count,
-			     data, &seq->seq_space);
-
-	CDEBUG(D_WARNING, "SEQ-MGR(srv): sequences space is changed "
-	       "to ["LPU64"-"LPU64"]\n", seq->seq_space.lr_start,
-	       seq->seq_space.lr_end);
+	rc = seq_proc_write_range(file, buffer, count,
+				  data, &seq->seq_space);
+	if (rc == 0) {
+		CDEBUG(D_WARNING, "SEQ-MGR(srv): sequences space has changed "
+		       "to ["LPU64"-"LPU64"]\n", seq->seq_space.lr_start,
+		       seq->seq_space.lr_end);
+	}
 	
 	up(&seq->seq_sem);
 	
@@ -132,17 +134,20 @@ seq_proc_write_super(struct file *file, const char *buffer,
 		     unsigned long count, void *data)
 {
         struct lu_server_seq *seq = (struct lu_server_seq *)data;
+	int rc;
 	ENTRY;
 
         LASSERT(seq != NULL);
 
 	down(&seq->seq_sem);
-	seq_proc_write_range(file, buffer, count,
-			     data, &seq->seq_super);
+	rc = seq_proc_write_range(file, buffer, count,
+				  data, &seq->seq_super);
 
-	CDEBUG(D_WARNING, "SEQ-MGR(srv): super-sequence is changed to "
-	       "["LPU64"-"LPU64"]\n", seq->seq_super.lr_start,
-	       seq->seq_super.lr_end);
+	if (rc == 0) {
+		CDEBUG(D_WARNING, "SEQ-MGR(srv): super-sequence has changed to "
+		       "["LPU64"-"LPU64"]\n", seq->seq_super.lr_start,
+		       seq->seq_super.lr_end);
+	}
 	
 	up(&seq->seq_sem);
 	

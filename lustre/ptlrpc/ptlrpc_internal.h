@@ -98,7 +98,8 @@ static inline int opcode_offset(__u32 opc) {
                             (MDS_LAST_OPC - MDS_FIRST_OPC)     + \
                             (OST_LAST_OPC - OST_FIRST_OPC)     + \
                             (OBD_LAST_OPC - OBD_FIRST_OPC)     + \
-                            (FLD_LAST_OPC - FLD_FIRST_OPC))
+                            (FLD_LAST_OPC - FLD_FIRST_OPC)     + \
+                            (SEQ_LAST_OPC - SEQ_FIRST_OPC))
 
 enum {
         PTLRPC_REQWAIT_CNTR = 0,
