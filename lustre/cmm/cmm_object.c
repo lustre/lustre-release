@@ -44,11 +44,10 @@ static int cmm_special_fid(const struct lu_fid *fid)
         return !range_within(space, fid_seq(fid));
 }
 
-static int cmm_fld_lookup(struct cmm_device *cm,
-                          const struct lu_fid *fid)
+static int cmm_fld_lookup(struct cmm_device *cm, 
+                          const struct lu_fid *fid, mdsno_t *mds)
 {
-        __u64 mds;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         LASSERT(fid_is_sane(fid));
@@ -56,19 +55,26 @@ static int cmm_fld_lookup(struct cmm_device *cm,
         /* XXX: is this correct? We need this to prevent FLD lookups while CMM
          * did not initialized yet all MDCs. */
         if (cmm_special_fid(fid))
-                mds = 0;
+                *mds = 0;
         else {
-                rc = fld_client_lookup(&cm->cmm_fld, fid_seq(fid), &mds);
+                rc = fld_client_lookup(&cm->cmm_fld, fid_seq(fid), mds);
                 if (rc) {
                         CERROR("can't find mds by seq "LPU64", rc %d\n",
                                fid_seq(fid), rc);
                         RETURN(rc);
                 }
         }
-        CWARN("CMM: got MDS "LPU64" for sequence: "LPU64"\n",
-              mds, fid_seq(fid));
 
-        RETURN((int)mds);
+        if (*mds >= cm->cmm_tgt_count) {
+                CERROR("Got invalid mdsno: %u (max: %u)\n",
+                       *mds, cm->cmm_tgt_count);
+                rc = -EINVAL;
+        } else {
+                CDEBUG(D_INFO, "CMM: got MDS %u for sequence: "LPU64"\n",
+                       *mds, fid_seq(fid));
+        }
+
+        RETURN (rc);
 }
 
 static struct md_object_operations cml_mo_ops;
@@ -86,15 +92,17 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
         struct lu_object  *lo = NULL;
         const struct lu_fid *fid = &loh->loh_fid;
         struct cmm_device *cd;
-        int mdsnum;
+        mdsno_t mdsnum;
+        int rc = 0;
+
         ENTRY;
 
         cd = lu2cmm_dev(ld);
         if (cd->cmm_flags & CMM_INITIALIZED) {
                 /* get object location */
-                mdsnum = cmm_fld_lookup(lu2cmm_dev(ld), fid);
-                if (mdsnum < 0)
-                        RETURN(ERR_PTR(mdsnum));
+                rc = cmm_fld_lookup(lu2cmm_dev(ld), fid, &mdsnum);
+                if (rc)
+                        RETURN(ERR_PTR(rc));
         } else
                 /*
                  * Device is not yet initialized, cmm_object is being created

@@ -42,7 +42,7 @@ struct cmm_device {
         /* underlaying device in MDS stack, usually MDD */
         struct md_device      *cmm_child;
         /* other MD servers in cluster */
-        __u32                 cmm_local_num;
+        mdsno_t               cmm_local_num;
         __u32                 cmm_tgt_count;
         struct list_head      cmm_targets;
         spinlock_t            cmm_tgt_guard;
@@ -92,7 +92,7 @@ struct cml_object {
 struct cmr_object {
         struct cmm_object cmm_obj;
         /* mds number where object is placed */
-        __u32            cmo_num;
+        mdsno_t           cmo_num;
 };
 
 static inline struct cmm_device *cmm_obj2dev(struct cmm_object *c)

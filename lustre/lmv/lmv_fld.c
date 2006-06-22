@@ -48,7 +48,7 @@
 int lmv_fld_lookup(struct obd_device *obd, const struct lu_fid *fid)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
-        __u64 mds;
+        mdsno_t mds;
         int rc;
         ENTRY;
 
@@ -59,10 +59,10 @@ int lmv_fld_lookup(struct obd_device *obd, const struct lu_fid *fid)
                        fid_seq(fid), rc);
                 RETURN(rc);
         }
-        CDEBUG(D_WARNING, "LMV: got MDS "LPU64" for sequence: "LPU64"\n",
+        CDEBUG(D_WARNING, "LMV: got MDS %u for sequence: "LPU64"\n",
                mds, fid_seq(fid));
-        if (mds >= lmv->desc.ld_tgt_count || mds < 0) {
-                CERROR("Got invalid mdsno: %llu (max: %d)\n",
+        if (mds >= lmv->desc.ld_tgt_count) {
+                CERROR("Got invalid mdsno: %u (max: %d)\n",
                        mds, lmv->desc.ld_tgt_count);
                 mds = (__u64)-EINVAL;
         }

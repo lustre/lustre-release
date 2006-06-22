@@ -86,10 +86,10 @@ extern struct lu_device_type mdc_device_type;
 static int cmm_add_mdc(const struct lu_context *ctx,
                        struct cmm_device *cm, struct lustre_cfg *cfg)
 {
-        struct lu_device_type *ldt = &mdc_device_type;
-        struct lu_device *ld;
-        struct mdc_device *mc, *tmp;
-        __u32 mdc_num;
+        struct  lu_device_type *ldt = &mdc_device_type;
+        struct  lu_device *ld;
+        struct  mdc_device *mc, *tmp;
+        mdsno_t mdc_num;
         int rc;
         ENTRY;
 

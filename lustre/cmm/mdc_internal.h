@@ -45,7 +45,7 @@ struct mdc_device {
         struct md_device        mc_md_dev;
         /* other MD servers in cluster */
         struct list_head        mc_linkage;
-        __u32                   mc_num;
+        mdsno_t                 mc_num;
         struct mdc_cli_desc     mc_desc;
 };
 

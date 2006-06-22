@@ -124,6 +124,8 @@
 #define LUSTRE_LOG_VERSION  0x00050000
 #define LUSTRE_MGS_VERSION  0x00060000
 
+typedef __u64 mdsno_t;
+
 struct lu_range {
         __u64 lr_start;
         __u64 lr_end;
@@ -1160,8 +1162,8 @@ extern void lustre_swab_lmv_desc (struct lmv_desc *ld);
 /* end adding MDT by huanghua@clusterfs.com */
 
 struct md_fld {
-        __u64 mf_seq;
-        __u64 mf_mds;
+        __u64   mf_seq;
+        mdsno_t mf_mds;
 };
 
 extern void lustre_swab_md_fld (struct md_fld *mf);

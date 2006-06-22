@@ -28,12 +28,11 @@
 
 #include <linux/types.h>
 
-typedef __u64 mdsno_t;
 typedef __u64 fidseq_t;
 
 struct fld_cache {
         struct hlist_node fld_list;
-        __u64             fld_mds;
+        mdsno_t           fld_mds;
         __u64             fld_seq;
 };
 
@@ -51,8 +50,8 @@ struct fld_list {
 
 struct fld_item {
         struct list_head fld_list;
-        __u64 fld_seq;
-        __u64 fld_mds;
+        __u64   fld_seq;
+        mdsno_t fld_mds;
 };
 
 enum fld_op {

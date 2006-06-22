@@ -339,7 +339,7 @@ out_req:
 
 int
 fld_client_create(struct lu_client_fld *fld,
-                  __u64 seq, __u64 mds)
+                  __u64 seq, mdsno_t mds)
 {
         struct obd_export *fld_exp;
         struct md_fld      md_fld;
@@ -363,7 +363,7 @@ EXPORT_SYMBOL(fld_client_create);
 
 int
 fld_client_delete(struct lu_client_fld *fld,
-                  __u64 seq, __u64 mds)
+                  __u64 seq, mdsno_t mds)
 {
         struct obd_export *fld_exp;
         struct md_fld      md_fld;
@@ -387,7 +387,7 @@ EXPORT_SYMBOL(fld_client_delete);
 
 static int
 fld_client_get(struct lu_client_fld *fld,
-               __u64 seq, __u64 *mds)
+               __u64 seq, mdsno_t *mds)
 {
         struct obd_export *fld_exp;
         struct md_fld md_fld;
@@ -410,7 +410,7 @@ fld_client_get(struct lu_client_fld *fld,
 /* lookup fid in the namespace of pfid according to the name */
 int
 fld_client_lookup(struct lu_client_fld *fld,
-                  __u64 seq, __u64 *mds)
+                  __u64 seq, mdsno_t *mds)
 {
 #ifdef __KERNEL__
         struct fld_cache *fld_entry;
