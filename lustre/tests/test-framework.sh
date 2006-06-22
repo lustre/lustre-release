@@ -334,7 +334,7 @@ replay_barrier_nodf() {
 }
 
 mds_evict_client() {
-    UUID=`cat /proc/fs/lustre/mdc/*-mdc-*/uuid`
+    UUID=`cat /proc/fs/lustre/mdc/${mds_svc}-mdc-*/uuid`
     do_facet mds "echo $UUID > /proc/fs/lustre/mds/${mds_svc}/evict_client"
 }
 
@@ -678,9 +678,9 @@ clear_failloc() {
 
 cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks start"
-    for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
+    for d in /proc/fs/lustre/ldlm/namespaces/*-$1-*; do
         if [ -f $d/lru_size ]; then
-            echo clear > $d/lru_size
+            echo clear >> $d/lru_size
             grep "[0-9]" $d/lock_unused_count
         fi
     done
