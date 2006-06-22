@@ -1,0 +1,167 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  lustre/fid/lproc_fid.c
+ *  Lustre Sequence Manager
+ *
+ *  Copyright (c) 2006 Cluster File Systems, Inc.
+ *   Author: Yury Umanets <umka@clusterfs.com>
+ *
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
+ *
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
+ *
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
+ *
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
+ */
+
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
+#define DEBUG_SUBSYSTEM S_FID
+
+#ifdef __KERNEL__
+# include <libcfs/libcfs.h>
+# include <linux/module.h>
+#else /* __KERNEL__ */
+# include <liblustre.h>
+#endif
+
+#include <obd.h>
+#include <obd_class.h>
+#include <dt_object.h>
+#include <md_object.h>
+#include <obd_support.h>
+#include <lustre_req_layout.h>
+#include <lustre_fid.h>
+#include "fid_internal.h"
+
+#ifdef LPROCFS
+static int
+seq_proc_write_range(struct file *file, const char *buffer,
+		     unsigned long count, void *data,
+		     struct lu_range *range)
+{
+	struct lu_range tmp;
+	int rc;
+	ENTRY;
+
+	LASSERT(range != NULL);
+
+        rc = sscanf(buffer, "["LPU64"-"LPU64"]\n",
+		    &tmp.lr_start, &tmp.lr_end);
+
+	*range = tmp;
+        RETURN(count);
+}
+
+static int
+seq_proc_read_range(char *page, char **start, off_t off,
+		    int count, int *eof, void *data,
+		    struct lu_range *range)
+{
+	int rc;
+	ENTRY;
+
+        *eof = 1;
+        rc = snprintf(page, count, "["LPU64"-"LPU64"]\n",
+		      range->lr_start, range->lr_end);
+	RETURN(rc);
+}
+
+static int
+seq_proc_write_space(struct file *file, const char *buffer,
+		     unsigned long count, void *data)
+{
+        struct lu_server_seq *seq = (struct lu_server_seq *)data;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+	seq_proc_write_range(file, buffer, count,
+			     data, &seq->seq_space);
+
+	CDEBUG(D_WARNING, "sequences space range is changed "
+	       "to ["LPU64"-"LPU64"]\n", seq->seq_space.lr_start,
+	       seq->seq_space.lr_end);
+	
+	up(&seq->seq_sem);
+	
+        RETURN(count);
+}
+
+static int
+seq_proc_read_space(char *page, char **start, off_t off,
+		    int count, int *eof, void *data)
+{
+        struct lu_server_seq *seq = (struct lu_server_seq *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+	rc = seq_proc_read_range(page, start, off, count, eof,
+				 data, &seq->seq_space);
+	up(&seq->seq_sem);
+	
+	RETURN(rc);
+}
+
+static int
+seq_proc_write_super(struct file *file, const char *buffer,
+		     unsigned long count, void *data)
+{
+        struct lu_server_seq *seq = (struct lu_server_seq *)data;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+	seq_proc_write_range(file, buffer, count,
+			     data, &seq->seq_super);
+
+	CDEBUG(D_WARNING, "super-sequence range is changed to "
+	       "["LPU64"-"LPU64"]\n", seq->seq_super.lr_start,
+	       seq->seq_super.lr_end);
+	
+	up(&seq->seq_sem);
+	
+        RETURN(count);
+}
+
+static int
+seq_proc_read_super(char *page, char **start, off_t off,
+		    int count, int *eof, void *data)
+{
+        struct lu_server_seq *seq = (struct lu_server_seq *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+	rc = seq_proc_read_range(page, start, off, count, eof,
+				 data, &seq->seq_super);
+	up(&seq->seq_sem);
+	
+	RETURN(rc);
+}
+
+struct lprocfs_vars seq_proc_list[] = {
+	{ "space", seq_proc_read_space, seq_proc_write_space, NULL },
+	{ "super", seq_proc_read_super, seq_proc_write_super, NULL },
+	{ NULL }};
+#endif

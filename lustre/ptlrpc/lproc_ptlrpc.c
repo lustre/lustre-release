@@ -84,7 +84,8 @@ struct ll_rpc_opcode {
         { OBD_PING,         "obd_ping" },
         { OBD_LOG_CANCEL,   "llog_origin_handle_cancel" },
         { OBD_QC_CALLBACK,  "obd_qc_callback" },
-        { FLD_QUERY,        "fld_query" }
+        { FLD_QUERY,        "fld_query" },
+        { SEQ_QUERY,        "seq_query" }
 };
 
 const char* ll_opcode2str(__u32 opcode)

@@ -28,4 +28,8 @@
 
 #define SEQ_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
+#ifdef LPROCFS
+extern struct lprocfs_vars seq_proc_list[];
+#endif
+
 #endif

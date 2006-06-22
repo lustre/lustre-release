@@ -64,7 +64,7 @@ struct lu_client_seq {
         struct lu_range         seq_range;
 
         /* seq related proc */
-        struct proc_dir_entry  *seq_proc_entry;
+        cfs_proc_dir_entry_t   *seq_proc_entry;
 
         /* this holds last allocated fid in last obtained seq */
         struct lu_fid           seq_fid;
@@ -88,7 +88,7 @@ struct lu_server_seq {
         int                     seq_flags;
 
         /* seq related proc */
-        struct proc_dir_entry  *seq_proc_entry;
+        cfs_proc_dir_entry_t   *seq_proc_entry;
 
         /* server side seq service */
         struct ptlrpc_service  *seq_service;

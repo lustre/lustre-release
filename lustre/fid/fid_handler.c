@@ -103,7 +103,7 @@ __seq_server_alloc_super(struct lu_server_seq *seq,
         LASSERT(range_is_sane(space));
         
         if (range_space(space) < LUSTRE_SEQ_SUPER_WIDTH) {
-                CWARN("sequences space is going to exhauste soon. "
+                CWARN("sequences space is going to exhaust soon. "
                       "Only can allocate "LPU64" sequences\n",
                       space->lr_end - space->lr_start);
                 *range = *space;
@@ -380,6 +380,66 @@ seq_server_controller(struct lu_server_seq *seq,
 }
 EXPORT_SYMBOL(seq_server_controller);
 
+#ifdef LPROCFS
+static cfs_proc_dir_entry_t *seq_type_proc_dir = NULL;
+
+static int
+seq_server_proc_init(struct lu_server_seq *seq)
+{
+        int rc;
+        ENTRY;
+
+        seq_type_proc_dir = lprocfs_register(LUSTRE_SEQ0_NAME,
+                                             proc_lustre_root,
+                                             NULL, NULL);
+        if (IS_ERR(seq_type_proc_dir)) {
+                CERROR("LProcFS failed in seq-init\n");
+                rc = PTR_ERR(seq_type_proc_dir);
+                GOTO(err, rc);
+        }
+
+        seq->seq_proc_entry = lprocfs_register("services",
+                                               seq_type_proc_dir,
+                                               NULL, NULL);
+        if (IS_ERR(seq->seq_proc_entry)) {
+                CERROR("LProcFS failed in seq-init\n");
+                rc = PTR_ERR(seq->seq_proc_entry);
+                GOTO(err_type, rc);
+        }
+
+        rc = lprocfs_add_vars(seq_type_proc_dir,
+                              seq_proc_list, seq);
+        if (rc) {
+                CERROR("can't init sequence manager "
+                       "proc, rc %d\n", rc);
+        }
+
+        RETURN(0);
+
+err_type:
+        lprocfs_remove(seq_type_proc_dir);
+err:
+        seq_type_proc_dir = NULL;
+        seq->seq_proc_entry = NULL;
+        return rc;
+}
+
+void seq_server_proc_fini(struct lu_server_seq *seq)
+{
+        ENTRY;
+        if (seq->seq_proc_entry) {
+                lprocfs_remove(seq->seq_proc_entry);
+                seq->seq_proc_entry = NULL;
+        }
+
+        if (seq_type_proc_dir) {
+                lprocfs_remove(seq_type_proc_dir);
+                seq_type_proc_dir = NULL;
+        }
+        EXIT;
+}
+#endif
+
 int
 seq_server_init(struct lu_server_seq *seq,
                 struct dt_device *dev, int flags,
@@ -421,7 +481,13 @@ seq_server_init(struct lu_server_seq *seq,
 		GOTO(out, rc);
 	}
         
-	seq->seq_service =  ptlrpc_init_svc_conf(&seq_conf,
+#ifdef LPROCFS
+        rc  = seq_server_proc_init(seq);
+        if (rc)
+		GOTO(out, rc);
+#endif
+
+        seq->seq_service =  ptlrpc_init_svc_conf(&seq_conf,
 						 seq_req_handle,
 						 LUSTRE_SEQ0_NAME,
 						 seq->seq_proc_entry, 
@@ -435,11 +501,15 @@ seq_server_init(struct lu_server_seq *seq,
 	EXIT;
 
 out:
-	if (rc)
+	if (rc) {
+#ifdef LPROCFS
+                seq_server_proc_fini(seq);
+#endif
 		seq_server_fini(seq, ctx);
-        else
+        } else {
                 CDEBUG(D_INFO|D_WARNING, "Server Sequence "
                        "Manager\n");
+        }
 	return rc;
 } 
 EXPORT_SYMBOL(seq_server_init);
@@ -454,6 +524,10 @@ seq_server_fini(struct lu_server_seq *seq,
                 ptlrpc_unregister_service(seq->seq_service);
                 seq->seq_service = NULL;
         }
+
+#ifdef LPROCFS
+        seq_server_proc_fini(seq);
+#endif
 
         if (seq->seq_dev != NULL) {
                 lu_device_put(&seq->seq_dev->dd_lu_dev);
