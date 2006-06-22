@@ -5,11 +5,6 @@ set -e
 #         bug  2986 5494 7288
 ALWAYS_EXCEPT="20b  24   27 $RECOVERY_SMALL_EXCEPT"
 
-# Tests that always fail with mountconf -- FIXME
-# 16 fails with 1, not evicted
-EXCEPT="$EXCEPT 16 18a 18b"
-
-
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
