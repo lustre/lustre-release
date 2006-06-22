@@ -716,9 +716,6 @@ AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])
 AC_CHECK_HEADERS([netinet/in.h arpa/inet.h catamount/data.h])
 AC_CHECK_FUNCS([inet_ntoa])
 
-# llite/xattr.c
-AC_CHECK_HEADERS([linux/xattr_acl.h])
-
 # utils/llverfs.c
 AC_CHECK_HEADERS([ext2fs/ext2fs.h])
 
