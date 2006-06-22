@@ -77,7 +77,8 @@ static int mdc_object_init(const struct lu_context *ctx, struct lu_object *lo)
         RETURN(0);
 }
 
-static int mdc_object_exists(const struct lu_context *ctx, struct lu_object *lo)
+static int mdc_object_exists(const struct lu_context *ctx,
+                             struct lu_object *lo)
 {
         /* we don't know does it exists or not - but suppose that it does*/
         return 1;
@@ -100,7 +101,7 @@ static struct lu_object_operations mdc_obj_ops = {
 static int mdc_object_create(const struct lu_context *ctx,
                              struct md_object *mo, struct lu_attr *attr)
 {
-        struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
+        struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct mdc_thread_info *mci;
         int rc;
         ENTRY;
@@ -117,12 +118,14 @@ static int mdc_object_create(const struct lu_context *ctx,
                        attr->la_mode, attr->la_uid, attr->la_gid, 0, 0,
                        &mci->mci_req);
 
+        ptlrpc_req_finished(mci->mci_req);
+
         RETURN(rc);
 }
 
 static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo)
 {
-        struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
+        struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct mdc_thread_info *mci;
         int rc;
         ENTRY;
@@ -136,12 +139,14 @@ static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo)
 
         rc = md_link(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
 
+        ptlrpc_req_finished(mci->mci_req);
+
         RETURN(rc);
 }
 
 static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo)
 {
-        struct mdc_device *mc = md2mdc_dev(md_device_get(mo));
+        struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct mdc_thread_info *mci;
         int rc;
         ENTRY;
@@ -154,6 +159,8 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo)
         mci->mci_opdata.namelen = 0;
 
         rc = md_unlink(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
+
+        ptlrpc_req_finished(mci->mci_req);
 
         RETURN(rc);
 }
@@ -169,7 +176,7 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
                           struct md_object *mo_p, struct md_object *mo_t,
                           const struct lu_fid *lf, const char *name)
 {
-        struct mdc_device *mc = md2mdc_dev(md_device_get(mo_p));
+        struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo_p));
         struct mdc_thread_info *mci;
         int rc;
         ENTRY;
@@ -182,6 +189,8 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
 
         rc = md_rename(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
                        name, strlen(name), &mci->mci_req);
+
+        ptlrpc_req_finished(mci->mci_req);
 
         RETURN(rc);
 }

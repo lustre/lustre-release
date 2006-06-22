@@ -50,7 +50,7 @@ static int cmm_fld_lookup(struct cmm_device *cm,
         __u64 mds;
         int rc;
         ENTRY;
-        return 0;
+
         LASSERT(fid_is_sane(fid));
 
         /* XXX: is this correct? We need this to prevent FLD lookups while CMM
@@ -203,7 +203,7 @@ static int cml_object_exists(const struct lu_context *ctx,
 static int cml_object_print(const struct lu_context *ctx,
                             struct seq_file *f, const struct lu_object *lo)
 {
-	return seq_printf(f, LUSTRE_CMM0_NAME"-object@%p", lo);
+	return seq_printf(f, LUSTRE_CMM0_NAME"-local@%p", lo);
 }
 
 static struct lu_object_operations cml_obj_ops = {
@@ -408,7 +408,7 @@ static inline struct cmr_object *cmm2cmr_obj(struct cmm_object *co)
         return container_of0(co, struct cmr_object, cmm_obj);
 }
 
-/* get local child device */
+/* get proper child device from MDCs */
 static struct lu_device *cmr_child_dev(struct cmm_device *d, __u32 num)
 {
         struct lu_device *next = NULL;
@@ -469,7 +469,7 @@ static int cmr_object_exists(const struct lu_context *ctx,
 static int cmr_object_print(const struct lu_context *ctx,
                             struct seq_file *f, const struct lu_object *lo)
 {
-	return seq_printf(f, LUSTRE_CMM0_NAME"-object@%p", lo);
+	return seq_printf(f, LUSTRE_CMM0_NAME"-remote@%p", lo);
 }
 
 static struct lu_object_operations cmr_obj_ops = {
@@ -618,8 +618,8 @@ static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
          * lookup and process this further */
 
         LASSERT(mo_t == NULL);
-        rc = mdo_rename_tgt(ctx, cmm2child_obj(md2cmm_obj(mo_pn)), NULL/* mo_t */,
-                            lf, t_name);
+        rc = mdo_rename_tgt(ctx, cmm2child_obj(md2cmm_obj(mo_pn)),
+                            NULL/* mo_t */, lf, t_name);
         /* only old name is removed localy */
         if (rc == 0)
                 rc = mdo_name_remove(ctx, cmm2child_obj(md2cmm_obj(mo_po)),

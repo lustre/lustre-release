@@ -1,23 +1,30 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
+ *  lustre/cmm/cmm_internal.h
+ *  Lustre Cluster Metadata Manager (cmm),
+ *  MDC device
+ *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Mike Pershin <tappro@clusterfs.com>
+ *   
+ *   This file is part of the Lustre file system, http://www.lustre.org
+ *   Lustre is a trademark of Cluster File Systems, Inc.
  *
- *   This file is part of Lustre, http://www.lustre.org.
+ *   You may have signed or agreed to another license before downloading
+ *   this software.  If so, you are bound by the terms and conditions
+ *   of that agreement, and the following does not apply to you.  See the
+ *   LICENSE file included with this distribution for more information.
  *
- *   Lustre is free software; you can redistribute it and/or
- *   modify it under the terms of version 2 of the GNU General Public
- *   License as published by the Free Software Foundation.
+ *   If you did not agree to a different license, then this copy of Lustre
+ *   is open source software; you can redistribute it and/or modify it
+ *   under the terms of version 2 of the GNU General Public License as
+ *   published by the Free Software Foundation.
  *
- *   Lustre is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with Lustre; if not, write to the Free Software
- *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
+ *   In either case, Lustre is distributed in the hope that it will be
+ *   useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+ *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   license text for more details.
  */
 
 #ifndef _CMM_MDC_INTERNAL_H
@@ -43,7 +50,6 @@ struct mdc_device {
 };
 
 struct mdc_thread_info {
-        const struct lu_context *mci_ctxt;
         struct md_op_data       mci_opdata;
         struct ptlrpc_request   *mci_req;
 };
@@ -64,7 +70,7 @@ static inline struct mdc_device *md2mdc_dev(struct md_device *md)
 
 static inline struct mdc_device *mdc_obj2dev(struct mdc_object *mco)
 {
-	return (md2mdc_dev(md_device_get(&mco->mco_obj)));
+	return (md2mdc_dev(md_obj2dev(&mco->mco_obj)));
 }
 
 static inline struct mdc_object *lu2mdc_obj(struct lu_object *lo)

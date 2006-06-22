@@ -182,6 +182,7 @@ void mdc_device_free(const struct lu_context *ctx, struct lu_device *ld)
         struct mdc_device *mc = lu2mdc_dev(ld);
 
 	LASSERT(atomic_read(&ld->ld_ref) == 0);
+        LASSERT(list_empty(&mc->mc_linkage));
 	md_device_fini(&mc->mc_md_dev);
         OBD_FREE_PTR(mc);
 }
@@ -195,9 +196,7 @@ static void *mdc_thread_init(const struct lu_context *ctx,
 
         CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
         OBD_ALLOC_PTR(info);
-        if (info != NULL)
-                info->mci_ctxt = ctx;
-        else
+        if (info == NULL)
                 info = ERR_PTR(-ENOMEM);
         return info;
 }

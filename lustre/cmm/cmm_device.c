@@ -55,7 +55,7 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 }
 
 static int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
-                 struct lu_fid *fid)
+                        struct lu_fid *fid)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
 
@@ -64,7 +64,7 @@ static int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
 }
 
 static int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
-               struct kstatfs *sfs) {
+                      struct kstatfs *sfs) {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
 	int rc;
 
@@ -88,8 +88,7 @@ static int cmm_add_mdc(const struct lu_context *ctx,
 {
         struct lu_device_type *ldt = &mdc_device_type;
         struct lu_device *ld;
-        struct mdc_device *mc;
-        struct mdc_device *tmp;
+        struct mdc_device *mc, *tmp;
         __u32 mdc_num;
         int rc;
         ENTRY;
@@ -100,22 +99,34 @@ static int cmm_add_mdc(const struct lu_context *ctx,
         spin_lock(&cm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
                                  mc_linkage) {
-                if (mc->mc_num == mdc_num)
+                if (mc->mc_num == mdc_num) {
+                        spin_unlock(&cm->cmm_tgt_guard);
                         RETURN(-EEXIST);
+                }
         }
         spin_unlock(&cm->cmm_tgt_guard);
         ld = ldt->ldt_ops->ldto_device_alloc(ctx, ldt, cfg);
         ld->ld_site = cmm2lu_dev(cm)->ld_site;
 
         rc = ldt->ldt_ops->ldto_device_init(ctx, ld, NULL);
-        if (rc)
+        if (rc) {
                 ldt->ldt_ops->ldto_device_free(ctx, ld);
-
+                RETURN (rc);
+        }
         /* pass config to the just created MDC */
         rc = ld->ld_ops->ldo_process_config(ctx, ld, cfg);
         if (rc == 0) {
-                mc = lu2mdc_dev(ld);
                 spin_lock(&cm->cmm_tgt_guard);
+                list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
+                                         mc_linkage) {
+                        if (mc->mc_num == mdc_num) {
+                                spin_unlock(&cm->cmm_tgt_guard);
+                                ldt->ldt_ops->ldto_device_fini(ctx, ld);
+                                ldt->ldt_ops->ldto_device_free(ctx, ld);
+                                RETURN(-EEXIST);
+                        }
+                }
+                mc = lu2mdc_dev(ld);
                 list_add_tail(&mc->mc_linkage, &cm->cmm_targets);
                 cm->cmm_tgt_count++;
                 spin_unlock(&cm->cmm_tgt_guard);
@@ -161,8 +172,8 @@ static struct lu_device_operations cmm_lu_ops = {
 /* --- lu_device_type operations --- */
 
 static struct lu_device *cmm_device_alloc(const struct lu_context *ctx,
-                                   struct lu_device_type *t,
-                                   struct lustre_cfg *cfg)
+                                          struct lu_device_type *t,
+                                          struct lustre_cfg *cfg)
 {
         struct lu_device  *l;
         struct cmm_device *m;
@@ -179,8 +190,7 @@ static struct lu_device *cmm_device_alloc(const struct lu_context *ctx,
                 l->ld_ops = &cmm_lu_ops;
         }
 
-        EXIT;
-        return l;
+        RETURN (l);
 }
 
 static void cmm_device_free(const struct lu_context *ctx, struct lu_device *d)
@@ -189,6 +199,7 @@ static void cmm_device_free(const struct lu_context *ctx, struct lu_device *d)
 
 	LASSERT(atomic_read(&d->ld_ref) == 0);
         LASSERT(m->cmm_tgt_count == 0);
+        LASSERT(list_empty(&m->cmm_targets));
 	md_device_fini(&m->cmm_md_dev);
         OBD_FREE_PTR(m);
 }
@@ -236,15 +247,14 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
                 struct lu_device *ld_m = mdc2lu_dev(mc);
 
-                list_del(&mc->mc_linkage);
+                list_del_init(&mc->mc_linkage);
                 lu_device_put(cmm2lu_dev(cm));
                 ld->ld_type->ldt_ops->ldto_device_fini(ctx, ld_m);
                 ld->ld_type->ldt_ops->ldto_device_free(ctx, ld_m);
                 cm->cmm_tgt_count--;
         }
 
-        EXIT;
-        return md2lu_dev(cm->cmm_child);
+        RETURN (md2lu_dev(cm->cmm_child));
 }
 
 static struct lu_device_type_operations cmm_device_type_ops = {
