@@ -1067,7 +1067,7 @@ static int mdc_fid_init(struct obd_export *exp)
                 RETURN(-ENOMEM);
 
         /* init client side sequence-manager */
-        rc = seq_client_init(cli->cl_seq, exp, 0);
+        rc = seq_client_init(cli->cl_seq, exp);
         if (rc)
                 GOTO(out_free_seq, rc);
 

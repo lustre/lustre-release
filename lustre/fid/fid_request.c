@@ -250,14 +250,12 @@ EXPORT_SYMBOL(seq_client_alloc_fid);
 
 int 
 seq_client_init(struct lu_client_seq *seq, 
-                struct obd_export *exp,
-                int flags)
+                struct obd_export *exp)
 {
         ENTRY;
 
         LASSERT(exp != NULL);
         
-        seq->seq_flags = flags;
         fid_zero(&seq->seq_fid);
         range_zero(&seq->seq_range);
         sema_init(&seq->seq_sem, 1);

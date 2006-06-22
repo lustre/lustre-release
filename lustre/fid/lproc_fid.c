@@ -100,7 +100,7 @@ seq_proc_write_space(struct file *file, const char *buffer,
 	seq_proc_write_range(file, buffer, count,
 			     data, &seq->seq_space);
 
-	CDEBUG(D_WARNING, "sequences space range is changed "
+	CDEBUG(D_WARNING, "SEQ-MGR(srv): sequences space is changed "
 	       "to ["LPU64"-"LPU64"]\n", seq->seq_space.lr_start,
 	       seq->seq_space.lr_end);
 	
@@ -140,7 +140,7 @@ seq_proc_write_super(struct file *file, const char *buffer,
 	seq_proc_write_range(file, buffer, count,
 			     data, &seq->seq_super);
 
-	CDEBUG(D_WARNING, "super-sequence range is changed to "
+	CDEBUG(D_WARNING, "SEQ-MGR(srv): super-sequence is changed to "
 	       "["LPU64"-"LPU64"]\n", seq->seq_super.lr_start,
 	       seq->seq_super.lr_end);
 	
@@ -167,8 +167,32 @@ seq_proc_read_super(char *page, char **start, off_t off,
 	RETURN(rc);
 }
 
+static int
+seq_proc_read_controller(char *page, char **start, off_t off,
+			 int count, int *eof, void *data)
+{
+        struct lu_server_seq *seq = (struct lu_server_seq *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	*eof = 1;
+	if (seq->seq_cli) {
+		struct obd_export *exp = seq->seq_cli->seq_exp;
+
+		rc = snprintf(page, count, "%s\n",
+			      exp->exp_client_uuid.uuid);
+	} else {
+		rc = snprintf(page, count, "<not assigned>\n");
+	}
+	
+	RETURN(rc);
+}
+
 struct lprocfs_vars seq_proc_list[] = {
-	{ "space", seq_proc_read_space, seq_proc_write_space, NULL },
-	{ "super", seq_proc_read_super, seq_proc_write_super, NULL },
+	{ "space",      seq_proc_read_space, seq_proc_write_space, NULL },
+	{ "super",      seq_proc_read_super, seq_proc_write_super, NULL },
+	{ "controller", seq_proc_read_controller, NULL, NULL },
 	{ NULL }};
 #endif

@@ -1692,8 +1692,7 @@ static int mdt_seq_init(const struct lu_context *ctx,
 
         if (ls->ls_server_seq != NULL) {
                 rc = seq_server_init(ls->ls_server_seq,
-                                     m->mdt_bottom,
-                                     0, ctx);
+                                     m->mdt_bottom, ctx);
         } else
                 rc = -ENOMEM;
 
@@ -1749,8 +1748,7 @@ static int mdt_controller_init(const struct lu_context *ctx,
 
                         if (ls->ls_client_seq != NULL) {
                                 rc = seq_client_init(ls->ls_client_seq,
-                                                     ls->ls_controller,
-                                                     0);
+                                                     ls->ls_controller);
                         } else
                                 rc = -ENOMEM;
 

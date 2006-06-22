@@ -55,9 +55,6 @@ struct lu_client_seq {
         struct obd_export      *seq_exp;
         struct semaphore        seq_sem;
 
-        /* different flags. */
-        int                     seq_flags;
-
         /* range of allowed for allocation sequeces. When using lu_client_seq on
          * clients, this contains meta-sequence range. And for servers this
          * contains super-sequence range. */
@@ -84,9 +81,6 @@ struct lu_server_seq {
          * store). */
         struct dt_device       *seq_dev;
 
-        /* different flags: LUSTRE_SEQ_CONTROLLER, etc. */
-        int                     seq_flags;
-
         /* seq related proc */
         cfs_proc_dir_entry_t   *seq_proc_entry;
 
@@ -103,7 +97,7 @@ struct lu_server_seq {
 
 #ifdef __KERNEL__
 int seq_server_init(struct lu_server_seq *seq,
-                    struct dt_device *dev, int flags,
+                    struct dt_device *dev,
                     const struct lu_context *ctx);
 
 void seq_server_fini(struct lu_server_seq *seq,
@@ -115,8 +109,7 @@ int seq_server_controller(struct lu_server_seq *seq,
 #endif
 
 int seq_client_init(struct lu_client_seq *seq, 
-                    struct obd_export *exp,
-                    int flags);
+                    struct obd_export *exp);
 
 void seq_client_fini(struct lu_client_seq *seq);
 

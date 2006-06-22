@@ -442,7 +442,7 @@ void seq_server_proc_fini(struct lu_server_seq *seq)
 
 int
 seq_server_init(struct lu_server_seq *seq,
-                struct dt_device *dev, int flags,
+                struct dt_device *dev,
                 const struct lu_context *ctx) 
 {
         int rc; 
@@ -462,7 +462,6 @@ seq_server_init(struct lu_server_seq *seq,
 
         seq->seq_dev = dev;
         seq->seq_cli = NULL;
-        seq->seq_flags = flags;
         sema_init(&seq->seq_sem, 1);
 
         seq->seq_space = LUSTRE_SEQ_SPACE_RANGE;
