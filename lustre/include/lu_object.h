@@ -188,6 +188,11 @@ struct lu_object_operations {
          */
         int (*loo_object_print)(const struct lu_context *ctx,
                                 struct seq_file *f, const struct lu_object *o);
+        /*
+         * Optional debugging method. Returns true iff method is internally
+         * consistent.
+         */
+        int (*loo_object_invariant)(const struct lu_object *o);
 };
 
 /*
@@ -589,7 +594,7 @@ static inline void lu_object_get(struct lu_object *o)
  * Return true of object will not be cached after last reference to it is
  * released.
  */
-static inline int lu_object_is_dying(struct lu_object_header *h)
+static inline int lu_object_is_dying(const struct lu_object_header *h)
 {
         return test_bit(LU_OBJECT_HEARD_BANSHEE, &h->loh_flags);
 }
@@ -666,6 +671,11 @@ struct lu_object *lu_object_locate(struct lu_object_header *h,
  */
 int lu_object_print(const struct lu_context *ctxt,
                     struct seq_file *f, const struct lu_object *o);
+
+/*
+ * Check object consistency.
+ */
+int lu_object_invariant(const struct lu_object *o);
 
 /*
  * Returns true iff object @o exists on the stable storage.
