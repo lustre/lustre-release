@@ -281,10 +281,8 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                         GOTO(out, err = -EINVAL);
                 }
                                 
-                if (index >= MAX_OBD_DEVICES)
-                        GOTO(out, err = -ENOENT);
-                obd = obd_devs[index];
-                if (!obd->obd_type)
+                obd = class_num2obd(index);
+                if (!obd)
                         GOTO(out, err = -ENOENT);
                 
                 if (obd->obd_stopping)
