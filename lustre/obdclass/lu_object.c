@@ -52,10 +52,12 @@ void lu_object_put(const struct lu_context *ctxt, struct lu_object *o)
 {
         struct lu_object_header *top;
         struct lu_site          *site;
+        struct lu_object        *orig;
         int                      kill_it;
 
         top = o->lo_header;
         site = o->lo_dev->ld_site;
+        orig = o;
         kill_it = 0;
         spin_lock(&site->ls_guard);
         if (-- top->loh_ref == 0) {
@@ -93,7 +95,7 @@ void lu_object_put(const struct lu_context *ctxt, struct lu_object *o)
                  * Object was already removed from hash and lru above, can
                  * kill it.
                  */
-                lu_object_free(ctxt, o);
+                lu_object_free(ctxt, orig);
 }
 EXPORT_SYMBOL(lu_object_put);
 
@@ -248,6 +250,22 @@ int lu_object_print(const struct lu_context *ctx,
 }
 EXPORT_SYMBOL(lu_object_print);
 
+/*
+ * Check object consistency.
+ */
+int lu_object_invariant(const struct lu_object *o)
+{
+        struct lu_object_header *top;
+
+        top = o->lo_header;
+        list_for_each_entry(o, &top->loh_layers, lo_linkage) {
+                if (o->lo_ops->loo_object_invariant != NULL &&
+                    !o->lo_ops->loo_object_invariant(o))
+                        return 0;
+        }
+        return 1;
+}
+EXPORT_SYMBOL(lu_object_invariant);
 
 static struct lu_object *htable_lookup(struct lu_site *s,
                                        const struct hlist_head *bucket,
