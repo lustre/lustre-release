@@ -622,7 +622,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                                   OBD_OCD_VERSION_MINOR(data->ocd_version),
                                   OBD_OCD_VERSION_PATCH(data->ocd_version),
                                   OBD_OCD_VERSION_FIX(data->ocd_version));
-                        data = lustre_msg_buf(req->rq_repmsg, 0,
+                        data = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                               offsetof(typeof(*data),
                                                        ocd_version) +
                                               sizeof(data->ocd_version));
