@@ -262,16 +262,16 @@ struct mdd_txn_op_descr {
 };
 
 enum {
-        MDD_TXN_OBJECT_DESTROY_CREDITS = 10,
-        MDD_TXN_OBJECT_CREATE_CREDITS  = 10,
-        MDD_TXN_ATTR_SET_CREDITS       = 10,
-        MDD_TXN_XATTR_SET_CREDITS      = 10,
-        MDD_TXN_INDEX_INSERT_CREDITS   = 10,
-        MDD_TXN_INDEX_DELETE_CREDITS   = 10,
-        MDD_TXN_LINK_CREDITS           = 10,
-        MDD_TXN_UNLINK_CREDITS         = 10,
-        MDD_TXN_RENAME_CREDITS         = 10,
-        MDD_TXN_MKDIR_CREDITS          = 10
+        MDD_TXN_OBJECT_DESTROY_CREDITS = 20,
+        MDD_TXN_OBJECT_CREATE_CREDITS  = 20,
+        MDD_TXN_ATTR_SET_CREDITS       = 20,
+        MDD_TXN_XATTR_SET_CREDITS      = 20,
+        MDD_TXN_INDEX_INSERT_CREDITS   = 20,
+        MDD_TXN_INDEX_DELETE_CREDITS   = 20,
+        MDD_TXN_LINK_CREDITS           = 20,
+        MDD_TXN_UNLINK_CREDITS         = 20,
+        MDD_TXN_RENAME_CREDITS         = 20,
+        MDD_TXN_MKDIR_CREDITS          = 20
 };
 
 #define DEFINE_MDD_TXN_OP_DESC(opname)          \
@@ -410,7 +410,7 @@ static struct lu_device *mdd_device_fini(const struct lu_context *ctx,
         struct lu_device *next = &m->mdd_child->dd_lu_dev;
 
         dt_device_fini(&m->mdd_lov_dev);
-        
+
         return next;
 }
 
@@ -847,9 +847,9 @@ static int mdd_create(const struct lu_context *ctxt,
         if (rc)
                 GOTO(cleanup, rc);
 cleanup:
-        if (rc && created) 
-               rc1 = __mdd_object_destroy(ctxt, mdo, handle); 
-        
+        if (rc && created)
+               rc1 = __mdd_object_destroy(ctxt, mdo, handle);
+
         mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
