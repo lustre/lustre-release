@@ -62,6 +62,13 @@ seq_proc_write_range(struct file *file, const char *buffer,
         rc = sscanf(buffer, "["LPU64"-"LPU64"]\n",
 		    &tmp.lr_start, &tmp.lr_end);
 
+	/* did not match 2 values */
+	if (rc != 2 || !range_is_sane(&tmp) || range_is_zero(&tmp)) {
+		CERROR("can't parse input string or "
+		       "input is not correct\n");
+		RETURN(count);
+	}
+
 	*range = tmp;
         RETURN(count);
 }
