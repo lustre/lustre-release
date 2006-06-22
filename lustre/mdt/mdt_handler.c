@@ -193,7 +193,7 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
                 rc = mo_xattr_get(info->mti_ctxt, next, NULL, 0, "lov");
 
                 CDEBUG(D_INODE, "got %d bytes MD data for object "DFID3"\n",
-                       rc, PFID3(mdt_object_fid(info->mti_object))); 
+                       rc, PFID3(mdt_object_fid(info->mti_object)));
                 if (rc < 0) {
                         if (rc != -ENODATA) {
                                 CERROR("error getting MD "DFID3": rc = %d\n",
@@ -278,7 +278,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info)
         length = req_capsule_get_size(&info->mti_pill,
                                       &RMF_MDT_MD,
                                       RCL_SERVER);
-        
+
         if ((S_ISREG(la->la_mode) && (reqbody->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(la->la_mode) && (reqbody->valid & OBD_MD_FLDIREA))) {
                 rc = mo_xattr_get(info->mti_ctxt, next,
@@ -325,7 +325,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info)
                                               RCL_SERVER);
                 rc = mo_xattr_get(info->mti_ctxt, next,
                                   buffer, length, XATTR_NAME_ACL_ACCESS);
-                
+
                 if (rc < 0) {
                         if (rc != -ENODATA) {
                                 CERROR("got acl size: %d\n", rc);
@@ -333,7 +333,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info)
                         }
                         rc = 0;
                 }
-                repbody->aclsize = rc; 
+                repbody->aclsize = rc;
                 repbody->valid |= OBD_MD_FLACL;
         }
 #endif
@@ -378,6 +378,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         int result;
         struct mdt_lock_handle *lhp;
         struct lu_fid child_fid;
+        struct ldlm_namespace *ns;
 
         ENTRY;
 
@@ -391,9 +392,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         if (name == NULL)
                 RETURN(-EFAULT);
 
+        ns = info->mti_mdt->mdt_namespace;
         /*step 1: lock parent */
-        result = mdt_object_lock(info->mti_mdt->mdt_namespace, parent,
-                                 lhp, MDS_INODELOCK_UPDATE);
+        result = mdt_object_lock(ns, parent, lhp, MDS_INODELOCK_UPDATE);
         if (result != 0)
                 RETURN(result);
 
@@ -407,12 +408,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
 
-
         /*step 4: lock child: this lock is returned back to caller
          *                    if successfully get attr.
          */
-        result = mdt_object_lock(info->mti_mdt->mdt_namespace, child,
-                                 lhc, child_bits);
+        result = mdt_object_lock(ns, child, lhc, child_bits);
         if (result != 0)
                 GOTO(out_child, result);
 
@@ -424,18 +423,18 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 LASSERT(ldlm_rep);
                 intent_set_disposition(ldlm_rep, DISP_IT_EXECD);
                 result = mdt_getattr_internal(info);
-                if (result) 
+                if (result)
                         intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
-                else 
+                else
                         intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
         }
         if (result != 0)
-                mdt_object_unlock(info->mti_mdt->mdt_namespace, child, lhc);
+                mdt_object_unlock(ns, child, lhc);
 
 out_child:
         mdt_object_put(info->mti_ctxt, child);
 out_parent:
-        mdt_object_unlock(info->mti_mdt->mdt_namespace, parent, lhp);
+        mdt_object_unlock(ns, parent, lhp);
         RETURN(result);
 }
 
@@ -614,7 +613,7 @@ static int mdt_sync(struct mdt_thread_info *info)
         struct req_capsule *pill = &info->mti_pill;
         int rc;
         ENTRY;
-        
+
         req_capsule_set(pill, &RQF_MDS_SYNC);
 
         body = req_capsule_client_get(pill, &RMF_MDT_BODY);
@@ -629,15 +628,15 @@ static int mdt_sync(struct mdt_thread_info *info)
         } else {
                 /* sync an object */
                 rc = mdt_unpack_req_pack_rep(info, HABEO_CORPUS | HABEO_REFERO);
-                if (rc != 0) 
+                if (rc != 0)
                         RETURN(rc);
 
                 rc = mdt_object_sync(info->mti_object);
                 if (rc != 0)
                         RETURN(rc);
 
-                rc = mo_attr_get(info->mti_ctxt, 
-                                 mdt_object_child(info->mti_object), 
+                rc = mo_attr_get(info->mti_ctxt,
+                                 mdt_object_child(info->mti_object),
                                  &info->mti_attr);
                 if (rc != 0)
                         RETURN(rc);
