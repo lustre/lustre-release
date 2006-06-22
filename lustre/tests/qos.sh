@@ -50,7 +50,7 @@ qos_test_1() {
 
 	# set stripe number to 1
 	$LFS setstripe $QOSFILE 65536 -1 1
-	FULLOST=`$LFS find -q $QOSFILE | awk '/\s*\d*/ {print $1}'`
+	FULLOST=`$LFS getstripe -q $QOSFILE | awk '/\s*\d*/ {print $1}'`
 	
 	# floodfill the FULLOST
 	echo "$TAB fill the OST $FULLOST to almost fullness..."
@@ -62,7 +62,7 @@ qos_test_1() {
 	for i in `seq 10`; do
 		rm -f $MOUNT/file-$i
 		$LFS setstripe $MOUNT/file-$i 65536 -1 1
-		idx=`$LFS find -q $MOUNT/file-$i | awk '/\s*\d*/ {print $1}'`
+		idx=`$LFS getstripe -q $MOUNT/file-$i | awk '/\s*\d*/ {print $1}'`
 		if [ $idx -eq $FULLOST ]; then
 			echo "$TAB ERROR: create object on full OST $FULLOST"
 			return 1
@@ -109,14 +109,14 @@ qos_test_2 () {
 	echo "$TAB done"
 
 	# the objects created on OST 0 should be 1/4 of on other OSTs'
-	CNT0=`$LFS find -q /mnt/lustre | awk '/\s*\d*/ {print $1}'| grep -c 0`
+	CNT0=`$LFS getstripe -q /mnt/lustre | awk '/\s*\d*/ {print $1}'| grep -c 0`
 	CNT0=$(($CNT0 - 1))
 	echo "$TAB object created on OST 0: $CNT0"
 	
 	# the object count of other osts must be greater than 2 times 
 	CNT0=$(($CNT0 * 2))
 	for i in `seq $(($OSTCOUNT - 1))`; do
-		CNT=`$LFS find -q /mnt/lustre | awk '/\s*\d*/ {print $1}'| grep -c $i`
+		CNT=`$LFS getstripe -q /mnt/lustre | awk '/\s*\d*/ {print $1}'| grep -c $i`
 		echo "$TAB object created on OST $i: $CNT"
 		if [ $CNT0 -gt $CNT ] ; then
 			echo "$TAB ERROR: too much objects created on OST 0"

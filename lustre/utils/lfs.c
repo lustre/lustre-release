@@ -220,7 +220,7 @@ static int set_time(time_t *time, time_t *set, char *str)
 
 static int lfs_find(int argc, char **argv)
 {
-        int new_fashion = 0;
+        int new_fashion = 1;
         int c, ret;
         int zeroend;
         time_t t;
@@ -262,7 +262,6 @@ static int lfs_find(int argc, char **argv)
                         /* Long options. */
                         break;
                 case 'A':
-                        new_fashion = 1;
                         ret = set_time(&t, &atime, optarg);
                         if (ret == INT_MAX)
                                 return -1;
@@ -270,7 +269,6 @@ static int lfs_find(int argc, char **argv)
                                 asign = ret;
                         break;
                 case 'C':
-                        new_fashion = 1;
                         ret = set_time(&t, &ctime, optarg);
                         if (ret == INT_MAX)
                                 return -1;
@@ -278,11 +276,9 @@ static int lfs_find(int argc, char **argv)
                                 csign = ret;
                         break;
                 case 'D':
-                        new_fashion = 1;
                         depth = strtol(optarg, 0, 0);
                         break;
                 case 'M':
-                        new_fashion = 1;
                         ret = set_time(&t, &mtime, optarg);
                         if (ret == INT_MAX)
                                 return -1;
@@ -299,20 +295,21 @@ static int lfs_find(int argc, char **argv)
                         obduuid = (struct obd_uuid *)optarg;
                         break;
                 case 'p':
-                        new_fashion = 1;
                         zeroend = 1;
                         break;
                 case 'P':
-                        new_fashion = 1;
                         break;
                 case 'q':
+                        new_fashion = 0;
                         quiet++;
                         verbose = 0;
                         break;
                 case 'r':
+                        new_fashion = 0;
                         recursive = 1;
                         break;
                 case 'v':
+                        new_fashion = 0;
                         verbose++;
                         quiet = 0;
                         break;

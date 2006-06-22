@@ -32,8 +32,8 @@ TMP=${TMP:-/tmp}
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
 LFS=${LFS:-lfs}
-LSTRIPE=${LSTRIPE:-"$LFS setstripe"}
-LFIND=${LFIND:-"$LFS find"}
+SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
+GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
 LVERIFY=${LVERIFY:-ll_dirstripe_verify}
 LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
@@ -878,7 +878,7 @@ run_test 26f "rm -r of a directory which has recursive symlink ="
 test_27a() {
 	echo '== stripe sanity =============================================='
 	mkdir $DIR/d27
-	$LSTRIPE $DIR/d27/f0 65536 0 1 || error "lstripe failed"
+	$SETSTRIPE $DIR/d27/f0 65536 0 1 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/f0 || error "checkstat failed"
 	pass
 	log "== test_27b: write to one stripe file ========================="
@@ -889,8 +889,8 @@ run_test 27a "one stripe file =================================="
 test_27c() {
 	[ "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
 	mkdir -p $DIR/d27
-	$LSTRIPE $DIR/d27/f01 65536 0 2 || error "lstripe failed"
-	[ `$LFIND $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
+	$SETSTRIPE $DIR/d27/f01 65536 0 2 || error "lstripe failed"
+	[ `$GETSTRIPE $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
 		error "two-stripe file doesn't have two stripes"
 	pass
 	log "== test_27d: write to two stripe file file f01 ================"
@@ -900,7 +900,7 @@ run_test 27c "create two stripe file f01 ======================="
 
 test_27d() {
 	mkdir -p $DIR/d27
-	$LSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
+	$SETSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
 	dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
@@ -908,17 +908,17 @@ run_test 27d "create file with default settings ================"
 
 test_27e() {
 	mkdir -p $DIR/d27
-	$LSTRIPE $DIR/d27/f12 65536 0 2 || error "lstripe failed"
-	$LSTRIPE $DIR/d27/f12 65536 0 2 && error "lstripe succeeded twice"
+	$SETSTRIPE $DIR/d27/f12 65536 0 2 || error "lstripe failed"
+	$SETSTRIPE $DIR/d27/f12 65536 0 2 && error "lstripe succeeded twice"
 	$CHECKSTAT -t file $DIR/d27/f12 || error "checkstat failed"
 }
 run_test 27e "lstripe existing file (should return error) ======"
 
 test_27f() {
 	mkdir -p $DIR/d27
-	$LSTRIPE $DIR/d27/fbad 100 0 1 && error "lstripe failed"
+	$SETSTRIPE $DIR/d27/fbad 100 0 1 && error "lstripe failed"
 	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error "dd failed"
-	$LFIND $DIR/d27/fbad || error "lfind failed"
+	$GETSTRIPE $DIR/d27/fbad || error "lfs getstripe failed"
 }
 run_test 27f "lstripe with bad stripe size (should return error)"
 
@@ -926,18 +926,18 @@ test_27g() {
 	mkdir -p $DIR/d27
 	$MCREATE $DIR/d27/fnone || error "mcreate failed"
 	pass
-	log "== test 27h: lfind with no objects ============================"
-	$LFIND $DIR/d27/fnone 2>&1 | grep "no stripe info" || error "has object"
+	log "== test 27h: lfs getstripe with no objects ===================="
+	$GETSTRIPE $DIR/d27/fnone 2>&1 | grep "no stripe info" || error "has object"
 	pass
-	log "== test 27i: lfind with some objects =========================="
+	log "== test 27i: lfs getstripe with some objects =================="
 	touch $DIR/d27/fsome || error "touch failed"
-	$LFIND $DIR/d27/fsome | grep obdidx || error "missing objects"
+	$GETSTRIPE $DIR/d27/fsome | grep obdidx || error "missing objects"
 }
-run_test 27g "test lfind ======================================="
+run_test 27g "test lfs getstripe ==========================================="
 
 test_27j() {
 	mkdir -p $DIR/d27
-	$LSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error "lstripe failed"||true
+	$SETSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error "lstripe failed"||true
 }
 run_test 27j "lstripe with bad stripe offset (should return error)"
 
@@ -946,7 +946,7 @@ test_27k() { # bug 2844
 	FILE=$DIR/d27/f27k
 	LL_MAX_BLKSIZE=$((4 * 1024 * 1024))
 	[ ! -d $DIR/d27 ] && mkdir -p $DIR/d27
-	$LSTRIPE $FILE 67108864 -1 0 || error "lstripe failed"
+	$SETSTRIPE $FILE 67108864 -1 0 || error "lstripe failed"
 	BLKSIZE=`stat $FILE | awk '/IO Block:/ { print $7 }'`
 	[ $BLKSIZE -le $LL_MAX_BLKSIZE ] || error "$BLKSIZE > $LL_MAX_BLKSIZE"
 	dd if=/dev/zero of=$FILE bs=4k count=1
@@ -958,7 +958,7 @@ run_test 27k "limit i_blksize for broken user apps ============="
 test_27l() {
 	mkdir -p $DIR/d27
 	mcreate $DIR/f27l || error "creating file"
-	$RUNAS $LSTRIPE $DIR/f27l 65536 -1 1 && \
+	$RUNAS $SETSTRIPE $DIR/f27l 65536 -1 1 && \
 		error "lstripe should have failed" || true
 }
 run_test 27l "check setstripe permissions (should return error)"
@@ -970,21 +970,21 @@ test_27m() {
 		return
 	fi
 	mkdir -p $DIR/d27
-	$LSTRIPE $DIR/d27/f27m_1 0 0 1
+	$SETSTRIPE $DIR/d27/f27m_1 0 0 1
 	dd if=/dev/zero of=$DIR/d27/f27m_1 bs=1024 count=$MAXFREE && \
 		error "dd should fill OST0"
 	i=2
-	while $LSTRIPE $DIR/d27/f27m_$i 0 0 1 ; do
+	while $SETSTRIPE $DIR/d27/f27m_$i 0 0 1 ; do
 		i=`expr $i + 1`
 		[ $i -gt 256 ] && break
 	done
 	i=`expr $i + 1`
 	touch $DIR/d27/f27m_$i
-	[ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+	[ `$GETSTRIPE $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
 		error "OST0 was full but new created file still use it"
 	i=`expr $i + 1`
 	touch $DIR/d27/f27m_$i
-	[ `$LFIND $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+	[ `$GETSTRIPE $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
 		error "OST0 was full but new created file still use it"
 	rm -r $DIR/d27
 }
@@ -1007,7 +1007,7 @@ exhaust_precreations() {
 	next_id=$(cat $LPROC/osc/${OST}-osc/prealloc_next_id)
 
 	mkdir -p $DIR/d27/${OST}
-	$LSTRIPE $DIR/d27/${OST} 0 $OSTIDX 1
+	$SETSTRIPE $DIR/d27/${OST} 0 $OSTIDX 1
 #define OBD_FAIL_OST_ENOSPC              0x215
 	sysctl -w lustre.fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
@@ -1095,7 +1095,7 @@ test_27r() {
 	rm -f $DIR/d27/f27r
 	exhaust_precreations 0 0x80000215
 
-	$LSTRIPE $DIR/d27/f27r 0 0 2 # && error
+	$SETSTRIPE $DIR/d27/f27r 0 0 2 # && error
 
 	reset_enospc
 }
@@ -1457,9 +1457,9 @@ TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
 	rm -f $DIR/f34
 	$MCREATE $DIR/f34 || error
-	$LFIND $DIR/f34 2>&1 | grep -q "no stripe info" || error
+	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" || error
 	$TRUNCATE $DIR/f34 $TEST_34_SIZE || error
-	$LFIND $DIR/f34 2>&1 | grep -q "no stripe info" || error
+	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" || error
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 }
 run_test 34a "truncate file that has not been opened ==========="
@@ -1468,7 +1468,7 @@ test_34b() {
 	[ ! -f $DIR/f34 ] && test_34a
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 	$OPENFILE -f O_RDONLY $DIR/f34
-	$LFIND $DIR/f34 2>&1 | grep -q "no stripe info" || error
+	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" || error
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 }
 run_test 34b "O_RDONLY opening file doesn't create objects ====="
@@ -1477,7 +1477,7 @@ test_34c() {
 	[ ! -f $DIR/f34 ] && test_34a 
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 	$OPENFILE -f O_RDWR $DIR/f34
-	$LFIND $DIR/f34 2>&1 | grep -q "no stripe info" && error
+	$GETSTRIPE $DIR/f34 2>&1 | grep -q "no stripe info" && error
 	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 }
 run_test 34c "O_RDWR opening file-with-size works =============="
@@ -2234,7 +2234,7 @@ run_test 55 "check iopen_connect_dentry() ======================"
 
 test_56() {
         rm -rf $DIR/d56
-        $LSTRIPE -d $DIR
+        $SETSTRIPE -d $DIR
         mkdir $DIR/d56
         mkdir $DIR/d56/dir
         NUMFILES=3
@@ -2244,45 +2244,45 @@ test_56() {
                 touch $DIR/d56/dir/file$i
         done
 
-        # test lfs find with --recursive
-        FILENUM=`$LFIND --recursive $DIR/d56 | grep -c obdidx`
+        # test lfs getstripe with --recursive
+        FILENUM=`$GETSTRIPE --recursive $DIR/d56 | grep -c obdidx`
         [ $FILENUM -eq $NUMFILESx2 ] || error \
-                "lfs find --recursive $DIR/d56 wrong: found $FILENUM, expected $NUMFILESx2"
-        FILENUM=`$LFIND $DIR/d56 | grep -c obdidx`
+                "lfs getstripe --recursive $DIR/d56 wrong: found $FILENUM, expected $NUMFILESx2"
+        FILENUM=`$GETSTRIPE $DIR/d56 | grep -c obdidx`
         [ $FILENUM -eq $NUMFILES ] || error \
-                "lfs find $DIR/d56 without --recursive wrong: found $FILENUM, expected $NUMFILES"
-        echo "lfs find --recursive passed."
+                "lfs getstripe $DIR/d56 without --recursive wrong: found $FILENUM, expected $NUMFILES"
+        echo "lfs getstripe --recursive passed."
 
-        # test lfs find with file instead of dir
-        FILENUM=`$LFIND $DIR/d56/file1 | grep -c obdidx`
+        # test lfs getstripe with file instead of dir
+        FILENUM=`$GETSTRIPE $DIR/d56/file1 | grep -c obdidx`
         [ $FILENUM  -eq 1 ] || error \
-                 "lfs find $DIR/d56/file1 wrong:found $FILENUM, expected 1"
-        echo "lfs find file passed."
+                 "lfs getstripe $DIR/d56/file1 wrong:found $FILENUM, expected 1"
+        echo "lfs getstripe file passed."
 
-        #test lfs find with --verbose
-        [ `$LFIND --verbose $DIR/d56 | grep -c lmm_magic` -eq $NUMFILES ] ||\
-                error "lfs find --verbose $DIR/d56 wrong: should find $NUMFILES lmm_magic info"
-        [ `$LFIND $DIR/d56 | grep -c lmm_magic` -eq 0 ] || error \
-                "lfs find $DIR/d56 without --verbose wrong: should not show lmm_magic info"
-        echo "lfs find --verbose passed."
+        #test lfs getstripe with --verbose
+        [ `$GETSTRIPE --verbose $DIR/d56 | grep -c lmm_magic` -eq $NUMFILES ] ||\
+                error "lfs getstripe --verbose $DIR/d56 wrong: should find $NUMFILES lmm_magic info"
+        [ `$GETSTRIPE $DIR/d56 | grep -c lmm_magic` -eq 0 ] || error \
+                "lfs getstripe $DIR/d56 without --verbose wrong: should not show lmm_magic info"
+        echo "lfs getstripe --verbose passed."
 
-        #test lfs find with --obd
-        $LFIND --obd wrong_uuid $DIR/d56 2>&1 | grep -q "unknown obduuid" || \
-                error "lfs find --obd wrong_uuid should return error message"
+        #test lfs getstripe with --obd
+        $GETSTRIPE --obd wrong_uuid $DIR/d56 2>&1 | grep -q "unknown obduuid" || \
+                error "lfs getstripe --obd wrong_uuid should return error message"
 
         [  "$OSTCOUNT" -lt 2 ] && \
-                echo "skipping other lfs find --obd test" && return
-        FILENUM=`$LFIND --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
-        OBDUUID=`$LFIND --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`
-        FOUND=`$LFIND -r --obd $OBDUUID $DIR/d56 | wc -l`
+                echo "skipping other lfs getstripe --obd test" && return
+        FILENUM=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1[	 ]/p' | wc -l`
+        OBDUUID=`$GETSTRIPE --recursive $DIR/d56 | sed -n '/^[	 ]*1:/p' | awk '{print $2}'`
+        FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | wc -l`
         [ $FOUND -eq $FILENUM ] || \
-                error "lfs find --obd wrong: found $FOUND, expected $FILENUM"
-        [ `$LFIND -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' |\
+                error "lfs getstripe --obd wrong: found $FOUND, expected $FILENUM"
+        [ `$GETSTRIPE -r -v --obd $OBDUUID $DIR/d56 | sed '/^[	 ]*1[	 ]/d' |\
                 sed -n '/^[	 ]*[0-9][0-9]*[	 ]/p' | wc -l` -eq 0 ] || \
-                error "lfs find --obd wrong: should not show file on other obd"
-        echo "lfs find --obd passed."
+                error "lfs getstripe --obd wrong: should not show file on other obd"
+        echo "lfs getstripe --obd passed."
 }
-run_test 56 "check lfs find ===================================="
+run_test 56 "check lfs getstripe ===================================="
 
 test_57a() {
 	# note test will not do anything if MDS is not local
@@ -2306,8 +2306,8 @@ test_57b() {
 		error "creating files in $DIR/d57b"
 
 	# verify that files do not have EAs yet
-	$LFIND $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
-	$LFIND $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
+	$GETSTRIPE $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
+	$GETSTRIPE $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
 
 	MDSFREE="`cat $LPROC/mds/*/kbytesfree`"
 	MDCFREE="`cat $LPROC/mdc/*/kbytesfree`"
@@ -2317,8 +2317,8 @@ test_57b() {
 	done
 
 	# verify that files have EAs now
-	$LFIND $FILE1 | grep -q "obdidx" || error "$FILE1 missing EA"
-	$LFIND $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
+	$GETSTRIPE $FILE1 | grep -q "obdidx" || error "$FILE1 missing EA"
+	$GETSTRIPE $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
 
 	sleep 1 # make sure we get new statfs data
 	MDSFREE2="`cat $LPROC/mds/*/kbytesfree`"
@@ -2449,7 +2449,7 @@ run_test 65a "directory with no stripe info ===================="
 
 test_65b() {
 	mkdir -p $DIR/d65
-	$LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+	$SETSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
 	touch $DIR/d65/f2
 	$LVERIFY $DIR/d65 $DIR/d65/f2 || error "lverify failed"
 }
@@ -2458,7 +2458,7 @@ run_test 65b "directory setstripe $(($STRIPESIZE * 2)) 0 1 ==============="
 test_65c() {
 	if [ $OSTCOUNT -gt 1 ]; then
 		mkdir -p $DIR/d65
-    		$LSTRIPE $DIR/d65 $(($STRIPESIZE * 4)) 1 \
+    		$SETSTRIPE $DIR/d65 $(($STRIPESIZE * 4)) 1 \
 			$(($OSTCOUNT - 1)) || error "setstripe"
 		touch $DIR/d65/f3
 		$LVERIFY $DIR/d65 $DIR/d65/f3 || error "lverify failed"
@@ -2470,7 +2470,7 @@ run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
 
 test_65d() {
 	mkdir -p $DIR/d65
-	$LSTRIPE $DIR/d65 $STRIPESIZE -1 $sc || error "setstripe"
+	$SETSTRIPE $DIR/d65 $STRIPESIZE -1 $sc || error "setstripe"
 	touch $DIR/d65/f4 $DIR/d65/f5
 	$LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
 }
@@ -2479,8 +2479,8 @@ run_test 65d "directory setstripe $STRIPESIZE -1 $sc =============="
 test_65e() {
 	mkdir -p $DIR/d65
 
-	$LSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
-        $LFS find -v $DIR/d65 | grep "has no stripe info" || error "no stripe info failed"
+	$SETSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
+        $GETSTRIPE -v $DIR/d65 | grep "has no stripe info" || error "no stripe info failed"
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
 }
@@ -2488,30 +2488,30 @@ run_test 65e "directory setstripe 0 -1 0 ======================="
 
 test_65f() {
 	mkdir -p $DIR/d65f
-	$RUNAS $LSTRIPE $DIR/d65f 0 -1 0 && error "setstripe succeeded" || true
+	$RUNAS $SETSTRIPE $DIR/d65f 0 -1 0 && error "setstripe succeeded" || true
 }
 run_test 65f "dir setstripe permission (should return error) ==="
 
 test_65g() {
         mkdir -p $DIR/d65
-        $LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
-        $LSTRIPE -d $DIR/d65 || error "setstripe"
-        $LFS find -v $DIR/d65 | grep "has no stripe info" || \
+        $SETSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+        $SETSTRIPE -d $DIR/d65 || error "setstripe"
+        $GETSTRIPE -v $DIR/d65 | grep "has no stripe info" || \
 		error "delete default stripe failed"
 }
 run_test 65g "directory setstripe -d ==========================="
 
 test_65h() {
         mkdir -p $DIR/d65
-        $LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+        $SETSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
         mkdir -p $DIR/d65/dd1
-        [ "`$LFS find -v $DIR/d65 | grep "^count"`" == \
-          "`$LFS find -v $DIR/d65/dd1 | grep "^count"`" ] || error "stripe info inherit failed"
+        [ "`$GETSTRIPE -v $DIR/d65 | grep "^count"`" == \
+          "`$GETSTRIPE -v $DIR/d65/dd1 | grep "^count"`" ] || error "stripe info inherit failed"
 }
 run_test 65h "directory stripe info inherit ===================="
  
 test_65i() { # bug6367
-        $LSTRIPE $MOUNT 65536 -1 -1
+        $SETSTRIPE $MOUNT 65536 -1 -1
 }
 run_test 65i "set default striping on root directory (bug 6367)="
 
@@ -2521,7 +2521,7 @@ test_65j() { # bug6367
 		cleanup -f || error "failed to unmount"
 		setup || error "failed to remount"
 	fi
-	$LSTRIPE -d $MOUNT || true
+	$SETSTRIPE -d $MOUNT || true
 }
 run_test 65j "get default striping on root directory (bug 6367)="
 
