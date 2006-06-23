@@ -108,11 +108,10 @@ static int mdc_object_create(const struct lu_context *ctx,
 
         mci = lu_context_key_get(ctx, &mdc_thread_key);
         LASSERT(mci);
-
+        
+        memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
         mci->mci_opdata.mod_time = attr->la_mtime;
-        mci->mci_opdata.name = NULL;
-        mci->mci_opdata.namelen = 0;
 
         rc = md_create(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
                        attr->la_mode, attr->la_uid, attr->la_gid, 0, 0,
@@ -133,9 +132,8 @@ static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo)
         mci = lu_context_key_get(ctx, &mdc_thread_key);
         LASSERT(mci);
 
+        memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
-        mci->mci_opdata.name = NULL;
-        mci->mci_opdata.namelen = 0;
 
         rc = md_link(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
 
@@ -154,9 +152,8 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo)
         mci = lu_context_key_get(ctx, &mdc_thread_key);
         LASSERT(mci);
 
+        memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
-        mci->mci_opdata.name = NULL;
-        mci->mci_opdata.namelen = 0;
 
         rc = md_unlink(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
 
@@ -184,6 +181,7 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
         mci = lu_context_key_get(ctx, &mdc_thread_key);
         LASSERT(mci);
 
+        memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
         mci->mci_opdata.fid1 = *lu_object_fid(&mo_p->mo_lu);
         mci->mci_opdata.fid2 = *lf;
 

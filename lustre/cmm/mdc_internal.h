@@ -36,8 +36,10 @@
 #include <obd.h>
 #include <md_object.h>
 struct mdc_cli_desc {
-        struct obd_connect_data  cl_conn_data;
-        struct obd_uuid          cl_cli_uuid;
+        struct lustre_handle     cl_conn;
+        /* uuid of remote MDT to connect */
+        struct obd_uuid          cl_srv_uuid;
+        /* export of mdc obd */
         struct obd_export        *cl_exp;
 };
 

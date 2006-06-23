@@ -50,25 +50,38 @@ static inline int lu_device_is_mdc(struct lu_device *ld)
 
 static struct md_device_operations mdc_md_ops = { 0 };
 
+/* MDC OBD is set up already and connected to the proper MDS
+ * mdc_add_obd() find that obd by uuid and connects to it.
+ * Local MDT uuid is used for connection
+ * */
 static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
 {
         struct mdc_cli_desc *desc = &mc->mc_desc;
         struct obd_device *mdc, *mdt;
         const char *srv = lustre_cfg_string(cfg, 0);
         const char *uuid_str = lustre_cfg_string(cfg, 1);
-        const char *index = lustre_cfg_string(cfg, 2);
+        const char *index = lustre_cfg_string(cfg, 2), *p;
         int rc = 0;
 
         ENTRY;
+        LASSERT(uuid_str);
+        LASSERT(index);
+        
+        mc->mc_num = simple_strtol(index, &p, 10);
+        if (*p) {
+                CERROR("Invalid index in lustre_cgf, offset 2\n");                
+                RETURN(-EINVAL);
+        }
 
-        //find mdt obd to get group uuid
+        /* find local MDT obd to get group uuid */
         mdt = class_name2obd(srv);
         if (mdt == NULL) {
                 CERROR("No such OBD %s\n", srv);
                 LBUG();
         }
-        obd_str2uuid(&desc->cl_cli_uuid, uuid_str);
-        mdc = class_find_client_obd(&desc->cl_cli_uuid, LUSTRE_MDC_NAME,
+        obd_str2uuid(&desc->cl_srv_uuid, uuid_str);
+        /* try to find MDC OBD connected to the needed MDT */
+        mdc = class_find_client_obd(&desc->cl_srv_uuid, LUSTRE_MDC_NAME,
                                     &mdt->obd_uuid);
         if (!mdc) {
                 CERROR("Cannot find MDC OBD connected to %s\n", uuid_str);
@@ -77,19 +90,18 @@ static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
                 CERROR("target %s not set up\n", mdc->obd_name);
                 rc = -EINVAL;
         } else {
-                struct lustre_handle conn = {0, };
+                struct lustre_handle *conn = &desc->cl_conn;
 
                 CDEBUG(D_CONFIG, "connect to %s(%s)\n",
                        mdc->obd_name, mdc->obd_uuid.uuid);
 
-                rc = obd_connect(&conn, mdc, &mdt->obd_uuid, NULL);
+                rc = obd_connect(conn, mdc, &mdt->obd_uuid, NULL);
 
                 if (rc) {
                         CERROR("target %s connect error %d\n",
                                mdc->obd_name, rc);
                 } else {
-                        desc->cl_exp = class_conn2export(&conn);
-                        mc->mc_num = simple_strtol(index, NULL, 10);
+                        desc->cl_exp = class_conn2export(conn);
                 }
         }
 
@@ -103,8 +115,8 @@ static int mdc_del_obd(struct mdc_device *mc)
 
         ENTRY;
 
-        CDEBUG(D_CONFIG, "disconnect from %s(%s)\n",
-               class_exp2obd(desc->cl_exp)->obd_name, desc->cl_cli_uuid.uuid);
+        CDEBUG(D_CONFIG, "disconnect from %s\n",
+               class_exp2obd(desc->cl_exp)->obd_name);
 
         rc = obd_disconnect(desc->cl_exp);
         if (rc) {

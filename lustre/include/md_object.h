@@ -146,7 +146,7 @@ static inline struct md_object *lu2md(const struct lu_object *o)
 
 static inline struct md_object *md_object_next(const struct md_object *obj)
 {
-        return lu2md(lu_object_next(&obj->mo_lu));
+        return (obj ? lu2md(lu_object_next(&obj->mo_lu)) : NULL);
 }
 
 static inline struct md_device *md_obj2dev(const struct md_object *o)

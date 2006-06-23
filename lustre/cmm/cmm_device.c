@@ -89,13 +89,19 @@ static int cmm_add_mdc(const struct lu_context *ctx,
         struct  lu_device_type *ldt = &mdc_device_type;
         struct  lu_device *ld;
         struct  mdc_device *mc, *tmp;
+        char *p, *num = lustre_cfg_string(cfg, 2);
         mdsno_t mdc_num;
         int rc;
         ENTRY;
 
         /* find out that there is no such mdc */
-        LASSERT(lustre_cfg_string(cfg, 2));
-        mdc_num = simple_strtol(lustre_cfg_string(cfg, 2), NULL, 10);
+        LASSERT(num);
+        mdc_num = simple_strtol(num, &p, 10);
+        if (*p) {
+                CERROR("Invalid index in lustre_cgf, offset 2\n");
+                RETURN(-EINVAL);
+        }
+
         spin_lock(&cm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
                                  mc_linkage) {
@@ -153,9 +159,13 @@ static int cmm_process_config(const struct lu_context *ctx,
                 break;
         case LCFG_SETUP:
         {
-                const char *index = lustre_cfg_string(cfg, 2);
+                const char *index = lustre_cfg_string(cfg, 2), *p;
                 LASSERT(index);
-                m->cmm_local_num = simple_strtol(index, NULL, 10);
+                m->cmm_local_num = simple_strtol(index, &p, 10);
+                if (*p) {
+                        CERROR("Invalid index in lustre_cgf, offset 2\n");
+                        RETURN(-EINVAL);
+                }
                 /* no break; to pass cfg further */
         }
         default:
@@ -244,6 +254,7 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
 
         fld_client_fini(&cm->cmm_fld);
         /* finish all mdc devices */
+        spin_lock(&cm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
                 struct lu_device *ld_m = mdc2lu_dev(mc);
 
@@ -253,6 +264,7 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
                 ld->ld_type->ldt_ops->ldto_device_free(ctx, ld_m);
                 cm->cmm_tgt_count--;
         }
+        spin_unlock(&cm->cmm_tgt_guard);
 
         RETURN (md2lu_dev(cm->cmm_child));
 }

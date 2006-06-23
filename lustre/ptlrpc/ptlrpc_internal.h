@@ -88,6 +88,14 @@ static inline int opcode_offset(__u32 opc) {
                         (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
                         (MDS_LAST_OPC - MDS_FIRST_OPC) +
                         (OST_LAST_OPC - OST_FIRST_OPC));
+        } else if (opc < SEQ_LAST_OPC) {
+                /* SEQ opcode */
+                return (opc - SEQ_FIRST_OPC +
+                        (OBD_LAST_OPC - OBD_FIRST_OPC) +
+                        (LDLM_LAST_OPC - LDLM_FIRST_OPC) +
+                        (MDS_LAST_OPC - MDS_FIRST_OPC) +
+                        (OST_LAST_OPC - OST_FIRST_OPC)) +
+                        (FLD_LAST_OPC - FLD_FIRST_OPC);
         } else {
                 /* Unknown Opcode */
                 return -1;
