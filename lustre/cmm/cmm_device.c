@@ -58,9 +58,12 @@ static int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
                         struct lu_fid *fid)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
-
-        return cmm_child_ops(cmm_dev)->mdo_root_get(ctx,
+        /* valid only on master MDS */
+        if (cmm_dev->cmm_local_num == 0)
+                return cmm_child_ops(cmm_dev)->mdo_root_get(ctx,
                                                     cmm_dev->cmm_child, fid);
+        else 
+                return -EINVAL;
 }
 
 static int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
