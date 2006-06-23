@@ -256,7 +256,7 @@ void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt)
 
 static int import_select_connection(struct obd_import *imp)
 {
-        struct obd_import_conn *imp_conn;
+        struct obd_import_conn *imp_conn = NULL, *conn;
         struct obd_export *dlmexp;
         ENTRY;
 
@@ -269,14 +269,43 @@ static int import_select_connection(struct obd_import *imp)
                 RETURN(-EINVAL);
         }
 
-        if (imp->imp_conn_current &&
-            imp->imp_conn_current->oic_item.next != &imp->imp_conn_list) {
-                imp_conn = list_entry(imp->imp_conn_current->oic_item.next,
-                                      struct obd_import_conn, oic_item);
-        } else {
-                imp_conn = list_entry(imp->imp_conn_list.next,
-                                      struct obd_import_conn, oic_item);
+        list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
+                CDEBUG(D_HA, "%s: connect to NID %s last attempt %llu\n",
+                       imp->imp_obd->obd_name,
+                       libcfs_nid2str(conn->oic_conn->c_peer.nid),
+                       conn->oic_last_attempt);
+
+                /* Throttle the reconnect rate to once per RECONNECT_INTERVAL */
+                if (jiffies > conn->oic_last_attempt + RECONNECT_INTERVAL * HZ) {
+
+                        /* If we have never tried this connection since the
+                           the last successful attempt, go with this one */
+                        if (conn->oic_last_attempt <=
+                                imp->imp_last_success_conn) {
+                                imp_conn = conn;
+                                break;
+                        }
+
+                        /* Both of these connections have already been tried
+                           since the last successful connection, just choose the
+                           least recently used */
+                        if (!imp_conn)
+                                imp_conn = conn;
+                        else
+                                if (conn->oic_last_attempt <
+                                                imp_conn->oic_last_attempt)
+                                        imp_conn = conn;
         }
+        }
+
+        /* if not found, simply choose the current one */
+        if (!imp_conn) {
+                LASSERT(imp->imp_conn_current);
+                imp_conn = imp->imp_conn_current;
+        }
+        LASSERT(imp_conn->oic_conn);
+
+        imp_conn->oic_last_attempt = get_jiffies_64();
 
         /* switch connection, don't mind if it's same as the current one */
         if (imp->imp_connection)
@@ -290,19 +319,23 @@ static int import_select_connection(struct obd_import *imp)
         dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
         class_export_put(dlmexp);
 
-        if (imp->imp_conn_current && (imp->imp_conn_current != imp_conn)) {
-                LCONSOLE_WARN("Changing connection for %s to %s\n",
-                              imp->imp_obd->obd_name, imp_conn->oic_uuid.uuid);
-        }
+        if (imp->imp_conn_current != imp_conn) {
+                LCONSOLE_INFO("Changing connection for %s to %s/%s\n",
+                              imp->imp_obd->obd_name, imp_conn->oic_uuid.uuid,
+                              libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
         imp->imp_conn_current = imp_conn;
-        CDEBUG(D_HA, "%s: import %p using connection %s\n",
-               imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid);
+        }
+
+        CDEBUG(D_HA, "%s: import %p using connection %s/%s\n",
+               imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid,
+               libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
+
         spin_unlock(&imp->imp_lock);
 
         RETURN(0);
 }
 
-int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
+int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
 {
         struct obd_device *obd = imp->imp_obd;
         int initial_connect = 0;
@@ -606,29 +639,33 @@ finish:
                 struct obd_connect_data *ocd;
                 struct obd_export *exp;
 
-                ocd = lustre_swab_repbuf(request, REPLY_REC_OFF,
-                                         sizeof *ocd, lustre_swab_connect);
+                ocd = lustre_swab_repbuf(request, REPLY_REC_OFF, sizeof(*ocd),
+                                         lustre_swab_connect);
+
+                spin_lock_irqsave(&imp->imp_lock, flags);
+                list_del(&imp->imp_conn_current->oic_item);
+                list_add(&imp->imp_conn_current->oic_item, &imp->imp_conn_list);
+                imp->imp_last_success_conn =
+                        imp->imp_conn_current->oic_last_attempt;
+
                 if (ocd == NULL) {
+                        spin_unlock_irqrestore(&imp->imp_lock, flags);
                         CERROR("Wrong connect data from server\n");
                         rc = -EPROTO;
                         GOTO(out, rc);
                 }
-                spin_lock_irqsave(&imp->imp_lock, flags);
-                
-                /*
-                 * check that server granted subset of flags we asked for.
-                 */
-                LASSERT((ocd->ocd_connect_flags &
-                         imp->imp_connect_data.ocd_connect_flags) ==
-                        ocd->ocd_connect_flags);
 
                 imp->imp_connect_data = *ocd;
-                if (!ocd->ocd_ibits_known &&
-                    ocd->ocd_connect_flags & OBD_CONNECT_IBITS)
-                        CERROR("Inodebits aware server returned zero compatible"
-                               " bits?\n");
 
                 exp = class_conn2export(&imp->imp_dlm_handle);
+                spin_unlock_irqrestore(&imp->imp_lock, flags);
+
+                /* check that server granted subset of flags we asked for. */
+                LASSERTF((ocd->ocd_connect_flags &
+                          imp->imp_connect_flags_orig) ==
+                         ocd->ocd_connect_flags, LPX64" != "LPX64,
+                         imp->imp_connect_flags_orig, ocd->ocd_connect_flags);
+
                 if (!exp) {
                         /* This could happen if export is cleaned during the 
                            connect attempt */
@@ -641,6 +678,11 @@ finish:
                 class_export_put(exp);
 
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_OCD);
+
+                if (!ocd->ocd_ibits_known &&
+                    ocd->ocd_connect_flags & OBD_CONNECT_IBITS)
+                        CERROR("Inodebits aware server returned zero compatible"
+                               " bits?\n");
 
                 if ((ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
                     (ocd->ocd_version > LUSTRE_VERSION_CODE +
@@ -661,21 +703,6 @@ finish:
                               OBD_OCD_VERSION_PATCH(ocd->ocd_version),
                               OBD_OCD_VERSION_FIX(ocd->ocd_version),
                               action, LUSTRE_VERSION_STRING);
-                }
-
-                if (imp->imp_conn_current != NULL) {
-                        list_del(&imp->imp_conn_current->oic_item);
-                        list_add(&imp->imp_conn_current->oic_item,
-                                 &imp->imp_conn_list);
-                        imp->imp_conn_current = NULL;
-                        spin_unlock_irqrestore(&imp->imp_lock, flags);
-                } else {
-                        static int bug7269_dump = 0;
-                        spin_unlock_irqrestore(&imp->imp_lock, flags);
-                        CERROR("this is bug 7269 - please attach log there\n");
-                        if (bug7269_dump == 0)
-                                libcfs_debug_dumplog();
-                        bug7269_dump = 1;
                 }
         }
 

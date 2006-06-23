@@ -73,6 +73,7 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
                         if (priority) {
                                 list_del(&item->oic_item);
                                 list_add(&item->oic_item, &imp->imp_conn_list);
+                                item->oic_last_attempt = 0;
                         }
                         CDEBUG(D_HA, "imp %p@%s: found existing conn %s%s\n",
                                imp, imp->imp_obd->obd_name, uuid->uuid,
@@ -85,6 +86,7 @@ static int import_set_conn(struct obd_import *imp, struct obd_uuid *uuid,
         if (create) {
                 imp_conn->oic_conn = ptlrpc_conn;
                 imp_conn->oic_uuid = *uuid;
+                item->oic_last_attempt = 0;
                 if (priority)
                         list_add(&imp_conn->oic_item, &imp->imp_conn_list);
                 else
@@ -122,7 +124,6 @@ int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
 int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
 {
         struct obd_import_conn *imp_conn;
-        struct obd_import_conn *cur_conn;
         struct obd_export *dlmexp;
         int rc = -ENOENT;
         ENTRY;
@@ -138,12 +139,8 @@ int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
                         continue;
                 LASSERT(imp_conn->oic_conn);
 
-                cur_conn = list_entry(imp->imp_conn_list.next,
-                                      struct obd_import_conn,
-                                      oic_item);
-
                 /* is current conn? */
-                if (imp_conn == cur_conn) {
+                if (imp_conn == imp->imp_conn_current) {
                         LASSERT(imp_conn->oic_conn == imp->imp_connection);
 
                         if (imp->imp_state != LUSTRE_IMP_CLOSED &&

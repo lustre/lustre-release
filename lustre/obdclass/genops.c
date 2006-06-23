@@ -745,6 +745,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
         CFS_INIT_LIST_HEAD(&imp->imp_sending_list);
         CFS_INIT_LIST_HEAD(&imp->imp_delayed_list);
         spin_lock_init(&imp->imp_lock);
+        imp->imp_last_success_conn = 0;
         imp->imp_state = LUSTRE_IMP_NEW;
         imp->imp_obd = class_incref(obd);
         cfs_waitq_init(&imp->imp_recovery_waitq);
