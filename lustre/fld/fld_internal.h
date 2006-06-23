@@ -42,18 +42,6 @@ struct fld_cache_info {
         int fld_hash_mask;
 };
 
-/*XXX use linked list temp for fld in this prototype*/
-struct fld_list {
-        struct list_head fld_list;
-        spinlock_t       fld_lock;
-};
-
-struct fld_item {
-        struct list_head fld_list;
-        __u64   fld_seq;
-        mdsno_t fld_mds;
-};
-
 enum fld_op {
         FLD_CREATE = 0,
         FLD_DELETE = 1,

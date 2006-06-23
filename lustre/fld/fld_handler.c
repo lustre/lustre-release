@@ -108,9 +108,6 @@ static void __exit fld_mod_exit(void)
         return;
 }
 
-
-static struct fld_list fld_list_head;
-
 static int
 fld_server_handle(struct lu_server_fld *fld,
                   const struct lu_context *ctx,
@@ -238,9 +235,6 @@ fld_server_init(struct lu_server_fld *fld,
 
         fld->fld_dt = dt;
         lu_device_get(&dt->dd_lu_dev);
-        INIT_LIST_HEAD(&fld_list_head.fld_list);
-        spin_lock_init(&fld_list_head.fld_lock);
-
         rc = fld_index_init(fld, ctx);
 
         if (rc == 0) {
@@ -267,7 +261,6 @@ void
 fld_server_fini(struct lu_server_fld *fld,
                 const struct lu_context *ctx)
 {
-        struct list_head *pos, *n;
         ENTRY;
 
         if (fld->fld_service != NULL) {
@@ -275,14 +268,6 @@ fld_server_fini(struct lu_server_fld *fld,
                 fld->fld_service = NULL;
         }
 
-        spin_lock(&fld_list_head.fld_lock);
-        list_for_each_safe(pos, n, &fld_list_head.fld_list) {
-                struct fld_item *fld = list_entry(pos, struct fld_item,
-                                                  fld_list);
-                list_del_init(&fld->fld_list);
-                OBD_FREE_PTR(fld);
-        }
-        spin_unlock(&fld_list_head.fld_lock);
         if (fld->fld_dt != NULL) {
                 lu_device_put(&fld->fld_dt->dd_lu_dev);
                 fld_index_fini(fld, ctx);
