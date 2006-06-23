@@ -571,7 +571,7 @@ test_24() {
 	lfs df $DIR1/$tfile || error "lfs df $DIR1/$tfile failed"
 	lfs df -ih $DIR2/$tfile || error "lfs df -ih $DIR2/$tfile failed"
 	
-	OSC=`lctl dl | awk '/OSC.*MNT/ {print $4}' | head -n 1`
+	OSC=`lctl dl | awk '/-osc-/ {print $4}' | head -n 1`
 	lctl --device %$OSC deactivate
 	lfs df -i || error "lfs df -i with deactivated OSC failed"
 	lctl --device %$OSC recover
@@ -580,7 +580,7 @@ test_24() {
 run_test 24 "lfs df [-ih] [path] test ========================="
 
 test_25() {
-	[ `cat $LPROC/mdc/MDC*MNT*/connect_flags | grep -c acl` -lt 2 ] && echo "skipping $TESTNAME (must have acl)" && return
+	[ `cat $LPROC/mdc/*-mdc-*/connect_flags | grep -c acl` -lt 2 ] && echo "skipping $TESTNAME (must have acl)" && return
 
 	mkdir $DIR1/d25 || error
 	touch $DIR1/d25/f1 || error
