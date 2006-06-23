@@ -301,8 +301,17 @@ __u64 get_device_size(char* device)
                 return 0;
         }
 
+#ifdef BLKGETSIZE64
         /* size in bytes. bz5831 */
         ret = ioctl(fd, BLKGETSIZE64, (void*)&size);
+#else
+        {
+                __u32 lsize = 0;
+                /* size in blocks */
+                ret = ioctl(fd, BLKGETSIZE, (void*)&lsize);
+                size = (__u64)lsize * 512; 
+        }
+#endif
         close(fd);
         if (ret < 0) {
                 fprintf(stderr, "%s: size ioctl failed: %s\n", 
