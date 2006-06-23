@@ -202,6 +202,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         int rc;
         ENTRY;
 
+        /* Store the connect data for connecting each of the oscs.
+           If the data was NULL, remember that as well. */
         lov->lov_ocd.ocd_connect_flags = OBD_CONNECT_EMPTY; 
         if (data) 
                 lov->lov_ocd = *data;
@@ -496,7 +498,8 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         }
 
         if (lov->lov_ocd.ocd_connect_flags != OBD_CONNECT_EMPTY) { 
-                /* Keep the original connect flags pristine */
+                /* Make a copy of the lov connect data for the osc_connect,
+                   which may modify the flags. */
                 OBD_ALLOC_PTR(ocd);
                 if (!ocd) 
                         RETURN(-ENOMEM);
