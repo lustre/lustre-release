@@ -60,7 +60,8 @@ static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
         struct obd_device *mdc, *mdt;
         const char *srv = lustre_cfg_string(cfg, 0);
         const char *uuid_str = lustre_cfg_string(cfg, 1);
-        const char *index = lustre_cfg_string(cfg, 2), *p;
+        const char *index = lustre_cfg_string(cfg, 2);
+        char *p;
         int rc = 0;
 
         ENTRY;

@@ -156,17 +156,26 @@ static int cmm_process_config(const struct lu_context *ctx,
         switch(cfg->lcfg_command) {
         case LCFG_ADD_MDC:
                 err = cmm_add_mdc(ctx, m, cfg);
+                /* the first ADD_MDC can be counted as setup is finished */
+                if (m->cmm_flags & CMM_INITIALIZED == 0)
+                        m->cmm_flags |= CMM_INITIALIZED;
                 break;
         case LCFG_SETUP:
         {
-                const char *index = lustre_cfg_string(cfg, 2), *p;
+                const char *index = lustre_cfg_string(cfg, 2);
+                char *p;
                 LASSERT(index);
-                m->cmm_local_num = simple_strtol(index, &p, 10);
-                if (*p) {
-                        CERROR("Invalid index in lustre_cgf, offset 2\n");
-                        RETURN(-EINVAL);
+                
+                /* lower layers should be set up at first */
+                err = next->ld_ops->ldo_process_config(ctx, next, cfg);
+                if (err == 0) {
+                        m->cmm_local_num = simple_strtol(index, &p, 10);
+                        if (*p) {
+                                CERROR("Invalid index in lustre_cgf\n");
+                                RETURN(-EINVAL);
+                        }
                 }
-                /* no break; to pass cfg further */
+                break;
         }
         default:
                 err = next->ld_ops->ldo_process_config(ctx, next, cfg);
@@ -240,8 +249,7 @@ static int cmm_device_init(const struct lu_context *ctx,
         err = fld_client_init(&m->cmm_fld, LUSTRE_CLI_FLD_HASH_RRB);
         if (err) {
                 CERROR("can't init FLD, err %d\n",  err);
-        } else
-                m->cmm_flags |= CMM_INITIALIZED;
+        }
         RETURN(err);
 }
 

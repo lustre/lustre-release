@@ -51,7 +51,7 @@ static int cmm_fld_lookup(struct cmm_device *cm,
                 RETURN(rc);
         }
 
-        if (*mds > cm->cmm_tgt_count) {
+        if (*mds >= cm->cmm_tgt_count) {
                 CERROR("Got invalid mdsno: "LPU64" (max: %u)\n",
                        *mds, cm->cmm_tgt_count);
                 rc = -EINVAL;
