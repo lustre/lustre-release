@@ -565,7 +565,7 @@ static int mdd_object_create(const struct lu_context *ctxt, struct md_object *ob
 
 static int
 __mdd_attr_set(const struct lu_context *ctxt, struct md_object *obj,
-               struct lu_attr *attr, struct thandle *handle)
+               const struct lu_attr *attr, struct thandle *handle)
 {
         struct dt_object *next;
 
@@ -576,7 +576,7 @@ __mdd_attr_set(const struct lu_context *ctxt, struct md_object *obj,
 
 static int
 mdd_attr_set(const struct lu_context *ctxt,
-             struct md_object *obj, struct lu_attr *attr)
+             struct md_object *obj, const struct lu_attr *attr)
 {
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
@@ -597,7 +597,7 @@ mdd_attr_set(const struct lu_context *ctxt,
 
 static int
 __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_device *mdd,
-                struct mdd_object *obj, void *buf,
+                struct mdd_object *obj, const void *buf,
                 int buf_len, const char *name, struct thandle *handle)
 {
         struct dt_object *next;
@@ -609,7 +609,7 @@ __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_device *mdd,
 }
 
 static int
-mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj, void *buf,
+mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj, const void *buf,
               int buf_len, const char *name)
 {
         struct mdd_device *mdd = mdo2mdd(obj);

@@ -123,10 +123,14 @@ enum {
 struct mdt_reint_record {
         mdt_reint_t          rr_opcode;
         const struct lu_fid *rr_fid1;
-        struct lu_fid       *rr_fid2;
+        const struct lu_fid *rr_fid2;
         const char          *rr_name;
         const char          *rr_tgt;
-        __u32                rr_flags;
+        int                  rr_eadatalen;
+        const void          *rr_eadata;
+        int                  rr_logcookielen;
+        const struct llog_cookie  *rr_logcookies;
+
 };
 
 struct mdt_reint_reply {
@@ -221,7 +225,10 @@ int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 int mdt_reint_rec(struct mdt_thread_info *);
 void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr);
 const struct lu_fid *mdt_object_fid(struct mdt_object *o);
-struct ptlrpc_request *mdt_info_req  (struct mdt_thread_info *info);
+static inline struct ptlrpc_request *mdt_info_req  (struct mdt_thread_info *info)
+{
+         return info->mti_pill.rc_req;
+}
 int mdt_getxattr(struct mdt_thread_info *info);
 int mdt_setxattr(struct mdt_thread_info *info);
 

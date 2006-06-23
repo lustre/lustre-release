@@ -131,6 +131,89 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
 
 static int mdt_reint_setattr(struct mdt_thread_info *info)
 {
+#ifdef MDT_CODE
+        struct lu_attr *attr = &info->mti_attr;
+        struct mdt_reint_record *rr = &info->mti_rr;
+        struct req_capsule *pill = &info->mti_pill;
+        struct ptlrpc_request *req = mdt_info_req(info);
+        struct mdt_object *mo;
+        struct mdt_lock_handle *lh;
+        struct lu_attr tmp_attr;
+        struct mdt_body *repbody;
+        int rc;
+        int locked = 0;
+
+        ENTRY;
+
+        DEBUG_REQ(D_INODE, req, "setattr "DFID3" %x", PFID3(rr->rr_fid1),
+                  (unsigned int)attr->la_valid);
+
+        /* MDS_CHECK_RESENT */
+
+        rc = req_capsule_pack(pill);
+        if (rc)
+                RETURN(rc);        
+
+        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                RETURN(-EROFS);
+
+        if (attr->la_valid & ATTR_FROM_OPEN) {
+                mo = mdt_object_find(info->mti_ctxt, info->mti_mdt, rr->rr_fid1);
+                if (IS_ERR(mo))
+                        RETURN(rc = PTR_ERR(mo));
+        } else {
+                __u64 lockpart = MDS_INODELOCK_UPDATE;
+                if (attr->la_valid & (ATTR_MODE|ATTR_UID|ATTR_GID))
+                        lockpart |= MDS_INODELOCK_LOOKUP;
+        
+                lh = &info->mti_lh[MDT_LH_PARENT];
+                lh->mlh_mode = LCK_EX;
+ 
+                mo = mdt_object_find_lock(info->mti_ctxt, info->mti_mdt, 
+                                          rr->rr_fid1, lh, lockpart);
+                
+                if (IS_ERR(mo))
+                        RETURN(rc = PTR_ERR(mo));
+                locked = 1;
+        }
+
+        LASSERT(lu_object_exists(info->mti_ctxt, &mo->mot_obj.mo_lu));
+
+        rc = mo_attr_set(info->mti_ctxt, mdt_object_child(mo), attr);
+        if (rc != 0)
+                GOTO(out_unlock, rc);
+        
+        rc = mo_attr_get(info->mti_ctxt, mdt_object_child(mo), &tmp_attr);
+        if (rc != 0)
+                GOTO(out_unlock, rc);
+
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        mdt_pack_attr2body(repbody, &tmp_attr);
+        repbody->fid1 = *mdt_object_fid(mo);
+        repbody->valid |= OBD_MD_FLID;
+       
+        /* don't return OST-specific attributes if we didn't just set them. */
+        if (attr->la_valid & ATTR_SIZE)
+                repbody->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+        if (attr->la_valid & (ATTR_MTIME | ATTR_MTIME_SET))
+                repbody->valid |= OBD_MD_FLMTIME;
+        if (attr->la_valid & (ATTR_ATIME | ATTR_ATIME_SET))
+                repbody->valid |= OBD_MD_FLATIME;
+        
+        rc = mo_xattr_set(info->mti_ctxt, mdt_object_child(mo),
+                          rr->rr_eadata, rr->rr_eadatalen, "lov");
+        if (rc)
+                GOTO(out_unlock, rc);
+
+        /* FIXME Please deal with logcookies here*/
+
+out_unlock:
+        if (locked) {
+                mdt_object_unlock(info->mti_mdt->mdt_namespace, mo, lh);
+        }
+        mdt_object_put(info->mti_ctxt, mo);
+        RETURN(rc);
+#endif
         ENTRY;
         RETURN(-EOPNOTSUPP);
 }
@@ -211,11 +294,13 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         struct mdt_body        *body = info->mti_reint_rep.mrr_body;
         struct lov_mds_md      *lmm  = info->mti_reint_rep.mrr_md;
         int                     created = 0;
+        struct lu_fid           child_fid;
         ENTRY;
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_PW;
 
+        req_capsule_pack(&info->mti_pill);
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
 
         parent = mdt_object_find_lock(info->mti_ctxt,
@@ -226,7 +311,7 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                 RETURN(PTR_ERR(parent));
 
         result = mdo_lookup(info->mti_ctxt, mdt_object_child(parent),
-                            info->mti_rr.rr_name, info->mti_rr.rr_fid2);
+                            info->mti_rr.rr_name, &child_fid);
         if (result && result != -ENOENT) {
                 GOTO(out_parent, result);
         }
@@ -239,13 +324,13 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
 
         if (result == -ENOENT) {
-                if(!(info->mti_rr.rr_flags & MDS_OPEN_CREAT))
+                if(!(info->mti_attr.la_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
                 if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                         GOTO(out_parent, result = -EROFS);
         }
 
-        child = mdt_object_find(info->mti_ctxt, mdt, info->mti_rr.rr_fid2);
+        child = mdt_object_find(info->mti_ctxt, mdt, &child_fid);
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
 
@@ -260,8 +345,8 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                 if (result != 0)
                         GOTO(out_child, result);
                 created = 1;
-        } else if (info->mti_rr.rr_flags & MDS_OPEN_EXCL &&
-                   info->mti_rr.rr_flags & MDS_OPEN_CREAT) {
+        } else if (info->mti_attr.la_flags & MDS_OPEN_EXCL &&
+                   info->mti_attr.la_flags & MDS_OPEN_CREAT) {
                         GOTO(out_child, result = -EEXIST);
         }
 

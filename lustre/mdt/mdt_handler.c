@@ -211,7 +211,6 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
                 }
         } else if (S_ISLNK(la->la_mode) && (body->valid & OBD_MD_LINKNAME)) {
                 /* It also uese the mdt_md to hold symname */
-                CERROR("DDDDDDDDDDDDDDDDDD rc = %d\n", rc);
                 int len = min_t(int, la->la_size + 1, body->eadatasize);
                 req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, len);
         }
@@ -266,17 +265,14 @@ static int mdt_getattr_internal(struct mdt_thread_info *info)
                 RETURN(rc);
         }
 
-        repbody = req_capsule_server_get(&info->mti_pill,
-                                         &RMF_MDT_BODY);
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         mdt_pack_attr2body(repbody, la);
         repbody->fid1 = *mdt_object_fid(info->mti_object);
         repbody->valid |= OBD_MD_FLID;
 
 #ifdef MDT_CODE
-        buffer = req_capsule_server_get(&info->mti_pill,
-                                        &RMF_MDT_MD);
-        length = req_capsule_get_size(&info->mti_pill,
-                                      &RMF_MDT_MD,
+        buffer = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
+        length = req_capsule_get_size(&info->mti_pill, &RMF_MDT_MD,
                                       RCL_SERVER);
 
         if ((S_ISREG(la->la_mode) && (reqbody->valid & OBD_MD_FLEASIZE)) ||
@@ -304,7 +300,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info)
                         repbody->valid |= OBD_MD_LINKNAME;
                         repbody->eadatasize = rc + 1;
                         ((char*)buffer)[rc] = 0;        /* NULL terminate */
-                        CDEBUG(S_MDS, "read symlink dest %s\n", (char*)buffer);
+                        CDEBUG(D_INODE, "read symlink dest %s\n", (char*)buffer);
                 }
         }
 
@@ -468,11 +464,6 @@ static struct mdt_device *mdt_dev(struct lu_device *d)
         return container_of0(d, struct mdt_device, mdt_md_dev.md_lu_dev);
 }
 
-struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
-{
-        return info->mti_pill.rc_req;
-}
-
 static int mdt_connect(struct mdt_thread_info *info)
 {
         int result;
@@ -555,10 +546,10 @@ static int mdt_reint(struct mdt_thread_info *info)
         static const struct req_format *reint_fmts[REINT_MAX] = {
                 [REINT_SETATTR] = &RQF_MDS_REINT_SETATTR,
                 [REINT_CREATE]  = &RQF_MDS_REINT_CREATE,
-                [REINT_LINK]    = NULL, /* XXX not yet */
+                [REINT_LINK]    = &RQF_MDS_REINT_LINK,
                 [REINT_UNLINK]  = &RQF_MDS_REINT_UNLINK,
-                [REINT_RENAME]  = NULL, /* XXX not yet */
-                [REINT_OPEN]    = &RQF_MDS_REINT_OPEN /* XXX Huang hua */
+                [REINT_RENAME]  = &RQF_MDS_REINT_RENAME,
+                [REINT_OPEN]    = &RQF_MDS_REINT_OPEN
         };
 
         ENTRY;
@@ -587,11 +578,6 @@ static int mdt_done_writing(struct mdt_thread_info *info)
 }
 
 static int mdt_pin(struct mdt_thread_info *info)
-{
-        return -EOPNOTSUPP;
-}
-
-static int mdt_sync(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
@@ -647,6 +633,11 @@ static int mdt_sync(struct mdt_thread_info *info)
                 body->valid |= OBD_MD_FLID;
         }
         RETURN(rc);
+}
+#else
+static int mdt_sync(struct mdt_thread_info *info)
+{
+        return -EOPNOTSUPP;
 }
 #endif
 
@@ -757,7 +748,8 @@ int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
              ldlm_policy_data_t *policy)
 {
         struct ldlm_res_id res_id;
-        int flags = 0, rc;
+        int flags = 0;
+        int rc;
         ENTRY;
 
         LASSERT(ns != NULL);
@@ -769,7 +761,7 @@ int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
                               LDLM_IBITS, policy, mode, &flags,
                               ldlm_blocking_ast, ldlm_completion_ast, NULL,
                               NULL, NULL, 0, NULL, lh);
-        RETURN (rc == ELDLM_OK ? 0 : -EIO);
+        RETURN(rc == ELDLM_OK ? 0 : -EIO);
 }
 
 void fid_unlock(struct ldlm_namespace *ns, const struct lu_fid *f,
@@ -1005,16 +997,16 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         }
 
         if (result == 0 && flags & HABEO_CLAVIS) {
-                struct ldlm_request *dlm;
+                struct ldlm_request *dlm_req;
 
                 LASSERT(h->mh_fmt != NULL);
 
-                dlm = req_capsule_client_get(&info->mti_pill, &RMF_DLM_REQ);
-                if (dlm != NULL) {
+                dlm_req = req_capsule_client_get(&info->mti_pill, &RMF_DLM_REQ);
+                if (dlm_req != NULL) {
                         if (info->mti_mdt->mdt_flags & MDT_CL_COMPAT_RESNAME)
                                 result = mdt_lock_resname_compat(info->mti_mdt,
-                                                                 dlm);
-                        info->mti_dlm_req = dlm;
+                                                                 dlm_req);
+                        info->mti_dlm_req = dlm_req;
                 } else {
                         CERROR("Can't unpack dlm request\n");
                         result = -EFAULT;
@@ -1039,11 +1031,11 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         if (result == 0 && flags & HABEO_CLAVIS &&
             info->mti_mdt->mdt_flags & MDT_CL_COMPAT_RESNAME) {
-                struct ldlm_reply *rep;
+                struct ldlm_reply *dlm_rep;
 
-                rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof *rep);
-                if (rep != NULL)
-                        result = mdt_lock_reply_compat(info->mti_mdt, rep);
+                dlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
+                if (dlm_rep != NULL)
+                        result = mdt_lock_reply_compat(info->mti_mdt, dlm_rep);
         }
 
         /* If we're DISCONNECTing, the mds_export_data is already freed */
@@ -1382,51 +1374,52 @@ static struct mdt_it_flavor {
 } mdt_it_flavor[] = {
         [MDT_IT_OPEN]     = {
                 .it_fmt   = &RQF_LDLM_INTENT,
-                .it_flags = HABEO_REFERO,
+                /*.it_flags = HABEO_REFERO,*/
+                .it_flags = 0,
                 .it_act   = mdt_intent_reint,
                 .it_reint = REINT_OPEN
         },
         [MDT_IT_OCREAT]   = {
                 .it_fmt   = &RQF_LDLM_INTENT,
-                .it_flags = HABEO_REFERO,
+                .it_flags = 0,
                 .it_act   = mdt_intent_reint,
                 .it_reint = REINT_OPEN
         },
         [MDT_IT_CREATE]   = {
                 .it_fmt   = &RQF_LDLM_INTENT,
-                .it_flags = HABEO_REFERO,
+                .it_flags = 0,
                 .it_act   = mdt_intent_reint,
                 .it_reint = REINT_CREATE
         },
         [MDT_IT_GETATTR]  = {
                 .it_fmt   = &RQF_LDLM_INTENT_GETATTR,
-                .it_flags = HABEO_CORPUS,
+                .it_flags = 0,
                 .it_act   = mdt_intent_getattr
         },
         [MDT_IT_READDIR]  = {
                 .it_fmt   = NULL,
-                .it_flags = HABEO_REFERO,
+                .it_flags = 0,
                 .it_act   = NULL
         },
         [MDT_IT_LOOKUP]   = {
                 .it_fmt   = &RQF_LDLM_INTENT_GETATTR,
-                .it_flags = HABEO_CORPUS,
+                .it_flags = 0,
                 .it_act   = mdt_intent_getattr
         },
         [MDT_IT_UNLINK]   = {
                 .it_fmt   = &RQF_LDLM_INTENT_UNLINK,
-                .it_flags = HABEO_REFERO,
+                .it_flags = 0,
                 .it_act   = NULL, /* XXX can be mdt_intent_reint, ? */
                 .it_reint = REINT_UNLINK
         },
         [MDT_IT_TRUNC]    = {
                 .it_fmt   = NULL,
-                .it_flags = HABEO_REFERO,
+                .it_flags = 0,
                 .it_act   = NULL
         },
         [MDT_IT_GETXATTR] = {
                 .it_fmt   = NULL,
-                .it_flags = HABEO_REFERO,
+                .it_flags = 0,
                 .it_act   = NULL
         }
 };
@@ -1436,13 +1429,13 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                               struct ldlm_lock **lockp,
                               int flags)
 {
-        __u64 child_bits;
+        __u64  child_bits;
         struct ldlm_lock *old_lock = *lockp;
         struct ldlm_lock *new_lock = NULL;
         struct ptlrpc_request *req = mdt_info_req(info);
         struct ldlm_reply *ldlm_rep;
         struct mdt_lock_handle lhc = {{0}};
-        int rc;
+        int    rc;
 
         ENTRY;
 

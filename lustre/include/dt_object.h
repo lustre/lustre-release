@@ -150,7 +150,8 @@ struct dt_object_operations {
          */
         int   (*do_attr_set)(const struct lu_context *ctxt,
                              struct dt_object *dt,
-                             struct lu_attr *attr, struct thandle *handle);
+                             const struct lu_attr *attr,
+                             struct thandle *handle);
         /*
          * Return a value of an extended attribute.
          *
@@ -165,7 +166,8 @@ struct dt_object_operations {
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*do_xattr_set)(const struct lu_context *ctxt,
-                              struct dt_object *dt, void *buf, int buf_len,
+                              struct dt_object *dt, 
+                              const void *buf, int buf_len,
                               const char *name, struct thandle *handle);
         /*
          * Create new object on this device.

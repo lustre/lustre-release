@@ -106,6 +106,8 @@ extern const struct req_format RQF_MDS_REINT;
 extern const struct req_format RQF_MDS_REINT_CREATE;
 extern const struct req_format RQF_MDS_REINT_OPEN;
 extern const struct req_format RQF_MDS_REINT_UNLINK;
+extern const struct req_format RQF_MDS_REINT_LINK;
+extern const struct req_format RQF_MDS_REINT_RENAME;
 extern const struct req_format RQF_MDS_REINT_SETATTR;
 extern const struct req_format RQF_LDLM_ENQUEUE;
 extern const struct req_format RQF_LDLM_INTENT;

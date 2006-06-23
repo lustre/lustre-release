@@ -127,16 +127,16 @@ int mdt_getxattr(struct mdt_thread_info *info)
         if (info->mti_body->valid & OBD_MD_FLXATTR) {
                 char *xattr_name = req_capsule_client_get(&info->mti_pill, 
                                                           &RMF_NAME);
-                CDEBUG(S_MDS, "getxattr %s\n", xattr_name);
+                CDEBUG(D_INODE, "getxattr %s\n", xattr_name);
 
                 rc = mo_xattr_get(info->mti_ctxt, next, 
                                    buf, buflen, xattr_name);
 
                 if (rc < 0 && rc != -ENODATA && rc != -EOPNOTSUPP &&
                     rc != -ERANGE)
-                        CDEBUG(S_MDS, "getxattr failed: %d\n", rc);
+                        CDEBUG(D_INODE, "getxattr failed: %d\n", rc);
         } else if (info->mti_body->valid & OBD_MD_FLXATTRLS) {
-                CDEBUG(S_MDS, "listxattr\n");
+                CDEBUG(D_INODE, "listxattr\n");
 
                 rc = mo_xattr_list(info->mti_ctxt, next, buf, buflen);
                 if (rc < 0)

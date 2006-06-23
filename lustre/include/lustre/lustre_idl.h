@@ -959,7 +959,7 @@ struct mdt_rec_setattr {
         __u32           sa_uid;
         __u32           sa_gid;
         __u32           sa_attr_flags;
-        __u32           sa_padding; /* also fix lustre_swab_mds_rec_setattr */
+        __u32           sa_padding; /* also fix lustre_swab_mdt_rec_setattr */
 };
 
 extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);

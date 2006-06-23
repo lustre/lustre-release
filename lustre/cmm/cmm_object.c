@@ -242,7 +242,7 @@ static int cml_attr_get(const struct lu_context *ctx, struct md_object *mo,
 }
 
 static int cml_attr_set(const struct lu_context *ctx, struct md_object *mo,
-                        struct lu_attr *attr)
+                        const struct lu_attr *attr)
 {
         int rc;
         ENTRY;
@@ -261,7 +261,7 @@ static int cml_xattr_get(const struct lu_context *ctx, struct md_object *mo,
 }
 
 static int cml_xattr_set(const struct lu_context *ctx, struct md_object *mo,
-                         void *buf, int buflen, const char *name)
+                         const void *buf, int buflen, const char *name)
 {
         int rc;
         ENTRY;
@@ -503,7 +503,7 @@ static int cmr_attr_get(const struct lu_context *ctx, struct md_object *mo,
 }
 
 static int cmr_attr_set(const struct lu_context *ctx, struct md_object *mo,
-                        struct lu_attr *attr)
+                        const struct lu_attr *attr)
 {
         RETURN(-EFAULT);
 }
@@ -515,7 +515,7 @@ static int cmr_xattr_get(const struct lu_context *ctx, struct md_object *mo,
 }
 
 static int cmr_xattr_set(const struct lu_context *ctx, struct md_object *mo,
-                         void *buf, int buflen, const char *name)
+                         const void *buf, int buflen, const char *name)
 {
         RETURN(-EFAULT);
 }
