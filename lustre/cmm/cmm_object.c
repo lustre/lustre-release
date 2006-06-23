@@ -36,14 +36,6 @@
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
-/* XXX: fix later this hack. It exists because OSD produces fids with like this:
-   seq = ROOT_SEQ + 1, etc. */
-static int cmm_special_fid(const struct lu_fid *fid)
-{
-        struct lu_range *space = (struct lu_range *)&LUSTRE_SEQ_SPACE_RANGE;
-        return !range_within(space, fid_seq(fid));
-}
-
 static int cmm_fld_lookup(struct cmm_device *cm, 
                           const struct lu_fid *fid, mdsno_t *mds)
 {
@@ -52,25 +44,19 @@ static int cmm_fld_lookup(struct cmm_device *cm,
 
         LASSERT(fid_is_sane(fid));
 
-        /* XXX: is this correct? We need this to prevent FLD lookups while CMM
-         * did not initialized yet all MDCs. */
-        if (cmm_special_fid(fid))
-                *mds = 0;
-        else {
-                rc = fld_client_lookup(&cm->cmm_fld, fid_seq(fid), mds);
-                if (rc) {
-                        CERROR("can't find mds by seq "LPU64", rc %d\n",
-                               fid_seq(fid), rc);
-                        RETURN(rc);
-                }
+        rc = fld_client_lookup(&cm->cmm_fld, fid_seq(fid), mds);
+        if (rc) {
+                CERROR("can't find mds by seq "LPU64", rc %d\n",
+                       fid_seq(fid), rc);
+                RETURN(rc);
         }
 
         if (*mds > cm->cmm_tgt_count) {
-                CERROR("Got invalid mdsno: %u (max: %u)\n",
+                CERROR("Got invalid mdsno: "LPU64" (max: %u)\n",
                        *mds, cm->cmm_tgt_count);
                 rc = -EINVAL;
         } else {
-                CDEBUG(D_INFO, "CMM: got MDS %u for sequence: "LPU64"\n",
+                CDEBUG(D_INFO, "CMM: got MDS "LPU64" for sequence: "LPU64"\n",
                        *mds, fid_seq(fid));
         }
 

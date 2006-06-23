@@ -111,12 +111,12 @@ static void __exit fld_mod_exit(void)
 static int
 fld_server_handle(struct lu_server_fld *fld,
                   const struct lu_context *ctx,
-                  __u32 opts, struct md_fld *mf)
+                  __u32 opc, struct md_fld *mf)
 {
         int rc;
         ENTRY;
 
-        switch (opts) {
+        switch (opc) {
         case FLD_CREATE:
                 rc = fld_index_handle_insert(fld, ctx,
                                              mf->mf_seq, mf->mf_mds);

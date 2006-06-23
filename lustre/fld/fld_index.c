@@ -60,10 +60,9 @@ static const struct dt_index_features fld_index_features = {
 };
 
 /*
- * number of blocks to reserve for particular operations. Should be function
- * of ... something. Stub for now.
+ * number of blocks to reserve for particular operations. Should be function of
+ * ... something. Stub for now.
  */
-
 enum {
         FLD_TXN_INDEX_INSERT_CREDITS  = 10,
         FLD_TXN_INDEX_DELETE_CREDITS  = 10
@@ -144,9 +143,12 @@ int fld_index_handle_insert(struct lu_server_fld *fld,
 
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
 
+        dt_obj->do_ops->do_object_lock(ctx, dt_obj, DT_WRITE_LOCK);
         rc = dt_obj->do_index_ops->dio_insert(ctx, dt_obj,
                                               fld_rec(ctx, mds),
                                               fld_key(ctx, seq), th);
+        dt_obj->do_ops->do_object_unlock(ctx, dt_obj, DT_WRITE_LOCK);
+        
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
@@ -165,8 +167,12 @@ int fld_index_handle_delete(struct lu_server_fld *fld,
 
         txn.tp_credits = FLD_TXN_INDEX_DELETE_CREDITS;
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
+
+        dt_obj->do_ops->do_object_lock(ctx, dt_obj, DT_WRITE_LOCK);
         rc = dt_obj->do_index_ops->dio_delete(ctx, dt_obj,
                                               fld_key(ctx, seq), th);
+        dt_obj->do_ops->do_object_unlock(ctx, dt_obj, DT_WRITE_LOCK);
+        
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
@@ -181,8 +187,11 @@ int fld_index_handle_lookup(struct lu_server_fld *fld,
         int rc;
         ENTRY;
 
+        dt_obj->do_ops->do_object_lock(ctx, dt_obj, DT_READ_LOCK);
         rc = dt_obj->do_index_ops->dio_lookup(ctx, dt_obj, rec,
                                               fld_key(ctx, seq));
+        dt_obj->do_ops->do_object_unlock(ctx, dt_obj, DT_READ_LOCK);
+        
         if (rc == 0)
                 *mds = be64_to_cpu(*(__u64 *)rec);
         RETURN(rc);
