@@ -2094,8 +2094,6 @@ static int mdt_init0(struct mdt_device *m,
         if (rc)
                 GOTO(err_free_ns, rc);
 
-        s->ls_flags |= LS_INITIALIZED;
-
         RETURN(0);
 
 err_free_ns:
