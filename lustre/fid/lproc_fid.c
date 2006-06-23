@@ -173,6 +173,49 @@ seq_proc_read_super(char *page, char **start, off_t off,
 }
 
 static int
+seq_proc_write_meta(struct file *file, const char *buffer,
+		    unsigned long count, void *data)
+{
+        struct lu_client_seq *seq = (struct lu_client_seq *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+	rc = seq_proc_write_range(file, buffer, count,
+				  data, &seq->seq_range);
+
+	if (rc == 0) {
+		CDEBUG(D_WARNING, "SEQ-MGR(cli): meta-sequence has changed to "
+		       "["LPU64"-"LPU64"]\n", seq->seq_range.lr_start,
+		       seq->seq_range.lr_end);
+	}
+	
+	up(&seq->seq_sem);
+	
+        RETURN(count);
+}
+
+static int
+seq_proc_read_meta(char *page, char **start, off_t off,
+		   int count, int *eof, void *data)
+{
+        struct lu_client_seq *seq = (struct lu_client_seq *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+	rc = seq_proc_read_range(page, start, off, count, eof,
+				 data, &seq->seq_range);
+	up(&seq->seq_sem);
+	
+	RETURN(rc);
+}
+
+static int
 seq_proc_read_controller(char *page, char **start, off_t off,
 			 int count, int *eof, void *data)
 {
@@ -195,9 +238,13 @@ seq_proc_read_controller(char *page, char **start, off_t off,
 	RETURN(rc);
 }
 
-struct lprocfs_vars seq_proc_list[] = {
+struct lprocfs_vars seq_server_proc_list[] = {
 	{ "space",      seq_proc_read_space, seq_proc_write_space, NULL },
 	{ "super",      seq_proc_read_super, seq_proc_write_super, NULL },
 	{ "controller", seq_proc_read_controller, NULL, NULL },
+	{ NULL }};
+
+struct lprocfs_vars seq_client_proc_list[] = {
+	{ "meta",       seq_proc_read_meta, seq_proc_write_meta, NULL },
 	{ NULL }};
 #endif

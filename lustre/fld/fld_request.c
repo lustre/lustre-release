@@ -353,8 +353,10 @@ fld_client_create(struct lu_client_fld *fld,
         md_fld.mf_mds = mds;
         
         rc = fld_client_rpc(fld_exp, &md_fld, FLD_CREATE);
+        
 #ifdef __KERNEL__
-        fld_cache_insert(fld_cache, seq, mds);
+        if (rc  == 0)
+                rc = fld_cache_insert(fld_cache, seq, mds);
 #endif
         
         RETURN(rc);
@@ -363,7 +365,7 @@ EXPORT_SYMBOL(fld_client_create);
 
 int
 fld_client_delete(struct lu_client_fld *fld,
-                  __u64 seq, mdsno_t mds)
+                  __u64 seq)
 {
         struct obd_export *fld_exp;
         struct md_fld      md_fld;
@@ -378,7 +380,7 @@ fld_client_delete(struct lu_client_fld *fld,
                 RETURN(-EINVAL);
 
         md_fld.mf_seq = seq;
-        md_fld.mf_mds = mds;
+        md_fld.mf_mds = 0;
 
         rc = fld_client_rpc(fld_exp, &md_fld, FLD_DELETE);
         RETURN(rc);
@@ -433,7 +435,8 @@ fld_client_lookup(struct lu_client_fld *fld,
                 RETURN(rc);
 
 #ifdef __KERNEL__
-        rc = fld_cache_insert(fld_cache, seq, *mds);
+        if (rc == 0)
+                rc = fld_cache_insert(fld_cache, seq, *mds);
 #endif
         
         RETURN(rc);

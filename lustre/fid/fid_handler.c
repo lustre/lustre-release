@@ -408,7 +408,7 @@ seq_server_proc_init(struct lu_server_seq *seq)
         }
 
         rc = lprocfs_add_vars(seq_type_proc_dir,
-                              seq_proc_list, seq);
+                              seq_server_proc_list, seq);
         if (rc) {
                 CERROR("can't init sequence manager "
                        "proc, rc %d\n", rc);

@@ -72,19 +72,19 @@ int fld_client_init(struct lu_client_fld *fld,
 
 void fld_client_fini(struct lu_client_fld *fld);
 
-int fld_client_add_export(struct lu_client_fld *fld,
-                          struct obd_export *exp);
-
-int fld_client_del_export(struct lu_client_fld *fld,
-                          struct obd_export *exp);
+int fld_client_lookup(struct lu_client_fld *fld,
+                      __u64 seq, mdsno_t *mds);
 
 int fld_client_create(struct lu_client_fld *fld,
                       __u64 seq, mdsno_t mds);
 
 int fld_client_delete(struct lu_client_fld *fld,
-                      __u64 seq, mdsno_t mds);
+                      __u64 seq);
 
-int fld_client_lookup(struct lu_client_fld *fld,
-                      __u64 seq, mdsno_t *mds);
+int fld_client_add_export(struct lu_client_fld *fld,
+                          struct obd_export *exp);
+
+int fld_client_del_export(struct lu_client_fld *fld,
+                          struct obd_export *exp);
 
 #endif

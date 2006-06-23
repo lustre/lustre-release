@@ -150,8 +150,6 @@ int fld_index_handle_insert(struct lu_server_fld *fld,
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
-        /* XXX: stub until IAM is ready */
-        return 0;
 }
 
 int fld_index_handle_delete(struct lu_server_fld *fld,
@@ -172,8 +170,6 @@ int fld_index_handle_delete(struct lu_server_fld *fld,
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
-        /* XXX: stub until IAM is ready */
-        return 0;
 }
 
 int fld_index_handle_lookup(struct lu_server_fld *fld,
@@ -190,9 +186,6 @@ int fld_index_handle_lookup(struct lu_server_fld *fld,
         if (rc == 0)
                 *mds = be64_to_cpu(*(__u64 *)rec);
         RETURN(rc);
-        /* XXX: stub until IAM is ready */
-        *mds = 0;
-        return 0;
 }
 
 int fld_index_init(struct lu_server_fld *fld,
