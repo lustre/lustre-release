@@ -157,7 +157,7 @@ static int cmm_process_config(const struct lu_context *ctx,
         case LCFG_ADD_MDC:
                 err = cmm_add_mdc(ctx, m, cfg);
                 /* the first ADD_MDC can be counted as setup is finished */
-                if (m->cmm_flags & CMM_INITIALIZED == 0)
+                if ((m->cmm_flags & CMM_INITIALIZED) == 0)
                         m->cmm_flags |= CMM_INITIALIZED;
                 break;
         case LCFG_SETUP:
