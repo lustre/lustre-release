@@ -678,12 +678,12 @@ clear_failloc() {
 
 cancel_lru_locks() {
     $LCTL mark "cancel_lru_locks start"
-    for d in /proc/fs/lustre/ldlm/namespaces/*-$1-*; do
+    for d in $LPROC/ldlm/namespaces/*-$1-*; do
         if [ -f $d/lru_size ]; then
-            echo clear >> $d/lru_size
-            grep "[0-9]" $d/lock_unused_count
-        fi
+	    echo clear >> $d/lru_size
+	fi
     done
+    grep "[0-9]" $LPROC/ldlm/namespaces/*-$1-*/lock_unused_count /dev/null
     $LCTL mark "cancel_lru_locks stop"
 }
 

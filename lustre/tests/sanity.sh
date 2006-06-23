@@ -1107,13 +1107,6 @@ test_28() {
 }
 run_test 28 "create/mknod/mkdir with bad file types ============"
 
-cancel_lru_locks() {
-	for d in $LPROC/ldlm/namespaces/*-$1-*; do
-		echo clear > $d/lru_size
-	done
-	grep "[0-9]" $LPROC/ldlm/namespaces/*-$1-*/lock_unused_count /dev/null
-}
-
 test_29() {
 	cancel_lru_locks mdc
 	mkdir $DIR/d29
@@ -1579,7 +1572,7 @@ test_36f() {
 	sleep 1
 	touch --date="$DATESTR" $DIR/d36/$tfile # setattr with timestamp in past
 	LS_BEFORE="`ls -l $DIR/d36/$tfile`" # "old" timestamp from client cache
-	cancel_lru_locks OSC
+	cancel_lru_locks osc
 	LS_AFTER="`ls -l $DIR/d36/$tfile`"  # timestamp from OST object
 	date; date +%s
 	[ "$LS_BEFORE" != "$LS_AFTER" ] && \

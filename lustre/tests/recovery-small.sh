@@ -339,7 +339,7 @@ test_21a() {
 
        do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
        kill -USR1 $close_pid
-       cancel_lru_locks MDC  # force the close
+       cancel_lru_locks mdc
        wait $close_pid || return 1
        wait $open_pid || return 2
        do_facet mds "sysctl -w lustre.fail_loc=0"
@@ -364,7 +364,7 @@ test_21b() {
        do_facet mds "sysctl -w lustre.fail_loc=0"
 
        kill -USR1 $close_pid
-       cancel_lru_locks MDC  # force the close
+       cancel_lru_locks mdc
        wait $close_pid || return 1
        wait $open_pid || return 3
 
@@ -388,7 +388,7 @@ test_21c() {
 
        do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
        kill -USR1 $close_pid
-       cancel_lru_locks MDC  # force the close
+       cancel_lru_locks mdc
        wait $close_pid || return 1
        wait $open_pid || return 2
 
@@ -413,7 +413,7 @@ test_21d() {
 
        do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
        kill -USR1 $pid
-       cancel_lru_locks MDC  # force the close
+       cancel_lru_locks mdc
        wait $pid || return 1
        do_facet mds "sysctl -w lustre.fail_loc=0"
 
@@ -436,7 +436,7 @@ test_21e() {
        do_facet mds "sysctl -w lustre.fail_loc=0"
 
        kill -USR1 $pid
-       cancel_lru_locks MDC  # force the close
+       cancel_lru_locks mdc
        wait $pid || return 1
 
        sleep $TIMEOUT
@@ -459,7 +459,7 @@ test_21f() {
 
        do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
        kill -USR1 $pid
-       cancel_lru_locks MDC  # force the close
+       cancel_lru_locks mdc
        wait $pid || return 1
        do_facet mds "sysctl -w lustre.fail_loc=0"
 
@@ -482,7 +482,7 @@ test_21g() {
 
        do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
        kill -USR1 $pid
-       cancel_lru_locks MDC  # force the close
+       cancel_lru_locks mdc
        wait $pid || return 1
        do_facet mds "sysctl -w lustre.fail_loc=0"
 
@@ -505,7 +505,7 @@ test_21h() {
        do_facet mds "sysctl -w lustre.fail_loc=0"
 
        do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
-       cancel_lru_locks MDC  # force the close
+       cancel_lru_locks mdc
        kill -USR1 $pid
        wait $pid || return 1
        do_facet mds "sysctl -w lustre.fail_loc=0"
@@ -530,7 +530,7 @@ test_22() {
     sleep 1
     multiop $f1 msu || return 1
 
-     cancel_lru_locks MDC  # force the close
+    cancel_lru_locks mdc
     do_facet mds "sysctl -w lustre.fail_loc=0"
 
     wait $close_pid || return 2
