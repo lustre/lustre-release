@@ -80,7 +80,6 @@ static inline struct lu_device *cmm2lu_dev(struct cmm_device *d)
 
 struct cmm_object {
         struct md_object cmo_obj;
-        int              cmo_local;
 };
 
 /* local CMM object */
@@ -116,12 +115,6 @@ static inline struct md_object *cmm2child_obj(struct cmm_object *o)
 {
         return (o ? lu2md(lu_object_next(&o->cmo_obj.mo_lu)) : NULL);
 }
-
-static inline int cmm_is_local_obj(struct cmm_object *c)
-{
-        return (c->cmo_local);
-}
-
 
 /* cmm_object.c */
 struct lu_object *cmm_object_alloc(const struct lu_context *ctx,

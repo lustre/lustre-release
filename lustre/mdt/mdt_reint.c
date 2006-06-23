@@ -177,7 +177,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
                 locked = 1;
         }
 
-        LASSERT(lu_object_exists(info->mti_ctxt, &mo->mot_obj.mo_lu));
+        LASSERT(lu_object_assert_exists(info->mti_ctxt, &mo->mot_obj.mo_lu));
 
         rc = mo_attr_set(info->mti_ctxt, mdt_object_child(mo), attr);
         if (rc != 0)

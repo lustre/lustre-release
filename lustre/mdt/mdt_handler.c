@@ -342,8 +342,8 @@ static int mdt_getattr(struct mdt_thread_info *info)
         int result;
 
         LASSERT(info->mti_object != NULL);
-        LASSERT(lu_object_exists(info->mti_ctxt,
-                                 &info->mti_object->mot_obj.mo_lu));
+        LASSERT(lu_object_assert_exists(info->mti_ctxt,
+                                        &info->mti_object->mot_obj.mo_lu));
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
@@ -894,6 +894,18 @@ static int mdt_lock_reply_compat(struct mdt_device *m, struct ldlm_reply *rep)
         return 0;
 }
 
+/*
+ * Generic code handling requests that have struct mdt_body passed in:
+ *
+ *  - extract mdt_body from request and save it in @info, if present;
+ *
+ *  - create lu_object, corresponding to the fid in mdt_body, and save it in
+ *  @info;
+ *
+ *  - if HABEO_CORPUS flag is set for this request type check whether object
+ *  actually exists on storage (lu_object_exists()).
+ *
+ */
 static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
 {
         int result;
@@ -930,18 +942,6 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
         return result;
 }
 
-/*
- * Generic code handling requests that have struct mdt_body passed in:
- *
- *  - extract mdt_body from request and save it in @info, if present;
- *
- *  - create lu_object, corresponding to the fid in mdt_body, and save it in
- *  @info;
- *
- *  - if HABEO_CORPUS flag is set for this request type check whether object
- *  actually exists on storage (lu_object_exists()).
- *
- */
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
 {
         struct req_capsule *pill;
@@ -2189,7 +2189,8 @@ static void mdt_object_free(const struct lu_context *ctxt, struct lu_object *o)
         EXIT;
 }
 
-static int mdt_object_exists(const struct lu_context *ctx, struct lu_object *o)
+static int mdt_object_exists(const struct lu_context *ctx,
+                             const struct lu_object *o)
 {
         return lu_object_exists(ctx, lu_object_next(o));
 }

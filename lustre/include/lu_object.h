@@ -182,7 +182,7 @@ struct lu_object_operations {
          * Return true off object @o exists on a storage.
          */
         int (*loo_object_exists)(const struct lu_context *ctx,
-                                 struct lu_object *o);
+                                 const struct lu_object *o);
         /*
          * Debugging helper. Print given object.
          */
@@ -682,12 +682,33 @@ int lu_object_print(const struct lu_context *ctxt,
 int lu_object_invariant(const struct lu_object *o);
 
 /*
- * Returns true iff object @o exists on the stable storage.
+ * Returns 1 iff object @o exists on the stable storage,
+ * returns -1 iif object @o is on remote server.
  */
 static inline int lu_object_exists(const struct lu_context *ctx,
-                                   struct lu_object *o)
+                                   const struct lu_object *o)
 {
         return o->lo_ops->loo_object_exists(ctx, o);
+}
+
+static inline int lu_object_assert_exists(const struct lu_context *ctx,
+                                   const struct lu_object *o)
+{
+        int result;
+        result = lu_object_exists(ctx, o);
+        if (result < 0)
+                result = 1;
+        return result;
+}
+ 
+static inline int lu_object_assert_not_exists(const struct lu_context *ctx,
+                                       const struct lu_object *o)
+{
+        int result;
+        result = lu_object_exists(ctx, o);
+        if (result < 0)
+                result = 0;
+        return !result;
 }
 
 /*

@@ -107,8 +107,7 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                         lu_object_init(lo, NULL, ld);
                         clo->cmm_obj.cmo_obj.mo_ops = &cml_mo_ops;
                         clo->cmm_obj.cmo_obj.mo_dir_ops = &cml_dir_ops;
-                        lo->lo_ops = &cml_obj_ops;
-                        clo->cmm_obj.cmo_local = 1;
+                        lo->lo_ops = &cml_obj_ops;                        
                 }
         } else {
                 struct cmr_object *cro;
@@ -121,7 +120,6 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                         cro->cmm_obj.cmo_obj.mo_dir_ops = &cmr_dir_ops;
                         lo->lo_ops = &cmr_obj_ops;
                         cro->cmo_num = mdsnum;
-                        cro->cmm_obj.cmo_local = 0;
                 }
         }
         RETURN(lo);
@@ -189,7 +187,7 @@ static int cml_object_init(const struct lu_context *ctx, struct lu_object *lo)
 }
 
 static int cml_object_exists(const struct lu_context *ctx,
-                             struct lu_object *lo)
+                             const struct lu_object *lo)
 {
         return lu_object_exists(ctx, lu_object_next(lo));
 }
@@ -351,7 +349,7 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
         int rc;
         ENTRY;
 
-        if (mo_t && !cmm_is_local_obj(md2cmm_obj(mo_t))) {
+        if (mo_t && lu_object_exists(ctx, &mo_t->mo_lu) < 0) {
                 /* mo_t is remote object and there is RPC to unlink it */
                 rc = mo_ref_del(ctx, md_object_next(mo_t));
                 if (rc)
@@ -455,10 +453,11 @@ static int cmr_object_init(const struct lu_context *ctx, struct lu_object *lo)
         RETURN(rc);
 }
 
+/* -1 is returned for remote object */
 static int cmr_object_exists(const struct lu_context *ctx,
-                             struct lu_object *lo)
+                             const struct lu_object *lo)
 {
-        return lu_object_exists(ctx, lu_object_next(lo));
+        return -1;
 }
 
 static int cmr_object_print(const struct lu_context *ctx,

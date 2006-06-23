@@ -105,7 +105,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         ENTRY;
 
         LASSERT(info->mti_object != NULL);
-        LASSERT(lu_object_exists(info->mti_ctxt,
+        LASSERT(lu_object_assert_exists(info->mti_ctxt,
                                  &info->mti_object->mot_obj.mo_lu));
         ENTRY;
 

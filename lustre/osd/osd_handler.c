@@ -111,7 +111,7 @@ static int   osd_object_init   (const struct lu_context *ctxt,
 static void  osd_object_release(const struct lu_context *ctxt,
                                 struct lu_object *l);
 static int   osd_object_exists (const struct lu_context *ctx,
-                                struct lu_object *o);
+                                const struct lu_object *o);
 static int   osd_object_print  (const struct lu_context *ctx,
                                 struct seq_file *f, const struct lu_object *o);
 static void  osd_device_free   (const struct lu_context *ctx,
@@ -335,7 +335,8 @@ static void osd_object_release(const struct lu_context *ctxt,
                 set_bit(LU_OBJECT_HEARD_BANSHEE, &l->lo_header->loh_flags);
 }
 
-static int osd_object_exists(const struct lu_context *ctx, struct lu_object *o)
+static int osd_object_exists(const struct lu_context *ctx,
+                             const struct lu_object *o)
 {
         LASSERT(osd_invariant(osd_obj(o)));
         return osd_obj(o)->oo_inode != NULL;

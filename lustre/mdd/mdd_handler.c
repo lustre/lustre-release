@@ -335,7 +335,8 @@ static int mdd_object_print(const struct lu_context *ctxt,
         return seq_printf(f, LUSTRE_MDD0_NAME"-object@%p", o);
 }
 
-static int mdd_object_exists(const struct lu_context *ctx, struct lu_object *o)
+static int mdd_object_exists(const struct lu_context *ctx,
+                             const struct lu_object *o)
 {
         return lu_object_exists(ctx, lu_object_next(o));
 }
