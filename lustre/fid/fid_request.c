@@ -248,10 +248,55 @@ out:
 }
 EXPORT_SYMBOL(seq_client_alloc_fid);
 
+#ifdef LPROCFS
+static int
+seq_client_proc_init(struct lu_client_seq *seq)
+{
+        int rc;
+        ENTRY;
+
+        seq->seq_proc_dir = lprocfs_register(seq->seq_name,
+                                             proc_lustre_root,
+                                             NULL, NULL);
+        
+        if (IS_ERR(seq->seq_proc_dir)) {
+                CERROR("LProcFS failed in seq-init\n");
+                rc = PTR_ERR(seq->seq_proc_dir);
+                GOTO(err, rc);
+        }
+
+        rc = lprocfs_add_vars(seq->seq_proc_dir,
+                              seq_client_proc_list, seq);
+        if (rc) {
+                CERROR("can't init sequence manager "
+                       "proc, rc %d\n", rc);
+        }
+
+        RETURN(0);
+
+err:
+        seq->seq_proc_dir = NULL;
+        return rc;
+}
+
+static void
+seq_client_proc_fini(struct lu_client_seq *seq)
+{
+        ENTRY;
+        if (seq->seq_proc_dir) {
+                lprocfs_remove(seq->seq_proc_dir);
+                seq->seq_proc_dir = NULL;
+        }
+        EXIT;
+}
+#endif
+
 int 
-seq_client_init(struct lu_client_seq *seq, 
+seq_client_init(struct lu_client_seq *seq,
+                const char *uuid,
                 struct obd_export *exp)
 {
+        int rc;
         ENTRY;
 
         LASSERT(exp != NULL);
@@ -261,8 +306,18 @@ seq_client_init(struct lu_client_seq *seq,
         sema_init(&seq->seq_sem, 1);
         seq->seq_exp = class_export_get(exp);
 
-        CDEBUG(D_INFO|D_WARNING, "Client Sequence "
-               "Manager initialized\n");
+        snprintf(seq->seq_name, sizeof(seq->seq_name),
+                 "%s-%s", LUSTRE_SEQ_NAME, uuid);
+
+#ifdef LPROCFS
+        rc = seq_client_proc_init(seq);
+        if (rc) {
+                class_export_put(seq->seq_exp);
+                RETURN(rc);
+        }
+#endif
+        
+        CDEBUG(D_INFO|D_WARNING, "Client Sequence Manager\n");
         RETURN(0);
 }
 EXPORT_SYMBOL(seq_client_init);
@@ -270,11 +325,18 @@ EXPORT_SYMBOL(seq_client_init);
 void seq_client_fini(struct lu_client_seq *seq)
 {
         ENTRY;
+
+#ifdef LPROCFS
+        seq_client_proc_fini(seq);
+#endif
+        
         if (seq->seq_exp != NULL) {
                 class_export_put(seq->seq_exp);
                 seq->seq_exp = NULL;
         }
-        CDEBUG(D_INFO|D_WARNING, "Client Sequence Manager finalized\n");
+        
+        CDEBUG(D_INFO|D_WARNING, "Client Sequence Manager\n");
+        
         EXIT;
 }
 EXPORT_SYMBOL(seq_client_fini);

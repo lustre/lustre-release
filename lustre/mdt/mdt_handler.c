@@ -1672,6 +1672,7 @@ static int mdt_seq_fini(const struct lu_context *ctx,
 }
 
 static int mdt_seq_init(const struct lu_context *ctx,
+                        const char *uuid, 
                         struct mdt_device *m)
 {
         struct lu_site *ls;
@@ -1683,8 +1684,9 @@ static int mdt_seq_init(const struct lu_context *ctx,
         OBD_ALLOC_PTR(ls->ls_server_seq);
 
         if (ls->ls_server_seq != NULL) {
-                rc = seq_server_init(ls->ls_server_seq,
-                                     m->mdt_bottom, ctx);
+                rc = seq_server_init(ls->ls_server_seq, 
+                                      m->mdt_bottom, uuid,
+                                     ctx);
         } else
                 rc = -ENOMEM;
 
@@ -1740,6 +1742,7 @@ static int mdt_seq_ctlr_init(const struct lu_context *ctx,
 
                         if (ls->ls_client_seq != NULL) {
                                 rc = seq_client_init(ls->ls_client_seq,
+                                                     mdc->obd_name,
                                                      ls->ls_controller);
                         } else
                                 rc = -ENOMEM;
@@ -2076,7 +2079,7 @@ static int mdt_init0(struct mdt_device *m,
                 GOTO(err_fini_stack, rc);
 
         lu_context_enter(&ctx);
-        rc = mdt_seq_init(&ctx, m);
+        rc = mdt_seq_init(&ctx, obd->obd_name, m);
         lu_context_exit(&ctx);
         if (rc)
                 GOTO(err_fini_fld, rc);

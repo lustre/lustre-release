@@ -550,18 +550,19 @@ struct lu_placement_hint {
         int          ph_opc;
 };
 
+#define LUSTRE_FLD_NAME  "fld"
+#define LUSTRE_SEQ_NAME  "seq"
+
 /* device types (not names--FIXME) */
 /* FIXME all the references to these defines need to be updated */
-#define LUSTRE_MDS_NAME "mds"
-#define LUSTRE_MDT_NAME "mdt"
+#define LUSTRE_MDS_NAME  "mds"
+#define LUSTRE_MDT_NAME  "mdt"
 
 /* new MDS layers. Prototype */
 #define LUSTRE_MDT0_NAME "mdt0"
 #define LUSTRE_CMM0_NAME "cmm0"
 #define LUSTRE_MDD0_NAME "mdd0"
 #define LUSTRE_OSD0_NAME "osd0"
-#define LUSTRE_FLD0_NAME "fld0"
-#define LUSTRE_SEQ0_NAME "seq0"
 #define LUSTRE_MDC0_NAME "mdc0"
 
 #define LUSTRE_MDC_NAME  "mdc"

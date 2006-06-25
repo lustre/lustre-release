@@ -240,11 +240,11 @@ fld_server_init(struct lu_server_fld *fld,
         if (rc == 0) {
                 fld->fld_service =
                         ptlrpc_init_svc_conf(&fld_conf, fld_req_handle,
-                                             LUSTRE_FLD0_NAME,
+                                             LUSTRE_FLD_NAME,
                                              fld->fld_proc_entry, NULL);
                 if (fld->fld_service != NULL)
                         rc = ptlrpc_start_threads(NULL, fld->fld_service,
-                                                  LUSTRE_FLD0_NAME);
+                                                  LUSTRE_FLD_NAME);
                 else
                         rc = -ENOMEM;
         }

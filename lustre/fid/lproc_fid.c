@@ -48,10 +48,11 @@
 #include "fid_internal.h"
 
 #ifdef LPROCFS
+/* server side procfs stuff */
 static int
-seq_proc_write_range(struct file *file, const char *buffer,
-		     unsigned long count, void *data,
-		     struct lu_range *range)
+seq_proc_write_common(struct file *file, const char *buffer,
+                      unsigned long count, void *data,
+                      struct lu_range *range)
 {
 	struct lu_range tmp;
 	int rc;
@@ -74,9 +75,9 @@ seq_proc_write_range(struct file *file, const char *buffer,
 }
 
 static int
-seq_proc_read_range(char *page, char **start, off_t off,
-		    int count, int *eof, void *data,
-		    struct lu_range *range)
+seq_proc_read_common(char *page, char **start, off_t off,
+                     int count, int *eof, void *data,
+                     struct lu_range *range)
 {
 	int rc;
 	ENTRY;
@@ -98,8 +99,8 @@ seq_proc_write_space(struct file *file, const char *buffer,
         LASSERT(seq != NULL);
 
 	down(&seq->seq_sem);
-	rc = seq_proc_write_range(file, buffer, count,
-				  data, &seq->seq_space);
+	rc = seq_proc_write_common(file, buffer, count,
+                                   data, &seq->seq_space);
 	if (rc == 0) {
 		CDEBUG(D_WARNING, "SEQ-MGR(srv): sequences space has changed "
 		       "to ["LPU64"-"LPU64"]\n", seq->seq_space.lr_start,
@@ -122,8 +123,8 @@ seq_proc_read_space(char *page, char **start, off_t off,
         LASSERT(seq != NULL);
 
 	down(&seq->seq_sem);
-	rc = seq_proc_read_range(page, start, off, count, eof,
-				 data, &seq->seq_space);
+	rc = seq_proc_read_common(page, start, off, count, eof,
+                                  data, &seq->seq_space);
 	up(&seq->seq_sem);
 	
 	RETURN(rc);
@@ -140,8 +141,8 @@ seq_proc_write_super(struct file *file, const char *buffer,
         LASSERT(seq != NULL);
 
 	down(&seq->seq_sem);
-	rc = seq_proc_write_range(file, buffer, count,
-				  data, &seq->seq_super);
+	rc = seq_proc_write_common(file, buffer, count,
+                                   data, &seq->seq_super);
 
 	if (rc == 0) {
 		CDEBUG(D_WARNING, "SEQ-MGR(srv): super-sequence has changed to "
@@ -165,51 +166,8 @@ seq_proc_read_super(char *page, char **start, off_t off,
         LASSERT(seq != NULL);
 
 	down(&seq->seq_sem);
-	rc = seq_proc_read_range(page, start, off, count, eof,
-				 data, &seq->seq_super);
-	up(&seq->seq_sem);
-	
-	RETURN(rc);
-}
-
-static int
-seq_proc_write_meta(struct file *file, const char *buffer,
-		    unsigned long count, void *data)
-{
-        struct lu_client_seq *seq = (struct lu_client_seq *)data;
-	int rc;
-	ENTRY;
-
-        LASSERT(seq != NULL);
-
-	down(&seq->seq_sem);
-	rc = seq_proc_write_range(file, buffer, count,
-				  data, &seq->seq_range);
-
-	if (rc == 0) {
-		CDEBUG(D_WARNING, "SEQ-MGR(cli): meta-sequence has changed to "
-		       "["LPU64"-"LPU64"]\n", seq->seq_range.lr_start,
-		       seq->seq_range.lr_end);
-	}
-	
-	up(&seq->seq_sem);
-	
-        RETURN(count);
-}
-
-static int
-seq_proc_read_meta(char *page, char **start, off_t off,
-		   int count, int *eof, void *data)
-{
-        struct lu_client_seq *seq = (struct lu_client_seq *)data;
-	int rc;
-	ENTRY;
-
-        LASSERT(seq != NULL);
-
-	down(&seq->seq_sem);
-	rc = seq_proc_read_range(page, start, off, count, eof,
-				 data, &seq->seq_range);
+	rc = seq_proc_read_common(page, start, off, count, eof,
+                                  data, &seq->seq_super);
 	up(&seq->seq_sem);
 	
 	RETURN(rc);
@@ -238,6 +196,50 @@ seq_proc_read_controller(char *page, char **start, off_t off,
 	RETURN(rc);
 }
 
+/* client side procfs stuff */
+static int
+seq_proc_write_range(struct file *file, const char *buffer,
+                     unsigned long count, void *data)
+{
+        struct lu_client_seq *seq = (struct lu_client_seq *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+	rc = seq_proc_write_common(file, buffer, count,
+                                   data, &seq->seq_range);
+
+	if (rc == 0) {
+		CDEBUG(D_WARNING, "SEQ-MGR(cli): meta-sequence has changed to "
+		       "["LPU64"-"LPU64"]\n", seq->seq_range.lr_start,
+		       seq->seq_range.lr_end);
+	}
+	
+	up(&seq->seq_sem);
+	
+        RETURN(count);
+}
+
+static int
+seq_proc_read_range(char *page, char **start, off_t off,
+                    int count, int *eof, void *data)
+{
+        struct lu_client_seq *seq = (struct lu_client_seq *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+	rc = seq_proc_read_common(page, start, off, count, eof,
+                                  data, &seq->seq_range);
+	up(&seq->seq_sem);
+	
+	RETURN(rc);
+}
+
 struct lprocfs_vars seq_server_proc_list[] = {
 	{ "space",      seq_proc_read_space, seq_proc_write_space, NULL },
 	{ "super",      seq_proc_read_super, seq_proc_write_super, NULL },
@@ -245,6 +247,6 @@ struct lprocfs_vars seq_server_proc_list[] = {
 	{ NULL }};
 
 struct lprocfs_vars seq_client_proc_list[] = {
-	{ "meta",       seq_proc_read_meta, seq_proc_write_meta, NULL },
+	{ "range",      seq_proc_read_range, seq_proc_write_range, NULL },
 	{ NULL }};
 #endif

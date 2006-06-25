@@ -381,25 +381,23 @@ out:
 } 
 
 #ifdef LPROCFS
-static cfs_proc_dir_entry_t *seq_type_proc_dir = NULL;
-
 static int
 seq_server_proc_init(struct lu_server_seq *seq)
 {
         int rc;
         ENTRY;
 
-        seq_type_proc_dir = lprocfs_register(LUSTRE_SEQ0_NAME,
+        seq->seq_proc_dir = lprocfs_register(seq->seq_name,
                                              proc_lustre_root,
                                              NULL, NULL);
-        if (IS_ERR(seq_type_proc_dir)) {
+        if (IS_ERR(seq->seq_proc_dir)) {
                 CERROR("LProcFS failed in seq-init\n");
-                rc = PTR_ERR(seq_type_proc_dir);
+                rc = PTR_ERR(seq->seq_proc_dir);
                 GOTO(err, rc);
         }
 
         seq->seq_proc_entry = lprocfs_register("services",
-                                               seq_type_proc_dir,
+                                               seq->seq_proc_dir,
                                                NULL, NULL);
         if (IS_ERR(seq->seq_proc_entry)) {
                 CERROR("LProcFS failed in seq-init\n");
@@ -407,7 +405,7 @@ seq_server_proc_init(struct lu_server_seq *seq)
                 GOTO(err_type, rc);
         }
 
-        rc = lprocfs_add_vars(seq_type_proc_dir,
+        rc = lprocfs_add_vars(seq->seq_proc_dir,
                               seq_server_proc_list, seq);
         if (rc) {
                 CERROR("can't init sequence manager "
@@ -417,14 +415,15 @@ seq_server_proc_init(struct lu_server_seq *seq)
         RETURN(0);
 
 err_type:
-        lprocfs_remove(seq_type_proc_dir);
+        lprocfs_remove(seq->seq_proc_dir);
 err:
-        seq_type_proc_dir = NULL;
+        seq->seq_proc_dir = NULL;
         seq->seq_proc_entry = NULL;
         return rc;
 }
 
-void seq_server_proc_fini(struct lu_server_seq *seq)
+static void
+seq_server_proc_fini(struct lu_server_seq *seq)
 {
         ENTRY;
         if (seq->seq_proc_entry) {
@@ -432,9 +431,9 @@ void seq_server_proc_fini(struct lu_server_seq *seq)
                 seq->seq_proc_entry = NULL;
         }
 
-        if (seq_type_proc_dir) {
-                lprocfs_remove(seq_type_proc_dir);
-                seq_type_proc_dir = NULL;
+        if (seq->seq_proc_dir) {
+                lprocfs_remove(seq->seq_proc_dir);
+                seq->seq_proc_dir = NULL;
         }
         EXIT;
 }
@@ -443,6 +442,7 @@ void seq_server_proc_fini(struct lu_server_seq *seq)
 int
 seq_server_init(struct lu_server_seq *seq,
                 struct dt_device *dev,
+                const char *uuid,
                 const struct lu_context *ctx) 
 {
         int rc; 
@@ -459,11 +459,15 @@ seq_server_init(struct lu_server_seq *seq,
         ENTRY;
 
 	LASSERT(dev != NULL);
+        LASSERT(uuid != NULL);
 
         seq->seq_dev = dev;
         seq->seq_cli = NULL;
         sema_init(&seq->seq_sem, 1);
 
+        snprintf(seq->seq_name, sizeof(seq->seq_name),
+                 "%s-%s", LUSTRE_SEQ_NAME, uuid);
+        
         seq->seq_space = LUSTRE_SEQ_SPACE_RANGE;
         seq->seq_super = LUSTRE_SEQ_ZERO_RANGE;
         
@@ -488,12 +492,12 @@ seq_server_init(struct lu_server_seq *seq,
 
         seq->seq_service =  ptlrpc_init_svc_conf(&seq_conf,
 						 seq_req_handle,
-						 LUSTRE_SEQ0_NAME,
+						 LUSTRE_SEQ_NAME,
 						 seq->seq_proc_entry, 
 						 NULL); 
 	if (seq->seq_service != NULL)
 		rc = ptlrpc_start_threads(NULL, seq->seq_service,
-					  LUSTRE_SEQ0_NAME); 
+					  LUSTRE_SEQ_NAME); 
 	else 
 		rc = -ENOMEM; 
 

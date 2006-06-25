@@ -61,10 +61,14 @@ struct lu_client_seq {
         struct lu_range         seq_range;
 
         /* seq related proc */
-        cfs_proc_dir_entry_t   *seq_proc_entry;
+        cfs_proc_dir_entry_t   *seq_proc_dir;
 
         /* this holds last allocated fid in last obtained seq */
         struct lu_fid           seq_fid;
+
+        /* service uuid, passed from MDT + seq name to form unique seq name to
+         * use it with procfs. */
+        char                    seq_name[80];
 };
 
 #ifdef __KERNEL__
@@ -83,6 +87,8 @@ struct lu_server_seq {
 
         /* seq related proc */
         cfs_proc_dir_entry_t   *seq_proc_entry;
+        cfs_proc_dir_entry_t   *seq_proc_dir;
+
 
         /* server side seq service */
         struct ptlrpc_service  *seq_service;
@@ -92,12 +98,17 @@ struct lu_server_seq {
 
         /* semaphore for protecting allocation */
         struct semaphore        seq_sem;
+
+        /* service uuid, passed from MDT + seq name to form unique seq name to
+         * use it with procfs. */
+        char                    seq_name[80];
 };
 #endif
 
 #ifdef __KERNEL__
 int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
+                    const char *uuid,
                     const struct lu_context *ctx);
 
 void seq_server_fini(struct lu_server_seq *seq,
@@ -109,6 +120,7 @@ int seq_server_set_ctlr(struct lu_server_seq *seq,
 #endif
 
 int seq_client_init(struct lu_client_seq *seq, 
+                    const char *uuid,
                     struct obd_export *exp);
 
 void seq_client_fini(struct lu_client_seq *seq);
