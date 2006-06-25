@@ -270,6 +270,7 @@ seq_client_proc_init(struct lu_client_seq *seq)
         if (rc) {
                 CERROR("can't init sequence manager "
                        "proc, rc %d\n", rc);
+                GOTO(err, rc);
         }
 
         RETURN(0);
@@ -312,14 +313,18 @@ seq_client_init(struct lu_client_seq *seq,
 
 #ifdef LPROCFS
         rc = seq_client_proc_init(seq);
-        if (rc) {
-                class_export_put(seq->seq_exp);
-                RETURN(rc);
-        }
+        if (rc)
+                GOTO(out, rc);
 #endif
-        
-        CDEBUG(D_INFO|D_WARNING, "Client Sequence Manager\n");
-        RETURN(0);
+
+        EXIT;
+out:
+        if (rc)
+                seq_client_fini(seq);
+        else
+                CDEBUG(D_INFO|D_WARNING,
+                       "Client Sequence Manager\n");
+        return rc;
 }
 EXPORT_SYMBOL(seq_client_init);
 

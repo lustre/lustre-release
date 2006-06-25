@@ -74,4 +74,9 @@ int fld_index_init(struct lu_server_fld *fld,
 void fld_index_fini(struct lu_server_fld *fld,
                     const struct lu_context *ctx);
 
+#ifdef LPROCFS
+extern struct lprocfs_vars fld_server_proc_list[];
+extern struct lprocfs_vars fld_client_proc_list[];
+#endif
+
 #endif

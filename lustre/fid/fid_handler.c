@@ -410,6 +410,7 @@ seq_server_proc_init(struct lu_server_seq *seq)
         if (rc) {
                 CERROR("can't init sequence manager "
                        "proc, rc %d\n", rc);
+                GOTO(err_type, rc);
         }
 
         RETURN(0);
@@ -507,15 +508,11 @@ seq_server_init(struct lu_server_seq *seq,
 	EXIT;
 
 out:
-	if (rc) {
-#ifdef LPROCFS
-                seq_server_proc_fini(seq);
-#endif
+	if (rc)
 		seq_server_fini(seq, ctx);
-        } else {
+        else
                 CDEBUG(D_INFO|D_WARNING, "Server Sequence "
                        "Manager\n");
-        }
 	return rc;
 } 
 EXPORT_SYMBOL(seq_server_init);

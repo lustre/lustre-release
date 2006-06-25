@@ -249,7 +249,8 @@ static int cmm_device_init(const struct lu_context *ctx,
         m->cmm_tgt_count = 0;
         m->cmm_child = lu2md_dev(next);
 
-        err = fld_client_init(&m->cmm_fld, LUSTRE_CLI_FLD_HASH_RRB);
+        err = fld_client_init(&m->cmm_fld, "CMM_UUID",
+                              LUSTRE_CLI_FLD_HASH_RRB);
         if (err) {
                 CERROR("can't init FLD, err %d\n",  err);
         }

@@ -55,7 +55,8 @@
 #ifdef __KERNEL__
 extern struct fld_cache_info *fld_cache;
 
-static __u32 fld_cache_hash(__u64 seq)
+static __u32
+fld_cache_hash(__u64 seq)
 {
         return seq;
 }
@@ -144,7 +145,8 @@ fld_cache_lookup(struct fld_cache_info *fld_cache, __u64 seq)
 }
 #endif
 
-static int fld_rrb_hash(struct lu_client_fld *fld, __u64 seq)
+static int
+fld_rrb_hash(struct lu_client_fld *fld, __u64 seq)
 {
         if (fld->fld_count == 0)
                 return 0;
@@ -152,7 +154,8 @@ static int fld_rrb_hash(struct lu_client_fld *fld, __u64 seq)
         return do_div(seq, fld->fld_count);
 }
 
-static int fld_dht_hash(struct lu_client_fld *fld, __u64 seq)
+static int
+fld_dht_hash(struct lu_client_fld *fld, __u64 seq)
 {
         /* XXX: here should DHT hash */
         return fld_rrb_hash(fld, seq);
@@ -197,7 +200,8 @@ fld_client_get_export(struct lu_client_fld *fld, __u64 seq)
 
 /* add export to FLD. This is usually done by CMM and LMV as they are main users
  * of FLD module. */
-int fld_client_add_export(struct lu_client_fld *fld,
+int
+fld_client_add_export(struct lu_client_fld *fld,
                           struct obd_export *exp)
 {
         struct obd_export *fld_exp;
@@ -230,7 +234,8 @@ int fld_client_add_export(struct lu_client_fld *fld,
 EXPORT_SYMBOL(fld_client_add_export);
 
 /* remove export from FLD */
-int fld_client_del_export(struct lu_client_fld *fld,
+int
+fld_client_del_export(struct lu_client_fld *fld,
                           struct obd_export *exp)
 {
         struct obd_export *fld_exp;
@@ -255,7 +260,53 @@ int fld_client_del_export(struct lu_client_fld *fld,
 }
 EXPORT_SYMBOL(fld_client_del_export);
 
-int fld_client_init(struct lu_client_fld *fld, int hash)
+#ifdef LPROCFS
+static int
+fld_client_proc_init(struct lu_client_fld *fld)
+{
+        int rc;
+        ENTRY;
+
+        fld->fld_proc_dir = lprocfs_register(fld->fld_name,
+                                             proc_lustre_root,
+                                             NULL, NULL);
+        
+        if (IS_ERR(fld->fld_proc_dir)) {
+                CERROR("LProcFS failed in fld-init\n");
+                rc = PTR_ERR(fld->fld_proc_dir);
+                GOTO(err, rc);
+        }
+
+        rc = lprocfs_add_vars(fld->fld_proc_dir,
+                              fld_client_proc_list, fld);
+        if (rc) {
+                CERROR("can't init FLD "
+                       "proc, rc %d\n", rc);
+                GOTO(err, rc);
+        }
+
+        RETURN(0);
+
+err:
+        fld->fld_proc_dir = NULL;
+        return rc;
+}
+
+static void
+fld_client_proc_fini(struct lu_client_fld *fld)
+{
+        ENTRY;
+        if (fld->fld_proc_dir) {
+                lprocfs_remove(fld->fld_proc_dir);
+                fld->fld_proc_dir = NULL;
+        }
+        EXIT;
+}
+#endif
+
+int
+fld_client_init(struct lu_client_fld *fld,
+                const char *uuid, int hash)
 {
         int rc = 0;
         ENTRY;
@@ -272,18 +323,37 @@ int fld_client_init(struct lu_client_fld *fld, int hash)
         fld->fld_hash = &fld_hash[hash];
         fld->fld_count = 0;
         
-        CDEBUG(D_INFO|D_WARNING, "Client FLD, using \"%s\" hash\n",
-               fld->fld_hash->fh_name);
-        RETURN(rc);
+        snprintf(fld->fld_name, sizeof(fld->fld_name),
+                 "%s-%s", LUSTRE_FLD_NAME, uuid);
+        
+#ifdef LPROCFS
+        rc = fld_client_proc_init(fld);
+        if (rc)
+                GOTO(out, rc);
+#endif
+        EXIT;
+out:
+        if (rc)
+                fld_client_fini(fld);
+        else 
+                CDEBUG(D_INFO|D_WARNING,
+                       "Client FLD, using \"%s\" hash\n",
+                       fld->fld_hash->fh_name);
+        return rc;
 }
 EXPORT_SYMBOL(fld_client_init);
 
-void fld_client_fini(struct lu_client_fld *fld)
+void
+fld_client_fini(struct lu_client_fld *fld)
 {
         struct obd_export *fld_exp;
         struct obd_export *tmp;
         ENTRY;
 
+#ifdef LPROCFS
+        fld_client_proc_fini(fld);
+#endif
+        
         spin_lock(&fld->fld_lock);
         list_for_each_entry_safe(fld_exp, tmp,
                                  &fld->fld_exports, exp_fld_chain) {

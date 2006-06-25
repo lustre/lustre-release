@@ -1782,7 +1782,9 @@ static void mdt_seq_ctlr_fini(struct mdt_device *m)
 /*
  * FLD wrappers
  */
-static int mdt_fld_init(const struct lu_context *ctx, struct mdt_device *m)
+static int mdt_fld_init(const struct lu_context *ctx,
+                        const char *uuid, 
+                        struct mdt_device *m)
 {
         struct lu_site *ls;
         int rc;
@@ -1793,14 +1795,16 @@ static int mdt_fld_init(const struct lu_context *ctx, struct mdt_device *m)
         OBD_ALLOC_PTR(ls->ls_fld);
 
         if (ls->ls_fld != NULL)
-                rc = fld_server_init(ls->ls_fld, ctx, m->mdt_bottom);
+                rc = fld_server_init(ls->ls_fld, ctx,
+                                     uuid, m->mdt_bottom);
         else
                 rc = -ENOMEM;
 
         RETURN(rc);
 }
 
-static int mdt_fld_fini(const struct lu_context *ctx, struct mdt_device *m)
+static int mdt_fld_fini(const struct lu_context *ctx,
+                        struct mdt_device *m)
 {
         struct lu_site *ls = m->mdt_md_dev.md_lu_dev.ld_site;
         ENTRY;
@@ -2073,7 +2077,7 @@ static int mdt_init0(struct mdt_device *m,
         s->ls_node_id = simple_strtol(num, NULL, 10);
 
         lu_context_enter(&ctx);
-        rc = mdt_fld_init(&ctx, m);
+        rc = mdt_fld_init(&ctx, obd->obd_name, m);
         lu_context_exit(&ctx);
         if (rc)
                 GOTO(err_fini_stack, rc);

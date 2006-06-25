@@ -215,9 +215,69 @@ out:
         return 0;
 }
 
+#ifdef LPROCFS
+static int
+fld_server_proc_init(struct lu_server_fld *fld)
+{
+        int rc;
+        ENTRY;
+
+        fld->fld_proc_dir = lprocfs_register(fld->fld_name,
+                                             proc_lustre_root,
+                                             NULL, NULL);
+        if (IS_ERR(fld->fld_proc_dir)) {
+                CERROR("LProcFS failed in fld-init\n");
+                rc = PTR_ERR(fld->fld_proc_dir);
+                GOTO(err, rc);
+        }
+
+        fld->fld_proc_entry = lprocfs_register("services",
+                                               fld->fld_proc_dir,
+                                               NULL, NULL);
+        if (IS_ERR(fld->fld_proc_entry)) {
+                CERROR("LProcFS failed in fld-init\n");
+                rc = PTR_ERR(fld->fld_proc_entry);
+                GOTO(err_type, rc);
+        }
+
+        rc = lprocfs_add_vars(fld->fld_proc_dir,
+                              fld_server_proc_list, fld);
+        if (rc) {
+                CERROR("can't init FLD proc, rc %d\n", rc);
+                GOTO(err_type, rc);
+        }
+
+        RETURN(0);
+
+err_type:
+        lprocfs_remove(fld->fld_proc_dir);
+err:
+        fld->fld_proc_dir = NULL;
+        fld->fld_proc_entry = NULL;
+        return rc;
+}
+
+static void
+fld_server_proc_fini(struct lu_server_fld *fld)
+{
+        ENTRY;
+        if (fld->fld_proc_entry) {
+                lprocfs_remove(fld->fld_proc_entry);
+                fld->fld_proc_entry = NULL;
+        }
+
+        if (fld->fld_proc_dir) {
+                lprocfs_remove(fld->fld_proc_dir);
+                fld->fld_proc_dir = NULL;
+        }
+        EXIT;
+}
+#endif
+
 int
 fld_server_init(struct lu_server_fld *fld,
                 const struct lu_context *ctx,
+                const char *uuid,
                 struct dt_device *dt)
 {
         int rc;
@@ -235,25 +295,37 @@ fld_server_init(struct lu_server_fld *fld,
 
         fld->fld_dt = dt;
         lu_device_get(&dt->dd_lu_dev);
+
+        snprintf(fld->fld_name, sizeof(fld->fld_name),
+                 "%s-%s", LUSTRE_FLD_NAME, uuid);
+        
         rc = fld_index_init(fld, ctx);
+        if (rc)
+                GOTO(out, rc);
 
-        if (rc == 0) {
-                fld->fld_service =
-                        ptlrpc_init_svc_conf(&fld_conf, fld_req_handle,
-                                             LUSTRE_FLD_NAME,
-                                             fld->fld_proc_entry, NULL);
-                if (fld->fld_service != NULL)
-                        rc = ptlrpc_start_threads(NULL, fld->fld_service,
-                                                  LUSTRE_FLD_NAME);
-                else
-                        rc = -ENOMEM;
-        }
+#ifdef LPROCFS
+        rc = fld_server_proc_init(fld);
+        if (rc)
+                GOTO(out, rc);
+#endif
 
-        if (rc != 0)
+        fld->fld_service =
+                ptlrpc_init_svc_conf(&fld_conf, fld_req_handle,
+                                     LUSTRE_FLD_NAME,
+                                     fld->fld_proc_entry, NULL);
+        if (fld->fld_service != NULL)
+                rc = ptlrpc_start_threads(NULL, fld->fld_service,
+                                          LUSTRE_FLD_NAME);
+        else
+                rc = -ENOMEM;
+
+        EXIT;
+out:
+        if (rc)
                 fld_server_fini(fld, ctx);
         else
                 CDEBUG(D_INFO|D_WARNING, "Server FLD\n");
-        RETURN(rc);
+        return rc;
 }
 EXPORT_SYMBOL(fld_server_init);
 
@@ -263,6 +335,10 @@ fld_server_fini(struct lu_server_fld *fld,
 {
         ENTRY;
 
+#ifdef LPROCFS
+        fld_server_proc_fini(fld);
+#endif
+        
         if (fld->fld_service != NULL) {
                 ptlrpc_unregister_service(fld->fld_service);
                 fld->fld_service = NULL;

@@ -372,7 +372,26 @@ seq_proc_read_seq_width(char *page, char **start, off_t off,
         LASSERT(seq != NULL);
 
 	down(&seq->seq_sem);
-        rc = snprintf(page, count, LPU64"\n", seq->seq_width);
+        rc = snprintf(page, count, LPU64"\n",
+                      seq->seq_width);
+	up(&seq->seq_sem);
+	
+	RETURN(rc);
+}
+
+static int
+seq_proc_read_next_fid(char *page, char **start, off_t off,
+                       int count, int *eof, void *data)
+{
+        struct lu_client_seq *seq = (struct lu_client_seq *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+        rc = snprintf(page, count, DFID3"\n",
+                      PFID3(&seq->seq_fid));
 	up(&seq->seq_sem);
 	
 	RETURN(rc);
@@ -404,6 +423,7 @@ struct lprocfs_vars seq_server_proc_list[] = {
 struct lprocfs_vars seq_client_proc_list[] = {
 	{ "range",      seq_proc_read_range, seq_proc_write_range, NULL },
 	{ "server",     seq_proc_read_server, NULL, NULL },
+	{ "next_fid" ,  seq_proc_read_next_fid, NULL, NULL },
 	{ "seq_width",  seq_proc_read_seq_width, seq_proc_write_seq_width, NULL },
 	{ NULL }};
 #endif

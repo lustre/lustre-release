@@ -49,6 +49,7 @@ struct lu_server_fld {
         struct dt_device        *fld_dt;
         struct dt_object        *fld_obj;
         struct lu_fid            fld_fid;
+        char                     fld_name[80];
 };
 
 struct lu_client_fld {
@@ -57,11 +58,13 @@ struct lu_client_fld {
         struct lu_fld_hash      *fld_hash;
         int                      fld_count;
         spinlock_t               fld_lock;
+        char                     fld_name[80];
 };
 
 /* server methods */
 int fld_server_init(struct lu_server_fld *fld,
                     const struct lu_context *ctx,
+                    const char *uuid,
                     struct dt_device *dt);
 
 void fld_server_fini(struct lu_server_fld *fld,
@@ -69,6 +72,7 @@ void fld_server_fini(struct lu_server_fld *fld,
 
 /* client methods */
 int fld_client_init(struct lu_client_fld *fld,
+                    const char *uuid,
                     int hash);
 
 void fld_client_fini(struct lu_client_fld *fld);
