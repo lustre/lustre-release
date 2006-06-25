@@ -39,7 +39,7 @@ extern const struct lu_range LUSTRE_SEQ_SPACE_RANGE;
 extern const struct lu_range LUSTRE_SEQ_ZERO_RANGE;
 
 /* this is how may FIDs may be allocated in one sequence. */
-#define LUSTRE_SEQ_WIDTH      0x00000000000002800
+#define LUSTRE_SEQ_MAX_WIDTH  0x00000000000002800
 
 /* how many sequences may be allocate for meta-sequence (this is 10240
  * sequences). */
@@ -69,6 +69,10 @@ struct lu_client_seq {
         /* service uuid, passed from MDT + seq name to form unique seq name to
          * use it with procfs. */
         char                    seq_name[80];
+
+        /* sequence width, that is how many objects may be allocated in one
+         * sequence. Default value for it is LUSTRE_SEQ_MAX_WIDTH. */
+        __u64                   seq_width;
 };
 
 #ifdef __KERNEL__
@@ -102,6 +106,11 @@ struct lu_server_seq {
         /* service uuid, passed from MDT + seq name to form unique seq name to
          * use it with procfs. */
         char                    seq_name[80];
+
+        /* allocation chunks for super and meta sequences. Default values are
+         * LUSTRE_SEQ_SUPER_WIDTH and LUSTRE_SEQ_META_WIDTH. */
+        __u64                   seq_super_width;
+        __u64                   seq_meta_width;
 };
 #endif
 

@@ -196,6 +196,97 @@ seq_proc_read_controller(char *page, char **start, off_t off,
 	RETURN(rc);
 }
 
+static int
+seq_proc_write_super_width(struct file *file, const char *buffer,
+                           unsigned long count, void *data)
+{
+        struct lu_server_seq *seq = (struct lu_server_seq *)data;
+	int rc, val;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                RETURN(rc);
+
+        seq->seq_super_width = val;
+        
+	if (rc == 0) {
+		CDEBUG(D_WARNING, "SEQ-MGR(srv): super-sequence width "
+                       "has changed to "LPU64"\n", seq->seq_super_width);
+	}
+	
+	up(&seq->seq_sem);
+	
+        RETURN(count);
+}
+
+static int
+seq_proc_read_super_width(char *page, char **start, off_t off,
+                          int count, int *eof, void *data)
+{
+        struct lu_server_seq *seq = (struct lu_server_seq *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+        rc = snprintf(page, count, LPU64"\n", seq->seq_super_width);
+	up(&seq->seq_sem);
+	
+	RETURN(rc);
+}
+
+static int
+seq_proc_write_meta_width(struct file *file, const char *buffer,
+                          unsigned long count, void *data)
+{
+        struct lu_server_seq *seq = (struct lu_server_seq *)data;
+	int rc, val;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                RETURN(rc);
+
+        if (val <= seq->seq_super_width) {
+                seq->seq_meta_width = val;
+                
+                if (rc == 0) {
+                        CDEBUG(D_WARNING, "SEQ-MGR(srv): meta-sequence width "
+                               "has changed to "LPU64"\n", seq->seq_meta_width);
+                }
+        }
+	
+	up(&seq->seq_sem);
+        RETURN(count);
+}
+
+static int
+seq_proc_read_meta_width(char *page, char **start, off_t off,
+                         int count, int *eof, void *data)
+{
+        struct lu_server_seq *seq = (struct lu_server_seq *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+        rc = snprintf(page, count, LPU64"\n", seq->seq_meta_width);
+	up(&seq->seq_sem);
+	
+	RETURN(rc);
+}
+
 /* client side procfs stuff */
 static int
 seq_proc_write_range(struct file *file, const char *buffer,
@@ -212,7 +303,7 @@ seq_proc_write_range(struct file *file, const char *buffer,
                                    data, &seq->seq_range);
 
 	if (rc == 0) {
-		CDEBUG(D_WARNING, "SEQ-MGR(cli): meta-sequence has changed to "
+		CDEBUG(D_WARNING, "SEQ-MGR(cli): range has changed to "
 		       "["LPU64"-"LPU64"]\n", seq->seq_range.lr_start,
 		       seq->seq_range.lr_end);
 	}
@@ -240,13 +331,63 @@ seq_proc_read_range(char *page, char **start, off_t off,
 	RETURN(rc);
 }
 
+static int
+seq_proc_write_seq_width(struct file *file, const char *buffer,
+                         unsigned long count, void *data)
+{
+        struct lu_client_seq *seq = (struct lu_client_seq *)data;
+	int rc, val;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                RETURN(rc);
+
+        if (val <= LUSTRE_SEQ_MAX_WIDTH) {
+                seq->seq_width = val;
+                
+                if (rc == 0) {
+                        CDEBUG(D_WARNING, "SEQ-MGR(cli): sequence width "
+                               "has changed to "LPU64"\n", seq->seq_width);
+                }
+        }
+	
+	up(&seq->seq_sem);
+	
+        RETURN(count);
+}
+
+static int
+seq_proc_read_seq_width(char *page, char **start, off_t off,
+                        int count, int *eof, void *data)
+{
+        struct lu_client_seq *seq = (struct lu_client_seq *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+
+	down(&seq->seq_sem);
+        rc = snprintf(page, count, LPU64"\n", seq->seq_width);
+	up(&seq->seq_sem);
+	
+	RETURN(rc);
+}
+
 struct lprocfs_vars seq_server_proc_list[] = {
-	{ "space",      seq_proc_read_space, seq_proc_write_space, NULL },
-	{ "super",      seq_proc_read_super, seq_proc_write_super, NULL },
-	{ "controller", seq_proc_read_controller, NULL, NULL },
+	{ "space",       seq_proc_read_space, seq_proc_write_space, NULL },
+	{ "super",       seq_proc_read_super, seq_proc_write_super, NULL },
+	{ "controller",  seq_proc_read_controller, NULL, NULL },
+	{ "super_width", seq_proc_read_super_width, seq_proc_write_super_width, NULL },
+	{ "meta_width",  seq_proc_read_meta_width, seq_proc_write_meta_width, NULL },
 	{ NULL }};
 
 struct lprocfs_vars seq_client_proc_list[] = {
 	{ "range",      seq_proc_read_range, seq_proc_write_range, NULL },
+	{ "seq_width",  seq_proc_read_seq_width, seq_proc_write_seq_width, NULL },
 	{ NULL }};
 #endif

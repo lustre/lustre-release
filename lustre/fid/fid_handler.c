@@ -160,7 +160,7 @@ __seq_server_alloc_super(struct lu_server_seq *seq,
 
         LASSERT(range_is_sane(space));
         
-        if (range_space(space) < LUSTRE_SEQ_SUPER_WIDTH) {
+        if (range_space(space) < seq->seq_super_width) {
                 CWARN("sequences space is going to exhaust soon. "
                       "Only can allocate "LPU64" sequences\n",
                       space->lr_end - space->lr_start);
@@ -171,7 +171,7 @@ __seq_server_alloc_super(struct lu_server_seq *seq,
                 CERROR("sequences space is exhausted\n");
                 rc = -ENOSPC;
         } else {
-                range_alloc(range, space, LUSTRE_SEQ_SUPER_WIDTH);
+                range_alloc(range, space, seq->seq_super_width);
                 rc = 0;
         }
 
@@ -247,7 +247,7 @@ __seq_server_alloc_meta(struct lu_server_seq *seq,
                         RETURN(0);
                 }
         }
-        range_alloc(range, super, LUSTRE_SEQ_META_WIDTH);
+        range_alloc(range, super, seq->seq_meta_width);
 
         rc = seq_server_write_state(seq, ctx);
         if (rc) {
@@ -464,6 +464,9 @@ seq_server_init(struct lu_server_seq *seq,
         seq->seq_dev = dev;
         seq->seq_cli = NULL;
         sema_init(&seq->seq_sem, 1);
+
+        seq->seq_super_width = LUSTRE_SEQ_SUPER_WIDTH;
+        seq->seq_meta_width = LUSTRE_SEQ_META_WIDTH;
 
         snprintf(seq->seq_name, sizeof(seq->seq_name),
                  "%s-%s", LUSTRE_SEQ_NAME, uuid);

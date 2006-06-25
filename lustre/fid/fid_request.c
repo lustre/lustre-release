@@ -211,7 +211,7 @@ seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
         down(&seq->seq_sem);
 
         if (!fid_is_sane(&seq->seq_fid) ||
-            fid_oid(&seq->seq_fid) >= LUSTRE_SEQ_WIDTH)
+            fid_oid(&seq->seq_fid) >= seq->seq_width)
         {
                 /* allocate new sequence for case client hass no sequence at all
                  * or sequnece is exhausted and should be switched. */
@@ -305,6 +305,7 @@ seq_client_init(struct lu_client_seq *seq,
         range_zero(&seq->seq_range);
         sema_init(&seq->seq_sem, 1);
         seq->seq_exp = class_export_get(exp);
+        seq->seq_width = LUSTRE_SEQ_MAX_WIDTH;
 
         snprintf(seq->seq_name, sizeof(seq->seq_name),
                  "%s-%s", LUSTRE_SEQ_NAME, uuid);
