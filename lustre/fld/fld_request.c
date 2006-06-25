@@ -272,7 +272,7 @@ int fld_client_init(struct lu_client_fld *fld, int hash)
         fld->fld_hash = &fld_hash[hash];
         fld->fld_count = 0;
         
-        CDEBUG(D_INFO|D_WARNING, "Client FLD initialized, using \"%s\" hash\n",
+        CDEBUG(D_INFO|D_WARNING, "Client FLD, using \"%s\" hash\n",
                fld->fld_hash->fh_name);
         RETURN(rc);
 }

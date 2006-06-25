@@ -43,15 +43,16 @@ struct lu_fld_hash {
 };
 
 struct lu_server_fld {
-        struct proc_dir_entry   *fld_proc_entry;
+        cfs_proc_dir_entry_t    *fld_proc_entry;
+        cfs_proc_dir_entry_t    *fld_proc_dir;
         struct ptlrpc_service   *fld_service;
         struct dt_device        *fld_dt;
         struct dt_object        *fld_obj;
-        struct lu_fid            fld_fid; /* used during initialization */
+        struct lu_fid            fld_fid;
 };
 
 struct lu_client_fld {
-        struct proc_dir_entry   *fld_proc_entry;
+        cfs_proc_dir_entry_t    *fld_proc_dir;
         struct list_head         fld_exports;
         struct lu_fld_hash      *fld_hash;
         int                      fld_count;

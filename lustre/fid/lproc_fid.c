@@ -378,6 +378,21 @@ seq_proc_read_seq_width(char *page, char **start, off_t off,
 	RETURN(rc);
 }
 
+static int
+seq_proc_read_server(char *page, char **start, off_t off,
+                     int count, int *eof, void *data)
+{
+        struct lu_client_seq *seq = (struct lu_client_seq *)data;
+        struct client_obd *cli = &seq->seq_exp->exp_obd->u.cli;
+	int rc;
+	ENTRY;
+
+        LASSERT(seq != NULL);
+        rc = snprintf(page, count, "%s\n",
+                      cli->cl_target_uuid.uuid);
+	RETURN(rc);
+}
+
 struct lprocfs_vars seq_server_proc_list[] = {
 	{ "space",       seq_proc_read_space, seq_proc_write_space, NULL },
 	{ "super",       seq_proc_read_super, seq_proc_write_super, NULL },
@@ -388,6 +403,7 @@ struct lprocfs_vars seq_server_proc_list[] = {
 
 struct lprocfs_vars seq_client_proc_list[] = {
 	{ "range",      seq_proc_read_range, seq_proc_write_range, NULL },
+	{ "server",     seq_proc_read_server, NULL, NULL },
 	{ "seq_width",  seq_proc_read_seq_width, seq_proc_write_seq_width, NULL },
 	{ NULL }};
 #endif
