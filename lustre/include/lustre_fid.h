@@ -103,9 +103,9 @@ int seq_server_init(struct lu_server_seq *seq,
 void seq_server_fini(struct lu_server_seq *seq,
                      const struct lu_context *ctx);
 
-int seq_server_controller(struct lu_server_seq *seq,
-                          struct lu_client_seq *cli,
-                          const struct lu_context *ctx);
+int seq_server_set_ctlr(struct lu_server_seq *seq,
+                        struct lu_client_seq *cli,
+                        const struct lu_context *ctx);
 #endif
 
 int seq_client_init(struct lu_client_seq *seq, 

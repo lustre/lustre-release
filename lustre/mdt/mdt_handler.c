@@ -1694,9 +1694,9 @@ static int mdt_seq_init(const struct lu_context *ctx,
 }
 
 /* XXX: this is ugly, should be something else */
-static int mdt_controller_init(const struct lu_context *ctx,
-                               struct mdt_device *m,
-                               struct lustre_cfg *cfg)
+static int mdt_seq_ctlr_init(const struct lu_context *ctx,
+                             struct mdt_device *m,
+                             struct lustre_cfg *cfg)
 {
         struct lu_site *ls = m->mdt_md_dev.md_lu_dev.ld_site;
         struct obd_device *mdc;
@@ -1749,16 +1749,16 @@ static int mdt_controller_init(const struct lu_context *ctx,
 
                         LASSERT(ls->ls_server_seq != NULL);
 
-                        rc = seq_server_controller(ls->ls_server_seq,
-                                                   ls->ls_client_seq,
-                                                   ctx);
+                        rc = seq_server_set_ctlr(ls->ls_server_seq,
+                                                 ls->ls_client_seq,
+                                                 ctx);
                 }
         }
 
         RETURN(rc);
 }
 
-static void mdt_controller_fini(struct mdt_device *m)
+static void mdt_seq_ctlr_fini(struct mdt_device *m)
 {
         struct lu_site *ls;
 
@@ -1999,7 +1999,7 @@ static void mdt_fini(struct mdt_device *m)
 
         mdt_fld_fini(&ctx, m);
         mdt_seq_fini(&ctx, m);
-        mdt_controller_fini(m);
+        mdt_seq_ctlr_fini(m);
 
         LASSERT(atomic_read(&d->ld_ref) == 0);
         md_device_fini(&m->mdt_md_dev);
@@ -2125,7 +2125,7 @@ static int mdt_process_config(const struct lu_context *ctx,
         case LCFG_ADD_MDC:
                 /* add mdc hook to get first MDT uuid and connect it to
                  * ls->controller to use for seq manager. */
-                err = mdt_controller_init(ctx, mdt_dev(d), cfg);
+                err = mdt_seq_ctlr_init(ctx, mdt_dev(d), cfg);
                 if (err) {
                         CERROR("can't initialize controller export, "
                                "rc %d\n", err);

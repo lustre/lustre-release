@@ -89,6 +89,64 @@ seq_server_read_state(struct lu_server_seq *seq,
 	RETURN(rc);
 }
 
+/* assigns client to sequence controller node */
+int
+seq_server_set_ctlr(struct lu_server_seq *seq,
+                    struct lu_client_seq *cli,
+                    const struct lu_context *ctx)
+{
+        int rc = 0;
+        ENTRY;
+        
+        LASSERT(cli != NULL);
+
+        if (seq->seq_cli) {
+                CERROR("SEQ-MGR(srv): sequence-controller "
+                       "is already assigned\n");
+                RETURN(-EINVAL);
+        }
+
+        CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): assign "
+               "sequence controller client %s\n",
+               cli->seq_exp->exp_client_uuid.uuid);
+
+        down(&seq->seq_sem);
+        
+        /* assign controller */
+        seq->seq_cli = cli;
+
+        /* get new range from controller only if super-sequence is not yet
+         * initialized from backing store or something else. */
+        if (range_is_zero(&seq->seq_super)) {
+                /* release sema to avoid deadlock for case we're asking our
+                 * selves. */
+                up(&seq->seq_sem);
+                rc = seq_client_alloc_super(cli);
+                down(&seq->seq_sem);
+                
+                if (rc) {
+                        CERROR("can't allocate super-sequence, "
+                               "rc %d\n", rc);
+                        RETURN(rc);
+                }
+
+                /* take super-seq from client seq mgr */
+                LASSERT(range_is_sane(&cli->seq_range));
+
+                seq->seq_super = cli->seq_range;
+
+                /* save init seq to backing store. */
+                rc = seq_server_write_state(seq, ctx);
+                if (rc) {
+                        CERROR("can't write sequence state, "
+                               "rc = %d\n", rc);
+                }
+        }
+        up(&seq->seq_sem);
+        RETURN(rc);
+}
+EXPORT_SYMBOL(seq_server_set_ctlr);
+
 /* on controller node, allocate new super sequence for regular sequnece
  * server. */
 static int
@@ -321,64 +379,6 @@ out:
         target_send_reply(req, rc, fail);
         return 0;
 } 
-
-/* assigns client to sequence controller node */
-int
-seq_server_controller(struct lu_server_seq *seq,
-                      struct lu_client_seq *cli,
-                      const struct lu_context *ctx)
-{
-        int rc = 0;
-        ENTRY;
-        
-        LASSERT(cli != NULL);
-
-        if (seq->seq_cli) {
-                CERROR("SEQ-MGR(srv): sequence-controller "
-                       "is already assigned\n");
-                RETURN(-EINVAL);
-        }
-
-        CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): assign "
-               "sequence controller client %s\n",
-               cli->seq_exp->exp_client_uuid.uuid);
-
-        down(&seq->seq_sem);
-        
-        /* assign controller */
-        seq->seq_cli = cli;
-
-        /* get new range from controller only if super-sequence is not yet
-         * initialized from backing store or something else. */
-        if (range_is_zero(&seq->seq_super)) {
-                /* release sema to avoid deadlock for case we're asking our
-                 * selves. */
-                up(&seq->seq_sem);
-                rc = seq_client_alloc_super(cli);
-                down(&seq->seq_sem);
-                
-                if (rc) {
-                        CERROR("can't allocate super-sequence, "
-                               "rc %d\n", rc);
-                        RETURN(rc);
-                }
-
-                /* take super-seq from client seq mgr */
-                LASSERT(range_is_sane(&cli->seq_range));
-
-                seq->seq_super = cli->seq_range;
-
-                /* save init seq to backing store. */
-                rc = seq_server_write_state(seq, ctx);
-                if (rc) {
-                        CERROR("can't write sequence state, "
-                               "rc = %d\n", rc);
-                }
-        }
-        up(&seq->seq_sem);
-        RETURN(rc);
-}
-EXPORT_SYMBOL(seq_server_controller);
 
 #ifdef LPROCFS
 static cfs_proc_dir_entry_t *seq_type_proc_dir = NULL;

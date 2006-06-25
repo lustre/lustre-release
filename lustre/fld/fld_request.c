@@ -95,29 +95,6 @@ exit_unlock:
         return rc;
 }
 
-static struct fld_cache *
-fld_cache_lookup(struct fld_cache_info *fld_cache, __u64 seq)
-{
-        struct hlist_head *bucket;
-        struct hlist_node *scan;
-        struct fld_cache *fld;
-        ENTRY;
-
-        bucket = fld_cache->fld_hash + (fld_cache_hash(seq) &
-                                        fld_cache->fld_hash_mask);
-
-        spin_lock(&fld_cache->fld_lock);
-        hlist_for_each_entry(fld, scan, bucket, fld_list) {
-                if (fld->fld_seq == seq) {
-                        spin_unlock(&fld_cache->fld_lock);
-                        RETURN(fld);
-                }
-        }
-        spin_unlock(&fld_cache->fld_lock);
-
-        RETURN(NULL);
-}
-
 static void
 fld_cache_delete(struct fld_cache_info *fld_cache, __u64 seq)
 {
@@ -141,6 +118,29 @@ fld_cache_delete(struct fld_cache_info *fld_cache, __u64 seq)
 out_unlock:
         spin_unlock(&fld_cache->fld_lock);
         return;
+}
+
+static struct fld_cache *
+fld_cache_lookup(struct fld_cache_info *fld_cache, __u64 seq)
+{
+        struct hlist_head *bucket;
+        struct hlist_node *scan;
+        struct fld_cache *fld;
+        ENTRY;
+
+        bucket = fld_cache->fld_hash + (fld_cache_hash(seq) &
+                                        fld_cache->fld_hash_mask);
+
+        spin_lock(&fld_cache->fld_lock);
+        hlist_for_each_entry(fld, scan, bucket, fld_list) {
+                if (fld->fld_seq == seq) {
+                        spin_unlock(&fld_cache->fld_lock);
+                        RETURN(fld);
+                }
+        }
+        spin_unlock(&fld_cache->fld_lock);
+
+        RETURN(NULL);
 }
 #endif
 
