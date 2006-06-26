@@ -9,7 +9,7 @@
 usage() {
 	cat >&2 <<EOF
 
-Usage:  `basename $0` <-n hostnames> <-s service addresses> 
+Usage:  `basename $0` <-n hostnames> [-s service addresses]
 		      [-c heartbeat channel] [-o heartbeat options] [-v]
 		      <-d target device> [-d target device...]
 
@@ -55,10 +55,7 @@ CONFIG_CMD=${CONFIG_CMD:-"${CLUMAN_TOOLS_PATH}/redhat-config-cluster-cmd"}
 
 # Configuration directory
 CLUMAN_DIR="/etc"			# CluManager configuration directory
-
-# Service directory and name
-INIT_DIR=${INIT_DIR:-"/etc/init.d"}
-LUSTRE_SRV=${LUSTRE_SRV:-"${INIT_DIR}/lustre"}	# service script for lustre
+FILE_SUFFIX=${FILE_SUFFIX:-".lustre"}	# Suffix of the generated config files
 
 TMP_DIR="/tmp/clumanager"		# temporary directory
 
@@ -135,11 +132,6 @@ if [ -z "${HOSTNAME_OPT}" ]; then
 	usage
 fi
 
-if [ -z "${SRVADDR_OPT}" ]; then
-	echo >&2 $"`basename $0`: Missing -s option!"
-	usage
-fi
-
 if [ -z "${DEVICE_OPT}" ]; then
 	echo >&2 $"`basename $0`: Missing -d option!"
 	usage
@@ -206,19 +198,80 @@ get_check_srvIPaddrs() {
 	return 0
 }
 
-# stop_clumanager
-#
-# Run remote command to stop each node's clumanager service
-stop_clumanager() {
-	declare -i idx
+# cluman_running host_name
+# 
+# Run remote command to check whether clumanager service is running in @host_name
+cluman_running() {
+	local host_name=$1
 	local ret_str
 
+	ret_str=`${REMOTE} ${host_name} "service clumanager status" 2>&1`
+	if [ $? -ne 0 ]; then
+		if [ "${ret_str}" != "${ret_str#*unrecognized*}" ]; then
+			echo >&2 "`basename $0`: cluman_running() error:"\
+			"remote command to ${host_name} error: ${ret_str}!"
+			return 2
+		else
+			return 1
+		fi
+	fi
+
+	return 0
+}
+
+# stop_cluman host_name
+#
+# Run remote command to stop clumanager service running in @host_name
+stop_cluman() {
+	local host_name=$1
+	local ret_str
+
+	ret_str=`${REMOTE} ${host_name} "/sbin/service clumanager stop" 2>&1`
+	if [ $? -ne 0 ]; then
+		echo >&2 "`basename $0`: stop_cluman() error:"\
+		"remote command to ${host_name} error: ${ret_str}!"
+		return 1
+	fi
+
+	echo "`basename $0`: Clumanager service is stopped on node ${host_name}."
+	return 0
+}
+
+# check_cluman
+#
+# Run remote command to check each node's clumanager service
+check_cluman() {
+	declare -i idx
+	local OK
+
+	# Get and check all the service IP addresses
+	if [ -n "${SRVADDR_OPT}" ] && ! get_check_srvIPaddrs; then
+		return 1
+	fi
+
 	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
-		ret_str=`${REMOTE} ${NODE_NAMES[idx]} \
-			"/sbin/service clumanager stop" 2>&1`
-		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: stop_clumanager() error:"\
-				 "from host ${NODE_NAMES[idx]} - $ret_str!"
+		# Check clumanager service status
+		cluman_running ${NODE_NAMES[idx]}
+		rc=$?
+		if [ "$rc" -eq "2" ]; then
+			return 1
+		elif [ "$rc" -eq "1" ]; then
+			verbose_output "Clumanager service is stopped on"\
+			"node ${NODE_NAMES[idx]}."
+		elif [ "$rc" -eq "0" ]; then
+			OK=
+			echo -n "`basename $0`: Clumanager service is running on"\
+			"${NODE_NAMES[idx]}, go ahead to stop the service and"\
+			"generate new configurations? [y/n]:"
+			read OK
+			if [ "${OK}" = "n" ]; then
+				echo "`basename $0`: New Clumanager configurations"\
+				"are not generated."
+				return 2
+			fi
+
+			# Stop clumanager service	
+			stop_cluman ${NODE_NAMES[idx]}
 		fi
 	done
 
@@ -258,13 +311,11 @@ get_srvname() {
 	return 0
 } 
 
-# create_service
+# get_srvnames
 #
-# Create service symlinks from /etc/init.d/lustre for Lustre targets
-create_service() {
+# Get server names of all the Lustre targets in this failover group
+get_srvnames() {
 	declare -i i
-	local srv_dir
-	local command ret_str
 
 	# Initialize the TARGET_SRVNAMES array
 	unset TARGET_SRVNAMES
@@ -275,22 +326,6 @@ create_service() {
 				     ${TARGET_DEVNAMES[i]})
 		if [ $? -ne 0 ]; then
 			echo >&2 "${TARGET_SRVNAMES[i]}"
-			return 1
-		fi
-	done
-
-	# Construct remote command
-	command=":"
-	for ((i = 0; i < ${#TARGET_SRVNAMES[@]}; i++)); do
-		command=${command}";ln -s -f ${LUSTRE_SRV} ${INIT_DIR}/${TARGET_SRVNAMES[i]}"
-	done
-
-	# Execute remote command to create symlinks
-	for ((i = 0; i < ${#NODE_NAMES[@]}; i++)); do
-		ret_str=`${REMOTE} ${NODE_NAMES[i]} "${command}" 2>&1`
-		if [ $? -ne 0 ]; then
-			echo >&2 "`basename $0`: create_service() error:" \
-		     		 "from host ${NODE_NAMES[i]} - ${ret_str}"
 			return 1
 		fi
 	done
@@ -320,12 +355,6 @@ add_services() {
 	# Add service tag
 	for ((i = 0; i < ${#TARGET_SRVNAMES[@]}; i++)); do
 		${CONFIG_CMD} --add_service --name=${TARGET_SRVNAMES[i]}
-		if ! check_retval $?; then
-			return 1
-		fi
-
-		${CONFIG_CMD} --service=${TARGET_SRVNAMES[i]} \
-			      --userscript=${INIT_DIR}/${TARGET_SRVNAMES[i]}
 		if ! check_retval $?; then
 			return 1
 		fi
@@ -437,14 +466,12 @@ create_config() {
 
 	/bin/mkdir -p ${TMP_DIR}
 	CONFIG_PRIMNODE=${TMP_DIR}$"/cluster.xml."${PRIM_NODENAME}
+	CONFIG_LUSTRE=${TMP_DIR}$"/cluster.xml"${FILE_SUFFIX}
 
-	# Create symlinks for Lustre services
-	verbose_output "Creating symlinks for lustre target services in"\
-	       	"${PRIM_NODENAME} failover group hosts..." 
-	if ! create_service; then
+	# Get server names of Lustre targets
+	if ! get_srvnames; then
 		return 1
 	fi
-	verbose_output "OK"
 
 	if [ -s ${CONFIG_PRIMNODE} ]; then
 		if [ -n "`/bin/grep ${TARGET_SRVNAMES[0]} ${CONFIG_PRIMNODE}`" ]
@@ -452,6 +479,9 @@ create_config() {
 			verbose_output "${CONFIG_PRIMNODE} already exists."
 			return 0
 		else
+			[ -e "${CLUMAN_DIR}/cluster.xml" ] && \
+			/bin/mv ${CLUMAN_DIR}/cluster.xml ${CLUMAN_DIR}/cluster.xml.old
+
 			/bin/cp -f ${CONFIG_PRIMNODE} ${CLUMAN_DIR}/cluster.xml 
 
 			# Add services into the cluster.xml file
@@ -469,18 +499,17 @@ create_config() {
 		verbose_output "OK"
 	fi
 
-	/bin/cp -f ${CLUMAN_DIR}/cluster.xml ${CONFIG_PRIMNODE}
+	/bin/mv ${CLUMAN_DIR}/cluster.xml ${CONFIG_LUSTRE}
+	[ -e "${CLUMAN_DIR}/cluster.xml.old" ] && \
+	/bin/mv ${CLUMAN_DIR}/cluster.xml.old ${CLUMAN_DIR}/cluster.xml
 
 	# scp the cluster.xml file to all the nodes
-	verbose_output "Remote copying cluster.xml file to" \
+	verbose_output "Remote copying cluster.xml${FILE_SUFFIX} file to" \
 		       "${PRIM_NODENAME} failover group hosts..."
 	for ((idx = 0; idx < ${#NODE_NAMES[@]}; idx++)); do
-		if [ "${PRIM_NODENAME}" != "${NODE_NAMES[idx]}" ]; then
-			/bin/cp -f ${CONFIG_PRIMNODE} \
-			${TMP_DIR}$"/cluster.xml."${NODE_NAMES[idx]}
-		fi
+		/bin/cp -f ${CONFIG_LUSTRE} ${TMP_DIR}$"/cluster.xml."${NODE_NAMES[idx]}
 
-		scp ${CONFIG_PRIMNODE} ${NODE_NAMES[idx]}:${CLUMAN_DIR}/cluster.xml
+		scp ${CONFIG_LUSTRE} ${NODE_NAMES[idx]}:${CLUMAN_DIR}/
 		if [ $? -ne 0 ]; then
 			echo >&2 "`basename $0`: Failed to scp cluster.xml file"\
 				 "to node ${NODE_NAMES[idx]}!"
@@ -498,15 +527,15 @@ if ! get_nodenames; then
 	exit 1
 fi
 
-# Get and check all the service IP addresses
-if ! get_check_srvIPaddrs; then
-	exit 1
-fi
-
-# Stop clumanager services
-verbose_output "Stopping clumanager service in the ${PRIM_NODENAME}"\
+# Check clumanager services
+verbose_output "Checking clumanager service in the ${PRIM_NODENAME}"\
 	       "failover group hosts..."
-if ! stop_clumanager; then
+check_cluman
+rc=$?
+if [ "$rc" -eq "2" ]; then
+	verbose_output "OK"
+	exit 0
+elif [ "$rc" -eq "1" ]; then
 	exit 1
 fi
 verbose_output "OK"
