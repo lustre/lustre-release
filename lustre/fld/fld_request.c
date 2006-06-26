@@ -206,13 +206,14 @@ int
 fld_client_add_export(struct lu_client_fld *fld,
                       struct obd_export *exp)
 {
+        struct client_obd *cli = &exp->exp_obd->u.cli;
         struct obd_export *fld_exp;
         ENTRY;
 
         LASSERT(exp != NULL);
 
         CDEBUG(D_INFO|D_WARNING, "FLD(cli): adding export %s\n",
-	       exp->exp_client_uuid.uuid);
+	       cli->cl_target_uuid.uuid);
         
         spin_lock(&fld->fld_lock);
         list_for_each_entry(fld_exp, &fld->fld_exports, exp_fld_chain) {
@@ -507,8 +508,7 @@ fld_client_lookup(struct lu_client_fld *fld,
                 RETURN(rc);
 
 #ifdef __KERNEL__
-        if (rc == 0)
-                rc = fld_cache_insert(fld_cache, seq, *mds);
+        rc = fld_cache_insert(fld_cache, seq, *mds);
 #endif
         
         RETURN(rc);

@@ -33,7 +33,7 @@ typedef __u64 fidseq_t;
 struct fld_cache_entry {
         struct hlist_node  fce_list;
         mdsno_t            fce_mds;
-        __u64              fce_seq;
+        fidseq_t           fce_seq;
 };
 
 struct fld_cache_info {

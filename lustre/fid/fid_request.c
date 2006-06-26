@@ -105,7 +105,7 @@ __seq_client_alloc_super(struct lu_client_seq *seq)
 
         rc = seq_client_rpc(seq, &seq->seq_range, SEQ_ALLOC_SUPER);
         if (rc == 0) {
-                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated super-sequence "
+                CDEBUG(D_INFO, "SEQ-MGR(cli): allocated super-sequence "
                        "["LPX64"-"LPX64"]\n", seq->seq_range.lr_start,
                        seq->seq_range.lr_end);
         }
@@ -135,7 +135,7 @@ __seq_client_alloc_meta(struct lu_client_seq *seq)
 
         rc = seq_client_rpc(seq, &seq->seq_range, SEQ_ALLOC_META);
         if (rc == 0) {
-                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated meta-sequence "
+                CDEBUG(D_INFO, "SEQ-MGR(cli): allocated meta-sequence "
                        "["LPX64"-"LPX64"]\n", seq->seq_range.lr_start,
                        seq->seq_range.lr_end);
         }
@@ -179,7 +179,7 @@ __seq_client_alloc_seq(struct lu_client_seq *seq, __u64 *seqnr)
         seq->seq_range.lr_start += 1;
         
         if (rc == 0) {
-                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(cli): allocated "
+                CDEBUG(D_INFO, "SEQ-MGR(cli): allocated "
                        "sequence ["LPX64"]\n", *seqnr);
         }
         RETURN(rc);
@@ -297,7 +297,7 @@ seq_client_init(struct lu_client_seq *seq,
                 const char *uuid,
                 struct obd_export *exp)
 {
-        int rc;
+        int rc = 0;
         ENTRY;
 
         LASSERT(exp != NULL);
@@ -313,18 +313,14 @@ seq_client_init(struct lu_client_seq *seq,
 
 #ifdef LPROCFS
         rc = seq_client_proc_init(seq);
-        if (rc)
-                GOTO(out, rc);
 #endif
 
-        EXIT;
-out:
         if (rc)
                 seq_client_fini(seq);
         else
                 CDEBUG(D_INFO|D_WARNING,
                        "Client Sequence Manager\n");
-        return rc;
+        RETURN(rc);
 }
 EXPORT_SYMBOL(seq_client_init);
 

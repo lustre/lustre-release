@@ -182,7 +182,7 @@ __seq_server_alloc_super(struct lu_server_seq *seq,
         }
 
         if (rc == 0) {
-                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): allocated super-sequence "
+                CDEBUG(D_INFO, "SEQ-MGR(srv): allocated super-sequence "
                        "["LPX64"-"LPX64"]\n", range->lr_start, range->lr_end);
         }
         
@@ -256,7 +256,7 @@ __seq_server_alloc_meta(struct lu_server_seq *seq,
         }
 
         if (rc == 0) {
-                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): allocated meta-sequence "
+                CDEBUG(D_INFO, "SEQ-MGR(srv): allocated meta-sequence "
                        "["LPX64"-"LPX64"]\n", range->lr_start, range->lr_end);
         }
 
