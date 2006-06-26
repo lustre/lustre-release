@@ -336,7 +336,6 @@ out:
                 mdd_lov_fini(ctxt, mdd);
         return rc;
 }
-EXPORT_SYMBOL(mdd_lov_init);
 
 /* update the LOV-OSC knowledge of the last used object id's */
 int mdd_lov_set_nextid(struct mdd_device *mdd)
