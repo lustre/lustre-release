@@ -81,6 +81,10 @@ load_module() {
 }
 
 load_modules() {
+    if [ -n "$MODPROBE" ]; then
+	# use modprobe
+	return 0
+    fi
     if [ "$HAVE_MODULES" = true ]; then
         return 0
     fi
