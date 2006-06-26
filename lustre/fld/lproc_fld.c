@@ -48,9 +48,36 @@
 #include "fld_internal.h"
 
 #ifdef LPROCFS
+static int
+fld_proc_read_targets(char *page, char **start, off_t off,
+                      int count, int *eof, void *data)
+{
+        struct lu_client_fld *fld = (struct lu_client_fld *)data;
+        struct obd_export *fld_exp;
+	int total = 0, rc;
+	ENTRY;
+
+        LASSERT(fld != NULL);
+
+        spin_lock(&fld->fld_lock);
+        list_for_each_entry(fld_exp,
+                            &fld->fld_exports, exp_fld_chain) {
+                rc = snprintf(page, count, "%s\n",
+                              fld_exp->exp_client_uuid.uuid);
+                page += rc;
+                count -= rc;
+                total += rc;
+                if (count == 0)
+                        break;
+        }
+        spin_unlock(&fld->fld_lock);
+	RETURN(total);
+}
+
 struct lprocfs_vars fld_server_proc_list[] = {
 	{ NULL }};
 
 struct lprocfs_vars fld_client_proc_list[] = {
+	{ "targets", fld_proc_read_targets, NULL, NULL },
 	{ NULL }};
 #endif

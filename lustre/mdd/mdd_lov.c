@@ -330,11 +330,13 @@ int mdd_lov_init(const struct lu_context *ctxt, struct mdd_device *mdd,
         rc = mdd_lov_connect(ctxt, mdd, lov_name);
         if (rc)
                 GOTO(out, rc);
+        EXIT;
 out: 
         if (rc)
                 mdd_lov_fini(ctxt, mdd);
-        RETURN(rc);
+        return rc;
 }
+EXPORT_SYMBOL(mdd_lov_init);
 
 /* update the LOV-OSC knowledge of the last used object id's */
 int mdd_lov_set_nextid(struct mdd_device *mdd)
