@@ -193,7 +193,7 @@ static void ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
                         struct lookup_intent *it, struct obd_client_handle *och)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
-        struct mds_body *body;
+        struct mdt_body *body;
 
         LASSERT(och);
 
