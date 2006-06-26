@@ -61,9 +61,12 @@ fld_proc_read_targets(char *page, char **start, off_t off,
 
         spin_lock(&fld->fld_lock);
         list_for_each_entry(fld_exp,
-                            &fld->fld_exports, exp_fld_chain) {
+                            &fld->fld_exports, exp_fld_chain)
+        {
+                struct client_obd *cli = &fld_exp->exp_obd->u.cli;
+                
                 rc = snprintf(page, count, "%s\n",
-                              fld_exp->exp_client_uuid.uuid);
+                              cli->cl_target_uuid.uuid);
                 page += rc;
                 count -= rc;
                 total += rc;
@@ -74,10 +77,63 @@ fld_proc_read_targets(char *page, char **start, off_t off,
 	RETURN(total);
 }
 
+static int
+fld_proc_read_hash(char *page, char **start, off_t off,
+                   int count, int *eof, void *data)
+{
+        struct lu_client_fld *fld = (struct lu_client_fld *)data;
+	int rc;
+	ENTRY;
+
+        LASSERT(fld != NULL);
+
+        spin_lock(&fld->fld_lock);
+        rc = snprintf(page, count, "%s\n",
+                      fld->fld_hash->fh_name);
+        spin_unlock(&fld->fld_lock);
+
+	RETURN(rc);
+}
+
+static int
+fld_proc_write_hash(struct file *file, const char *buffer,
+                    unsigned long count, void *data)
+{
+        struct lu_client_fld *fld = (struct lu_client_fld *)data;
+        struct lu_fld_hash *hash = NULL;
+        int i;
+	ENTRY;
+
+        LASSERT(fld != NULL);
+
+        for (i = 0; i < sizeof(fld_hash) / sizeof(*hash); i++) {
+                if (fld_hash[i].fh_name == NULL ||
+                    count != strlen(fld_hash[i].fh_name))
+                        continue;
+                        
+                if (!strncmp(fld_hash[i].fh_name, buffer, count)) {
+                        hash = &fld_hash[i];
+                        break;
+                }
+        }
+
+        if (hash != NULL) {
+                spin_lock(&fld->fld_lock);
+                fld->fld_hash = hash;
+                spin_unlock(&fld->fld_lock);
+
+                CDEBUG(D_WARNING, "FLD(cli): changed hash to \"%s\"\n",
+                       hash->fh_name);
+        }
+	
+        RETURN(count);
+}
+
 struct lprocfs_vars fld_server_proc_list[] = {
 	{ NULL }};
 
 struct lprocfs_vars fld_client_proc_list[] = {
 	{ "targets", fld_proc_read_targets, NULL, NULL },
+	{ "hash",    fld_proc_read_hash, fld_proc_write_hash, NULL },
 	{ NULL }};
 #endif

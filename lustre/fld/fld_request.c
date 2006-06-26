@@ -161,7 +161,7 @@ fld_dht_hash(struct lu_client_fld *fld, __u64 seq)
         return fld_rrb_hash(fld, seq);
 }
 
-static struct lu_fld_hash fld_hash[3] = {
+struct lu_fld_hash fld_hash[3] = {
         {
                 .fh_name = "DHT",
                 .fh_func = fld_dht_hash
@@ -183,7 +183,10 @@ fld_client_get_export(struct lu_client_fld *fld, __u64 seq)
         ENTRY;
 
         LASSERT(fld->fld_hash != NULL);
+
+        spin_lock(&fld->fld_lock);
         hash = fld->fld_hash->fh_func(fld, seq);
+        spin_unlock(&fld->fld_lock);
 
         spin_lock(&fld->fld_lock);
         list_for_each_entry(fld_exp,
@@ -209,7 +212,7 @@ fld_client_add_export(struct lu_client_fld *fld,
 
         LASSERT(exp != NULL);
 
-        CDEBUG(D_INFO|D_WARNING, "adding export %s\n",
+        CDEBUG(D_INFO|D_WARNING, "FLD(cli): adding export %s\n",
 	       exp->exp_client_uuid.uuid);
         
         spin_lock(&fld->fld_lock);

@@ -54,6 +54,8 @@ enum {
         FLD_HTABLE_MASK = FLD_HTABLE_SIZE - 1
 };
 
+extern struct lu_fld_hash fld_hash[3];
+
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
 int fld_index_handle_insert(struct lu_server_fld *fld,

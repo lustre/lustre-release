@@ -43,21 +43,45 @@ struct lu_fld_hash {
 };
 
 struct lu_server_fld {
+        /* service proc entry */
         cfs_proc_dir_entry_t    *fld_proc_entry;
+
+        /* fld dir proc entry */
         cfs_proc_dir_entry_t    *fld_proc_dir;
+
+        /* pointer to started server service */
         struct ptlrpc_service   *fld_service;
+
+        /* device for access object index methods */
         struct dt_device        *fld_dt;
+
+        /* /fld file object device */
         struct dt_object        *fld_obj;
+
+        /* /fld file fid */
         struct lu_fid            fld_fid;
+
+        /* fld service name in form "fld-MDTXXX" */
         char                     fld_name[80];
 };
 
 struct lu_client_fld {
+        /* client side proc entry */
         cfs_proc_dir_entry_t    *fld_proc_dir;
+
+        /* list of exports client FLD knows about */
         struct list_head         fld_exports;
+
+        /* current hash to be used to chose an export */
         struct lu_fld_hash      *fld_hash;
+
+        /* exports count */
         int                      fld_count;
+
+        /* lock protecting exports list and fld_hash */
         spinlock_t               fld_lock;
+
+        /* client fld proc entry name */
         char                     fld_name[80];
 };
 
