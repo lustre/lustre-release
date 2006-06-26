@@ -1163,6 +1163,14 @@ static int osd_mount(const struct lu_context *ctx,
                                 result = PTR_ERR(d);
                 } else
                         result = PTR_ERR(d);
+                /*
+                 * XXX temporary resolution: OBJ_IDS should also be done in mkfs
+                 */
+                d = simple_mknod(osd_sb(o)->s_root, "lov_objid", 0777, 1);
+                if (!IS_ERR(d))
+                        dput(d);
+                else
+                        result = PTR_ERR(d);
         }
         if (result != 0)
                 osd_device_fini(ctx, osd2lu_dev(o));

@@ -415,24 +415,7 @@ static struct lu_device *mdd_device_fini(const struct lu_context *ctx,
         return next;
 }
 
-static int mdd_lov_init(struct mdd_device *mdd, struct lustre_cfg *cfg)
-{
-        int rc;
-        ENTRY;
-
-        /*FIXME lov device is a dt or obd device in this cycle?*/
-
-        rc = dt_device_init(&mdd->mdd_lov_dev, NULL);
-        if (rc)
-                GOTO(out, rc);
-
-        mdd->mdd_lov_dev.dd_lu_dev.ld_obd =
-                class_name2obd(lustre_cfg_string(cfg, 3));
-out:
-        RETURN(rc);
-}
-
-static int mdd_process_config(const struct lu_context *ctx,
+static int mdd_process_config(const struct lu_context *ctxt,
                               struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct mdd_device *m = lu2mdd_dev(d);
@@ -441,13 +424,13 @@ static int mdd_process_config(const struct lu_context *ctx,
 
         switch(cfg->lcfg_command) {
         case LCFG_SETUP:
-                rc = next->ld_ops->ldo_process_config(ctx, next, cfg);
+                rc = next->ld_ops->ldo_process_config(ctxt, next, cfg);
                 if (rc)
                         GOTO(out, rc);
-                rc = mdd_mount(ctx, m);
+                rc = mdd_mount(ctxt, m);
                 if (rc)
                         GOTO(out, rc);
-                rc = mdd_lov_init(m, cfg);
+                rc = mdd_lov_init(ctxt, m, cfg);
                 if (rc) {
                         CERROR("lov init error %d \n", rc);
                         /*FIXME umount the mdd*/
@@ -455,7 +438,7 @@ static int mdd_process_config(const struct lu_context *ctx,
                 }
                 break;
         default:
-                rc = next->ld_ops->ldo_process_config(ctx, next, cfg);
+                rc = next->ld_ops->ldo_process_config(ctxt, next, cfg);
                 break;
         }
 out:
@@ -742,15 +725,11 @@ mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
-        rc = __mdd_ref_del(ctxt, mdd_pobj, handle);
-        if (rc)
-                GOTO(cleanup, rc);
-
         rc = __mdd_ref_del(ctxt, mdd_cobj, handle);
         if (rc)
                 GOTO(cleanup, rc);
 cleanup:
-       /*FIXME: error handling*/
+       /*FIXME: error handling?*/
         mdd_lock2(ctxt, mdd_pobj, mdd_cobj);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);

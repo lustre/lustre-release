@@ -1,4 +1,4 @@
 MODULES := mdd
-mdd-objs := mdd_handler.o
+mdd-objs := mdd_handler.o mdd_lov.o
 
 @INCLUDE_RULES@
