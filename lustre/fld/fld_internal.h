@@ -30,16 +30,16 @@
 
 typedef __u64 fidseq_t;
 
-struct fld_cache {
-        struct hlist_node fld_list;
-        mdsno_t           fld_mds;
-        __u64             fld_seq;
+struct fld_cache_entry {
+        struct hlist_node  fld_list;
+        mdsno_t            fld_mds;
+        __u64              fld_seq;
 };
 
 struct fld_cache_info {
         struct hlist_head *fld_hash;
-        spinlock_t fld_lock;
-        int fld_hash_mask;
+        spinlock_t         fld_lock;
+        int                fld_hash_mask;
 };
 
 enum fld_op {
@@ -55,6 +55,7 @@ enum {
 };
 
 extern struct lu_fld_hash fld_hash[3];
+extern struct fld_cache_info *fld_cache;
 
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 

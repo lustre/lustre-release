@@ -53,64 +53,64 @@
 #include "fld_internal.h"
 
 #ifdef __KERNEL__
-extern struct fld_cache_info *fld_cache;
-
 static __u32
 fld_cache_hash(__u64 seq)
 {
-        return seq;
+        return (__u32)seq;
 }
 
 static int
 fld_cache_insert(struct fld_cache_info *fld_cache,
                  __u64 seq, __u64 mds)
 {
-        struct fld_cache *fld;
+        struct fld_cache_entry *flde, *fldt;
         struct hlist_head *bucket;
         struct hlist_node *scan;
         int rc = 0;
         ENTRY;
 
+        OBD_ALLOC_PTR(flde);
+        if (!flde)
+                RETURN(-ENOMEM);
+
         bucket = fld_cache->fld_hash + (fld_cache_hash(seq) &
                                         fld_cache->fld_hash_mask);
 
-        OBD_ALLOC_PTR(fld);
-        if (!fld)
-                RETURN(-ENOMEM);
-
-        INIT_HLIST_NODE(&fld->fld_list);
-        fld->fld_mds = mds;
-        fld->fld_seq = seq;
-
         spin_lock(&fld_cache->fld_lock);
-        hlist_for_each_entry(fld, scan, bucket, fld_list) {
-                if (fld->fld_seq == seq)
+        hlist_for_each_entry(fldt, scan, bucket, fld_list) {
+                if (fldt->fld_seq == seq)
                         GOTO(exit_unlock, rc = -EEXIST);
         }
-        hlist_add_head(&fld->fld_list, bucket);
+
+        INIT_HLIST_NODE(&flde->fld_list);
+        flde->fld_mds = mds;
+        flde->fld_seq = seq;
+        
+        hlist_add_head(&flde->fld_list, bucket);
+
         EXIT;
 exit_unlock:
         spin_unlock(&fld_cache->fld_lock);
         if (rc != 0)
-                OBD_FREE(fld, sizeof(*fld));
+                OBD_FREE_PTR(flde);
         return rc;
 }
 
 static void
 fld_cache_delete(struct fld_cache_info *fld_cache, __u64 seq)
 {
+        struct fld_cache_entry *flde;
         struct hlist_head *bucket;
         struct hlist_node *scan;
-        struct fld_cache *fld;
         ENTRY;
 
         bucket = fld_cache->fld_hash + (fld_cache_hash(seq) &
                                         fld_cache->fld_hash_mask);
 
         spin_lock(&fld_cache->fld_lock);
-        hlist_for_each_entry(fld, scan, bucket, fld_list) {
-                if (fld->fld_seq == seq) {
-                        hlist_del_init(&fld->fld_list);
+        hlist_for_each_entry(flde, scan, bucket, fld_list) {
+                if (flde->fld_seq == seq) {
+                        hlist_del_init(&flde->fld_list);
                         GOTO(out_unlock, 0);
                 }
         }
@@ -121,26 +121,25 @@ out_unlock:
         return;
 }
 
-static struct fld_cache *
+static struct fld_cache_entry *
 fld_cache_lookup(struct fld_cache_info *fld_cache, __u64 seq)
 {
+        struct fld_cache_entry *flde;
         struct hlist_head *bucket;
         struct hlist_node *scan;
-        struct fld_cache *fld;
         ENTRY;
 
         bucket = fld_cache->fld_hash + (fld_cache_hash(seq) &
                                         fld_cache->fld_hash_mask);
 
         spin_lock(&fld_cache->fld_lock);
-        hlist_for_each_entry(fld, scan, bucket, fld_list) {
-                if (fld->fld_seq == seq) {
+        hlist_for_each_entry(flde, scan, bucket, fld_list) {
+                if (flde->fld_seq == seq) {
                         spin_unlock(&fld_cache->fld_lock);
-                        RETURN(fld);
+                        RETURN(flde);
                 }
         }
         spin_unlock(&fld_cache->fld_lock);
-
         RETURN(NULL);
 }
 #endif
@@ -205,7 +204,7 @@ fld_client_get_export(struct lu_client_fld *fld, __u64 seq)
  * of FLD module. */
 int
 fld_client_add_export(struct lu_client_fld *fld,
-                          struct obd_export *exp)
+                      struct obd_export *exp)
 {
         struct obd_export *fld_exp;
         ENTRY;
@@ -488,16 +487,16 @@ fld_client_lookup(struct lu_client_fld *fld,
                   __u64 seq, mdsno_t *mds)
 {
 #ifdef __KERNEL__
-        struct fld_cache *fld_entry;
+        struct fld_cache_entry *flde;
 #endif
         int rc;
         ENTRY;
 
 #ifdef __KERNEL__
         /* lookup it in the cache */
-        fld_entry = fld_cache_lookup(fld_cache, seq);
-        if (fld_entry != NULL) {
-                *mds = fld_entry->fld_mds;
+        flde = fld_cache_lookup(fld_cache, seq);
+        if (flde != NULL) {
+                *mds = flde->fld_mds;
                 RETURN(0);
         }
 #endif
