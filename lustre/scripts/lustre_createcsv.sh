@@ -416,8 +416,8 @@ get_module_opts() {
 }
 
 #************************ HA software configurations ************************#
-# is_ha_target hostname target_svname
-# Check whether the target service @target_svname was made to be high-available
+# is_ha_target hostname target_devname
+# Check whether the target @target_devname was made to be high-available
 is_ha_target() {
 	local host_name=$1
 	local target_svname=$2
@@ -517,7 +517,8 @@ get_hb_configs() {
                 	[ -z "`echo \"${line}\"|egrep -v \"^#\"`" ] && continue
 
 			SRV_IPADDRS=`echo ${line} | awk '{print $2}'`
-			[ -n "${SRV_IPADDRS}" ] && break
+			[ -n "${SRV_IPADDRS}" ] \
+			&& [ "`echo ${line} | awk '{print $1}'`" = "${host_name}" ] && break
         	done < <(${REMOTE} ${host_name} "cat ${HA_RES}")
 	
 		if [ -z "${SRV_IPADDRS}" ]; then
@@ -534,7 +535,7 @@ get_hb_configs() {
 
 		# Execute remote command to check whether this target service 
 		# was made to be high-available
-		if is_ha_target ${host_name} ${TARGET_SVNAMES[i]}; then
+		if is_ha_target ${host_name} ${TARGET_DEVNAMES[i]}; then
 			HA_CONFIGS[i]=${HB_CHANNELS},${SRV_IPADDRS},${HB_OPTIONS}
 		fi
 	done
@@ -635,7 +636,7 @@ get_cluman_configs() {
 
 		# Execute remote command to check whether this target service 
 		# was made to be high-available
-		! is_ha_target ${host_name} ${TARGET_SVNAMES[i]} && continue
+		! is_ha_target ${host_name} ${TARGET_DEVNAMES[i]} && continue
 
 		# Execute remote command to get Heartbeat channel
 		HB_CHANNELS=$(get_cluman_channel ${host_name})
