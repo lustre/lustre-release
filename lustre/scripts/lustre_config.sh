@@ -62,12 +62,34 @@ It can also optionally:
 
 Each line in the csv file represents one Lustre target. The format is:
 hostname,module_opts,device name,mount point,device type,fsname,mgs nids,index,
-format options,mkfs options,mount options,failover nids,heartbeat channels,
-service address,heartbeat options
+format options,mkfs options,mount options,failover nids
+
+hostname            hostname of the node in the cluster, must match "uname -n"
+module_opts         Lustre networking module options
+device name         Lustre target (block device or loopback file)
+mount point         Lustre target mount point
+device type         Lustre target type (mgs, mdt, ost, mgs|mdt, mdt|mgs)
+fsname              Lustre filesystem name, should be limited to 8 characters 
+                    Default is "lustre".
+mgs nids            NID(s) of remote mgs node, required for mdt and ost targets
+                    If this item is not given for an mdt, it is assumed that
+                    the mdt will also be an mgs, according to mkfs.lustre.
+index               Lustre target index
+format options      a "catchall" contains options to be passed to mkfs.lustre
+                    "--device-size", "--param", etc. all goes into this item.
+mkfs options        format options to be wrapped with --mkfsoptions="" and
+                    passed to mkfs.lustre
+mount options       If this script is invoked with "-m" option, then the value of
+                    this item will be wrapped with --mountfsoptions="" and passed
+                    to mkfs.lustre, else the value will be added into /etc/fstab.
+failover nids       NID(s) of failover partner node
+
+All the NIDs in one node are delimited by commas (','). When multiple nodes are
+specified, they are delimited by a colon (':').
 
 Items left blank will be set to defaults.
 
-Example 1 - Simple, without HA software configuration options:
+Example 1 - Simple, with combo MGS/MDT:
 -------------------------------------------------------------------------------
 # combo mdt/mgs
 lustre-mgs,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs|mdt,,,,--device-size=10240
@@ -82,52 +104,16 @@ lustre-ost,options lnet networks=tcp,/tmp/ost1,/mnt/ost1,ost,,lustre-mgs@tcp0,,-
 Example 2 - Separate MGS/MDT, two networks interfaces:
 -------------------------------------------------------------------------------
 # mgs
-lustre-mgs1,options lnet 'networks="tcp,elan"',/tmp/mgs,/mnt/mgs,mgs,,,,--device-size=10240,-J size=4,,"lustre-mgs2,2@elan"
+lustre-mgs1,options lnet 'networks="tcp,elan"',/dev/sda,/mnt/mgs,mgs,,,,--quiet --param="sys.timeout=50",,"defaults,noauto","lustre-mgs2,2@elan"
 
 # mdt
-lustre-mdt1,options lnet 'networks="tcp,elan"',/tmp/mdt,/mnt/mdt,mdt,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--device-size=10240,-J size=4,,lustre-mdt2
+lustre-mdt1,options lnet 'networks="tcp,elan"',/dev/sdb,/mnt/mdt,mdt,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--quiet --param="lov.stripe.size=4194304",-J size=16,"defaults,noauto",lustre-mdt2
 
 # ost
-lustre-ost1,options lnet 'networks="tcp,elan"',/tmp/ost,/mnt/ost,ost,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--device-size=10240,-J size=4,,lustre-ost2
+lustre-ost1,options lnet 'networks="tcp,elan"',/dev/sdc,/mnt/ost,ost,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--quiet,-I 512,"defaults,noauto",lustre-ost2
 -------------------------------------------------------------------------------
 
-Example 3 - with Heartbeat version 1 configuration options:
--------------------------------------------------------------------------------
-# mgs
-lustre-mgs1,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs,,,,--device-size=10240,,,lustre-mgs2,serial /dev/ttyS0:bcast eth1,192.168.1.170,ping 192.168.1.169:respawn hacluster /usr/lib/heartbeat/ipfail
-
-# mdt
-lustre-mdt1,options lnet networks=tcp,/tmp/mdt,/mnt/mdt,mdt,,"lustre-mgs1:lustre-mgs2",,--device-size=10240,,,lustre-mdt2,bcast eth1,192.168.1.173
-
-# ost
-lustre-ost1,options lnet networks=tcp,/tmp/ost,/mnt/ost,ost,,"lustre-mgs1:lustre-mgs2",,--device-size=10240,,,lustre-ost2,bcast eth1,192.168.1.171
--------------------------------------------------------------------------------
-
-Example 4 - with Heartbeat version 2 configuration options:
--------------------------------------------------------------------------------
-# combo mdt/mgs
-lustre-mgs1,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs|mdt,,,,--device-size=10240,,,"lustre-mgs2:lustre-mgs3",bcast eth1
-
-# ost1
-lustre-ost1,options lnet networks=tcp,/tmp/ost1,/mnt/ost1,ost,,"lustre-mgs1:lustre-mgs2:lustre-mgs3",,--device-size=10240,,,lustre-ost2,bcast eth2
-
-# ost2
-lustre-ost2,options lnet networks=tcp,/tmp/ost2,/mnt/ost2,ost,,"lustre-mgs1:lustre-mgs2:lustre-mgs3",,--device-size=10240,,,lustre-ost1,bcast eth2
--------------------------------------------------------------------------------
-
-Example 5 - with Red Hat Cluster Manager configuration options:
--------------------------------------------------------------------------------
-# mgs
-lustre-mgs1,options lnet networks=tcp,/dev/sda,/mnt/mgs,mgs,,,,,,,lustre-mgs2,broadcast,192.168.1.170,--clumembd --interval=1000000 --tko_count=20
-
-# mdt
-lustre-mdt1,options lnet networks=tcp,/dev/sdb,/mnt/mdt,mdt,,"lustre-mgs1:lustre-mgs2",,,,,lustre-mdt2,multicast 225.0.0.12,192.168.1.173
-
-# ost
-lustre-ost1,options lnet networks=tcp,/dev/sdb,/mnt/ost,ost,,"lustre-mgs1:lustre-mgs2",,,,,lustre-ost2,,192.168.1.171:192.168.1.172
--------------------------------------------------------------------------------
-
-Example 6 - with combo mgs/mdt failover pair and ost failover pair:
+Example 3 - with combo MGS/MDT failover pair and OST failover pair:
 -------------------------------------------------------------------------------
 # combo mgs/mdt
 lustre-mgs1,options lnet networks=tcp,/tmp/mgs,/mnt/mgs,mgs|mdt,,,,--quiet --device-size=10240,,,lustre-mgs2@tcp0
@@ -189,7 +175,6 @@ declare -a TARGET_OPTS              # target services in one failover group
 # All the items in the csv file
 declare -a HOST_NAME MODULE_OPTS DEVICE_NAME MOUNT_POINT DEVICE_TYPE FS_NAME
 declare -a MGS_NIDS INDEX FORMAT_OPTIONS MKFS_OPTIONS MOUNT_OPTIONS FAILOVERS
-declare -a HB_CHANNELS SRV_IPADDRS HB_OPTIONS
 
 
 VERIFY_CONNECT=true
@@ -370,60 +355,9 @@ check_item() {
     fi
 
     # Check mount point
-    if ${MODIFY_FSTAB} && [ -z "${MOUNT_POINT[i]}" ]; then
+    if [ -z "${MOUNT_POINT[i]}" ]; then
         echo >&2 $"`basename $0`: check_item() error: mount"\
                   "point item of target ${DEVICE_NAME[i]} has null value!"
-        return 1
-    fi
-
-    return 0
-}
-
-# Check the items required for HA configuration
-check_ha_item() {
-    if [ -z "${HATYPE_OPT}" ]; then
-        return 0
-    fi
-
-    # Check argument
-    if [ $# -eq 0 ]; then
-        echo >&2 $"`basename $0`: check_ha_item() error: Missing"\
-        "argument for function check_ha_item()!"
-        return 1
-    fi
-
-    declare -i i=$1
-
-    [ -z "${HB_CHANNELS[i]}" ] && [ -z "${SRV_IPADDRS[i]}" ] \
-    && [ -z "${HB_OPTIONS[i]}" ] && return 0
-
-    # Check mount point
-    if [ -z "${MOUNT_POINT[i]}" ]; then
-        echo >&2 $"`basename $0`: check_ha_item() error: mount"\
-        "point item of target ${DEVICE_NAME[i]} has null value!"
-        return 1
-    fi
-
-    # Check failover nodes
-    if [ -z "${FAILOVERS[i]}" ]; then
-        echo >&2 $"`basename $0`: check_ha_item() error:"\
-        "failover item of host ${HOST_NAME[i]} has null value!"
-        return 1
-    fi
-
-    # Check service IP item
-    if [ "${HATYPE_OPT}" = "${HATYPE_HBV1}" -a -z "${SRV_IPADDRS[i]}" ]
-    then
-        echo >&2 $"`basename $0`: check_ha_item() error:"\
-        "service IP item of host ${HOST_NAME[i]} has null value!"
-        return 1
-    fi
-
-    # Check heartbeat channel item
-    if [ "${HATYPE_OPT}" != "${HATYPE_CLUMGR}" -a -z "${HB_CHANNELS[i]}" ]
-    then
-        echo >&2 $"`basename $0`: check_ha_item() error: Heartbeat"\
-        "channel item of host ${HOST_NAME[i]} has null value!"
         return 1
     fi
 
@@ -706,11 +640,7 @@ get_nodenames() {
 is_ha_line() {
     declare -i i=$1
 
-    if [ "${HATYPE_OPT}" != "${HATYPE_CLUMGR}" ]; then
-        [ -n "${HB_CHANNELS[i]}" ] && return 0
-    else
-        [ -n "${SRV_IPADDRS[i]}" ] && return 0
-    fi
+    [ -n "${FAILOVERS[i]}" ] && return 0
 
     return 1
 }
@@ -733,15 +663,6 @@ gen_ha_config() {
         HOSTNAME_OPT=${HOSTNAME_OPT}$":"${NODE_NAMES[idx]}
     done
 
-    # Service IP address option
-    SRVADDR_OPT=${SRV_IPADDRS[i]}
-
-    # Heartbeat channels option
-    HBCHANNEL_OPT=$"\""${HB_CHANNELS[i]}$"\""
-
-    # Heartbeat options option
-    HBOPT_OPT=$"\""${HB_OPTIONS[i]}$"\""
-
     # Target devices option
     DEVICE_OPT=" -d "${TARGET_OPTS[0]}
     for ((idx = 1; idx < ${#TARGET_OPTS[@]}; idx++)); do
@@ -752,27 +673,11 @@ gen_ha_config() {
     case "${HATYPE_OPT}" in
     "${HATYPE_HBV1}"|"${HATYPE_HBV2}")    # Heartbeat 
         cmd_line=${GEN_HB_CONFIG}$" -r ${HATYPE_OPT} -n ${HOSTNAME_OPT}"
-        cmd_line=${cmd_line}$" -c ${HBCHANNEL_OPT}"${DEVICE_OPT}${VERBOSE_OPT}
-
-        if [ -n "${SRV_IPADDRS[i]}" ]; then
-            cmd_line=${cmd_line}$" -s ${SRVADDR_OPT}"
-        fi
-
-        if [ -n "${HB_OPTIONS[i]}" ]; then
-            cmd_line=${cmd_line}$" -o ${HBOPT_OPT}"
-        fi
+        cmd_line=${cmd_line}${DEVICE_OPT}${VERBOSE_OPT}
         ;;
     "${HATYPE_CLUMGR}")                 # CluManager
         cmd_line=${GEN_CLUMGR_CONFIG}$" -n ${HOSTNAME_OPT}"
-        cmd_line=${cmd_line}$" -s ${SRVADDR_OPT}"${DEVICE_OPT}${VERBOSE_OPT}
-
-        if [ -n "${HBCHANNEL_OPT}" ]; then
-            cmd_line=${cmd_line}$" -c ${HBCHANNEL_OPT}"
-        fi
-
-        if [ -n "${HB_OPTIONS[i]}" ]; then
-            cmd_line=${cmd_line}$" -o ${HBOPT_OPT}"
-        fi
+        cmd_line=${cmd_line}${DEVICE_OPT}${VERBOSE_OPT}
         ;;
     esac
     
@@ -841,7 +746,7 @@ config_ha() {
     done
 
     if [ ${#PRIM_HOSTNAMES[@]} -eq 0 ]; then
-        verbose_output "There are no HA configuration items in the"\
+        verbose_output "There are no \"failover nids\" items in the"\
         "csv file. No HA configuration files are generated!"
     fi
 
@@ -899,10 +804,6 @@ get_items() {
         MOUNT_OPTIONS[idx]=${CONFIG_ITEM[10]}
         FAILOVERS[idx]=${CONFIG_ITEM[11]}
 
-        HB_CHANNELS[idx]=${CONFIG_ITEM[12]}
-        SRV_IPADDRS[idx]=${CONFIG_ITEM[13]}
-        HB_OPTIONS[idx]=${CONFIG_ITEM[14]}
-
         # Check some required items for formatting target
         if ! check_item $idx; then
             echo >&2 $"`basename $0`: check_item() error:"\
@@ -910,13 +811,6 @@ get_items() {
             return 1    
         fi
 
-        # Check the items required for HA configuration
-        if ! check_ha_item $idx; then
-            echo >&2 $"`basename $0`: check_ha_item() error:"\
-                  "Occurred on line ${line_num} in ${CSV_FILE}."
-            return 1    
-        fi
-        
         idx=${idx}+1
     done < ${CSV_FILE}
 
