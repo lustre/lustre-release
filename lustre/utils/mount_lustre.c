@@ -243,7 +243,7 @@ int parse_options(char *orig_options, int *flagp)
 int main(int argc, char *const argv[])
 {
         char default_options[] = "";
-        char *source, *target;
+        char *source, *target, *ptr;
         char *options, *optcopy, *orig_options = default_options;
         int i, nargs = 3, opt, rc, flags, optlen;
         static struct option long_opt[] = {
@@ -303,6 +303,11 @@ int main(int argc, char *const argv[])
 
         source = convert_hostnames(argv[optind]);
         target = argv[optind + 1];
+        ptr = target + strlen(target) - 1;
+        while ((ptr > target) && (*ptr == '/')) {
+                *ptr = 0;
+                ptr--;
+        }
 
         if (!source) {
                 usage(stderr);
