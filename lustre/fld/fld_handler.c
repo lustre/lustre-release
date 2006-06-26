@@ -65,19 +65,19 @@ static int fld_init(void)
         if (fld_cache == NULL)
                 RETURN(-ENOMEM);
 
-        spin_lock_init(&fld_cache->fld_lock);
+        spin_lock_init(&fld_cache->fci_lock);
 
         /* init fld cache info */
-        fld_cache->fld_hash_mask = FLD_HTABLE_MASK;
-        OBD_ALLOC(fld_cache->fld_hash, FLD_HTABLE_SIZE *
-                  sizeof(*fld_cache->fld_hash));
-        if (fld_cache->fld_hash == NULL) {
+        fld_cache->fci_hash_mask = FLD_HTABLE_MASK;
+        OBD_ALLOC(fld_cache->fci_hash, FLD_HTABLE_SIZE *
+                  sizeof(*fld_cache->fci_hash));
+        if (fld_cache->fci_hash == NULL) {
                 OBD_FREE_PTR(fld_cache);
                 RETURN(-ENOMEM);
         }
         
         for (i = 0; i < FLD_HTABLE_SIZE; i++)
-                INIT_HLIST_HEAD(&fld_cache->fld_hash[i]);
+                INIT_HLIST_HEAD(&fld_cache->fci_hash[i]);
 
         CDEBUG(D_INFO|D_WARNING, "Client FLD, cache size %d\n",
                FLD_HTABLE_SIZE);
@@ -89,8 +89,8 @@ static int fld_fini(void)
 {
         ENTRY;
         if (fld_cache != NULL) {
-                OBD_FREE(fld_cache->fld_hash, FLD_HTABLE_SIZE *
-                         sizeof(*fld_cache->fld_hash));
+                OBD_FREE(fld_cache->fci_hash, FLD_HTABLE_SIZE *
+                         sizeof(*fld_cache->fci_hash));
                 OBD_FREE_PTR(fld_cache);
         }
         RETURN(0);

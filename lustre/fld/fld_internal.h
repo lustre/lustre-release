@@ -31,15 +31,15 @@
 typedef __u64 fidseq_t;
 
 struct fld_cache_entry {
-        struct hlist_node  fld_list;
-        mdsno_t            fld_mds;
-        __u64              fld_seq;
+        struct hlist_node  fce_list;
+        mdsno_t            fce_mds;
+        __u64              fce_seq;
 };
 
 struct fld_cache_info {
-        struct hlist_head *fld_hash;
-        spinlock_t         fld_lock;
-        int                fld_hash_mask;
+        struct hlist_head *fci_hash;
+        spinlock_t         fci_lock;
+        int                fci_hash_mask;
 };
 
 enum fld_op {

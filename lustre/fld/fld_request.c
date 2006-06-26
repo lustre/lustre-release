@@ -73,24 +73,24 @@ fld_cache_insert(struct fld_cache_info *fld_cache,
         if (!flde)
                 RETURN(-ENOMEM);
 
-        bucket = fld_cache->fld_hash + (fld_cache_hash(seq) &
-                                        fld_cache->fld_hash_mask);
+        bucket = fld_cache->fci_hash + (fld_cache_hash(seq) &
+                                        fld_cache->fci_hash_mask);
 
-        spin_lock(&fld_cache->fld_lock);
-        hlist_for_each_entry(fldt, scan, bucket, fld_list) {
-                if (fldt->fld_seq == seq)
+        spin_lock(&fld_cache->fci_lock);
+        hlist_for_each_entry(fldt, scan, bucket, fce_list) {
+                if (fldt->fce_seq == seq)
                         GOTO(exit_unlock, rc = -EEXIST);
         }
 
-        INIT_HLIST_NODE(&flde->fld_list);
-        flde->fld_mds = mds;
-        flde->fld_seq = seq;
+        INIT_HLIST_NODE(&flde->fce_list);
+        flde->fce_mds = mds;
+        flde->fce_seq = seq;
         
-        hlist_add_head(&flde->fld_list, bucket);
+        hlist_add_head(&flde->fce_list, bucket);
 
         EXIT;
 exit_unlock:
-        spin_unlock(&fld_cache->fld_lock);
+        spin_unlock(&fld_cache->fci_lock);
         if (rc != 0)
                 OBD_FREE_PTR(flde);
         return rc;
@@ -104,20 +104,20 @@ fld_cache_delete(struct fld_cache_info *fld_cache, __u64 seq)
         struct hlist_node *scan;
         ENTRY;
 
-        bucket = fld_cache->fld_hash + (fld_cache_hash(seq) &
-                                        fld_cache->fld_hash_mask);
+        bucket = fld_cache->fci_hash + (fld_cache_hash(seq) &
+                                        fld_cache->fci_hash_mask);
 
-        spin_lock(&fld_cache->fld_lock);
-        hlist_for_each_entry(flde, scan, bucket, fld_list) {
-                if (flde->fld_seq == seq) {
-                        hlist_del_init(&flde->fld_list);
+        spin_lock(&fld_cache->fci_lock);
+        hlist_for_each_entry(flde, scan, bucket, fce_list) {
+                if (flde->fce_seq == seq) {
+                        hlist_del_init(&flde->fce_list);
                         GOTO(out_unlock, 0);
                 }
         }
 
         EXIT;
 out_unlock:
-        spin_unlock(&fld_cache->fld_lock);
+        spin_unlock(&fld_cache->fci_lock);
         return;
 }
 
@@ -129,17 +129,17 @@ fld_cache_lookup(struct fld_cache_info *fld_cache, __u64 seq)
         struct hlist_node *scan;
         ENTRY;
 
-        bucket = fld_cache->fld_hash + (fld_cache_hash(seq) &
-                                        fld_cache->fld_hash_mask);
+        bucket = fld_cache->fci_hash + (fld_cache_hash(seq) &
+                                        fld_cache->fci_hash_mask);
 
-        spin_lock(&fld_cache->fld_lock);
-        hlist_for_each_entry(flde, scan, bucket, fld_list) {
-                if (flde->fld_seq == seq) {
-                        spin_unlock(&fld_cache->fld_lock);
+        spin_lock(&fld_cache->fci_lock);
+        hlist_for_each_entry(flde, scan, bucket, fce_list) {
+                if (flde->fce_seq == seq) {
+                        spin_unlock(&fld_cache->fci_lock);
                         RETURN(flde);
                 }
         }
-        spin_unlock(&fld_cache->fld_lock);
+        spin_unlock(&fld_cache->fci_lock);
         RETURN(NULL);
 }
 #endif
@@ -496,7 +496,7 @@ fld_client_lookup(struct lu_client_fld *fld,
         /* lookup it in the cache */
         flde = fld_cache_lookup(fld_cache, seq);
         if (flde != NULL) {
-                *mds = flde->fld_mds;
+                *mds = flde->fce_mds;
                 RETURN(0);
         }
 #endif
