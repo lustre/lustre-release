@@ -657,7 +657,7 @@ static int __req_capsule_offset(const struct req_capsule *pill,
         return offset;
 }
 
-static void *__req_capsule_get(const struct req_capsule *pill,
+static void *__req_capsule_get(struct req_capsule *pill,
                                const struct req_msg_field *field,
                                enum req_location loc)
 {
@@ -688,8 +688,10 @@ static void *__req_capsule_get(const struct req_capsule *pill,
 
         if (!(pill->rc_swabbed & (1 << offset)) && loc != pill->rc_loc &&
             field->rmf_swabber != NULL && value != NULL &&
-            lustre_msg_swabbed(msg))
+            lustre_msg_swabbed(msg)) {
                 field->rmf_swabber(value);
+                pill->rc_swabbed |= (1 << offset);
+        }
         if (value == NULL)
                 DEBUG_REQ(D_ERROR, pill->rc_req,
                           "Wrong buffer for field `%s' (%d of %d) "
@@ -700,21 +702,21 @@ static void *__req_capsule_get(const struct req_capsule *pill,
         return value;
 }
 
-void *req_capsule_client_get(const struct req_capsule *pill,
+void *req_capsule_client_get(struct req_capsule *pill,
                              const struct req_msg_field *field)
 {
         return __req_capsule_get(pill, field, RCL_CLIENT);
 }
 EXPORT_SYMBOL(req_capsule_client_get);
 
-void *req_capsule_server_get(const struct req_capsule *pill,
+void *req_capsule_server_get(struct req_capsule *pill,
                              const struct req_msg_field *field)
 {
         return __req_capsule_get(pill, field, RCL_SERVER);
 }
 EXPORT_SYMBOL(req_capsule_server_get);
 
-const void *req_capsule_other_get(const struct req_capsule *pill,
+const void *req_capsule_other_get(struct req_capsule *pill,
                                   const struct req_msg_field *field)
 {
         return __req_capsule_get(pill, field, pill->rc_loc ^ 1);
@@ -767,6 +769,8 @@ void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt)
                 LASSERT(FMT_FIELD(fmt, i, j)->rmf_size >=
                         FMT_FIELD(old, i, j)->rmf_size);
         }
+        /* last field should be returned to the unswabbed state */
+        pill->rc_swabbed &= ~(__u32)(1 << j);
         pill->rc_fmt = fmt;
 }
 EXPORT_SYMBOL(req_capsule_extend);

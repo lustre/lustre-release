@@ -61,11 +61,11 @@ void req_capsule_fini(struct req_capsule *pill);
 void req_capsule_set(struct req_capsule *pill, const struct req_format *fmt);
 int  req_capsule_pack(struct req_capsule *pill);
 
-void *req_capsule_client_get(const struct req_capsule *pill,
+void *req_capsule_client_get(struct req_capsule *pill,
                              const struct req_msg_field *field);
-void *req_capsule_server_get(const struct req_capsule *pill,
+void *req_capsule_server_get(struct req_capsule *pill,
                              const struct req_msg_field *field);
-const void *req_capsule_other_get(const struct req_capsule *pill,
+const void *req_capsule_other_get(struct req_capsule *pill,
                                   const struct req_msg_field *field);
 
 void req_capsule_set_size(const struct req_capsule *pill,

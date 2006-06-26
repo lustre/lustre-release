@@ -912,7 +912,7 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
         const struct mdt_body    *body;
         struct mdt_object        *obj;
         const struct lu_context  *ctx;
-        const struct req_capsule *pill;
+        struct req_capsule *pill;
 
         ctx = info->mti_ctxt;
         pill = &info->mti_pill;
@@ -1501,6 +1501,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                             int flags)
 {
         long opc;
+        int rc;
         struct ldlm_reply *rep;
 
         static const struct req_format *intent_fmts[REINT_MAX] = {
@@ -1520,9 +1521,9 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                 RETURN(-EPROTO);
         }
 
-        opc = req_capsule_pack(&info->mti_pill);
-        if (opc)
-                RETURN(opc);
+        rc = req_capsule_pack(&info->mti_pill);
+        if (rc)
+                RETURN(rc);
 
         rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         if (rep == NULL)

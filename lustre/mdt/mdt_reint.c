@@ -579,14 +579,15 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         struct lov_mds_md      *lmm  = info->mti_reint_rep.mrr_md;
         struct mdt_reint_record *rr = &info->mti_rr;
         int                     created = 0;
-        struct lu_fid           child_fid;
+        struct lu_fid          child_fid;
         ENTRY;
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_PW;
 
-        req_capsule_pack(&info->mti_pill);
+        //req_capsule_pack(&info->mti_pill);
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
+        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
         parent = mdt_object_find_lock(info->mti_ctxt, mdt, rr->rr_fid1,
                                       lh, MDS_INODELOCK_UPDATE);
@@ -601,18 +602,20 @@ static int mdt_reint_open(struct mdt_thread_info *info)
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
 
-        if (result == -ENOENT)
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
-        else
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
-
         if (result == -ENOENT) {
-                if(!(info->mti_attr.la_flags & MDS_OPEN_CREAT))
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
+                if (!(info->mti_attr.la_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
                 if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                         GOTO(out_parent, result = -EROFS);
-        }
+                child_fid = *info->mti_rr.rr_fid2;
+        } else {
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
+                if (info->mti_attr.la_flags & MDS_OPEN_EXCL &&
+                    info->mti_attr.la_flags & MDS_OPEN_CREAT)
+                        GOTO(out_parent, result = -EEXIST);
 
+        }
         child = mdt_object_find(info->mti_ctxt, mdt, &child_fid);
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
@@ -628,16 +631,13 @@ static int mdt_reint_open(struct mdt_thread_info *info)
                 if (result != 0)
                         GOTO(out_child, result);
                 created = 1;
-        } else if (info->mti_attr.la_flags & MDS_OPEN_EXCL &&
-                   info->mti_attr.la_flags & MDS_OPEN_CREAT) {
-                        GOTO(out_child, result = -EEXIST);
+        } else {
+                result = mo_attr_get(info->mti_ctxt,
+                                     mdt_object_child(child),
+                                     &info->mti_attr);
+                if (result != 0)
+                        GOTO(destroy_child, result);
         }
-
-        result = mo_attr_get(info->mti_ctxt,
-                             mdt_object_child(child),
-                             &info->mti_attr);
-        if (result != 0)
-                GOTO(destroy_child, result);
 
         mdt_pack_attr2body(body, &info->mti_attr);
         body->fid1 = *mdt_object_fid(child);
