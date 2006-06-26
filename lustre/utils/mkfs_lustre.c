@@ -77,7 +77,7 @@ void usage(FILE *out)
         fprintf(out, 
                 "\t<device>:block device or file (e.g /dev/sda or /tmp/ost1)\n"
                 "\ttarget types:\n"
-                "\t\t--ost: object storage, mutually exclusive with mdt\n"
+                "\t\t--ost: object storage, mutually exclusive with mdt,mgs\n"
                 "\t\t--mdt: metadata storage, mutually exclusive with ost\n"
                 "\t\t--mgs: configuration management service - one per site\n"
                 "\toptions (in order of popularity):\n"
@@ -1160,9 +1160,17 @@ int main(int argc, char *const argv[])
         ldd = &mop.mo_ldd;
         if (!(IS_MDT(ldd) || IS_OST(ldd) || IS_MGS(ldd))) {
                 fatal();
-                fprintf(stderr, "must set target type :{mdt,ost,mgs}\n");
+                fprintf(stderr, "must set target type: MDT,OST,MGS\n");
                 usage(stderr);
-                ret = 1;
+                ret = EINVAL;
+                goto out;
+        }
+
+        if (((IS_MDT(ldd) || IS_MGS(ldd))) && IS_OST(ldd)) {
+                fatal();
+                fprintf(stderr, "OST type is exclusive with MDT,MGS\n");
+                usage(stderr);
+                ret = EINVAL;
                 goto out;
         }
 
