@@ -43,10 +43,10 @@ static int cmm_fld_lookup(struct cmm_device *cm,
         ENTRY;
 
         LASSERT(fid_is_sane(fid));
-
+        
         rc = fld_client_lookup(&cm->cmm_fld, fid_seq(fid), mds);
         if (rc) {
-                CERROR("can't find mds by seq "LPU64", rc %d\n",
+                CERROR("can't find mds by seq "LPX64", rc %d\n",
                        fid_seq(fid), rc);
                 RETURN(rc);
         }
@@ -88,7 +88,7 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                 /* get object location */
                 rc = cmm_fld_lookup(lu2cmm_dev(ld), fid, &mdsnum);
                 if (rc)
-                        RETURN(ERR_PTR(rc));
+                        RETURN(NULL);
         } else
                 /*
                  * Device is not yet initialized, cmm_object is being created
@@ -375,12 +375,25 @@ static int cml_rename_tgt(const struct lu_context *ctx,
                             md_object_next(mo_t), lf, name);
         RETURN(rc);
 }
+/* used only in case of rename_tgt() when target is not exist */
+static int cml_name_insert(const struct lu_context *ctx,
+                           struct md_object *p, const char *name,
+                           const struct lu_fid *f)
+{
+        int rc;
+        ENTRY;
+
+        rc = mdo_name_insert(ctx, md_object_next(p), name, lf);
+
+        RETURN(rc);
+}
 
 static struct md_dir_operations cml_dir_ops = {
         .mdo_lookup      = cml_lookup,
         .mdo_create      = cml_create,
         .mdo_link        = cml_link,
         .mdo_unlink      = cml_unlink,
+        .mdo_name_insert = cml_name_insert,
         .mdo_rename      = cml_rename,
         .mdo_rename_tgt  = cml_rename_tgt,
 };
