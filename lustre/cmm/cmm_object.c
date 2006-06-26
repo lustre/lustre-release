@@ -378,7 +378,7 @@ static int cml_rename_tgt(const struct lu_context *ctx,
 /* used only in case of rename_tgt() when target is not exist */
 static int cml_name_insert(const struct lu_context *ctx,
                            struct md_object *p, const char *name,
-                           const struct lu_fid *f)
+                           const struct lu_fid *lf)
 {
         int rc;
         ENTRY;
