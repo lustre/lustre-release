@@ -187,7 +187,6 @@ static int lustre_pack_request_v1(struct ptlrpc_request *req,
                                   int count, int *lens, char **bufs)
 {
         int reqlen;
-        ENTRY;
 
         reqlen = lustre_msg_size_v1(count, lens);
 
@@ -204,21 +203,22 @@ static int lustre_pack_request_v1(struct ptlrpc_request *req,
                 memset(req->rq_reqmsg, 0, reqlen);
         } else {
                 OBD_ALLOC(req->rq_reqmsg, reqlen);
-                if (req->rq_reqmsg == NULL)
-                        RETURN(-ENOMEM);
+                if (req->rq_reqmsg == NULL) {
+                        CERROR("alloc reqmsg (len %d) failed\n", reqlen);
+                        return -ENOMEM;
+                }
         }
 
         req->rq_reqlen = reqlen;
 
         lustre_init_msg_v1(req->rq_reqmsg, count, lens, bufs);
-        RETURN (0);
+        return 0;
 }
 
 static int lustre_pack_request_v2(struct ptlrpc_request *req,
                                   int count, int *lens, char **bufs)
 {
         int reqlen;
-        ENTRY;
 
         reqlen = lustre_msg_size_v2(count, lens);
 
@@ -235,15 +235,17 @@ static int lustre_pack_request_v2(struct ptlrpc_request *req,
                 memset(req->rq_reqmsg, 0, reqlen);
         } else {
                 OBD_ALLOC(req->rq_reqmsg, reqlen);
-                if (req->rq_reqmsg == NULL)
-                        RETURN(-ENOMEM);
+                if (req->rq_reqmsg == NULL) {
+                        CERROR("alloc reqmsg (len %d) failed\n", reqlen);
+                        return -ENOMEM;
+                }
         }
 
         req->rq_reqlen = reqlen;
 
         lustre_init_msg_v2(req->rq_reqmsg, count, lens, bufs);
         lustre_msg_add_version(req->rq_reqmsg, PTLRPC_MSG_VERSION);
-        RETURN(0);
+        return 0;
 }
 
 int lustre_pack_request(struct ptlrpc_request *req, __u32 magic, int count,
@@ -706,14 +708,13 @@ int lustre_unpack_msg_v1(void *msg, int len)
 static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
 {
         int flipped, required_len, i;
-        ENTRY;
 
         required_len = lustre_msg_hdr_size_v2(m->lm_bufcount);
         if (len < required_len) {
                 /* didn't receive all the buffer lengths */
                 CERROR ("message length %d too small for %d buflens\n",
                         len, m->lm_bufcount);
-                RETURN(-EINVAL);
+                return -EINVAL;
         }
 
         flipped = lustre_msg_swabbed(m);
@@ -735,10 +736,10 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
                 CERROR("bufcount: %d\n", m->lm_bufcount);
                 for (i = 0; i < m->lm_bufcount; i++)
                         CERROR("buffer %d length %d\n", i, m->lm_buflens[i]);
-                RETURN(-EINVAL);
+                return -EINVAL;
         }
 
-        RETURN(0);
+        return 0;
 }
 
 int lustre_unpack_msg(struct lustre_msg *m, int len)
@@ -781,21 +782,20 @@ int lustre_unpack_msg(struct lustre_msg *m, int len)
 static inline int lustre_unpack_ptlrpc_body_v2(struct lustre_msg_v2 *m)
 {
         struct ptlrpc_body *pb;
-        ENTRY;
 
         pb = lustre_swab_buf(m, MSG_PTLRPC_BODY_OFF, sizeof(*pb),
                              lustre_swab_ptlrpc_body);
         if (!pb) {
                 CERROR("error unpacking ptlrpc body");
-                RETURN(-EFAULT);
+                return -EFAULT;
         }
 
         if ((pb->pb_version & ~LUSTRE_VERSION_MASK) != PTLRPC_MSG_VERSION) {
                  CERROR("wrong lustre_msg version %08x\n", pb->pb_version);
-                 RETURN(-EINVAL);
+                 return -EINVAL;
          }
 
-        RETURN(0);
+        return 0;
 }
 
 int lustre_unpack_ptlrpc_body(struct lustre_msg *m)
