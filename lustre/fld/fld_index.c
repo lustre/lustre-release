@@ -127,9 +127,9 @@ static struct dt_rec *fld_rec(const struct lu_context *ctx,
         RETURN((void *)&info->fti_rec);
 }
 
-int fld_index_handle_insert(struct lu_server_fld *fld,
-                            const struct lu_context *ctx,
-                            fidseq_t seq, mdsno_t mds)
+int fld_index_insert(struct lu_server_fld *fld,
+                     const struct lu_context *ctx,
+                     fidseq_t seq, mdsno_t mds)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
@@ -154,9 +154,9 @@ int fld_index_handle_insert(struct lu_server_fld *fld,
         RETURN(rc);
 }
 
-int fld_index_handle_delete(struct lu_server_fld *fld,
-                            const struct lu_context *ctx,
-                            fidseq_t seq)
+int fld_index_delete(struct lu_server_fld *fld,
+                     const struct lu_context *ctx,
+                     fidseq_t seq)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
@@ -178,9 +178,9 @@ int fld_index_handle_delete(struct lu_server_fld *fld,
         RETURN(rc);
 }
 
-int fld_index_handle_lookup(struct lu_server_fld *fld,
-                            const struct lu_context *ctx,
-                            fidseq_t seq, mdsno_t *mds)
+int fld_index_lookup(struct lu_server_fld *fld,
+                     const struct lu_context *ctx,
+                     fidseq_t seq, mdsno_t *mds)
 {
         struct dt_object *dt_obj = fld->fld_obj;
         struct dt_rec    *rec = fld_rec(ctx, 0);
@@ -208,7 +208,7 @@ int fld_index_init(struct lu_server_fld *fld,
         if (fld_key_registered == 0) {
                 rc = lu_context_key_register(&fld_thread_key);
                 if (rc != 0)
-                        return rc;
+                        RETURN(rc);
         }
         fld_key_registered++;
 
@@ -226,9 +226,10 @@ int fld_index_init(struct lu_server_fld *fld,
                 if (rc == 0)
                         LASSERT(dt_obj->do_index_ops != NULL);
                 else
-                        CERROR("fld is not an index!\n");
+                        CERROR("\"fld\" is not an index!\n");
         } else {
-                CERROR("Cannot find fld obj %lu \n", PTR_ERR(dt_obj));
+                CERROR("cannot find \"fld\" obj %d\n",
+                       (int)PTR_ERR(dt_obj));
                 rc = PTR_ERR(dt_obj);
         }
 

@@ -118,15 +118,15 @@ fld_server_handle(struct lu_server_fld *fld,
 
         switch (opc) {
         case FLD_CREATE:
-                rc = fld_index_handle_insert(fld, ctx,
-                                             mf->mf_seq, mf->mf_mds);
+                rc = fld_index_insert(fld, ctx,
+                                      mf->mf_seq, mf->mf_mds);
                 break;
         case FLD_DELETE:
-                rc = fld_index_handle_delete(fld, ctx, mf->mf_seq);
+                rc = fld_index_delete(fld, ctx, mf->mf_seq);
                 break;
         case FLD_LOOKUP:
-                rc = fld_index_handle_lookup(fld, ctx,
-                                             mf->mf_seq, &mf->mf_mds);
+                rc = fld_index_lookup(fld, ctx,
+                                      mf->mf_seq, &mf->mf_mds);
                 break;
         default:
                 rc = -EINVAL;

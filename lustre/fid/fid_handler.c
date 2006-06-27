@@ -63,32 +63,6 @@ const struct lu_range LUSTRE_SEQ_ZERO_RANGE = {
 };
 EXPORT_SYMBOL(LUSTRE_SEQ_ZERO_RANGE);
 
-static int
-seq_server_write_state(struct lu_server_seq *seq,
-                       const struct lu_context *ctx)
-{
-	int rc = 0;
-	ENTRY;
-
-	/* XXX: here should be calling struct dt_device methods to write
-	 * sequence state to backing store. */
-
-	RETURN(rc);
-}
-
-static int
-seq_server_read_state(struct lu_server_seq *seq,
-                      const struct lu_context *ctx)
-{
-	int rc = -ENODATA;
-	ENTRY;
-	
-	/* XXX: here should be calling struct dt_device methods to read the
-	 * sequence state from backing store. */
-
-	RETURN(rc);
-}
-
 /* assigns client to sequence controller node */
 int
 seq_server_set_ctlr(struct lu_server_seq *seq,
@@ -136,7 +110,7 @@ seq_server_set_ctlr(struct lu_server_seq *seq,
                 seq->seq_super = cli->seq_range;
 
                 /* save init seq to backing store. */
-                rc = seq_server_write_state(seq, ctx);
+                rc = seq_store_write(seq, ctx);
                 if (rc) {
                         CERROR("can't write sequence state, "
                                "rc = %d\n", rc);
@@ -175,7 +149,7 @@ __seq_server_alloc_super(struct lu_server_seq *seq,
                 rc = 0;
         }
 
-        rc = seq_server_write_state(seq, ctx);
+        rc = seq_store_write(seq, ctx);
         if (rc) {
                 CERROR("can't save state, rc = %d\n",
 		       rc);
@@ -249,7 +223,7 @@ __seq_server_alloc_meta(struct lu_server_seq *seq,
         }
         range_alloc(range, super, seq->seq_meta_width);
 
-        rc = seq_server_write_state(seq, ctx);
+        rc = seq_store_write(seq, ctx);
         if (rc) {
                 CERROR("can't save state, rc = %d\n",
 		       rc);
@@ -478,7 +452,7 @@ seq_server_init(struct lu_server_seq *seq,
         lu_device_get(&seq->seq_dev->dd_lu_dev);
 
         /* request backing store for saved sequence info */
-        rc = seq_server_read_state(seq, ctx);
+        rc = seq_store_read(seq, ctx);
         if (rc == -ENODATA) {
                 CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): no data on "
                        "disk found, waiting for controller assign\n");
@@ -487,6 +461,10 @@ seq_server_init(struct lu_server_seq *seq,
 		       rc);
 		GOTO(out, rc);
 	}
+        
+        rc = seq_store_init(seq, ctx);
+        if (rc)
+                GOTO(out, rc);
         
 #ifdef LPROCFS
         rc  = seq_server_proc_init(seq);
@@ -531,6 +509,8 @@ seq_server_fini(struct lu_server_seq *seq,
 #ifdef LPROCFS
         seq_server_proc_fini(seq);
 #endif
+
+        seq_store_fini(seq, ctx);
 
         if (seq->seq_dev != NULL) {
                 lu_device_put(&seq->seq_dev->dd_lu_dev);

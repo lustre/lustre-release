@@ -57,25 +57,28 @@ enum {
 extern struct lu_fld_hash fld_hash[3];
 extern struct fld_cache_info *fld_cache;
 
+#ifdef __KERNEL__
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
-int fld_index_handle_insert(struct lu_server_fld *fld,
-                            const struct lu_context *ctx,
-                            fidseq_t seq, mdsno_t mds);
+int fld_index_insert(struct lu_server_fld *fld,
+                     const struct lu_context *ctx,
+                     fidseq_t seq, mdsno_t mds);
 
-int fld_index_handle_delete(struct lu_server_fld *fld,
-                            const struct lu_context *ctx,
-                            fidseq_t seq);
+int fld_index_delete(struct lu_server_fld *fld,
+                     const struct lu_context *ctx,
+                     fidseq_t seq);
 
-int fld_index_handle_lookup(struct lu_server_fld *fld,
-                            const struct lu_context *ctx,
-                            fidseq_t seq, mdsno_t *mds);
+int fld_index_lookup(struct lu_server_fld *fld,
+                     const struct lu_context *ctx,
+                     fidseq_t seq, mdsno_t *mds);
 
 int fld_index_init(struct lu_server_fld *fld,
                    const struct lu_context *ctx);
 
 void fld_index_fini(struct lu_server_fld *fld,
                     const struct lu_context *ctx);
+
+#endif
 
 #ifdef LPROCFS
 extern struct lprocfs_vars fld_server_proc_list[];

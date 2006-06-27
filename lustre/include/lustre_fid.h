@@ -89,6 +89,12 @@ struct lu_server_seq {
          * store). */
         struct dt_device       *seq_dev;
 
+        /* /seq file object device */
+        struct dt_object       *seq_obj;
+
+        /* /seq file fid */
+        struct lu_fid           seq_fid;
+
         /* seq related proc */
         cfs_proc_dir_entry_t   *seq_proc_entry;
         cfs_proc_dir_entry_t   *seq_proc_dir;

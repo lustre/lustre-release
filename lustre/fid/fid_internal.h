@@ -33,4 +33,18 @@ extern struct lprocfs_vars seq_server_proc_list[];
 extern struct lprocfs_vars seq_client_proc_list[];
 #endif
 
+#ifdef __KERNEL__
+int seq_store_init(struct lu_server_seq *seq,
+                   const struct lu_context *ctx);
+
+void seq_store_fini(struct lu_server_seq *seq,
+                    const struct lu_context *ctx);
+
+int seq_store_write(struct lu_server_seq *seq,
+                    const struct lu_context *ctx);
+
+int seq_store_read(struct lu_server_seq *seq,
+                   const struct lu_context *ctx);
+#endif
+
 #endif
