@@ -276,7 +276,8 @@ static int import_select_connection(struct obd_import *imp)
                        conn->oic_last_attempt);
 
                 /* Throttle the reconnect rate to once per RECONNECT_INTERVAL */
-                if (jiffies > conn->oic_last_attempt + RECONNECT_INTERVAL * HZ) {
+                if (get_jiffies_64() >
+                    conn->oic_last_attempt + RECONNECT_INTERVAL * HZ) {
 
                         /* If we have never tried this connection since the
                            the last successful attempt, go with this one */

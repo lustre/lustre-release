@@ -45,7 +45,7 @@ struct obd_import_conn {
         struct list_head          oic_item;
         struct ptlrpc_connection *oic_conn;
         struct obd_uuid           oic_uuid;
-        __u64                     oic_last_attempt; /* in cfs_time_t */
+        __u64                     oic_last_attempt; /* jiffies, 64-bit */
 };
 
 struct obd_import {
@@ -77,7 +77,7 @@ struct obd_import {
         __u64                     imp_last_transno_checked;
         struct lustre_handle      imp_remote_handle;
         cfs_time_t                imp_next_ping;   /* jiffies */
-        __u64                     imp_last_success_conn;   /* jiffies */
+        __u64                     imp_last_success_conn;   /* jiffies, 64-bit */
 
         /* all available obd_import_conn linked here */
         struct list_head          imp_conn_list;
