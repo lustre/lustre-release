@@ -215,7 +215,8 @@ check_options()
             | suse-2.4.21-2 \
             | rh-2.4 \
             | rhel-2.4 \
-            | sles-2.4)
+            | sles-2.4 \
+            | 2.6-patchless)
                 CANONICAL_TARGET="$TARGET"
                 ;;
     esac
@@ -696,55 +697,17 @@ unpack_lustre
 # prep_build needs the .spec.in from the lustre source
 if [ -z "$LINUX" ] ; then
     load_target
-
-    if [ "$SERIES" ] ; then
-        if (( $DO_SRC )) ; then
-            unpack_linux
-            patch_linux
-            pack_linux
-            clean_linux
-        fi
-
-        prep_kernel_build
-        clean_lustre
-
-        build_kernel
-    else
-        # can't build a kernel if we have no series for it (i.e. patchless)
-        # but we still need the headers
-        use_unpacked_source=true
-        if $use_unpacked_source; then
-            unpack_linux
-            LINUX=$(pwd)/linux
-            pushd $LINUX && {
-                # need a .config -- like a user would do
-                BOOTCONFIG="/boot/config-${lnxmaj}-${lnxrel}smp"
-                if [ -f $BOOTCONFIG ]; then
-                    cp $BOOTCONFIG .config
-                else
-                    fatal 1 "$BOOTCONFIG doesn't exist!  Help!"                
-                fi
-                # vendors like to taint the EXTRAVERSION in their kernel-source
-                # to differentiate a user-built kernel from their own
-                ed << EOF Makefile
-,s/^EXTRAVERSION =.*/EXTRAVERSION = -${lnxrel}smp/
-wq
-EOF
-                make oldconfig
-                make include/asm
-                make include/linux/version.h
-                make SUBDIRS=scripts
-            }
-            popd
-        else
-            LINUX=/lib/modules/${lnxmaj}-${lnxrel}smp/build
-            if [ ! -e $LINUX ]; then
-                fatal 1 "$LINUX does not exist!  Install a kernel-devel package!"
-            fi
-        fi
-        CONFIGURE_FLAGS="$CONFIGURE_FLAGS --disable-server"
-        build_lustre
+    if (( $DO_SRC )) ; then
+        unpack_linux
+        patch_linux
+        pack_linux
+        clean_linux
     fi
+
+    prep_kernel_build
+    clean_lustre
+
+    build_kernel
 else
     build_lustre
 fi
