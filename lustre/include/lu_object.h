@@ -140,6 +140,14 @@ struct lu_device_operations {
          */
         int  (*ldo_process_config)(const struct lu_context *ctx,
                                    struct lu_device *, struct lustre_cfg *);
+
+        /*
+         * notify function for metadata stack 
+         */
+        int (*ldo_notify)(const struct lu_context *ctx, struct lu_device *d,
+                          struct obd_device *watched, enum obd_notify_event ev,
+                          void *data);
+
 };
 
 /*

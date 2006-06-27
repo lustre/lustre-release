@@ -59,4 +59,48 @@ struct mdd_object {
 int mdd_lov_init(const struct lu_context *ctxt, struct mdd_device *mdd,
                  struct lustre_cfg *cfg);
 int mdd_lov_fini(const struct lu_context *ctxt, struct mdd_device *mdd);
+int mdd_notify(const struct lu_context *ctxt, struct lu_device *ld,
+               struct obd_device *watched, enum obd_notify_event ev,
+               void *data);
+
+extern struct lu_device_operations mdd_lu_ops;
+static inline int lu_device_is_mdd(struct lu_device *d)
+{
+	/*
+	 * XXX for now. Tags in lu_device_type->ldt_something are needed.
+	 */
+	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
+}
+
+static inline struct mdd_device* lu2mdd_dev(struct lu_device *d)
+{
+	LASSERT(lu_device_is_mdd(d));
+	return container_of0(d, struct mdd_device, mdd_md_dev.md_lu_dev);
+}
+
+static inline struct lu_device *mdd2lu_dev(struct mdd_device *d)
+{
+	return (&d->mdd_md_dev.md_lu_dev);
+}
+
+static inline struct mdd_object *mdd_obj(struct lu_object *o)
+{
+	LASSERT(lu_device_is_mdd(o->lo_dev));
+	return container_of0(o, struct mdd_object, mod_obj.mo_lu);
+}
+
+static inline struct mdd_device* mdo2mdd(struct md_object *mdo)
+{
+        return lu2mdd_dev(mdo->mo_lu.lo_dev);
+}
+
+static inline struct mdd_object* mdo2mddo(struct md_object *mdo)
+{
+        return container_of0(mdo, struct mdd_object, mod_obj);
+}
+
+static inline struct dt_device_operations *mdd_child_ops(struct mdd_device *d)
+{
+        return d->mdd_child->dd_ops;
+}
 #endif

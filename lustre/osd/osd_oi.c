@@ -39,6 +39,7 @@
  * struct OBD_{ALLOC,FREE}*()
  * OBD_FAIL_CHECK
  */
+#include <obd.h>
 #include <obd_support.h>
 
 /* fid_is_local() */

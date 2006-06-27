@@ -50,7 +50,6 @@ static struct thandle* mdd_trans_start(const struct lu_context *ctxt,
 static void mdd_trans_stop(const struct lu_context *ctxt,
                            struct mdd_device *mdd, struct thandle *handle);
 static struct dt_object* mdd_object_child(struct mdd_object *o);
-static struct lu_device_operations mdd_lu_ops;
 static void mdd_lock(const struct lu_context *ctx,
                      struct mdd_object *obj, enum dt_lock_mode mode);
 static void mdd_unlock(const struct lu_context *ctx,
@@ -79,46 +78,6 @@ static struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx)
         info = lu_context_key_get(ctx, &mdd_thread_key);
         LASSERT(info != NULL);
         return info;
-}
-
-static int lu_device_is_mdd(struct lu_device *d)
-{
-	/*
-	 * XXX for now. Tags in lu_device_type->ldt_something are needed.
-	 */
-	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
-}
-
-static struct mdd_device* lu2mdd_dev(struct lu_device *d)
-{
-	LASSERT(lu_device_is_mdd(d));
-	return container_of0(d, struct mdd_device, mdd_md_dev.md_lu_dev);
-}
-
-static inline struct lu_device *mdd2lu_dev(struct mdd_device *d)
-{
-	return (&d->mdd_md_dev.md_lu_dev);
-}
-
-static struct mdd_object *mdd_obj(struct lu_object *o)
-{
-	LASSERT(lu_device_is_mdd(o->lo_dev));
-	return container_of0(o, struct mdd_object, mod_obj.mo_lu);
-}
-
-static struct mdd_device* mdo2mdd(struct md_object *mdo)
-{
-        return lu2mdd_dev(mdo->mo_lu.lo_dev);
-}
-
-static struct mdd_object* mdo2mddo(struct md_object *mdo)
-{
-        return container_of0(mdo, struct mdd_object, mod_obj);
-}
-
-static inline struct dt_device_operations *mdd_child_ops(struct mdd_device *d)
-{
-        return d->mdd_child->dd_ops;
 }
 
 static struct lu_object *mdd_object_alloc(const struct lu_context *ctxt,
@@ -445,9 +404,10 @@ out:
         RETURN(rc);
 }
 
-static struct lu_device_operations mdd_lu_ops = {
+struct lu_device_operations mdd_lu_ops = {
 	.ldo_object_alloc   = mdd_object_alloc,
-        .ldo_process_config = mdd_process_config
+        .ldo_process_config = mdd_process_config,
+        .ldo_notify         = mdd_notify
 };
 
 static struct lu_object_operations mdd_lu_obj_ops = {

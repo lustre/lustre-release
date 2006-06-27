@@ -32,7 +32,6 @@
 #include <lustre_export.h>
 #include <lustre_quota.h>
 #include <lustre_fld.h>
-#include <lu_object.h>
 
 /* this is really local to the OSC */
 struct loi_oap_pages {
@@ -684,6 +683,7 @@ enum obd_notify_event {
         OBD_NOTIFY_SYNC
 };
 
+#include <lu_object.h>
 /*
  * Data structure used to pass obd_notify()-event to non-obd listeners (llite
  * and liblustre being main examples).

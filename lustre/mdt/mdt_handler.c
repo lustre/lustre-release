@@ -2348,10 +2348,36 @@ static int mdt_obd_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
+static int mdt_notify(struct obd_device *obd, struct obd_device *watched,
+                      enum obd_notify_event ev, void *data)
+{
+        struct mdt_device *mdt;
+        struct lu_device *next;
+        struct lu_context ctxt;
+        int rc;
+        ENTRY;
+
+        /*FIXME: allocation here may have some problems :( */
+        rc = lu_context_init(&ctxt);
+        if (rc)
+                GOTO(out, rc);
+
+        mdt = mdt_dev(obd->obd_lu_dev);
+        next = md2lu_dev(mdt->mdt_child);
+
+        lu_context_enter(&ctxt);
+        rc = next->ld_ops->ldo_notify(&ctxt, next, watched, ev, data);
+        lu_context_exit(&ctxt);
+out:
+        lu_context_fini(&ctxt); 
+        RETURN(rc); 
+}
+
 static struct obd_ops mdt_obd_device_ops = {
         .o_owner = THIS_MODULE,
         .o_connect = mdt_obd_connect,
         .o_disconnect = mdt_obd_disconnect,
+        .o_notify = mdt_notify,
 };
 
 static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)

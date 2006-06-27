@@ -32,6 +32,7 @@
 # define EXPORT_SYMTAB
 #endif
 
+#include <obd.h>
 #include <dt_object.h>
 #include <libcfs/list.h>
 
