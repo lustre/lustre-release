@@ -1077,8 +1077,9 @@ extern void lustre_swab_mgs_target_info(struct mgs_target_info *oinfo);
 #define CM_START_SKIP (CM_START | CM_SKIP)
 
 struct cfg_marker {
-        __u32             cm_step;  /* aka config version */
+        __u32             cm_step;       /* aka config version */
         __u32             cm_flags;
+        __u32             cm_vers;       /* lustre release version number */
         time_t            cm_createtime; /*when this record was first created */
         time_t            cm_canceltime; /*when this record is no longer valid*/
         char              cm_svname[16];

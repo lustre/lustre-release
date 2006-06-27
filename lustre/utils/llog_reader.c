@@ -334,8 +334,13 @@ void print_lustre_cfg(struct lustre_cfg *lcfg, int *skip)
                         if (marker->cm_flags & CM_END)
                                 (*skip)--;
                 }
-                printf("marker %d (flags=%#x) %.16s '%s' %s:%s", marker->cm_step,
-                       marker->cm_flags, marker->cm_svname, 
+                printf("marker %d (flags=%#x, v%d.%d.%d.%d) %.16s '%s' %s:%s",
+                       marker->cm_step, marker->cm_flags,
+                       OBD_OCD_VERSION_MAJOR(marker->cm_vers),
+                       OBD_OCD_VERSION_MINOR(marker->cm_vers),
+                       OBD_OCD_VERSION_PATCH(marker->cm_vers),
+                       OBD_OCD_VERSION_FIX(marker->cm_vers),
+                       marker->cm_svname, 
                        marker->cm_comment, ctime(&marker->cm_createtime),
                        marker->cm_canceltime ? 
                        ctime(&marker->cm_canceltime) : "");

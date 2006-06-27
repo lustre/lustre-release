@@ -86,7 +86,7 @@ void usage(FILE *out)
                 "\t\t--fsname=<filesystem_name> : default is 'lustre'\n"
                 "\t\t--failnode=<nid>[,<...>] : NID(s) of a failover partner\n"
                 "\t\t--param <key>=<value> : set a permanent parameter\n"
-                "\t\t--index=#N : target index\n"
+                "\t\t--index=#N : target index (i.e. ost index within the lov)\n"
                 /* FIXME implement 1.6.x
                 "\t\t--configdev=<altdevice|file>: store configuration info\n"
                 "\t\t\tfor this device on an alternate device\n"
@@ -778,7 +778,6 @@ int read_local_files(struct mkfs_opts *mop)
                         if (ret) 
                                 goto out_close;
                 }
-                ret = 0;
                 vprint("Feature compat=%x, incompat=%x\n",
                        lsd.lsd_feature_compat, lsd.lsd_feature_incompat);
 
@@ -822,11 +821,11 @@ int read_local_files(struct mkfs_opts *mop)
                                         mop->mo_ldd.ldd_flags =
                                         LDD_F_SV_TYPE_OST | LDD_F_NEED_INDEX;
                                         verrprint("OST with unknown index\n");
-
                                 }
                         }
                 }
-
+                
+                ret = 0;
                 memcpy(mop->mo_ldd.ldd_uuid, lsd.lsd_uuid, 
                        sizeof(mop->mo_ldd.ldd_uuid));
                 mop->mo_ldd.ldd_flags |= LDD_F_UPGRADE14;
@@ -1161,7 +1160,6 @@ int main(int argc, char *const argv[])
         if (!(IS_MDT(ldd) || IS_OST(ldd) || IS_MGS(ldd))) {
                 fatal();
                 fprintf(stderr, "must set target type: MDT,OST,MGS\n");
-                usage(stderr);
                 ret = EINVAL;
                 goto out;
         }
@@ -1169,7 +1167,15 @@ int main(int argc, char *const argv[])
         if (((IS_MDT(ldd) || IS_MGS(ldd))) && IS_OST(ldd)) {
                 fatal();
                 fprintf(stderr, "OST type is exclusive with MDT,MGS\n");
-                usage(stderr);
+                ret = EINVAL;
+                goto out;
+        }
+
+        if ((mop.mo_ldd.ldd_flags & (LDD_F_NEED_INDEX | LDD_F_UPGRADE14)) ==
+            (LDD_F_NEED_INDEX | LDD_F_UPGRADE14)) {
+                fatal();
+                fprintf(stderr, "Can't find the target index, "
+                        "specify with --index\n");
                 ret = EINVAL;
                 goto out;
         }
@@ -1183,7 +1189,6 @@ int main(int argc, char *const argv[])
         if (!IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
                 fatal();
                 fprintf(stderr, "Must specify either --mgs or --mgsnode\n");
-                usage(stderr);
                 ret = EINVAL;
                 goto out;
         }

@@ -44,6 +44,7 @@
 #include <lustre_fsfilt.h>
 #include <lustre_disk.h>
 #include <lustre_param.h>
+#include <lustre_ver.h>
 #include "mgs_internal.h"
 
 /********************** Class fns ********************/
@@ -645,6 +646,7 @@ static int record_marker(struct obd_device *obd, struct llog_handle *llh,
                 fsdb->fsdb_gen++;
         marker.cm_step = fsdb->fsdb_gen;
         marker.cm_flags = flags;
+        marker.cm_vers = LUSTRE_VERSION_CODE;
         strncpy(marker.cm_svname, svname, sizeof(marker.cm_svname)); 
         strncpy(marker.cm_comment, comment, sizeof(marker.cm_comment)); 
         do_gettimeofday(&tv);
