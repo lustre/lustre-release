@@ -774,7 +774,7 @@ static int mdt_reint_open(struct mdt_thread_info *info)
         /* Open it now. */
         /* TODO: not supported yet
         result = mdt_md_open(info, child);
-        */ 
+        */
 
 destroy_child:
         if (result != 0 && created)

@@ -36,7 +36,7 @@
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
-static int cmm_fld_lookup(struct cmm_device *cm, 
+static int cmm_fld_lookup(struct cmm_device *cm,
                           const struct lu_fid *fid, mdsno_t *mds)
 {
         int rc = 0;
@@ -107,7 +107,7 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                         lu_object_init(lo, NULL, ld);
                         clo->cmm_obj.cmo_obj.mo_ops = &cml_mo_ops;
                         clo->cmm_obj.cmo_obj.mo_dir_ops = &cml_dir_ops;
-                        lo->lo_ops = &cml_obj_ops;                        
+                        lo->lo_ops = &cml_obj_ops;
                 }
         } else {
                 struct cmr_object *cro;

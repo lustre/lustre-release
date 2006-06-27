@@ -33,6 +33,10 @@
 
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
+/* handle_t, journal_start(), journal_stop() */
+#include <linux/jbd.h>
+/* struct dx_hash_info */
+#include <linux/ldiskfs_fs.h>
 #include <linux/lustre_iam.h>
 
 #include <dt_object.h>

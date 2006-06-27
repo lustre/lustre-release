@@ -484,7 +484,7 @@ const struct req_format RQF_MDS_REINT_OPEN =
 EXPORT_SYMBOL(RQF_MDS_REINT_OPEN);
 
 const struct req_format RQF_MDS_REINT_UNLINK =
-        DEFINE_REQ_FMT0("MDS_REINT_UNLINK", mds_reint_unlink_client, 
+        DEFINE_REQ_FMT0("MDS_REINT_UNLINK", mds_reint_unlink_client,
                         mds_reint_rename_or_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_UNLINK);
 
@@ -494,7 +494,7 @@ const struct req_format RQF_MDS_REINT_LINK =
 EXPORT_SYMBOL(RQF_MDS_REINT_LINK);
 
 const struct req_format RQF_MDS_REINT_RENAME =
-        DEFINE_REQ_FMT0("MDS_REINT_RENAME", mds_reint_rename_client, 
+        DEFINE_REQ_FMT0("MDS_REINT_RENAME", mds_reint_rename_client,
                         mds_reint_rename_or_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_RENAME);
 

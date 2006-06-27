@@ -305,12 +305,14 @@ static void osd_object_free(const struct lu_context *ctx, struct lu_object *l)
 static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
 {
         struct osd_object *o = osd_obj(l);
+        struct iam_container *bag;
 
         LASSERT(osd_invariant(o));
 
+        bag = &o->oo_container;
         if (o->oo_ipd != NULL) {
-                LASSERT(o->oo_descr.id_ops->id_ipd_free != NULL);
-                o->oo_descr.id_ops->id_ipd_free(&o->oo_container, o->oo_ipd);
+                LASSERT(bag->ic_descr->id_ops->id_ipd_free != NULL);
+                bag->ic_descr->id_ops->id_ipd_free(&o->oo_container, o->oo_ipd);
         }
         if (o->oo_inode != NULL) {
                 if (o->oo_container.ic_object == o->oo_inode)
@@ -827,7 +829,7 @@ static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
                         if (osd_index_probe(ctx, obj, feat)) {
                                 struct iam_path_descr *ipd;
 
-                                ipd = obj->oo_descr.id_ops->id_ipd_alloc(bag);
+                                ipd = bag->ic_descr->id_ops->id_ipd_alloc(bag);
                                 if (ipd != NULL) {
                                         obj->oo_ipd = ipd;
                                         dt->do_index_ops = &osd_index_ops;
