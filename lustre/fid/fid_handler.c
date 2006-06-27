@@ -451,6 +451,10 @@ seq_server_init(struct lu_server_seq *seq,
         
         lu_device_get(&seq->seq_dev->dd_lu_dev);
 
+        rc = seq_store_init(seq, ctx);
+        if (rc)
+                GOTO(out, rc);
+        
         /* request backing store for saved sequence info */
         rc = seq_store_read(seq, ctx);
         if (rc == -ENODATA) {
@@ -461,10 +465,6 @@ seq_server_init(struct lu_server_seq *seq,
 		       rc);
 		GOTO(out, rc);
 	}
-        
-        rc = seq_store_init(seq, ctx);
-        if (rc)
-                GOTO(out, rc);
         
 #ifdef LPROCFS
         rc  = seq_server_proc_init(seq);
