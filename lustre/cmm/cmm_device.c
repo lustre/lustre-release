@@ -142,7 +142,7 @@ static int cmm_add_mdc(const struct lu_context *ctx,
 
                 lu_device_get(cmm2lu_dev(cm));
 
-                fld_client_add_export(&cm->cmm_fld,
+                fld_client_add_target(&cm->cmm_fld,
                                       mc->mc_desc.cl_exp);
         }
         RETURN(rc);

@@ -110,10 +110,10 @@ int fld_client_create(struct lu_client_fld *fld,
 int fld_client_delete(struct lu_client_fld *fld,
                       __u64 seq);
 
-int fld_client_add_export(struct lu_client_fld *fld,
+int fld_client_add_target(struct lu_client_fld *fld,
                           struct obd_export *exp);
 
-int fld_client_del_export(struct lu_client_fld *fld,
+int fld_client_del_target(struct lu_client_fld *fld,
                           struct obd_export *exp);
 
 #endif

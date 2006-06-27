@@ -175,7 +175,7 @@ struct lu_fld_hash fld_hash[3] = {
 };
 
 static struct obd_export *
-fld_client_get_export(struct lu_client_fld *fld, __u64 seq)
+fld_client_get_target(struct lu_client_fld *fld, __u64 seq)
 {
         struct obd_export *fld_exp;
         int count = 0, hash;
@@ -203,7 +203,7 @@ fld_client_get_export(struct lu_client_fld *fld, __u64 seq)
 /* add export to FLD. This is usually done by CMM and LMV as they are main users
  * of FLD module. */
 int
-fld_client_add_export(struct lu_client_fld *fld,
+fld_client_add_target(struct lu_client_fld *fld,
                       struct obd_export *exp)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
@@ -234,11 +234,11 @@ fld_client_add_export(struct lu_client_fld *fld,
         
         RETURN(0);
 }
-EXPORT_SYMBOL(fld_client_add_export);
+EXPORT_SYMBOL(fld_client_add_target);
 
 /* remove export from FLD */
 int
-fld_client_del_export(struct lu_client_fld *fld,
+fld_client_del_target(struct lu_client_fld *fld,
                           struct obd_export *exp)
 {
         struct obd_export *fld_exp;
@@ -261,7 +261,7 @@ fld_client_del_export(struct lu_client_fld *fld,
         spin_unlock(&fld->fld_lock);
         RETURN(-ENOENT);
 }
-EXPORT_SYMBOL(fld_client_del_export);
+EXPORT_SYMBOL(fld_client_del_target);
 
 #ifdef LPROCFS
 static int
@@ -419,7 +419,7 @@ fld_client_create(struct lu_client_fld *fld,
         __u32 rc;
         ENTRY;
 
-        fld_exp = fld_client_get_export(fld, seq);
+        fld_exp = fld_client_get_target(fld, seq);
         if (!fld_exp)
                 RETURN(-EINVAL);
         md_fld.mf_seq = seq;
@@ -448,7 +448,7 @@ fld_client_delete(struct lu_client_fld *fld,
         fld_cache_delete(fld_cache, seq);
 #endif
         
-        fld_exp = fld_client_get_export(fld, seq);
+        fld_exp = fld_client_get_target(fld, seq);
         if (!fld_exp)
                 RETURN(-EINVAL);
 
@@ -469,7 +469,7 @@ fld_client_get(struct lu_client_fld *fld,
         int rc;
         ENTRY;
 
-        fld_exp = fld_client_get_export(fld, seq);
+        fld_exp = fld_client_get_target(fld, seq);
         if (!fld_exp)
                 RETURN(-EINVAL);
                 

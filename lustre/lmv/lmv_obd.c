@@ -337,7 +337,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         }
 
         mdc_exp = class_conn2export(&conn);
-        fld_client_add_export(&lmv->lmv_fld, mdc_exp);
+        fld_client_add_target(&lmv->lmv_fld, mdc_exp);
 
         mdc_data = &class_exp2cliimp(mdc_exp)->imp_connect_data;
 
