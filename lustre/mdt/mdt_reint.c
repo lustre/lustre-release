@@ -141,9 +141,10 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
                                          &info->mti_attr);
                         if (rc == 0) {
                                 mdt_pack_attr2body(repbody, &info->mti_attr);
-                                repbody->fid1 = *mdt_object_fid(next);
+                                repbody->fid1 = *mdt_object_fid(o);
                                 repbody->valid |= OBD_MD_FLID;
                         }
+                }
                 mdt_object_put(info->mti_ctxt, o);
         } else
                 rc = PTR_ERR(o);
