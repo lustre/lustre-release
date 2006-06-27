@@ -467,10 +467,8 @@ static struct mdt_device *mdt_dev(struct lu_device *d)
 static int mdt_connect(struct mdt_thread_info *info)
 {
         int result;
-        struct req_capsule *pill;
         struct ptlrpc_request *req;
 
-        pill = &info->mti_pill;
         req = mdt_info_req(info);
         result = target_handle_connect(req, mdt_handle);
         if (result == 0) {
@@ -569,6 +567,15 @@ static int mdt_reint(struct mdt_thread_info *info)
 
 static int mdt_close(struct mdt_thread_info *info)
 {
+#ifdef MDT_CODE
+        /* TODO: dual to open handling, orphan handling */
+        struct mdt_body * reqbody;
+        struct mdt_body * repbody;
+
+        reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+
+#endif
         return -EOPNOTSUPP;
 }
 
@@ -579,15 +586,22 @@ static int mdt_done_writing(struct mdt_thread_info *info)
 
 static int mdt_pin(struct mdt_thread_info *info)
 {
+#ifdef MDT_CODE
+        /* TODO: This is open handling. */
+#endif
         return -EOPNOTSUPP;
 }
 
 #ifdef MDT_CODE
+/* TODO these two methods not available now. */
+
+/* this should sync the whole device */
 static int mdt_device_sync(struct mdt_device *mdt)
 {
         return 0;
 }
 
+/* this should sync this object */
 static int mdt_object_sync(struct mdt_object *m)
 {
         return 0;
@@ -600,6 +614,7 @@ static int mdt_sync(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
+        /* The fid may be zero, so we req_capsule_set manually */
         req_capsule_set(pill, &RQF_MDS_SYNC);
 
         body = req_capsule_client_get(pill, &RMF_MDT_BODY);
@@ -2265,7 +2280,7 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         int rc;
         struct mdt_device *mdt;
         struct mds_export_data *med;
-        struct mds_client_data *mcd = NULL;
+        struct mds_client_data *mcd;
         ENTRY;
 
         if (!conn || !obd || !cluuid)
@@ -2488,7 +2503,7 @@ DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
 DEF_MDT_HNDL_0(HABEO_CORPUS,              READPAGE,     mdt_readpage),
 DEF_MDT_HNDL_F(0,                         REINT,        mdt_reint),
-DEF_MDT_HNDL_0(HABEO_CORPUS,              CLOSE,        mdt_close),
+DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, CLOSE,        mdt_close),
 DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),
 DEF_MDT_HNDL_0(0,                         PIN,          mdt_pin),
 DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),

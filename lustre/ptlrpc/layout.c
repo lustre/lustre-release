@@ -221,6 +221,12 @@ static const struct req_msg_field *mds_getattr_server[] = {
 #endif
 };
 
+static const struct req_msg_field *mds_close_server[] = {
+        &RMF_MDT_BODY,
+        &RMF_MDT_MD,
+        &RMF_LOGCOOKIES
+};
+
 static const struct req_format *req_formats[] = {
         &RQF_MDS_CONNECT,
         &RQF_MDS_DISCONNECT,
@@ -232,6 +238,8 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_REINT_CREATE,
         &RQF_MDS_REINT_OPEN,
         &RQF_MDS_REINT_UNLINK,
+        &RQF_MDS_REINT_LINK,
+        &RQF_MDS_REINT_RENAME,
         &RQF_MDS_REINT_SETATTR,
         &RQF_LDLM_ENQUEUE,
         &RQF_LDLM_INTENT,
@@ -243,7 +251,8 @@ static const struct req_format *req_formats[] = {
         &RQF_FLD_QUERY,
         &RQF_MDS_GETXATTR,
         &RQF_MDS_SETXATTR,
-        &RQF_MDS_SYNC
+        &RQF_MDS_SYNC,
+        &RQF_MDS_CLOSE
 };
 
 struct req_msg_field {
@@ -379,11 +388,13 @@ const struct req_msg_field RMF_REC_SETATTR =
                     lustre_swab_mdt_rec_setattr);
 EXPORT_SYMBOL(RMF_REC_SETATTR);
 
+/* Huang Hua changed the size from 0 to 16 to avoid ASSERT failure */
+
 const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, 16, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
 const struct req_msg_field RMF_LOGCOOKIES =
-        DEFINE_MSGF("logcookies", 0, 0, NULL);
+        DEFINE_MSGF("logcookies", 0, 16, NULL);
 EXPORT_SYMBOL(RMF_LOGCOOKIES);
 
 const struct req_msg_field RMF_REINT_OPC =
@@ -530,6 +541,11 @@ const struct req_format RQF_LDLM_INTENT_UNLINK =
         DEFINE_REQ_FMT0("LDLM_INTENT_UNLINK",
                         ldlm_intent_unlink_client, ldlm_intent_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_UNLINK);
+
+const struct req_format RQF_MDS_CLOSE =
+        DEFINE_REQ_FMT0("MDS_CLOSE",
+                        mdt_body_only, mds_close_server);
+EXPORT_SYMBOL(RQF_MDS_CLOSE);
 
 #if !defined(__REQ_LAYOUT_USER__)
 

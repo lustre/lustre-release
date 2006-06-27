@@ -465,10 +465,10 @@ out_unlock_source:
         RETURN(-EOPNOTSUPP);
 }
 
+#ifdef MDT_CODE
 /* partial operation for rename */
 static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
 {
-#ifdef MDT_CODE
         struct lu_attr *attr = &info->mti_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule *pill = &info->mti_pill;
@@ -534,9 +534,8 @@ out_unlock_tgtdir:
         mdt_object_put(info->mti_ctxt, mtgtdir);
 out:
         return rc;
-#endif
 }
-
+#endif
 
 
 static int mdt_reint_rename(struct mdt_thread_info *info)
