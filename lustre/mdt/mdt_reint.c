@@ -50,8 +50,9 @@ static int mdt_md_create(struct mdt_thread_info *info)
         struct mdt_object      *parent;
         struct mdt_object      *child;
         struct mdt_lock_handle *lh;
-
-        int result;
+        struct mdt_body        *repbody = info->mti_reint_rep.mrr_body;
+        int rc;
+        ENTRY;
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_PW;
@@ -65,14 +66,25 @@ static int mdt_md_create(struct mdt_thread_info *info)
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(parent);
 
-                result = mdo_create(info->mti_ctxt, next, info->mti_rr.rr_name,
-                                    mdt_object_child(child), &info->mti_attr);
+                rc = mdo_create(info->mti_ctxt, next, info->mti_rr.rr_name,
+                                mdt_object_child(child), &info->mti_attr);
+                if (rc == 0) {
+                        /* return fid to client. */
+                        rc = mo_attr_get(info->mti_ctxt, 
+                                         mdt_object_child(child), 
+                                         &info->mti_attr);
+                        if (rc == 0) {
+                                mdt_pack_attr2body(repbody, &info->mti_attr);
+                                repbody->fid1 = *mdt_object_fid(child);
+                                repbody->valid |= OBD_MD_FLID;
+                        }
+                }
                 mdt_object_put(info->mti_ctxt, child);
         } else
-                result = PTR_ERR(child);
+                rc = PTR_ERR(child);
         mdt_object_unlock(mdt->mdt_namespace, parent, lh);
         mdt_object_put(info->mti_ctxt, parent);
-        return result;
+        RETURN(rc);
 }
 
 static int mdt_md_mkdir(struct mdt_thread_info *info)
@@ -111,7 +123,8 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
 {
         struct mdt_device      *mdt = info->mti_mdt;
         struct mdt_object      *o;
-        int result;
+        struct mdt_body        *repbody = info->mti_reint_rep.mrr_body;
+        int rc;
 
         ENTRY;
 
@@ -119,13 +132,23 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         if (!IS_ERR(o)) {
                 struct md_object *next = mdt_object_child(o);
 
-                result = mo_object_create(info->mti_ctxt, next,
-                                          &info->mti_attr);
+                rc = mo_object_create(info->mti_ctxt, next,
+                                      &info->mti_attr);
+                if (rc == 0) {
+                        /* return fid to client. */
+                        rc = mo_attr_get(info->mti_ctxt, 
+                                         next, 
+                                         &info->mti_attr);
+                        if (rc == 0) {
+                                mdt_pack_attr2body(repbody, &info->mti_attr);
+                                repbody->fid1 = *mdt_object_fid(next);
+                                repbody->valid |= OBD_MD_FLID;
+                        }
                 mdt_object_put(info->mti_ctxt, o);
         } else
-                result = PTR_ERR(o);
+                rc = PTR_ERR(o);
 
-        RETURN(result);
+        RETURN(rc);
 }
 
 
@@ -226,35 +249,20 @@ static int mdt_reint_create(struct mdt_thread_info *info)
         ENTRY;
 
         switch (info->mti_attr.la_mode & S_IFMT) {
-        case S_IFREG:{
-                rc = -EOPNOTSUPP;
-                break;
-        }
         case S_IFDIR:{
                 if (strlen(info->mti_rr.rr_name) > 0)
                         rc = mdt_md_create(info);
                 else
                         rc = mdt_md_mkobj(info);
-
-                /* return fid to client. */
-                if (rc == 0) {
-                        struct mdt_body *body;
-
-                        body = info->mti_reint_rep.mrr_body;
-                        body->fid1   = *info->mti_rr.rr_fid2;
-                        body->valid |= OBD_MD_FLID;
-                }
                 break;
         }
-        case S_IFLNK:{
-                rc = -EOPNOTSUPP;
-                break;
-        }
+        case S_IFREG:
+        case S_IFLNK:
         case S_IFCHR:
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:{
-                rc = -EOPNOTSUPP;
+                rc = mdt_md_create(info);
                 break;
         }
         default:
