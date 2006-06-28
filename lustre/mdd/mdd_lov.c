@@ -53,7 +53,7 @@ static int mdd_lov_read_objids(const struct lu_context *ctxt,
 {
         struct mdd_lov_info *lov_info = &mdd->mdd_lov_info;
         struct dt_object *obj_ids = lov_info->mdd_lov_objid_obj;
-        struct lu_attr *lu_attr = NULL;
+        struct lu_attr *lu_attr = &mdd_ctx_info(ctxt)->mti_attr;
         obd_id *ids;
         int i, rc;
         ENTRY;
@@ -64,14 +64,11 @@ static int mdd_lov_read_objids(const struct lu_context *ctxt,
         /* Read everything in the file, even if our current lov desc 
            has fewer targets. Old targets not in the lov descriptor 
            during mds setup may still have valid objids. */
-        OBD_ALLOC_PTR(lu_attr);
-        if (!lu_attr) 
-                RETURN(-ENOMEM);
-       
+        
         rc = obj_ids->do_ops->do_attr_get(ctxt, obj_ids, lu_attr);
         if (rc)
                 GOTO(out, rc);
-        
+
         if (lu_attr->la_size == 0)
                 GOTO(out, rc);
 
@@ -97,8 +94,6 @@ static int mdd_lov_read_objids(const struct lu_context *ctxt,
                        lov_info->mdd_lov_objids[i], i);
         }
 out:
-        if (lu_attr)
-                OBD_FREE_PTR(lu_attr);
         RETURN(0);
 }
 
@@ -113,10 +108,8 @@ static int mdd_lov_update_desc(const struct lu_context *ctxt,
         int rc = 0;
         ENTRY;
 
-        OBD_ALLOC(ld, sizeof(*ld));
-        if (!ld)
-                RETURN(-ENOMEM);
-
+        ld = &mdd_ctx_info(ctxt)->mti_ld;
+        
         rc = obd_get_info(lov_obd->obd_self_export, strlen(KEY_LOVDESC) + 1, 
                           KEY_LOVDESC, &valsize, ld);
         if (rc)
@@ -163,7 +156,6 @@ static int mdd_lov_update_desc(const struct lu_context *ctxt,
         CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize: %d/%d\n",
                mdd->mdd_max_mdsize, mdd->mdd_max_cookiesize);
 out:
-        OBD_FREE(ld, sizeof(*ld));
         RETURN(rc);
 }
 
