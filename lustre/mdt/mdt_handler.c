@@ -2084,7 +2084,6 @@ static int mdt_init0(struct mdt_device *m,
                 CERROR("can't init device stack, rc %d\n", rc);
                 GOTO(err_fini_ctx, rc);
         }
-        lu_context_exit(&ctx);
         if (rc)
                 GOTO(err_fini_ctx, rc);
 
@@ -2092,13 +2091,10 @@ static int mdt_init0(struct mdt_device *m,
         LASSERT(num);
         s->ls_node_id = simple_strtol(num, NULL, 10);
 
-        lu_context_enter(&ctx);
         rc = mdt_fld_init(&ctx, obd->obd_name, m);
-        lu_context_exit(&ctx);
         if (rc)
                 GOTO(err_fini_stack, rc);
 
-        lu_context_enter(&ctx);
         rc = mdt_seq_init(&ctx, obd->obd_name, m);
         lu_context_exit(&ctx);
         if (rc)
