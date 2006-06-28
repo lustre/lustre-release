@@ -1804,14 +1804,14 @@ static int mdt_fld_init(const struct lu_context *ctx,
 
         OBD_ALLOC_PTR(ls->ls_fld);
 
-        if (ls->ls_fld != NULL)
+        if (ls->ls_fld != NULL) {
                 rc = fld_server_init(ls->ls_fld, ctx,
                                      uuid, m->mdt_bottom);
                 if (rc) {
                         OBD_FREE_PTR(ls->ls_fld);
                         ls->ls_fld = NULL;
                 }
-        else
+        } else
                 rc = -ENOMEM;
 
         RETURN(rc);
