@@ -66,7 +66,25 @@ Set permanent parameter
 .I key 
 to value 
 .I value.
-This option can be repeated as desired.
+This option can be repeated as desired.  Typical options might include:
+.RS
+.I \--param sys.timeout=40 
+.RS
+System obd timeout
+.RE
+.I \--param lov.stripe.size=2097152
+.RS
+Default stripe size
+.RE
+.I \--param lov.stripe.count=2       
+.RS
+Default stripe count
+.RE
+.I \--param failover.mode=failout    
+.RS
+Return errs instead of waiting for recovery
+.RE
+.RE
 .TP
 .BI \--quiet
 Print less information.

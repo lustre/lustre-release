@@ -86,7 +86,13 @@ void usage(FILE *out)
                 "\t\t\trequired for all targets other than the mgs node\n"
                 "\t\t--fsname=<filesystem_name> : default is 'lustre'\n"
                 "\t\t--failnode=<nid>[,<...>] : NID(s) of a failover partner\n"
+#ifndef TUNEFS
+                /* Use lctl conf_param on a live system, not tunefs.
+                   Currently, new/modified params written here are ignored */
                 "\t\t--param <key>=<value> : set a permanent parameter\n"
+                "\t\t\te.g. --param sys.timeout=40\n"
+                "\t\t\t     --param lov.stripe.size=4194304\n"
+#endif
                 "\t\t--index=#N : target index (i.e. ost index within the lov)\n"
                 /* FIXME implement 1.6.x
                 "\t\t--configdev=<altdevice|file>: store configuration info\n"

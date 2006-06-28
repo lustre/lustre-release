@@ -34,269 +34,213 @@ To get a complete listing of available commands, type help at the lctl prompt.  
 
 For non-interactive single-threaded use, one uses the second invocation, which runs command after connecting to the device. 
 
-.B Network Configuration
+.SS Network Configuration
 .TP
---net <tcp/elan/myrinet> <command> 
-Indicate the network type to be used for the operation.
-.TP 
-network <tcp/elans/myrinet> 
-Indicate what kind of network applies for the configuration commands that follow.
+.BI network " <up/down>|<tcp/elan/myrinet>"
+Start or stop LNET, or select a network type for other
+.I
+lctl
+commands
 .TP
-interface_list 
+.BI list_nids
+Print all Network Identifiers on the local node
+.TP
+.BI which_nid " <nidlist>"
+From a list of nids for a remote node, show which interface communication
+will take place on.
+.TP
+.BI interface_list 
 Print the interface entries.
 .TP
-add_interface <ip> [netmask] 
+.BI add_interface " <ip> [netmask]" 
 Add an interface entry.
 .TP
-del_interface [ip] 
+.BI del_interface " [ip]" 
 Delete an interface entry.
 .TP
-peer_list 
+.BI peer_list 
 Print the peer entries.
 .TP
-add_peer <nid> <host> <port> 
+.BI add_peer " <nid> <host> <port>"
 Add a peer entry.
 .TP
-del_peer [<nid>] [<host>] [ks] 
+.BI del_peer " [<nid>] [<host>] [ks] "
 Remove a peer entry.
 .TP
-conn_list 
-Print all the connected remote nid.
-.TP 
-connect [[<hostname> <port>] | <elan id>] 
-This will establish a connection to a remote network network id given by the hostname/port combination, or the elan id.
-.TP 
-disconnect <nid> 
-Disconnect from a remote nid.
+.BI conn_list 
+Print all the connected remote nids on a network.
 .TP
-active_tx 
+.BI active_tx 
 This command should print active transmits, and it is only used for elan network type.
 .TP 
-mynid [nid] 
-Informs the socknal of the local nid. It defaults to hostname for tcp networks and is automatically setup for elan/myrinet networks.
-.TP
-shownid 
-Print the local NID.
-.TP 
-add_uuid <uuid> <nid> 
-Associate a given UUID with an nid.
-.TP 
-close_uuid <uuid> 
-Disconnect a UUID.
-.TP 
-del_uuid <uuid> 
-Delete a UUID association.
-.TP 
-add_route <gateway> <target> [target] 
+.BI add_route " <gateway> <target> [target] "
 Add an entry to the routing table for the given target.
 .TP 
-del_route <target> 
+.BI del_route " <target>" 
 Delete an entry for the target from the routing table.
 .TP
-set_route <gateway> <up/down> [<time>] 
+.BI set_route " <gateway> <up/down> [<time>] "
 Enable/disable routes via the given gateway in the protals routing table. <time> is used to tell when a gateway comes back online.
 .TP 
-route_list 
+.BI route_list 
 Print the complete routing table.
 .TP
-fail nid|_all_ [count] 
-Fail/restore communications. Omitting the count implies fail indefinitely, count of zero indicates that communication should be restored. A non-zero count indicates the number of portals messages to be dropped after which the communication is restored. The argument "nid" is used to specify the gateway, which is one peer of the communication.
+.BI fail " <nid>|_all_ [count]" 
+Fail/restore communications. Omitting the count implies fail indefinitely, count of zero indicates that communication should be restored. A non-zero count indicates the number of LNET messages to be dropped after which the communication is restored. The argument "nid" is used to specify the gateway, which is one peer of the communication.
 .PP
-.B Device Selection
+.SS Device Selection
 .TP 
-newdev 
-Create a new device.
-.TP 
-device 
+.BI device 
 This will select the specified OBD device.  All other commands depend on the device being set. 
 .TP
-cfg_device <$name> 
+.BI cfg_device " <$name>" 
 Set current device being configured to <$name>.
 .TP 
-device_list 
+.BI device_list 
 Show all the devices.
 .TP 
-lustre_build_version 
+.BI lustre_build_version 
 Print the Lustre build version.
 .PP
-.B Device Configuration
+.SS Device Configuration
 .TP 
-attach type [name [uuid]] 
-Attach a type to the current device (which you need to set using the device command) and give that device a name and UUID.  This allows us to identify the device for use later, and also tells us what type of device we will have.
+.BI conf_param " <device> <parameter>"
+Set a configuration parameter 
 .TP 
-setup <args...> 
-Type specific device setup commands. For obdfilter, a setup command tells the driver which block device it should use for storage and what type of filesystem is on that device. 
-.TP 
-cleanup 
+.BI cleanup " [force/failover]"
 Cleanup a previously setup device.
 .TP 
-detach 
+.BI detach 
 Remove driver (and name and UUID) from the current device.
-.TP 
-lov_setconfig lov-uuid stripe-count default-stripe-size offset pattern UUID1 [UUID2...] 
-Write LOV configuration to an MDS device.
-.TP 
-lov_getconfig lov-uuid 
-Read LOV configuration from an MDS device. Returns default-stripe-count, default-stripe-size, offset, pattern, and a list of OST UUID's.
-.TP
-record cfg-uuid-name 
-Record commands that follow in log.
-.TP
-endrecord 
-Stop recording.
-.TP
-parse config-uuid-name 
-Parse the log of recorded commands for this config.
-.TP
-dump_log config-uuid-name 
-Print log of recorded commands for this config to kernel debug log.
-.TP
-clear_log config-name 
-Delete current config log of recorded commands.
 .PP
-.B Device Operations
+.SS Device Operations
 .TP 
-probe [timeout] 
-Build a connection handle to a device. This command is used to suspend configuration until the lctl command has ensured that the MDS and OSC services are available. This is to avoid mount failures in a rebooting cluster.
-.TP 
-close 
-Close the connection handle
-.TP 
-getattr <objid> 
+.BI getattr " <objid>" 
 Get attributes for an OST object <objid> .
 .TP 
-setattr <objid> <mode> 
+.BI setattr " <objid> <mode>" 
 Set mode attribute for OST object <objid>.
 .TP 
-create [num [mode [verbose]]] 
+.BI create " [num [mode [verbose]]]" 
 Create the specified number <num> of OST objects with the given <mode>.
 .TP 
-destroy <num> 
+.BI destroy " <num>" 
 Starting at <objid>, destroy <num> number of objects starting from the object with object id <objid>.
 .TP 
-test_getattr <num> [verbose [[t]objid]] 
+.BI test_getattr " <num> [verbose [[t]objid]]" 
 Do <num> getattrs on OST object <objid> (objectid+1 on each thread).
 .TP 
-test_brw [t]<num> [write [verbose [npages [[t]objid]]]] 
+.BI test_brw " [t]<num> [write [verbose [npages [[t]objid]]]]" 
 Do <num> bulk read/writes on OST object <objid> (<npages> per I/O).
 .TP 
-test_ldlm 
+.BI test_ldlm 
 Perform lock manager test.
 .TP 
-ldlm_regress_start %s [numthreads [refheld [numres [numext]]]] 
+.BI ldlm_regress_start " %s [numthreads [refheld [numres [numext]]]]" 
 Start lock manager stress test.
 .TP 
-ldlm_regress_stop 
+.BI ldlm_regress_stop 
 Stop lock manager stress test.
 .TP 
-dump_ldlm 
+.BI dump_ldlm 
 Dump all lock manager state, this is very useful for debugging
 .TP 
-activate 
+.BI activate 
 Activate an import
 .TP 
-deacttivate 
+.BI deactivate 
 De-activate an import
 .TP 
-recover <connection UUID> 
+.BI recover " <connection UUID>" 
 .TP 
-lookup <directory> <file>
+.BI lookup " <directory> <file>"
 .TP 
-notransno 
+.BI notransno 
 Disable sending of committed transnumber updates
 .TP 
-readonly 
+.BI readonly 
 Disable writes to the underlying device
 .TP 
-abort_recovery 
+.BI abort_recovery 
 Abort recovery on MDS device
 .TP 
-mount_option 
-Dump mount options to a file
-.TP 
-get_stripe 
+.BI get_stripe 
 Show stripe info for an echo client object.
 .TP 
-set_stripe <objid>[ width!count[@offset] [:id:id....] 
+.BI set_stripe " <objid>[ width!count[@offset] [:id:id....] "
 Set stripe info for an echo client
 .TP 
-unset_stripe <objid> 
+.BI unset_stripe " <objid>" 
 Unset stripe info for an echo client object.
 .TP
-del_mount_option profile 
-Delete a specified profile.
-.TP
-set_timeout <secs> 
-Set the timeout(obd_timeout) for server to wait before failing recovery.
-.TP
-set_lustre_upcall </full/path/to/upcall> 
+.BI set_lustre_upcall " </full/path/to/upcall> "
 Set the lustre upcall(obd_lustre_upcall) via the lustre.upcall sysctl.
 .TP
-llog_catlist 
+.BI llog_catlist 
 List all catalog logs on current device.
 .TP
-llog_info <$logname|#oid#ogr#ogen> 
+.BI llog_info " <$logname|#oid#ogr#ogen> "
 Print log header information. 
 .TP
-llog_print <$logname|#oid#ogr#ogen> [from] [to] 
+.BI llog_print " <$logname|#oid#ogr#ogen> [from] [to] "
 Print log content information. It will print all records from index 1 by default.
 .TP
-llog_check <$logname|#oid#ogr#ogen> [from] [to] 
+.BI llog_check " <$logname|#oid#ogr#ogen> [from] [to] "
 Check log content information. It will check all records from index 1 by default.
 .TP
-llog_cancel <catalog id|catalog name> <log id> <index> 
+.BI llog_cancel " <catalog id|catalog name> <log id> <index> "
 Cancel one record in log.
 .TP
-llog_remove <catalog id|catalog name> <log id> 
+.BI llog_remove " <catalog id|catalog name> <log id> "
 Remove one log from catalog, erase it from disk.
 .PP
-.B Debug
+.SS Debug
 .TP 
-debug_daemon 
+.BI debug_daemon 
 Debug daemon control and dump to a file
 .TP 
-debug_kernel [file] [raw] 
+.BI debug_kernel " [file] [raw]" 
 Get debug buffer and dump to a fileusage.
 .TP 
-debug_file <input> [output]
+.BI debug_file " <input> [output]"
 Convert kernel-dumped debug log from binary to plain text format.
 .TP 
-clear 
+.BI clear 
 Clear kernel debug buffer.
 .TP 
-mark <text> 
+.BI mark " <text>" 
 Insert marker text in kernel debug buffer.
 .TP 
-filter <subsystem id/debug mask> 
+.BI filter " <subsystem id/debug mask>" 
 Filter message type from the kernel debug buffer.
 .TP 
-show <subsystem id/debug mask> 
+.BI show " <subsystem id/debug mask>" 
 Show specific type of messages.
 .TP 
-debug_list <subs/types> 
+.BI debug_list " <subs/types>" 
 List all the subsystem and debug types.
 .TP
-modules <path> 
+.BI modules " <path>" 
 Provide gdb-friendly module information.
 .TP 
-panic 
+.BI panic 
 Force the kernel to panic.
 .TP
-lwt start/stop [file] 
+.BI lwt " start/stop [file]" 
 Light-weight tracing.
 .TP
-memhog <page count> [<gfp flags>] 
+.BI memhog " <page count> [<gfp flags>]" 
 Memory pressure testing.
 .PP
-.B Control
+.SS Control
 .TP 
-help 
+.BI help 
 Show a complete list of commands; help <command name> can be used to get help on specific command.
 .TP 
-exit 
+.BI exit 
 Close the lctl session.
 .TP 
-quit 
+.BI quit 
 Close the lctl session.
 
 .SH OPTIONS
@@ -314,69 +258,32 @@ Ignore errors during script processing
 .B dump 
 Save ioctls to a file 
 .SH EXAMPLES
-.B attach
-
 # lctl
 .br
-lctl > newdev
+lctl > dl
+  0 UP mgc MGC192.168.0.20@tcp bfbb24e3-7deb-2ffa-eab0-44dffe00f692 5
+  1 UP ost OSS OSS_uuid 3
+  2 UP obdfilter testfs-OST0000 testfs-OST0000_UUID 3
 .br
-lctl > attach obdfilter OBDDEV OBDUUID
-
-.B connect
-
-lctl > name2dev OSCDEV 2 
-.br
-lctl > device 2
-.br
-lctl > connect
-
-.B getattr
-
-lctl > getattr 12
-.br
-id: 12
-.br
-grp: 0
-.br
-atime: 1002663714
-.br
-mtime: 1002663535
-.br
-ctime: 1002663535
-.br
-size: 10
-.br
-blocks: 8
-.br
-blksize: 4096
-.br
-mode: 100644
-.br
-uid: 0
-.br
-gid: 0
-.br
-flags: 0
-.br
-obdflags: 0
-.br
-nlink: 1
-.br
-valid: ffffffff
-.br
-inline:
-.br
-obdmd:
-.br
-lctl > disconnect 
-.br
-Finished (success)
-
-.B setup 
-
-lctl > setup /dev/loop0 ldiskfs
+lctl > dk /tmp/log
+Debug log: 87 lines, 87 kept, 0 dropped.
 .br
 lctl > quit
+.PP
+# lctl conf_param testfs-MDT0000 sys.timeout=40
 
 .SH BUGS
-None are known.
+Please report all bugs to ClusterFileSystems, support@clusterfs.com
+.SH AVAILABILITY
+.B lctl
+is part of the 
+.BR Lustre (7) 
+filesystem package and is available from CFS
+.br
+http://clusterfs.com
+.SH SEE ALSO
+.BR Lustre (7),
+.BR mkfs.lustre (8),
+.BR mount.lustre (8),
+.BR lctl (8),
+.BR lfs (1)
