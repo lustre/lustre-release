@@ -988,7 +988,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                                                  0, 0);
                         if (rc) {
                                 CERROR("failed to start MDS: %d\n", rc);
-                                GOTO(out_servers, rc);
+                                RETURN(rc);
                         }
                 }
         }
@@ -1004,7 +1004,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                                                  0, 0);
                         if (rc) {
                                 CERROR("failed to start OSS: %d\n", rc);
-                                GOTO(out_servers, rc);
+                                RETURN(rc);
                         }
                 }
         }
@@ -1013,7 +1013,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
            to read and write configs locally. */
         rc = server_mgc_set_fs(lsi->lsi_mgc, sb);
         if (rc)
-                GOTO(out_servers, rc);
+                RETURN(rc);
 
         /* Register with MGS */
         rc = server_register_target(sb);
@@ -1025,20 +1025,20 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                         LCONSOLE_ERROR("Communication error with the MGS.  Is "
                                        "the MGS running?\n");
                 }
-                GOTO(out, rc);
+                GOTO(out_mgc, rc);
         }
         if (rc == -EINVAL) {
                 LCONSOLE_ERROR("The MGS is refusing to allow this server (%s) "
                                "to start.  Please see messages on the MGS node."
                                "\n", lsi->lsi_ldd->ldd_svname);
-                GOTO(out, rc);
+                GOTO(out_mgc, rc);
         }
 
         /* Let the target look up the mount using the target's name 
            (we can't pass the sb or mnt through class_process_config.) */
         rc = server_register_mount(lsi->lsi_ldd->ldd_svname, sb, mnt);
         if (rc) 
-                GOTO(out, rc);
+                GOTO(out_mgc, rc);
 
         /* Start targets using the llog named for the target */
         memset(&cfg, 0, sizeof(cfg));
@@ -1046,26 +1046,28 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         if (rc) {
                 CERROR("failed to start server %s: %d\n",
                        lsi->lsi_ldd->ldd_svname, rc);
-                GOTO(out, rc);
+                GOTO(out_mgc, rc);
         }
 
-        obd = class_name2obd(lsi->lsi_ldd->ldd_svname);
-        if (!obd) {
-                CERROR("no server named %s was started\n",
-                       lsi->lsi_ldd->ldd_svname);
-                GOTO(out, rc = -ENXIO);
-        }
-
-        if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_ABORT_RECOV) &&
-            (OBP(obd, iocontrol)))
-                obd_iocontrol(OBD_IOC_ABORT_RECOVERY, obd->obd_self_export,
-                              0, NULL, NULL);
-        
-out:
+out_mgc:
         /* Release the mgc fs for others to use */
         server_mgc_clear_fs(lsi->lsi_mgc);
 
-out_servers:
+        if (!rc) {
+                obd = class_name2obd(lsi->lsi_ldd->ldd_svname);
+                if (!obd) {
+                        CERROR("no server named %s was started\n",
+                               lsi->lsi_ldd->ldd_svname);
+                        RETURN(-ENXIO);
+                }
+
+                if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_ABORT_RECOV) &&
+                    (OBP(obd, iocontrol))) {
+                        obd_iocontrol(OBD_IOC_ABORT_RECOVERY, 
+                                      obd->obd_self_export, 0, NULL, NULL);
+                }
+        }
+        
         RETURN(rc);
 }
 
