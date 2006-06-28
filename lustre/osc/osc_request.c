@@ -3821,5 +3821,5 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Object Storage Client (OSC)");
 MODULE_LICENSE("GPL");
 
-cfs_module(osc, "1.0.0", osc_init, osc_exit);
+cfs_module(osc, LUSTRE_VERSION_STRING, osc_init, osc_exit);
 #endif

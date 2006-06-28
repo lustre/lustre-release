@@ -520,11 +520,13 @@ int init_obdclass(void)
 #ifdef __KERNEL__
         int lustre_register_fs(void);
 
-        printk(KERN_INFO "Lustre: OBD class driver Build Version: "
-               BUILD_VERSION", info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre: OBD class driver, info@clusterfs.com\n");
+        printk(KERN_INFO "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
+        printk(KERN_INFO "        Build Version: "BUILD_VERSION"\n");
 #else
-        CDEBUG(D_INFO, "Lustre: OBD class driver Build Version: "
-               BUILD_VERSION", info@clusterfs.com\n");
+        CDEBUG(D_INFO, "Lustre: OBD class driver, info@clusterfs.com\n");
+        CDEBUG(D_INFO, "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
+        CDEBUG(D_INFO, "        Build Version: "BUILD_VERSION"\n");
 #endif
 
         spin_lock_init(&obd_types_lock);
@@ -600,5 +602,5 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Class Driver Build Version: " BUILD_VERSION);
 MODULE_LICENSE("GPL");
 
-cfs_module(obdclass, "1.0.0", init_obdclass, cleanup_obdclass);
+cfs_module(obdclass, LUSTRE_VERSION_STRING, init_obdclass, cleanup_obdclass);
 #endif

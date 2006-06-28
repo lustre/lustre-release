@@ -2660,5 +2660,5 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Logical Object Volume OBD driver");
 MODULE_LICENSE("GPL");
 
-cfs_module(lov, "1.0.0", lov_init, lov_exit);
+cfs_module(lov, LUSTRE_VERSION_STRING, lov_init, lov_exit);
 #endif
