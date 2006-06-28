@@ -560,9 +560,13 @@ AC_MSG_RESULT([no])
 
 AC_DEFUN([LC_LUSTRE_VERSION_H],
 [LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
-       rm -f "$LUSTRE/include/linux/lustre_version.h"
+	rm -f "$LUSTRE/include/linux/lustre_version.h"
 ],[
-       touch "$LUSTRE/include/linux/lustre_version.h"
+	touch "$LUSTRE/include/linux/lustre_version.h"
+	if test x$enable_server = xyes ; then
+		AC_MSG_WARN([Patchless build detected, disabling server building])
+		enable_server='no'
+	fi
 ])
 ])
 
@@ -585,7 +589,8 @@ have_show_task=0
 # Lustre linux kernel checks
 #
 AC_DEFUN([LC_PROG_LINUX],
-[if test x$enable_server = xyes ; then
+[ LC_LUSTRE_VERSION_H
+if test x$enable_server = xyes ; then
 	LC_CONFIG_BACKINGFS
 fi
 LC_CONFIG_PINGER
@@ -611,7 +616,6 @@ LC_BIT_SPINLOCK_H
 LC_XATTR_ACL
 LC_STRUCT_INTENT_FILE
 LC_POSIX_ACL_XATTR_H
-LC_LUSTRE_VERSION_H
 LC_FUNC_SET_FS_PWD
 ])
 
