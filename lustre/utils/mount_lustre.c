@@ -376,7 +376,11 @@ int main(int argc, char *const argv[])
                 rc = mount(source, target, "lustre", flags, (void *)optcopy);
 
         if (rc) {
-                char *cli = strrchr(source, ':');
+                char *cli;
+
+                rc = errno;
+
+                cli = strrchr(source, ':');
                 if (cli && (strlen(cli) > 2)) 
                         cli += 2;
                 else
@@ -420,7 +424,14 @@ int main(int argc, char *const argv[])
                         fprintf(stderr, "Are the mount options correct?\n");
                         fprintf(stderr, "Check the syslog for more info.\n");
                 }
-                rc = errno;
+
+                /* May as well try to clean up loop devs */
+                if (strncmp(source, "/dev/loop", 9) == 0) {
+                        char cmd[256];
+                        sprintf(cmd, "/sbin/losetup -d %s", source);
+                        system(cmd);
+                }
+
         } else if (!nomtab) {
                 rc = update_mtab_entry(source, target, "lustre", orig_options,
                                        0,0,0);

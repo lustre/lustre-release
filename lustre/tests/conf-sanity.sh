@@ -181,7 +181,7 @@ test_2() {
 	check_mount || return 43
 	cleanup || return $?
 }
-run_test 2 "start up mds twice"
+run_test 2 "start up mds twice (should return err)"
 
 test_3() {
 	setup
@@ -190,7 +190,7 @@ test_3() {
 	check_mount || return 44
 	cleanup || return $?
 }
-run_test 3 "mount client twice"
+run_test 3 "mount client twice (should return err)"
 
 test_4() {
 	setup
@@ -255,7 +255,7 @@ test_5b() {
 	cleanup_nocli || return $?
 	return 0
 }
-run_test 5b "mds down, cleanup after failed mount (bug 2712)"
+run_test 5b "mds down, cleanup after failed mount (bug 2712) (should return errs)"
 
 test_5c() {
 	start_ost
@@ -267,7 +267,7 @@ test_5c() {
 	umount_client $MOUNT
 	cleanup_nocli  || return $?
 }
-run_test 5c "cleanup after failed mount (bug 2712)"
+run_test 5c "cleanup after failed mount (bug 2712) (should return errs)"
 
 test_5d() {
 	start_ost
