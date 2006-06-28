@@ -21,6 +21,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
+ /* This source file is compiled into both mkfs.lustre and tunefs.lustre */
 
 #define _GNU_SOURCE
 #include <stdlib.h>
@@ -1105,9 +1106,9 @@ int main(int argc, char *const argv[])
         else
                 progname = argv[0];
 
-        if (argc < 2) {
+        if ((argc < 2) || (argv[argc - 1][0] == '-')) {
                 usage(stderr);
-                ret = 1;
+                ret = EINVAL;
                 goto out;
         }
 
