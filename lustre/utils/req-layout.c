@@ -123,7 +123,6 @@ void print_layouts(void)
 
 int main(int argc, char **argv)
 {
-        int result;
         int opt;
         int verbose;
 
