@@ -10,6 +10,7 @@
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct mds_client_data;
+struct mdt_client_data;
 
 struct mds_export_data {
         struct list_head        med_open_head;
@@ -20,6 +21,14 @@ struct mds_export_data {
         int                     med_lr_idx;
 };
 
+struct mdt_export_data {
+        struct list_head        med_open_head;
+        spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
+        struct mdt_client_data *med_mcd;
+        __u64                   med_ibits_known;
+        loff_t                  med_lr_off;
+        int                     med_lr_idx;
+};
 struct osc_creator {
         spinlock_t              oscc_lock;
         struct list_head        oscc_list;
@@ -78,12 +87,14 @@ struct obd_export {
                                   exp_libclient:1; /* liblustre client? */
         union {
                 struct mds_export_data    eu_mds_data;
+                struct mdt_export_data    eu_mdt_data;
                 struct filter_export_data eu_filter_data;
                 struct ec_export_data     eu_ec_data;
         } u;
 };
 
 #define exp_mds_data    u.eu_mds_data
+#define exp_mdt_data    u.eu_mdt_data
 #define exp_lov_data    u.eu_lov_data
 #define exp_filter_data u.eu_filter_data
 #define exp_ec_data     u.eu_ec_data

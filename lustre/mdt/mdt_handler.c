@@ -52,8 +52,6 @@
 #include <obd.h>
 /* lu2dt_dev() */
 #include <dt_object.h>
-/* struct mds_client_data */
-#include "../mds/mds_internal.h"
 #include "mdt_internal.h"
 
 /*
@@ -375,12 +373,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         struct mdt_lock_handle *lhp;
         struct lu_fid child_fid;
         struct ldlm_namespace *ns;
-
         ENTRY;
-
-        lhp = &info->mti_lh[MDT_LH_PARENT];
-        lhp->mlh_mode = LCK_CR;
-        lhc->mlh_mode = LCK_CR;
 
         LASSERT(info->mti_object != NULL);
 
@@ -390,6 +383,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         ns = info->mti_mdt->mdt_namespace;
         /*step 1: lock parent */
+        lhp = &info->mti_lh[MDT_LH_PARENT];
+        lhp->mlh_mode = LCK_CR;
         result = mdt_object_lock(ns, parent, lhp, MDS_INODELOCK_UPDATE);
         if (result != 0)
                 RETURN(result);
@@ -407,6 +402,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         /*step 4: lock child: this lock is returned back to caller
          *                    if successfully get attr.
          */
+        lhc->mlh_mode = LCK_CR;
         result = mdt_object_lock(ns, child, lhc, child_bits);
         if (result != 0)
                 GOTO(out_child, result);
@@ -426,12 +422,13 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         }
         if (result != 0)
                 mdt_object_unlock(ns, child, lhc);
+        EXIT;
 
 out_child:
         mdt_object_put(info->mti_ctxt, child);
 out_parent:
         mdt_object_unlock(ns, parent, lhp);
-        RETURN(result);
+        return result;
 }
 
 /* normal handler: should release the child lock */
@@ -593,13 +590,13 @@ static int mdt_pin(struct mdt_thread_info *info)
 /* TODO these two methods not available now. */
 
 /* this should sync the whole device */
-static int mdt_device_sync(struct mdt_device *mdt)
+static int mdt_device_sync(struct mdt_thread_info *info)
 {
         return 0;
 }
 
 /* this should sync this object */
-static int mdt_object_sync(struct mdt_object *m)
+static int mdt_object_sync(struct mdt_thread_info *info)
 {
         return 0;
 }
@@ -622,14 +619,14 @@ static int mdt_sync(struct mdt_thread_info *info)
                 /* sync the whole device */
                 rc = req_capsule_pack(pill);
                 if (rc == 0)
-                        rc = mdt_device_sync(info->mti_mdt);
+                        rc = mdt_device_sync(info);
         } else {
                 /* sync an object */
                 rc = mdt_unpack_req_pack_rep(info, HABEO_CORPUS | HABEO_REFERO);
                 if (rc != 0)
                         RETURN(rc);
 
-                rc = mdt_object_sync(info->mti_object);
+                rc = mdt_object_sync(info);
                 if (rc != 0)
                         RETURN(rc);
 
@@ -890,7 +887,7 @@ static struct mdt_handler *mdt_handler_find(__u32 opc)
 
 static inline __u64 req_exp_last_xid(struct ptlrpc_request *req)
 {
-        return req->rq_export->exp_mds_data.med_mcd->mcd_last_xid;
+        return req->rq_export->exp_mdt_data.med_mcd->mcd_last_xid;
 }
 
 static int mdt_lock_resname_compat(struct mdt_device *m,
@@ -1004,8 +1001,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         if (h->mh_fmt != NULL) {
                 req_capsule_set(&info->mti_pill, h->mh_fmt);
-                if (result == 0)
-                        result = mdt_unpack_req_pack_rep(info, flags);
+                result = mdt_unpack_req_pack_rep(info, flags);
         }
 
         if (result == 0 && flags & HABEO_CLAVIS) {
@@ -1050,14 +1046,33 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                         result = mdt_lock_reply_compat(info->mti_mdt, dlm_rep);
         }
 
-        /* If we're DISCONNECTing, the mds_export_data is already freed */
+        /* If we're DISCONNECTing, the mdt_export_data is already freed */
         if (result == 0 && h->mh_opc != MDS_DISCONNECT) {
+#ifdef MDT_CODE
+                /* FIXME: fake untill journal callback & open handling is OK.*/ 
+                __u64 last_transno;
+                __u64 last_committed;
+                struct mdt_device *mdt = info->mti_mdt;
+
+                LASSERT(mdt != NULL);
+                spin_lock(&mdt->mdt_transno_lock);
+                last_transno = ++ (mdt->mdt_last_transno);
+                last_committed = ++ (mdt->mdt_last_committed);
+                spin_unlock(&mdt->mdt_transno_lock);
+                
+                req->rq_repmsg->transno = req->rq_transno = last_transno;
+                req->rq_repmsg->last_xid = req->rq_xid;
+                req->rq_repmsg->last_committed = last_committed;
+                req->rq_export->exp_obd->obd_last_committed = last_committed;
+#else
                 req->rq_repmsg->last_xid = le64_to_cpu(req_exp_last_xid(req));
                 target_committed_to_req(req);
+#endif
         }
         req_capsule_fini(&info->mti_pill);
         RETURN(result);
 }
+
 
 void mdt_lock_handle_init(struct mdt_lock_handle *lh)
 {
@@ -1482,8 +1497,20 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         new_lock = ldlm_handle2lock(&lhc.mlh_lh);
         if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
                 RETURN(0);
+        
+        LASSERTF(new_lock != NULL, "op %d lockh "LPX64"\n",
+                 opcode, lhc.mlh_lh.cookie);
 
         *lockp = new_lock;
+
+        /* FIXME:This only happen when I can handle RESENT */
+        if (new_lock->l_export == req->rq_export) {
+                /* Already gave this to the client, which means that we
+                 * reconstructed a reply. */
+                LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
+                        MSG_RESENT);
+                RETURN(ELDLM_LOCK_REPLACED);
+        }
 
         /* Fixup the lock to be given to the client */
         l_lock(&new_lock->l_resource->lr_namespace->ns_lock);
@@ -1589,12 +1616,10 @@ static int mdt_intent_code(long itcode)
 static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
                           struct ldlm_lock **lockp, int flags)
 {
-        int opc;
-        int rc;
-
         struct req_capsule   *pill;
         struct mdt_it_flavor *flv;
-
+        int opc;
+        int rc;
         ENTRY;
 
         opc = mdt_intent_code(itopc);
@@ -1879,7 +1904,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 .psc_max_reply_size   = MDS_MAXREPSIZE,
                 .psc_req_portal       = MDS_REQUEST_PORTAL,
                 .psc_rep_portal       = MDC_REPLY_PORTAL,
-                .psc_watchdog_timeout = MDS_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
                 /*
                  * We'd like to have a mechanism to set this on a per-device
                  * basis, but alas...
@@ -2075,6 +2100,13 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         obd = class_name2obd(dev);
         m->mdt_md_dev.md_lu_dev.ld_obd = obd;
 
+        spin_lock_init(&m->mdt_transno_lock);
+        /* FIXME: We need to load them from disk. But now fake it */
+        m->mdt_last_transno = 0;
+        m->mdt_last_committed = 0;
+        m->mdt_max_mdsize = MAX_MD_SIZE;
+        m->mdt_max_cookiesize = sizeof(struct llog_cookie);
+
         OBD_ALLOC_PTR(s);
         if (s == NULL)
                 RETURN(-ENOMEM);
@@ -2260,7 +2292,7 @@ static int mdt_connect0(struct mdt_device *mdt,
 
                 exp->exp_connect_flags = data->ocd_connect_flags;
                 data->ocd_version = LUSTRE_VERSION_CODE;
-                exp->exp_mds_data.med_ibits_known = data->ocd_ibits_known;
+                exp->exp_mdt_data.med_ibits_known = data->ocd_ibits_known;
         }
 
         if (mdt->mdt_opts.mo_acl &&
@@ -2280,8 +2312,8 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct obd_export *exp;
         int rc;
         struct mdt_device *mdt;
-        struct mds_export_data *med;
-        struct mds_client_data *mcd;
+        struct mdt_export_data *med;
+        struct mdt_client_data *mcd;
         ENTRY;
 
         if (!conn || !obd || !cluuid)
@@ -2295,7 +2327,7 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         exp = class_conn2export(conn);
         LASSERT(exp != NULL);
-        med = &exp->exp_mds_data;
+        med = &exp->exp_mdt_data;
 
         rc = mdt_connect0(mdt, exp, data);
         if (rc == 0) {
@@ -2316,7 +2348,7 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
 
 static int mdt_obd_disconnect(struct obd_export *exp)
 {
-        struct mds_export_data *med = &exp->exp_mds_data;
+        struct mdt_export_data *med = &exp->exp_mdt_data;
         unsigned long irqflags;
         int rc;
         ENTRY;
@@ -2403,8 +2435,8 @@ static struct lu_device *mdt_device_alloc(const struct lu_context *ctx,
                 l = &m->mdt_md_dev.md_lu_dev;
                 result = mdt_init0(ctx, m, t, cfg);
                 if (result != 0) {
-                        mdt_device_free(ctx, l);
-                        return ERR_PTR(result);
+                        OBD_FREE_PTR(m);
+                        l = ERR_PTR(result);
                 }
 
         } else

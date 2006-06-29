@@ -54,7 +54,7 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
         rec = req_capsule_client_get(pill, &RMF_REC_SETATTR);
 
         if (rec == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
 
         rr->rr_fid1 = &rec->sa_fid;
         attr->la_valid = rec->sa_valid;
@@ -109,7 +109,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 attr->la_flags = rec->cr_flags;
                 attr->la_ctime = rec->cr_time;
                 if (req_capsule_field_present(pill, &RMF_SYMTGT))
-                        rr->rr_tgt  = req_capsule_client_get(pill, &RMF_SYMTGT);
+                        rr->rr_tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
 #endif
         } else
                 result = -EFAULT;
@@ -127,7 +127,7 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 
         rec = req_capsule_client_get(pill, &RMF_REC_LINK);
         if (rec == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
 
         attr->la_uid = rec->lk_fsuid;
         attr->la_gid = rec->lk_fsgid;
@@ -137,7 +137,7 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (rr->rr_name == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
         RETURN(0);
 #endif
         ENTRY;
@@ -155,7 +155,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 
         rec = req_capsule_client_get(pill, &RMF_REC_UNLINK);
         if (rec == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
 
         attr->la_uid = rec->ul_fsuid;
         attr->la_gid = rec->ul_fsgid;
@@ -166,7 +166,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (rr->rr_name == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
         RETURN(0);
 #endif
         ENTRY;
@@ -184,7 +184,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 
         rec = req_capsule_client_get(pill, &RMF_REC_RENAME);
         if (rec == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
 
         attr->la_uid = rec->rn_fsuid;
         attr->la_gid = rec->rn_fsgid;
@@ -194,10 +194,10 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (rr->rr_name == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
         rr->rr_tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
         if (rr->rr_tgt == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
         RETURN(0);
 #endif
  

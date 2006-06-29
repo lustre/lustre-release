@@ -49,6 +49,8 @@
 #include <lustre_fid.h>
 #include <lustre_fld.h>
 #include <lustre_req_layout.h>
+/* LR_CLIENT_SIZE, etc. */
+#include <lustre_disk.h>
 
 struct mdt_device {
         /* super-class */
@@ -73,7 +75,26 @@ struct mdt_device {
                 signed int         mo_user_xattr :1;
                 signed int         mo_acl        :1;
         } mdt_opts;
+        /* Transaction related stuff here */
+        spinlock_t                 mdt_transno_lock;
+        __u64                      mdt_last_transno;
+        __u64                      mdt_last_committed;
+        /* these values should be updated from lov if necessary.
+         * or should be placed somewhere else. */
+        int                        mdt_max_mdsize;
+        int                        mdt_max_cookiesize;
+
 };
+/* Data stored per client in the last_rcvd file.  In le32 order. */
+struct mdt_client_data {
+        __u8  mcd_uuid[40];     /* client UUID */
+        __u64 mcd_last_transno; /* last completed transaction ID */
+        __u64 mcd_last_xid;     /* xid for the last transaction */
+        __u32 mcd_last_result;  /* result from last RPC */
+        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
+        __u8  mcd_padding[LR_CLIENT_SIZE - 64];
+};
+#define MDT_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
 static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)
 {

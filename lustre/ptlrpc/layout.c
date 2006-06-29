@@ -394,7 +394,7 @@ const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, 16, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
 const struct req_msg_field RMF_LOGCOOKIES =
-        DEFINE_MSGF("logcookies", 0, 16, NULL);
+        DEFINE_MSGF("logcookies", 0, sizeof(struct llog_cookie), NULL);
 EXPORT_SYMBOL(RMF_LOGCOOKIES);
 
 const struct req_msg_field RMF_REINT_OPC =
