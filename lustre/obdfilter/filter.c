@@ -2655,7 +2655,6 @@ static int filter_handle_precreate(struct obd_export *exp, struct obdo *oa,
 
                 LASSERTF(diff >= 0,"%s: "LPU64" - "LPU64" = %d\n",obd->obd_name,
                          oa->o_id, filter_last_id(filter, group), diff);
-                RETURN(diff);
         }
 
         if (diff > 0) {
