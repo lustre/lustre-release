@@ -92,8 +92,14 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                                                 max(diff/3, OST_MIN_PRECREATE);
                                 oscc->oscc_last_id = body->oa.o_id;
                         }
+                } else {
+                        /* filter always set body->oa.o_id as the last_id 
+                         * of filter (see filter_handle_precreate for detail)*/
+                        if (body && body->oa.o_id > oscc->oscc_last_id)
+                                oscc->oscc_last_id = body->oa.o_id;
                 }
                 spin_unlock(&oscc->oscc_lock);
+
         }
 
         CDEBUG(D_HA, "preallocated through id "LPU64" (last used "LPU64")\n",
