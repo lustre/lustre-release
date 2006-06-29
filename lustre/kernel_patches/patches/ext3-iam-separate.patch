@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
 --- iam.orig/fs/ext3/Makefile	2006-05-31 20:24:32.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-06-28 01:37:26.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-06-29 18:50:12.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,8 +14,8 @@ Index: iam/fs/ext3/Makefile
 Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam.c	2006-06-28 00:25:38.000000000 +0400
-@@ -0,0 +1,1229 @@
++++ iam/fs/ext3/iam.c	2006-06-28 22:46:13.000000000 +0400
+@@ -0,0 +1,1233 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -428,9 +428,9 @@ Index: iam/fs/ext3/iam.c
 +        iam_leaf_ops(leaf)->rec_add(leaf, key, rec);
 +}
 +
-+static void iam_rec_del(struct iam_leaf *leaf)
++static void iam_rec_del(struct iam_leaf *leaf, int shift)
 +{
-+        iam_leaf_ops(leaf)->rec_del(leaf);
++        iam_leaf_ops(leaf)->rec_del(leaf, shift);
 +}
 +
 +int iam_leaf_at_end(const struct iam_leaf *leaf)
@@ -451,6 +451,7 @@ Index: iam/fs/ext3/iam.c
 +
 +static int iam_leaf_check(struct iam_leaf *leaf)
 +{
++        return 1;
 +        struct iam_lentry    *orig;
 +        struct iam_path      *path;
 +        struct iam_container *bag;
@@ -468,13 +469,16 @@ Index: iam/fs/ext3/iam.c
 +                return result;
 +
 +        first = 1;
++        iam_leaf_start(leaf);
 +        k0 = iam_path_ikey(path, 0);
 +        k1 = iam_path_ikey(path, 1);
 +        while (!iam_leaf_at_end(leaf)) {
 +		iam_ikeycpy(bag, k0, k1);
 +		iam_ikeycpy(bag, k1, iam_leaf_ikey(leaf, k1));
-+                if (!first && iam_ikeycmp(bag, k0, k1) > 0)
++                if (!first && iam_ikeycmp(bag, k0, k1) > 0) {
++                        BREAKPOINT;
 +                        return 0;
++                }
 +                first = 0;
 +                iam_leaf_next(leaf);
 +        }
@@ -1031,7 +1035,7 @@ Index: iam/fs/ext3/iam.c
 +         * no compaction for now.
 +         */
 +        if (result == 0) {
-+                iam_rec_del(leaf);
++                iam_rec_del(leaf, it->ii_flags&IAM_IT_MOVE);
 +                result = iam_txn_dirty(h, path, leaf->il_bh);
 +                if (result == 0 && iam_leaf_at_end(leaf) &&
 +                    it->ii_flags&IAM_IT_MOVE) {
@@ -1248,8 +1252,8 @@ Index: iam/fs/ext3/iam.c
 Index: iam/fs/ext3/iam_htree.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_htree.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_htree.c	2006-06-28 01:17:33.000000000 +0400
-@@ -0,0 +1,636 @@
++++ iam/fs/ext3/iam_htree.c	2006-06-28 22:18:53.000000000 +0400
+@@ -0,0 +1,645 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1467,10 +1471,12 @@ Index: iam/fs/ext3/iam_htree.c
 +        found = NULL;
 +        for (scan = getstart(l); scan < gettop(l); scan = entnext(scan)) {
 +                if (scan != getent(l) && ent_is_live(scan) &&
-+                    entcmp(l, getent(l), scan) > 0 &&
++                    entcmp(l, getent(l), scan) < 0 &&
 +                    (found == NULL || entcmp(l, scan, found) < 0))
 +                        found = scan;
 +        }
++        assert(ergo(found != NULL,
++                    gethash(l, getent(l)) <= gethash(l, found)));
 +        l->il_at = (void *)(found ? : gettop(l));
 +}
 +
@@ -1533,20 +1539,21 @@ Index: iam/fs/ext3/iam_htree.c
 +        assert(0);
 +}
 +
-+static int iam_htree_key_cmp(const struct iam_leaf *l, const struct iam_key *k)
++static int iam_htree_key_cmp(const struct iam_leaf *l,
++                             const struct iam_key *k)
 +{
-+        struct ext3_dir_entry_2 *hd;
 +        const char *name;
-+        int result;
++        __u32 h0;
++        __u32 h1;
 +
 +        name = (const char *)k;
-+        hd = getent(l);
-+        assert(ent_is_live(hd));
 +
-+        result = strncmp(hd->name, name, hd->name_len);
-+        if (result == 0 && strlen(name) < hd->name_len)
-+                result = -1;
-+        return result;
++        assert(ent_is_live(getent(l)));
++
++        h0 = gethash(l, getent(l));
++        h1 = hashname(l, name, strlen(name));
++
++        return h0 < h1 ? -1 : (h0 == h1 ? 0 : +1);
 +}
 +
 +static void iam_htree_rec_set(struct iam_leaf *l, const struct iam_rec *r)
@@ -1557,8 +1564,8 @@ Index: iam/fs/ext3/iam_htree.c
 +        getent(l)->inode = cpu_to_le32(*ino);
 +}
 +
-+static void iam_htree_rec_add(struct iam_leaf *leaf,
-+                              const struct iam_key *k, const struct iam_rec *r)
++static void iam_htree_rec_add(struct iam_leaf *leaf, const struct iam_key *k,
++                              const struct iam_rec *r)
 +{
 +        struct ext3_dir_entry_2 *scan;
 +        struct inode        *dir;
@@ -1580,18 +1587,24 @@ Index: iam/fs/ext3/iam_htree.c
 +        leaf->il_at = (void *)scan;
 +}
 +
-+static void iam_htree_rec_del(struct iam_leaf *leaf)
++static void iam_htree_rec_del(struct iam_leaf *leaf, int shift)
 +{
++        struct ext3_dir_entry_2 *orig;
 +        struct ext3_dir_entry_2 *scan;
 +        struct ext3_dir_entry_2 *prev;
 +
 +        assert(iam_leaf_at_rec(leaf));
 +
-+        for (prev = NULL, scan = getstart(leaf); scan < getent(leaf);
++        orig = getent(leaf);
++
++        if (shift)
++                iam_htree_next(leaf);
++
++        for (prev = NULL, scan = getstart(leaf); scan < orig;
 +             prev = scan, scan = entnext(scan))
 +                ;
 +
-+        assert(scan == getent(leaf));
++        assert(scan == orig);
 +        if (prev != NULL) {
 +                prev->rec_len = cpu_to_le16(le16_to_cpu(prev->rec_len) +
 +                                              le16_to_cpu(scan->rec_len));
@@ -1889,7 +1902,7 @@ Index: iam/fs/ext3/iam_htree.c
 Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lfix.c	2006-06-28 00:09:00.000000000 +0400
++++ iam/fs/ext3/iam_lfix.c	2006-06-28 21:18:56.000000000 +0400
 @@ -0,0 +1,649 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2212,7 +2225,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +        assert(iam_leaf_at_rec(leaf));
 +}
 +
-+static void iam_lfix_rec_del(struct iam_leaf *leaf)
++static void iam_lfix_rec_del(struct iam_leaf *leaf, int shift)
 +{
 +        struct iam_lentry *next, *end;
 +        int count;
@@ -4538,7 +4551,7 @@ Index: iam/fs/ext3/namei.c
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
 --- iam.orig/include/linux/lustre_iam.h	2006-05-31 20:24:32.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-06-28 01:37:26.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-06-29 18:50:12.000000000 +0400
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
