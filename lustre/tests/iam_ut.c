@@ -193,6 +193,10 @@ int main(int argc, char **argv)
         int N = 0x10000;
         int verbose = 0;
         int doinit = 1;
+        int keynul = 1;
+        int recnul = 1;
+
+        void *(*copier)(void *, void *, size_t);
 
         enum op op;
 
@@ -221,6 +225,7 @@ int main(int argc, char **argv)
                         break;
                 case 'K':
                         key_opt = packdigit(optarg);
+                        keynul = 0;
                         break;
                 case 'k':
                         key_opt = optarg;
@@ -230,6 +235,7 @@ int main(int argc, char **argv)
                         break;
                 case 'R':
                         rec_opt = packdigit(optarg);
+                        recnul = 0;
                         break;
                 case 'r':
                         rec_opt = optarg;
@@ -292,8 +298,10 @@ int main(int argc, char **argv)
                 return 1;
         }
 
-        memcpy(key, key_opt ? : "RIVERRUN", keysize + 1);
-        memcpy(rec, rec_opt ? : "PALEFIRE", recsize + 1);
+        copier = keynul ? &strncpy : &memcpy;
+        copier(key, key_opt ? : "RIVERRUN", keysize + 1);
+        copier = recnul ? &strncpy : &memcpy;
+        copier(rec, rec_opt ? : "PALEFIRE", recsize + 1);
 
         if (op == OP_INSERT)
                 return doop(0, key, rec, IAM_IOC_INSERT, "IAM_IOC_INSERT");
