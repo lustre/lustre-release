@@ -499,7 +499,7 @@ int mdd_lov_start_synchronize(const struct lu_context *ctxt,
            disconnect the LOV.  This of course means a cleanup won't
            finish for as long as the sync is blocking. */
         lu_device_get(ld);
-        
+#if 0 
         if (nonblock) {
                 /* Synchronize in the background */
                 rc = cfs_kernel_thread(mdd_lov_synchronize, mlsi,
@@ -515,7 +515,11 @@ int mdd_lov_start_synchronize(const struct lu_context *ctxt,
         } else {
                 rc = __mdd_lov_synchronize((void *)mlsi);
         }
-
+#else
+        /*FIXME: Did not implement the nonblock lov sync here. because ctxt can not
+         * be shared, maybe we need ref_count for ctxt */
+        rc = __mdd_lov_synchronize((void *)mlsi);
+#endif
         RETURN(rc);
 }
 
