@@ -318,7 +318,7 @@ static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
                 if (o->oo_container.ic_object == o->oo_inode)
                         iam_container_fini(&o->oo_container);
                 iput(o->oo_inode);
-                o->oo_inode = (void *)0xdeaddead;
+                o->oo_inode = NULL;
         }
 }
 
@@ -691,6 +691,26 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
         return result;
 }
 
+/*
+ * Destroy existing object.
+ *
+ * precondition: lu_object_exists(ctxt, &dt->do_lu);
+ * postcondition: ergo(result == 0,
+ *                     !lu_object_exists(ctxt, &dt->do_lu));
+ */
+int osd_object_destroy(const struct lu_context *ctxt,
+                       struct dt_object *dt, struct thandle *th)
+{
+        /*
+         * Stub for now, just drop inode.
+         */
+        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
+        CWARN("Stub!\n");
+        osd_object_delete(ctxt, &dt->do_lu);
+        LASSERT(!lu_object_exists(ctxt, &dt->do_lu));
+        return 0;
+}
+
 static void osd_inode_inc_link(const struct lu_context *ctxt,
                                struct inode *inode, struct thandle *th)
 {
@@ -735,6 +755,7 @@ static struct dt_object_operations osd_obj_ops = {
         .do_object_unlock    = osd_object_unlock,
         .do_attr_get         = osd_attr_get,
         .do_object_create    = osd_object_create,
+        .do_object_destroy   = osd_object_destroy,
         .do_object_index_try = osd_index_try,
         .do_object_ref_add   = osd_object_ref_add,
         .do_object_ref_del   = osd_object_ref_del
