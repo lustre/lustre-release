@@ -72,7 +72,9 @@ seq_client_rpc(struct lu_client_seq *seq,
         *op = opc;
 
         req->rq_replen = lustre_msg_size(1, &repsize);
-        req->rq_request_portal = MDS_SEQ_PORTAL;
+        
+        req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
+                SEQ_CTLR_PORTAL : SEQ_SRV_PORTAL;
 
         rc = ptlrpc_queue_wait(req);
         if (rc)
@@ -96,20 +98,29 @@ out_req:
         return rc;
 }
 
-/* request sequence-controller node to allocate new super-sequence. */
 static int
-__seq_client_alloc_super(struct lu_client_seq *seq)
+__seq_client_alloc_opc(struct lu_client_seq *seq,
+                       int opc, const char *opcname)
 {
         int rc;
         ENTRY;
 
-        rc = seq_client_rpc(seq, &seq->seq_range, SEQ_ALLOC_SUPER);
+        rc = seq_client_rpc(seq, &seq->seq_range, opc);
         if (rc == 0) {
-                CDEBUG(D_INFO, "SEQ-MGR(cli): allocated super-sequence "
-                       "["LPX64"-"LPX64"]\n", seq->seq_range.lr_start,
+                CDEBUG(D_INFO, "SEQ-MGR(cli): allocated "
+                       "%s-sequence ["LPX64"-"LPX64"]\n",
+                       opcname, seq->seq_range.lr_start,
                        seq->seq_range.lr_end);
         }
         RETURN(rc);
+}
+
+/* request sequence-controller node to allocate new super-sequence. */
+static int
+__seq_client_alloc_super(struct lu_client_seq *seq)
+{
+        ENTRY;
+        RETURN(__seq_client_alloc_opc(seq, SEQ_ALLOC_SUPER, "super"));
 }
 
 int
@@ -130,16 +141,8 @@ EXPORT_SYMBOL(seq_client_alloc_super);
 static int
 __seq_client_alloc_meta(struct lu_client_seq *seq)
 {
-        int rc;
         ENTRY;
-
-        rc = seq_client_rpc(seq, &seq->seq_range, SEQ_ALLOC_META);
-        if (rc == 0) {
-                CDEBUG(D_INFO, "SEQ-MGR(cli): allocated meta-sequence "
-                       "["LPX64"-"LPX64"]\n", seq->seq_range.lr_start,
-                       seq->seq_range.lr_end);
-        }
-        RETURN(rc);
+        RETURN(__seq_client_alloc_opc(seq, SEQ_ALLOC_META, "meta"));
 }
 
 int
@@ -172,6 +175,7 @@ __seq_client_alloc_seq(struct lu_client_seq *seq, __u64 *seqnr)
                 if (rc) {
                         CERROR("can't allocate new meta-sequence, "
                                "rc %d\n", rc);
+                        RETURN(rc);
                 }
         }
         

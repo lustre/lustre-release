@@ -49,6 +49,13 @@ extern const struct lu_range LUSTRE_SEQ_ZERO_RANGE;
  * allocated to MDTs. */
 #define LUSTRE_SEQ_SUPER_WIDTH (LUSTRE_SEQ_META_WIDTH * LUSTRE_SEQ_META_WIDTH)
 
+enum lu_server_type {
+        LUSTRE_SEQ_SRV,
+        LUSTRE_SEQ_CTLR
+};
+
+typedef enum lu_server_type lu_server_type_t;
+
 /* client sequence manager interface */
 struct lu_client_seq {
         /* sequence-controller export. */
@@ -99,6 +106,8 @@ struct lu_server_seq {
         cfs_proc_dir_entry_t   *seq_proc_entry;
         cfs_proc_dir_entry_t   *seq_proc_dir;
 
+        /* LUSTRE_SEQ_SRV or LUSTRE_SEQ_CTLR */
+        lu_server_type_t        seq_type;
 
         /* server side seq service */
         struct ptlrpc_service  *seq_service;
@@ -121,17 +130,21 @@ struct lu_server_seq {
 #endif
 
 #ifdef __KERNEL__
+
 int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
                     const char *uuid,
+                    lu_server_type_t type,
                     const struct lu_context *ctx);
 
 void seq_server_fini(struct lu_server_seq *seq,
                      const struct lu_context *ctx);
 
-int seq_server_set_ctlr(struct lu_server_seq *seq,
-                        struct lu_client_seq *cli,
-                        const struct lu_context *ctx);
+int seq_server_init_ctlr(struct lu_server_seq *seq,
+                         struct lu_client_seq *cli,
+                         const struct lu_context *ctx);
+
+void  seq_server_fini_ctlr(struct lu_server_seq *seq);
 #endif
 
 int seq_client_init(struct lu_client_seq *seq, 

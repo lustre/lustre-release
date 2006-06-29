@@ -65,9 +65,9 @@ EXPORT_SYMBOL(LUSTRE_SEQ_ZERO_RANGE);
 
 /* assigns client to sequence controller node */
 int
-seq_server_set_ctlr(struct lu_server_seq *seq,
-                    struct lu_client_seq *cli,
-                    const struct lu_context *ctx)
+seq_server_init_ctlr(struct lu_server_seq *seq,
+                     struct lu_client_seq *cli,
+                     const struct lu_context *ctx)
 {
         int rc = 0;
         ENTRY;
@@ -92,12 +92,7 @@ seq_server_set_ctlr(struct lu_server_seq *seq,
         /* get new range from controller only if super-sequence is not yet
          * initialized from backing store or something else. */
         if (range_is_zero(&seq->seq_super)) {
-                /* release sema to avoid deadlock for case we're asking our
-                 * selves. */
-                up(&seq->seq_sem);
                 rc = seq_client_alloc_super(cli);
-                down(&seq->seq_sem);
-                
                 if (rc) {
                         CERROR("can't allocate super-sequence, "
                                "rc %d\n", rc);
@@ -119,7 +114,20 @@ seq_server_set_ctlr(struct lu_server_seq *seq,
         up(&seq->seq_sem);
         RETURN(rc);
 }
-EXPORT_SYMBOL(seq_server_set_ctlr);
+EXPORT_SYMBOL(seq_server_init_ctlr);
+
+void
+seq_server_fini_ctlr(struct lu_server_seq *seq)
+{
+        ENTRY;
+
+        down(&seq->seq_sem);
+        seq->seq_cli = NULL;
+        up(&seq->seq_sem);
+        
+        EXIT;
+}
+EXPORT_SYMBOL(seq_server_fini_ctlr);
 
 /* on controller node, allocate new super sequence for regular sequnece
  * server. */
@@ -197,29 +205,16 @@ __seq_server_alloc_meta(struct lu_server_seq *seq,
                         RETURN(-EOPNOTSUPP);
                 }
 
-                /* allocate new super-sequence. */
-                up(&seq->seq_sem);
                 rc = seq_client_alloc_super(seq->seq_cli);
-                down(&seq->seq_sem);
                 if (rc) {
                         CERROR("can't allocate new super-sequence, "
                                "rc %d\n", rc);
                         RETURN(rc);
                 }
 
-                if (seq->seq_cli->seq_range.lr_start > super->lr_start) {
-                        /* saving new range into allocation space. */
-                        *super = seq->seq_cli->seq_range;
-                        LASSERT(range_is_sane(super));
-                } else {
-                        /* XXX: race is catched, ignore what we have from
-                         * controller node. The only issue is that controller
-                         * node has now this super-sequence lost, what makes
-                         * sequences space smaller. */
-                        CWARN("SEQ-MGR(srv): race is cached, reject "
-                              "allocated super-sequence\n");
-                        RETURN(0);
-                }
+                /* saving new range into allocation space. */
+                *super = seq->seq_cli->seq_range;
+                LASSERT(range_is_sane(super));
         }
         range_alloc(range, super, seq->seq_meta_width);
 
@@ -269,25 +264,30 @@ seq_server_handle(struct lu_server_seq *seq,
                 rc = seq_server_alloc_meta(seq, range, ctx);
                 break;
         default:
+                CERROR("wrong opc 0x%x\n", opc);
                 rc = -EINVAL;
                 break;
         }
-
         RETURN(rc);
 }
 
 static int
 seq_req_handle0(const struct lu_context *ctx,
-                struct lu_server_seq *seq, 
                 struct ptlrpc_request *req) 
 {
         int rep_buf_size[2] = { 0, };
+        struct obd_device *obd;
         struct req_capsule pill;
+        struct lu_site *site;
         struct lu_range *out;
         int rc = -EPROTO;
         __u32 *opc;
         ENTRY;
 
+        obd = req->rq_export->exp_obd;
+        site = obd->obd_lu_dev->ld_site;
+        LASSERT(site != NULL);
+			
         req_capsule_init(&pill, req, RCL_SERVER,
                          rep_buf_size);
 
@@ -301,7 +301,22 @@ seq_req_handle0(const struct lu_context *ctx,
                         CERROR("can't get range buffer\n");
                         GOTO(out_pill, rc= -EPROTO);
                 }
-                rc = seq_server_handle(seq, ctx, out, *opc);
+                
+                if (*opc == SEQ_ALLOC_META) {
+                        if (!site->ls_server_seq) {
+                                CERROR("sequence-server is not initialized\n");
+                                GOTO(out_pill, rc == -EINVAL);
+                        }
+                        rc = seq_server_handle(site->ls_server_seq,
+                                               ctx, out, *opc);
+                } else {
+                        if (!site->ls_ctlr_seq) {
+                                CERROR("sequence-controller is not initialized\n");
+                                GOTO(out_pill, rc == -EINVAL);
+                        }
+                        rc = seq_server_handle(site->ls_ctlr_seq,
+                                               ctx, out, *opc);
+                }
         } else {
                 CERROR("cannot unpack client request\n");
         }
@@ -317,7 +332,6 @@ seq_req_handle(struct ptlrpc_request *req)
 {
         int fail = OBD_FAIL_SEQ_ALL_REPLY_NET;
         const struct lu_context *ctx;
-        struct lu_site    *site;
         int rc = -EPROTO;
         ENTRY;
 
@@ -328,13 +342,7 @@ seq_req_handle(struct ptlrpc_request *req)
         LASSERT(ctx->lc_thread == req->rq_svc_thread);
         if (req->rq_reqmsg->opc == SEQ_QUERY) {
                 if (req->rq_export != NULL) {
-                        struct obd_device *obd;
-
-                        obd = req->rq_export->exp_obd;
-                        site = obd->obd_lu_dev->ld_site;
-                        LASSERT(site != NULL);
-			
-                        rc = seq_req_handle0(ctx, site->ls_server_seq, req);
+                        rc = seq_req_handle0(ctx, req);
                 } else {
                         CERROR("Unconnected request\n");
                         req->rq_status = -ENOTCONN;
@@ -418,15 +426,18 @@ int
 seq_server_init(struct lu_server_seq *seq,
                 struct dt_device *dev,
                 const char *uuid,
+                lu_server_type_t type,
                 const struct lu_context *ctx) 
 {
-        int rc; 
+        int rc, portal = (type == LUSTRE_SEQ_SRV) ?
+                SEQ_SRV_PORTAL : SEQ_CTLR_PORTAL;
+        
         struct ptlrpc_service_conf seq_conf = { 
                 .psc_nbufs = MDS_NBUFS, 
                 .psc_bufsize = MDS_BUFSIZE, 
                 .psc_max_req_size = MDS_MAXREQSIZE,
                 .psc_max_reply_size = MDS_MAXREPSIZE,
-                .psc_req_portal = MDS_SEQ_PORTAL,
+                .psc_req_portal = portal,
                 .psc_rep_portal = MDC_REPLY_PORTAL,
                 .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT, 
                 .psc_num_threads = SEQ_NUM_THREADS
@@ -438,13 +449,15 @@ seq_server_init(struct lu_server_seq *seq,
 
         seq->seq_dev = dev;
         seq->seq_cli = NULL;
+        seq->seq_type = type;
         sema_init(&seq->seq_sem, 1);
 
         seq->seq_super_width = LUSTRE_SEQ_SUPER_WIDTH;
         seq->seq_meta_width = LUSTRE_SEQ_META_WIDTH;
 
-        snprintf(seq->seq_name, sizeof(seq->seq_name),
-                 "%s-%s", LUSTRE_SEQ_NAME, uuid);
+        snprintf(seq->seq_name, sizeof(seq->seq_name), "%s-%s-%s",
+                 LUSTRE_SEQ_NAME, (type == LUSTRE_SEQ_SRV ? "srv" : "ctlr"),
+                 uuid);
         
         seq->seq_space = LUSTRE_SEQ_SPACE_RANGE;
         seq->seq_super = LUSTRE_SEQ_ZERO_RANGE;
@@ -458,8 +471,13 @@ seq_server_init(struct lu_server_seq *seq,
         /* request backing store for saved sequence info */
         rc = seq_store_read(seq, ctx);
         if (rc == -ENODATA) {
-                CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): no data on "
-                       "disk found, waiting for controller assign\n");
+                if (type == LUSTRE_SEQ_SRV) {
+                        CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): no data on "
+                               "disk found, waiting for controller assign\n");
+                } else {
+                        CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(ctlr): no data on "
+                               "disk found, this is first controller run\n");
+                }
         } else if (rc) {
 		CERROR("can't read sequence state, rc = %d\n",
 		       rc);
@@ -474,23 +492,24 @@ seq_server_init(struct lu_server_seq *seq,
 
         seq->seq_service =  ptlrpc_init_svc_conf(&seq_conf,
 						 seq_req_handle,
-						 LUSTRE_SEQ_NAME,
+                                                 LUSTRE_SEQ_NAME,
 						 seq->seq_proc_entry, 
 						 NULL); 
 	if (seq->seq_service != NULL)
 		rc = ptlrpc_start_threads(NULL, seq->seq_service,
-					  LUSTRE_SEQ_NAME); 
+                                          LUSTRE_SEQ_NAME);
 	else 
 		rc = -ENOMEM; 
 
 	EXIT;
 
 out:
-	if (rc)
+	if (rc) {
 		seq_server_fini(seq, ctx);
-        else
-                CDEBUG(D_INFO|D_WARNING, "Server Sequence "
-                       "Manager\n");
+        } else {
+                CDEBUG(D_INFO|D_WARNING, "%s Sequence Manager\n",
+                       (type == LUSTRE_SEQ_SRV ? "Server" : "Controller"));
+        }
 	return rc;
 } 
 EXPORT_SYMBOL(seq_server_init);

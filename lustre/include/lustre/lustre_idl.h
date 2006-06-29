@@ -97,8 +97,9 @@
 #define MGS_REQUEST_PORTAL             26
 #define MGS_REPLY_PORTAL               27
 #define OST_REQUEST_PORTAL             28
-#define MDS_FLD_PORTAL                 29
-#define MDS_SEQ_PORTAL                 30
+#define FLD_REQUEST_PORTAL             29
+#define SEQ_SRV_PORTAL                 30
+#define SEQ_CTLR_PORTAL                31
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2

@@ -286,7 +286,7 @@ fld_server_init(struct lu_server_fld *fld,
                 .psc_bufsize          = MDS_BUFSIZE,
                 .psc_max_req_size     = MDS_MAXREQSIZE,
                 .psc_max_reply_size   = MDS_MAXREPSIZE,
-                .psc_req_portal       = MDS_FLD_PORTAL,
+                .psc_req_portal       = FLD_REQUEST_PORTAL,
                 .psc_rep_portal       = MDC_REPLY_PORTAL,
                 .psc_watchdog_timeout = FLD_SERVICE_WATCHDOG_TIMEOUT,
                 .psc_num_threads      = FLD_NUM_THREADS
