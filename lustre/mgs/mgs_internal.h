@@ -45,6 +45,7 @@ int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_write_log_target(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti);
+int mgs_erase_log(struct obd_device *obd, char *name);
 int mgs_erase_logs(struct obd_device *obd, char *fsname);
 int mgs_setparam(struct obd_device *obd, char *fsname, struct lustre_cfg *lcfg);
 

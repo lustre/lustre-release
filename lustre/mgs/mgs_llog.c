@@ -1353,12 +1353,15 @@ int mgs_write_log_target(struct obd_device *obd,
         } else {
                 if (rc == EALREADY) {
                         /* Update a target entry in the logs */
-                        CERROR("updates not yet implemented\n");
+                        LCONSOLE_WARN("Found index %d for %s, " 
+                                      "attempting to write log anyhow\n", 
+                                      mti->mti_stripe_index, mti->mti_svname);
                         /* FIXME mark old log sections as invalid, 
                            inc config ver #, add new log sections.
                            Make sure to update client and mds logs too
                            if needed */
-                        RETURN(-ENXIO);
+                        /* in the mean time, assume all logs were lost
+                           (writeconf), and recreate this one */
                 }
         }
 
@@ -1444,7 +1447,7 @@ int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti)
 }
 /* end COMPAT_146 */
 
-static int mgs_clear_log(struct obd_device *obd, char *name)
+int mgs_erase_log(struct obd_device *obd, char *name)
 {
         struct lvfs_run_ctxt saved;
         struct llog_handle *llh;
@@ -1495,7 +1498,7 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
                 list_del(&dirent->lld_list);
                 if (strncmp(fsname, dirent->lld_name, len) == 0) {
                         CDEBUG(D_MGS, "Removing log %s\n", dirent->lld_name);
-                        mgs_clear_log(obd, dirent->lld_name);
+                        mgs_erase_log(obd, dirent->lld_name);
                 }
                 OBD_FREE(dirent, sizeof(*dirent));
         }

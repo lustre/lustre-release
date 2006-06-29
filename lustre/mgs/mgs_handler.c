@@ -316,7 +316,7 @@ static int mgs_put_cfg_lock(struct lustre_handle *lockh)
 
 /* rc=0 means ok
       1 means update
-     -1 means error */
+     <0 means error */
 static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
 {
         int rc;
@@ -325,10 +325,11 @@ static int mgs_check_target(struct obd_device *obd, struct mgs_target_info *mti)
         rc = mgs_check_index(obd, mti);
         if (rc == 0) {
                 LCONSOLE_ERROR("%s claims to have registered, but this MGS "
-                               "does not know about it.  Resolve this issue "
-                               "with tunefs.lustre on that device\n",
+                               "does not know about it.  Assuming the log was "
+                               "lost, will regenerate.\n",
                                mti->mti_svname);
-                rc = -EINVAL;
+                mti->mti_flags |= LDD_F_UPDATE;
+                rc = 1;
         } else if (rc == -1) {
                 LCONSOLE_ERROR("Client log %s-client has disappeared! "
                                "Regenerating all logs.\n",
@@ -387,13 +388,20 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         /* Log writing contention is handled by the fsdb_sem */
 
         if (mti->mti_flags & LDD_F_WRITECONF) {
-                rc = mgs_erase_logs(obd, mti->mti_fsname);
-                mti->mti_flags |= LDD_F_UPDATE;
-                LCONSOLE_WARN("%s: Logs for fs %s were removed by user request."
-                              " All servers must re-register in order to "
-                              "regenerate the client log.\n",
-                              obd->obd_name, mti->mti_fsname);
+                if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+                        rc = mgs_erase_logs(obd, mti->mti_fsname);
+                        LCONSOLE_WARN("%s: Logs for fs %s were removed by user "
+                                      "request.  All servers must be restarted "
+                                      "in order to regenerate the client log."
+                                      "\n", obd->obd_name, mti->mti_fsname);
+                } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
+                        rc = mgs_erase_log(obd, mti->mti_svname);
+                        LCONSOLE_WARN("%s: Regenerating %s log by user "
+                                      "request.\n",
+                                      obd->obd_name, mti->mti_fsname);
+                }
                 mti->mti_flags &= ~LDD_F_WRITECONF;
+                mti->mti_flags |= LDD_F_UPDATE;
         }
 
         /* COMPAT_146 */
@@ -411,7 +419,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         /* end COMPAT_146 */
 
         if (mti->mti_flags & LDD_F_UPDATE) {
-                CDEBUG(D_MGS, "adding %s, index=%d\n", mti->mti_svname, 
+                CDEBUG(D_MGS, "updating %s, index=%d\n", mti->mti_svname, 
                        mti->mti_stripe_index);
                 
                 /* create the log for the new target 
