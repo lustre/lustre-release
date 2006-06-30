@@ -744,8 +744,9 @@ static int lustre_stop_mgc(struct super_block *sb)
         if (obd->u.cli.cl_mgc_mgsexp)
                 obd_disconnect(obd->u.cli.cl_mgc_mgsexp);
 
-        /* Save the obdname for cleaning the nid uuids */
-        len = strlen(obd->obd_name) + 3;
+        /* Save the obdname for cleaning the nid uuids, which are 
+           obdnameXX */
+        len = strlen(obd->obd_name) + 5;
         OBD_ALLOC(niduuid, len);
         if (niduuid) {
                 strcpy(niduuid, obd->obd_name);
@@ -761,7 +762,7 @@ static int lustre_stop_mgc(struct super_block *sb)
                 RETURN(-ENOMEM);
         for (i = 0; i < lsi->lsi_lmd->lmd_mgs_failnodes; i++) {
                 sprintf(ptr, "%x", i);
-                rc = do_lcfg(obd->obd_name, 0, LCFG_DEL_UUID, 
+                rc = do_lcfg(LUSTRE_MGC_OBDNAME, 0, LCFG_DEL_UUID, 
                              niduuid, 0, 0, 0);
                 if (rc)
                         CERROR("del MDC UUID %s failed: rc = %d\n", 
