@@ -184,6 +184,7 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
         struct lu_attr *la = &info->mti_attr;
         int rc;
         ENTRY;
+        RETURN(-EROFS);
 
         rc = mo_attr_get(info->mti_ctxt, next, la);
         if (rc){
@@ -1481,6 +1482,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         else
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
         ldlm_rep->lock_policy_res2 = rc;
+        intent_set_disposition(rep, DISP_IT_EXECD);
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
 
