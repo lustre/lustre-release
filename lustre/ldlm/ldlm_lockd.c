@@ -69,7 +69,7 @@ static inline unsigned int ldlm_get_rq_timeout(unsigned int ldlm_timeout,
 
 #ifdef __KERNEL__
 /* w_l_spinlock protects both waiting_locks_list and expired_lock_thread */
-static spinlock_t waiting_locks_spinlock;
+static spinlock_t waiting_locks_spinlock;   /* BH lock (timer) */
 static struct list_head waiting_locks_list;
 static cfs_timer_t waiting_locks_timer;
 

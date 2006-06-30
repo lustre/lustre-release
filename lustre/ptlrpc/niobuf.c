@@ -390,7 +390,6 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         int rc;
         int rc2;
         struct ptlrpc_connection *connection;
-        unsigned long flags;
         lnet_handle_me_t  reply_me_h;
         lnet_md_t         reply_md;
         ENTRY;
@@ -443,7 +442,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 }
         }
 
-        spin_lock_irqsave (&request->rq_lock, flags);
+        spin_lock(&request->rq_lock);
         /* If the MD attach succeeds, there _will_ be a reply_in callback */
         request->rq_receiving_reply = !noreply;
         /* Clear any flags that may be present from previous sends. */
@@ -453,7 +452,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         request->rq_net_err = 0;
         request->rq_resend = 0;
         request->rq_restart = 0;
-        spin_unlock_irqrestore (&request->rq_lock, flags);
+        spin_unlock(&request->rq_lock);
 
         if (!noreply) {
                 reply_md.start     = request->rq_repmsg;
@@ -468,10 +467,10 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 if (rc != 0) {
                         CERROR("LNetMDAttach failed: %d\n", rc);
                         LASSERT (rc == -ENOMEM);
-                        spin_lock_irqsave (&request->rq_lock, flags);
+                        spin_lock(&request->rq_lock);
                         /* ...but the MD attach didn't succeed... */
                         request->rq_receiving_reply = 0;
-                        spin_unlock_irqrestore (&request->rq_lock, flags);
+                        spin_unlock(&request->rq_lock);
                         GOTO(cleanup_me, rc -ENOMEM);
                 }
 

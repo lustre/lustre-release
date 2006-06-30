@@ -130,8 +130,7 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_paddings[3]);
 }
 
-static void
-check_obd_connect(void)
+static void check_obd_connect_data(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(obd_connect_data);
@@ -139,9 +138,32 @@ check_obd_connect(void)
         CHECK_MEMBER(obd_connect_data, ocd_version);
         CHECK_MEMBER(obd_connect_data, ocd_grant);
         CHECK_MEMBER(obd_connect_data, ocd_index);
+        CHECK_MEMBER(obd_connect_data, ocd_unused);
         CHECK_MEMBER(obd_connect_data, ocd_ibits_known);
         CHECK_MEMBER(obd_connect_data, ocd_nllu);
         CHECK_MEMBER(obd_connect_data, ocd_nllg);
+        CHECK_MEMBER(obd_connect_data, padding1);
+        CHECK_MEMBER(obd_connect_data, padding2);
+        CHECK_MEMBER(obd_connect_data, padding3);
+        CHECK_MEMBER(obd_connect_data, padding4);
+
+        CHECK_CDEFINE(OBD_CONNECT_RDONLY);
+        CHECK_CDEFINE(OBD_CONNECT_INDEX);
+        CHECK_CDEFINE(OBD_CONNECT_GRANT);
+        CHECK_CDEFINE(OBD_CONNECT_SRVLOCK);
+        CHECK_CDEFINE(OBD_CONNECT_VERSION);
+        CHECK_CDEFINE(OBD_CONNECT_REQPORTAL);
+        CHECK_CDEFINE(OBD_CONNECT_ACL);
+        CHECK_CDEFINE(OBD_CONNECT_XATTR);
+        CHECK_CDEFINE(OBD_CONNECT_CROW);
+        CHECK_CDEFINE(OBD_CONNECT_TRUNCLOCK);
+        CHECK_CDEFINE(OBD_CONNECT_TRANSNO);
+        CHECK_CDEFINE(OBD_CONNECT_IBITS);
+        CHECK_CDEFINE(OBD_CONNECT_JOIN);
+        CHECK_CDEFINE(OBD_CONNECT_ATTRFID);
+        CHECK_CDEFINE(OBD_CONNECT_NODEVOH);
+        CHECK_CDEFINE(OBD_CONNECT_LCL_CLIENT);
+        CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT);
 }
 
 static void
@@ -426,6 +448,15 @@ check_mds_body(void)
         CHECK_CDEFINE(MDS_OPEN_JOIN_FILE);
         CHECK_CDEFINE(MDS_OPEN_HAS_EA);
         CHECK_CDEFINE(MDS_OPEN_HAS_OBJS);
+
+        /* these should be identical to their EXT3_*_FL counterparts, and
+         * are redefined only to avoid dragging in ext3_fs.h */
+        CHECK_CDEFINE(MDS_SYNC_FL);
+        CHECK_CDEFINE(MDS_IMMUTABLE_FL);
+        CHECK_CDEFINE(MDS_APPEND_FL);
+        CHECK_CDEFINE(MDS_NOATIME_FL);
+        CHECK_CDEFINE(MDS_DIRSYNC_FL);
+        CHECK_CDEFINE(MDS_BFLAG_EXT_FLAGS);
 
         CHECK_CDEFINE(MDS_INODELOCK_LOOKUP);
         CHECK_CDEFINE(MDS_INODELOCK_UPDATE);
@@ -1116,24 +1147,6 @@ main(int argc, char **argv)
         CHECK_VALUE(MGS_TARGET_REG);
         CHECK_VALUE(MGS_TARGET_DEL);
 
-        CHECK_CDEFINE(OBD_CONNECT_RDONLY);
-        CHECK_CDEFINE(OBD_CONNECT_INDEX);
-        CHECK_CDEFINE(OBD_CONNECT_GRANT);
-        CHECK_CDEFINE(OBD_CONNECT_SRVLOCK);
-        CHECK_CDEFINE(OBD_CONNECT_VERSION);
-        CHECK_CDEFINE(OBD_CONNECT_REQPORTAL);
-        CHECK_CDEFINE(OBD_CONNECT_ACL);
-        CHECK_CDEFINE(OBD_CONNECT_XATTR);
-        CHECK_CDEFINE(OBD_CONNECT_CROW);
-        CHECK_CDEFINE(OBD_CONNECT_TRUNCLOCK);
-        CHECK_CDEFINE(OBD_CONNECT_TRANSNO);
-        CHECK_CDEFINE(OBD_CONNECT_IBITS);
-        CHECK_CDEFINE(OBD_CONNECT_JOIN);
-        CHECK_CDEFINE(OBD_CONNECT_ATTRFID);
-        CHECK_CDEFINE(OBD_CONNECT_NODEVOH);
-        CHECK_CDEFINE(OBD_CONNECT_LCL_CLIENT);
-        CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT);
-
         COMMENT("Sizes and Offsets");
         BLANK_LINE();
         CHECK_STRUCT(obd_uuid);
@@ -1143,7 +1156,7 @@ main(int argc, char **argv)
         printf("        LASSERT(offsetof(struct lustre_msg_v1, lm_magic) == "
                "offsetof(struct lustre_msg_v2, lm_magic));\n");
         check_ptlrpc_body();
-        check_obd_connect();
+        check_obd_connect_data();
         check_obdo();
         check_lov_mds_md_v1();
         check_lov_mds_md_join();

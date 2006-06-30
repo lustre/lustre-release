@@ -600,12 +600,11 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req);
 
 static inline int ptlrpc_bulk_active (struct ptlrpc_bulk_desc *desc)
 {
-        unsigned long flags;
         int           rc;
 
-        spin_lock_irqsave (&desc->bd_lock, flags);
+        spin_lock(&desc->bd_lock);
         rc = desc->bd_network_rw;
-        spin_unlock_irqrestore (&desc->bd_lock, flags);
+        spin_unlock(&desc->bd_lock);
         return (rc);
 }
 
@@ -625,24 +624,22 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid);
 static inline int
 ptlrpc_client_receiving_reply (struct ptlrpc_request *req)
 {
-        unsigned long flags;
         int           rc;
 
-        spin_lock_irqsave(&req->rq_lock, flags);
+        spin_lock(&req->rq_lock);
         rc = req->rq_receiving_reply;
-        spin_unlock_irqrestore(&req->rq_lock, flags);
+        spin_unlock(&req->rq_lock);
         return (rc);
 }
 
 static inline int
 ptlrpc_client_replied (struct ptlrpc_request *req)
 {
-        unsigned long flags;
         int           rc;
 
-        spin_lock_irqsave(&req->rq_lock, flags);
+        spin_lock(&req->rq_lock);
         rc = req->rq_replied;
-        spin_unlock_irqrestore(&req->rq_lock, flags);
+        spin_unlock(&req->rq_lock);
         return (rc);
 }
 

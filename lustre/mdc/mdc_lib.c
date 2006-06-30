@@ -166,6 +166,10 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
 
         if (lmm) {
                 rec->cr_flags |= MDS_OPEN_HAS_EA;
+#ifndef __KERNEL__
+                /*XXX a hack for liblustre to set EA (LL_IOC_LOV_SETSTRIPE) */
+                rec->cr_replayfid = op_data->fid2;
+#endif
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, lmmlen);
                 memcpy (tmp, lmm, lmmlen);
         }

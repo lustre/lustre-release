@@ -163,10 +163,9 @@ static inline void mdc_clear_replay_flag(struct ptlrpc_request *req, int rc)
 {
         /* Don't hold error requests for replay. */
         if (req->rq_replay) {
-                unsigned long irqflags;
-                spin_lock_irqsave(&req->rq_lock, irqflags);
+                spin_lock(&req->rq_lock);
                 req->rq_replay = 0;
-                spin_unlock_irqrestore(&req->rq_lock, irqflags);
+                spin_unlock(&req->rq_lock);
         }
         if (rc && req->rq_transno != 0) {
                 DEBUG_REQ(D_ERROR, req, "transno returned on error rc %d", rc);
@@ -209,7 +208,6 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
         OBD_ALLOC(new_msg, new_size);
         if (new_msg != NULL) {
                 struct lustre_msg *old_msg = req->rq_reqmsg;
-                unsigned long irqflags;
 
                 DEBUG_REQ(D_INFO, req, "replace reqmsg for larger EA %u\n",
                           body->eadatasize);
@@ -217,10 +215,10 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
                 lustre_msg_set_buflen(new_msg, DLM_INTENT_REC_OFF + 2,
                                       body->eadatasize);
 
-                spin_lock_irqsave(&req->rq_lock, irqflags);
+                spin_lock(&req->rq_lock);
                 req->rq_reqmsg = new_msg;
                 req->rq_reqlen = new_size;
-                spin_unlock_irqrestore(&req->rq_lock, irqflags);
+                spin_unlock(&req->rq_lock);
 
                 OBD_FREE(old_msg, old_size);
         } else {
@@ -262,7 +260,6 @@ int mdc_enqueue(struct obd_export *exp,
         int flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
         int repbufcnt = 4, rc;
         void *eadata;
-        unsigned long irqflags;
         ENTRY;
 
         LASSERTF(lock_type == LDLM_IBITS, "lock type %d\n", lock_type);
@@ -315,9 +312,9 @@ int mdc_enqueue(struct obd_export *exp,
                 if (!req)
                         RETURN(-ENOMEM);
 
-                spin_lock_irqsave (&req->rq_lock, irqflags);
+                spin_lock(&req->rq_lock);
                 req->rq_replay = 1;
-                spin_unlock_irqrestore (&req->rq_lock, irqflags);
+                spin_unlock(&req->rq_lock);
 
                 /* pack the intent */
                 lit = lustre_msg_buf(req->rq_reqmsg, DLM_INTENT_IT_OFF,

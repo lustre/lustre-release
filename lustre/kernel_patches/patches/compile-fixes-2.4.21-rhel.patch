@@ -1,8 +1,7 @@
-Index: linux-2.4.21/drivers/i2c/i2c-ali1535.c
-===================================================================
---- linux-2.4.21.orig/drivers/i2c/i2c-ali1535.c	2004-09-11 10:16:33.000000000 -0400
-+++ linux-2.4.21/drivers/i2c/i2c-ali1535.c	2004-11-03 17:40:31.000000000 -0500
-@@ -672,8 +672,8 @@
+diff -X dontdiff -urp kern_oldest/drivers/i2c/i2c-ali1535.c kern_fix/drivers/i2c/i2c-ali1535.c
+--- kern_oldest/drivers/i2c/i2c-ali1535.c	2006-05-01 11:55:43.000000000 -0700
++++ kern_fix/drivers/i2c/i2c-ali1535.c	2006-05-01 15:25:34.000000000 -0700
+@@ -672,8 +672,8 @@ EXPORT_NO_SYMBOLS;
  #ifdef MODULE
  
  MODULE_AUTHOR
@@ -13,30 +12,26 @@ Index: linux-2.4.21/drivers/i2c/i2c-ali1535.c
  MODULE_DESCRIPTION("ALI1535 SMBus driver");
  
  int init_module(void)
-Index: linux-2.4.21/drivers/sensors/lm87.c
-===================================================================
---- linux-2.4.21.orig/drivers/sensors/lm87.c	2004-09-11 10:16:33.000000000 -0400
-+++ linux-2.4.21/drivers/sensors/lm87.c	2004-11-03 17:40:31.000000000 -0500
-@@ -1060,10 +1060,10 @@
- #endif
- 
- MODULE_AUTHOR
--    ("Frodo Looijaard <frodol@dds.nl>,
--      Philip Edelbrock <phil@netroedge.com>, 
--      Mark Studebaker <mdsxyz123@yahoo.com>,
--      and Stephen Rousset <stephen.rousset@rocketlogix.com>");
-+    ("Frodo Looijaard <frodol@dds.nl>, "
-+      "Philip Edelbrock <phil@netroedge.com>, "
-+      "Mark Studebaker <mdsxyz123@yahoo.com>, "
-+      "and Stephen Rousset <stephen.rousset@rocketlogix.com>");
- 
- MODULE_DESCRIPTION("LM87 driver");
- 
-Index: linux-2.4.21/drivers/net/wan/sbni.c
-===================================================================
---- linux-2.4.21.orig/drivers/net/wan/sbni.c	2002-11-28 18:53:14.000000000 -0500
-+++ linux-2.4.21/drivers/net/wan/sbni.c	2004-11-03 17:40:31.000000000 -0500
-@@ -1552,13 +1552,13 @@
+diff -X dontdiff -urp kern_oldest/drivers/net/pcmcia/wvlan_cs.c kern_fix/drivers/net/pcmcia/wvlan_cs.c
+--- kern_oldest/drivers/net/pcmcia/wvlan_cs.c	2006-05-01 11:55:40.000000000 -0700
++++ kern_fix/drivers/net/pcmcia/wvlan_cs.c	2006-05-01 15:25:34.000000000 -0700
+@@ -1084,9 +1084,9 @@ static int wvlan_hw_config (struct net_d
+  			/* This is a PrismII card. It is is *very* similar
+  			 * to the Lucent, and the driver work 95%,
+  			 * therefore, we attempt to support it... */
+- 			printk(KERN_NOTICE "%s: This is a PrismII card, not a Wavelan IEEE card :-(
+-You may want report firmare revision (0x%X) and what the card support.
+-I will try to make it work, but you should look for a better driver.\n", dev_info, firmware);
++ 			printk(KERN_NOTICE "%s: This is a PrismII card, not a Wavelan IEEE card :-(\n"
++"You may want report firmare revision (0x%X) and what the card support.\n"
++"I will try to make it work, but you should look for a better driver.\n", dev_info, firmware);
+  			local->has_port3  = 1;
+  			local->has_ibssid = 0;
+  			local->has_mwo    = 0;
+diff -X dontdiff -urp kern_oldest/drivers/net/wan/sbni.c kern_fix/drivers/net/wan/sbni.c
+--- kern_oldest/drivers/net/wan/sbni.c	2006-05-01 11:55:40.000000000 -0700
++++ kern_fix/drivers/net/wan/sbni.c	2006-05-01 15:25:34.000000000 -0700
+@@ -1552,13 +1552,13 @@ __setup( "sbni=", sbni_setup );
  static u32
  calc_crc32( u32  crc,  u8  *p,  u32  len )
  {
@@ -53,7 +48,7 @@ Index: linux-2.4.21/drivers/net/wan/sbni.c
  		"movl	$crc32tab, %%edi\n"
  		"shrl	$2, %%ecx\n"
  		"jz	1f\n"
-@@ -1594,7 +1594,7 @@
+@@ -1594,7 +1594,7 @@ calc_crc32( u32  crc,  u8  *p,  u32  len
  		"jnz	0b\n"
  
  	"1:\n"
@@ -62,7 +57,7 @@ Index: linux-2.4.21/drivers/net/wan/sbni.c
  		"andl	$3, %%ecx\n"
  		"jz	2f\n"
  
-@@ -1619,9 +1619,9 @@
+@@ -1619,9 +1619,9 @@ calc_crc32( u32  crc,  u8  *p,  u32  len
  		"xorb	2(%%esi), %%bl\n"
  		"xorl	(%%edi,%%ebx,4), %%eax\n"
  	"2:\n"
@@ -75,33 +70,21 @@ Index: linux-2.4.21/drivers/net/wan/sbni.c
  	);
  
  	return  _crc;
-Index: linux-2.4.21/drivers/net/pcmcia/wvlan_cs.c
-===================================================================
---- linux-2.4.21.orig/drivers/net/pcmcia/wvlan_cs.c	2004-09-11 10:16:39.000000000 -0400
-+++ linux-2.4.21/drivers/net/pcmcia/wvlan_cs.c	2004-11-03 17:40:31.000000000 -0500
-@@ -1084,9 +1084,9 @@
-  			/* This is a PrismII card. It is is *very* similar
-  			 * to the Lucent, and the driver work 95%,
-  			 * therefore, we attempt to support it... */
-- 			printk(KERN_NOTICE "%s: This is a PrismII card, not a Wavelan IEEE card :-(
--You may want report firmare revision (0x%X) and what the card support.
--I will try to make it work, but you should look for a better driver.\n", dev_info, firmware);
-+ 			printk(KERN_NOTICE "%s: This is a PrismII card, not a Wavelan IEEE card :-(\n"
-+"You may want report firmare revision (0x%X) and what the card support.\n"
-+"I will try to make it work, but you should look for a better driver.\n", dev_info, firmware);
-  			local->has_port3  = 1;
-  			local->has_ibssid = 0;
-  			local->has_mwo    = 0;
-Index: linux-2.4.21/Makefile
-===================================================================
---- linux-2.4.21.orig/Makefile	2004-09-11 10:16:39.000000000 -0400
-+++ linux-2.4.21/Makefile	2004-11-03 17:41:35.000000000 -0500
-@@ -539,7 +539,7 @@
- ifdef CONFIG_MODVERSIONS
- 	$(MAKE) update-modverfile
- endif
--	scripts/mkdep -- `find $(FINDHPATH) \( -name SCCS -o -name .svn \) -prune -o -follow -name \*.h ! -name modversions.h -print` > .hdepend
-+	find $(FINDHPATH) \( -name SCCS -o -name .svn \) -prune -o -follow -name \*.h ! -name modversions.h -print | xargs scripts/mkdep --  > .hdepend
- 	scripts/mkdep -- init/*.c > .depend
- 	(find $(TOPDIR) \( -name .depend -o -name .hdepend \) -print | xargs $(AWK) -f scripts/include_deps) > tmp_include_depends
- 	sed -ne 's/^\([^ ].*\):.*/  \1 \\/p' tmp_include_depends > tmp_include_depends_1
+diff -X dontdiff -urp kern_oldest/drivers/sensors/lm87.c kern_fix/drivers/sensors/lm87.c
+--- kern_oldest/drivers/sensors/lm87.c	2006-05-01 11:55:44.000000000 -0700
++++ kern_fix/drivers/sensors/lm87.c	2006-05-01 15:25:34.000000000 -0700
+@@ -1060,10 +1060,10 @@ MODULE_LICENSE("GPL");
+ #endif
+ 
+ MODULE_AUTHOR
+-    ("Frodo Looijaard <frodol@dds.nl>,
+-      Philip Edelbrock <phil@netroedge.com>, 
+-      Mark Studebaker <mdsxyz123@yahoo.com>,
+-      and Stephen Rousset <stephen.rousset@rocketlogix.com>");
++    ("Frodo Looijaard <frodol@dds.nl>, "
++      "Philip Edelbrock <phil@netroedge.com>, "
++      "Mark Studebaker <mdsxyz123@yahoo.com>, "
++      "and Stephen Rousset <stephen.rousset@rocketlogix.com>");
+ 
+ MODULE_DESCRIPTION("LM87 driver");
+ 

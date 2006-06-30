@@ -600,6 +600,28 @@ test_25() {
 }
 run_test 25 "change ACL on one mountpoint be seen on another ==="
 
+test_26a() {
+        rm -f $DIR1/f26a
+        utime $DIR1/f26a -s $DIR2/f26a || error
+}
+run_test 26a "allow mtime to get older"
+
+test_26b() {
+        rm -f $DIR1/f26b
+        touch $DIR1/f26b
+        sleep 1
+        echo "aaa" >> $DIR1/f26b
+        sleep 1
+        chmod a+x $DIR2/f26b
+        mt1=`stat $DIR1/f26b | sed 's/\./ /g' | awk ' /Modify/ { print $5 }'`
+        mt2=`stat $DIR2/f26b | sed 's/\./ /g' | awk ' /Modify/ { print $5 }'`
+        
+        if [ x"$mt1" != x"$mt2" ]; then 
+                error "not equal mtime, client1: "$mt1", client2: "$mt2"."
+        fi
+}
+run_test 26b "sync mtime between ost and mds"
+
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
 if [ "$I_MOUNTED" = "yes" ]; then

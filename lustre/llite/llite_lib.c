@@ -1169,6 +1169,16 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 attr->ia_mtime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
+        if ((attr->ia_valid & ATTR_CTIME) && !(attr->ia_valid & ATTR_MTIME)) {
+                /* To avoid stale mtime on mds, obtain it from ost and send 
+                   to mds. */
+                rc = ll_glimpse_size(inode, 0);
+                if (rc) 
+                        RETURN(rc);
+                
+                attr->ia_valid |= ATTR_MTIME_SET | ATTR_MTIME;
+                attr->ia_mtime = inode->i_mtime;
+        }
 
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
@@ -1533,15 +1543,17 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(inode->i_atime))
                 LTIME_S(inode->i_atime) = body->atime;
-        if (body->valid & OBD_MD_FLMTIME &&
-            body->mtime > LTIME_S(inode->i_mtime)) {
-                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to "LPU64"\n",
-                       inode->i_ino, LTIME_S(inode->i_mtime), body->mtime);
-                LTIME_S(inode->i_mtime) = body->mtime;
-        }
         if (body->valid & OBD_MD_FLCTIME &&
-            body->ctime > LTIME_S(inode->i_ctime))
+            body->ctime > LTIME_S(inode->i_ctime)) {
                 LTIME_S(inode->i_ctime) = body->ctime;
+                /* mtime is always updated with ctime, but can be set in past */
+                if (body->valid & OBD_MD_FLMTIME) {
+                        CDEBUG(D_INODE, "setting ino %lu mtime "
+                               "from %lu to "LPU64"\n", inode->i_ino, 
+                               LTIME_S(inode->i_mtime), body->mtime);
+                        LTIME_S(inode->i_mtime) = body->mtime;
+                }
+        }
         if (body->valid & OBD_MD_FLMODE)
                 inode->i_mode = (inode->i_mode & S_IFMT)|(body->mode & ~S_IFMT);
         if (body->valid & OBD_MD_FLTYPE)

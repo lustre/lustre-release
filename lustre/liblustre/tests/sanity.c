@@ -40,6 +40,8 @@
 #include <sys/time.h>
 
 #include "test_common.h"
+#include <ioctl.h>
+#include <lustre/lustre_user.h>
 
 #ifndef PAGE_SIZE
 #define PAGE_SIZE getpagesize()
@@ -1156,6 +1158,170 @@ int t54(char *name)
         LEAVE();
 }
 
+/* for O_DIRECTORY */
+#define _GNU_SOURCE
+
+#define STRIPE_SIZE       (2048 * 2048)
+#define STRIPE_OFFSET           0
+#define STRIPE_COUNT            1
+int t55(char *name)
+{
+        char path[MAX_PATH_LENGTH] = "";
+        char file[MAX_PATH_LENGTH] = "";
+        struct lov_user_md *lum = NULL;
+        struct lov_user_ost_data *lo = NULL;
+        int index, fd, buflen, rc;
+
+        ENTRY("setstripe/getstripe");
+        snprintf(path, MAX_PATH_LENGTH, "%s/test_t55", lustre_path);
+        snprintf(file, MAX_PATH_LENGTH, "%s/test_t55/file_t55", lustre_path);
+      
+        buflen = sizeof(struct lov_user_md);
+        buflen += STRIPE_COUNT * sizeof(struct lov_user_ost_data);
+        lum = (struct lov_user_md *)malloc(buflen);
+        if (!lum) {
+                printf("out of memory!\n");
+                return -1;
+        }
+        memset(lum, 0, buflen);
+
+        t_mkdir(path);
+        rc = llapi_file_create(path, STRIPE_SIZE, STRIPE_OFFSET,
+                               STRIPE_COUNT, LOV_PATTERN_RAID0);
+        if (rc) {
+                printf("llapi_file_create failed: rc = %d (%s) \n",
+                       rc, strerror(-rc));
+                t_rmdir(path);
+                free(lum);
+                return -1;
+        }
+
+        fd = open(file, O_CREAT | O_RDWR, 0644);
+        if (fd < 0) {
+                printf("open file(%s) failed: rc = %d (%s) \n)",
+                       file, fd, strerror(errno));
+                t_rmdir(path);
+                free(lum);
+                return -1;
+        }
+        
+        lum->lmm_magic = LOV_USER_MAGIC;
+        lum->lmm_stripe_count = STRIPE_COUNT;
+        rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, lum);
+        if (rc) {
+                printf("dir:ioctl(LL_IOC_LOV_GETSTRIPE) failed: rc = %d(%s)\n",
+                       rc, strerror(errno));
+                close(fd);
+                t_unlink(file);
+                t_rmdir(path);
+                free(lum);
+                return -1;
+        }
+
+        close(fd);
+
+        if (opt_verbose) {
+                printf("lmm_magic:          0x%08X\n",  lum->lmm_magic);
+                printf("lmm_object_id:      "LPX64"\n", lum->lmm_object_id);
+                printf("lmm_object_gr:      "LPX64"\n", lum->lmm_object_gr);
+                printf("lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
+                printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
+                printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
+        
+                for (index = 0; index < lum->lmm_stripe_count; index++) {
+                        lo = lum->lmm_objects + index;
+                        printf("object %d:\n", index);
+                        printf("\tobject_gr:    "LPX64"\n", lo->l_object_gr);
+                        printf("\tobject_id:    "LPX64"\n", lo->l_object_id);
+                        printf("\tost_gen:      "LPX64"\n", lo->l_ost_gen);
+                        printf("\tost_idx:      %u\n", lo->l_ost_idx);
+                }
+        }
+
+        if (lum->lmm_magic != LOV_USER_MAGIC ||
+            lum->lmm_pattern != LOV_PATTERN_RAID0 ||
+            lum->lmm_stripe_size != STRIPE_SIZE ||
+            lum->lmm_objects[0].l_ost_idx != STRIPE_OFFSET ||
+            lum->lmm_stripe_count != STRIPE_COUNT) {
+                printf("incorrect striping information!\n");
+                t_unlink(file);
+                t_rmdir(path);
+                free(lum);
+                return -1;
+        }
+        t_unlink(file);
+
+        /* setstripe on regular file */
+        rc = llapi_file_create(file, STRIPE_SIZE, STRIPE_OFFSET,
+                               STRIPE_COUNT, LOV_PATTERN_RAID0);
+        if (rc) {
+                printf("llapi_file_create failed: rc = %d (%s) \n",
+                       rc, strerror(-rc));
+                t_unlink(file);
+                t_rmdir(path);
+                free(lum);
+                return -1;
+        }
+        fd = open(file, O_RDWR, 0644);
+        if (fd < 0) {
+                printf("failed to open(%s): rc = %d (%s)\n", 
+                       file, fd, strerror(errno));
+                t_unlink(file);
+                t_rmdir(path);
+                free(lum);
+                return -1;
+        }
+
+        lum->lmm_magic = LOV_USER_MAGIC;
+        lum->lmm_stripe_count = STRIPE_COUNT;
+        rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, lum);
+        if (rc) {
+                printf("file:ioctl(LL_IOC_LOV_GETSTRIPE) failed: rc = %d(%s)\n",
+                       rc, strerror(errno));
+                close(fd);
+                t_unlink(file);
+                t_rmdir(path);
+                free(lum);
+                return -1;
+        }
+        close(fd);
+
+        if (opt_verbose) {
+                printf("lmm_magic:          0x%08X\n",  lum->lmm_magic);
+                printf("lmm_object_id:      "LPX64"\n", lum->lmm_object_id);
+                printf("lmm_object_gr:      "LPX64"\n", lum->lmm_object_gr);
+                printf("lmm_stripe_count:   %u\n", (int)lum->lmm_stripe_count);
+                printf("lmm_stripe_size:    %u\n",      lum->lmm_stripe_size);
+                printf("lmm_stripe_pattern: %x\n",      lum->lmm_pattern);
+        
+                for (index = 0; index < lum->lmm_stripe_count; index++) {
+                        lo = lum->lmm_objects + index;
+                        printf("object %d:\n", index);
+                        printf("\tobject_gr:    "LPX64"\n", lo->l_object_gr);
+                        printf("\tobject_id:    "LPX64"\n", lo->l_object_id);
+                        printf("\tost_gen:      "LPX64"\n", lo->l_ost_gen);
+                        printf("\tost_idx:      %u\n", lo->l_ost_idx);
+                }
+        }
+
+        if (lum->lmm_magic != LOV_USER_MAGIC ||
+            lum->lmm_pattern != LOV_PATTERN_RAID0 ||
+            lum->lmm_stripe_size != STRIPE_SIZE ||
+            lum->lmm_objects[0].l_ost_idx != STRIPE_OFFSET ||
+            lum->lmm_stripe_count != STRIPE_COUNT) {
+                printf("incorrect striping information!\n");
+                t_unlink(file);
+                t_rmdir(path);
+                free(lum);
+                return -1;
+        }
+
+        t_unlink(file);
+        t_rmdir(path);
+        free(lum);
+        LEAVE();
+}
+
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);
 
@@ -1202,6 +1368,7 @@ struct testlist {
         { t51, "51" },
         { t53, "53" },
         { t54, "54" },
+        { t55, "55" },
         { NULL, NULL }
 };
 

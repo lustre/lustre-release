@@ -451,7 +451,6 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         struct ldlm_namespace *ns;
         cfs_flock_t *getlk = lock->l_ast_data;
         struct ldlm_flock_wait_data fwd;
-        unsigned long irqflags;
         struct obd_device *obd;
         struct obd_import *imp = NULL;
         ldlm_error_t err;
@@ -479,9 +478,9 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 imp = obd->u.cli.cl_import;
 
         if (imp != NULL) {
-                spin_lock_irqsave(&imp->imp_lock, irqflags);
+                spin_lock(&imp->imp_lock);
                 fwd.fwd_generation = imp->imp_generation;
-                spin_unlock_irqrestore(&imp->imp_lock, irqflags);
+                spin_unlock(&imp->imp_lock);
         }
 
         lwi = LWI_TIMEOUT_INTR(0, NULL, ldlm_flock_interrupted_wait, &fwd);

@@ -1405,7 +1405,6 @@ int ll_readpage(struct file *filp, struct page *page)
                 ll_truncate_complete_page(page);
                 clear_page(page);
                 SetPageUptodate(page);
-                unlock_page(page);
                 RETURN(0);
         }
 

@@ -5,6 +5,7 @@ set -e
 # bug number:  6088 10124
 ALWAYS_EXCEPT="8    15c   $REPLAY_DUAL_EXCEPT"
 
+PTLDEBUG=${PTLDEBUG:-1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 

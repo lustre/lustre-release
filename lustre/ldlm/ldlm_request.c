@@ -84,7 +84,6 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 {
         /* XXX ALLOCATE - 160 bytes */
         struct lock_wait_data lwd;
-        unsigned long irqflags;
         struct obd_device *obd;
         struct obd_import *imp = NULL;
         struct l_wait_info lwi;
@@ -127,9 +126,9 @@ noreproc:
         }
 
         if (imp != NULL) {
-                spin_lock_irqsave(&imp->imp_lock, irqflags);
+                spin_lock(&imp->imp_lock);
                 lwd.lwd_conn_cnt = imp->imp_conn_cnt;
-                spin_unlock_irqrestore(&imp->imp_lock, irqflags);
+                spin_unlock(&imp->imp_lock);
         }
 
         /* Go to sleep until the lock is granted or cancelled. */

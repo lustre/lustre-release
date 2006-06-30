@@ -257,7 +257,7 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
                 return rc;
         }
 
-        if (!param->obduuid && !param->quiet)
+        if (!param->obduuid && !param->quiet && !param->obds_printed)
                 printf("OBDS:\n");
 
         while (fgets(buf, sizeof(buf), fp) != NULL) {
@@ -270,15 +270,16 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
                                 param->obdindex = index;
                                 break;
                         }
-                } else if (!param->quiet) {
+                } else if (!param->quiet && !param->obds_printed) {
                         /* Print everything */
                         printf("%s", buf);
                 }
         }
+        param->obds_printed = 1;
 
         fclose(fp);
 
-        if (!param->quiet && param->obduuid && 
+        if (!param->quiet && param->obduuid &&
             (param->obdindex == OBD_NOT_FOUND)) {
                 fprintf(stderr, "error: %s: unknown obduuid: %s\n",
                         __FUNCTION__, param->obduuid->uuid);
@@ -406,7 +407,7 @@ void lov_dump_user_lmm_join(struct lov_user_md_v1 *lum, char *path,
         }
 }
 
-void llapi_lov_dump_user_lmm(struct find_param *param, 
+void llapi_lov_dump_user_lmm(struct find_param *param,
                              char *path, int is_dir)
 {
         switch(*(__u32 *)&param->lmd->lmd_lmm) { /* lum->lmm_magic */
@@ -519,11 +520,11 @@ static DIR *opendir_parent(char *path)
         DIR *parent;
         char *fname;
         char c;
-        
+
         fname = strrchr(path, '/');
         if (fname == NULL)
                 return opendir(".");
-        
+
         c = fname[1];
         fname[1] = '\0';
         parent = opendir(path);
@@ -537,15 +538,14 @@ static int llapi_semantic_traverse(char *path, DIR *parent,
 {
         struct dirent64 *dent;
         int len, ret;
-        DIR *d, *p;
-        
+        DIR *d, *p = NULL;
+
         ret = 0;
-        p = NULL;
         len = strlen(path);
 
         d = opendir(path);
         if (!d && errno != ENOTDIR) {
-                fprintf(stderr, "%s: Failed to open '%s': %s.", 
+                fprintf(stderr, "%s: Failed to open '%s': %s.",
                         __FUNCTION__, path, strerror(errno));
                 return -EINVAL;
         } else if (!d && !parent) {
@@ -564,7 +564,7 @@ static int llapi_semantic_traverse(char *path, DIR *parent,
         while((dent = readdir64(d)) != NULL) {
                 if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
                         continue;
-                
+
                 path[len] = 0;
                 strcat(path, "/");
                 strcat(path, dent->d_name);
@@ -601,11 +601,11 @@ static int llapi_semantic_traverse(char *path, DIR *parent,
 
 out:
         path[len] = 0;
-                
+
         if (sem_fini)
                 sem_fini(path, parent, d, data);
 err:
-        if (d) 
+        if (d)
                 closedir(d);
         if (p)
                 closedir(p);
@@ -614,9 +614,9 @@ err:
 
 /* Check if the file time matches 1 of the given criteria (e.g. --atime +/-N).
  * @mds indicates if this is MDS timestamps and there are attributes on OSTs.
- * 
+ *
  * The result is -1 if it does not match, 0 if not yet clear, 1 if matches.
- * The table bolow gives the answers for the specified parameters (time and 
+ * The table bolow gives the answers for the specified parameters (time and
  * sign), 1st column is the answer for the MDS time, the 2nd is for the OST:
  * --------------------------------------
  * 1 | file > limit; sign > 0 | -1 / -1 |
@@ -629,7 +629,7 @@ err:
  * 8 | file = limit; sign < 0 |  ? / -1 |
  * 9 | file < limit; sign < 0 |  ? / -1 |
  * --------------------------------------
- * Note: 5th actually means that the file time stamp is within the interval 
+ * Note: 5th actually means that the file time stamp is within the interval
  * (limit - 24hours, limit]. */
 static int find_time_cmp(time_t file, time_t limit, int sign, int mds) {
         if (sign > 0) {
@@ -656,10 +656,10 @@ static int find_time_cmp(time_t file, time_t limit, int sign, int mds) {
 
 /* Check if the file time matches all the given criteria (e.g. --atime +/-N).
  * Return -1 or 1 if file timestamp does not or does match the given criteria
- * correspondingly. Return 0 if the MDS time is being checked and there are 
+ * correspondingly. Return 0 if the MDS time is being checked and there are
  * attributes on OSTs and it is not yet clear if the timespamp matches.
- * 
- * If 0 is returned, we need to do another RPC to the OSTs to obtain the 
+ *
+ * If 0 is returned, we need to do another RPC to the OSTs to obtain the
  * updated timestamps. */
 static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 {
@@ -668,15 +668,15 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
 
         /* Check if file is accepted. */
         if (param->atime) {
-                ret = find_time_cmp(st->st_atime, param->atime, 
+                ret = find_time_cmp(st->st_atime, param->atime,
                                     param->asign, mds);
                 if (ret < 0)
                         return ret;
                 rc = ret;
         }
-        
+
         if (param->mtime) {
-                ret = find_time_cmp(st->st_mtime, param->mtime, 
+                ret = find_time_cmp(st->st_mtime, param->mtime,
                                     param->msign, mds);
                 if (ret < 0)
                         return ret;
@@ -686,13 +686,13 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
                 if (rc == 1)
                         rc = ret;
         }
-        
+
         if (param->ctime) {
                 ret = find_time_cmp(st->st_ctime, param->ctime,
                                     param->csign, mds);
                 if (ret < 0)
                         return ret;
-                
+
                 /* If the previous check matches, but this one is not yet clear,
                  * we should return 0 to do an RPC on OSTs. */
                 if (rc == 1)
@@ -711,7 +711,7 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
         int ret = 0;
 
         LASSERT(parent != NULL || dir != NULL);
-        
+
         param->lmd->lmd_lmm.lmm_stripe_count = 0;
 
         /* If a time or OST should be checked, the decision is not taken yet. */
@@ -721,17 +721,17 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
         /* Request MDS for the stat info. */
         if (!decision && dir) {
                 /* retrieve needed file info */
-                ret = ioctl(dirfd(dir), LL_IOC_MDC_GETINFO, 
+                ret = ioctl(dirfd(dir), LL_IOC_MDC_GETINFO,
                             (void *)param->lmd);
         } else if (!decision && parent) {
                 char *fname = strrchr(path, '/') + 1;
-                
+
                 /* retrieve needed file info */
                 strncpy((char *)param->lmd, fname, param->lumlen);
-                ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, 
+                ret = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO,
                            (void *)param->lmd);
         }
- 
+
         if (ret) {
                 if (errno == ENOTTY) {
                         /* ioctl is not supported, it is not a lustre fs.
@@ -745,7 +745,7 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
                         }
                 } else {
                         err_msg("error: %s: %s failed for %s", __FUNCTION__,
-                                dir ? "LL_IOC_MDC_GETINFO" : 
+                                dir ? "LL_IOC_MDC_GETINFO" :
                                 "IOC_MDC_GETFILEINFO", path);
                         return ret;
                 }
@@ -753,13 +753,14 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
 
         /* Prepare odb. */
         if (param->obduuid) {
-                if (lustre_fs && param->got_uuids && 
+                if (lustre_fs && param->got_uuids &&
                     param->st_dev != st->st_dev) {
                         /* A lustre/lustre mount point is crossed. */
                         param->got_uuids = 0;
+                        param->obds_printed = 0;
                         param->obdindex = OBD_NOT_FOUND;
                 }
-                
+
                 if (lustre_fs && !param->got_uuids) {
                         ret = setup_obd_uuids(dir ? dir : parent, path, param);
                         if (ret)
@@ -778,44 +779,43 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
 
         /* If a OST UUID is given, and some OST matches, check it here. */
         if (decision != -1 && param->obdindex != OBD_NOT_FOUND) {
-                /* Only those files should be accepted, which have a strip on 
+                /* Only those files should be accepted, which have a strip on
                  * the specified OST. */
                 if (!param->lmd->lmd_lmm.lmm_stripe_count) {
                         decision = -1;
                 } else {
                         int i;
-                        for (i = 0; 
-                             i < param->lmd->lmd_lmm.lmm_stripe_count;
-                             i++) {
-                                if (param->obdindex == 
-                                    param->lmd->lmd_lmm.lmm_objects[i].l_ost_idx)
+                        for (i = 0;
+                             i < param->lmd->lmd_lmm.lmm_stripe_count; i++) {
+                               if (param->obdindex ==
+                                   param->lmd->lmd_lmm.lmm_objects[i].l_ost_idx)
                                         break;
                         }
-                        
+
                         if (i == param->lmd->lmd_lmm.lmm_stripe_count)
                                 decision = -1;
                 }
         }
-        
+
         /* Check the time on mds. */
         if (!decision) {
                 int for_mds;
-                
+
                 for_mds = lustre_fs ? param->lmd->lmd_lmm.lmm_stripe_count : 0;
                 decision = find_time_check(st, param, for_mds);
         }
-        
+
         /* If file still fits the request, ask osd for updated info.
-           The regulat stat is almost of the same speed as some new 
+           The regulat stat is almost of the same speed as some new
            'glimpse-size-ioctl'. */
         if (!decision && param->lmd->lmd_lmm.lmm_stripe_count) {
                 if (dir) {
                         ret = ioctl(dirfd(dir), IOC_LOV_GETINFO,
                                     (void *)param->lmd);
                 } else if (parent) {
-                        ret = ioctl(dirfd(parent), IOC_LOV_GETINFO, 
+                        ret = ioctl(dirfd(parent), IOC_LOV_GETINFO,
                                     (void *)param->lmd);
-                } 
+                }
 
                 if (ret) {
                         fprintf(stderr, "%s: IOC_LOV_GETINFO on %s failed: "
@@ -832,7 +832,7 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
                 printf("%s", path);
                 if (param->zeroend)
                         printf("%c", '\0');
-                else 
+                else
                         printf("\n");
         }
 
@@ -855,7 +855,7 @@ int llapi_find(char *path, struct find_param *param)
 {
         char buf[PATH_MAX + 1];
         int ret;
-        
+
         ret = common_param_init(param);
         if (ret)
                 return ret;
@@ -863,8 +863,8 @@ int llapi_find(char *path, struct find_param *param)
         param->depth = 0;
         strncpy(buf, path, strlen(path));
         buf[strlen(path)] = '\0';
-        
-        ret = llapi_semantic_traverse(buf, NULL, cb_find_init, 
+
+        ret = llapi_semantic_traverse(buf, NULL, cb_find_init,
                                       cb_common_fini, param);
 
         find_param_fini(param);
@@ -877,37 +877,36 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data)
         int ret = 0;
 
         LASSERT(parent != NULL || d != NULL);
-        
+
         /* Prepare odb. */
         if (!param->got_uuids) {
                 ret = setup_obd_uuids(d ? d : parent, path, param);
                 if (ret)
                         return ret;
         }
-        
+
         if (d) {
-                ret = ioctl(dirfd(d), LL_IOC_LOV_GETSTRIPE, 
+                ret = ioctl(dirfd(d), LL_IOC_LOV_GETSTRIPE,
                             (void *)&param->lmd->lmd_lmm);
         } else if (parent) {
                 char *fname = strrchr(path, '/') + 1;
-                
+
                 strncpy((char *)&param->lmd->lmd_lmm, fname, param->lumlen);
                 ret = ioctl(dirfd(parent), IOC_MDC_GETFILESTRIPE,
                             (void *)&param->lmd->lmd_lmm);
-        } 
+        }
 
         if (ret) {
                 if (errno == ENODATA) {
                         if (!param->obduuid && !param->quiet)
-                                printf("%s has no stripe info\n", 
-                                        path);
+                                printf("%s has no stripe info\n", path);
                         goto out;
                 } else if (errno == ENOTTY) {
                         fprintf(stderr, "%s: '%s' not on a Lustre fs?\n",
                                 __FUNCTION__, path);
                 } else {
                         err_msg("error: %s: %s failed for %s", __FUNCTION__,
-                                d ? "LL_IOC_LOV_GETSTRIPE" : 
+                                d ? "LL_IOC_LOV_GETSTRIPE" :
                                 "IOC_MDC_GETFILESTRIPE", path);
                 }
 
@@ -933,7 +932,7 @@ int llapi_getstripe(char *path, struct find_param *param)
                 return ret;
 
         param->depth = 0;
-        ret = llapi_semantic_traverse(path, NULL, cb_getstripe, 
+        ret = llapi_semantic_traverse(path, NULL, cb_getstripe,
                                       cb_common_fini, param);
         find_param_fini(param);
         return ret < 0 ? ret : 0;
@@ -1187,17 +1186,17 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data)
         struct find_param *param = (struct find_param *)data;
         lstat_t *st;
         int rc;
-        
+
         LASSERT(parent != NULL || d != NULL);
 
         if (d) {
-                rc = ioctl(dirfd(d), LL_IOC_MDC_GETINFO, 
+                rc = ioctl(dirfd(d), LL_IOC_MDC_GETINFO,
                            (void *)param->lmd);
         } else if (parent) {
                 char *fname = strrchr(path, '/') + 1;
 
                 strncpy((char *)param->lmd, fname, param->lumlen);
-                rc = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO, 
+                rc = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO,
                            (void *)param->lmd);
         } else {
                 return 0;
@@ -1211,7 +1210,7 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data)
                         rc = 0;
                 } else if (errno != EISDIR) {
                         err_msg("%s ioctl failed for %s.",
-                                d ? "LL_IOC_MDC_GETINFO" : 
+                                d ? "LL_IOC_MDC_GETINFO" :
                                 "IOC_MDC_GETFILEINFO", path);
                         rc = errno;
                 }

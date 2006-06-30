@@ -58,14 +58,12 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
 
 static int echo_disconnect(struct obd_export *exp)
 {
-        unsigned long irqflags;
-
         LASSERT (exp != NULL);
 
         ldlm_cancel_locks_for_export(exp);
 
         /* complete all outstanding replies */
-        spin_lock_irqsave(&exp->exp_lock, irqflags);
+        spin_lock(&exp->exp_lock);
         while (!list_empty(&exp->exp_outstanding_replies)) {
                 struct ptlrpc_reply_state *rs =
                         list_entry(exp->exp_outstanding_replies.next,
@@ -77,7 +75,7 @@ static int echo_disconnect(struct obd_export *exp)
                 ptlrpc_schedule_difficult_reply(rs);
                 spin_unlock(&svc->srv_lock);
         }
-        spin_unlock_irqrestore(&exp->exp_lock, irqflags);
+        spin_unlock(&exp->exp_lock);
 
         return class_disconnect(exp);
 }

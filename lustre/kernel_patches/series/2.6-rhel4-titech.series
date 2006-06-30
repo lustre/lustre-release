@@ -25,5 +25,6 @@ raid5-stats.patch
 raid5-configurable-cachesize.patch
 raid5-large-io.patch
 raid5-stripe-by-stripe-handling.patch
+raid5-optimize-memcpy.patch
 raid5-merge-ios.patch
 raid5-serialize-ovelapping-reqs.patch

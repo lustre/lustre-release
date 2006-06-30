@@ -59,7 +59,6 @@ struct filter_iobuf {
 static void record_start_io(struct filter_iobuf *iobuf, int rw, int size)
 {
         struct filter_obd *filter = iobuf->dr_filter;
-        unsigned long flags;
 
         atomic_inc(&iobuf->dr_numreqs);
 
@@ -72,26 +71,26 @@ static void record_start_io(struct filter_iobuf *iobuf, int rw, int size)
                                  filter->fo_w_in_flight);
                 lprocfs_oh_tally_log2(&filter->fo_w_disk_iosize, size);
         }
-        spin_lock_irqsave(&filter->fo_stats_lock, flags);
+        spin_lock(&filter->fo_stats_lock);
         if (rw == OBD_BRW_READ)
                 filter->fo_r_in_flight++;
         else
                 filter->fo_w_in_flight++;
-        spin_unlock_irqrestore(&filter->fo_stats_lock, flags);
+        spin_unlock(&filter->fo_stats_lock);
         iobuf->dr_start_time = jiffies;
 }
 
 static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
 {
         struct filter_obd *filter = iobuf->dr_filter;
-        unsigned long flags, stop_time = jiffies;
+        unsigned long stop_time = jiffies;
 
-        spin_lock_irqsave(&filter->fo_stats_lock, flags);
+        spin_lock(&filter->fo_stats_lock);
         if (rw == OBD_BRW_READ)
                 filter->fo_r_in_flight--;
         else
                 filter->fo_w_in_flight--;
-        spin_unlock_irqrestore(&filter->fo_stats_lock, flags);
+        spin_unlock(&filter->fo_stats_lock);
 
         if (atomic_dec_and_test(&iobuf->dr_numreqs))
                 wake_up(&iobuf->dr_wait);
@@ -111,7 +110,6 @@ static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
 static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 {
         struct filter_iobuf *iobuf = bio->bi_private;
-        unsigned long flags;
 
         if (bio->bi_size) {
                 CWARN("gets called against non-complete bio 0x%p: %d/%d/%d\n",
@@ -137,10 +135,10 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                 return 0;
         }
 
-        spin_lock_irqsave(&iobuf->dr_lock, flags);
+        spin_lock(&iobuf->dr_lock);
         if (iobuf->dr_error == 0)
                 iobuf->dr_error = error;
-        spin_unlock_irqrestore(&iobuf->dr_lock, flags);
+        spin_unlock(&iobuf->dr_lock);
 
         record_finish_io(iobuf, test_bit(BIO_RW, &bio->bi_rw) ?
                          OBD_BRW_WRITE : OBD_BRW_READ, error);

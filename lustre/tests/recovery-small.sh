@@ -2,9 +2,10 @@
 
 set -e
 
-#         bug  2986 5494 7288
-ALWAYS_EXCEPT="20b  24   27 $RECOVERY_SMALL_EXCEPT"
+#         bug  5494 7288
+ALWAYS_EXCEPT="24   27 $RECOVERY_SMALL_EXCEPT"
 
+PTLDEBUG=${PTLDEBUG:-1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@

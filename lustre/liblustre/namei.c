@@ -47,7 +47,7 @@
 
 #include "llite_lib.h"
 
-static void ll_intent_drop_lock(struct lookup_intent *it)
+void ll_intent_drop_lock(struct lookup_intent *it)
 {
         struct lustre_handle *handle;
 
@@ -63,7 +63,7 @@ static void ll_intent_drop_lock(struct lookup_intent *it)
         }
 }
 
-static void ll_intent_release(struct lookup_intent *it)
+void ll_intent_release(struct lookup_intent *it)
 {
         ENTRY;
 

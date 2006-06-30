@@ -911,14 +911,12 @@ EXPORT_SYMBOL(lprocfs_obd_seq_create);
 
 void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value)
 {
-        unsigned long flags;
-
         if (value >= OBD_HIST_MAX)
                 value = OBD_HIST_MAX - 1;
 
-        spin_lock_irqsave(&oh->oh_lock, flags);
+        spin_lock(&oh->oh_lock);
         oh->oh_buckets[value]++;
-        spin_unlock_irqrestore(&oh->oh_lock, flags);
+        spin_unlock(&oh->oh_lock);
 }
 EXPORT_SYMBOL(lprocfs_oh_tally);
 
@@ -946,10 +944,9 @@ EXPORT_SYMBOL(lprocfs_oh_sum);
 
 void lprocfs_oh_clear(struct obd_histogram *oh)
 {
-        unsigned long flags;
-        spin_lock_irqsave(&oh->oh_lock, flags);
+        spin_lock(&oh->oh_lock);
         memset(oh->oh_buckets, 0, sizeof(oh->oh_buckets));
-        spin_unlock_irqrestore(&oh->oh_lock, flags);
+        spin_unlock(&oh->oh_lock);
 }
 EXPORT_SYMBOL(lprocfs_oh_clear);
 

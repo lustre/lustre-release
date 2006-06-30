@@ -11,7 +11,7 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 63 64b 71 77 101"
+[ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 36g 51b 51c 63 64b 71 77 101"
 
 # Tests that fail on uml, maybe elsewhere, FIXME
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
@@ -53,18 +53,18 @@ ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
 UMOUNT=${UMOUNT:-"umount -d"}
 
 if [ $UID -ne 0 ]; then
-    echo "Warning: running as non-root uid $UID"
+	echo "Warning: running as non-root uid $UID"
 	RUNAS_ID="$UID"
 	RUNAS=""
 else
 	RUNAS_ID=${RUNAS_ID:-500}
 	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
 
-    # $RUNAS_ID may get set incorrectly somewhere else
-    if [ $RUNAS_ID -eq 0 ]; then
-       echo "Error: \$RUNAS_ID set to 0, but \$UID is also 0!"
-       exit 1
-    fi
+	# $RUNAS_ID may get set incorrectly somewhere else
+	if [ $RUNAS_ID -eq 0 ]; then
+		echo "Error: \$RUNAS_ID set to 0, but \$UID is also 0!"
+		exit 1
+	fi
 fi
 
 SANITYLOG=${SANITYLOG:-/tmp/sanity.log}
@@ -1276,32 +1276,27 @@ test_32f() {
 run_test 32f "open d32f/symlink->tmp/symlink->lustre-subdir ===="
 
 test_32g() {
-	[ -e $DIR/d32g ] && rm -fr $DIR/d32g
-	[ -e $DIR/test_dir ] && rm -fr $DIR/test_dir
-	mkdir -p $DIR/test_dir 
-	mkdir -p $DIR/d32g/tmp    
-	TMP_DIR=$DIR/d32g/tmp       
-	ln -s $DIR/test_dir $TMP_DIR/symlink12 
+	TMP_DIR=$DIR/$tdir/tmp       
+	mkdir -p $TMP_DIR $DIR/${tdir}2
+	ln -s $DIR/${tdir}2 $TMP_DIR/symlink12 
 	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
-	$CHECKSTAT -t link $DIR/d32g/tmp/symlink12 || error
-	$CHECKSTAT -t link $DIR/d32g/symlink02 || error
-	$CHECKSTAT -t dir -f $DIR/d32g/tmp/symlink12 || error
-	$CHECKSTAT -t dir -f $DIR/d32g/symlink02 || error
+	$CHECKSTAT -t link $TMP_DIR/symlink12 || error
+	$CHECKSTAT -t link $DIR/$tdir/symlink02 || error
+	$CHECKSTAT -t dir -f $TMP_DIR/symlink12 || error
+	$CHECKSTAT -t dir -f $DIR/$tdir/symlink02 || error
 }
-run_test 32g "stat d32g/symlink->tmp/symlink->lustre-subdir/test_dir"
+run_test 32g "stat d32g/symlink->tmp/symlink->lustre-subdir/${tdir}2"
 
 test_32h() {
-	[ -e $DIR/d32h ] && rm -fr $DIR/d32h
-	[ -e $DIR/test_dir ] && rm -fr $DIR/test_dir
-	mkdir -p $DIR/test_dir 
-	mkdir -p $DIR/d32h/tmp    
-	TMP_DIR=$DIR/d32h/tmp       
-	ln -s $DIR/test_dir $TMP_DIR/symlink12 
+	rm -fr $DIR/$tdir $DIR/${tdir}2
+	TMP_DIR=$DIR/$tdir/tmp       
+	mkdir -p $TMP_DIR $DIR/${tdir}2 
+	ln -s $DIR/${tdir}2 $TMP_DIR/symlink12 
 	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
-	ls $DIR/d32h/tmp/symlink12 || error
-	ls $DIR/d32h/symlink02  || error
+	ls $TMP_DIR/symlink12 || error
+	ls $DIR/$tdir/symlink02  || error
 }
-run_test 32h "open d32h/symlink->tmp/symlink->lustre-subdir/test_dir"
+run_test 32h "open d32h/symlink->tmp/symlink->lustre-subdir/${tdir}2"
 
 test_32i() {
 	[ -e $DIR/d32i ] && rm -fr $DIR/d32i
@@ -1368,33 +1363,32 @@ test_32n() {
 run_test 32n "open d32n/symlink->tmp/symlink->lustre-root ======"
 
 test_32o() {
-	rm -fr $DIR/d32o
-	rm -f $DIR/test_file
-	touch $DIR/test_file 
+	rm -fr $DIR/d32o $DIR/$tfile
+	touch $DIR/$tfile 
 	mkdir -p $DIR/d32o/tmp    
 	TMP_DIR=$DIR/d32o/tmp       
-	ln -s $DIR/test_file $TMP_DIR/symlink12 
+	ln -s $DIR/$tfile $TMP_DIR/symlink12 
 	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
 	$CHECKSTAT -t link $DIR/d32o/tmp/symlink12 || error
 	$CHECKSTAT -t link $DIR/d32o/symlink02 || error
 	$CHECKSTAT -t file -f $DIR/d32o/tmp/symlink12 || error
 	$CHECKSTAT -t file -f $DIR/d32o/symlink02 || error
 }
-run_test 32o "stat d32o/symlink->tmp/symlink->lustre-root/test_file"
+run_test 32o "stat d32o/symlink->tmp/symlink->lustre-root/$tfile"
 
 test_32p() {
     log 32p_1
 	rm -fr $DIR/d32p
     log 32p_2
-	rm -f $DIR/test_file
+	rm -f $DIR/$tfile
     log 32p_3
-	touch $DIR/test_file 
+	touch $DIR/$tfile 
     log 32p_4
 	mkdir -p $DIR/d32p/tmp    
     log 32p_5
 	TMP_DIR=$DIR/d32p/tmp       
     log 32p_6
-	ln -s $DIR/test_file $TMP_DIR/symlink12 
+	ln -s $DIR/$tfile $TMP_DIR/symlink12 
     log 32p_7
 	ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
     log 32p_8
@@ -1403,7 +1397,7 @@ test_32p() {
 	cat $DIR/d32p/symlink02 || error
     log 32p_10
 }
-run_test 32p "open d32p/symlink->tmp/symlink->lustre-root/test_file"
+run_test 32p "open d32p/symlink->tmp/symlink->lustre-root/$tfile"
 
 test_32q() {
 	[ -e $DIR/d32q ] && rm -fr $DIR/d32q
@@ -1551,14 +1545,6 @@ test_36e() {
 }
 run_test 36e "utime on non-owned file (should return error) ===="
 
-export TIMEOUT_OLD=`sysctl -n lustre.timeout`
-export TIMEOUT_NEW=16
-sysctl -w lustre.timeout=$TIMEOUT_NEW
-
-export FMD_MAX_AGE=`cat $LPROC/obdfilter/*/client_cache_seconds | head -n 1`
-for F in $LPROC/obdfilter/*/client_cache_seconds; do
-	echo 12 > $F
-done
 test_36f() {
 	export LANG=C LC_LANG=C # for date language
 
@@ -1583,21 +1569,22 @@ test_36f() {
 }
 run_test 36f "utime on file racing with OST BRW write =========="
 
+if [ -d $LPROC/obdfilter ]; then
+export FMD_MAX_AGE=`cat $LPROC/obdfilter/*/client_cache_seconds | head -n 1`
+
 test_36g() {
 	FMD_BEFORE="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
 	touch $DIR/d36/$tfile
-	sleep $((TIMEOUT_NEW + 10))
+	sleep $((FMD_MAX_AGE + 12))
 	FMD_AFTER="`awk '/ll_fmd_cache/ { print $2 }' /proc/slabinfo`"
 	[ "$FMD_AFTER" -gt "$FMD_BEFORE" ] && \
 		echo "AFTER : $FMD_AFTER > BEFORE $FMD_BEFORE" && \
 		error "fmd didn't expire after ping" || true
 }
 run_test 36g "filter mod data cache expiry ====================="
-
-sysctl -w lustre.timeout=$TIMEOUT_OLD
-for F in $LPROC/obdfilter/*/client_cache_seconds; do
-	echo $FMD_MAX_AGE > $F
-done
+else
+	log "skipping test_36g because of non-local OST"
+fi # [ -d $LPROC/obdfilter ]
 
 test_37() {
 	mkdir -p $DIR/dextra
@@ -1610,7 +1597,7 @@ test_37() {
 run_test 37 "ls a mounted file system to check old content ====="
 
 test_38() {
-	o_directory $DIR/test38
+	o_directory $DIR/$tfile
 }
 run_test 38 "open a regular file with O_DIRECTORY =============="
 

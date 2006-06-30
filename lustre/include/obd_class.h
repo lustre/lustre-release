@@ -706,7 +706,7 @@ static inline int obd_statfs_async(struct obd_device *obd,
         OBD_CHECK_OP(obd, statfs, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
-        CDEBUG(D_SUPER, "osfs "CFS_TIME_T", max_age "CFS_TIME_T"\n", 
+        CDEBUG(D_SUPER, "osfs "CFS_TIME_T", max_age "CFS_TIME_T"\n",
                obd->obd_osfs_age, max_age);
         if (cfs_time_before(obd->obd_osfs_age, max_age)) {
                 rc = OBP(obd, statfs_async)(obd, oinfo, max_age, rqset);
@@ -722,8 +722,7 @@ static inline int obd_statfs_async(struct obd_device *obd,
 }
 
 static inline int obd_statfs_rqset(struct obd_device *obd,
-                                   struct obd_statfs *osfs,
-                                   cfs_time_t max_age)
+                                   struct obd_statfs *osfs, cfs_time_t max_age)
 {
         struct ptlrpc_request_set *set = NULL;
         struct obd_info oinfo = { { { 0 } } };
@@ -757,7 +756,7 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         OBD_CHECK_OP(obd, statfs, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
-        CDEBUG(D_SUPER, "osfs "CFS_TIME_T", max_age "CFS_TIME_T"\n", 
+        CDEBUG(D_SUPER, "osfs "CFS_TIME_T", max_age "CFS_TIME_T"\n",
                obd->obd_osfs_age, max_age);
         if (cfs_time_before(obd->obd_osfs_age, max_age)) {
                 rc = OBP(obd, statfs)(obd, osfs, max_age);

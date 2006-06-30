@@ -970,13 +970,12 @@ EXPORT_SYMBOL(oig_release);
 
 void oig_add_one(struct obd_io_group *oig, struct oig_callback_context *occ)
 {
-        unsigned long flags;
         CDEBUG(D_CACHE, "oig %p ready to roll\n", oig);
-        spin_lock_irqsave(&oig->oig_lock, flags);
+        spin_lock(&oig->oig_lock);
         oig->oig_pending++;
         if (occ != NULL)
                 list_add_tail(&occ->occ_oig_item, &oig->oig_occ_list);
-        spin_unlock_irqrestore(&oig->oig_lock, flags);
+        spin_unlock(&oig->oig_lock);
         oig_grab(oig);
 }
 EXPORT_SYMBOL(oig_add_one);
@@ -984,11 +983,10 @@ EXPORT_SYMBOL(oig_add_one);
 void oig_complete_one(struct obd_io_group *oig,
                       struct oig_callback_context *occ, int rc)
 {
-        unsigned long flags;
         cfs_waitq_t *wake = NULL;
         int old_rc;
 
-        spin_lock_irqsave(&oig->oig_lock, flags);
+        spin_lock(&oig->oig_lock);
 
         if (occ != NULL)
                 list_del_init(&occ->occ_oig_item);
@@ -1000,7 +998,7 @@ void oig_complete_one(struct obd_io_group *oig,
         if (--oig->oig_pending <= 0)
                 wake = &oig->oig_waitq;
 
-        spin_unlock_irqrestore(&oig->oig_lock, flags);
+        spin_unlock(&oig->oig_lock);
 
         CDEBUG(D_CACHE, "oig %p completed, rc %d -> %d via %d, %d now "
                         "pending (racey)\n", oig, old_rc, oig->oig_rc, rc,
@@ -1013,12 +1011,11 @@ EXPORT_SYMBOL(oig_complete_one);
 
 static int oig_done(struct obd_io_group *oig)
 {
-        unsigned long flags;
         int rc = 0;
-        spin_lock_irqsave(&oig->oig_lock, flags);
+        spin_lock(&oig->oig_lock);
         if (oig->oig_pending <= 0)
                 rc = 1;
-        spin_unlock_irqrestore(&oig->oig_lock, flags);
+        spin_unlock(&oig->oig_lock);
         return rc;
 }
 
@@ -1026,9 +1023,8 @@ static void interrupted_oig(void *data)
 {
         struct obd_io_group *oig = data;
         struct oig_callback_context *occ;
-        unsigned long flags;
 
-        spin_lock_irqsave(&oig->oig_lock, flags);
+        spin_lock(&oig->oig_lock);
         /* We need to restart the processing each time we drop the lock, as
          * it is possible other threads called oig_complete_one() to remove
          * an entry elsewhere in the list while we dropped lock.  We need to
@@ -1039,12 +1035,12 @@ restart:
                 if (occ->interrupted)
                         continue;
                 occ->interrupted = 1;
-                spin_unlock_irqrestore(&oig->oig_lock, flags);
+                spin_unlock(&oig->oig_lock);
                 occ->occ_interrupted(occ);
-                spin_lock_irqsave(&oig->oig_lock, flags);
+                spin_lock(&oig->oig_lock);
                 goto restart;
         }
-        spin_unlock_irqrestore(&oig->oig_lock, flags);
+        spin_unlock(&oig->oig_lock);
 }
 
 int oig_wait(struct obd_io_group *oig)
@@ -1075,12 +1071,11 @@ EXPORT_SYMBOL(oig_wait);
 void class_fail_export(struct obd_export *exp)
 {
         int rc, already_failed;
-        unsigned long flags;
 
-        spin_lock_irqsave(&exp->exp_lock, flags);
+        spin_lock(&exp->exp_lock);
         already_failed = exp->exp_failed;
         exp->exp_failed = 1;
-        spin_unlock_irqrestore(&exp->exp_lock, flags);
+        spin_unlock(&exp->exp_lock);
 
         if (already_failed) {
                 CDEBUG(D_HA, "disconnecting dead export %p/%s; skipping\n",

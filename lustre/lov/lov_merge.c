@@ -76,12 +76,14 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                         size = lov_size;
                 /* merge blocks, mtime, atime */
                 blocks += loi->loi_lvb.lvb_blocks;
-                if (loi->loi_lvb.lvb_mtime > current_mtime)
-                        current_mtime = loi->loi_lvb.lvb_mtime;
                 if (loi->loi_lvb.lvb_atime > current_atime)
                         current_atime = loi->loi_lvb.lvb_atime;
-                if (loi->loi_lvb.lvb_ctime > current_ctime)
+                if (loi->loi_lvb.lvb_ctime > current_ctime) {
                         current_ctime = loi->loi_lvb.lvb_ctime;
+                        /* mtime is always updated with ctime, but can be set 
+                           in past. */
+                        current_mtime = loi->loi_lvb.lvb_mtime;
+                }
         }
 
         lvb->lvb_size = size;
@@ -151,10 +153,14 @@ void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
                         tgt->o_blocks += src->o_blocks;
                 if (valid & OBD_MD_FLBLKSZ)
                         tgt->o_blksize += src->o_blksize;
-                if (valid & OBD_MD_FLCTIME && tgt->o_ctime < src->o_ctime)
+                if (valid & OBD_MD_FLCTIME && tgt->o_ctime < src->o_ctime) {
                         tgt->o_ctime = src->o_ctime;
-                if (valid & OBD_MD_FLMTIME && tgt->o_mtime < src->o_mtime)
-                        tgt->o_mtime = src->o_mtime;
+
+                        /* mtime is always updated with ctime, but can be set 
+                           in past. */
+                        if (valid & OBD_MD_FLMTIME)
+                                tgt->o_mtime = src->o_mtime;
+                }
         } else {
                 memcpy(tgt, src, sizeof(*tgt));
                 tgt->o_id = lsm->lsm_object_id;

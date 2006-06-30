@@ -181,7 +181,6 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
 {
         struct ptlrpc_service *svc = data;
         int                    bufpages;
-        unsigned long          flags;
         int                    val;
         int                    rc = lprocfs_write_helper(buffer, count, &val);
 
@@ -198,9 +197,9 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
         if (val > num_physpages/(2*bufpages))
                 return -ERANGE;
 
-        spin_lock_irqsave(&svc->srv_lock, flags);
+        spin_lock(&svc->srv_lock);
         svc->srv_max_history_rqbds = val;
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        spin_unlock(&svc->srv_lock);
 
         return count;
 }
@@ -254,7 +253,6 @@ ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
 {
         struct ptlrpc_service       *svc = s->private;
         struct ptlrpc_srh_iterator  *srhi;
-        unsigned long                flags;
         int                          rc;
 
         OBD_ALLOC(srhi, sizeof(*srhi));
@@ -264,9 +262,9 @@ ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
         srhi->srhi_seq = 0;
         srhi->srhi_req = NULL;
 
-        spin_lock_irqsave(&svc->srv_lock, flags);
+        spin_lock(&svc->srv_lock);
         rc = ptlrpc_lprocfs_svc_req_history_seek(svc, srhi, *pos);
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        spin_unlock(&svc->srv_lock);
 
         if (rc == 0) {
                 *pos = srhi->srhi_seq;
@@ -292,12 +290,11 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
 {
         struct ptlrpc_service       *svc = s->private;
         struct ptlrpc_srh_iterator  *srhi = iter;
-        unsigned long                flags;
         int                          rc;
 
-        spin_lock_irqsave(&svc->srv_lock, flags);
+        spin_lock(&svc->srv_lock);
         rc = ptlrpc_lprocfs_svc_req_history_seek(svc, srhi, *pos + 1);
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        spin_unlock(&svc->srv_lock);
 
         if (rc != 0) {
                 OBD_FREE(srhi, sizeof(*srhi));
@@ -313,10 +310,9 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
         struct ptlrpc_service      *svc = s->private;
         struct ptlrpc_srh_iterator *srhi = iter;
         struct ptlrpc_request      *req;
-        unsigned long               flags;
         int                         rc;
 
-        spin_lock_irqsave(&svc->srv_lock, flags);
+        spin_lock(&svc->srv_lock);
 
         rc = ptlrpc_lprocfs_svc_req_history_seek(svc, srhi, srhi->srhi_seq);
 
@@ -340,7 +336,7 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
                         svc->srv_request_history_print_fn(s, srhi->srhi_req);
         }
 
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        spin_unlock(&svc->srv_lock);
 
         return rc;
 }

@@ -101,13 +101,12 @@ static int ptlrpc_pinger_main(void *arg)
                                 list_entry(iter, struct obd_import,
                                            imp_pinger_chain);
                         int force, level;
-                        unsigned long flags;
 
-                        spin_lock_irqsave(&imp->imp_lock, flags);
+                        spin_lock(&imp->imp_lock);
                         level = imp->imp_state;
                         force = imp->imp_force_verify;
                         imp->imp_force_verify = 0;
-                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                        spin_unlock(&imp->imp_lock);
 
                         CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
                                "level %s/%u force %u deactive %u pingable %u\n",
@@ -491,15 +490,14 @@ static int pinger_check_rpcs(void *arg)
                 struct obd_import *imp =
                         list_entry(iter, struct obd_import, imp_pinger_chain);
                 int generation, level;
-                unsigned long flags;
 
                 if (cfs_time_aftereq(pd->pd_this_ping, 
                                      imp->imp_next_ping - 5 * CFS_TICK)) {
                         /* Add a ping. */
-                        spin_lock_irqsave(&imp->imp_lock, flags);
+                        spin_lock(&imp->imp_lock);
                         generation = imp->imp_generation;
                         level = imp->imp_state;
-                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                        spin_unlock(&imp->imp_lock);
 
                         if (level != LUSTRE_IMP_FULL) {
                                 CDEBUG(D_HA,

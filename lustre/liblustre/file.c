@@ -78,10 +78,15 @@ void llu_prepare_mdc_op_data(struct mdc_op_data *data,
                              int namelen,
                              int mode)
 {
-        LASSERT(i1);
+        LASSERT(i1 != NULL || i2 != NULL);
 
-        ll_i2gids(data->suppgids, i1, i2);
-        ll_inode2fid(&data->fid1, i1);
+        if (i1) {
+                ll_i2gids(data->suppgids, i1, i2);
+                ll_inode2fid(&data->fid1, i1);
+        }else {
+                ll_i2gids(data->suppgids, i2, i1);
+                ll_inode2fid(&data->fid1, i2);
+        }
 
         if (i2)
                 ll_inode2fid(&data->fid2, i2);
@@ -109,10 +114,13 @@ void obdo_refresh_inode(struct inode *dst,
 
         if (valid & OBD_MD_FLATIME && src->o_atime > LTIME_S(st->st_atime))
                 LTIME_S(st->st_atime) = src->o_atime;
-        if (valid & OBD_MD_FLMTIME && src->o_mtime > LTIME_S(st->st_mtime))
-                LTIME_S(st->st_mtime) = src->o_mtime;
-        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(st->st_ctime))
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(st->st_ctime)) {
                 LTIME_S(st->st_ctime) = src->o_ctime;
+                
+                /* mtime is always updated with ctime, but can be set in past */
+                if (valid & OBD_MD_FLMTIME)
+                        LTIME_S(st->st_mtime) = src->o_mtime;
+        }
         if (valid & OBD_MD_FLSIZE && src->o_size > st->st_size)
                 st->st_size = src->o_size;
         /* optimum IO size */
@@ -123,7 +131,7 @@ void obdo_refresh_inode(struct inode *dst,
                 st->st_blocks = src->o_blocks;
 }
 
-static int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
+int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
         struct ll_file_data *fd;
@@ -355,7 +363,7 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
         RETURN(rc);
 }
 
-static int llu_file_release(struct inode *inode)
+int llu_file_release(struct inode *inode)
 {
         struct ll_file_data *fd;
         struct llu_sb_info *sbi = llu_i2sbi(inode);

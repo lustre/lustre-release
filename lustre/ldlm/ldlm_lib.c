@@ -523,7 +523,6 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         struct list_head *p;
         char *str, *tmp;
         int rc = 0, abort_recovery;
-        unsigned long flags;
         struct obd_connect_data *data;
         int size[2] = { sizeof(struct ptlrpc_body), sizeof(*data) };
         ENTRY;
@@ -742,18 +741,18 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         req->rq_export = export;
 
-        spin_lock_irqsave(&export->exp_lock, flags);
+        spin_lock(&export->exp_lock);
         if (export->exp_conn_cnt >= lustre_msg_get_conn_cnt(req->rq_reqmsg)) {
                 CERROR("%s: %s already connected at higher conn_cnt: %d > %d\n",
                        cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
                        export->exp_conn_cnt,
                        lustre_msg_get_conn_cnt(req->rq_reqmsg));
                        
-                spin_unlock_irqrestore(&export->exp_lock, flags);
+                spin_unlock(&export->exp_lock);
                 GOTO(out, rc = -EALREADY);
         }
         export->exp_conn_cnt = lustre_msg_get_conn_cnt(req->rq_reqmsg);
-        spin_unlock_irqrestore(&export->exp_lock, flags);
+        spin_unlock(&export->exp_lock);
 
         /* request from liblustre?  Don't evict it for not pinging. */
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
@@ -1325,7 +1324,6 @@ void
 target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 {
         int                        netrc;
-        unsigned long              flags;
         struct ptlrpc_reply_state *rs;
         struct obd_device         *obd;
         struct obd_export         *exp;
@@ -1363,7 +1361,7 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         rs->rs_transno   = req->rq_transno;
         rs->rs_export    = exp;
 
-        spin_lock_irqsave (&obd->obd_uncommitted_replies_lock, flags);
+        spin_lock(&obd->obd_uncommitted_replies_lock);
 
         if (rs->rs_transno > obd->obd_last_committed) {
                 /* not committed already */
@@ -1376,11 +1374,11 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
         list_add_tail (&rs->rs_exp_list, &exp->exp_outstanding_replies);
 
-        spin_unlock_irqrestore (&exp->exp_lock, flags);
+        spin_unlock(&exp->exp_lock);
 
         netrc = target_send_reply_msg (req, rc, fail_id);
 
-        spin_lock_irqsave (&svc->srv_lock, flags);
+        spin_lock(&svc->srv_lock);
 
         svc->srv_n_difficult_replies++;
 
@@ -1405,7 +1403,7 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
                 rs->rs_scheduled = 0;           /* allow notifier to schedule */
         }
 
-        spin_unlock_irqrestore (&svc->srv_lock, flags);
+        spin_unlock(&svc->srv_lock);
 }
 
 int target_handle_ping(struct ptlrpc_request *req)

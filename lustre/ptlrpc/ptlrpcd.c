@@ -92,21 +92,20 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
 {
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
-        unsigned long flags;
         int rc = 0;
         ENTRY;
 
         if (test_bit(LIOD_STOP, &pc->pc_flags))
                 RETURN(1);
 
-        spin_lock_irqsave(&pc->pc_set->set_new_req_lock, flags);
+        spin_lock(&pc->pc_set->set_new_req_lock);
         list_for_each_safe(pos, tmp, &pc->pc_set->set_new_requests) {
                 req = list_entry(pos, struct ptlrpc_request, rq_set_chain);
                 list_del_init(&req->rq_set_chain);
                 ptlrpc_set_add_req(pc->pc_set, req);
                 rc = 1; /* need to calculate its timeout */
         }
-        spin_unlock_irqrestore(&pc->pc_set->set_new_req_lock, flags);
+        spin_unlock(&pc->pc_set->set_new_req_lock);
 
         if (pc->pc_set->set_remaining) {
                 rc = rc | ptlrpc_check_set(pc->pc_set);
@@ -127,9 +126,9 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
 
         if (rc == 0) {
                 /* If new requests have been added, make sure to wake up */
-                spin_lock_irqsave(&pc->pc_set->set_new_req_lock, flags);
+                spin_lock(&pc->pc_set->set_new_req_lock);
                 rc = !list_empty(&pc->pc_set->set_new_requests);
-                spin_unlock_irqrestore(&pc->pc_set->set_new_req_lock, flags);
+                spin_unlock(&pc->pc_set->set_new_req_lock);
         }
 
         RETURN(rc);

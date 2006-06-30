@@ -2,6 +2,7 @@
 
 set -e
 
+PTLDEBUG=${PTLDEBUG:-1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
@@ -11,8 +12,8 @@ ostfailover_HOST=${ostfailover_HOST:-$ost_HOST}
 #failover= must be defined in OST_MKFS_OPTIONS if ostfailover_HOST != ost_HOST
 
 # Skip these tests
-# BUG NUMBER: 2766?
-ALWAYS_EXCEPT="5 $REPLAY_OST_SINGLE_EXCEPT"
+# BUG NUMBER: 
+ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"
 
 # It is replay-ost-single, after all
 OSTCOUNT=1
@@ -26,7 +27,6 @@ cleanup() {
 }
 
 if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w lnet.debug=0
     cleanup
     exit
 fi
@@ -112,6 +112,7 @@ test_4() {
 run_test 4 "Fail OST during read, with verification"
 
 test_5() {
+    [ -z "`which iozone 2> /dev/null`" ] && log "iozone missing" && return
     FREE=`df -P -h $DIR | tail -n 1 | awk '{ print $3 }'`
     case $FREE in
     *T|*G) FREE=1G;;
@@ -142,6 +143,7 @@ test_6() {
     do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
     sync
     sleep 1					# ensure we have a fresh statfs
+    sync
     after_dd=`kbytesfree`
     log "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1

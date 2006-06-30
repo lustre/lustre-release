@@ -26,9 +26,9 @@ struct find_param {
         int asign;
         int csign;
         int msign;
-        int zeroend;
 
-        int     recursive;
+        int zeroend:1, recursive:1, got_uuids:1, obds_printed:1;
+
         int     verbose;
         int     quiet;
 
@@ -40,7 +40,6 @@ struct find_param {
 
         /* In-precess parameters. */
         unsigned int depth;
-        int     got_uuids;
         dev_t   st_dev;
 };
 

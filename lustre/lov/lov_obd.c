@@ -2237,15 +2237,18 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                                 RETURN(err);
                         } else if (err) {
                                 if (lov->tgts[i].ltd_active) {
-                                        CERROR("error: iocontrol OSC %s on OST "
+                                        CDEBUG(err == -ENOTTY ?
+                                               D_IOCTL : D_WARNING,
+                                               "iocontrol OSC %s on OST "
                                                "idx %d cmd %x: err = %d\n",
                                                obd_uuid2str(&lov->tgts[i].ltd_uuid),
                                                i, cmd, err);
                                         if (!rc)
                                                 rc = err;
                                 }
-                        } else
+                        } else {
                                 set = 1;
+                        }
                 }
                 if (!set && !rc)
                         rc = -EIO;
@@ -2519,7 +2522,6 @@ int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
              i++, loi++, lov_lockhp++) {
                 struct ldlm_lock *lock;
                 struct obd_device *obd;
-                unsigned long irqflags;
 
                 lock = ldlm_handle2lock(lov_lockhp);
                 if (lock == NULL) {
@@ -2537,9 +2539,9 @@ int lov_complete_many(struct obd_export *exp, struct lov_stripe_md *lsm,
                 if (obd != NULL)
                         imp = obd->u.cli.cl_import;
                 if (imp != NULL) {
-                        spin_lock_irqsave(&imp->imp_lock, irqflags);
+                        spin_lock(&imp->imp_lock);
                         queues[i].generation = imp->imp_generation;
-                        spin_unlock_irqrestore(&imp->imp_lock, irqflags);
+                        spin_unlock(&imp->imp_lock);
                 }
         }
 

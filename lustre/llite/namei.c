@@ -766,15 +766,18 @@ static void ll_update_times(struct ptlrpc_request *request, int offset,
                                                sizeof(*body));
         LASSERT(body);
 
-        if (body->valid & OBD_MD_FLMTIME &&
-            body->mtime > LTIME_S(inode->i_mtime)) {
-                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to "LPU64"\n",
-                       inode->i_ino, LTIME_S(inode->i_mtime), body->mtime);
-                LTIME_S(inode->i_mtime) = body->mtime;
-        }
         if (body->valid & OBD_MD_FLCTIME &&
-            body->ctime > LTIME_S(inode->i_ctime))
+            body->ctime > LTIME_S(inode->i_ctime)) {
                 LTIME_S(inode->i_ctime) = body->ctime;
+
+                /* mtime is always updated with ctime, but can be set in past */
+                if (body->valid & OBD_MD_FLMTIME) {
+                        CDEBUG(D_INODE, "setting ino %lu mtime from %lu "
+                               "to "LPU64"\n", inode->i_ino, 
+                               LTIME_S(inode->i_mtime), body->mtime);
+                        LTIME_S(inode->i_mtime) = body->mtime;
+                }
+        }
 }
 
 static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,

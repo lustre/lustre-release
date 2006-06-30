@@ -903,8 +903,10 @@ int mds_open(struct mds_update_record *rec, int offset,
         /* Step 0: If we are passed a fid, then we assume the client already
          * opened this file and is only replaying the RPC, so we open the
          * inode by fid (at some large expense in security). */
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY &&
-            !(rec->ur_flags & MDS_OPEN_JOIN_FILE)) {
+        /*XXX liblustre use mds_open_by_fid to implement LL_IOC_LOV_SETSTRIPE */
+        if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY || 
+            (req->rq_export->exp_libclient && rec->ur_flags & MDS_OPEN_HAS_EA))
+            && !(rec->ur_flags & MDS_OPEN_JOIN_FILE)) {
                 if (rec->ur_fid2->id == 0) {
                         struct ldlm_lock *lock = ldlm_handle2lock(child_lockh);
                         if (lock) {

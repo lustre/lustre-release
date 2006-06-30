@@ -316,11 +316,10 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
         struct list_head          *tmp;
         struct ptlrpc_reply_state *oldrep;
         struct ptlrpc_service     *svc;
-        unsigned long              flags;
         int                        i;
 
         /* CAVEAT EMPTOR: spinlock order */
-        spin_lock_irqsave (&exp->exp_lock, flags);
+        spin_lock(&exp->exp_lock);
         list_for_each (tmp, &exp->exp_outstanding_replies) {
                 oldrep = list_entry(tmp, struct ptlrpc_reply_state,rs_exp_list);
 
@@ -358,7 +357,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
                 spin_unlock (&svc->srv_lock);
                 break;
         }
-        spin_unlock_irqrestore (&exp->exp_lock, flags);
+        spin_unlock(&exp->exp_lock);
 }
 
 void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd)
@@ -444,10 +443,9 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
         }
 
         /* then fill oa */
+        obdo_from_inode(oinfo.oi_oa, inode, OBD_MD_FLUID | OBD_MD_FLGID);
+        oinfo.oi_oa->o_valid |= OBD_MD_FLID;
         oinfo.oi_oa->o_id = oinfo.oi_md->lsm_object_id;
-        oinfo.oi_oa->o_uid = inode->i_uid;
-        oinfo.oi_oa->o_gid = inode->i_gid;
-        oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID;
         if (logcookies) {
                 oinfo.oi_oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies = logcookies;

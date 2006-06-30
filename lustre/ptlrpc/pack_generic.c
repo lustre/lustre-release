@@ -279,20 +279,16 @@ spinlock_t ptlrpc_rs_debug_lock;
 
 #define PTLRPC_RS_DEBUG_LRU_ADD(rs)                                     \
 do {                                                                    \
-        unsigned long __flags;                                          \
-                                                                        \
-        spin_lock_irqsave(&ptlrpc_rs_debug_lock, __flags);              \
+        spin_lock(&ptlrpc_rs_debug_lock);                               \
         list_add_tail(&(rs)->rs_debug_list, &ptlrpc_rs_debug_lru);      \
-        spin_unlock_irqrestore(&ptlrpc_rs_debug_lock, __flags);         \
+        spin_unlock(&ptlrpc_rs_debug_lock);                             \
 } while (0)
 
-#define PTLRPC_RS_DEBUG_LRU_DEL(rs)                                     \
-do {                                                                    \
-        unsigned long __flags;                                          \
-                                                                        \
-        spin_lock_irqsave(&ptlrpc_rs_debug_lock, __flags);              \
-        list_del(&(rs)->rs_debug_list);                                 \
-        spin_unlock_irqrestore(&ptlrpc_rs_debug_lock, __flags);         \
+#define PTLRPC_RS_DEBUG_LRU_DEL(rs)             \
+do {                                            \
+        spin_lock(&ptlrpc_rs_debug_lock);       \
+        list_del(&(rs)->rs_debug_list);         \
+        spin_unlock(&ptlrpc_rs_debug_lock);     \
 } while (0)
 #else
 # define PTLRPC_RS_DEBUG_LRU_ADD(rs) do {} while(0)
@@ -302,15 +298,14 @@ do {                                                                    \
 static struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc,
                                                       int size)
 {
-        unsigned long flags;
         struct ptlrpc_reply_state *rs = NULL;
 
-        spin_lock_irqsave(&svc->srv_lock, flags);
+        spin_lock(&svc->srv_lock);
         /* See if we have anything in a pool, and wait if nothing */
         while (list_empty(&svc->srv_free_rs_list)) {
                 struct l_wait_info lwi;
                 int rc;
-                spin_unlock_irqrestore(&svc->srv_lock, flags);
+                spin_unlock(&svc->srv_lock);
                 /* If we cannot get anything for some long time, we better
                    bail out instead of waiting infinitely */
                 lwi = LWI_TIMEOUT(cfs_time_seconds(10), NULL, NULL);
@@ -318,13 +313,13 @@ static struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc
                                   !list_empty(&svc->srv_free_rs_list), &lwi);
                 if (rc)
                         goto out;
-                spin_lock_irqsave(&svc->srv_lock, flags);
+                spin_lock(&svc->srv_lock);
         }
         
         rs = list_entry(svc->srv_free_rs_list.next, struct ptlrpc_reply_state,
                         rs_list);
         list_del(&rs->rs_list);
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        spin_unlock(&svc->srv_lock);
         LASSERT(rs);
         LASSERTF(svc->srv_max_reply_size > size, "Want %d, prealloc %d\n", size,
                  svc->srv_max_reply_size);
@@ -633,13 +628,12 @@ void lustre_free_reply_state(struct ptlrpc_reply_state *rs)
         LASSERT (list_empty(&rs->rs_obd_list));
 
         if (unlikely(rs->rs_prealloc)) {
-                unsigned long flags;
                 struct ptlrpc_service *svc = rs->rs_service;
 
-                spin_lock_irqsave(&svc->srv_lock, flags);
+                spin_lock(&svc->srv_lock);
                 list_add(&rs->rs_list,
                          &svc->srv_free_rs_list);
-                spin_unlock_irqrestore(&svc->srv_lock, flags);
+                spin_unlock(&svc->srv_lock);
                 cfs_waitq_signal(&svc->srv_free_rs_waitq);
         } else {
                 OBD_FREE(rs, rs->rs_size);

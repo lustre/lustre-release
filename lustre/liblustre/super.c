@@ -148,15 +148,16 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
 
         if (body->valid & OBD_MD_FLID)
                 st->st_ino = body->ino;
-        if (body->valid & OBD_MD_FLMTIME &&
-            body->mtime > LTIME_S(st->st_mtime))
-                LTIME_S(st->st_mtime) = body->mtime;
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(st->st_atime))
                 LTIME_S(st->st_atime) = body->atime;
         if (body->valid & OBD_MD_FLCTIME &&
-            body->ctime > LTIME_S(st->st_ctime))
+            body->ctime > LTIME_S(st->st_ctime)) {
                 LTIME_S(st->st_ctime) = body->ctime;
+                /* mtime is always changed with ctime, but can be set in past */
+                if (body->valid & OBD_MD_FLMTIME)
+                        LTIME_S(st->st_mtime) = body->mtime;
+        }
         if (body->valid & OBD_MD_FLMODE)
                 st->st_mode = (st->st_mode & S_IFMT)|(body->mode & ~S_IFMT);
         if (body->valid & OBD_MD_FLTYPE)
@@ -664,6 +665,16 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         if (!(ia_valid & ATTR_MTIME_SET) && (attr->ia_valid & ATTR_MTIME)) {
                 attr->ia_mtime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
+        }
+        if ((attr->ia_valid & ATTR_CTIME) && !(attr->ia_valid & ATTR_MTIME)) {
+                /* To avoid stale mtime on mds, obtain it from ost and send 
+                   to mds. */
+                rc = llu_glimpse_size(inode);
+                if (rc) 
+                        RETURN(rc);
+                
+                attr->ia_valid |= ATTR_MTIME_SET | ATTR_MTIME;
+                attr->ia_mtime = inode->i_stbuf.st_mtime;
         }
 
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
@@ -1589,6 +1600,170 @@ static int llu_put_grouplock(struct inode *inode, unsigned long arg)
         RETURN(0);
 }
 
+static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
+{
+        struct llu_sb_info *sbi = llu_i2sbi(ino); 
+        struct ptlrpc_request *request = NULL;
+        struct mdc_op_data op_data;
+        struct iattr attr = { 0 };
+        struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
+        int rc = 0;
+
+        llu_prepare_mdc_op_data(&op_data, ino, NULL, NULL, 0, 0);
+
+        LASSERT(sizeof(lum) == sizeof(*lump));
+        LASSERT(sizeof(lum.lmm_objects[0]) ==
+                sizeof(lump->lmm_objects[0]));
+        rc = copy_from_user(&lum, lump, sizeof(lum));
+        if (rc)
+                return(-EFAULT);
+
+        if (lum.lmm_magic != LOV_USER_MAGIC)
+                RETURN(-EINVAL);
+
+        if (lum.lmm_magic != cpu_to_le32(LOV_USER_MAGIC))
+                lustre_swab_lov_user_md(&lum);
+
+        /* swabbing is done in lov_setstripe() on server side */
+        rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
+                         &attr, &lum, sizeof(lum), NULL, 0, &request);
+        if (rc) {
+                ptlrpc_req_finished(request);
+                if (rc != -EPERM && rc != -EACCES)
+                        CERROR("mdc_setattr fails: rc = %d\n", rc);
+                return rc;
+        }
+        ptlrpc_req_finished(request);
+
+        return rc;
+}
+
+static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
+                                     struct lov_user_md *lum, int lum_size)
+{
+        struct llu_sb_info *sbi = llu_i2sbi(ino); 
+        struct obd_export *exp = llu_i2obdexp(ino);
+        struct llu_inode_info *lli = llu_i2info(ino);
+        struct llu_inode_info *lli2 = NULL;
+        struct lov_stripe_md *lsm;
+        struct lookup_intent oit = {.it_op = IT_OPEN, .it_flags = flags};
+        struct ptlrpc_request *req = NULL;
+        struct lustre_md md;
+        struct mdc_op_data data;
+        struct lustre_handle lockh;
+        struct ldlm_lock *lock = NULL;
+        int rc = 0;
+        ENTRY;
+
+        lsm = lli->lli_smd;
+        if (lsm) {
+                CDEBUG(D_IOCTL, "stripe already exists for ino %llu\n",
+                       lli->lli_fid.id);
+                return -EEXIST;
+        }
+
+        OBD_ALLOC(lli2, sizeof(struct llu_inode_info));
+        if (!lli2)
+                return -ENOMEM;
+        
+        memcpy(lli2, lli, sizeof(struct llu_inode_info));
+        lli2->lli_open_count = 0;
+        lli2->lli_it = NULL;
+        lli2->lli_file_data = NULL;
+        lli2->lli_smd = NULL;
+        lli2->lli_symlink_name = NULL;
+        ino->i_private = lli2;
+
+        llu_prepare_mdc_op_data(&data, NULL, ino, NULL, 0, O_RDWR);
+
+        rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, &oit, LCK_CR, &data,
+                         &lockh, lum, lum_size, ldlm_completion_ast,
+                         llu_mdc_blocking_ast, NULL, LDLM_FL_INTENT_ONLY);
+        if (rc)
+                GOTO(out, rc);
+        
+        req = oit.d.lustre.it_data;
+        rc = it_open_error(DISP_IT_EXECD, &oit);
+        if (rc) {
+                req->rq_replay = 0;
+                GOTO(out, rc);
+        }
+        
+        rc = it_open_error(DISP_OPEN_OPEN, &oit);
+        if (rc) {
+                req->rq_replay = 0;
+                GOTO(out, rc);
+        }
+        
+        rc = mdc_req2lustre_md(req, 1, exp, &md);
+        if (rc)
+                GOTO(out, rc);
+        
+        llu_update_inode(ino, md.body, md.lsm);
+        lli->lli_smd = lli2->lli_smd;
+        lli2->lli_smd = NULL;
+
+        llu_local_open(lli2, &oit);
+       
+        /* release intent */
+        lock = __ldlm_handle2lock(&lockh, 0);
+        if (lock) {
+                lock->l_flags |= LDLM_FL_LOCAL_ONLY;
+                ldlm_lock_decref_internal(lock, LCK_CR);
+                LDLM_LOCK_PUT(lock);
+        }
+        ptlrpc_req_finished(req);
+        req = NULL;
+        
+        rc = llu_file_release(ino);
+ out:
+        ino->i_private = lli;
+        if (lli2)
+                OBD_FREE(lli2, sizeof(struct llu_inode_info));
+        if (req != NULL)
+                ptlrpc_req_finished(req);
+        RETURN(rc);
+}
+
+static int llu_lov_file_setstripe(struct inode *ino, unsigned long arg)
+{
+        struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
+        int rc;
+        int flags = FMODE_WRITE;
+        ENTRY;
+
+        LASSERT(sizeof(lum) == sizeof(*lump));
+        LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lump->lmm_objects[0]));
+        rc = copy_from_user(&lum, lump, sizeof(lum));
+        if (rc)
+                RETURN(-EFAULT);
+
+        rc = llu_lov_setstripe_ea_info(ino, flags, &lum, sizeof(lum));
+        RETURN(rc);
+}
+
+static int llu_lov_setstripe(struct inode *ino, unsigned long arg)
+{
+        struct intnl_stat *st = llu_i2stat(ino);
+        if (S_ISREG(st->st_mode))
+                return llu_lov_file_setstripe(ino, arg);
+        if (S_ISDIR(st->st_mode))
+                return llu_lov_dir_setstripe(ino, arg);
+        
+        return -EINVAL; 
+}
+
+static int llu_lov_getstripe(struct inode *ino, unsigned long arg)
+{
+        struct lov_stripe_md *lsm = llu_i2info(ino)->lli_smd;
+
+        if (!lsm)
+                RETURN(-ENODATA);
+
+        return obd_iocontrol(LL_IOC_LOV_GETSTRIPE, llu_i2obdexp(ino), 0, lsm,
+                            (void *)arg);
+}
+
 static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
                          va_list ap)
 {
@@ -1605,6 +1780,14 @@ static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
         case LL_IOC_GROUP_UNLOCK:
                 arg = va_arg(ap, unsigned long);
                 rc = llu_put_grouplock(ino, arg);
+                break;
+        case LL_IOC_LOV_SETSTRIPE:
+                arg = va_arg(ap, unsigned long);
+                rc = llu_lov_setstripe(ino, arg);
+                break;
+        case LL_IOC_LOV_GETSTRIPE:
+                arg = va_arg(ap, unsigned long);
+                rc = llu_lov_getstripe(ino, arg);
                 break;
         default:
                 CERROR("did not support ioctl cmd %lx\n", request);
