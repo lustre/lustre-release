@@ -721,7 +721,7 @@ finish:
 
                 if (rc == -EPROTO) {
                         struct obd_connect_data *ocd;
-                        ocd = lustre_swab_repbuf(request, 0,
+                        ocd = lustre_swab_repbuf(request, REPLY_REC_OFF,
                                                  sizeof *ocd,
                                                  lustre_swab_connect);
                         if (ocd &&
