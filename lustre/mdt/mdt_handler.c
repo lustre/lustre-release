@@ -184,7 +184,6 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
         struct lu_attr *la = &info->mti_attr;
         int rc;
         ENTRY;
-        RETURN(-EROFS);
 
         rc = mo_attr_get(info->mti_ctxt, next, la);
         if (rc){
