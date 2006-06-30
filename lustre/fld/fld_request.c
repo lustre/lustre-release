@@ -52,98 +52,6 @@
 #include <lustre_fld.h>
 #include "fld_internal.h"
 
-#ifdef __KERNEL__
-static __u32
-fld_cache_hash(__u64 seq)
-{
-        return (__u32)seq;
-}
-
-static int
-fld_cache_insert(struct fld_cache_info *fld_cache,
-                 __u64 seq, __u64 mds)
-{
-        struct fld_cache_entry *flde, *fldt;
-        struct hlist_head *bucket;
-        struct hlist_node *scan;
-        int rc = 0;
-        ENTRY;
-
-        OBD_ALLOC_PTR(flde);
-        if (!flde)
-                RETURN(-ENOMEM);
-
-        bucket = fld_cache->fci_hash + (fld_cache_hash(seq) &
-                                        fld_cache->fci_hash_mask);
-
-        spin_lock(&fld_cache->fci_lock);
-        hlist_for_each_entry(fldt, scan, bucket, fce_list) {
-                if (fldt->fce_seq == seq)
-                        GOTO(exit_unlock, rc = -EEXIST);
-        }
-
-        INIT_HLIST_NODE(&flde->fce_list);
-        flde->fce_mds = mds;
-        flde->fce_seq = seq;
-        
-        hlist_add_head(&flde->fce_list, bucket);
-
-        EXIT;
-exit_unlock:
-        spin_unlock(&fld_cache->fci_lock);
-        if (rc != 0)
-                OBD_FREE_PTR(flde);
-        return rc;
-}
-
-static void
-fld_cache_delete(struct fld_cache_info *fld_cache, __u64 seq)
-{
-        struct fld_cache_entry *flde;
-        struct hlist_head *bucket;
-        struct hlist_node *scan;
-        ENTRY;
-
-        bucket = fld_cache->fci_hash + (fld_cache_hash(seq) &
-                                        fld_cache->fci_hash_mask);
-
-        spin_lock(&fld_cache->fci_lock);
-        hlist_for_each_entry(flde, scan, bucket, fce_list) {
-                if (flde->fce_seq == seq) {
-                        hlist_del_init(&flde->fce_list);
-                        GOTO(out_unlock, 0);
-                }
-        }
-
-        EXIT;
-out_unlock:
-        spin_unlock(&fld_cache->fci_lock);
-        return;
-}
-
-static struct fld_cache_entry *
-fld_cache_lookup(struct fld_cache_info *fld_cache, __u64 seq)
-{
-        struct fld_cache_entry *flde;
-        struct hlist_head *bucket;
-        struct hlist_node *scan;
-        ENTRY;
-
-        bucket = fld_cache->fci_hash + (fld_cache_hash(seq) &
-                                        fld_cache->fci_hash_mask);
-
-        spin_lock(&fld_cache->fci_lock);
-        hlist_for_each_entry(flde, scan, bucket, fce_list) {
-                if (flde->fce_seq == seq) {
-                        spin_unlock(&fld_cache->fci_lock);
-                        RETURN(flde);
-                }
-        }
-        spin_unlock(&fld_cache->fci_lock);
-        RETURN(NULL);
-}
-#endif
-
 static int
 fld_rrb_hash(struct lu_client_fld *fld, __u64 seq)
 {
@@ -428,8 +336,13 @@ fld_client_create(struct lu_client_fld *fld,
         rc = fld_client_rpc(fld_exp, &md_fld, FLD_CREATE);
         
 #ifdef __KERNEL__
-        if (rc  == 0)
-                rc = fld_cache_insert(fld_cache, seq, mds);
+        if (rc  == 0) {
+                /* do not return result of calling fld_cache_insert()
+                 * here. First of all because it may return -EEXISTS. Another
+                 * reason is that, we do not want to stop proceeding because of
+                 * cache errors. --umka */
+                fld_cache_insert(fld_cache, seq, mds);
+        }
 #endif
         
         RETURN(rc);
@@ -508,7 +421,9 @@ fld_client_lookup(struct lu_client_fld *fld,
                 RETURN(rc);
 
 #ifdef __KERNEL__
-        rc = fld_cache_insert(fld_cache, seq, *mds);
+        /* do not return error here as well. See previous comment in same
+         * situation in function fld_client_create(). --umka */
+        fld_cache_insert(fld_cache, seq, *mds);
 #endif
         
         RETURN(rc);

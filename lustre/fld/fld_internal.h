@@ -39,6 +39,7 @@ struct fld_cache_entry {
 struct fld_cache_info {
         struct hlist_head *fci_hash;
         spinlock_t         fci_lock;
+        int                fci_size;
         int                fci_hash_mask;
 };
 
@@ -48,11 +49,7 @@ enum fld_op {
         FLD_LOOKUP = 2
 };
 
-enum {
-        FLD_HTABLE_BITS = 8,
-        FLD_HTABLE_SIZE = (1 << FLD_HTABLE_BITS),
-        FLD_HTABLE_MASK = FLD_HTABLE_SIZE - 1
-};
+#define FLD_HTABLE_SIZE 256
 
 extern struct lu_fld_hash fld_hash[3];
 extern struct fld_cache_info *fld_cache;
@@ -60,7 +57,13 @@ extern struct fld_cache_info *fld_cache;
 #ifdef __KERNEL__
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
-int fld_index_insert(struct lu_server_fld *fld,
+int fld_index_init(struct lu_server_fld *fld,
+                   const struct lu_context *ctx);
+
+void fld_index_fini(struct lu_server_fld *fld,
+                    const struct lu_context *ctx);
+
+int fld_index_create(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
                      fidseq_t seq, mdsno_t mds);
 
@@ -72,11 +75,24 @@ int fld_index_lookup(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
                      fidseq_t seq, mdsno_t *mds);
 
-int fld_index_init(struct lu_server_fld *fld,
-                   const struct lu_context *ctx);
+struct fld_cache_info *fld_cache_init(int size);
 
-void fld_index_fini(struct lu_server_fld *fld,
-                    const struct lu_context *ctx);
+void fld_cache_fini(struct fld_cache_info *cache);
+
+int fld_cache_insert(struct fld_cache_info *cache,
+                     __u64 seq, __u64 mds);
+
+void fld_cache_delete(struct fld_cache_info *cache,
+                      __u64 seq);
+
+struct fld_cache_entry *
+fld_cache_lookup(struct fld_cache_info *cache,
+                 __u64 seq);
+
+static inline __u32 fld_cache_hash(__u64 seq)
+{
+        return (__u32)seq;
+}
 
 #endif
 

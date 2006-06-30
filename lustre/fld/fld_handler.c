@@ -58,42 +58,27 @@ struct fld_cache_info *fld_cache = NULL;
 
 static int fld_init(void)
 {
-        int i;
+        int rc = 0;
         ENTRY;
-
-        OBD_ALLOC_PTR(fld_cache);
-        if (fld_cache == NULL)
-                RETURN(-ENOMEM);
-
-        spin_lock_init(&fld_cache->fci_lock);
-
-        /* init fld cache info */
-        fld_cache->fci_hash_mask = FLD_HTABLE_MASK;
-        OBD_ALLOC(fld_cache->fci_hash, FLD_HTABLE_SIZE *
-                  sizeof(*fld_cache->fci_hash));
-        if (fld_cache->fci_hash == NULL) {
-                OBD_FREE_PTR(fld_cache);
-                RETURN(-ENOMEM);
-        }
         
-        for (i = 0; i < FLD_HTABLE_SIZE; i++)
-                INIT_HLIST_HEAD(&fld_cache->fci_hash[i]);
+        fld_cache = fld_cache_init(FLD_HTABLE_SIZE);
+        if (IS_ERR(fld_cache))
+                rc = PTR_ERR(fld_cache);
 
-        CDEBUG(D_INFO|D_WARNING, "Client FLD, cache size %d\n",
-               FLD_HTABLE_SIZE);
+        if (rc != 0)
+                fld_cache = NULL;
         
-        RETURN(0);
+        RETURN(rc);
 }
 
-static int fld_fini(void)
+static void fld_fini(void)
 {
         ENTRY;
         if (fld_cache != NULL) {
-                OBD_FREE(fld_cache->fci_hash, FLD_HTABLE_SIZE *
-                         sizeof(*fld_cache->fci_hash));
-                OBD_FREE_PTR(fld_cache);
+                fld_cache_fini(fld_cache);
+                fld_cache = NULL;
         }
-        RETURN(0);
+        EXIT;
 }
 
 static int __init fld_mod_init(void)
@@ -108,6 +93,58 @@ static void __exit fld_mod_exit(void)
         return;
 }
 
+/* insert index entry and update cache */
+static int
+fld_server_create(struct lu_server_fld *fld,
+                  const struct lu_context *ctx,
+                  __u64 seq, mdsno_t mds)
+{
+        int rc;
+        ENTRY;
+        
+        rc = fld_index_create(fld, ctx, seq, mds);
+        if (rc == 0) {
+                /* do not return result of calling fld_cache_insert()
+                 * here. First of all because it may return -EEXISTS. Another
+                 * reason is that, we do not want to stop proceeding because of
+                 * cache errors. --umka */
+                fld_cache_insert(fld_cache, seq, mds);
+        }
+        RETURN(rc);
+}
+
+/* delete index entry and update cache */
+static int
+fld_server_delete(struct lu_server_fld *fld,
+                  const struct lu_context *ctx,
+                  __u64 seq)
+{
+        ENTRY;
+        fld_cache_delete(fld_cache, seq);
+        RETURN(fld_index_delete(fld, ctx, seq));
+}
+
+/* lookup in cache first and then issue index lookup */
+static int
+fld_server_lookup(struct lu_server_fld *fld,
+                  const struct lu_context *ctx,
+                  __u64 seq, mdsno_t *mds)
+{
+        struct fld_cache_entry *flde;
+        int rc;
+        ENTRY;
+        
+        /* lookup it in the cache first */
+        flde = fld_cache_lookup(fld_cache, seq);
+        if (flde != NULL) {
+                *mds = flde->fce_mds;
+                RETURN(0);
+        }
+
+        rc = fld_index_lookup(fld, ctx, seq, mds);
+        RETURN(rc);
+}
+
 static int
 fld_server_handle(struct lu_server_fld *fld,
                   const struct lu_context *ctx,
@@ -118,15 +155,15 @@ fld_server_handle(struct lu_server_fld *fld,
 
         switch (opc) {
         case FLD_CREATE:
-                rc = fld_index_insert(fld, ctx,
-                                      mf->mf_seq, mf->mf_mds);
+                rc = fld_server_create(fld, ctx,
+                                       mf->mf_seq, mf->mf_mds);
                 break;
         case FLD_DELETE:
-                rc = fld_index_delete(fld, ctx, mf->mf_seq);
+                rc = fld_server_delete(fld, ctx, mf->mf_seq);
                 break;
         case FLD_LOOKUP:
-                rc = fld_index_lookup(fld, ctx,
-                                      mf->mf_seq, &mf->mf_mds);
+                rc = fld_server_lookup(fld, ctx,
+                                       mf->mf_seq, &mf->mf_mds);
                 break;
         default:
                 rc = -EINVAL;

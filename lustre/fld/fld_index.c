@@ -127,7 +127,7 @@ static struct dt_rec *fld_rec(const struct lu_context *ctx,
         RETURN((void *)&info->fti_rec);
 }
 
-int fld_index_insert(struct lu_server_fld *fld,
+int fld_index_create(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
                      fidseq_t seq, mdsno_t mds)
 {
