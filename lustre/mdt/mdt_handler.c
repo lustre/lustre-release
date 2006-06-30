@@ -1482,7 +1482,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         else
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
         ldlm_rep->lock_policy_res2 = rc;
-        intent_set_disposition(rep, DISP_IT_EXECD);
+        intent_set_disposition(ldlm_rep, DISP_IT_EXECD);
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
 
