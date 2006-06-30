@@ -110,6 +110,9 @@ static int mdt_getstatus(struct mdt_thread_info *info)
 
         ENTRY;
 
+        /* Can I remove the OBD_FAIL_CHECK here? because the packing result
+         * has already been checked.
+         */
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
                 result = -ENOMEM;
         else {
@@ -175,6 +178,7 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
 #ifdef MDT_CODE
         const struct mdt_body *body = info->mti_body;
         struct req_capsule *pill = &info->mti_pill;
+        struct ptlrpc_request *req = mdt_info_req(info);
 #endif
         struct md_object *next = mdt_object_child(info->mti_object);
         struct lu_attr *la = &info->mti_attr;
@@ -205,16 +209,19 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
                         CERROR("MD size %d larger than maximum possible %u\n",
                                rc, MAX_MD_SIZE);
                 } else {
-                        req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, rc);
+                        req_capsule_set_size(pill, &RMF_MDT_MD, 
+                                             RCL_SERVER, rc);
                 }
         } else if (S_ISLNK(la->la_mode) && (body->valid & OBD_MD_LINKNAME)) {
-                /* It also uese the mdt_md to hold symname */
+                /* XXX:It also uese the mdt_md to hold symname.
+                 * Are there any problem? will be swabbed? hope not.
+                 */
                 int len = min_t(int, la->la_size + 1, body->eadatasize);
                 req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, len);
         }
 
 #ifdef CONFIG_FS_POSIX_ACL
-        if ((mdt_info_req(info)->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
+        if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
             (body->valid & OBD_MD_FLACL)) {
 
                 rc = mo_xattr_get(info->mti_ctxt, next,
@@ -226,7 +233,8 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
                         }
                         req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, 0);
                 } else
-                        req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, rc);
+                        req_capsule_set_size(pill, &RMF_EADATA, 
+                                             RCL_SERVER, rc);
         }
 #endif
 #endif
@@ -253,6 +261,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info)
 #ifdef MDT_CODE
         void *buffer;
         int length;
+        struct ptlrpc_request *req = mdt_info_req(info);
 #endif
         ENTRY;
 
@@ -298,19 +307,19 @@ static int mdt_getattr_internal(struct mdt_thread_info *info)
                         repbody->valid |= OBD_MD_LINKNAME;
                         repbody->eadatasize = rc + 1;
                         ((char*)buffer)[rc] = 0;        /* NULL terminate */
-                        CDEBUG(D_INODE, "read symlink dest %s\n", (char*)buffer);
+                        CDEBUG(D_INODE, "symlink dest %s\n", (char*)buffer);
                 }
         }
 
         if (reqbody->valid & OBD_MD_FLMODEASIZE) {
-                repbody->max_cookiesize = MAX_MD_SIZE; /*FIXME*/
-                repbody->max_mdsize = MAX_MD_SIZE;
+                repbody->max_cookiesize = info->mti_mdt->mdt_max_cookiesize;
+                repbody->max_mdsize = info->mti_mdt->mdt_max_mdsize;
                 repbody->valid |= OBD_MD_FLMODEASIZE;
         }
 
 
 #ifdef CONFIG_FS_POSIX_ACL
-        if ((mdt_info_req(info)->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
+        if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
             (reqbody->valid & OBD_MD_FLACL)) {
                 buffer = req_capsule_server_get(&info->mti_pill,
                                                 &RMF_EADATA);
@@ -394,37 +403,22 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         if (result != 0)
                 GOTO(out_parent, result);
 
-        /*step 3: find the child object by fid */
-        child = mdt_object_find(info->mti_ctxt, info->mti_mdt, &child_fid);
+        /*step 3: find the child object by fid & lock it*/
+        lhc->mlh_mode = LCK_CR;
+        child = mdt_object_find_lock(info->mti_ctxt, info->mti_mdt, 
+                                     &child_fid, lhc, child_bits);
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
-
-        /*step 4: lock child: this lock is returned back to caller
-         *                    if successfully get attr.
-         */
-        lhc->mlh_mode = LCK_CR;
-        result = mdt_object_lock(ns, child, lhc, child_bits);
-        if (result != 0)
-                GOTO(out_child, result);
 
         /* finally, we can get attr for child. */
         result = mdt_getattr_pack_msg(info);
         if (result == 0) {
-                struct ldlm_reply *ldlm_rep;
-                ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
-                LASSERT(ldlm_rep);
-                intent_set_disposition(ldlm_rep, DISP_IT_EXECD);
                 result = mdt_getattr_internal(info);
-                if (result)
-                        intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
-                else
-                        intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
         }
         if (result != 0)
                 mdt_object_unlock(ns, child, lhc);
         EXIT;
 
-out_child:
         mdt_object_put(info->mti_ctxt, child);
 out_parent:
         mdt_object_unlock(ns, parent, lhp);
@@ -1480,9 +1474,12 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         }
 
         rc = mdt_getattr_name_lock(info, &lhc, child_bits);
+        ldlm_rep = req_capsule_server_get(&info->mti_pill, 
+                                          &RMF_DLM_REP);
         if (rc)
-                RETURN(rc);
-        ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
+        else
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
         ldlm_rep->lock_policy_res2 = rc;
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
@@ -1503,7 +1500,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         *lockp = new_lock;
 
-        /* FIXME:This only happen when I can handle RESENT */
+        /* FIXME:This only happens when MDT can handle RESENT */
         if (new_lock->l_export == req->rq_export) {
                 /* Already gave this to the client, which means that we
                  * reconstructed a reply. */
@@ -2438,7 +2435,6 @@ static struct lu_device *mdt_device_alloc(const struct lu_context *ctx,
                         OBD_FREE_PTR(m);
                         l = ERR_PTR(result);
                 }
-
         } else
                 l = ERR_PTR(-ENOMEM);
         return l;

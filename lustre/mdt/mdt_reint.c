@@ -178,7 +178,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         /* MDS_CHECK_RESENT */
 
         if (attr->la_valid & ATTR_FROM_OPEN) {
-                mo = mdt_object_find(info->mti_ctxt, info->mti_mdt, rr->rr_fid1);
+                mo = mdt_object_find(info->mti_ctxt, info->mti_mdt, 
+                                     rr->rr_fid1);
                 if (IS_ERR(mo))
                         RETURN(rc = PTR_ERR(mo));
         } else {
@@ -343,7 +344,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         if (rc != 0)
                 GOTO(out_unlock_child, rc);
 
-        if ((S_ISREG(attr->la_mode) && attr->la_nlink == 1)) {
+        if (S_ISREG(attr->la_mode) && attr->la_nlink == 1) {
                 /* && if opencount == 0*/
                 /* see mds_reint */
                 void * lmm = req_capsule_server_get(&info->mti_pill,
