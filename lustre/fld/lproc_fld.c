@@ -53,17 +53,17 @@ fld_proc_read_targets(char *page, char **start, off_t off,
                       int count, int *eof, void *data)
 {
         struct lu_client_fld *fld = (struct lu_client_fld *)data;
-        struct obd_export *fld_exp;
+        struct fld_target *target;
 	int total = 0, rc;
 	ENTRY;
 
         LASSERT(fld != NULL);
 
         spin_lock(&fld->fld_lock);
-        list_for_each_entry(fld_exp,
-                            &fld->fld_exports, exp_fld_chain)
+        list_for_each_entry(target,
+                            &fld->fld_targets, fldt_chain)
         {
-                struct client_obd *cli = &fld_exp->exp_obd->u.cli;
+                struct client_obd *cli = &target->fldt_exp->exp_obd->u.cli;
                 
                 rc = snprintf(page, count, "%s\n",
                               cli->cl_target_uuid.uuid);

@@ -39,12 +39,16 @@
 static int cmm_fld_lookup(struct cmm_device *cm,
                           const struct lu_fid *fid, mdsno_t *mds)
 {
+        struct lu_site *ls;
         int rc = 0;
         ENTRY;
 
         LASSERT(fid_is_sane(fid));
         
-        rc = fld_client_lookup(&cm->cmm_fld, fid_seq(fid), mds);
+        ls = cm->cmm_md_dev.md_lu_dev.ld_site;
+        
+        rc = fld_client_lookup(ls->ls_client_fld,
+                               fid_seq(fid), mds);
         if (rc) {
                 CERROR("can't find mds by seq "LPX64", rc %d\n",
                        fid_seq(fid), rc);

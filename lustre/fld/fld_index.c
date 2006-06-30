@@ -53,8 +53,8 @@
 
 static const struct dt_index_features fld_index_features = {
         .dif_flags       = DT_IND_UPDATE,
-        .dif_keysize_min = sizeof(fidseq_t),
-        .dif_keysize_max = sizeof(fidseq_t),
+        .dif_keysize_min = sizeof(seqno_t),
+        .dif_keysize_max = sizeof(seqno_t),
         .dif_recsize_min = sizeof(mdsno_t),
         .dif_recsize_max = sizeof(mdsno_t)
 };
@@ -102,7 +102,7 @@ static struct lu_context_key fld_thread_key = {
 };
 
 static struct dt_key *fld_key(const struct lu_context *ctx,
-                              const fidseq_t seq)
+                              const seqno_t seq)
 {
         struct fld_thread_info *info;
         ENTRY;
@@ -129,7 +129,7 @@ static struct dt_rec *fld_rec(const struct lu_context *ctx,
 
 int fld_index_create(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
-                     fidseq_t seq, mdsno_t mds)
+                     seqno_t seq, mdsno_t mds)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
@@ -156,7 +156,7 @@ int fld_index_create(struct lu_server_fld *fld,
 
 int fld_index_delete(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
-                     fidseq_t seq)
+                     seqno_t seq)
 {
         struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
@@ -180,7 +180,7 @@ int fld_index_delete(struct lu_server_fld *fld,
 
 int fld_index_lookup(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
-                     fidseq_t seq, mdsno_t *mds)
+                     seqno_t seq, mdsno_t *mds)
 {
         struct dt_object *dt_obj = fld->fld_obj;
         struct dt_rec    *rec = fld_rec(ctx, 0);

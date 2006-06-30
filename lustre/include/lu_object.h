@@ -487,7 +487,8 @@ struct lu_site {
         /*
          * Fid location database
          */
-        struct lu_server_fld *ls_fld;
+        struct lu_server_fld *ls_server_fld;
+        struct lu_client_fld *ls_client_fld;
 
         /*
          * Server Seq Manager

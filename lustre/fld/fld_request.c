@@ -53,7 +53,7 @@
 #include "fld_internal.h"
 
 static int
-fld_rrb_hash(struct lu_client_fld *fld, __u64 seq)
+fld_rrb_hash(struct lu_client_fld *fld, seqno_t seq)
 {
         if (fld->fld_count == 0)
                 return 0;
@@ -62,7 +62,7 @@ fld_rrb_hash(struct lu_client_fld *fld, __u64 seq)
 }
 
 static int
-fld_dht_hash(struct lu_client_fld *fld, __u64 seq)
+fld_dht_hash(struct lu_client_fld *fld, seqno_t seq)
 {
         /* XXX: here should DHT hash */
         return fld_rrb_hash(fld, seq);
@@ -82,11 +82,11 @@ struct lu_fld_hash fld_hash[3] = {
         }
 };
 
-static struct obd_export *
-fld_client_get_target(struct lu_client_fld *fld, __u64 seq)
+static struct fld_target *
+fld_client_get_target(struct lu_client_fld *fld, seqno_t seq)
 {
-        struct obd_export *fld_exp;
-        int count = 0, hash;
+        struct fld_target *target;
+        int hash;
         ENTRY;
 
         LASSERT(fld->fld_hash != NULL);
@@ -96,13 +96,12 @@ fld_client_get_target(struct lu_client_fld *fld, __u64 seq)
         spin_unlock(&fld->fld_lock);
 
         spin_lock(&fld->fld_lock);
-        list_for_each_entry(fld_exp,
-                            &fld->fld_exports, exp_fld_chain) {
-                if (count == hash) {
+        list_for_each_entry(target,
+                            &fld->fld_targets, fldt_chain) {
+                if (target->fldt_idx == hash) {
                         spin_unlock(&fld->fld_lock);
-                        RETURN(fld_exp);
+                        RETURN(target);
                 }
-                count++;
         }
         spin_unlock(&fld->fld_lock);
         RETURN(NULL);
@@ -115,7 +114,7 @@ fld_client_add_target(struct lu_client_fld *fld,
                       struct obd_export *exp)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
-        struct obd_export *fld_exp;
+        struct fld_target *target, *tmp;
         ENTRY;
 
         LASSERT(exp != NULL);
@@ -123,21 +122,27 @@ fld_client_add_target(struct lu_client_fld *fld,
         CDEBUG(D_INFO|D_WARNING, "FLD(cli): adding export %s\n",
 	       cli->cl_target_uuid.uuid);
         
+        OBD_ALLOC_PTR(target);
+        if (target == NULL)
+                RETURN(-ENOMEM);
+        
         spin_lock(&fld->fld_lock);
-        list_for_each_entry(fld_exp, &fld->fld_exports, exp_fld_chain) {
-                if (obd_uuid_equals(&fld_exp->exp_client_uuid,
+        list_for_each_entry(tmp, &fld->fld_targets, fldt_chain) {
+                if (obd_uuid_equals(&tmp->fldt_exp->exp_client_uuid,
                                     &exp->exp_client_uuid))
                 {
                         spin_unlock(&fld->fld_lock);
+                        OBD_FREE_PTR(target);
                         RETURN(-EEXIST);
                 }
         }
+
+        target->fldt_exp = class_export_get(exp);
+        target->fldt_idx = fld->fld_count;
         
-        fld_exp = class_export_get(exp);
-        list_add_tail(&fld_exp->exp_fld_chain,
-                      &fld->fld_exports);
+        list_add_tail(&target->fldt_chain,
+                      &fld->fld_targets);
         fld->fld_count++;
-        
         spin_unlock(&fld->fld_lock);
         
         RETURN(0);
@@ -147,22 +152,22 @@ EXPORT_SYMBOL(fld_client_add_target);
 /* remove export from FLD */
 int
 fld_client_del_target(struct lu_client_fld *fld,
-                          struct obd_export *exp)
+                      struct obd_export *exp)
 {
-        struct obd_export *fld_exp;
-        struct obd_export *tmp;
+        struct fld_target *target, *tmp;
         ENTRY;
 
         spin_lock(&fld->fld_lock);
-        list_for_each_entry_safe(fld_exp, tmp, &fld->fld_exports, exp_fld_chain) {
-                if (obd_uuid_equals(&fld_exp->exp_client_uuid,
+        list_for_each_entry_safe(target, tmp,
+                                 &fld->fld_targets, fldt_chain) {
+                if (obd_uuid_equals(&target->fldt_exp->exp_client_uuid,
                                     &exp->exp_client_uuid))
                 {
                         fld->fld_count--;
-                        list_del(&fld_exp->exp_fld_chain);
-                        class_export_get(fld_exp);
-
+                        list_del(&target->fldt_chain);
+                        class_export_put(target->fldt_exp);
                         spin_unlock(&fld->fld_lock);
+                        OBD_FREE_PTR(target);
                         RETURN(0);
                 }
         }
@@ -229,7 +234,7 @@ fld_client_init(struct lu_client_fld *fld,
                 RETURN(-EINVAL);
         }
         
-        INIT_LIST_HEAD(&fld->fld_exports);
+        INIT_LIST_HEAD(&fld->fld_targets);
         spin_lock_init(&fld->fld_lock);
         fld->fld_hash = &fld_hash[hash];
         fld->fld_count = 0;
@@ -237,6 +242,13 @@ fld_client_init(struct lu_client_fld *fld,
         snprintf(fld->fld_name, sizeof(fld->fld_name),
                  "%s-%s", LUSTRE_FLD_NAME, uuid);
         
+        fld->fld_cache = fld_cache_init(FLD_HTABLE_SIZE);
+        if (IS_ERR(fld->fld_cache)) {
+                rc = PTR_ERR(fld->fld_cache);
+                fld->fld_cache = NULL;
+                GOTO(out, rc);
+        }
+
 #ifdef LPROCFS
         rc = fld_client_proc_init(fld);
         if (rc)
@@ -257,8 +269,7 @@ EXPORT_SYMBOL(fld_client_init);
 void
 fld_client_fini(struct lu_client_fld *fld)
 {
-        struct obd_export *fld_exp;
-        struct obd_export *tmp;
+        struct fld_target *target, *tmp;
         ENTRY;
 
 #ifdef LPROCFS
@@ -266,13 +277,20 @@ fld_client_fini(struct lu_client_fld *fld)
 #endif
         
         spin_lock(&fld->fld_lock);
-        list_for_each_entry_safe(fld_exp, tmp,
-                                 &fld->fld_exports, exp_fld_chain) {
+        list_for_each_entry_safe(target, tmp,
+                                 &fld->fld_targets, fldt_chain) {
                 fld->fld_count--;
-                list_del(&fld_exp->exp_fld_chain);
-                class_export_get(fld_exp);
+                list_del(&target->fldt_chain);
+                class_export_put(target->fldt_exp);
+                OBD_FREE_PTR(target);
         }
         spin_unlock(&fld->fld_lock);
+
+        if (fld->fld_cache != NULL) {
+                fld_cache_fini(fld->fld_cache);
+                fld->fld_cache = NULL;
+        }
+        
         CDEBUG(D_INFO|D_WARNING, "Client FLD finalized\n");
         EXIT;
 }
@@ -320,20 +338,20 @@ out_req:
 
 int
 fld_client_create(struct lu_client_fld *fld,
-                  __u64 seq, mdsno_t mds)
+                  seqno_t seq, mdsno_t mds)
 {
-        struct obd_export *fld_exp;
+        struct fld_target *target;
         struct md_fld      md_fld;
         __u32 rc;
         ENTRY;
 
-        fld_exp = fld_client_get_target(fld, seq);
-        if (!fld_exp)
+        target = fld_client_get_target(fld, seq);
+        if (!target)
                 RETURN(-EINVAL);
         md_fld.mf_seq = seq;
         md_fld.mf_mds = mds;
         
-        rc = fld_client_rpc(fld_exp, &md_fld, FLD_CREATE);
+        rc = fld_client_rpc(target->fldt_exp, &md_fld, FLD_CREATE);
         
 #ifdef __KERNEL__
         if (rc  == 0) {
@@ -341,7 +359,7 @@ fld_client_create(struct lu_client_fld *fld,
                  * here. First of all because it may return -EEXISTS. Another
                  * reason is that, we do not want to stop proceeding because of
                  * cache errors. --umka */
-                fld_cache_insert(fld_cache, seq, mds);
+                fld_cache_insert(fld->fld_cache, seq, mds);
         }
 #endif
         
@@ -351,43 +369,44 @@ EXPORT_SYMBOL(fld_client_create);
 
 int
 fld_client_delete(struct lu_client_fld *fld,
-                  __u64 seq)
+                  seqno_t seq)
 {
-        struct obd_export *fld_exp;
+        struct fld_target *target;
         struct md_fld      md_fld;
         __u32 rc;
 
 #ifdef __KERNEL__
-        fld_cache_delete(fld_cache, seq);
+        fld_cache_delete(fld->fld_cache, seq);
 #endif
         
-        fld_exp = fld_client_get_target(fld, seq);
-        if (!fld_exp)
+        target = fld_client_get_target(fld, seq);
+        if (!target)
                 RETURN(-EINVAL);
 
         md_fld.mf_seq = seq;
         md_fld.mf_mds = 0;
 
-        rc = fld_client_rpc(fld_exp, &md_fld, FLD_DELETE);
+        rc = fld_client_rpc(target->fldt_exp,
+                            &md_fld, FLD_DELETE);
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_delete);
 
 static int
 fld_client_get(struct lu_client_fld *fld,
-               __u64 seq, mdsno_t *mds)
+               seqno_t seq, mdsno_t *mds)
 {
-        struct obd_export *fld_exp;
+        struct fld_target *target;
         struct md_fld md_fld;
         int rc;
         ENTRY;
 
-        fld_exp = fld_client_get_target(fld, seq);
-        if (!fld_exp)
+        target = fld_client_get_target(fld, seq);
+        if (!target)
                 RETURN(-EINVAL);
                 
         md_fld.mf_seq = seq;
-        rc = fld_client_rpc(fld_exp,
+        rc = fld_client_rpc(target->fldt_exp,
                             &md_fld, FLD_LOOKUP);
         if (rc == 0)
                 *mds = md_fld.mf_mds;
@@ -398,7 +417,7 @@ fld_client_get(struct lu_client_fld *fld,
 /* lookup fid in the namespace of pfid according to the name */
 int
 fld_client_lookup(struct lu_client_fld *fld,
-                  __u64 seq, mdsno_t *mds)
+                  seqno_t seq, mdsno_t *mds)
 {
 #ifdef __KERNEL__
         struct fld_cache_entry *flde;
@@ -408,7 +427,7 @@ fld_client_lookup(struct lu_client_fld *fld,
 
 #ifdef __KERNEL__
         /* lookup it in the cache */
-        flde = fld_cache_lookup(fld_cache, seq);
+        flde = fld_cache_lookup(fld->fld_cache, seq);
         if (flde != NULL) {
                 *mds = flde->fce_mds;
                 RETURN(0);
@@ -423,7 +442,7 @@ fld_client_lookup(struct lu_client_fld *fld,
 #ifdef __KERNEL__
         /* do not return error here as well. See previous comment in same
          * situation in function fld_client_create(). --umka */
-        fld_cache_insert(fld_cache, seq, *mds);
+        fld_cache_insert(fld->fld_cache, seq, *mds);
 #endif
         
         RETURN(rc);

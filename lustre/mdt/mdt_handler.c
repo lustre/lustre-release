@@ -1853,14 +1853,14 @@ static int mdt_fld_init(const struct lu_context *ctx,
 
         ls = m->mdt_md_dev.md_lu_dev.ld_site;
 
-        OBD_ALLOC_PTR(ls->ls_fld);
+        OBD_ALLOC_PTR(ls->ls_server_fld);
 
-        if (ls->ls_fld != NULL) {
-                rc = fld_server_init(ls->ls_fld, ctx,
+        if (ls->ls_server_fld != NULL) {
+                rc = fld_server_init(ls->ls_server_fld, ctx,
                                      uuid, m->mdt_bottom);
                 if (rc) {
-                        OBD_FREE_PTR(ls->ls_fld);
-                        ls->ls_fld = NULL;
+                        OBD_FREE_PTR(ls->ls_server_fld);
+                        ls->ls_server_fld = NULL;
                 }
         } else
                 rc = -ENOMEM;
@@ -1874,10 +1874,10 @@ static int mdt_fld_fini(const struct lu_context *ctx,
         struct lu_site *ls = m->mdt_md_dev.md_lu_dev.ld_site;
         ENTRY;
 
-        if (ls && ls->ls_fld) {
-                fld_server_fini(ls->ls_fld, ctx);
-                OBD_FREE_PTR(ls->ls_fld);
-                ls->ls_fld = NULL;
+        if (ls && ls->ls_server_fld) {
+                fld_server_fini(ls->ls_server_fld, ctx);
+                OBD_FREE_PTR(ls->ls_server_fld);
+                ls->ls_server_fld = NULL;
         }
         RETURN(0);
 }

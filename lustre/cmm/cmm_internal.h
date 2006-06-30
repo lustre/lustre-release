@@ -46,9 +46,6 @@ struct cmm_device {
         __u32                 cmm_tgt_count;
         struct list_head      cmm_targets;
         spinlock_t            cmm_tgt_guard;
-
-        /* client FLD interface */
-        struct lu_client_fld  cmm_fld;
 };
 
 enum cmm_flags {

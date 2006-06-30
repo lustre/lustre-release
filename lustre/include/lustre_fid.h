@@ -157,7 +157,7 @@ int seq_client_alloc_super(struct lu_client_seq *seq);
 int seq_client_alloc_meta(struct lu_client_seq *seq);
 
 int seq_client_alloc_seq(struct lu_client_seq *seq,
-                         __u64 *seqnr);
+                         seqno_t *seqnr);
 int seq_client_alloc_fid(struct lu_client_seq *seq,
                          struct lu_fid *fid);
 

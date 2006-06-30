@@ -161,7 +161,7 @@ EXPORT_SYMBOL(seq_client_alloc_meta);
 
 /* allocate new sequence for client (llite or MDC are expected to use this) */
 static int
-__seq_client_alloc_seq(struct lu_client_seq *seq, __u64 *seqnr)
+__seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
 {
         int rc = 0;
         ENTRY;
@@ -190,7 +190,7 @@ __seq_client_alloc_seq(struct lu_client_seq *seq, __u64 *seqnr)
 }
 
 int
-seq_client_alloc_seq(struct lu_client_seq *seq, __u64 *seqnr)
+seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
 {
         int rc = 0;
         ENTRY;
@@ -206,7 +206,7 @@ EXPORT_SYMBOL(seq_client_alloc_seq);
 int
 seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
 {
-        __u64 seqnr = 0;
+        seqno_t seqnr = 0;
         int rc;
         ENTRY;
 

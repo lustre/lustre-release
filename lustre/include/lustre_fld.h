@@ -65,12 +65,25 @@ struct lu_server_fld {
         char                     fld_name[80];
 };
 
+struct fld_cache_entry {
+        struct hlist_node        fce_list;
+        mdsno_t                  fce_mds;
+        seqno_t                  fce_seq;
+};
+
+struct fld_cache_info {
+        struct hlist_head       *fci_hash;
+        spinlock_t               fci_lock;
+        int                      fci_size;
+        int                      fci_hash_mask;
+};
+
 struct lu_client_fld {
         /* client side proc entry */
         cfs_proc_dir_entry_t    *fld_proc_dir;
 
         /* list of exports client FLD knows about */
-        struct list_head         fld_exports;
+        struct list_head         fld_targets;
 
         /* current hash to be used to chose an export */
         struct lu_fld_hash      *fld_hash;
@@ -80,6 +93,9 @@ struct lu_client_fld {
 
         /* lock protecting exports list and fld_hash */
         spinlock_t               fld_lock;
+
+        /* client FLD cache */
+        struct fld_cache_info   *fld_cache;
 
         /* client fld proc entry name */
         char                     fld_name[80];
@@ -96,15 +112,15 @@ void fld_server_fini(struct lu_server_fld *fld,
 
 int fld_server_lookup(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
-                      __u64 seq, mdsno_t *mds);
+                      seqno_t seq, mdsno_t *mds);
         
 int fld_server_create(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
-                      __u64 seq, mdsno_t mds);
+                      seqno_t seq, mdsno_t mds);
 
 int fld_server_delete(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
-                      __u64 seq);
+                      seqno_t seq);
 
 /* client methods */
 int fld_client_init(struct lu_client_fld *fld,
@@ -114,18 +130,33 @@ int fld_client_init(struct lu_client_fld *fld,
 void fld_client_fini(struct lu_client_fld *fld);
 
 int fld_client_lookup(struct lu_client_fld *fld,
-                      __u64 seq, mdsno_t *mds);
+                      seqno_t seq, mdsno_t *mds);
 
 int fld_client_create(struct lu_client_fld *fld,
-                      __u64 seq, mdsno_t mds);
+                      seqno_t seq, mdsno_t mds);
 
 int fld_client_delete(struct lu_client_fld *fld,
-                      __u64 seq);
+                      seqno_t seq);
 
 int fld_client_add_target(struct lu_client_fld *fld,
                           struct obd_export *exp);
 
 int fld_client_del_target(struct lu_client_fld *fld,
                           struct obd_export *exp);
+
+/* cache methods */
+struct fld_cache_info *fld_cache_init(int size);
+
+void fld_cache_fini(struct fld_cache_info *cache);
+
+int fld_cache_insert(struct fld_cache_info *cache,
+                     seqno_t seq, mdsno_t mds);
+
+void fld_cache_delete(struct fld_cache_info *cache,
+                      seqno_t seq);
+
+struct fld_cache_entry *
+fld_cache_lookup(struct fld_cache_info *cache,
+                 seqno_t seq);
 
 #endif

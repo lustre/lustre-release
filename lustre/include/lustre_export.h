@@ -65,7 +65,6 @@ struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
         struct obd_uuid           exp_client_uuid;
-        struct list_head          exp_fld_chain;
         struct list_head          exp_obd_chain;
         /* exp_obd_chain_timed fo ping evictor, protected by obd_dev_lock */
         struct list_head          exp_obd_chain_timed;

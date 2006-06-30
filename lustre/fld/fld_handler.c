@@ -54,42 +54,15 @@
 #include "fld_internal.h"
 
 #ifdef __KERNEL__
-struct fld_cache_info *fld_cache = NULL;
-
-static int fld_init(void)
-{
-        int rc = 0;
-        ENTRY;
-
-        fld_cache = fld_cache_init(FLD_HTABLE_SIZE);
-        if (IS_ERR(fld_cache))
-                rc = PTR_ERR(fld_cache);
-
-        if (rc != 0)
-                fld_cache = NULL;
-
-        RETURN(rc);
-}
-
-static void fld_fini(void)
-{
-        ENTRY;
-        if (fld_cache != NULL) {
-                fld_cache_fini(fld_cache);
-                fld_cache = NULL;
-        }
-        EXIT;
-}
-
 static int __init fld_mod_init(void)
 {
-        fld_init();
+        /* nothing to init seems */
         return 0;
 }
 
 static void __exit fld_mod_exit(void)
 {
-        fld_fini();
+        /* nothing to fini seems */
         return;
 }
 
@@ -97,54 +70,32 @@ static void __exit fld_mod_exit(void)
 int
 fld_server_create(struct lu_server_fld *fld,
                   const struct lu_context *ctx,
-                  __u64 seq, mdsno_t mds)
+                  seqno_t seq, mdsno_t mds)
 {
-        int rc;
         ENTRY;
-
-        rc = fld_index_create(fld, ctx, seq, mds);
-        if (rc == 0) {
-                /* do not return result of calling fld_cache_insert()
-                 * here. First of all because it may return -EEXISTS. Another
-                 * reason is that, we do not want to stop proceeding because of
-                 * cache errors. --umka */
-                fld_cache_insert(fld_cache, seq, mds);
-        }
-        RETURN(rc);
+        RETURN(fld_index_create(fld, ctx, seq, mds));
 }
 EXPORT_SYMBOL(fld_server_create);
 
-/* delete index entry and update cache */
+/* delete index entry */
 int
 fld_server_delete(struct lu_server_fld *fld,
                   const struct lu_context *ctx,
-                  __u64 seq)
+                  seqno_t seq)
 {
         ENTRY;
-        fld_cache_delete(fld_cache, seq);
         RETURN(fld_index_delete(fld, ctx, seq));
 }
 EXPORT_SYMBOL(fld_server_delete);
 
-/* lookup in cache first and then issue index lookup */
+/* issue on-disk index lookup */
 int
 fld_server_lookup(struct lu_server_fld *fld,
                   const struct lu_context *ctx,
-                  __u64 seq, mdsno_t *mds)
+                  seqno_t seq, mdsno_t *mds)
 {
-        struct fld_cache_entry *flde;
-        int rc;
         ENTRY;
-
-        /* lookup it in the cache first */
-        flde = fld_cache_lookup(fld_cache, seq);
-        if (flde != NULL) {
-                *mds = flde->fce_mds;
-                RETURN(0);
-        }
-
-        rc = fld_index_lookup(fld, ctx, seq, mds);
-        RETURN(rc);
+        RETURN(fld_index_lookup(fld, ctx, seq, mds));
 }
 EXPORT_SYMBOL(fld_server_lookup);
 
@@ -236,7 +187,7 @@ static int fld_req_handle(struct ptlrpc_request *req)
                 if (req->rq_export != NULL) {
                         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
                         LASSERT(site != NULL);
-                        rc = fld_req_handle0(ctx, site->ls_fld, req);
+                        rc = fld_req_handle0(ctx, site->ls_server_fld, req);
                 } else {
                         CERROR("Unconnected request\n");
                         req->rq_status = -ENOTCONN;
@@ -254,30 +205,6 @@ out:
         target_send_reply(req, rc, fail);
         return 0;
 }
-
-/*
- * Returns true, if fid is local to this server node.
- *
- * WARNING: this function is *not* guaranteed to return false if fid is
- * remote: it makes an educated conservative guess only.
- *
- * fid_is_local() is supposed to be used in assertion checks only.
- */
-int fid_is_local(struct lu_site *site, const struct lu_fid *fid)
-{
-        int result;
-
-        result = 1; /* conservatively assume fid is local */
-        if (site->ls_fld != NULL) {
-                struct fld_cache_entry *entry;
-
-                entry = fld_cache_lookup(fld_cache, fid_seq(fid));
-                if (entry != NULL)
-                        result = (entry->fce_mds == site->ls_node_id);
-        }
-        return result;
-}
-EXPORT_SYMBOL(fid_is_local);
 
 #ifdef LPROCFS
 static int

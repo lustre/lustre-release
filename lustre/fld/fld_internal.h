@@ -28,19 +28,10 @@
 
 #include <linux/types.h>
 
-typedef __u64 fidseq_t;
-
-struct fld_cache_entry {
-        struct hlist_node  fce_list;
-        mdsno_t            fce_mds;
-        fidseq_t           fce_seq;
-};
-
-struct fld_cache_info {
-        struct hlist_head *fci_hash;
-        spinlock_t         fci_lock;
-        int                fci_size;
-        int                fci_hash_mask;
+struct fld_target {
+        struct list_head   fldt_chain;
+        struct obd_export *fldt_exp;
+        __u64              fldt_idx;
 };
 
 enum fld_op {
@@ -52,7 +43,6 @@ enum fld_op {
 #define FLD_HTABLE_SIZE 256
 
 extern struct lu_fld_hash fld_hash[3];
-extern struct fld_cache_info *fld_cache;
 
 #ifdef __KERNEL__
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
@@ -65,35 +55,20 @@ void fld_index_fini(struct lu_server_fld *fld,
 
 int fld_index_create(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
-                     fidseq_t seq, mdsno_t mds);
+                     seqno_t seq, mdsno_t mds);
 
 int fld_index_delete(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
-                     fidseq_t seq);
+                     seqno_t seq);
 
 int fld_index_lookup(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
-                     fidseq_t seq, mdsno_t *mds);
+                     seqno_t seq, mdsno_t *mds);
 
-struct fld_cache_info *fld_cache_init(int size);
-
-void fld_cache_fini(struct fld_cache_info *cache);
-
-int fld_cache_insert(struct fld_cache_info *cache,
-                     __u64 seq, __u64 mds);
-
-void fld_cache_delete(struct fld_cache_info *cache,
-                      __u64 seq);
-
-struct fld_cache_entry *
-fld_cache_lookup(struct fld_cache_info *cache,
-                 __u64 seq);
-
-static inline __u32 fld_cache_hash(__u64 seq)
+static inline __u32 fld_cache_hash(seqno_t seq)
 {
         return (__u32)seq;
 }
-
 #endif
 
 #ifdef LPROCFS

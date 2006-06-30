@@ -91,6 +91,7 @@ static int cmm_add_mdc(const struct lu_context *ctx,
 {
         struct  lu_device_type *ldt = &mdc_device_type;
         struct  lu_device *ld;
+        struct lu_site *ls;
         struct  mdc_device *mc, *tmp;
         char *p, *num = lustre_cfg_string(cfg, 2);
         mdsno_t mdc_num;
@@ -142,7 +143,8 @@ static int cmm_add_mdc(const struct lu_context *ctx,
 
                 lu_device_get(cmm2lu_dev(cm));
 
-                fld_client_add_target(&cm->cmm_fld,
+                ls = cm->cmm_md_dev.md_lu_dev.ld_site;
+                fld_client_add_target(ls->ls_client_fld,
                                       mc->mc_desc.cl_exp);
         }
         RETURN(rc);
@@ -255,8 +257,8 @@ static int cmm_device_init(const struct lu_context *ctx,
                            struct lu_device *d, struct lu_device *next)
 {
         struct cmm_device *m = lu2cmm_dev(d);
+        struct lu_site *ls;
         int err = 0;
-
         ENTRY;
 
         spin_lock_init(&m->cmm_tgt_guard);
@@ -264,7 +266,12 @@ static int cmm_device_init(const struct lu_context *ctx,
         m->cmm_tgt_count = 0;
         m->cmm_child = lu2md_dev(next);
 
-        err = fld_client_init(&m->cmm_fld, "CMM_UUID",
+        ls = m->cmm_md_dev.md_lu_dev.ld_site;
+        OBD_ALLOC_PTR(ls->ls_client_fld);
+        if (!ls->ls_client_fld)
+                RETURN(-ENOMEM);
+        
+        err = fld_client_init(ls->ls_client_fld, "CMM_UUID",
                               LUSTRE_CLI_FLD_HASH_RRB);
         if (err) {
                 CERROR("can't init FLD, err %d\n",  err);
@@ -277,9 +284,14 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
 {
 	struct cmm_device *cm = lu2cmm_dev(ld);
         struct mdc_device *mc, *tmp;
+        struct lu_site *ls;
         ENTRY;
 
-        fld_client_fini(&cm->cmm_fld);
+        ls = cm->cmm_md_dev.md_lu_dev.ld_site;
+        fld_client_fini(ls->ls_client_fld);
+        OBD_FREE_PTR(ls->ls_client_fld);
+        ls->ls_client_fld = NULL;
+        
         /* finish all mdc devices */
         spin_lock(&cm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {

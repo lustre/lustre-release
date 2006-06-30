@@ -83,6 +83,7 @@ struct fld_cache_info *fld_cache_init(int size)
         
         RETURN(cache);
 }
+EXPORT_SYMBOL(fld_cache_init);
 
 void fld_cache_fini(struct fld_cache_info *cache)
 {
@@ -112,10 +113,11 @@ void fld_cache_fini(struct fld_cache_info *cache)
 	
         EXIT;
 }
+EXPORT_SYMBOL(fld_cache_fini);
 
 int
 fld_cache_insert(struct fld_cache_info *cache,
-                 __u64 seq, __u64 mds)
+                 seqno_t seq, mdsno_t mds)
 {
         struct fld_cache_entry *flde, *fldt;
         struct hlist_head *bucket;
@@ -149,9 +151,10 @@ exit_unlock:
                 OBD_FREE_PTR(flde);
         return rc;
 }
+EXPORT_SYMBOL(fld_cache_insert);
 
 void
-fld_cache_delete(struct fld_cache_info *cache, __u64 seq)
+fld_cache_delete(struct fld_cache_info *cache, seqno_t seq)
 {
         struct fld_cache_entry *flde;
         struct hlist_head *bucket;
@@ -175,9 +178,10 @@ out_unlock:
         spin_unlock(&cache->fci_lock);
         return;
 }
+EXPORT_SYMBOL(fld_cache_delete);
 
 struct fld_cache_entry *
-fld_cache_lookup(struct fld_cache_info *cache, __u64 seq)
+fld_cache_lookup(struct fld_cache_info *cache, seqno_t seq)
 {
         struct fld_cache_entry *flde;
         struct hlist_head *bucket;
@@ -197,5 +201,6 @@ fld_cache_lookup(struct fld_cache_info *cache, __u64 seq)
         spin_unlock(&cache->fci_lock);
         RETURN(NULL);
 }
+EXPORT_SYMBOL(fld_cache_lookup);
 #endif
 
