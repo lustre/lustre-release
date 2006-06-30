@@ -2596,7 +2596,6 @@ static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
 
         rc = filter_update_last_objid(exp->exp_obd, doa.o_gr, 1);
         filter->fo_destroy_in_progress = 0;
-        up(&filter->fo_create_lock);
 
         RETURN(0);
 }
