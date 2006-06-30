@@ -94,7 +94,7 @@ static void __exit fld_mod_exit(void)
 }
 
 /* insert index entry and update cache */
-static int
+int
 fld_server_create(struct lu_server_fld *fld,
                   const struct lu_context *ctx,
                   __u64 seq, mdsno_t mds)
@@ -112,9 +112,10 @@ fld_server_create(struct lu_server_fld *fld,
         }
         RETURN(rc);
 }
+EXPORT_SYMBOL(fld_server_create);
 
 /* delete index entry and update cache */
-static int
+int
 fld_server_delete(struct lu_server_fld *fld,
                   const struct lu_context *ctx,
                   __u64 seq)
@@ -123,9 +124,10 @@ fld_server_delete(struct lu_server_fld *fld,
         fld_cache_delete(fld_cache, seq);
         RETURN(fld_index_delete(fld, ctx, seq));
 }
+EXPORT_SYMBOL(fld_server_delete);
 
 /* lookup in cache first and then issue index lookup */
-static int
+int
 fld_server_lookup(struct lu_server_fld *fld,
                   const struct lu_context *ctx,
                   __u64 seq, mdsno_t *mds)
@@ -144,6 +146,7 @@ fld_server_lookup(struct lu_server_fld *fld,
         rc = fld_index_lookup(fld, ctx, seq, mds);
         RETURN(rc);
 }
+EXPORT_SYMBOL(fld_server_lookup);
 
 static int
 fld_server_handle(struct lu_server_fld *fld,

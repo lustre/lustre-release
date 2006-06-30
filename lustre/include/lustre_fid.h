@@ -162,11 +162,27 @@ int seq_client_alloc_fid(struct lu_client_seq *seq,
                          struct lu_fid *fid);
 
 /* Fids common stuff */
-static inline int fid_is_local(struct lu_site *site,
+static inline int fid_is_local(const struct lu_context *ctx,
+                               struct lu_site *site,
                                const struct lu_fid *fid)
 {
-        /* XXX: fix this when fld is ready. */
-        return 1;
+        mdsno_t mds;
+        
+        if (site->ls_fld == NULL)
+                return 1;
+
+        /* XXX: this function checks also on-disk index, so it can't be used
+         * with spinlocks taken.  --umka */
+        rc = fld_server_lookup(site->ls_fld, ctx,
+                               fid_seq(fid), *mds);
+        if (rc) {
+                CERROR("can't lookup FLD for seq "LPU64", rc %d. "
+                       "Considering local fid anyway\n", fid_seq(fid),
+                        rc);
+                return 1;
+        }
+        
+        return (mds == ls_node_id);
 }
 
 void fid_to_le(struct lu_fid *dst, const struct lu_fid *src);
