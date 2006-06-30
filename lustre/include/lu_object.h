@@ -142,7 +142,7 @@ struct lu_device_operations {
                                    struct lu_device *, struct lustre_cfg *);
 
         /*
-         * notify function for metadata stack 
+         * notify function for metadata stack
          */
         int (*ldo_notify)(const struct lu_context *ctx, struct lu_device *d,
                           struct obd_device *watched, enum obd_notify_event ev,
@@ -480,8 +480,10 @@ struct lu_site {
          * Top-level device for this stack.
          */
         struct lu_device     *ls_top_dev;
-        /* current server index */
-        __u32                 ls_node_id;
+        /*
+         * mds number of this site.
+         */
+        mdsno_t               ls_node_id;
         /*
          * Fid location database
          */
@@ -713,7 +715,7 @@ static inline int lu_object_assert_exists(const struct lu_context *ctx,
                 result = 1;
         return result;
 }
- 
+
 static inline int lu_object_assert_not_exists(const struct lu_context *ctx,
                                        const struct lu_object *o)
 {

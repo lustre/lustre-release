@@ -60,14 +60,14 @@ static int fld_init(void)
 {
         int rc = 0;
         ENTRY;
-        
+
         fld_cache = fld_cache_init(FLD_HTABLE_SIZE);
         if (IS_ERR(fld_cache))
                 rc = PTR_ERR(fld_cache);
 
         if (rc != 0)
                 fld_cache = NULL;
-        
+
         RETURN(rc);
 }
 
@@ -101,7 +101,7 @@ fld_server_create(struct lu_server_fld *fld,
 {
         int rc;
         ENTRY;
-        
+
         rc = fld_index_create(fld, ctx, seq, mds);
         if (rc == 0) {
                 /* do not return result of calling fld_cache_insert()
@@ -135,7 +135,7 @@ fld_server_lookup(struct lu_server_fld *fld,
         struct fld_cache_entry *flde;
         int rc;
         ENTRY;
-        
+
         /* lookup it in the cache first */
         flde = fld_cache_lookup(fld_cache, seq);
         if (flde != NULL) {
@@ -212,7 +212,7 @@ fld_req_handle0(const struct lu_context *ctx,
         } else {
                 CERROR("cannot unpack FLD operation\n");
         }
-        
+
 out_pill:
         EXIT;
         req_capsule_fini(&pill);
@@ -254,6 +254,30 @@ out:
         target_send_reply(req, rc, fail);
         return 0;
 }
+
+/*
+ * Returns true, if fid is local to this server node.
+ *
+ * WARNING: this function is *not* guaranteed to return false if fid is
+ * remote: it makes an educated conservative guess only.
+ *
+ * fid_is_local() is supposed to be used in assertion checks only.
+ */
+int fid_is_local(struct lu_site *site, const struct lu_fid *fid)
+{
+        int result;
+
+        result = 1; /* conservatively assume fid is local */
+        if (site->ls_fld != NULL) {
+                struct fld_cache_entry *entry;
+
+                entry = fld_cache_lookup(fld_cache, fid_seq(fid));
+                if (entry != NULL)
+                        result = (entry->fce_mds == site->ls_node_id);
+        }
+        return result;
+}
+EXPORT_SYMBOL(fid_is_local);
 
 #ifdef LPROCFS
 static int
@@ -338,7 +362,7 @@ fld_server_init(struct lu_server_fld *fld,
 
         snprintf(fld->fld_name, sizeof(fld->fld_name),
                  "%s-%s", LUSTRE_FLD_NAME, uuid);
-        
+
         rc = fld_index_init(fld, ctx);
         if (rc)
                 GOTO(out, rc);
@@ -378,7 +402,7 @@ fld_server_fini(struct lu_server_fld *fld,
 #ifdef LPROCFS
         fld_server_proc_fini(fld);
 #endif
-        
+
         if (fld->fld_service != NULL) {
                 ptlrpc_unregister_service(fld->fld_service);
                 fld->fld_service = NULL;
