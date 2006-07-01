@@ -116,6 +116,8 @@ cat >lustre.files <<EOF
 %attr(-, root, root) /usr/include/lustre
 
 %attr(-, root, root) %{_mandir}/man?/*
+
+%attr(-, root, root) %{_libdir}/lustre/*
 EOF
 
 if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
