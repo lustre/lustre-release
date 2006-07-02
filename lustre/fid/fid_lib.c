@@ -54,27 +54,3 @@ void fid_to_le(struct lu_fid *dst, const struct lu_fid *src)
 }
 EXPORT_SYMBOL(fid_to_le);
 
-/*
- * Returns true, if fid is local to this server node.
- *
- * WARNING: this function is *not* guaranteed to return false if fid is
- * remote: it makes an educated conservative guess only.
- *
- * fid_is_local() is supposed to be used in assertion checks only.
- */
-int fid_is_local(struct lu_site *site, const struct lu_fid *fid)
-{
-        int result;
-
-        result = 1; /* conservatively assume fid is local */
-        if (site->ls_client_fld != NULL) {
-                struct fld_cache_entry *entry;
-
-                entry = fld_cache_lookup(site->ls_client_fld->fld_cache,
-                                         fid_seq(fid));
-                if (entry != NULL)
-                        result = (entry->fce_mds == site->ls_node_id);
-        }
-        return result;
-}
-EXPORT_SYMBOL(fid_is_local);
