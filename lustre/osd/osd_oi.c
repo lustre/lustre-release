@@ -57,7 +57,7 @@ int osd_oi_init(struct osd_oi *oi, struct dentry *root, struct lu_site *site)
 {
         int result;
 
-        oi->oi_dir = osd_open(root, osd_oi_dirname, S_IFDIR);
+        oi->oi_dir = osd_open(root, osd_oi_dirname, S_IFREG);
         if (IS_ERR(oi->oi_dir)) {
                 result = PTR_ERR(oi->oi_dir);
                 oi->oi_dir = NULL;
