@@ -75,7 +75,9 @@ enum iam_ioctl_cmd {
         IAM_IOC_DELETE   = _IOR('i', 5, struct iam_uapi_op),
         IAM_IOC_IT_START = _IOR('i', 6, struct iam_uapi_it),
         IAM_IOC_IT_NEXT  = _IOW('i', 7, struct iam_uapi_it),
-        IAM_IOC_IT_STOP  = _IOR('i', 8, struct iam_uapi_it)
+        IAM_IOC_IT_STOP  = _IOR('i', 8, struct iam_uapi_it),
+
+        IAM_IOC_POLYMORPH = _IOR('i', 9, unsigned long)
 };
 
 static void usage(void)
@@ -136,15 +138,26 @@ static int delete(int fd, const void *key, void *rec)
         return doop(fd, key, rec, IAM_IOC_DELETE, "IAM_IOC_DELETE");
 }
 
+static int rec_is_nul_term(int recsize)
+{
+        return recsize == 255;
+}
+
 static void print_rec(const unsigned char *rec, int nr)
 {
         int i;
 
-        for (i = 0; i < nr; ++i)
+        for (i = 0; i < nr; ++i) {
                 printf("%c", rec[i]);
+                if (rec_is_nul_term(nr) && rec[i] == 0)
+                        break;
+        }
         printf("|    |");
-        for (i = 0; i < nr; ++i)
+        for (i = 0; i < nr; ++i) {
                 printf("%x", rec[i]);
+                if (rec_is_nul_term(nr) && rec[i] == 0)
+                        break;
+        }
         printf("\n");
 }
 
@@ -217,7 +230,7 @@ int main(int argc, char **argv)
         op = OP_TEST;
 
         do {
-                opt = getopt(argc, argv, "vilk:K:N:r:R:dsSn");
+                opt = getopt(argc, argv, "vilk:K:N:r:R:dsSnP:");
                 switch (opt) {
                 case 'v':
                         verbose++;
@@ -260,6 +273,15 @@ int main(int argc, char **argv)
                         op = OP_IT_NEXT;
                         doinit = 0;
                         break;
+                case 'P': {
+                        unsigned long mode;
+
+                        mode = strtoul(optarg, NULL, 0);
+                        rc = ioctl(0, IAM_IOC_POLYMORPH, mode);
+                        if (rc == -1)
+                                perror("IAM_IOC_POLYMORPH");
+                        return 0;
+                }
                 case '?':
                 default:
                         fprintf(stderr, "Unable to parse options.");
