@@ -129,6 +129,15 @@ void dt_object_fini(struct dt_object *obj)
 }
 EXPORT_SYMBOL(dt_object_fini);
 
+int dt_is_dir(const struct lu_context *ctx, struct dt_object *obj)
+{
+        if (obj->do_index_ops == NULL)
+                obj->do_ops->do_object_index_try(ctx, obj,
+                                                 &dt_directory_features);
+        return obj->do_index_ops != NULL;
+}
+EXPORT_SYMBOL(dt_is_dir);
+
 static int dt_lookup(const struct lu_context *ctx, struct dt_object *dir,
                      const char *name, struct lu_fid *fid)
 {
@@ -136,7 +145,7 @@ static int dt_lookup(const struct lu_context *ctx, struct dt_object *dir,
         const struct dt_key *key = (const struct dt_key *)name;
         int result;
 
-        if (dir->do_index_ops != NULL)
+        if (dt_is_dir(ctx, dir))
                 result = dir->do_index_ops->dio_lookup(ctx, dir, rec, key);
         else
                 result = -ENOTDIR;

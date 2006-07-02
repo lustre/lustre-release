@@ -65,7 +65,7 @@ static struct lu_object_operations mdd_lu_obj_ops;
 static struct lu_context_key       mdd_thread_key;
 
 
-const char *mdd_root_dir_name = "ROOT";
+const char *mdd_root_dir_name = "root";
 
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx)
 {
@@ -567,7 +567,7 @@ static int __mdd_index_insert(const struct lu_context *ctxt,
         struct dt_object *next = mdd_object_child(pobj);
         ENTRY;
 
-        if (next->do_index_ops != NULL)
+        if (dt_is_dir(ctxt, next))
                 rc = next->do_index_ops->dio_insert(ctxt, next,
                                          (struct dt_rec *)lf,
                                          (struct dt_key *)name, handle);
@@ -584,7 +584,7 @@ static int __mdd_index_delete(const struct lu_context *ctxt,
         struct dt_object *next = mdd_object_child(pobj);
         ENTRY;
 
-        if (next->do_index_ops != NULL)
+        if (dt_is_dir(ctxt, next))
                 rc = next->do_index_ops->dio_delete(ctxt, next,
                                         (struct dt_key *)name, handle);
         else
@@ -721,13 +721,13 @@ cleanup:
 static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
                       const char *name, struct lu_fid* fid)
 {
-        struct dt_object *dir    = mdd_object_child(md2mdd_obj(pobj));
-        struct dt_rec    *rec    = (struct dt_rec *)fid;
+        struct dt_object    *dir    = mdd_object_child(md2mdd_obj(pobj));
+        struct dt_rec       *rec    = (struct dt_rec *)fid;
         const struct dt_key *key = (const struct dt_key *)name;
         int result;
         ENTRY;
 
-        if (dir->do_index_ops != NULL)
+        if (dt_is_dir(ctxt, dir))
                 result = dir->do_index_ops->dio_lookup(ctxt, dir, rec, key);
         else
                 result = -ENOTDIR;
@@ -975,7 +975,8 @@ static void mdd_device_free(const struct lu_context *ctx, struct lu_device *lu)
         LASSERT(atomic_read(&lu->ld_ref) == 0);
         md_device_fini(&m->mdd_md_dev);
 
-        class_put_type(dt_lov->dd_lu_dev.ld_type->ldt_obd_type);
+        if (dt_lov->dd_lu_dev.ld_type != NULL)
+                class_put_type(dt_lov->dd_lu_dev.ld_type->ldt_obd_type);
 
         OBD_FREE_PTR(m);
 }

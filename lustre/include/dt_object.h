@@ -166,7 +166,7 @@ struct dt_object_operations {
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*do_xattr_set)(const struct lu_context *ctxt,
-                              struct dt_object *dt, 
+                              struct dt_object *dt,
                               const void *buf, int buf_len,
                               const char *name, struct thandle *handle);
         /*
@@ -345,6 +345,7 @@ int dt_txn_hook_stop(const struct lu_context *ctx,
 int dt_txn_hook_commit(const struct lu_context *ctx,
                        struct dt_device *dev, struct thandle *txn);
 
+int dt_is_dir(const struct lu_context *ctx, struct dt_object *obj);
 struct dt_object *dt_store_open(const struct lu_context *ctx,
                                 struct dt_device *dt, const char *name,
                                 struct lu_fid *fid);
