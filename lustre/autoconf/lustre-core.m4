@@ -491,6 +491,7 @@ AC_DEFUN([LC_BIT_SPINLOCK_H],
 [LB_CHECK_FILE([$LINUX/include/linux/bit_spinlock.h],[
 	AC_MSG_CHECKING([if bit_spinlock.h can be compiled])
 	LB_LINUX_TRY_COMPILE([
+		#include <asm/processor.h>
 		#include <linux/spinlock.h>
 		#include <linux/bit_spinlock.h>
 	],[],[
