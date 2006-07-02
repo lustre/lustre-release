@@ -33,7 +33,7 @@
 struct dt_device;
 
 struct mdd_lov_info {
-        struct obd_device               *mdd_lov_obd; 
+        struct obd_device               *mdd_lov_obd;
         struct obd_uuid                  mdd_lov_uuid;
         struct lov_desc                  mdd_lov_desc;
         obd_id                          *mdd_lov_objids;
@@ -49,7 +49,7 @@ struct mdd_device {
         struct md_device                 mdd_md_dev;
         struct dt_device                *mdd_child;
         struct mdd_lov_info              mdd_lov_info;
-        struct dt_device                 mdd_lov_dev; 
+        struct dt_device                 mdd_lov_dev;
         int                              mdd_max_mdsize;
         int                              mdd_max_cookiesize;
         struct lu_fid                    mdd_root_fid;
