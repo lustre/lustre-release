@@ -150,6 +150,7 @@ static int   osd_index_probe   (const struct lu_context *ctxt,
 static int   osd_index_try     (const struct lu_context *ctx,
                                 struct dt_object *dt,
                                 const struct dt_index_features *feat);
+static void  osd_index_fini    (struct osd_object *o);
 
 static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
@@ -182,6 +183,7 @@ static struct lu_context_key            osd_key;
 static struct dt_object_operations      osd_obj_ops;
 static struct dt_body_operations        osd_body_ops;
 static struct dt_index_operations       osd_index_ops;
+static struct dt_index_operations       osd_index_compat_ops;
 
 struct osd_thandle {
         struct thandle  ot_super;
@@ -269,11 +271,7 @@ static struct lu_object *osd_object_alloc(const struct lu_context *ctx,
 static void osd_object_init0(struct osd_object *obj)
 {
         LASSERT(obj->oo_inode != NULL);
-
-        if (S_ISDIR(obj->oo_inode->i_mode))
-                obj->oo_dt.do_index_ops = &osd_index_ops;
-        else
-                obj->oo_dt.do_body_ops = &osd_body_ops;
+        obj->oo_dt.do_body_ops = &osd_body_ops;
 }
 
 static int osd_object_init(const struct lu_context *ctxt, struct lu_object *l)
@@ -302,12 +300,9 @@ static void osd_object_free(const struct lu_context *ctx, struct lu_object *l)
         OBD_FREE_PTR(obj);
 }
 
-static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
+static void osd_index_fini(struct osd_object *o)
 {
-        struct osd_object *o = osd_obj(l);
         struct iam_container *bag;
-
-        LASSERT(osd_invariant(o));
 
         bag = &o->oo_container;
         if (o->oo_ipd != NULL) {
@@ -317,8 +312,19 @@ static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
         if (o->oo_inode != NULL) {
                 if (o->oo_container.ic_object == o->oo_inode)
                         iam_container_fini(&o->oo_container);
-                iput(o->oo_inode);
-                o->oo_inode = NULL;
+        }
+}
+
+static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
+{
+        struct osd_object *obj = osd_obj(l);
+
+        LASSERT(osd_invariant(obj));
+
+        osd_index_fini(obj);
+        if (obj->oo_inode != NULL) {
+                iput(obj->oo_inode);
+                obj->oo_inode = NULL;
         }
 }
 
@@ -557,7 +563,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
                         LASSERT(dentry->d_inode != NULL);
                         obj->oo_inode = dentry->d_inode;
                         igrab(obj->oo_inode);
-                        obj->oo_dt.do_index_ops = &osd_index_ops;
+                        obj->oo_dt.do_index_ops = &osd_index_compat_ops;
                 }
                 dput(dentry);
         } else
@@ -598,7 +604,6 @@ static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
                         LASSERT(dentry->d_inode != NULL);
                         obj->oo_inode = dentry->d_inode;
                         igrab(obj->oo_inode);
-                        obj->oo_dt.do_index_ops = &osd_index_ops;
                 }
                 dput(dentry);
         } else
@@ -815,7 +820,14 @@ static int osd_index_probe(const struct lu_context *ctxt, struct osd_object *o,
 
         descr = o->oo_container.ic_descr;
         if (feat == &dt_directory_features)
-                return descr == &iam_htree_compat_param;
+                return osd_sb(osd_obj2dev(o))->s_root->d_inode == o->oo_inode ||
+                        descr == &iam_htree_compat_param ||
+                        (descr->id_rec_size == sizeof(struct lu_fid) &&
+                         1 /*
+                            * XXX check that index looks like directory.
+                            */
+                                );
+
         else
                 return
                         feat->dif_keysize_min <= descr->id_key_size &&
@@ -833,32 +845,41 @@ static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
                          const struct dt_index_features *feat)
 {
         int result;
-        struct osd_object    *obj = osd_dt_obj(dt);
-        struct iam_container *bag;
+        struct osd_object *obj = osd_dt_obj(dt);
 
         LASSERT(osd_invariant(obj));
         LASSERT(lu_object_exists(ctx, &dt->do_lu));
 
-        if (osd_has_index(obj))
-                return 0;
+        if (osd_sb(osd_obj2dev(obj))->s_root->d_inode == obj->oo_inode) {
+                dt->do_index_ops = &osd_index_compat_ops;
+                result = 0;
+        } else if (!osd_has_index(obj)) {
+                struct iam_container *bag;
 
-        bag = &obj->oo_container;
-        result = iam_container_init(bag, &obj->oo_descr, obj->oo_inode);
-        if (result == 0) {
-                result = iam_container_setup(bag);
+                bag = &obj->oo_container;
+                result = iam_container_init(bag, &obj->oo_descr, obj->oo_inode);
                 if (result == 0) {
-                        if (osd_index_probe(ctx, obj, feat)) {
+                        result = iam_container_setup(bag);
+                        if (result == 0) {
                                 struct iam_path_descr *ipd;
 
+                                LASSERT(obj->oo_ipd == NULL);
                                 ipd = bag->ic_descr->id_ops->id_ipd_alloc(bag);
                                 if (ipd != NULL) {
                                         obj->oo_ipd = ipd;
                                         dt->do_index_ops = &osd_index_ops;
                                 } else
                                         result = -ENOMEM;
-                        } else
-                                result = -EINVAL;
+                        }
                 }
+        } else
+                result = 0;
+
+        if (result == 0) {
+                if (osd_index_probe(ctx, obj, feat))
+                        result = 0;
+                else
+                        result = -ENOTDIR;
         }
         LASSERT(osd_invariant(obj));
         return result;
@@ -888,90 +909,144 @@ static int osd_index_delete(const struct lu_context *ctxt, struct dt_object *dt,
         RETURN(rc);
 }
 
-/*
- * XXX This is temporary solution: inode operations are used until iam is
- * ready.
- */
 static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
                             struct dt_rec *rec, const struct dt_key *key)
 {
         struct osd_object *obj = osd_dt_obj(dt);
 
+
+        int rc;
+
+        ENTRY;
+
         LASSERT(osd_invariant(obj));
+        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
+        LASSERT(obj->oo_container.ic_object == obj->oo_inode);
+        LASSERT(obj->oo_ipd != NULL);
 
-        if (!S_ISDIR(obj->oo_inode->i_mode)) {
-                int rc;
+        rc = iam_lookup(&obj->oo_container, (const struct iam_key *)key,
+                        (struct iam_rec *)rec, obj->oo_ipd);
 
-                ENTRY;
+        LASSERT(osd_invariant(obj));
+        RETURN(rc);
+}
 
-                LASSERT(lu_object_exists(ctxt, &dt->do_lu));
-                LASSERT(obj->oo_container.ic_object == obj->oo_inode);
-                LASSERT(obj->oo_ipd != NULL);
 
-                rc = iam_lookup(&obj->oo_container, (const struct iam_key *)key,
-                                (struct iam_rec *)rec, obj->oo_ipd);
+static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
+                            const struct dt_rec *rec, const struct dt_key *key,
+                            struct thandle *th)
+{
+        struct osd_object     *obj = osd_dt_obj(dt);
 
-                LASSERT(osd_invariant(obj));
-                RETURN(rc);
-        } else {
-                struct osd_object      *obj  = osd_dt_obj(dt);
-                struct osd_device      *osd  = osd_obj2dev(obj);
-                struct osd_thread_info *info = lu_context_key_get(ctxt,
-                                                                  &osd_key);
-                struct inode           *dir;
+        struct osd_thandle    *oh;
+        int rc;
 
-                int result;
+        ENTRY;
+
+        LASSERT(osd_invariant(obj));
+        LASSERT(lu_object_exists(ctx, &dt->do_lu));
+        LASSERT(obj->oo_container.ic_object == obj->oo_inode);
+        LASSERT(obj->oo_ipd != NULL);
+
+        oh = container_of0(th, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle != NULL);
+        rc = iam_insert(oh->ot_handle, &obj->oo_container,
+                        (const struct iam_key *)key,
+                        (struct iam_rec *)rec, obj->oo_ipd);
+
+        LASSERT(osd_invariant(obj));
+        RETURN(rc);
+}
+
+static struct dt_index_operations osd_index_ops = {
+        .dio_lookup = osd_index_lookup,
+        .dio_insert = osd_index_insert,
+        .dio_delete = osd_index_delete
+};
+
+static int osd_index_compat_delete(const struct lu_context *ctxt,
+                                   struct dt_object *dt,
+                                   const struct dt_key *key,
+                                   struct thandle *handle)
+{
+        struct osd_object *obj = osd_dt_obj(dt);
+
+        LASSERT(S_ISDIR(obj->oo_inode->i_mode));
+        ENTRY;
+        RETURN(-EOPNOTSUPP);
+}
+
+/*
+ * Compatibility index operations.
+ *
+ * XXX This is temporary solution: inode operations are used until iam is
+ * ready.
+ */
+
+
+static int osd_index_compat_lookup(const struct lu_context *ctxt,
+                                   struct dt_object *dt,
+                                   struct dt_rec *rec, const struct dt_key *key)
+{
+        struct osd_object *obj = osd_dt_obj(dt);
+
+        struct osd_device      *osd  = osd_obj2dev(obj);
+        struct osd_thread_info *info = lu_context_key_get(ctxt, &osd_key);
+        struct inode           *dir;
+
+        int result;
+
+        /*
+         * XXX temporary solution.
+         */
+        struct dentry *dentry;
+        struct dentry *parent;
+
+        LASSERT(osd_invariant(obj));
+        LASSERT(S_ISDIR(obj->oo_inode->i_mode));
+        LASSERT(osd_has_index(obj));
+        LASSERT(osd->od_obj_area != NULL);
+
+        info->oti_str.name = (const char *)key;
+        info->oti_str.len  = strlen((const char *)key);
+
+        dir = obj->oo_inode;
+        LASSERT(dir->i_op != NULL && dir->i_op->lookup != NULL);
+
+        parent = d_alloc_root(dir);
+        if (parent == NULL)
+                return -ENOMEM;
+
+        dentry = d_alloc(parent, &info->oti_str);
+        if (dentry != NULL) {
+                struct dentry *d;
 
                 /*
-                 * XXX temporary solution.
+                 * XXX passing NULL for nameidata should work for
+                 * ext3/ldiskfs.
                  */
-                struct dentry *dentry;
-                struct dentry *parent;
-
-                LASSERT(osd_has_index(obj));
-                LASSERT(osd->od_obj_area != NULL);
-
-                info->oti_str.name = (const char *)key;
-                info->oti_str.len  = strlen((const char *)key);
-
-                dir = obj->oo_inode;
-                LASSERT(dir->i_op != NULL && dir->i_op->lookup != NULL);
-
-                parent = d_alloc_root(dir);
-                if (parent == NULL)
-                        return -ENOMEM;
-
-                dentry = d_alloc(parent, &info->oti_str);
-                if (dentry != NULL) {
-                        struct dentry *d;
-
+                d = dir->i_op->lookup(dir, dentry, NULL);
+                if (d == NULL) {
                         /*
-                         * XXX passing NULL for nameidata should work for
-                         * ext3/ldiskfs.
+                         * normal case, result is in @dentry.
                          */
-                        d = dir->i_op->lookup(dir, dentry, NULL);
-                        if (d == NULL) {
-                                /*
-                                 * normal case, result is in @dentry.
-                                 */
-                                if (dentry->d_inode != NULL)
-                                        result = osd_build_fid(osd, dentry,
-                                                               (struct lu_fid *)rec);
-                                else
-                                        result = -ENOENT;
-                        } else {
-                                /* What? Disconnected alias? Ppheeeww... */
-                                CERROR("Aliasing where not expected\n");
-                                result = -EIO;
-                                dput(d);
-                        }
-                        dput(dentry);
-                } else
-                        result = -ENOMEM;
-                dput(parent);
-                LASSERT(osd_invariant(obj));
-                return result;
-        }
+                        if (dentry->d_inode != NULL)
+                                result = osd_build_fid(osd, dentry,
+                                                       (struct lu_fid *)rec);
+                        else
+                                result = -ENOENT;
+                } else {
+                        /* What? Disconnected alias? Ppheeeww... */
+                        CERROR("Aliasing where not expected\n");
+                        result = -EIO;
+                        dput(d);
+                }
+                dput(dentry);
+        } else
+                result = -ENOMEM;
+        dput(parent);
+        LASSERT(osd_invariant(obj));
+        return result;
 }
 
 static int osd_add_rec(struct osd_thread_info *info, struct osd_device *dev,
@@ -1020,33 +1095,13 @@ static int osd_add_rec(struct osd_thread_info *info, struct osd_device *dev,
 /*
  * XXX Temporary stuff.
  */
-static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
-                            const struct dt_rec *rec, const struct dt_key *key,
-                            struct thandle *th)
+static int osd_index_compat_insert(const struct lu_context *ctx,
+                                   struct dt_object *dt,
+                                   const struct dt_rec *rec,
+                                   const struct dt_key *key, struct thandle *th)
 {
         struct osd_object     *obj = osd_dt_obj(dt);
 
-        LASSERT(osd_invariant(obj));
-
-if (!S_ISDIR(obj->oo_inode->i_mode)) {
-        struct osd_thandle    *oh;
-        int rc;
-
-        ENTRY;
-
-        LASSERT(lu_object_exists(ctx, &dt->do_lu));
-        LASSERT(obj->oo_container.ic_object == obj->oo_inode);
-        LASSERT(obj->oo_ipd != NULL);
-
-        oh = container_of0(th, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle != NULL);
-        rc = iam_insert(oh->ot_handle, &obj->oo_container,
-                        (const struct iam_key *)key,
-                        (struct iam_rec *)rec, obj->oo_ipd);
-
-        LASSERT(osd_invariant(obj));
-        RETURN(rc);
-} else {
         const struct lu_fid *fid  = (const struct lu_fid *)rec;
         const char          *name = (const char *)key;
 
@@ -1056,6 +1111,9 @@ if (!S_ISDIR(obj->oo_inode->i_mode)) {
         struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
 
         int result;
+
+        LASSERT(S_ISDIR(obj->oo_inode->i_mode));
+        LASSERT(osd_invariant(obj));
 
         luch = lu_object_find(ctx, ludev->ld_site, fid);
         if (!IS_ERR(luch)) {
@@ -1084,12 +1142,11 @@ if (!S_ISDIR(obj->oo_inode->i_mode)) {
         LASSERT(osd_invariant(obj));
         return result;
 }
-}
 
-static struct dt_index_operations osd_index_ops = {
-        .dio_lookup = osd_index_lookup,
-        .dio_insert = osd_index_insert,
-        .dio_delete = osd_index_delete
+static struct dt_index_operations osd_index_compat_ops = {
+        .dio_lookup = osd_index_compat_lookup,
+        .dio_insert = osd_index_compat_insert,
+        .dio_delete = osd_index_compat_delete
 };
 
 /*
