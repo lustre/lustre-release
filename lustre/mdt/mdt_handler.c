@@ -209,7 +209,7 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
                         CERROR("MD size %d larger than maximum possible %u\n",
                                rc, MAX_MD_SIZE);
                 } else {
-                        req_capsule_set_size(pill, &RMF_MDT_MD, 
+                        req_capsule_set_size(pill, &RMF_MDT_MD,
                                              RCL_SERVER, rc);
                 }
         } else if (S_ISLNK(la->la_mode) && (body->valid & OBD_MD_LINKNAME)) {
@@ -233,7 +233,7 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
                         }
                         req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, 0);
                 } else
-                        req_capsule_set_size(pill, &RMF_EADATA, 
+                        req_capsule_set_size(pill, &RMF_EADATA,
                                              RCL_SERVER, rc);
         }
 #endif
@@ -405,7 +405,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         /*step 3: find the child object by fid & lock it*/
         lhc->mlh_mode = LCK_CR;
-        child = mdt_object_find_lock(info->mti_ctxt, info->mti_mdt, 
+        child = mdt_object_find_lock(info->mti_ctxt, info->mti_mdt,
                                      &child_fid, lhc, child_bits);
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
@@ -1043,7 +1043,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
         if (result == 0 && h->mh_opc != MDS_DISCONNECT) {
 #ifdef MDT_CODE
-                /* FIXME: fake untill journal callback & open handling is OK.*/ 
+                /* FIXME: fake untill journal callback & open handling is OK.*/
                 __u64 last_transno;
                 __u64 last_committed;
                 struct mdt_device *mdt = info->mti_mdt;
@@ -1053,7 +1053,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 last_transno = ++ (mdt->mdt_last_transno);
                 last_committed = ++ (mdt->mdt_last_committed);
                 spin_unlock(&mdt->mdt_transno_lock);
-                
+
                 req->rq_repmsg->transno = req->rq_transno = last_transno;
                 req->rq_repmsg->last_xid = req->rq_xid;
                 req->rq_repmsg->last_committed = last_committed;
@@ -1474,7 +1474,10 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         }
 
         rc = mdt_getattr_name_lock(info, &lhc, child_bits);
-        ldlm_rep = req_capsule_server_get(&info->mti_pill, 
+        /*
+         * XXX nikita: if rc != 0, reply message is not necessary packed.
+         */
+        ldlm_rep = req_capsule_server_get(&info->mti_pill,
                                           &RMF_DLM_REP);
         if (rc)
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
@@ -1495,7 +1498,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         new_lock = ldlm_handle2lock(&lhc.mlh_lh);
         if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
                 RETURN(0);
-        
+
         LASSERTF(new_lock != NULL, "op %d lockh "LPX64"\n",
                  opcode, lhc.mlh_lh.cookie);
 
@@ -1705,7 +1708,7 @@ static int mdt_seq_fini(const struct lu_context *ctx,
 }
 
 static int mdt_seq_init(const struct lu_context *ctx,
-                        const char *uuid, 
+                        const char *uuid,
                         struct mdt_device *m)
 {
         struct lu_site *ls;
@@ -1720,7 +1723,7 @@ static int mdt_seq_init(const struct lu_context *ctx,
                 OBD_ALLOC_PTR(ls->ls_ctlr_seq);
 
                 if (ls->ls_ctlr_seq != NULL) {
-                        rc = seq_server_init(ls->ls_ctlr_seq, 
+                        rc = seq_server_init(ls->ls_ctlr_seq,
                                              m->mdt_bottom, uuid,
                                              LUSTRE_SEQ_CTLR,
                                              ctx);
@@ -1734,7 +1737,7 @@ static int mdt_seq_init(const struct lu_context *ctx,
         OBD_ALLOC_PTR(ls->ls_server_seq);
 
         if (ls->ls_server_seq != NULL) {
-                rc = seq_server_init(ls->ls_server_seq, 
+                rc = seq_server_init(ls->ls_server_seq,
                                      m->mdt_bottom, uuid,
                                      LUSTRE_SEQ_SRV,
                                      ctx);
@@ -1822,17 +1825,17 @@ static void mdt_seq_fini_ctlr(struct mdt_device *m)
 
         if (ls && ls->ls_server_seq)
                 seq_server_fini_ctlr(ls->ls_server_seq);
-        
+
         if (ls && ls->ls_client_seq) {
                 seq_client_fini(ls->ls_client_seq);
                 OBD_FREE_PTR(ls->ls_client_seq);
                 ls->ls_client_seq = NULL;
         }
-        
+
         if (ls && ls->ls_ctlr_exp) {
                 int rc = obd_disconnect(ls->ls_ctlr_exp);
                 ls->ls_ctlr_exp = NULL;
-                
+
                 if (rc) {
                         CERROR("failure to disconnect "
                                "obd: %d\n", rc);
@@ -1845,7 +1848,7 @@ static void mdt_seq_fini_ctlr(struct mdt_device *m)
  * FLD wrappers
  */
 static int mdt_fld_init(const struct lu_context *ctx,
-                        const char *uuid, 
+                        const char *uuid,
                         struct mdt_device *m)
 {
         struct lu_site *ls;
@@ -2400,8 +2403,8 @@ static int mdt_notify(struct obd_device *obd, struct obd_device *watched,
         rc = next->ld_ops->ldo_notify(&ctxt, next, watched, ev, data);
         lu_context_exit(&ctxt);
 out:
-        lu_context_fini(&ctxt); 
-        RETURN(rc); 
+        lu_context_fini(&ctxt);
+        RETURN(rc);
 }
 
 static struct obd_ops mdt_obd_device_ops = {
