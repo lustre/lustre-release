@@ -50,6 +50,7 @@
 #include <lustre_fld.h>
 #include "fld_internal.h"
 
+const char fld_index_name[] = "fld";
 
 static const struct dt_index_features fld_index_features = {
         .dif_flags       = DT_IND_UPDATE,
@@ -64,8 +65,8 @@ static const struct dt_index_features fld_index_features = {
  * ... something. Stub for now.
  */
 enum {
-        FLD_TXN_INDEX_INSERT_CREDITS  = 10,
-        FLD_TXN_INDEX_DELETE_CREDITS  = 10
+        FLD_TXN_INDEX_INSERT_CREDITS  = 20,
+        FLD_TXN_INDEX_DELETE_CREDITS  = 20
 };
 
 struct fld_thread_info {
@@ -143,12 +144,9 @@ int fld_index_create(struct lu_server_fld *fld,
 
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
 
-        dt_obj->do_ops->do_object_lock(ctx, dt_obj, DT_WRITE_LOCK);
         rc = dt_obj->do_index_ops->dio_insert(ctx, dt_obj,
                                               fld_rec(ctx, mds),
                                               fld_key(ctx, seq), th);
-        dt_obj->do_ops->do_object_unlock(ctx, dt_obj, DT_WRITE_LOCK);
-        
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
@@ -168,11 +166,8 @@ int fld_index_delete(struct lu_server_fld *fld,
         txn.tp_credits = FLD_TXN_INDEX_DELETE_CREDITS;
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
 
-        dt_obj->do_ops->do_object_lock(ctx, dt_obj, DT_WRITE_LOCK);
         rc = dt_obj->do_index_ops->dio_delete(ctx, dt_obj,
                                               fld_key(ctx, seq), th);
-        dt_obj->do_ops->do_object_unlock(ctx, dt_obj, DT_WRITE_LOCK);
-        
         dt->dd_ops->dt_trans_stop(ctx, th);
 
         RETURN(rc);
@@ -187,11 +182,8 @@ int fld_index_lookup(struct lu_server_fld *fld,
         int rc;
         ENTRY;
 
-        dt_obj->do_ops->do_object_lock(ctx, dt_obj, DT_READ_LOCK);
         rc = dt_obj->do_index_ops->dio_lookup(ctx, dt_obj, rec,
                                               fld_key(ctx, seq));
-        dt_obj->do_ops->do_object_unlock(ctx, dt_obj, DT_READ_LOCK);
-        
         if (rc == 0)
                 *mds = be64_to_cpu(*(__u64 *)rec);
         RETURN(rc);
@@ -218,7 +210,7 @@ int fld_index_init(struct lu_server_fld *fld,
          */
         LASSERT(fld->fld_service == NULL);
 
-        dt_obj = dt_store_open(ctx, dt, "fld", &fld->fld_fid);
+        dt_obj = dt_store_open(ctx, dt, fld_index_name, &fld->fld_fid);
         if (!IS_ERR(dt_obj)) {
                 fld->fld_obj = dt_obj;
                 rc = dt_obj->do_ops->do_object_index_try(ctx, dt_obj,
@@ -226,10 +218,10 @@ int fld_index_init(struct lu_server_fld *fld,
                 if (rc == 0)
                         LASSERT(dt_obj->do_index_ops != NULL);
                 else
-                        CERROR("\"fld\" is not an index!\n");
+                        CERROR("\"%s\" is not an index!\n", fld_index_name);
         } else {
-                CERROR("cannot find \"fld\" obj %d\n",
-                       (int)PTR_ERR(dt_obj));
+                CERROR("cannot find \"%s\" obj %d\n",
+                       fld_index_name, (int)PTR_ERR(dt_obj));
                 rc = PTR_ERR(dt_obj);
         }
 
