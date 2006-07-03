@@ -650,8 +650,8 @@ static int lmv_fids_balanced(struct obd_device *obd)
 
 /* returns number of target where new fid should be allocated using passed @hint
  * as input data for making decision. */
-static int lmv_placment_policy(struct obd_device *obd,
-                               struct lu_placement_hint *hint)
+static int lmv_placement_policy(struct obd_device *obd,
+                                struct lu_placement_hint *hint)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         ENTRY;
@@ -719,7 +719,7 @@ static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
         LASSERT(fid != NULL);
         LASSERT(hint != NULL);
 
-        mds = lmv_placment_policy(obd, hint);
+        mds = lmv_placement_policy(obd, hint);
         if (mds < 0 || mds >= lmv->desc.ld_tgt_count) {
                 CERROR("can't get target for allocating fid\n");
                 RETURN(-EINVAL);
