@@ -36,6 +36,7 @@ static inline void client_obd_list_lock(client_obd_lock_t *lock)
 
 static inline void client_obd_list_unlock(client_obd_lock_t *lock)
 {
+        spin_unlock(lock);
 }
 
 #endif /* __LINUX_OBD_H */
