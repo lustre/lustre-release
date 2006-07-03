@@ -293,8 +293,8 @@ fld_server_proc_fini(struct lu_server_fld *fld)
 int
 fld_server_init(struct lu_server_fld *fld,
                 const struct lu_context *ctx,
-                const char *uuid,
-                struct dt_device *dt)
+                struct dt_device *dt,
+                const char *uuid)
 {
         int rc;
         struct ptlrpc_service_conf fld_conf = {

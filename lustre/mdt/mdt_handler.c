@@ -1855,7 +1855,7 @@ static int mdt_fld_init(const struct lu_context *ctx,
 
         if (ls->ls_server_fld != NULL) {
                 rc = fld_server_init(ls->ls_server_fld, ctx,
-                                     uuid, m->mdt_bottom);
+                                     m->mdt_bottom, uuid);
                 if (rc) {
                         OBD_FREE_PTR(ls->ls_server_fld);
                         ls->ls_server_fld = NULL;

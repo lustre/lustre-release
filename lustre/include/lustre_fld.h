@@ -104,8 +104,8 @@ struct lu_client_fld {
 /* server methods */
 int fld_server_init(struct lu_server_fld *fld,
                     const struct lu_context *ctx,
-                    const char *uuid,
-                    struct dt_device *dt);
+                    struct dt_device *dt,
+                    const char *uuid);
 
 void fld_server_fini(struct lu_server_fld *fld,
                      const struct lu_context *ctx);

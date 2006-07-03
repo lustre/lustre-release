@@ -53,7 +53,8 @@
 #include "fld_internal.h"
 
 #ifdef __KERNEL__
-struct fld_cache_info *fld_cache_init(int size)
+struct fld_cache_info *
+fld_cache_init(int size)
 {
 	struct fld_cache_info *cache;
         int i;
@@ -85,7 +86,8 @@ struct fld_cache_info *fld_cache_init(int size)
 }
 EXPORT_SYMBOL(fld_cache_init);
 
-void fld_cache_fini(struct fld_cache_info *cache)
+void
+fld_cache_fini(struct fld_cache_info *cache)
 {
         struct fld_cache_entry *flde;
         struct hlist_head *bucket;

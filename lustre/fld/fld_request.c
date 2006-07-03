@@ -93,9 +93,7 @@ fld_client_get_target(struct lu_client_fld *fld, seqno_t seq)
 
         spin_lock(&fld->fld_lock);
         hash = fld->fld_hash->fh_func(fld, seq);
-        spin_unlock(&fld->fld_lock);
 
-        spin_lock(&fld->fld_lock);
         list_for_each_entry(target,
                             &fld->fld_targets, fldt_chain) {
                 if (target->fldt_idx == hash) {
@@ -220,6 +218,11 @@ fld_client_proc_fini(struct lu_client_fld *fld)
 }
 #endif
 
+static inline int hash_is_sane(int hash)
+{
+        return (hash >= 0 && hash < LUSTRE_CLI_FLD_HASH_LAST);
+}
+
 int
 fld_client_init(struct lu_client_fld *fld,
                 const char *uuid, int hash)
@@ -229,7 +232,7 @@ fld_client_init(struct lu_client_fld *fld,
 
         LASSERT(fld != NULL);
 
-        if (hash < 0 || hash >= LUSTRE_CLI_FLD_HASH_LAST) {
+        if (!hash_is_sane(hash)) {
                 CERROR("wrong hash function 0x%x\n", hash);
                 RETURN(-EINVAL);
         }
