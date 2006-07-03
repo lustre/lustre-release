@@ -395,7 +395,7 @@ unpack_lustre()
     DIRNAME="lustre-$TAG-$TIMESTAMP"
     if [ "$LUSTRE" ] ; then
         untar "$LUSTRE"
-        [ -d lustre ] || ln -sf lustre* lustre
+        [ -d lustre ] || ln -sf lustre-[0-9].[0-9]* lustre
     else
         if [ "$USE_DATESTAMP" ]; then
             DATESTAMP="-D '$DATE'"
