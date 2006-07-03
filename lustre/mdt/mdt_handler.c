@@ -1474,26 +1474,20 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         }
 
         rc = mdt_getattr_name_lock(info, &lhc, child_bits);
-        /*
-         * XXX nikita: if rc != 0, reply message is not necessary packed.
-         */
-        ldlm_rep = req_capsule_server_get(&info->mti_pill,
+        ldlm_rep = req_capsule_server_get(&info->mti_pill, 
                                           &RMF_DLM_REP);
-        if (rc)
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
-        else
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
-        ldlm_rep->lock_policy_res2 = rc;
         intent_set_disposition(ldlm_rep, DISP_IT_EXECD);
-
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
 
-        if (intent_disposition(ldlm_rep, DISP_LOOKUP_NEG))
-                ldlm_rep->lock_policy_res2 = 0;
-        if (!intent_disposition(ldlm_rep, DISP_LOOKUP_POS) ||
-            ldlm_rep->lock_policy_res2) {
+        if (rc) {
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
+                if (ldlm_rep)
+                        ldlm_rep->lock_policy_res2 = 0;
                 RETURN(ELDLM_LOCK_ABORTED);
         }
+        else
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
+
 
         new_lock = ldlm_handle2lock(&lhc.mlh_lh);
         if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
