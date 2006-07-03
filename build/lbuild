@@ -341,9 +341,13 @@ load_target()
     if [ "$EXTRA_VERSION_save" ] ; then
         EXTRA_VERSION="$EXTRA_VERSION_save"
     elif ! (( $RELEASE )) ; then
-        #remove the @VERSION@ (lustre version)
-        EXTRA_VERSION=$(echo $EXTRA_VERSION | sed -e "s/\(.*_lustre\)\..*/\1/")
-        EXTRA_VERSION="${EXTRA_VERSION}-${TAG}.${TIMESTAMP}"
+        # if there is no patch series, then this is not a lustre specific
+        # kernel.  don't make it look like one
+        if [ -n "$SERIES" ]; then
+            #remove the @VERSION@ (lustre version)
+            EXTRA_VERSION=$(echo $EXTRA_VERSION | sed -e "s/\(.*_lustre\)\..*/\1/")
+            EXTRA_VERSION="${EXTRA_VERSION}-${TAG}.${TIMESTAMP}"
+        fi
     fi
     # EXTRA_VERSION=${EXTRA_VERSION//-/_}
 
