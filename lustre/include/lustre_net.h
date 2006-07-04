@@ -124,6 +124,9 @@
 #define MDS_MAXREQSIZE  (5 * 1024)
 #define MDS_MAXREPSIZE  max(9 * 1024, 280 + LOV_MAX_STRIPE_COUNT * 56)
 
+#define FLD_MAXREQSIZE  (8192)
+#define FLD_MAXREPSIZE  (16)
+
 /* FIXME fix all constants here.  Andreas suggests dyamically adding threads. */
 #define MGS_MAX_THREADS 8UL
 #define MGS_NUM_THREADS max(2UL, min_t(unsigned long, MGS_MAX_THREADS, \

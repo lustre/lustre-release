@@ -31,8 +31,7 @@ struct lu_server_fld;
  */
 enum {
         LUSTRE_CLI_FLD_HASH_DHT = 0,
-        LUSTRE_CLI_FLD_HASH_RRB,
-        LUSTRE_CLI_FLD_HASH_LAST
+        LUSTRE_CLI_FLD_HASH_RRB
 };
 
 typedef int (*fld_hash_func_t) (struct lu_client_fld *, __u64);
@@ -155,8 +154,8 @@ int fld_cache_insert(struct fld_cache_info *cache,
 void fld_cache_delete(struct fld_cache_info *cache,
                       seqno_t seq);
 
-struct fld_cache_entry *
+int
 fld_cache_lookup(struct fld_cache_info *cache,
-                 seqno_t seq);
+                 seqno_t seq, mdsno_t *mds);
 
 #endif

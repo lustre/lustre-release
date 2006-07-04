@@ -220,12 +220,13 @@ int fid_is_local(struct lu_site *site, const struct lu_fid *fid)
 
         result = 1; /* conservatively assume fid is local */
         if (site->ls_client_fld != NULL) {
-                struct fld_cache_entry *entry;
+                mdsno_t mds;
+                int rc;
 
-                entry = fld_cache_lookup(site->ls_client_fld->fld_cache,
-                                         fid_seq(fid));
-                if (entry != NULL)
-                        result = (entry->fce_mds == site->ls_node_id);
+                rc = fld_cache_lookup(site->ls_client_fld->fld_cache,
+                                      fid_seq(fid), &mds);
+                if (rc == 0)
+                        result = (mds == site->ls_node_id);
         }
         return result;
 }
@@ -300,8 +301,8 @@ fld_server_init(struct lu_server_fld *fld,
         struct ptlrpc_service_conf fld_conf = {
                 .psc_nbufs            = MDS_NBUFS,
                 .psc_bufsize          = MDS_BUFSIZE,
-                .psc_max_req_size     = MDS_MAXREQSIZE,
-                .psc_max_reply_size   = MDS_MAXREPSIZE,
+                .psc_max_req_size     = FLD_MAXREQSIZE,
+                .psc_max_reply_size   = FLD_MAXREPSIZE,
                 .psc_req_portal       = FLD_REQUEST_PORTAL,
                 .psc_rep_portal       = MDC_REPLY_PORTAL,
                 .psc_watchdog_timeout = FLD_SERVICE_WATCHDOG_TIMEOUT,

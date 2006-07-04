@@ -178,12 +178,12 @@ fld_cache_delete(struct fld_cache_info *cache, seqno_t seq)
         EXIT;
 out_unlock:
         spin_unlock(&cache->fci_lock);
-        return;
 }
 EXPORT_SYMBOL(fld_cache_delete);
 
-struct fld_cache_entry *
-fld_cache_lookup(struct fld_cache_info *cache, seqno_t seq)
+int
+fld_cache_lookup(struct fld_cache_info *cache,
+                 seqno_t seq, mdsno_t *mds)
 {
         struct fld_cache_entry *flde;
         struct hlist_head *bucket;
@@ -196,12 +196,36 @@ fld_cache_lookup(struct fld_cache_info *cache, seqno_t seq)
         spin_lock(&cache->fci_lock);
         hlist_for_each_entry(flde, scan, bucket, fce_list) {
                 if (flde->fce_seq == seq) {
+                        *mds = flde->fce_mds;
                         spin_unlock(&cache->fci_lock);
-                        RETURN(flde);
+                        RETURN(0);
                 }
         }
         spin_unlock(&cache->fci_lock);
-        RETURN(NULL);
+        RETURN(-ENOENT);
+}
+EXPORT_SYMBOL(fld_cache_lookup);
+#else
+int
+fld_cache_insert(struct fld_cache_info *cache,
+                 seqno_t seq, mdsno_t mds)
+{
+        return -ENOTSUPP;
+}
+EXPORT_SYMBOL(fld_cache_insert);
+
+void
+fld_cache_delete(struct fld_cache_info *cache, seqno_t seq)
+{
+        return;
+}
+EXPORT_SYMBOL(fld_cache_delete);
+
+int
+fld_cache_lookup(struct fld_cache_info *cache,
+                 seqno_t seq, mdsno_t *mds)
+{
+        return -ENOTSUPP;
 }
 EXPORT_SYMBOL(fld_cache_lookup);
 #endif
