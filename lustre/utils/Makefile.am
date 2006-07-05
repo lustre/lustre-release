@@ -16,13 +16,14 @@ rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
 	l_getgroups llverfs llverdev
 bin_PROGRAMS = lfs
-lib_LIBRARIES = liblustreapi.a
 sbin_SCRIPTS = $(sbin_scripts)
 endif # UTILS
 
+lib_LIBRARIES = liblustreapi.a
+
 lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h platform.h
-lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL) 
-lctl_DEPENDENCIES := $(LIBPTLCTL) 
+lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
+lctl_DEPENDENCIES := $(LIBPTLCTL)
 
 lfs_SOURCES = lfs.c parser.c obd.c
 lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
