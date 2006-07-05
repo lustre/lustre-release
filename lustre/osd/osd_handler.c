@@ -755,6 +755,19 @@ static int osd_object_ref_del(const struct lu_context *ctxt,
         return 0;
 }
 
+int osd_xattr_get(const struct lu_context *ctxt, struct dt_object *dt,
+                  void *buf, int buf_len, const char *name)
+{
+        return 0;
+}
+
+int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
+                  const void *buf, int buf_len, const char *name, 
+                  struct thandle *handle)
+{
+        return 0;
+}
+
 static struct dt_object_operations osd_obj_ops = {
         .do_object_lock      = osd_object_lock,
         .do_object_unlock    = osd_object_unlock,
@@ -763,7 +776,9 @@ static struct dt_object_operations osd_obj_ops = {
         .do_object_destroy   = osd_object_destroy,
         .do_object_index_try = osd_index_try,
         .do_object_ref_add   = osd_object_ref_add,
-        .do_object_ref_del   = osd_object_ref_del
+        .do_object_ref_del   = osd_object_ref_del,
+        .do_xattr_get        = osd_xattr_get,
+        .do_xattr_set        = osd_xattr_set
 };
 
 static struct dt_body_operations osd_body_ops = {

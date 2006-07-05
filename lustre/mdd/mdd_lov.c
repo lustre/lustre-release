@@ -566,3 +566,47 @@ int mdd_notify(const struct lu_context *ctxt, struct lu_device *ld,
                                        !(ev == OBD_NOTIFY_SYNC));
         RETURN(rc);
 }
+
+static int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
+                      void *md, int *md_size, int lock)
+{
+        struct dt_object *next;
+        int rc = 0;
+        int lmm_size;
+
+        next = mdd_object_child(md2mdd_obj(obj));
+        rc = next->do_ops->do_xattr_get(ctxt, next, md, *md_size, 
+                                        "lov");
+        if (rc < 0) {
+                CERROR("Error %d reading eadata \n", rc);
+        } else if (rc > 0) {
+                lmm_size = rc;
+                /*FIXME convert lov EA necessary for this version?*/
+                *md_size = lmm_size;
+                rc = lmm_size;
+        } else {
+                *md_size = 0;
+        }
+        
+        RETURN (rc);
+}
+
+int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
+                   struct md_object *child)
+{
+        struct dt_object *next = mdd_object_child(md2mdd_obj(child));
+        int rc = 0;
+        ENTRY;
+
+        if (dt_is_dir(ctxt, next)) {
+                struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
+                int lmm_size = sizeof(lmm);
+                rc = mdd_get_md(ctxt, pobj, &lmm, &lmm_size, 1);
+                if (rc > 0) {
+                        rc = mdd_xattr_set(ctxt, child, lmm, lmm_size, "lov");
+                        if (rc)
+                                CERROR("error on copy stripe info: rc = %d\n", rc);
+                }
+        }
+        RETURN(rc);
+}

@@ -64,6 +64,7 @@ struct mdd_thread_info {
         struct lu_fid    mti_fid;
         struct lu_attr   mti_attr;
         struct lov_desc  mti_ld;
+        struct lov_mds_md mti_lmm;
 };
 
 int mdd_lov_init(const struct lu_context *ctxt, struct mdd_device *mdd,
@@ -73,6 +74,10 @@ int mdd_notify(const struct lu_context *ctxt, struct lu_device *ld,
                struct obd_device *watched, enum obd_notify_event ev,
                void *data);
 
+int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
+                  const void *buf, int buf_len, const char *name);
+int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
+                   struct md_object *child);
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx);
 extern struct lu_device_operations mdd_lu_ops;
 static inline int lu_device_is_mdd(struct lu_device *d)
@@ -114,4 +119,11 @@ static inline struct dt_device_operations *mdd_child_ops(struct mdd_device *d)
 {
         return d->mdd_child->dd_ops;
 }
+
+static inline struct dt_object* mdd_object_child(struct mdd_object *o)
+{
+        return container_of0(lu_object_next(&o->mod_obj.mo_lu),
+                             struct dt_object, do_lu);
+}
+
 #endif

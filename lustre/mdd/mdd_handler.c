@@ -380,11 +380,6 @@ static struct lu_object_operations mdd_lu_obj_ops = {
 	.loo_object_exists  = mdd_object_exists,
 };
 
-static struct dt_object* mdd_object_child(struct mdd_object *o)
-{
-        return container_of0(lu_object_next(&o->mod_obj.mo_lu),
-                             struct dt_object, do_lu);
-}
 
 static void mdd_lock(const struct lu_context *ctxt,
                      struct mdd_object *obj, enum dt_lock_mode mode)
@@ -512,8 +507,8 @@ static int __mdd_xattr_set(const struct lu_context *ctxt,struct mdd_device *mdd,
                                           handle);
 }
 
-static int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
-                         const void *buf, int buf_len, const char *name)
+int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
+                  const void *buf, int buf_len, const char *name)
 {
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
@@ -591,7 +586,6 @@ static int mdd_link(const struct lu_context *ctxt, struct md_object *tgt_obj,
         rc = __mdd_ref_add(ctxt, mdd_sobj, handle);
 exit:
         mdd_unlock2(ctxt, mdd_tobj, mdd_sobj);
-
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
 }
@@ -621,7 +615,6 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         if (rc)
                 GOTO(cleanup, rc);
 cleanup:
-       /*FIXME: error handling?*/
         mdd_lock2(ctxt, mdd_pobj, mdd_cobj);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
@@ -774,7 +767,7 @@ static int mdd_create(const struct lu_context *ctxt,
         struct mdd_object *mdo = md2mdd_obj(pobj);
         struct mdd_object *son = md2mdd_obj(child);
         struct thandle *handle;
-        int rc = 0;
+        int rc = 0, created = 0, inserted = 0;
         ENTRY;
 
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
@@ -826,18 +819,27 @@ static int mdd_create(const struct lu_context *ctxt,
         if (rc)
                 GOTO(cleanup, rc);
 
+        created = 1;
         rc = __mdd_index_insert(ctxt, mdo, lu_object_fid(&child->mo_lu),
                                 name, handle);
+        
+        inserted = 1;
+        rc = mdd_lov_set_md(ctxt, pobj, child);
         if (rc) {
-                int rc2;
+                CERROR("error on stripe info copy %d \n", rc);
+        }
+cleanup:
+        if (rc && created) {
+                int rc1 = 0, rc2 = 0;
 
-                rc2 = __mdd_object_destroy(ctxt, son, handle);
-                if (rc2)
-                        CERROR("Cannot cleanup insertion failure: %d/%d\n",
-                               rc, rc2);
+                rc1 = __mdd_object_destroy(ctxt, son, handle);
+                if (inserted) 
+                        rc2 = __mdd_index_delete(ctxt, mdo, name, handle);
+                if (rc1 || rc2) 
+                        CERROR("error can not cleanup destory %d insert %d \n",
+                               rc1, rc2);
         }
 
-cleanup:
         mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
