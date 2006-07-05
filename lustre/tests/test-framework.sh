@@ -122,11 +122,11 @@ unload_modules() {
     rmmod $MODULES >/dev/null 2>&1 
      # do it again, in case we tried to unload ksocklnd too early
     lsmod | grep lnet > /dev/null && rmmod $MODULES >/dev/null 2>&1 
-    lsmod | grep lnet && echo "modules still loaded" && return 1
+    lsmod | grep lnet && echo "modules still loaded" && cat $LPROC/devices && return 1
     HAVE_MODULES=false
 
-    LEAK_LUSTRE=`dmesg | tail -n 30 | grep "obd mem.*leaked"`
-    LEAK_PORTALS=`dmesg | tail -n 20 | grep "Portals memory leaked"`
+    LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd mem.*leaked" || true)
+    LEAK_PORTALS=$(dmesg | tail -n 20 | grep "Portals memory leaked" || true)
     if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
         echo "$LEAK_LUSTRE" 1>&2
         echo "$LEAK_PORTALS" 1>&2
@@ -176,7 +176,7 @@ stop() {
         do_facet ${facet} umount -d $@ ${MOUNT%/*}/${facet}
     fi
 
-    [ -e /proc/fs/lustre ] && grep "ST " /proc/fs/lustre/devices && echo "service didn't stop" && exit 1
+    [ -e /proc/fs/lustre ] && grep "ST " $LPROC/devices && echo "service didn't stop" && exit 1
     return 0
 
 }
