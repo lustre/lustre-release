@@ -172,10 +172,10 @@ struct mount_option_s
 
 /* llite_lib.c */
 void generate_random_uuid(unsigned char uuid_out[16]);
-int liblustre_process_log(struct config_llog_instance *cfg, char *mdsnid,
-                          char *mdsname, char *profile, int allow_recov);
-int ll_parse_mount_target(const char *target, char **mdsnid,
-                          char **mdsname, char **profile);
+int liblustre_process_log(struct config_llog_instance *cfg, char *mgsnid,
+                          char *profile, int allow_recov);
+int ll_parse_mount_target(const char *target, char **mgsnid,
+                          char **fsname);
 
 extern struct mount_option_s mount_option;
 
@@ -233,7 +233,7 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
 
 /* dir.c */
 ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep, 
-			       char *buf, size_t nbytes);
+                               char *buf, size_t nbytes);
 
 /* ext2 related */
 #define EXT2_NAME_LEN (255)

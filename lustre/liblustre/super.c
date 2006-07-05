@@ -1884,7 +1884,7 @@ llu_fsswop_mount(const char *source,
         struct config_llog_instance cfg;
         char ll_instance[sizeof(sbi) * 2 + 1];
         struct lustre_profile *lprof;
-        char *zconf_mdsnid, *zconf_mdsname, *zconf_profile;
+        char *zconf_mgsnid, *zconf_profile;
         char *osc = NULL, *mdc = NULL;
         int async = 1, err = -EINVAL;
         struct obd_connect_data ocd = {0,};
@@ -1892,13 +1892,12 @@ llu_fsswop_mount(const char *source,
         ENTRY;
 
         if (ll_parse_mount_target(source,
-                                  &zconf_mdsnid,
-                                  &zconf_mdsname,
+                                  &zconf_mgsnid,
                                   &zconf_profile)) {
                 CERROR("mal-formed target %s\n", source);
                 RETURN(err);
         }
-        if (!zconf_mdsnid || !zconf_mdsname || !zconf_profile) {
+        if (!zconf_mgsnid || !zconf_profile) {
                 printf("Liblustre: invalid target %s\n", source);
                 RETURN(err);
         }
@@ -1918,8 +1917,8 @@ llu_fsswop_mount(const char *source,
         /* retrive & parse config log */
         cfg.cfg_instance = ll_instance;
         cfg.cfg_uuid = sbi->ll_sb_uuid;
-        err = liblustre_process_log(&cfg, zconf_mdsnid, zconf_mdsname,
-                                    zconf_profile, 1);
+        cfg.cfg_last_idx = 0;
+        err = liblustre_process_log(&cfg, zconf_mgsnid, zconf_profile, 1);
         if (err < 0) {
                 CERROR("Unable to process log: %s\n", zconf_profile);
                 GOTO(out_free, err);

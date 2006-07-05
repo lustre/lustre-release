@@ -14,6 +14,7 @@ LUSTRE_LIBS = libllite.a \
               $(top_builddir)/lustre/obdecho/libobdecho.a \
               $(top_builddir)/lustre/osc/libosc.a \
               $(top_builddir)/lustre/mdc/libmdc.a \
+              $(top_builddir)/lustre/mgc/libmgc.a \
               $(top_builddir)/lustre/ptlrpc/libptlrpc.a \
               $(top_builddir)/lustre/obdclass/liblustreclass.a \
               $(top_builddir)/lustre/lvfs/liblvfs.a

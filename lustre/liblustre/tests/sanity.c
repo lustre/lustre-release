@@ -1329,7 +1329,7 @@ extern void __liblustre_cleanup_(void);
 void usage(char *cmd)
 {
         printf("\n"
-               "usage: %s [--only {test}] --target mdsnid:/mdsname/profile\n",
+               "usage: %s [--only {test}] --target mgsnid:/fsname\n",
                cmd);
         printf("       %s --dumpfile dumpfile\n", cmd);
         exit(-1);

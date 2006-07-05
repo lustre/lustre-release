@@ -286,6 +286,7 @@ extern int ldlm_init(void);
 extern int osc_init(void);
 extern int lov_init(void);
 extern int mdc_init(void);
+extern int mgc_init(void);
 extern int echo_client_init(void);
 
 

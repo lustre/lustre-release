@@ -55,27 +55,28 @@ static int lllib_init(void)
             init_lib_portals() ||
             init_obdclass() ||
             ptlrpc_init() ||
+            mgc_init() ||
             mdc_init() ||
             lov_init() ||
             osc_init())
                 return -1;
 
-        return _sysio_fssw_register("llite", &llu_fssw_ops);
+        return _sysio_fssw_register("lustre", &llu_fssw_ops);
 }
 
 int liblustre_process_log(struct config_llog_instance *cfg,
-                          char *mdsnid, char *mdsname, char *profile,
+                          char *mgsnid, char *profile,
                           int allow_recov)
 {
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
-        char  *peer = "MDS_PEER_UUID";
+        char  *peer = "MGS_UUID";
         struct obd_device *obd;
-        struct lustre_handle mdc_conn = {0, };
+        struct lustre_handle mgc_conn = {0, };
         struct obd_export *exp;
-        char  *name = "mdc_dev";
+        char  *name = "mgc_dev";
         class_uuid_t uuid;
-        struct obd_uuid mdc_uuid;
+        struct obd_uuid mgc_uuid;
         struct llog_ctxt *ctxt;
         lnet_nid_t nid = 0;
         int err, rc = 0;
@@ -83,11 +84,11 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         ENTRY;
 
         generate_random_uuid(uuid);
-        class_uuid_unparse(uuid, &mdc_uuid);
+        class_uuid_unparse(uuid, &mgc_uuid);
 
-        nid = libcfs_str2nid(mdsnid);
+        nid = libcfs_str2nid(mgsnid);
         if (nid == LNET_NID_ANY) {
-                CERROR("Can't parse NID %s\n", mdsnid);
+                CERROR("Can't parse NID %s\n", mgsnid);
                 RETURN(-EINVAL);
         }
 
@@ -101,8 +102,8 @@ int liblustre_process_log(struct config_llog_instance *cfg,
                 GOTO(out, rc);
 
         lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MDC_NAME);//FIXME connect to mgc
-        lustre_cfg_bufs_set_string(&bufs, 2, mdc_uuid.uuid);
+        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MGC_NAME);
+        lustre_cfg_bufs_set_string(&bufs, 2, mgc_uuid.uuid);
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         rc = class_process_config(lcfg);
         lustre_cfg_free(lcfg);
@@ -110,7 +111,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
                 GOTO(out_del_uuid, rc);
 
         lustre_cfg_bufs_reset(&bufs, name);
-        lustre_cfg_bufs_set_string(&bufs, 1, mdsname);
+        lustre_cfg_bufs_set_string(&bufs, 1, LUSTRE_MGS_OBDNAME);
         lustre_cfg_bufs_set_string(&bufs, 2, peer);
         lcfg = lustre_cfg_new(LCFG_SETUP, &bufs);
         rc = class_process_config(lcfg);
@@ -129,18 +130,14 @@ int liblustre_process_log(struct config_llog_instance *cfg,
         ocd->ocd_connect_flags = OBD_CONNECT_VERSION;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
-        /* Disable initial recovery on this import */
-        rc = obd_set_info_async(obd->obd_self_export,
-                                strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
-                                sizeof(allow_recov), &allow_recov, NULL);
-
-        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, ocd);
+        rc = obd_connect(&mgc_conn, obd, &mgc_uuid, ocd);
         if (rc) {
-                CERROR("cannot connect to %s: rc = %d\n", mdsname, rc);
+                CERROR("cannot connect to %s at %s: rc = %d\n",
+                       LUSTRE_MGS_OBDNAME, nid, rc);
                 GOTO(out_cleanup, rc);
         }
 
-        exp = class_conn2export(&mdc_conn);
+        exp = class_conn2export(&mgc_conn);
 
         ctxt = exp->exp_obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
         rc = class_config_parse_llog(ctxt, profile, cfg);
@@ -186,9 +183,9 @@ out:
         RETURN(rc);
 }
 
-/* parse host:/mdsname/profile string */
-int ll_parse_mount_target(const char *target, char **mdsnid,
-                          char **mdsname, char **profile)
+/* parse host:/fsname string */
+int ll_parse_mount_target(const char *target, char **mgsnid,
+                          char **fsname)
 {
         static char buf[256];
         char *s;
@@ -197,17 +194,15 @@ int ll_parse_mount_target(const char *target, char **mdsnid,
         strncpy(buf, target, 255);
 
         if ((s = strchr(buf, ':'))) {
-                *mdsnid = buf;
+                *mgsnid = buf;
                 *s = '\0';
 
                 while (*++s == '/')
                         ;
-                *mdsname = s;
-                if ((s = strchr(*mdsname, '/'))) {
-                        *s = '\0';
-                        *profile = s + 1;
-                        return 0;
-                }
+                sprintf(s + strlen(s), "-client");
+                *fsname = s;
+
+                return 0;
         }
 
         return -1;
