@@ -58,6 +58,8 @@ static int __mdd_ref_add(const struct lu_context *ctxt, struct mdd_object *obj,
                          struct thandle *handle);
 static int __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
                          struct thandle *handle);
+static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
+                      const char *name, struct lu_fid* fid);
 static struct md_object_operations mdd_obj_ops;
 static struct md_dir_operations    mdd_dir_ops;
 static struct lu_object_operations mdd_lu_obj_ops;
@@ -625,20 +627,71 @@ cleanup:
         RETURN(rc);
 }
 
-static void mdd_rename_lock(struct mdd_device *mdd,
-                            struct mdd_object *src_pobj,
-                            struct mdd_object *tgt_pobj,
-                            struct mdd_object *tobj)
+static int mdd_parent_fid(const struct lu_context *ctxt, 
+                          struct mdd_object *obj, 
+                          struct lu_fid *fid)
 {
-
-        return;
+        const char *name = "..";
+        int rc;
+        
+        rc = mdd_lookup(ctxt, &obj->mod_obj, name, fid);
+        
+        return rc;
 }
 
-static void mdd_rename_unlock(struct mdd_device *mdd,
-                              struct mdd_object *src_pobj,
-                              struct mdd_object *tgt_pobj,
-                              struct mdd_object *tobj)
+#define mdo2fid(obj) (&((obj)->mod_obj.mo_lu.lo_header->loh_fid))
+static int mdd_rename_lock(const struct lu_context *ctxt,
+                           struct mdd_device *mdd,
+                           struct mdd_object *src_pobj,
+                           struct mdd_object *tgt_pobj)
 {
+        struct lu_fid pfid; 
+        int rc;
+        ENTRY;
+
+        if (src_pobj == tgt_pobj) {
+                mdd_lock(ctxt, src_pobj, DT_WRITE_LOCK);
+                RETURN(0);
+        }
+        /*compared the parent child relationship of src_p&tgt_p*/
+        if (lu_fid_eq(&mdd->mdd_root_fid, mdo2fid(src_pobj))){
+                mdd_lock2(ctxt, src_pobj, tgt_pobj);
+                RETURN(0);
+        } else if (lu_fid_eq(&mdd->mdd_root_fid, mdo2fid(tgt_pobj))) { 
+                mdd_lock2(ctxt, tgt_pobj, src_pobj);
+                RETURN(0);
+        }
+        do {
+                rc = mdd_parent_fid(ctxt, src_pobj, &pfid);
+                if (rc) 
+                        RETURN(rc);
+                if (lu_fid_eq(&pfid, mdo2fid(tgt_pobj))) {
+                        mdd_lock2(ctxt, tgt_pobj, src_pobj);
+                        RETURN(0);
+                }
+        } while (!lu_fid_eq(&pfid, &mdd->mdd_root_fid));
+        
+        do {
+                rc = mdd_parent_fid(ctxt, tgt_pobj, &pfid);
+                if (rc) 
+                        RETURN(rc);
+                if (lu_fid_eq(&pfid, mdo2fid(src_pobj))) {
+                        mdd_lock2(ctxt, src_pobj, tgt_pobj);
+                        RETURN(0);
+                }
+        } while (!lu_fid_eq(&pfid, &mdd->mdd_root_fid));
+
+        mdd_lock2(ctxt, src_pobj, tgt_pobj);
+        RETURN(0);
+}
+
+static void mdd_rename_unlock(const struct lu_context *ctxt,
+                              struct mdd_object *src_pobj,
+                              struct mdd_object *tgt_pobj)
+{
+        mdd_unlock(ctxt, src_pobj, DT_WRITE_LOCK);
+        if (src_pobj != tgt_pobj)
+                mdd_unlock(ctxt, src_pobj, DT_WRITE_LOCK);
         return;
 }
 
@@ -652,7 +705,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
         struct mdd_object *mdd_tobj = NULL;
         struct thandle *handle;
-        int rc;
+        int rc, locked = 0;
         ENTRY;
 
         mdd_txn_param_build(ctxt, &MDD_TXN_RENAME);
@@ -660,10 +713,13 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        if (tobj)
+        /*FIXME: Should consider tobj and sobj too in rename_lock*/
+        rc = mdd_rename_lock(ctxt, mdd, mdd_spobj, mdd_tpobj);
+        if (rc) 
+                GOTO(cleanup, rc);
+        locked = 1;
+        if (tobj) 
                 mdd_tobj = md2mdd_obj(tobj);
-
-        mdd_rename_lock(mdd, mdd_spobj, mdd_tpobj, mdd_tobj);
 
         rc = __mdd_index_delete(ctxt, mdd_spobj, sname, handle);
         if (rc)
@@ -685,7 +741,8 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         }
 cleanup:
        /*FIXME: should we do error handling here?*/
-        mdd_rename_unlock(mdd, mdd_spobj, mdd_tpobj, mdd_tobj);
+        if (locked)
+                mdd_rename_unlock(ctxt, mdd_spobj, mdd_tpobj);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
 }
