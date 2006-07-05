@@ -10,7 +10,7 @@ sbin_scripts = llstat.pl llobdstat.pl lrun
 
 if UTILS
 noinst_PROGRAMS = mount_lustre mkfs_lustre tunefs_lustre \
-	llog_reader wirecheck wiretest lload obdio obdbarrier
+	llog_reader lr_reader wirecheck wiretest lload obdio obdbarrier
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
@@ -64,6 +64,8 @@ obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 llog_reader_SOURCES = llog_reader.c
 llog_reader_LDADD := $(LIBPTLCTL)
 llog_reader_DEPENDENCIES := $(LIBPTLCTL)
+
+lr_reader_SOURCES = lr_reader.c
 
 mount_lustre_SOURCES = mount_lustre.c 
 mount_lustre_LDADD := $(LIBPTLCTL)
