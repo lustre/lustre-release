@@ -257,8 +257,6 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_LCL_CLIENT 0x10000ULL /* local 1.6 client */
 #define OBD_CONNECT_RMT_CLIENT 0x20000ULL /* Remote client */
 
-#define OBD_CONNECT_EMPTY 0x80000000ULL /* fake: these are empty connect flags*/
-
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags() */
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \

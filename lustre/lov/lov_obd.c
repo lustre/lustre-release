@@ -145,6 +145,9 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                 RETURN(0);
         }
 
+        if (data && (data->ocd_connect_flags & OBD_CONNECT_INDEX))
+                data->ocd_index = tgt->ltd_index;
+
         rc = obd_connect(&conn, tgt_obd, &lov_osc_uuid, data);
         if (rc) {
                 CERROR("Target %s connect error %d\n",
@@ -192,6 +195,10 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         }
 #endif
 
+        rc = qos_add_tgt(obd, tgt);
+        if (rc) 
+                CERROR("qos_add_tgt failed %d\n", rc);
+
         RETURN(0);
 }
 
@@ -199,23 +206,41 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         struct lov_obd *lov = &obd->u.lov;
-        int rc;
+        struct lov_tgt_desc *tgt;
+        int i, rc;
         ENTRY;
 
-        /* Store the connect data for connecting each of the oscs.
-           If the data was NULL, remember that as well. */
-        lov->lov_ocd.ocd_connect_flags = OBD_CONNECT_EMPTY; 
-        if (data) 
-                lov->lov_ocd = *data;
-
-        rc = class_connect(conn, obd, cluuid);
-        if (!rc) 
-                lov->lov_connects++;
         CDEBUG(D_CONFIG, "connect #%d\n", lov->lov_connects);
 
-        /* target connects are done in lov_add_target */
+        rc = class_connect(conn, obd, cluuid);
+        if (rc)
+                RETURN(rc);
 
-        RETURN (rc);
+        /* Why should there ever be more than 1 connect? */
+        lov->lov_connects++;
+        LASSERT(lov->lov_connects == 1);
+        
+        lov_getref(obd);
+        
+        memset(&lov->lov_ocd, 0, sizeof(lov->lov_ocd));
+        if (data)
+                lov->lov_ocd = *data;
+
+        for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
+                if (obd_uuid_empty(&tgt->ltd_uuid))
+                        continue;
+                /* Flags will be lowest common demoninator */
+                rc = lov_connect_obd(obd, tgt, tgt->ltd_active, &lov->lov_ocd);
+                if (rc) {
+                        CERROR("%s: lov connect tgt %d failed: %d\n", 
+                               obd->obd_name, i, rc);
+                        continue;
+                }
+        }
+
+        lov_putref(obd);
+        
+        RETURN(0);
 }
 
 static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
@@ -431,7 +456,6 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
-        struct obd_connect_data *ocd = NULL;
         __u32 bufsize, idx;
         int rc;
         ENTRY;
@@ -489,31 +513,15 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         CDEBUG(D_CONFIG, "idx=%d ltd_gen=%d ld_tgt_count=%d\n",
                 index, tgt->ltd_gen, lov->desc.ld_tgt_count);
 
-        if (tgt->ltd_exp) {
-                struct obd_device *osc_obd;
+        if (lov->lov_connects == 0)
+                /* lov_connect hasn't been called yet. We'll do the
+                   lov_connect_obd on this target when that fn first runs,
+                   because we don't know the connect flags yet. */
+                RETURN(0);
 
-                osc_obd = class_exp2obd(tgt->ltd_exp);
-                if (osc_obd)
-                        osc_obd->obd_no_recov = 0;
-        }
-
-        if (lov->lov_ocd.ocd_connect_flags != OBD_CONNECT_EMPTY) { 
-                /* Make a copy of the lov connect data for the osc_connect,
-                   which may modify the flags. */
-                OBD_ALLOC_PTR(ocd);
-                if (!ocd) 
-                        RETURN(-ENOMEM);
-                *ocd = lov->lov_ocd;
-        }
-        rc = lov_connect_obd(obd, tgt, active, ocd);
-        if (ocd)
-                OBD_FREE_PTR(ocd);
+        rc = lov_connect_obd(obd, tgt, active, &lov->lov_ocd);
         if (rc)
                 GOTO(out, rc);
-
-        rc = qos_add_tgt(obd, tgt);
-        if (rc) 
-                CERROR("qos_add_tgt failed %d\n", rc);
 
         idx = index;
         rc = lov_notify(obd, tgt->ltd_exp->exp_obd, 
@@ -684,7 +692,7 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                 CERROR("Out of memory\n");
                 RETURN(-EINVAL);
         }
-
+        
         desc->ld_active_tgt_count = 0;
         lov->desc = *desc;
         sema_init(&lov->lov_lock, 1);
