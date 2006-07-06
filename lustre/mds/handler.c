@@ -1770,6 +1770,9 @@ static void fsoptions_to_mds_flags(struct mds_obd *mds, char *options)
 {
         char *p = options;
 
+        if (!options)
+                return;
+
         while (*options) {
                 int len;
 
@@ -1780,25 +1783,24 @@ static void fsoptions_to_mds_flags(struct mds_obd *mds, char *options)
                 if (len == sizeof("user_xattr") - 1 &&
                     memcmp(options, "user_xattr", len) == 0) {
                         mds->mds_fl_user_xattr = 1;
+                        LCONSOLE_INFO("Enabling user_xattr\n");
                 } else if (len == sizeof("nouser_xattr") - 1 &&
                            memcmp(options, "nouser_xattr", len) == 0) {
                         mds->mds_fl_user_xattr = 0;
+                        LCONSOLE_INFO("Disabling user_xattr\n");
                 } else if (len == sizeof("acl") - 1 &&
                            memcmp(options, "acl", len) == 0) {
 #ifdef CONFIG_FS_POSIX_ACL
                         mds->mds_fl_acl = 1;
+                        LCONSOLE_INFO("Enabling ACL\n");
 #else
                         CWARN("ignoring unsupported acl mount option\n");
-                        memmove(options, p, strlen(p) + 1);
-                        p = options;
 #endif
                 } else if (len == sizeof("noacl") - 1 &&
                            memcmp(options, "noacl", len) == 0) {
 #ifdef CONFIG_FS_POSIX_ACL
                         mds->mds_fl_acl = 0;
-#else
-                        memmove(options, p, strlen(p) + 1);
-                        p = options;
+                        LCONSOLE_INFO("Disabling ACL\n");
 #endif
                 }
 
@@ -1843,6 +1845,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 /* We already mounted in lustre_fill_super.
                    lcfg bufs 1, 2, 4 (device, fstype, mount opts) are ignored.*/
                 struct lustre_sb_info *lsi = s2lsi(lmi->lmi_sb);
+                fsoptions_to_mds_flags(mds, lsi->lsi_ldd->ldd_mount_opts);
+                fsoptions_to_mds_flags(mds, lsi->lsi_lmd->lmd_opts);
                 mnt = lmi->lmi_mnt;
                 obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         } else {
