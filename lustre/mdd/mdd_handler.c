@@ -633,13 +633,31 @@ static int mdd_parent_fid(const struct lu_context *ctxt,
 }
 
 #define mdo2fid(obj) (&((obj)->mod_obj.mo_lu.lo_header->loh_fid))
+static int mdd_is_parent(const struct lu_context *ctxt,
+                         struct mdd_device *mdd,
+                         struct mdd_object *p1,
+                         struct mdd_object *p2)
+{
+        struct lu_fid pfid; 
+        int rc = 0;
+
+        do {
+                rc = mdd_parent_fid(ctxt, p1, &pfid);
+                if (rc) 
+                        RETURN(rc);
+                if (lu_fid_eq(&pfid, mdo2fid(p2))) {
+                        RETURN(1);
+                }
+        } while (!lu_fid_eq(&pfid, &mdd->mdd_root_fid));
+        
+        RETURN(rc);
+}
+
 static int mdd_rename_lock(const struct lu_context *ctxt,
                            struct mdd_device *mdd,
                            struct mdd_object *src_pobj,
                            struct mdd_object *tgt_pobj)
 {
-        struct lu_fid pfid; 
-        int rc;
         ENTRY;
 
         if (src_pobj == tgt_pobj) {
@@ -654,25 +672,14 @@ static int mdd_rename_lock(const struct lu_context *ctxt,
                 mdd_lock2(ctxt, tgt_pobj, src_pobj);
                 RETURN(0);
         }
-        do {
-                rc = mdd_parent_fid(ctxt, src_pobj, &pfid);
-                if (rc) 
-                        RETURN(rc);
-                if (lu_fid_eq(&pfid, mdo2fid(tgt_pobj))) {
-                        mdd_lock2(ctxt, tgt_pobj, src_pobj);
-                        RETURN(0);
-                }
-        } while (!lu_fid_eq(&pfid, &mdd->mdd_root_fid));
-        
-        do {
-                rc = mdd_parent_fid(ctxt, tgt_pobj, &pfid);
-                if (rc) 
-                        RETURN(rc);
-                if (lu_fid_eq(&pfid, mdo2fid(src_pobj))) {
-                        mdd_lock2(ctxt, src_pobj, tgt_pobj);
-                        RETURN(0);
-                }
-        } while (!lu_fid_eq(&pfid, &mdd->mdd_root_fid));
+        if (mdd_is_parent(ctxt, mdd, src_pobj, tgt_pobj)) {
+                mdd_lock2(ctxt, tgt_pobj, src_pobj);
+                RETURN(0);
+        }
+        if (mdd_is_parent(ctxt, mdd, tgt_pobj, src_pobj)) {
+                mdd_lock2(ctxt, src_pobj, tgt_pobj);
+                RETURN(0);
+        }
 
         mdd_lock2(ctxt, src_pobj, tgt_pobj);
         RETURN(0);
