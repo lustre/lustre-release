@@ -1281,6 +1281,7 @@ static void server_put_super(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device     *obd;
         struct vfsmount       *mnt = lsi->lsi_srv_mnt;
+        lvfs_sbdev_type        save_dev;
         char *tmpname;
         int tmpname_sz;
         int lddflags = lsi->lsi_ldd->ldd_flags;
@@ -1327,6 +1328,8 @@ static void server_put_super(struct super_block *sb)
                 server_stop_mgs(sb);
         }
 
+        save_dev = lvfs_sbdev(sb);
+
         /* Clean the mgc and sb */
         rc = lustre_common_put_super(sb);
         /* FIXME how can I report a failure to umount? */ 
@@ -1337,6 +1340,7 @@ static void server_put_super(struct super_block *sb)
         
         /* drop the One True Mount */
         unlock_mntput(mnt);
+        lvfs_clear_rdonly(save_dev);
         
         /* Stop the servers (MDS, OSS) if no longer needed.  We must wait
            until the target is really gone so that our type refcount check

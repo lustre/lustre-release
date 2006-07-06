@@ -1892,12 +1892,12 @@ static int filter_cleanup(struct obd_device *obd)
                 must_relock++;
         }
         
-        if (must_put) 
+        if (must_put) {
                 /* In case we didn't mount with lustre_get_mount -- old method*/
                 mntput(filter->fo_vfsmnt);
+                lvfs_clear_rdonly(save_dev);
+        }
         obd->u.obt.obt_sb = NULL;
-
-        lvfs_clear_rdonly(save_dev);
 
         if (must_relock)
                 lock_kernel();

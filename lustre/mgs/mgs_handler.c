@@ -251,7 +251,6 @@ static int mgs_ldlm_nsfree(void *data)
 static int mgs_cleanup(struct obd_device *obd)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
-        lvfs_sbdev_type save_dev;
         ENTRY;
 
         ping_evictor_stop();
@@ -259,7 +258,6 @@ static int mgs_cleanup(struct obd_device *obd)
         if (mgs->mgs_sb == NULL)
                 RETURN(0);
 
-        save_dev = lvfs_sbdev(mgs->mgs_sb);
         
         ptlrpc_unregister_service(mgs->mgs_service);
 
@@ -278,7 +276,6 @@ static int mgs_cleanup(struct obd_device *obd)
         cfs_kernel_thread(mgs_ldlm_nsfree, obd->obd_namespace, 
                           CLONE_VM | CLONE_FILES);
 
-        lvfs_clear_rdonly(save_dev);
 
         fsfilt_put_ops(obd->obd_fsops);
 
