@@ -194,7 +194,7 @@ struct lsm_operations lsm_plain_ops = {
         .lsm_unpackmd           = lsm_unpackmd_plain,
 };
 
-struct lov_extent *lovea_off2le(struct lov_stripe_md *lsm, __u64 lov_off)
+struct lov_extent *lovea_off2le(struct lov_stripe_md *lsm, obd_off lov_off)
 {
         struct lov_array_info *lai;
         struct lov_extent *le;
