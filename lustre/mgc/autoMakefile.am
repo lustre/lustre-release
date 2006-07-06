@@ -15,4 +15,4 @@ modulefs_DATA = mgc$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES := $(mgc-objs:%.o=%.c)
+DIST_SOURCES := $(mgc-objs:%.o=%.c) libmgc.c
