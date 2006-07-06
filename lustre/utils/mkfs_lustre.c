@@ -182,14 +182,13 @@ int run_command(char *cmd)
 
         /* Can't use popen because we need the rv of the command */
         rc = system(cmd);
-        if (rc && fd >= 0) {
+        if ((rc || (verbose > 2)) && (fd >= 0)) {
                 char buf[128];
                 FILE *fp;
                 fp = fopen(log, "r");
                 if (fp) {
                         while (fgets(buf, sizeof(buf), fp) != NULL) {
-                                if (rc || verbose > 2) 
-                                        printf("   %s", buf);
+                                printf("   %s", buf);
                         }
                         fclose(fp);
                 }
@@ -738,11 +737,13 @@ int read_local_files(struct mkfs_opts *mop)
 
         /* Construct debugfs command line. */
         memset(cmd, 0, sizeof(cmd));
-        sprintf(cmd,
-                "debugfs -c -R 'rdump /%s %s' %s",
+        sprintf(cmd, "debugfs -c -R 'rdump /%s %s' %s",
                 MOUNT_CONFIGS_DIR, tmpdir, dev);
 
-        run_command(cmd);
+        ret = run_command(cmd);
+        if (ret)
+                verrprint("%s: Unable to dump %s dir (%d)\n",
+                          progname, MOUNT_CONFIGS_DIR);
 
         sprintf(filepnm, "%s/%s", tmpdir, MOUNT_DATA_FILE);
         filep = fopen(filepnm, "r");
@@ -753,8 +754,12 @@ int read_local_files(struct mkfs_opts *mop)
                 /* COMPAT_146 */
                 /* Try to read pre-1.6 config from last_rcvd */
                 struct lr_server_data lsd;
-                verrprint("%s: Unable to read %s, trying last_rcvd\n",
-                       progname, MOUNT_DATA_FILE);
+                verrprint("%s: Unable to read %s (%s).\n",
+                          progname, MOUNT_DATA_FILE, strerror(errno));
+                verrprint("Contents of %s:\n", MOUNT_CONFIGS_DIR);
+                sprintf(cmd, "ls -l %s", tmpdir);
+                run_command(cmd);
+                verrprint("Trying last_rcvd\n");
 
                 /* Construct debugfs command line. */
                 memset(cmd, 0, sizeof(cmd));
