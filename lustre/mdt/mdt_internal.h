@@ -10,6 +10,7 @@
  *   Author: Phil Schwan <phil@clusterfs.com>
  *   Author: Mike Shaver <shaver@clusterfs.com>
  *   Author: Nikita Danilov <nikita@clusterfs.com>
+ *   Author: Huang Hua <huanghua@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -46,11 +47,56 @@
  */
 #include <lustre/lustre_idl.h>
 #include <md_object.h>
+#include <dt_object.h>
 #include <lustre_fid.h>
 #include <lustre_fld.h>
 #include <lustre_req_layout.h>
 /* LR_CLIENT_SIZE, etc. */
 #include <lustre_disk.h>
+
+
+/* Data stored per client in the last_rcvd file.  In le32 order. */
+struct mdt_client_data {
+        __u8  mcd_uuid[40];     /* client UUID */
+        __u64 mcd_last_transno; /* last completed transaction ID */
+        __u64 mcd_last_xid;     /* xid for the last transaction */
+        __u32 mcd_last_result;  /* result from last RPC */
+        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
+        __u8  mcd_padding[LR_CLIENT_SIZE - 64];
+};
+
+/* copied from lr_server_data.
+ * mds data stored at the head of last_rcvd file. In le32 order. */
+struct mdt_server_data {
+        __u8  msd_uuid[40];        /* server UUID */
+        __u64 msd_unused;          /* was fsd_last_objid - don't use for now */
+        __u64 msd_last_transno;    /* last completed transaction ID */
+        __u64 msd_mount_count;     /* incarnation number */
+        __u32 msd_feature_compat;  /* compatible feature flags */
+        __u32 msd_feature_rocompat;/* read-only compatible feature flags */
+        __u32 msd_feature_incompat;/* incompatible feature flags */
+        __u32 msd_server_size;     /* size of server data area */
+        __u32 msd_client_start;    /* start of per-client data area */
+        __u16 msd_client_size;     /* size of per-client data area */
+        __u16 msd_subdir_count;    /* number of subdirectories for objects */
+        __u64 msd_catalog_oid;     /* recovery catalog object id */
+        __u32 msd_catalog_ogen;    /* recovery catalog inode generation */
+        __u8  msd_peeruuid[40];    /* UUID of MDS associated with this OST */
+        __u32 msd_ost_index;       /* index number of OST in LOV */
+        __u32 msd_mdt_index;       /* index number of MDT in LMV */
+        __u8  msd_padding[LR_SERVER_SIZE - 148];
+};
+
+struct mdt_object;
+/* file data for open files on MDS */
+struct mdt_file_data {
+        struct portals_handle mfd_handle; /* must be first */
+        atomic_t              mfd_refcount;
+        struct list_head      mfd_list; /* protected by med_open_lock */
+        __u64                 mfd_xid;
+        int                   mfd_mode;
+        struct mdt_object    *mfd_object;
+};
 
 struct mdt_device {
         /* super-class */
@@ -83,24 +129,17 @@ struct mdt_device {
          * or should be placed somewhere else. */
         int                        mdt_max_mdsize;
         int                        mdt_max_cookiesize;
+        __u64                      mdt_mount_count;     
+        
+        struct mdt_server_data     mdt_msd;
+        unsigned long              mdt_client_bitmap[LR_MAX_CLIENTS / sizeof(long)];
+        struct dt_object          *mdt_last;
+};
 
-};
-/* Data stored per client in the last_rcvd file.  In le32 order. */
-struct mdt_client_data {
-        __u8  mcd_uuid[40];     /* client UUID */
-        __u64 mcd_last_transno; /* last completed transaction ID */
-        __u64 mcd_last_xid;     /* xid for the last transaction */
-        __u32 mcd_last_result;  /* result from last RPC */
-        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        __u8  mcd_padding[LR_CLIENT_SIZE - 64];
-};
+/*XXX copied from mds_internal.h */
 #define MDT_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
-
-static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)
-{
-        LASSERT(m->mdt_child);
-        return m->mdt_child->md_ops;
-}
+#define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
+#define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
 
 enum mdt_flags {
         /*
@@ -115,21 +154,10 @@ struct mdt_object {
         struct md_object        mot_obj;
 };
 
-static inline struct md_object *mdt_object_child(struct mdt_object *o)
-{
-        return lu2md(lu_object_next(&o->mot_obj.mo_lu));
-}
-
 struct mdt_lock_handle {
         struct lustre_handle    mlh_lh;
         ldlm_mode_t             mlh_mode;
 };
-
-void mdt_lock_handle_init(struct mdt_lock_handle *lh);
-void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
-
-int md_device_init(struct md_device *md, struct lu_device_type *t);
-void md_device_fini(struct md_device *md);
 
 enum {
         MDT_REP_BUF_NR_MAX = 8
@@ -220,23 +248,51 @@ struct mdt_thread_info {
         struct mdt_reint_reply     mti_reint_rep;
 };
 
-int fid_lock(struct ldlm_namespace *, const struct lu_fid *,
-             struct lustre_handle *, ldlm_mode_t,
-             ldlm_policy_data_t *);
+static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)
+{
+        LASSERT(m->mdt_child);
+        return m->mdt_child->md_ops;
+}
 
-void fid_unlock(struct ldlm_namespace *, const struct lu_fid *,
-                struct lustre_handle *, ldlm_mode_t);
+static inline struct md_object *mdt_object_child(struct mdt_object *o)
+{
+        return lu2md(lu_object_next(&o->mot_obj.mo_lu));
+}
 
-struct mdt_object *mdt_object_find(const struct lu_context *,
-                                   struct mdt_device *, const struct lu_fid *);
-void mdt_object_put(const struct lu_context *ctxt, struct mdt_object *);
+static inline struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
+{
+         return info->mti_pill.rc_req;
+}
 
-int mdt_object_lock(struct ldlm_namespace *, struct mdt_object *,
-                    struct mdt_lock_handle *, __u64);
+static inline void mdt_object_get(const struct lu_context *ctxt, 
+                                  struct mdt_object *o)
+{
+        lu_object_get(&o->mot_obj.mo_lu);
+}
 
-void mdt_object_unlock(struct ldlm_namespace *, struct mdt_object *,
+static inline void mdt_object_put(const struct lu_context *ctxt, 
+                                  struct mdt_object *o)
+{
+        lu_object_put(ctxt, &o->mot_obj.mo_lu);
+}
+
+static inline const struct lu_fid *mdt_object_fid(struct mdt_object *o)
+{
+        return lu_object_fid(&o->mot_obj.mo_lu);
+}
+
+int mdt_object_lock(struct ldlm_namespace *, 
+                    struct mdt_object *,
+                    struct mdt_lock_handle *, 
+                    __u64);
+
+void mdt_object_unlock(struct ldlm_namespace *, 
+                       struct mdt_object *,
                        struct mdt_lock_handle *);
 
+struct mdt_object *mdt_object_find(const struct lu_context *,
+                                   struct mdt_device *, 
+                                   const struct lu_fid *);
 struct mdt_object *mdt_object_find_lock(const struct lu_context *,
                                         struct mdt_device *,
                                         const struct lu_fid *,
@@ -245,13 +301,53 @@ struct mdt_object *mdt_object_find_lock(const struct lu_context *,
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 int mdt_reint_rec(struct mdt_thread_info *);
 void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr);
-const struct lu_fid *mdt_object_fid(struct mdt_object *o);
-static inline struct ptlrpc_request *mdt_info_req  (struct mdt_thread_info *info)
-{
-         return info->mti_pill.rc_req;
-}
+
 int mdt_getxattr(struct mdt_thread_info *info);
 int mdt_setxattr(struct mdt_thread_info *info);
+
+void mdt_lock_handle_init(struct mdt_lock_handle *lh);
+void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
+
+
+int mdt_object_exists(const struct lu_context *ctx,
+                      const struct lu_object *o);
+
+int mdt_fs_setup(const struct lu_context *ctxt,
+                 struct mdt_device *mdt);
+
+void mdt_fs_cleanup(const struct lu_context *ctxt,
+                    struct mdt_device *mdt);
+
+int mdt_client_free(const struct lu_context *ctxt,
+                    struct mdt_device *mdt,
+                    struct mdt_export_data *med);
+
+int mdt_update_server_data(const struct lu_context *ctxt,
+                           struct mdt_device *mdt,
+                           int sync);
+
+int mdt_client_add(const struct lu_context *ctxt,
+                   struct mdt_device *mdt,
+                   struct mdt_export_data *med,
+                   int cl_idx);
+
+int mdt_pin(struct mdt_thread_info* info);
+
+int mdt_lock_new_child(struct mdt_thread_info *info, 
+                       struct mdt_object *o,
+                       struct mdt_lock_handle *child_lockh);
+
+int mdt_reint_open(struct mdt_thread_info *info);
+
+int mdt_mfd_close(const struct lu_context *ctxt,
+                  struct mdt_file_data *mfd,
+                  int unlink_orphan);
+
+int mdt_close(struct mdt_thread_info *info);
+
+int mdt_done_writing(struct mdt_thread_info *info);
+
+
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

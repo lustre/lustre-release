@@ -553,33 +553,6 @@ static int mdt_reint(struct mdt_thread_info *info)
         RETURN(rc);
 }
 
-static int mdt_close(struct mdt_thread_info *info)
-{
-#ifdef MDT_CODE
-        /* TODO: dual to open handling, orphan handling */
-        struct mdt_body * reqbody;
-        struct mdt_body * repbody;
-
-        reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-
-#endif
-        return -EOPNOTSUPP;
-}
-
-static int mdt_done_writing(struct mdt_thread_info *info)
-{
-        return -EOPNOTSUPP;
-}
-
-static int mdt_pin(struct mdt_thread_info *info)
-{
-#ifdef MDT_CODE
-        /* TODO: This is open handling. */
-#endif
-        return -EOPNOTSUPP;
-}
-
 #ifdef MDT_CODE
 /* TODO these two methods not available now. */
 
@@ -803,16 +776,6 @@ struct mdt_object *mdt_object_find(const struct lu_context *ctxt,
                 return (struct mdt_object *)o;
         else
                 return mdt_obj(o);
-}
-
-void mdt_object_put(const struct lu_context *ctxt, struct mdt_object *o)
-{
-        lu_object_put(ctxt, &o->mot_obj.mo_lu);
-}
-
-const struct lu_fid *mdt_object_fid(struct mdt_object *o)
-{
-        return lu_object_fid(&o->mot_obj.mo_lu);
 }
 
 int mdt_object_lock(struct ldlm_namespace *ns, struct mdt_object *o,
@@ -2055,6 +2018,8 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
         struct lu_site   *ls = d->ld_site;
 
         ENTRY;
+        
+        mdt_fs_cleanup(ctx, m);
 
         mdt_stop_ptlrpc_service(m);
 
@@ -2145,8 +2110,13 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         if (rc)
                 GOTO(err_free_ns, rc);
 
-        RETURN(0);
+        rc = mdt_fs_setup(ctx, m);
+        if (rc)
+                GOTO(err_stop_service, rc);
 
+        RETURN(0);
+err_stop_service:
+        mdt_stop_ptlrpc_service(m);
 err_free_ns:
         ldlm_namespace_free(m->mdt_namespace, 0);
         m->mdt_namespace = NULL;
@@ -2240,16 +2210,16 @@ static void mdt_object_free(const struct lu_context *ctxt, struct lu_object *o)
         EXIT;
 }
 
-static int mdt_object_exists(const struct lu_context *ctx,
-                             const struct lu_object *o)
-{
-        return lu_object_exists(ctx, lu_object_next(o));
-}
-
 static int mdt_object_print(const struct lu_context *ctxt,
                             struct seq_file *f, const struct lu_object *o)
 {
         return seq_printf(f, LUSTRE_MDT0_NAME"-object@%p", o);
+}
+
+int mdt_object_exists(const struct lu_context *ctx,
+                      const struct lu_object *o)
+{
+        return lu_object_exists(ctx, lu_object_next(o));
 }
 
 static struct lu_device_operations mdt_lu_ops = {
@@ -2376,6 +2346,64 @@ static int mdt_obd_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
+static int mdt_init_export(struct obd_export *exp)
+{
+        struct mdt_export_data *med = &exp->exp_mdt_data;
+
+        INIT_LIST_HEAD(&med->med_open_head);
+        spin_lock_init(&med->med_open_lock);
+        exp->exp_connecting = 1;
+        RETURN(0);
+}
+
+static int mdt_destroy_export(struct obd_export *export)
+{
+        struct mdt_export_data *med;
+        struct obd_device *obd = export->exp_obd;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        struct lu_context ctxt;
+        int rc = 0;
+        ENTRY;
+
+        med = &export->exp_mdt_data;
+        target_destroy_export(export);
+
+        if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
+                RETURN(0);
+
+        rc = lu_context_init(&ctxt);
+        if (rc)
+                RETURN(rc);
+
+        lu_context_enter(&ctxt);
+        /* Close any open files (which may also cause orphan unlinking). */
+        spin_lock(&med->med_open_lock);
+        while (!list_empty(&med->med_open_head)) {
+                struct list_head *tmp = med->med_open_head.next;
+                struct mdt_file_data *mfd =
+                        list_entry(tmp, struct mdt_file_data, mfd_list);
+
+                /* Remove mfd handle so it can't be found again.
+                 * We are consuming the mfd_list reference here. */
+                class_handle_unhash(&mfd->mfd_handle);
+                list_del_init(&mfd->mfd_list);
+                spin_unlock(&med->med_open_lock);
+
+                rc = mdt_mfd_close(&ctxt, mfd, 0);
+
+                if (rc)
+                        CDEBUG(D_INODE|D_IOCTL, "Error closing file: %d\n", rc);
+                spin_lock(&med->med_open_lock);
+        }
+        spin_unlock(&med->med_open_lock);
+        mdt_client_free(&ctxt, mdt, med);
+
+        lu_context_exit(&ctxt);
+        lu_context_fini(&ctxt);
+
+        RETURN(rc);
+}
+
 static int mdt_notify(struct obd_device *obd, struct obd_device *watched,
                       enum obd_notify_event ev, void *data)
 {
@@ -2402,10 +2430,12 @@ out:
 }
 
 static struct obd_ops mdt_obd_device_ops = {
-        .o_owner = THIS_MODULE,
-        .o_connect = mdt_obd_connect,
-        .o_disconnect = mdt_obd_disconnect,
-        .o_notify = mdt_notify,
+        .o_owner          = THIS_MODULE,
+        .o_connect        = mdt_obd_connect,
+        .o_disconnect     = mdt_obd_disconnect,
+        .o_init_export    = mdt_init_export,    /* By Huang Hua*/
+        .o_destroy_export = mdt_destroy_export, /* By Huang Hua*/
+        .o_notify         = mdt_notify,
 };
 
 static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)
