@@ -225,6 +225,8 @@ test_17() {
 run_test 17 "timeout bulk get, evict client (2732)"
 
 test_18a() {
+    [ -z ${ost2_svc} ] && echo Skipping, needs 2 osts && return 0
+
     do_facet client mkdir -p $MOUNT/$tdir
     f=$MOUNT/$tdir/$tfile
 
