@@ -547,7 +547,6 @@ static int mdt_reint(struct mdt_thread_info *info)
         RETURN(rc);
 }
 
-#ifdef MDT_CODE
 /* TODO these two methods not available now. */
 
 /* this should sync the whole device */
@@ -604,13 +603,6 @@ static int mdt_sync(struct mdt_thread_info *info)
         }
         RETURN(rc);
 }
-#else
-static int mdt_sync(struct mdt_thread_info *info)
-{
-        return -EOPNOTSUPP;
-}
-#endif
-
 
 static int mdt_handle_quotacheck(struct mdt_thread_info *info)
 {
@@ -999,7 +991,6 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
         if (result == 0 && h->mh_opc != MDS_DISCONNECT) {
-#ifdef MDT_CODE
                 /* FIXME: fake untill journal callback & open handling is OK.*/
                 __u64 last_transno;
                 __u64 last_committed;
@@ -1015,7 +1006,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 req->rq_repmsg->last_xid = req->rq_xid;
                 req->rq_repmsg->last_committed = last_committed;
                 req->rq_export->exp_obd->obd_last_committed = last_committed;
-#else
+#if 0
                 req->rq_repmsg->last_xid = le64_to_cpu(req_exp_last_xid(req));
                 target_committed_to_req(req);
 #endif

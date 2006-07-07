@@ -503,6 +503,14 @@ static int osd_attr_get(const struct lu_context *ctxt, struct dt_object *dt,
         return osd_inode_getattr(ctxt, obj->oo_inode, attr);
 }
 
+static int osd_attr_set(const struct lu_context *ctxt,
+                        struct dt_object *dt,
+                        const struct lu_attr *attr,
+                        struct thandle *handle)
+{
+        return 0;
+}
+
 /*
  * Object creation.
  *
@@ -772,6 +780,7 @@ static struct dt_object_operations osd_obj_ops = {
         .do_object_lock      = osd_object_lock,
         .do_object_unlock    = osd_object_unlock,
         .do_attr_get         = osd_attr_get,
+        .do_attr_set         = osd_attr_set,
         .do_object_create    = osd_object_create,
         .do_object_destroy   = osd_object_destroy,
         .do_object_index_try = osd_index_try,

@@ -114,6 +114,7 @@ static int mdt_object_open(struct mdt_thread_info *info,
         repbody->fid1 = *mdt_object_fid(o);
         repbody->valid |= OBD_MD_FLID;
 
+/*
         rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
                           lmm, info->mti_mdt->mdt_max_mdsize, "lov");
         if (rc < 0)
@@ -125,7 +126,7 @@ static int mdt_object_open(struct mdt_thread_info *info,
                 repbody->valid |= OBD_MD_FLEASIZE;
         repbody->eadatasize = rc;
         rc = 0;
-
+*/
         mfd = mdt_mfd_new();
         if (mfd == NULL) {
                 CERROR("mds: out of memory\n");
@@ -190,6 +191,7 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
         if (child_lockh == NULL)
                 child_lockh = &lockh;
 
+        mdt_lock_handle_init(&lockh);
         lockh.mlh_mode = LCK_EX;
         rc = mdt_object_lock(info->mti_mdt->mdt_namespace, 
                              o, &lockh, MDS_INODELOCK_UPDATE);
@@ -351,7 +353,7 @@ int mdt_close(struct mdt_thread_info *info)
                 mdt_pack_attr2body(repbody, &info->mti_attr);
                 repbody->fid1 = *mdt_object_fid(o);
                 repbody->valid |= OBD_MD_FLID;
-
+/*
                 rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
                                   lmm, info->mti_mdt->mdt_max_mdsize, "lov");
                 if (rc >= 0) {
@@ -362,6 +364,7 @@ int mdt_close(struct mdt_thread_info *info)
                         repbody->eadatasize = rc;
                         rc = 0;
                 }
+*/
         }
 
         rc = mdt_mfd_close(info->mti_ctxt, mfd, 1);

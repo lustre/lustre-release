@@ -179,21 +179,21 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         repbody->fid1 = *mdt_object_fid(mo);
         repbody->valid |= OBD_MD_FLID;
        
-        /* don't return OST-specific attributes if we didn't just set them. */
+        /* don't return OST-specific attributes if we didn't just set them. 
         if (attr->la_valid & ATTR_SIZE)
                 repbody->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
         if (attr->la_valid & (ATTR_MTIME | ATTR_MTIME_SET))
                 repbody->valid |= OBD_MD_FLMTIME;
         if (attr->la_valid & (ATTR_ATIME | ATTR_ATIME_SET))
                 repbody->valid |= OBD_MD_FLATIME;
-
+        */
         /* FIXME: I have to combine the attr_set & xattr_set into one single
                   transaction. How can I?
-         */ 
         rc = mo_xattr_set(info->mti_ctxt, mdt_object_child(mo),
                           rr->rr_eadata, rr->rr_eadatalen, "lov");
         if (rc)
                 GOTO(out_unlock, rc);
+         */ 
 
         /* FIXME & TODO Please deal with logcookies here*/
         GOTO(out_unlock, rc);
