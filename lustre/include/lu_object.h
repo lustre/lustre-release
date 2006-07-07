@@ -708,21 +708,13 @@ static inline int lu_object_exists(const struct lu_context *ctx,
 static inline int lu_object_assert_exists(const struct lu_context *ctx,
                                    const struct lu_object *o)
 {
-        int result;
-        result = lu_object_exists(ctx, o);
-        if (result < 0)
-                result = 1;
-        return result;
+        return lu_object_exists(ctx, o) != 0;
 }
 
 static inline int lu_object_assert_not_exists(const struct lu_context *ctx,
                                        const struct lu_object *o)
 {
-        int result;
-        result = lu_object_exists(ctx, o);
-        if (result < 0)
-                result = 0;
-        return !result;
+        return lu_object_exists(ctx, o) <= 0;
 }
 
 /*
