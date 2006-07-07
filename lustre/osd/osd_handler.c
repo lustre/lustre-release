@@ -347,7 +347,7 @@ static int osd_object_exists(const struct lu_context *ctx,
                              const struct lu_object *o)
 {
         LASSERT(osd_invariant(osd_obj(o)));
-        return osd_obj(o)->oo_inode != NULL;
+        return !!(osd_obj(o)->oo_inode != NULL);
 }
 
 static int osd_object_print(const struct lu_context *ctx,
@@ -770,7 +770,7 @@ int osd_xattr_get(const struct lu_context *ctxt, struct dt_object *dt,
 }
 
 int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
-                  const void *buf, int buf_len, const char *name, 
+                  const void *buf, int buf_len, const char *name,
                   struct thandle *handle)
 {
         return 0;
