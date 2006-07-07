@@ -10,6 +10,7 @@
  *   Author: Phil Schwan <phil@clusterfs.com>
  *   Author: Mike Shaver <shaver@clusterfs.com>
  *   Author: Nikita Danilov <nikita@clusterfs.com>
+ *   Author: Huang Hua <huanghua@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -173,14 +174,13 @@ void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr)
         b->nlink      = attr->la_nlink;
 }
 
-static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
+static int mdt_getattr_pack_msg(struct mdt_thread_info *info, 
+                                struct mdt_object *o)
 {
-#ifdef MDT_CODE
         const struct mdt_body *body = info->mti_body;
         struct req_capsule *pill = &info->mti_pill;
         struct ptlrpc_request *req = mdt_info_req(info);
-#endif
-        struct md_object *next = mdt_object_child(info->mti_object);
+        struct md_object *next = mdt_object_child(o);
         struct lu_attr *la = &info->mti_attr;
         int rc;
         ENTRY;
@@ -189,36 +189,32 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
         if (rc){
                 RETURN(rc);
         }
-#ifdef MDT_CODE
         if ((S_ISREG(la->la_mode) && (body->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(la->la_mode) && (body->valid & OBD_MD_FLDIREA))) {
                 rc = mo_xattr_get(info->mti_ctxt, next, NULL, 0, "lov");
 
                 CDEBUG(D_INODE, "got %d bytes MD data for object "DFID3"\n",
-                       rc, PFID3(mdt_object_fid(info->mti_object)));
+                       rc, PFID3(mdt_object_fid(o)));
                 if (rc < 0) {
-                        if (rc != -ENODATA) {
+                        if (rc != -ENODATA && rc != -EOPNOTSUPP) {
                                 CERROR("error getting MD "DFID3": rc = %d\n",
-                                       PFID3(mdt_object_fid(info->mti_object)),
+                                       PFID3(mdt_object_fid(o)),
                                        rc);
                                 RETURN(rc);
                         }
-                        req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, 0);
+                        rc = 0;
                 } else if (rc > MAX_MD_SIZE) {
-                        req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, 0);
                         CERROR("MD size %d larger than maximum possible %u\n",
                                rc, MAX_MD_SIZE);
-                } else {
-                        req_capsule_set_size(pill, &RMF_MDT_MD,
-                                             RCL_SERVER, rc);
+                        rc = 0;
                 }
         } else if (S_ISLNK(la->la_mode) && (body->valid & OBD_MD_LINKNAME)) {
-                /* XXX:It also uese the mdt_md to hold symname.
+                /* XXX:It also uses the mdt_md to hold symname.
                  * Are there any problem? will be swabbed? hope not.
                  */
-                int len = min_t(int, la->la_size + 1, body->eadatasize);
-                req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, len);
+                rc = min_t(int, la->la_size + 1, body->eadatasize);
         }
+        req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, rc);
 
 #ifdef CONFIG_FS_POSIX_ACL
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
@@ -227,16 +223,14 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
                 rc = mo_xattr_get(info->mti_ctxt, next,
                                   NULL, 0, XATTR_NAME_ACL_ACCESS);
                 if (rc < 0) {
-                        if (rc != -ENODATA) {
+                        if (rc != -ENODATA && rc != -EOPNOTSUPP) {
                                 CERROR("got acl size: %d\n", rc);
                                 RETURN(rc);
                         }
-                        req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, 0);
-                } else
-                        req_capsule_set_size(pill, &RMF_EADATA,
-                                             RCL_SERVER, rc);
+                        rc = 0;
+                } 
+                req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, rc);
         }
-#endif
 #endif
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 CERROR("failed MDT_GETATTR_PACK test\n");
@@ -245,24 +239,22 @@ static int mdt_getattr_pack_msg(struct mdt_thread_info *info)
         rc = req_capsule_pack(&info->mti_pill);
         if (rc) {
                 CERROR("lustre_pack_reply failed: rc %d\n", rc);
-                RETURN(rc);
         }
 
-        RETURN(0);
+        RETURN(rc);
 }
 
-static int mdt_getattr_internal(struct mdt_thread_info *info)
+static int mdt_getattr_internal(struct mdt_thread_info *info,
+                                struct mdt_object *o)
 {
-        struct md_object *next = mdt_object_child(info->mti_object);
+        struct md_object *next = mdt_object_child(o);
         const struct mdt_body  *reqbody = info->mti_body;
         struct mdt_body  *repbody;
         struct lu_attr *la = &info->mti_attr;
         int rc;
-#ifdef MDT_CODE
         void *buffer;
         int length;
         struct ptlrpc_request *req = mdt_info_req(info);
-#endif
         ENTRY;
 
         rc = mo_attr_get(info->mti_ctxt, next, la);
@@ -274,10 +266,9 @@ static int mdt_getattr_internal(struct mdt_thread_info *info)
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         mdt_pack_attr2body(repbody, la);
-        repbody->fid1 = *mdt_object_fid(info->mti_object);
+        repbody->fid1 = *mdt_object_fid(o);
         repbody->valid |= OBD_MD_FLID;
 
-#ifdef MDT_CODE
         buffer = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
         length = req_capsule_get_size(&info->mti_pill, &RMF_MDT_MD,
                                       RCL_SERVER);
@@ -330,7 +321,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info)
                                   buffer, length, XATTR_NAME_ACL_ACCESS);
 
                 if (rc < 0) {
-                        if (rc != -ENODATA) {
+                        if (rc != -ENODATA && rc != -EOPNOTSUPP) {
                                 CERROR("got acl size: %d\n", rc);
                                 RETURN(rc);
                         }
@@ -339,7 +330,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info)
                 repbody->aclsize = rc;
                 repbody->valid |= OBD_MD_FLACL;
         }
-#endif
 #endif
         RETURN(0);
 }
@@ -357,9 +347,9 @@ static int mdt_getattr(struct mdt_thread_info *info)
                 CERROR(LUSTRE_MDT0_NAME": getattr lustre_pack_reply failed\n");
                 result = -ENOMEM;
         } else {
-                result = mdt_getattr_pack_msg(info);
+                result = mdt_getattr_pack_msg(info, info->mti_object);
                 if (result == 0)
-                        result = mdt_getattr_internal(info);
+                        result = mdt_getattr_internal(info, info->mti_object);
         }
         RETURN(result);
 }
@@ -400,6 +390,22 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         /*step 2: lookup child's fid by name */
         result = mdo_lookup(info->mti_ctxt, next, name, &child_fid);
+        if (result == -EREMOTE) {
+                /* This object is located on remote node */
+                req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, 
+                                     RCL_SERVER, 0);
+#ifdef CONFIG_FS_POSIX_ACL
+                req_capsule_set_size(&info->mti_pill, &RMF_EADATA, 
+                                     RCL_SERVER, 0);
+#endif
+                result = req_capsule_pack(&info->mti_pill);
+                if (result == 0) {
+                        struct mdt_body *repbody;
+                        repbody = req_capsule_server_get(&info->mti_pill, 
+                                                         &RMF_MDT_BODY);
+                        repbody->fid1 = child_fid;
+                }
+        } 
         if (result != 0)
                 GOTO(out_parent, result);
 
@@ -411,9 +417,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 GOTO(out_parent, result = PTR_ERR(child));
 
         /* finally, we can get attr for child. */
-        result = mdt_getattr_pack_msg(info);
+        result = mdt_getattr_pack_msg(info, child);
         if (result == 0) {
-                result = mdt_getattr_internal(info);
+                result = mdt_getattr_internal(info, child);
         }
         if (result != 0)
                 mdt_object_unlock(ns, child, lhc);
@@ -488,19 +494,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
 
         rc = mdt_reint_unpack(info, op);
         if (rc == 0) {
-                struct mdt_reint_reply *rep;
-
-                rep = &info->mti_reint_rep;
-                rep->mrr_body = req_capsule_server_get(&info->mti_pill,
-                                                       &RMF_MDT_BODY);
-                if (rep->mrr_body != NULL)
-                        /*
-                         * XXX fill other fields in @rep with pointers to
-                         * reply buffers.
-                         */
-                        rc = mdt_reint_rec(info);
-                else
-                        rc = -EFAULT;
+                rc = mdt_reint_rec(info);
         }
 
         RETURN(rc);
@@ -1443,14 +1437,16 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
 
         if (rc) {
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
+                if (rc == -EREMOTE)
+                        intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
+                else
+                        intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
                 if (ldlm_rep)
                         ldlm_rep->lock_policy_res2 = 0;
                 RETURN(ELDLM_LOCK_ABORTED);
         }
-        else
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
 
+        intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
 
         new_lock = ldlm_handle2lock(&lhc.mlh_lh);
         if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
@@ -2019,8 +2015,9 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 
         ENTRY;
         
+/*
         mdt_fs_cleanup(ctx, m);
-
+*/
         mdt_stop_ptlrpc_service(m);
 
         /* finish the stack */
@@ -2067,6 +2064,13 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
 
+        m->mdt_flags = 0;
+
+        /* Temporary. should parse mount option. */
+        m->mdt_opts.mo_user_xattr = 0;
+        m->mdt_opts.mo_acl = 0;
+
+
         OBD_ALLOC_PTR(s);
         if (s == NULL)
                 RETURN(-ENOMEM);
@@ -2109,14 +2113,16 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         rc = mdt_start_ptlrpc_service(m);
         if (rc)
                 GOTO(err_free_ns, rc);
-
+/* TODO: wait for read & write
         rc = mdt_fs_setup(ctx, m);
         if (rc)
                 GOTO(err_stop_service, rc);
-
+*/
         RETURN(0);
+/*
 err_stop_service:
         mdt_stop_ptlrpc_service(m);
+*/
 err_free_ns:
         ldlm_namespace_free(m->mdt_namespace, 0);
         m->mdt_namespace = NULL;
@@ -2130,6 +2136,7 @@ err_fini_site:
         lu_site_fini(s);
 err_free_site:
         OBD_FREE_PTR(s);
+        md_device_fini(&m->mdt_md_dev);
         return (rc);
 }
 
@@ -2346,6 +2353,7 @@ static int mdt_obd_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
+/* FIXME: Can we avoid using these two interfaces? */
 static int mdt_init_export(struct obd_export *exp)
 {
         struct mdt_export_data *med = &exp->exp_mdt_data;
@@ -2646,10 +2654,10 @@ static struct mdt_opc_slice mdt_handlers[] = {
 };
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Meta-data Target Prototype ("LUSTRE_MDT0_NAME")");
+MODULE_DESCRIPTION("Lustre Meta-data Target ("LUSTRE_MDT0_NAME")");
 MODULE_LICENSE("GPL");
 
 CFS_MODULE_PARM(mdt_num_threads, "ul", ulong, 0444,
                 "number of mdt service threads to start");
 
-cfs_module(mdt, "0.0.4", mdt_mod_init, mdt_mod_exit);
+cfs_module(mdt, "0.1.0", mdt_mod_init, mdt_mod_exit);

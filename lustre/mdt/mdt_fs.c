@@ -400,8 +400,8 @@ int mdt_fs_setup(const struct lu_context *ctxt,
                         mdt->mdt_last = NULL;
                 }
         } else {
-                CERROR("cannot open %s: rc = %d\n", LAST_RCVD, rc);
                 rc = PTR_ERR(last);
+                CERROR("cannot open %s: rc = %d\n", LAST_RCVD, rc);
         }
         return rc;
 }

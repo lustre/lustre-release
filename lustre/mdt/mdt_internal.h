@@ -182,11 +182,6 @@ struct mdt_reint_record {
 
 };
 
-struct mdt_reint_reply {
-        struct mdt_body    *mrr_body;
-        struct lov_mds_md  *mrr_md;
-        struct llog_cookie *mrr_cookie;
-};
 
 #define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
 
@@ -245,7 +240,6 @@ struct mdt_thread_info {
          * frequent.
          */
         struct kstatfs             mti_sfs;
-        struct mdt_reint_reply     mti_reint_rep;
 };
 
 static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)

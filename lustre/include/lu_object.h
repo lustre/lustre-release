@@ -337,10 +337,8 @@ struct lu_attr {
         __u32          la_flags;  /* object flags */
         __u32          la_nlink;  /* number of persistent references to this
                                    * object */
-#ifdef MDT_CODE
         __u32          la_rdev;   /* real device */
-        __u64          la_valid;   /* real device */
-#endif
+        __u64          la_valid;  /* valid bits */
 };
 
 

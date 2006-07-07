@@ -1,8 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/mdt/mdt_reint.c
- *  Lustre Metadata Target (mdt) reintegration routines
+ *  linux/mdt/mdt_xattr.c
+ *  Lustre Metadata Target (mdt) extended attributes management.
  *
  *  Copyright (C) 2002-2006 Cluster File Systems, Inc.
  *   Author: Peter Braam <braam@clusterfs.com>
@@ -40,11 +40,10 @@
 /* return EADATA length to the caller. negative value means error */
 static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 {
-        char *xattr_name;
-        int rc = -EOPNOTSUPP;
-        int rc2;
         struct req_capsule *pill = &info->mti_pill ;
         struct ptlrpc_request *req = mdt_info_req(info);
+        char *xattr_name;
+        int rc;
 
         /* Imagine how many bytes we need */
         if (info->mti_body->valid & OBD_MD_FLXATTR) {
@@ -71,23 +70,22 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         }
 
         if (rc < 0) {
-                if (rc != -ENODATA && rc != -EOPNOTSUPP)
+                if (rc != -ENODATA && rc != -EOPNOTSUPP) {
                         CWARN("get EA size error: %d\n", rc);
-                /* return empty to client */
-                req_capsule_extend(&info->mti_pill, &RQF_MDS_SETXATTR);
+                        return rc;
+                }
+                rc = 0;
         } else {
                 rc =  min_t(int, info->mti_body->eadatasize, rc);
-                req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, rc);
         }
+        req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, rc);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK)) {
                 CERROR("failed MDS_GETXATTR_PACK test\n");
                 return -ENOMEM;
         }
 
-        rc2 = req_capsule_pack(pill);
-        if (rc2)
-                return rc2;
+        rc = req_capsule_pack(pill);
         return rc;
 }
 
@@ -117,12 +115,11 @@ int mdt_getxattr(struct mdt_thread_info *info)
         rc = mdt_getxattr_pack_reply(info);
         if (rc < 0)
                 RETURN(rc);
-        buf = req_capsule_server_get(&info->mti_pill,
-                                     &RMF_EADATA);
-        buflen = req_capsule_get_size(&info->mti_pill,
-                                      &RMF_EADATA, RCL_SERVER);
-        rep_body = req_capsule_server_get(&info->mti_pill,
-                                          &RMF_MDT_BODY);
+        buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
+        rep_body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        buflen = req_capsule_get_size(&info->mti_pill, &RMF_EADATA, RCL_SERVER);
+        if (buflen == 0)
+                GOTO(no_xattr, rc = 0);
 
         if (info->mti_body->valid & OBD_MD_FLXATTR) {
                 char *xattr_name = req_capsule_client_get(&info->mti_pill, 
@@ -145,6 +142,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
                 LBUG();
 
         if (rc >= 0) {
+no_xattr:
                 rep_body->eadatasize = rc;
                 rc = 0;
         }
@@ -163,18 +161,11 @@ int mdt_setxattr(struct mdt_thread_info *info)
         struct mdt_lock_handle *lh;
         ENTRY;
 
-        lh = &info->mti_lh[MDT_LH_PARENT];
-        lh->mlh_mode = LCK_EX;
 
-/*        if (req->rq_reqmsg->bufcount < 2)
- *                RETURN(-EFAULT);
- */
         DEBUG_REQ(D_INODE, req, "setxattr "DFID3"\n",
                   PFID3(&info->mti_body->fid1));
 
 /*        MDS_CHECK_RESENT(req, mds_reconstruct_generic(req)); */
-
-        lockpart = MDS_INODELOCK_UPDATE;
 
         /* various sanity check for xattr name */
         xattr_name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
@@ -197,13 +188,19 @@ int mdt_setxattr(struct mdt_thread_info *info)
                 GOTO(out, rc = -EOPNOTSUPP);
         }
 
+        lockpart = MDS_INODELOCK_UPDATE;
         if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
                 lockpart |= MDS_INODELOCK_LOOKUP;
 
+        lh = &info->mti_lh[MDT_LH_PARENT];
+        lh->mlh_mode = LCK_EX;
         rc = mdt_object_lock(info->mti_mdt->mdt_namespace, info->mti_object, 
                                  lh, lockpart);
         if (rc != 0)
                 GOTO(out, rc);
+
+        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                GOTO(out_unlock, rc = -EROFS);
 
         if (info->mti_body->valid & OBD_MD_FLXATTR) {
                 char * xattr; 
