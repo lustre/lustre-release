@@ -158,22 +158,6 @@ static int mdd_xattr_get(const struct lu_context *ctxt, struct md_object *obj,
         RETURN(rc);
 }
 
-static int __mdd_object_destroy(const struct lu_context *ctxt,
-                                struct mdd_object *obj,
-                                struct thandle *handle)
-{
-        struct dt_object  *next = mdd_object_child(obj);
-        int rc = 0;
-
-        ENTRY;
-        if (lu_object_exists(ctxt, &obj->mod_obj.mo_lu))
-                rc = next->do_ops->do_object_destroy(ctxt, next, handle);
-
-        LASSERT(ergo(rc == 0, !lu_object_exists(ctxt, &obj->mod_obj.mo_lu)));
-
-        RETURN(rc);
-}
-
 enum mdd_txn_op {
         MDD_TXN_OBJECT_DESTROY_OP,
         MDD_TXN_OBJECT_CREATE_OP,
@@ -230,38 +214,6 @@ static void mdd_txn_param_build(const struct lu_context *ctx,
                                 const struct mdd_txn_op_descr *opd)
 {
         mdd_ctx_info(ctx)->mti_param.tp_credits = opd->mod_credits;
-}
-
-static void mdd_object_release(const struct lu_context *ctxt,
-                               struct lu_object *lo)
-{
-	struct mdd_device *mdd = lu2mdd_dev(lo->lo_dev);
-        struct mdd_object *mdd_obj = lu2mdd_obj(lo);
-        struct lu_attr *lu_attr = &mdd_ctx_info(ctxt)->mti_attr;
-        struct thandle *handle;
-        int rc = 0;
-        ENTRY;
-
-        if (!lu_object_exists(ctxt, lo))
-                GOTO(out, rc);
-
-        rc = mdd_attr_get(ctxt, &mdd_obj->mod_obj, lu_attr);
-        if (rc < 0)
-                GOTO(out, rc);
-
-        if (lu_attr->la_nlink == 0) {
-                mdd_txn_param_build(ctxt, &MDD_TXN_OBJECT_CREATE);
-                handle = mdd_trans_start(ctxt, mdd);
-                if (IS_ERR(handle))
-                        GOTO(out, rc = PTR_ERR(handle));
-                rc = __mdd_object_destroy(ctxt, mdd_obj, handle);
-                mdd_trans_stop(ctxt, mdd, handle);
-        }
-out:
-        if (rc)
-                CERROR("release object error %d \n", rc);
-        EXIT;
-        return;
 }
 
 static int mdd_object_print(const struct lu_context *ctxt,
@@ -375,7 +327,6 @@ struct lu_device_operations mdd_lu_ops = {
 static struct lu_object_operations mdd_lu_obj_ops = {
 	.loo_object_init    = mdd_object_init,
 	.loo_object_free    = mdd_object_free,
-        .loo_object_release = mdd_object_release,
 	.loo_object_print   = mdd_object_print,
 	.loo_object_exists  = mdd_object_exists,
 };
@@ -596,6 +547,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *mdd_cobj = md2mdd_obj(cobj);
+        struct dt_object  *dt_cobj = mdd_object_child(mdd_cobj); 
         struct thandle *handle;
         int rc;
         ENTRY;
@@ -614,6 +566,11 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         rc = __mdd_ref_del(ctxt, mdd_cobj, handle);
         if (rc)
                 GOTO(cleanup, rc);
+        if (dt_is_dir(ctxt, dt_cobj)) {
+                rc = __mdd_ref_del(ctxt, mdd_pobj, handle);
+                if (rc)
+                        GOTO(cleanup, rc);
+        }
 cleanup:
         mdd_lock2(ctxt, mdd_pobj, mdd_cobj);
         mdd_trans_stop(ctxt, mdd, handle);
@@ -724,6 +681,9 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         rc = __mdd_index_delete(ctxt, mdd_spobj, sname, handle);
         if (rc)
                 GOTO(cleanup, rc);
+        /*FIXME: no sobj now, we should check sobj type, if it is dir,
+         * the nlink of its parent should be dec
+         */
         if (tobj) {
                 rc = __mdd_index_delete(ctxt, mdd_tpobj, tname, handle);
                 if (rc)
@@ -734,10 +694,18 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
+
         if (tobj && lu_object_exists(ctxt, &tobj->mo_lu)) {
-                rc = __mdd_object_destroy(ctxt, mdd_tobj, handle);
+                struct dt_object *dt_tobj = mdd_object_child(mdd_tobj);
+
+                rc = __mdd_ref_del(ctxt, mdd_tobj, handle);
                 if (rc)
                         GOTO(cleanup, rc);
+                if (dt_is_dir(ctxt, dt_tobj)) {
+                        rc = __mdd_ref_add(ctxt, mdd_tpobj, handle);
+                        if (rc)
+                                GOTO(cleanup, rc);
+                }
         }
 cleanup:
        /*FIXME: should we do error handling here?*/
@@ -773,8 +741,9 @@ static int mdd_create(const struct lu_context *ctxt,
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdo = md2mdd_obj(pobj);
         struct mdd_object *son = md2mdd_obj(child);
+        struct dt_object  *dt_son = mdd_object_child(son); 
         struct thandle *handle;
-        int rc = 0, created = 0, inserted = 0;
+        int rc = 0, created = 0, inserted = 0, ref_add = 0;
         ENTRY;
 
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
@@ -829,20 +798,28 @@ static int mdd_create(const struct lu_context *ctxt,
         created = 1;
         rc = __mdd_index_insert(ctxt, mdo, lu_object_fid(&child->mo_lu),
                                 name, handle);
-        
+      
         inserted = 1;
+        if (dt_is_dir(ctxt, dt_son)) {
+                rc = __mdd_ref_add(ctxt, mdo, handle);
+                if (rc)
+                        GOTO(cleanup, rc);
+                ref_add = 1;
+        }
         rc = mdd_lov_set_md(ctxt, pobj, child);
         if (rc) {
                 CERROR("error on stripe info copy %d \n", rc);
         }
 cleanup:
         if (rc && created) {
-                int rc1 = 0, rc2 = 0;
+                int rc1 = 0, rc2 = 0, rc3 = 0;
 
-                rc1 = __mdd_object_destroy(ctxt, son, handle);
+                rc1 = __mdd_ref_del(ctxt, son, handle);
                 if (inserted) 
                         rc2 = __mdd_index_delete(ctxt, mdo, name, handle);
-                if (rc1 || rc2) 
+                if (ref_add)
+                        rc3 = __mdd_ref_del(ctxt, mdo, handle);
+                if (rc1 || rc2 || rc3) 
                         CERROR("error can not cleanup destory %d insert %d \n",
                                rc1, rc2);
         }
@@ -932,7 +909,7 @@ static int mdd_rename_tgt(const struct lu_context *ctxt, struct md_object *pobj,
                 GOTO(cleanup, rc);
 
         if (tobj && lu_object_exists(ctxt, &tobj->mo_lu)) {
-                rc = __mdd_object_destroy(ctxt, mdd_tobj, handle);
+                rc = __mdd_ref_del(ctxt, mdd_tobj, handle);
                 if (rc)
                         GOTO(cleanup, rc);
         }
