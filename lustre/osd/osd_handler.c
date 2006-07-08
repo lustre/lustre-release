@@ -539,8 +539,8 @@ static void osd_fid_build_name(const struct lu_fid *fid, char *name)
         sprintf(name, qfmt, fid_seq(fid), fid_oid(fid), fid_ver(fid));
 }
 
-static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
-                     struct lu_attr *attr, struct thandle *th)
+static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
+                      umode_t mode, struct thandle *th)
 {
         int result;
         struct osd_device *osd = osd_obj2dev(obj);
@@ -553,7 +553,6 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
 
         LASSERT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
-        LASSERT(S_ISDIR(attr->la_mode));
         LASSERT(osd->od_obj_area != NULL);
 
         dir = osd->od_obj_area->d_inode;
@@ -565,8 +564,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
 
         dentry = d_alloc(osd->od_obj_area, &info->oti_str);
         if (dentry != NULL) {
-                result = dir->i_op->mkdir(dir, dentry,
-                                          attr->la_mode & (S_IRWXUGO|S_ISVTX));
+                result = dir->i_op->create(dir, dentry, mode, NULL);
                 if (result == 0) {
                         LASSERT(dentry->d_inode != NULL);
                         obj->oo_inode = dentry->d_inode;
@@ -580,44 +578,43 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
         return result;
 }
 
-static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
+
+extern int iam_lvar_create(struct inode *obj, int keysize, int ptrsize,
+                           int recsize, handle_t *handle);
+
+enum {
+        OSD_NAME_LEN = 255
+};
+
+static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
                      struct lu_attr *attr, struct thandle *th)
 {
         int result;
-        struct osd_device *osd = osd_obj2dev(obj);
-        struct inode      *dir;
+        struct osd_thandle *oth;
 
-        /*
-         * XXX temporary solution.
-         */
-        struct dentry     *dentry;
-
-        LASSERT(osd_invariant(obj));
-        LASSERT(obj->oo_inode == NULL);
-        LASSERT(S_ISREG(attr->la_mode));
-        LASSERT(osd->od_obj_area != NULL);
-
-        dir = osd->od_obj_area->d_inode;
-        LASSERT(dir->i_op != NULL && dir->i_op->create != NULL);
-
-        osd_fid_build_name(lu_object_fid(&obj->oo_dt.do_lu), info->oti_name);
-        info->oti_str.name = info->oti_name;
-        info->oti_str.len  = strlen(info->oti_name);
-
-        dentry = d_alloc(osd->od_obj_area, &info->oti_str);
-        if (dentry != NULL) {
-                result = dir->i_op->create(dir, dentry,
-                                          attr->la_mode & (S_IRWXUGO|S_ISVTX), NULL);
-                if (result == 0) {
-                        LASSERT(dentry->d_inode != NULL);
-                        obj->oo_inode = dentry->d_inode;
-                        igrab(obj->oo_inode);
-                }
-                dput(dentry);
-        } else
-                result = -ENOMEM;
-        LASSERT(osd_invariant(obj));
+        oth = container_of0(th, struct osd_thandle, ot_super);
+        LASSERT(S_ISDIR(attr->la_mode));
+        result = osd_mkfile(info, obj,
+                            S_IFDIR | (attr->la_mode & (S_IRWXUGO|S_ISVTX)),
+                            th);
+        if (result == 0) {
+                LASSERT(obj->oo_inode != NULL);
+                /*
+                 * XXX uh-oh... call low-level iam function directly.
+                 */
+                result = iam_lvar_create(obj->oo_inode, OSD_NAME_LEN, 4,
+                                         sizeof (struct lu_fid),
+                                         oth->ot_handle);
+        }
         return result;
+}
+
+static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
+                     struct lu_attr *attr, struct thandle *th)
+{
+        LASSERT(S_ISREG(attr->la_mode));
+        return osd_mkfile(info, obj,
+                          S_IFREG | (attr->la_mode & (S_IRWXUGO|S_ISVTX)), th);
 }
 
 typedef int (*osd_obj_type_f)(struct osd_thread_info *, struct osd_object *,
