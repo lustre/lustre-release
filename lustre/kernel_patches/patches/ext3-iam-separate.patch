@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
 --- iam.orig/fs/ext3/Makefile	2006-05-31 20:24:32.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-07-03 01:03:10.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-07-07 23:18:44.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -2606,8 +2606,8 @@ Index: iam/fs/ext3/iam_lfix.c
 Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lvar.c	2006-07-01 20:10:13.000000000 +0400
-@@ -0,0 +1,732 @@
++++ iam/fs/ext3/iam_lvar.c	2006-07-07 21:15:52.000000000 +0400
+@@ -0,0 +1,835 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3288,6 +3288,109 @@ Index: iam/fs/ext3/iam_lvar.c
 +{
 +        iam_ipd_free(ipd);
 +}
++
++static void lvar_root(void *buf,
++                      int blocksize, int keysize, int ptrsize, int recsize)
++{
++        struct lvar_root *root;
++        struct dx_countlimit *limit;
++        void                 *entry;
++        int isize;
++
++        isize = sizeof(lvar_hash_t) + ptrsize;
++        root = buf;
++        *root = (typeof(*root)) {
++                .vr_magic            = cpu_to_le32(IAM_LVAR_ROOT_MAGIC),
++                .vr_recsize          = cpu_to_le16(recsize),
++                .vr_ptrsize          = cpu_to_le16(ptrsize),
++                .vr_indirect_levels  = 0
++        };
++
++        limit = (void *)(root + 1);
++        *limit = (typeof(*limit)){
++                /*
++                 * limit itself + one pointer to the leaf.
++                 */
++                .count = cpu_to_le16(2),
++                .limit = (blocksize - sizeof *root) / isize
++        };
++
++        entry = root + 1;
++        /*
++         * Skip over @limit.
++         */
++        entry += isize;
++
++        /*
++         * Entry format is <key> followed by <ptr>. In the minimal tree
++         * consisting of a root and single node, <key> is a minimal possible
++         * key.
++         *
++         * XXX: this key is hard-coded to be a sequence of 0's.
++         */
++        entry += sizeof(lvar_hash_t);
++        /* now @entry points to <ptr> */
++        if (ptrsize == 4)
++                *(u_int32_t *)entry = cpu_to_le32(1);
++        else
++                *(u_int64_t *)entry = cpu_to_le64(1);
++}
++
++static int lvar_esize(int namelen, int recsize)
++{
++        return (offsetof(struct lvar_leaf_entry, vle_key) +
++                namelen + recsize + LVAR_ROUND) & ~LVAR_ROUND;
++}
++
++static void lvar_leaf(void *buf,
++                      int blocksize, int keysize, int ptrsize, int recsize)
++{
++        struct lvar_leaf_header *head;
++
++        /* form leaf */
++        head = buf;
++        *head = (typeof(*head)) {
++                .vlh_magic = cpu_to_le16(IAM_LVAR_LEAF_MAGIC),
++                .vlh_used  = cpu_to_le16(sizeof *head + lvar_esize(0, recsize))
++        };
++}
++
++#include <linux/jbd.h>
++#include <linux/ext3_fs.h>
++#include <linux/ext3_jbd.h>
++
++int iam_lvar_create(struct inode *obj,
++                    int keysize, int ptrsize, int recsize, handle_t *handle)
++{
++        struct buffer_head *root_node;
++        struct buffer_head *leaf_node;
++        struct super_block *sb;
++
++        u32 blknr;
++        int result;
++        unsigned long bsize;
++
++        assert(obj->i_size == 0);
++
++        sb = obj->i_sb;
++        bsize = sb->s_blocksize;
++        root_node = ext3_append(handle, obj, &blknr, &result);
++        leaf_node = ext3_append(handle, obj, &blknr, &result);
++        if (root_node != NULL && leaf_node != NULL) {
++                lvar_root(root_node->b_data, bsize, keysize, ptrsize, recsize);
++                lvar_leaf(leaf_node->b_data, bsize, keysize, ptrsize, recsize);
++                ext3_mark_inode_dirty(handle, obj);
++                result = ext3_journal_dirty_metadata(handle, root_node);
++                if (result == 0)
++                        result = ext3_journal_dirty_metadata(handle, leaf_node);
++                if (result != 0)
++                        ext3_std_error(sb, result);
++        }
++        brelse(leaf_node);
++        brelse(root_node);
++        return result;
++}
++EXPORT_SYMBOL(iam_lvar_create);
 +
 +static struct iam_operations lvar_ops = {
 +        .id_root_ptr    = lvar_root_ptr,
@@ -5338,7 +5441,7 @@ Index: iam/fs/ext3/namei.c
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
 --- iam.orig/include/linux/lustre_iam.h	2006-05-31 20:24:32.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-07-03 01:03:10.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-07-07 23:18:44.000000000 +0400
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:

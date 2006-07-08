@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
---- iam.orig/fs/ext3/Makefile	2006-07-03 01:03:10.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-07-03 01:03:11.000000000 +0400
+--- iam.orig/fs/ext3/Makefile	2006-07-07 23:18:44.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-07-07 23:18:45.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -13,8 +13,8 @@ Index: iam/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
 Index: iam/fs/ext3/dir.c
 ===================================================================
---- iam.orig/fs/ext3/dir.c	2006-07-03 01:03:10.000000000 +0400
-+++ iam/fs/ext3/dir.c	2006-07-03 01:03:11.000000000 +0400
+--- iam.orig/fs/ext3/dir.c	2006-07-07 23:18:44.000000000 +0400
++++ iam/fs/ext3/dir.c	2006-07-07 23:18:45.000000000 +0400
 @@ -28,6 +28,7 @@
  #include <linux/smp_lock.h>
  #include <linux/slab.h>
@@ -112,8 +112,8 @@ Index: iam/fs/ext3/dir.c
  		    (filp->f_version != inode->i_version)) {
 Index: iam/fs/ext3/file.c
 ===================================================================
---- iam.orig/fs/ext3/file.c	2006-07-03 01:03:10.000000000 +0400
-+++ iam/fs/ext3/file.c	2006-07-03 01:03:11.000000000 +0400
+--- iam.orig/fs/ext3/file.c	2006-07-07 23:18:44.000000000 +0400
++++ iam/fs/ext3/file.c	2006-07-07 23:18:45.000000000 +0400
 @@ -23,6 +23,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -149,7 +149,7 @@ Index: iam/fs/ext3/file.c
 Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
 --- iam.orig/fs/ext3/iam-uapi.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam-uapi.c	2006-07-03 01:03:11.000000000 +0400
++++ iam/fs/ext3/iam-uapi.c	2006-07-07 23:18:45.000000000 +0400
 @@ -0,0 +1,361 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -514,8 +514,8 @@ Index: iam/fs/ext3/iam-uapi.c
 +}
 Index: iam/fs/ext3/ioctl.c
 ===================================================================
---- iam.orig/fs/ext3/ioctl.c	2006-07-03 01:03:10.000000000 +0400
-+++ iam/fs/ext3/ioctl.c	2006-07-03 01:03:11.000000000 +0400
+--- iam.orig/fs/ext3/ioctl.c	2006-07-07 23:18:44.000000000 +0400
++++ iam/fs/ext3/ioctl.c	2006-07-07 23:18:45.000000000 +0400
 @@ -250,6 +250,6 @@ flags_err:
  
  
@@ -526,8 +526,8 @@ Index: iam/fs/ext3/ioctl.c
  }
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- iam.orig/include/linux/lustre_iam.h	2006-07-03 01:03:10.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-07-03 01:03:11.000000000 +0400
+--- iam.orig/include/linux/lustre_iam.h	2006-07-07 23:18:44.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-07-07 23:18:45.000000000 +0400
 @@ -30,9 +30,6 @@
  #ifndef __LINUX_LUSTRE_IAM_H__
  #define __LINUX_LUSTRE_IAM_H__
@@ -992,15 +992,19 @@ Index: iam/include/linux/lustre_iam.h
 +static inline struct iam_entry *iam_entry_shift(struct iam_path *p,
 +						struct iam_entry *entry,
 +						int shift)
-+{
+ {
+-	memcpy(k1, k2, c->ic_descr->id_key_size);
 +	void *e = entry;
 +	return e + shift * iam_entry_size(p);
-+}
-+
+ }
+ 
+-static inline int iam_keycmp(const struct iam_container *c,
+-			     const struct iam_key *k1, const struct iam_key *k2)
 +static inline struct iam_ikey *iam_get_ikey(struct iam_path *p,
 +                                            struct iam_entry *entry,
 +                                            struct iam_ikey *key)
-+{
+ {
+-	return c->ic_descr->id_ops->id_keycmp(c, k1, k2);
 +	return memcpy(key, entry, iam_path_descr(p)->id_ikey_size);
 +}
 +
@@ -1027,19 +1031,15 @@ Index: iam/include/linux/lustre_iam.h
 + */
 +static inline void iam_ikeycpy0(const struct iam_container *c,
 +                                struct iam_ikey *k1, const struct iam_ikey *k2)
- {
--	memcpy(k1, k2, c->ic_descr->id_key_size);
++{
 +        if (k1 != k2)
 +                iam_ikeycpy(c, k1, k2);
- }
- 
--static inline int iam_keycmp(const struct iam_container *c,
--			     const struct iam_key *k1, const struct iam_key *k2)
++}
++
 +static inline int iam_ikeycmp(const struct iam_container *c,
 +                              const struct iam_ikey *k1,
 +                              const struct iam_ikey *k2)
- {
--	return c->ic_descr->id_ops->id_keycmp(c, k1, k2);
++{
 +	return c->ic_descr->id_ops->id_ikeycmp(c, k1, k2);
  }
  
@@ -1160,7 +1160,7 @@ Index: iam/include/linux/lustre_iam.h
  
  int ext3_htree_next_block(struct inode *dir, __u32 hash,
  			  struct iam_path *path, __u32 *start_hash);
-@@ -681,6 +756,21 @@ int ext3_htree_next_block(struct inode *
+@@ -681,6 +756,20 @@ int ext3_htree_next_block(struct inode *
  struct buffer_head *ext3_append(handle_t *handle, struct inode *inode,
  				u32 *block, int *err);
  int split_index_node(handle_t *handle, struct iam_path *path);
@@ -1178,11 +1178,10 @@ Index: iam/include/linux/lustre_iam.h
 +				      __u32 *delim_hash);
 +
 +extern struct iam_descr iam_htree_compat_param;
-+
  
  /*
   * external
-@@ -698,10 +788,12 @@ int iam_node_read(struct iam_container *
+@@ -698,10 +787,12 @@ int iam_node_read(struct iam_container *
  		  handle_t *handle, struct buffer_head **bh);
  
  void iam_insert_key(struct iam_path *path, struct iam_frame *frame,
@@ -1196,7 +1195,7 @@ Index: iam/include/linux/lustre_iam.h
  
  struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
  struct iam_container *iam_leaf_container(const struct iam_leaf *leaf);
-@@ -709,14 +801,79 @@ struct iam_descr *iam_leaf_descr(const s
+@@ -709,14 +800,79 @@ struct iam_descr *iam_leaf_descr(const s
  struct iam_leaf_operations *iam_leaf_ops(const struct iam_leaf *leaf);
  
  
