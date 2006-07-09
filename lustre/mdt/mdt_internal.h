@@ -108,11 +108,6 @@ struct mdt_device {
         struct ptlrpc_client       mdt_ldlm_client;
         /* underlying device */
         struct md_device          *mdt_child;
-        /*
-         * Device flags, taken from enum mdt_flags. No locking (so far) is
-         * necessary.
-         */
-        unsigned long              mdt_flags;
         struct dt_device          *mdt_bottom;
         /*
          * Options bit-fields.
@@ -120,6 +115,7 @@ struct mdt_device {
         struct {
                 signed int         mo_user_xattr :1;
                 signed int         mo_acl        :1;
+                signed int         mo_compat_resname:1;
         } mdt_opts;
         /* Transaction related stuff here */
         spinlock_t                 mdt_transno_lock;
@@ -141,14 +137,6 @@ struct mdt_device {
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
 #define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR)
 
-enum mdt_flags {
-        /*
-         * This mdt works with legacy clients with different resource name
-         * encoding (pre-fid, etc.).
-         */
-        MDT_CL_COMPAT_RESNAME = 1 << 0,
-};
-
 struct mdt_object {
         struct lu_object_header mot_header;
         struct md_object        mot_obj;
@@ -166,6 +154,8 @@ enum {
 enum {
         MDT_LH_PARENT,
         MDT_LH_CHILD,
+        MDT_LH_OLD,
+        MDT_LH_NEW,
         MDT_LH_NR
 };
 
@@ -184,6 +174,7 @@ struct mdt_reint_record {
 
 
 #define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
+#define XATTR_NAME_LOV          "lov"
 
 /*
  * Common data shared by mdt-level handlers. This is allocated per-thread to
@@ -240,6 +231,15 @@ struct mdt_thread_info {
          * frequent.
          */
         struct kstatfs             mti_sfs;
+
+        /* temporary stuff used by thread */
+        struct lu_fid              mti_tmp_fid1;
+        struct lu_fid              mti_tmp_fid2;
+        ldlm_policy_data_t         mti_policy;
+        struct ldlm_res_id         mti_res_id;
+        union {
+                struct obd_uuid    uuid;
+        } mti_u;
 };
 
 static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)
@@ -275,26 +275,30 @@ static inline const struct lu_fid *mdt_object_fid(struct mdt_object *o)
         return lu_object_fid(&o->mot_obj.mo_lu);
 }
 
-int mdt_object_lock(struct ldlm_namespace *, 
+int mdt_object_lock(struct mdt_thread_info *,
                     struct mdt_object *,
                     struct mdt_lock_handle *, 
                     __u64);
 
-void mdt_object_unlock(struct ldlm_namespace *, 
+void mdt_object_unlock(struct mdt_thread_info *, 
                        struct mdt_object *,
                        struct mdt_lock_handle *);
 
 struct mdt_object *mdt_object_find(const struct lu_context *,
                                    struct mdt_device *, 
                                    const struct lu_fid *);
-struct mdt_object *mdt_object_find_lock(const struct lu_context *,
-                                        struct mdt_device *,
+struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *,
                                         const struct lu_fid *,
-                                        struct mdt_lock_handle *, __u64);
+                                        struct mdt_lock_handle *,
+                                        __u64);
+void mdt_object_unlock_put(struct mdt_thread_info *, 
+                           struct mdt_object *,
+                           struct mdt_lock_handle *);
 
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 int mdt_reint_rec(struct mdt_thread_info *);
-void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr);
+void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr, 
+                        const struct lu_fid *fid);
 
 int mdt_getxattr(struct mdt_thread_info *info);
 int mdt_setxattr(struct mdt_thread_info *info);
@@ -341,7 +345,13 @@ int mdt_close(struct mdt_thread_info *info);
 
 int mdt_done_writing(struct mdt_thread_info *info);
 
-
+/* debug issues helper starts here*/
+#define MDT_FAIL_CHECK(id)                                              \
+({                                                                      \
+        if (OBD_FAIL_CHECK(id))                                         \
+                CERROR(LUSTRE_MDT0_NAME": " #id " test failed\n");      \
+        OBD_FAIL_CHECK(id);                                             \
+})
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

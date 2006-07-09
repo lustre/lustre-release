@@ -129,15 +129,15 @@ int mdt_client_free(const struct lu_context *ctxt,
                     struct mdt_export_data *med)
 {
         struct mdt_client_data *mcd = med->med_mcd;
-        int rc;
+        int rc = 0;
         loff_t off;
         ENTRY;
 
         if (!mcd)
                 RETURN(0);
 
-        CDEBUG(D_INFO, "freeing client at idx %u, offset %lld with UUID '%s'\n",
-               med->med_lr_idx, med->med_lr_off, mcd->mcd_uuid);
+        CDEBUG(D_INFO, "freeing client at idx %u, offset %lld\n",
+               med->med_lr_idx, med->med_lr_off);
 
         off = med->med_lr_off;
 
@@ -157,12 +157,13 @@ int mdt_client_free(const struct lu_context *ctxt,
                 LBUG();
         }
 
-//      if (!(exp->exp_flags & OBD_OPT_FAILOVER)) {
         memset(&mcd, 0, sizeof *mcd);
+/*
         rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt, 
                                                    mdt->mdt_last,
                                                    mcd,
                                                    sizeof(*mcd), &off);
+*/
         CDEBUG_EX(rc == 0 ? D_INFO : D_ERROR,
                   "zeroing out client idx %u in %s rc %d\n",
                   med->med_lr_idx, LAST_RCVD, rc);

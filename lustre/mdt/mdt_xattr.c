@@ -40,27 +40,30 @@
 /* return EADATA length to the caller. negative value means error */
 static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 {
-        struct req_capsule *pill = &info->mti_pill ;
-        struct ptlrpc_request *req = mdt_info_req(info);
-        char *xattr_name;
-        int rc;
+        struct req_capsule     *pill = &info->mti_pill ;
+        struct ptlrpc_request  *req = mdt_info_req(info);
+        char                   *xattr_name;
+        __u64                   valid = info->mti_body->valid;
+        const char              user_string[] = "user.";
+        int                     rc;
 
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK)) {
+                return -ENOMEM;
+        }
+
+        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
+             (strncmp(xattr_name, user_string, sizeof(user_string) - 1) == 0))
+                return -EOPNOTSUPP;
         /* Imagine how many bytes we need */
-        if (info->mti_body->valid & OBD_MD_FLXATTR) {
+        if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
                 xattr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (!xattr_name) {
-                        CERROR("can't extract xattr name for getxattr\n");
                         return -EFAULT;
                 }
-
-                if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
-                    (strncmp(xattr_name, "user.", 5) == 0))
-                        return -EOPNOTSUPP;
-
                 rc = mo_xattr_get(info->mti_ctxt, 
                                   mdt_object_child(info->mti_object), 
                                   NULL, 0, xattr_name);
-        } else if (info->mti_body->valid & OBD_MD_FLXATTRLS) {
+        } else if ((valid & OBD_MD_FLXATTRLS) == OBD_MD_FLXATTRLS) {
                 rc = mo_xattr_list(info->mti_ctxt, 
                                    mdt_object_child(info->mti_object),
                                    NULL, 0);
@@ -80,11 +83,6 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         }
         req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, rc);
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK)) {
-                CERROR("failed MDS_GETXATTR_PACK test\n");
-                return -ENOMEM;
-        }
-
         rc = req_capsule_pack(pill);
         return rc;
 }
@@ -103,18 +101,17 @@ int mdt_getxattr(struct mdt_thread_info *info)
         LASSERT(info->mti_object != NULL);
         LASSERT(lu_object_assert_exists(info->mti_ctxt,
                                  &info->mti_object->mot_obj.mo_lu));
-        ENTRY;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK)) {
-                CERROR(LUSTRE_MDT0_NAME":getxattr pack_reply failed\n");
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK)) {
                 RETURN(rc = -ENOMEM);
         }
 
         next = mdt_object_child(info->mti_object);
 
         rc = mdt_getxattr_pack_reply(info);
-        if (rc < 0)
+        if (rc != 0)
                 RETURN(rc);
+
         buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
         rep_body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         buflen = req_capsule_get_size(&info->mti_pill, &RMF_EADATA, RCL_SERVER);
@@ -153,38 +150,41 @@ no_xattr:
 
 int mdt_setxattr(struct mdt_thread_info *info)
 {
-        int    rc;
-        char  *xattr_name;
-        int    xattr_len;
-        struct ptlrpc_request *req = mdt_info_req(info);
-        __u64 lockpart;
+        struct ptlrpc_request  *req = mdt_info_req(info);
+        const char              user_string[] = "user.";
+        const char              trust_string[] = "trusted.";
         struct mdt_lock_handle *lh;
+        __u64                   valid = info->mti_body->valid;
+        char                   *xattr_name;
+        int                     xattr_len;
+        __u64                   lockpart;
+        int                     rc;
         ENTRY;
 
 
         DEBUG_REQ(D_INODE, req, "setxattr "DFID3"\n",
                   PFID3(&info->mti_body->fid1));
-
-/*        MDS_CHECK_RESENT(req, mds_reconstruct_generic(req)); */
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR)) {
+                RETURN(rc = -ENOMEM);
+        }
 
         /* various sanity check for xattr name */
         xattr_name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
         if (!xattr_name) {
-                CERROR("can't extract xattr name\n");
-                GOTO(out, rc = -EPROTO);
+                GOTO(out, rc = -EFAULT);
         }
 
         CDEBUG(D_INODE, "%s xattr %s\n",
                   info->mti_body->valid & OBD_MD_FLXATTR ? "set" : "remove",
                   xattr_name);
 
-        if (strncmp(xattr_name, "trusted.", 8) == 0) {
-                if (strcmp(xattr_name + 8, "lov") == 0)
+        if (strncmp(xattr_name, trust_string, sizeof(trust_string) - 1) == 0) {
+                if (strcmp(xattr_name + 8, XATTR_NAME_LOV) == 0)
                         GOTO(out, rc = -EACCES);
         }
 
         if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
-            (strncmp(xattr_name, "user.", 5) == 0)) {
+            (strncmp(xattr_name, user_string, sizeof(user_string) - 1) == 0)) {
                 GOTO(out, rc = -EOPNOTSUPP);
         }
 
@@ -194,15 +194,14 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_EX;
-        rc = mdt_object_lock(info->mti_mdt->mdt_namespace, info->mti_object, 
-                                 lh, lockpart);
+        rc = mdt_object_lock(info, info->mti_object, lh, lockpart);
         if (rc != 0)
                 GOTO(out, rc);
 
         if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                 GOTO(out_unlock, rc = -EROFS);
 
-        if (info->mti_body->valid & OBD_MD_FLXATTR) {
+        if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
                 char * xattr; 
                 if (!req_capsule_field_present(&info->mti_pill, &RMF_EADATA)) {
                         CERROR("no xattr data supplied\n");
@@ -219,7 +218,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
                                           mdt_object_child(info->mti_object),
                                           xattr, xattr_len, xattr_name);
                 }
-        } else if (info->mti_body->valid & OBD_MD_FLXATTRRM) {
+        } else if ((valid & OBD_MD_FLXATTRRM) == OBD_MD_FLXATTRRM) {
                 rc = mo_xattr_del(info->mti_ctxt, 
                                   mdt_object_child(info->mti_object),
                                   xattr_name);
@@ -229,8 +228,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
         }
         EXIT;
 out_unlock:
-        mdt_object_unlock(info->mti_mdt->mdt_namespace, 
-                          info->mti_object, lh);
+        mdt_object_unlock(info, info->mti_object, lh);
 out:
         return rc;
 }

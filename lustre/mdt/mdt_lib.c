@@ -97,13 +97,14 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 rr->rr_fid1 = &rec->cr_fid1;
                 rr->rr_fid2 = &rec->cr_fid2;
                 attr->la_mode = rec->cr_mode;
-                rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 attr->la_rdev  = rec->cr_rdev;
                 attr->la_uid   = rec->cr_fsuid;
                 attr->la_gid   = rec->cr_fsgid;
                 attr->la_flags = rec->cr_flags;
                 attr->la_ctime = rec->cr_time;
                 attr->la_mtime = rec->cr_time;
+                rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
+
                 if (req_capsule_field_present(pill, &RMF_SYMTGT))
                         rr->rr_tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
         } else

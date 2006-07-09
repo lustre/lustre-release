@@ -110,23 +110,21 @@ static int mdt_object_open(struct mdt_thread_info *info,
         if (rc != 0)
                 GOTO(out, rc);
 
-        mdt_pack_attr2body(repbody, &info->mti_attr);
-        repbody->fid1 = *mdt_object_fid(o);
-        repbody->valid |= OBD_MD_FLID;
+        mdt_pack_attr2body(repbody, &info->mti_attr, mdt_object_fid(o));
 
 /*
         rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
                           lmm, info->mti_mdt->mdt_max_mdsize, "lov");
         if (rc < 0)
                 GOTO(out, rc = -EINVAL);
-
+*/
+        rc = 0;
         if (S_ISDIR(info->mti_attr.la_mode))
                 repbody->valid |= OBD_MD_FLDIREA;
         else
                 repbody->valid |= OBD_MD_FLEASIZE;
         repbody->eadatasize = rc;
         rc = 0;
-*/
         mfd = mdt_mfd_new();
         if (mfd == NULL) {
                 CERROR("mds: out of memory\n");
@@ -193,14 +191,12 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
 
         mdt_lock_handle_init(&lockh);
         lockh.mlh_mode = LCK_EX;
-        rc = mdt_object_lock(info->mti_mdt->mdt_namespace, 
-                             o, &lockh, MDS_INODELOCK_UPDATE);
+        rc = mdt_object_lock(info, o, &lockh, MDS_INODELOCK_UPDATE);
 
         if (rc != ELDLM_OK)
                 CERROR("can not mdt_object_lock: %d\n", rc);
         else if (child_lockh == &lockh)
-                mdt_object_unlock(info->mti_mdt->mdt_namespace, 
-                                  o, &lockh);
+                mdt_object_unlock(info, o, &lockh);
 
         RETURN(rc);
 }
@@ -230,11 +226,13 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_PW;
-        parent = mdt_object_find_lock(info->mti_ctxt, mdt, rr->rr_fid1,
+        parent = mdt_object_find_lock(info, rr->rr_fid1,
                                       lh, MDS_INODELOCK_UPDATE);
-        if (IS_ERR(parent))
+        if (IS_ERR(parent)) {
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
                 GOTO(out, result = PTR_ERR(parent));
-
+        }
         result = mdo_lookup(info->mti_ctxt, mdt_object_child(parent),
                             rr->rr_name, &child_fid);
         if (result && result != -ENOENT) {
@@ -273,11 +271,12 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 if (result != 0)
                         GOTO(out_child, result);
                 created = 1;
-        } else
-                intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
+        }
 
         /* Open it now. */
         result = mdt_object_open(info, child, info->mti_attr.la_flags);
+        if (result == 0)
+                intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
         GOTO(destroy_child, result);
 
 destroy_child:
@@ -290,8 +289,7 @@ destroy_child:
 out_child:
         mdt_object_put(info->mti_ctxt, child);
 out_parent:
-        mdt_object_unlock(mdt->mdt_namespace, parent, lh);
-        mdt_object_put(info->mti_ctxt, parent);
+        mdt_object_unlock_put(info, parent, lh);
 out:
         return result;
 }
@@ -350,9 +348,7 @@ int mdt_close(struct mdt_thread_info *info)
         rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o),
                          &info->mti_attr);
         if (rc == 0) {
-                mdt_pack_attr2body(repbody, &info->mti_attr);
-                repbody->fid1 = *mdt_object_fid(o);
-                repbody->valid |= OBD_MD_FLID;
+                mdt_pack_attr2body(repbody, &info->mti_attr, mdt_object_fid(o));
 /*
                 rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
                                   lmm, info->mti_mdt->mdt_max_mdsize, "lov");
