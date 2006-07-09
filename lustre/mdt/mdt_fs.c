@@ -90,11 +90,12 @@ int mdt_client_add(const struct lu_context *ctxt,
                 loff_t off = med->med_lr_off;
                 int rc = 0;
                 
+/*
                 rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt, 
                                                            mdt->mdt_last,
                                                            mcd, sizeof(*mcd), 
                                                            &off);
-
+*/
                 if (rc)
                         return rc;
                 CDEBUG(D_INFO, "wrote client mcd at idx %u off %llu (len %u)\n",
@@ -116,10 +117,12 @@ int mdt_update_server_data(const struct lu_context *ctxt,
                 mdt->mdt_mount_count, mdt->mdt_last_transno);
       
         msd->msd_last_transno = cpu_to_le64(mdt->mdt_last_transno);
+/*
         rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt, 
                                                    mdt->mdt_last,
                                                    msd,
                                                    sizeof(*msd), &off);
+*/
         RETURN(rc);
 
 }
@@ -157,7 +160,7 @@ int mdt_client_free(const struct lu_context *ctxt,
                 LBUG();
         }
 
-        memset(&mcd, 0, sizeof *mcd);
+        memset(mcd, 0, sizeof *mcd);
 /*
         rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt, 
                                                    mdt->mdt_last,
@@ -218,10 +221,12 @@ static int mdt_init_server_data(const struct lu_context *ctxt,
                 msd->msd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_MDT |
                                                         OBD_INCOMPAT_COMMON_LR);
         } else {
+/*
                 rc = mdt->mdt_last->do_body_ops->dbo_read(ctxt, 
                                                           mdt->mdt_last,
                                                           msd,
                                                           sizeof(*msd), &off);
+*/
                 if (rc) {
                         CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
                         GOTO(out, rc);
@@ -302,10 +307,12 @@ static int mdt_init_server_data(const struct lu_context *ctxt,
 
                 off = le32_to_cpu(msd->msd_client_start) +
                         cl_idx * le16_to_cpu(msd->msd_client_size);
+/*
                 rc = mdt->mdt_last->do_body_ops->dbo_read(ctxt, 
                                                           mdt->mdt_last,
                                                           mcd,
                                                           sizeof(*mcd), &off);
+*/
                 if (rc) {
                         CERROR("error reading MDS %s idx %d, off %llu: rc %d\n",
                                LAST_RCVD, cl_idx, off, rc);

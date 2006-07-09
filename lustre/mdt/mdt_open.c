@@ -117,14 +117,13 @@ static int mdt_object_open(struct mdt_thread_info *info,
                           lmm, info->mti_mdt->mdt_max_mdsize, "lov");
         if (rc < 0)
                 GOTO(out, rc = -EINVAL);
-*/
-        rc = 0;
         if (S_ISDIR(info->mti_attr.la_mode))
                 repbody->valid |= OBD_MD_FLDIREA;
         else
                 repbody->valid |= OBD_MD_FLEASIZE;
         repbody->eadatasize = rc;
         rc = 0;
+*/
         mfd = mdt_mfd_new();
         if (mfd == NULL) {
                 CERROR("mds: out of memory\n");
@@ -275,8 +274,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         /* Open it now. */
         result = mdt_object_open(info, child, info->mti_attr.la_flags);
-        if (result == 0)
-                intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
+        intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
         GOTO(destroy_child, result);
 
 destroy_child:
