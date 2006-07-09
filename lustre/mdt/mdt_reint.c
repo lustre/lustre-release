@@ -295,7 +295,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
                 GOTO(out_unlock_child, rc = -EROFS);
 
         /* step 4: delete it */
-        rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mc),
+        rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mp),
                         mdt_object_child(mc), rr->rr_name);
 
         /*step 5: orphan handling & recovery issue */
