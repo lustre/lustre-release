@@ -572,7 +572,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
                         GOTO(cleanup, rc);
         }
 cleanup:
-        mdd_lock2(ctxt, mdd_pobj, mdd_cobj);
+        mdd_unlock2(ctxt, mdd_pobj, mdd_cobj);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
 }
