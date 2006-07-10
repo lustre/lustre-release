@@ -159,92 +159,6 @@ AC_CONFIG_SUBDIRS(libsysio)
 ])
 
 #
-# LB_CONFIG_PORTALS
-#
-# configure support for Cray Portals
-#
-AC_DEFUN([LB_CONFIG_PORTALS],
-[AC_MSG_CHECKING([for external Portals])
-AC_ARG_WITH([portals],
-  	AC_HELP_STRING([--with-portals=path],
-                       [set path to portals]),
-        [
-		case $with_portals in
-			no)	PORTALS=""
-				enable_portals=no
-				;;
-			*)	if test x$with_portals != x ; then
-					PORTALS="$with_portals"
-					enable_portals=yes
-				else
-					AC_MSG_ERROR([Path to portals must be specified])
-					enable_portals=no
-				fi
-				;;
-		esac
-		
-	], [enable_portals=no])
-AC_MSG_CHECKING([location of portals])
-case x$enable_portals in
-	xyes)
-		AC_MSG_RESULT([$PORTALS])
-		LB_CHECK_FILE([$PORTALS/include/portals/api.h],[],
-			      AC_MSG_ERROR([Cannot find portals headers]))
-		;;
-	*)
-		AC_MSG_RESULT([no external portals])
-		;;
-esac
-
-AC_SUBST(PORTALS)
-])
-
-#
-# LB_CONFIG_LUSTRE_PORTALS
-#
-# configure support for Lustre Portals
-#
-AC_DEFUN([LB_CONFIG_LUSTRE_PORTALS],
-[AC_MSG_CHECKING([for Lustre Portals])
-AC_ARG_WITH([lustre-portals],
-  	AC_HELP_STRING([--with-lustre-portals=path],
-                       [set path to Lustre portals]),
-        [
-		case $with_lustre_portals in
-			yes)	LUSTRE_PORTALS="$PWD/portals"
-				enable_lustre_portals=yes
-				;;
-			no)	LUSTRE_PORTALS=""
-				enable_lustre_portals=no
-				;;
-			*)	if test x$with_lustre_portals != x ; then
-					LUSTRE_PORTALS="$with_lustre_portals"
-				else
-					LUSTRE_PORTALS="$PWD/portals"
-				fi
-				enable_lustre_portals=yes
-				;;
-		esac
-		
-	], [enable_lustre_portals=no])
-
-AC_MSG_CHECKING([location of Lustre portals])
-case x$enable_lustre_portals in
-	xyes)
-		AC_MSG_RESULT([$LUSTRE_PORTALS])
-		LB_CHECK_FILE([$LUSTRE_PORTALS/include/portals/api.h],[LUSTRE_PORTALS_SUBDIR="portals"],
-			      AC_MSG_ERROR([Cannot find Lustre portals headers]))
-		;;
-	*)
-		AC_MSG_RESULT([disable Lustre portals])
-		;;
-esac
-
-AC_SUBST(LUSTRE_PORTALS_SUBDIR)
-AC_SUBST(LUSTRE_PORTALS)
-])
-
-#
 # LB_CONFIG_CRAY_XT3
 #
 # Enable Cray XT3 features
@@ -536,7 +450,6 @@ AM_CONDITIONAL(UTILS, test x$enable_utils = xyes)
 AM_CONDITIONAL(TESTS, test x$enable_tests = xyes)
 AM_CONDITIONAL(DOC, test x$ENABLE_DOC = x1)
 AM_CONDITIONAL(INIT_SCRIPTS, test x$ENABLE_INIT_SCRIPTS = "x1")
-AM_CONDITIONAL(BUILD_PORTALS, test x$LUSTRE_PORTALS_SUBDIR = "xportals")
 AM_CONDITIONAL(LINUX, test x$lb_target_os = "xlinux")
 AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
 
@@ -556,9 +469,6 @@ LB_DARWIN_CONDITIONALS
 
 LN_CONDITIONALS
 LC_CONDITIONALS
-#if test "$LUSTRE_PORTALS" ; then
-	LP_CONDITIONALS
-#fi
 ])
 
 #
@@ -571,11 +481,6 @@ AC_DEFUN([LB_CONFIGURE],
 
 LB_INCLUDE_RULES
 
-LB_CONFIG_PORTALS
-if ! test "$PORTALS" ; then
-# if portals is configured, Lustre portals will be ignored
-	LB_CONFIG_LUSTRE_PORTALS
-fi
 LB_CONFIG_CRAY_XT3
 LB_CONFIG_BGL
 LB_PATH_DEFAULTS
@@ -584,10 +489,6 @@ LB_PROG_CC
 
 LB_PATH_LIBSYSIO
 LB_PATH_SNMP
-
-if test "$LUSTRE_PORTALS" ; then
-	LP_PROG_CC
-fi
 
 LB_CONFIG_DOCS
 LB_CONFIG_UTILS
@@ -602,9 +503,7 @@ LC_CONFIG_LIBLUSTRE
 LN_CONFIGURE
 
 LC_CONFIGURE
-if test "$LUSTRE_PORTALS" ; then
-	LP_CONFIGURE
-fi
+
 if test "$SNMP_DIST_SUBDIR" ; then
 	LS_CONFIGURE
 fi
@@ -623,9 +522,6 @@ build/lustre.spec
 
 LN_CONFIG_FILES
 LC_CONFIG_FILES
-if test "$LUSTRE_PORTALS" ; then
-	LP_CONFIG_FILES
-fi
 if test "$SNMP_DIST_SUBDIR" ; then
 	LS_CONFIG_FILES
 fi
