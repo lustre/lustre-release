@@ -391,6 +391,42 @@ out:
         return rc;
 }
 
+/*
+ * last_rcvd update callbacks 
+ */
+
+#define MDT_TXN_LAST_RCVD_CREDITS 1
+/* add credits for last_rcvd update */
+static int mdt_txn_start_cb(const struct lu_context *ctx,
+                            struct dt_device *dev,
+                            struct txn_param *param, void *cookie)
+{
+        param->tp_credits += MDT_TXN_LAST_RCVD_CREDITS;
+        return 0;
+}
+/* Update last_rcvd records with latests transaction data */
+static int mdt_txn_stop_cb(const struct lu_context *ctx,
+                           struct dt_device *dev,
+                           struct thandle *txn, void *cookie)
+{
+/*
+        struct mdt_device *mdt = cookie;
+        TODO: write last_rcvd
+*/
+        return 0;
+}
+/*
+ * commit callback, need to update last_commited value */
+static int mdt_txn_commit_cb(const struct lu_context *ctx,
+                             struct dt_device *dev,
+                             struct thandle *txn, void *cookie)
+{
+        struct mdt_device *mdt = cookie;
+        /* TODO: update mdt_last_commited, need current transno here */
+        ++ mdt->mdt_last_committed;
+        return 0;
+}
+ 
 int mdt_fs_setup(const struct lu_context *ctxt, 
                  struct mdt_device *mdt)
 {
@@ -399,9 +435,17 @@ int mdt_fs_setup(const struct lu_context *ctxt,
         int rc;
         ENTRY;
 
+        /* prepare transactions callbacks */
+        mdt->mdt_txn_cb.dtc_txn_start = mdt_txn_start_cb;
+        mdt->mdt_txn_cb.dtc_txn_stop = mdt_txn_stop_cb;
+        mdt->mdt_txn_cb.dtc_txn_commit = mdt_txn_commit_cb;
+        mdt->mdt_txn_cb.dtc_cookie = mdt;
+        
+        dt_txn_callback_add(mdt->mdt_bottom, &mdt->mdt_txn_cb);
+/*        
         last = dt_store_open(ctxt, mdt->mdt_bottom, LAST_RCVD, &last_fid);
         if(!IS_ERR(last)) {
-                mdt->mdt_last = last;
+                mdt->mdt_last_rcvd = last;
                 rc = mdt_init_server_data(ctxt, mdt);
                 if (rc) {
                         lu_object_put(ctxt, &last->do_lu);
@@ -411,6 +455,7 @@ int mdt_fs_setup(const struct lu_context *ctxt,
                 rc = PTR_ERR(last);
                 CERROR("cannot open %s: rc = %d\n", LAST_RCVD, rc);
         }
+*/
         return rc;
 }
 
@@ -419,11 +464,14 @@ void mdt_fs_cleanup(const struct lu_context *ctxt,
                    struct mdt_device *mdt)
 {
         struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
+        
+        /* remove transaction callback */
+        dt_txn_callback_del(mdt->mdt_bottom, &mdt->mdt_txn_cb);
 
         class_disconnect_exports(obd); /* cleans up client info too */
 
-        if (mdt->mdt_last)
-                lu_object_put(ctxt, &mdt->mdt_last->do_lu);
-        mdt->mdt_last = NULL;
+        if (mdt->mdt_last_rcvd)
+                lu_object_put(ctxt, &mdt->mdt_last_rcvd->do_lu);
+        mdt->mdt_last_rcvd = NULL;
 }
 

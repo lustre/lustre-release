@@ -121,6 +121,11 @@ struct mdt_device {
         spinlock_t                 mdt_transno_lock;
         __u64                      mdt_last_transno;
         __u64                      mdt_last_committed;
+        /* transaction callbacks */
+        struct dt_txn_callback     mdt_txn_cb;
+        /* last_rcvd file */
+        struct dt_object          *mdt_last_rcvd;
+
         /* these values should be updated from lov if necessary.
          * or should be placed somewhere else. */
         int                        mdt_max_mdsize;
@@ -128,8 +133,7 @@ struct mdt_device {
         __u64                      mdt_mount_count;     
         
         struct mdt_server_data     mdt_msd;
-        unsigned long              mdt_client_bitmap[LR_MAX_CLIENTS / sizeof(long)];
-        struct dt_object          *mdt_last;
+        unsigned long              mdt_client_bitmap[(LR_MAX_CLIENTS >> 3) / sizeof(long)];
 };
 
 /*XXX copied from mds_internal.h */
@@ -230,6 +234,7 @@ struct mdt_thread_info {
          * XXX this is probably huge overkill, because statfs is not that
          * frequent.
          */
+
         struct kstatfs             mti_sfs;
 
         /* temporary stuff used by thread */
