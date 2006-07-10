@@ -2323,7 +2323,9 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                 if (mcd != NULL) {
                         memcpy(mcd->mcd_uuid, cluuid, sizeof mcd->mcd_uuid);
                         med->med_mcd = mcd;
-                        rc = mdt_client_add(&ctxt, mdt, med, -1);
+                        /*
+                         * rc = mdt_client_add(&ctxt, mdt, med, -1);
+                         */
                 } else
                         rc = -ENOMEM;
         }
