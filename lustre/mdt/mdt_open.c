@@ -209,7 +209,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
         struct ldlm_reply      *ldlm_rep;
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct mdt_body        *body;
-        struct lu_fid           child_fid;
+        struct lu_fid          *child_fid = &info->mti_tmp_fid1;
         int                     result;
         int                     created = 0;
         struct mdt_reint_record *rr = &info->mti_rr;
@@ -232,13 +232,19 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
                 GOTO(out, result = PTR_ERR(parent));
         }
-        result = mdo_lookup(info->mti_ctxt, mdt_object_child(parent),
-                            rr->rr_name, &child_fid);
-        if (result && result != -ENOENT) {
-                GOTO(out_parent, result);
-        }
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
+        result = mdo_lookup(info->mti_ctxt, mdt_object_child(parent),
+                            rr->rr_name, child_fid);
+        if (result && result != -ENOENT) {
+                if (result == -EREMOTE) {
+                        /* FIXME: POS or NEG? */
+                        intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
+                        body->fid1 = *child_fid;
+                        body->valid |= OBD_MD_FLID;
+                }
+                GOTO(out_parent, result);
+        }
 
         if (result == -ENOENT) {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
@@ -246,7 +252,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
                         GOTO(out_parent, result);
                 if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                         GOTO(out_parent, result = -EROFS);
-                child_fid = *info->mti_rr.rr_fid2;
+                *child_fid = *info->mti_rr.rr_fid2;
         } else {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
                 if (info->mti_attr.la_flags & MDS_OPEN_EXCL &&
@@ -255,7 +261,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         }
 
-        child = mdt_object_find(info->mti_ctxt, mdt, &child_fid);
+        child = mdt_object_find(info->mti_ctxt, mdt, child_fid);
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
 
@@ -339,28 +345,35 @@ int mdt_close(struct mdt_thread_info *info)
         list_del_init(&mfd->mfd_list);
         spin_unlock(&med->med_open_lock);
 
+        /* mdt_handle2mfd increase reference count, we must drop it here */
+        mdt_mfd_put(mfd);
+
         o = mfd->mfd_object;
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
+        if (lu_object_is_dying(&o->mot_header)) {
+                repbody = req_capsule_server_get(&info->mti_pill, 
+                                                 &RMF_MDT_BODY);
+                lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
 
-        rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o),
-                         &info->mti_attr);
-        if (rc == 0) {
-                mdt_pack_attr2body(repbody, &info->mti_attr, mdt_object_fid(o));
+                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o),
+                                 &info->mti_attr);
+                if (rc == 0) {
+                        mdt_pack_attr2body(repbody, &info->mti_attr, 
+                                           mdt_object_fid(o));
 /*
-                rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
-                                  lmm, info->mti_mdt->mdt_max_mdsize, "lov");
-                if (rc >= 0) {
-                        if (S_ISDIR(info->mti_attr.la_mode))
-                                repbody->valid |= OBD_MD_FLDIREA;
-                        else
-                                repbody->valid |= OBD_MD_FLEASIZE;
-                        repbody->eadatasize = rc;
-                        rc = 0;
-                }
+                        rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
+                                          lmm, info->mti_mdt->mdt_max_mdsize, 
+                                          XATTR_NAME_LOV);
+                        if (rc >= 0) {
+                                if (S_ISDIR(info->mti_attr.la_mode))
+                                        repbody->valid |= OBD_MD_FLDIREA;
+                                else
+                                        repbody->valid |= OBD_MD_FLEASIZE;
+                                repbody->eadatasize = rc;
+                                rc = 0;
+                        }
 */
+               }
         }
-
         rc = mdt_mfd_close(info->mti_ctxt, mfd, 1);
 
         RETURN(rc);
