@@ -66,7 +66,6 @@ static struct lu_object_operations mdd_lu_obj_ops;
 
 static struct lu_context_key       mdd_thread_key;
 
-
 const char *mdd_root_dir_name = "root";
 
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx)
@@ -83,7 +82,6 @@ static struct lu_object *mdd_object_alloc(const struct lu_context *ctxt,
                                           struct lu_device *d)
 {
         struct mdd_object *mdo;
-        ENTRY;
 
         OBD_ALLOC_PTR(mdo);
         if (mdo != NULL) {
@@ -95,8 +93,9 @@ static struct lu_object *mdd_object_alloc(const struct lu_context *ctxt,
                 mdo->mod_obj.mo_dir_ops = &mdd_dir_ops;
                 o->lo_ops = &mdd_lu_obj_ops;
                 return &mdo->mod_obj.mo_lu;
-        } else
+        } else {
                 return NULL;
+        }
 }
 
 static int mdd_object_init(const struct lu_context *ctxt, struct lu_object *o)
@@ -230,7 +229,7 @@ static int mdd_object_exists(const struct lu_context *ctx,
 
 static int mdd_mount(const struct lu_context *ctx, struct mdd_device *mdd)
 {
-        int result;
+        int rc;
         struct dt_object *root;
         ENTRY;
 
@@ -239,10 +238,10 @@ static int mdd_mount(const struct lu_context *ctx, struct mdd_device *mdd)
         if (!IS_ERR(root)) {
                 LASSERT(root != NULL);
                 lu_object_put(ctx, &root->do_lu);
-                result = 0;
+                rc = 0;
         } else
-                result = PTR_ERR(root);
-        RETURN(result);
+                rc = PTR_ERR(root);
+        RETURN(rc);
 }
 
 static int mdd_fs_setup(const struct lu_context *ctx, struct mdd_device *mdd)
@@ -261,19 +260,14 @@ static int mdd_device_init(const struct lu_context *ctx,
                            struct lu_device *d, struct lu_device *next)
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
-        int rc = -EFAULT;
-
+        int rc;
         ENTRY;
-
+        
         mdd->mdd_child = lu2dt_dev(next);
 
         rc = mdd_fs_setup(ctx, mdd);
         if (rc)
-                GOTO(err, rc);
-
-        RETURN(rc);
-err:
-        mdd_fs_cleanup(mdd);
+                mdd_fs_cleanup(mdd);
         RETURN(rc);
 }
 
@@ -306,7 +300,6 @@ static int mdd_process_config(const struct lu_context *ctxt,
                 rc = mdd_lov_init(ctxt, m, cfg);
                 if (rc) {
                         CERROR("lov init error %d \n", rc);
-                        /*FIXME umount the mdd*/
                         GOTO(out, rc);
                 }
                 break;
@@ -381,7 +374,7 @@ static int __mdd_object_create(const struct lu_context *ctxt,
                                struct thandle *handle)
 {
         struct dt_object *next;
-        int rc = 0;
+        int rc;
         ENTRY;
 
         if (!lu_object_exists(ctxt, &obj->mod_obj.mo_lu)) {
@@ -536,6 +529,8 @@ static int mdd_link(const struct lu_context *ctxt, struct md_object *tgt_obj,
 
         rc = __mdd_ref_add(ctxt, mdd_sobj, handle);
 exit:
+        if (rc)
+                rc = __mdd_index_delete(ctxt, mdd_tobj, name, handle);
         mdd_unlock2(ctxt, mdd_tobj, mdd_sobj);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
@@ -596,7 +591,7 @@ static int mdd_is_parent(const struct lu_context *ctxt,
                          struct mdd_object *p2)
 {
         struct lu_fid pfid; 
-        int rc = 0;
+        int rc;
 
         do {
                 rc = mdd_parent_fid(ctxt, p1, &pfid);
@@ -721,14 +716,14 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
         struct dt_object    *dir    = mdd_object_child(md2mdd_obj(pobj));
         struct dt_rec       *rec    = (struct dt_rec *)fid;
         const struct dt_key *key = (const struct dt_key *)name;
-        int result;
+        int rc;
         ENTRY;
 
         if (dt_is_dir(ctxt, dir))
-                result = dir->do_index_ops->dio_lookup(ctxt, dir, rec, key);
+                rc = dir->do_index_ops->dio_lookup(ctxt, dir, rec, key);
         else
-                result = -ENOTDIR;
-        RETURN(result);
+                rc = -ENOTDIR;
+        RETURN(rc);
 }
 
 /*
@@ -743,7 +738,7 @@ static int mdd_create(const struct lu_context *ctxt,
         struct mdd_object *son = md2mdd_obj(child);
         struct dt_object  *dt_son = mdd_object_child(son); 
         struct thandle *handle;
-        int rc = 0, created = 0, inserted = 0, ref_add = 0;
+        int rc, created = 0, inserted = 0, ref_add = 0;
         ENTRY;
 
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
@@ -835,7 +830,7 @@ static int mdd_mkname(const struct lu_context *ctxt, struct md_object *pobj,
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdo = md2mdd_obj(pobj);
         struct thandle *handle;
-        int rc = 0;
+        int rc;
         ENTRY;
 
         mdd_txn_param_build(ctxt, &MDD_TXN_INDEX_INSERT);
@@ -859,7 +854,7 @@ static int mdd_name_remove(const struct lu_context *ctxt,
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdo = md2mdd_obj(pobj);
         struct thandle *handle;
-        int rc = 0;
+        int rc;
         ENTRY;
 
         mdd_txn_param_build(ctxt, &MDD_TXN_INDEX_DELETE);
