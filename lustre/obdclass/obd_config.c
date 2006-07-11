@@ -181,6 +181,7 @@ int class_attach(struct lustre_cfg *lcfg)
         LASSERTF(strncmp(obd->obd_name, name, strlen(name)) == 0, "%p obd_name %s != %s\n",
                  obd, obd->obd_name, name);
 
+        sema_init(&obd->obd_setup_sem, 1);
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         spin_lock_init(&obd->obd_dev_lock);
@@ -406,8 +407,11 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         dump_exports(obd);
                         GOTO(out, err = -EBUSY);
                 }
+                /* refcounf - 3 might be the number of real exports 
+                   (excluding self export). But class_incref is called
+                   by other things as well, so don't count on it. */
                 CDEBUG(D_IOCTL, "%s: forcing exports to disconnect: %d\n",
-                       obd->obd_name, atomic_read(&obd->obd_refcount) - 1);
+                       obd->obd_name, atomic_read(&obd->obd_refcount) - 3);
                 dump_exports(obd);
                 class_disconnect_exports(obd);
         }

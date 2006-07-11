@@ -744,7 +744,8 @@ struct obd_device {
                      obd_async_recov:1;   /* allow asyncronous orphan cleanup */
         atomic_t obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
-        cfs_proc_dir_entry_t  *obd_proc_entry;
+        struct semaphore        obd_setup_sem; /* for gating config stuff */
+        cfs_proc_dir_entry_t   *obd_proc_entry;
         struct list_head        obd_exports;
         int                     obd_num_exports;
         struct ldlm_namespace  *obd_namespace;

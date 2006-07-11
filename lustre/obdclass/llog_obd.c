@@ -71,6 +71,7 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
         if (index < 0 || index >= LLOG_MAX_CTXTS)
                 RETURN(-EFAULT);
 
+        mutex_down(&obd->obd_setup_sem);
 
         if (obd->obd_llog_ctxt[index]) {
                 /* mds_lov_update_mds might call here multiple times. So if the
@@ -81,12 +82,12 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                 LASSERT(ctxt->loc_obd == obd);
                 LASSERT(ctxt->loc_exp == disk_obd->obd_self_export);
                 LASSERT(ctxt->loc_logops == op);
-                RETURN(0);
+                GOTO(out, rc = 0);
         }
         
         OBD_ALLOC(ctxt, sizeof(*ctxt));
         if (!ctxt)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         obd->obd_llog_ctxt[index] = ctxt;
         ctxt->loc_obd = obd;
@@ -97,7 +98,15 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
 
         if (op->lop_setup)
                 rc = op->lop_setup(obd, index, disk_obd, count, logid);
-
+        
+        if (rc) {
+                obd->obd_llog_ctxt[index] = NULL;
+                class_export_put(ctxt->loc_exp);
+                OBD_FREE(ctxt, sizeof(*ctxt));
+        }
+        
+out:
+        mutex_up(&obd->obd_setup_sem);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_setup);
@@ -243,10 +252,6 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
         if (rc)
                 CERROR("llog_process with cat_cancel_cb failed: %d\n", rc);
  out:
-        if (ctxt && rc) {
-                obd->obd_llog_ctxt[index] = NULL;
-                OBD_FREE(ctxt, sizeof(*ctxt));
-        }
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_obd_origin_setup);
