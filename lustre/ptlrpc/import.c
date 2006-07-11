@@ -265,11 +265,8 @@ static int import_select_connection(struct obd_import *imp)
                        imp->imp_obd->obd_name,
                        libcfs_nid2str(conn->oic_conn->c_peer.nid),
                        conn->oic_last_attempt);
-
-                /* Throttle the reconnect rate to once per RECONNECT_INTERVAL */
                 if (get_jiffies_64() >
                     conn->oic_last_attempt + RECONNECT_INTERVAL * HZ) {
-
                         /* If we have never tried this connection since the
                            the last successful attempt, go with this one */
                         if (conn->oic_last_attempt <=
@@ -279,7 +276,7 @@ static int import_select_connection(struct obd_import *imp)
                         }
 
                         /* Both of these connections have already been tried
-                           since the last successful connection, just choose the
+                           since the last successful connection; just choose the
                            least recently used */
                         if (!imp_conn)
                                 imp_conn = conn;
@@ -287,7 +284,7 @@ static int import_select_connection(struct obd_import *imp)
                                 if (conn->oic_last_attempt <
                                                 imp_conn->oic_last_attempt)
                                         imp_conn = conn;
-        }
+                }
         }
 
         /* if not found, simply choose the current one */

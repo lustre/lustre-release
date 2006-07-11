@@ -212,16 +212,17 @@ void request_in_callback(lnet_event_t *ev)
 
         if (ev->unlinked) {
                 service->srv_nrqbd_receiving--;
-                if (ev->type != LNET_EVENT_UNLINK &&
-                    service->srv_nrqbd_receiving == 0) {
-                        /* This service is off-air because all its request
-                         * buffers are busy.  Portals will start dropping
-                         * incoming requests until more buffers get posted.  
-                         * NB don't moan if it's because we're tearing down the
-                         * service. */
-                        CERROR("All %s request buffers busy\n",
+                CDEBUG(D_RPCTRACE,"Buffer complete: %d buffers still posted\n",
+                       service->srv_nrqbd_receiving);
+
+                /* Normally, don't complain about 0 buffers posted; LNET won't
+                 * drop incoming reqs since we set the portal lazy */
+                if (test_req_buffer_pressure &&
+                    ev->type != LNET_EVENT_UNLINK &&
+                    service->srv_nrqbd_receiving == 0)
+                        CWARN("All %s request buffers busy\n",
                               service->srv_name);
-                }
+
                 /* req takes over the network's ref on rqbd */
         } else {
                 /* req takes a ref on rqbd */

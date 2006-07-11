@@ -315,8 +315,8 @@ Frequency  : Always
 Bugzilla   : 10248
 Description: Allow fractional MB tunings for lustre in /proc/ filesystem.
 Details    : Many of the /proc/ tunables can only be tuned at a megabyte
-             granularity. Now, Fractional MB granularity is be supported,
-             this is very useful for low memory system.
+	     granularity. Now, Fractional MB granularity is be supported,
+	     this is very useful for low memory system.
 
 Severity   : enhancement
 Bugzilla   : 9292
@@ -391,8 +391,44 @@ Frequency  : rare
 Bugzilla   : 10409
 Description: i_sem vs transaction deadlock in mds_obd_destroy during unlink.
 Details    : protect inode from truncation within vfs_unlink() context
-             just take a reference before calling vfs_unlink() and release it
-             when parent's i_sem is free.
+	     just take a reference before calling vfs_unlink() and release it
+	     when parent's i_sem is free.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 4778
+Description: last_id value checked outside lock on OST caused LASSERT failure
+Details    : If there were multiple MDS->OST object precreate requests in
+	     flight, it was possible that the OST's last object id was checked
+	     outside a lock and incorrectly tripped an assertion.  Move checks
+	     inside locks, and discard old precreate requests.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 9387
+Description: import connection selection may be incorrect if timer wraps
+Details    : Using a 32-bit jiffies timer with HZ=1000 may cause backup
+	     import connections to be ignored if the 32-bit jiffies counter
+	     wraps.  Use a 64-bit jiffies counter.
+
+Severity   : minor
+Frequency  : very large clusters immediately after boot
+Bugzilla   : 10083
+Description: LNET request buffers exhausted under heavy short-term load
+Details    : If a large number of client requests are generated on a service
+	     that has previously never seen so many requests it is possible
+	     that the request buffer growth cannot keep up with the spike in
+	     demand.  Instead of dropping incoming requests, they are held in
+	     the LND until the RPC service can accept more requests.
+
+Severity   : minor
+Frequency  : Sometimes during replay
+Bugzilla   : 9314
+Description: Assertion failure in ll_local_open after replay.
+Details    : If replay happened on an open request reply before we were able
+             to set replay handler, reply will become not swabbed tripping the
+             assertion in ll_local_open. Now we set the handler right after
+             recognising of open request
 
 Severity   : minor
 Frequency  : Sometimes during replay

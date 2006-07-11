@@ -34,6 +34,10 @@
 #include <lnet/types.h>
 #include "ptlrpc_internal.h"
 
+int test_req_buffer_pressure = 0;
+CFS_MODULE_PARM(test_req_buffer_pressure, "i", int, 0444,
+                "set non-zero to put pressure on request buffer pools");
+
 /* forward ref */
 static int ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc);
 
@@ -239,13 +243,8 @@ ptlrpc_server_post_idle_rqbds (struct ptlrpc_service *svc)
         list_del(&rqbd->rqbd_list);
         list_add_tail(&rqbd->rqbd_list, &svc->srv_idle_rqbds);
 
-        if (svc->srv_nrqbd_receiving == 0) {
-                /* This service is off-air on this interface because all
-                 * its request buffers are busy.  Portals will have started
-                 * dropping incoming requests until more buffers get
-                 * posted */
-                CERROR("All %s request buffers busy\n", svc->srv_name);
-        }
+        /* Don't complain if no request buffers are posted right now; LNET
+         * won't drop requests because we set the portal lazy! */
 
         spin_unlock(&svc->srv_lock);
 
@@ -277,7 +276,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         CFS_INIT_LIST_HEAD(&service->srv_threads);
         cfs_waitq_init(&service->srv_waitq);
 
-        service->srv_nbuf_per_group = nbufs;
+        service->srv_nbuf_per_group = test_req_buffer_pressure ? 1 : nbufs;
         service->srv_max_req_size = max_req_size;
         service->srv_buf_size = bufsize;
         service->srv_rep_portal = rep_portal;
@@ -288,6 +287,9 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         service->srv_request_seq = 1;           /* valid seq #s start at 1 */
         service->srv_request_max_cull_seq = 0;
         service->srv_num_threads = num_threads;
+
+        rc = LNetSetLazyPortal(service->srv_req_portal);
+        LASSERT (rc == 0);
 
         CFS_INIT_LIST_HEAD(&service->srv_request_queue);
         CFS_INIT_LIST_HEAD(&service->srv_idle_rqbds);
@@ -836,7 +838,8 @@ static void
 ptlrpc_check_rqbd_pool(struct ptlrpc_service *svc)
 {
         int avail = svc->srv_nrqbd_receiving;
-        int low_water = svc->srv_nbuf_per_group/2;
+        int low_water = test_req_buffer_pressure ? 0 :
+                        svc->srv_nbuf_per_group/2;
 
         /* NB I'm not locking; just looking. */
 
@@ -979,6 +982,8 @@ static int ptlrpc_main(void *arg)
                          * for a timeout (unless something else happens)
                          * before I try again */
                         svc->srv_rqbd_timeout = cfs_time_seconds(1)/10;
+                        CDEBUG(D_RPCTRACE,"Posted buffers: %d\n",
+                               svc->srv_nrqbd_receiving);
                 }
         }
 
@@ -1130,6 +1135,9 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         service->srv_max_history_rqbds = 0;
 
         CDEBUG(D_NET, "%s: tearing down\n", service->srv_name);
+
+        rc = LNetClearLazyPortal(service->srv_req_portal);
+        LASSERT (rc == 0);
 
         /* Unlink all the request buffers.  This forces a 'final' event with
          * its 'unlink' flag set for each posted rqbd */
