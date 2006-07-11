@@ -82,7 +82,6 @@ static int mgs_connect(struct lustre_handle *conn, struct obd_device *obd,
 
 static int mgs_disconnect(struct obd_export *exp)
 {
-        unsigned long irqflags;
         int rc;
         ENTRY;
 
@@ -94,7 +93,7 @@ static int mgs_disconnect(struct obd_export *exp)
         ldlm_cancel_locks_for_export(exp);
 
         /* complete all outstanding replies */
-        spin_lock_irqsave(&exp->exp_lock, irqflags);
+        spin_lock(&exp->exp_lock);
         while (!list_empty(&exp->exp_outstanding_replies)) {
                 struct ptlrpc_reply_state *rs =
                         list_entry(exp->exp_outstanding_replies.next,
@@ -106,7 +105,7 @@ static int mgs_disconnect(struct obd_export *exp)
                 ptlrpc_schedule_difficult_reply(rs);
                 spin_unlock(&svc->srv_lock);
         }
-        spin_unlock_irqrestore(&exp->exp_lock, irqflags);
+        spin_unlock(&exp->exp_lock);
 
         class_export_put(exp);
         RETURN(rc);
