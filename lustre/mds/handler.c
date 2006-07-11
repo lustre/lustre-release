@@ -444,7 +444,8 @@ static int mds_disconnect(struct obd_export *exp)
 
         /* Disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp);
-        ldlm_cancel_locks_for_export(exp);
+        if (exp->exp_obd->obd_namespace != NULL)
+                ldlm_cancel_locks_for_export(exp);
 
         /* complete all outstanding replies */
         spin_lock(&exp->exp_lock);

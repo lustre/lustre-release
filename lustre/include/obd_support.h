@@ -37,6 +37,7 @@ extern unsigned int ldlm_timeout;
 extern unsigned int obd_health_check_timeout;
 extern char obd_lustre_upcall[128];
 extern cfs_waitq_t obd_race_waitq;
+extern int obd_race_state;
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
@@ -221,8 +222,8 @@ do {                                                                         \
  * first thread that calls this with a matching fail_loc is put to
  * sleep. The next thread that calls with the same fail_loc wakes up
  * the first and continues. */
-#define OBD_RACE(id)                                            \
-do {                                                            \
+#define OBD_RACE(id)                                                           \
+do {                                                                           \
         if  (OBD_FAIL_CHECK_ONCE(id)) {                         \
                 CERROR("obd_race id %x sleeping\n", (id));      \
                 OBD_SLEEP_ON(&obd_race_waitq);        \

@@ -226,10 +226,18 @@ int t8(char *name)
         ENTRY("chmod");
         snprintf(path, MAX_PATH_LENGTH, "%s/test_t8", lustre_path);
 
+        /* Check file. */
         t_touch(path);
         t_chmod_raw(path, 0700);
         t_check_stat(path, NULL);
         t_unlink(path);
+
+        /* Check dir. */
+        t_mkdir(path);
+        t_chmod_raw(path, 0700);
+        t_check_stat(path, NULL);
+        t_rmdir(path);
+
         LEAVE();
 }
 

@@ -68,6 +68,7 @@ unsigned int obd_health_check_timeout = 120; /* seconds */
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
 
 cfs_waitq_t obd_race_waitq;
+int obd_race_state;
 
 #ifdef __KERNEL__
 unsigned int obd_print_fail_loc(void)
@@ -380,6 +381,7 @@ EXPORT_SYMBOL(obd_devs);
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
+EXPORT_SYMBOL(obd_race_state);
 EXPORT_SYMBOL(obd_dump_on_timeout);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(ldlm_timeout);

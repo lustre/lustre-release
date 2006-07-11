@@ -338,7 +338,7 @@ static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
 
         CDEBUG(D_SUPER, "osfs "CFS_TIME_T", max_age "CFS_TIME_T"\n", 
                 obd->obd_osfs_age, max_age);
-        if (cfs_time_before(obd->obd_osfs_age, max_age)) {
+        if (time_before_64(obd->obd_osfs_age, max_age)) {
                 rc = obd->obd_fsops->fs_statfs(sb, &obd->obd_osfs);
                 if (rc == 0) /* N.B. statfs can't really fail */
                         obd->obd_osfs_age = get_jiffies_64();

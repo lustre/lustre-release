@@ -37,7 +37,7 @@ Index: linux-2.6.9/drivers/md/raid5.c
 +	sectors = bi->bi_size >> 9;
 +
 +repeat:
-+	stripe = block * sectors_per_block / data_disks;
++	stripe = block * (sectors_per_block / data_disks);
 +	b_sector = stripe * data_disks;
 +	/* iterate through all stripes in this block,
 +	 * where block is a set of internal stripes

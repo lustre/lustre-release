@@ -137,7 +137,7 @@ test_6() {
     rm -f $f
     sync && sleep 2 && sync	# wait for delete thread
     before=`kbytesfree`
-    dd if=/dev/urandom bs=4096 count=1280 of=$f
+    dd if=/dev/urandom bs=4096 count=1280 of=$f || return 28
     lfs getstripe $f
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
     do_facet mds "sysctl -w lustre.fail_loc=0x80000119"

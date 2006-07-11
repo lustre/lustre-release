@@ -234,6 +234,12 @@ int llu_glimpse_size(struct inode *inode)
 
         CDEBUG(D_DLMTRACE, "Glimpsing inode %llu\n", (long long)st->st_ino);
 
+        if (!lli->lli_smd) {
+                CDEBUG(D_DLMTRACE, "No objects for inode %llu\n", 
+                       (long long)st->st_ino);
+                RETURN(0);
+        }
+
         einfo.ei_type = LDLM_EXTENT;
         einfo.ei_mode = LCK_PR;
         einfo.ei_flags = LDLM_FL_HAS_INTENT;

@@ -2,7 +2,7 @@ Index: linux-stage/fs/ext3/extents.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/extents.c	2005-02-25 15:33:48.890198160 +0200
 +++ linux-stage/fs/ext3/extents.c	2005-02-25 15:33:48.917194056 +0200
-@@ -0,0 +1,2353 @@
+@@ -0,0 +1,2359 @@
 +/*
 + * Copyright(c) 2003, 2004, 2005, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -560,6 +560,7 @@ Index: linux-stage/fs/ext3/extents.c
 +
 +	ix->ei_block = logical;
 +	ix->ei_leaf = ptr;
++	ix->ei_leaf_hi = ix->ei_unused = 0;
 +	curp->p_hdr->eh_entries++;
 +
 +	EXT_ASSERT(curp->p_hdr->eh_entries <= curp->p_hdr->eh_max);
@@ -722,6 +723,7 @@ Index: linux-stage/fs/ext3/extents.c
 +		fidx = EXT_FIRST_INDEX(neh);
 +		fidx->ei_block = border;
 +		fidx->ei_leaf = oldblock;
++		fidx->ei_leaf_hi = fidx->ei_unused = 0;
 +
 +		ext_debug(tree,	"int.index at %d (block %lu): %lu -> %lu\n",
 +			  i, newblock, border, oldblock);
@@ -855,6 +857,7 @@ Index: linux-stage/fs/ext3/extents.c
 +	/* FIXME: it works, but actually path[0] can be index */
 +	curp->p_idx->ei_block = EXT_FIRST_EXTENT(path[0].p_hdr)->ee_block;
 +	curp->p_idx->ei_leaf = newblock;
++	curp->p_idx->ei_leaf_hi = curp->p_idx->ei_unused = 0;
 +
 +	neh = EXT_ROOT_HDR(tree);
 +	fidx = EXT_FIRST_INDEX(neh);
@@ -1403,6 +1406,7 @@ Index: linux-stage/fs/ext3/extents.c
 +	if (block >= cex->ec_block && block < cex->ec_block + cex->ec_len) {
 +		ex->ee_block = cex->ec_block;
 +		ex->ee_start = cex->ec_start;
++		ex->ee_start_hi = 0;
 +		ex->ee_len = cex->ec_len;
 +		ext_debug(tree, "%lu cached by %lu:%lu:%lu\n",
 +			  (unsigned long) block,
@@ -1624,7 +1628,7 @@ Index: linux-stage/fs/ext3/extents.c
 +
 +		if (num == 0) {
 +			/* this extent is removed entirely mark slot unused */
-+			ex->ee_start = 0;
++			ex->ee_start = ex->ee_start_hi = 0;
 +			eh->eh_entries--;
 +			fu = ex;
 +		}
@@ -1646,7 +1650,7 @@ Index: linux-stage/fs/ext3/extents.c
 +		while (lu < le) {
 +			if (lu->ee_start) {
 +				*fu = *lu;
-+				lu->ee_start = 0;
++				lu->ee_start = lu->ee_start_hi = 0;
 +				fu++;
 +			}
 +			lu++;
@@ -2001,6 +2005,7 @@ Index: linux-stage/fs/ext3/extents.c
 +		/* allocate new block for the extent */
 +		goal = ext3_ext_find_goal(inode, path, ex->ee_block);
 +		ex->ee_start = ext3_new_block(handle, inode, goal, err);
++		ex->ee_start_hi = 0;
 +		if (ex->ee_start == 0) {
 +			/* error occured: restore old extent */
 +			ex->ee_start = newblock;
@@ -2116,6 +2121,7 @@ Index: linux-stage/fs/ext3/extents.c
 +	/* try to insert new extent into found leaf and return */
 +	newex.ee_block = iblock;
 +	newex.ee_start = newblock;
++	newex.ee_start_hi = 0;
 +	newex.ee_len = 1;
 +	err = ext3_ext_insert_extent(handle, &tree, path, &newex);
 +	if (err)

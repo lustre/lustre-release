@@ -689,6 +689,14 @@ obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
 #define time_before(t1, t2) ((long)t2 - (long)t1 > 0)
 #endif
 
+#ifndef time_before_64
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+#define time_before_64(t1, t2) ((__s64)t2 - (__s64)t1 > 0)
+#else
+#define time_before_64 time_before
+#endif
+#endif
+
 /* @max_age is the oldest time in jiffies that we accept using a cached data.
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */

@@ -601,20 +601,18 @@ test_25() {
 run_test 25 "change ACL on one mountpoint be seen on another ==="
 
 test_26a() {
-        rm -f $DIR1/f26a
         utime $DIR1/f26a -s $DIR2/f26a || error
 }
 run_test 26a "allow mtime to get older"
 
 test_26b() {
-        rm -f $DIR1/f26b
-        touch $DIR1/f26b
+        touch $DIR1/$tfile
         sleep 1
-        echo "aaa" >> $DIR1/f26b
+        echo "aaa" >> $DIR1/$tfile
         sleep 1
-        chmod a+x $DIR2/f26b
-        mt1=`stat $DIR1/f26b | sed 's/\./ /g' | awk ' /Modify/ { print $5 }'`
-        mt2=`stat $DIR2/f26b | sed 's/\./ /g' | awk ' /Modify/ { print $5 }'`
+        chmod a+x $DIR2/$tfile
+        mt1=`stat -c %Y $DIR1/$tfile`
+        mt2=`stat -c %Y $DIR2/$tfile`
         
         if [ x"$mt1" != x"$mt2" ]; then 
                 error "not equal mtime, client1: "$mt1", client2: "$mt2"."
