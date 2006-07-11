@@ -1027,7 +1027,8 @@ static int mdt_req_handle(struct mdt_thread_info *info,
          * caller). ptlrpc_server_handle_request() doesn't check return value
          * anyway.
          */
-        req->rq_status = result;
+        /*XXX the status can be lost due to this, remove for now -tappro
+         * req->rq_status = result;*/
 
         LASSERT(current->journal_info == NULL);
 
@@ -1242,7 +1243,8 @@ static int mdt_recovery(struct ptlrpc_request *req)
         RETURN(+1);
 }
 
-static int mdt_reply(struct ptlrpc_request *req, struct mdt_thread_info *info)
+static int mdt_reply(struct ptlrpc_request *req, int result, 
+                     struct mdt_thread_info *info)
 {
         struct obd_device *obd;
 
@@ -1253,15 +1255,15 @@ static int mdt_reply(struct ptlrpc_request *req, struct mdt_thread_info *info)
                 obd = req->rq_export != NULL ? req->rq_export->exp_obd : NULL;
                 if (obd && obd->obd_recovering) {
                         DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        RETURN(target_queue_final_reply(req, req->rq_status));
+                        RETURN(target_queue_final_reply(req, result));
                 } else {
                         /* Lost a race with recovery; let the error path
                          * DTRT. */
-                        req->rq_status = -ENOTCONN;
+                        result = req->rq_status = -ENOTCONN;
                 }
         }
-        target_send_reply(req, req->rq_status, info->mti_fail_id);
-        RETURN(req->rq_status);
+        target_send_reply(req, result, info->mti_fail_id);
+        RETURN(0);
 }
 
 static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info)
@@ -1292,7 +1294,7 @@ static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info)
                         }
                         /* fall through */
                 case 0:
-                        result = mdt_reply(req, info);
+                        result = mdt_reply(req, result, info);
                 }
         } else
                 CERROR(LUSTRE_MDT0_NAME" drops mal-formed request\n");
@@ -1920,6 +1922,8 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "mdt_ldlm_client", &m->mdt_ldlm_client);
 
+        m->mdt_md_dev.md_lu_dev.ld_obd->obd_ldlm_client = m->mdt_ldlm_client;
+
         m->mdt_service =
                 ptlrpc_init_svc_conf(&conf, mdt_handle, LUSTRE_MDT0_NAME,
                                      m->mdt_md_dev.md_lu_dev.ld_proc_entry,
@@ -2103,8 +2107,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         ENTRY;
 
         obd = class_name2obd(dev);
-        m->mdt_md_dev.md_lu_dev.ld_obd = obd;
-
+        
         spin_lock_init(&m->mdt_transno_lock);
         /* FIXME: We need to load them from disk. But now fake it */
         m->mdt_last_transno = 100;
@@ -2124,6 +2127,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
 
         md_device_init(&m->mdt_md_dev, t);
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
+        m->mdt_md_dev.md_lu_dev.ld_obd = obd;
 
         rc = lu_site_init(s, &m->mdt_md_dev.md_lu_dev);
         if (rc) {
@@ -2137,7 +2141,6 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
                 CERROR("can't init device stack, rc %d\n", rc);
                 GOTO(err_fini_site, rc);
         }
-
         /* set server index */
         LASSERT(num);
         s->ls_node_id = simple_strtol(num, NULL, 10);
@@ -2501,7 +2504,7 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_disconnect     = mdt_obd_disconnect,
         .o_init_export    = mdt_init_export,    /* By Huang Hua*/
         .o_destroy_export = mdt_destroy_export, /* By Huang Hua*/
-        .o_notify         = mdt_notify,
+        //.o_notify         = mdt_notify,
 };
 
 static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)
