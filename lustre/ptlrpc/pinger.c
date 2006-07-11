@@ -372,23 +372,21 @@ static int ping_evictor_main(void *arg)
                 while (!list_empty(&obd->obd_exports_timed)) {
                         exp = list_entry(obd->obd_exports_timed.next,
                                          struct obd_export,exp_obd_chain_timed);
-
                         if (expire_time > exp->exp_last_request_time) {
                                 class_export_get(exp);
                                 spin_unlock(&obd->obd_dev_lock);
-                                LCONSOLE_WARN("%s: haven't heard from %s in %ld"
-                                              " seconds. Last request was at %ld. "
-                                              "I think it's dead, and I am evicting "
-                                              "it.\n", obd->obd_name,
+                                LCONSOLE_WARN("%s: haven't heard from client %s"
+                                              " (at %s) in %ld seconds. I think"
+                                              " it's dead, and I am evicting"
+                                              " it.\n", obd->obd_name,
+                                              obd_uuid2str(&exp->exp_client_uuid),
                                               obd_export_nid2str(exp),
                                               (long)(CURRENT_SECONDS -
-                                                     exp->exp_last_request_time),
-                                              exp->exp_last_request_time);
-
-
+                                                     exp->exp_last_request_time));
+                                CDEBUG(D_HA, "Last request was at %ld\n",
+                                       exp->exp_last_request_time);
                                 class_fail_export(exp);
                                 class_export_put(exp);
-
                                 spin_lock(&obd->obd_dev_lock);
                         } else {
                                 /* List is sorted, so everyone below is ok */
