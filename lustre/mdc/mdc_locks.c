@@ -455,6 +455,14 @@ int mdc_enqueue(struct obd_export *exp,
                         RETURN (-EPROTO);
                 }
 
+                /* If this is an successful OPEN request, we need to set
+                   replay handler and data early, so that if replay happens
+                   immediatelly after swabbing below, new reply is swabbed
+                   by that handler correctly */
+                if (it_disposition(it, DISP_OPEN_OPEN) &&
+                    !it_open_error(DISP_OPEN_OPEN, it))
+                        mdc_set_open_replay_data(NULL, req);
+
                 if ((body->valid & OBD_MD_FLEASIZE) != 0) {
                         /* The eadata is opaque; just check that it is there.
                          * Eventually, obd_unpackmd() will check the contents */

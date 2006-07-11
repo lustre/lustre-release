@@ -394,6 +394,15 @@ Details    : protect inode from truncation within vfs_unlink() context
              just take a reference before calling vfs_unlink() and release it
              when parent's i_sem is free.
 
+Severity   : minor
+Frequency  : Sometimes during replay
+Bugzilla   : 9314
+Description: Assertion failure in ll_local_open after replay.
+Details    : If replay happened on an open request reply before we were able
+             to set replay handler, reply will become not swabbed tripping the
+             assertion in ll_local_open. Now we set the handler right after
+             recognising of open request
+
 
 ------------------------------------------------------------------------------
 

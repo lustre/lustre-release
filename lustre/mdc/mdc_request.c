@@ -546,20 +546,22 @@ void mdc_set_open_replay_data(struct obd_client_handle *och,
         /* outgoing messages always in my byte order */
         LASSERT(body != NULL);
 
-        OBD_ALLOC(mod, sizeof(*mod));
-        if (mod == NULL) {
-                DEBUG_REQ(D_ERROR, open_req, "can't allocate mdc_open_data");
-                return;
-        }
+        if (och) {
+                OBD_ALLOC(mod, sizeof(*mod));
+                if (mod == NULL) {
+                        DEBUG_REQ(D_ERROR, open_req, "can't allocate mdc_open_data");
+                        return;
+                }
 
-        och->och_mod = mod;
-        mod->mod_och = och;
-        mod->mod_open_req = open_req;
+                och->och_mod = mod;
+                mod->mod_och = och;
+                mod->mod_open_req = open_req;
+                open_req->rq_cb_data = mod;
+                open_req->rq_commit_cb = mdc_commit_open;
+        }
 
         memcpy(&rec->cr_replayfid, &body->fid1, sizeof rec->cr_replayfid);
         open_req->rq_replay_cb = mdc_replay_open;
-        open_req->rq_commit_cb = mdc_commit_open;
-        open_req->rq_cb_data = mod;
         if (body->fid1.id == 0) {
                 DEBUG_REQ(D_ERROR, open_req, "saving replay request with "
                           "id = 0 gen = %u", body->fid1.generation);
