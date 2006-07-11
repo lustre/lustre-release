@@ -107,8 +107,13 @@ static int mdt_object_open(struct mdt_thread_info *info,
 
         rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o),
                          &info->mti_attr);
+        if (rc == -EREMOTE) {
+                repbody->fid1 = *mdt_object_fid(o);
+                repbody->valid |= OBD_MD_FLID;
+                RETURN(-EREMOTE);
+        }
         if (rc != 0)
-                GOTO(out, rc);
+                RETURN(rc);
 
         mdt_pack_attr2body(repbody, &info->mti_attr, mdt_object_fid(o));
 
@@ -116,7 +121,7 @@ static int mdt_object_open(struct mdt_thread_info *info,
         rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
                           lmm, info->mti_mdt->mdt_max_mdsize, "lov");
         if (rc < 0)
-                GOTO(out, rc = -EINVAL);
+                RETURN(-EINVAL);
         if (S_ISDIR(info->mti_attr.la_mode))
                 repbody->valid |= OBD_MD_FLDIREA;
         else
@@ -127,7 +132,7 @@ static int mdt_object_open(struct mdt_thread_info *info,
         mfd = mdt_mfd_new();
         if (mfd == NULL) {
                 CERROR("mds: out of memory\n");
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
         }
 
         if (flags & FMODE_WRITE) {
@@ -151,26 +156,40 @@ static int mdt_object_open(struct mdt_thread_info *info,
         repbody->handle.cookie = mfd->mfd_handle.h_cookie;
 
         RETURN(rc);
-out:
-        return rc;
 }
 
-int mdt_pin(struct mdt_thread_info* info)
+int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
+                    __u32 flags, struct ldlm_reply *rep)
 {
         struct mdt_object *o;
         int rc;
         ENTRY;
 
-        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, &info->mti_body->fid1);
+        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid);
         if (!IS_ERR(o)) {
                 if (mdt_object_exists(info->mti_ctxt, &o->mot_obj.mo_lu)) {
-                        rc = mdt_object_open(info, o, info->mti_body->flags);
+                        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
+                        intent_set_disposition(rep, DISP_LOOKUP_POS);
+                        rc = mdt_object_open(info, o, flags);
+                        intent_set_disposition(rep, DISP_OPEN_OPEN);
                         mdt_object_put(info->mti_ctxt, o);
-                } else
+                } else {
+                        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
+                        intent_set_disposition(rep, DISP_LOOKUP_NEG);
                         rc = -ENOENT;
+                }
         } else
                 rc = PTR_ERR(o);
 
+        RETURN(rc);
+}
+
+int mdt_pin(struct mdt_thread_info* info)
+{
+        int rc;
+        ENTRY;
+        rc = mdt_open_by_fid(info, &info->mti_body->fid1, 
+                             info->mti_body->flags, NULL);
         RETURN(rc);
 }
 
@@ -219,30 +238,29 @@ int mdt_reint_open(struct mdt_thread_info *info)
         LASSERT(info->mti_pill.rc_fmt == &RQF_LDLM_INTENT_OPEN);
 
         /*TODO: MDS_CHECK_RESENT */;
-
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
+        if (strlen(rr->rr_name) == 0) {
+                /* partial remote open */
+                RETURN(mdt_open_by_fid(info, rr->rr_fid1, 
+                                       info->mti_attr.la_flags, ldlm_rep));
+        }
+
+        intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_PW;
-        parent = mdt_object_find_lock(info, rr->rr_fid1,
-                                      lh, MDS_INODELOCK_UPDATE);
+        parent = mdt_object_find_lock(info, rr->rr_fid1, lh, 
+                                      MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent)) {
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
+                /* FIXME: just simulate child not exist */
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
                 GOTO(out, result = PTR_ERR(parent));
         }
 
-        intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
         result = mdo_lookup(info->mti_ctxt, mdt_object_child(parent),
                             rr->rr_name, child_fid);
-        if (result && result != -ENOENT) {
-                if (result == -EREMOTE) {
-                        /* FIXME: POS or NEG? */
-                        intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
-                        body->fid1 = *child_fid;
-                        body->valid |= OBD_MD_FLID;
-                }
+        if (result != 0 && result != -ENOENT) {
                 GOTO(out_parent, result);
         }
 
@@ -258,7 +276,8 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 if (info->mti_attr.la_flags & MDS_OPEN_EXCL &&
                     info->mti_attr.la_flags & MDS_OPEN_CREAT)
                         GOTO(out_parent, result = -EEXIST);
-
+                /* child_fid is filled by mdo_lookup(). */
+                LASSERT(lu_fid_eq(child_fid, info->mti_rr.rr_fid2));
         }
 
         child = mdt_object_find(info->mti_ctxt, mdt, child_fid);
@@ -284,10 +303,11 @@ int mdt_reint_open(struct mdt_thread_info *info)
         GOTO(destroy_child, result);
 
 destroy_child:
-        if (result != 0 && created) {
+        if (created && result != 0 && result != -EREMOTE) {
                 mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
                            mdt_object_child(child), rr->rr_name);
         } else if (created) {
+                /* barrier with other thread */
                 mdt_lock_new_child(info, child, NULL);
         }
 out_child:
@@ -344,7 +364,6 @@ int mdt_close(struct mdt_thread_info *info)
         class_handle_unhash(&mfd->mfd_handle);
         list_del_init(&mfd->mfd_list);
         spin_unlock(&med->med_open_lock);
-
         /* mdt_handle2mfd increase reference count, we must drop it here */
         mdt_mfd_put(mfd);
 

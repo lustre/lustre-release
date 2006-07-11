@@ -144,25 +144,21 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
                   (unsigned int)attr->la_valid);
 
         /* MDS_CHECK_RESENT */
+        lh = &info->mti_lh[MDT_LH_PARENT];
+        lh->mlh_mode = LCK_EX;
 
         if (attr->la_valid & ATTR_FROM_OPEN) {
                 mo = mdt_object_find(info->mti_ctxt, info->mti_mdt, 
                                      rr->rr_fid1);
-                if (IS_ERR(mo))
-                        RETURN(rc = PTR_ERR(mo));
         } else {
                 __u64 lockpart = MDS_INODELOCK_UPDATE;
                 if (attr->la_valid & (ATTR_MODE|ATTR_UID|ATTR_GID))
                         lockpart |= MDS_INODELOCK_LOOKUP;
-        
-                lh = &info->mti_lh[MDT_LH_PARENT];
-                lh->mlh_mode = LCK_EX;
  
                 mo = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart);
-                
-                if (IS_ERR(mo))
-                        RETURN(rc = PTR_ERR(mo));
         }
+        if (IS_ERR(mo))
+                RETURN(rc = PTR_ERR(mo));
 
         next = mdt_object_child(mo);
         if (lu_object_exists(info->mti_ctxt, &mo->mot_obj.mo_lu) <= 0)
@@ -198,8 +194,6 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
                 rc = mo_xattr_set(info->mti_ctxt, next,
                                   rr->rr_eadata, rr->rr_eadatalen, 
                                   XATTR_NAME_LOV);
-        if (rc)
-                GOTO(out_unlock, rc);
 
         /* FIXME & TODO Please deal with logcookies here*/
         GOTO(out_unlock, rc);
@@ -215,6 +209,7 @@ static int mdt_reint_create(struct mdt_thread_info *info)
         ENTRY;
 
         switch (info->mti_attr.la_mode & S_IFMT) {
+        case S_IFREG:
         case S_IFDIR:{
                 if (strlen(info->mti_rr.rr_name) > 0)
                         rc = mdt_md_create(info);
@@ -222,12 +217,14 @@ static int mdt_reint_create(struct mdt_thread_info *info)
                         rc = mdt_md_mkobj(info);
                 break;
         }
-        case S_IFREG:
         case S_IFLNK:
         case S_IFCHR:
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:{
+                /* special file should stay on the same node as parent */
+                LASSERT(strlen(info->mti_rr.rr_name) > 0);
+
                 rc = mdt_md_create(info);
                 break;
         }
@@ -274,28 +271,26 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         }
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+
         /*step 2: find & lock the child */
         lhc = &info->mti_lh[MDT_LH_CHILD];
         lhc->mlh_mode = LCK_EX;
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(mp),
                         rr->rr_name, child_fid);
-        if (rc == -EREMOTE) {
-                repbody->fid1 = *child_fid;
-                repbody->valid |= OBD_MD_FLID;
-        }
         if (rc != 0)
                  GOTO(out_unlock_parent, rc);
 
+        /* we will lock the child regardless it is local or remote. No harm. */
         mc = mdt_object_find_lock(info, child_fid, lhc, MDS_INODELOCK_FULL);
         if (IS_ERR(mc))
                 GOTO(out_unlock_parent, rc = PTR_ERR(mc));
-
         
         /*step 3:  do some checking*/
         if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                 GOTO(out_unlock_child, rc = -EROFS);
 
         /* step 4: delete it */
+        /* cmm will take care if child is local or remote */
         rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mp),
                         mdt_object_child(mc), rr->rr_name);
 
@@ -311,10 +306,10 @@ static int mdt_reint_link(struct mdt_thread_info *info)
 {
         struct mdt_reint_record *rr = &info->mti_rr;
         struct ptlrpc_request *req = mdt_info_req(info);
+        struct mdt_object *mp;
         struct mdt_object *ms;
-        struct mdt_object *mt;
+        struct mdt_lock_handle *lhp;
         struct mdt_lock_handle *lhs;
-        struct mdt_lock_handle *lht;
         int rc;
 
         ENTRY;
@@ -325,39 +320,39 @@ static int mdt_reint_link(struct mdt_thread_info *info)
         /* MDS_CHECK_RESENT here */
 
         /* step 1: lock the source */
-        lhs = &info->mti_lh[MDT_LH_PARENT];
-        lhs->mlh_mode = LCK_EX;
-        ms = mdt_object_find_lock(info, rr->rr_fid1, lhs, MDS_INODELOCK_UPDATE);
-        if (IS_ERR(ms))
-                RETURN(PTR_ERR(ms));
+        lhp = &info->mti_lh[MDT_LH_PARENT];
+        lhp->mlh_mode = LCK_EX;
+        mp = mdt_object_find_lock(info, rr->rr_fid1, lhp, MDS_INODELOCK_UPDATE);
+        if (IS_ERR(mp))
+                RETURN(PTR_ERR(mp));
 
         if (strlen(rr->rr_name) == 0) {
                 if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                         GOTO(out_unlock_source, rc = -EROFS);
 
                 /* remote partial operation */
-                rc = mo_ref_add(info->mti_ctxt, mdt_object_child(ms));
+                rc = mo_ref_add(info->mti_ctxt, mdt_object_child(mp));
                 GOTO(out_unlock_source, rc);
         }
         /*step 2: find & lock the target */
-        lht = &info->mti_lh[MDT_LH_CHILD];
-        lht->mlh_mode = LCK_EX;
-        mt = mdt_object_find_lock(info, rr->rr_fid2, lht, MDS_INODELOCK_UPDATE);
-        if (IS_ERR(mt))
-                GOTO(out_unlock_source, rc = PTR_ERR(mt));
+        lhs = &info->mti_lh[MDT_LH_CHILD];
+        lhs->mlh_mode = LCK_EX;
+        ms = mdt_object_find_lock(info, rr->rr_fid2, lhs, MDS_INODELOCK_UPDATE);
+        if (IS_ERR(ms))
+                GOTO(out_unlock_source, rc = PTR_ERR(ms));
 
         if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                 GOTO(out_unlock_target, rc = -EROFS);
 
         /* step 4: link it */
-        rc = mdo_link(info->mti_ctxt, mdt_object_child(mt),
+        rc = mdo_link(info->mti_ctxt, mdt_object_child(mp),
                       mdt_object_child(ms), rr->rr_name);
         GOTO(out_unlock_target, rc);
 
 out_unlock_target:
-        mdt_object_unlock_put(info, mt, lht);
-out_unlock_source:
         mdt_object_unlock_put(info, ms, lhs);
+out_unlock_source:
+        mdt_object_unlock_put(info, mp, lhp);
         return rc;
 }
 
@@ -390,7 +385,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         /*step 2: find & lock the target object if exists*/
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(mtgtdir),
                         rr->rr_tgt, tgt_fid);
-        if (rc && rc != -ENOENT)
+        if (rc != 0 && rc != -ENOENT)
                 GOTO(out_unlock_tgtdir, rc);
 
         if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
@@ -477,7 +472,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         /*step 3: find & lock the old object*/
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(msrcdir),
                         rr->rr_name, old_fid);
-        if (rc) 
+        if (rc != 0) 
                 GOTO(out_unlock_target, rc);
  
         lh_oldp = &info->mti_lh[MDT_LH_OLD];
@@ -491,7 +486,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         /* new target object may not exist now */
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(mtgtdir),
                         rr->rr_tgt, new_fid);
-        if (rc && rc != -ENOENT)
+        if (rc != 0 && rc != -ENOENT)
                 GOTO(out_unlock_old, rc);
 
         if (rc == 0) { 
@@ -513,12 +508,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                         mdt_object_child(mtgtdir), old_fid,
                         rr->rr_name, mnew ? mdt_object_child(mnew): NULL,
                         rr->rr_tgt);
-        if (rc)
-                GOTO(out_unlock_new, rc);
-
-        /* step 7: TODO:check old object */
-        /* if (mold is orphan)
-         */
+        GOTO(out_unlock_new, rc);
 
 out_unlock_new:
         if (mnew) {

@@ -210,6 +210,23 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         }
 
         rc = mo_attr_get(ctxt, next, la);
+        if (rc == -EREMOTE) {
+                /* This object is located on remote node */
+                req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, 
+                                     RCL_SERVER, 0);
+#ifdef CONFIG_FS_POSIX_ACL
+                req_capsule_set_size(&info->mti_pill, &RMF_EADATA, 
+                                     RCL_SERVER, 0);
+#endif
+                rc = req_capsule_pack(&info->mti_pill);
+                if (rc == 0) {
+                        repbody = req_capsule_server_get(&info->mti_pill,
+                                                         &RMF_MDT_BODY);
+                        repbody->fid1 = *mdt_object_fid(o);
+                        repbody->valid |= OBD_MD_FLID;
+                }
+                RETURN(rc);
+        } 
         if (rc){
                 CERROR("getattr error for "DFID3": %d\n",
                         PFID3(mdt_object_fid(o)), rc);
@@ -267,32 +284,32 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
         /* now, to getattr*/
         if (mdt_body_has_lov(la, reqbody)) {
-                if (length > 0)
+                if (length > 0) {
                         rc = mo_xattr_get(info->mti_ctxt, next,
                                           buffer, length, XATTR_NAME_LOV);
-                /* else rc = 0; */
-
-                if (rc < 0)
-                        RETURN(rc);
-
-                if (S_ISDIR(la->la_mode))
-                        repbody->valid |= OBD_MD_FLDIREA;
-                else
-                        repbody->valid |= OBD_MD_FLEASIZE;
-                repbody->eadatasize = rc;
+                        if (rc > 0) {
+                                if (S_ISDIR(la->la_mode))
+                                        repbody->valid |= OBD_MD_FLDIREA;
+                                else
+                                        repbody->valid |= OBD_MD_FLEASIZE;
+                                repbody->eadatasize = rc;
+                                rc = 0;
+                        }
+                }
         } else if (S_ISLNK(la->la_mode) &&
                           (reqbody->valid & OBD_MD_LINKNAME) != 0) {
                 /* FIXME How to readlink??
                 rc = mo_xattr_get(info->mti_ctxt, next,
                                   buffer, length, "readlink");
                 */ rc = 10;
-                if (rc < 0) {
+                if (rc <= 0) {
                         CERROR("readlink failed: %d\n", rc);
-                        RETURN(rc);
+                        rc = -EFAULT;
                 } else {
                         repbody->valid |= OBD_MD_LINKNAME;
                         repbody->eadatasize = rc + 1;
                         ((char*)buffer)[rc] = 0;        /* NULL terminate */
+                        rc = 0;
                         CDEBUG(D_INODE, "symlink dest %s\n", (char*)buffer);
                 }
         }
@@ -303,6 +320,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 repbody->valid |= OBD_MD_FLMODEASIZE;
         }
 
+        if (rc != 0) 
+                RETURN(rc);
 #ifdef CONFIG_FS_POSIX_ACL
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
             (reqbody->valid & OBD_MD_FLACL)) {
@@ -311,21 +330,19 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 length = req_capsule_get_size(&info->mti_pill,
                                               &RMF_EADATA,
                                               RCL_SERVER);
-                if (length > 0)
+                if (length > 0) {
                         rc = mo_xattr_get(info->mti_ctxt, next, buffer, 
                                           length, XATTR_NAME_ACL_ACCESS);
-                else 
-                        rc = 0;
-
-                if (rc < 0) {
-                        CERROR("got acl size: %d\n", rc);
-                        RETURN(rc);
+                        if (rc < 0) {
+                                CERROR("got acl size: %d\n", rc);
+                        } else {
+                                repbody->aclsize = rc;
+                                repbody->valid |= OBD_MD_FLACL;
+                        }
                 }
-                repbody->aclsize = rc;
-                repbody->valid |= OBD_MD_FLACL;
         }
 #endif
-        RETURN(0);
+        RETURN(rc);
 }
 
 static int mdt_getattr(struct mdt_thread_info *info)
@@ -345,7 +362,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
         RETURN(result);
 }
 
-/* @ Huang Hua
+/*
  * UPDATE lock should be taken against parent, and be release before exit;
  * child_bits lock should be taken against child, and be returned back:
  *            (1)normal request should release the child lock;
@@ -369,6 +386,21 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
         if (name == NULL)
                 RETURN(-EFAULT);
+        
+        if (strlen(name) == 0) {
+                /* only open the child. parent is on another node. */
+                child = parent;
+                mdt_lock_handle_init(lhc);
+                lhc->mlh_mode = LCK_CR;
+                result = mdt_object_lock(info, child, lhc, child_bits);
+                if (result != 0) {
+                        /* finally, we can get attr for child. */
+                        result = mdt_getattr_internal(info, child);
+                        if (result != 0)
+                                mdt_object_unlock(info, child, lhc);
+                }
+                RETURN(result);
+        }
 
         /*step 1: lock parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
@@ -379,27 +411,14 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         /*step 2: lookup child's fid by name */
         result = mdo_lookup(info->mti_ctxt, next, name, child_fid);
-        if (result == -EREMOTE) {
-                /* This object is located on remote node */
-                req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, 
-                                     RCL_SERVER, 0);
-#ifdef CONFIG_FS_POSIX_ACL
-                req_capsule_set_size(&info->mti_pill, &RMF_EADATA, 
-                                     RCL_SERVER, 0);
-#endif
-                result = req_capsule_pack(&info->mti_pill);
-                if (result == 0) {
-                        struct mdt_body *repbody;
-                        repbody = req_capsule_server_get(&info->mti_pill, 
-                                                         &RMF_MDT_BODY);
-                        repbody->fid1 = *child_fid;
-                }
-                GOTO(out_parent, result);
-        } 
         if (result != 0)
                 GOTO(out_parent, result);
 
-        /*step 3: find the child object by fid & lock it*/
+        /*
+         *step 3: find the child object by fid & lock it.
+         *        regardless if it is local or remote.
+         */    
+        mdt_lock_handle_init(lhc);
         lhc->mlh_mode = LCK_CR;
         child = mdt_object_find_lock(info, child_fid, lhc, child_bits);
         if (IS_ERR(child))
@@ -426,8 +445,10 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
         ENTRY;
 
         rc = mdt_getattr_name_lock(info, lhc, MDS_INODELOCK_UPDATE);
-        if (lustre_handle_is_used(&lhc->mlh_lh))
+        if (lustre_handle_is_used(&lhc->mlh_lh)) {
                 ldlm_lock_decref(&lhc->mlh_lh, lhc->mlh_mode);
+                lhc->mlh_lh.cookie = 0;
+        }
         RETURN(rc);
 }
 
@@ -569,13 +590,12 @@ static int mdt_sync(struct mdt_thread_info *info)
                 if (rc == 0) {
                         rc = mdt_object_sync(info);
                         if (rc == 0) {
-                                struct md_object *next;
-                                const struct lu_fid    *fid;
+                                struct md_object    *next;
+                                const struct lu_fid *fid;
                                 next = mdt_object_child(info->mti_object);
                                 fid = mdt_object_fid(info->mti_object);
                                 rc = mo_attr_get(info->mti_ctxt,
-                                                 next,
-                                                 &info->mti_attr);
+                                                 next, &info->mti_attr);
                                 if (rc == 0) {
                                         body = req_capsule_server_get(pill, 
                                                                 &RMF_MDT_BODY);
@@ -854,11 +874,11 @@ static int mdt_lock_reply_compat(struct mdt_device *m, struct ldlm_reply *rep)
  */
 static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
 {
-        int result;
-        const struct mdt_body    *body;
-        struct mdt_object        *obj;
-        const struct lu_context  *ctx;
-        struct req_capsule *pill;
+        const struct mdt_body   *body;
+        struct mdt_object       *obj;
+        const struct lu_context *ctx;
+        struct req_capsule      *pill;
+        int                     result;
 
         ctx = info->mti_ctxt;
         pill = &info->mti_pill;
@@ -960,8 +980,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         flags = h->mh_flags;
         LASSERT(ergo(flags & (HABEO_CORPUS | HABEO_REFERO), h->mh_fmt != NULL));
 
-        req_capsule_init(&info->mti_pill,
-                         req, RCL_SERVER, info->mti_rep_buf_size);
+        req_capsule_init(&info->mti_pill, req, RCL_SERVER, info->mti_rep_buf_size);
 
         if (h->mh_fmt != NULL) {
                 req_capsule_set(&info->mti_pill, h->mh_fmt);
@@ -1402,14 +1421,14 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                               struct ldlm_lock **lockp,
                               int flags)
 {
-        __u64  child_bits;
-        struct ldlm_lock *old_lock = *lockp;
-        struct ldlm_lock *new_lock = NULL;
-        struct ptlrpc_request *req = mdt_info_req(info);
-        struct ldlm_reply *ldlm_rep;
-        struct mdt_lock_handle tmp_lock;
+        struct ldlm_lock       *old_lock = *lockp;
+        struct ldlm_lock       *new_lock = NULL;
+        struct ptlrpc_request  *req = mdt_info_req(info);
+        struct ldlm_reply      *ldlm_rep;
+        struct mdt_lock_handle  tmp_lock;
         struct mdt_lock_handle *lhc = &tmp_lock;
-        int    rc;
+        __u64                   child_bits;
+        int                     rc;
 
         ENTRY;
 
@@ -1425,8 +1444,6 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                 RETURN(-EINVAL);
         }
 
-
-        mdt_lock_handle_init(lhc);
         rc = mdt_getattr_name_lock(info, lhc, child_bits);
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         intent_set_disposition(ldlm_rep, DISP_IT_EXECD);
@@ -1461,6 +1478,11 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                         MSG_RESENT);
                 RETURN(ELDLM_LOCK_REPLACED);
         }
+
+        /* TODO:
+         * These are copied from mds/hander.c, and should be factored into
+         * ldlm module in order to share these code, and be easy for merge.
+         */
 
         /* Fixup the lock to be given to the client */
         l_lock(&new_lock->l_resource->lr_namespace->ns_lock);
