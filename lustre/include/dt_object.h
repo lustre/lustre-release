@@ -179,15 +179,6 @@ struct dt_object_operations {
                                   struct dt_object *dt,
                                   struct lu_attr *attr, struct thandle *th);
         /*
-         * Destroy existing object.
-         *
-         * precondition: lu_object_exists(ctxt, &dt->do_lu);
-         * postcondition: ergo(result == 0,
-         *                     !lu_object_exists(ctxt, &dt->do_lu));
-         */
-        int   (*do_object_destroy)(const struct lu_context *ctxt,
-                                   struct dt_object *dt, struct thandle *th);
-        /*
          * Announce that this object is going to be used as an index. This
          * operation check that object supports indexing operations and
          * installs appropriate dt_index_operations vector on success.
