@@ -60,8 +60,8 @@ static const struct dt_index_features oi_index_features = {
         .dif_flags       = DT_IND_UPDATE,
         .dif_keysize_min = sizeof(struct lu_fid),
         .dif_keysize_max = sizeof(struct lu_fid),
-        .dif_recsize_min = sizeof(__u64) + sizeof(__u32),
-        .dif_recsize_max = sizeof(__u64) + sizeof(__u32)
+        .dif_recsize_min = sizeof(struct osd_inode_id),
+        .dif_recsize_max = sizeof(struct osd_inode_id)
 };
 
 int osd_oi_init(struct osd_thread_info *info,

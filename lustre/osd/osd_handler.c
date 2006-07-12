@@ -1351,7 +1351,7 @@ static int osd_fid_lookup(const struct lu_context *ctx,
         struct osd_thread_info *info;
         struct lu_device       *ldev = obj->oo_dt.do_lu.lo_dev;
         struct osd_device      *dev;
-        struct osd_inode_id     id;
+        struct osd_inode_id    *id;
         struct osd_oi          *oi;
         struct inode           *inode;
         int                     result;
@@ -1365,16 +1365,16 @@ static int osd_fid_lookup(const struct lu_context *ctx,
 
         info = lu_context_key_get(ctx, &osd_key);
         dev  = osd_dev(ldev);
-
-        oi = &dev->od_oi;
+        id   = &info->oti_id;
+        oi   = &dev->od_oi;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
                 RETURN(-ENOENT);
 
         osd_oi_read_lock(oi);
-        result = osd_oi_lookup(info, oi, fid, &id);
+        result = osd_oi_lookup(info, oi, fid, id);
         if (result == 0) {
-                inode = osd_iget(info, dev, &id);
+                inode = osd_iget(info, dev, id);
                 if (!IS_ERR(inode)) {
                         obj->oo_inode = inode;
                         LASSERT(obj->oo_inode->i_sb == osd_sb(dev));

@@ -52,6 +52,7 @@ struct osd_oi {
 struct osd_inode_id {
         __u64 oii_ino;
         __u32 oii_gen;
+        __u32 oii_pad;
 };
 
 enum {
