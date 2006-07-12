@@ -313,14 +313,14 @@ static int cml_lookup(const struct lu_context *ctx, struct md_object *mo_p,
 
 }
 
-static int cml_create(const struct lu_context *ctx,
-                      struct md_object *mo_p, const char *name,
-                      struct md_object *mo_c, struct lu_attr *attr)
+static int cml_create(const struct lu_context *ctx, struct md_object *mo_p, 
+                      const char *child_name, struct md_object *mo_c, 
+                      const char *target_name, struct lu_attr *attr)
 {
         int rc;
         ENTRY;
-        rc = mdo_create(ctx, md_object_next(mo_p), name,
-                        md_object_next(mo_c), attr);
+        rc = mdo_create(ctx, md_object_next(mo_p), child_name,
+                        md_object_next(mo_c), target_name, attr);
         RETURN(rc);
 }
 
@@ -574,9 +574,9 @@ static int cmr_lookup(const struct lu_context *ctx, struct md_object *mo_p,
  * For more details see rollback HLD/DLD.
  *
  */
-static int cmr_create(const struct lu_context *ctx,
-                      struct md_object *mo_p, const char *name,
-                      struct md_object *mo_c, struct lu_attr *attr)
+static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
+                      const char *child_name, struct md_object *mo_c, 
+                      const char *target_name, struct lu_attr *attr)
 {
         int rc;
 
@@ -588,7 +588,7 @@ static int cmr_create(const struct lu_context *ctx,
         rc = mo_object_create(ctx, md_object_next(mo_c), attr);
         if (rc == 0) {
                 rc = mdo_name_insert(ctx, md_object_next(mo_p),
-                                     name, lu_object_fid(&mo_c->mo_lu));
+                                     child_name, lu_object_fid(&mo_c->mo_lu));
         }
 
         RETURN(rc);

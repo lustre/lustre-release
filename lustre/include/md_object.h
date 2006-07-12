@@ -77,9 +77,10 @@ struct md_dir_operations {
         int (*mdo_lookup)(const struct lu_context *, struct md_object *,
                           const char *, struct lu_fid *);
 
+        /* target_name is valid iff this is a symlink operation. */
         int (*mdo_create)(const struct lu_context *, struct md_object *,
-                          const char *, struct md_object *,
-                          struct lu_attr *);
+                          const char *child_name, struct md_object *,
+                          const char *target_name, struct lu_attr *);
 
         int (*mdo_rename)(const struct lu_context *ctxt,
                           struct md_object *spobj, struct md_object *tpobj,
@@ -254,12 +255,12 @@ static inline int mdo_lookup(const struct lu_context *cx, struct md_object *p,
         return p->mo_dir_ops->mdo_lookup(cx, p, name, f);
 }
 
-static inline int mdo_create(const struct lu_context *cx,
-                             struct md_object *p, const char *name,
-                             struct md_object *c, struct lu_attr *at)
+static inline int mdo_create(const struct lu_context *cx, struct md_object *p,
+                             const char *child_name, struct md_object *c, 
+                             const char *target_name, struct lu_attr *at)
 {
         LASSERT(c->mo_dir_ops->mdo_create);
-        return c->mo_dir_ops->mdo_create(cx, p, name, c, at);
+        return c->mo_dir_ops->mdo_create(cx, p, child_name, c, target_name, at);
 }
 
 static inline int mdo_rename(const struct lu_context *cx,

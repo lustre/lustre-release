@@ -64,7 +64,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 struct md_object *next = mdt_object_child(parent);
 
                 rc = mdo_create(info->mti_ctxt, next, rr->rr_name,
-                                mdt_object_child(child), attr);
+                                mdt_object_child(child), rr->rr_tgt, attr);
                 if (rc == 0) {
                         /* return fid to client. attr is over-written!!*/
                         rc = mo_attr_get(info->mti_ctxt, 

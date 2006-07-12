@@ -729,9 +729,9 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
 /*
  * Create object and insert it into namespace.
  */
-static int mdd_create(const struct lu_context *ctxt,
-                      struct md_object *pobj, const char *name,
-                      struct md_object *child, struct lu_attr* attr)
+static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj, 
+                      const char *name, struct md_object *child, 
+                      const char *target_name, struct lu_attr* attr)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdo = md2mdd_obj(pobj);
