@@ -102,10 +102,11 @@ struct mdt_device {
         /* super-class */
         struct md_device           mdt_md_dev;
         struct ptlrpc_service     *mdt_service;
+        struct ptlrpc_service     *mdt_readpage_service;
         /* DLM name-space for meta-data locks maintained by this server */
         struct ldlm_namespace     *mdt_namespace;
         /* ptlrpc handle for MDS->client connections (for lock ASTs). */
-        struct ptlrpc_client       mdt_ldlm_client;
+        struct ptlrpc_client      *mdt_ldlm_client;
         /* underlying device */
         struct md_device          *mdt_child;
         struct dt_device          *mdt_bottom;
@@ -350,6 +351,9 @@ int mdt_mfd_close(const struct lu_context *ctxt,
 int mdt_close(struct mdt_thread_info *info);
 
 int mdt_done_writing(struct mdt_thread_info *info);
+int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
+                           const struct req_format *);
+
 
 /* debug issues helper starts here*/
 #define MDT_FAIL_CHECK(id)                                              \
