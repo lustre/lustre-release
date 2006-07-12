@@ -1,5 +1,5 @@
 MODULES := osd
-osd-objs := osd_handler.o osd_oi.o
+osd-objs := osd_handler.o osd_oi.o osd_igif.o
 
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LUSTRE@ -I@LUSTRE@/ldiskfs
 
