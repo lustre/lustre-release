@@ -2098,13 +2098,16 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
                      struct lu_device_type *t, struct lustre_cfg *cfg)
 {
-        int rc;
-        struct lu_site *s;
-        char   ns_name[48];
-        const char *dev = lustre_cfg_string(cfg, 0);
-        const char *num = lustre_cfg_string(cfg, 2);
-        struct obd_device *obd;
+        struct mdt_thread_info *info;
+        struct obd_device      *obd;
+        const char             *dev = lustre_cfg_string(cfg, 0);
+        const char             *num = lustre_cfg_string(cfg, 2);
+        struct lu_site         *s;
+        int                     rc;
         ENTRY;
+
+        info = lu_context_key_get(ctx, &mdt_thread_key);
+        LASSERT(info != NULL);
 
         obd = class_name2obd(dev);
         
@@ -2153,8 +2156,10 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         if (rc)
                 GOTO(err_fini_fld, rc);
 
-        snprintf(ns_name, sizeof ns_name, LUSTRE_MDT0_NAME"-%p", m);
-        m->mdt_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
+        snprintf(info->mti_u.ns_name, sizeof info->mti_u.ns_name,
+                 LUSTRE_MDT0_NAME"-%p", m);
+        m->mdt_namespace = ldlm_namespace_new(info->mti_u.ns_name, 
+                                              LDLM_NAMESPACE_SERVER);
         if (m->mdt_namespace == NULL)
                 GOTO(err_fini_seq, rc = -ENOMEM);
 

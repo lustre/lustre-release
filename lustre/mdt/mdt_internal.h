@@ -244,6 +244,7 @@ struct mdt_thread_info {
         struct ldlm_res_id         mti_res_id;
         union {
                 struct obd_uuid    uuid;
+                char               ns_name[48];
         } mti_u;
 };
 

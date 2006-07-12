@@ -360,8 +360,9 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                 rc = lu_context_init(&ctx);
                 if (rc == 0) {
                         lu_context_enter(&ctx);
-
                         d = ldt->ldt_ops->ldto_device_alloc(&ctx, ldt, cfg);
+                        lu_context_exit(&ctx);
+                        lu_context_fini(&ctx);
                         if (!IS_ERR(d)) {
                                 obd->obd_lu_dev = d;
                                 d->ld_obd = obd;
