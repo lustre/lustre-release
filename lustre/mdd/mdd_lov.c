@@ -47,9 +47,9 @@
 
 #include "mdd_internal.h"
 
-const char *mdd_lov_objid_name = "lov_objid";
+static const char mdd_lov_objid_name[] = "lov_objid";
 
-static int mdd_lov_read_objids(const struct lu_context *ctxt, 
+static int mdd_lov_read_objids(const struct lu_context *ctxt,
                                struct mdd_device *mdd)
 {
         struct mdd_lov_info *lov_info = &mdd->mdd_lov_info;
@@ -61,11 +61,11 @@ static int mdd_lov_read_objids(const struct lu_context *ctxt,
 
         LASSERT(!lov_info->mdd_lov_objids_size);
         LASSERT(!lov_info->mdd_lov_objids_dirty);
-        
-        /* Read everything in the file, even if our current lov desc 
-           has fewer targets. Old targets not in the lov descriptor 
+
+        /* Read everything in the file, even if our current lov desc
+           has fewer targets. Old targets not in the lov descriptor
            during mds setup may still have valid objids. */
-        
+
         rc = obj_ids->do_ops->do_attr_get(ctxt, obj_ids, lu_attr);
         if (rc)
                 GOTO(out, rc);
@@ -81,13 +81,13 @@ static int mdd_lov_read_objids(const struct lu_context *ctxt,
         lov_info->mdd_lov_objids_size = lu_attr->la_size;
 
 #if 0
-        rc = obj_ids->do_body_ops->dbo_read(ctxt, obj_ids, ids, 
+        rc = obj_ids->do_body_ops->dbo_read(ctxt, obj_ids, ids,
                                             lu_attr->la_size, &off);
         if (rc < 0) {
                 CERROR("Error reading objids %d\n", rc);
                 RETURN(rc);
         }
-#endif                
+#endif
         lov_info->mdd_lov_objids_in_file = lu_attr->la_size / sizeof(*ids);
 
         for (i = 0; i < lov_info->mdd_lov_objids_in_file; i++) {
@@ -99,7 +99,7 @@ out:
 }
 
 /* Update the lov desc for a new size lov. */
-static int mdd_lov_update_desc(const struct lu_context *ctxt, 
+static int mdd_lov_update_desc(const struct lu_context *ctxt,
                                struct mdd_device *mdd)
 {
         struct mdd_lov_info *lov_info = &mdd->mdd_lov_info;
@@ -110,15 +110,15 @@ static int mdd_lov_update_desc(const struct lu_context *ctxt,
         ENTRY;
 
         ld = &mdd_ctx_info(ctxt)->mti_ld;
-        
-        rc = obd_get_info(lov_obd->obd_self_export, strlen(KEY_LOVDESC) + 1, 
+
+        rc = obd_get_info(lov_obd->obd_self_export, strlen(KEY_LOVDESC) + 1,
                           KEY_LOVDESC, &valsize, ld);
         if (rc)
                 GOTO(out, rc);
 
         /* The size of the LOV target table may have increased. */
         size = ld->ld_tgt_count * sizeof(obd_id);
-        if ((lov_info->mdd_lov_objids_size == 0) || 
+        if ((lov_info->mdd_lov_objids_size == 0) ||
             (size > lov_info->mdd_lov_objids_size)) {
                 obd_id *ids;
 
@@ -160,7 +160,7 @@ out:
         RETURN(rc);
 }
 
-int mdd_lov_write_objids(const struct lu_context *ctxt, 
+int mdd_lov_write_objids(const struct lu_context *ctxt,
                          struct mdd_lov_info *lov_info)
 {
         int i, rc = 0, tgts;
@@ -169,7 +169,7 @@ int mdd_lov_write_objids(const struct lu_context *ctxt,
         if (!lov_info->mdd_lov_objids_dirty)
                 RETURN(0);
 
-        tgts = max(lov_info->mdd_lov_desc.ld_tgt_count, 
+        tgts = max(lov_info->mdd_lov_desc.ld_tgt_count,
                    lov_info->mdd_lov_objids_in_file);
         if (!tgts)
                 RETURN(0);
@@ -189,7 +189,7 @@ int mdd_lov_write_objids(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
-static int mdd_lov_connect(const struct lu_context *ctxt, 
+static int mdd_lov_connect(const struct lu_context *ctxt,
                            struct mdd_device *mdd, char *lov_name)
 {
         struct mdd_lov_info *lov_info = &mdd->mdd_lov_info;
@@ -214,7 +214,7 @@ static int mdd_lov_connect(const struct lu_context *ctxt,
                 lov_info->mdd_lov_obd = ERR_PTR(rc);
                 RETURN(rc);
         }
-       
+
         /* open and test the lov objd file */
 
         rc = mdd_lov_read_objids(ctxt, mdd);
@@ -236,13 +236,13 @@ static int mdd_lov_connect(const struct lu_context *ctxt,
 #endif
         /* If we're mounting this code for the first time on an existing FS,
          * we need to populate the objids array from the real OST values */
-        if (lov_info->mdd_lov_desc.ld_tgt_count > 
+        if (lov_info->mdd_lov_desc.ld_tgt_count >
                       lov_info->mdd_lov_objids_in_file) {
                 int size = sizeof(obd_id) * lov_info->mdd_lov_desc.ld_tgt_count;
                 int i;
 
-                rc = obd_get_info(lov_info->mdd_lov_obd->obd_self_export, 
-                                  strlen("last_id"), "last_id", &size, 
+                rc = obd_get_info(lov_info->mdd_lov_obd->obd_self_export,
+                                  strlen("last_id"), "last_id", &size,
                                   lov_info->mdd_lov_objids);
                 if (!rc) {
                         for (i = 0; i < lov_info->mdd_lov_desc.ld_tgt_count; i++)
@@ -273,7 +273,7 @@ out:
 int mdd_lov_fini(const struct lu_context *ctxt, struct mdd_device *mdd)
 {
         struct mdd_lov_info *lov_info = &mdd->mdd_lov_info;
-        
+
         dt_object_fini(lov_info->mdd_lov_objid_obj);
         return 0;
 }
@@ -287,7 +287,7 @@ int mdd_lov_init(const struct lu_context *ctxt, struct mdd_device *mdd,
         char *lov_name = NULL, *srv = NULL;
         int rc = 0;
         ENTRY;
- 
+
         if (IS_ERR(lov_info->mdd_lov_obd))
                 RETURN(PTR_ERR(lov_info->mdd_lov_obd));
 
@@ -304,7 +304,7 @@ int mdd_lov_init(const struct lu_context *ctxt, struct mdd_device *mdd,
                                &lov_info->mdd_lov_objid_fid);
         if (IS_ERR(obj_id)){
                 rc = PTR_ERR(obj_id);
-                RETURN(rc); 
+                RETURN(rc);
         }
 
         LASSERT(obj_id != NULL);
@@ -330,7 +330,7 @@ int mdd_lov_init(const struct lu_context *ctxt, struct mdd_device *mdd,
                 GOTO(out, rc);
         }
         EXIT;
-out: 
+out:
         if (rc)
                 mdd_lov_fini(ctxt, mdd);
         return rc;
@@ -345,12 +345,12 @@ int mdd_lov_set_nextid(struct mdd_device *mdd)
 
         LASSERT(lov_info->mdd_lov_objids != NULL);
 
-        rc = obd_set_info_async(lov_info->mdd_lov_obd->obd_self_export, 
+        rc = obd_set_info_async(lov_info->mdd_lov_obd->obd_self_export,
                                 strlen(KEY_NEXT_ID), KEY_NEXT_ID,
                                 lov_info->mdd_lov_desc.ld_tgt_count,
                                 lov_info->mdd_lov_objids, NULL);
 
-        if (rc) 
+        if (rc)
                 CERROR ("mdd_lov_set_nextid failed (%d)\n", rc);
 
         RETURN(rc);
@@ -368,7 +368,7 @@ struct mdd_lov_sync_info {
 /* Inform MDS about new/updated target */
 static int mdd_lov_update_mds(struct lu_context *ctxt,
                               struct lu_device *ld,
-                              struct obd_device *watched, 
+                              struct obd_device *watched,
                               __u32 idx)
 {
         struct mdd_device *mdd = lu2mdd_dev(ld);
@@ -382,23 +382,23 @@ static int mdd_lov_update_mds(struct lu_context *ctxt,
         if (rc)
                 RETURN(rc);
 
-        /* 
-         * idx is set as data from lov_notify. 
+        /*
+         * idx is set as data from lov_notify.
          * XXX did not consider recovery here
          */
         if (idx != MDSLOV_NO_INDEX) {
                 if (idx >= lov_info->mdd_lov_desc.ld_tgt_count) {
-                        CERROR("index %d > count %d!\n", idx, 
+                        CERROR("index %d > count %d!\n", idx,
                                lov_info->mdd_lov_desc.ld_tgt_count);
                         RETURN(-EINVAL);
                 }
-                
+
                 if (idx >= lov_info->mdd_lov_objids_in_file) {
                         /* We never read this lastid; ask the osc */
                         obd_id lastid;
                         __u32 size = sizeof(lastid);
                         rc = obd_get_info(watched->obd_self_export,
-                                          strlen("last_id"), 
+                                          strlen("last_id"),
                                           "last_id", &size, &lastid);
                         if (rc)
                                 RETURN(rc);
@@ -407,10 +407,10 @@ static int mdd_lov_update_mds(struct lu_context *ctxt,
                         mdd_lov_write_objids(ctxt, lov_info);
                 } else {
                         /* We have read this lastid from disk; tell the osc.
-                           Don't call this during recovery. */ 
+                           Don't call this during recovery. */
                         rc = mdd_lov_set_nextid(mdd);
                 }
-        
+
                 CDEBUG(D_CONFIG, "last object "LPU64" from OST %d\n",
                       lov_info->mdd_lov_objids[idx], idx);
         }
@@ -418,7 +418,7 @@ static int mdd_lov_update_mds(struct lu_context *ctxt,
         RETURN(rc);
 }
 
-static int mdd_lov_clear_orphans(struct mdd_lov_info *mli, 
+static int mdd_lov_clear_orphans(struct mdd_lov_info *mli,
                                  struct obd_uuid *ost_uuid)
 {
         int rc;
@@ -439,16 +439,16 @@ static int mdd_lov_clear_orphans(struct mdd_lov_info *mli,
                 memcpy(&oa.o_inline, ost_uuid, sizeof(*ost_uuid));
                 oa.o_valid |= OBD_MD_FLINLINE;
         }
-        rc = obd_create(mli->mdd_lov_obd->obd_self_export, &oa, 
+        rc = obd_create(mli->mdd_lov_obd->obd_self_export, &oa,
                         &empty_ea, &oti);
 
         RETURN(rc);
 }
 
 /* We only sync one osc at a time, so that we don't have to hold
-   any kind of lock on the whole mds_lov_desc, which may change 
+   any kind of lock on the whole mds_lov_desc, which may change
    (grow) as a result of mds_lov_add_ost.  This also avoids any
-   kind of mismatch between the lov_desc and the mds_lov_desc, 
+   kind of mismatch between the lov_desc and the mds_lov_desc,
    which are not in lock-step during lov_add_obd */
 static int __mdd_lov_synchronize(void *data)
 {
@@ -472,15 +472,15 @@ static int __mdd_lov_synchronize(void *data)
         rc = mdd_lov_update_mds(ctxt, ld, watched, idx);
         if (rc != 0)
                 GOTO(out, rc);
-        
+
         rc = obd_set_info_async(mdd->mdd_lov_info.mdd_lov_obd->obd_self_export,
-                                strlen(KEY_MDS_CONN), KEY_MDS_CONN, 0, uuid, 
+                                strlen(KEY_MDS_CONN), KEY_MDS_CONN, 0, uuid,
                                 NULL);
         if (rc != 0) {
                 CERROR("failed at obd_set_info_async: %d\n", rc);
                 GOTO(out, rc);
         }
-                 
+
         rc = mdd_lov_clear_orphans(&mdd->mdd_lov_info, uuid);
         if (rc != 0) {
                 CERROR("failed at mds_lov_clear_orphans: %d\n", rc);
@@ -503,7 +503,7 @@ int mdd_lov_synchronize(void *data)
         RETURN(__mdd_lov_synchronize(data));
 }
 
-int mdd_lov_start_synchronize(const struct lu_context *ctxt, 
+int mdd_lov_start_synchronize(const struct lu_context *ctxt,
                               struct lu_device *ld,
                               struct obd_device *watched,
                               void *data, int nonblock)
@@ -536,7 +536,7 @@ int mdd_lov_start_synchronize(const struct lu_context *ctxt,
            disconnect the LOV.  This of course means a cleanup won't
            finish for as long as the sync is blocking. */
         lu_device_get(ld);
-#if 0 
+#if 0
         if (nonblock) {
                 /* Synchronize in the background */
                 rc = cfs_kernel_thread(mdd_lov_synchronize, mlsi,
@@ -545,7 +545,7 @@ int mdd_lov_start_synchronize(const struct lu_context *ctxt,
                         CERROR("error starting mdd_lov_synchronize: %d\n", rc);
                         lu_device_put(ld);
                 } else {
-                        CDEBUG(D_HA, "mdd_lov_synchronize idx=%d thread=%d\n", 
+                        CDEBUG(D_HA, "mdd_lov_synchronize idx=%d thread=%d\n",
                                mlsi->mlsi_index, rc);
                         rc = 0;
                 }
@@ -612,7 +612,7 @@ static int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
         int lmm_size;
 
         next = mdd_object_child(md2mdd_obj(obj));
-        rc = next->do_ops->do_xattr_get(ctxt, next, md, *md_size, 
+        rc = next->do_ops->do_xattr_get(ctxt, next, md, *md_size,
                                         MDS_LOV_MD_NAME);
         if (rc < 0) {
                 CERROR("Error %d reading eadata \n", rc);
@@ -624,7 +624,7 @@ static int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
         } else {
                 *md_size = 0;
         }
-        
+
         RETURN (rc);
 }
 
@@ -670,17 +670,17 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         rc = obd_create(mli->mdd_lov_obd->obd_self_export, oa, &lsm, NULL);
         if (rc)
                 GOTO(out_oa, rc);
-        
+
         rc = obd_packmd(mli->mdd_lov_obd->obd_self_export, &lmm, lsm);
         if (rc < 0) {
                 CERROR("cannot pack lsm, err = %d\n", rc);
                 GOTO(out_oa, rc);
         }
         lmm_size = rc;
-        
-        rc = mdd_xattr_set(ctxt, &child->mod_obj, lmm, lmm_size, 
+
+        rc = mdd_xattr_set(ctxt, &child->mod_obj, lmm, lmm_size,
                            MDS_LOV_MD_NAME);
 out_oa:
         obdo_free(oa);
-        RETURN(rc); 
+        RETURN(rc);
 }
