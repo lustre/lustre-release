@@ -236,6 +236,8 @@ int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op)
         ENTRY;
 
         if (op < REINT_MAX && mdt_reint_unpackers[op] != NULL) {
+                memset(&info->mti_rr, 0, sizeof info->mti_rr);
+                memset(&info->mti_attr, 0, sizeof info->mti_attr);
                 info->mti_rr.rr_opcode = op;
                 rc = mdt_reint_unpackers[op](info);
         } else {
