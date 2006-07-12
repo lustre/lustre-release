@@ -2338,18 +2338,13 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                            struct obd_uuid *cluuid,
                            struct obd_connect_data *data)
 {
-        struct obd_export *exp;
-        int rc;
-        struct mdt_device *mdt;
+        struct obd_export      *exp;
+        struct mdt_device      *mdt;
         struct mdt_export_data *med;
         struct mdt_client_data *mcd;
-        struct lu_context ctxt;
+        struct lu_context       ctxt;
+        int                     rc;
         ENTRY;
-
-        rc = lu_context_init(&ctxt);
-        if (rc)
-                RETURN(rc);
-        lu_context_enter(&ctxt);
 
         if (!conn || !obd || !cluuid)
                 RETURN(-EINVAL);
@@ -2370,18 +2365,24 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                 if (mcd != NULL) {
                         memcpy(mcd->mcd_uuid, cluuid, sizeof mcd->mcd_uuid);
                         med->med_mcd = mcd;
-                        /*
-                         * rc = mdt_client_add(&ctxt, mdt, med, -1);
-                         */
+                        rc = lu_context_init(&ctxt);
+                        if (rc == 0) {
+                                lu_context_enter(&ctxt);
+                                /*
+                                * rc = mdt_client_add(&ctxt, mdt, med, -1);
+                                */
+                                lu_context_exit(&ctxt);
+                                lu_context_fini(&ctxt);
+                        }
+                        if (rc != 0)
+                                OBD_FREE_PTR(mcd);
                 } else
                         rc = -ENOMEM;
         }
-        if (rc)
+        if (rc != 0)
                 class_disconnect(exp);
         else
                 class_export_put(exp);
-        lu_context_exit(&ctxt);
-        lu_context_fini(&ctxt);
 
         RETURN(rc);
 }
