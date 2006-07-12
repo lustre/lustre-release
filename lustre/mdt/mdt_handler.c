@@ -939,7 +939,7 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
 }
 
 /* FIXME: fake untill journal callback is OK.*/
-int mdt_update_last_transno(struct mdt_thread_info *info)
+int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
 {
         __u64 last_transno;
         __u64 last_committed;
@@ -947,10 +947,29 @@ int mdt_update_last_transno(struct mdt_thread_info *info)
         struct ptlrpc_request * req = mdt_info_req(info);
 
         LASSERT(mdt != NULL);
-        spin_lock(&mdt->mdt_transno_lock);
-        last_transno = ++ (mdt->mdt_last_transno);
-        last_committed = ++ (mdt->mdt_last_committed);
-        spin_unlock(&mdt->mdt_transno_lock);
+
+
+        last_transno = req->rq_reqmsg->transno;
+        if (rc != 0) {
+                if (last_transno != 0) {
+                        CERROR("replay %s transno "LPU64" failed: rc %d\n",
+                   libcfs_nid2str(req->rq_export->exp_connection->c_peer.nid),
+                   last_transno, rc);
+                        last_transno = 0;
+                }
+        } else { /* rc == 0 */
+                spin_lock(&mdt->mdt_transno_lock);
+                if (last_transno == 0) {
+                        last_transno = ++mdt->mdt_last_transno;
+                } else {
+                        if (last_transno > mdt->mdt_last_transno)
+                                mdt->mdt_last_transno = last_transno;
+                }
+                spin_unlock(&mdt->mdt_transno_lock);
+        }
+                
+        /*last_committed = (mdt->mdt_last_committed);*/
+        last_committed = last_transno;
 
         CERROR("last_transno = %llu, last_committed = %llu\n", 
                 last_transno, last_committed);
@@ -958,10 +977,6 @@ int mdt_update_last_transno(struct mdt_thread_info *info)
         req->rq_repmsg->last_xid = req->rq_xid;
         req->rq_repmsg->last_committed = last_committed;
         req->rq_export->exp_obd->obd_last_committed = last_committed;
-/*
-        req->rq_repmsg->last_xid = le64_to_cpu(req_exp_last_xid(req));
-        target_committed_to_req(req);
-*/
         return 0;
 }
 
@@ -1040,9 +1055,9 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         }
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
-        if (result == 0 && h->mh_opc != MDS_DISCONNECT) {
+        if (h->mh_opc != MDS_DISCONNECT) {
                 /* FIXME: fake untill journal callback is OK.*/
-                mdt_update_last_transno(info);
+                mdt_update_last_transno(info, result);
         }
         req_capsule_fini(&info->mti_pill);
         RETURN(result);
@@ -1569,6 +1584,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                 RETURN(-EFAULT);
         rep->lock_policy_res2 = mdt_reint_internal(info, opc);
         intent_set_disposition(rep, DISP_IT_EXECD);
+        mdt_update_last_transno(info, rep->lock_policy_res2);
 
         RETURN(ELDLM_LOCK_ABORTED);
 }
@@ -1672,7 +1688,6 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                                    ldlm_it2str(it->opc));
 
                         rc = mdt_intent_opc(it->opc, info, lockp, flags);
-                        mdt_update_last_transno(info);
                         if (rc == 0)
                                 rc = ELDLM_OK;
                 } else
@@ -2519,7 +2534,7 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_disconnect     = mdt_obd_disconnect,
         .o_init_export    = mdt_init_export,    /* By Huang Hua*/
         .o_destroy_export = mdt_destroy_export, /* By Huang Hua*/
-        //.o_notify         = mdt_notify,
+        .o_notify         = mdt_notify,
 };
 
 static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)
