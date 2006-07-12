@@ -991,8 +991,6 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         flags = h->mh_flags;
         LASSERT(ergo(flags & (HABEO_CORPUS | HABEO_REFERO), h->mh_fmt != NULL));
 
-        req_capsule_init(&info->mti_pill, req, RCL_SERVER, info->mti_rep_buf_size);
-
         if (h->mh_fmt != NULL) {
                 req_capsule_set(&info->mti_pill, h->mh_fmt);
                 result = mdt_unpack_req_pack_rep(info, flags);
@@ -1062,9 +1060,13 @@ void mdt_lock_handle_fini(struct mdt_lock_handle *lh)
         LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
 }
 
-static void mdt_thread_info_init(struct mdt_thread_info *info)
+static void mdt_thread_info_init(struct ptlrpc_request *req,
+                                 struct mdt_thread_info *info)
 {
         int i;
+
+        memset(&info->mti_rr, 0, sizeof info->mti_rr);
+        memset(&info->mti_attr, 0, sizeof info->mti_attr);
 
         info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
         for (i = 0; i < ARRAY_SIZE(info->mti_rep_buf_size); i++)
@@ -1072,6 +1074,15 @@ static void mdt_thread_info_init(struct mdt_thread_info *info)
         info->mti_rep_buf_nr = i;
         for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
                 mdt_lock_handle_init(&info->mti_lh[i]);
+
+        info->mti_ctxt = req->rq_svc_thread->t_ctx;
+        /* it can be NULL while CONNECT */
+        if (req->rq_export)
+                info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
+        req_capsule_init(&info->mti_pill, req, RCL_SERVER, info->mti_rep_buf_size);
+
+        /* other members of "struct mdt_thread_info" should be initialized
+         * by users before they can be used. */
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)
@@ -1309,9 +1320,9 @@ static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info)
  */
 static int mdt_handle(struct ptlrpc_request *req)
 {
-        int result;
         struct lu_context      *ctx;
         struct mdt_thread_info *info;
+        int                     result;
         ENTRY;
 
         ctx = req->rq_svc_thread->t_ctx;
@@ -1321,12 +1332,10 @@ static int mdt_handle(struct ptlrpc_request *req)
         info = lu_context_key_get(ctx, &mdt_thread_key);
         LASSERT(info != NULL);
 
-        mdt_thread_info_init(info);
-        /* it can be NULL while CONNECT */
-        if (req->rq_export)
-                info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
+        mdt_thread_info_init(req, info);
 
         result = mdt_handle0(req, info);
+
         mdt_thread_info_fini(info);
         RETURN(result);
 }
@@ -2557,9 +2566,7 @@ static void *mdt_thread_init(const struct lu_context *ctx,
          */
         CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
         OBD_ALLOC_PTR(info);
-        if (info != NULL)
-                info->mti_ctxt = ctx;
-        else
+        if (info == NULL)
                 info = ERR_PTR(-ENOMEM);
         return info;
 }
