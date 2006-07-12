@@ -1059,6 +1059,7 @@ struct mgs_target_info {
         __u32            mti_config_ver;
         __u32            mti_flags;
         __u32            mti_nid_count;
+        __u32            padding;                    /* 64 bit align */
         char             mti_fsname[MTI_NAME_MAXLEN];
         char             mti_svname[MTI_NAME_MAXLEN];
         char             mti_uuid[sizeof(struct obd_uuid)];

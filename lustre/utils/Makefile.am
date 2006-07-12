@@ -87,6 +87,8 @@ EXTRA_DIST = $(sbin_scripts)
 newwiretest: wirehdr.c wirecheck
 	cp wirehdr.c wiretest.c
 	./wirecheck >> wiretest.c
+	cp ../ptlrpc/wirehdr.c ../ptlrpc/wiretest.c
+	./wirecheck >> ../ptlrpc/wiretest.c
 
 # Apparently I can't use .'s in automake names
 mount.lustre$(EXEEXT): mount_lustre
