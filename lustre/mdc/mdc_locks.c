@@ -385,10 +385,15 @@ int mdc_enqueue(struct obd_export *exp,
         /* get ready for the reply */
         ptlrpc_req_set_repsize(req, repbufcnt, repsize);
 
+         /* It is important to obtain rpc_lock first (if applicable), so that
+          * threads that are serialised with rpc_lock are not polluting our
+          * rpcs in flight counter */
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
+        mdc_enter_request(&obddev->u.cli);
         rc = ldlm_cli_enqueue(exp, &req, res_id, lock_type, &policy,
                               lock_mode, &flags, cb_blocking, cb_completion,
                               NULL, cb_data, NULL, 0, NULL, lockh, 0);
+        mdc_exit_request(&obddev->u.cli);
         mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
 
         /* Similarly, if we're going to replay this request, we don't want to

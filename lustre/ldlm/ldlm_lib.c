@@ -261,7 +261,9 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         spin_lock_init(&cli->cl_read_offset_hist.oh_lock);
         spin_lock_init(&cli->cl_write_offset_hist.oh_lock);
         cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
-        if (num_physpages >> (20 - PAGE_SHIFT) <= 128 /* MB */) {
+        if (!strcmp(name, LUSTRE_MDC_NAME)) {
+                cli->cl_max_rpcs_in_flight = MDC_MAX_RIF_DEFAULT;
+        } else if (num_physpages >> (20 - PAGE_SHIFT) <= 128 /* MB */) {
                 cli->cl_max_rpcs_in_flight = 2;
         } else if (num_physpages >> (20 - PAGE_SHIFT) <= 256 /* MB */) {
                 cli->cl_max_rpcs_in_flight = 3;

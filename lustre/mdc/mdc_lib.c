@@ -348,3 +348,62 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
                 body->valid |= OBD_MD_FLFLAGS;
         }
 }
+
+struct mdc_cache_waiter {       
+        struct list_head        mcw_entry;
+        wait_queue_head_t       mcw_waitq;
+};
+
+static int mdc_req_avail(struct client_obd *cli, struct mdc_cache_waiter *mcw)
+{
+        int rc;
+        ENTRY;
+        spin_lock(&cli->cl_loi_list_lock);
+        rc = list_empty(&mcw->mcw_entry);
+        spin_unlock(&cli->cl_loi_list_lock);
+        RETURN(rc);
+};
+
+/* We record requests in flight in cli->cl_r_in_flight here.
+ * There is only one write rpc possible in mdc anyway. If this to change
+ * in the future - the code may need to be revisited. */
+void mdc_enter_request(struct client_obd *cli)
+{
+        struct mdc_cache_waiter mcw;
+        struct l_wait_info lwi = { 0 };
+
+        spin_lock(&cli->cl_loi_list_lock);
+        if (cli->cl_r_in_flight >= cli->cl_max_rpcs_in_flight) {
+                list_add_tail(&mcw.mcw_entry, &cli->cl_cache_waiters);
+                init_waitqueue_head(&mcw.mcw_waitq);
+                spin_unlock(&cli->cl_loi_list_lock);
+                l_wait_event(mcw.mcw_waitq, mdc_req_avail(cli, &mcw), &lwi);
+        } else {
+                cli->cl_r_in_flight++;
+                spin_unlock(&cli->cl_loi_list_lock);
+        }
+}
+
+void mdc_exit_request(struct client_obd *cli)
+{
+        struct list_head *l, *tmp;
+        struct mdc_cache_waiter *mcw;
+
+        spin_lock(&cli->cl_loi_list_lock);
+        cli->cl_r_in_flight--;
+        list_for_each_safe(l, tmp, &cli->cl_cache_waiters) {
+                
+                if (cli->cl_r_in_flight >= cli->cl_max_rpcs_in_flight) {
+                        /* No free request slots anymore */
+                        break;
+                }
+
+                mcw = list_entry(l, struct mdc_cache_waiter, mcw_entry);
+                list_del_init(&mcw->mcw_entry);
+                cli->cl_r_in_flight++;
+                wake_up(&mcw->mcw_waitq);
+        }
+        /* Empty waiting list? Decrease reqs in-flight number */
+        
+        spin_unlock(&cli->cl_loi_list_lock);
+}

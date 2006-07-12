@@ -350,6 +350,9 @@ struct filter_obd {
 #define OSC_MAX_DIRTY_DEFAULT  (OSC_MAX_RIF_DEFAULT * 4)
 #define OSC_MAX_DIRTY_MB_MAX   2048     /* totally arbitrary */
 
+#define MDC_MAX_RIF_DEFAULT       8
+#define MDC_MAX_RIF_MAX         512
+
 struct mdc_rpc_lock;
 struct obd_import;
 struct client_obd {

@@ -30,6 +30,40 @@
 #include <lprocfs_status.h>
 
 #ifdef LPROCFS
+
+static int mdc_rd_max_rpcs_in_flight(char *page, char **start, off_t off,
+                                     int count, int *eof, void *data)
+{
+        struct obd_device *dev = data;
+        struct client_obd *cli = &dev->u.cli;
+        int rc;
+
+        spin_lock(&cli->cl_loi_list_lock);
+        rc = snprintf(page, count, "%u\n", cli->cl_max_rpcs_in_flight);
+        spin_unlock(&cli->cl_loi_list_lock);
+        return rc;
+}
+
+static int mdc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
+                                     unsigned long count, void *data)
+{
+        struct obd_device *dev = data;
+        struct client_obd *cli = &dev->u.cli;
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 1 || val > MDC_MAX_RIF_MAX)
+                return -ERANGE;
+
+        spin_lock(&cli->cl_loi_list_lock);
+        cli->cl_max_rpcs_in_flight = val;
+        spin_unlock(&cli->cl_loi_list_lock);
+
+        return count;
+}
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,        0 },
@@ -43,6 +77,8 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         //{ "filegroups",      lprocfs_rd_filegroups,  0, 0 },
         { "mds_server_uuid", lprocfs_rd_server_uuid, 0, 0 },
         { "mds_conn_uuid",   lprocfs_rd_conn_uuid,   0, 0 },
+        { "max_rpcs_in_flight", mdc_rd_max_rpcs_in_flight,
+                                mdc_wr_max_rpcs_in_flight, 0 },
         { 0 }
 };
 

@@ -59,7 +59,14 @@ Description: SPEC SFS validation failure on NFS v2 over lustre.
 Details    : Changes the blocksize for regular files to be 2x RPC size,
              and not depend on stripe size.
 	
-	
+Severity   : enhancement
+Bugzilla   : 9293
+Description: Multiple MD RPCs in flight.
+Details    : Further unserialise some read-only MDS RPCs - learn about intents.
+             To avoid overly-overloading MDS, introduce a limit on number of
+             MDS RPCs in flight for a single client and add /proc controls
+             to adjust this limit.
+
 	
 ------------------------------------------------------------------------------
 

@@ -36,6 +36,8 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
                      const char *old, int oldlen, const char *new, int newlen);
 void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
                     int valid, struct obd_client_handle *och);
+void mdc_exit_request(struct client_obd *cli);
+void mdc_enter_request(struct client_obd *cli);
 
 struct mdc_open_data {
         struct obd_client_handle *mod_och;
@@ -58,7 +60,7 @@ static inline void mdc_get_rpc_lock(struct mdc_rpc_lock *lck,
                                     struct lookup_intent *it)
 {
         ENTRY;
-        if (1 || !it || (it->it_op != IT_GETATTR && it->it_op != IT_LOOKUP)) {
+        if (!it || (it->it_op != IT_GETATTR && it->it_op != IT_LOOKUP)) {
                 down(&lck->rpcl_sem);
                 LASSERT(lck->rpcl_it == NULL);
                 lck->rpcl_it = it;
@@ -68,7 +70,7 @@ static inline void mdc_get_rpc_lock(struct mdc_rpc_lock *lck,
 static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck,
                                     struct lookup_intent *it)
 {
-        if (1 || !it || (it->it_op != IT_GETATTR && it->it_op != IT_LOOKUP)) {
+        if (!it || (it->it_op != IT_GETATTR && it->it_op != IT_LOOKUP)) {
                 LASSERT(it == lck->rpcl_it);
                 lck->rpcl_it = NULL;
                 up(&lck->rpcl_sem);
