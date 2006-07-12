@@ -971,7 +971,7 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
         /*last_committed = (mdt->mdt_last_committed);*/
         last_committed = last_transno;
 
-        CERROR("last_transno = %llu, last_committed = %llu\n", 
+        CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n", 
                 last_transno, last_committed);
         req->rq_repmsg->transno = req->rq_transno = last_transno;
         req->rq_repmsg->last_xid = req->rq_xid;
@@ -1055,7 +1055,8 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         }
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
-        if (h->mh_opc != MDS_DISCONNECT) {
+        if (h->mh_opc != MDS_DISCONNECT &&
+            h->mh_opc != MDS_READPAGE) {
                 /* FIXME: fake untill journal callback is OK.*/
                 mdt_update_last_transno(info, result);
         }
@@ -1919,6 +1920,10 @@ static void mdt_stop_ptlrpc_service(struct mdt_device *m)
                 ptlrpc_unregister_service(m->mdt_service);
                 m->mdt_service = NULL;
         }
+        if (m->mdt_readpage_service != NULL) {
+                ptlrpc_unregister_service(m->mdt_readpage_service);
+                m->mdt_readpage_service = NULL;
+        }
 }
 
 static int mdt_start_ptlrpc_service(struct mdt_device *m)
@@ -1942,11 +1947,9 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 
         ENTRY;
 
-
+        m->mdt_ldlm_client = &m->mdt_md_dev.md_lu_dev.ld_obd->obd_ldlm_client;
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
-                           "mdt_ldlm_client", &m->mdt_ldlm_client);
-
-        m->mdt_md_dev.md_lu_dev.ld_obd->obd_ldlm_client = m->mdt_ldlm_client;
+                           "mdt_ldlm_client", m->mdt_ldlm_client);
 
         m->mdt_service =
                 ptlrpc_init_svc_conf(&conf, mdt_handle, LUSTRE_MDT0_NAME,
@@ -1959,10 +1962,25 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
-        RETURN(rc);
+        m->mdt_readpage_service =
+                ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
+                                MDS_MAXREPSIZE, MDS_READPAGE_PORTAL,
+                                MDC_REPLY_PORTAL, MDT_SERVICE_WATCHDOG_TIMEOUT,
+                                mdt_handle, "mds_readpage",
+                                m->mdt_md_dev.md_lu_dev.ld_proc_entry, NULL,
+                                min(max(mdt_num_threads, MDT_MIN_THREADS), MDT_MAX_THREADS));
+
+        if (m->mdt_readpage_service == NULL) {
+                CERROR("failed to start readpage service\n");
+                GOTO(err_mdt_svc, rc = -ENOMEM);
+        }
+
+        rc = ptlrpc_start_threads(NULL, m->mdt_readpage_service, "ll_mdt_rdpg");
+
+        EXIT;
 err_mdt_svc:
-        ptlrpc_unregister_service(m->mdt_service);
-        m->mdt_service = NULL;
+        if (rc)
+                mdt_stop_ptlrpc_service(m);
 
         return rc;
 }
@@ -2090,9 +2108,8 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 
         ENTRY;
         
-/*
+
         mdt_fs_cleanup(ctx, m);
-*/
         ping_evictor_stop();
         mdt_stop_ptlrpc_service(m);
 
@@ -2194,16 +2211,13 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
                 GOTO(err_free_ns, rc);
 
         ping_evictor_start();
-/* TODO: wait for read & write
         rc = mdt_fs_setup(ctx, m);
         if (rc)
                 GOTO(err_stop_service, rc);
-*/
         RETURN(0);
-/*
+
 err_stop_service:
         mdt_stop_ptlrpc_service(m);
-*/
 err_free_ns:
         ldlm_namespace_free(m->mdt_namespace, 0);
         m->mdt_namespace = NULL;
@@ -2681,7 +2695,7 @@ DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR_NAME, mdt_getattr_name),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, SETXATTR,     mdt_setxattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
-DEF_MDT_HNDL_0(HABEO_CORPUS,              READPAGE,     mdt_readpage),
+DEF_MDT_HNDL_F(HABEO_CORPUS,              READPAGE,     mdt_readpage),
 DEF_MDT_HNDL_F(0,                         REINT,        mdt_reint),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, CLOSE,        mdt_close),
 DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),
