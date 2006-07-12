@@ -44,27 +44,28 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         struct ptlrpc_request  *req = mdt_info_req(info);
         char                   *xattr_name;
         __u64                   valid = info->mti_body->valid;
-        const char              user_string[] = "user.";
+        static const char       user_string[] = "user.";
         int                     rc;
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK)) {
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
                 return -ENOMEM;
-        }
 
-        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
-             (strncmp(xattr_name, user_string, sizeof(user_string) - 1) == 0))
-                return -EOPNOTSUPP;
-        /* Imagine how many bytes we need */
+        /* Determine how many bytes we need */
         if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
                 xattr_name = req_capsule_client_get(pill, &RMF_NAME);
-                if (!xattr_name) {
+                if (!xattr_name)
                         return -EFAULT;
-                }
-                rc = mo_xattr_get(info->mti_ctxt, 
-                                  mdt_object_child(info->mti_object), 
+
+                if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
+                    strncmp(xattr_name, user_string,
+                            sizeof(user_string) - 1) == 0)
+                        return -EOPNOTSUPP;
+
+                rc = mo_xattr_get(info->mti_ctxt,
+                                  mdt_object_child(info->mti_object),
                                   NULL, 0, xattr_name);
         } else if ((valid & OBD_MD_FLXATTRLS) == OBD_MD_FLXATTRLS) {
-                rc = mo_xattr_list(info->mti_ctxt, 
+                rc = mo_xattr_list(info->mti_ctxt,
                                    mdt_object_child(info->mti_object),
                                    NULL, 0);
         } else {
@@ -119,11 +120,11 @@ int mdt_getxattr(struct mdt_thread_info *info)
                 GOTO(no_xattr, rc = 0);
 
         if (info->mti_body->valid & OBD_MD_FLXATTR) {
-                char *xattr_name = req_capsule_client_get(&info->mti_pill, 
+                char *xattr_name = req_capsule_client_get(&info->mti_pill,
                                                           &RMF_NAME);
                 CDEBUG(D_INODE, "getxattr %s\n", xattr_name);
 
-                rc = mo_xattr_get(info->mti_ctxt, next, 
+                rc = mo_xattr_get(info->mti_ctxt, next,
                                    buf, buflen, xattr_name);
 
                 if (rc < 0 && rc != -ENODATA && rc != -EOPNOTSUPP &&
@@ -202,24 +203,24 @@ int mdt_setxattr(struct mdt_thread_info *info)
                 GOTO(out_unlock, rc = -EROFS);
 
         if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
-                char * xattr; 
+                char * xattr;
                 if (!req_capsule_field_present(&info->mti_pill, &RMF_EADATA)) {
                         CERROR("no xattr data supplied\n");
                         GOTO(out_unlock, rc = -EFAULT);
                 }
 
-                xattr_len = req_capsule_get_size(&info->mti_pill, 
+                xattr_len = req_capsule_get_size(&info->mti_pill,
                                                  &RMF_EADATA, RCL_CLIENT);
                 if (xattr_len) {
-                        xattr = req_capsule_client_get(&info->mti_pill, 
+                        xattr = req_capsule_client_get(&info->mti_pill,
                                                        &RMF_EADATA);
 
-                        rc = mo_xattr_set(info->mti_ctxt, 
+                        rc = mo_xattr_set(info->mti_ctxt,
                                           mdt_object_child(info->mti_object),
                                           xattr, xattr_len, xattr_name);
                 }
         } else if ((valid & OBD_MD_FLXATTRRM) == OBD_MD_FLXATTRRM) {
-                rc = mo_xattr_del(info->mti_ctxt, 
+                rc = mo_xattr_del(info->mti_ctxt,
                                   mdt_object_child(info->mti_object),
                                   xattr_name);
         } else {
