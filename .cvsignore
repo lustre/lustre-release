@@ -32,3 +32,5 @@ config.h
 config.h.in
 stamp-h1
 INSTALL
+.pc
+patches
