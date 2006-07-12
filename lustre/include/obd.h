@@ -402,6 +402,32 @@ struct mgs_obd {
         struct semaphore                 mgs_sem;
 };
 
+struct md_lov_info {
+        struct obd_device               *md_osc_obd; /* XXX lov_obd */
+        struct obd_uuid                  md_lov_uuid;
+        struct obd_export               *md_osc_exp; /* XXX lov_exp */
+        struct lov_desc                  md_lov_desc;
+        obd_id                          *md_lov_objids;
+        int                              md_lov_objids_size;
+        __u32                            md_lov_objids_in_file;
+        unsigned int                     md_lov_objids_dirty:1;
+        int                              md_lov_nextid_set;
+        struct file                     *md_lov_objid_filp;
+        unsigned long                    md_lov_objids_valid:1;
+};
+
+#define mds_osc_obd             mds_lov_info.md_osc_obd
+#define mds_lov_uuid            mds_lov_info.md_lov_uuid
+#define mds_osc_exp             mds_lov_info.md_osc_exp
+#define mds_lov_desc            mds_lov_info.md_lov_desc
+#define mds_lov_objids          mds_lov_info.md_lov_objids
+#define mds_lov_objids_size     mds_lov_info.md_lov_objids_size
+#define mds_lov_objids_in_file  mds_lov_info.md_lov_objids_in_file
+#define mds_lov_objids_dirty    mds_lov_info.md_lov_objids_dirty
+#define mds_lov_nextid_set      mds_lov_info.md_lov_nextid_set
+#define mds_lov_objid_filp      mds_lov_info.md_lov_objid_filp
+#define mds_lov_objids_valid    mds_lov_info.md_lov_objids_valid
+
 struct mds_obd {
         /* NB this field MUST be first */
         struct obd_device_target         mds_obt;
@@ -426,17 +452,8 @@ struct mds_obd {
         cfs_dentry_t                    *mds_objects_dir;
         struct llog_handle              *mds_cfg_llh;
 //        struct llog_handle              *mds_catalog;
-        struct obd_device               *mds_osc_obd; /* XXX lov_obd */
-        struct obd_uuid                  mds_lov_uuid;
+        struct md_lov_info              mds_lov_info;
         char                            *mds_profile;
-        struct obd_export               *mds_osc_exp; /* XXX lov_exp */
-        struct lov_desc                  mds_lov_desc;
-        obd_id                          *mds_lov_objids;
-        int                              mds_lov_objids_size;
-        __u32                            mds_lov_objids_in_file;
-        unsigned int                     mds_lov_objids_dirty:1;
-        int                              mds_lov_nextid_set;
-        struct file                     *mds_lov_objid_filp;
         struct file                     *mds_health_check_filp;
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
@@ -445,8 +462,7 @@ struct mds_obd {
         struct lustre_quota_info         mds_quota_info;
         struct semaphore                 mds_qonoff_sem;
         struct semaphore                 mds_health_sem;
-        unsigned long                    mds_lov_objids_valid:1,
-                                         mds_fl_user_xattr:1,
+        unsigned long                    mds_fl_user_xattr:1,
                                          mds_fl_acl:1;
 };
 

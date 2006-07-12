@@ -81,7 +81,6 @@ struct md_dir_operations {
         int (*mdo_create)(const struct lu_context *, struct md_object *,
                           const char *child_name, struct md_object *,
                           const char *target_name, struct lu_attr *);
-
         int (*mdo_rename)(const struct lu_context *ctxt,
                           struct md_object *spobj, struct md_object *tpobj,
                           const struct lu_fid *lf, const char *sname,

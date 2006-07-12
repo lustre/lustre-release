@@ -43,6 +43,7 @@
 #include <lu_object.h>
 #include <md_object.h>
 #include <dt_object.h>
+#include <lustre_mds.h>
 
 #include "mdd_internal.h"
 
@@ -417,6 +418,33 @@ static int mdd_lov_update_mds(struct lu_context *ctxt,
         RETURN(rc);
 }
 
+static int mdd_lov_clear_orphans(struct mdd_lov_info *mli, 
+                                 struct obd_uuid *ost_uuid)
+{
+        int rc;
+        struct obdo oa;
+        struct obd_trans_info oti = {0};
+        struct lov_stripe_md  *empty_ea = NULL;
+        ENTRY;
+
+        LASSERT(mli->mdd_lov_objids != NULL);
+
+        /* This create will in fact either create or destroy:  If the OST is
+         * missing objects below this ID, they will be created.  If it finds
+         * objects above this ID, they will be removed. */
+        memset(&oa, 0, sizeof(oa));
+        oa.o_valid = OBD_MD_FLFLAGS;
+        oa.o_flags = OBD_FL_DELORPHAN;
+        if (ost_uuid != NULL) {
+                memcpy(&oa.o_inline, ost_uuid, sizeof(*ost_uuid));
+                oa.o_valid |= OBD_MD_FLINLINE;
+        }
+        rc = obd_create(mli->mdd_lov_obd->obd_self_export, &oa, 
+                        &empty_ea, &oti);
+
+        RETURN(rc);
+}
+
 /* We only sync one osc at a time, so that we don't have to hold
    any kind of lock on the whole mds_lov_desc, which may change 
    (grow) as a result of mds_lov_add_ost.  This also avoids any
@@ -448,11 +476,20 @@ static int __mdd_lov_synchronize(void *data)
         rc = obd_set_info_async(mdd->mdd_lov_info.mdd_lov_obd->obd_self_export,
                                 strlen(KEY_MDS_CONN), KEY_MDS_CONN, 0, uuid, 
                                 NULL);
-        if (rc != 0)
+        if (rc != 0) {
+                CERROR("failed at obd_set_info_async: %d\n", rc);
                 GOTO(out, rc);
+        }
+                 
+        rc = mdd_lov_clear_orphans(&mdd->mdd_lov_info, uuid);
+        if (rc != 0) {
+                CERROR("failed at mds_lov_clear_orphans: %d\n", rc);
+                GOTO(out, rc);
+        }
 out:
+        EXIT;
         lu_device_put(ld);
-        RETURN(rc);
+        return rc;
 }
 
 int mdd_lov_synchronize(void *data)
@@ -576,7 +613,7 @@ static int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
 
         next = mdd_object_child(md2mdd_obj(obj));
         rc = next->do_ops->do_xattr_get(ctxt, next, md, *md_size, 
-                                        "lov");
+                                        MDS_LOV_MD_NAME);
         if (rc < 0) {
                 CERROR("Error %d reading eadata \n", rc);
         } else if (rc > 0) {
@@ -603,10 +640,47 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
                 int lmm_size = sizeof(lmm);
                 rc = mdd_get_md(ctxt, pobj, &lmm, &lmm_size, 1);
                 if (rc > 0) {
-                        rc = mdd_xattr_set(ctxt, child, lmm, lmm_size, "lov");
+                        rc = mdd_xattr_set(ctxt, child, lmm, lmm_size, MDS_LOV_MD_NAME);
                         if (rc)
                                 CERROR("error on copy stripe info: rc = %d\n", rc);
                 }
         }
         RETURN(rc);
+}
+
+int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
+                   struct mdd_object *child)
+{
+        struct mdd_lov_info *mli = &mdd->mdd_lov_info;
+        struct obdo *oa;
+        struct lov_mds_md *lmm = NULL;
+        struct lov_stripe_md *lsm = NULL;
+        int rc = 0, lmm_size;
+        ENTRY;
+
+        oa = obdo_alloc();
+
+        oa->o_uid = 0; /* must have 0 uid / gid on OST */
+        oa->o_gid = 0;
+        oa->o_mode = S_IFREG | 0600;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |
+                OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
+        oa->o_size = 0;
+
+        rc = obd_create(mli->mdd_lov_obd->obd_self_export, oa, &lsm, NULL);
+        if (rc)
+                GOTO(out_oa, rc);
+        
+        rc = obd_packmd(mli->mdd_lov_obd->obd_self_export, &lmm, lsm);
+        if (rc < 0) {
+                CERROR("cannot pack lsm, err = %d\n", rc);
+                GOTO(out_oa, rc);
+        }
+        lmm_size = rc;
+        
+        rc = mdd_xattr_set(ctxt, &child->mod_obj, lmm, lmm_size, 
+                           MDS_LOV_MD_NAME);
+out_oa:
+        obdo_free(oa);
+        RETURN(rc); 
 }

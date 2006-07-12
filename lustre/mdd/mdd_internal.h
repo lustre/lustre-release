@@ -78,6 +78,8 @@ int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
                   const void *buf, int buf_len, const char *name);
 int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
                    struct md_object *child);
+int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
+                   struct mdd_object *child);
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx);
 extern struct lu_device_operations mdd_lu_ops;
 static inline int lu_device_is_mdd(struct lu_device *d)

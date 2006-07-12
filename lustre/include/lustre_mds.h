@@ -93,4 +93,5 @@ int mds_reint_rec(struct mds_update_record *r, int offset,
 #define IOC_REQUEST_CLOSE               _IOWR('f', 35, long)
 #define IOC_REQUEST_MAX_NR               35
 
+#define MDS_LOV_MD_NAME "lov"
 #endif

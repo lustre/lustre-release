@@ -790,6 +790,9 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
+        rc = mdd_lov_create(ctxt, mdd, son);
+        if (rc)
+                GOTO(cleanup, rc);
         created = 1;
         rc = __mdd_index_insert(ctxt, mdo, lu_object_fid(&child->mo_lu),
                                 name, handle);

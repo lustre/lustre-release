@@ -42,20 +42,24 @@
 
 #include "mds_internal.h"
 
+void md_lov_info_update_objids(struct md_lov_info *mli, obd_id *ids)
+{
+        int i;
+        lock_kernel();
+        for (i = 0; i < mli->md_lov_desc.ld_tgt_count; i++)
+                if (ids[i] > (mli->md_lov_objids)[i]) {
+                        (mli->md_lov_objids)[i] = ids[i];
+                        mli->md_lov_objids_dirty = 1;
+                }
+        unlock_kernel();
+}
+EXPORT_SYMBOL(md_lov_info_update_objids);
+
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids)
 {
         struct mds_obd *mds = &obd->u.mds;
-        int i;
-        ENTRY;
-
-        lock_kernel();
-        for (i = 0; i < mds->mds_lov_desc.ld_tgt_count; i++)
-                if (ids[i] > (mds->mds_lov_objids)[i]) {
-                        (mds->mds_lov_objids)[i] = ids[i];
-                        mds->mds_lov_objids_dirty = 1;
-                }
-        unlock_kernel();
-        EXIT;
+        
+        md_lov_info_update_objids(&mds->mds_lov_info, ids);
 }
 
 static int mds_lov_read_objids(struct obd_device *obd)
@@ -127,7 +131,8 @@ int mds_lov_write_objids(struct obd_device *obd)
         RETURN(rc);
 }
 
-int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
+int md_lov_info_clear_orphans(struct md_lov_info *mli, 
+                              struct obd_uuid *ost_uuid)
 {
         int rc;
         struct obdo oa;
@@ -135,7 +140,7 @@ int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
         struct lov_stripe_md  *empty_ea = NULL;
         ENTRY;
 
-        LASSERT(mds->mds_lov_objids != NULL);
+        LASSERT(mli->md_lov_objids != NULL);
 
         /* This create will in fact either create or destroy:  If the OST is
          * missing objects below this ID, they will be created.  If it finds
@@ -147,40 +152,54 @@ int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
                 memcpy(&oa.o_inline, ost_uuid, sizeof(*ost_uuid));
                 oa.o_valid |= OBD_MD_FLINLINE;
         }
-        rc = obd_create(mds->mds_osc_exp, &oa, &empty_ea, &oti);
+        rc = obd_create(mli->md_osc_exp, &oa, &empty_ea, &oti);
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(md_lov_info_clear_orphans);
+
+int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
+{
+        return md_lov_info_clear_orphans(&mds->mds_lov_info, ost_uuid);
+}
+
+int md_lov_info_set_nextid(struct md_lov_info *mli)
+{
+        int rc;
+        ENTRY;
+        
+        LASSERT(mli->md_lov_objids != NULL);
+
+        rc = obd_set_info_async(mli->md_osc_exp, strlen(KEY_NEXT_ID),
+                                KEY_NEXT_ID,
+                                mli->md_lov_desc.ld_tgt_count,
+                                mli->md_lov_objids, NULL);
+        
+
+        RETURN(rc);
+
+}
+EXPORT_SYMBOL(md_lov_info_set_nextid);
 
 /* update the LOV-OSC knowledge of the last used object id's */
 int mds_lov_set_nextid(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         int rc;
-        ENTRY;
 
         LASSERT(!obd->obd_recovering);
-
-        LASSERT(mds->mds_lov_objids != NULL);
-
-        rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_NEXT_ID),
-                                KEY_NEXT_ID,
-                                mds->mds_lov_desc.ld_tgt_count,
-                                mds->mds_lov_objids, NULL);
         
+        rc = md_lov_info_set_nextid(&mds->mds_lov_info);
         if (rc) 
                 CERROR ("%s: mds_lov_set_nextid failed (%d)\n", 
                         obd->obd_name, rc);
-
         RETURN(rc);
 }
 
-/* Update the lov desc for a new size lov. */
-static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
+int md_lov_info_update_desc(struct md_lov_info *mli, struct obd_export *lov)
 {
-        struct mds_obd *mds = &obd->u.mds;
         struct lov_desc *ld; 
-        __u32 size, stripes, valsize = sizeof(mds->mds_lov_desc);
+        __u32 size, valsize = sizeof(mli->md_lov_desc);
         int rc = 0;
         ENTRY;
 
@@ -195,8 +214,8 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
 
         /* The size of the LOV target table may have increased. */
         size = ld->ld_tgt_count * sizeof(obd_id);
-        if ((mds->mds_lov_objids_size == 0) || 
-            (size > mds->mds_lov_objids_size)) {
+        if ((mli->md_lov_objids_size == 0) || 
+            (size > mli->md_lov_objids_size)) {
                 obd_id *ids;
                 
                 /* add room by powers of 2 */
@@ -209,23 +228,39 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
                 if (ids == NULL)
                         GOTO(out, rc = -ENOMEM);
                 memset(ids, 0, size);
-                if (mds->mds_lov_objids_size) {
-                        obd_id *old_ids = mds->mds_lov_objids;
-                        memcpy(ids, mds->mds_lov_objids, 
-                               mds->mds_lov_objids_size);
-                        mds->mds_lov_objids = ids;
-                        OBD_FREE(old_ids, mds->mds_lov_objids_size);
+                if (mli->md_lov_objids_size) {
+                        obd_id *old_ids = mli->md_lov_objids;
+                        memcpy(ids, mli->md_lov_objids, 
+                               mli->md_lov_objids_size);
+                        mli->md_lov_objids = ids;
+                        OBD_FREE(old_ids, mli->md_lov_objids_size);
                 }
-                mds->mds_lov_objids = ids;
-                mds->mds_lov_objids_size = size;
+                mli->md_lov_objids = ids;
+                mli->md_lov_objids_size = size;
         }
 
         /* Don't change the mds_lov_desc until the objids size matches the
            count (paranoia) */
-        mds->mds_lov_desc = *ld;
+        mli->md_lov_desc = *ld;
         CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d\n",
-               mds->mds_lov_desc.ld_tgt_count);
+               mli->md_lov_desc.ld_tgt_count);
+out:
+        OBD_FREE(ld, sizeof(*ld));
+        RETURN(rc);
+}
 
+/* Update the lov desc for a new size lov. */
+static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        __u32 stripes;
+        int rc = 0;
+        ENTRY;
+
+        rc = md_lov_info_update_desc(&mds->mds_lov_info, lov);
+        if (rc)
+                GOTO(out, rc);
+        
         stripes = min((__u32)LOV_MAX_STRIPE_COUNT, 
                       max(mds->mds_lov_desc.ld_tgt_count,
                           mds->mds_lov_objids_in_file));
@@ -233,9 +268,7 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
         mds->mds_max_cookiesize = stripes * sizeof(struct llog_cookie);
         CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize: %d/%d\n",
                mds->mds_max_mdsize, mds->mds_max_cookiesize);
-
 out:
-        OBD_FREE(ld, sizeof(*ld));
         RETURN(rc);
 }
 
@@ -625,6 +658,7 @@ struct mds_lov_sync_info {
         struct obd_device *mlsi_watched; /* target osc */
         __u32              mlsi_index;   /* index of target */
 };
+
 
 /* We only sync one osc at a time, so that we don't have to hold
    any kind of lock on the whole mds_lov_desc, which may change 
