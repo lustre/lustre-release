@@ -143,12 +143,13 @@ int fld_index_create(struct lu_server_fld *fld,
         txn.tp_credits = FLD_TXN_INDEX_INSERT_CREDITS;
 
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
-
-        rc = dt_obj->do_index_ops->dio_insert(ctx, dt_obj,
-                                              fld_rec(ctx, mds),
-                                              fld_key(ctx, seq), th);
-        dt->dd_ops->dt_trans_stop(ctx, th);
-
+        if (!IS_ERR(th)) {
+                rc = dt_obj->do_index_ops->dio_insert(ctx, dt_obj,
+                                                      fld_rec(ctx, mds),
+                                                      fld_key(ctx, seq), th);
+                dt->dd_ops->dt_trans_stop(ctx, th);
+        } else
+                rc = PTR_ERR(th);
         RETURN(rc);
 }
 
@@ -165,11 +166,12 @@ int fld_index_delete(struct lu_server_fld *fld,
 
         txn.tp_credits = FLD_TXN_INDEX_DELETE_CREDITS;
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
-
-        rc = dt_obj->do_index_ops->dio_delete(ctx, dt_obj,
-                                              fld_key(ctx, seq), th);
-        dt->dd_ops->dt_trans_stop(ctx, th);
-
+        if (!IS_ERR(th)) {
+                rc = dt_obj->do_index_ops->dio_delete(ctx, dt_obj,
+                                                      fld_key(ctx, seq), th);
+                dt->dd_ops->dt_trans_stop(ctx, th);
+        } else
+                rc = PTR_ERR(th);
         RETURN(rc);
 }
 
