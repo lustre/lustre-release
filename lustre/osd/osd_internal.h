@@ -47,8 +47,12 @@ struct dentry;
 
 struct dentry *osd_lookup(struct dentry *parent, const char *name);
 struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode);
+int osd_lookup_id(struct dt_device *dev, const char *name, mode_t mode,
+                  struct osd_inode_id *id);
 
 struct osd_thread_info {
+        const struct lu_context  *oti_ctx;
+
         struct lu_fid       oti_fid;
         struct osd_inode_id oti_id;
         /*
@@ -59,7 +63,7 @@ struct osd_thread_info {
          * XXX temporary: for ->i_op calls.
          */
         struct qstr         oti_str;
-        void                *scratch_key;
+        struct txn_param    oti_txn;
 };
 
 #endif /* __KERNEL__ */

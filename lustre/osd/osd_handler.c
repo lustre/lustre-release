@@ -65,6 +65,7 @@
 #include <linux/lustre_iam.h>
 
 #include "osd_internal.h"
+#include "osd_igif.h"
 
 struct osd_object {
         struct dt_object       oo_dt;
@@ -129,8 +130,6 @@ static int   osd_fid_lookup    (const struct lu_context *ctx,
                                 const struct lu_fid *fid);
 static int   osd_inode_getattr (const struct lu_context *ctx,
                                 struct inode *inode, struct lu_attr *attr);
-static int   osd_inode_get_fid (struct osd_device *d, const struct inode *inode,
-                                struct lu_fid *fid);
 static int   osd_param_is_sane (const struct osd_device *dev,
                                 const struct txn_param *param);
 static int   osd_index_lookup  (const struct lu_context *ctxt,
@@ -211,38 +210,15 @@ static int osd_invariant(const struct osd_object *obj)
 #define osd_invariant(obj) (1)
 #endif
 
-/*
- * DT methods.
- */
-static struct dt_object *dt_obj(struct lu_object *o)
-{
-        return container_of0(o, struct dt_object, do_lu);
-}
-
 static int osd_root_get(const struct lu_context *ctx,
                         struct dt_device *dev, struct lu_fid *f)
 {
-        struct osd_device *d = osd_dt_dev(dev);
+        struct inode *inode;
 
-        return osd_inode_get_fid(d, osd_sb(d)->s_root->d_inode, f);
+        inode = osd_sb(osd_dt_dev(dev))->s_root->d_inode;
+        lu_igif_build(f, inode->i_ino, inode->i_generation);
+        return 0;
 }
-
-struct dt_object *dt_object_find(struct lu_context *ctxt,
-                                 struct dt_device *d,
-                                 const struct lu_fid *f)
-{
-        struct lu_object *o;
-
-        o = lu_object_find(ctxt, d->dd_lu_dev.ld_site, f);
-        if (IS_ERR(o))
-                return (struct dt_object *)o;
-        else {
-                o = lu_object_locate(o->lo_header, &osd_device_type);
-                LASSERT(lu_device_is_osd(o->lo_dev));
-                return dt_obj(o);
-        }
-}
-EXPORT_SYMBOL(dt_object_find);
 
 /*
  * OSD object methods.
@@ -569,7 +545,7 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
                         LASSERT(dentry->d_inode != NULL);
                         obj->oo_inode = dentry->d_inode;
                         igrab(obj->oo_inode);
-                        obj->oo_dt.do_index_ops = &osd_index_compat_ops;
+                        obj->oo_dt.do_index_ops = &osd_index_ops;
                 }
                 dput(dentry);
         } else
@@ -701,26 +677,6 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
         return result;
 }
 
-/*
- * Destroy existing object.
- *
- * precondition: lu_object_exists(ctxt, &dt->do_lu);
- * postcondition: ergo(result == 0,
- *                     !lu_object_exists(ctxt, &dt->do_lu));
- */
-int osd_object_destroy(const struct lu_context *ctxt,
-                       struct dt_object *dt, struct thandle *th)
-{
-        /*
-         * Stub for now, just drop inode.
-         */
-        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
-        CWARN("Stub!\n");
-        osd_object_delete(ctxt, &dt->do_lu);
-        LASSERT(!lu_object_exists(ctxt, &dt->do_lu));
-        return 0;
-}
-
 static void osd_inode_inc_link(const struct lu_context *ctxt,
                                struct inode *inode, struct thandle *th)
 {
@@ -779,7 +735,6 @@ static struct dt_object_operations osd_obj_ops = {
         .do_attr_get         = osd_attr_get,
         .do_attr_set         = osd_attr_set,
         .do_object_create    = osd_object_create,
-        .do_object_destroy   = osd_object_destroy,
         .do_object_index_try = osd_index_try,
         .do_object_ref_add   = osd_object_ref_add,
         .do_object_ref_del   = osd_object_ref_del,
@@ -793,46 +748,6 @@ static struct dt_body_operations osd_body_ops = {
 /*
  * Index operations.
  */
-
-#if OI_IN_MEMORY
-
-/*
- * XXX fid for "real" root.
- */
-static const struct lu_fid uber_fid = {
-        .f_seq = LUSTRE_ROOT_FID_SEQ,
-        .f_oid = LUSTRE_ROOT_FID_OID,
-        .f_ver = 0
-};
-
-extern void osd_oi_init0(struct osd_oi *oi, const struct lu_fid *fid,
-                         __u64 root_ino, __u32 root_gen);
-extern int osd_oi_find_fid(struct osd_oi *oi,
-                           __u64 ino, __u32 gen, struct lu_fid *fid);
-#endif
-
-static int osd_build_fid(struct osd_device *osd,
-                         struct dentry *dentry, struct lu_fid *fid)
-{
-        struct inode *inode = dentry->d_inode;
-        int result;
-
-        /*
-         * Build fid from inode.
-         */
-        result = osd_oi_find_fid(&osd->od_oi,
-                                 inode->i_ino, inode->i_generation, fid);
-        if (result == -ENOENT) {
-                /* XXX hard-coded */
-                fid->f_seq = LUSTRE_ROOT_FID_SEQ + 1;
-                fid->f_oid = inode->i_ino;
-                fid->f_ver = inode->i_generation;
-                osd_oi_init0(&osd->od_oi, fid,
-                             inode->i_ino, inode->i_generation);
-                result = 0;
-        }
-        return result;
-}
 
 static int osd_index_probe(const struct lu_context *ctxt, struct osd_object *o,
                            const struct dt_index_features *feat)
@@ -999,11 +914,17 @@ static int osd_index_compat_delete(const struct lu_context *ctxt,
 
 /*
  * Compatibility index operations.
- *
- * XXX This is temporary solution: inode operations are used until iam is
- * ready.
  */
 
+
+static int osd_build_fid(struct osd_device *osd,
+                         struct dentry *dentry, struct lu_fid *fid)
+{
+        struct inode *inode = dentry->d_inode;
+
+        lu_igif_build(fid, inode->i_ino, inode->i_generation);
+        return 0;
+}
 
 static int osd_index_compat_lookup(const struct lu_context *ctxt,
                                    struct dt_object *dt,
@@ -1026,7 +947,6 @@ static int osd_index_compat_lookup(const struct lu_context *ctxt,
         LASSERT(osd_invariant(obj));
         LASSERT(S_ISDIR(obj->oo_inode->i_mode));
         LASSERT(osd_has_index(obj));
-        LASSERT(osd->od_obj_area != NULL);
 
         info->oti_str.name = (const char *)key;
         info->oti_str.len  = strlen((const char *)key);
@@ -1194,7 +1114,9 @@ static void *osd_key_init(const struct lu_context *ctx,
         struct osd_thread_info *info;
 
         OBD_ALLOC_PTR(info);
-        if (info == NULL)
+        if (info != NULL)
+                info->oti_ctx = ctx;
+        else
                 info = ERR_PTR(-ENOMEM);
         return info;
 }
@@ -1217,7 +1139,7 @@ static int osd_mount(const struct lu_context *ctx,
 {
         struct lustre_mount_info *lmi;
         const char               *dev = lustre_cfg_string(cfg, 0);
-        struct inode             *inode;
+        struct osd_thread_info   *info = lu_context_key_get(ctx, &osd_key);
         int result;
 
         ENTRY;
@@ -1237,40 +1159,25 @@ static int osd_mount(const struct lu_context *ctx,
         LASSERT(lmi != NULL);
         /* save lustre_mount_info in dt_device */
         o->od_mount = lmi;
-        result = osd_oi_init(&o->od_oi, osd_sb(o)->s_root,
-                             osd2lu_dev(o)->ld_site);
+
+        result = osd_oi_init(info, &o->od_oi, &o->od_dt_dev);
         if (result == 0) {
                 struct dentry *d;
-
-                inode = osd_sb(o)->s_root->d_inode;
-                /*
-                 * XXX temporary kludge: this should be done by mkfs.
-                 */
-                osd_oi_init0(&o->od_oi, &uber_fid,
-                             inode->i_ino, inode->i_generation);
 
                 d = simple_mkdir(osd_sb(o)->s_root, "*OBJ-TEMP*", 0777, 1);
                 if (!IS_ERR(d)) {
                         o->od_obj_area = d;
-
                         /*
-                         * XXX temporary fix for mdd/fld: create root
-                         * directory if not yet there, and insert it into fld.
+                         * XXX temporary resolution: OBJ_IDS should also be
+                         * done in mkfs
                          */
-                        d = simple_mkdir(osd_sb(o)->s_root, "ROOT", 0777, 1);
+                        d = simple_mknod(osd_sb(o)->s_root,
+                                         "lov_objid", 0777, 1);
                         if (!IS_ERR(d))
                                 dput(d);
                         else
                                 result = PTR_ERR(d);
                 } else
-                        result = PTR_ERR(d);
-                /*
-                 * XXX temporary resolution: OBJ_IDS should also be done in mkfs
-                 */
-                d = simple_mknod(osd_sb(o)->s_root, "lov_objid", 0777, 1);
-                if (!IS_ERR(d))
-                        dput(d);
-                else
                         result = PTR_ERR(d);
         }
         if (result != 0)
@@ -1281,14 +1188,15 @@ static int osd_mount(const struct lu_context *ctx,
 static struct lu_device *osd_device_fini(const struct lu_context *ctx,
                                          struct lu_device *d)
 {
-        struct osd_device *o = osd_dev(d);
+        struct osd_device      *o = osd_dev(d);
+        struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
 
         ENTRY;
         if (o->od_obj_area != NULL) {
                 dput(o->od_obj_area);
                 o->od_obj_area = NULL;
         }
-        osd_oi_fini(&o->od_oi);
+        osd_oi_fini(info, &o->od_oi);
 
         if (o->od_mount)
                 server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
@@ -1349,25 +1257,6 @@ static int osd_process_config(const struct lu_context *ctx,
  * fid<->inode<->object functions.
  */
 
-static int osd_inode_get_fid(struct osd_device *d, const struct inode *inode,
-                             struct lu_fid *fid)
-{
-        int result;
-
-        /*
-         * XXX: Should return fid stored together with inode in memory.
-         */
-        if (OI_IN_MEMORY) {
-                result = osd_oi_find_fid(&d->od_oi, inode->i_ino,
-                                         inode->i_generation, fid);
-        } else {
-                fid->f_seq = inode->i_ino;
-                fid->f_oid = inode->i_generation;
-                result = 0;
-        }
-        return result;
-}
-
 struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode)
 {
         struct dentry *dentry;
@@ -1411,6 +1300,27 @@ struct dentry *osd_lookup(struct dentry *parent, const char *name)
         return dentry;
 }
 
+int osd_lookup_id(struct dt_device *dev, const char *name, mode_t mode,
+                  struct osd_inode_id *id)
+{
+        struct dentry     *dent;
+        struct osd_device *osd = osd_dt_dev(dev);
+        int result;
+
+        dent = osd_open(osd_sb(osd)->s_root, name, mode);
+        if (!IS_ERR(dent)) {
+                struct inode *inode;
+
+                inode = dent->d_inode;
+                LASSERT(inode != NULL);
+                id->oii_ino = inode->i_ino;
+                id->oii_gen = inode->i_generation;
+                result = 0;
+        } else
+                result = PTR_ERR(dent);
+        return result;
+}
+
 static struct inode *osd_iget(struct osd_thread_info *info,
                               struct osd_device *dev,
                               const struct osd_inode_id *id)
@@ -1442,6 +1352,7 @@ static int osd_fid_lookup(const struct lu_context *ctx,
         struct lu_device       *ldev = obj->oo_dt.do_lu.lo_dev;
         struct osd_device      *dev;
         struct osd_inode_id     id;
+        struct osd_oi          *oi;
         struct inode           *inode;
         int                     result;
 
@@ -1455,11 +1366,13 @@ static int osd_fid_lookup(const struct lu_context *ctx,
         info = lu_context_key_get(ctx, &osd_key);
         dev  = osd_dev(ldev);
 
+        oi = &dev->od_oi;
+
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
                 RETURN(-ENOENT);
 
-        osd_oi_read_lock(&dev->od_oi);
-        result = osd_oi_lookup(info, &dev->od_oi, fid, &id);
+        osd_oi_read_lock(oi);
+        result = osd_oi_lookup(info, oi, fid, &id);
         if (result == 0) {
                 inode = osd_iget(info, dev, &id);
                 if (!IS_ERR(inode)) {
@@ -1470,7 +1383,7 @@ static int osd_fid_lookup(const struct lu_context *ctx,
                         result = PTR_ERR(inode);
         } else if (result == -ENOENT)
                 result = 0;
-        osd_oi_read_unlock(&dev->od_oi);
+        osd_oi_read_unlock(oi);
         LASSERT(osd_invariant(obj));
         RETURN(result);
 }
@@ -1497,9 +1410,6 @@ static int osd_inode_getattr(const struct lu_context *ctx,
 
 static int lu_device_is_osd(const struct lu_device *d)
 {
-        /*
-         * XXX for now. Tags in lu_device_type->ldt_something are needed.
-         */
         return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &osd_lu_ops);
 }
 

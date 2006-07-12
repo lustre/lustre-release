@@ -35,16 +35,18 @@
 #include <linux/rwsem.h>
 #include <lu_object.h>
 
-struct dentry;
 struct lu_fid;
 struct osd_thread_info;
 struct lu_site;
 struct thandle;
 
+struct oi_boot_rec;
+struct osd_device;
+
 struct osd_oi {
-        struct dentry       *oi_dir;
+        struct dt_object    *oi_dir;
         struct rw_semaphore  oi_lock;
-        struct lu_site      *oi_site;
+        struct oi_boot_rec  *oi_boot;
 };
 
 struct osd_inode_id {
@@ -56,8 +58,9 @@ enum {
         OSD_GEN_IGNORE = (__u32)~0
 };
 
-int  osd_oi_init(struct osd_oi *oi, struct dentry *root, struct lu_site *s);
-void osd_oi_fini(struct osd_oi *oi);
+int  osd_oi_init(struct osd_thread_info *info,
+                 struct osd_oi *oi, struct dt_device *dev);
+void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi);
 
 void osd_oi_read_lock(struct osd_oi *oi);
 void osd_oi_read_unlock(struct osd_oi *oi);
@@ -72,8 +75,6 @@ int  osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
 int  osd_oi_delete(struct osd_thread_info *info,
                    struct osd_oi *oi, const struct lu_fid *fid,
                    struct thandle *th);
-
-#define OI_IN_MEMORY (1)
 
 #endif /* __KERNEL__ */
 #endif /* _OSD_OI_H */

@@ -48,31 +48,57 @@
 #include "osd_oi.h"
 /* osd_lookup(), struct osd_thread_info */
 #include "osd_internal.h"
+/* lu_fid_is_igif() */
+#include "osd_igif.h"
+#include "dt_object.h"
 
-static struct lu_fid *oi_fid_key(struct osd_thread_info *info,
-                                 const struct lu_fid *fid);
-static const char osd_oi_dirname[] = "oi";
+static const struct dt_key *oi_fid_key(struct osd_thread_info *info,
+                                       const struct lu_fid *fid);
+static const char oi_dirname[] = "oi";
 
-int osd_oi_init(struct osd_oi *oi, struct dentry *root, struct lu_site *site)
+static const struct dt_index_features oi_index_features = {
+        .dif_flags       = DT_IND_UPDATE,
+        .dif_keysize_min = sizeof(struct lu_fid),
+        .dif_keysize_max = sizeof(struct lu_fid),
+        .dif_recsize_min = sizeof(__u64) + sizeof(__u32),
+        .dif_recsize_max = sizeof(__u64) + sizeof(__u32)
+};
+
+int osd_oi_init(struct osd_thread_info *info,
+                struct osd_oi *oi, struct dt_device *dev)
 {
         int result;
+        struct dt_object        *obj;
+        const struct lu_context *ctx;
 
-        oi->oi_dir = osd_open(root, osd_oi_dirname, S_IFREG);
-        if (IS_ERR(oi->oi_dir)) {
-                result = PTR_ERR(oi->oi_dir);
-                oi->oi_dir = NULL;
+        ctx = info->oti_ctx;
+        /*
+         * Initialize ->oi_lock first, because of possible oi re-entrance in
+         * dt_store_open().
+         */
+        init_rwsem(&oi->oi_lock);
+
+        obj = dt_store_open(ctx, dev, oi_dirname, &info->oti_fid);
+        if (!IS_ERR(obj)) {
+                result = obj->do_ops->do_object_index_try(ctx, obj,
+                                                          &oi_index_features);
+                if (result == 0) {
+                        LASSERT(obj->do_index_ops != NULL);
+                        oi->oi_dir = obj;
+                } else
+                        CERROR("Wrong index \"%s\": %d\n",
+                               oi_dirname, result);
         } else {
-                result = 0;
-                init_rwsem(&oi->oi_lock);
-                oi->oi_site = site;
+                result = PTR_ERR(obj);
+                CERROR("Cannot open \"%s\": %d\n", oi_dirname, result);
         }
         return result;
 }
 
-void osd_oi_fini(struct osd_oi *oi)
+void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi)
 {
         if (oi->oi_dir != NULL) {
-                dput(oi->oi_dir);
+                lu_object_put(info->oti_ctx, &oi->oi_dir->do_lu);
                 oi->oi_dir = NULL;
         }
 }
@@ -97,53 +123,36 @@ void osd_oi_write_unlock(struct osd_oi *oi)
         up_write(&oi->oi_lock);
 }
 
-static struct lu_fid *oi_fid_key(struct osd_thread_info *info,
-                                 const struct lu_fid *fid)
+static const struct dt_key *oi_fid_key(struct osd_thread_info *info,
+                                       const struct lu_fid *fid)
 {
-        fid_to_le(&info->oti_fid, fid);
-        return &info->oti_fid;
+        fid_to_be(&info->oti_fid, fid);
+        return (const struct dt_key *)&info->oti_fid;
 }
 
-/****************************************************************************
- * XXX prototype.
- ****************************************************************************/
-
-#if OI_IN_MEMORY
-struct oi_entry {
-        struct lu_fid       oe_key;
-        struct osd_inode_id oe_rec;
-        struct list_head    oe_linkage;
+enum {
+        OI_TXN_INSERT_CREDITS = 20,
+        OI_TXN_DELETE_CREDITS = 20
 };
 
-static CFS_LIST_HEAD(oi_head);
-
-static struct oi_entry *oi_lookup(const struct lu_fid *fid)
-{
-        struct oi_entry *entry;
-
-        list_for_each_entry(entry, &oi_head, oe_linkage) {
-                if (lu_fid_eq(fid, &entry->oe_key))
-                        return entry;
-        }
-        return NULL;
-}
-
 /*
  * Locking: requires at least read lock on oi.
  */
 int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, struct osd_inode_id *id)
 {
-        struct oi_entry *entry;
         int result;
 
-        LASSERT(fid_is_local(oi->oi_site, fid));
-        entry = oi_lookup(fid);
-        if (entry != NULL) {
-                *id = entry->oe_rec;
+        if (lu_fid_is_igif(fid)) {
+                lu_igif_to_id(fid, id);
                 result = 0;
-        } else
-                result = -ENOENT;
+        } else {
+                result = oi->oi_dir->do_index_ops->dio_lookup
+                        (info->oti_ctx, oi->oi_dir,
+                         (struct dt_rec *)id, oi_fid_key(info, fid));
+                id->oii_ino = be64_to_cpu(id->oii_ino);
+                id->oii_gen = be32_to_cpu(id->oii_gen);
+        }
         return result;
 }
 
@@ -151,26 +160,23 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
  * Locking: requires write lock on oi.
  */
 int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
-                  const struct lu_fid *fid, const struct osd_inode_id *id,
+                  const struct lu_fid *fid, const struct osd_inode_id *id0,
                   struct thandle *th)
 {
-        struct oi_entry *entry;
-        int result;
+        struct dt_object    *idx;
+        struct dt_device    *dev;
+        struct osd_inode_id *id;
 
-        LASSERT(fid_is_local(oi->oi_site, fid));
-        entry = oi_lookup(fid);
-        if (entry == NULL) {
-                OBD_ALLOC_PTR(entry);
-                if (entry != NULL) {
-                        entry->oe_key = *fid;
-                        entry->oe_rec = *id;
-                        list_add(&entry->oe_linkage, &oi_head);
-                        result = 0;
-                } else
-                        result = -ENOMEM;
-        } else
-                result = -EEXIST;
-        return result;
+        LASSERT(oi->oi_boot == NULL);
+
+        idx = oi->oi_dir;
+        dev = lu2dt_dev(idx->do_lu.lo_dev);
+        id = &info->oti_id;
+        id->oii_ino = cpu_to_be64(id0->oii_ino);
+        id->oii_gen = cpu_to_be32(id0->oii_gen);
+        return idx->do_index_ops->dio_insert(info->oti_ctx, idx,
+                                             (const struct dt_rec *)id,
+                                             oi_fid_key(info, fid), th);
 }
 
 /*
@@ -180,88 +186,14 @@ int osd_oi_delete(struct osd_thread_info *info,
                   struct osd_oi *oi, const struct lu_fid *fid,
                   struct thandle *th)
 {
-        struct oi_entry *entry;
-        int result;
+        struct dt_object *idx;
+        struct dt_device *dev;
 
-        LASSERT(fid_is_local(oi->oi_site, fid));
-        entry = oi_lookup(fid);
-        if (entry != NULL) {
-                list_del(&entry->oe_linkage);
-                OBD_FREE_PTR(entry);
-                result = 0;
-        } else
-                result = -ENOENT;
-        return result;
+        LASSERT(oi->oi_boot == NULL);
+
+        idx = oi->oi_dir;
+        dev = lu2dt_dev(idx->do_lu.lo_dev);
+        return idx->do_index_ops->dio_delete(info->oti_ctx, idx,
+                                             oi_fid_key(info, fid), th);
 }
 
-void osd_oi_init0(struct osd_oi *oi, const struct lu_fid *fid,
-                  __u64 root_ino, __u32 root_gen)
-{
-        int result;
-        const struct osd_inode_id root_id = {
-                .oii_ino = root_ino,
-                .oii_gen = root_gen
-        };
-
-        result = osd_oi_insert(NULL, oi, fid, &root_id, NULL);
-        LASSERT(result == 0);
-}
-
-int osd_oi_find_fid(struct osd_oi *oi, __u64 ino, __u32 gen, struct lu_fid *fid)
-{
-        struct oi_entry *entry;
-        int result;
-
-        result = -ENOENT;
-        osd_oi_read_lock(oi);
-        list_for_each_entry(entry, &oi_head, oe_linkage) {
-                if (entry->oe_rec.oii_ino == ino &&
-                    entry->oe_rec.oii_gen == gen) {
-                        *fid = entry->oe_key;
-                        result = 0;
-                        LASSERT(fid_is_local(oi->oi_site, fid));
-                        break;
-                }
-        }
-        osd_oi_read_unlock(oi);
-        return result;
-}
-
-/* OI_IN_MEMORY */
-#else
-
-/*
- * Locking: requires at least read lock on oi.
- */
-int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
-                  const struct lu_fid *fid, struct osd_inode_id *id)
-{
-        id->oii_ino = fid_seq(fid);
-        id->oii_gen = fid_oid(fid);
-        return 0;
-}
-
-/*
- * Locking: requires write lock on oi.
- */
-int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
-                  const struct lu_fid *fid, const struct osd_inode_id *id,
-                  struct thandle *th)
-{
-        LASSERT(id->oii_ino == fid_seq(fid));
-        LASSERT(id->oii_gen == fid_oid(fid));
-        return 0;
-}
-
-/*
- * Locking: requires write lock on oi.
- */
-int osd_oi_delete(struct osd_thread_info *info,
-                  struct osd_oi *oi, const struct lu_fid *fid,
-                  struct thandle *th)
-{
-        return 0;
-}
-
-/* OI_IN_MEMORY */
-#endif
