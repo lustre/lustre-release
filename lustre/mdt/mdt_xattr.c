@@ -103,9 +103,11 @@ int mdt_getxattr(struct mdt_thread_info *info)
         LASSERT(lu_object_assert_exists(info->mti_ctxt,
                                  &info->mti_object->mot_obj.mo_lu));
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK)) {
-                RETURN(rc = -ENOMEM);
-        }
+        CDEBUG(D_INODE, "getxattr "DFID3"\n",
+                        PFID3(&info->mti_body->fid1));
+
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK)) 
+                RETURN(-ENOMEM);
 
         next = mdt_object_child(info->mti_object);
 
@@ -162,18 +164,16 @@ int mdt_setxattr(struct mdt_thread_info *info)
         int                     rc;
         ENTRY;
 
+        CDEBUG(D_INODE, "setxattr "DFID3"\n",
+                        PFID3(&info->mti_body->fid1));
 
-        DEBUG_REQ(D_INODE, req, "setxattr "DFID3"\n",
-                  PFID3(&info->mti_body->fid1));
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR)) {
-                RETURN(rc = -ENOMEM);
-        }
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR)) 
+                RETURN(-ENOMEM);
 
         /* various sanity check for xattr name */
         xattr_name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
-        if (!xattr_name) {
+        if (!xattr_name)
                 GOTO(out, rc = -EFAULT);
-        }
 
         CDEBUG(D_INODE, "%s xattr %s\n",
                   info->mti_body->valid & OBD_MD_FLXATTR ? "set" : "remove",

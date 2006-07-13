@@ -52,20 +52,19 @@ static void mdt_mfd_get(void *mfdp)
 static struct mdt_file_data *mdt_mfd_new(void)
 {
         struct mdt_file_data *mfd;
+        ENTRY;
 
         OBD_ALLOC_PTR(mfd);
-        if (mfd == NULL) {
-                CERROR("mds: out of memory\n");
-                return NULL;
-        }
+        if (mfd != NULL) {
+                atomic_set(&mfd->mfd_refcount, 1);
 
-        atomic_set(&mfd->mfd_refcount, 1);
+                INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
+                INIT_LIST_HEAD(&mfd->mfd_list);
+                class_handle_hash(&mfd->mfd_handle, mdt_mfd_get);
+        } else
+                CERROR("mdt: out of memory\n");
 
-        INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
-        INIT_LIST_HEAD(&mfd->mfd_list);
-        class_handle_hash(&mfd->mfd_handle, mdt_mfd_get);
-
-        return mfd;
+        RETURN(mfd);
 }
 
 /* Get a new reference on the mfd pointed to by handle, if handle is still
@@ -110,7 +109,8 @@ static int mdt_object_open(struct mdt_thread_info *info,
         if (rc == -EREMOTE) {
                 repbody->fid1 = *mdt_object_fid(o);
                 repbody->valid |= OBD_MD_FLID;
-                RETURN(-EREMOTE);
+                /*FIXME: should be return 0 or -EREMOTE? */
+                /* also in mdt_reint:mdt_md_create() */
         }
         if (rc != 0)
                 RETURN(rc);
@@ -129,31 +129,31 @@ static int mdt_object_open(struct mdt_thread_info *info,
         repbody->eadatasize = rc;
         rc = 0;
 */
-        mfd = mdt_mfd_new();
-        if (mfd == NULL) {
-                CERROR("mds: out of memory\n");
-                RETURN(-ENOMEM);
-        }
-
         if (flags & FMODE_WRITE) {
                 /*mds_get_write_access*/
         } else if (flags & MDS_FMODE_EXEC) {
                 /*mds_deny_write_access*/
         }
 
-        /* keep a reference on this object for this open,
-         * and is released by mdt_mfd_close() */
-        mdt_object_get(info->mti_ctxt, o);
+        mfd = mdt_mfd_new();
+        if (mfd != NULL) {
+                /* keep a reference on this object for this open,
+                * and is released by mdt_mfd_close() */
+                mdt_object_get(info->mti_ctxt, o);
 
-        mfd->mfd_mode = flags;
-        mfd->mfd_object = o;
-        mfd->mfd_xid = mdt_info_req(info)->rq_xid;
+                mfd->mfd_mode = flags;
+                mfd->mfd_object = o;
+                mfd->mfd_xid = mdt_info_req(info)->rq_xid;
 
-        spin_lock(&med->med_open_lock);
-        list_add(&mfd->mfd_list, &med->med_open_head);
-        spin_unlock(&med->med_open_lock);
+                spin_lock(&med->med_open_lock);
+                list_add(&mfd->mfd_list, &med->med_open_head);
+                spin_unlock(&med->med_open_lock);
 
-        repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+                repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+        } else {
+                CERROR("mdt: out of memory\n");
+                rc = -ENOMEM;
+        }
 
         RETURN(rc);
 }
@@ -165,19 +165,18 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
         int rc;
         ENTRY;
 
+        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid);
         if (!IS_ERR(o)) {
                 if (mdt_object_exists(info->mti_ctxt, &o->mot_obj.mo_lu)) {
-                        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
                         intent_set_disposition(rep, DISP_LOOKUP_POS);
                         rc = mdt_object_open(info, o, flags);
                         intent_set_disposition(rep, DISP_OPEN_OPEN);
-                        mdt_object_put(info->mti_ctxt, o);
                 } else {
-                        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
                         intent_set_disposition(rep, DISP_LOOKUP_NEG);
                         rc = -ENOENT;
                 }
+                mdt_object_put(info->mti_ctxt, o);
         } else
                 rc = PTR_ERR(o);
 
@@ -203,6 +202,7 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
 {
         struct mdt_lock_handle lockh;
         int rc;
+        ENTRY;
         
         if (child_lockh == NULL)
                 child_lockh = &lockh;
@@ -304,12 +304,14 @@ int mdt_reint_open(struct mdt_thread_info *info)
         GOTO(destroy_child, result);
 
 destroy_child:
-        if (created && result != 0 && result != -EREMOTE) {
-                mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
-                           mdt_object_child(child), rr->rr_name);
-        } else if (created) {
-                /* barrier with other thread */
-                mdt_lock_new_child(info, child, NULL);
+        if (created) {
+                if (result != 0 && result != -EREMOTE) {
+                        mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
+                                   mdt_object_child(child), rr->rr_name);
+                } else {
+                        /* barrier with other thread */
+                        mdt_lock_new_child(info, child, NULL);
+                }
         }
 out_child:
         mdt_object_put(info->mti_ctxt, child);
@@ -348,28 +350,29 @@ int mdt_close(struct mdt_thread_info *info)
         ENTRY;
 
         med = &mdt_info_req(info)->rq_export->exp_mdt_data;
-        LASSERT(med);        
 
         spin_lock(&med->med_open_lock);
         mfd = mdt_handle2mfd(&(info->mti_body->handle));
         if (mfd == NULL) {
                 spin_unlock(&med->med_open_lock);
-                CDEBUG(D_INODE, "no handle for file close ino "DFID3
-                       ": cookie "LPX64, PFID3(&info->mti_body->fid1), 
+                CDEBUG(D_INODE, "no handle for file close: fid = "DFID3
+                       ": cookie = "LPX64, PFID3(&info->mti_body->fid1),
                        info->mti_body->handle.cookie);
-                RETURN(-ESTALE);
+                rc = -ESTALE;
+        } else {
+                class_handle_unhash(&mfd->mfd_handle);
+                list_del_init(&mfd->mfd_list);
+                spin_unlock(&med->med_open_lock);
+        
+                /* mdt_handle2mfd increases reference count on mfd,
+                 * we must drop it here. */
+                mdt_mfd_put(mfd);
+
+                rc = mdt_handle_last_unlink(info, mfd->mfd_object,
+                                            &RQF_MDS_CLOSE_LAST);
+
+                rc = mdt_mfd_close(info->mti_ctxt, mfd, 1);
         }
-        class_handle_unhash(&mfd->mfd_handle);
-        list_del_init(&mfd->mfd_list);
-        spin_unlock(&med->med_open_lock);
-        /* mdt_handle2mfd increase reference count, we must drop it here */
-        mdt_mfd_put(mfd);
-
-        rc = mdt_handle_last_unlink(info, mfd->mfd_object,
-                                    &RQF_MDS_CLOSE_LAST);
-
-        rc = mdt_mfd_close(info->mti_ctxt, mfd, 1);
-
         RETURN(rc);
 }
 

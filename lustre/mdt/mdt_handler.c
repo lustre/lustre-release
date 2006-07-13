@@ -214,6 +214,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         if (rc == -EREMOTE) {
                 /* FIXME: This object is located on remote node.
                  * What value should we return to client? 
+                 * also in mdt_md_create() and mdt_object_open() 
                  */
                 if (need_pack_reply) {
                         rc = req_capsule_pack(&info->mti_pill);
@@ -397,6 +398,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 /* only open the child. parent is on another node. */
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
                 child = parent;
+                CDEBUG(D_INFO, "partial getattr_name child_fid = "DFID3
+                               ", ldlm_rep=%p\n",
+                               PFID3(mdt_object_fid(child)), ldlm_rep);
+
                 mdt_lock_handle_init(lhc);
                 lhc->mlh_mode = LCK_CR;
                 result = mdt_object_lock(info, child, lhc, child_bits);
@@ -407,9 +412,11 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                         if (result != 0)
                                 mdt_object_unlock(info, child, lhc);
                 }
-                RETURN(result);
+                GOTO(out, result);
         }
 
+        CDEBUG(D_INFO, DFID3"/%s, ldlm_rep = %p\n",
+                       PFID3(mdt_object_fid(parent)), name, ldlm_rep);
         /*step 1: lock parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
         lhp->mlh_mode = LCK_CR;
@@ -444,6 +451,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         EXIT;
 out_parent:
         mdt_object_unlock(info, parent, lhp);
+out:
         return result;
 }
 
@@ -728,7 +736,6 @@ int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
 {
         int flags = 0;
         int rc;
-        ENTRY;
 
         LASSERT(ns != NULL);
         LASSERT(lh != NULL);
@@ -739,14 +746,13 @@ int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
                               LDLM_IBITS, policy, mode, &flags,
                               ldlm_blocking_ast, ldlm_completion_ast, NULL,
                               NULL, NULL, 0, NULL, lh);
-        RETURN(rc == ELDLM_OK ? 0 : -EIO);
+        return rc == ELDLM_OK ? 0 : -EIO;
 }
 
 void fid_unlock(struct ldlm_namespace *ns, const struct lu_fid *f,
                 struct lustre_handle *lh, ldlm_mode_t mode)
 {
         struct ldlm_lock *lock;
-        ENTRY;
 
         /* FIXME: this is debug stuff, remove it later. */
         lock = ldlm_handle2lock(lh);
@@ -758,7 +764,6 @@ void fid_unlock(struct ldlm_namespace *ns, const struct lu_fid *f,
         LASSERT(fid_res_name_eq(f, &lock->l_resource->lr_name));
 
         ldlm_lock_decref(lh, mode);
-        EXIT;
 }
 
 static struct mdt_object *mdt_obj(struct lu_object *o)
@@ -772,12 +777,15 @@ struct mdt_object *mdt_object_find(const struct lu_context *ctxt,
                                    const struct lu_fid *f)
 {
         struct lu_object *o;
+        struct mdt_object *m;
+        ENTRY;
 
         o = lu_object_find(ctxt, d->mdt_md_dev.md_lu_dev.ld_site, f);
         if (IS_ERR(o))
-                return (struct mdt_object *)o;
+                m = (struct mdt_object *)o;
         else
-                return mdt_obj(o);
+                m = mdt_obj(o);
+        RETURN(m);
 }
 
 int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o, 
@@ -786,24 +794,29 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         ldlm_policy_data_t *policy = &info->mti_policy;
         struct ldlm_res_id *res_id = &info->mti_res_id;
         struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
+        int rc;
+        ENTRY;
 
         LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
         LASSERT(lh->mlh_mode != LCK_MINMODE);
 
         policy->l_inodebits.bits = ibits;
 
-        return fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode, policy, res_id);
+        rc = fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode, policy, res_id);
+        RETURN(rc);
 }
 
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
                        struct mdt_lock_handle *lh)
 {
         struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
+        ENTRY;
 
         if (lustre_handle_is_used(&lh->mlh_lh)) {
                 fid_unlock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode);
                 lh->mlh_lh.cookie = 0;
         }
+        EXIT;
 }
 
 struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
@@ -947,7 +960,6 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
         struct ptlrpc_request * req = mdt_info_req(info);
 
         LASSERT(mdt != NULL);
-
 
         last_transno = req->rq_reqmsg->transno;
         if (rc != 0) {
@@ -1184,6 +1196,8 @@ static int mds_msg_check_version(struct lustre_msg *msg)
 static int mdt_filter_recovery_request(struct ptlrpc_request *req,
                                        struct obd_device *obd, int *process)
 {
+        ENTRY;
+
         switch (req->rq_reqmsg->opc) {
         case MDS_CONNECT: /* This will never get here, but for completeness. */
         case OST_CONNECT: /* This will never get here, but for completeness. */
@@ -1274,6 +1288,7 @@ static int mdt_reply(struct ptlrpc_request *req, int result,
                      struct mdt_thread_info *info)
 {
         struct obd_device *obd;
+        ENTRY;
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
                 if (req->rq_reqmsg->opc != OBD_PING)
@@ -2289,14 +2304,19 @@ static int mdt_object_init(const struct lu_context *ctxt, struct lu_object *o)
         struct mdt_device *d = mdt_dev(o->lo_dev);
         struct lu_device  *under;
         struct lu_object  *below;
+        int                rc = 0;
+        ENTRY;
+
+        CDEBUG(D_INFO, "object init, fid = "DFID3"\n", 
+                       PFID3(&o->lo_header->loh_fid));
 
         under = &d->mdt_child->md_lu_dev;
         below = under->ld_ops->ldo_object_alloc(ctxt, o->lo_header, under);
         if (below != NULL) {
                 lu_object_add(o, below);
-                return 0;
         } else
-                return -ENOMEM;
+                rc = -ENOMEM;
+        RETURN(rc);
 }
 
 static void mdt_object_free(const struct lu_context *ctxt, struct lu_object *o)
@@ -2306,6 +2326,8 @@ static void mdt_object_free(const struct lu_context *ctxt, struct lu_object *o)
         ENTRY;
 
         h = o->lo_header;
+        CDEBUG(D_INFO, "object free, fid = "DFID3"\n", PFID3(&h->loh_fid));
+
         lu_object_fini(o);
         lu_object_header_fini(h);
         OBD_FREE_PTR(mo);
