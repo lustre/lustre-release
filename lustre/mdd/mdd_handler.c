@@ -741,6 +741,15 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         int rc, created = 0, inserted = 0, ref_add = 0;
         ENTRY;
 
+        /* no RPC inside the transaction, so OST objects should be created at
+         * first */
+
+        if (S_ISREG(attr->la_mode)) {
+                rc = mdd_lov_create(ctxt, mdd, son);
+                if (rc)
+                        RETURN(rc);
+        }
+
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
@@ -790,9 +799,6 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
-        rc = mdd_lov_create(ctxt, mdd, son);
-        if (rc)
-                GOTO(cleanup, rc);
         created = 1;
         rc = __mdd_index_insert(ctxt, mdo, lu_object_fid(&child->mo_lu),
                                 name, handle);
