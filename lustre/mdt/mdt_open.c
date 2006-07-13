@@ -343,10 +343,7 @@ int mdt_mfd_close(const struct lu_context *ctxt,
 int mdt_close(struct mdt_thread_info *info)
 {
         struct mdt_export_data *med;
-        struct mdt_body        *repbody;
         struct mdt_file_data   *mfd;
-        struct mdt_object      *o;
-        struct lov_mds_md      *lmm;
         int rc;
         ENTRY;
 
@@ -368,32 +365,9 @@ int mdt_close(struct mdt_thread_info *info)
         /* mdt_handle2mfd increase reference count, we must drop it here */
         mdt_mfd_put(mfd);
 
-        o = mfd->mfd_object;
-        if (lu_object_is_dying(&o->mot_header)) {
-                repbody = req_capsule_server_get(&info->mti_pill, 
-                                                 &RMF_MDT_BODY);
-                lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
+        rc = mdt_handle_last_unlink(info, mfd->mfd_object,
+                                    &RQF_MDS_CLOSE_LAST);
 
-                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o),
-                                 &info->mti_attr);
-                if (rc == 0) {
-                        mdt_pack_attr2body(repbody, &info->mti_attr, 
-                                           mdt_object_fid(o));
-/*
-                        rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
-                                          lmm, info->mti_mdt->mdt_max_mdsize, 
-                                          XATTR_NAME_LOV);
-                        if (rc >= 0) {
-                                if (S_ISDIR(info->mti_attr.la_mode))
-                                        repbody->valid |= OBD_MD_FLDIREA;
-                                else
-                                        repbody->valid |= OBD_MD_FLEASIZE;
-                                repbody->eadatasize = rc;
-                                rc = 0;
-                        }
-*/
-               }
-        }
         rc = mdt_mfd_close(info->mti_ctxt, mfd, 1);
 
         RETURN(rc);

@@ -96,8 +96,10 @@ extern const struct req_format RQF_MDS_GETXATTR;
 extern const struct req_format RQF_MDS_SETXATTR;
 extern const struct req_format RQF_MDS_GETATTR;
 extern const struct req_format RQF_MDS_CLOSE;
+extern const struct req_format RQF_MDS_CLOSE_LAST;
 extern const struct req_format RQF_MDS_CONNECT;
 extern const struct req_format RQF_MDS_DISCONNECT;
+extern const struct req_format RQF_MDS_READPAGE;
 
 /*
  * This is format of direct (non-intent) MDS_GETATTR_NAME request.
@@ -107,8 +109,10 @@ extern const struct req_format RQF_MDS_REINT;
 extern const struct req_format RQF_MDS_REINT_CREATE;
 extern const struct req_format RQF_MDS_REINT_OPEN;
 extern const struct req_format RQF_MDS_REINT_UNLINK;
+extern const struct req_format RQF_MDS_REINT_UNLINK_LAST;
 extern const struct req_format RQF_MDS_REINT_LINK;
 extern const struct req_format RQF_MDS_REINT_RENAME;
+extern const struct req_format RQF_MDS_REINT_RENAME_LAST;
 extern const struct req_format RQF_MDS_REINT_SETATTR;
 extern const struct req_format RQF_LDLM_ENQUEUE;
 extern const struct req_format RQF_LDLM_INTENT;

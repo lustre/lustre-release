@@ -293,8 +293,12 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         /* cmm will take care if child is local or remote */
         rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mp),
                         mdt_object_child(mc), rr->rr_name);
+        
+        if (rc)
+                GOTO(out_unlock_child, rc);
+        
+        rc = mdt_handle_last_unlink(info, mc, &RQF_MDS_REINT_UNLINK_LAST);
 
-        GOTO(out_unlock_child, rc);
 out_unlock_child:
         mdt_object_unlock_put(info, mc, lhc);
 out_unlock_parent:

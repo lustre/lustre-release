@@ -123,7 +123,7 @@ static const struct req_msg_field *mds_reint_rename_client[] = {
         &RMF_SYMTGT
 };
 
-static const struct req_msg_field *mds_reint_rename_or_unlink_server[] = {
+static const struct req_msg_field *mds_last_unlink_server[] = {
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
         &RMF_LOGCOOKIES
@@ -221,12 +221,6 @@ static const struct req_msg_field *mds_getattr_server[] = {
 #endif
 };
 
-static const struct req_msg_field *mds_close_server[] = {
-        &RMF_MDT_BODY,
-        &RMF_MDT_MD,
-        &RMF_LOGCOOKIES
-};
-
 static const struct req_format *req_formats[] = {
         &RQF_MDS_CONNECT,
         &RQF_MDS_DISCONNECT,
@@ -252,7 +246,12 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_GETXATTR,
         &RQF_MDS_SETXATTR,
         &RQF_MDS_SYNC,
-        &RQF_MDS_CLOSE
+        &RQF_MDS_CLOSE,
+        &RQF_MDS_READPAGE,
+        &RQF_MDS_REINT_UNLINK_LAST,
+        &RQF_MDS_CLOSE_LAST,
+        &RQF_MDS_REINT_RENAME_LAST
+
 };
 
 struct req_msg_field {
@@ -485,7 +484,7 @@ EXPORT_SYMBOL(RQF_MDS_REINT_OPEN);
 
 const struct req_format RQF_MDS_REINT_UNLINK =
         DEFINE_REQ_FMT0("MDS_REINT_UNLINK", mds_reint_unlink_client,
-                        mds_reint_rename_or_unlink_server);
+                        mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT_UNLINK);
 
 const struct req_format RQF_MDS_REINT_LINK =
@@ -495,7 +494,7 @@ EXPORT_SYMBOL(RQF_MDS_REINT_LINK);
 
 const struct req_format RQF_MDS_REINT_RENAME =
         DEFINE_REQ_FMT0("MDS_REINT_RENAME", mds_reint_rename_client,
-                        mds_reint_rename_or_unlink_server);
+                        mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT_RENAME);
 
 const struct req_format RQF_MDS_REINT_SETATTR =
@@ -544,8 +543,28 @@ EXPORT_SYMBOL(RQF_LDLM_INTENT_UNLINK);
 
 const struct req_format RQF_MDS_CLOSE =
         DEFINE_REQ_FMT0("MDS_CLOSE",
-                        mdt_body_only, mds_close_server);
+                        mdt_body_only, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_CLOSE);
+
+const struct req_format RQF_MDS_READPAGE =
+        DEFINE_REQ_FMT0("MDS_READPAGE",
+                        mdt_body_only, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_READPAGE);
+
+/* formats for requests which delete last object */
+const struct req_format RQF_MDS_REINT_UNLINK_LAST =
+        DEFINE_REQ_FMT0("MDS_REINT_UNLINK_LAST", mds_reint_unlink_client,
+                        mds_last_unlink_server);
+EXPORT_SYMBOL(RQF_MDS_REINT_UNLINK_LAST);
+
+const struct req_format RQF_MDS_CLOSE_LAST =
+        DEFINE_REQ_FMT0("MDS_CLOSE_LAST", mdt_body_only, mds_last_unlink_server);
+EXPORT_SYMBOL(RQF_MDS_CLOSE_LAST);
+
+const struct req_format RQF_MDS_REINT_RENAME_LAST =
+        DEFINE_REQ_FMT0("MDS_REINT_RENAME_LAST", mds_reint_rename_client,
+                        mds_last_unlink_server);
+EXPORT_SYMBOL(RQF_MDS_REINT_RENAME_LAST);
 
 #if !defined(__REQ_LAYOUT_USER__)
 

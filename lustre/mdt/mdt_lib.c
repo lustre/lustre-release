@@ -40,6 +40,50 @@
 
 #include "mdt_internal.h"
 
+/* if object is dying, pack the lov/llog data */
+int mdt_handle_last_unlink(struct mdt_thread_info *info,
+                           struct mdt_object *mo, const struct req_format *fmt)
+{
+        int rc = 0;
+        ENTRY;
+        /* only for reg files and if that object will be deleted */
+        if (lu_object_is_dying(&mo->mot_header)) {
+                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(mo),
+                                 &info->mti_attr);
+                if (rc == 0 && S_ISREG(info->mti_attr.la_mode)) {
+                        struct mdt_body    *body;
+                        struct lov_mds_md  *lmm;
+
+                        /* reply should contains more data,
+                         * so we need to extend it */
+                        req_capsule_extend(&info->mti_pill, fmt);
+
+                        body = req_capsule_server_get(&info->mti_pill,
+                                                      &RMF_MDT_BODY);
+                        lmm = req_capsule_server_get(&info->mti_pill,
+                                                     &RMF_MDT_MD);
+
+                        mdt_pack_attr2body(body, &info->mti_attr, 
+                                           mdt_object_fid(mo));
+
+/*TODO: lmm data & llog cookie
+                        rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
+                                          lmm, info->mti_mdt->mdt_max_mdsize, 
+                                          XATTR_NAME_LOV);
+                        if (rc >= 0) {
+                                if (S_ISDIR(info->mti_attr.la_mode))
+                                        body->valid |= OBD_MD_FLDIREA;
+                                else
+                                        body->valid |= OBD_MD_FLEASIZE;
+                                body->eadatasize = rc;
+                                rc = 0;
+                        }
+*/
+                }
+        }
+        RETURN(rc);
+}
+
 
 /* unpacking */
 static int mdt_setattr_unpack(struct mdt_thread_info *info)
