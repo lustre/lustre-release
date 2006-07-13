@@ -689,20 +689,12 @@ obd_lvfs_fid2dentry(struct obd_export *exp, __u64 id_ino, __u32 gen, __u64 gr)
 #define time_before(t1, t2) ((long)t2 - (long)t1 > 0)
 #endif
 
-#ifndef time_before_64
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-#define time_before_64(t1, t2) ((__s64)t2 - (__s64)t1 > 0)
-#else
-#define time_before_64 time_before
-#endif
-#endif
-
 /* @max_age is the oldest time in jiffies that we accept using a cached data.
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */
 static inline int obd_statfs_async(struct obd_device *obd,
                                    struct obd_info *oinfo,
-                                   cfs_time_t max_age,
+                                   __u64 max_age,
                                    struct ptlrpc_request_set *rqset)
 {
         int rc = 0;
@@ -714,9 +706,9 @@ static inline int obd_statfs_async(struct obd_device *obd,
         OBD_CHECK_OP(obd, statfs, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
-        CDEBUG(D_SUPER, "osfs "CFS_TIME_T", max_age "CFS_TIME_T"\n",
+        CDEBUG(D_SUPER, "osfs "LPU64", max_age "LPU64"\n",
                obd->obd_osfs_age, max_age);
-        if (cfs_time_before(obd->obd_osfs_age, max_age)) {
+        if (cfs_time_before_64(obd->obd_osfs_age, max_age)) {
                 rc = OBP(obd, statfs_async)(obd, oinfo, max_age, rqset);
         } else {
                 CDEBUG(D_SUPER, "using cached obd_statfs data\n");
@@ -730,7 +722,7 @@ static inline int obd_statfs_async(struct obd_device *obd,
 }
 
 static inline int obd_statfs_rqset(struct obd_device *obd,
-                                   struct obd_statfs *osfs, cfs_time_t max_age)
+                                   struct obd_statfs *osfs, __u64 max_age)
 {
         struct ptlrpc_request_set *set = NULL;
         struct obd_info oinfo = { { { 0 } } };
@@ -753,7 +745,7 @@ static inline int obd_statfs_rqset(struct obd_device *obd,
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */
 static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                             cfs_time_t max_age)
+                             __u64 max_age)
 {
         int rc = 0;
         ENTRY;
@@ -764,14 +756,14 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         OBD_CHECK_OP(obd, statfs, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
-        CDEBUG(D_SUPER, "osfs "CFS_TIME_T", max_age "CFS_TIME_T"\n",
+        CDEBUG(D_SUPER, "osfs "LPU64", max_age "LPU64"\n",
                obd->obd_osfs_age, max_age);
-        if (cfs_time_before(obd->obd_osfs_age, max_age)) {
+        if (cfs_time_before_64(obd->obd_osfs_age, max_age)) {
                 rc = OBP(obd, statfs)(obd, osfs, max_age);
                 if (rc == 0) {
                         spin_lock(&obd->obd_osfs_lock);
                         memcpy(&obd->obd_osfs, osfs, sizeof(obd->obd_osfs));
-                        obd->obd_osfs_age = cfs_time_current();
+                        obd->obd_osfs_age = cfs_time_current_64();
                         spin_unlock(&obd->obd_osfs_lock);
                 }
         } else {

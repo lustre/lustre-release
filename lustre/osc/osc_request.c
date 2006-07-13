@@ -3075,8 +3075,7 @@ out:
 }
 
 static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
-                            cfs_time_t max_age,
-                            struct ptlrpc_request_set *rqset)
+                            __u64 max_age, struct ptlrpc_request_set *rqset)
 {
         struct ptlrpc_request *req;
         struct osc_async_args *aa;
@@ -3107,7 +3106,7 @@ static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
 }
 
 static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      cfs_time_t max_age)
+                      __u64 max_age)
 {
         struct obd_statfs *msfs;
         struct ptlrpc_request *req;

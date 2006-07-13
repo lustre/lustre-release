@@ -169,7 +169,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
         sbi->ll_mdc_exp = class_conn2export(&mdc_conn);
 
-        err = obd_statfs(obd, &osfs, get_jiffies_64() - HZ);
+        err = obd_statfs(obd, &osfs, cfs_time_current_64() - HZ);
         if (err)
                 GOTO(out_mdc, err);
 
@@ -1407,7 +1407,7 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
         /* For now we will always get up-to-date statfs values, but in the
          * future we may allow some amount of caching on the client (e.g.
          * from QOS or lprocfs updates). */
-        rc = ll_statfs_internal(sb, &osfs, get_jiffies_64() - 1);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - 1);
         if (rc)
                 return rc;
 
@@ -1913,7 +1913,7 @@ int ll_obd_statfs(struct inode *inode, void *arg)
         if (!client_obd)
                 GOTO(out_statfs, rc = -EINVAL);
 
-        rc = obd_statfs(client_obd, &stat_buf, get_jiffies_64() - 1);
+        rc = obd_statfs(client_obd, &stat_buf, cfs_time_current_64() - 1);
         if (rc)
                 GOTO(out_statfs, rc);
 

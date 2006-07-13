@@ -265,8 +265,9 @@ static int import_select_connection(struct obd_import *imp)
                        imp->imp_obd->obd_name,
                        libcfs_nid2str(conn->oic_conn->c_peer.nid),
                        conn->oic_last_attempt);
-                if (get_jiffies_64() >
-                    conn->oic_last_attempt + RECONNECT_INTERVAL * HZ) {
+                if (cfs_time_before_64(conn->oic_last_attempt + 
+                                       RECONNECT_INTERVAL * HZ,
+                                       cfs_time_current_64())) {
                         /* If we have never tried this connection since the
                            the last successful attempt, go with this one */
                         if (conn->oic_last_attempt <=
@@ -294,7 +295,7 @@ static int import_select_connection(struct obd_import *imp)
         }
         LASSERT(imp_conn->oic_conn);
 
-        imp_conn->oic_last_attempt = get_jiffies_64();
+        imp_conn->oic_last_attempt = cfs_time_current_64();
 
         /* switch connection, don't mind if it's same as the current one */
         if (imp->imp_connection)

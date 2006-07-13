@@ -1403,7 +1403,7 @@ int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,int success)
 
                 spin_lock(&obd->obd_osfs_lock);
                 memcpy(&obd->obd_osfs, osfs, sizeof(osfs));
-                obd->obd_osfs_age = get_jiffies_64();
+                obd->obd_osfs_age = cfs_time_current_64();
                 spin_unlock(&obd->obd_osfs_lock);
                 RETURN(0);
         }
@@ -1435,7 +1435,7 @@ void lov_update_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 {
         spin_lock(&obd->obd_osfs_lock);
         memcpy(&obd->obd_osfs, lov_sfs, sizeof(osfs));
-        obd->obd_osfs_age = get_jiffies_64();
+        obd->obd_osfs_age = cfs_time_current_64();
         spin_unlock(&obd->obd_osfs_lock);
 
         if (success == 0) {

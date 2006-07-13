@@ -160,9 +160,10 @@ obd_size filter_grant_space_left(struct obd_export *exp)
 
         LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
 
-        if (time_before_64(obd->obd_osfs_age, get_jiffies_64() - HZ)) {
+        if (cfs_time_before_64(obd->obd_osfs_age, cfs_time_current_64() - HZ)) {
 restat:
-                rc = fsfilt_statfs(obd, obd->u.obt.obt_sb, get_jiffies_64() + HZ);
+                rc = fsfilt_statfs(obd, obd->u.obt.obt_sb,
+                                   cfs_time_current_64() + HZ);
                 if (rc) /* N.B. statfs can't really fail */
                         RETURN(0);
                 statfs_done = 1;

@@ -188,7 +188,7 @@ int class_attach(struct lustre_cfg *lcfg)
         spin_lock_init(&obd->obd_osfs_lock);
         /* obd->obd_osfs_age must be set to a value in the distant
          * past to guarantee a fresh statfs is fetched on mount. */
-        obd->obd_osfs_age = cfs_time_shift(-1000);
+        obd->obd_osfs_age = cfs_time_shift_64(-1000);
 
         /* XXX belongs in setup not attach  */
         /* recovery data */

@@ -974,9 +974,9 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
         struct lov_obd *lov;
         struct obd_info oinfo;
         struct lov_request_set *set = NULL;
-        struct obd_statfs osfs;
-        unsigned long maxage;
         struct lov_request *req;
+        struct obd_statfs osfs;
+        __u64 maxage;
         int rc = 0;
         ENTRY;
 
@@ -1001,7 +1001,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                  RETURN(rc);
         }
 
-        maxage = cfs_time_shift(-lov->desc.ld_qos_maxage);
+        maxage = cfs_time_shift_64(-lov->desc.ld_qos_maxage);
         obd_statfs_rqset(exp->exp_obd, &osfs, maxage);
 
         rc = lov_prep_create_set(exp, &oinfo, ea, src_oa, oti, &set);
@@ -2084,7 +2084,7 @@ static int lov_statfs_interpret(struct ptlrpc_request_set *rqset,
 }
 
 static int lov_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
-                            cfs_time_t max_age, struct ptlrpc_request_set *rqset)
+                            __u64 max_age, struct ptlrpc_request_set *rqset)
 {
         struct lov_request_set *set;
         struct lov_request *req;
@@ -2126,7 +2126,7 @@ static int lov_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
 }
 
 static int lov_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      cfs_time_t max_age)
+                      __u64 max_age)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct obd_statfs lov_sfs;

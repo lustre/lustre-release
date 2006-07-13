@@ -759,7 +759,7 @@ struct obd_device {
         struct fsfilt_operations *obd_fsops;
         spinlock_t              obd_osfs_lock;
         struct obd_statfs       obd_osfs;       /* locked by obd_osfs_lock */
-        cfs_time_t              obd_osfs_age;   
+        __u64                   obd_osfs_age;   
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
@@ -865,10 +865,9 @@ struct obd_ops {
         int (*o_disconnect)(struct obd_export *exp);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
-                        cfs_time_t max_age);
+                        __u64 max_age);
         int (*o_statfs_async)(struct obd_device *obd, struct obd_info *oinfo,
-                              cfs_time_t max_age,
-                              struct ptlrpc_request_set *set);
+                              __u64 max_age, struct ptlrpc_request_set *set);
         int (*o_packmd)(struct obd_export *exp, struct lov_mds_md **disk_tgt,
                         struct lov_stripe_md *mem_src);
         int (*o_unpackmd)(struct obd_export *exp,struct lov_stripe_md **mem_tgt,

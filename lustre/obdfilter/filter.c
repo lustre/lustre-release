@@ -2672,7 +2672,7 @@ out:
 }
 
 static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                         cfs_time_t max_age)
+                         __u64 max_age)
 {
         struct filter_obd *filter = &obd->u.filter;
         int blockbits = obd->u.obt.obt_sb->s_blocksize_bits;
@@ -2741,7 +2741,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 OBD_ALLOC(osfs, sizeof(*osfs));
                 if (osfs == NULL)
                         RETURN(-ENOMEM);
-                rc = filter_statfs(obd, osfs, get_jiffies_64() - HZ);
+                rc = filter_statfs(obd, osfs, cfs_time_current_64() - HZ);
                 if (rc == 0 && osfs->os_bavail < (osfs->os_blocks >> 10)) {
                         CDEBUG(D_HA, "OST out of space! avail "LPU64"\n",
                                osfs->os_bavail <<

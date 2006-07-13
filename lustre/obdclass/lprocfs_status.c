@@ -230,7 +230,7 @@ int lprocfs_rd_blksize(char *page, char **start, off_t off, int count,
                        int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, get_jiffies_64() - HZ);
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
                 *eof = 1;
                 rc = snprintf(page, count, "%u\n", osfs.os_bsize);
@@ -242,7 +242,7 @@ int lprocfs_rd_kbytestotal(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, get_jiffies_64() - HZ);
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_blocks;
@@ -260,7 +260,7 @@ int lprocfs_rd_kbytesfree(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, get_jiffies_64() - HZ);
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_bfree;
@@ -278,7 +278,7 @@ int lprocfs_rd_kbytesavail(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, get_jiffies_64() - HZ);
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_bavail;
@@ -296,7 +296,7 @@ int lprocfs_rd_filestotal(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, get_jiffies_64() - HZ);
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
                 *eof = 1;
                 rc = snprintf(page, count, LPU64"\n", osfs.os_files);
@@ -309,7 +309,7 @@ int lprocfs_rd_filesfree(char *page, char **start, off_t off, int count,
                          int *eof, void *data)
 {
         struct obd_statfs osfs;
-        int rc = obd_statfs(data, &osfs, get_jiffies_64() - HZ);
+        int rc = obd_statfs(data, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
                 *eof = 1;
                 rc = snprintf(page, count, LPU64"\n", osfs.os_ffree);
