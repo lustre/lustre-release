@@ -109,7 +109,7 @@ int mdt_update_server_data(const struct lu_context *ctxt,
                            int sync)
 {
         struct mdt_server_data *msd = &mdt->mdt_msd;
-        loff_t off = 0;
+        //loff_t off = 0;
         int rc = 0;
         ENTRY;
 
@@ -430,9 +430,9 @@ static int mdt_txn_commit_cb(const struct lu_context *ctx,
 int mdt_fs_setup(const struct lu_context *ctxt, 
                  struct mdt_device *mdt)
 {
-        struct lu_fid last_fid;
-        struct dt_object *last;
-        int rc;
+        //struct lu_fid last_fid;
+        //struct dt_object *last;
+        int rc = 0;
         ENTRY;
 
         /* prepare transactions callbacks */
@@ -456,7 +456,7 @@ int mdt_fs_setup(const struct lu_context *ctxt,
                 CERROR("cannot open %s: rc = %d\n", LAST_RCVD, rc);
         }
 */
-        return rc;
+        RETURN (rc);
 }
 
 
