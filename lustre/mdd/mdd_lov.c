@@ -242,7 +242,8 @@ static int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
 }
 
 int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
-                   struct md_object *child)
+                   struct md_object *child, struct lov_mds_md *lmmp,
+                   int lmm_size)
 {
         struct dt_object *next = mdd_object_child(md2mdd_obj(child));
         int rc = 0;
@@ -250,25 +251,34 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
 
         if (dt_is_dir(ctxt, next)) {
                 struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
-                int lmm_size = sizeof(lmm);
-                rc = mdd_get_md(ctxt, pobj, &lmm, &lmm_size, 1);
+                int size = sizeof(lmm);
+                rc = mdd_get_md(ctxt, pobj, &lmm, &size, 1);
                 if (rc > 0) {
-                        rc = mdd_xattr_set(ctxt, child, lmm, lmm_size, MDS_LOV_MD_NAME);
+                        rc = mdd_xattr_set(ctxt, child, lmm, size, 
+                                           MDS_LOV_MD_NAME);
                         if (rc)
-                                CERROR("error on copy stripe info: rc = %d\n", rc);
+                                CERROR("error on copy stripe info: rc = %d\n",
+                                        rc);
                 }
+        } else if (lmmp) {
+                LASSERT(lmm_size > 0);
+                rc = mdd_xattr_set(ctxt, child, lmmp, lmm_size, 
+                                   MDS_LOV_MD_NAME);
+                if (rc)
+                        CERROR("error on copy stripe info: rc = %d\n",
+                                rc);
         }
         RETURN(rc);
 }
 
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
-                   struct mdd_object *child)
+                   struct mdd_object *child, struct lov_mds_md **lmm, 
+                   int *lmm_size)
 {
         struct md_lov_info *mli = &mdd->mdd_lov_info;
         struct obdo *oa;
-        struct lov_mds_md *lmm = NULL;
         struct lov_stripe_md *lsm = NULL;
-        int rc = 0, lmm_size;
+        int rc = 0;
         ENTRY;
 
         oa = obdo_alloc();
@@ -284,14 +294,13 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         if (rc)
                 GOTO(out_oa, rc);
 
-        rc = obd_packmd(mli->md_lov_exp, &lmm, lsm);
+        rc = obd_packmd(mli->md_lov_exp, lmm, lsm);
         if (rc < 0) {
                 CERROR("cannot pack lsm, err = %d\n", rc);
                 GOTO(out_oa, rc);
         }
-        lmm_size = rc;
+        *lmm_size = rc;
         rc = 0;
-        /*FIXME: did not set MD here */
 out_oa:
         obdo_free(oa);
         RETURN(rc);
