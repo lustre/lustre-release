@@ -10,8 +10,8 @@
 # that will be part of the Lustre cluster.
 # 
 # In addition, it can also verify the network connectivity and hostnames in 
-# the cluster and produce High-Availability software configurations for
-# Heartbeat or CluManager.
+# the cluster, configure Linux MD/LVM devices and produce High-Availability
+# software configurations for Heartbeat or CluManager.
 #
 ################################################################################
 
@@ -19,7 +19,7 @@
 usage() {
     cat >&2 <<EOF
 
-Usage:  `basename $0` [-t HAtype] [-n] [-f] [-m] [-h] [-v] <csv file>
+Usage:  `basename $0` [-t HAtype] [-n] [-d] [-f] [-m] [-h] [-v] <csv file>
 
     This script is used to format and set up multiple lustre servers from a
     csv file.
@@ -32,6 +32,8 @@ Usage:  `basename $0` [-t HAtype] [-n] [-f] [-m] [-h] [-v] <csv file>
                 and hbv2 (Heartbeat version 2).
     -n          no net - don't verify network connectivity and hostnames
                 in the cluster
+    -d          configure Linux MD/LVM devices before formatting the
+                Lustre targets
     -f          force-format the Lustre targets using --reformat option
     -m          no fstab change - don't modify /etc/fstab to add the new
                 Lustre targets
@@ -56,11 +58,74 @@ that will be part of the Lustre cluster.
 
 It can also optionally: 
  * verify the network connectivity and hostnames in the cluster
+ * configure Linux MD/LVM devices
  * modify /etc/modprobe.conf to add Lustre networking info
  * add the Lustre server info to /etc/fstab
  * produce configurations for Heartbeat or CluManager.
 
-Each line in the csv file represents one Lustre target. The format is:
+There are 5 kinds of line formats in the csv file. They represent the following 
+targets:
+1) Linux MD device
+The format is:
+hostname,MD,md name,operation mode,options,raid level,component devices
+
+hostname            hostname of the node in the cluster
+MD                  marker of MD device line
+md name             MD device name, e.g. /dev/md0
+operation mode      create or remove, default is create
+options             a "catchall" for other mdadm options, e.g. "-c 128"
+raid level          raid level: 0,1,4,5,6,10,linear and multipath
+component devices   block devices to be combined into the MD device
+                    Multiple devices are separated by space or by using
+                    shell expansions, e.g. "/dev/sd{a,b,c}"
+
+2) Linux LVM PV (Physical Volume)
+The format is:
+hostname,PV,pv names,operation mode,options
+
+hostname            hostname of the node in the cluster
+PV                  marker of PV line
+pv names            devices or loopback files to be initialized for later
+                    use by LVM or to be wiped the label, e.g. /dev/sda
+                    Multiple devices or files are separated by space or by
+                    using shell expansions, e.g. "/dev/sd{a,b,c}"
+operation mode      create or remove, default is create
+options             a "catchall" for other pvcreate/pvremove options
+                    e.g. "-vv"
+
+3) Linux LVM VG (Volume Group)
+The format is:
+hostname,VG,vg name,operation mode,options,pv paths
+
+hostname            hostname of the node in the cluster
+VG                  marker of VG line
+vg name             name of the volume group, e.g. ost_vg
+operation mode      create or remove, default is create
+options             a "catchall" for other vgcreate/vgremove options
+                    e.g. "-s 32M"
+pv paths            physical volumes to construct this VG, required by
+                    create mode
+                    Multiple PVs are separated by space or by using
+                    shell expansions, e.g. "/dev/sd[k-m]1"
+
+4) Linux LVM LV (Logical Volume)
+The format is:
+hostname,LV,lv name,operation mode,options,lv size,vg name
+
+hostname            hostname of the node in the cluster
+LV                  marker of LV line
+lv name             name of the logical volume to be created (optional)
+                    or path of the logical volume to be removed (required
+                    by remove mode)
+operation mode      create or remove, default is create
+options             a "catchall" for other lvcreate/lvremove options
+                    e.g. "-i 2 -I 128"
+lv size             size [kKmMgGtT] to be allocated for the new LV
+                    Default unit is megabytes.
+vg name             name of the VG in which the new LV will be created
+
+5) Lustre target
+The format is:
 hostname,module_opts,device name,mount point,device type,fsname,mgs nids,index,
 format options,mkfs options,mount options,failover nids
 
@@ -128,6 +193,29 @@ lustre-ost1,options lnet networks=tcp,/tmp/ost1,/mnt/ost1,ost,,"lustre-mgs1@tcp0
 lustre-ost2,options lnet networks=tcp,/tmp/ost2,/mnt/ost2,ost,,"lustre-mgs1@tcp0:lustre-mgs2@tcp0",,--quiet --device-size=10240 --noformat,,,lustre-ost1@tcp0
 -------------------------------------------------------------------------------
 
+Example 4 - Configure Linux MD/LVM devices before formatting Lustre targets:
+-------------------------------------------------------------------------------
+# MD device on mgsnode
+mgsnode,MD,/dev/md0,,-q,1,/dev/sda1 /dev/sdb1
+
+# MD/LVM devices on ostnode
+ostnode,MD,/dev/md0,,-q -c 128,5,"/dev/sd{a,b,c}"
+ostnode,MD,/dev/md1,,-q -c 128,5,"/dev/sd{d,e,f}"
+ostnode,PV,/dev/md0 /dev/md1
+ostnode,VG,ost_vg,,-s 32M,/dev/md0 /dev/md1
+ostnode,LV,ost0,,-i 2 -I 128,300G,ost_vg
+ostnode,LV,ost1,,-i 2 -I 128,300G,ost_vg
+
+# combo mgs/mdt
+mgsnode,options lnet networks=tcp,/dev/md0,/mnt/mgs,mgs|mdt,,,,--quiet
+
+# ost0
+ostnode,options lnet networks=tcp,/dev/ost_vg/ost0,/mnt/ost0,ost,,mgsnode,,--quiet
+
+# ost1
+ostnode,options lnet networks=tcp,/dev/ost_vg/ost1,/mnt/ost1,ost,,mgsnode,,--quiet
+-------------------------------------------------------------------------------
+
 EOF
     exit 0
 }
@@ -150,10 +238,11 @@ declare -a MGS_NIDS INDEX FORMAT_OPTIONS MKFS_OPTIONS MOUNT_OPTIONS FAILOVERS
 
 
 VERIFY_CONNECT=true
+CONFIG_MD_LVM=false
 MODIFY_FSTAB=true
 VERBOSE_OUTPUT=false
 # Get and check the positional parameters
-while getopts "t:nfmhv" OPTION; do
+while getopts "t:ndfmhv" OPTION; do
     case $OPTION in
     t)
         HATYPE_OPT=$OPTARG
@@ -167,6 +256,9 @@ while getopts "t:nfmhv" OPTION; do
         ;;
     n)
         VERIFY_CONNECT=false
+        ;;
+    d)
+        CONFIG_MD_LVM=true
         ;;
     f)
         REFORMAT_OPTION=$"--reformat "
@@ -640,6 +732,7 @@ get_items() {
 
     CSV_FILE=$1
     local LINE
+    local marker
     declare -i line_num=0
     declare -i idx=0
 
@@ -655,6 +748,13 @@ get_items() {
         # Get rid of the comment line
         if [ -z "`echo \"${LINE}\" | egrep -v \"([[:space:]]|^)#\"`" ]
         then
+            continue
+        fi
+
+        # Skip the Linux MD/LVM line
+        marker=`echo ${LINE} | awk -F, '{print $2}'`
+        if [ "${marker}" = "${MD_MARKER}" -o "${marker}" = "${PV_MARKER}" ] \
+        || [ "${marker}" = "${VG_MARKER}" -o "${marker}" = "${LV_MARKER}" ]; then
             continue
         fi
 
@@ -1021,6 +1121,20 @@ if ${VERIFY_CONNECT}; then
     fi
     echo "`basename $0`: Check the cluster network connectivity"\
          "and hostnames OK!"
+    echo
+fi
+
+if ${CONFIG_MD_LVM}; then
+# Configure Linux MD/LVM devices
+    echo "`basename $0`: Configuring Linux MD/LVM devices..."
+    if ! ${SCRIPT_CONFIG_MD} ${VERBOSE_OPT} ${CSV_FILE}; then
+        exit 1
+    fi
+
+    if ! ${SCRIPT_CONFIG_LVM} ${VERBOSE_OPT} ${CSV_FILE}; then
+        exit 1
+    fi
+    echo "`basename $0`: Configure Linux MD/LVM devices OK!"
     echo
 fi
 

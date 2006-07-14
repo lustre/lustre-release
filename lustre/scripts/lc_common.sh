@@ -27,6 +27,8 @@ GEN_HB_CONFIG=${SCRIPTS_PATH}/lc_hb.sh
 GEN_CLUMGR_CONFIG=${SCRIPTS_PATH}/lc_cluman.sh
 SCRIPT_VERIFY_SRVIP=${SCRIPTS_PATH}/lc_servip.sh
 SCRIPT_GEN_MONCF=${SCRIPTS_PATH}/lc_mon.sh
+SCRIPT_CONFIG_MD=${SCRIPTS_PATH}/lc_md.sh
+SCRIPT_CONFIG_LVM=${SCRIPTS_PATH}/lc_lvm.sh
 
 # Variables of HA software
 HBVER_HBV1="hbv1"                   # Heartbeat version 1
@@ -55,7 +57,17 @@ TMP_DIRS="${HB_TMP_DIR} ${CLUMGR_TMP_DIR}"
 FS_TYPE=${FS_TYPE:-"lustre"}        # Lustre filesystem type
 FILE_SUFFIX=${FILE_SUFFIX:-".lustre"}	# Suffix of the generated config files
 
+# Marker of the MD device line
+MD_MARKER=${MD_MARKER:-"MD"}
+
+# Marker of the LVM device line
+PV_MARKER=${PV_MARKER:-"PV"}
+VG_MARKER=${VG_MARKER:-"VG"}
+LV_MARKER=${LV_MARKER:-"LV"}
+
 declare -a CONFIG_ITEM              # Items in each line of the csv file
+declare -a NODE_NAME                # Hostnames of nodes have been configured
+
 
 # verbose_output string
 # Output verbose information $string
@@ -177,4 +189,18 @@ fcanon() {
     else
         echo "$NAME"
     fi
+}
+
+# configured_host host_name
+#
+# Check whether the devices in $host_name has been configured or not
+configured_host() {
+    local host_name=$1
+    declare -i i
+
+    for ((i = 0; i < ${#NODE_NAME[@]}; i++)); do
+        [ "${host_name}" = "${NODE_NAME[i]}" ] && return 0
+    done
+
+    return 1
 }

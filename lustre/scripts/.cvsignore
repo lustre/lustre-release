@@ -14,3 +14,5 @@ lc_net.sh
 lc_modprobe.sh
 lc_hb.sh
 lc_cluman.sh
+lc_md.sh
+lc_lvm.sh
