@@ -387,7 +387,11 @@ declare -fx h2tcp
 
 h2elan() {
     if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
-        ID=`echo $1 | sed 's/[^0-9]*//g'`
+        if type __h2elan >/dev/null 2>&1; then
+            ID=$(__h2elan $1)
+        else
+            ID=`echo $1 | sed 's/[^0-9]*//g'`
+        fi
         echo $ID"@elan"
     fi
 }
