@@ -402,31 +402,47 @@ struct mgs_obd {
         struct semaphore                 mgs_sem;
 };
 
+struct md_lov_info;
+
+struct md_lov_ops {
+        int (*ml_read_objids)(struct obd_device *obd, struct md_lov_info *mli, 
+                              const void *ctxt);
+        int (*ml_write_objids)(struct obd_device *obd, struct md_lov_info *mli,
+                               const void *ctxt);
+};
 struct md_lov_info {
-        struct obd_device               *md_osc_obd; /* XXX lov_obd */
+        struct obd_device               *md_lov_obd; /* XXX lov_obd */
         struct obd_uuid                  md_lov_uuid;
-        struct obd_export               *md_osc_exp; /* XXX lov_exp */
+        struct obd_export               *md_lov_exp; /* XXX lov_exp */
         struct lov_desc                  md_lov_desc;
         obd_id                          *md_lov_objids;
         int                              md_lov_objids_size;
         __u32                            md_lov_objids_in_file;
         unsigned int                     md_lov_objids_dirty:1;
         int                              md_lov_nextid_set;
-        struct file                     *md_lov_objid_filp;
+        void                            *md_lov_objid_obj;
+        struct lu_fid                    md_lov_objid_fid;
         unsigned long                    md_lov_objids_valid:1;
+        int                              md_lov_max_mdsize;
+        int                              md_lov_max_cookiesize;
+        struct semaphore                 md_lov_orphan_recovery_sem;
+        struct md_lov_ops                *md_lov_ops;
 };
 
-#define mds_osc_obd             mds_lov_info.md_osc_obd
+#define mds_osc_obd             mds_lov_info.md_lov_obd
 #define mds_lov_uuid            mds_lov_info.md_lov_uuid
-#define mds_osc_exp             mds_lov_info.md_osc_exp
+#define mds_osc_exp             mds_lov_info.md_lov_exp
 #define mds_lov_desc            mds_lov_info.md_lov_desc
 #define mds_lov_objids          mds_lov_info.md_lov_objids
 #define mds_lov_objids_size     mds_lov_info.md_lov_objids_size
 #define mds_lov_objids_in_file  mds_lov_info.md_lov_objids_in_file
 #define mds_lov_objids_dirty    mds_lov_info.md_lov_objids_dirty
 #define mds_lov_nextid_set      mds_lov_info.md_lov_nextid_set
-#define mds_lov_objid_filp      mds_lov_info.md_lov_objid_filp
+#define mds_lov_objid_filp      mds_lov_info.md_lov_objid_obj
 #define mds_lov_objids_valid    mds_lov_info.md_lov_objids_valid
+#define mds_max_mdsize          mds_lov_info.md_lov_max_mdsize
+#define mds_max_cookiesize      mds_lov_info.md_lov_max_cookiesize
+#define mds_orphan_recovery_sem mds_lov_info.md_lov_orphan_recovery_sem
 
 struct mds_obd {
         /* NB this field MUST be first */
@@ -436,8 +452,6 @@ struct mds_obd {
         struct ptlrpc_service           *mds_readpage_service;
         struct vfsmount                 *mds_vfsmnt;
         cfs_dentry_t                    *mds_fid_de;
-        int                              mds_max_mdsize;
-        int                              mds_max_cookiesize;
         struct file                     *mds_rcvd_filp;
         spinlock_t                       mds_transno_lock;
         __u64                            mds_last_transno;
@@ -456,7 +470,6 @@ struct mds_obd {
         char                            *mds_profile;
         struct file                     *mds_health_check_filp;
         unsigned long                   *mds_client_bitmap;
-        struct semaphore                 mds_orphan_recovery_sem;
         struct upcall_cache             *mds_group_hash;
 
         struct lustre_quota_info         mds_quota_info;

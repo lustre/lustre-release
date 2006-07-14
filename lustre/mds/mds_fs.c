@@ -555,7 +555,8 @@ err_health_check:
             filp_close(mds->mds_health_check_filp, 0))
                 CERROR("can't close %s after error\n", HEALTH_CHECK);
 err_lov_objid:
-        if (mds->mds_lov_objid_filp && filp_close(mds->mds_lov_objid_filp, 0))
+        if (mds->mds_lov_objid_filp && 
+                filp_close((struct file *)mds->mds_lov_objid_filp, 0))
                 CERROR("can't close %s after error\n", LOV_OBJID);
 err_client:
         class_disconnect_exports(obd);
@@ -595,7 +596,7 @@ int mds_fs_cleanup(struct obd_device *obd)
                         CERROR("%s file won't close, rc=%d\n", LAST_RCVD, rc);
         }
         if (mds->mds_lov_objid_filp) {
-                rc = filp_close(mds->mds_lov_objid_filp, 0);
+                rc = filp_close((struct file *)mds->mds_lov_objid_filp, 0);
                 mds->mds_lov_objid_filp = NULL;
                 if (rc)
                         CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);

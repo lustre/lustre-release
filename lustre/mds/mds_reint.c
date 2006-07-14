@@ -186,7 +186,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                      "wrote trans #"LPU64" rc %d client %s at idx %u: err = %d",
                      transno, rc, mcd->mcd_uuid, med->med_lr_idx, err);
 
-        err = mds_lov_write_objids(obd);
+        err = mds_lov_write_objids(obd, &mds->mds_lov_info, NULL);
         if (err) {
                 log_pri = D_ERROR;
                 if (rc == 0)
