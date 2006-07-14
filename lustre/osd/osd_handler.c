@@ -1335,8 +1335,7 @@ static struct inode *osd_iget(struct osd_thread_info *info,
                 CERROR("bad inode\n");
 		iput(inode);
 		inode = ERR_PTR(-ENOENT);
-	} else if (inode->i_generation != id->oii_gen &&
-                   id->oii_gen != OSD_GEN_IGNORE) {
+	} else if (inode->i_generation != id->oii_gen) {
                 CERROR("stale inode\n");
 		iput(inode);
 		inode = ERR_PTR(-ESTALE);
@@ -1380,6 +1379,13 @@ static int osd_fid_lookup(const struct lu_context *ctx,
                         LASSERT(obj->oo_inode->i_sb == osd_sb(dev));
                         result = 0;
                 } else
+                        /*
+                         * If fid wasn't found in oi, inode-less object is
+                         * created, for which lu_object_exists() returns
+                         * false. This is used in a (frequent) case when
+                         * objects are created as locking anchors or
+                         * place holders for objects yet to be created.
+                         */
                         result = PTR_ERR(inode);
         } else if (result == -ENOENT)
                 result = 0;

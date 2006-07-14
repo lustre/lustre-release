@@ -25,6 +25,14 @@
  *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *   license text for more details.
  */
+/*
+ * oi uses two mechanisms to implement fid->cookie mapping:
+ *
+ *     - persistent index, where cookie is a record and fid is a key, and
+ *
+ *     - algorithmic mapping for "igif" fids.
+ *
+ */
 
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
@@ -167,7 +175,8 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         struct dt_device    *dev;
         struct osd_inode_id *id;
 
-        LASSERT(oi->oi_boot == NULL);
+        if (lu_fid_is_igif(fid))
+                return 0;
 
         idx = oi->oi_dir;
         dev = lu2dt_dev(idx->do_lu.lo_dev);
@@ -189,7 +198,8 @@ int osd_oi_delete(struct osd_thread_info *info,
         struct dt_object *idx;
         struct dt_device *dev;
 
-        LASSERT(oi->oi_boot == NULL);
+        if (lu_fid_is_igif(fid))
+                return 0;
 
         idx = oi->oi_dir;
         dev = lu2dt_dev(idx->do_lu.lo_dev);

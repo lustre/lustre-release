@@ -25,6 +25,11 @@
  *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *   license text for more details.
  */
+/*
+ * Object Index (oi) service runs in the bottom layer of server stack. In
+ * translates fid local to this service to the storage cookie that uniquely
+ * and efficiently identifies object (inode) of the underlying file system.
+ */
 
 #ifndef _OSD_OI_H
 #define _OSD_OI_H
@@ -40,23 +45,33 @@ struct osd_thread_info;
 struct lu_site;
 struct thandle;
 
-struct oi_boot_rec;
 struct osd_device;
 
+/*
+ * Object Index (oi) instance.
+ */
 struct osd_oi {
+        /*
+         * underlying index object, where fid->id mapping in stored.
+         */
         struct dt_object    *oi_dir;
+        /*
+         * semaphore, synchronizing access to oi.
+         */
         struct rw_semaphore  oi_lock;
-        struct oi_boot_rec  *oi_boot;
 };
 
+/*
+ * Storage cookie. Datum uniquely identifying inode on the underlying file
+ * system.
+ *
+ * XXX Currently this is ext2/ext3/ldiskfs specific thing. In the future this
+ * should be generalized to work with other local file systems.
+ */
 struct osd_inode_id {
-        __u64 oii_ino;
-        __u32 oii_gen;
-        __u32 oii_pad;
-};
-
-enum {
-        OSD_GEN_IGNORE = (__u32)~0
+        __u64 oii_ino; /* inode number */
+        __u32 oii_gen; /* inode generation */
+        __u32 oii_pad; /* alignment padding */
 };
 
 int  osd_oi_init(struct osd_thread_info *info,
