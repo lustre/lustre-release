@@ -263,7 +263,7 @@ test_5c() {
 	start_mds
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab before mount" && return 10
-	mount -t lustre `facet_nid mgs`:/wrong.$FSNAME $MOUNT || :
+	mount -t lustre $MGSNID:/wrong.$FSNAME $MOUNT || :
 	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab after failed mount" && return 11
 	umount_client $MOUNT
 	cleanup_nocli  || return $?
@@ -631,7 +631,7 @@ test_15() {
 	# load llite module on the client if it isn't in /lib/modules
 	do_facet client "$LCONF --nosetup --node client_facet $XMLCONFIG"
 	do_facet client "mount -t lustre -o $MOUNTOPT \
-		`facet_nid mds`:/mds_svc/client_facet $MOUNT" ||return $?
+		$MGSNID:/$FSNAME $MOUNT" ||return $?
 	echo "mount lustre on $MOUNT with $MOUNTLUSTRE: success"
 	[ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
 	check_mount || return 41
@@ -640,7 +640,7 @@ test_15() {
 	[ -f "$MOUNTLUSTRE" ] && rm -f $MOUNTLUSTRE
 	echo "mount lustre on ${MOUNT} without $MOUNTLUSTRE....."
 	do_node `hostname` mount -t lustre -o nettype=$NETTYPE,$MOUNTOPT \
-		`facet_nid mds`:/mds_svc/client_facet $MOUNT &&return $?
+		$MGSNID:/$FSNAME $MOUNT &&return $?
 	echo "mount lustre on $MOUNT without $MOUNTLUSTRE failed as expected"
 	cleanup || return $?
 	cleanup_15

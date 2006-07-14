@@ -189,7 +189,7 @@ zconf_mount() {
     if [ -n "$MOUNTOPT" ]; then
         OPTIONS="-o $MOUNTOPT"
     fi
-    local device=`facet_nid mgs`:/$FSNAME
+    local device=$MGSNID:/$FSNAME
     if [ -z "$mnt" -o -z "$FSNAME" ]; then
         echo Bad zconf mount command: opt=$OPTIONS dev=$device mnt=$mnt
         exit 1
@@ -414,20 +414,6 @@ facet_host() {
         fi
     fi
     echo -n ${!varname}
-}
-
-facet_nid() {
-    facet=$1
-    HOST=`facet_host $facet`
-    if [ -z "$HOST" ]; then
-    echo "The env variable ${facet}_HOST must be set."
-        exit 1
-    fi
-    if [ -z "$NETTYPE" ]; then
-        echo "The env variable NETTYPE must be set."
-        exit 1
-    fi
-    echo `h2$NETTYPE $HOST`
 }
 
 facet_active() {

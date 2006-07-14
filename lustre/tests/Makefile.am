@@ -5,7 +5,7 @@ AM_CFLAGS = $(LLCFLAGS)
 # LDADD := -lreadline -ltermcap # -lefence
 
 noinst_DATA =
-noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh
+noinst_SCRIPTS = leak_finder.pl llecho.sh llmount.sh llmountcleanup.sh test-framework.sh
 noinst_SCRIPTS += runfailure-mds runvmstat runfailure-net
 noinst_SCRIPTS += runfailure-ost runiozone runregression-net.sh runtests
 noinst_SCRIPTS += sanity.sh rundbench
