@@ -3,19 +3,42 @@
 dmesg -c >/dev/null
 dmesg -n 8
 
-modprobe mgs
-modprobe fid
-modprobe fld
-modprobe mgc
-modprobe osd
-modprobe ost
-modprobe obdfilter
-modprobe mdd
-modprobe cmm
-modprobe mdt
+
 modprobe mds
+modprobe osd
+modprobe obdfilter
+modprobe ost
+modprobe mgs
+modprobe lov
+modprobe ptlrpc
+modprobe obdecho
+modprobe llite
+modprobe mgc
+modprobe ldiskfs
+modprobe quotafmt_test
 modprobe osc
+modprobe mdt
+modprobe lquota
+modprobe quotactl_test
+modprobe quotacheck_test
+modprobe cmm
 modprobe mdc
+modprobe fsfilt_ldiskfs
+modprobe lvfs
+modprobe llog_test
+modprobe obdclass
+modprobe mdd
+modprobe fld
+modprobe fid
+modprobe lmv
+modprobe libcfs
+modprobe pingcli
+modprobe spingsrv
+modprobe pingsrv
+modprobe spingcli
+modprobe lnet
+modprobe ksocklnd
+
 
 HOST=`hostname`
 echo -1 >/proc/sys/lnet/debug
@@ -24,3 +47,4 @@ echo "/r/tmp/$HOST.debug" >/proc/sys/lnet/daemon_file
 #  To generate gdb debug file:
 rm -f /r/tmp/ogdb-`hostname`
 ./lctl modules > /r/tmp/ogdb-`hostname`
+

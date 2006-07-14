@@ -126,12 +126,24 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
                 struct inode *old_inode = lock->l_ast_data;
+/* FIXME: This is commented out by huanghua@clusterfs.com,
+ * if anything wrong, please restore that */
+/*
                 LASSERTF(old_inode->i_state & I_FREEING,
                          "Found existing inode %p/%lu/%u state %lu in lock: "
                          "setting data to %p/%lu/%u\n", old_inode,
                          old_inode->i_ino, old_inode->i_generation,
                          old_inode->i_state,
                          new_inode, new_inode->i_ino, new_inode->i_generation);
+*/
+                if (!(old_inode->i_state & I_FREEING)) {
+                        CERROR("Found existing inode %p/%lu/%u state %lu in lock: "
+                         "setting data to %p/%lu/%u\n", old_inode,
+                         old_inode->i_ino, old_inode->i_generation,
+                         old_inode->i_state,
+                         new_inode, new_inode->i_ino, new_inode->i_generation);
+                        iput(old_inode);
+                }
         }
 #endif
         lock->l_ast_data = data;
@@ -675,9 +687,11 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */
-        if (fid_is_sane(&op_data->fid2) && 
-                        !it_disposition(it, DISP_OPEN_CREATE)) {
-                it_set_disposition(it, DISP_ENQ_COMPLETE);
+        if (fid_is_sane(&op_data->fid2)){
+/* FIXME: This is commented out by huanghua@clusterfs.com,
+ * if anything wrong, please restore that */
+//                        !it_disposition(it, DISP_OPEN_CREATE)) {
+//                it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
                 if (memcmp(&op_data->fid2, &mdt_body->fid1, sizeof(op_data->fid2)))
                         RETURN(-ESTALE);

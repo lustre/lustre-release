@@ -1068,7 +1068,8 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
         if (h->mh_opc != MDS_DISCONNECT &&
-            h->mh_opc != MDS_READPAGE) {
+            h->mh_opc != MDS_READPAGE &&
+            h->mh_opc != LDLM_ENQUEUE) {
                 /* FIXME: fake untill journal callback is OK.*/
                 mdt_update_last_transno(info, result);
         }
