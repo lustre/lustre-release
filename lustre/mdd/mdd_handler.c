@@ -314,7 +314,6 @@ out:
 struct lu_device_operations mdd_lu_ops = {
 	.ldo_object_alloc   = mdd_object_alloc,
         .ldo_process_config = mdd_process_config,
-        .ldo_notify         = mdd_notify
 };
 
 static struct lu_object_operations mdd_lu_obj_ops = {
@@ -1018,6 +1017,7 @@ static int mdd_close(const struct lu_context *ctxt, struct md_object *obj)
 struct md_device_operations mdd_ops = {
         .mdo_root_get       = mdd_root_get,
         .mdo_statfs         = mdd_statfs,
+        .mdo_notify         = mdd_notify
 };
 
 static struct md_dir_operations mdd_dir_ops = {

@@ -779,7 +779,6 @@ int md_lov_start_synchronize(struct obd_device *obd, struct md_lov_info *mli,
            disconnect the LOV.  This of course means a cleanup won't
            finish for as long as the sync is blocking. */
         class_incref(obd);
-#if 0
         if (nonblock) {
                 /* Synchronize in the background */
                 rc = cfs_kernel_thread(mds_lov_synchronize, mlsi,
@@ -797,9 +796,6 @@ int md_lov_start_synchronize(struct obd_device *obd, struct md_lov_info *mli,
         } else {
                 rc = __mds_lov_synchronize((void *)mlsi);
         }
-#else
-                rc = __mds_lov_synchronize((void *)mlsi);
-#endif
         RETURN(rc);
 }
 EXPORT_SYMBOL(md_lov_start_synchronize);

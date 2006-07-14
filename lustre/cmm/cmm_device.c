@@ -77,9 +77,22 @@ static int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
         RETURN (rc);
 }
 
+int cmm_notify(struct md_device *md, struct obd_device *watched, 
+               enum obd_notify_event ev, void *data)
+{
+        struct cmm_device *cmm_dev = md2cmm_dev(md);
+        int rc;
+
+        rc = cmm_child_ops(cmm_dev)->mdo_notify(cmm_dev->cmm_child, watched,
+                                                ev, data);
+
+        return rc;
+}
+
 static struct md_device_operations cmm_md_ops = {
         .mdo_root_get       = cmm_root_get,
         .mdo_statfs         = cmm_statfs,
+        .mdo_notify         = cmm_notify
 };
 
 extern struct lu_device_type mdc_device_type;
@@ -188,24 +201,9 @@ static int cmm_process_config(const struct lu_context *ctx,
         RETURN(err);
 }
 
-int cmm_notify(const struct lu_context *ctx, struct lu_device *d,
-               struct obd_device *watched, enum obd_notify_event ev, 
-               void *data)
-{
-        struct cmm_device *m = lu2cmm_dev(d);
-        struct lu_device *next = md2lu_dev(m->cmm_child);
-        int err;
-        ENTRY;
-
-        err = next->ld_ops->ldo_notify(ctx, next, watched, ev, data);
-
-        RETURN(err);
-        
-}
 static struct lu_device_operations cmm_lu_ops = {
 	.ldo_object_alloc   = cmm_object_alloc,
         .ldo_process_config = cmm_process_config,
-        .ldo_notify         = cmm_notify
 };
 
 /* --- lu_device_type operations --- */

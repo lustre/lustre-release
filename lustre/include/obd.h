@@ -28,6 +28,7 @@
 #define IOC_MDC_MAX_NR       50
 
 #include <lustre/lustre_idl.h>
+#include <lu_object.h>
 #include <lustre_lib.h>
 #include <lustre_export.h>
 #include <lustre_quota.h>
@@ -426,6 +427,7 @@ struct md_lov_info {
         int                              md_lov_max_mdsize;
         int                              md_lov_max_cookiesize;
         struct semaphore                 md_lov_orphan_recovery_sem;
+        struct lu_context                md_lov_ctxt;
         struct md_lov_ops                *md_lov_ops;
 };
 

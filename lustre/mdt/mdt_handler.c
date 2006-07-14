@@ -2543,24 +2543,15 @@ static int mdt_notify(struct obd_device *obd, struct obd_device *watched,
                       enum obd_notify_event ev, void *data)
 {
         struct mdt_device *mdt;
-        struct lu_device *next;
-        struct lu_context ctxt;
+        struct md_device *next;
         int rc;
         ENTRY;
 
-        /*FIXME: allocation here may have some problems :( */
-        rc = lu_context_init(&ctxt);
-        if (rc)
-                GOTO(out, rc);
-
         mdt = mdt_dev(obd->obd_lu_dev);
-        next = md2lu_dev(mdt->mdt_child);
+        next = mdt->mdt_child;
 
-        lu_context_enter(&ctxt);
-        rc = next->ld_ops->ldo_notify(&ctxt, next, watched, ev, data);
-        lu_context_exit(&ctxt);
-out:
-        lu_context_fini(&ctxt);
+        rc = next->md_ops->mdo_notify(next, watched, ev, data);
+        
         RETURN(rc);
 }
 

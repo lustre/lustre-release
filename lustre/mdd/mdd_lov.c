@@ -143,6 +143,7 @@ int mdd_lov_fini(const struct lu_context *ctxt, struct mdd_device *mdd)
                 mli->md_lov_exp = NULL;
         }
         
+        lu_context_fini(&mli->md_lov_ctxt);
         dt_object_fini(mli->md_lov_objid_obj);
         return 0;
 }
@@ -182,16 +183,21 @@ int mdd_lov_init(const struct lu_context *ctxt, struct mdd_device *mdd,
         rc = md_lov_connect(obd, lov_info, lov_name, 
                             &obd->obd_uuid, &mdd_lov_ops, ctxt);
         if (rc)
+                GOTO(out, rc);
+        
+        rc = lu_context_init(&lov_info->md_lov_ctxt);
+out:
+        if (rc)
                 mdd_lov_fini(ctxt, mdd);
+
         RETURN(rc);
 }
 
-int mdd_notify(const struct lu_context *ctxt, struct lu_device *ld,
-               struct obd_device *watched, enum obd_notify_event ev,
-               void *data)
+int mdd_notify(struct md_device *md, struct obd_device *watched, 
+               enum obd_notify_event ev, void *data)
 {
-        struct mdd_device *mdd = lu2mdd_dev(ld);
-        struct obd_device *obd = ld->ld_site->ls_top_dev->ld_obd;
+	struct mdd_device *mdd = lu2mdd_dev(&md->md_lu_dev);
+        struct obd_device *obd = md2lu_dev(md)->ld_site->ls_top_dev->ld_obd;
         int rc = 0;
         ENTRY;
 
@@ -201,10 +207,13 @@ int mdd_notify(const struct lu_context *ctxt, struct lu_device *ld,
                         rc = 0;
                 RETURN(rc);
         }
-
-        rc = md_lov_start_synchronize(obd, &mdd->mdd_lov_info, watched, data, 
-                                      !(ev == OBD_NOTIFY_SYNC), ctxt);
-
+        
+        lu_context_enter(&mdd->mdd_lov_info.md_lov_ctxt);
+        rc = md_lov_start_synchronize(obd, &mdd->mdd_lov_info, watched, data,
+                                      !(ev == OBD_NOTIFY_SYNC),
+                                      &mdd->mdd_lov_info.md_lov_ctxt);
+        lu_context_exit(&mdd->mdd_lov_info.md_lov_ctxt);
+        
         RETURN(rc);
 }
 
