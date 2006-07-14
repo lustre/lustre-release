@@ -89,45 +89,69 @@ static void mdt_mfd_put(struct mdt_file_data *mfd)
         }
 }
 
-static int mdt_object_open(struct mdt_thread_info *info,
-                           struct mdt_object *o, 
-                           int flags)
+static int mdt_mfd_open(struct mdt_thread_info *info,
+                        struct mdt_object *o, 
+                        int flags, struct ldlm_reply *rep)
 {
         struct mdt_export_data *med;
         struct mdt_file_data   *mfd;
         struct mdt_body        *repbody;
-        struct lov_mds_md      *lmm;
+        struct lov_mds_md      *lmm = NULL;
+        struct lu_attr         *attr = &info->mti_attr;
+        struct ptlrpc_request  *req = mdt_info_req(info);
         int                     rc = 0;
         ENTRY;
 
         med = &mdt_info_req(info)->rq_export->exp_mdt_data;
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
+        if (req_capsule_has_field(&info->mti_pill, &RMF_MDT_MD))
+                lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
 
-        rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o),
-                         &info->mti_attr);
-        if (rc == -EREMOTE) {
-                repbody->fid1 = *mdt_object_fid(o);
-                repbody->valid |= OBD_MD_FLID;
-                /*FIXME: should be return 0 or -EREMOTE? */
-                /* also in mdt_reint:mdt_md_create() */
+        rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), attr);
+        if (rc == 0) {
+                if (!S_ISREG(attr->la_mode) &&
+                    !S_ISDIR(attr->la_mode) &&
+                     (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))
+                        /* If client supports this, do not return open handle
+                        *  for special device nodes */
+                        RETURN(0);
+
+                if (S_ISDIR(attr->la_mode)) {
+                        if (flags & MDS_OPEN_CREAT || flags & FMODE_WRITE) {
+                                /* we are trying to create or 
+                                 * write an existing dir. */
+                                rc = -EISDIR;
+                        }
+                } else if (flags & MDS_OPEN_DIRECTORY) 
+                        rc = -ENOTDIR;
         }
-        if (rc != 0)
+        intent_set_disposition(rep, DISP_OPEN_OPEN);
+        if (rc != 0) {
+                if (rc == -EREMOTE) {
+                        repbody->fid1 = *mdt_object_fid(o);
+                        repbody->valid |= OBD_MD_FLID;
+                        /*FIXME: should be return 0 or -EREMOTE? */
+                        /* also in mdt_reint:mdt_md_create() */
+                }
                 RETURN(rc);
+        }
 
-        mdt_pack_attr2body(repbody, &info->mti_attr, mdt_object_fid(o));
+        mdt_pack_attr2body(repbody, attr, mdt_object_fid(o));
 
 /*
-        rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
-                          lmm, info->mti_mdt->mdt_max_mdsize, "lov");
-        if (rc < 0)
-                RETURN(-EINVAL);
-        if (S_ISDIR(info->mti_attr.la_mode))
-                repbody->valid |= OBD_MD_FLDIREA;
-        else
-                repbody->valid |= OBD_MD_FLEASIZE;
-        repbody->eadatasize = rc;
-        rc = 0;
+        if (lmm) {
+                rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
+                                  lmm, info->mti_mdt->mdt_max_mdsize, 
+                                  XATTR_NAME_LOV);
+                if (rc < 0)
+                        RETURN(-EINVAL);
+                if (S_ISDIR(attr->la_mode))
+                        repbody->valid |= OBD_MD_FLDIREA;
+                else
+                        repbody->valid |= OBD_MD_FLEASIZE;
+                repbody->eadatasize = rc;
+                rc = 0;
+        }
 */
         if (flags & FMODE_WRITE) {
                 /*mds_get_write_access*/
@@ -170,8 +194,7 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
         if (!IS_ERR(o)) {
                 if (mdt_object_exists(info->mti_ctxt, &o->mot_obj.mo_lu)) {
                         intent_set_disposition(rep, DISP_LOOKUP_POS);
-                        rc = mdt_object_open(info, o, flags);
-                        intent_set_disposition(rep, DISP_OPEN_OPEN);
+                        rc = mdt_mfd_open(info, o, flags ,rep);
                 } else {
                         intent_set_disposition(rep, DISP_LOOKUP_NEG);
                         rc = -ENOENT;
@@ -185,10 +208,15 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
 
 int mdt_pin(struct mdt_thread_info* info)
 {
+        struct mdt_body *body;
         int rc;
         ENTRY;
-        rc = mdt_open_by_fid(info, &info->mti_body->fid1, 
-                             info->mti_body->flags, NULL);
+        
+        rc = req_capsule_pack(&info->mti_pill);
+        if (rc == 0) {
+                body = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
+                rc = mdt_open_by_fid(info, &body->fid1, body->flags, NULL);
+        }
         RETURN(rc);
 }
 
@@ -227,7 +255,6 @@ int mdt_reint_open(struct mdt_thread_info *info)
         struct mdt_lock_handle *lh;
         struct ldlm_reply      *ldlm_rep;
         struct ptlrpc_request  *req = mdt_info_req(info);
-        struct mdt_body        *body;
         struct lu_fid          *child_fid = &info->mti_tmp_fid1;
         int                     result;
         int                     created = 0;
@@ -239,7 +266,6 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         /*TODO: MDS_CHECK_RESENT */;
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
-        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
         if (strlen(rr->rr_name) == 0) {
                 /* partial remote open */
@@ -299,11 +325,10 @@ int mdt_reint_open(struct mdt_thread_info *info)
         }
 
         /* Open it now. */
-        result = mdt_object_open(info, child, info->mti_attr.la_flags);
-        intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
-        GOTO(destroy_child, result);
+        result = mdt_mfd_open(info, child, info->mti_attr.la_flags, ldlm_rep);
+        GOTO(finish_open, result);
 
-destroy_child:
+finish_open:
         if (created) {
                 if (result != 0 && result != -EREMOTE) {
                         mdo_unlink(info->mti_ctxt, mdt_object_child(parent),

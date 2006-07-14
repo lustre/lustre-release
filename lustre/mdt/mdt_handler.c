@@ -2721,7 +2721,7 @@ DEF_MDT_HNDL_F(HABEO_CORPUS,              READPAGE,     mdt_readpage),
 DEF_MDT_HNDL_F(0,                         REINT,        mdt_reint),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, CLOSE,        mdt_close),
 DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),
-DEF_MDT_HNDL_0(0,                         PIN,          mdt_pin),
+DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),
 DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),
 DEF_MDT_HNDL_0(0,                         QUOTACHECK,   mdt_handle_quotacheck),
 DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_handle_quotactl)
