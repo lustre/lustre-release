@@ -2525,7 +2525,7 @@ static int mdt_destroy_export(struct obd_export *export)
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
 
-                rc = mdt_mfd_close(&ctxt, mfd, 0);
+                rc = mdt_mfd_close(&ctxt, mfd);
 
                 if (rc)
                         CDEBUG(D_INODE|D_IOCTL, "Error closing file: %d\n", rc);

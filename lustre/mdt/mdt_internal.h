@@ -91,11 +91,10 @@ struct mdt_object;
 /* file data for open files on MDS */
 struct mdt_file_data {
         struct portals_handle mfd_handle; /* must be first */
-        atomic_t              mfd_refcount;
-        struct list_head      mfd_list; /* protected by med_open_lock */
-        __u64                 mfd_xid;
-        int                   mfd_mode;
-        struct mdt_object    *mfd_object;
+        struct list_head      mfd_list;   /* protected by med_open_lock */
+        __u64                 mfd_xid;    /* xid of the open request */
+        int                   mfd_mode;   /* open mode provided by client */
+        struct mdt_object    *mfd_object; /* point to opened object */
 };
 
 struct mdt_device {
@@ -345,8 +344,7 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
 int mdt_reint_open(struct mdt_thread_info *info);
 
 int mdt_mfd_close(const struct lu_context *ctxt,
-                  struct mdt_file_data *mfd,
-                  int unlink_orphan);
+                  struct mdt_file_data *mfd);
 
 int mdt_close(struct mdt_thread_info *info);
 

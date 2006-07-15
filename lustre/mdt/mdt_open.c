@@ -33,22 +33,13 @@
 
 #include "mdt_internal.h"
 
-/*
- * MDS file data handling: file data holds a handle for a file opened
- * by a client.
- */
-
+/* we do nothing because we do not have refcount now */
 static void mdt_mfd_get(void *mfdp)
 {
-        struct mdt_file_data *mfd = mfdp;
-
-        atomic_inc(&mfd->mfd_refcount);
-        CDEBUG(D_INFO, "GETting mfd %p : new refcount %d\n", mfd,
-               atomic_read(&mfd->mfd_refcount));
 }
 
-/* Create a new mdt_file_data struct. 
- * reference is set to 1 */
+/* Create a new mdt_file_data struct, initialize it, 
+ * and insert it to global hash table */ 
 static struct mdt_file_data *mdt_mfd_new(void)
 {
         struct mdt_file_data *mfd;
@@ -56,8 +47,6 @@ static struct mdt_file_data *mdt_mfd_new(void)
 
         OBD_ALLOC_PTR(mfd);
         if (mfd != NULL) {
-                atomic_set(&mfd->mfd_refcount, 1);
-
                 INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
                 INIT_LIST_HEAD(&mfd->mfd_list);
                 class_handle_hash(&mfd->mfd_handle, mdt_mfd_get);
@@ -67,8 +56,7 @@ static struct mdt_file_data *mdt_mfd_new(void)
         RETURN(mfd);
 }
 
-/* Get a new reference on the mfd pointed to by handle, if handle is still
- * valid.  Caller must drop reference with mdt_mfd_put(). */
+/* Find the mfd pointed to by handle in global hash table. */
 static struct mdt_file_data *mdt_handle2mfd(const struct lustre_handle *handle)
 {
         ENTRY;
@@ -76,22 +64,16 @@ static struct mdt_file_data *mdt_handle2mfd(const struct lustre_handle *handle)
         RETURN(class_handle2object(handle->cookie));
 }
 
-/* Drop mfd reference, freeing struct if this is the last one. */
-static void mdt_mfd_put(struct mdt_file_data *mfd)
+/* free mfd */
+static void mdt_mfd_free(struct mdt_file_data *mfd)
 {
-        CDEBUG(D_INFO, "PUTting mfd %p : new refcount %d\n", mfd,
-               atomic_read(&mfd->mfd_refcount) - 1);
-        LASSERT(atomic_read(&mfd->mfd_refcount) > 0 &&
-                atomic_read(&mfd->mfd_refcount) < 0x5a5a);
-        if (atomic_dec_and_test(&mfd->mfd_refcount)) {
-                LASSERT(list_empty(&mfd->mfd_handle.h_link));
-                OBD_FREE_PTR(mfd);
-        }
+        LASSERT(list_empty(&mfd->mfd_handle.h_link));
+        OBD_FREE_PTR(mfd);
 }
 
 static int mdt_mfd_open(struct mdt_thread_info *info,
                         struct mdt_object *o, 
-                        int flags, struct ldlm_reply *rep)
+                        int flags)
 {
         struct mdt_export_data *med;
         struct mdt_file_data   *mfd;
@@ -102,7 +84,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         int                     rc = 0;
         ENTRY;
 
-        med = &mdt_info_req(info)->rq_export->exp_mdt_data;
+        med = &req->rq_export->exp_mdt_data;
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         if (req_capsule_has_field(&info->mti_pill, &RMF_MDT_MD))
                 lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
@@ -116,8 +98,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                         *  for special device nodes */
                         RETURN(0);
 
+                /* FIXME:maybe this can be done earlier? */
                 if (S_ISDIR(attr->la_mode)) {
-                        if (flags & MDS_OPEN_CREAT || flags & FMODE_WRITE) {
+                        if (flags & (MDS_OPEN_CREAT | FMODE_WRITE)) {
                                 /* we are trying to create or 
                                  * write an existing dir. */
                                 rc = -EISDIR;
@@ -125,13 +108,10 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 } else if (flags & MDS_OPEN_DIRECTORY) 
                         rc = -ENOTDIR;
         }
-        intent_set_disposition(rep, DISP_OPEN_OPEN);
         if (rc != 0) {
                 if (rc == -EREMOTE) {
                         repbody->fid1 = *mdt_object_fid(o);
                         repbody->valid |= OBD_MD_FLID;
-                        /*FIXME: should be return 0 or -EREMOTE? */
-                        /* also in mdt_reint:mdt_md_create() */
                 }
                 RETURN(rc);
         }
@@ -174,29 +154,24 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 spin_unlock(&med->med_open_lock);
 
                 repbody->handle.cookie = mfd->mfd_handle.h_cookie;
-        } else {
-                CERROR("mdt: out of memory\n");
+        } else 
                 rc = -ENOMEM;
-        }
 
         RETURN(rc);
 }
 
 int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
-                    __u32 flags, struct ldlm_reply *rep)
+                    __u32 flags)
 {
         struct mdt_object *o;
         int rc;
         ENTRY;
 
-        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid);
         if (!IS_ERR(o)) {
                 if (mdt_object_exists(info->mti_ctxt, &o->mot_obj.mo_lu)) {
-                        intent_set_disposition(rep, DISP_LOOKUP_POS);
-                        rc = mdt_mfd_open(info, o, flags ,rep);
+                        rc = mdt_mfd_open(info, o, flags);
                 } else {
-                        intent_set_disposition(rep, DISP_LOOKUP_NEG);
                         rc = -ENOENT;
                 }
                 mdt_object_put(info->mti_ctxt, o);
@@ -215,7 +190,7 @@ int mdt_pin(struct mdt_thread_info* info)
         rc = req_capsule_pack(&info->mti_pill);
         if (rc == 0) {
                 body = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
-                rc = mdt_open_by_fid(info, &body->fid1, body->flags, NULL);
+                rc = mdt_open_by_fid(info, &body->fid1, body->flags);
         }
         RETURN(rc);
 }
@@ -261,17 +236,17 @@ int mdt_reint_open(struct mdt_thread_info *info)
         struct mdt_reint_record *rr = &info->mti_rr;
         ENTRY;
 
+        if (strlen(rr->rr_name) == 0) {
+                /* reint partial remote open */
+                RETURN(mdt_open_by_fid(info, rr->rr_fid1, 
+                                       info->mti_attr.la_flags));
+        }
+
         /* we now have no resent message, so it must be an intent */
+        /*TODO: remove this and add MDS_CHECK_RESENT if resent enabled*/
         LASSERT(info->mti_pill.rc_fmt == &RQF_LDLM_INTENT_OPEN);
 
-        /*TODO: MDS_CHECK_RESENT */;
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
-
-        if (strlen(rr->rr_name) == 0) {
-                /* partial remote open */
-                RETURN(mdt_open_by_fid(info, rr->rr_fid1, 
-                                       info->mti_attr.la_flags, ldlm_rep));
-        }
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
         lh = &info->mti_lh[MDT_LH_PARENT];
@@ -279,7 +254,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
         parent = mdt_object_find_lock(info, rr->rr_fid1, lh, 
                                       MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent)) {
-                /* FIXME: just simulate child not exist */
+                /* just simulate child not existing */
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
                 GOTO(out, result = PTR_ERR(parent));
         }
@@ -311,7 +286,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 GOTO(out_parent, result = PTR_ERR(child));
 
         if (result == -ENOENT) {
-                /* not found and with MDS_OPEN_CREAT: let's create something */
+                /* not found and with MDS_OPEN_CREAT: let's create it */
                 result = mdo_create(info->mti_ctxt,
                                     mdt_object_child(parent),
                                     rr->rr_name,
@@ -325,19 +300,15 @@ int mdt_reint_open(struct mdt_thread_info *info)
         }
 
         /* Open it now. */
-        result = mdt_mfd_open(info, child, info->mti_attr.la_flags, ldlm_rep);
+        result = mdt_mfd_open(info, child, info->mti_attr.la_flags);
+        intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
         GOTO(finish_open, result);
 
 finish_open:
-        if (created) {
-                if (result != 0 && result != -EREMOTE) {
-                        mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
-                                   mdt_object_child(child), rr->rr_name);
-                } else {
-                        /* barrier with other thread */
-                        mdt_lock_new_child(info, child, NULL);
-                }
-        }
+        if (result != 0 && result != -EREMOTE && created) {
+                mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
+                           mdt_object_child(child), rr->rr_name);
+        } 
 out_child:
         mdt_object_put(info->mti_ctxt, child);
 out_parent:
@@ -347,8 +318,7 @@ out:
 }
 
 int mdt_mfd_close(const struct lu_context *ctxt,
-                  struct mdt_file_data *mfd, 
-                  int unlink_orphan)
+                  struct mdt_file_data *mfd)
 {
         ENTRY;
 
@@ -363,7 +333,7 @@ int mdt_mfd_close(const struct lu_context *ctxt,
          */
         mdt_object_put(ctxt, mfd->mfd_object);
 
-        mdt_mfd_put(mfd);
+        mdt_mfd_free(mfd);
         RETURN(0);
 }
 
@@ -389,14 +359,10 @@ int mdt_close(struct mdt_thread_info *info)
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
         
-                /* mdt_handle2mfd increases reference count on mfd,
-                 * we must drop it here. */
-                mdt_mfd_put(mfd);
-
                 rc = mdt_handle_last_unlink(info, mfd->mfd_object,
                                             &RQF_MDS_CLOSE_LAST);
 
-                rc = mdt_mfd_close(info->mti_ctxt, mfd, 1);
+                rc = mdt_mfd_close(info->mti_ctxt, mfd);
         }
         RETURN(rc);
 }
