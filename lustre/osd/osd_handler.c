@@ -185,8 +185,9 @@ static struct dt_index_operations       osd_index_ops;
 static struct dt_index_operations       osd_index_compat_ops;
 
 struct osd_thandle {
-        struct thandle  ot_super;
-        handle_t       *ot_handle;
+        struct thandle          ot_super;
+        handle_t               *ot_handle;
+        struct journal_callback ot_jcb;
 };
 
 /*
@@ -365,6 +366,23 @@ static int osd_param_is_sane(const struct osd_device *dev,
         return param->tp_credits <= osd_journal(dev)->j_max_transaction_buffers;
 }
 
+static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
+{
+        struct osd_thandle *oh = container_of0(jcb, struct osd_thandle, ot_jcb);
+        struct thandle     *th = &oh->ot_super;
+
+        /* there is no thread context available */
+        dt_txn_hook_commit(&th->th_ctx, th->th_dev, th);
+
+        if (th->th_dev != NULL) {
+                lu_device_put(&th->th_dev->dd_lu_dev);
+                th->th_dev = NULL;
+        }
+
+        lu_context_fini(&th->th_ctx);
+        OBD_FREE_PTR(oh);
+}
+
 static struct thandle *osd_trans_start(const struct lu_context *ctx,
                                        struct dt_device *d,
                                        struct txn_param *p)
@@ -383,6 +401,9 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
 
         if (osd_param_is_sane(dev, p)) {
                 OBD_ALLOC_PTR(oh);
+                /*TODO: it seems we need something like that:
+                 * OBD_SLAB_ALLOC(oh, oh_cache, GFP_NOFS, sizeof *oh);
+                 */
                 if (oh != NULL) {
                         /*
                          * XXX temporary stuff. Some abstraction layer should
@@ -394,6 +415,10 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
                                 th = &oh->ot_super;
                                 th->th_dev = d;
                                 lu_device_get(&d->dd_lu_dev);
+                                /* add commit callback */
+                                lu_context_init(&th->th_ctx);
+                                journal_callback_set(jh, osd_trans_commit_cb,
+                                                     (struct journal_callback *)&oh->ot_jcb);
                         } else {
                                 OBD_FREE_PTR(oh);
                                 th = (void *)jh;
@@ -428,10 +453,12 @@ static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
                         CERROR("Failure to stop transaction: %d\n", result);
                 oh->ot_handle = NULL;
         }
+/*
         if (th->th_dev != NULL) {
                 lu_device_put(&th->th_dev->dd_lu_dev);
                 th->th_dev = NULL;
         }
+*/
         EXIT;
 }
 
