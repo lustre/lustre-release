@@ -952,15 +952,20 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
 }
 
 /* FIXME: fake untill journal callback is OK.*/
+struct lu_context_key mdt_txn_key;
+
 int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
 {
-        __u64 last_transno;
-        __u64 last_committed;
         struct mdt_device *mdt = info->mti_mdt;
         struct ptlrpc_request * req = mdt_info_req(info);
+        struct mdt_txn_info *txi;
+        __u64 last_transno;
+        __u64 last_committed;
 
         LASSERT(mdt != NULL);
+        last_committed = mdt->mdt_last_committed;
 
+#if 0
         last_transno = req->rq_reqmsg->transno;
         if (rc != 0) {
                 if (last_transno != 0) {
@@ -982,9 +987,11 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
                 
         /*last_committed = (mdt->mdt_last_committed);*/
         last_committed = last_transno;
-
+#endif
+        txi = lu_context_key_get(info->mti_ctxt, &mdt_txn_key);
+        last_transno = txi->txi_transno;
         CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n", 
-                last_transno, last_committed);
+               last_transno, last_committed);
         req->rq_repmsg->transno = req->rq_transno = last_transno;
         req->rq_repmsg->last_xid = req->rq_xid;
         req->rq_repmsg->last_committed = last_committed;
@@ -1067,6 +1074,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         }
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
+        
         if (h->mh_opc != MDS_DISCONNECT &&
             h->mh_opc != MDS_READPAGE &&
             h->mh_opc != LDLM_ENQUEUE) {
@@ -2562,7 +2570,7 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_disconnect     = mdt_obd_disconnect,
         .o_init_export    = mdt_init_export,    /* By Huang Hua*/
         .o_destroy_export = mdt_destroy_export, /* By Huang Hua*/
-        .o_notify         = mdt_notify,
+        //.o_notify         = mdt_notify,
 };
 
 static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)
@@ -2626,14 +2634,48 @@ static struct lu_context_key mdt_thread_key = {
         .lct_fini = mdt_thread_fini
 };
 
+static void *mdt_txn_init(const struct lu_context *ctx,
+                             struct lu_context_key *key)
+{
+        struct mdt_txn_info *txi;
+
+        /*
+         * check that no high order allocations are incurred.
+         */
+        CLASSERT(CFS_PAGE_SIZE >= sizeof *txi);
+        OBD_ALLOC_PTR(txi);
+        if (txi == NULL)
+                txi = ERR_PTR(-ENOMEM);
+        return txi;
+}
+
+static void mdt_txn_fini(const struct lu_context *ctx,
+                            struct lu_context_key *key, void *data)
+{
+        struct mdt_txn_info *txi = data;
+        OBD_FREE_PTR(txi);
+}
+
+struct lu_context_key mdt_txn_key = {
+        .lct_init = mdt_txn_init,
+        .lct_fini = mdt_txn_fini
+};
+
+
 static int mdt_type_init(struct lu_device_type *t)
 {
-        return lu_context_key_register(&mdt_thread_key);
+        int rc;
+
+        rc = lu_context_key_register(&mdt_thread_key);
+        if (rc == 0)
+                rc = lu_context_key_register(&mdt_txn_key);
+        return rc;
 }
 
 static void mdt_type_fini(struct lu_device_type *t)
 {
         lu_context_key_degister(&mdt_thread_key);
+        lu_context_key_degister(&mdt_txn_key);
 }
 
 static struct lu_device_type_operations mdt_device_type_ops = {

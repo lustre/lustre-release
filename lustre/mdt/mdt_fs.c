@@ -394,6 +394,7 @@ out:
 /*
  * last_rcvd update callbacks 
  */
+extern struct lu_context_key mdt_txn_key;
 
 #define MDT_TXN_LAST_RCVD_CREDITS 1
 /* add credits for last_rcvd update */
@@ -404,26 +405,53 @@ static int mdt_txn_start_cb(const struct lu_context *ctx,
         param->tp_credits += MDT_TXN_LAST_RCVD_CREDITS;
         return 0;
 }
+
 /* Update last_rcvd records with latests transaction data */
 static int mdt_txn_stop_cb(const struct lu_context *ctx,
                            struct dt_device *dev,
                            struct thandle *txn, void *cookie)
 {
-/*
         struct mdt_device *mdt = cookie;
+        struct mdt_txn_info *txni, *thdi;
+
+        /* transno in two contexts - for commit_cb and for thread */
+        txni = lu_context_key_get(&txn->th_ctx, &mdt_txn_key);
+        thdi = lu_context_key_get(ctx, &mdt_txn_key);
+        /*TODO: checks for recovery cases, see mds_finish_transno */
+        spin_lock(&mdt->mdt_transno_lock);
+        if (thdi->txi_transno == 0) {
+                thdi->txi_transno = ++ mdt->mdt_last_transno;
+        } else {
+                /* replay */
+                if (thdi->txi_transno > mdt->mdt_last_transno)
+                        mdt->mdt_last_transno = thdi->txi_transno;
+        }
+        spin_unlock(&mdt->mdt_transno_lock);
+
+        txni->txi_transno = thdi->txi_transno;
+/*
         TODO: write last_rcvd
 */
         return 0;
 }
-/*
- * commit callback, need to update last_commited value */
+
+/* commit callback, need to update last_commited value */
 static int mdt_txn_commit_cb(const struct lu_context *ctx,
                              struct dt_device *dev,
                              struct thandle *txn, void *cookie)
 {
         struct mdt_device *mdt = cookie;
-        /* TODO: update mdt_last_commited, need current transno here */
-        ++ mdt->mdt_last_committed;
+        struct obd_device *obd = md2lu_dev(&mdt->mdt_md_dev)->ld_obd;
+        struct mdt_txn_info *txi;
+
+        txi = lu_context_key_get(&txn->th_ctx, &mdt_txn_key);
+        if (txi->txi_transno > mdt->mdt_last_committed) {
+                mdt->mdt_last_committed = txi->txi_transno;
+                ptlrpc_commit_replies (obd);
+        }
+        CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
+               obd->obd_name, txi->txi_transno);
+
         return 0;
 }
  

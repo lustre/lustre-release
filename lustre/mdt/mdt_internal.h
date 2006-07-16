@@ -247,6 +247,12 @@ struct mdt_thread_info {
                 char               ns_name[48];
         } mti_u;
 };
+/*
+ * Info allocated per-transaction.
+ */
+struct mdt_txn_info {
+        __u64  txi_transno;
+};
 
 static inline struct md_device_operations *mdt_child_ops(struct mdt_device * m)
 {
