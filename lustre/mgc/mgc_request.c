@@ -224,6 +224,7 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         RETURN(rc);
 }
 
+#if 0
 /* Failsafe FIXME remove this */
 static void config_log_end_all(void)
 {
@@ -241,7 +242,7 @@ static void config_log_end_all(void)
         spin_unlock(&config_list_lock);
         EXIT;
 }
-
+#endif
 
 /********************** class fns **********************/
 
@@ -346,9 +347,6 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         case OBD_CLEANUP_EARLY: 
                 break;
         case OBD_CLEANUP_EXPORTS:
-                if (obd->obd_type->typ_refcnt <= 2) 
-                        /* Only for the last mgc */
-                        config_log_end_all();
                 break;
         case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
@@ -371,7 +369,7 @@ static int mgc_cleanup(struct obd_device *obd)
         
         /* COMPAT_146 - old config logs may have added profiles we don't 
            know about */
-        if (obd->obd_type->typ_refcnt <= 2) 
+        if (obd->obd_type->typ_refcnt <= 1) 
                 /* Only for the last mgc */
                 class_del_profiles();
 
