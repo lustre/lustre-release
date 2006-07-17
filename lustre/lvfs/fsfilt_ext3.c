@@ -757,9 +757,12 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define ext3_up_truncate_sem(inode)  up_write(&EXT3_I(inode)->truncate_sem);
 #define ext3_down_truncate_sem(inode)  down_write(&EXT3_I(inode)->truncate_sem);
-#else
+#elif (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17))
 #define ext3_up_truncate_sem(inode)  up(&EXT3_I(inode)->truncate_sem);
 #define ext3_down_truncate_sem(inode)  down(&EXT3_I(inode)->truncate_sem);
+#else
+#define ext3_up_truncate_sem(inode)  mutex_unlock(&EXT3_I(inode)->truncate_mutex);
+#define ext3_down_truncate_sem(inode)  mutex_lock(&EXT3_I(inode)->truncate_mutex);
 #endif
 
 #include <linux/lustre_version.h>
