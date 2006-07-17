@@ -115,14 +115,14 @@ parse_line() {
         return 1
     fi
 
-    declare -i i=0
+    declare -i i=0              # Index of the CONFIG_ITEM array
     declare -i length=0 
     declare -i idx=0
-    declare -i s_quote_flag=0 
-    declare -i d_quote_flag=0
+    declare -i s_quote_flag=0   # Flag of the single quote character 
+    declare -i d_quote_flag=0   # Flag of the double quotes character
     local TMP_LETTER LINE
  
-    LINE=$*
+    LINE="$*"
 
     # Initialize the CONFIG_ITEM array
     unset CONFIG_ITEM
@@ -159,12 +159,6 @@ parse_line() {
             else
                 d_quote_flag=0
             fi
-
-            if [ ${i} -eq 1 ]; then
-                CONFIG_ITEM[i]=${CONFIG_ITEM[i]}"\\"${TMP_LETTER}
-                idx=${idx}+1
-                continue
-            fi
             ;;
         "")
             idx=${idx}+1
@@ -176,6 +170,21 @@ parse_line() {
         CONFIG_ITEM[i]=${CONFIG_ITEM[i]}${TMP_LETTER}
         idx=${idx}+1
     done
+
+    # Extract the real value of each field
+    # Remove surrounded double-quotes, etc.
+    for ((idx = 0; idx <= $i; idx++)); do
+        # Strip the leading and trailing space-characters
+        CONFIG_ITEM[idx]=`expr "${CONFIG_ITEM[idx]}" : '[[:space:]]*\(.*\)[[:space:]]*$'`
+
+        # Remove the surrounded double-quotes
+        if [ -z "`echo \"${CONFIG_ITEM[idx]}\"|sed 's/^".*"$//'`" ]; then
+            CONFIG_ITEM[idx]=`echo "${CONFIG_ITEM[idx]}" | sed 's/^"//' | sed 's/"$//'`
+        fi
+
+        CONFIG_ITEM[idx]=`echo "${CONFIG_ITEM[idx]}" | sed 's/""/"/g'`
+    done
+
     return 0
 }
 

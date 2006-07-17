@@ -523,7 +523,6 @@ construct_mkfs_cmdline() {
     fi
 
     if [ -n "${MGS_NIDS[i]}" ]; then
-        MGS_NIDS[i]=`echo "${MGS_NIDS[i]}" | sed 's/^"//' | sed 's/"$//'`
         mgsnids_str=${MGS_NIDS[i]}
         while read mgsnids; do
             MKFS_CMD=${MKFS_CMD}$"--mgsnode="${mgsnids}$" "
@@ -536,9 +535,6 @@ construct_mkfs_cmdline() {
     fi
 
     if [ -n "${FORMAT_OPTIONS[i]}" ]; then
-        if [ "${FORMAT_OPTIONS[i]:0:1}" = "\"" ]; then
-            FORMAT_OPTIONS[i]=`echo "${FORMAT_OPTIONS[i]}" | sed 's/^"//' | sed 's/"$//'`
-        fi
         MKFS_CMD=${MKFS_CMD}${FORMAT_OPTIONS[i]}$" "
     fi
 
@@ -555,7 +551,6 @@ construct_mkfs_cmdline() {
     fi
 
     if [ -n "${FAILOVERS[i]}" ]; then
-        FAILOVERS[i]=`echo "${FAILOVERS[i]}" | sed 's/^"//' | sed 's/"$//'`
         failnids_str=${FAILOVERS[i]}
         while read failnids; do
             MKFS_CMD=${MKFS_CMD}$"--failnode="${failnids}$" "
@@ -759,7 +754,7 @@ get_items() {
         fi
 
         # Parse the config line into CONFIG_ITEM
-        if ! parse_line $LINE; then
+        if ! parse_line "$LINE"; then
             echo >&2 $"`basename $0`: parse_line() error: Occurred"\
                   "on line ${line_num} in ${CSV_FILE}: $LINE"
             return 1    
@@ -777,6 +772,8 @@ get_items() {
         MKFS_OPTIONS[idx]=${CONFIG_ITEM[9]}
         MOUNT_OPTIONS[idx]=${CONFIG_ITEM[10]}
         FAILOVERS[idx]=${CONFIG_ITEM[11]}
+
+        MODULE_OPTS[idx]=`echo "${MODULE_OPTS[idx]}" | sed 's/"/\\\"/g'`
 
         # Check some required items for formatting target
         if ! check_item $idx; then

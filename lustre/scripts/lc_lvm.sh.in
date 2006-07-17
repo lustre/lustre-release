@@ -241,7 +241,7 @@ get_lvm_items() {
         && [ "${line_marker}" != "${LV_MARKER}" ] && continue
 
         # Parse the config line into CONFIG_ITEM
-        if ! parse_line $LINE; then
+        if ! parse_line "$LINE"; then
             return 1    
         fi
 
@@ -252,10 +252,6 @@ get_lvm_items() {
         OP_OPTS[idx]=${CONFIG_ITEM[4]}
         SIXTH_ITEM[idx]=${CONFIG_ITEM[5]}
         SEVENTH_ITEM[idx]=${CONFIG_ITEM[6]}
-
-        LVM_NAME[idx]=`echo "${LVM_NAME[idx]}" | sed 's/^"//' | sed 's/"$//'`
-        OP_OPTS[idx]=`echo "${OP_OPTS[idx]}" | sed 's/^"//' | sed 's/"$//'`
-        SIXTH_ITEM[idx]=`echo "${SIXTH_ITEM[idx]}" | sed 's/^"//' | sed 's/"$//'`
 
         # Check some required items
         if ! check_lvm_item $idx; then

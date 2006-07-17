@@ -174,7 +174,7 @@ get_md_items() {
         [ "`echo ${LINE}|awk -F, '{print $2}'`" != "${MD_MARKER}" ] && continue
 
         # Parse the config line into CONFIG_ITEM
-        if ! parse_line $LINE; then
+        if ! parse_line "$LINE"; then
             return 1    
         fi
 
@@ -184,9 +184,6 @@ get_md_items() {
         OP_OPTS[idx]=${CONFIG_ITEM[4]}
         RAID_LEVEL[idx]=${CONFIG_ITEM[5]}
         MD_DEVS[idx]=${CONFIG_ITEM[6]}
-
-        OP_OPTS[idx]=`echo "${OP_OPTS[idx]}" | sed 's/^"//' | sed 's/"$//'`
-        MD_DEVS[idx]=`echo "${MD_DEVS[idx]}" | sed 's/^"//' | sed 's/"$//'`
 
         # Check some required items
         if ! check_md_item $idx; then
