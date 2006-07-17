@@ -1849,6 +1849,7 @@ void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb))
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 /* 2.5 and later */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,18))
 struct super_block * lustre_get_sb(struct file_system_type *fs_type,
                                int flags, const char *devname, void * data)
 {
@@ -1857,6 +1858,17 @@ struct super_block * lustre_get_sb(struct file_system_type *fs_type,
            but 2.4 doesn't get devname.  So we do it in mount_lustre.c */
         return get_sb_nodev(fs_type, flags, data, lustre_fill_super);
 }
+#else
+int lustre_get_sb(struct file_system_type *fs_type,
+                               int flags, const char *devname, void * data,
+                               struct vfsmount *mnt)
+{
+        /* calls back in fill super */
+        /* we could append devname= onto options (*data) here, 
+           but 2.4 doesn't get devname.  So we do it in mount_lustre.c */
+        return get_sb_nodev(fs_type, flags, data, lustre_fill_super, mnt);
+}
+#endif
 
 struct file_system_type lustre_fs_type = {
         .owner        = THIS_MODULE,
