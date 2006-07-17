@@ -918,6 +918,17 @@ static char *convert_hostnames(char *s1)
                         free(converted);
                         return NULL;
                 }
+
+                if (strncmp(libcfs_nid2str(nid), "127.0.0.1", 
+                            strlen("127.0.0.1")) == 0) {
+                        fprintf(stderr, "%s: The NID '%s' resolves to the "
+                                "loopback address '%s'.  Lustre requires a "
+                                "non-loopback address.\n", 
+                                progname, s2, libcfs_nid2str(nid));
+                        free(converted);
+                        return NULL;
+                }
+
                 c += snprintf(c, left, "%s,", libcfs_nid2str(nid));
                 left = converted + MAXNIDSTR - c;
         }
