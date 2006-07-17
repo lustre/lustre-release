@@ -55,8 +55,13 @@ AC_DEFUN([LB_LINUX_RELEASE],
 [LINUXRELEASE=
 rm -f build/conftest.i
 AC_MSG_CHECKING([for Linux release])
+if test -s $LINUX_OBJ/include/linux/utsrelease.h ; then
+	LINUXRELEASEHEADER=utsrelease.h
+else
+	LINUXRELEASEHEADER=version.h
+fi
 LB_LINUX_TRY_MAKE([
-	#include <linux/version.h>
+	#include <linux/$LINUXRELEASEHEADER>
 ],[
 	char *LINUXRELEASE;
 	LINUXRELEASE=UTS_RELEASE;
