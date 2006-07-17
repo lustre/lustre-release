@@ -55,8 +55,9 @@ struct mdd_thread_info {
 int mdd_lov_init(const struct lu_context *ctxt, struct mdd_device *mdd,
                  struct lustre_cfg *cfg);
 int mdd_lov_fini(const struct lu_context *ctxt, struct mdd_device *mdd);
-int mdd_notify(struct md_device *md, struct obd_device *watched, 
-               enum obd_notify_event ev, void *data);
+int mdd_notify(const struct lu_context *ctxt, struct md_device *md, 
+               struct obd_device *watched, enum obd_notify_event ev, 
+               void *data);
 
 int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
                   const void *buf, int buf_len, const char *name);

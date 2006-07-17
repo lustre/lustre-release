@@ -364,6 +364,8 @@ int md_lov_connect(struct obd_device *obd, struct md_lov_info *mli,
                        lov_name, rc);
                 GOTO(out, rc);
         }
+        CDEBUG(D_INFO, "regist observer %s to lov %s \n",
+                        obd->obd_name, mli->md_lov_obd->obd_name);
         
         rc = mli->md_lov_ops->ml_read_objids(obd, mli, ctxt);
         if (rc) {

@@ -111,7 +111,8 @@ struct md_device_operations {
         /*
          * notify function for metadata stack
          */
-        int (*mdo_notify)(struct md_device *m, struct obd_device *watched, 
+        int (*mdo_notify)(const struct lu_context *ctx, 
+                          struct md_device *m, struct obd_device *watched, 
                           enum obd_notify_event ev, void *data);
 
 };

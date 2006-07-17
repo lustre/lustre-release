@@ -77,14 +77,15 @@ static int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
         RETURN (rc);
 }
 
-int cmm_notify(struct md_device *md, struct obd_device *watched, 
+int cmm_notify(const struct lu_context *ctxt, struct md_device *md, 
+               struct obd_device *watched, 
                enum obd_notify_event ev, void *data)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
         int rc;
 
-        rc = cmm_child_ops(cmm_dev)->mdo_notify(cmm_dev->cmm_child, watched,
-                                                ev, data);
+        rc = cmm_child_ops(cmm_dev)->mdo_notify(ctxt, cmm_dev->cmm_child, 
+                                                watched, ev, data);
 
         return rc;
 }
