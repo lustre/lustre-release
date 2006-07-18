@@ -383,6 +383,9 @@ static int __mdd_object_create(const struct lu_context *ctxt,
                 rc = -EEXIST;
 
         LASSERT(ergo(rc == 0, lu_object_exists(ctxt, &obj->mod_obj.mo_lu)));
+        /* increase the nlink for directory */
+        if (rc == 0 && dt_is_dir(ctxt, mdd_object_child(obj)))
+                rc = __mdd_ref_add(ctxt, obj, handle);
         /*XXX increase the refcount of the object or not?*/
         RETURN(rc);
 }
@@ -749,7 +752,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 if (rc)
                         RETURN(rc);
         }
-
+        
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
@@ -800,6 +803,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 GOTO(cleanup, rc);
 
         created = 1;
+        
         rc = __mdd_index_insert(ctxt, mdo, lu_object_fid(&child->mo_lu),
                                 name, handle);
       
