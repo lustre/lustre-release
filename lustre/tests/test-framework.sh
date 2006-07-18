@@ -2,7 +2,9 @@
 # vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 set -e
+trap 'echo "test-framework exiting on error"' ERR
 #set -vx
+
 
 export REFORMAT=""
 export VERBOSE=false
@@ -117,6 +119,7 @@ load_modules() {
 }
 
 unload_modules() {
+    set -x
     lsmod | grep lnet > /dev/null && $LCTL dl && $LCTL dk $TMP/debug
     local MODULES=`$LCTL modules | awk '{ print $2 }'`
     rmmod $MODULES >/dev/null 2>&1 
@@ -134,6 +137,7 @@ unload_modules() {
         echo "Memory leaks detected"
         return 254
     fi
+    echo "modules unloaded."
     return 0
 }
 
