@@ -1340,7 +1340,9 @@ static void server_put_super(struct super_block *sb)
         
         /* drop the One True Mount */
         unlock_mntput(mnt);
+#ifndef LUSTRE_PATCHLESS
         lvfs_clear_rdonly(save_dev);
+#endif
         
         /* Stop the servers (MDS, OSS) if no longer needed.  We must wait
            until the target is really gone so that our type refcount check
