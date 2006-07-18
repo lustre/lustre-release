@@ -50,7 +50,7 @@
 
 static const char mdd_lov_objid_name[] = "lov_objid";
 
-static int mdd_lov_read_objids(struct obd_device *obd, struct md_lov_info *mli, 
+static int mdd_lov_read_objids(struct obd_device *obd, struct md_lov_info *mli,
                                const void *ctxt)
 {
         struct dt_object *obj_ids = mli->md_lov_objid_obj;
@@ -98,7 +98,7 @@ out:
         RETURN(0);
 }
 
-int mdd_lov_write_objids(struct obd_device *obd, struct md_lov_info *mli, 
+int mdd_lov_write_objids(struct obd_device *obd, struct md_lov_info *mli,
                          const void *ctxt)
 {
         int i, rc = 0, tgts;
@@ -137,12 +137,12 @@ int mdd_lov_fini(const struct lu_context *ctxt, struct mdd_device *mdd)
         struct md_lov_info *mli = &mdd->mdd_lov_info;
 
         obd_register_observer(mli->md_lov_obd, NULL);
-        
+
         if (mli->md_lov_exp) {
                 obd_disconnect(mli->md_lov_exp);
                 mli->md_lov_exp = NULL;
         }
-        
+
         dt_object_fini(mli->md_lov_objid_obj);
         return 0;
 }
@@ -191,8 +191,8 @@ out:
         RETURN(rc);
 }
 
-int mdd_notify(const struct lu_context *ctxt, struct md_device *md, 
-               struct obd_device *watched, 
+int mdd_notify(const struct lu_context *ctxt, struct md_device *md,
+               struct obd_device *watched,
                enum obd_notify_event ev, void *data)
 {
 	struct mdd_device *mdd = lu2mdd_dev(&md->md_lu_dev);
@@ -206,10 +206,10 @@ int mdd_notify(const struct lu_context *ctxt, struct md_device *md,
                         rc = 0;
                 RETURN(rc);
         }
-        
+
         rc = md_lov_start_synchronize(obd, &mdd->mdd_lov_info, watched, data,
                                       !(ev == OBD_NOTIFY_SYNC), ctxt);
-        
+
         RETURN(rc);
 }
 
@@ -245,12 +245,12 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
         int rc = 0;
         ENTRY;
 
-        if (dt_is_dir(ctxt, next)) {
+        if (dt_try_as_dir(ctxt, next)) {
                 struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
                 int size = sizeof(lmm);
                 rc = mdd_get_md(ctxt, pobj, &lmm, &size, 1);
                 if (rc > 0) {
-                        rc = mdd_xattr_set(ctxt, child, lmm, size, 
+                        rc = mdd_xattr_set(ctxt, child, lmm, size,
                                            MDS_LOV_MD_NAME);
                         if (rc)
                                 CERROR("error on copy stripe info: rc = %d\n",
@@ -258,7 +258,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
                 }
         } else if (lmmp) {
                 LASSERT(lmm_size > 0);
-                rc = mdd_xattr_set(ctxt, child, lmmp, lmm_size, 
+                rc = mdd_xattr_set(ctxt, child, lmmp, lmm_size,
                                    MDS_LOV_MD_NAME);
                 if (rc)
                         CERROR("error on copy stripe info: rc = %d\n",
@@ -268,7 +268,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
 }
 
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
-                   struct mdd_object *child, struct lov_mds_md **lmm, 
+                   struct mdd_object *child, struct lov_mds_md **lmm,
                    int *lmm_size)
 {
         struct md_lov_info *mli = &mdd->mdd_lov_info;
