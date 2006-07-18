@@ -572,7 +572,6 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
                         LASSERT(dentry->d_inode != NULL);
                         obj->oo_inode = dentry->d_inode;
                         igrab(obj->oo_inode);
-                        obj->oo_dt.do_index_ops = &osd_index_ops;
                 }
                 dput(dentry);
         } else
