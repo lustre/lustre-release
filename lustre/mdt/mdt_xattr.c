@@ -199,9 +199,6 @@ int mdt_setxattr(struct mdt_thread_info *info)
         if (rc != 0)
                 GOTO(out, rc);
 
-        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
-                GOTO(out_unlock, rc = -EROFS);
-
         if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
                 char * xattr;
                 if (!req_capsule_field_present(&info->mti_pill, &RMF_EADATA)) {

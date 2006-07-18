@@ -93,7 +93,12 @@ enum mdt_handler_flags {
          * this request has fixed reply format, so that reply message can be
          * packed by generic code.
          */
-        HABEO_REFERO = (1 << 2)
+        HABEO_REFERO = (1 << 2),
+        /*
+         * this request will modify something, so check whether the filesystem
+         * is readonly or not, then return -EROFS to client asap if necessary.
+         */
+        HABEO_MUTABOR = (1 << 3)
 };
 
 struct mdt_opc_slice {
@@ -1030,6 +1035,11 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 result = mdt_unpack_req_pack_rep(info, flags);
         }
 
+        
+        if (result == 0 && flags & HABEO_MUTABOR) {
+                if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                        result = -EROFS; 
+        }
         if (result == 0 && flags & HABEO_CLAVIS) {
                 struct ldlm_request *dlm_req;
 
@@ -1081,7 +1091,6 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 /* FIXME: fake untill journal callback is OK.*/
                 mdt_update_last_transno(info, result);
         }
-        req_capsule_fini(&info->mti_pill);
         RETURN(result);
 }
 
@@ -1100,32 +1109,32 @@ void mdt_lock_handle_fini(struct mdt_lock_handle *lh)
 static void mdt_thread_info_init(struct ptlrpc_request *req,
                                  struct mdt_thread_info *info)
 {
+        memset(info, 0, sizeof *info);
+/*
         int i;
-
         memset(&info->mti_rr, 0, sizeof info->mti_rr);
         memset(&info->mti_attr, 0, sizeof info->mti_attr);
 
-        info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
         for (i = 0; i < ARRAY_SIZE(info->mti_rep_buf_size); i++)
                 info->mti_rep_buf_size[i] = 0;
         info->mti_rep_buf_nr = i;
         for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
                 mdt_lock_handle_init(&info->mti_lh[i]);
+*/
 
+        info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
         info->mti_ctxt = req->rq_svc_thread->t_ctx;
         /* it can be NULL while CONNECT */
         if (req->rq_export)
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
         req_capsule_init(&info->mti_pill, req, RCL_SERVER, info->mti_rep_buf_size);
-
-        /* other members of "struct mdt_thread_info" should be initialized
-         * by users before they can be used. */
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)
 {
         int i;
 
+        req_capsule_fini(&info->mti_pill);
         if (info->mti_object != NULL) {
                 mdt_object_put(info->mti_ctxt, info->mti_object);
                 info->mti_object = NULL;
@@ -1435,13 +1444,13 @@ static struct mdt_it_flavor {
         },
         [MDT_IT_OCREAT]   = {
                 .it_fmt   = &RQF_LDLM_INTENT,
-                .it_flags = 0,
+                .it_flags = HABEO_MUTABOR,
                 .it_act   = mdt_intent_reint,
                 .it_reint = REINT_OPEN
         },
         [MDT_IT_CREATE]   = {
                 .it_fmt   = &RQF_LDLM_INTENT,
-                .it_flags = 0,
+                .it_flags = HABEO_MUTABOR,
                 .it_act   = mdt_intent_reint,
                 .it_reint = REINT_CREATE
         },
@@ -1462,13 +1471,13 @@ static struct mdt_it_flavor {
         },
         [MDT_IT_UNLINK]   = {
                 .it_fmt   = &RQF_LDLM_INTENT_UNLINK,
-                .it_flags = 0,
+                .it_flags = HABEO_MUTABOR,
                 .it_act   = NULL, /* XXX can be mdt_intent_reint, ? */
                 .it_reint = REINT_UNLINK
         },
         [MDT_IT_TRUNC]    = {
                 .it_fmt   = NULL,
-                .it_flags = 0,
+                .it_flags = HABEO_MUTABOR,
                 .it_act   = NULL
         },
         [MDT_IT_GETXATTR] = {
@@ -1675,13 +1684,16 @@ static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
 
         rc = mdt_unpack_req_pack_rep(info, flv->it_flags);
         if (rc == 0) {
-                /* execute policy */
-                /*XXX LASSERT( flv->it_act) */
-                if (flv->it_act) {
-                        rc = flv->it_act(opc, info, lockp, flags);
-                } else
-                        rc = -EOPNOTSUPP;
+                struct ptlrpc_request *req = mdt_info_req(info);
+                if (flv->it_flags & HABEO_MUTABOR &&
+                    req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                        rc = -EROFS;
         }
+        if (rc == 0 && flv->it_act != NULL) {
+                /* execute policy */
+                rc = flv->it_act(opc, info, lockp, flags);
+        } else
+                rc = -EOPNOTSUPP;
         RETURN(rc);
 }
 
@@ -2754,11 +2766,13 @@ DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR,      mdt_getattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR_NAME, mdt_getattr_name),
-DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, SETXATTR,     mdt_setxattr),
+DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO|HABEO_MUTABOR, 
+                                          SETXATTR,     mdt_setxattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              READPAGE,     mdt_readpage),
-DEF_MDT_HNDL_F(0,                         REINT,        mdt_reint),
+DEF_MDT_HNDL_F(0                        |HABEO_MUTABOR,
+                                          REINT,        mdt_reint),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, CLOSE,        mdt_close),
 DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),

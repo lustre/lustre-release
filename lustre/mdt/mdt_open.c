@@ -229,7 +229,6 @@ int mdt_reint_open(struct mdt_thread_info *info)
         struct mdt_object      *child;
         struct mdt_lock_handle *lh;
         struct ldlm_reply      *ldlm_rep;
-        struct ptlrpc_request  *req = mdt_info_req(info);
         struct lu_fid          *child_fid = &info->mti_tmp_fid1;
         int                     result;
         int                     created = 0;
@@ -269,8 +268,6 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
                 if (!(info->mti_attr.la_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
-                if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
-                        GOTO(out_parent, result = -EROFS);
                 *child_fid = *info->mti_rr.rr_fid2;
         } else {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);

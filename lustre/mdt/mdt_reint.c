@@ -166,9 +166,6 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         if (lu_object_exists(info->mti_ctxt, &mo->mot_obj.mo_lu) <= 0)
                 GOTO(out_unlock, rc = -ENOENT);
 
-        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
-                GOTO(out_unlock, rc = -EROFS);
-
         rc = mo_attr_set(info->mti_ctxt, next, attr);
         if (rc != 0)
                 GOTO(out_unlock, rc);
@@ -264,9 +261,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
                 RETURN(PTR_ERR(mp));
 
         if (strlen(rr->rr_name) == 0) {
-                if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
-                        GOTO(out_unlock_parent, rc = -EROFS);
-
                 /* remote partial operation */
                 rc = mo_ref_del(info->mti_ctxt, mdt_object_child(mp));
                 GOTO(out_unlock_parent, rc);
@@ -287,9 +281,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         if (IS_ERR(mc))
                 GOTO(out_unlock_parent, rc = PTR_ERR(mc));
 
-        /*step 3:  do some checking*/
-        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
-                GOTO(out_unlock_child, rc = -EROFS);
+        /*step 3:  do some checking ...*/
 
         /* step 4: delete it */
         /* cmm will take care if child is local or remote */
@@ -333,9 +325,6 @@ static int mdt_reint_link(struct mdt_thread_info *info)
                 RETURN(PTR_ERR(ms));
 
         if (strlen(rr->rr_name) == 0) {
-                if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
-                        GOTO(out_unlock_source, rc = -EROFS);
-
                 /* remote partial operation */
                 rc = mo_ref_add(info->mti_ctxt, mdt_object_child(ms));
                 GOTO(out_unlock_source, rc);
@@ -346,9 +335,6 @@ static int mdt_reint_link(struct mdt_thread_info *info)
         mp = mdt_object_find_lock(info, rr->rr_fid2, lhp, MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
                 GOTO(out_unlock_source, rc = PTR_ERR(mp));
-
-        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
-                GOTO(out_unlock_target, rc = -EROFS);
 
         /* step 4: link it */
         rc = mdo_link(info->mti_ctxt, mdt_object_child(mp),
@@ -394,9 +380,6 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
                         rr->rr_tgt, tgt_fid);
         if (rc != 0 && rc != -ENOENT)
                 GOTO(out_unlock_tgtdir, rc);
-
-        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
-                GOTO(out_unlock_tgt, rc = -EROFS);
 
         if (rc == 0) {
                 lh_tgt->mlh_mode = LCK_EX;
@@ -506,9 +489,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                         GOTO(out_unlock_old, rc = PTR_ERR(mnew));
         }
 
-        /* step 5: dome some checking*/
-        if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
-                GOTO(out_unlock_new, rc = -EROFS);
+        /* step 5: dome some checking ...*/
 
         /* step 6: rename it */
         rc = mdo_rename(info->mti_ctxt, mdt_object_child(msrcdir),
