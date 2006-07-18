@@ -4,6 +4,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	 INTEROPERATE with older versions automatically.  In many cases a
 	 special upgrade step is needed. Please read the
 	 user documentation before upgrading any part of a live system.
+       * WIRE PROTOCOL CHANGE from previous 1.6 beta versions.  This
+         version will not interoperate with 1.6 betas.  
        * WARNING: Lustre configuration and startup changes are required with
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
