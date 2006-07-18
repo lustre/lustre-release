@@ -1,7 +1,7 @@
-Index: linux-stage/fs/ext3/al.h
+Index: mmp/fs/ext3/al.h
 ===================================================================
 --- /dev/null	1970-01-01 00:00:00.000000000 +0000
-+++ linux-stage/fs/ext3/al.h	2006-07-16 00:50:31.000000000 +0800
++++ mmp/fs/ext3/al.h	2006-07-18 20:43:51.000000000 +0800
 @@ -0,0 +1,11 @@
 +/*
 + * (C) 2006  Qi Yong <qiyong@clusterfs.com>
@@ -14,10 +14,10 @@ Index: linux-stage/fs/ext3/al.h
 +	__le32	al_time;
 +	char	al_nodename[65];
 +};
-Index: linux-stage/fs/ext3/namei.c
+Index: mmp/fs/ext3/namei.c
 ===================================================================
---- linux-stage.orig/fs/ext3/namei.c	2006-07-16 00:49:58.000000000 +0800
-+++ linux-stage/fs/ext3/namei.c	2006-07-16 00:50:31.000000000 +0800
+--- mmp.orig/fs/ext3/namei.c	2006-07-18 20:43:51.000000000 +0800
++++ mmp/fs/ext3/namei.c	2006-07-18 20:43:51.000000000 +0800
 @@ -805,7 +805,7 @@ static inline int search_dirblock(struct
   * The returned buffer_head has ->b_count elevated.  The caller is expected
   * to brelse() it when appropriate.
@@ -27,10 +27,10 @@ Index: linux-stage/fs/ext3/namei.c
  					struct ext3_dir_entry_2 ** res_dir)
  {
  	struct super_block * sb;
-Index: linux-stage/fs/ext3/super.c
+Index: mmp/fs/ext3/super.c
 ===================================================================
---- linux-stage.orig/fs/ext3/super.c	2006-07-16 00:50:06.000000000 +0800
-+++ linux-stage/fs/ext3/super.c	2006-07-16 00:50:31.000000000 +0800
+--- mmp.orig/fs/ext3/super.c	2006-07-18 20:43:51.000000000 +0800
++++ mmp/fs/ext3/super.c	2006-07-18 23:49:54.000000000 +0800
 @@ -35,12 +35,14 @@
  #include <linux/namei.h>
  #include <linux/quotaops.h>
@@ -55,18 +55,17 @@ Index: linux-stage/fs/ext3/super.c
  
  /* 
   * Wrappers for journal_start/end.
-@@ -434,6 +438,10 @@ static void ext3_put_super (struct super
+@@ -434,6 +438,9 @@ static void ext3_put_super (struct super
  		invalidate_bdev(sbi->journal_bdev, 0);
  		ext3_blkdev_remove(sbi);
  	}
-+	if (EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_ALIVE)) {
-+		BUG_ON(!sbi->s_alive_tsk);
++	if (sbi->s_alive_tsk)
 +		kthread_stop(sbi->s_alive_tsk);
-+	}
++
  	sb->s_fs_info = NULL;
  	kfree(sbi);
  	return;
-@@ -1374,6 +1382,261 @@ static ext3_fsblk_t descriptor_loc(struc
+@@ -1374,6 +1381,261 @@ static ext3_fsblk_t descriptor_loc(struc
  	return (has_super + ext3_group_first_block_no(sb, bg));
  }
  
@@ -328,7 +327,7 @@ Index: linux-stage/fs/ext3/super.c
  
  static int ext3_fill_super (struct super_block *sb, void *data, int silent)
  {
-@@ -1688,6 +1951,10 @@ static int ext3_fill_super (struct super
+@@ -1688,6 +1950,10 @@ static int ext3_fill_super (struct super
  			  EXT3_HAS_INCOMPAT_FEATURE(sb,
  				    EXT3_FEATURE_INCOMPAT_RECOVER));
  
@@ -339,10 +338,19 @@ Index: linux-stage/fs/ext3/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-Index: linux-stage/include/linux/ext3_fs.h
+@@ -1796,6 +2062,8 @@ failed_mount3:
+ 	percpu_counter_destroy(&sbi->s_freeblocks_counter);
+ 	percpu_counter_destroy(&sbi->s_freeinodes_counter);
+ 	percpu_counter_destroy(&sbi->s_dirs_counter);
++	if (sbi->s_alive_tsk)
++		kthread_stop(sbi->s_alive_tsk);
+ failed_mount2:
+ 	for (i = 0; i < db_count; i++)
+ 		brelse(sbi->s_group_desc[i]);
+Index: mmp/include/linux/ext3_fs.h
 ===================================================================
---- linux-stage.orig/include/linux/ext3_fs.h	2006-07-16 00:49:58.000000000 +0800
-+++ linux-stage/include/linux/ext3_fs.h	2006-07-16 00:50:31.000000000 +0800
+--- mmp.orig/include/linux/ext3_fs.h	2006-07-18 20:43:51.000000000 +0800
++++ mmp/include/linux/ext3_fs.h	2006-07-18 20:43:52.000000000 +0800
 @@ -579,12 +579,14 @@ static inline struct ext3_inode_info *EX
  #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
  #define EXT3_FEATURE_INCOMPAT_META_BG		0x0010
@@ -359,10 +367,10 @@ Index: linux-stage/include/linux/ext3_fs.h
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
-Index: linux-stage/include/linux/ext3_fs_sb.h
+Index: mmp/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-stage.orig/include/linux/ext3_fs_sb.h	2006-07-16 00:50:02.000000000 +0800
-+++ linux-stage/include/linux/ext3_fs_sb.h	2006-07-16 00:50:31.000000000 +0800
+--- mmp.orig/include/linux/ext3_fs_sb.h	2006-07-18 20:43:51.000000000 +0800
++++ mmp/include/linux/ext3_fs_sb.h	2006-07-18 20:43:52.000000000 +0800
 @@ -86,6 +86,7 @@ struct ext3_sb_info {
  	char *s_qf_names[MAXQUOTAS];		/* Names of quota files with journalled quota */
  	int s_jquota_fmt;			/* Format of quota to use */
