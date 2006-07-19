@@ -274,8 +274,6 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 if (attr->la_flags & MDS_OPEN_EXCL &&
                     attr->la_flags & MDS_OPEN_CREAT)
                         GOTO(out_parent, result = -EEXIST);
-                /* child_fid is filled by mdo_lookup(). */
-                LASSERT(lu_fid_eq(child_fid, info->mti_rr.rr_fid2));
         }
 
         child = mdt_object_find(info->mti_ctxt, mdt, child_fid);
