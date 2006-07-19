@@ -387,7 +387,10 @@ static int __mdd_object_create(const struct lu_context *ctxt,
         /* increase the nlink for directory */
         if (rc == 0 && dt_try_as_dir(ctxt, mdd_object_child(obj)))
                 rc = __mdd_ref_add(ctxt, obj, handle);
-        /*XXX increase the refcount of the object or not?*/
+        
+        if (rc == 0)
+                mdd_attr_get(ctxt, &obj->mod_obj, &ma->ma_attr);
+
         RETURN(rc);
 }
 
@@ -539,6 +542,14 @@ exit:
         RETURN(rc);
 }
 
+static int mdd_empty_dir(const struct lu_context *ctxt,
+                         struct md_object *dir)
+{
+        /*TODO: iterate through the index until first entry
+         * other than dot or dotdot. For now - not empty always */
+        return 0;
+}
+
 static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
                       struct md_object *cobj, const char *name,
                       struct md_attr *ma)
@@ -551,6 +562,15 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         int rc;
         ENTRY;
 
+        /* sanity checks */
+        if (dt_try_as_dir(ctxt, dt_cobj)) {
+                if (!S_ISDIR(ma->ma_attr.la_mode))
+                        RETURN(rc = -EISDIR);
+        } else {
+                if (S_ISDIR(ma->ma_attr.la_mode))
+                        RETURN(rc = -ENOTDIR);
+        }
+
         mdd_txn_param_build(ctxt, &MDD_TXN_UNLINK);
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
@@ -558,21 +578,26 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
 
         mdd_lock2(ctxt, mdd_pobj, mdd_cobj);
 
+        /* rmdir checks */
+        if (S_ISDIR(ma->ma_attr.la_mode)) {
+                if (!mdd_empty_dir(ctxt, cobj))
+                        GOTO(cleanup, rc = -ENOTEMPTY);
+        }
+
         rc = __mdd_index_delete(ctxt, mdd_pobj, name, handle);
         if (rc)
                 GOTO(cleanup, rc);
 
         rc = __mdd_ref_del(ctxt, mdd_cobj, handle, ma);
-        if (rc)
-                GOTO(cleanup, rc);
-        if (dt_try_as_dir(ctxt, dt_cobj)) {
+
+        if (rc == 0 && S_ISDIR(ma->ma_attr.la_mode)) {
                 /* unlink dot */
                 rc = __mdd_ref_del(ctxt, mdd_cobj, handle, ma);
-                /* unlink dotdot */
-                rc = __mdd_ref_del(ctxt, mdd_pobj, handle, NULL);
-                if (rc)
-                        GOTO(cleanup, rc);
+                if (rc == 0)
+                        /* unlink dotdot */
+                        rc = __mdd_ref_del(ctxt, mdd_pobj, handle, NULL);
         }
+
 cleanup:
         mdd_unlock2(ctxt, mdd_pobj, mdd_cobj);
         mdd_trans_stop(ctxt, mdd, handle);
@@ -1002,11 +1027,16 @@ static int
 __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
               struct thandle *handle, struct md_attr *ma)
 {
-        struct dt_object *next;
+        struct dt_object *next = mdd_object_child(obj);
+        int rc;
 
         LASSERT(lu_object_exists(ctxt, &obj->mod_obj.mo_lu));
-        next = mdd_object_child(obj);
-        return next->do_ops->do_object_ref_del(ctxt, next, handle);
+
+        rc = next->do_ops->do_object_ref_del(ctxt, next, handle);
+        if (rc == 0 && ma != NULL)
+                mdd_attr_get(ctxt, &obj->mod_obj, &ma->ma_attr);
+
+        return rc;
 }
 
 static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
