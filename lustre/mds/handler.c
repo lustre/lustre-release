@@ -1190,8 +1190,8 @@ int mds_reint(struct ptlrpc_request *req, int offset,
         return rc;
 }
 
-static int mds_filter_recovery_request(struct ptlrpc_request *req,
-                                       struct obd_device *obd, int *process)
+int mds_filter_recovery_request(struct ptlrpc_request *req,
+                                struct obd_device *obd, int *process)
 {
         switch (req->rq_reqmsg->opc) {
         case MDS_CONNECT: /* This will never get here, but for completeness. */
@@ -1217,6 +1217,7 @@ static int mds_filter_recovery_request(struct ptlrpc_request *req,
                 RETURN(ptlrpc_error(req));
         }
 }
+EXPORT_SYMBOL(mds_filter_recovery_request);
 
 static char *reint_names[] = {
         [REINT_SETATTR] "setattr",

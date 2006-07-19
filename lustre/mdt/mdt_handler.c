@@ -1138,36 +1138,9 @@ static void mdt_thread_info_fini(struct mdt_thread_info *info)
                 mdt_lock_handle_fini(&info->mti_lh[i]);
 }
 
-static int mdt_filter_recovery_request(struct ptlrpc_request *req,
-                                       struct obd_device *obd, int *process)
-{
-        ENTRY;
-
-        switch (req->rq_reqmsg->opc) {
-        case MDS_CONNECT: /* This will never get here, but for completeness. */
-        case OST_CONNECT: /* This will never get here, but for completeness. */
-        case MDS_DISCONNECT:
-        case OST_DISCONNECT:
-               *process = 1;
-               RETURN(0);
-
-        case MDS_CLOSE:
-        case MDS_SYNC: /* used in unmounting */
-        case OBD_PING:
-        case MDS_REINT:
-        case LDLM_ENQUEUE:
-                *process = target_queue_recovery_request(req, obd);
-                RETURN(0);
-
-        default:
-                DEBUG_REQ(D_ERROR, req, "not permitted during recovery");
-                *process = 0;
-                /* XXX what should we set rq_status to here? */
-                req->rq_status = -EAGAIN;
-                RETURN(ptlrpc_error(req));
-        }
-}
-
+/* mds/handler.c */
+extern int mds_filter_recovery_request(struct ptlrpc_request *req,
+                                       struct obd_device *obd, int *process);
 /*
  * Handle recovery. Return:
  *        +1: continue request processing;
@@ -1220,7 +1193,7 @@ static int mdt_recovery(struct ptlrpc_request *req)
                 int rc;
                 int should_process;
 
-                rc = mdt_filter_recovery_request(req, obd, &should_process);
+                rc = mds_filter_recovery_request(req, obd, &should_process);
                 if (rc != 0 || !should_process) {
                         LASSERT(rc < 0);
                         RETURN(rc);
