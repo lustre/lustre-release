@@ -45,6 +45,10 @@ struct md_device;
 struct md_device_operations;
 struct md_object;
 
+struct md_attr {
+        struct lu_attr ma_attr;
+};
+
 /*
  * Operations implemented for each md object (both directory and leaf).
  */
@@ -63,9 +67,10 @@ struct md_object_operations {
                              int buf_len, const char *name);
         /* part of cross-ref operation */
         int (*moo_object_create)(const struct lu_context *,
-                                 struct md_object *, struct lu_attr *);
+                                 struct md_object *, struct md_attr *);
         int (*moo_ref_add)(const struct lu_context *, struct md_object *);
-        int (*moo_ref_del)(const struct lu_context *, struct md_object *);
+        int (*moo_ref_del)(const struct lu_context *, struct md_object *,
+                           struct md_attr *);
         int (*moo_open)(const struct lu_context *, struct md_object *);
         int (*moo_close)(const struct lu_context *, struct md_object *);
 };
@@ -80,7 +85,7 @@ struct md_dir_operations {
         /* target_name is valid iff this is a symlink operation. */
         int (*mdo_create)(const struct lu_context *, struct md_object *,
                           const char *child_name, struct md_object *,
-                          const char *target_name, struct lu_attr *);
+                          const char *target_name, struct md_attr *);
         int (*mdo_rename)(const struct lu_context *ctxt,
                           struct md_object *spobj, struct md_object *tpobj,
                           const struct lu_fid *lf, const char *sname,
@@ -90,7 +95,7 @@ struct md_dir_operations {
                         struct md_object *sobj, const char *name);
 
         int (*mdo_unlink)(const struct lu_context *, struct md_object *,
-                          struct md_object *, const char *);
+                          struct md_object *, const char *, struct md_attr *);
 
         /* partial ops for cross-ref case */
         int (*mdo_name_insert)(const struct lu_context *, struct md_object *,
@@ -233,7 +238,7 @@ static inline int mo_close(const struct lu_context *cx, struct md_object *m)
 }
 
 static inline int mo_object_create(const struct lu_context *cx,
-                                   struct md_object *m, struct lu_attr *at)
+                                   struct md_object *m, struct md_attr *at)
 {
         LASSERT(m->mo_ops->moo_object_create);
         return m->mo_ops->moo_object_create(cx, m, at);
@@ -247,10 +252,10 @@ static inline int mo_ref_add(const struct lu_context *cx,
 }
 
 static inline int mo_ref_del(const struct lu_context *cx,
-                             struct md_object *m)
+                             struct md_object *m, struct md_attr *ma)
 {
         LASSERT(m->mo_ops->moo_ref_del);
-        return m->mo_ops->moo_ref_del(cx, m);
+        return m->mo_ops->moo_ref_del(cx, m, ma);
 }
 
 static inline int mdo_lookup(const struct lu_context *cx, struct md_object *p,
@@ -262,7 +267,7 @@ static inline int mdo_lookup(const struct lu_context *cx, struct md_object *p,
 
 static inline int mdo_create(const struct lu_context *cx, struct md_object *p,
                              const char *child_name, struct md_object *c, 
-                             const char *target_name, struct lu_attr *at)
+                             const char *target_name, struct md_attr *at)
 {
         LASSERT(c->mo_dir_ops->mdo_create);
         return c->mo_dir_ops->mdo_create(cx, p, child_name, c, target_name, at);
@@ -285,10 +290,11 @@ static inline int mdo_link(const struct lu_context *cx, struct md_object *p,
 }
 
 static inline int mdo_unlink(const struct lu_context *cx, struct md_object *p,
-                             struct md_object *c, const char *name)
+                             struct md_object *c, const char *name,
+                             struct md_attr *ma)
 {
         LASSERT(c->mo_dir_ops->mdo_unlink);
-        return c->mo_dir_ops->mdo_unlink(cx, p, c, name);
+        return c->mo_dir_ops->mdo_unlink(cx, p, c, name, ma);
 }
 
 static inline int mdo_name_insert(const struct lu_context *cx,
