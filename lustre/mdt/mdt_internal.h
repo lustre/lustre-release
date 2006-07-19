@@ -210,7 +210,7 @@ struct mdt_thread_info {
         /*
          * Object attributes.
          */
-        struct lu_attr             mti_attr;
+        struct md_attr             mti_attr;
         /*
          * reint record. Containing information for reint operations.
          */

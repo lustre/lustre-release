@@ -40,30 +40,26 @@
 
 #include "mdt_internal.h"
 
-/* if object is dying, pack the lov/llog data */
+/* if object is dying, pack the lov/llog data,
+ * parameter info->mti_attr should be valid at this point! */
 int mdt_handle_last_unlink(struct mdt_thread_info *info,
                            struct mdt_object *mo, const struct req_format *fmt)
 {
         struct mdt_body *body;
+        struct lu_attr *la = &info->mti_attr.ma_attr;
         int rc = 0;
         ENTRY;
  
-        rc = mo_attr_get(info->mti_ctxt, mdt_object_child(mo),
-                         &info->mti_attr);
-        if (rc)
-                RETURN(rc);
-
         body = req_capsule_server_get(&info->mti_pill,
                                       &RMF_MDT_BODY);
-        mdt_pack_attr2body(body, &info->mti_attr, mdt_object_fid(mo));
+        mdt_pack_attr2body(body, la, mdt_object_fid(mo));
         
         /* if last unlinked object reference so client should destroy ost
          * objects*/
-        if (S_ISREG(info->mti_attr.la_mode) &&
-            info->mti_attr.la_nlink == 0 && mo->mot_header.loh_ref == 1) {
+        if (S_ISREG(la->la_mode) &&
+            la->la_nlink == 0 && mo->mot_header.loh_ref == 1) {
                 struct lov_mds_md  *lmm;
                 
-                CERROR("Last object!\n");
                 /* reply should contains more data,
                  * * so we need to extend it */
                 req_capsule_extend(&info->mti_pill, fmt);
@@ -94,7 +90,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info,
 static int mdt_setattr_unpack(struct mdt_thread_info *info)
 {
         struct mdt_rec_setattr *rec;
-        struct lu_attr *attr = &info->mti_attr;
+        struct lu_attr *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule *pill = &info->mti_pill;
         ENTRY;
@@ -135,7 +131,7 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
 static int mdt_create_unpack(struct mdt_thread_info *info)
 {
         struct mdt_rec_create *rec;
-        struct lu_attr *attr = &info->mti_attr;
+        struct lu_attr *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule *pill = &info->mti_pill;
         int result = 0;
@@ -164,7 +160,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 static int mdt_link_unpack(struct mdt_thread_info *info)
 {
         struct mdt_rec_link *rec;
-        struct lu_attr *attr = &info->mti_attr;
+        struct lu_attr *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule *pill = &info->mti_pill;
         ENTRY;
@@ -189,7 +185,7 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 static int mdt_unlink_unpack(struct mdt_thread_info *info)
 {
         struct mdt_rec_unlink *rec;
-        struct lu_attr *attr = &info->mti_attr;
+        struct lu_attr *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule *pill = &info->mti_pill;
         ENTRY;
@@ -215,7 +211,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 static int mdt_rename_unpack(struct mdt_thread_info *info)
 {
         struct mdt_rec_rename *rec;
-        struct lu_attr *attr = &info->mti_attr;
+        struct lu_attr *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule *pill = &info->mti_pill;
         ENTRY;
@@ -243,7 +239,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 static int mdt_open_unpack(struct mdt_thread_info *info)
 {
         struct mdt_rec_create   *rec;
-        struct lu_attr          *attr = &info->mti_attr;
+        struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct req_capsule      *pill = &info->mti_pill;
         struct mdt_reint_record *rr   = &info->mti_rr;
         int result;

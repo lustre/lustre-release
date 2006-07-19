@@ -79,7 +79,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         struct mdt_file_data   *mfd;
         struct mdt_body        *repbody;
         struct lov_mds_md      *lmm = NULL;
-        struct lu_attr         *attr = &info->mti_attr;
+        struct lu_attr         *attr = &info->mti_attr.ma_attr;
         struct ptlrpc_request  *req = mdt_info_req(info);
         int                     rc = 0;
         ENTRY;
@@ -230,6 +230,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
         struct mdt_lock_handle *lh;
         struct ldlm_reply      *ldlm_rep;
         struct lu_fid          *child_fid = &info->mti_tmp_fid1;
+        struct lu_attr         *attr = &info->mti_attr.ma_attr;
         int                     result;
         int                     created = 0;
         struct mdt_reint_record *rr = &info->mti_rr;
@@ -237,8 +238,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         if (strlen(rr->rr_name) == 0) {
                 /* reint partial remote open */
-                RETURN(mdt_open_by_fid(info, rr->rr_fid1, 
-                                       info->mti_attr.la_flags));
+                RETURN(mdt_open_by_fid(info, rr->rr_fid1, attr->la_flags));
         }
 
         /* we now have no resent message, so it must be an intent */
@@ -266,13 +266,13 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         if (result == -ENOENT) {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
-                if (!(info->mti_attr.la_flags & MDS_OPEN_CREAT))
+                if (!(attr->la_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
                 *child_fid = *info->mti_rr.rr_fid2;
         } else {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
-                if (info->mti_attr.la_flags & MDS_OPEN_EXCL &&
-                    info->mti_attr.la_flags & MDS_OPEN_CREAT)
+                if (attr->la_flags & MDS_OPEN_EXCL &&
+                    attr->la_flags & MDS_OPEN_CREAT)
                         GOTO(out_parent, result = -EEXIST);
                 /* child_fid is filled by mdo_lookup(). */
                 LASSERT(lu_fid_eq(child_fid, info->mti_rr.rr_fid2));
@@ -297,14 +297,15 @@ int mdt_reint_open(struct mdt_thread_info *info)
         }
 
         /* Open it now. */
-        result = mdt_mfd_open(info, child, info->mti_attr.la_flags);
+        result = mdt_mfd_open(info, child, attr->la_flags);
         intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
         GOTO(finish_open, result);
 
 finish_open:
-        if (result != 0 && result != -EREMOTE && created) {
+        if (result != 0 && created) {
                 mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
-                           mdt_object_child(child), rr->rr_name);
+                           mdt_object_child(child), rr->rr_name,
+                           &info->mti_attr);
         } 
 out_child:
         mdt_object_put(info->mti_ctxt, child);

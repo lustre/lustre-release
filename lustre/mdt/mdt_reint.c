@@ -44,7 +44,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
         struct mdt_object      *child;
         struct mdt_lock_handle *lh;
         struct mdt_body        *repbody;
-        struct lu_attr         *attr = &info->mti_attr;
+        struct lu_attr         *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         int rc;
         ENTRY;
@@ -64,7 +64,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 struct md_object *next = mdt_object_child(parent);
 
                 rc = mdo_create(info->mti_ctxt, next, rr->rr_name,
-                                mdt_object_child(child), rr->rr_tgt, attr);
+                                mdt_object_child(child), rr->rr_tgt, &info->mti_attr);
                 if (rc == 0) {
                         /* return fid & attr to client. attr is over-written!*/
                         rc = mo_attr_get(info->mti_ctxt,
@@ -110,9 +110,10 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
                         /* return fid to client. */
                         rc = mo_attr_get(info->mti_ctxt,
                                          next,
-                                         &info->mti_attr);
+                                         &info->mti_attr.ma_attr);
                         if (rc == 0) {
-                                mdt_pack_attr2body(repbody, &info->mti_attr,
+                                mdt_pack_attr2body(repbody,
+                                                   &info->mti_attr.ma_attr,
                                                    mdt_object_fid(o));
                         }
                 }
@@ -130,7 +131,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
  * We use the ATTR_FROM_OPEN flag to tell these cases apart. */
 static int mdt_reint_setattr(struct mdt_thread_info *info)
 {
-        struct lu_attr          *attr = &info->mti_attr;
+        struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_object       *mo;
@@ -207,7 +208,7 @@ static int mdt_reint_create(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
-        switch (info->mti_attr.la_mode & S_IFMT) {
+        switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFREG:
         case S_IFDIR:{
                 if (strlen(info->mti_rr.rr_name) > 0)
@@ -262,7 +263,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 
         if (strlen(rr->rr_name) == 0) {
                 /* remote partial operation */
-                rc = mo_ref_del(info->mti_ctxt, mdt_object_child(mp));
+                rc = mo_ref_del(info->mti_ctxt, mdt_object_child(mp), 
+                                &info->mti_attr);
                 GOTO(out_unlock_parent, rc);
         }
 
@@ -286,7 +288,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         /* step 4: delete it */
         /* cmm will take care if child is local or remote */
         rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mp),
-                        mdt_object_child(mc), rr->rr_name);
+                        mdt_object_child(mc), rr->rr_name, &info->mti_attr);
         
         if (rc)
                 GOTO(out_unlock_child, rc);

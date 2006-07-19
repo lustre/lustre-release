@@ -202,7 +202,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         struct md_object        *next = mdt_object_child(o);
         const struct mdt_body   *reqbody = info->mti_body;
         struct ptlrpc_request   *req = mdt_info_req(info);
-        struct lu_attr          *la = &info->mti_attr;
+        struct lu_attr          *la = &info->mti_attr.ma_attr;
         struct req_capsule      *pill = &info->mti_pill;
         const struct lu_context *ctxt = info->mti_ctxt;
         struct mdt_body         *repbody;
@@ -619,12 +619,12 @@ static int mdt_sync(struct mdt_thread_info *info)
                                 next = mdt_object_child(info->mti_object);
                                 fid = mdt_object_fid(info->mti_object);
                                 rc = mo_attr_get(info->mti_ctxt,
-                                                 next, &info->mti_attr);
+                                                 next, &info->mti_attr.ma_attr);
                                 if (rc == 0) {
                                         body = req_capsule_server_get(pill, 
                                                                 &RMF_MDT_BODY);
                                         mdt_pack_attr2body(body, 
-                                                           &info->mti_attr, 
+                                                           &info->mti_attr.ma_attr, 
                                                            fid);
                                 }
                         }
@@ -739,7 +739,7 @@ int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
              ldlm_policy_data_t *policy,
              struct ldlm_res_id *res_id)
 {
-        int flags = 0;
+        int flags = 0; /*XXX: LDLM_FL_LOCAL_ONLY?*/
         int rc;
 
         LASSERT(ns != NULL);
@@ -1109,18 +1109,13 @@ void mdt_lock_handle_fini(struct mdt_lock_handle *lh)
 static void mdt_thread_info_init(struct ptlrpc_request *req,
                                  struct mdt_thread_info *info)
 {
-        memset(info, 0, sizeof *info);
-/*
         int i;
-        memset(&info->mti_rr, 0, sizeof info->mti_rr);
-        memset(&info->mti_attr, 0, sizeof info->mti_attr);
 
-        for (i = 0; i < ARRAY_SIZE(info->mti_rep_buf_size); i++)
-                info->mti_rep_buf_size[i] = 0;
-        info->mti_rep_buf_nr = i;
+        memset(info, 0, sizeof(*info));
+        
+        info->mti_rep_buf_nr = ARRAY_SIZE(info->mti_rep_buf_size);
         for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
                 mdt_lock_handle_init(&info->mti_lh[i]);
-*/
 
         info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
         info->mti_ctxt = req->rq_svc_thread->t_ctx;
@@ -1377,7 +1372,6 @@ static int mdt_handle(struct ptlrpc_request *req)
         ctx = req->rq_svc_thread->t_ctx;
         LASSERT(ctx != NULL);
         LASSERT(ctx->lc_thread == req->rq_svc_thread);
-
         info = lu_context_key_get(ctx, &mdt_thread_key);
         LASSERT(info != NULL);
 
