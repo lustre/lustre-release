@@ -19,6 +19,10 @@ LCTL=${LCTL:-"$CMD_PATH/lctl"}
 
 EXPORT_PATH=${EXPORT_PATH:-"PATH=\$PATH:/sbin:/usr/sbin;"}
 
+# Raid command path
+RAID_CMD_PATH=${RAID_CMD_PATH:-"/sbin"}
+MDADM=${MDADM:-"$RAID_CMD_PATH/mdadm"}
+
 # Some scripts to be called
 SCRIPTS_PATH=${CLUSTER_SCRIPTS_PATH:-"$(cd `dirname $0`; echo $PWD)"}
 MODULE_CONFIG=${SCRIPTS_PATH}/lc_modprobe.sh
@@ -177,12 +181,14 @@ parse_line() {
         # Strip the leading and trailing space-characters
         CONFIG_ITEM[idx]=`expr "${CONFIG_ITEM[idx]}" : '[[:space:]]*\(.*\)[[:space:]]*$'`
 
-        # Remove the surrounded double-quotes
-        if [ -z "`echo \"${CONFIG_ITEM[idx]}\"|sed 's/^".*"$//'`" ]; then
-            CONFIG_ITEM[idx]=`echo "${CONFIG_ITEM[idx]}" | sed 's/^"//' | sed 's/"$//'`
-        fi
+        [ -z "${CONFIG_ITEM[idx]}" ] && continue
 
-        CONFIG_ITEM[idx]=`echo "${CONFIG_ITEM[idx]}" | sed 's/""/"/g'`
+        # Remove the surrounded double-quotes
+        while [ -z "`echo "${CONFIG_ITEM[idx]}"|sed -e 's/^".*"$//'`" ]; do
+            CONFIG_ITEM[idx]=`echo "${CONFIG_ITEM[idx]}" | sed -e 's/^"//' -e 's/"$//'`
+        done
+
+        CONFIG_ITEM[idx]=`echo "${CONFIG_ITEM[idx]}" | sed -e 's/""/"/g'`
     done
 
     return 0

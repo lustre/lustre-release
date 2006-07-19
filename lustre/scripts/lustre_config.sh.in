@@ -539,12 +539,10 @@ construct_mkfs_cmdline() {
     fi
 
     if [ -n "${MKFS_OPTIONS[i]}" ]; then
-        MKFS_OPTIONS[i]=`echo "${MKFS_OPTIONS[i]}" | sed 's/^"//' | sed 's/"$//'`
         MKFS_CMD=${MKFS_CMD}$"--mkfsoptions="$"\""${MKFS_OPTIONS[i]}$"\""$" "
     fi
 
     if [ -n "${MOUNT_OPTIONS[i]}" ]; then
-        MOUNT_OPTIONS[i]=`echo "${MOUNT_OPTIONS[i]}" | sed 's/^"//' | sed 's/"$//'`
         if ! ${MODIFY_FSTAB}; then
             MKFS_CMD=${MKFS_CMD}$"--mountfsoptions="$"\""${MOUNT_OPTIONS[i]}$"\""$" "
         fi
