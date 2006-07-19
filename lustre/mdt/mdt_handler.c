@@ -1138,74 +1138,6 @@ static void mdt_thread_info_fini(struct mdt_thread_info *info)
                 mdt_lock_handle_fini(&info->mti_lh[i]);
 }
 
-static int mds_msg_check_version(struct lustre_msg *msg)
-{
-        int rc;
-
-        /* TODO: enable the below check while really introducing msg version.
-         * it's disabled because it will break compatibility with b1_4.
-         */
-        return (0);
-
-        switch (msg->opc) {
-        case MDS_CONNECT:
-        case MDS_DISCONNECT:
-        case OBD_PING:
-                rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
-                if (rc)
-                        CERROR("bad opc %u version %08x, expecting %08x\n",
-                               msg->opc, msg->version, LUSTRE_OBD_VERSION);
-                break;
-        case MDS_GETSTATUS:
-        case MDS_GETATTR:
-        case MDS_GETATTR_NAME:
-        case MDS_STATFS:
-        case MDS_READPAGE:
-        case MDS_REINT:
-        case MDS_CLOSE:
-        case MDS_DONE_WRITING:
-        case MDS_PIN:
-        case MDS_SYNC:
-        case MDS_GETXATTR:
-        case MDS_SETXATTR:
-        case MDS_SET_INFO:
-        case MDS_QUOTACHECK:
-        case MDS_QUOTACTL:
-        case QUOTA_DQACQ:
-        case QUOTA_DQREL:
-                rc = lustre_msg_check_version(msg, LUSTRE_MDS_VERSION);
-                if (rc)
-                        CERROR("bad opc %u version %08x, expecting %08x\n",
-                               msg->opc, msg->version, LUSTRE_MDS_VERSION);
-                break;
-        case LDLM_ENQUEUE:
-        case LDLM_CONVERT:
-        case LDLM_BL_CALLBACK:
-        case LDLM_CP_CALLBACK:
-                rc = lustre_msg_check_version(msg, LUSTRE_DLM_VERSION);
-                if (rc)
-                        CERROR("bad opc %u version %08x, expecting %08x\n",
-                               msg->opc, msg->version, LUSTRE_DLM_VERSION);
-                break;
-        case OBD_LOG_CANCEL:
-        case LLOG_ORIGIN_HANDLE_CREATE:
-        case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
-        case LLOG_ORIGIN_HANDLE_PREV_BLOCK:
-        case LLOG_ORIGIN_HANDLE_READ_HEADER:
-        case LLOG_ORIGIN_HANDLE_CLOSE:
-        case LLOG_CATINFO:
-                rc = lustre_msg_check_version(msg, LUSTRE_LOG_VERSION);
-                if (rc)
-                        CERROR("bad opc %u version %08x, expecting %08x\n",
-                               msg->opc, msg->version, LUSTRE_LOG_VERSION);
-                break;
-        default:
-                CERROR("MDS unknown opcode %d\n", msg->opc);
-                rc = -ENOTSUPP;
-        }
-        return rc;
-}
-
 static int mdt_filter_recovery_request(struct ptlrpc_request *req,
                                        struct obd_device *obd, int *process)
 {
@@ -1320,6 +1252,9 @@ static int mdt_reply(struct ptlrpc_request *req, int result,
         target_send_reply(req, result, info->mti_fail_id);
         RETURN(0);
 }
+
+/* mds/handler.c */
+extern int mds_msg_check_version(struct lustre_msg *msg);
 
 static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info)
 {

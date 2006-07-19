@@ -1307,7 +1307,7 @@ static int mds_handle_quotactl(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-static int mds_msg_check_version(struct lustre_msg *msg)
+int mds_msg_check_version(struct lustre_msg *msg)
 {
         int rc;
 
@@ -1374,6 +1374,7 @@ static int mds_msg_check_version(struct lustre_msg *msg)
         }
         return rc;
 }
+EXPORT_SYMBOL(mds_msg_check_version);
 
 int mds_handle(struct ptlrpc_request *req)
 {
