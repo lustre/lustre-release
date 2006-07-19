@@ -1812,7 +1812,8 @@ static int filter_reconnect(struct obd_export *exp, struct obd_device *obd,
 }
 
 /* nearly identical to mds_connect */
-static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
+static int filter_connect(const struct lu_context *ctx,
+                          struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid,
                           struct obd_connect_data *data)
 {

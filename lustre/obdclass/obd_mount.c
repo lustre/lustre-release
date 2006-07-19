@@ -34,12 +34,12 @@
 #include <lustre_fsfilt.h>
 #include <obd_class.h>
 #include <lustre/lustre_user.h>
-#include <linux/version.h> 
+#include <linux/version.h>
 #include <lustre_log.h>
 #include <lustre_disk.h>
 #include <lustre_param.h>
 #include <lustre_ver.h>
-                      
+
 static int (*client_fill_super)(struct super_block *sb) = NULL;
 
 /*********** string parsing utils *********/
@@ -125,7 +125,7 @@ static struct lustre_mount_info *server_find_mount(const char *name)
 
         list_for_each(tmp, &server_mount_info_list) {
                 lmi = list_entry(tmp, struct lustre_mount_info, lmi_list_chain);
-                if (strcmp(name, lmi->lmi_name) == 0) 
+                if (strcmp(name, lmi->lmi_name) == 0)
                         RETURN(lmi);
         }
         RETURN(NULL);
@@ -204,7 +204,7 @@ static int server_deregister_mount(const char *name)
 /* Deregister anyone referencing the mnt. Everyone should have
    put_mount in *_cleanup, but this is a catch-all in case of err... */
 /* FIXME this should be removed from lustre_free_lsi, which may be called
-   from server_put_mount _before_ it gets to server_deregister_mount. 
+   from server_put_mount _before_ it gets to server_deregister_mount.
    Leave it here for now for the error message it shows... */
 static void server_deregister_mount_all(struct vfsmount *mnt)
 {
@@ -251,8 +251,8 @@ struct lustre_mount_info *server_get_mount(const char *name)
         lsi = s2lsi(lmi->lmi_sb);
         mntget(lmi->lmi_mnt);
         atomic_inc(&lsi->lsi_mounts);
-        
-        CDEBUG(D_MOUNT, "get_mnt %p from %s, refs=%d, vfscount=%d\n", 
+
+        CDEBUG(D_MOUNT, "get_mnt %p from %s, refs=%d, vfscount=%d\n",
                lmi->lmi_mnt, name, atomic_read(&lsi->lsi_mounts),
                atomic_read(&lmi->lmi_mnt->mnt_count));
 
@@ -629,7 +629,7 @@ static int lustre_start_mgc(struct super_block *sb)
                    or not?  If there's truly one MGS per site, the MGS uuids
                    _should_ all be the same. Maybe check here?
                 */
-                
+
                 /* If we are restarting the MGS, don't try to keep the MGC's
                    old connection, or registration will fail. */
                 if ((lsi->lsi_flags & LSI_SERVER) && IS_MGS(lsi->lsi_ldd)) {
@@ -637,7 +637,7 @@ static int lustre_start_mgc(struct super_block *sb)
                         recov_bk = 1;
                 }
 
-                /* Try all connections, but only once (again). 
+                /* Try all connections, but only once (again).
                    We don't want to block another target from starting
                    (using its local copy of the log), but we do want to connect
                    if at all possible. */
@@ -738,10 +738,10 @@ static int lustre_start_mgc(struct super_block *sb)
         /* Try all connections, but only once. */
         recov_bk = 1;
         rc = obd_set_info_async(obd->obd_self_export,
-                                strlen(KEY_INIT_RECOV_BACKUP), 
+                                strlen(KEY_INIT_RECOV_BACKUP),
                                 KEY_INIT_RECOV_BACKUP,
                                 sizeof(recov_bk), &recov_bk, NULL);
-        if (rc) 
+        if (rc)
                 /* nonfatal */
                 CERROR("can't set %s %d\n", KEY_INIT_RECOV_BACKUP, rc);
 
@@ -749,7 +749,7 @@ static int lustre_start_mgc(struct super_block *sb)
         //ocd.ocd_connect_flags = OBD_CONNECT_ACL;
 
         /* We connect to the MGS at setup, and don't disconnect until cleanup */
-        rc = obd_connect(&mgc_conn, obd, &(obd->obd_uuid), &ocd);
+        rc = obd_connect(NULL, &mgc_conn, obd, &(obd->obd_uuid), &ocd);
         if (rc) {
                 CERROR("connect failed %d\n", rc);
                 GOTO(out, rc);
@@ -846,7 +846,7 @@ static int server_mgc_clear_fs(struct obd_device *mgc)
         ENTRY;
 
         CDEBUG(D_MOUNT, "Unassign mgc disk\n");
-        
+
         rc = obd_set_info_async(mgc->obd_self_export,
                                 strlen("clear_fs"), "clear_fs",
                                 0, NULL, NULL);
@@ -985,7 +985,7 @@ int server_register_target(struct super_block *sb)
                 char *label;
                 int err;
                 CDEBUG(D_MOUNT, "Changing on-disk index from %#x to %#x "
-                       "for %s\n", ldd->ldd_svindex, mti->mti_stripe_index, 
+                       "for %s\n", ldd->ldd_svindex, mti->mti_stripe_index,
                        mti->mti_svname);
                 ldd->ldd_svindex = mti->mti_stripe_index;
                 strncpy(ldd->ldd_svname, mti->mti_svname,
@@ -997,7 +997,7 @@ int server_register_target(struct super_block *sb)
                 if (err)
                         CERROR("Label set error %d\n", err);
                 label = fsfilt_get_label(mgc, lsi->lsi_srv_mnt->mnt_sb);
-                if (label) 
+                if (label)
                         CDEBUG(D_MOUNT, "Disk label changed to %s\n", label);
         }
 
@@ -1307,12 +1307,12 @@ static void server_put_super(struct super_block *sb)
         ENTRY;
 
         LASSERT(lsiflags & LSI_SERVER);
-        
+
         tmpname_sz = strlen(lsi->lsi_ldd->ldd_svname) + 1;
         OBD_ALLOC(tmpname, tmpname_sz);
         memcpy(tmpname, lsi->lsi_ldd->ldd_svname, tmpname_sz);
         CDEBUG(D_MOUNT, "server put_super %s\n", tmpname);
-                                                                                       
+
         /* Stop the target */
         if (IS_MDT(lsi->lsi_ldd) || IS_OST(lsi->lsi_ldd)) {
 

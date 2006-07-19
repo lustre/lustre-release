@@ -134,7 +134,7 @@ int liblustre_process_log(struct config_llog_instance *cfg,
                                 strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
                                 sizeof(allow_recov), &allow_recov, NULL);
 
-        rc = obd_connect(&mdc_conn, obd, &mdc_uuid, ocd);
+        rc = obd_connect(NULL, &mdc_conn, obd, &mdc_uuid, ocd);
         if (rc) {
                 CERROR("cannot connect to %s: rc = %d\n", mdsname, rc);
                 GOTO(out_cleanup, rc);

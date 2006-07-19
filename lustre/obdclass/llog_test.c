@@ -461,7 +461,8 @@ static int llog_test_6(struct obd_device *obd, char *name)
                 RETURN(-ENOENT);
         }
 
-        rc = obd_connect(&exph, mdc_obd, &uuid, NULL /* obd_connect_data */);
+        rc = obd_connect(NULL,
+                         &exph, mdc_obd, &uuid, NULL /* obd_connect_data */);
         if (rc) {
                 CERROR("6: failed to connect to MDC: %s\n", mdc_obd->obd_name);
                 RETURN(rc);

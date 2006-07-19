@@ -130,8 +130,8 @@ struct mdt_device {
          * or should be placed somewhere else. */
         int                        mdt_max_mdsize;
         int                        mdt_max_cookiesize;
-        __u64                      mdt_mount_count;     
-        
+        __u64                      mdt_mount_count;
+
         struct mdt_server_data     mdt_msd;
         unsigned long              mdt_client_bitmap[(LR_MAX_CLIENTS >> 3) / sizeof(long)];
 };
@@ -270,13 +270,13 @@ static inline struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
          return info->mti_pill.rc_req;
 }
 
-static inline void mdt_object_get(const struct lu_context *ctxt, 
+static inline void mdt_object_get(const struct lu_context *ctxt,
                                   struct mdt_object *o)
 {
         lu_object_get(&o->mot_obj.mo_lu);
 }
 
-static inline void mdt_object_put(const struct lu_context *ctxt, 
+static inline void mdt_object_put(const struct lu_context *ctxt,
                                   struct mdt_object *o)
 {
         lu_object_put(ctxt, &o->mot_obj.mo_lu);
@@ -289,27 +289,27 @@ static inline const struct lu_fid *mdt_object_fid(struct mdt_object *o)
 
 int mdt_object_lock(struct mdt_thread_info *,
                     struct mdt_object *,
-                    struct mdt_lock_handle *, 
+                    struct mdt_lock_handle *,
                     __u64);
 
-void mdt_object_unlock(struct mdt_thread_info *, 
+void mdt_object_unlock(struct mdt_thread_info *,
                        struct mdt_object *,
                        struct mdt_lock_handle *);
 
 struct mdt_object *mdt_object_find(const struct lu_context *,
-                                   struct mdt_device *, 
+                                   struct mdt_device *,
                                    const struct lu_fid *);
 struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *,
                                         const struct lu_fid *,
                                         struct mdt_lock_handle *,
                                         __u64);
-void mdt_object_unlock_put(struct mdt_thread_info *, 
+void mdt_object_unlock_put(struct mdt_thread_info *,
                            struct mdt_object *,
                            struct mdt_lock_handle *);
 
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 int mdt_reint_rec(struct mdt_thread_info *);
-void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr, 
+void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr,
                         const struct lu_fid *fid);
 
 int mdt_getxattr(struct mdt_thread_info *info);
@@ -343,7 +343,7 @@ int mdt_client_add(const struct lu_context *ctxt,
 
 int mdt_pin(struct mdt_thread_info* info);
 
-int mdt_lock_new_child(struct mdt_thread_info *info, 
+int mdt_lock_new_child(struct mdt_thread_info *info,
                        struct mdt_object *o,
                        struct mdt_lock_handle *child_lockh);
 

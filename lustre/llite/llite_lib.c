@@ -68,7 +68,7 @@ struct ll_sb_info *ll_init_sbi(void)
                 sbi->ll_async_page_max = (num_physpages / 4) * 3;
         sbi->ll_ra_info.ra_max_pages = min(num_physpages / 8,
                                            SBI_DEFAULT_READAHEAD_MAX);
-        sbi->ll_ra_info.ra_max_read_ahead_whole_pages = 
+        sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
                                            SBI_DEFAULT_READAHEAD_WHOLE_MAX;
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
@@ -193,7 +193,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         /* real client */
         data->ocd_connect_flags |= OBD_CONNECT_REAL;
 
-        err = obd_connect(&md_conn, obd, &sbi->ll_sb_uuid, data);
+        err = obd_connect(NULL, &md_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An MDT (mdc %s) is performing recovery, of which this"
                        " client is not a part.  Please wait for recovery to "
@@ -250,7 +250,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 CERROR("can't init FIDs framework, rc %d\n", err);
                 GOTO(out_mdc, err);
         }
-        
+
         obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
@@ -267,7 +267,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         obd->obd_upcall.onu_owner = &sbi->ll_lco;
         obd->obd_upcall.onu_upcall = ll_ocd_update;
 
-        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, data);
+        err = obd_connect(NULL, &osc_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
                 CERROR("An OST (osc %s) is performing recovery, of which this"
                        " client is not a part.  Please wait for recovery to "
@@ -311,7 +311,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 CERROR("can't init FIDs framework, rc %d\n", err);
                 GOTO(out_osc, err);
         }
-        
+
         err = md_getstatus(sbi->ll_md_exp, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
@@ -749,14 +749,14 @@ void ll_put_super(struct super_block *sb)
                 /* We need to set force before the lov_disconnect in
                 lustre_common_put_super, since l_d cleans up osc's as well. */
                 next = 0;
-                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) 
+                while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next))
                        != NULL) {
                         obd->obd_force = force;
                 }
         }
 
         client_common_put_super(sb);
-                
+
         next = 0;
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) !=NULL) {
                 class_manual_cleanup(obd);
@@ -1073,14 +1073,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
                        inode->i_ino, LTIME_S(attr->ia_mtime));
-                
+
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_valid = OBD_MD_FLID;
 
                 flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
                         OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                         OBD_MD_FLFID | OBD_MD_FLGENER;
-                
+
                 obdo_from_inode(&oa, inode, flags);
                 rc = obd_setattr(sbi->ll_dt_exp, &oa, lsm, NULL);
                 if (rc)
@@ -1210,10 +1210,10 @@ void ll_inode_size_unlock(struct inode *inode, int unlock_lsm)
 static void ll_replace_lsm(struct inode *inode, struct lov_stripe_md *lsm)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
- 
+
         dump_lsm(D_INODE, lsm);
-        dump_lsm(D_INODE, lli->lli_smd); 
-        LASSERTF(lsm->lsm_magic == LOV_MAGIC_JOIN, 
+        dump_lsm(D_INODE, lli->lli_smd);
+        LASSERTF(lsm->lsm_magic == LOV_MAGIC_JOIN,
                  "lsm must be joined lsm %p\n", lsm);
         obd_free_memmd(ll_i2dtexp(inode), &lli->lli_smd);
         CDEBUG(D_INODE, "replace lsm %p to lli_smd %p for inode %lu%u(%p)\n",
@@ -1233,7 +1233,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
                 if (lli->lli_smd == NULL) {
-                        if (lsm->lsm_magic != LOV_MAGIC && 
+                        if (lsm->lsm_magic != LOV_MAGIC &&
                             lsm->lsm_magic != LOV_MAGIC_JOIN) {
                                 dump_lsm(D_ERROR, lsm);
                                 LBUG();
@@ -1249,7 +1249,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
                         if (lli->lli_smd->lsm_magic == lsm->lsm_magic &&
-                             lli->lli_smd->lsm_stripe_count == 
+                             lli->lli_smd->lsm_stripe_count ==
                                         lsm->lsm_stripe_count) {
                                 if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
                                         CERROR("lsm mismatch for inode %ld\n",
@@ -1260,7 +1260,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                         dump_lsm(D_ERROR, lsm);
                                         LBUG();
                                 }
-                        } else 
+                        } else
                                 ll_replace_lsm(inode, lsm);
                 }
                 /* bug 2844 - limit i_blksize for broken user-space apps */
@@ -1324,7 +1324,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 
         if (body->valid & OBD_MD_FLID)
                 lli->lli_fid = body->fid1;
-        
+
         LASSERT(fid_seq(&lli->lli_fid) != 0);
 }
 
@@ -1404,7 +1404,7 @@ void ll_delete_inode(struct inode *inode)
         if (rc) {
                 CERROR("fid_delete() failed, rc %d\n", rc);
         }
-        
+
         EXIT;
 }
 
@@ -1555,18 +1555,18 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         int err;
         __u32 read_only;
- 
+
         if ((*flags & MS_RDONLY) != (sb->s_flags & MS_RDONLY)) {
                 read_only = *flags & MS_RDONLY;
                 err = obd_set_info_async(sbi->ll_md_exp, strlen("read-only"),
-                                         "read-only", sizeof(read_only), 
+                                         "read-only", sizeof(read_only),
                                          &read_only, NULL);
                 if (err) {
                         CERROR("Failed to change the read-only flag during "
                                "remount: %d\n", err);
                         return err;
                 }
- 
+
                 if (read_only)
                         sb->s_flags |= MS_RDONLY;
                 else
@@ -1601,7 +1601,7 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
                  * client generated for creating some inode. So using ->fid1 is
                  * okay here. */
                 LASSERT(fid_is_sane(&md.body->fid1));
-                
+
                 *inode = ll_iget(sb, ll_fid_build_ino(sbi, &md.body->fid1), &md);
                 if (*inode == NULL || is_bad_inode(*inode)) {
                         md_free_lustre_md(sbi->ll_dt_exp, &md);

@@ -574,6 +574,10 @@ int lu_context_key_register(struct lu_context_key *key)
         int result;
         int i;
 
+        LASSERT(key->lct_init != NULL);
+        LASSERT(key->lct_fini != NULL);
+        LASSERT(key->lct_tags != 0);
+
         result = -ENFILE;
         spin_lock(&lu_keys_guard);
         for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {

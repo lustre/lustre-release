@@ -338,7 +338,8 @@ int client_obd_cleanup(struct obd_device *obddev)
 }
 
 /* ->o_connect() method for client side (OSC and MDC and MGC) */
-int client_connect_import(struct lustre_handle *dlm_handle,
+int client_connect_import(const struct lu_context *ctx,
+                          struct lustre_handle *dlm_handle,
                           struct obd_device *obd, struct obd_uuid *cluuid,
                           struct obd_connect_data *data)
 {
@@ -692,7 +693,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                         rc = -EBUSY;
                 } else {
  dont_check_exports:
-                        rc = obd_connect(&conn, target, &cluuid, data);
+                        rc = obd_connect(req->rq_svc_thread->t_ctx,
+                                         &conn, target, &cluuid, data);
                 }
         } else {
                 rc = obd_reconnect(export, target, &cluuid, data);
@@ -969,7 +971,7 @@ static void reset_recovery_timer(struct obd_device *obd)
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
         }
-        cfs_timer_arm(&obd->obd_recovery_timer, 
+        cfs_timer_arm(&obd->obd_recovery_timer,
                       cfs_time_shift(OBD_RECOVERY_TIMEOUT));
         spin_unlock_bh(&obd->obd_processing_task_lock);
         CDEBUG(D_HA, "%s: timer will expire in %u seconds\n", obd->obd_name,

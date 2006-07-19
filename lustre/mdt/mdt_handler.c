@@ -83,22 +83,30 @@ enum mdt_handler_flags {
         /*
          * struct mdt_body is passed in the incoming message, and object
          * identified by this fid exists on disk.
+         *
+         * "habeo corpus" == "I have a body"
          */
         HABEO_CORPUS = (1 << 0),
         /*
          * struct ldlm_request is passed in the incoming message.
+         *
+         * "habeo clavis" == "I have a key"
          */
         HABEO_CLAVIS = (1 << 1),
         /*
          * this request has fixed reply format, so that reply message can be
          * packed by generic code.
+         *
+         * "habeo refero" == "I have a reply"
          */
         HABEO_REFERO = (1 << 2),
         /*
          * this request will modify something, so check whether the filesystem
          * is readonly or not, then return -EROFS to client asap if necessary.
+         *
+         * "mutabor" == "I shall modify"
          */
-        HABEO_MUTABOR = (1 << 3)
+        MUTABOR      = (1 << 3)
 };
 
 struct mdt_opc_slice {
@@ -1036,10 +1044,10 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         }
 
 
-        if (result == 0 && flags & HABEO_MUTABOR) {
-                if (req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
-                        result = -EROFS;
-        }
+        if (result == 0 && flags & MUTABOR &&
+            req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                result = -EROFS;
+
         if (result == 0 && flags & HABEO_CLAVIS) {
                 struct ldlm_request *dlm_req;
 
@@ -1346,13 +1354,13 @@ static struct mdt_it_flavor {
         },
         [MDT_IT_OCREAT]   = {
                 .it_fmt   = &RQF_LDLM_INTENT,
-                .it_flags = HABEO_MUTABOR,
+                .it_flags = MUTABOR,
                 .it_act   = mdt_intent_reint,
                 .it_reint = REINT_OPEN
         },
         [MDT_IT_CREATE]   = {
                 .it_fmt   = &RQF_LDLM_INTENT,
-                .it_flags = HABEO_MUTABOR,
+                .it_flags = MUTABOR,
                 .it_act   = mdt_intent_reint,
                 .it_reint = REINT_CREATE
         },
@@ -1373,13 +1381,13 @@ static struct mdt_it_flavor {
         },
         [MDT_IT_UNLINK]   = {
                 .it_fmt   = &RQF_LDLM_INTENT_UNLINK,
-                .it_flags = HABEO_MUTABOR,
+                .it_flags = MUTABOR,
                 .it_act   = NULL, /* XXX can be mdt_intent_reint, ? */
                 .it_reint = REINT_UNLINK
         },
         [MDT_IT_TRUNC]    = {
                 .it_fmt   = NULL,
-                .it_flags = HABEO_MUTABOR,
+                .it_flags = MUTABOR,
                 .it_act   = NULL
         },
         [MDT_IT_GETXATTR] = {
@@ -1587,7 +1595,7 @@ static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
         rc = mdt_unpack_req_pack_rep(info, flv->it_flags);
         if (rc == 0) {
                 struct ptlrpc_request *req = mdt_info_req(info);
-                if (flv->it_flags & HABEO_MUTABOR &&
+                if (flv->it_flags & MUTABOR &&
                     req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
                         rc = -EROFS;
         }
@@ -1749,7 +1757,7 @@ static int mdt_seq_init_ctlr(const struct lu_context *ctx,
                 CDEBUG(D_CONFIG, "connect to controller %s(%s)\n",
                        mdc->obd_name, mdc->obd_uuid.uuid);
 
-                rc = obd_connect(&conn, mdc, &mdc->obd_uuid, NULL);
+                rc = obd_connect(ctx, &conn, mdc, &mdc->obd_uuid, NULL);
 
                 if (rc) {
                         CERROR("target %s connect error %d\n",
@@ -2319,7 +2327,8 @@ static int mdt_connect0(struct mdt_device *mdt,
 }
 
 /* mds_connect copy */
-static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
+static int mdt_obd_connect(const struct lu_context *ctx,
+                           struct lustre_handle *conn, struct obd_device *obd,
                            struct obd_uuid *cluuid,
                            struct obd_connect_data *data)
 {
@@ -2327,10 +2336,10 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct mdt_device      *mdt;
         struct mdt_export_data *med;
         struct mdt_client_data *mcd;
-        struct lu_context       ctxt;
         int                     rc;
         ENTRY;
 
+        LASSERT(ctx != NULL);
         if (!conn || !obd || !cluuid)
                 RETURN(-EINVAL);
 
@@ -2350,15 +2359,9 @@ static int mdt_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                 if (mcd != NULL) {
                         memcpy(mcd->mcd_uuid, cluuid, sizeof mcd->mcd_uuid);
                         med->med_mcd = mcd;
-                        rc = lu_context_init(&ctxt, LCT_MD_THREAD);
-                        if (rc == 0) {
-                                lu_context_enter(&ctxt);
-                                /*
-                                * rc = mdt_client_add(&ctxt, mdt, med, -1);
-                                */
-                                lu_context_exit(&ctxt);
-                                lu_context_fini(&ctxt);
-                        }
+                        /*
+                         * rc = mdt_client_add(ctx, mdt, med, -1);
+                         */
                         if (rc != 0)
                                 OBD_FREE_PTR(mcd);
                 } else
@@ -2673,12 +2676,12 @@ DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR,      mdt_getattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR_NAME, mdt_getattr_name),
-DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO|HABEO_MUTABOR,
+DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO|MUTABOR,
                                           SETXATTR,     mdt_setxattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              READPAGE,     mdt_readpage),
-DEF_MDT_HNDL_F(0                        |HABEO_MUTABOR,
+DEF_MDT_HNDL_F(0                        |MUTABOR,
                                           REINT,        mdt_reint),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, CLOSE,        mdt_close),
 DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),

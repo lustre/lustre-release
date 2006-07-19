@@ -423,9 +423,9 @@ echo_get_stripe_off_id (struct lov_stripe_md *lsm, obd_off *offp, obd_id *idp)
         *offp = offset * stripe_size + woffset % stripe_size;
 }
 
-static void 
-echo_client_page_debug_setup(struct lov_stripe_md *lsm, 
-                             cfs_page_t *page, int rw, obd_id id, 
+static void
+echo_client_page_debug_setup(struct lov_stripe_md *lsm,
+                             cfs_page_t *page, int rw, obd_id id,
                              obd_off offset, obd_off count)
 {
         char    *addr;
@@ -454,8 +454,8 @@ echo_client_page_debug_setup(struct lov_stripe_md *lsm,
         cfs_kunmap(page);
 }
 
-static int echo_client_page_debug_check(struct lov_stripe_md *lsm, 
-                                        cfs_page_t *page, obd_id id, 
+static int echo_client_page_debug_check(struct lov_stripe_md *lsm,
+                                        cfs_page_t *page, obd_id id,
                                         obd_off offset, obd_off count)
 {
         obd_off stripe_off;
@@ -848,8 +848,8 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                 if (oa->o_id != ECHO_PERSISTENT_OBJID &&
                     (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
                     (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0)
-                        echo_client_page_debug_setup(lsm, eap->eap_page, rw, 
-                                                     oa->o_id, 
+                        echo_client_page_debug_setup(lsm, eap->eap_page, rw,
+                                                     oa->o_id,
                                                      eap->eap_off, CFS_PAGE_SIZE);
 
                 /* always asserts urgent, which isn't quite right */
@@ -1354,7 +1354,7 @@ static int echo_client_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         ocd->ocd_connect_flags = OBD_CONNECT_VERSION;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
 
-        rc = obd_connect(&conn, tgt, &echo_uuid, ocd);
+        rc = obd_connect(NULL, &conn, tgt, &echo_uuid, ocd);
 
         OBD_FREE(ocd, sizeof(*ocd));
 
@@ -1399,7 +1399,8 @@ static int echo_client_cleanup(struct obd_device *obddev)
         RETURN(rc);
 }
 
-static int echo_client_connect(struct lustre_handle *conn,
+static int echo_client_connect(const struct lu_context *ctx,
+                               struct lustre_handle *conn,
                                struct obd_device *src, struct obd_uuid *cluuid,
                                struct obd_connect_data *data)
 {

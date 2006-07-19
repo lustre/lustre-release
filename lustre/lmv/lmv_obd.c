@@ -161,7 +161,8 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
 
 /* this is fake connect function. Its purpose is to initialize lmv and say
  * caller that everything is okay. Real connection will be performed later. */
-static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
+static int lmv_connect(const struct lu_context *ctx,
+                       struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
 #ifdef __KERNEL__
@@ -330,7 +331,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 RETURN(-EINVAL);
         }
 
-        rc = obd_connect(&conn, mdc_obd, &lmv_mdc_uuid, &lmv->conn_data);
+        rc = obd_connect(NULL, &conn, mdc_obd, &lmv_mdc_uuid, &lmv->conn_data);
         if (rc) {
                 CERROR("target %s connect error %d\n", tgt->uuid.uuid, rc);
                 RETURN(rc);

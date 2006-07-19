@@ -49,7 +49,8 @@ enum {
         LPROC_ECHO_LAST = LPROC_ECHO_WRITE_BYTES +1
 };
 
-static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
+static int echo_connect(const struct lu_context *ctx,
+                        struct lustre_handle *conn, struct obd_device *obd,
                         struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         data->ocd_connect_flags &= ECHO_CONNECT_SUPPORTED;

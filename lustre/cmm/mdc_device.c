@@ -51,7 +51,8 @@ static struct md_device_operations mdc_md_ops = { 0 };
  * mdc_add_obd() find that obd by uuid and connects to it.
  * Local MDT uuid is used for connection
  * */
-static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
+static int mdc_add_obd(const struct lu_context *ctx,
+                       struct mdc_device *mc, struct lustre_cfg *cfg)
 {
         struct mdc_cli_desc *desc = &mc->mc_desc;
         struct obd_device *mdc, *mdt;
@@ -93,7 +94,7 @@ static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
                 CDEBUG(D_CONFIG, "connect to %s(%s)\n",
                        mdc->obd_name, mdc->obd_uuid.uuid);
 
-                rc = obd_connect(conn, mdc, &mdt->obd_uuid, NULL);
+                rc = obd_connect(ctx, conn, mdc, &mdt->obd_uuid, NULL);
 
                 if (rc) {
                         CERROR("target %s connect error %d\n",
@@ -135,7 +136,7 @@ static int mdc_process_config(const struct lu_context *ctx,
         ENTRY;
         switch (cfg->lcfg_command) {
         case LCFG_ADD_MDC:
-                rc = mdc_add_obd(mc, cfg);
+                rc = mdc_add_obd(ctx, mc, cfg);
                 break;
         default:
                 rc = -EOPNOTSUPP;

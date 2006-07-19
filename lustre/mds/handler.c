@@ -310,7 +310,8 @@ static int mds_reconnect(struct obd_export *exp, struct obd_device *obd,
  * about that client, like open files, the last operation number it did
  * on the server, etc.
  */
-static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
+static int mds_connect(const struct lu_context *ctx,
+                       struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         struct obd_export *exp;

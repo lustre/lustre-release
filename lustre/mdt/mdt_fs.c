@@ -327,8 +327,9 @@ static int mdt_init_server_data(const struct lu_context *ctxt,
 
                 last_transno = le64_to_cpu(mcd->mcd_last_transno);
 
-                /* These exports are cleaned up by mdt_obd_disconnect(), so they
-                 * need to be set up like real exports as mdt_obd_connect() does.
+                /* These exports are cleaned up by mdt_obd_disconnect(), so
+                 * they need to be set up like real exports as
+                 * mdt_obd_connect() does.
                  */
                 CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
                        " srv lr: "LPU64" lx: "LPU64"\n", mcd->mcd_uuid, cl_idx,

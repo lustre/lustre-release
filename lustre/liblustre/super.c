@@ -346,7 +346,7 @@ static struct inode* llu_new_inode(struct filesys *fs,
 #endif
                 /* FIXME: fix this later */
                 .st_mode = 0,
-                
+
                 .st_uid  = geteuid(),
                 .st_gid  = getegid(),
         };
@@ -436,7 +436,7 @@ static int llu_inode_revalidate(struct inode *inode)
                         ealen = obd_size_diskmd(sbi->ll_dt_exp, NULL);
                         valid |= OBD_MD_FLEASIZE;
                 }
-                rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), 
+                rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
                                 valid, ealen, &req);
                 if (rc) {
                         CERROR("failure %d inode %llu\n", rc,
@@ -538,7 +538,7 @@ void llu_clear_inode(struct inode *inode)
                inode);
 
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(lli->lli_flags));
-        md_change_cbdata(sbi->ll_md_exp, ll_inode2fid(inode), 
+        md_change_cbdata(sbi->ll_md_exp, ll_inode2fid(inode),
                          null_if_equal, inode);
 
         if (lli->lli_smd)
@@ -1231,7 +1231,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
                 .ph_cname = qstr,
                 .ph_opc = LUSTRE_OPC_MKDIR
         };
-        
+
         int err = -EMLINK;
         ENTRY;
 
@@ -1299,7 +1299,7 @@ static int llu_file_flock(struct inode *ino,
         struct ldlm_res_id res_id =
                 { .name = {fid_seq(&lli->lli_fid),
                            fid_oid(&lli->lli_fid),
-                           fid_ver(&lli->lli_fid), 
+                           fid_ver(&lli->lli_fid),
                            LDLM_FLOCK} };
         struct lustre_handle lockh = {0};
         ldlm_policy_data_t flock;
@@ -1824,7 +1824,7 @@ llu_fsswop_mount(const char *source,
         ocd.ocd_version = LUSTRE_VERSION_CODE;
 
         /* setup mdc */
-        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, &ocd);
+        err = obd_connect(NULL, &mdc_conn, obd, &sbi->ll_sb_uuid, &ocd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, err);
@@ -1858,7 +1858,7 @@ llu_fsswop_mount(const char *source,
         ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK|OBD_CONNECT_REQPORTAL|
                                 OBD_CONNECT_VERSION|OBD_CONNECT_TRUNCLOCK;
         ocd.ocd_version = LUSTRE_VERSION_CODE;
-        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, &ocd);
+        err = obd_connect(NULL, &osc_conn, obd, &sbi->ll_sb_uuid, &ocd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, err);

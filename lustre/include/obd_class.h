@@ -670,7 +670,8 @@ static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
         RETURN(rc);
 }
 
-static inline int obd_connect(struct lustre_handle *conn,struct obd_device *obd,
+static inline int obd_connect(const struct lu_context *ctx,
+                              struct lustre_handle *conn,struct obd_device *obd,
                               struct obd_uuid *cluuid,
                               struct obd_connect_data *d)
 {
@@ -682,7 +683,7 @@ static inline int obd_connect(struct lustre_handle *conn,struct obd_device *obd,
         OBD_CHECK_DT_OP(obd, connect, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, connect);
 
-        rc = OBP(obd, connect)(conn, obd, cluuid, d);
+        rc = OBP(obd, connect)(ctx, conn, obd, cluuid, d);
         /* check that only subset is granted */
         LASSERT(ergo(d != NULL,
                      (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));

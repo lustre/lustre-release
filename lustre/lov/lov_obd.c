@@ -144,7 +144,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                 RETURN(0);
         }
 
-        rc = obd_connect(&conn, tgt_obd, &lov_osc_uuid, data);
+        rc = obd_connect(NULL, &conn, tgt_obd, &lov_osc_uuid, data);
         if (rc) {
                 CERROR("Target %s connect error %d\n",
                        obd_uuid2str(tgt_uuid), rc);
@@ -194,7 +194,8 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         RETURN(0);
 }
 
-static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
+static int lov_connect(const struct lu_context *ctx,
+                       struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
         struct lov_obd *lov = &obd->u.lov;

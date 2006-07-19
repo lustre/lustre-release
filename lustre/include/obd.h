@@ -406,7 +406,7 @@ struct mgs_obd {
 struct md_lov_info;
 
 struct md_lov_ops {
-        int (*ml_read_objids)(struct obd_device *obd, struct md_lov_info *mli, 
+        int (*ml_read_objids)(struct obd_device *obd, struct md_lov_info *mli,
                               const void *ctxt);
         int (*ml_write_objids)(struct obd_device *obd, struct md_lov_info *mli,
                                const void *ctxt);
@@ -548,7 +548,7 @@ struct lmv_obd {
         int                     max_cookiesize;
         int                     server_timeout;
         struct semaphore        init_sem;
-        
+
         struct lmv_tgt_desc     *tgts;
         int                     tgts_size;
 
@@ -572,7 +572,7 @@ struct niobuf_local {
 #define LUSTRE_OPC_SYMLINK   (1 << 1)
 #define LUSTRE_OPC_MKNOD     (1 << 2)
 #define LUSTRE_OPC_CREATE    (1 << 3)
-        
+
 struct lu_placement_hint {
         struct qstr *ph_pname;
         struct qstr *ph_cname;
@@ -752,7 +752,7 @@ struct obd_device {
         struct fsfilt_operations *obd_fsops;
         spinlock_t              obd_osfs_lock;
         struct obd_statfs       obd_osfs;       /* locked by obd_osfs_lock */
-        cfs_time_t              obd_osfs_age;   
+        cfs_time_t              obd_osfs_age;
         struct lvfs_run_ctxt    obd_lvfs_ctxt;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
@@ -799,7 +799,7 @@ struct obd_device {
 
         unsigned int           md_cntr_base;
         struct lprocfs_stats  *md_stats;
-    
+
         cfs_proc_dir_entry_t  *obd_svc_procroot;
         struct lprocfs_stats  *obd_svc_stats;
 };
@@ -830,6 +830,8 @@ enum obd_cleanup_stage {
 #define KEY_INIT_RECOV "initial_recov"
 #define KEY_INIT_RECOV_BACKUP "init_recov_bk"
 
+struct lu_context;
+
 struct obd_ops {
         struct module *o_owner;
         int (*o_iocontrol)(unsigned int cmd, struct obd_export *exp, int len,
@@ -855,7 +857,8 @@ struct obd_ops {
          * data. @ocd->ocd_connect_flags is modified to reflect flags actually
          * granted by the target, which are guaranteed to be a subset of flags
          * asked for. If @ocd == NULL, use default parameters. */
-        int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
+        int (*o_connect)(const struct lu_context *ctx,
+                         struct lustre_handle *conn, struct obd_device *src,
                          struct obd_uuid *cluuid, struct obd_connect_data *ocd);
         int (*o_reconnect)(struct obd_export *exp, struct obd_device *src,
                            struct obd_uuid *cluuid,
@@ -868,9 +871,9 @@ struct obd_ops {
 
         int (*o_fid_alloc)(struct obd_export *exp, struct lu_fid *fid,
                            struct lu_placement_hint *hint);
-        
+
         int (*o_fid_delete)(struct obd_export *exp, struct lu_fid *fid);
-        
+
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
                         unsigned long max_age);
         int (*o_packmd)(struct obd_export *exp, struct lov_mds_md **disk_tgt,
@@ -1059,23 +1062,23 @@ struct md_ops {
                           int, int, int, struct ptlrpc_request **);
 
         int (*m_init_ea_size)(struct obd_export *, int, int, int);
-        
+
         int (*m_get_lustre_md)(struct obd_export *, struct ptlrpc_request *,
                                int, struct obd_export *, struct lustre_md *);
-        
+
         int (*m_free_lustre_md)(struct obd_export *, struct lustre_md *);
-        
+
         int (*m_set_open_replay_data)(struct obd_export *,
                                       struct obd_client_handle *,
                                       struct ptlrpc_request *);
         int (*m_clear_open_replay_data)(struct obd_export *,
                                         struct obd_client_handle *);
         int (*m_set_lock_data)(struct obd_export *, __u64 *, void *);
-        
+
         int (*m_lock_match)(struct obd_export *, int, struct lu_fid *,
                             ldlm_type_t, ldlm_policy_data_t *, ldlm_mode_t,
                             struct lustre_handle *);
-                
+
         int (*m_cancel_unused)(struct obd_export *, struct lu_fid *,
                                int flags, void *opaque);
 
