@@ -98,6 +98,7 @@ static void fld_key_fini(const struct lu_context *ctx,
 static int fld_key_registered = 0;
 
 static struct lu_context_key fld_thread_key = {
+        .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD,
         .lct_init = fld_key_init,
         .lct_fini = fld_key_fini
 };

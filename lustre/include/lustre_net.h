@@ -575,6 +575,11 @@ struct ptlrpc_service {
         cfs_waitq_t              srv_free_rs_waitq;
 
         /*
+         * Tags for lu_context associated with this thread, see struct
+         * lu_context.
+         */
+        __u32                    srv_ctx_tags;
+        /*
          * if non-NULL called during thread creation (ptlrpc_start_thread())
          * to initialize service specific per-thread state.
          */
@@ -728,6 +733,7 @@ struct ptlrpc_service_conf {
         int psc_rep_portal;
         int psc_watchdog_timeout; /* in ms */
         int psc_num_threads;
+        __u32 psc_ctx_tags;
 };
 
 /* ptlrpc/service.c */
@@ -746,7 +752,8 @@ struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
                                        int watchdog_timeout, /* in ms */
                                        svc_handler_t, char *name,
                                        cfs_proc_dir_entry_t *proc_entry,
-                                       svcreq_printfn_t, int num_threads);
+                                       svcreq_printfn_t, int num_threads,
+                                       __u32 ctx_tags);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 
 int ptlrpc_start_threads(struct obd_device *dev, struct ptlrpc_service *svc,

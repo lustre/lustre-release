@@ -653,7 +653,7 @@ static int keys_init(struct lu_context *ctx)
                         struct lu_context_key *key;
 
                         key = lu_keys[i];
-                        if (key != NULL) {
+                        if (key != NULL && key->lct_tags & ctx->lc_tags) {
                                 void *value;
 
                                 LASSERT(key->lct_init != NULL);
@@ -677,9 +677,10 @@ static int keys_init(struct lu_context *ctx)
 /*
  * Initialize context data-structure. Create values for all keys.
  */
-int lu_context_init(struct lu_context *ctx)
+int lu_context_init(struct lu_context *ctx, __u32 tags)
 {
         memset(ctx, 0, sizeof *ctx);
+        ctx->lc_tags = tags;
         keys_init(ctx);
         return 0;
 }

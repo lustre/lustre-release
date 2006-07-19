@@ -357,7 +357,7 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
         if (ldt != NULL) {
                 struct lu_context ctx;
 
-                rc = lu_context_init(&ctx);
+                rc = lu_context_init(&ctx, ldt->ldt_ctx_tags);
                 if (rc == 0) {
                         lu_context_enter(&ctx);
                         d = ldt->ldt_ops->ldto_device_alloc(&ctx, ldt, cfg);
@@ -407,7 +407,7 @@ static inline int obd_cleanup(struct obd_device *obd)
         if (ldt != NULL && d != NULL) {
                 struct lu_context ctx;
 
-                rc = lu_context_init(&ctx);
+                rc = lu_context_init(&ctx, ldt->ldt_ctx_tags);
                 if (rc == 0) {
                         lu_context_enter(&ctx);
                         ldt->ldt_ops->ldto_device_free(&ctx, d);
@@ -441,7 +441,7 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
         if (ldt != NULL && d != NULL) {
                 struct lu_context ctx;
 
-                rc = lu_context_init(&ctx);
+                rc = lu_context_init(&ctx, ldt->ldt_ctx_tags);
                 if (rc == 0) {
                         lu_context_enter(&ctx);
                         rc = d->ld_ops->ldo_process_config(&ctx, d, data);

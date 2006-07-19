@@ -71,7 +71,7 @@ seq_server_init_ctlr(struct lu_server_seq *seq,
 {
         int rc = 0;
         ENTRY;
-        
+
         LASSERT(cli != NULL);
 
         if (seq->seq_cli) {
@@ -85,7 +85,7 @@ seq_server_init_ctlr(struct lu_server_seq *seq,
                cli->seq_exp->exp_client_uuid.uuid);
 
         down(&seq->seq_sem);
-        
+
         /* assign controller */
         seq->seq_cli = cli;
 
@@ -124,7 +124,7 @@ seq_server_fini_ctlr(struct lu_server_seq *seq)
         down(&seq->seq_sem);
         seq->seq_cli = NULL;
         up(&seq->seq_sem);
-        
+
         EXIT;
 }
 EXPORT_SYMBOL(seq_server_fini_ctlr);
@@ -141,7 +141,7 @@ __seq_server_alloc_super(struct lu_server_seq *seq,
         ENTRY;
 
         LASSERT(range_is_sane(space));
-        
+
         if (range_space(space) < seq->seq_super_width) {
                 CWARN("sequences space is going to exhaust soon. "
                       "Only can allocate "LPU64" sequences\n",
@@ -167,7 +167,7 @@ __seq_server_alloc_super(struct lu_server_seq *seq,
                 CDEBUG(D_INFO, "SEQ-MGR(srv): allocated super-sequence "
                        "["LPX64"-"LPX64"]\n", range->lr_start, range->lr_end);
         }
-        
+
         RETURN(rc);
 }
 
@@ -182,7 +182,7 @@ seq_server_alloc_super(struct lu_server_seq *seq,
         down(&seq->seq_sem);
         rc = __seq_server_alloc_super(seq, range, ctx);
         up(&seq->seq_sem);
-        
+
         RETURN(rc);
 }
 
@@ -243,13 +243,13 @@ seq_server_alloc_meta(struct lu_server_seq *seq,
         down(&seq->seq_sem);
         rc = __seq_server_alloc_meta(seq, range, ctx);
         up(&seq->seq_sem);
-        
+
         RETURN(rc);
 }
 
 static int
 seq_server_handle(struct lu_server_seq *seq,
-                  const struct lu_context *ctx, 
+                  const struct lu_context *ctx,
                   struct lu_range *range,
                   __u32 opc)
 {
@@ -273,7 +273,7 @@ seq_server_handle(struct lu_server_seq *seq,
 
 static int
 seq_req_handle0(const struct lu_context *ctx,
-                struct ptlrpc_request *req) 
+                struct ptlrpc_request *req)
 {
         int rep_buf_size[2] = { 0, };
         struct obd_device *obd;
@@ -301,7 +301,7 @@ seq_req_handle0(const struct lu_context *ctx,
                         CERROR("can't get range buffer\n");
                         GOTO(out_pill, rc= -EPROTO);
                 }
-                
+
                 if (*opc == SEQ_ALLOC_META) {
                         if (!site->ls_server_seq) {
                                 CERROR("sequence-server is not initialized\n");
@@ -327,8 +327,8 @@ out_pill:
         return rc;
 }
 
-static int 
-seq_req_handle(struct ptlrpc_request *req) 
+static int
+seq_req_handle(struct ptlrpc_request *req)
 {
         int fail = OBD_FAIL_SEQ_ALL_REPLY_NET;
         const struct lu_context *ctx;
@@ -336,7 +336,7 @@ seq_req_handle(struct ptlrpc_request *req)
         ENTRY;
 
         OBD_FAIL_RETURN(OBD_FAIL_SEQ_ALL_REPLY_NET | OBD_FAIL_ONCE, 0);
-        
+
         ctx = req->rq_svc_thread->t_ctx;
         LASSERT(ctx != NULL);
         LASSERT(ctx->lc_thread == req->rq_svc_thread);
@@ -360,7 +360,7 @@ seq_req_handle(struct ptlrpc_request *req)
 out:
         target_send_reply(req, rc, fail);
         return 0;
-} 
+}
 
 #ifdef LPROCFS
 static int
@@ -427,20 +427,21 @@ seq_server_init(struct lu_server_seq *seq,
                 struct dt_device *dev,
                 const char *uuid,
                 lu_server_type_t type,
-                const struct lu_context *ctx) 
+                const struct lu_context *ctx)
 {
         int rc, portal = (type == LUSTRE_SEQ_SRV) ?
                 SEQ_SRV_PORTAL : SEQ_CTLR_PORTAL;
-        
-        struct ptlrpc_service_conf seq_conf = { 
-                .psc_nbufs = MDS_NBUFS, 
-                .psc_bufsize = MDS_BUFSIZE, 
+
+        struct ptlrpc_service_conf seq_conf = {
+                .psc_nbufs = MDS_NBUFS,
+                .psc_bufsize = MDS_BUFSIZE,
                 .psc_max_req_size = MDS_MAXREQSIZE,
                 .psc_max_reply_size = MDS_MAXREPSIZE,
                 .psc_req_portal = portal,
                 .psc_rep_portal = MDC_REPLY_PORTAL,
-                .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT, 
-                .psc_num_threads = SEQ_NUM_THREADS
+                .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_num_threads = SEQ_NUM_THREADS,
+                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
         };
         ENTRY;
 
@@ -458,16 +459,16 @@ seq_server_init(struct lu_server_seq *seq,
         snprintf(seq->seq_name, sizeof(seq->seq_name), "%s-%s-%s",
                  LUSTRE_SEQ_NAME, (type == LUSTRE_SEQ_SRV ? "srv" : "ctlr"),
                  uuid);
-        
+
         seq->seq_space = LUSTRE_SEQ_SPACE_RANGE;
         seq->seq_super = LUSTRE_SEQ_ZERO_RANGE;
-        
+
         lu_device_get(&seq->seq_dev->dd_lu_dev);
 
         rc = seq_store_init(seq, ctx);
         if (rc)
                 GOTO(out, rc);
-        
+
         /* request backing store for saved sequence info */
         rc = seq_store_read(seq, ctx);
         if (rc == -ENODATA) {
@@ -483,7 +484,7 @@ seq_server_init(struct lu_server_seq *seq,
 		       rc);
 		GOTO(out, rc);
 	}
-        
+
 #ifdef LPROCFS
         rc  = seq_server_proc_init(seq);
         if (rc)
@@ -493,13 +494,13 @@ seq_server_init(struct lu_server_seq *seq,
         seq->seq_service =  ptlrpc_init_svc_conf(&seq_conf,
 						 seq_req_handle,
                                                  LUSTRE_SEQ_NAME,
-						 seq->seq_proc_entry, 
-						 NULL); 
+						 seq->seq_proc_entry,
+						 NULL);
 	if (seq->seq_service != NULL)
 		rc = ptlrpc_start_threads(NULL, seq->seq_service,
                                           LUSTRE_SEQ_NAME);
-	else 
-		rc = -ENOMEM; 
+	else
+		rc = -ENOMEM;
 
 	EXIT;
 
@@ -511,12 +512,12 @@ out:
                        (type == LUSTRE_SEQ_SRV ? "Server" : "Controller"));
         }
 	return rc;
-} 
+}
 EXPORT_SYMBOL(seq_server_init);
 
 void
 seq_server_fini(struct lu_server_seq *seq,
-                const struct lu_context *ctx) 
+                const struct lu_context *ctx)
 {
         ENTRY;
 
@@ -535,7 +536,7 @@ seq_server_fini(struct lu_server_seq *seq,
                 lu_device_put(&seq->seq_dev->dd_lu_dev);
                 seq->seq_dev = NULL;
         }
-        
+
         CDEBUG(D_INFO|D_WARNING, "Server Sequence "
                "Manager\n");
         EXIT;
@@ -554,8 +555,8 @@ static int fid_fini(void)
 	RETURN(0);
 }
 
-static int 
-__init fid_mod_init(void) 
+static int
+__init fid_mod_init(void)
 
 {
         /* init caches if any */
@@ -563,8 +564,8 @@ __init fid_mod_init(void)
         return 0;
 }
 
-static void 
-__exit fid_mod_exit(void) 
+static void
+__exit fid_mod_exit(void)
 {
         /* free caches if any */
         fid_fini();

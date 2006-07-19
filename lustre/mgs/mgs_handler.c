@@ -181,7 +181,8 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                 MGS_MAXREPSIZE, MGS_REQUEST_PORTAL,
                                 MGC_REPLY_PORTAL, MGS_SERVICE_WATCHDOG_TIMEOUT,
                                 mgs_handle, LUSTRE_MGS_NAME,
-                                obd->obd_proc_entry, NULL, MGS_NUM_THREADS);
+                                obd->obd_proc_entry, NULL, MGS_NUM_THREADS,
+                                LCT_MD_THREAD);
 
         if (!mgs->mgs_service) {
                 CERROR("failed to start service\n");
@@ -275,7 +276,7 @@ static int mgs_cleanup(struct obd_device *obd)
         /* Free the namespace in it's own thread, so that if the
            ldlm_cancel_handler put the last mgs obd ref, we won't
            deadlock here. */
-        cfs_kernel_thread(mgs_ldlm_nsfree, obd->obd_namespace, 
+        cfs_kernel_thread(mgs_ldlm_nsfree, obd->obd_namespace,
                           CLONE_VM | CLONE_FILES);
 
         lvfs_clear_rdonly(save_dev);

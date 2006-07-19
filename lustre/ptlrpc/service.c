@@ -267,7 +267,7 @@ struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,
                                c->psc_req_portal, c->psc_rep_portal,
                                c->psc_watchdog_timeout,
                                h, name, proc_entry,
-                               prntfn, c->psc_num_threads);
+                               prntfn, c->psc_num_threads, c->psc_ctx_tags);
 }
 EXPORT_SYMBOL(ptlrpc_init_svc_conf);
 
@@ -276,7 +276,8 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
                 int req_portal, int rep_portal, int watchdog_timeout,
                 svc_handler_t handler, char *name,
                 cfs_proc_dir_entry_t *proc_entry,
-                svcreq_printfn_t svcreq_printfn, int num_threads)
+                svcreq_printfn_t svcreq_printfn, int num_threads,
+                __u32 ctx_tags)
 {
         int                    rc;
         struct ptlrpc_service *service;
@@ -284,6 +285,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
 
         LASSERT (nbufs > 0);
         LASSERT (bufsize >= max_req_size);
+        LASSERT (ctx_tags != 0);
 
         OBD_ALLOC(service, sizeof(*service));
         if (service == NULL)
@@ -307,6 +309,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         service->srv_request_seq = 1;           /* valid seq #s start at 1 */
         service->srv_request_max_cull_seq = 0;
         service->srv_num_threads = num_threads;
+        service->srv_ctx_tags = ctx_tags;
 
         CFS_INIT_LIST_HEAD(&service->srv_request_queue);
         CFS_INIT_LIST_HEAD(&service->srv_idle_rqbds);
@@ -921,7 +924,7 @@ static int ptlrpc_main(void *arg)
                         goto out;
         }
 
-        rc = lu_context_init(&ctx);
+        rc = lu_context_init(&ctx, svc->srv_ctx_tags);
         if (rc)
                 goto out_srv_init;
 

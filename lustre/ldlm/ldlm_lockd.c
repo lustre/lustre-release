@@ -1548,7 +1548,8 @@ static int ldlm_setup(void)
                                 LDLM_MAXREPSIZE, LDLM_CB_REQUEST_PORTAL,
                                 LDLM_CB_REPLY_PORTAL, ldlm_timeout * 900,
                                 ldlm_callback_handler, "ldlm_cbd",
-                                ldlm_svc_proc_dir, NULL, LDLM_NUM_THREADS);
+                                ldlm_svc_proc_dir, NULL, LDLM_NUM_THREADS,
+                                LCT_MD_THREAD|LCT_DT_THREAD);
 
         if (!ldlm_state->ldlm_cb_service) {
                 CERROR("failed to start service\n");
@@ -1560,7 +1561,8 @@ static int ldlm_setup(void)
                                 LDLM_MAXREPSIZE, LDLM_CANCEL_REQUEST_PORTAL,
                                 LDLM_CANCEL_REPLY_PORTAL, 30000,
                                 ldlm_cancel_handler, "ldlm_canceld",
-                                ldlm_svc_proc_dir, NULL, LDLM_NUM_THREADS);
+                                ldlm_svc_proc_dir, NULL, LDLM_NUM_THREADS,
+                                LCT_MD_THREAD|LCT_DT_THREAD);
 
         if (!ldlm_state->ldlm_cancel_service) {
                 CERROR("failed to start service\n");

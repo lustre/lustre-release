@@ -416,7 +416,7 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
                                 th->th_dev = d;
                                 lu_device_get(&d->dd_lu_dev);
                                 /* add commit callback */
-                                lu_context_init(&th->th_ctx);
+                                lu_context_init(&th->th_ctx, LCT_TX_HANDLE);
                                 journal_callback_set(jh, osd_trans_commit_cb,
                                                      (struct journal_callback *)&oh->ot_jcb);
                         } else {
@@ -1130,6 +1130,7 @@ static void osd_type_fini(struct lu_device_type *t)
 }
 
 static struct lu_context_key osd_key = {
+        .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD,
         .lct_init = osd_key_init,
         .lct_fini = osd_key_fini
 };
@@ -1525,9 +1526,10 @@ static struct lu_device_type_operations osd_device_type_ops = {
 };
 
 static struct lu_device_type osd_device_type = {
-        .ldt_tags = LU_DEVICE_DT,
-        .ldt_name = LUSTRE_OSD0_NAME,
-        .ldt_ops  = &osd_device_type_ops
+        .ldt_tags     = LU_DEVICE_DT,
+        .ldt_name     = LUSTRE_OSD0_NAME,
+        .ldt_ops      = &osd_device_type_ops,
+        .ldt_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
 };
 
 /*

@@ -1634,7 +1634,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                                 OSC_REPLY_PORTAL,
                                 obd_timeout * 1000, ost_handle, LUSTRE_OSS_NAME,
                                 obd->obd_proc_entry, ost_print_req,
-                                ost_num_threads);
+                                ost_num_threads, LCT_DT_THREAD);
         if (ost->ost_service == NULL) {
                 CERROR("failed to start service\n");
                 GOTO(out_lprocfs, rc = -ENOMEM);
@@ -1649,7 +1649,8 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                                 OST_MAXREPSIZE, OST_CREATE_PORTAL,
                                 OSC_REPLY_PORTAL,
                                 obd_timeout * 1000, ost_handle, "ost_create",
-                                obd->obd_proc_entry, ost_print_req, 1);
+                                obd->obd_proc_entry, ost_print_req, 1,
+                                LCT_DT_THREAD);
         if (ost->ost_create_service == NULL) {
                 CERROR("failed to start OST create service\n");
                 GOTO(out_service, rc = -ENOMEM);
@@ -1666,7 +1667,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                                 OSC_REPLY_PORTAL,
                                 obd_timeout * 1000, ost_handle, "ost_io",
                                 obd->obd_proc_entry, ost_print_req,
-                                ost_num_threads);
+                                ost_num_threads, LCT_DT_THREAD);
         if (ost->ost_io_service == NULL) {
                 CERROR("failed to start OST I/O service\n");
                 GOTO(out_create, rc = -ENOMEM);

@@ -826,7 +826,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 GOTO(cleanup, rc);
 
         inserted = 1;
-        
+
         if (dt_try_as_dir(ctxt, dt_son)) {
                 rc = __mdd_ref_add(ctxt, mdo, handle);
                 if (rc)
@@ -1124,9 +1124,10 @@ static struct lu_device_type_operations mdd_device_type_ops = {
 };
 
 static struct lu_device_type mdd_device_type = {
-        .ldt_tags = LU_DEVICE_MD,
-        .ldt_name = LUSTRE_MDD0_NAME,
-        .ldt_ops  = &mdd_device_type_ops
+        .ldt_tags     = LU_DEVICE_MD,
+        .ldt_name     = LUSTRE_MDD0_NAME,
+        .ldt_ops      = &mdd_device_type_ops,
+        .ldt_ctx_tags = LCT_MD_THREAD
 };
 
 static void *mdd_key_init(const struct lu_context *ctx,
@@ -1148,6 +1149,7 @@ static void mdd_key_fini(const struct lu_context *ctx,
 }
 
 static struct lu_context_key mdd_thread_key = {
+        .lct_tags = LCT_MD_THREAD,
         .lct_init = mdd_key_init,
         .lct_fini = mdd_key_fini
 };

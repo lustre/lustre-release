@@ -41,9 +41,6 @@ static struct lu_device_operations mdc_lu_ops;
 
 static inline int lu_device_is_mdc(struct lu_device *ld)
 {
-	/*
-	 * XXX for now. Tags in lu_device_type->ldt_something are needed.
-	 */
 	return ergo(ld != NULL && ld->ld_ops != NULL,
                     ld->ld_ops == &mdc_lu_ops);
 }
@@ -67,10 +64,10 @@ static int mdc_add_obd(struct mdc_device *mc, struct lustre_cfg *cfg)
         ENTRY;
         LASSERT(uuid_str);
         LASSERT(index);
-        
+
         mc->mc_num = simple_strtol(index, &p, 10);
         if (*p) {
-                CERROR("Invalid index in lustre_cgf, offset 2\n");                
+                CERROR("Invalid index in lustre_cgf, offset 2\n");
                 RETURN(-EINVAL);
         }
 
@@ -222,6 +219,7 @@ static void mdc_thread_fini(const struct lu_context *ctx,
 }
 
 struct lu_context_key mdc_thread_key = {
+        .lct_tags = LCT_MD_THREAD|LCT_CL_THREAD,
         .lct_init = mdc_thread_init,
         .lct_fini = mdc_thread_fini
 };
@@ -248,8 +246,9 @@ static struct lu_device_type_operations mdc_device_type_ops = {
 };
 
 struct lu_device_type mdc_device_type = {
-        .ldt_tags = LU_DEVICE_MD,
-        .ldt_name = LUSTRE_MDC0_NAME,
-        .ldt_ops  = &mdc_device_type_ops
+        .ldt_tags     = LU_DEVICE_MD,
+        .ldt_name     = LUSTRE_MDC0_NAME,
+        .ldt_ops      = &mdc_device_type_ops,
+        .ldt_ctx_tags = LCT_MD_THREAD|LCT_CL_THREAD
 };
 

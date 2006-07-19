@@ -40,9 +40,9 @@
  * It should not be possible to fail adding an existing client - otherwise
  * mdt_init_server_data() callsite needs to be fixed.
  */
-int mdt_client_add(const struct lu_context *ctxt, 
+int mdt_client_add(const struct lu_context *ctxt,
                    struct mdt_device *mdt,
-                   struct mdt_export_data *med, 
+                   struct mdt_export_data *med,
                    int cl_idx)
 {
         unsigned long *bitmap = mdt->mdt_client_bitmap;
@@ -82,18 +82,18 @@ int mdt_client_add(const struct lu_context *ctxt,
                cl_idx, med->med_mcd->mcd_uuid);
 
         med->med_lr_idx = cl_idx;
-        med->med_lr_off = le32_to_cpu(msd->msd_client_start) + 
+        med->med_lr_off = le32_to_cpu(msd->msd_client_start) +
                           (cl_idx * le16_to_cpu(msd->msd_client_size));
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
 
         if (new_client) {
                 loff_t off = med->med_lr_off;
                 int rc = 0;
-                
+
 /*
-                rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt, 
+                rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt,
                                                            mdt->mdt_last,
-                                                           mcd, sizeof(*mcd), 
+                                                           mcd, sizeof(*mcd),
                                                            &off);
 */
                 if (rc)
@@ -104,8 +104,8 @@ int mdt_client_add(const struct lu_context *ctxt,
         return 0;
 }
 
-int mdt_update_server_data(const struct lu_context *ctxt, 
-                           struct mdt_device *mdt, 
+int mdt_update_server_data(const struct lu_context *ctxt,
+                           struct mdt_device *mdt,
                            int sync)
 {
         struct mdt_server_data *msd = &mdt->mdt_msd;
@@ -115,10 +115,10 @@ int mdt_update_server_data(const struct lu_context *ctxt,
 
         CDEBUG(D_SUPER, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
                 mdt->mdt_mount_count, mdt->mdt_last_transno);
-      
+
         msd->msd_last_transno = cpu_to_le64(mdt->mdt_last_transno);
 /*
-        rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt, 
+        rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt,
                                                    mdt->mdt_last,
                                                    msd,
                                                    sizeof(*msd), &off);
@@ -127,8 +127,8 @@ int mdt_update_server_data(const struct lu_context *ctxt,
 
 }
 
-int mdt_client_free(const struct lu_context *ctxt, 
-                    struct mdt_device *mdt, 
+int mdt_client_free(const struct lu_context *ctxt,
+                    struct mdt_device *mdt,
                     struct mdt_export_data *med)
 {
         struct mdt_client_data *mcd = med->med_mcd;
@@ -162,7 +162,7 @@ int mdt_client_free(const struct lu_context *ctxt,
 
         memset(mcd, 0, sizeof *mcd);
 /*
-        rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt, 
+        rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt,
                                                    mdt->mdt_last,
                                                    mcd,
                                                    sizeof(*mcd), &off);
@@ -189,7 +189,7 @@ free:
         return 0;
 }
 
-static int mdt_init_server_data(const struct lu_context *ctxt, 
+static int mdt_init_server_data(const struct lu_context *ctxt,
                                 struct mdt_device *mdt)
 {
         struct mdt_server_data *msd = &mdt->mdt_msd;
@@ -222,7 +222,7 @@ static int mdt_init_server_data(const struct lu_context *ctxt,
                                                         OBD_INCOMPAT_COMMON_LR);
         } else {
 /*
-                rc = mdt->mdt_last->do_body_ops->dbo_read(ctxt, 
+                rc = mdt->mdt_last->do_body_ops->dbo_read(ctxt,
                                                           mdt->mdt_last,
                                                           msd,
                                                           sizeof(*msd), &off);
@@ -308,7 +308,7 @@ static int mdt_init_server_data(const struct lu_context *ctxt,
                 off = le32_to_cpu(msd->msd_client_start) +
                         cl_idx * le16_to_cpu(msd->msd_client_size);
 /*
-                rc = mdt->mdt_last->do_body_ops->dbo_read(ctxt, 
+                rc = mdt->mdt_last->do_body_ops->dbo_read(ctxt,
                                                           mdt->mdt_last,
                                                           mcd,
                                                           sizeof(*mcd), &off);
@@ -392,7 +392,7 @@ out:
 }
 
 /*
- * last_rcvd update callbacks 
+ * last_rcvd update callbacks
  */
 extern struct lu_context_key mdt_txn_key;
 
@@ -454,8 +454,8 @@ static int mdt_txn_commit_cb(const struct lu_context *ctx,
 
         return 0;
 }
- 
-int mdt_fs_setup(const struct lu_context *ctxt, 
+
+int mdt_fs_setup(const struct lu_context *ctxt,
                  struct mdt_device *mdt)
 {
         //struct lu_fid last_fid;
@@ -468,9 +468,9 @@ int mdt_fs_setup(const struct lu_context *ctxt,
         mdt->mdt_txn_cb.dtc_txn_stop = mdt_txn_stop_cb;
         mdt->mdt_txn_cb.dtc_txn_commit = mdt_txn_commit_cb;
         mdt->mdt_txn_cb.dtc_cookie = mdt;
-        
+
         dt_txn_callback_add(mdt->mdt_bottom, &mdt->mdt_txn_cb);
-/*        
+/*
         last = dt_store_open(ctxt, mdt->mdt_bottom, LAST_RCVD, &last_fid);
         if(!IS_ERR(last)) {
                 mdt->mdt_last_rcvd = last;
@@ -488,11 +488,11 @@ int mdt_fs_setup(const struct lu_context *ctxt,
 }
 
 
-void mdt_fs_cleanup(const struct lu_context *ctxt, 
+void mdt_fs_cleanup(const struct lu_context *ctxt,
                    struct mdt_device *mdt)
 {
         struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
-        
+
         /* remove transaction callback */
         dt_txn_callback_del(mdt->mdt_bottom, &mdt->mdt_txn_cb);
 

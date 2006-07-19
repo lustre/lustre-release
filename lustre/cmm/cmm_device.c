@@ -48,9 +48,6 @@ static struct lu_device_operations cmm_lu_ops;
 
 static inline int lu_device_is_cmm(struct lu_device *d)
 {
-	/*
-	 * XXX for now. Tags in lu_device_type->ldt_something are needed.
-	 */
 	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
 }
 
@@ -62,7 +59,7 @@ static int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
         if (cmm_dev->cmm_local_num == 0)
                 return cmm_child_ops(cmm_dev)->mdo_root_get(ctx,
                                                     cmm_dev->cmm_child, fid);
-        else 
+        else
                 return -EINVAL;
 }
 
@@ -77,14 +74,14 @@ static int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
         RETURN (rc);
 }
 
-int cmm_notify(const struct lu_context *ctxt, struct md_device *md, 
-               struct obd_device *watched, 
+int cmm_notify(const struct lu_context *ctxt, struct md_device *md,
+               struct obd_device *watched,
                enum obd_notify_event ev, void *data)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
         int rc;
 
-        rc = cmm_child_ops(cmm_dev)->mdo_notify(ctxt, cmm_dev->cmm_child, 
+        rc = cmm_child_ops(cmm_dev)->mdo_notify(ctxt, cmm_dev->cmm_child,
                                                 watched, ev, data);
 
         return rc;
@@ -184,7 +181,7 @@ static int cmm_process_config(const struct lu_context *ctx,
                 const char *index = lustre_cfg_string(cfg, 2);
                 char *p;
                 LASSERT(index);
-                
+
                 /* lower layers should be set up at first */
                 err = next->ld_ops->ldo_process_config(ctx, next, cfg);
                 if (err == 0) {
@@ -269,7 +266,7 @@ static int cmm_device_init(const struct lu_context *ctx,
         OBD_ALLOC_PTR(ls->ls_client_fld);
         if (!ls->ls_client_fld)
                 RETURN(-ENOMEM);
-        
+
         err = fld_client_init(ls->ls_client_fld, "CMM_UUID",
                               LUSTRE_CLI_FLD_HASH_RRB);
         if (err) {
@@ -290,7 +287,7 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
         fld_client_fini(ls->ls_client_fld);
         OBD_FREE_PTR(ls->ls_client_fld);
         ls->ls_client_fld = NULL;
-        
+
         /* finish all mdc devices */
         spin_lock(&cm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
@@ -319,9 +316,10 @@ static struct lu_device_type_operations cmm_device_type_ops = {
 };
 
 static struct lu_device_type cmm_device_type = {
-        .ldt_tags = LU_DEVICE_MD,
-        .ldt_name = LUSTRE_CMM0_NAME,
-        .ldt_ops  = &cmm_device_type_ops
+        .ldt_tags     = LU_DEVICE_MD,
+        .ldt_name     = LUSTRE_CMM0_NAME,
+        .ldt_ops      = &cmm_device_type_ops,
+        .ldt_ctx_tags = LCT_MD_THREAD
 };
 
 struct lprocfs_vars lprocfs_cmm_obd_vars[] = {

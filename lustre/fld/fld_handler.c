@@ -306,7 +306,8 @@ fld_server_init(struct lu_server_fld *fld,
                 .psc_req_portal       = FLD_REQUEST_PORTAL,
                 .psc_rep_portal       = MDC_REPLY_PORTAL,
                 .psc_watchdog_timeout = FLD_SERVICE_WATCHDOG_TIMEOUT,
-                .psc_num_threads      = FLD_NUM_THREADS
+                .psc_num_threads      = FLD_NUM_THREADS,
+                .psc_ctx_tags         = LCT_DT_THREAD|LCT_MD_THREAD
         };
         ENTRY;
 

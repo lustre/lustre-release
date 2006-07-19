@@ -263,6 +263,10 @@ struct lu_device_type {
          * XXX: temporary pointer to associated obd_type.
          */
         struct obd_type                  *ldt_obd_type;
+        /*
+         * XXX: temporary: context tags used by obd_*() calls.
+         */
+        __u32                             ldt_ctx_tags;
 };
 
 /*
@@ -736,8 +740,8 @@ struct lu_context {
          *
          * To achieve this, set of tags in introduced. Contexts and keys are
          * marked with tags. Key value are created only for context whose set
-         * of tags has non-empty intersection with one for key. NOT YET
-         * IMPLEMENTED.
+         * of tags has non-empty intersection with one for key. Tags are taken
+         * from enum lu_context_tag.
          */
         __u32                  lc_tags;
         /*
@@ -756,11 +760,21 @@ struct lu_context {
  * lu_context_key interface. Similar to pthread_key.
  */
 
+enum lu_context_tag {
+        LCT_MD_THREAD = 1 << 0,
+        LCT_DT_THREAD = 1 << 1,
+        LCT_TX_HANDLE = 1 << 2,
+        LCT_CL_THREAD = 1 << 3
+};
 
 /*
  * Key. Represents per-context value slot.
  */
 struct lu_context_key {
+        /*
+         * Set of tags for which values of this key are to be instantiated.
+         */
+        __u32 lct_tags;
         /*
          * Value constructor. This is called when new value is created for a
          * context. Returns pointer to new value of error pointer.
@@ -803,7 +817,7 @@ void *lu_context_key_get(const struct lu_context *ctx,
 /*
  * Initialize context data-structure. Create values for all keys.
  */
-int  lu_context_init(struct lu_context *ctx);
+int  lu_context_init(struct lu_context *ctx, __u32 tags);
 /*
  * Finalize context data-structure. Destroy key values.
  */
