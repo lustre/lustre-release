@@ -322,6 +322,22 @@ enum lu_object_flags {
 /*
  * Common object attributes.
  */
+/* valid flags */
+enum la_valid {
+        LA_ATIME  = OBD_MD_FLATIME,
+        LA_MTIME  = OBD_MD_FLMTIME,
+        LA_CTIME  = OBD_MD_FLCTIME,
+        LA_SIZE   = OBD_MD_FLSIZE,
+        LA_BLOCKS = OBD_MD_FLBLOCKS,
+        LA_MODE   = OBD_MD_FLMODE,
+        LA_TYPE   = OBD_MD_FLTYPE,
+        LA_UID    = OBD_MD_FLUID,
+        LA_GID    = OBD_MD_FLGID,
+        LA_FLAGS  = OBD_MD_FLFLAGS,
+        LA_NLINK  = OBD_MD_FLNLINK,
+        LA_RDEV   = OBD_MD_FLRDEV,
+};
+
 struct lu_attr {
         __u64          la_size;   /* size in bytes */
         __u64          la_mtime;  /* modification time in seconds since Epoch */

@@ -45,7 +45,15 @@ struct md_device;
 struct md_device_operations;
 struct md_object;
 
+
+/* metadata attributes */
+enum ma_valid {
+        MA_INODE = (1 << 0),
+        MA_LOV   = (1 << 1)
+};
+
 struct md_attr {
+        __u64          ma_valid;
         struct lu_attr ma_attr;
 };
 
