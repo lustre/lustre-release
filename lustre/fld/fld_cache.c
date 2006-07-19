@@ -75,13 +75,13 @@ fld_cache_init(int size)
                 OBD_FREE_PTR(cache);
                 RETURN(ERR_PTR(-ENOMEM));
         }
-        
+
         for (i = 0; i < size; i++)
                 INIT_HLIST_HEAD(&cache->fci_hash[i]);
 
         CDEBUG(D_INFO|D_WARNING, "FLD cache size %d\n",
                size);
-        
+
         RETURN(cache);
 }
 EXPORT_SYMBOL(fld_cache_init);
@@ -92,6 +92,7 @@ fld_cache_fini(struct fld_cache_info *cache)
         struct fld_cache_entry *flde;
         struct hlist_head *bucket;
         struct hlist_node *scan;
+        struct hlist_node *next;
 	int i;
         ENTRY;
 
@@ -101,7 +102,7 @@ fld_cache_fini(struct fld_cache_info *cache)
 	spin_lock(&cache->fci_lock);
 	for (i = 0; i < cache->fci_size; i++) {
 		bucket = cache->fci_hash + i;
-		hlist_for_each_entry(flde, scan, bucket, fce_list) {
+		hlist_for_each_entry_safe(flde, scan, next, bucket, fce_list) {
 			hlist_del_init(&flde->fce_list);
 			OBD_FREE_PTR(flde);
 		}
@@ -143,7 +144,7 @@ fld_cache_insert(struct fld_cache_info *cache,
         INIT_HLIST_NODE(&flde->fce_list);
         flde->fce_mds = mds;
         flde->fce_seq = seq;
-        
+
         hlist_add_head(&flde->fce_list, bucket);
 
         EXIT;
