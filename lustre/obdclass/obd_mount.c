@@ -958,6 +958,9 @@ int server_register_target(struct super_block *sb)
                 label = fsfilt_get_label(mgc, lsi->lsi_srv_mnt->mnt_sb);
                 if (label) 
                         CDEBUG(D_MOUNT, "Disk label changed to %s\n", label);
+                
+                /* Flush the new ldd to disk */
+                fsfilt_sync(mgc, lsi->lsi_srv_mnt->mnt_sb);
         }
 
 out:

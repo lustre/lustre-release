@@ -119,13 +119,18 @@ load_modules() {
 }
 
 unload_modules() {
-    set -x
     lsmod | grep lnet > /dev/null && $LCTL dl && $LCTL dk $TMP/debug
-    local MODULES=`$LCTL modules | awk '{ print $2 }'`
-    rmmod $MODULES >/dev/null 2>&1 
+    local MODULES=$($LCTL modules | awk '{ print $2 }')
+    rmmod $MODULES >/dev/null 2>&1 || true
      # do it again, in case we tried to unload ksocklnd too early
-    lsmod | grep lnet > /dev/null && rmmod $MODULES >/dev/null 2>&1 
-    lsmod | grep lnet && echo "modules still loaded" && cat $LPROC/devices && return 1
+    lsmod | grep libcfs > /dev/null && rmmod $MODULES >/dev/null 2>&1 || true
+    MODULES=$($LCTL modules | awk '{ print $2 }')
+    if [ -n "$MODULES" ]; then
+	echo "modules still loaded"
+	echo $MODULES 
+	cat $LPROC/devices
+	return 2
+    fi
     HAVE_MODULES=false
 
     LEAK_LUSTRE=$(dmesg | tail -n 30 | grep "obd mem.*leaked" || true)

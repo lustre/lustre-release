@@ -388,7 +388,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                         rc = mgs_erase_logs(obd, mti->mti_fsname);
                         LCONSOLE_WARN("%s: Logs for fs %s were removed by user "
                                       "request.  All servers must be restarted "
-                                      "in order to regenerate the client log."
+                                      "in order to regenerate the logs."
                                       "\n", obd->obd_name, mti->mti_fsname);
                 } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
                         rc = mgs_erase_log(obd, mti->mti_svname);
@@ -396,7 +396,6 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                                       "request.\n",
                                       obd->obd_name, mti->mti_fsname);
                 }
-                mti->mti_flags &= ~LDD_F_WRITECONF;
                 mti->mti_flags |= LDD_F_UPDATE;
         }
 
@@ -408,8 +407,10 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                         GOTO(out, rc);
                 }
                 
-                mti->mti_flags &= ~LDD_F_UPGRADE14;
-                /* Turn off the upgrade flag permanently */
+                /* Turn off all other update-related flags; we're done. */
+                mti->mti_flags &= ~(LDD_F_UPGRADE14 | 
+                                    LDD_F_VIRGIN | LDD_F_UPDATE | 
+                                    LDD_F_NEED_INDEX | LDD_F_WRITECONF);
                 mti->mti_flags |= LDD_F_REWRITE_LDD;
         }
         /* end COMPAT_146 */
@@ -418,7 +419,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                 CDEBUG(D_MGS, "updating %s, index=%d\n", mti->mti_svname, 
                        mti->mti_stripe_index);
                 
-                /* create the log for the new target 
+                /* create or update the target log 
                    and update the client/mdt logs */
                 rc = mgs_write_log_target(obd, mti);
                 if (rc) {
@@ -428,7 +429,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                 }
 
                 mti->mti_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE | 
-                                    LDD_F_NEED_INDEX);
+                                    LDD_F_NEED_INDEX | LDD_F_WRITECONF);
                 mti->mti_flags |= LDD_F_REWRITE_LDD;
         }
 
@@ -444,6 +445,9 @@ out_nolock:
         rep_mti = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*rep_mti));
         memcpy(rep_mti, mti, sizeof(*rep_mti));
+
+        /* Flush logs to disk */
+        fsfilt_sync(obd, obd->u.mgs.mgs_sb);
         RETURN(rc);
 }
 

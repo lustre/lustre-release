@@ -436,7 +436,10 @@ int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti)
         RETURN(0);
 }
 
-
+/* Return codes:
+        0  newly marked as in use
+        <0 err
+        +EALREADY for update of an old index */
 int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
 {
         struct fs_db *fsdb;
@@ -748,11 +751,12 @@ static int mgs_write_log_direct(struct obd_device *obd, struct fs_db *fsdb,
 
 /* write the lcfg in all logs for the given fs */
 int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
-                           char *fsname, struct lustre_cfg *lcfg)
+                           struct mgs_target_info *mti, struct lustre_cfg *lcfg)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         struct list_head dentry_list;
         struct l_linux_dirent *dirent, *n;
+        char *fsname = mti->mti_fsname;
         char *logname;
         int rc, len = strlen(fsname);
         ENTRY;
@@ -783,7 +787,7 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
                 if (strncmp(fsname, dirent->lld_name, len) == 0) {
                         CDEBUG(D_MGS, "Changing log %s\n", dirent->lld_name);
                         rc = mgs_write_log_direct(obd, fsdb, dirent->lld_name,
-                                                  dirent->lld_name, lcfg);
+                                                  mti->mti_svname, lcfg);
                 }
                 OBD_FREE(dirent, sizeof(*dirent));
         }
@@ -1194,6 +1198,9 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
         if (!mti->mti_params) 
                 RETURN(0);
 
+        /* FIXME we should cancel out old settings of the same parameters,
+           and skip settings that are the same as old values */
+
         while (ptr < end) {
                 while (*ptr == ' ') 
                         ptr++;
@@ -1222,7 +1229,7 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         rc = 0;
                         /* We already processed failovers params for new
                            targets in mgs_write_log_target */
-                        if (mti->mti_flags & MTI_F_IOCTL) {
+                        if (mti->mti_flags & LDD_F_PARAM_FNID) {
                                 CDEBUG(D_MGS, "Adding failnode\n");
                                 rc = mgs_write_log_add_failnid(obd, fsdb, mti);
                         }
@@ -1239,8 +1246,7 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         lcfg = lustre_cfg_new(LCFG_SET_TIMEOUT, &bufs);
                         lcfg->lcfg_num = timeout;
                         /* modify all servers and clients */
-                        rc = mgs_write_log_direct_all(obd, fsdb, mti->mti_fsname,
-                                                   lcfg); 
+                        rc = mgs_write_log_direct_all(obd, fsdb, mti, lcfg); 
                         lustre_cfg_free(lcfg);
                         GOTO(end_while, rc);
                 }
@@ -1342,19 +1348,19 @@ int mgs_write_log_target(struct obd_device *obd,
         /* COMPAT_146 */
         if (mti->mti_flags & LDD_F_UPGRADE14) {
                 if (rc == EALREADY) {
-                        CDEBUG(D_MGS, "Found index for %s old log, upgrading\n",
-                               mti->mti_svname);
+                        CDEBUG(D_MGS, "Found index %d for %s 1.4 log, upgrading\n",
+                               mti->mti_stripe_index, mti->mti_svname);
                 } else {
                         LCONSOLE_ERROR("Failed to find %s in the old client "
                                        "log\n", mti->mti_svname);
+                        /* Not in client log?  Upgrade anyhow...*/
                         /* RETURN(-EINVAL); */
                 }
                 /* end COMPAT_146 */
         } else {
                 if (rc == EALREADY) {
                         /* Update a target entry in the logs */
-                        LCONSOLE_WARN("Found index %d for %s, " 
-                                      "attempting to write log anyhow\n", 
+                        LCONSOLE_WARN("Found index %d for %s, updating log\n", 
                                       mti->mti_stripe_index, mti->mti_svname);
                         /* FIXME mark old log sections as invalid, 
                            inc config ver #, add new log sections.
@@ -1373,19 +1379,28 @@ int mgs_write_log_target(struct obd_device *obd,
 
         down(&fsdb->fsdb_sem);
 
-        if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
-                rc = mgs_write_log_mdt(obd, fsdb, mti);
-        } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
-                rc = mgs_write_log_ost(obd, fsdb, mti);
+        if (mti->mti_flags & 
+            (LDD_F_VIRGIN | LDD_F_UPGRADE14 | LDD_F_WRITECONF)) {
+                /* Generate a log from scratch */
+                if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+                        rc = mgs_write_log_mdt(obd, fsdb, mti);
+                } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
+                        rc = mgs_write_log_ost(obd, fsdb, mti);
+                } else {
+                        CERROR("Unknown target type %#x, can't create log for "
+                               "%s\n", mti->mti_flags, mti->mti_svname);
+                }
+                if (rc) {
+                        CERROR("Can't write logs for %s (%d)\n",
+                               mti->mti_svname, rc);
+                        GOTO(out_up, rc);
+                }
         } else {
-                CERROR("Unknown target type %#x, can't create log for %s\n",
-                       mti->mti_flags, mti->mti_svname);
+                /* Just update the params from tunefs in mgs_write_log_params */
+                CDEBUG(D_MGS, "Update params for %s\n", mti->mti_svname);
+                mti->mti_flags |= LDD_F_PARAM_FNID;
         }
-        if (rc) {
-                CERROR("Can't write logs for %s (%d)\n", mti->mti_svname, rc);
-                GOTO(out_up, rc);
-        }
-
+        
         rc = mgs_write_log_params(obd, fsdb, mti);
 
 out_up:
@@ -1569,7 +1584,7 @@ int mgs_setparam(struct obd_device *obd, char *fsname, struct lustre_cfg *lcfg)
         rc = server_name2index(devname, &mti->mti_stripe_index, NULL);
         if (rc < 0) 
                 GOTO(out, rc);
-        mti->mti_flags = rc | MTI_F_IOCTL;
+        mti->mti_flags = rc | LDD_F_PARAM_FNID;
         strncpy(mti->mti_params, lustre_cfg_string(lcfg, 1), 
                 sizeof(mti->mti_params));
 

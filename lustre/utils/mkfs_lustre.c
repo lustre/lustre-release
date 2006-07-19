@@ -86,14 +86,9 @@ void usage(FILE *out)
                 "\t\t\trequired for all targets other than the mgs node\n"
                 "\t\t--fsname=<filesystem_name> : default is 'lustre'\n"
                 "\t\t--failnode=<nid>[,<...>] : NID(s) of a failover partner\n"
-#ifndef TUNEFS
-                /* Use lctl conf_param on a live system, not tunefs.
-                   Currently, new/modified params written here are checked 
-                   only on the first mount. */
                 "\t\t--param <key>=<value> : set a permanent parameter\n"
                 "\t\t\te.g. --param sys.timeout=40\n"
                 "\t\t\t     --param lov.stripe.size=4194304\n"
-#endif
                 "\t\t--index=#N : target index (i.e. ost index within the lov)\n"
                 /* FIXME implement 1.6.x
                 "\t\t--configdev=<altdevice|file>: store configuration info\n"
@@ -1008,6 +1003,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         break;
                 case 'e':
                         mop->mo_ldd.ldd_params[0] = '\0';
+                        /* Must update the mgs logs */
+                        mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
                         break;
                 case 'f': {
                         char *nids = convert_hostnames(optarg);
@@ -1018,6 +1015,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         free(nids);
                         if (rc) 
                                 return rc;
+                        /* Must update the mgs logs */
+                        mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
                         break;
                 }
                 case 'G':
@@ -1027,6 +1026,13 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         usage(stdout);
                         return 1;
                 case 'i':
+                        if (!(mop->mo_ldd.ldd_flags & 
+                              (LDD_F_UPGRADE14 | LDD_F_VIRGIN |
+                               LDD_F_WRITECONF))) {
+                                fprintf(stderr, "%s: cannot change the index of"
+                                        " a registered target\n", progname);
+                                return 1;
+                        }
                         if (IS_MDT(&mop->mo_ldd) || IS_OST(&mop->mo_ldd)) {
                                 mop->mo_ldd.ldd_svindex = atol(optarg);
                                 mop->mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
@@ -1040,6 +1046,13 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                 sizeof(mop->mo_mkfsopts) - 1);
                         break;
                 case 'L':
+                        if (!(mop->mo_ldd.ldd_flags & 
+                              (LDD_F_UPGRADE14 | LDD_F_VIRGIN |
+                               LDD_F_WRITECONF))) {
+                                fprintf(stderr, "%s: cannot change the name of"
+                                        " a registered target\n", progname);
+                                return 1;
+                        }
                         if (strlen(optarg) > 8) {
                                 fprintf(stderr, "%s: filesystem name must be "
                                         "<= 8 chars\n", progname);
@@ -1080,6 +1093,8 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         rc = add_param(mop->mo_ldd.ldd_params, NULL, optarg);
                         if (rc) 
                                 return rc;
+                        /* Must update the mgs logs */
+                        mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
                         break;
                 case 'q':
                         verbose--;
@@ -1181,6 +1196,7 @@ int main(int argc, char *const argv[])
                 goto out;
 
         ldd = &mop.mo_ldd;
+        
         if (!(IS_MDT(ldd) || IS_OST(ldd) || IS_MGS(ldd))) {
                 fatal();
                 fprintf(stderr, "must set target type: MDT,OST,MGS\n");
