@@ -91,9 +91,10 @@ static struct lu_object_operations mdc_obj_ops = {
 
 /* md_object_operations */
 static int mdc_object_create(const struct lu_context *ctx,
-                             struct md_object *mo, struct lu_attr *attr)
+                             struct md_object *mo, struct md_attr *ma)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
+        struct lu_attr *attr = &ma->ma_attr;
         struct mdc_thread_info *mci;
         int rc;
         ENTRY;
@@ -134,13 +135,14 @@ static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo)
         RETURN(rc);
 }
 
-static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo)
+static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
+                       struct md_attr *ma)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct mdc_thread_info *mci;
         int rc;
         ENTRY;
-
+        /*XXX: update attr after reply */
         mci = lu_context_key_get(ctx, &mdc_thread_key);
         LASSERT(mci);
 

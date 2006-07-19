@@ -212,7 +212,7 @@ static struct lu_object_operations cml_obj_ops = {
 /* CMM local md_object operations */
 static int cml_object_create(const struct lu_context *ctx,
                              struct md_object *mo,
-                             struct lu_attr *attr)
+                             struct md_attr *attr)
 {
         int rc;
         ENTRY;
@@ -266,11 +266,12 @@ static int cml_ref_add(const struct lu_context *ctx, struct md_object *mo)
         RETURN(rc);
 }
 
-static int cml_ref_del(const struct lu_context *ctx, struct md_object *mo)
+static int cml_ref_del(const struct lu_context *ctx, struct md_object *mo,
+                       struct md_attr *ma)
 {
         int rc;
         ENTRY;
-        rc = mo_ref_del(ctx, md_object_next(mo));
+        rc = mo_ref_del(ctx, md_object_next(mo), ma);
         RETURN(rc);
 }
 
@@ -315,12 +316,12 @@ static int cml_lookup(const struct lu_context *ctx, struct md_object *mo_p,
 
 static int cml_create(const struct lu_context *ctx, struct md_object *mo_p, 
                       const char *child_name, struct md_object *mo_c, 
-                      const char *target_name, struct lu_attr *attr)
+                      const char *target_name, struct md_attr *ma)
 {
         int rc;
         ENTRY;
         rc = mdo_create(ctx, md_object_next(mo_p), child_name,
-                        md_object_next(mo_c), target_name, attr);
+                        md_object_next(mo_c), target_name, ma);
         RETURN(rc);
 }
 
@@ -335,12 +336,13 @@ static int cml_link(const struct lu_context *ctx, struct md_object *mo_p,
 }
 
 static int cml_unlink(const struct lu_context *ctx, struct md_object *mo_p,
-                      struct md_object *mo_c, const char *name)
+                      struct md_object *mo_c, const char *name,
+                      struct md_attr *ma)
 {
         int rc;
         ENTRY;
-        rc = mdo_unlink(ctx, md_object_next(mo_p),
-                        md_object_next(mo_c), name);
+        rc = mdo_unlink(ctx, md_object_next(mo_p), md_object_next(mo_c),
+                        name, ma);
         RETURN(rc);
 }
 
@@ -355,7 +357,7 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
 
         if (mo_t && lu_object_exists(ctx, &mo_t->mo_lu) < 0) {
                 /* mo_t is remote object and there is RPC to unlink it */
-                rc = mo_ref_del(ctx, md_object_next(mo_t));
+                rc = mo_ref_del(ctx, md_object_next(mo_t), NULL);
                 if (rc)
                         RETURN(rc);
                 mo_t = NULL;
@@ -493,7 +495,7 @@ static struct lu_object_operations cmr_obj_ops = {
 /* CMM remote md_object operations. All are invalid */
 static int cmr_object_create(const struct lu_context *ctx,
                              struct md_object *mo,
-                             struct lu_attr *attr)
+                             struct md_attr *ma)
 {
         RETURN(-EFAULT);
 }
@@ -527,7 +529,8 @@ static int cmr_ref_add(const struct lu_context *ctx, struct md_object *mo)
         RETURN(-EFAULT);
 }
 
-static int cmr_ref_del(const struct lu_context *ctx, struct md_object *mo)
+static int cmr_ref_del(const struct lu_context *ctx, struct md_object *mo,
+                       struct md_attr *ma)
 {
         RETURN(-EFAULT);
 }
@@ -576,7 +579,7 @@ static int cmr_lookup(const struct lu_context *ctx, struct md_object *mo_p,
  */
 static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
                       const char *child_name, struct md_object *mo_c, 
-                      const char *target_name, struct lu_attr *attr)
+                      const char *target_name, struct md_attr *ma)
 {
         int rc;
 
@@ -585,7 +588,7 @@ static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
         //XXX: make sure that MDT checks name isn't exist
 
         /* remote object creation and local name insert */
-        rc = mo_object_create(ctx, md_object_next(mo_c), attr);
+        rc = mo_object_create(ctx, md_object_next(mo_c), ma);
         if (rc == 0) {
                 rc = mdo_name_insert(ctx, md_object_next(mo_p),
                                      child_name, lu_object_fid(&mo_c->mo_lu));
@@ -612,12 +615,13 @@ static int cmr_link(const struct lu_context *ctx, struct md_object *mo_p,
 }
 
 static int cmr_unlink(const struct lu_context *ctx, struct md_object *mo_p,
-                      struct md_object *mo_c, const char *name)
+                      struct md_object *mo_c, const char *name,
+                      struct md_attr *ma)
 {
         int rc;
         ENTRY;
 
-        rc = mo_ref_del(ctx, md_object_next(mo_c));
+        rc = mo_ref_del(ctx, md_object_next(mo_c), ma);
         if (rc == 0) {
                 rc = mdo_name_remove(ctx, md_object_next(mo_p),
                                      name);
@@ -658,7 +662,7 @@ static int cmr_rename_tgt(const struct lu_context *ctx,
         int rc;
         ENTRY;
         /* target object is remote one */
-        rc = mo_ref_del(ctx, md_object_next(mo_t));
+        rc = mo_ref_del(ctx, md_object_next(mo_t), NULL);
         /* continue locally with name handling only */
         if (rc == 0)
                 rc = mdo_rename_tgt(ctx, md_object_next(mo_p),
