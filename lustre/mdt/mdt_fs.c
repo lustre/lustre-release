@@ -396,6 +396,7 @@ out:
  * last_rcvd update callbacks
  */
 extern struct lu_context_key mdt_txn_key;
+extern struct lu_context_key mdt_thread_key;
 
 #define MDT_TXN_LAST_RCVD_CREDITS 1
 /* add credits for last_rcvd update */
@@ -413,23 +414,24 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
                            struct thandle *txn, void *cookie)
 {
         struct mdt_device *mdt = cookie;
-        struct mdt_txn_info *txni, *thdi;
+        struct mdt_txn_info *txni;
+        struct mdt_thread_info *mti;
 
         /* transno in two contexts - for commit_cb and for thread */
         txni = lu_context_key_get(&txn->th_ctx, &mdt_txn_key);
-        thdi = lu_context_key_get(ctx, &mdt_txn_key);
+        mti = lu_context_key_get(ctx, &mdt_thread_key);
         /*TODO: checks for recovery cases, see mds_finish_transno */
         spin_lock(&mdt->mdt_transno_lock);
-        if (thdi->txi_transno == 0) {
-                thdi->txi_transno = ++ mdt->mdt_last_transno;
+        if (mti->mti_transno == 0) {
+                mti->mti_transno = ++ mdt->mdt_last_transno;
         } else {
                 /* replay */
-                if (thdi->txi_transno > mdt->mdt_last_transno)
-                        mdt->mdt_last_transno = thdi->txi_transno;
+                if (mti->mti_transno > mdt->mdt_last_transno)
+                        mdt->mdt_last_transno = mti->mti_transno;
         }
         spin_unlock(&mdt->mdt_transno_lock);
-
-        txni->txi_transno = thdi->txi_transno;
+        /* save transno for the commit callback */
+        txni->txi_transno = mti->mti_transno;
 /*
         TODO: write last_rcvd
 */

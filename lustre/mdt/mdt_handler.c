@@ -121,7 +121,7 @@ static int                    mdt_handle    (struct ptlrpc_request *req);
 static struct mdt_device     *mdt_dev       (struct lu_device *d);
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
 
-static struct lu_context_key       mdt_thread_key;
+struct lu_context_key       mdt_thread_key;
 static struct lu_object_operations mdt_obj_ops;
 
 
@@ -971,7 +971,6 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
 {
         struct mdt_device *mdt = info->mti_mdt;
         struct ptlrpc_request * req = mdt_info_req(info);
-        struct mdt_txn_info *txi;
         __u64 last_transno;
         __u64 last_committed;
 
@@ -1001,9 +1000,8 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
         /*last_committed = (mdt->mdt_last_committed);*/
         last_committed = last_transno;
 #endif
-        txi = lu_context_key_get(info->mti_ctxt, &mdt_txn_key);
-        last_transno = txi->txi_transno;
-        CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n",
+        last_transno = info->mti_transno;
+        CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n", 
                last_transno, last_committed);
         req->rq_repmsg->transno = req->rq_transno = last_transno;
         req->rq_repmsg->last_xid = req->rq_xid;
@@ -2554,7 +2552,7 @@ static void mdt_thread_fini(const struct lu_context *ctx,
         OBD_FREE_PTR(info);
 }
 
-static struct lu_context_key mdt_thread_key = {
+struct lu_context_key mdt_thread_key = {
         .lct_tags = LCT_MD_THREAD,
         .lct_init = mdt_thread_init,
         .lct_fini = mdt_thread_fini
@@ -2583,7 +2581,7 @@ static void mdt_txn_fini(const struct lu_context *ctx,
 }
 
 struct lu_context_key mdt_txn_key = {
-        .lct_tags = LCT_TX_HANDLE|LCT_MD_THREAD,
+        .lct_tags = LCT_TX_HANDLE,
         .lct_init = mdt_txn_init,
         .lct_fini = mdt_txn_fini
 };

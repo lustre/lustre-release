@@ -246,6 +246,8 @@ struct mdt_thread_info {
                 struct obd_uuid    uuid;
                 char               ns_name[48];
         } mti_u;
+        /* transaction number of current request */
+        __u64                      mti_transno;
 };
 /*
  * Info allocated per-transaction.
