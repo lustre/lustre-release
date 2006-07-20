@@ -153,6 +153,14 @@ static int   osd_index_try     (const struct lu_context *ctx,
                                 const struct dt_index_features *feat);
 static void  osd_index_fini    (struct osd_object *o);
 
+static void  osd_it_fini       (const struct lu_context *ctx, struct dt_it *di);
+static int   osd_it_get        (const struct lu_context *ctx,
+                                struct dt_it *di, const struct dt_key *key);
+static void  osd_it_put        (const struct lu_context *ctx, struct dt_it *di);
+static int   osd_it_next       (const struct lu_context *ctx, struct dt_it *di);
+static int   osd_it_key_size   (const struct lu_context *ctx,
+                                const struct dt_it *di);
+
 static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
 static struct osd_device  *osd_dt_dev       (const struct dt_device *d);
@@ -171,7 +179,14 @@ static struct inode       *osd_iget         (struct osd_thread_info *info,
                                              struct osd_device *dev,
                                              const struct osd_inode_id *id);
 static struct super_block *osd_sb           (const struct osd_device *dev);
+static struct dt_it       *osd_it_init      (const struct lu_context *ctx,
+                                             struct dt_object *dt);
+static struct dt_key      *osd_it_key       (const struct lu_context *ctx,
+                                             const struct dt_it *di);
+static struct dt_rec      *osd_it_rec       (const struct lu_context *ctx,
+                                             const struct dt_it *di);
 static journal_t          *osd_journal      (const struct osd_device *dev);
+
 
 static struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
@@ -959,10 +974,97 @@ static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
         RETURN(rc);
 }
 
+/*
+ * Iterator operations.
+ */
+struct osd_it {
+        struct osd_object  *oi_obj;
+        struct iam_iterator oi_it;
+};
+
+static struct dt_it *osd_it_init(const struct lu_context *ctx,
+                                 struct dt_object *dt)
+{
+        struct osd_it     *it;
+        struct osd_object *obj = osd_dt_obj(dt);
+        struct lu_object  *lo  = &dt->do_lu;
+
+        LASSERT(lu_object_exists(ctx, lo));
+        LASSERT(obj->oo_ipd != NULL);
+
+        OBD_ALLOC_PTR(it);
+        if (it != NULL) {
+                it->oi_obj = obj;
+                lu_object_get(lo);
+                iam_it_init(&it->oi_it,
+                            &obj->oo_container, IAM_IT_MOVE, obj->oo_ipd);
+        }
+        return (struct dt_it *)it;
+}
+
+static void osd_it_fini(const struct lu_context *ctx, struct dt_it *di)
+{
+        struct osd_it *it = (struct osd_it *)di;
+
+        iam_it_fini(&it->oi_it);
+        lu_object_put(ctx, &it->oi_obj->oo_dt.do_lu);
+        OBD_FREE_PTR(it);
+}
+
+static int osd_it_get(const struct lu_context *ctx,
+                      struct dt_it *di, const struct dt_key *key)
+{
+        struct osd_it *it = (struct osd_it *)di;
+
+        return iam_it_get(&it->oi_it, (const struct iam_key *)key);
+}
+
+static void osd_it_put(const struct lu_context *ctx, struct dt_it *di)
+{
+        struct osd_it *it = (struct osd_it *)di;
+        iam_it_put(&it->oi_it);
+}
+
+static int osd_it_next(const struct lu_context *ctx, struct dt_it *di)
+{
+        struct osd_it *it = (struct osd_it *)di;
+        return iam_it_next(&it->oi_it);
+}
+
+static struct dt_key *osd_it_key(const struct lu_context *ctx,
+                                 const struct dt_it *di)
+{
+        struct osd_it *it = (struct osd_it *)di;
+        return (struct dt_key *)iam_it_key_get(&it->oi_it);
+}
+
+static int osd_it_key_size(const struct lu_context *ctx, const struct dt_it *di)
+{
+        struct osd_it *it = (struct osd_it *)di;
+        return iam_it_key_size(&it->oi_it);
+}
+
+static struct dt_rec *osd_it_rec(const struct lu_context *ctx,
+                                 const struct dt_it *di)
+{
+        struct osd_it *it = (struct osd_it *)di;
+        return (struct dt_rec *)iam_it_rec_get(&it->oi_it);
+}
+
 static struct dt_index_operations osd_index_ops = {
         .dio_lookup = osd_index_lookup,
         .dio_insert = osd_index_insert,
-        .dio_delete = osd_index_delete
+        .dio_delete = osd_index_delete,
+        .dio_it     = {
+                .init     = osd_it_init,
+                .fini     = osd_it_fini,
+                .get      = osd_it_get,
+                .put      = osd_it_put,
+                .next     = osd_it_next,
+                .key      = osd_it_key,
+                .key_size = osd_it_key_size,
+                .rec      = osd_it_rec
+        }
 };
 
 static int osd_index_compat_delete(const struct lu_context *ctxt,
