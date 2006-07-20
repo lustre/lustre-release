@@ -687,22 +687,31 @@ static struct ldlm_callback_suite cbs = {
 
 static int mdt_enqueue(struct mdt_thread_info *info)
 {
+        int result;
+        struct ptlrpc_request *req;
+
         /*
          * info->mti_dlm_req already contains swapped and (if necessary)
          * converted dlm request.
          */
         LASSERT(info->mti_dlm_req != NULL);
 
+        req = mdt_info_req(info);
         info->mti_fail_id = OBD_FAIL_LDLM_REPLY;
-        return ldlm_handle_enqueue0(info->mti_mdt->mdt_namespace,
-                                    mdt_info_req(info),
-                                    info->mti_dlm_req, &cbs);
+        result = ldlm_handle_enqueue0(info->mti_mdt->mdt_namespace,
+                                      req, info->mti_dlm_req, &cbs);
+        return result ? : req->rq_status;
 }
 
 static int mdt_convert(struct mdt_thread_info *info)
 {
+        int result;
+        struct ptlrpc_request *req;
+
         LASSERT(info->mti_dlm_req);
-        return ldlm_handle_convert0(mdt_info_req(info), info->mti_dlm_req);
+        req = mdt_info_req(info);
+        result = ldlm_handle_convert0(req, info->mti_dlm_req);
+        return result ? : req->rq_status;
 }
 
 static int mdt_bl_callback(struct mdt_thread_info *info)
@@ -1070,11 +1079,18 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                  * Process request.
                  */
                 result = h->mh_act(info);
-
+        /*
+         * XXX result value is unconditionally shoved into ->rq_status
+         * (original code sometimes placed error code into ->rq_status, and
+         * sometimes returned it to the
+         * caller). ptlrpc_server_handle_request() doesn't check return value
+         * anyway.
+         */
+        req->rq_status = result;
+        result = 0;
         LASSERT(current->journal_info == NULL);
 
-        if (result == 0 && flags & HABEO_CLAVIS &&
-            info->mti_mdt->mdt_opts.mo_compat_resname) {
+        if (flags & HABEO_CLAVIS && info->mti_mdt->mdt_opts.mo_compat_resname) {
                 struct ldlm_reply *dlm_rep;
 
                 dlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
