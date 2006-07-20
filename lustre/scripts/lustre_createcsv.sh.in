@@ -2,10 +2,10 @@
 #
 # lustre_createcsv.sh - generate a csv file from a running lustre cluster
 #
-# This script is used to collect lustre target informations and HA software
-# configurations in a lustre cluster to generate a csv file. In reverse, the
-# csv file could be parsed by lustre_config.sh to configure multiple lustre
-# servers in parallel.
+# This script is used to collect lustre target informations, linux MD/LVM device
+# informations and HA software configurations in a lustre cluster to generate a
+# csv file. In reverse, the csv file could be parsed by lustre_config.sh to 
+# configure multiple lustre servers in parallel.
 #
 # This script should be run on the MGS node.
 #
@@ -15,17 +15,18 @@
 usage() {
 	cat >&2 <<EOF
 
-Usage:	`basename $0` [-t HAtype] [-h] [-v] [-f csv_filename]
+Usage:	`basename $0` [-t HAtype] [-d] [-h] [-v] [-f csv_filename]
 
-	This script is used to collect lustre target informations and HA software
-	configurations from a running lustre cluster to generate a csv file. It 
-	should be run on the MGS node.
+	This script is used to collect lustre target informations, linux MD/LVM
+	device informations and HA software configurations from a running lustre
+	cluster to generate a csv file. It should be run on the MGS node.
 
 	-t HAtype	collect High-Availability software configurations
 			The argument following -t is used to indicate the High-
 			Availability software type. The HA software types which 
 			are currently supported are: hbv1 (Heartbeat version 1)
 			and hbv2 (Heartbeat version 2).
+	-d		collect linux MD/LVM device informations
 	-h		help
 	-v		verbose mode
 	-f csv_filename	designate a name for the csv file
@@ -73,6 +74,11 @@ declare -a HA_CONFIGS
 declare -a ALL_TARGET_SVNAMES		# All the target services in the cluster
 declare -a FAILOVER_FMTOPTS		# "--noformat"	
 
+# Informations of linux MD/LVM devices in one cluster node
+declare -a MD_NAME MD_LEVEL MD_DEVS	# MD
+declare -a VG_NAME VG_PVNAMES		# VG
+declare -a LV_NAME LV_SIZE LV_VGNAME	# LV
+
 # Lustre target service types
 let "LDD_F_SV_TYPE_MDT = 0x0001"
 let "LDD_F_SV_TYPE_OST = 0x0002"
@@ -97,7 +103,8 @@ OPTSTR_STRIPE_COUNT=${OPTSTR_STRIPE_COUNT:-"--stripe-count-hint="}
 
 # Get and check the positional parameters
 VERBOSE_OUTPUT=false
-while getopts "t:hvf:" OPTION; do
+GET_MDLVM_INFO=false
+while getopts "t:dhvf:" OPTION; do
 	case $OPTION in
 	t) 
 		HATYPE_OPT=$OPTARG
@@ -109,6 +116,7 @@ while getopts "t:hvf:" OPTION; do
 			usage
 		fi
 		;;
+	d)	GET_MDLVM_INFO=true;;
 	h)	usage;;
 	v) 	VERBOSE_OUTPUT=true;;
 	f)	LUSTRE_CSV_FILE=$OPTARG;;
@@ -151,13 +159,13 @@ remote_error() {
 	ret_str=$*
 
 	if [ "${ret_str}" != "${ret_str#*connect:*}" ]; then
-		echo "`basename $0`: ${fn_name}() error: remote error:" \
+		echo >&2 "`basename $0`: ${fn_name}() error: remote error:" \
 		     "${ret_str}"
 		return 0
 	fi
 
 	if [ -z "${ret_str}" ]; then
-		echo "`basename $0`: ${fn_name}() error: remote error:" \
+		echo >&2 "`basename $0`: ${fn_name}() error: remote error:" \
 		     "No results from remote!" \
 		     "Check network connectivity between the local host"\
 		     "and ${host_addr}!"
@@ -277,6 +285,202 @@ get_hostnames() {
 			let "i -= 1"
 		fi
 	done
+
+	return 0
+}
+
+#********************** Linux MD/LVM device informations **********************#
+# get_md_configs hostname
+# Get all the active MD device informations from the node @hostname
+get_md_configs() {
+	declare -i i=0
+	declare -i j=0
+	local host_name=$1
+	local ret_line line first_item
+
+	# Initialize the arrays
+	unset MD_NAME
+	unset MD_LEVEL
+	unset MD_DEVS
+	
+	# Execute remote command to the node ${host_name} and get all the
+	# active MD device informations.
+	while read -r ret_line; do
+		if is_pdsh; then
+                	set -- ${ret_line}
+			shift
+			line="$*"
+		else
+			line="${ret_line}"
+		fi
+
+		first_item=`echo "${line}" | awk '{print $1}'`
+
+		# Get the MD device name and raid level
+		if [ "${first_item}" = "ARRAY" ]; then
+			MD_NAME[i]=`echo "${line}" | awk '{print $2}'`
+			MD_LEVEL[i]=`echo "${line}" | awk '{print $3}' | sed -e 's/level=//'`
+			let "j = i"
+			let "i += 1"
+		fi
+
+		# Get the MD component devices
+		if [ "${first_item}" != "${first_item#devices=}" ]; then
+			MD_DEVS[j]=`echo "${line}" | sed -e 's/devices=//' -e 's/,/ /g'`
+		fi
+        done < <(${REMOTE} ${host_name} "${MDADM} --detail --scan --verbose")
+
+	if [ $i -eq 0 ]; then
+		verbose_output "There are no active MD devices" \
+			       "in the host ${host_name}!"
+	fi
+
+	return 0
+}
+
+# get_pv_configs hostname
+# Get all the LVM PV informations from the node @hostname
+get_pv_configs() {
+	PV_NAMES=
+	local host_name=$1
+	local cmd ret_str
+
+	# Execute remote command to get all the PV informations.
+	cmd="${EXPORT_PATH} pvdisplay -c | awk -F: '{print \$1}' | xargs"
+	ret_str=`${REMOTE} ${host_name} "${cmd}" 2>&1`
+	if [ $? -ne 0 ]; then
+		if [ -n "${ret_str}" ]; then
+			echo >&2 "`basename $0`: get_pv_configs() error:" \
+			"remote command to ${host_name} error: ${ret_str}"
+		else
+			remote_error "get_pv_configs" ${host_name}
+		fi
+		return 1
+	fi
+
+	PV_NAMES=`echo "${ret_str}" | sed -e 's/^'${host_name}':[[:space:]]//'`
+	if [ -z "${PV_NAMES}" ]; then
+		verbose_output "There are no PVs in the host ${host_name}!"
+		return 0
+	fi
+
+	return 0
+}
+
+# get_vg_pvnames hostname vgname
+# Get the PVs contained in @vgname from the node @hostname
+get_vg_pvnames() {
+	local host_name=$1
+	local vg_name=$2
+	local pv_names=
+	local cmd ret_str
+
+	# Execute remote command to get the PV names.
+	cmd="${EXPORT_PATH} vgdisplay -v ${vg_name} 2>/dev/null\
+	     | grep \"PV Name\" | awk '{print \$3}' | xargs"
+	ret_str=`${REMOTE} ${host_name} "${cmd}" 2>&1`
+	if [ $? -ne 0 ]; then
+		if [ -n "${ret_str}" ]; then
+			echo "`basename $0`: get_vg_pvnames() error:" \
+			"remote command to ${host_name} error: ${ret_str}"
+		else
+			remote_error "get_vg_pvnames" ${host_name}
+		fi
+		return 1
+	fi
+
+	pv_names=`echo "${ret_str}" | sed -e 's/^'${host_name}':[[:space:]]//'`
+	if [ -z "${pv_names}" ]; then
+		echo "`basename $0`: get_vg_pvnames() error:" \
+		"There are no PVs in VG ${vg_name} in the host ${host_name}!"\
+		"Or VG ${vg_name} does not exist."
+		return 1
+	fi
+
+	echo "${pv_names}"
+	return 0
+}
+
+# get_vg_configs hostname
+# Get all the LVM VG informations from the node @hostname
+get_vg_configs() {
+	declare -i i=0
+	local host_name=$1
+	local cmd ret_str
+	local vg_name
+
+	# Initialize the arrays
+	unset VG_NAME
+	unset VG_PVNAMES
+
+	# Execute remote command to get all the VG names.
+	cmd="${EXPORT_PATH} vgdisplay \
+	     | grep \"VG Name\" | awk '{print \$3}' | xargs"
+	ret_str=`${REMOTE} ${host_name} "${cmd}" 2>&1`
+	if [ $? -ne 0 ]; then
+		if [ -n "${ret_str}" ]; then
+			echo >&2 "`basename $0`: get_vg_configs() error:" \
+			"remote command to ${host_name} error: ${ret_str}"
+		else
+			remote_error "get_vg_configs" ${host_name}
+		fi
+		return 1
+	fi
+
+	if [ -z "${ret_str}" ] \
+	|| [ "${ret_str}" != "${ret_str#*No volume groups found*}" ]; then
+		verbose_output "There are no VGs in the host ${host_name}!"
+		return 0
+	fi
+
+	# Get all the VG informations
+	for vg_name in `echo "${ret_str}" | sed -e 's/^'${host_name}'://'`; do
+		VG_NAME[i]=${vg_name}
+		VG_PVNAMES[i]=$(get_vg_pvnames ${host_name} ${VG_NAME[i]})
+		if [ $? -ne 0 ]; then
+			echo >&2 "${VG_PVNAMES[i]}"
+			return 1
+		fi
+		let "i += 1"
+	done
+
+	return 0
+}
+
+# get_lv_configs hostname
+# Get all the LVM LV informations from the node @hostname
+get_lv_configs() {
+	declare -i i=0
+	local host_name=$1
+	local ret_line line
+
+	# Initialize the arrays
+	unset LV_NAME
+	unset LV_SIZE
+	unset LV_VGNAME
+
+	# Execute remote command to get all the LV informations.
+	while read -r ret_line; do
+		if is_pdsh; then
+                	set -- ${ret_line}
+			shift
+			line="$*"
+		else
+			line="${ret_line}"
+		fi
+
+		[ "${line}" != "${line#*volume group*}" ] && break
+
+		LV_NAME[i]=`echo "${line}" | awk -F: '{print $1}' | sed -e 's/.*\///g'`
+		LV_VGNAME[i]=`echo "${line}" | awk -F: '{print $2}'`
+		LV_SIZE[i]=`echo "${line}" | awk -F: '{print $7}' | sed -e 's/.*/&K/'`
+
+		let "i += 1"
+        done < <(${REMOTE} ${host_name} "${EXPORT_PATH} lvdisplay -c")
+
+	if [ $i -eq 0 ]; then
+		verbose_output "There are no LVs in the host ${host_name}"
+	fi
 
 	return 0
 }
@@ -1907,6 +2111,67 @@ get_configs() {
 	return 0
 }
 
+# Collect linux MD/LVM device informations from the lustre cluster and
+# append them to the csv file
+get_mdlvm_info() {
+	declare -i idx
+	declare -i i
+	local line
+
+	# Collect and append linux MD/LVM informations to the csv file
+	for ((idx = 0; idx < ${#HOST_NAMES[@]}; idx++)); do
+		[ -z "${HOST_NAMES[idx]}" ] && continue
+
+		# Collect MD device informations
+		! get_md_configs ${HOST_NAMES[idx]} && return 1
+
+		# Append MD device informations to the csv file
+		for ((i = 0; i < ${#MD_NAME[@]}; i++)); do
+			line=${HOST_NAMES[idx]},${MD_MARKER},${MD_NAME[i]},,,${MD_LEVEL[i]},${MD_DEVS[i]}
+			verbose_output "Informations of MD device ${MD_NAME[i]}" \
+				       "in host ${HOST_NAMES[idx]} are as follows:"
+			verbose_output "${line}"
+			echo "${line}" >> ${LUSTRE_CSV_FILE}
+		done
+
+		# Collect PV informations
+		! get_pv_configs ${HOST_NAMES[idx]} && return 1
+
+		# Append PV informations to the csv file
+		if [ -n "${PV_NAMES}" ]; then
+			line=${HOST_NAMES[idx]},${PV_MARKER},${PV_NAMES}
+			verbose_output "Informations of PVs" \
+				       "in host ${HOST_NAMES[idx]} are as follows:"
+			verbose_output "${line}"
+			echo "${line}" >> ${LUSTRE_CSV_FILE}
+		fi
+
+		# Collect VG informations
+		! get_vg_configs ${HOST_NAMES[idx]} && return 1
+
+		# Append VG informations to the csv file
+		for ((i = 0; i < ${#VG_NAME[@]}; i++)); do
+			line=${HOST_NAMES[idx]},${VG_MARKER},${VG_NAME[i]},,,${VG_PVNAMES[i]}
+			verbose_output "Informations of VG ${VG_NAME[i]}" \
+				       "in host ${HOST_NAMES[idx]} are as follows:"
+			verbose_output "${line}"
+			echo "${line}" >> ${LUSTRE_CSV_FILE}
+		done
+
+		# Collect LV informations
+		! get_lv_configs ${HOST_NAMES[idx]} && return 1
+
+		# Append LV informations to the csv file
+		for ((i = 0; i < ${#LV_NAME[@]}; i++)); do
+			line=${HOST_NAMES[idx]},${LV_MARKER},${LV_NAME[i]},,,${LV_SIZE[i]},${LV_VGNAME[i]}
+			verbose_output "Informations of LV /dev/${LV_VGNAME[i]}/${LV_NAME[i]}"\
+				       "in host ${HOST_NAMES[idx]} are as follows:"
+			verbose_output "${line}"
+			echo "${line}" >> ${LUSTRE_CSV_FILE}
+		done
+	done
+	return 0
+}
 
 # Generate the csv file from the lustre cluster
 gen_csvfile() {
@@ -1923,6 +2188,9 @@ gen_csvfile() {
 
 	: > ${LUSTRE_CSV_FILE}
 
+	${GET_MDLVM_INFO} && get_mdlvm_info
+
+	# Collect and append lustre target informations to the csv file
 	for ((idx = 0; idx < ${#HOST_NAMES[@]}; idx++)); do
 		# Collect informations
 		if ! get_configs ${HOST_NAMES[idx]}; then

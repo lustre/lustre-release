@@ -67,10 +67,6 @@ EOF
 . @scriptlibdir@/lc_common.sh
 
 #***************************** Global variables *****************************#
-# Raid command path
-RAID_CMD_PATH=${RAID_CMD_PATH:-"/sbin"}
-MDADM=${MDADM:-"$RAID_CMD_PATH/mdadm"}
-
 # All the MD device items in the csv file
 declare -a HOST_NAME MD_NAME OP_MODE OP_OPTS RAID_LEVEL MD_DEVS
 
