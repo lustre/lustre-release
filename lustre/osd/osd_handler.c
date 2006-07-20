@@ -160,6 +160,9 @@ static void  osd_it_put        (const struct lu_context *ctx, struct dt_it *di);
 static int   osd_it_next       (const struct lu_context *ctx, struct dt_it *di);
 static int   osd_it_key_size   (const struct lu_context *ctx,
                                 const struct dt_it *di);
+static void  osd_conf_get      (const struct lu_context *ctx,
+                                const struct dt_device *dev,
+                                struct dt_device_param *param);
 
 static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
@@ -373,6 +376,18 @@ static int osd_statfs(const struct lu_context *ctx,
         RETURN (result);
 }
 
+static void osd_conf_get(const struct lu_context *ctx,
+                         const struct dt_device *dev,
+                         struct dt_device_param *param)
+{
+        /*
+         * XXX should be taken from not-yet-existing fs abstraction layer.
+         */
+        param->ddp_max_name_len  = LDISKFS_NAME_LEN;
+        param->ddp_max_nlink     = LDISKFS_LINK_MAX;
+        param->ddp_block_shift   = osd_sb(osd_dt_dev(dev))->s_blocksize_bits;
+}
+
 /*
  * Journal
  */
@@ -483,7 +498,8 @@ static struct dt_device_operations osd_dt_ops = {
         .dt_root_get    = osd_root_get,
         .dt_statfs      = osd_statfs,
         .dt_trans_start = osd_trans_start,
-        .dt_trans_stop  = osd_trans_stop
+        .dt_trans_stop  = osd_trans_stop,
+        .dt_conf_get    = osd_conf_get
 };
 
 static void osd_object_lock(const struct lu_context *ctx, struct dt_object *dt,
