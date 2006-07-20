@@ -234,6 +234,11 @@ struct dt_rec;
 struct dt_key;
 
 /*
+ * Incomplete type of dt iterator.
+ */
+struct dt_it;
+
+/*
  * Per-dt-object operations on object as index.
  */
 struct dt_index_operations {
@@ -253,6 +258,33 @@ struct dt_index_operations {
          */
         int (*dio_delete)(const struct lu_context *ctxt, struct dt_object *dt,
                           const struct dt_key *key, struct thandle *handle);
+        /*
+         * Iterator interface
+         */
+        struct dt_it_ops {
+                /*
+                 * Allocate and initialize new iterator.
+                 *
+                 * precondition: lu_object_exists(ctxt, &dt->do_lu);
+                 */
+                struct dt_it *(*init)(const struct lu_context *ctxt,
+                                      struct dt_object *dt);
+                void          (*fini)(const struct lu_context *ctxt,
+                                      struct dt_it *di);
+                int            (*get)(const struct lu_context *ctxt,
+                                      struct dt_it *di,
+                                      const struct dt_key *key);
+                void           (*put)(const struct lu_context *ctxt,
+                                      struct dt_it *di);
+                int           (*next)(const struct lu_context *ctxt,
+                                      struct dt_it *di);
+                struct dt_key *(*key)(const struct lu_context *ctxt,
+                                      const struct dt_it *di);
+                int       (*key_size)(const struct lu_context *ctxt,
+                                      const struct dt_it *di);
+                struct dt_rec *(*rec)(const struct lu_context *ctxt,
+                                      const struct dt_it *di);
+        } dio_it;
 };
 
 struct dt_device {
