@@ -944,6 +944,11 @@ mass_config() {
     declare -i pid_num=0
     declare -i i=0
 
+    if [ ${#HOST_NAME[@]} -eq 0 ]; then
+        verbose_output "There are no Lustre targets to be formatted."
+        return 0
+    fi
+
     # Start lnet network in the MGS node
     if ! start_mgs_lnet; then
         return 1    
