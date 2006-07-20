@@ -1786,6 +1786,30 @@ void fsoptions_to_mds_flags(struct mds_obd *mds, char *options)
                 options = ++p;
         }
 }
+static int mds_lov_presetup (struct mds_obd *mds, struct lustre_cfg *lcfg)
+{
+        int rc;
+        ENTRY;
+
+        rc = llog_start_commit_thread();
+        if (rc < 0)
+                RETURN(rc);
+
+        if (lcfg->lcfg_bufcount >= 4 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
+                class_uuid_t uuid;
+
+                generate_random_uuid(uuid);
+                class_uuid_unparse(uuid, &mds->mds_lov_uuid);
+
+                OBD_ALLOC(mds->mds_profile, LUSTRE_CFG_BUFLEN(lcfg, 3));
+                if (mds->mds_profile == NULL)
+                        RETURN(-ENOMEM);
+
+                strncpy(mds->mds_profile, lustre_cfg_string(lcfg, 3),
+                        LUSTRE_CFG_BUFLEN(lcfg, 3));
+        }
+        RETURN(rc);
+}
 
 /* mount the file system (secretly).  lustre_cfg parameters are:
  * 1 = device
@@ -1808,7 +1832,7 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         ENTRY;
 
         /* setup 1:/dev/loop/0 2:ext3 3:mdsA 4:errors=remount-ro,iopen_nopriv */
-
+        
         CLASSERT(offsetof(struct obd_device, u.obt) ==
                  offsetof(struct obd_device, u.mds.mds_obt));
 
@@ -1889,23 +1913,9 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 GOTO(err_ns, rc);
         }
 
-        rc = llog_start_commit_thread();
+        rc = mds_lov_presetup(mds, lcfg);
         if (rc < 0)
                 GOTO(err_fs, rc);
-
-        if (lcfg->lcfg_bufcount >= 4 && LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
-                class_uuid_t uuid;
-
-                generate_random_uuid(uuid);
-                class_uuid_unparse(uuid, &mds->mds_lov_uuid);
-
-                OBD_ALLOC(mds->mds_profile, LUSTRE_CFG_BUFLEN(lcfg, 3));
-                if (mds->mds_profile == NULL)
-                        GOTO(err_fs, rc = -ENOMEM);
-
-                strncpy(mds->mds_profile, lustre_cfg_string(lcfg, 3),
-                        LUSTRE_CFG_BUFLEN(lcfg, 3));
-        }
 
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "mds_ldlm_client", &obd->obd_ldlm_client);
@@ -2663,12 +2673,27 @@ static __attribute__((unused)) void /*__exit*/ mds_exit(void)
         class_unregister_type(LUSTRE_MDS_NAME);
         class_unregister_type(LUSTRE_MDT_NAME);
 }
-
+/*mds still need lov setup here*/
 static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
+        struct mds_obd *mds = &obd->u.mds;
+        int rc = 0;
         ENTRY;
 
-        RETURN(0);
+        CDEBUG(D_INFO, "obd %s setup \n", obd->obd_name);
+        if (strcmp(obd->obd_name, "mdd_obd"))
+                RETURN(0);
+        
+        rc = mds_lov_presetup(mds, lcfg);
+        if (rc < 0)
+                RETURN(rc);
+
+        /* Don't wait for mds_postrecov trying to clear orphans */
+        obd->obd_async_recov = 1;
+        rc = mds_postsetup(obd);
+        obd->obd_async_recov = 0;
+
+        RETURN(rc);
 }
 
 static int mds_cmd_cleanup(struct obd_device *obd)
@@ -2688,6 +2713,12 @@ static struct obd_ops mds_cmd_obd_ops = {
         .o_owner           = THIS_MODULE,
         .o_setup           = mds_cmd_setup,
         .o_cleanup         = mds_cmd_cleanup,
+        .o_precleanup      = mds_precleanup,
+        .o_create          = mds_obd_create,
+        .o_destroy         = mds_obd_destroy,
+        .o_llog_init       = mds_llog_init,
+        .o_llog_finish     = mds_llog_finish,
+        .o_notify          = mds_notify,
         .o_health_check    = mds_cmd_health_check,
 };
 

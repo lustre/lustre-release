@@ -30,6 +30,10 @@
 #include <asm/semaphore.h>
 #include <md_object.h>
 
+#define MDD_OBD_NAME    "mdd_obd"
+#define MDD_OBD_UUID    "mdd_obd_uuid"
+#define MDD_OBD_TYPE    "mds"
+#define MDD_OBD_PROFILE "lustre-client"
 struct dt_device;
 
 struct mdd_device {

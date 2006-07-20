@@ -4,7 +4,7 @@
  *  linux/mds/mds_lov.c
  *  Lustre Metadata Server (mds) handling of striped file data
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
+ *  Copyright (C) 2001-2006 Cluster File Systems, Inc.
  *   Author: Peter Braam <braam@clusterfs.com>
  *           wangdi <wangdi@clusterfs.com>
  *
