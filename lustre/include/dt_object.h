@@ -61,6 +61,12 @@ enum dt_lock_mode {
         DT_READ_LOCK  = 2,
 };
 
+struct dt_device_param {
+        unsigned           ddp_max_name_len;
+        unsigned           ddp_max_nlink;
+        unsigned           ddp_block_shift;
+};
+
 /*
  * Operations on dt device.
  */
@@ -86,6 +92,12 @@ struct dt_device_operations {
          */
         int   (*dt_root_get)(const struct lu_context *ctx,
                              struct dt_device *dev, struct lu_fid *f);
+        /*
+         * Return device configuration data.
+         */
+        void  (*dt_conf_get)(const struct lu_context *ctx,
+                             const struct dt_device *dev,
+                             struct dt_device_param *param);
 };
 
 struct dt_index_features {
