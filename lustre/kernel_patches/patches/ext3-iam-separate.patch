@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
 --- iam.orig/fs/ext3/Makefile	2006-05-31 20:24:32.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-07-20 18:33:52.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-07-21 00:20:30.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,8 +14,8 @@ Index: iam/fs/ext3/Makefile
 Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam.c	2006-07-01 20:21:38.000000000 +0400
-@@ -0,0 +1,1262 @@
++++ iam/fs/ext3/iam.c	2006-07-20 19:36:04.000000000 +0400
+@@ -0,0 +1,1276 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -620,6 +620,7 @@ Index: iam/fs/ext3/iam.c
 +	iam_path_init(&it->ii_path, c, pd);
 +	return 0;
 +}
++EXPORT_SYMBOL(iam_it_init);
 +
 +/*
 + * Finalize iterator and release all resources.
@@ -631,6 +632,7 @@ Index: iam/fs/ext3/iam.c
 +	assert(it_state(it) == IAM_IT_DETACHED);
 +	iam_path_fini(&it->ii_path);
 +}
++EXPORT_SYMBOL(iam_it_fini);
 +
 +/*
 + * Performs tree top-to-bottom traversal starting from root, and loads leaf
@@ -707,6 +709,7 @@ Index: iam/fs/ext3/iam.c
 +        assert(result != -ENOENT);
 +        return result;
 +}
++EXPORT_SYMBOL(iam_it_get);
 +
 +/*
 + * Attach iterator, and assure it points to the record (not skewed).
@@ -733,6 +736,7 @@ Index: iam/fs/ext3/iam.c
 +        assert(ergo(result >= 0, it_state(it) == IAM_IT_ATTACHED));
 +        return result;
 +}
++EXPORT_SYMBOL(iam_it_get_at);
 +
 +/*
 + * Duplicates iterator.
@@ -774,6 +778,7 @@ Index: iam/fs/ext3/iam.c
 +                iam_it_unlock(it);
 +        }
 +}
++EXPORT_SYMBOL(iam_it_put);
 +
 +/*
 + * Move iterator one record right.
@@ -830,6 +835,7 @@ Index: iam/fs/ext3/iam.c
 +        assert(ergo(result >  0, it_state(it) == IAM_IT_DETACHED));
 +        return result;
 +}
++EXPORT_SYMBOL(iam_it_next);
 +
 +/*
 + * Return pointer to the record under iterator.
@@ -843,6 +849,7 @@ Index: iam/fs/ext3/iam.c
 +        assert(it_at_rec(it));
 +        return iam_leaf_rec(&it->ii_path.ip_leaf);
 +}
++EXPORT_SYMBOL(iam_it_rec_get);
 +
 +static void iam_it_reccpy(struct iam_iterator *it, const struct iam_rec *r)
 +{
@@ -878,6 +885,7 @@ Index: iam/fs/ext3/iam.c
 +        }
 +        return result;
 +}
++EXPORT_SYMBOL(iam_it_rec_set);
 +
 +/*
 + * Return pointer to the key under iterator.
@@ -892,6 +900,7 @@ Index: iam/fs/ext3/iam.c
 +        assert(it_at_rec(it));
 +        return iam_leaf_key(&it->ii_path.ip_leaf);
 +}
++EXPORT_SYMBOL(iam_it_key_get);
 +
 +/*
 + * Return size of key under iterator (in bytes)
@@ -906,6 +915,7 @@ Index: iam/fs/ext3/iam.c
 +        assert(it_at_rec(it));
 +        return iam_leaf_key_size(&it->ii_path.ip_leaf);
 +}
++EXPORT_SYMBOL(iam_it_key_size);
 +
 +/*
 + * Insertion of new record. Interaction with jbd during non-trivial case (when
@@ -1034,6 +1044,7 @@ Index: iam/fs/ext3/iam.c
 +                            iam_it_container(it)->ic_descr->id_rec_size)));
 +        return result;
 +}
++EXPORT_SYMBOL(iam_it_rec_insert);
 +
 +/*
 + * Delete record under iterator.
@@ -1079,6 +1090,7 @@ Index: iam/fs/ext3/iam.c
 +               it_state(it) == IAM_IT_DETACHED);
 +	return result;
 +}
++EXPORT_SYMBOL(iam_it_rec_delete);
 +
 +/*
 + * Convert iterator to cookie.
@@ -1098,6 +1110,7 @@ Index: iam/fs/ext3/iam.c
 +        result = *(iam_pos_t *)iam_it_key_get(it);
 +        return result;
 +}
++EXPORT_SYMBOL(iam_it_store);
 +
 +/*
 + * Restore iterator from cookie.
@@ -1113,6 +1126,7 @@ Index: iam/fs/ext3/iam.c
 +        assert(iam_it_container(it)->ic_descr->id_key_size <= sizeof pos);
 +        return iam_it_get(it, (struct iam_key *)&pos);
 +}
++EXPORT_SYMBOL(iam_it_load);
 +
 +/***********************************************************************/
 +/* invariants                                                          */
@@ -5441,7 +5455,7 @@ Index: iam/fs/ext3/namei.c
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
 --- iam.orig/include/linux/lustre_iam.h	2006-05-31 20:24:32.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-07-20 18:33:52.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-07-21 00:20:30.000000000 +0400
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
