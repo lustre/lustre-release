@@ -110,9 +110,14 @@ static inline struct dt_device_operations *mdd_child_ops(struct mdd_device *d)
         return d->mdd_child->dd_ops;
 }
 
+static inline struct lu_object *mdd2lu_obj(struct mdd_object *obj)
+{
+        return &obj->mod_obj.mo_lu;
+}
+
 static inline struct dt_object* mdd_object_child(struct mdd_object *o)
 {
-        return container_of0(lu_object_next(&o->mod_obj.mo_lu),
+        return container_of0(lu_object_next(mdd2lu_obj(o)),
                              struct dt_object, do_lu);
 }
 

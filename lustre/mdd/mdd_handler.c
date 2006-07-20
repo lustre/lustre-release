@@ -66,7 +66,10 @@ static struct lu_object_operations mdd_lu_obj_ops;
 
 static struct lu_context_key       mdd_thread_key;
 
-const char *mdd_root_dir_name = "root";
+static const char *mdd_root_dir_name = "root";
+static const char dot[] = ".";
+static const char dotdot[] = "..";
+
 
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx)
 {
@@ -87,12 +90,12 @@ static struct lu_object *mdd_object_alloc(const struct lu_context *ctxt,
         if (mdo != NULL) {
                 struct lu_object *o;
 		
-                o = &mdo->mod_obj.mo_lu;
+                o = mdd2lu_obj(mdo);
                 lu_object_init(o, NULL, d);
                 mdo->mod_obj.mo_ops = &mdd_obj_ops;
                 mdo->mod_obj.mo_dir_ops = &mdd_dir_ops;
                 o->lo_ops = &mdd_lu_obj_ops;
-                return &mdo->mod_obj.mo_lu;
+                return o;
         } else {
                 return NULL;
         }
@@ -377,13 +380,13 @@ static int __mdd_object_create(const struct lu_context *ctxt,
         int rc;
         ENTRY;
 
-        if (!lu_object_exists(ctxt, &obj->mod_obj.mo_lu)) {
+        if (!lu_object_exists(ctxt, mdd2lu_obj(obj))) {
                 next = mdd_object_child(obj);
                 rc = next->do_ops->do_create(ctxt, next, attr, handle);
         } else
                 rc = -EEXIST;
 
-        LASSERT(ergo(rc == 0, lu_object_exists(ctxt, &obj->mod_obj.mo_lu)));
+        LASSERT(ergo(rc == 0, lu_object_exists(ctxt, mdd2lu_obj(obj))));
         /* increase the nlink for directory */
         if (rc == 0 && dt_try_as_dir(ctxt, mdd_object_child(obj)))
                 rc = __mdd_ref_add(ctxt, obj, handle);
@@ -451,7 +454,7 @@ static int __mdd_xattr_set(const struct lu_context *ctxt,struct mdd_device *mdd,
 {
         struct dt_object *next;
 
-        LASSERT(lu_object_exists(ctxt, &obj->mod_obj.mo_lu));
+        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
         next = mdd_object_child(obj);
         return next->do_ops->do_xattr_set(ctxt, next, buf, buf_len, name,
                                           handle);
@@ -542,12 +545,61 @@ exit:
         RETURN(rc);
 }
 
-static int mdd_empty_dir(const struct lu_context *ctxt,
-                         struct md_object *dir)
+/*
+ * Check that @dir contains no entries except (possibly) dot and dotdot.
+ *
+ * Returns:
+ *
+ *             0        empty
+ *    -ENOTEMPTY        not empty
+ *           -ve        other error
+ *
+ */
+static int mdd_dir_is_empty(const struct lu_context *ctx,
+                            struct mdd_object *dir)
 {
-        /*TODO: iterate through the index until first entry
-         * other than dot or dotdot. For now - not empty always */
-        return 0;
+        struct dt_it     *it;
+        struct dt_object *obj;
+        struct dt_it_ops *iops;
+        int result;
+
+        obj = mdd_object_child(dir);
+        iops = &obj->do_index_ops->dio_it;
+        it = iops->init(ctx, obj);
+        if (it != NULL) {
+                result = iops->get(ctx, it, (const void *)"");
+                if (result > 0) {
+                        int i;
+                        for (result = 0, i = 0; result == 0 && i < 3; ++i) {
+                                result = iops->next(ctx, it);
+#if 0
+                                if (result == 0) {
+                                        struct lu_fid *fid;
+                                        char          *name;
+                                        int            len;
+
+                                        fid  = (void *)iops->rec(ctx, it);
+                                        name = (void *)iops->key(ctx, it);
+                                        len  = iops->key_size(ctx, it);
+                                        CERROR("entry: "DFID3": \"%*.*s\"\n",
+                                               PFID3(fid), len, len, name);
+                                }
+#endif
+                        }
+                        iops->put(ctx, it);
+                        if (result == 0)
+                                result = -ENOTEMPTY;
+                        else if (result == +1)
+                                result = 0;
+                } else if (result == 0)
+                        /*
+                         * Huh? Index contains no zero key?
+                         */
+                        result = -EIO;
+                iops->fini(ctx, it);
+        } else
+                result = -ENOMEM;
+        return result;
 }
 
 static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
@@ -580,8 +632,9 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
 
         /* rmdir checks */
         if (S_ISDIR(ma->ma_attr.la_mode)) {
-                if (!mdd_empty_dir(ctxt, cobj))
-                        GOTO(cleanup, rc = -ENOTEMPTY);
+                rc = mdd_dir_is_empty(ctxt, mdd_cobj);
+                if (rc != 0)
+                        GOTO(cleanup, rc);
         }
 
         rc = __mdd_index_delete(ctxt, mdd_pobj, name, handle);
@@ -608,15 +661,18 @@ static int mdd_parent_fid(const struct lu_context *ctxt,
                           struct mdd_object *obj,
                           struct lu_fid *fid)
 {
-        const char *name = "..";
         int rc;
 
-        rc = mdd_lookup(ctxt, &obj->mod_obj, name, fid);
+        rc = mdd_lookup(ctxt, &obj->mod_obj, dotdot, fid);
 
         return rc;
 }
 
-#define mdo2fid(obj) (&((obj)->mod_obj.mo_lu.lo_header->loh_fid))
+static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
+{
+        return lu_object_fid(&obj->mod_obj.mo_lu);
+}
+
 static int mdd_is_parent(const struct lu_context *ctxt,
                          struct mdd_device *mdd,
                          struct mdd_object *p1,
@@ -759,6 +815,37 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
         RETURN(rc);
 }
 
+static int __mdd_object_initialize(const struct lu_context *ctxt,
+                                   struct mdd_object *parent,
+                                   struct mdd_object *child,
+                                   struct md_attr *ma, struct thandle *handle)
+{
+        int rc;
+
+        rc = 0;
+        if (S_ISDIR(ma->ma_attr.la_mode)) {
+                rc = __mdd_index_insert(ctxt, child,
+                                        mdo2fid(child), dot, handle);
+                if (rc == 0) {
+                        rc = __mdd_index_insert(ctxt, child, mdo2fid(parent),
+                                                dotdot, handle);
+                        if (rc == 0) {
+                                __mdd_ref_add(ctxt, child, handle);
+                                __mdd_ref_add(ctxt, parent, handle);
+                        } else {
+                                int rc2;
+
+                                rc2 = __mdd_index_delete(ctxt,
+                                                         child, dot, handle);
+                                if (rc2 != 0)
+                                        CERROR("Failure to cleanup after dotdot"
+                                               " creation: %d (%d)\n", rc2, rc);
+                        }
+                }
+        }
+        return rc;
+}
+
 /*
  * Create object and insert it into namespace.
  */
@@ -840,6 +927,14 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
 
         rc = __mdd_object_create(ctxt, son, ma, handle);
         if (rc)
+                GOTO(cleanup, rc);
+
+        rc = __mdd_object_initialize(ctxt, mdo, son, ma, handle);
+        if (rc)
+                /*
+                 * Object has no links, so it will be destroyed when last
+                 * reference is released. (XXX not now.)
+                 */
                 GOTO(cleanup, rc);
 
         created = 1;
@@ -999,7 +1094,7 @@ static int __mdd_ref_add(const struct lu_context *ctxt, struct mdd_object *obj,
 {
         struct dt_object *next;
 
-        LASSERT(lu_object_exists(ctxt, &obj->mod_obj.mo_lu));
+        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
         next = mdd_object_child(obj);
         return next->do_ops->do_ref_add(ctxt, next, handle);
 }
@@ -1030,7 +1125,7 @@ __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
         struct dt_object *next = mdd_object_child(obj);
         int rc;
 
-        LASSERT(lu_object_exists(ctxt, &obj->mod_obj.mo_lu));
+        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
 
         rc = next->do_ops->do_ref_del(ctxt, next, handle);
         if (rc == 0 && ma != NULL)
