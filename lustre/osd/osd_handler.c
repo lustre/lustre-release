@@ -130,6 +130,8 @@ static int   osd_fid_lookup    (const struct lu_context *ctx,
                                 const struct lu_fid *fid);
 static int   osd_inode_getattr (const struct lu_context *ctx,
                                 struct inode *inode, struct lu_attr *attr);
+static int   osd_inode_setattr (const struct lu_context *ctx,
+                                struct inode *inode, const struct lu_attr *attr);
 static int   osd_param_is_sane (const struct osd_device *dev,
                                 const struct txn_param *param);
 static int   osd_index_lookup  (const struct lu_context *ctxt,
@@ -511,7 +513,44 @@ static int osd_attr_set(const struct lu_context *ctxt,
                         const struct lu_attr *attr,
                         struct thandle *handle)
 {
-        return 0;
+        struct osd_object *obj = osd_dt_obj(dt);
+        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
+        LASSERT(osd_invariant(obj));
+        return osd_inode_setattr(ctxt, obj->oo_inode, attr);
+}
+
+static int osd_inode_setattr(const struct lu_context *ctx,
+                             struct inode *inode, const struct lu_attr *attr)
+{
+        struct iattr iattr;
+        int rc;
+
+        iattr.ia_valid = attr->la_valid;
+        iattr.ia_mode  = attr->la_mode;
+        iattr.ia_uid   = attr->la_uid;
+        iattr.ia_gid   = attr->la_gid;
+        iattr.ia_size  = attr->la_size;
+        LTIME_S(iattr.ia_atime) = attr->la_atime;
+        LTIME_S(iattr.ia_mtime) = attr->la_mtime;
+        LTIME_S(iattr.ia_ctime) = attr->la_ctime;
+        
+        /* TODO: handle ATTR_SIZE & truncate in the future */
+        iattr.ia_valid &= ~ATTR_SIZE;
+
+        /* Don't allow setattr to change file type */
+        if (iattr.ia_valid & ATTR_MODE)
+                iattr.ia_mode = (inode->i_mode & S_IFMT) |
+                                 (iattr.ia_mode & ~S_IFMT);
+
+//        if (inode->i_op->setattr) {
+//                rc = inode->i_op->setattr(dentry, iattr);
+//        } else 
+        {
+                rc = inode_change_ok(inode, &iattr);
+                if (!rc)
+                        rc = inode_setattr(inode, &iattr);
+        }
+        return rc;
 }
 
 /*
