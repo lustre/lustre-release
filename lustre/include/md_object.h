@@ -53,8 +53,10 @@ enum ma_valid {
 };
 
 struct md_attr {
-        __u64          ma_valid;
-        struct lu_attr ma_attr;
+        __u64                   ma_valid;
+        struct lu_attr          ma_attr;
+        struct lov_mds_md      *ma_lmm;
+        int                     ma_lmm_size;
 };
 
 /*
