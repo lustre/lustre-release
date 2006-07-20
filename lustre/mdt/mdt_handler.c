@@ -116,6 +116,7 @@ struct mdt_opc_slice {
 };
 
 static struct mdt_opc_slice mdt_handlers[];
+static struct mdt_opc_slice mdt_readpage_handlers[];
 
 static int                    mdt_handle    (struct ptlrpc_request *req);
 static struct mdt_device     *mdt_dev       (struct lu_device *d);
@@ -860,13 +861,14 @@ void mdt_object_unlock_put(struct mdt_thread_info * info,
         mdt_object_put(info->mti_ctxt, o);
 }
 
-static struct mdt_handler *mdt_handler_find(__u32 opc)
+static struct mdt_handler *mdt_handler_find(__u32 opc,
+                                            struct mdt_opc_slice *supported)
 {
         struct mdt_opc_slice *s;
         struct mdt_handler   *h;
 
         h = NULL;
-        for (s = mdt_handlers; s->mos_hs != NULL; s++) {
+        for (s = supported; s->mos_hs != NULL; s++) {
                 if (s->mos_opc_start <= opc && opc < s->mos_opc_end) {
                         h = s->mos_hs + (opc - s->mos_opc_start);
                         if (h->mh_opc != 0)
@@ -1001,7 +1003,7 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
         last_committed = last_transno;
 #endif
         last_transno = info->mti_transno;
-        CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n", 
+        CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n",
                last_transno, last_committed);
         req->rq_repmsg->transno = req->rq_transno = last_transno;
         req->rq_repmsg->last_xid = req->rq_xid;
@@ -1226,7 +1228,8 @@ static int mdt_reply(struct ptlrpc_request *req, int result,
 /* mds/handler.c */
 extern int mds_msg_check_version(struct lustre_msg *msg);
 
-static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info)
+static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info,
+                       struct mdt_opc_slice *supported)
 {
         struct mdt_handler *h;
         struct lustre_msg  *msg;
@@ -1244,7 +1247,7 @@ static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info)
                 result = mdt_recovery(req);
                 switch (result) {
                 case +1:
-                        h = mdt_handler_find(msg->opc);
+                        h = mdt_handler_find(msg->opc, supported);
                         if (h != NULL)
                                 result = mdt_req_handle(info, h, req);
                         else {
@@ -1267,7 +1270,8 @@ static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info)
  * XXX common "target" functionality should be factored into separate module
  * shared by mdt, ost and stand-alone services like fld.
  */
-static int mdt_handle(struct ptlrpc_request *req)
+static int mdt_handle_common(struct ptlrpc_request *req,
+                             struct mdt_opc_slice *supported)
 {
         struct lu_context      *ctx;
         struct mdt_thread_info *info;
@@ -1282,10 +1286,20 @@ static int mdt_handle(struct ptlrpc_request *req)
 
         mdt_thread_info_init(req, info);
 
-        result = mdt_handle0(req, info);
+        result = mdt_handle0(req, info, mdt_handlers);
 
         mdt_thread_info_fini(info);
         RETURN(result);
+}
+
+static int mdt_handle(struct ptlrpc_request *req)
+{
+        return mdt_handle_common(req, mdt_handlers);
+}
+
+static int mdt_readpage_handle(struct ptlrpc_request *req)
+{
+        return mdt_handle_common(req, mdt_readpage_handlers);
 }
 
 /*Please move these functions from mds to mdt*/
@@ -1898,21 +1912,34 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
+        /*
+         * readpage service configuration. Parameters have to be adjusted,
+         * ideally.
+         */
+        conf = (typeof(conf)) {
+                .psc_nbufs            = MDS_NBUFS,
+                .psc_bufsize          = MDS_BUFSIZE,
+                .psc_max_req_size     = MDS_MAXREQSIZE,
+                .psc_max_reply_size   = MDS_MAXREPSIZE,
+                .psc_req_portal       = MDS_READPAGE_PORTAL,
+                .psc_rep_portal       = MDC_REPLY_PORTAL,
+                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_num_threads   = min(max(mdt_num_threads, MDT_MIN_THREADS),
+                                       MDT_MAX_THREADS),
+                .psc_ctx_tags      = LCT_MD_THREAD
+        };
         m->mdt_readpage_service =
-                ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
-                                MDS_MAXREPSIZE, MDS_READPAGE_PORTAL,
-                                MDC_REPLY_PORTAL, MDT_SERVICE_WATCHDOG_TIMEOUT,
-                                mdt_handle, "mds_readpage",
-                                m->mdt_md_dev.md_lu_dev.ld_proc_entry, NULL,
-                                min(max(mdt_num_threads, MDT_MIN_THREADS),
-                                    MDT_MAX_THREADS), LCT_MD_THREAD);
+                ptlrpc_init_svc_conf(&conf, mdt_readpage_handle,
+                                     LUSTRE_MDT0_NAME "_readpage",
+                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
+                                     NULL);
 
         if (m->mdt_readpage_service == NULL) {
                 CERROR("failed to start readpage service\n");
                 GOTO(err_mdt_svc, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_readpage_service, "ll_mdt_rdpg");
+        rc = ptlrpc_start_threads(NULL, m->mdt_readpage_service, "mdt_rdpg");
 
         EXIT;
 err_mdt_svc:
@@ -2669,7 +2696,6 @@ DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO|MUTABOR,
                                           SETXATTR,     mdt_setxattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
-DEF_MDT_HNDL_F(HABEO_CORPUS,              READPAGE,     mdt_readpage),
 DEF_MDT_HNDL_F(0                        |MUTABOR,
                                           REINT,        mdt_reint),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, CLOSE,        mdt_close),
@@ -2731,6 +2757,18 @@ static struct mdt_opc_slice mdt_handlers[] = {
         }
 };
 
+static struct mdt_handler mdt_mds_readpage_ops[] = {
+        DEF_MDT_HNDL_F(HABEO_CORPUS, READPAGE, mdt_readpage),
+};
+
+static struct mdt_opc_slice mdt_readpage_handlers[] = {
+        {
+                .mos_opc_start = MDS_READPAGE,
+                .mos_opc_end   = MDS_READPAGE + 1,
+                .mos_hs        = mdt_mds_readpage_ops
+        }
+};
+
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Meta-data Target ("LUSTRE_MDT0_NAME")");
 MODULE_LICENSE("GPL");
@@ -2738,4 +2776,4 @@ MODULE_LICENSE("GPL");
 CFS_MODULE_PARM(mdt_num_threads, "ul", ulong, 0444,
                 "number of mdt service threads to start");
 
-cfs_module(mdt, "0.1.0", mdt_mod_init, mdt_mod_exit);
+cfs_module(mdt, "0.2.0", mdt_mod_init, mdt_mod_exit);
