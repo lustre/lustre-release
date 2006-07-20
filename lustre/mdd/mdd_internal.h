@@ -42,6 +42,7 @@ struct mdd_device {
         struct md_lov_info               mdd_lov_info;
         struct dt_device                 mdd_lov_dev;
         struct lu_fid                    mdd_root_fid;
+        struct dt_device_param           mdd_dt_conf;
 };
 
 struct mdd_object {
