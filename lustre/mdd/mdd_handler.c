@@ -329,7 +329,7 @@ static void mdd_lock(const struct lu_context *ctxt,
 {
         struct dt_object  *next = mdd_object_child(obj);
 
-        next->do_ops->do_object_lock(ctxt, next, mode);
+        next->do_ops->do_lock(ctxt, next, mode);
 }
 
 static void mdd_unlock(const struct lu_context *ctxt,
@@ -337,7 +337,7 @@ static void mdd_unlock(const struct lu_context *ctxt,
 {
         struct dt_object  *next = mdd_object_child(obj);
 
-        next->do_ops->do_object_unlock(ctxt, next, mode);
+        next->do_ops->do_unlock(ctxt, next, mode);
 }
 
 static void mdd_lock2(const struct lu_context *ctxt,
@@ -379,7 +379,7 @@ static int __mdd_object_create(const struct lu_context *ctxt,
 
         if (!lu_object_exists(ctxt, &obj->mod_obj.mo_lu)) {
                 next = mdd_object_child(obj);
-                rc = next->do_ops->do_object_create(ctxt, next, attr, handle);
+                rc = next->do_ops->do_create(ctxt, next, attr, handle);
         } else
                 rc = -EEXIST;
 
@@ -387,7 +387,7 @@ static int __mdd_object_create(const struct lu_context *ctxt,
         /* increase the nlink for directory */
         if (rc == 0 && dt_try_as_dir(ctxt, mdd_object_child(obj)))
                 rc = __mdd_ref_add(ctxt, obj, handle);
-        
+
         if (rc == 0)
                 mdd_attr_get(ctxt, &obj->mod_obj, &ma->ma_attr);
 
@@ -803,7 +803,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         /*
          * Two operations have to be performed:
          *
-         *  - allocation of new object (->do_object_create()), and
+         *  - allocation of new object (->do_create()), and
          *
          *  - insertion into parent index (->dio_insert()).
          *
@@ -1001,7 +1001,7 @@ static int __mdd_ref_add(const struct lu_context *ctxt, struct mdd_object *obj,
 
         LASSERT(lu_object_exists(ctxt, &obj->mod_obj.mo_lu));
         next = mdd_object_child(obj);
-        return next->do_ops->do_object_ref_add(ctxt, next, handle);
+        return next->do_ops->do_ref_add(ctxt, next, handle);
 }
 
 static int mdd_ref_add(const struct lu_context *ctxt, struct md_object *obj)
@@ -1032,7 +1032,7 @@ __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
 
         LASSERT(lu_object_exists(ctxt, &obj->mod_obj.mo_lu));
 
-        rc = next->do_ops->do_object_ref_del(ctxt, next, handle);
+        rc = next->do_ops->do_ref_del(ctxt, next, handle);
         if (rc == 0 && ma != NULL)
                 mdd_attr_get(ctxt, &obj->mod_obj, &ma->ma_attr);
 

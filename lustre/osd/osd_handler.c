@@ -533,7 +533,7 @@ static int osd_inode_setattr(const struct lu_context *ctx,
         LTIME_S(iattr.ia_atime) = attr->la_atime;
         LTIME_S(iattr.ia_mtime) = attr->la_mtime;
         LTIME_S(iattr.ia_ctime) = attr->la_ctime;
-        
+
         /* TODO: handle ATTR_SIZE & truncate in the future */
         iattr.ia_valid &= ~ATTR_SIZE;
 
@@ -544,7 +544,7 @@ static int osd_inode_setattr(const struct lu_context *ctx,
 
 //        if (inode->i_op->setattr) {
 //                rc = inode->i_op->setattr(dentry, iattr);
-//        } else 
+//        } else
         {
                 rc = inode_change_ok(inode, &iattr);
                 if (!rc)
@@ -795,16 +795,16 @@ int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
 }
 
 static struct dt_object_operations osd_obj_ops = {
-        .do_object_lock      = osd_object_lock,
-        .do_object_unlock    = osd_object_unlock,
-        .do_attr_get         = osd_attr_get,
-        .do_attr_set         = osd_attr_set,
-        .do_object_create    = osd_object_create,
-        .do_object_index_try = osd_index_try,
-        .do_object_ref_add   = osd_object_ref_add,
-        .do_object_ref_del   = osd_object_ref_del,
-        .do_xattr_get        = osd_xattr_get,
-        .do_xattr_set        = osd_xattr_set
+        .do_lock      = osd_object_lock,
+        .do_unlock    = osd_object_unlock,
+        .do_attr_get  = osd_attr_get,
+        .do_attr_set  = osd_attr_set,
+        .do_create    = osd_object_create,
+        .do_index_try = osd_index_try,
+        .do_ref_add   = osd_object_ref_add,
+        .do_ref_del   = osd_object_ref_del,
+        .do_xattr_get = osd_xattr_get,
+        .do_xattr_set = osd_xattr_set
 };
 
 static struct dt_body_operations osd_body_ops = {

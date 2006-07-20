@@ -216,8 +216,8 @@ int fld_index_init(struct lu_server_fld *fld,
         dt_obj = dt_store_open(ctx, dt, fld_index_name, &fld->fld_fid);
         if (!IS_ERR(dt_obj)) {
                 fld->fld_obj = dt_obj;
-                rc = dt_obj->do_ops->do_object_index_try(ctx, dt_obj,
-                                                         &fld_index_features);
+                rc = dt_obj->do_ops->do_index_try(ctx, dt_obj,
+                                                  &fld_index_features);
                 if (rc == 0)
                         LASSERT(dt_obj->do_index_ops != NULL);
                 else

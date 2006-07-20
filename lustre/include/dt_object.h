@@ -122,10 +122,10 @@ extern const struct dt_index_features dt_directory_features;
  * Per-dt-object operations.
  */
 struct dt_object_operations {
-        void  (*do_object_lock)(const struct lu_context *ctx,
-                                struct dt_object *dt, enum dt_lock_mode mode);
-        void  (*do_object_unlock)(const struct lu_context *ctx,
-                                  struct dt_object *dt, enum dt_lock_mode mode);
+        void  (*do_lock)(const struct lu_context *ctx,
+                         struct dt_object *dt, enum dt_lock_mode mode);
+        void  (*do_unlock)(const struct lu_context *ctx,
+                           struct dt_object *dt, enum dt_lock_mode mode);
         /*
          * Note: following ->do_{x,}attr_{set,get}() operations are very
          * similar to ->moo_{x,}attr_{set,get}() operations in struct
@@ -175,9 +175,8 @@ struct dt_object_operations {
          * precondition: !lu_object_exists(ctxt, &dt->do_lu);
          * postcondition: ergo(result == 0, lu_object_exists(ctxt, &dt->do_lu));
          */
-        int   (*do_object_create)(const struct lu_context *ctxt,
-                                  struct dt_object *dt,
-                                  struct lu_attr *attr, struct thandle *th);
+        int   (*do_create)(const struct lu_context *ctxt, struct dt_object *dt,
+                           struct lu_attr *attr, struct thandle *th);
         /*
          * Announce that this object is going to be used as an index. This
          * operation check that object supports indexing operations and
@@ -186,21 +185,21 @@ struct dt_object_operations {
          * Also probes for features. Operation is successful if all required
          * features are supported.
          */
-        int   (*do_object_index_try)(const struct lu_context *ctxt,
-                                     struct dt_object *dt,
-                                     const struct dt_index_features *feat);
+        int   (*do_index_try)(const struct lu_context *ctxt,
+                              struct dt_object *dt,
+                              const struct dt_index_features *feat);
         /*
          * Add nlink of the object
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
-        int   (*do_object_ref_add)(const struct lu_context *ctxt,
-                                   struct dt_object *dt, struct thandle *th);
+        int   (*do_ref_add)(const struct lu_context *ctxt,
+                            struct dt_object *dt, struct thandle *th);
         /*
          * Del nlink of the object
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
-        int   (*do_object_ref_del)(const struct lu_context *ctxt,
-                                   struct dt_object *dt, struct thandle *th);
+        int   (*do_ref_del)(const struct lu_context *ctxt,
+                            struct dt_object *dt, struct thandle *th);
 };
 
 /*

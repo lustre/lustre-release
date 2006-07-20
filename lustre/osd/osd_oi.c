@@ -88,8 +88,8 @@ int osd_oi_init(struct osd_thread_info *info,
 
         obj = dt_store_open(ctx, dev, oi_dirname, &info->oti_fid);
         if (!IS_ERR(obj)) {
-                result = obj->do_ops->do_object_index_try(ctx, obj,
-                                                          &oi_index_features);
+                result = obj->do_ops->do_index_try(ctx, obj,
+                                                   &oi_index_features);
                 if (result == 0) {
                         LASSERT(obj->do_index_ops != NULL);
                         oi->oi_dir = obj;

@@ -1068,15 +1068,6 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                  * Process request.
                  */
                 result = h->mh_act(info);
-        /*
-         * XXX result value is unconditionally shoved into ->rq_status
-         * (original code sometimes placed error code into ->rq_status, and
-         * sometimes returned it to the
-         * caller). ptlrpc_server_handle_request() doesn't check return value
-         * anyway.
-         */
-        /*XXX the status can be lost due to this, remove for now -tappro
-         * req->rq_status = result;*/
 
         LASSERT(current->journal_info == NULL);
 

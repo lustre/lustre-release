@@ -132,8 +132,7 @@ EXPORT_SYMBOL(dt_object_fini);
 int dt_try_as_dir(const struct lu_context *ctx, struct dt_object *obj)
 {
         if (obj->do_index_ops == NULL)
-                obj->do_ops->do_object_index_try(ctx, obj,
-                                                 &dt_directory_features);
+                obj->do_ops->do_index_try(ctx, obj, &dt_directory_features);
         return obj->do_index_ops != NULL;
 }
 EXPORT_SYMBOL(dt_try_as_dir);

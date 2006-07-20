@@ -398,7 +398,10 @@ out:
 extern struct lu_context_key mdt_txn_key;
 extern struct lu_context_key mdt_thread_key;
 
-#define MDT_TXN_LAST_RCVD_CREDITS 1
+enum {
+        MDT_TXN_LAST_RCVD_CREDITS = 1
+};
+
 /* add credits for last_rcvd update */
 static int mdt_txn_start_cb(const struct lu_context *ctx,
                             struct dt_device *dev,
