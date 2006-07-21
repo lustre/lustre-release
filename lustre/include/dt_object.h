@@ -204,13 +204,13 @@ struct dt_object_operations {
          * Add nlink of the object
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
-        int   (*do_ref_add)(const struct lu_context *ctxt,
+        void  (*do_ref_add)(const struct lu_context *ctxt,
                             struct dt_object *dt, struct thandle *th);
         /*
          * Del nlink of the object
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
-        int   (*do_ref_del)(const struct lu_context *ctxt,
+        void  (*do_ref_del)(const struct lu_context *ctxt,
                             struct dt_object *dt, struct thandle *th);
 };
 
