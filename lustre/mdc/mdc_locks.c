@@ -147,13 +147,16 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
 #endif
         }
 #endif
+
+#ifdef __KERNEL__
         {
-        /* This is debug code by huanghua. Please remove this when ready */
+                /* This is debug code by huanghua. Please remove this when ready */
                 struct inode *new_inode = data;
                 CERROR("XXX: I am going to set lockh : "LPX64" to %p/%lu/%u\n",
                         ((struct lustre_handle *)lockh)->cookie,
                         new_inode, new_inode->i_ino, new_inode->i_generation);
         }
+#endif        
         lock->l_ast_data = data;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_PUT(lock);

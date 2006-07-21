@@ -64,7 +64,7 @@ fld_rrb_hash(struct lu_client_fld *fld, seqno_t seq)
 static int
 fld_dht_hash(struct lu_client_fld *fld, seqno_t seq)
 {
-        /* XXX: here should DHT hash */
+        /* XXX: here should be DHT hash */
         return fld_rrb_hash(fld, seq);
 }
 
