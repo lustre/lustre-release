@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
 --- iam.orig/fs/ext3/Makefile	2006-05-31 20:24:32.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-07-21 00:20:30.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-07-21 23:12:10.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,8 +14,8 @@ Index: iam/fs/ext3/Makefile
 Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam.c	2006-07-20 19:36:04.000000000 +0400
-@@ -0,0 +1,1276 @@
++++ iam/fs/ext3/iam.c	2006-07-21 22:21:17.000000000 +0400
+@@ -0,0 +1,1280 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -342,11 +342,13 @@ Index: iam/fs/ext3/iam.c
 +	return iam_leaf_ops(leaf)->key_size(leaf);
 +}
 +
++#if 0
 +static struct iam_ikey *iam_leaf_ikey(const struct iam_leaf *leaf,
 +                                      struct iam_ikey *key)
 +{
 +	return iam_leaf_ops(leaf)->ikey(leaf, key);
 +}
++#endif
 +
 +static int iam_leaf_keycmp(const struct iam_leaf *leaf,
 +                           const struct iam_key *key)
@@ -458,6 +460,7 @@ Index: iam/fs/ext3/iam.c
 +static int iam_leaf_check(struct iam_leaf *leaf)
 +{
 +        return 1;
++#if 0
 +        struct iam_lentry    *orig;
 +        struct iam_path      *path;
 +        struct iam_container *bag;
@@ -490,6 +493,7 @@ Index: iam/fs/ext3/iam.c
 +        }
 +        leaf->il_at = orig;
 +        return 1;
++#endif
 +}
 +
 +static int iam_txn_dirty(handle_t *handle,
@@ -2620,8 +2624,8 @@ Index: iam/fs/ext3/iam_lfix.c
 Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lvar.c	2006-07-07 21:15:52.000000000 +0400
-@@ -0,0 +1,835 @@
++++ iam/fs/ext3/iam_lvar.c	2006-07-21 22:23:04.000000000 +0400
+@@ -0,0 +1,837 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2770,6 +2774,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +                offsetof(struct lvar_leaf_entry, vle_key) + e_keysize(ent);
 +}
 +
++#if 0
 +static int e_check(const struct iam_leaf *leaf,
 +                   const struct lvar_leaf_entry *ent)
 +{
@@ -2779,6 +2784,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +                start + sizeof(struct lvar_leaf_header) <= point &&
 +                point + e_size(leaf, ent) < start + blocksize(leaf);
 +}
++#endif
 +
 +static struct lvar_leaf_entry *e_next(const struct iam_leaf *leaf,
 +                                      const struct lvar_leaf_entry *ent)
@@ -5455,7 +5461,7 @@ Index: iam/fs/ext3/namei.c
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
 --- iam.orig/include/linux/lustre_iam.h	2006-05-31 20:24:32.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-07-21 00:20:30.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-07-21 23:12:10.000000000 +0400
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
