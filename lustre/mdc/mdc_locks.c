@@ -128,24 +128,32 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
                 struct inode *old_inode = lock->l_ast_data;
 /* FIXME: This is commented out by huanghua@clusterfs.com,
  * if anything wrong, please restore that */
-/*
+#if 0
                 LASSERTF(old_inode->i_state & I_FREEING,
                          "Found existing inode %p/%lu/%u state %lu in lock: "
                          "setting data to %p/%lu/%u\n", old_inode,
                          old_inode->i_ino, old_inode->i_generation,
                          old_inode->i_state,
                          new_inode, new_inode->i_ino, new_inode->i_generation);
-*/
+#else
                 if (!(old_inode->i_state & I_FREEING)) {
-                        CERROR("Found existing inode %p/%lu/%u state %lu in lock: "
-                         "setting data to %p/%lu/%u\n", old_inode,
-                         old_inode->i_ino, old_inode->i_generation,
-                         old_inode->i_state,
+                        CERROR("Found existing inode %p/%lu/%u state %lu in "
+                         "lock: "LPX64", and setting its data to %p/%lu/%u\n",
+                         old_inode, old_inode->i_ino, 
+                         old_inode->i_generation, old_inode->i_state, 
+                         ((struct lustre_handle *)lockh)->cookie,
                          new_inode, new_inode->i_ino, new_inode->i_generation);
-                        iput(old_inode);
                 }
+#endif
         }
 #endif
+        {
+        /* This is debug code by huanghua. Please remove this when ready */
+                struct inode *new_inode = data;
+                CERROR("XXX: I am going to set lockh : "LPX64" to %p/%lu/%u\n",
+                        ((struct lustre_handle *)lockh)->cookie,
+                        new_inode, new_inode->i_ino, new_inode->i_generation);
+        }
         lock->l_ast_data = data;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_PUT(lock);
