@@ -77,10 +77,10 @@ static int mdc_object_init(const struct lu_context *ctx, struct lu_object *lo)
         RETURN(0);
 }
 
-static int mdc_object_print(const struct lu_context *ctx,
-                            struct seq_file *f, const struct lu_object *lo)
+static int mdc_object_print(const struct lu_context *ctx, void *cookie,
+                            lu_printer_t p, const struct lu_object *lo)
 {
-	return seq_printf(f, LUSTRE_MDC0_NAME"-object@%p", lo);
+	return (*p)(ctx, cookie, LUSTRE_MDC0_NAME"-object@%p", lo);
 }
 
 static struct lu_object_operations mdc_obj_ops = {
@@ -101,7 +101,7 @@ static int mdc_object_create(const struct lu_context *ctx,
 
         mci = lu_context_key_get(ctx, &mdc_thread_key);
         LASSERT(mci);
-        
+
         memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
         mci->mci_opdata.mod_time = attr->la_mtime;

@@ -218,10 +218,10 @@ static void mdd_txn_param_build(const struct lu_context *ctx,
         mdd_ctx_info(ctx)->mti_param.tp_credits = opd->mod_credits;
 }
 
-static int mdd_object_print(const struct lu_context *ctxt,
-                            struct seq_file *f, const struct lu_object *o)
+static int mdd_object_print(const struct lu_context *ctxt, void *cookie,
+                            lu_printer_t p, const struct lu_object *o)
 {
-        return seq_printf(f, LUSTRE_MDD0_NAME"-object@%p", o);
+        return (*p)(ctxt, cookie, LUSTRE_MDD0_NAME"-object@%p", o);
 }
 
 static int mdd_object_exists(const struct lu_context *ctx,

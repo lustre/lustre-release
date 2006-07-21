@@ -144,6 +144,16 @@ struct lu_device_operations {
 };
 
 /*
+ * Type of "printer" function used by ->loo_object_print() method.
+ *
+ * Printer function is needed to provide some flexibility in (semi-)debugging
+ * output: possible implementations: printk, CDEBUG, sysfs/seq_file
+ */
+typedef int (*lu_printer_t)(const struct lu_context *ctx,
+                            void *cookie, const char *format, ...)
+        __attribute__ ((format (printf, 3, 4)));
+
+/*
  * Operations specific for particular lu_object.
  */
 struct lu_object_operations {
@@ -187,8 +197,8 @@ struct lu_object_operations {
         /*
          * Debugging helper. Print given object.
          */
-        int (*loo_object_print)(const struct lu_context *ctx,
-                                struct seq_file *f, const struct lu_object *o);
+        int (*loo_object_print)(const struct lu_context *ctx, void *cookie,
+                                lu_printer_t p, const struct lu_object *o);
         /*
          * Optional debugging method. Returns true iff method is internally
          * consistent.
@@ -435,6 +445,7 @@ struct lu_object_header {
 };
 
 struct fld;
+
 /*
  * lu_site is a "compartment" within which objects are unique, and LRU
  * discipline is maintained.
@@ -697,11 +708,41 @@ lu_object_ops(const struct lu_object *o)
 struct lu_object *lu_object_locate(struct lu_object_header *h,
                                    struct lu_device_type *dtype);
 
+struct lu_cdebug_print_info {
+        int         lpi_subsys;
+        int         lpi_mask;
+        const char *lpi_file;
+        const char *lpi_fn;
+        int         lpi_line;
+};
+
+/*
+ * Printer function emitting messages through libcfs_debug_msg().
+ */
+int lu_cdebug_printer(const struct lu_context *ctx,
+                      void *cookie, const char *format, ...);
+
+/*
+ * Print object description followed by user-supplied message.
+ */
+#define LU_OBJECT_DEBUG(mask, ctx, object, format, ...)                 \
+({                                                                      \
+        static struct lu_cdebug_print_info __info = {                   \
+                .lpi_subsys = DEBUG_SUBSYSTEM,                          \
+                .lpi_mask   = (mask),                                   \
+                .lpi_file   = __FILE__,                                 \
+                .lpi_fn     = __FUNCTION__,                             \
+                .lpi_line   = __LINE__                                  \
+        };                                                              \
+        lu_object_print(ctx, &__info, lu_cdebug_printer, object);       \
+        CDEBUG(mask, format , ## __VA_ARGS__);                          \
+})
+
 /*
  * Print human readable representation of the @o to the @f.
  */
-int lu_object_print(const struct lu_context *ctxt,
-                    struct seq_file *f, const struct lu_object *o);
+void lu_object_print(const struct lu_context *ctxt, void *cookie,
+                     lu_printer_t printer, const struct lu_object *o);
 
 /*
  * Check object consistency.
@@ -710,7 +751,7 @@ int lu_object_invariant(const struct lu_object *o);
 
 /*
  * Returns 1 iff object @o exists on the stable storage,
- * returns -1 iif object @o is on remote server.
+ * returns -1 iff object @o is on remote server.
  */
 static inline int lu_object_exists(const struct lu_context *ctx,
                                    const struct lu_object *o)
@@ -719,13 +760,13 @@ static inline int lu_object_exists(const struct lu_context *ctx,
 }
 
 static inline int lu_object_assert_exists(const struct lu_context *ctx,
-                                   const struct lu_object *o)
+                                          const struct lu_object *o)
 {
         return lu_object_exists(ctx, o) != 0;
 }
 
 static inline int lu_object_assert_not_exists(const struct lu_context *ctx,
-                                       const struct lu_object *o)
+                                              const struct lu_object *o)
 {
         return lu_object_exists(ctx, o) <= 0;
 }
@@ -847,5 +888,15 @@ void lu_context_enter(struct lu_context *ctx);
  * Called after exiting from @ctx
  */
 void lu_context_exit(struct lu_context *ctx);
+
+/*
+ * Initialization of global lu_* data.
+ */
+int lu_global_init(void);
+
+/*
+ * Dual to lu_global_init().
+ */
+void lu_global_fini(void);
 
 #endif /* __LUSTRE_LU_OBJECT_H */

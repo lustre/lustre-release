@@ -772,7 +772,7 @@ int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
         return rc == ELDLM_OK ? 0 : -EIO;
 }
 
-/* just call ldlm_lock_decref() if decref, 
+/* just call ldlm_lock_decref() if decref,
  * else we only call ptlrpc_save_lock() to save this lock in req.
  * when transaction committed, req will be released and lock will be released */
 void fid_unlock(struct ptlrpc_request *req, const struct lu_fid *f,
@@ -790,7 +790,7 @@ void fid_unlock(struct ptlrpc_request *req, const struct lu_fid *f,
         }
         if (decref)
                 ldlm_lock_decref(lh, mode);
-        else 
+        else
                 ptlrpc_save_lock(req, lh, mode);
 }
 
@@ -841,7 +841,7 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
         ENTRY;
 
         if (lustre_handle_is_used(&lh->mlh_lh)) {
-                fid_unlock(req, mdt_object_fid(o), 
+                fid_unlock(req, mdt_object_fid(o),
                            &lh->mlh_lh, lh->mlh_mode, decref);
                 lh->mlh_lh.cookie = 0;
         }
@@ -2306,10 +2306,10 @@ static void mdt_object_free(const struct lu_context *ctxt, struct lu_object *o)
         EXIT;
 }
 
-static int mdt_object_print(const struct lu_context *ctxt,
-                            struct seq_file *f, const struct lu_object *o)
+static int mdt_object_print(const struct lu_context *ctxt, void *cookie,
+                            lu_printer_t p, const struct lu_object *o)
 {
-        return seq_printf(f, LUSTRE_MDT0_NAME"-object@%p", o);
+        return (*p)(ctxt, cookie, LUSTRE_MDT0_NAME"-object@%p", o);
 }
 
 int mdt_object_exists(const struct lu_context *ctx,
@@ -2671,18 +2671,24 @@ LPROCFS_INIT_VARS(mdt, lprocfs_mdt_module_vars, lprocfs_mdt_obd_vars);
 
 static int __init mdt_mod_init(void)
 {
+        int result;
         struct lprocfs_static_vars lvars;
 
         mdt_num_threads = MDT_NUM_THREADS;
         lprocfs_init_vars(mdt, &lvars);
-        return class_register_type(&mdt_obd_device_ops, NULL,
-                                   lvars.module_vars, LUSTRE_MDT0_NAME,
-                                   &mdt_device_type);
+        result = lu_global_init();
+        if (result == 0)
+                result = class_register_type(&mdt_obd_device_ops, NULL,
+                                             lvars.module_vars,
+                                             LUSTRE_MDT0_NAME,
+                                             &mdt_device_type);
+        return result;
 }
 
 static void __exit mdt_mod_exit(void)
 {
         class_unregister_type(LUSTRE_MDT0_NAME);
+        lu_global_fini();
 }
 
 

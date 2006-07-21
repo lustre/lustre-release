@@ -44,9 +44,9 @@ static int cmm_fld_lookup(struct cmm_device *cm,
         ENTRY;
 
         LASSERT(fid_is_sane(fid));
-        
+
         ls = cm->cmm_md_dev.md_lu_dev.ld_site;
-        
+
         rc = fld_client_lookup(ls->ls_client_fld,
                                fid_seq(fid), mds);
         if (rc) {
@@ -196,10 +196,10 @@ static int cml_object_exists(const struct lu_context *ctx,
         return lu_object_exists(ctx, lu_object_next(lo));
 }
 
-static int cml_object_print(const struct lu_context *ctx,
-                            struct seq_file *f, const struct lu_object *lo)
+static int cml_object_print(const struct lu_context *ctx, void *cookie,
+                            lu_printer_t p, const struct lu_object *lo)
 {
-	return seq_printf(f, LUSTRE_CMM0_NAME"-local@%p", lo);
+	return (*p)(ctx, cookie, LUSTRE_CMM0_NAME"-local@%p", lo);
 }
 
 static struct lu_object_operations cml_obj_ops = {
@@ -314,8 +314,8 @@ static int cml_lookup(const struct lu_context *ctx, struct md_object *mo_p,
 
 }
 
-static int cml_create(const struct lu_context *ctx, struct md_object *mo_p, 
-                      const char *child_name, struct md_object *mo_c, 
+static int cml_create(const struct lu_context *ctx, struct md_object *mo_p,
+                      const char *child_name, struct md_object *mo_c,
                       const char *target_name, struct md_attr *ma)
 {
         int rc;
@@ -479,10 +479,10 @@ static int cmr_object_exists(const struct lu_context *ctx,
         return -1;
 }
 
-static int cmr_object_print(const struct lu_context *ctx,
-                            struct seq_file *f, const struct lu_object *lo)
+static int cmr_object_print(const struct lu_context *ctx, void *cookie,
+                            lu_printer_t p, const struct lu_object *lo)
 {
-	return seq_printf(f, LUSTRE_CMM0_NAME"-remote@%p", lo);
+	return (*p)(ctx, cookie, LUSTRE_CMM0_NAME"-remote@%p", lo);
 }
 
 static struct lu_object_operations cmr_obj_ops = {
@@ -578,7 +578,7 @@ static int cmr_lookup(const struct lu_context *ctx, struct md_object *mo_p,
  *
  */
 static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
-                      const char *child_name, struct md_object *mo_c, 
+                      const char *child_name, struct md_object *mo_c,
                       const char *target_name, struct md_attr *ma)
 {
         int rc;
@@ -653,7 +653,7 @@ static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
         RETURN(rc);
 }
 
-/* part of cross-ref rename(). Used to insert new name in new parent 
+/* part of cross-ref rename(). Used to insert new name in new parent
  * and unlink target with same name if it exists */
 static int cmr_rename_tgt(const struct lu_context *ctx,
                           struct md_object *mo_p, struct md_object *mo_t,

@@ -224,29 +224,136 @@ void lu_site_purge(const struct lu_context *ctx, struct lu_site *s, int nr)
 EXPORT_SYMBOL(lu_site_purge);
 
 /*
- * Print human readable representation of the @o to the @f.
+ * Object printing.
+ *
+ * Code below has to jump through certain loops to output object description
+ * into libcfs_debug_msg-based log. The problem is that lu_object_print()
+ * composes object description from strings that are parts of _lines_ of
+ * output (i.e., strings that are not terminated by newline). This doesn't fit
+ * very well into libcfs_debug_msg() interface that assumes that each message
+ * supplied to it is a self-contained output line.
+ *
+ * To work around this, strings are collected in a temporary buffer
+ * (implemented as a value of lu_cdebug_key key), until terminating newline
+ * character is detected.
+ *
  */
-int lu_object_print(const struct lu_context *ctx,
-                    struct seq_file *f, const struct lu_object *o)
+
+enum {
+        /*
+         * Maximal line size.
+         *
+         * XXX overflow is not handled correctly.
+         */
+        LU_CDEBUG_LINE = 256
+};
+
+struct lu_cdebug_data {
+        /*
+         * Temporary buffer.
+         */
+        char lck_area[LU_CDEBUG_LINE];
+};
+
+static void *lu_cdebug_key_init(const struct lu_context *ctx,
+                                struct lu_context_key *key)
 {
-        static char ruler[] = "........................................";
+        struct lu_cdebug_key *value;
+
+        OBD_ALLOC_PTR(value);
+        if (value == NULL)
+                value = ERR_PTR(-ENOMEM);
+        return value;
+}
+
+static void lu_cdebug_key_fini(const struct lu_context *ctx,
+                               struct lu_context_key *key, void *data)
+{
+        struct lu_cdebug_key *value = data;
+        OBD_FREE_PTR(value);
+}
+
+/*
+ * Key, holding temporary buffer. This key is registered very early by
+ * lu_global_init().
+ */
+static struct lu_context_key lu_cdebug_key = {
+        .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD|LCT_CL_THREAD,
+        .lct_init = lu_cdebug_key_init,
+        .lct_fini = lu_cdebug_key_fini
+};
+
+/*
+ * Printer function emitting messages through libcfs_debug_msg().
+ */
+int lu_cdebug_printer(const struct lu_context *ctx,
+                      void *cookie, const char *format, ...)
+{
+        struct lu_cdebug_print_info *info = cookie;
+        struct lu_cdebug_data       *key;
+        int used;
+        int complete;
+	va_list args;
+
+        va_start(args, format);
+
+        key = lu_context_key_get(ctx, &lu_cdebug_key);
+        LASSERT(key != NULL);
+
+        used = strlen(key->lck_area);
+        complete = format[strlen(format) - 1] == '\n';
+        /*
+         * Append new chunk to the buffer.
+         */
+        vsnprintf(key->lck_area + used,
+                  ARRAY_SIZE(key->lck_area) - used, format, args);
+        if (complete) {
+                libcfs_debug_msg(info->lpi_subsys, info->lpi_mask,
+                                 info->lpi_file, info->lpi_fn,
+                                 info->lpi_line, "%s", key->lck_area);
+                key->lck_area[0] = 0;
+        }
+        va_end(args);
+        return 0;
+}
+EXPORT_SYMBOL(lu_cdebug_printer);
+
+/*
+ * Print object header.
+ */
+static void lu_object_header_print(const struct lu_context *ctx,
+                                   void *cookie, lu_printer_t printer,
+                                   const struct lu_object_header *hdr)
+{
+        (*printer)(ctx, cookie, "header@%p[%#lx, %d, "DFID3"%s%s]",
+                   hdr, hdr->loh_flags, hdr->loh_ref, PFID3(&hdr->loh_fid),
+                   hlist_unhashed(&hdr->loh_hash) ? "" : " hash",
+                   list_empty(&hdr->loh_lru) ? "" : " lru");
+}
+
+/*
+ * Print human readable representation of the @o to the @printer.
+ */
+void lu_object_print(const struct lu_context *ctx, void *cookie,
+                     lu_printer_t printer, const struct lu_object *o)
+{
+        static const char ruler[] = "........................................";
         struct lu_object_header *top;
-        int nob;
         int depth;
 
-        nob = 0;
         top = o->lo_header;
+        lu_object_header_print(ctx, cookie, printer, top);
+        (*printer)(ctx, cookie, "\n");
         list_for_each_entry(o, &top->loh_layers, lo_linkage) {
-                depth = o->lo_depth;
+                depth = o->lo_depth + 4;
                 LASSERT(o->lo_ops->loo_object_print != NULL);
                 /*
                  * print `.' @depth times.
                  */
-                nob += seq_printf(f, "%*.*s", depth, depth, ruler);
-                nob += o->lo_ops->loo_object_print(ctx, f, o);
-                nob += seq_printf(f, "\n");
+                (*printer)(ctx, cookie, "%*.*s", depth, depth, ruler);
+                o->lo_ops->loo_object_print(ctx, cookie, printer, o);
+                (*printer)(ctx, cookie, "\n");
         }
-        return nob;
 }
 EXPORT_SYMBOL(lu_object_print);
 
@@ -714,3 +821,31 @@ void lu_context_exit(struct lu_context *ctx)
 {
 }
 EXPORT_SYMBOL(lu_context_exit);
+
+/*
+ * Initialization of global lu_* data.
+ */
+int lu_global_init(void)
+{
+        static int initialized = 0;
+        int result;
+
+        if (!initialized) {
+                result = lu_context_key_register(&lu_cdebug_key);
+                initialized = 1;
+        } else {
+                CERROR("Double initialization\n");
+                result = 0;
+        }
+        return result;
+}
+EXPORT_SYMBOL(lu_global_init);
+
+/*
+ * Dual to lu_global_init().
+ */
+void lu_global_fini(void)
+{
+        lu_context_key_degister(&lu_cdebug_key);
+}
+EXPORT_SYMBOL(lu_global_fini);
