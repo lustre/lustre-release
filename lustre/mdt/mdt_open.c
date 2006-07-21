@@ -73,33 +73,47 @@ static void mdt_mfd_free(struct mdt_file_data *mfd)
 
 static int mdt_mfd_open(struct mdt_thread_info *info,
                         struct mdt_object *o, 
-                        int flags)
+                        int flags, int created)
 {
         struct mdt_export_data *med;
         struct mdt_file_data   *mfd;
         struct mdt_body        *repbody;
-        struct lov_mds_md      *lmm = NULL;
-        struct lu_attr         *attr = &info->mti_attr.ma_attr;
+        struct md_attr         *ma = &info->mti_attr;
+        struct lu_attr         *la = &ma->ma_attr;
         struct ptlrpc_request  *req = mdt_info_req(info);
         int                     rc = 0;
         ENTRY;
 
         med = &req->rq_export->exp_mdt_data;
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        if (req_capsule_has_field(&info->mti_pill, &RMF_MDT_MD))
-                lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
 
-        rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), attr);
-        if (rc == 0) {
-                if (!S_ISREG(attr->la_mode) &&
-                    !S_ISDIR(attr->la_mode) &&
+        if (!created) {
+                /* we have to get attr & lov ea for this object*/
+                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), la);
+                if (rc == 0 && S_ISREG(la->la_mode)) {
+                        ma->ma_valid |= MA_INODE;
+                        rc = mo_xattr_get(info->mti_ctxt, 
+                                          mdt_object_child(o),
+                                          ma->ma_lmm, 
+                                          ma->ma_lmm_size,
+                                          XATTR_NAME_LOV);
+                        if (rc >= 0) {
+                                ma->ma_lmm_size = rc;
+                                rc = 0;
+                                ma->ma_valid |= MA_LOV;
+                        }
+                }
+        }
+        if (rc == 0){
+                if (!S_ISREG(la->la_mode) &&
+                    !S_ISDIR(la->la_mode) &&
                      (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))
                         /* If client supports this, do not return open handle
                         *  for special device nodes */
                         RETURN(0);
 
                 /* FIXME:maybe this can be done earlier? */
-                if (S_ISDIR(attr->la_mode)) {
+                if (S_ISDIR(la->la_mode)) {
                         if (flags & (MDS_OPEN_CREAT | FMODE_WRITE)) {
                                 /* we are trying to create or 
                                  * write an existing dir. */
@@ -108,31 +122,19 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 } else if (flags & MDS_OPEN_DIRECTORY) 
                         rc = -ENOTDIR;
         }
-        if (rc != 0) {
-                if (rc == -EREMOTE) {
-                        repbody->fid1 = *mdt_object_fid(o);
-                        repbody->valid |= OBD_MD_FLID;
-                }
+        if (rc != 0)
                 RETURN(rc);
-        }
-
-        mdt_pack_attr2body(repbody, attr, mdt_object_fid(o));
-
-/*
-        if (lmm) {
-                rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
-                                  lmm, info->mti_mdt->mdt_max_mdsize, 
-                                  XATTR_NAME_LOV);
-                if (rc < 0)
-                        RETURN(-EINVAL);
-                if (S_ISDIR(attr->la_mode))
+        if (ma->ma_valid & MA_INODE)
+                mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
+        if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
+                CERROR("LOVLOV size = %d\n", ma->ma_lmm_size);
+                repbody->eadatasize = ma->ma_lmm_size;
+                if (S_ISDIR(la->la_mode))
                         repbody->valid |= OBD_MD_FLDIREA;
                 else
                         repbody->valid |= OBD_MD_FLEASIZE;
-                repbody->eadatasize = rc;
-                rc = 0;
         }
-*/
+
         if (flags & FMODE_WRITE) {
                 /*mds_get_write_access*/
         } else if (flags & MDS_FMODE_EXEC) {
@@ -164,15 +166,27 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
                     __u32 flags)
 {
         struct mdt_object *o;
-        int rc;
+        struct lu_attr    *la = &info->mti_attr.ma_attr;
+        int                rc;
         ENTRY;
 
         o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid);
         if (!IS_ERR(o)) {
                 if (mdt_object_exists(info->mti_ctxt, &o->mot_obj.mo_lu)) {
-                        rc = mdt_mfd_open(info, o, flags);
+                        if (la->la_flags & MDS_OPEN_EXCL &&
+                            la->la_flags & MDS_OPEN_CREAT)
+                                rc = -EEXIST;
+                        else 
+                                rc = mdt_mfd_open(info, o, flags, 0);
                 } else {
                         rc = -ENOENT;
+                        if (la->la_flags & MDS_OPEN_CREAT) {
+                                rc = mo_object_create(info->mti_ctxt, 
+                                                      mdt_object_child(o),
+                                                      &info->mti_attr);
+                                if (rc == 0)
+                                        rc = mdt_mfd_open(info, o, flags, 1);
+                        }
                 }
                 mdt_object_put(info->mti_ctxt, o);
         } else
@@ -230,15 +244,22 @@ int mdt_reint_open(struct mdt_thread_info *info)
         struct mdt_lock_handle *lh;
         struct ldlm_reply      *ldlm_rep;
         struct lu_fid          *child_fid = &info->mti_tmp_fid1;
-        struct lu_attr         *attr = &info->mti_attr.ma_attr;
+        struct md_attr         *ma = &info->mti_attr;
+        struct lu_attr         *la = &ma->ma_attr;
         int                     result;
         int                     created = 0;
         struct mdt_reint_record *rr = &info->mti_rr;
         ENTRY;
+        
+        ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
+                                            &RMF_MDT_MD);
+        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                                               &RMF_MDT_MD,
+                                               RCL_SERVER);
 
         if (strlen(rr->rr_name) == 0) {
                 /* reint partial remote open */
-                RETURN(mdt_open_by_fid(info, rr->rr_fid1, attr->la_flags));
+                RETURN(mdt_open_by_fid(info, rr->rr_fid1, la->la_flags));
         }
 
         /* we now have no resent message, so it must be an intent */
@@ -266,13 +287,13 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         if (result == -ENOENT) {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
-                if (!(attr->la_flags & MDS_OPEN_CREAT))
+                if (!(la->la_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
                 *child_fid = *info->mti_rr.rr_fid2;
         } else {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
-                if (attr->la_flags & MDS_OPEN_EXCL &&
-                    attr->la_flags & MDS_OPEN_CREAT)
+                if (la->la_flags & MDS_OPEN_EXCL &&
+                    la->la_flags & MDS_OPEN_CREAT)
                         GOTO(out_parent, result = -EEXIST);
         }
 
@@ -295,7 +316,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
         }
 
         /* Open it now. */
-        result = mdt_mfd_open(info, child, attr->la_flags);
+        result = mdt_mfd_open(info, child, la->la_flags, created);
         intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
         GOTO(finish_open, result);
 

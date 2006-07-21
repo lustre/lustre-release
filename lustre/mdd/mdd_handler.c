@@ -385,8 +385,11 @@ static int __mdd_object_create(const struct lu_context *ctxt,
         if (!lu_object_exists(ctxt, mdd2lu_obj(obj))) {
                 next = mdd_object_child(obj);
                 rc = next->do_ops->do_create(ctxt, next, attr, handle);
-                if (rc == 0)
-                        mdd_attr_get(ctxt, &obj->mod_obj, &ma->ma_attr);
+                if (rc == 0) {
+                        rc = mdd_attr_get(ctxt, &obj->mod_obj, &ma->ma_attr);
+                        if (rc == 0)
+                                ma->ma_valid |= MA_INODE;
+                }
         } else
                 rc = -EEXIST;
 
@@ -870,6 +873,12 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 rc = mdd_lov_create(ctxt, mdd, son, &lmm, &lmm_size);
                 if (rc)
                         RETURN(rc);
+                if (lmm_size < ma->ma_lmm_size)
+                        ma->ma_lmm_size = lmm_size;
+                if (ma->ma_lmm_size > 0) {
+                        memcpy(ma->ma_lmm, lmm, ma->ma_lmm_size);
+                        ma->ma_valid |= MA_LOV;
+                }
         }
 
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
@@ -960,7 +969,8 @@ cleanup:
                 if (rc2 == 0)
                         __mdd_ref_del(ctxt, son, handle, NULL);
         }
-
+        if (lmm)
+                OBD_FREE(lmm, lmm_size);
         mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
@@ -1113,8 +1123,11 @@ __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
         LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
 
         next->do_ops->do_ref_del(ctxt, next, handle);
-        if (ma != NULL)
-                mdd_attr_get(ctxt, &obj->mod_obj, &ma->ma_attr);
+        if (ma != NULL) {
+                int rc = mdd_attr_get(ctxt, &obj->mod_obj, &ma->ma_attr);
+                if (rc == 0)
+                        ma->ma_valid |= MA_INODE;
+        }
 }
 
 static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,

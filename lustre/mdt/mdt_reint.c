@@ -44,7 +44,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
         struct mdt_object      *child;
         struct mdt_lock_handle *lh;
         struct mdt_body        *repbody;
-        struct lu_attr         *attr = &info->mti_attr.ma_attr;
+        struct md_attr         *ma = &info->mti_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         int rc;
         ENTRY;
@@ -64,23 +64,12 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 struct md_object *next = mdt_object_child(parent);
 
                 rc = mdo_create(info->mti_ctxt, next, rr->rr_name,
-                                mdt_object_child(child), rr->rr_tgt, &info->mti_attr);
+                                mdt_object_child(child), rr->rr_tgt, ma);
                 if (rc == 0) {
-                        /* return fid & attr to client. attr is over-written!*/
-                        rc = mo_attr_get(info->mti_ctxt,
-                                         mdt_object_child(child),
-                                         attr);
-                        if (rc == 0) {
-                                /*parent and child are all local. */
-                                mdt_pack_attr2body(repbody, attr,
+                        /* return fid & attr to client. */
+                        if (ma->ma_valid & MA_INODE)
+                                mdt_pack_attr2body(repbody, &ma->ma_attr,
                                                    mdt_object_fid(child));
-                        } else if (rc == -EREMOTE) {
-                                /* parent is local, child is remote. */
-                                /*FIXME: should be return 0 or -EREMOTE? */
-                                /* also in mdt_open:mdt_object_open() */
-                                repbody->fid1 = *mdt_object_fid(child);
-                                repbody->valid |= OBD_MD_FLID;
-                        }
                 }
                 mdt_object_put(info->mti_ctxt, child);
         } else
@@ -95,6 +84,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         struct mdt_device      *mdt = info->mti_mdt;
         struct mdt_object      *o;
         struct mdt_body        *repbody;
+        struct md_attr         *ma = &info->mti_attr;
         int rc;
         ENTRY;
 
@@ -104,18 +94,12 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         if (!IS_ERR(o)) {
                 struct md_object *next = mdt_object_child(o);
 
-                rc = mo_object_create(info->mti_ctxt, next,
-                                      &info->mti_attr);
+                rc = mo_object_create(info->mti_ctxt, next, ma);
                 if (rc == 0) {
-                        /* return fid to client. */
-                        rc = mo_attr_get(info->mti_ctxt,
-                                         next,
-                                         &info->mti_attr.ma_attr);
-                        if (rc == 0) {
-                                mdt_pack_attr2body(repbody,
-                                                   &info->mti_attr.ma_attr,
+                        /* return fid & attr to client. */
+                        if (ma->ma_valid & MA_INODE)
+                                mdt_pack_attr2body(repbody, &ma->ma_attr,
                                                    mdt_object_fid(o));
-                        }
                 }
                 mdt_object_put(info->mti_ctxt, o);
         } else
