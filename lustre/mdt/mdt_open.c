@@ -305,7 +305,7 @@ finish_open:
 out_child:
         mdt_object_put(info->mti_ctxt, child);
 out_parent:
-        mdt_object_unlock_put(info, parent, lh);
+        mdt_object_unlock_put(info, parent, lh, result);
 out:
         return result;
 }

@@ -293,7 +293,8 @@ int mdt_object_lock(struct mdt_thread_info *,
 
 void mdt_object_unlock(struct mdt_thread_info *,
                        struct mdt_object *,
-                       struct mdt_lock_handle *);
+                       struct mdt_lock_handle *,
+                       int decref);
 
 struct mdt_object *mdt_object_find(const struct lu_context *,
                                    struct mdt_device *,
@@ -304,7 +305,8 @@ struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *,
                                         __u64);
 void mdt_object_unlock_put(struct mdt_thread_info *,
                            struct mdt_object *,
-                           struct mdt_lock_handle *);
+                           struct mdt_lock_handle *,
+                           int decref);
 
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 int mdt_reint_rec(struct mdt_thread_info *);

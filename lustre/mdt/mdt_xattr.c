@@ -226,7 +226,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
         }
         EXIT;
 out_unlock:
-        mdt_object_unlock(info, info->mti_object, lh);
+        mdt_object_unlock(info, info->mti_object, lh, rc);
 out:
         return rc;
 }

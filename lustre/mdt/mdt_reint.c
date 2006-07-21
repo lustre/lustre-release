@@ -74,7 +74,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 mdt_object_put(info->mti_ctxt, child);
         } else
                 rc = PTR_ERR(child);
-        mdt_object_unlock_put(info, parent, lh);
+        mdt_object_unlock_put(info, parent, lh, rc);
         RETURN(rc);
 }
 
@@ -182,7 +182,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         /* FIXME & TODO Please deal with logcookies here*/
         GOTO(out_unlock, rc);
 out_unlock:
-        mdt_object_unlock_put(info, mo, lh);
+        mdt_object_unlock_put(info, mo, lh, rc);
         return rc;
 }
 
@@ -280,9 +280,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         rc = mdt_handle_last_unlink(info, mc, &RQF_MDS_REINT_UNLINK_LAST);
 
 out_unlock_child:
-        mdt_object_unlock_put(info, mc, lhc);
+        mdt_object_unlock_put(info, mc, lhc, rc);
 out_unlock_parent:
-        mdt_object_unlock_put(info, mp, lhp);
+        mdt_object_unlock_put(info, mp, lhp, rc);
         return rc;
 }
 
@@ -328,9 +328,9 @@ static int mdt_reint_link(struct mdt_thread_info *info)
         GOTO(out_unlock_target, rc);
 
 out_unlock_target:
-        mdt_object_unlock_put(info, mp, lhp);
+        mdt_object_unlock_put(info, mp, lhp, rc);
 out_unlock_source:
-        mdt_object_unlock_put(info, ms, lhs);
+        mdt_object_unlock_put(info, ms, lhs, rc);
         return rc;
 }
 
@@ -388,10 +388,10 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
 
 out_unlock_tgt:
         if (mtgt) {
-                mdt_object_unlock_put(info, mtgt, lh_tgt);
+                mdt_object_unlock_put(info, mtgt, lh_tgt, rc);
         }
 out_unlock_tgtdir:
-        mdt_object_unlock_put(info, mtgtdir, lh_tgtdir);
+        mdt_object_unlock_put(info, mtgtdir, lh_tgtdir, rc);
 out:
         return rc;
 }
@@ -486,14 +486,14 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
 
 out_unlock_new:
         if (mnew) {
-                mdt_object_unlock_put(info, mnew, lh_newp);
+                mdt_object_unlock_put(info, mnew, lh_newp, rc);
         }
 out_unlock_old:
-        mdt_object_unlock_put(info, mold, lh_oldp);
+        mdt_object_unlock_put(info, mold, lh_oldp, rc);
 out_unlock_target:
-        mdt_object_unlock_put(info, mtgtdir, lh_tgtdirp);
+        mdt_object_unlock_put(info, mtgtdir, lh_tgtdirp, rc);
 out_unlock_source:
-        mdt_object_unlock_put(info, msrcdir, lh_srcdirp);
+        mdt_object_unlock_put(info, msrcdir, lh_srcdirp, rc);
 out:
         return rc;
 }

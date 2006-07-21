@@ -424,7 +424,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                         result = mdt_getattr_internal(info, child,
                                                       ldlm_rep ? 0 : 1);
                         if (result != 0)
-                                mdt_object_unlock(info, child, lhc);
+                                mdt_object_unlock(info, child, lhc, 1);
                 }
                 GOTO(out, result);
         }
@@ -459,12 +459,12 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         /* finally, we can get attr for child. */
         result = mdt_getattr_internal(info, child, ldlm_rep ? 0 : 1);
         if (result != 0)
-                mdt_object_unlock(info, child, lhc);
+                mdt_object_unlock(info, child, lhc, 1);
         mdt_object_put(info->mti_ctxt, child);
 
         EXIT;
 out_parent:
-        mdt_object_unlock(info, parent, lhp);
+        mdt_object_unlock(info, parent, lhp, 1);
 out:
         return result;
 }
@@ -772,21 +772,26 @@ int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
         return rc == ELDLM_OK ? 0 : -EIO;
 }
 
-void fid_unlock(struct ldlm_namespace *ns, const struct lu_fid *f,
-                struct lustre_handle *lh, ldlm_mode_t mode)
+/* just call ldlm_lock_decref() if decref, 
+ * else we only call ptlrpc_save_lock() to save this lock in req.
+ * when transaction committed, req will be released and lock will be released */
+void fid_unlock(struct ptlrpc_request *req, const struct lu_fid *f,
+                struct lustre_handle *lh, ldlm_mode_t mode, int decref)
 {
-        struct ldlm_lock *lock;
-
+        {
         /* FIXME: this is debug stuff, remove it later. */
-        lock = ldlm_handle2lock(lh);
-        if (!lock) {
-                CERROR("invalid lock handle "LPX64, lh->cookie);
-                LBUG();
+                struct ldlm_lock *lock = ldlm_handle2lock(lh);
+                if (!lock) {
+                        CERROR("invalid lock handle "LPX64, lh->cookie);
+                        LBUG();
+                }
+                LASSERT(fid_res_name_eq(f, &lock->l_resource->lr_name));
+                LDLM_LOCK_PUT(lock);
         }
-
-        LASSERT(fid_res_name_eq(f, &lock->l_resource->lr_name));
-
-        ldlm_lock_decref(lh, mode);
+        if (decref)
+                ldlm_lock_decref(lh, mode);
+        else 
+                ptlrpc_save_lock(req, lh, mode);
 }
 
 static struct mdt_object *mdt_obj(struct lu_object *o)
@@ -830,13 +835,14 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
 }
 
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
-                       struct mdt_lock_handle *lh)
+                       struct mdt_lock_handle *lh, int decref)
 {
-        struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
+        struct ptlrpc_request *req = mdt_info_req(info);
         ENTRY;
 
         if (lustre_handle_is_used(&lh->mlh_lh)) {
-                fid_unlock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode);
+                fid_unlock(req, mdt_object_fid(o), 
+                           &lh->mlh_lh, lh->mlh_mode, decref);
                 lh->mlh_lh.cookie = 0;
         }
         EXIT;
@@ -864,9 +870,10 @@ struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
 
 void mdt_object_unlock_put(struct mdt_thread_info * info,
                            struct mdt_object * o,
-                           struct mdt_lock_handle *lh)
+                           struct mdt_lock_handle *lh,
+                           int decref)
 {
-        mdt_object_unlock(info, o, lh);
+        mdt_object_unlock(info, o, lh, decref);
         mdt_object_put(info->mti_ctxt, o);
 }
 
