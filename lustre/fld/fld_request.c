@@ -57,7 +57,7 @@ fld_rrb_hash(struct lu_client_fld *fld, seqno_t seq)
 {
         if (fld->fld_count == 0)
                 return 0;
-        
+
         return do_div(seq, fld->fld_count);
 }
 
@@ -134,11 +134,11 @@ fld_client_add_target(struct lu_client_fld *fld,
 
         CDEBUG(D_INFO|D_WARNING, "FLD(cli): adding export %s\n",
 	       cli->cl_target_uuid.uuid);
-        
+
         OBD_ALLOC_PTR(target);
         if (target == NULL)
                 RETURN(-ENOMEM);
-        
+
         spin_lock(&fld->fld_lock);
         list_for_each_entry(tmp, &fld->fld_targets, fldt_chain) {
                 if (obd_uuid_equals(&tmp->fldt_exp->exp_client_uuid,
@@ -152,12 +152,12 @@ fld_client_add_target(struct lu_client_fld *fld,
 
         target->fldt_exp = class_export_get(exp);
         target->fldt_idx = fld->fld_count;
-        
+
         list_add_tail(&target->fldt_chain,
                       &fld->fld_targets);
         fld->fld_count++;
         spin_unlock(&fld->fld_lock);
-        
+
         RETURN(0);
 }
 EXPORT_SYMBOL(fld_client_add_target);
@@ -199,7 +199,7 @@ fld_client_proc_init(struct lu_client_fld *fld)
         fld->fld_proc_dir = lprocfs_register(fld->fld_name,
                                              proc_lustre_root,
                                              NULL, NULL);
-        
+
         if (IS_ERR(fld->fld_proc_dir)) {
                 CERROR("LProcFS failed in fld-init\n");
                 rc = PTR_ERR(fld->fld_proc_dir);
@@ -251,15 +251,15 @@ fld_client_init(struct lu_client_fld *fld,
                 CERROR("wrong hash function 0x%x\n", hash);
                 RETURN(-EINVAL);
         }
-        
+
         INIT_LIST_HEAD(&fld->fld_targets);
         spin_lock_init(&fld->fld_lock);
         fld->fld_hash = &fld_hash[hash];
         fld->fld_count = 0;
-        
+
         snprintf(fld->fld_name, sizeof(fld->fld_name),
                  "%s-%s", LUSTRE_FLD_NAME, uuid);
-        
+
 #ifdef __KERNEL__
         fld->fld_cache = fld_cache_init(FLD_HTABLE_SIZE);
         if (IS_ERR(fld->fld_cache)) {
@@ -275,10 +275,12 @@ fld_client_init(struct lu_client_fld *fld,
                 GOTO(out, rc);
 #endif
         EXIT;
+#ifdef __KERNEL__
 out:
+#endif
         if (rc)
                 fld_client_fini(fld);
-        else 
+        else
                 CDEBUG(D_INFO|D_WARNING,
                        "Client FLD, using \"%s\" hash\n",
                        fld->fld_hash->fh_name);
@@ -295,7 +297,7 @@ fld_client_fini(struct lu_client_fld *fld)
 #ifdef LPROCFS
         fld_client_proc_fini(fld);
 #endif
-        
+
         spin_lock(&fld->fld_lock);
         list_for_each_entry_safe(target, tmp,
                                  &fld->fld_targets, fldt_chain) {
@@ -352,7 +354,7 @@ fld_client_rpc(struct obd_export *exp,
 
         pmf = lustre_swab_repbuf(req, 0, sizeof(*pmf),
                                  lustre_swab_md_fld);
-        *mf = *pmf; 
+        *mf = *pmf;
 out_req:
         ptlrpc_req_finished(req);
         RETURN(rc);
@@ -370,9 +372,9 @@ __fld_client_create(struct lu_client_fld *fld,
         target = fld_client_get_target(fld, seq);
         if (!target)
                 RETURN(-EINVAL);
-        
+
         rc = fld_client_rpc(target->fldt_exp, md_fld, FLD_CREATE);
-        
+
         if (rc  == 0) {
                 /* do not return result of calling fld_cache_insert()
                  * here. First of all because it may return -EEXISTS. Another
@@ -380,7 +382,7 @@ __fld_client_create(struct lu_client_fld *fld,
                  * cache errors. --umka */
                 fld_cache_insert(fld->fld_cache, seq, mds);
         }
-        
+
         RETURN(rc);
 }
 
@@ -405,7 +407,7 @@ __fld_client_delete(struct lu_client_fld *fld,
         __u32 rc;
 
         fld_cache_delete(fld->fld_cache, seq);
-        
+
         target = fld_client_get_target(fld, seq);
         if (!target)
                 RETURN(-EINVAL);
@@ -440,12 +442,12 @@ __fld_client_lookup(struct lu_client_fld *fld,
         rc = fld_cache_lookup(fld->fld_cache, seq, mds);
         if (rc == 0)
                 RETURN(0);
-        
+
         /* can not find it in the cache */
         target = fld_client_get_target(fld, seq);
         if (!target)
                 RETURN(-EINVAL);
-                
+
         rc = fld_client_rpc(target->fldt_exp,
                             md_fld, FLD_LOOKUP);
         if (rc == 0)
@@ -454,7 +456,7 @@ __fld_client_lookup(struct lu_client_fld *fld,
         /* do not return error here as well. See previous comment in same
          * situation in function fld_client_create(). --umka */
         fld_cache_insert(fld->fld_cache, seq, *mds);
-        
+
         RETURN(rc);
 }
 
