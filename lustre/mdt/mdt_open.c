@@ -50,9 +50,7 @@ static struct mdt_file_data *mdt_mfd_new(void)
                 INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
                 INIT_LIST_HEAD(&mfd->mfd_list);
                 class_handle_hash(&mfd->mfd_handle, mdt_mfd_get);
-        } else
-                CERROR("mdt: out of memory\n");
-
+        }
         RETURN(mfd);
 }
 
@@ -68,6 +66,7 @@ static struct mdt_file_data *mdt_handle2mfd(const struct lustre_handle *handle)
 static void mdt_mfd_free(struct mdt_file_data *mfd)
 {
         LASSERT(list_empty(&mfd->mfd_handle.h_link));
+        LASSERT(list_empty(&mfd->mfd_list));
         OBD_FREE_PTR(mfd);
 }
 
@@ -90,26 +89,29 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         if (!created) {
                 /* we have to get attr & lov ea for this object*/
                 rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), la);
-                if (rc == 0 && S_ISREG(la->la_mode)) {
+                if (rc == 0) {
                         ma->ma_valid |= MA_INODE;
-                        rc = mo_xattr_get(info->mti_ctxt, 
-                                          mdt_object_child(o),
-                                          ma->ma_lmm, 
-                                          ma->ma_lmm_size,
-                                          XATTR_NAME_LOV);
-                        if (rc >= 0) {
-                                ma->ma_lmm_size = rc;
-                                rc = 0;
-                                ma->ma_valid |= MA_LOV;
+                        if (S_ISREG(la->la_mode)) {
+                                rc = mo_xattr_get(info->mti_ctxt, 
+                                                  mdt_object_child(o),
+                                                  ma->ma_lmm, 
+                                                  ma->ma_lmm_size,
+                                                  XATTR_NAME_LOV);
+                                if (rc >= 0) {
+                                        ma->ma_lmm_size = rc;
+                                        rc = 0;
+                                        ma->ma_valid |= MA_LOV;
+                                }
                         }
                 }
         }
         if (rc == 0){
                 if (!S_ISREG(la->la_mode) &&
                     !S_ISDIR(la->la_mode) &&
-                     (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))
+                    (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH ||
+                     S_ISLNK(la->la_mode)))
                         /* If client supports this, do not return open handle
-                        *  for special device nodes */
+                        *  for special nodes */
                         RETURN(0);
 
                 /* FIXME:maybe this can be done earlier? */
@@ -208,33 +210,6 @@ int mdt_pin(struct mdt_thread_info* info)
         RETURN(rc);
 }
 
-/*  Get an internal lock on the inode number (but not generation) to sync
- *  new inode creation with inode unlink (bug 2029).  If child_lockh is NULL
- *  we just get the lock as a barrier to wait for other holders of this lock,
- *  and drop it right away again. */
-int mdt_lock_new_child(struct mdt_thread_info *info, 
-                       struct mdt_object *o,
-                       struct mdt_lock_handle *child_lockh)
-{
-        struct mdt_lock_handle lockh;
-        int rc;
-        ENTRY;
-        
-        if (child_lockh == NULL)
-                child_lockh = &lockh;
-
-        mdt_lock_handle_init(&lockh);
-        lockh.mlh_mode = LCK_EX;
-        rc = mdt_object_lock(info, o, &lockh, MDS_INODELOCK_UPDATE);
-
-        if (rc != ELDLM_OK)
-                CERROR("can not mdt_object_lock: %d\n", rc);
-        else if (child_lockh == &lockh)
-                mdt_object_unlock(info, o, &lockh);
-
-        RETURN(rc);
-}
-
 int mdt_reint_open(struct mdt_thread_info *info)
 {
         struct mdt_device      *mdt = info->mti_mdt;
@@ -256,7 +231,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
                                                &RMF_MDT_MD,
                                                RCL_SERVER);
 
-        if (strlen(rr->rr_name) == 0) {
+        if (rr->rr_name[0] == 0) {
                 /* reint partial remote open */
                 RETURN(mdt_open_by_fid(info, rr->rr_fid1, la->la_flags));
         }
@@ -269,26 +244,26 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
         lh = &info->mti_lh[MDT_LH_PARENT];
-        lh->mlh_mode = LCK_PW;
+        if (!(la->la_flags & MDS_OPEN_CREAT))
+                lh->mlh_mode = LCK_PR;
+        else
+                lh->mlh_mode = LCK_PW;
         parent = mdt_object_find_lock(info, rr->rr_fid1, lh, 
                                       MDS_INODELOCK_UPDATE);
-        if (IS_ERR(parent)) {
-                /* just simulate child not existing */
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
+        if (IS_ERR(parent))
                 GOTO(out, result = PTR_ERR(parent));
-        }
 
         result = mdo_lookup(info->mti_ctxt, mdt_object_child(parent),
                             rr->rr_name, child_fid);
-        if (result != 0 && result != -ENOENT) {
+        if (result != 0 && result != -ENOENT)
                 GOTO(out_parent, result);
-        }
 
         if (result == -ENOENT) {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
                 if (!(la->la_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
                 *child_fid = *info->mti_rr.rr_fid2;
+                /* new object will be created. see the following */
         } else {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
                 if (la->la_flags & MDS_OPEN_EXCL &&
@@ -321,9 +296,11 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
 finish_open:
         if (result != 0 && created) {
-                mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
-                           mdt_object_child(child), rr->rr_name,
-                           &info->mti_attr);
+                int rc2 = mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
+                                     mdt_object_child(child), rr->rr_name,
+                                     &info->mti_attr);
+                if (rc2 != 0)
+                        CERROR("error in cleanup of open");
         } 
 out_child:
         mdt_object_put(info->mti_ctxt, child);
@@ -378,7 +355,7 @@ int mdt_close(struct mdt_thread_info *info)
                 rc = mdt_handle_last_unlink(info, mfd->mfd_object,
                                             &RQF_MDS_CLOSE_LAST);
 
-                rc = mdt_mfd_close(info->mti_ctxt, mfd);
+                mdt_mfd_close(info->mti_ctxt, mfd);
         }
         RETURN(rc);
 }

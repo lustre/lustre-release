@@ -177,9 +177,6 @@ struct mdt_reint_record {
 };
 
 
-#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
-#define XATTR_NAME_LOV          "lov"
-
 /*
  * Common data shared by mdt-level handlers. This is allocated per-thread to
  * reduce stack consumption.
@@ -212,7 +209,7 @@ struct mdt_thread_info {
          */
         struct md_attr             mti_attr;
         /*
-         * reint record. Containing information for reint operations.
+         * reint record. contains information for reint operations.
          */
         struct mdt_reint_record    mti_rr;
         /*
