@@ -45,7 +45,8 @@ struct osd_thread_info;
 struct lu_site;
 struct thandle;
 
-struct osd_device;
+struct dt_device;
+
 
 /*
  * Object Index (oi) instance.
