@@ -65,6 +65,10 @@ case "$lustretag" in
         lnettag="b_hd_newconfig"
         ;;
 
+    b1_8 | b1_8_*)
+        lnettag="b_hd_newconfig"
+        ;;
+
     b_cmd*)
         portalstag="$lustretag"
         ;;
