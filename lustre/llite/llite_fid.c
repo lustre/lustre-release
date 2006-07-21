@@ -110,7 +110,6 @@ static int ll_fid_fini(struct obd_export *exp)
         if (rc) {
                 CERROR("cannot finalize FIDs framework, "
                        "rc %d\n", rc);
-                RETURN(rc);
         }
 
         RETURN(rc);
