@@ -113,8 +113,8 @@ static void  osd_object_release(const struct lu_context *ctxt,
                                 struct lu_object *l);
 static int   osd_object_exists (const struct lu_context *ctx,
                                 const struct lu_object *o);
-static int   osd_object_print  (const struct lu_context *ctx,
-                                struct seq_file *f, const struct lu_object *o);
+static int   osd_object_print  (const struct lu_context *ctx, void *cookie,
+                                lu_printer_t p, const struct lu_object *o);
 static void  osd_device_free   (const struct lu_context *ctx,
                                 struct lu_device *m);
 static void *osd_key_init      (const struct lu_context *ctx,
@@ -347,18 +347,18 @@ static int osd_object_exists(const struct lu_context *ctx,
         return !!(osd_obj(o)->oo_inode != NULL);
 }
 
-static int osd_object_print(const struct lu_context *ctx,
-                            struct seq_file *f, const struct lu_object *l)
+static int osd_object_print(const struct lu_context *ctx, void *cookie,
+                            lu_printer_t p, const struct lu_object *l)
 {
         struct osd_object *o = osd_obj(l);
         struct iam_descr  *d;
 
         d = o->oo_container.ic_descr;
-        return seq_printf(f, LUSTRE_OSD0_NAME"-object@%p(i:%p:%lu/%u)[%s]",
-                          o, o->oo_inode,
-                          o->oo_inode ? o->oo_inode->i_ino : 0UL,
-                          o->oo_inode ? o->oo_inode->i_generation : 0,
-                          d ? d->id_ops->id_name : "plain");
+        return (*p)(ctx, cookie, LUSTRE_OSD0_NAME"-object@%p(i:%p:%lu/%u)[%s]",
+                    o, o->oo_inode,
+                    o->oo_inode ? o->oo_inode->i_ino : 0UL,
+                    o->oo_inode ? o->oo_inode->i_generation : 0,
+                    d ? d->id_ops->id_name : "plain");
 }
 
 static int osd_statfs(const struct lu_context *ctx,
@@ -773,43 +773,38 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
         return result;
 }
 
-static void osd_inode_inc_link(const struct lu_context *ctxt,
-                               struct inode *inode, struct thandle *th)
-{
-        inode->i_nlink ++;
-        mark_inode_dirty(inode);
-}
-
-
-static void osd_inode_dec_link(const struct lu_context *ctxt,
-                               struct inode *inode, struct thandle *th)
-{
-        inode->i_nlink --;
-        mark_inode_dirty(inode);
-}
-
-static int osd_object_ref_add(const struct lu_context *ctxt,
-                              struct dt_object *dt, struct thandle *th)
+static void osd_object_ref_add(const struct lu_context *ctxt,
+                               struct dt_object *dt, struct thandle *th)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+        struct inode *inode = obj->oo_inode;
 
         LASSERT(osd_invariant(obj));
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
-        osd_inode_inc_link(ctxt, obj->oo_inode, th);
+        if (inode->i_nlink < LDISKFS_LINK_MAX) {
+                inode->i_nlink ++;
+                mark_inode_dirty(inode);
+        } else
+                LU_OBJECT_DEBUG(D_ERROR, ctxt, &dt->do_lu,
+                                "Overflowed nlink\n");
         LASSERT(osd_invariant(obj));
-        return 0;
 }
 
-static int osd_object_ref_del(const struct lu_context *ctxt,
-                              struct dt_object *dt, struct thandle *th)
+static void osd_object_ref_del(const struct lu_context *ctxt,
+                               struct dt_object *dt, struct thandle *th)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+        struct inode *inode = obj->oo_inode;
 
         LASSERT(osd_invariant(obj));
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
-        osd_inode_dec_link(ctxt, obj->oo_inode, th);
+        if (inode->i_nlink > 0) {
+                inode->i_nlink --;
+                mark_inode_dirty(inode);
+        } else
+                LU_OBJECT_DEBUG(D_ERROR, ctxt, &dt->do_lu,
+                                "Overflowed nlink\n");
         LASSERT(osd_invariant(obj));
-        return 0;
 }
 
 int osd_xattr_get(const struct lu_context *ctxt, struct dt_object *dt,
