@@ -588,7 +588,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
 
-#define MAX_MD_SIZE (sizeof(struct lov_mds_md) + 16 * sizeof(struct lov_ost_data))
+#define MAX_MD_SIZE (sizeof(struct lov_mds_md) + 4 * sizeof(struct lov_ost_data))
 
 #define OBD_MD_FLID        (0x00000001ULL) /* object ID */
 #define OBD_MD_FLATIME     (0x00000002ULL) /* access time */

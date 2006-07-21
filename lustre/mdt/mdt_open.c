@@ -127,7 +127,6 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         if (ma->ma_valid & MA_INODE)
                 mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
         if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
-                CERROR("LOVLOV size = %d\n", ma->ma_lmm_size);
                 repbody->eadatasize = ma->ma_lmm_size;
                 if (S_ISDIR(la->la_mode))
                         repbody->valid |= OBD_MD_FLDIREA;
