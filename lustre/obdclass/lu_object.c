@@ -258,7 +258,7 @@ struct lu_cdebug_data {
 static void *lu_cdebug_key_init(const struct lu_context *ctx,
                                 struct lu_context_key *key)
 {
-        struct lu_cdebug_key *value;
+        struct lu_cdebug_data *value;
 
         OBD_ALLOC_PTR(value);
         if (value == NULL)
@@ -269,7 +269,7 @@ static void *lu_cdebug_key_init(const struct lu_context *ctx,
 static void lu_cdebug_key_fini(const struct lu_context *ctx,
                                struct lu_context_key *key, void *data)
 {
-        struct lu_cdebug_key *value = data;
+        struct lu_cdebug_data *value = data;
         OBD_FREE_PTR(value);
 }
 
