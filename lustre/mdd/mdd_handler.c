@@ -1160,13 +1160,13 @@ static int mdd_close(const struct lu_context *ctxt, struct md_object *obj)
 }
 
 static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
-                        struct md_rdpg *rdpg)
+                        struct lu_rdpg *rdpg)
 {
         struct dt_object *next;
         int rc;
 
-        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
-        next = mdd_object_child(obj);
+        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(md2mdd_obj(obj))));
+        next = mdd_object_child(md2mdd_obj(obj));
         rc = next->do_ops->do_readpage(ctxt, next, rdpg);
         return rc;
 }

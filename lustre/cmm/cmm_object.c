@@ -291,6 +291,15 @@ static int cml_close(const struct lu_context *ctx, struct md_object *mo)
         RETURN(rc);
 }
 
+static int cml_readpage(const struct lu_context *ctxt, struct md_object *mo,
+                        struct lu_rdpg *rdpg)
+{
+        int rc;
+        ENTRY;
+        rc = mo_readpage(ctxt, md_object_next(mo), rdpg);
+        RETURN(rc);
+}
+
 static struct md_object_operations cml_mo_ops = {
         .moo_attr_get      = cml_attr_get,
         .moo_attr_set      = cml_attr_set,
@@ -300,7 +309,8 @@ static struct md_object_operations cml_mo_ops = {
         .moo_ref_add       = cml_ref_add,
         .moo_ref_del       = cml_ref_del,
         .moo_open          = cml_open,
-        .moo_close         = cml_close
+        .moo_close         = cml_close,
+        .moo_readpage      = cml_readpage
 };
 
 /* md_dir operations */

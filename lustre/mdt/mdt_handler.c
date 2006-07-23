@@ -582,37 +582,31 @@ free_desc:
 
 static int mdt_readpage(struct mdt_thread_info *info)
 {
+        struct mdt_object *child = info->mti_object;
         struct mdt_body *reqbody, *repbody;
         int rc, i, tmpcount, tmpsize = 0;
         struct lu_rdpg rdpg = { 0 };
-        struct mdt_object *child;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
                 RETURN(-ENOMEM);
-
-        req_capsule_set(&info->mti_pill, &RQF_MDS_READPAGE);
-        rc = req_capsule_pack(&info->mti_pill);
-        if (rc)
-                RETURN(rc);
 
         reqbody = req_capsule_client_get(&info->mti_pill,
                                          &RMF_MDT_BODY);
         if (reqbody == NULL)
                 RETURN(-EFAULT);
 
-        child = mdt_object_find(info->mti_ctxt,
-                                info->mti_mdt, &reqbody->fid1);
-        if (IS_ERR(child))
-                RETURN(PTR_ERR(child));
-
         repbody = req_capsule_server_get(&info->mti_pill,
                                          &RMF_MDT_BODY);
 
         if (repbody == NULL)
-                GOTO(out_child, -EFAULT);
+                RETURN(-EFAULT);
 
-        /* prepare @rdpg before calling lower layers and transfer itself. */
+        /*
+         * prepare @rdpg before calling lower layers and transfer itself. Here
+         * reqbody->size contains offset of where to start to read and
+         * reqbody->nlink contains number bytes to read.
+         */
         rdpg.rp_offset = reqbody->size;
         rdpg.rp_count = reqbody->nlink;
         rdpg.rp_npages = (rdpg.rp_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
@@ -639,10 +633,8 @@ static int mdt_readpage(struct mdt_thread_info *info)
         EXIT;
 free_rdpg:
         for (i = 0; i < rdpg.rp_npages; i++)
-                if (rdpg.rp_pages[i])
+                if (rdpg.rp_pages[i] != NULL)
                         __free_pages(rdpg.rp_pages[i], 0);
-out_child:
-        mdt_object_put(info->mti_ctxt, child);
         return rc;
 }
 
@@ -2910,13 +2902,13 @@ static struct mdt_opc_slice mdt_handlers[] = {
 };
 
 static struct mdt_handler mdt_mds_readpage_ops[] = {
-        DEF_MDT_HNDL_F(HABEO_CORPUS, READPAGE, mdt_readpage),
+        DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, READPAGE, mdt_readpage),
 };
 
 static struct mdt_opc_slice mdt_readpage_handlers[] = {
         {
-                .mos_opc_start = MDS_READPAGE,
-                .mos_opc_end   = MDS_READPAGE + 1,
+                .mos_opc_start = MDS_GETATTR,
+                .mos_opc_end   = MDS_LAST_OPC,
                 .mos_hs        = mdt_mds_readpage_ops
         },
         {
