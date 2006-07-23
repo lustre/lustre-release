@@ -438,7 +438,7 @@ static int mdd_attr_set(const struct lu_context *ctxt,
 
         mdd_txn_param_build(ctxt, &MDD_TXN_ATTR_SET);
         handle = mdd_trans_start(ctxt, mdd);
-        if (!handle)
+        if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
         rc = __mdd_attr_set(ctxt, obj, attr, handle);
@@ -470,7 +470,7 @@ int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
 
         mdd_txn_param_build(ctxt, &MDD_TXN_XATTR_SET);
         handle = mdd_trans_start(ctxt, mdd);
-        if (!handle)
+        if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
         rc = __mdd_xattr_set(ctxt, mdd, md2mdd_obj(obj), buf, buf_len, name,
@@ -1104,7 +1104,7 @@ static int mdd_ref_add(const struct lu_context *ctxt, struct md_object *obj)
 
         mdd_txn_param_build(ctxt, &MDD_TXN_XATTR_SET);
         handle = mdd_trans_start(ctxt, mdd);
-        if (!handle)
+        if (IS_ERR(handle))
                 RETURN(-ENOMEM);
         __mdd_ref_add(ctxt, mdd_obj, handle);
 
@@ -1139,7 +1139,7 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
 
         mdd_txn_param_build(ctxt, &MDD_TXN_XATTR_SET);
         handle = mdd_trans_start(ctxt, mdd);
-        if (!handle)
+        if (IS_ERR(handle))
                 RETURN(-ENOMEM);
         __mdd_ref_del(ctxt, mdd_obj, handle, ma);
 
