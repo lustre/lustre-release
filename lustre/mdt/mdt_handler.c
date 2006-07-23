@@ -583,9 +583,9 @@ free_desc:
 static int mdt_readpage(struct mdt_thread_info *info)
 {
         struct mdt_object *child = info->mti_object;
+        struct lu_rdpg *rdpg = &info->mti_rdpg;
         struct mdt_body *reqbody, *repbody;
         int rc, i, tmpcount, tmpsize = 0;
-        struct lu_rdpg rdpg = { 0 };
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
@@ -607,34 +607,34 @@ static int mdt_readpage(struct mdt_thread_info *info)
          * reqbody->size contains offset of where to start to read and
          * reqbody->nlink contains number bytes to read.
          */
-        rdpg.rp_offset = reqbody->size;
-        rdpg.rp_count = reqbody->nlink;
-        rdpg.rp_npages = (rdpg.rp_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
+        rdpg->rp_offset = reqbody->size;
+        rdpg->rp_count = reqbody->nlink;
+        rdpg->rp_npages = (rdpg->rp_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
         
-        for (i = 0, tmpcount = rdpg.rp_count;
-             i < rdpg.rp_npages; i++, tmpcount -= tmpsize) {
-                rdpg.rp_pages[i] = alloc_pages(GFP_KERNEL, 0);
-                if (rdpg.rp_pages[i] == NULL)
+        for (i = 0, tmpcount = rdpg->rp_count;
+             i < rdpg->rp_npages; i++, tmpcount -= tmpsize) {
+                rdpg->rp_pages[i] = alloc_pages(GFP_KERNEL, 0);
+                if (rdpg->rp_pages[i] == NULL)
                         GOTO(free_rdpg, rc = -ENOMEM);
         }
 
         /* call lower layers to fill allocated pages with directory data */
         rc = mo_readpage(info->mti_ctxt,
-                         mdt_object_child(child), &rdpg);
+                         mdt_object_child(child), rdpg);
         if (rc)
                 GOTO(free_rdpg, rc);
         
-        repbody->size = rdpg.rp_size;
+        repbody->size = rdpg->rp_size;
         repbody->valid = OBD_MD_FLSIZE;
 
         /* send pages to client */
-        rc = mdt_sendpage(info, child, &rdpg);
+        rc = mdt_sendpage(info, child, rdpg);
         
         EXIT;
 free_rdpg:
-        for (i = 0; i < rdpg.rp_npages; i++)
-                if (rdpg.rp_pages[i] != NULL)
-                        __free_pages(rdpg.rp_pages[i], 0);
+        for (i = 0; i < rdpg->rp_npages; i++)
+                if (rdpg->rp_pages[i] != NULL)
+                        __free_pages(rdpg->rp_pages[i], 0);
         return rc;
 }
 

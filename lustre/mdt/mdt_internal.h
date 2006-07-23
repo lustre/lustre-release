@@ -245,6 +245,9 @@ struct mdt_thread_info {
         } mti_u;
         /* transaction number of current request */
         __u64                      mti_transno;
+
+        /* readdir hint structure */
+        struct lu_rdpg             mti_rdpg;
 };
 /*
  * Info allocated per-transaction.
