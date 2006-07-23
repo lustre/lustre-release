@@ -2097,9 +2097,10 @@ int mds_postrecov(struct obd_device *obd)
         }
 
         /* clean PENDING dir */
-        rc = mds_cleanup_pending(obd);
-        if (rc < 0)
-                GOTO(out, rc);
+        if (strcmp(obd->obd_name, MDD_OBD_NAME))
+                rc = mds_cleanup_pending(obd);
+                if (rc < 0)
+                        GOTO(out, rc);
 
         /* FIXME Does target_finish_recovery really need this to block? */
         /* Notify the LOV, which will in turn call mds_notify for each tgt */
@@ -2681,7 +2682,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         ENTRY;
 
         CDEBUG(D_INFO, "obd %s setup \n", obd->obd_name);
-        if (strcmp(obd->obd_name, "mdd_obd"))
+        if (strcmp(obd->obd_name, MDD_OBD_NAME))
                 RETURN(0);
         
         rc = mds_lov_presetup(mds, lcfg);
@@ -2693,6 +2694,10 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         rc = mds_postsetup(obd);
         obd->obd_async_recov = 0;
 
+        sema_init(&mds->mds_orphan_recovery_sem, 1);
+        mds->mds_max_mdsize = sizeof(struct lov_mds_md);
+        mds->mds_max_cookiesize = sizeof(struct llog_cookie);
+        
         RETURN(rc);
 }
 

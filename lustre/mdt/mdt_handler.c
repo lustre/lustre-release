@@ -2621,35 +2621,12 @@ static int mdt_destroy_export(struct obd_export *export)
         RETURN(rc);
 }
 
-static int mdt_notify(struct obd_device *obd, struct obd_device *watched,
-                      enum obd_notify_event ev, void *data)
-{
-        struct mdt_device *mdt;
-        struct md_device *next;
-        struct lu_context ctxt;
-        int rc;
-        ENTRY;
-
-        lu_context_init(&ctxt, LCT_MD_THREAD);
-
-        mdt = mdt_dev(obd->obd_lu_dev);
-        next = mdt->mdt_child;
-
-        lu_context_enter(&ctxt);
-        rc = next->md_ops->mdo_notify(&ctxt, next, watched, ev, data);
-        lu_context_exit(&ctxt);
-
-        lu_context_fini(&ctxt);
-        RETURN(rc);
-}
-
 static struct obd_ops mdt_obd_device_ops = {
         .o_owner          = THIS_MODULE,
         .o_connect        = mdt_obd_connect,
         .o_disconnect     = mdt_obd_disconnect,
         .o_init_export    = mdt_init_export,    /* By Huang Hua*/
         .o_destroy_export = mdt_destroy_export, /* By Huang Hua*/
-        .o_notify         = mdt_notify,
 };
 
 static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)

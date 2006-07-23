@@ -54,7 +54,7 @@ static int mdd_lov_read_objids(struct obd_device *obd, struct md_lov_info *mli,
                                const void *ctxt)
 {
         struct dt_object *obj_ids = mli->md_lov_objid_obj;
-        struct lu_attr *lu_attr = &mdd_ctx_info(ctxt)->mti_attr;
+        struct lu_attr *lu_attr = NULL;
         obd_id *ids;
         int i, rc;
         ENTRY;
@@ -66,6 +66,9 @@ static int mdd_lov_read_objids(struct obd_device *obd, struct md_lov_info *mli,
            has fewer targets. Old targets not in the lov descriptor
            during mds setup may still have valid objids. */
 
+        OBD_ALLOC_PTR(lu_attr);
+        if (!lu_attr)
+                GOTO(out, rc = -ENOMEM);
         rc = obj_ids->do_ops->do_attr_get(ctxt, obj_ids, lu_attr);
         if (rc)
                 GOTO(out, rc);
@@ -95,6 +98,8 @@ static int mdd_lov_read_objids(struct obd_device *obd, struct md_lov_info *mli,
                        mli->md_lov_objids[i], i);
         }
 out:
+        if (lu_attr)
+                OBD_FREE_PTR(lu_attr);
         RETURN(0);
 }
 
@@ -126,90 +131,112 @@ int mdd_lov_write_objids(struct obd_device *obd, struct md_lov_info *mli,
 #endif
         RETURN(rc);
 }
+static int mdd_lov_write_catlist(struct obd_device *obd, void *idarray, int size, 
+                                 const void *ctxt)
+{
+        int rc = 0;
+        RETURN(rc);
+}
+
+static int mdd_lov_read_catlist(struct obd_device *obd, void *idarray, int size,
+                                const void *ctxt)
+{
+        int rc = 0;
+        RETURN(rc);
+}
 
 struct md_lov_ops mdd_lov_ops = {
         .ml_read_objids = mdd_lov_read_objids,
         .ml_write_objids = mdd_lov_write_objids,
+        .ml_read_catlist = mdd_lov_read_catlist,
+        .ml_write_catlist = mdd_lov_write_catlist
 };
 
-int mdd_lov_fini(const struct lu_context *ctxt, struct mdd_device *mdd)
+/*The obd is created for handling data stack for mdd*/
+int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd)
 {
-        struct md_lov_info *mli = &mdd->mdd_lov_info;
-
-        obd_register_observer(mli->md_lov_obd, NULL);
-
-        if (mli->md_lov_exp) {
-                obd_disconnect(mli->md_lov_exp);
-                mli->md_lov_exp = NULL;
-        }
-
-        dt_object_fini(mli->md_lov_objid_obj);
-        return 0;
-}
-
-int mdd_lov_init(const struct lu_context *ctxt, struct mdd_device *mdd,
-                 struct lustre_cfg *cfg)
-{
-        struct md_lov_info *lov_info = &mdd->mdd_lov_info;
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg      *lcfg;
+        struct obd_device      *obd;
         struct dt_object *obj_id;
-        struct obd_device *obd = NULL;
-        char *lov_name = NULL, *srv = NULL;
-        int rc = 0;
+        struct md_lov_info    *mli;
+        int rc;
         ENTRY;
+        
+        lustre_cfg_bufs_reset(&bufs, MDD_OBD_NAME);
+        lustre_cfg_bufs_set_string(&bufs, 1, MDD_OBD_TYPE);
+        lustre_cfg_bufs_set_string(&bufs, 2, MDD_OBD_UUID);
+        lustre_cfg_bufs_set_string(&bufs, 3, MDD_OBD_PROFILE);
 
-        if (IS_ERR(lov_info->md_lov_obd))
-                RETURN(PTR_ERR(lov_info->md_lov_obd));
-
-        lov_name = lustre_cfg_string(cfg, 3);
-        LASSERTF(lov_name != NULL, "MDD need lov \n");
-
+        lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
+        if (!lcfg)
+                RETURN(-ENOMEM);
+        
+        rc = class_attach(lcfg);
+        if (rc)
+                GOTO(lcfg_cleanup, rc);
+       
+        obd = class_name2obd(MDD_OBD_NAME);
+        if (!obd) {
+                CERROR("can not find obd %s \n", MDD_OBD_NAME);
+                LBUG();
+        }
+      
+        /*init mli, which will be used in following mds setup*/
+        mli = &obd->u.mds.mds_lov_info;
+        mli->md_lov_ops = &mdd_lov_ops;
+        
         obj_id = dt_store_open(ctxt, mdd->mdd_child, mdd_lov_objid_name,
-                               &lov_info->md_lov_objid_fid);
+                               &mli->md_lov_objid_fid);
         if (IS_ERR(obj_id)){
                 rc = PTR_ERR(obj_id);
                 RETURN(rc);
         }
+        mli->md_lov_objid_obj = obj_id;
 
-        LASSERT(obj_id != NULL);
-        lov_info->md_lov_objid_obj = obj_id;
-
-        srv = lustre_cfg_string(cfg, 0);
-        obd = class_name2obd(srv);
-        if (obd == NULL) {
-                CERROR("No such OBD %s\n", srv);
-                LBUG();
-        }
-        CDEBUG(D_INFO, "srv name %s, obd %p \n", obd->obd_name, obd);
-        rc = md_lov_connect(obd, lov_info, lov_name,
-                            &obd->obd_uuid, &mdd_lov_ops, ctxt);
+        rc = class_setup(obd, lcfg);
         if (rc)
-                GOTO(out, rc);
-out:
-        if (rc)
-                mdd_lov_fini(ctxt, mdd);
+                GOTO(class_detach, rc);
 
+        mdd->mdd_md_dev.md_lu_dev.ld_obd = obd;
+class_detach:
+        if (rc)
+                class_detach(obd, lcfg);
+lcfg_cleanup:
+        lustre_cfg_free(lcfg);
         RETURN(rc);
 }
 
-int mdd_notify(const struct lu_context *ctxt, struct md_device *md,
-               struct obd_device *watched,
-               enum obd_notify_event ev, void *data)
+int mdd_cleanup_obd(struct mdd_device *mdd)
 {
-	struct mdd_device *mdd = lu2mdd_dev(&md->md_lu_dev);
-        struct obd_device *obd = md2lu_dev(md)->ld_site->ls_top_dev->ld_obd;
-        int rc = 0;
+        struct lustre_cfg_bufs bufs;
+        struct md_lov_info     *mli;
+        struct lustre_cfg      *lcfg;
+        struct obd_device      *obd; 
+        int rc;
         ENTRY;
+        
+        obd = mdd->mdd_md_dev.md_lu_dev.ld_obd;
+        LASSERT(obd);
+        
+        mli = &obd->u.mds.mds_lov_info;
+        dt_object_fini(mli->md_lov_objid_obj);
+        
+        lustre_cfg_bufs_reset(&bufs, MDD_OBD_NAME);
+        lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
+        if (!lcfg)
+                RETURN(-ENOMEM);
 
-        rc = md_lov_notity_pre(obd, &mdd->mdd_lov_info, watched, ev, data);
-        if (rc) {
-                if (rc == -ENOENT || rc == -EBUSY)
-                        rc = 0;
-                RETURN(rc);
-        }
-
-        rc = md_lov_start_synchronize(obd, &mdd->mdd_lov_info, watched, data,
-                                      !(ev == OBD_NOTIFY_SYNC), ctxt);
-
+        rc = class_cleanup(obd, lcfg);
+        if (rc)
+                GOTO(lcfg_cleanup, rc);
+        
+        rc = class_detach(obd, lcfg);
+        if (rc)
+                GOTO(lcfg_cleanup, rc);
+        mdd->mdd_md_dev.md_lu_dev.ld_obd = NULL;
+lcfg_cleanup:
+        lustre_cfg_free(lcfg);
         RETURN(rc);
 }
 
@@ -271,7 +298,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *child, struct lov_mds_md **lmm,
                    int *lmm_size)
 {
-        struct md_lov_info *mli = &mdd->mdd_lov_info;
+        struct obd_device *obd = mdd->mdd_md_dev.md_lu_dev.ld_obd;
+        struct obd_export *lov_exp = obd->u.mds.mds_osc_exp; 
         struct obdo *oa;
         struct lov_stripe_md *lsm = NULL;
         int rc = 0;
@@ -286,11 +314,11 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
         oa->o_size = 0;
 
-        rc = obd_create(mli->md_lov_exp, oa, &lsm, NULL);
+        rc = obd_create(lov_exp, oa, &lsm, NULL);
         if (rc)
                 GOTO(out_oa, rc);
 
-        rc = obd_packmd(mli->md_lov_exp, lmm, lsm);
+        rc = obd_packmd(lov_exp, lmm, lsm);
         if (rc < 0) {
                 CERROR("cannot pack lsm, err = %d\n", rc);
                 GOTO(out_oa, rc);

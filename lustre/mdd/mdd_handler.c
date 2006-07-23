@@ -302,7 +302,7 @@ static int mdd_process_config(const struct lu_context *ctxt,
                 rc = mdd_mount(ctxt, m);
                 if (rc)
                         GOTO(out, rc);
-                rc = mdd_lov_init(ctxt, m, cfg);
+                rc = mdd_init_obd(ctxt, m);
                 if (rc) {
                         CERROR("lov init error %d \n", rc);
                         GOTO(out, rc);
@@ -327,7 +327,6 @@ static struct lu_object_operations mdd_lu_obj_ops = {
 	.loo_object_print   = mdd_object_print,
 	.loo_object_exists  = mdd_object_exists,
 };
-
 
 static void mdd_lock(const struct lu_context *ctxt,
                      struct mdd_object *obj, enum dt_lock_mode mode)
@@ -1174,7 +1173,6 @@ static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
 struct md_device_operations mdd_ops = {
         .mdo_root_get       = mdd_root_get,
         .mdo_statfs         = mdd_statfs,
-        .mdo_notify         = mdd_notify
 };
 
 static struct md_dir_operations mdd_dir_ops = {

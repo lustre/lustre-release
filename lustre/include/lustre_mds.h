@@ -103,4 +103,9 @@ int md_lov_start_synchronize(struct obd_device *obd, struct md_lov_info *mli,
 #define IOC_REQUEST_MAX_NR               35
 
 #define MDS_LOV_MD_NAME "lov"
+#define MDD_OBD_NAME    "mdd_obd"
+#define MDD_OBD_UUID    "mdd_obd_uuid"
+#define MDD_OBD_TYPE    "mds"
+#define MDD_OBD_PROFILE "lustre-MDT0000"
+
 #endif

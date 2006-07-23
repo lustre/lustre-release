@@ -74,23 +74,9 @@ static int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
         RETURN (rc);
 }
 
-int cmm_notify(const struct lu_context *ctxt, struct md_device *md,
-               struct obd_device *watched,
-               enum obd_notify_event ev, void *data)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(md);
-        int rc;
-
-        rc = cmm_child_ops(cmm_dev)->mdo_notify(ctxt, cmm_dev->cmm_child,
-                                                watched, ev, data);
-
-        return rc;
-}
-
 static struct md_device_operations cmm_md_ops = {
         .mdo_root_get       = cmm_root_get,
         .mdo_statfs         = cmm_statfs,
-        .mdo_notify         = cmm_notify
 };
 
 extern struct lu_device_type mdc_device_type;

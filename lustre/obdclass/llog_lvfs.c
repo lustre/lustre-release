@@ -43,6 +43,7 @@
 #include <obd_class.h>
 #include <lustre_log.h>
 #include <obd_ost.h>
+#include <lustre_mds.h>
 #include <libcfs/list.h>
 #include <lvfs.h>
 #include <lustre_fsfilt.h>
@@ -712,6 +713,12 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         if (!count) 
                 return (0);
 
+        if (!strcmp(disk_obd->obd_name, MDD_OBD_NAME)) {
+                struct md_lov_info *mli = &disk_obd->u.mds.mds_lov_info;
+                rc = mli->md_lov_ops->ml_read_catlist(disk_obd, idarray,
+                                                       size, NULL);
+                return (0);
+        }
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
@@ -757,6 +764,12 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         if (!count) 
                 return (0);
 
+        if (!strcmp(disk_obd->obd_name, MDD_OBD_NAME)) {
+                struct md_lov_info *mli = &disk_obd->u.mds.mds_lov_info;
+                rc = mli->md_lov_ops->ml_write_catlist(disk_obd, idarray,
+                                                        size, NULL);
+                return (0);
+        }
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {

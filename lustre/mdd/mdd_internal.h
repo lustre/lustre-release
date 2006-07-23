@@ -30,10 +30,6 @@
 #include <asm/semaphore.h>
 #include <md_object.h>
 
-#define MDD_OBD_NAME    "mdd_obd"
-#define MDD_OBD_UUID    "mdd_obd_uuid"
-#define MDD_OBD_TYPE    "mds"
-#define MDD_OBD_PROFILE "lustre-client"
 struct dt_device;
 
 struct mdd_device {
@@ -57,13 +53,7 @@ struct mdd_thread_info {
         struct lov_mds_md mti_lmm;
 };
 
-int mdd_lov_init(const struct lu_context *ctxt, struct mdd_device *mdd,
-                 struct lustre_cfg *cfg);
-int mdd_lov_fini(const struct lu_context *ctxt, struct mdd_device *mdd);
-int mdd_notify(const struct lu_context *ctxt, struct md_device *md,
-               struct obd_device *watched, enum obd_notify_event ev,
-               void *data);
-
+int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd);
 int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
                   const void *buf, int buf_len, const char *name);
 int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,

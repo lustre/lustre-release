@@ -1210,7 +1210,7 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
 {
         char *log = mti->mti_svname;
         struct llog_handle *llh = NULL;
-        char *uuid, *lovname;
+        char *uuid, *lovname, *lmvname;
         char mdt_index[5];
         int rc = 0;
         ENTRY;
@@ -1222,6 +1222,7 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
                 RETURN(-ENOMEM);
 
         name_create(log, "-mdtlov", &lovname);
+        name_create(log, "-mdtlmv", &lmvname);
         if (mgs_log_is_empty(obd, log)) {
                 rc = mgs_write_log_lov(obd, fsdb, mti, log, lovname);
         } 
@@ -1232,6 +1233,8 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
         rc = record_start_log(obd, &llh, log);
         rc = record_marker(obd, llh, fsdb, CM_START, log, "add mdt");
         rc = record_attach(obd, llh, log, LUSTRE_MDT0_NAME, uuid);
+        /*FIXME: lmvname maybe not right now*/
+        rc = record_mount_opt(obd, llh, log, lovname, lmvname);
         rc = record_setup(obd, llh, log, uuid, mdt_index, lovname, 0);
         rc = record_marker(obd, llh, fsdb, CM_END, log, "add mdt");
         rc = record_end_log(obd, &llh);

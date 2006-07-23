@@ -410,6 +410,11 @@ struct md_lov_ops {
                               const void *ctxt);
         int (*ml_write_objids)(struct obd_device *obd, struct md_lov_info *mli,
                                const void *ctxt);
+        int (*ml_read_catlist)(struct obd_device *obd, void *idarray, int size,
+                               const void *ctxt);
+        int (*ml_write_catlist)(struct obd_device *obd, void *idarray, int size,
+                               const void *ctxt);
+
 };
 struct md_lov_info {
         struct obd_device               *md_lov_obd; /* XXX lov_obd */

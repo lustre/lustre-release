@@ -39,6 +39,7 @@
 #include <lustre_lib.h>
 #include <lustre_fsfilt.h>
 #include <lustre_ver.h>
+#include <dt_object.h>
 
 #include "mds_internal.h"
 
@@ -315,6 +316,8 @@ static int mds_lov_update_mds(struct obd_device *obd,
                 llog_cat_initialize(obd, mli->md_lov_desc.ld_tgt_count);
                 up(&mli->md_lov_orphan_recovery_sem);
         }
+        CDEBUG(D_CONFIG, "reset llogs idx=%d\n", idx);
+        llog_cat_initialize(obd, mli->md_lov_desc.ld_tgt_count);
 #endif
         RETURN(rc);
 }
@@ -339,8 +342,6 @@ int md_lov_connect(struct obd_device *obd, struct md_lov_info *mli,
                 mli->md_lov_obd = ERR_PTR(-ENOTCONN);
                 RETURN(-ENOTCONN);
         }
-
-        mli->md_lov_ops = mlo;
 
         OBD_ALLOC(data, sizeof(*data));
         if (data == NULL)
@@ -707,8 +708,8 @@ static int __mds_lov_synchronize(void *data)
                                 KEY_MDS_CONN, 0, uuid, NULL);
         if (rc != 0)
                 GOTO(out, rc);
+
 #if 0
-        /*disable for not support llog in mdd*/
         rc = llog_connect(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT),
                           mds->mds_lov_desc.ld_tgt_count,
                           NULL, NULL, uuid);
