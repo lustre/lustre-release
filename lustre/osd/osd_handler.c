@@ -820,6 +820,38 @@ int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
         return 0;
 }
 
+int osd_readpage(const struct lu_context *ctxt,
+                 struct dt_object *dt, struct lu_rdpg *rdpg)
+{
+        struct osd_object *obj = osd_dt_obj(dt);
+        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
+        LASSERT(osd_invariant(obj));
+
+        LASSERT(rdpg->rp_pages != NULL);
+        
+        /* check input params */
+        if ((rdpg->rp_offset & (obj->oo_inode->i_blksize - 1)) != 0) {
+                CERROR("offset "LPU64" not on a block boundary of %lu\n",
+                       rdpg->rp_offset, obj->oo_inode->i_blksize);
+                return -EFAULT;
+        }
+
+        if (rdpg->rp_count & (obj->oo_inode->i_blksize - 1)) {
+                CERROR("size %u is not multiple of blocksize %lu\n",
+                       rdpg->rp_count, obj->oo_inode->i_blksize);
+                return -EFAULT;
+        }
+
+        /* prepare output */
+        rdpg->rp_size = obj->oo_inode->i_size;
+
+        /*
+         * XXX: here should be filling pages by dir data in ext3 format and
+         * ->rp_pages already should be allocated.
+         */
+        return 0;
+}
+
 static struct dt_object_operations osd_obj_ops = {
         .do_lock      = osd_object_lock,
         .do_unlock    = osd_object_unlock,
@@ -830,7 +862,8 @@ static struct dt_object_operations osd_obj_ops = {
         .do_ref_add   = osd_object_ref_add,
         .do_ref_del   = osd_object_ref_del,
         .do_xattr_get = osd_xattr_get,
-        .do_xattr_set = osd_xattr_set
+        .do_xattr_set = osd_xattr_set,
+        .do_readpage  = osd_readpage
 };
 
 static struct dt_body_operations osd_body_ops = {

@@ -83,6 +83,9 @@ struct md_object_operations {
                            struct md_attr *);
         int (*moo_open)(const struct lu_context *, struct md_object *);
         int (*moo_close)(const struct lu_context *, struct md_object *);
+        
+        int (*moo_readpage)(const struct lu_context *, struct md_object *,
+                            struct lu_rdpg *);
 };
 
 /*
@@ -245,6 +248,13 @@ static inline int mo_close(const struct lu_context *cx, struct md_object *m)
 {
         LASSERT(m->mo_ops->moo_close);
         return m->mo_ops->moo_close(cx, m);
+}
+
+static inline int mo_readpage(const struct lu_context *cx, struct md_object *m,
+                              struct lu_rdpg *rdpg)
+{
+        LASSERT(m->mo_ops->moo_readpage);
+        return m->mo_ops->moo_readpage(cx, m, rdpg);
 }
 
 static inline int mo_object_create(const struct lu_context *cx,

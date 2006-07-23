@@ -771,6 +771,17 @@ static inline int lu_object_assert_not_exists(const struct lu_context *ctx,
         return lu_object_exists(ctx, o) <= 0;
 }
 
+struct lu_rdpg {
+        /* input params, should be filled out by mdt */
+        loff_t                  rp_offset;
+        int                     rp_count;
+        int                     rp_npages;
+        struct page           **rp_pages;
+
+        /* output params, filled by osd */
+        __u64                   rp_size;
+};
+
 /*
  * lu_context. Execution context for lu_object methods. Currently associated
  * with thread.

@@ -1159,6 +1159,18 @@ static int mdd_close(const struct lu_context *ctxt, struct md_object *obj)
         return 0;
 }
 
+static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
+                        struct md_rdpg *rdpg)
+{
+        struct dt_object *next;
+        int rc;
+
+        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
+        next = mdd_object_child(obj);
+        rc = next->do_ops->do_readpage(ctxt, next, rdpg);
+        return rc;
+}
+
 struct md_device_operations mdd_ops = {
         .mdo_root_get       = mdd_root_get,
         .mdo_statfs         = mdd_statfs,
@@ -1186,7 +1198,8 @@ static struct md_object_operations mdd_obj_ops = {
         .moo_ref_add       = mdd_ref_add,
         .moo_ref_del       = mdd_ref_del,
         .moo_open          = mdd_open,
-        .moo_close         = mdd_close
+        .moo_close         = mdd_close,
+        .moo_readpage      = mdd_readpage
 };
 
 static struct obd_ops mdd_obd_device_ops = {

@@ -212,6 +212,9 @@ struct dt_object_operations {
          */
         void  (*do_ref_del)(const struct lu_context *ctxt,
                             struct dt_object *dt, struct thandle *th);
+
+        int (*do_readpage)(const struct lu_context *ctxt,
+                           struct dt_object *dt, struct lu_rdpg *rdpg);
 };
 
 /*
