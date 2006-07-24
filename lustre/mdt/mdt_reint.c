@@ -417,14 +417,14 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         ENTRY;
 
         DEBUG_REQ(D_INODE, req, "rename "DFID3"/%s to "DFID3"/%s",
-                  PFID3(rr->rr_fid1), rr->rr_tgt,
-                  PFID3(rr->rr_fid2), rr->rr_name);
+                  PFID3(rr->rr_fid1), rr->rr_name,
+                  PFID3(rr->rr_fid2), rr->rr_tgt);
 
         /* MDS_CHECK_RESENT here */
 
         rc = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
         if (rc == 1) {
-        /* if (strlen(rr->rr_name) == 0) {*/
+        /* if (rr->rr_name[0] == 0) {*/
                 RETURN(mdt_reint_rename_tgt(info));
         }
 
@@ -439,12 +439,17 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                 GOTO(out, rc = PTR_ERR(msrcdir));
 
         /*step 2: find & lock the target dir*/
-        lh_tgtdirp = &info->mti_lh[MDT_LH_CHILD];
-        lh_tgtdirp->mlh_mode = LCK_EX;
-        mtgtdir = mdt_object_find_lock(info, rr->rr_fid2, lh_tgtdirp,
-                                       MDS_INODELOCK_UPDATE);
-        if (IS_ERR(mtgtdir))
-                GOTO(out_unlock_source, rc = PTR_ERR(mtgtdir));
+        if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
+                mdt_object_get(info->mti_ctxt, msrcdir);
+                mtgtdir = msrcdir;
+        } else {
+                lh_tgtdirp = &info->mti_lh[MDT_LH_CHILD];
+                lh_tgtdirp->mlh_mode = LCK_EX;
+                mtgtdir = mdt_object_find_lock(info, rr->rr_fid2, lh_tgtdirp,
+                                               MDS_INODELOCK_UPDATE);
+                if (IS_ERR(mtgtdir))
+                        GOTO(out_unlock_source, rc = PTR_ERR(mtgtdir));
+        }
 
         /*step 3: find & lock the old object*/
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(msrcdir),
@@ -491,7 +496,10 @@ out_unlock_new:
 out_unlock_old:
         mdt_object_unlock_put(info, mold, lh_oldp, rc);
 out_unlock_target:
-        mdt_object_unlock_put(info, mtgtdir, lh_tgtdirp, rc);
+        if (mtgtdir == msrcdir)
+                mdt_object_put(info->mti_ctxt, mtgtdir);
+        else
+                mdt_object_unlock_put(info, mtgtdir, lh_tgtdirp, rc);
 out_unlock_source:
         mdt_object_unlock_put(info, msrcdir, lh_srcdirp, rc);
 out:
