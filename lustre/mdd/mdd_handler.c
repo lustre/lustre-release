@@ -160,6 +160,23 @@ static int mdd_xattr_get(const struct lu_context *ctxt, struct md_object *obj,
         RETURN(rc);
 }
 
+static int mdd_xattr_list(const struct lu_context *ctxt, struct md_object *obj,
+                          void *buf, int buf_len)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+        struct dt_object  *next;
+        int rc;
+
+        ENTRY;
+
+        LASSERT(lu_object_exists(ctxt, &obj->mo_lu));
+
+        next = mdd_object_child(mdd_obj);
+        rc = next->do_ops->do_xattr_list(ctxt, next, buf, buf_len);
+
+        RETURN(rc);
+}
+
 enum mdd_txn_op {
         MDD_TXN_OBJECT_DESTROY_OP,
         MDD_TXN_OBJECT_CREATE_OP,
@@ -1192,7 +1209,8 @@ static struct md_object_operations mdd_obj_ops = {
         .moo_attr_set      = mdd_attr_set,
         .moo_xattr_get     = mdd_xattr_get,
         .moo_xattr_set     = mdd_xattr_set,
-        .moo_object_create  = mdd_object_create,
+        .moo_xattr_list    = mdd_xattr_list,
+        .moo_object_create = mdd_object_create,
         .moo_ref_add       = mdd_ref_add,
         .moo_ref_del       = mdd_ref_del,
         .moo_open          = mdd_open,

@@ -106,7 +106,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         CDEBUG(D_INODE, "getxattr "DFID3"\n",
                         PFID3(&info->mti_body->fid1));
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK)) 
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
                 RETURN(-ENOMEM);
 
         next = mdt_object_child(info->mti_object);
@@ -127,7 +127,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
                 CDEBUG(D_INODE, "getxattr %s\n", xattr_name);
 
                 rc = mo_xattr_get(info->mti_ctxt, next,
-                                   buf, buflen, xattr_name);
+                                  buf, buflen, xattr_name);
 
                 if (rc < 0 && rc != -ENODATA && rc != -EOPNOTSUPP &&
                     rc != -ERANGE)
@@ -167,7 +167,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
         CDEBUG(D_INODE, "setxattr "DFID3"\n",
                         PFID3(&info->mti_body->fid1));
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR)) 
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(-ENOMEM);
 
         /* various sanity check for xattr name */

@@ -72,6 +72,10 @@ struct md_object_operations {
                              struct md_object *obj,
                              void *buf, int buf_len, const char *name);
 
+        int (*moo_xattr_list)(const struct lu_context *ctxt,
+                              struct md_object *obj,
+                              void *buf, int buf_len);
+
         int (*moo_xattr_set)(const struct lu_context *ctxt,
                              struct md_object *obj, const void *buf,
                              int buf_len, const char *name);
@@ -83,7 +87,7 @@ struct md_object_operations {
                            struct md_attr *);
         int (*moo_open)(const struct lu_context *, struct md_object *);
         int (*moo_close)(const struct lu_context *, struct md_object *);
-        
+
         int (*moo_readpage)(const struct lu_context *, struct md_object *,
                             struct lu_rdpg *);
 };
@@ -215,7 +219,7 @@ static inline int mo_xattr_del(const struct lu_context *cx,
 }
 
 static inline int mo_xattr_set(const struct lu_context *cx,
-                               struct md_object *m, const void *buf, 
+                               struct md_object *m, const void *buf,
                                int buf_len, const char *name)
 {
         LASSERT(m->mo_ops->moo_xattr_set);
@@ -227,8 +231,7 @@ static inline int mo_xattr_list(const struct lu_context *cx,
                                void *buf, int buf_len)
 {
         LASSERT(m->mo_ops->moo_xattr_get);
-        /*NULL name for get? or we need a new interface*/
-        return m->mo_ops->moo_xattr_get(cx, m, buf, buf_len, NULL);
+        return m->mo_ops->moo_xattr_list(cx, m, buf, buf_len);
 }
 
 static inline int mo_open(const struct lu_context *cx, struct md_object *m)
@@ -279,7 +282,7 @@ static inline int mdo_lookup(const struct lu_context *cx, struct md_object *p,
 }
 
 static inline int mdo_create(const struct lu_context *cx, struct md_object *p,
-                             const char *child_name, struct md_object *c, 
+                             const char *child_name, struct md_object *c,
                              const char *target_name, struct md_attr *at)
 {
         LASSERT(c->mo_dir_ops->mdo_create);

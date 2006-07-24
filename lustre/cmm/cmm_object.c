@@ -243,8 +243,16 @@ static int cml_xattr_get(const struct lu_context *ctx, struct md_object *mo,
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_get(ctx, md_object_next(mo),
-                         buf, buflen, name);
+        rc = mo_xattr_get(ctx, md_object_next(mo), buf, buflen, name);
+        RETURN(rc);
+}
+
+static int cml_xattr_list(const struct lu_context *ctx, struct md_object *mo,
+                          void *buf, int buflen)
+{
+        int rc;
+        ENTRY;
+        rc = mo_xattr_list(ctx, md_object_next(mo), buf, buflen);
         RETURN(rc);
 }
 
@@ -253,8 +261,7 @@ static int cml_xattr_set(const struct lu_context *ctx, struct md_object *mo,
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_set(ctx, md_object_next(mo),
-                          buf, buflen, name);
+        rc = mo_xattr_set(ctx, md_object_next(mo), buf, buflen, name);
         RETURN(rc);
 }
 
@@ -304,6 +311,7 @@ static struct md_object_operations cml_mo_ops = {
         .moo_attr_get      = cml_attr_get,
         .moo_attr_set      = cml_attr_set,
         .moo_xattr_get     = cml_xattr_get,
+        .moo_xattr_list    = cml_xattr_list,
         .moo_xattr_set     = cml_xattr_set,
         .moo_object_create = cml_object_create,
         .moo_ref_add       = cml_ref_add,
@@ -524,6 +532,12 @@ static int cmr_attr_set(const struct lu_context *ctx, struct md_object *mo,
 
 static int cmr_xattr_get(const struct lu_context *ctx, struct md_object *mo,
                          void *buf, int buflen, const char *name)
+{
+        RETURN(-EFAULT);
+}
+
+static int cmr_xattr_list(const struct lu_context *ctx, struct md_object *mo,
+                          void *buf, int buflen)
 {
         RETURN(-EFAULT);
 }

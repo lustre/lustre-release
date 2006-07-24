@@ -182,6 +182,15 @@ struct dt_object_operations {
                               const void *buf, int buf_len,
                               const char *name, struct thandle *handle);
         /*
+         * Place list of existing extended attributes into @buf (which has
+         * length len).
+         *
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
+         */
+        int   (*do_xattr_list)(const struct lu_context *ctxt,
+                               struct dt_object *dt,
+                               const void *buf, int buf_len);
+        /*
          * Create new object on this device.
          *
          * precondition: !lu_object_exists(ctxt, &dt->do_lu);

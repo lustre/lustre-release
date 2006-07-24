@@ -820,6 +820,12 @@ int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
         return 0;
 }
 
+int osd_xattr_list(const struct lu_context *ctxt, struct dt_object *dt,
+                   const void *buf, int buf_len, struct thandle *handle)
+{
+        return 0;
+}
+
 int osd_readpage(const struct lu_context *ctxt,
                  struct dt_object *dt, struct lu_rdpg *rdpg)
 {
@@ -828,7 +834,7 @@ int osd_readpage(const struct lu_context *ctxt,
         LASSERT(osd_invariant(obj));
 
         LASSERT(rdpg->rp_pages != NULL);
-        
+
         /* check input params */
         if ((rdpg->rp_offset & (obj->oo_inode->i_blksize - 1)) != 0) {
                 CERROR("offset "LPU64" not on a block boundary of %lu\n",
@@ -853,17 +859,18 @@ int osd_readpage(const struct lu_context *ctxt,
 }
 
 static struct dt_object_operations osd_obj_ops = {
-        .do_lock      = osd_object_lock,
-        .do_unlock    = osd_object_unlock,
-        .do_attr_get  = osd_attr_get,
-        .do_attr_set  = osd_attr_set,
-        .do_create    = osd_object_create,
-        .do_index_try = osd_index_try,
-        .do_ref_add   = osd_object_ref_add,
-        .do_ref_del   = osd_object_ref_del,
-        .do_xattr_get = osd_xattr_get,
-        .do_xattr_set = osd_xattr_set,
-        .do_readpage  = osd_readpage
+        .do_lock       = osd_object_lock,
+        .do_unlock     = osd_object_unlock,
+        .do_attr_get   = osd_attr_get,
+        .do_attr_set   = osd_attr_set,
+        .do_create     = osd_object_create,
+        .do_index_try  = osd_index_try,
+        .do_ref_add    = osd_object_ref_add,
+        .do_ref_del    = osd_object_ref_del,
+        .do_xattr_get  = osd_xattr_get,
+        .do_xattr_set  = osd_xattr_set,
+        .do_xattr_list = osd_xattr_list,
+        .do_readpage   = osd_readpage
 };
 
 static struct dt_body_operations osd_body_ops = {
