@@ -181,7 +181,7 @@ Espan:
         // error = "inode out of bounds";
 bad_entry:
         CERROR("%s: bad entry in directory %lu/%u: %s - "
-                "offset=%lu+%u, inode=%lu, rec_len=%d, name_len=%d",
+                "offset=%lu+%u, inode=%lu, rec_len=%d, name_len=%d\n",
                 ll_i2mdexp(dir)->exp_obd->obd_name, dir->i_ino,
                 dir->i_generation, error, (page->index<<PAGE_CACHE_SHIFT), offs,
                 (unsigned long)le32_to_cpu(p->inode),
@@ -191,7 +191,7 @@ Eend:
         p = (ext2_dirent *)(kaddr + offs);
         CERROR("ext2_check_page"
                 "entry in directory #%lu spans the page boundary"
-                "offset=%lu, inode=%lu",
+                "offset=%lu, inode=%lu\n",
                 dir->i_ino, (page->index<<PAGE_CACHE_SHIFT)+offs,
                 (unsigned long) le32_to_cpu(p->inode));
 fail:
@@ -583,7 +583,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         struct lov_stripe_md *lsm;
                         struct lov_user_md_join *lmj;
                         int lmj_size, i, aindex = 0, rc;
- 
+
                         rc = obd_unpackmd(sbi->ll_dt_exp, &lsm, lmm, lmmsize);
                         if (rc < 0)
                                 GOTO(out_req, rc = -ENOMEM);
@@ -664,7 +664,7 @@ out_free_memmd:
 
                 rc = copy_to_user(lump, lmm, lmmsize);
                 if (lmm->lmm_magic == LOV_MAGIC_JOIN)
-                        OBD_FREE(lmm, lmmsize); 
+                        OBD_FREE(lmm, lmmsize);
                 if (rc)
                         GOTO(out_req, rc = -EFAULT);
 
@@ -771,7 +771,7 @@ out_free_memmd:
                                 rc = -EFAULT;
                         GOTO(out_poll, rc);
                 }
-        out_poll:                 
+        out_poll:
                 OBD_FREE_PTR(check);
                 RETURN(rc);
         }
@@ -779,7 +779,7 @@ out_free_memmd:
         case OBD_IOC_QUOTACTL: {
                 struct if_quotactl *qctl;
                 struct obd_quotactl *oqctl;
-                
+
                 int cmd, type, id, rc = 0;
 
                 OBD_ALLOC_PTR(qctl);
@@ -888,11 +888,11 @@ out_free_memmd:
                 RETURN(rc);
         }
 #endif /* HAVE_QUOTA_SUPPORT */
-        case OBD_IOC_GETNAME: {  
+        case OBD_IOC_GETNAME: {
                 struct obd_device *obd = class_exp2obd(sbi->ll_dt_exp);
                 if (!obd)
                         RETURN(-EFAULT);
-                if (copy_to_user((void *)arg, obd->obd_name, 
+                if (copy_to_user((void *)arg, obd->obd_name,
                                 strlen(obd->obd_name) + 1))
                         RETURN (-EFAULT);
                 RETURN(0);
