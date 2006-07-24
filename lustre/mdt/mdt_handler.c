@@ -518,25 +518,24 @@ static int mdt_disconnect(struct mdt_thread_info *info)
 }
 
 static int mdt_sendpage(struct mdt_thread_info *info,
-                        struct mdt_object *object,
                         struct lu_rdpg *rdpg)
 {
-        int rc = 0, npages, i, tmpcount, tmpsize = 0;
+        struct ptlrpc_request   *req = mdt_info_req(info);
         struct ptlrpc_bulk_desc *desc;
-        struct ptlrpc_request *req;
-        struct l_wait_info lwi;
+        struct l_wait_info       lwi;
+        int                      tmpcount;
+        int                      tmpsize;
+        int                      i;
+        int                      rc;
         ENTRY;
 
-        LASSERT((rdpg->rp_offset & (PAGE_SIZE - 1)) == 0);
-
-        req = info->mti_pill.rc_req;
-        npages = (rdpg->rp_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
-        desc = ptlrpc_prep_bulk_exp(req, npages, BULK_PUT_SOURCE,
+        desc = ptlrpc_prep_bulk_exp(req, rdpg->rp_npages, BULK_PUT_SOURCE,
                                     MDS_BULK_PORTAL);
         if (desc == NULL)
-                GOTO(free_desc, rc = -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
-        for (i = 0, tmpcount = rdpg->rp_count; i < npages; i++, tmpcount -= tmpsize) {
+        for (i = 0, tmpcount = rdpg->rp_count;
+                i < rdpg->rp_npages; i++, tmpcount -= tmpsize) {
                 tmpsize = tmpcount > PAGE_SIZE ? PAGE_SIZE : tmpcount;
                 ptlrpc_prep_bulk_page(desc, rdpg->rp_pages[i], 0, tmpsize);
         }
@@ -546,11 +545,8 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         if (rc)
                 GOTO(free_desc, rc);
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
-                CERROR("obd_fail_loc=%x, fail operation rc=%d\n",
-                       OBD_FAIL_MDS_SENDPAGE, rc);
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
                 GOTO(abort_bulk, rc);
-        }
 
         lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, NULL);
         rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), &lwi);
@@ -577,29 +573,28 @@ abort_bulk:
         ptlrpc_abort_bulk(desc);
 free_desc:
         ptlrpc_free_bulk(desc);
+out:
         return rc;
 }
 
 static int mdt_readpage(struct mdt_thread_info *info)
 {
-        struct mdt_object *child = info->mti_object;
-        struct lu_rdpg *rdpg = &info->mti_rdpg;
-        struct mdt_body *reqbody, *repbody;
-        int rc, i, tmpcount, tmpsize = 0;
+        struct mdt_object *object = info->mti_object;
+        struct lu_rdpg    *rdpg = &info->mti_rdpg;
+        struct mdt_body   *reqbody;
+        struct mdt_body   *repbody;
+        int                rc;
+        int                i;
         ENTRY;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
                 RETURN(-ENOMEM);
 
         reqbody = req_capsule_client_get(&info->mti_pill,
                                          &RMF_MDT_BODY);
-        if (reqbody == NULL)
-                RETURN(-EFAULT);
-
         repbody = req_capsule_server_get(&info->mti_pill,
                                          &RMF_MDT_BODY);
-
-        if (repbody == NULL)
+        if (reqbody == NULL || repbody == NULL)
                 RETURN(-EFAULT);
 
         /*
@@ -610,17 +605,20 @@ static int mdt_readpage(struct mdt_thread_info *info)
         rdpg->rp_offset = reqbody->size;
         rdpg->rp_count = reqbody->nlink;
         rdpg->rp_npages = (rdpg->rp_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
+        LASSERT((rdpg->rp_offset & (PAGE_SIZE - 1)) == 0);
+
+        OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
+        if (rdpg->rp_pages == NULL)
+                GOTO(out, rc = -ENOMEM);
         
-        for (i = 0, tmpcount = rdpg->rp_count;
-             i < rdpg->rp_npages; i++, tmpcount -= tmpsize) {
+        for (i = 0; i < rdpg->rp_npages; ++i) {
                 rdpg->rp_pages[i] = alloc_pages(GFP_KERNEL, 0);
                 if (rdpg->rp_pages[i] == NULL)
                         GOTO(free_rdpg, rc = -ENOMEM);
         }
 
         /* call lower layers to fill allocated pages with directory data */
-        rc = mo_readpage(info->mti_ctxt,
-                         mdt_object_child(child), rdpg);
+        rc = mo_readpage(info->mti_ctxt, mdt_object_child(object), rdpg);
         if (rc)
                 GOTO(free_rdpg, rc);
         
@@ -628,13 +626,15 @@ static int mdt_readpage(struct mdt_thread_info *info)
         repbody->valid = OBD_MD_FLSIZE;
 
         /* send pages to client */
-        rc = mdt_sendpage(info, child, rdpg);
+        rc = mdt_sendpage(info, rdpg);
         
         EXIT;
 free_rdpg:
         for (i = 0; i < rdpg->rp_npages; i++)
                 if (rdpg->rp_pages[i] != NULL)
                         __free_pages(rdpg->rp_pages[i], 0);
+         OBD_FREE(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
+out:
         return rc;
 }
 

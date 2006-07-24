@@ -773,13 +773,13 @@ static inline int lu_object_assert_not_exists(const struct lu_context *ctx,
 
 struct lu_rdpg {
         /* input params, should be filled out by mdt */
-        loff_t                  rp_offset;
-        int                     rp_count;
-        int                     rp_npages;
-        struct page           **rp_pages;
+        loff_t                  rp_offset;      /* offset, page alligned*/
+        int                     rp_count;       /* count in bytes       */
+        int                     rp_npages;      /* number of pages      */
+        struct page           **rp_pages;       /* pointers to pages    */
 
         /* output params, filled by osd */
-        __u64                   rp_size;
+        __u64                   rp_size;        /* file size in total   */
 };
 
 /*
