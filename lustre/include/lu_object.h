@@ -901,6 +901,11 @@ void lu_context_enter(struct lu_context *ctx);
 void lu_context_exit(struct lu_context *ctx);
 
 /*
+ * One-time initializers, called at obdclass module initialization, not
+ * exported.
+ */
+
+/*
  * Initialization of global lu_* data.
  */
 int lu_global_init(void);

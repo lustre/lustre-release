@@ -2768,19 +2768,15 @@ static int __init mdt_mod_init(void)
 
         mdt_num_threads = MDT_NUM_THREADS;
         lprocfs_init_vars(mdt, &lvars);
-        result = lu_global_init();
-        if (result == 0)
-                result = class_register_type(&mdt_obd_device_ops, NULL,
-                                             lvars.module_vars,
-                                             LUSTRE_MDT0_NAME,
-                                             &mdt_device_type);
+        result = class_register_type(&mdt_obd_device_ops, NULL,
+                                     lvars.module_vars, LUSTRE_MDT0_NAME,
+                                     &mdt_device_type);
         return result;
 }
 
 static void __exit mdt_mod_exit(void)
 {
         class_unregister_type(LUSTRE_MDT0_NAME);
-        lu_global_fini();
 }
 
 

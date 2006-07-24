@@ -275,18 +275,18 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 if (!data->ioc_inlbuf1) {
                         CERROR("No buffer passed in ioctl\n");
                         GOTO(out, err = -EINVAL);
-                } 
+                }
                 if (data->ioc_inllen1 < 128) {
                         CERROR("ioctl buffer too small to hold version\n");
                         GOTO(out, err = -EINVAL);
                 }
-                                
+
                 if (index >= MAX_OBD_DEVICES)
                         GOTO(out, err = -ENOENT);
                 obd = &obd_dev[index];
                 if (!obd->obd_type)
                         GOTO(out, err = -ENOENT);
-                
+
                 if (obd->obd_stopping)
                         status = "ST";
                 else if (obd->obd_set_up)
@@ -294,7 +294,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 else if (obd->obd_attached)
                         status = "AT";
                 else
-                        status = "--"; 
+                        status = "--";
                 str = (char *)data->ioc_bulk;
                 snprintf(str, len - sizeof(*data), "%3d %s %s %s %s %d",
                          (int)index, status, obd->obd_type->typ_name,
@@ -557,6 +557,9 @@ int init_obdclass(void)
         if (err)
                 return err;
 #ifdef __KERNEL__
+        err = lu_global_init();
+        if (err)
+                return err;
         err = class_procfs_init();
         lustre_register_fs();
 #endif
@@ -584,6 +587,7 @@ static void cleanup_obdclass(void)
                         OBP(obd, detach)(obd);
                 }
         }
+        lu_global_fini();
 
         obd_cleanup_caches();
         obd_sysctl_clean();

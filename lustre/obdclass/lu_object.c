@@ -827,19 +827,11 @@ EXPORT_SYMBOL(lu_context_exit);
  */
 int lu_global_init(void)
 {
-        static int initialized = 0;
         int result;
 
-        if (!initialized) {
-                result = lu_context_key_register(&lu_cdebug_key);
-                initialized = 1;
-        } else {
-                CERROR("Double initialization\n");
-                result = 0;
-        }
+        result = lu_context_key_register(&lu_cdebug_key);
         return result;
 }
-EXPORT_SYMBOL(lu_global_init);
 
 /*
  * Dual to lu_global_init().
@@ -848,4 +840,3 @@ void lu_global_fini(void)
 {
         lu_context_key_degister(&lu_cdebug_key);
 }
-EXPORT_SYMBOL(lu_global_fini);
