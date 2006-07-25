@@ -620,6 +620,7 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                            a reasonable return. bug 6155 */
                         CERROR("LBUG POISONED open %p!\n", mod->mod_open_req);
                         ptlrpc_req_finished(req);
+                        req = NULL;
                         GOTO(out, rc = -EIO);
                 }
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");

@@ -397,6 +397,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         ENTRY;
 
         LASSERT(info->mti_object != NULL);
+        CDEBUG(D_INFO, "getattr with lock for "DFID3"/%s, ldlm_rep = %p\n",
+                        PFID3(mdt_object_fid(parent)), name, ldlm_rep);
 
         name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
         if (name == NULL)
@@ -424,8 +426,6 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 GOTO(out, result);
         }
 
-        CDEBUG(D_INFO, DFID3"/%s, ldlm_rep = %p\n",
-                       PFID3(mdt_object_fid(parent)), name, ldlm_rep);
         /*step 1: lock parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
         lhp->mlh_mode = LCK_CR;
@@ -455,6 +455,24 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         result = mdt_getattr_internal(info, child, ldlm_rep ? 0 : 1);
         if (result != 0)
                 mdt_object_unlock(info, child, lhc, 1);
+        else {
+                struct ldlm_lock *lock;
+                struct ldlm_res_id *res_id;
+                lock = ldlm_handle2lock(&lhc->mlh_lh);
+                if (lock) {
+                        res_id = &lock->l_resource->lr_name;
+                        LDLM_DEBUG(lock, "we will return this lock client\n");
+                        LASSERTF(fid_res_name_eq(mdt_object_fid(child), 
+                                                &lock->l_resource->lr_name),
+                                "Lock res_id: %lu/%lu/%lu, Fid: "DFID3".\n",
+                         (unsigned long)res_id->name[0],
+                         (unsigned long)res_id->name[1],
+                         (unsigned long)res_id->name[2],
+                         PFID3(mdt_object_fid(child)));
+                        LDLM_LOCK_PUT(lock);
+                }
+
+        }
         mdt_object_put(info->mti_ctxt, child);
 
         EXIT;
@@ -581,7 +599,6 @@ static int mdt_readpage(struct mdt_thread_info *info)
         int                rc;
         int                i;
         ENTRY;
-        RETURN(-EOPNOTSUPP);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
                 RETURN(-ENOMEM);
@@ -851,16 +868,6 @@ struct ldlm_res_id *fid_build_res_name(const struct lu_fid *f,
         name->name[1] = fid_oid(f);
         name->name[2] = fid_ver(f);
         return name;
-}
-
-/*
- * Return true if resource is for object identified by fid.
- */
-int fid_res_name_eq(const struct lu_fid *f, const struct ldlm_res_id *name)
-{
-        return name->name[0] == fid_seq(f) &&
-                name->name[1] == fid_oid(f) &&
-                name->name[2] == fid_ver(f);
 }
 
 /* issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
@@ -1632,8 +1639,8 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         new_lock->l_flags &= ~LDLM_FL_LOCAL;
 
-        LDLM_LOCK_PUT(new_lock);
         l_unlock(&new_lock->l_resource->lr_namespace->ns_lock);
+        LDLM_LOCK_PUT(new_lock);
 
         RETURN(ELDLM_LOCK_REPLACED);
 }

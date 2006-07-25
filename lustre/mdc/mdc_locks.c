@@ -126,37 +126,14 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
                 struct inode *old_inode = lock->l_ast_data;
-/* FIXME: This is commented out by huanghua@clusterfs.com,
- * if anything wrong, please restore that */
-#if 0
                 LASSERTF(old_inode->i_state & I_FREEING,
                          "Found existing inode %p/%lu/%u state %lu in lock: "
                          "setting data to %p/%lu/%u\n", old_inode,
                          old_inode->i_ino, old_inode->i_generation,
                          old_inode->i_state,
                          new_inode, new_inode->i_ino, new_inode->i_generation);
-#else
-                if (!(old_inode->i_state & I_FREEING)) {
-                        CERROR("Found existing inode %p/%lu/%u state %lu in "
-                         "lock: "LPX64", and setting its data to %p/%lu/%u\n",
-                         old_inode, old_inode->i_ino, 
-                         old_inode->i_generation, old_inode->i_state, 
-                         ((struct lustre_handle *)lockh)->cookie,
-                         new_inode, new_inode->i_ino, new_inode->i_generation);
-                }
-#endif
         }
 #endif
-
-#ifdef __KERNEL__
-        {
-                /* This is debug code by huanghua. Please remove this when ready */
-                struct inode *new_inode = data;
-                CERROR("XXX: I am going to set lockh : "LPX64" to %p/%lu/%u\n",
-                        ((struct lustre_handle *)lockh)->cookie,
-                        new_inode, new_inode->i_ino, new_inode->i_generation);
-        }
-#endif        
         lock->l_ast_data = data;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_PUT(lock);
@@ -602,9 +579,10 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         ENTRY;
         LASSERT(it);
 
-        CDEBUG(D_DLMTRACE,"name: %.*s in obj "DFID3", intent: %s flags %#o\n",
-               op_data->namelen, op_data->name, PFID3(&op_data->fid1),
-               ldlm_it2str(it->it_op), it->it_flags);
+        CDEBUG(D_DLMTRACE, "(name: %.*s,"DFID3") in obj "DFID3
+                           ", intent: %s flags %#o\n",
+               op_data->namelen, op_data->name, PFID3(&op_data->fid2), 
+               PFID3(&op_data->fid1), ldlm_it2str(it->it_op), it->it_flags);
 
         if (fid_is_sane(&op_data->fid2) &&
             (it->it_op & (IT_LOOKUP | IT_GETATTR))) {
@@ -739,7 +717,18 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         if (lock) {
                 ldlm_policy_data_t policy = lock->l_policy_data;
                 LDLM_DEBUG(lock, "matching against this");
+
+                LASSERTF(fid_res_name_eq(&mdt_body->fid1, 
+                                         &lock->l_resource->lr_name),
+                         "Lock res_id: %lu/%lu/%lu, fid: %lu/%lu/%lu.\n",
+                         (unsigned long)lock->l_resource->lr_name.name[0],
+                         (unsigned long)lock->l_resource->lr_name.name[1],
+                         (unsigned long)lock->l_resource->lr_name.name[2],
+                         (unsigned long)fid_seq(&mdt_body->fid1),
+                         (unsigned long)fid_oid(&mdt_body->fid1),
+                         (unsigned long)fid_ver(&mdt_body->fid1));
                 LDLM_LOCK_PUT(lock);
+
                 memcpy(&old_lock, &lockh, sizeof(lockh));
                 if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
                                     LDLM_IBITS, &policy, LCK_NL, &old_lock)) {

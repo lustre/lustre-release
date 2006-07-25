@@ -471,8 +471,8 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                         lock->l_req_mode = newmode;
                 }
 
-                if (reply->lock_desc.l_resource.lr_name.name[0] !=
-                    lock->l_resource->lr_name.name[0]) {
+                if (memcmp(reply->lock_desc.l_resource.lr_name.name,
+                    lock->l_resource->lr_name.name, sizeof(struct ldlm_res_id))) { 
                         CDEBUG(D_INFO, "remote intent success, locking %ld "
                                "instead of %ld\n",
                               (long)reply->lock_desc.l_resource.lr_name.name[0],

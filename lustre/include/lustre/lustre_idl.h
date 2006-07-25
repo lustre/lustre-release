@@ -262,6 +262,7 @@ static inline void fid_le_to_cpu(struct lu_fid *fid)
         fid->f_ver = le32_to_cpu(fid_ver(fid));
 }
 
+
 #define MEA_MAGIC_LAST_CHAR      0xb2221ca1
 #define MEA_MAGIC_ALL_CHARS      0xb222a11c
 
@@ -1678,6 +1679,17 @@ typedef enum {
         QUOTA_DQACQ     = 601,
         QUOTA_DQREL     = 602,
 } quota_cmd_t;
+
+/*
+ * Return true if resource is for object identified by fid.
+ */
+static inline int fid_res_name_eq(const struct lu_fid *f,
+                                  const struct ldlm_res_id *name)
+{
+        return name->name[0] == fid_seq(f) &&
+                name->name[1] == fid_oid(f) &&
+                name->name[2] == fid_ver(f);
+}
 
 #define JOIN_FILE_ALIGN 4096
 #endif
