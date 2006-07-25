@@ -821,7 +821,7 @@ int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
 }
 
 int osd_xattr_list(const struct lu_context *ctxt, struct dt_object *dt,
-                   const void *buf, int buf_len, struct thandle *handle)
+                   void *buf, int buf_len)
 {
         return 0;
 }
