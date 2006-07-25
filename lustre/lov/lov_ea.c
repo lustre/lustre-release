@@ -57,12 +57,14 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
                 return -EINVAL;
         }
 
+/* FIXME: commetted out by huanghua@clusterfs.com */
+/*
         if (lmm->lmm_object_id == 0) {
                 CERROR("zero object id\n");
                 lov_dump_lmm_v1(D_WARNING, lmm);
                 return -EINVAL;
         }
-
+*/
         if (lmm->lmm_pattern != cpu_to_le32(LOV_PATTERN_RAID0)) {
                 CERROR("bad striping pattern\n");
                 lov_dump_lmm_v1(D_WARNING, lmm);

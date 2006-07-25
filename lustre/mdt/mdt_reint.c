@@ -233,8 +233,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 
         ENTRY;
 
-        DEBUG_REQ(D_INODE, req, "unlink "DFID3"/"DFID3, PFID3(rr->rr_fid1),
-                  PFID3(rr->rr_fid2));
+        DEBUG_REQ(D_INODE, req, "unlink "DFID3"/%s\n", PFID3(rr->rr_fid1),
+                  rr->rr_name);
 
         /* MDS_CHECK_RESENT here */
 
@@ -278,6 +278,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
                 GOTO(out_unlock_child, rc);
         
         rc = mdt_handle_last_unlink(info, mc, &RQF_MDS_REINT_UNLINK_LAST);
+        GOTO(out_unlock_child, rc);
 
 out_unlock_child:
         mdt_object_unlock_put(info, mc, lhc, rc);
@@ -439,12 +440,12 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                 GOTO(out, rc = PTR_ERR(msrcdir));
 
         /*step 2: find & lock the target dir*/
+        lh_tgtdirp = &info->mti_lh[MDT_LH_CHILD];
+        lh_tgtdirp->mlh_mode = LCK_EX;
         if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
                 mdt_object_get(info->mti_ctxt, msrcdir);
                 mtgtdir = msrcdir;
         } else {
-                lh_tgtdirp = &info->mti_lh[MDT_LH_CHILD];
-                lh_tgtdirp->mlh_mode = LCK_EX;
                 mtgtdir = mdt_object_find_lock(info, rr->rr_fid2, lh_tgtdirp,
                                                MDS_INODELOCK_UPDATE);
                 if (IS_ERR(mtgtdir))
@@ -496,10 +497,7 @@ out_unlock_new:
 out_unlock_old:
         mdt_object_unlock_put(info, mold, lh_oldp, rc);
 out_unlock_target:
-        if (mtgtdir == msrcdir)
-                mdt_object_put(info->mti_ctxt, mtgtdir);
-        else
-                mdt_object_unlock_put(info, mtgtdir, lh_tgtdirp, rc);
+        mdt_object_unlock_put(info, mtgtdir, lh_tgtdirp, rc);
 out_unlock_source:
         mdt_object_unlock_put(info, msrcdir, lh_srcdirp, rc);
 out:

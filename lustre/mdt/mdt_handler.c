@@ -586,6 +586,7 @@ static int mdt_readpage(struct mdt_thread_info *info)
         int                rc;
         int                i;
         ENTRY;
+        RETURN(-EOPNOTSUPP);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
                 RETURN(-ENOMEM);

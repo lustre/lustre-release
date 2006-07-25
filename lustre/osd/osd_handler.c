@@ -689,11 +689,21 @@ static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
                           S_IFREG | (attr->la_mode & (S_IRWXUGO|S_ISVTX)), th);
 }
 
+static int osd_mksym(struct osd_thread_info *info, struct osd_object *obj,
+                     struct lu_attr *attr, struct thandle *th)
+{
+        LASSERT(S_ISLNK(attr->la_mode));
+        return -EOPNOTSUPP;
+}
+
+static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
+                     struct lu_attr *attr, struct thandle *th)
+{
+        return -EOPNOTSUPP;
+}
+
 typedef int (*osd_obj_type_f)(struct osd_thread_info *, struct osd_object *,
                               struct lu_attr *, struct thandle *);
-
-osd_obj_type_f osd_mksym = NULL;
-osd_obj_type_f osd_mknod = NULL;
 
 static osd_obj_type_f osd_create_type_f(__u32 mode)
 {
