@@ -37,13 +37,14 @@
 #include <linux/jbd.h>
 /* struct dx_hash_info */
 #include <linux/ldiskfs_fs.h>
+/* struct dentry */
+#include <linux/dcache.h>
 #include <linux/lustre_iam.h>
 
 #include <dt_object.h>
 #include "osd_oi.h"
 
 struct inode;
-struct dentry;
 
 struct dentry *osd_lookup(struct dentry *parent, const char *name);
 struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode);
@@ -64,6 +65,10 @@ struct osd_thread_info {
          */
         struct qstr         oti_str;
         struct txn_param    oti_txn;
+        /*
+         * XXX temporary: fake dentry used by xattr calls.
+         */
+        struct dentry       oti_dentry;
 };
 
 #endif /* __KERNEL__ */

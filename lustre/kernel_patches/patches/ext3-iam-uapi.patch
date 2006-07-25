@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
---- iam.orig/fs/ext3/Makefile	2006-07-21 23:12:10.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-07-21 23:12:10.000000000 +0400
+--- iam.orig/fs/ext3/Makefile	2006-07-25 16:59:51.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-07-25 16:59:51.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -13,8 +13,8 @@ Index: iam/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
 Index: iam/fs/ext3/dir.c
 ===================================================================
---- iam.orig/fs/ext3/dir.c	2006-07-21 23:12:10.000000000 +0400
-+++ iam/fs/ext3/dir.c	2006-07-21 23:12:10.000000000 +0400
+--- iam.orig/fs/ext3/dir.c	2006-07-25 16:59:51.000000000 +0400
++++ iam/fs/ext3/dir.c	2006-07-25 16:59:51.000000000 +0400
 @@ -28,6 +28,7 @@
  #include <linux/smp_lock.h>
  #include <linux/slab.h>
@@ -112,8 +112,8 @@ Index: iam/fs/ext3/dir.c
  		    (filp->f_version != inode->i_version)) {
 Index: iam/fs/ext3/file.c
 ===================================================================
---- iam.orig/fs/ext3/file.c	2006-07-21 23:12:10.000000000 +0400
-+++ iam/fs/ext3/file.c	2006-07-21 23:12:10.000000000 +0400
+--- iam.orig/fs/ext3/file.c	2006-07-25 16:59:51.000000000 +0400
++++ iam/fs/ext3/file.c	2006-07-25 16:59:51.000000000 +0400
 @@ -23,6 +23,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -149,7 +149,7 @@ Index: iam/fs/ext3/file.c
 Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
 --- iam.orig/fs/ext3/iam-uapi.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam-uapi.c	2006-07-21 23:12:10.000000000 +0400
++++ iam/fs/ext3/iam-uapi.c	2006-07-25 16:59:51.000000000 +0400
 @@ -0,0 +1,361 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -514,8 +514,8 @@ Index: iam/fs/ext3/iam-uapi.c
 +}
 Index: iam/fs/ext3/ioctl.c
 ===================================================================
---- iam.orig/fs/ext3/ioctl.c	2006-07-21 23:12:10.000000000 +0400
-+++ iam/fs/ext3/ioctl.c	2006-07-21 23:12:10.000000000 +0400
+--- iam.orig/fs/ext3/ioctl.c	2006-07-25 16:59:51.000000000 +0400
++++ iam/fs/ext3/ioctl.c	2006-07-25 16:59:51.000000000 +0400
 @@ -250,6 +250,6 @@ flags_err:
  
  
@@ -526,8 +526,8 @@ Index: iam/fs/ext3/ioctl.c
  }
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- iam.orig/include/linux/lustre_iam.h	2006-07-21 23:12:10.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-07-21 23:12:10.000000000 +0400
+--- iam.orig/include/linux/lustre_iam.h	2006-07-25 16:59:51.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-07-25 16:59:51.000000000 +0400
 @@ -30,9 +30,6 @@
  #ifndef __LINUX_LUSTRE_IAM_H__
  #define __LINUX_LUSTRE_IAM_H__

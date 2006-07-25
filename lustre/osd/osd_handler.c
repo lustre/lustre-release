@@ -36,6 +36,12 @@
 
 /* LUSTRE_VERSION_CODE */
 #include <lustre_ver.h>
+/* prerequisite for linux/xattr.h */
+#include <linux/types.h>
+/* prerequisite for linux/xattr.h */
+#include <linux/fs.h>
+/* XATTR_{REPLACE,CREATE} */
+#include <linux/xattr.h>
 /*
  * XXX temporary stuff: direct access to ldiskfs/jdb. Interface between osd
  * and file system is not yet specified.
@@ -818,23 +824,68 @@ static void osd_object_ref_del(const struct lu_context *ctxt,
 }
 
 int osd_xattr_get(const struct lu_context *ctxt, struct dt_object *dt,
-                  void *buf, int buf_len, const char *name)
+                  void *buf, int size, const char *name)
 {
-        return 0;
+        struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
+        struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
+        struct dentry          *dentry = &info->oti_dentry;
+
+        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
+        LASSERT(inode->i_op != NULL && inode->i_op->getxattr != NULL);
+        dentry->d_inode = inode;
+        return inode->i_op->getxattr(dentry, name, buf, size);
 }
 
 int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
-                  const void *buf, int buf_len, const char *name,
+                  const void *buf, int size, const char *name, int fl,
                   struct thandle *handle)
 {
-        return 0;
+        int fs_flags;
+
+        struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
+        struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
+        struct dentry          *dentry = &info->oti_dentry;
+
+        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
+        LASSERT(inode->i_op != NULL && inode->i_op->setxattr != NULL);
+        dentry->d_inode = inode;
+
+        fs_flags = 0;
+        if (fl & LU_XATTR_REPLACE)
+                fs_flags |= XATTR_REPLACE;
+
+        if (fl & LU_XATTR_CREATE)
+                fs_flags |= XATTR_CREATE;
+
+        return inode->i_op->setxattr(dentry, name, buf, size, fs_flags);
 }
 
 int osd_xattr_list(const struct lu_context *ctxt, struct dt_object *dt,
-                   void *buf, int buf_len)
+                   void *buf, int size)
 {
-        return 0;
+        struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
+        struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
+        struct dentry          *dentry = &info->oti_dentry;
+
+        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
+        LASSERT(inode->i_op != NULL && inode->i_op->listxattr != NULL);
+        dentry->d_inode = inode;
+        return inode->i_op->listxattr(dentry, buf, size);
 }
+
+int osd_xattr_del(const struct lu_context *ctxt, struct dt_object *dt,
+                  const char *name, struct thandle *handle)
+{
+        struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
+        struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
+        struct dentry          *dentry = &info->oti_dentry;
+
+        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
+        LASSERT(inode->i_op != NULL && inode->i_op->removexattr != NULL);
+        dentry->d_inode = inode;
+        return inode->i_op->removexattr(dentry, name);
+}
+
 
 int osd_readpage(const struct lu_context *ctxt,
                  struct dt_object *dt, struct lu_rdpg *rdpg)

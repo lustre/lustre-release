@@ -467,18 +467,19 @@ static int mdd_attr_set(const struct lu_context *ctxt,
 
 static int __mdd_xattr_set(const struct lu_context *ctxt,struct mdd_device *mdd,
                            struct mdd_object *obj, const void *buf,
-                           int buf_len, const char *name,struct thandle *handle)
+                           int buf_len, const char *name, int fl,
+                           struct thandle *handle)
 {
         struct dt_object *next;
 
         LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
         next = mdd_object_child(obj);
-        return next->do_ops->do_xattr_set(ctxt, next, buf, buf_len, name,
+        return next->do_ops->do_xattr_set(ctxt, next, buf, buf_len, name, fl,
                                           handle);
 }
 
 int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
-                  const void *buf, int buf_len, const char *name)
+                  const void *buf, int buf_len, const char *name, int fl)
 {
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
@@ -491,7 +492,38 @@ int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
                 RETURN(PTR_ERR(handle));
 
         rc = __mdd_xattr_set(ctxt, mdd, md2mdd_obj(obj), buf, buf_len, name,
-                             handle);
+                             fl, handle);
+
+        mdd_trans_stop(ctxt, mdd, handle);
+
+        RETURN(rc);
+}
+
+static int __mdd_xattr_del(const struct lu_context *ctxt,struct mdd_device *mdd,
+                           struct mdd_object *obj,
+                           const char *name, struct thandle *handle)
+{
+        struct dt_object *next;
+
+        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
+        next = mdd_object_child(obj);
+        return next->do_ops->do_xattr_del(ctxt, next, name, handle);
+}
+
+int mdd_xattr_del(const struct lu_context *ctxt, struct md_object *obj,
+                  const char *name)
+{
+        struct mdd_device *mdd = mdo2mdd(obj);
+        struct thandle *handle;
+        int  rc;
+        ENTRY;
+
+        mdd_txn_param_build(ctxt, &MDD_TXN_XATTR_SET);
+        handle = mdd_trans_start(ctxt, mdd);
+        if (IS_ERR(handle))
+                RETURN(PTR_ERR(handle));
+
+        rc = __mdd_xattr_del(ctxt, mdd, md2mdd_obj(obj), name, handle);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -1210,6 +1242,7 @@ static struct md_object_operations mdd_obj_ops = {
         .moo_xattr_get     = mdd_xattr_get,
         .moo_xattr_set     = mdd_xattr_set,
         .moo_xattr_list    = mdd_xattr_list,
+        .moo_xattr_del     = mdd_xattr_del,
         .moo_object_create = mdd_object_create,
         .moo_ref_add       = mdd_ref_add,
         .moo_ref_del       = mdd_ref_del,

@@ -78,7 +78,10 @@ struct md_object_operations {
 
         int (*moo_xattr_set)(const struct lu_context *ctxt,
                              struct md_object *obj, const void *buf,
-                             int buf_len, const char *name);
+                             int buf_len, const char *name, int fl);
+        int (*moo_xattr_del)(const struct lu_context *ctxt,
+                             struct md_object *obj, const char *name);
+
         /* part of cross-ref operation */
         int (*moo_object_create)(const struct lu_context *,
                                  struct md_object *, struct md_attr *);
@@ -214,16 +217,15 @@ static inline int mo_xattr_del(const struct lu_context *cx,
                                const char *name)
 {
         LASSERT(m->mo_ops->moo_xattr_set);
-        /*NULL buffer & zero length for set? or we need a new interface*/
-        return m->mo_ops->moo_xattr_set(cx, m, NULL, 0, name);
+        return m->mo_ops->moo_xattr_del(cx, m, name);
 }
 
 static inline int mo_xattr_set(const struct lu_context *cx,
                                struct md_object *m, const void *buf,
-                               int buf_len, const char *name)
+                               int buf_len, const char *name, int flags)
 {
         LASSERT(m->mo_ops->moo_xattr_set);
-        return m->mo_ops->moo_xattr_set(cx, m, buf, buf_len, name);
+        return m->mo_ops->moo_xattr_set(cx, m, buf, buf_len, name, flags);
 }
 
 static inline int mo_xattr_list(const struct lu_context *cx,

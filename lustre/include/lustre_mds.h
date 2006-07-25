@@ -82,7 +82,7 @@ int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *);
 
 int md_lov_connect(struct obd_device *obd, struct md_lov_info *mli,
-                   char *lov_name, struct obd_uuid *uuid, 
+                   char *lov_name, struct obd_uuid *uuid,
                    struct md_lov_ops *mlo, const void *ctxt);
 int md_lov_notity_pre(struct obd_device *obd, struct md_lov_info *mli,
                       struct obd_device *watched, enum obd_notify_event ev,
@@ -102,7 +102,7 @@ int md_lov_start_synchronize(struct obd_device *obd, struct md_lov_info *mli,
 #define IOC_REQUEST_CLOSE               _IOWR('f', 35, long)
 #define IOC_REQUEST_MAX_NR               35
 
-#define MDS_LOV_MD_NAME "lov"
+#define MDS_LOV_MD_NAME "trusted.lov"
 #define MDD_OBD_NAME    "mdd_obd"
 #define MDD_OBD_UUID    "mdd_obd_uuid"
 #define MDD_OBD_TYPE    "mds"

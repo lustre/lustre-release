@@ -257,11 +257,20 @@ static int cml_xattr_list(const struct lu_context *ctx, struct md_object *mo,
 }
 
 static int cml_xattr_set(const struct lu_context *ctx, struct md_object *mo,
-                         const void *buf, int buflen, const char *name)
+                         const void *buf, int buflen, const char *name, int fl)
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_set(ctx, md_object_next(mo), buf, buflen, name);
+        rc = mo_xattr_set(ctx, md_object_next(mo), buf, buflen, name, fl);
+        RETURN(rc);
+}
+
+static int cml_xattr_del(const struct lu_context *ctx, struct md_object *mo,
+                         const char *name)
+{
+        int rc;
+        ENTRY;
+        rc = mo_xattr_del(ctx, md_object_next(mo), name);
         RETURN(rc);
 }
 
@@ -313,6 +322,7 @@ static struct md_object_operations cml_mo_ops = {
         .moo_xattr_get     = cml_xattr_get,
         .moo_xattr_list    = cml_xattr_list,
         .moo_xattr_set     = cml_xattr_set,
+        .moo_xattr_del     = cml_xattr_del,
         .moo_object_create = cml_object_create,
         .moo_ref_add       = cml_ref_add,
         .moo_ref_del       = cml_ref_del,
@@ -543,7 +553,13 @@ static int cmr_xattr_list(const struct lu_context *ctx, struct md_object *mo,
 }
 
 static int cmr_xattr_set(const struct lu_context *ctx, struct md_object *mo,
-                         const void *buf, int buflen, const char *name)
+                         const void *buf, int buflen, const char *name, int fl)
+{
+        RETURN(-EFAULT);
+}
+
+static int cmr_xattr_del(const struct lu_context *ctx, struct md_object *mo,
+                         const char *name)
 {
         RETURN(-EFAULT);
 }
@@ -574,6 +590,8 @@ static struct md_object_operations cmr_mo_ops = {
         .moo_attr_set      = cmr_attr_set,
         .moo_xattr_get     = cmr_xattr_get,
         .moo_xattr_set     = cmr_xattr_set,
+        .moo_xattr_list    = cmr_xattr_list,
+        .moo_xattr_del     = cmr_xattr_del,
         .moo_object_create = cmr_object_create,
         .moo_ref_add       = cmr_ref_add,
         .moo_ref_del       = cmr_ref_del,

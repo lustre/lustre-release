@@ -131,7 +131,7 @@ int mdd_lov_write_objids(struct obd_device *obd, struct md_lov_info *mli,
 #endif
         RETURN(rc);
 }
-static int mdd_lov_write_catlist(struct obd_device *obd, void *idarray, int size, 
+static int mdd_lov_write_catlist(struct obd_device *obd, void *idarray, int size,
                                  const void *ctxt)
 {
         int rc = 0;
@@ -162,7 +162,7 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd)
         struct md_lov_info    *mli;
         int rc;
         ENTRY;
-        
+
         lustre_cfg_bufs_reset(&bufs, MDD_OBD_NAME);
         lustre_cfg_bufs_set_string(&bufs, 1, MDD_OBD_TYPE);
         lustre_cfg_bufs_set_string(&bufs, 2, MDD_OBD_UUID);
@@ -171,21 +171,21 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd)
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         if (!lcfg)
                 RETURN(-ENOMEM);
-        
+
         rc = class_attach(lcfg);
         if (rc)
                 GOTO(lcfg_cleanup, rc);
-       
+
         obd = class_name2obd(MDD_OBD_NAME);
         if (!obd) {
                 CERROR("can not find obd %s \n", MDD_OBD_NAME);
                 LBUG();
         }
-      
+
         /*init mli, which will be used in following mds setup*/
         mli = &obd->u.mds.mds_lov_info;
         mli->md_lov_ops = &mdd_lov_ops;
-        
+
         obj_id = dt_store_open(ctxt, mdd->mdd_child, mdd_lov_objid_name,
                                &mli->md_lov_objid_fid);
         if (IS_ERR(obj_id)){
@@ -212,16 +212,16 @@ int mdd_cleanup_obd(struct mdd_device *mdd)
         struct lustre_cfg_bufs bufs;
         struct md_lov_info     *mli;
         struct lustre_cfg      *lcfg;
-        struct obd_device      *obd; 
+        struct obd_device      *obd;
         int rc;
         ENTRY;
-        
+
         obd = mdd->mdd_md_dev.md_lu_dev.ld_obd;
         LASSERT(obd);
-        
+
         mli = &obd->u.mds.mds_lov_info;
         dt_object_fini(mli->md_lov_objid_obj);
-        
+
         lustre_cfg_bufs_reset(&bufs, MDD_OBD_NAME);
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
         if (!lcfg)
@@ -230,7 +230,7 @@ int mdd_cleanup_obd(struct mdd_device *mdd)
         rc = class_cleanup(obd, lcfg);
         if (rc)
                 GOTO(lcfg_cleanup, rc);
-        
+
         rc = class_detach(obd, lcfg);
         if (rc)
                 GOTO(lcfg_cleanup, rc);
@@ -250,15 +250,20 @@ static int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
         next = mdd_object_child(md2mdd_obj(obj));
         rc = next->do_ops->do_xattr_get(ctxt, next, md, *md_size,
                                         MDS_LOV_MD_NAME);
-        if (rc < 0) {
+        /*
+         * XXX: handling of -ENODATA, the right way is to have ->do_md_get()
+         * exported by dt layer.
+         */
+        if (rc == 0 || rc == -ENODATA) {
+                *md_size = 0;
+                rc = 0;
+        } else if (rc < 0) {
                 CERROR("Error %d reading eadata \n", rc);
         } else if (rc > 0) {
                 lmm_size = rc;
                 /*FIXME convert lov EA necessary for this version?*/
                 *md_size = lmm_size;
                 rc = lmm_size;
-        } else {
-                *md_size = 0;
         }
 
         RETURN (rc);
@@ -278,7 +283,12 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
                 rc = mdd_get_md(ctxt, pobj, &lmm, &size, 1);
                 if (rc > 0) {
                         rc = mdd_xattr_set(ctxt, child, lmm, size,
-                                           MDS_LOV_MD_NAME);
+                                           /*
+                                            * Flags are 0: we don't care
+                                            * whether attribute exists
+                                            * already.
+                                            */
+                                           MDS_LOV_MD_NAME, 0);
                         if (rc)
                                 CERROR("error on copy stripe info: rc = %d\n",
                                         rc);
@@ -286,7 +296,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
         } else if (lmmp) {
                 LASSERT(lmm_size > 0);
                 rc = mdd_xattr_set(ctxt, child, lmmp, lmm_size,
-                                   MDS_LOV_MD_NAME);
+                                   MDS_LOV_MD_NAME, 0);
                 if (rc)
                         CERROR("error on copy stripe info: rc = %d\n",
                                 rc);
@@ -299,7 +309,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    int *lmm_size)
 {
         struct obd_device *obd = mdd->mdd_md_dev.md_lu_dev.ld_obd;
-        struct obd_export *lov_exp = obd->u.mds.mds_osc_exp; 
+        struct obd_export *lov_exp = obd->u.mds.mds_osc_exp;
         struct obdo *oa;
         struct lov_stripe_md *lsm = NULL;
         int rc = 0;

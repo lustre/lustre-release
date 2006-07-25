@@ -34,6 +34,13 @@
 #endif
 #define DEBUG_SUBSYSTEM S_MDS
 
+/* prerequisite for linux/xattr.h */
+#include <linux/types.h>
+/* prerequisite for linux/xattr.h */
+#include <linux/fs.h>
+/* XATTR_{REPLACE,CREATE} */
+#include <linux/xattr.h>
+
 #include "mdt_internal.h"
 
 
@@ -157,27 +164,30 @@ int mdt_setxattr(struct mdt_thread_info *info)
         const char              user_string[] = "user.";
         const char              trust_string[] = "trusted.";
         struct mdt_lock_handle *lh;
-        __u64                   valid = info->mti_body->valid;
+        struct req_capsule       *pill = &info->mti_pill;
+        struct mdt_object        *obj  = info->mti_object;
+        const struct mdt_body    *body = info->mti_body;
+        const struct lu_context  *ctx  = info->mti_ctxt;
+        struct md_object       *child  = mdt_object_child(obj);
+        __u64                   valid  = body->valid;
         char                   *xattr_name;
         int                     xattr_len;
         __u64                   lockpart;
         int                     rc;
         ENTRY;
 
-        CDEBUG(D_INODE, "setxattr "DFID3"\n",
-                        PFID3(&info->mti_body->fid1));
+        CDEBUG(D_INODE, "setxattr "DFID3"\n", PFID3(&body->fid1));
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(-ENOMEM);
 
         /* various sanity check for xattr name */
-        xattr_name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
+        xattr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (!xattr_name)
                 GOTO(out, rc = -EFAULT);
 
         CDEBUG(D_INODE, "%s xattr %s\n",
-                  info->mti_body->valid & OBD_MD_FLXATTR ? "set" : "remove",
-                  xattr_name);
+                  body->valid & OBD_MD_FLXATTR ? "set" : "remove", xattr_name);
 
         if (strncmp(xattr_name, trust_string, sizeof(trust_string) - 1) == 0) {
                 if (strcmp(xattr_name + 8, XATTR_NAME_LOV) == 0)
@@ -195,38 +205,40 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_EX;
-        rc = mdt_object_lock(info, info->mti_object, lh, lockpart);
+        rc = mdt_object_lock(info, obj, lh, lockpart);
         if (rc != 0)
                 GOTO(out, rc);
 
         if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
                 char * xattr;
-                if (!req_capsule_field_present(&info->mti_pill, &RMF_EADATA)) {
+                if (!req_capsule_field_present(pill, &RMF_EADATA)) {
                         CERROR("no xattr data supplied\n");
                         GOTO(out_unlock, rc = -EFAULT);
                 }
 
-                xattr_len = req_capsule_get_size(&info->mti_pill,
-                                                 &RMF_EADATA, RCL_CLIENT);
+                xattr_len = req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT);
                 if (xattr_len) {
-                        xattr = req_capsule_client_get(&info->mti_pill,
-                                                       &RMF_EADATA);
+                        int flags = 0;
+                        xattr = req_capsule_client_get(pill, &RMF_EADATA);
 
-                        rc = mo_xattr_set(info->mti_ctxt,
-                                          mdt_object_child(info->mti_object),
-                                          xattr, xattr_len, xattr_name);
+                        if (body->flags & XATTR_REPLACE)
+                                flags |= LU_XATTR_REPLACE;
+
+                        if (body->flags & XATTR_CREATE)
+                                flags |= LU_XATTR_CREATE;
+
+                        rc = mo_xattr_set(ctx, child, xattr,
+                                          xattr_len, xattr_name, flags);
                 }
         } else if ((valid & OBD_MD_FLXATTRRM) == OBD_MD_FLXATTRRM) {
-                rc = mo_xattr_del(info->mti_ctxt,
-                                  mdt_object_child(info->mti_object),
-                                  xattr_name);
+                rc = mo_xattr_del(ctx, child, xattr_name);
         } else {
-                CERROR("valid bits: "LPX64"\n", info->mti_body->valid);
+                CERROR("valid bits: "LPX64"\n", body->valid);
                 rc = -EINVAL;
         }
         EXIT;
 out_unlock:
-        mdt_object_unlock(info, info->mti_object, lh, rc);
+        mdt_object_unlock(info, obj, lh, rc);
 out:
         return rc;
 }

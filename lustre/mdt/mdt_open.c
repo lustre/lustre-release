@@ -38,8 +38,8 @@ static void mdt_mfd_get(void *mfdp)
 {
 }
 
-/* Create a new mdt_file_data struct, initialize it, 
- * and insert it to global hash table */ 
+/* Create a new mdt_file_data struct, initialize it,
+ * and insert it to global hash table */
 static struct mdt_file_data *mdt_mfd_new(void)
 {
         struct mdt_file_data *mfd;
@@ -71,7 +71,7 @@ static void mdt_mfd_free(struct mdt_file_data *mfd)
 }
 
 static int mdt_mfd_open(struct mdt_thread_info *info,
-                        struct mdt_object *o, 
+                        struct mdt_object *o,
                         int flags, int created)
 {
         struct mdt_export_data *med;
@@ -92,9 +92,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 if (rc == 0) {
                         ma->ma_valid |= MA_INODE;
                         if (S_ISREG(la->la_mode)) {
-                                rc = mo_xattr_get(info->mti_ctxt, 
+                                rc = mo_xattr_get(info->mti_ctxt,
                                                   mdt_object_child(o),
-                                                  ma->ma_lmm, 
+                                                  ma->ma_lmm,
                                                   ma->ma_lmm_size,
                                                   XATTR_NAME_LOV);
                                 if (rc >= 0) {
@@ -117,11 +117,11 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 /* FIXME:maybe this can be done earlier? */
                 if (S_ISDIR(la->la_mode)) {
                         if (flags & (MDS_OPEN_CREAT | FMODE_WRITE)) {
-                                /* we are trying to create or 
+                                /* we are trying to create or
                                  * write an existing dir. */
                                 rc = -EISDIR;
                         }
-                } else if (flags & MDS_OPEN_DIRECTORY) 
+                } else if (flags & MDS_OPEN_DIRECTORY)
                         rc = -ENOTDIR;
         }
         if (rc != 0)
@@ -157,7 +157,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 spin_unlock(&med->med_open_lock);
 
                 repbody->handle.cookie = mfd->mfd_handle.h_cookie;
-        } else 
+        } else
                 rc = -ENOMEM;
 
         RETURN(rc);
@@ -177,12 +177,12 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
                         if (la->la_flags & MDS_OPEN_EXCL &&
                             la->la_flags & MDS_OPEN_CREAT)
                                 rc = -EEXIST;
-                        else 
+                        else
                                 rc = mdt_mfd_open(info, o, flags, 0);
                 } else {
                         rc = -ENOENT;
                         if (la->la_flags & MDS_OPEN_CREAT) {
-                                rc = mo_object_create(info->mti_ctxt, 
+                                rc = mo_object_create(info->mti_ctxt,
                                                       mdt_object_child(o),
                                                       &info->mti_attr);
                                 if (rc == 0)
@@ -201,7 +201,7 @@ int mdt_pin(struct mdt_thread_info* info)
         struct mdt_body *body;
         int rc;
         ENTRY;
-        
+
         rc = req_capsule_pack(&info->mti_pill);
         if (rc == 0) {
                 body = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
@@ -224,7 +224,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
         int                     created = 0;
         struct mdt_reint_record *rr = &info->mti_rr;
         ENTRY;
-        
+
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
                                             &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
@@ -248,7 +248,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 lh->mlh_mode = LCK_PR;
         else
                 lh->mlh_mode = LCK_PW;
-        parent = mdt_object_find_lock(info, rr->rr_fid1, lh, 
+        parent = mdt_object_find_lock(info, rr->rr_fid1, lh,
                                       MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
                 GOTO(out, result = PTR_ERR(parent));
@@ -301,7 +301,7 @@ finish_open:
                                      &info->mti_attr);
                 if (rc2 != 0)
                         CERROR("error in cleanup of open");
-        } 
+        }
 out_child:
         mdt_object_put(info->mti_ctxt, child);
 out_parent:
@@ -351,7 +351,7 @@ int mdt_close(struct mdt_thread_info *info)
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
-        
+
                 rc = mdt_handle_last_unlink(info, mfd->mfd_object,
                                             &RQF_MDS_CLOSE_LAST);
 

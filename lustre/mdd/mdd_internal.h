@@ -55,7 +55,7 @@ struct mdd_thread_info {
 
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd);
 int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
-                  const void *buf, int buf_len, const char *name);
+                  const void *buf, int buf_len, const char *name, int fl);
 int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
                    struct md_object *child, struct lov_mds_md *lmm,
                    int lmm_size);

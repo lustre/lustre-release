@@ -175,11 +175,21 @@ struct dt_object_operations {
         /*
          * Set value of an extended attribute.
          *
+         * @fl - flags from enum lu_xattr_flags
+         *
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*do_xattr_set)(const struct lu_context *ctxt,
                               struct dt_object *dt,
                               const void *buf, int buf_len,
+                              const char *name, int fl, struct thandle *handle);
+        /*
+         * Delete existing extended attribute.
+         *
+         * precondition: lu_object_exists(ctxt, &dt->do_lu);
+         */
+        int   (*do_xattr_del)(const struct lu_context *ctxt,
+                              struct dt_object *dt,
                               const char *name, struct thandle *handle);
         /*
          * Place list of existing extended attributes into @buf (which has
@@ -188,8 +198,7 @@ struct dt_object_operations {
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         int   (*do_xattr_list)(const struct lu_context *ctxt,
-                               struct dt_object *dt,
-                               void *buf, int buf_len);
+                               struct dt_object *dt, void *buf, int buf_len);
         /*
          * Create new object on this device.
          *

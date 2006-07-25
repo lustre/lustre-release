@@ -782,6 +782,11 @@ struct lu_rdpg {
         __u64                   rp_size;        /* file size in total   */
 };
 
+enum lu_xattr_flags {
+        LU_XATTR_REPLACE = (1 << 0),
+        LU_XATTR_CREATE  = (1 << 1)
+};
+
 /*
  * lu_context. Execution context for lu_object methods. Currently associated
  * with thread.

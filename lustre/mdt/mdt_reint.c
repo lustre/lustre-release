@@ -177,7 +177,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         if (rr->rr_eadatalen > 0)
                 rc = mo_xattr_set(info->mti_ctxt, next,
                                   rr->rr_eadata, rr->rr_eadatalen,
-                                  XATTR_NAME_LOV);
+                                  XATTR_NAME_LOV, 0);
 
         /* FIXME & TODO Please deal with logcookies here*/
         GOTO(out_unlock, rc);
@@ -247,7 +247,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 
         if (strlen(rr->rr_name) == 0) {
                 /* remote partial operation */
-                rc = mo_ref_del(info->mti_ctxt, mdt_object_child(mp), 
+                rc = mo_ref_del(info->mti_ctxt, mdt_object_child(mp),
                                 &info->mti_attr);
                 GOTO(out_unlock_parent, rc);
         }
@@ -273,10 +273,10 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         /* cmm will take care if child is local or remote */
         rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mp),
                         mdt_object_child(mc), rr->rr_name, &info->mti_attr);
-        
+
         if (rc)
                 GOTO(out_unlock_child, rc);
-        
+
         rc = mdt_handle_last_unlink(info, mc, &RQF_MDS_REINT_UNLINK_LAST);
         GOTO(out_unlock_child, rc);
 

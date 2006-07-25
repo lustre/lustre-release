@@ -49,29 +49,29 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info,
         struct lu_attr  *la = &info->mti_attr.ma_attr;
         int              rc = 0;
         ENTRY;
- 
+
         body = req_capsule_server_get(&info->mti_pill,
                                       &RMF_MDT_BODY);
         mdt_pack_attr2body(body, la, mdt_object_fid(mo));
-        
+
         /* if last unlinked object reference so client should destroy ost
          * objects*/
         if (S_ISREG(la->la_mode) &&
             la->la_nlink == 0 && mo->mot_header.loh_ref == 1) {
                 struct lov_mds_md  *lmm;
-                
+
                 /* reply should contains more data,
                  * * so we need to extend it */
                 req_capsule_extend(&info->mti_pill, fmt);
-                
+
                 lmm = req_capsule_server_get(&info->mti_pill,
                                 &RMF_MDT_MD);
-                
-                
+
+
                 /*TODO: lmm data & llog cookie
                  * rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
-                 * lmm, info->mti_mdt->mdt_max_mdsize, 
-                 * XATTR_NAME_LOV);
+                 * lmm, info->mti_mdt->mdt_max_mdsize,
+                 * MDS_LOV_MD_NAME);
                  * if (rc >= 0) {
                  * if (S_ISDIR(info->mti_attr.la_mode))
                  * body->valid |= OBD_MD_FLDIREA;
@@ -113,14 +113,14 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
 
         if (req_capsule_field_present(pill, &RMF_EADATA)) {
                 rr->rr_eadata = req_capsule_client_get(pill, &RMF_EADATA);
-                rr->rr_eadatalen = req_capsule_get_size(pill, 
+                rr->rr_eadatalen = req_capsule_get_size(pill,
                                                         &RMF_EADATA,
                                                         RCL_CLIENT);
         }
         if (req_capsule_field_present(pill, &RMF_LOGCOOKIES)) {
-                rr->rr_logcookies = req_capsule_client_get(pill, 
+                rr->rr_logcookies = req_capsule_client_get(pill,
                                                            &RMF_LOGCOOKIES);
-                rr->rr_logcookielen = req_capsule_get_size(pill, 
+                rr->rr_logcookielen = req_capsule_get_size(pill,
                                                            &RMF_LOGCOOKIES,
                                                            RCL_CLIENT);
         }
@@ -151,7 +151,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (rr->rr_name) {
                         if (req_capsule_field_present(pill, &RMF_SYMTGT)) {
-                                rr->rr_tgt = req_capsule_client_get(pill, 
+                                rr->rr_tgt = req_capsule_client_get(pill,
                                                                 &RMF_SYMTGT);
                                 if (rr->rr_tgt == NULL)
                                         result = -EFAULT;
@@ -210,9 +210,9 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (rr->rr_name == NULL)
-                        result = -EFAULT; 
+                        result = -EFAULT;
         } else
-                result = -EFAULT; 
+                result = -EFAULT;
         RETURN(result);
 }
 

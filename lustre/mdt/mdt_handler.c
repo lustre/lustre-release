@@ -231,13 +231,12 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                  * also in mdt_md_create() and mdt_object_open()
                  */
                 if (need_pack_reply) {
-                        rc = req_capsule_pack(&info->mti_pill);
+                        rc = req_capsule_pack(pill);
                         if (rc)
                                 RETURN(rc);
                 }
 
-                repbody = req_capsule_server_get(&info->mti_pill,
-                                                 &RMF_MDT_BODY);
+                repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
                 repbody->fid1 = *mdt_object_fid(o);
                 repbody->valid |= OBD_MD_FLID;
                 RETURN(0);
@@ -304,7 +303,7 @@ skip_packing:
         /* now, to getattr*/
         if (mdt_body_has_lov(la, reqbody)) {
                 if (length > 0) {
-                        rc = mo_xattr_get(info->mti_ctxt, next,
+                        rc = mo_xattr_get(ctxt, next,
                                           buffer, length, XATTR_NAME_LOV);
                         if (rc > 0) {
                                 if (S_ISDIR(la->la_mode))
@@ -318,8 +317,7 @@ skip_packing:
         } else if (S_ISLNK(la->la_mode) &&
                           (reqbody->valid & OBD_MD_LINKNAME) != 0) {
                 /* FIXME How to readlink??
-                rc = mo_xattr_get(info->mti_ctxt, next,
-                                  buffer, length, "readlink");
+                rc = mo_xattr_get(ctxt, next, buffer, length, "readlink");
                 */ rc = 10;
                 if (rc <= 0) {
                         CERROR("readlink failed: %d\n", rc);
@@ -344,13 +342,10 @@ skip_packing:
 #ifdef CONFIG_FS_POSIX_ACL
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
             (reqbody->valid & OBD_MD_FLACL)) {
-                buffer = req_capsule_server_get(&info->mti_pill,
-                                                &RMF_EADATA);
-                length = req_capsule_get_size(&info->mti_pill,
-                                              &RMF_EADATA,
-                                              RCL_SERVER);
+                buffer = req_capsule_server_get(pill, &RMF_EADATA);
+                length = req_capsule_get_size(pill, &RMF_EADATA, RCL_SERVER);
                 if (length > 0) {
-                        rc = mo_xattr_get(info->mti_ctxt, next, buffer,
+                        rc = mo_xattr_get(ctxt, next, buffer,
                                           length, XATTR_NAME_ACL_ACCESS);
                         if (rc < 0) {
                                 CERROR("got acl size: %d\n", rc);
@@ -611,7 +606,7 @@ static int mdt_readpage(struct mdt_thread_info *info)
         OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
         if (rdpg->rp_pages == NULL)
                 GOTO(out, rc = -ENOMEM);
-        
+
         for (i = 0; i < rdpg->rp_npages; ++i) {
                 rdpg->rp_pages[i] = alloc_pages(GFP_KERNEL, 0);
                 if (rdpg->rp_pages[i] == NULL)
@@ -622,13 +617,13 @@ static int mdt_readpage(struct mdt_thread_info *info)
         rc = mo_readpage(info->mti_ctxt, mdt_object_child(object), rdpg);
         if (rc)
                 GOTO(free_rdpg, rc);
-        
+
         repbody->size = rdpg->rp_size;
         repbody->valid = OBD_MD_FLSIZE;
 
         /* send pages to client */
         rc = mdt_sendpage(info, rdpg);
-        
+
         EXIT;
 free_rdpg:
         for (i = 0; i < rdpg->rp_npages; i++)
@@ -1104,8 +1099,9 @@ struct lu_context_key mdt_txn_key;
 
 int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
 {
-        struct mdt_device *mdt = info->mti_mdt;
-        struct ptlrpc_request * req = mdt_info_req(info);
+        struct mdt_device     *mdt = info->mti_mdt;
+        struct ptlrpc_request *req = mdt_info_req(info);
+        struct obd_export     *exp = req->rq_export;
         __u64 last_transno;
         __u64 last_committed;
 
@@ -1135,13 +1131,20 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
         /*last_committed = (mdt->mdt_last_committed);*/
         last_committed = last_transno;
 #endif
-        last_transno = info->mti_transno;
-        CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n",
-               last_transno, last_committed);
+        if (rc == 0) {
+                last_transno = info->mti_transno;
+                CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n",
+                       last_transno, last_committed);
+        } else {
+                last_transno = 0;
+                CERROR("replay %s transno "LPU64" failed: rc %d\n",
+                       libcfs_nid2str(exp->exp_connection->c_peer.nid),
+                       last_transno, rc);
+        }
         req->rq_repmsg->transno = req->rq_transno = last_transno;
         req->rq_repmsg->last_xid = req->rq_xid;
         req->rq_repmsg->last_committed = last_committed;
-        req->rq_export->exp_obd->obd_last_committed = last_committed;
+        exp->exp_obd->obd_last_committed = last_committed;
         return 0;
 }
 

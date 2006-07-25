@@ -386,12 +386,12 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_parent = parent;
 
         /* allocate new fid for child */
-        if (it->it_op & IT_CREAT || 
+        if (it->it_op & IT_CREAT ||
             (it->it_op & IT_OPEN && it->it_create_mode & O_CREAT)) {
                 struct lu_placement_hint hint = { .ph_pname = NULL,
                                                   .ph_cname = &dentry->d_name,
                                                   .ph_opc = LUSTRE_OPC_CREATE };
-                
+
                 rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data.fid2, &hint);
                 if (rc) {
                         CERROR("can't allocate new fid, rc %d\n", rc);
@@ -618,7 +618,7 @@ static int ll_symlink_generic(struct inode *dir, struct qstr *name,
         struct lu_placement_hint hint = { .ph_pname = NULL,
                                           .ph_cname = name,
                                           .ph_opc = LUSTRE_OPC_SYMLINK };
-                
+
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct md_op_data op_data = { { 0 } };
@@ -706,11 +706,8 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name, int mode,
         err = md_create(sbi->ll_md_exp, &op_data, NULL, 0, mode,
                         current->fsuid, current->fsgid, current->cap_effective,
                         0, &request);
-        if (err == 0)
-                ll_update_times(request, 0, dir);
-
         ll_update_times(request, 0, dir);
-        if (dchild) {
+        if (!err && dchild) {
                 err = ll_prep_inode(&inode, request, 0,
                                     dchild->d_sb);
                 if (err)
@@ -745,7 +742,7 @@ static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
                                 RETURN(-EBUSY);
                 }
         }
-                
+
         ll_prepare_md_op_data(&op_data, dir, NULL, name->name,
                               name->len, S_IFDIR);
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, &op_data, &request);
@@ -936,7 +933,7 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
 {
         return ll_symlink_generic(dir, &dentry->d_name, oldname);
 }
-static int ll_link(struct dentry *old_dentry, struct inode *dir, 
+static int ll_link(struct dentry *old_dentry, struct inode *dir,
                    struct dentry *new_dentry)
 {
         return ll_link_generic(old_dentry->d_inode, dir, &new_dentry->d_name);
@@ -944,7 +941,7 @@ static int ll_link(struct dentry *old_dentry, struct inode *dir,
 static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
                      struct inode *new_dir, struct dentry *new_dentry)
 {
-        return ll_rename_generic(old_dir, &old_dentry->d_name, new_dir, 
+        return ll_rename_generic(old_dir, &old_dentry->d_name, new_dir,
                                &new_dentry->d_name);
 }
 #endif
@@ -990,7 +987,7 @@ struct inode_operations ll_special_inode_operations = {
         .setattr        = ll_setattr,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         .getattr_it     = ll_getattr_it,
-#else   
+#else
         .revalidate_it  = ll_inode_revalidate_it,
 #endif
         .permission     = ll_inode_permission,
