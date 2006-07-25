@@ -123,7 +123,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         struct mdt_lock_handle  *lh;
         struct mdt_body         *repbody;
         /*__u64                   valid = attr->la_valid;*/
-        int                     rc;
+        int                      rc;
 
         ENTRY;
 
@@ -225,11 +225,11 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_object       *mp;
         struct mdt_object       *mc;
-        struct mdt_lock_handle *lhp;
-        struct mdt_lock_handle *lhc;
+        struct mdt_lock_handle  *lhp;
+        struct mdt_lock_handle  *lhc;
         struct mdt_body         *repbody;
         struct lu_fid           *child_fid = &info->mti_tmp_fid1;
-        int                     rc;
+        int                      rc;
 
         ENTRY;
 
@@ -289,11 +289,11 @@ out_unlock_parent:
 static int mdt_reint_link(struct mdt_thread_info *info)
 {
         struct mdt_reint_record *rr = &info->mti_rr;
-        struct ptlrpc_request *req = mdt_info_req(info);
-        struct mdt_object *ms;
-        struct mdt_object *mp;
-        struct mdt_lock_handle *lhs;
-        struct mdt_lock_handle *lhp;
+        struct ptlrpc_request   *req = mdt_info_req(info);
+        struct mdt_object       *ms;
+        struct mdt_object       *mp;
+        struct mdt_lock_handle  *lhs;
+        struct mdt_lock_handle  *lhp;
         int rc;
 
         ENTRY;
@@ -344,7 +344,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         struct mdt_lock_handle  *lh_tgtdir;
         struct mdt_lock_handle  *lh_tgt;
         struct lu_fid           *tgt_fid = &info->mti_tmp_fid1;
-        int                     rc;
+        int                      rc;
 
         ENTRY;
 
@@ -406,13 +406,13 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         struct mdt_object       *mtgtdir;
         struct mdt_object       *mold;
         struct mdt_object       *mnew = NULL;
-        struct mdt_lock_handle *lh_srcdirp;
-        struct mdt_lock_handle *lh_tgtdirp;
-        struct mdt_lock_handle *lh_oldp;
-        struct mdt_lock_handle *lh_newp;
-        struct lu_fid          *old_fid = &info->mti_tmp_fid1;
-        struct lu_fid          *new_fid = &info->mti_tmp_fid2;
-        int rc;
+        struct mdt_lock_handle  *lh_srcdirp;
+        struct mdt_lock_handle  *lh_tgtdirp;
+        struct mdt_lock_handle  *lh_oldp;
+        struct mdt_lock_handle  *lh_newp;
+        struct lu_fid           *old_fid = &info->mti_tmp_fid1;
+        struct lu_fid           *new_fid = &info->mti_tmp_fid2;
+        int                      rc;
 
         ENTRY;
 

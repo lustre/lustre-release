@@ -46,8 +46,8 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info,
                            struct mdt_object *mo, const struct req_format *fmt)
 {
         struct mdt_body *body;
-        struct lu_attr *la = &info->mti_attr.ma_attr;
-        int rc = 0;
+        struct lu_attr  *la = &info->mti_attr.ma_attr;
+        int              rc = 0;
         ENTRY;
  
         body = req_capsule_server_get(&info->mti_pill,
@@ -89,10 +89,10 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info,
 /* unpacking */
 static int mdt_setattr_unpack(struct mdt_thread_info *info)
 {
-        struct mdt_rec_setattr *rec;
-        struct lu_attr *attr = &info->mti_attr.ma_attr;
+        struct mdt_rec_setattr  *rec;
+        struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule *pill = &info->mti_pill;
+        struct req_capsule      *pill = &info->mti_pill;
         ENTRY;
 
         rec = req_capsule_client_get(pill, &RMF_REC_SETATTR);
@@ -130,11 +130,11 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
 
 static int mdt_create_unpack(struct mdt_thread_info *info)
 {
-        struct mdt_rec_create *rec;
-        struct lu_attr *attr = &info->mti_attr.ma_attr;
+        struct mdt_rec_create   *rec;
+        struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule *pill = &info->mti_pill;
-        int result = 0;
+        struct req_capsule      *pill = &info->mti_pill;
+        int                     result = 0;
         ENTRY;
 
         rec = req_capsule_client_get(pill, &RMF_REC_CREATE);
@@ -149,9 +149,15 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 attr->la_ctime = rec->cr_time;
                 attr->la_mtime = rec->cr_time;
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
-
-                if (req_capsule_field_present(pill, &RMF_SYMTGT))
-                        rr->rr_tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
+                if (rr->rr_name) {
+                        if (req_capsule_field_present(pill, &RMF_SYMTGT)) {
+                                rr->rr_tgt = req_capsule_client_get(pill, 
+                                                                &RMF_SYMTGT);
+                                if (rr->rr_tgt == NULL)
+                                        result = -EFAULT;
+                        }
+                } else
+                        result = -EFAULT;
         } else
                 result = -EFAULT;
         RETURN(result);
@@ -159,81 +165,82 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 
 static int mdt_link_unpack(struct mdt_thread_info *info)
 {
-        struct mdt_rec_link *rec;
-        struct lu_attr *attr = &info->mti_attr.ma_attr;
+        struct mdt_rec_link     *rec;
+        struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule *pill = &info->mti_pill;
+        struct req_capsule      *pill = &info->mti_pill;
+        int                      result = 0;
         ENTRY;
 
         rec = req_capsule_client_get(pill, &RMF_REC_LINK);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+        if (rec != NULL) {
+                attr->la_uid = rec->lk_fsuid;
+                attr->la_gid = rec->lk_fsgid;
+                rr->rr_fid1 = &rec->lk_fid1;
+                rr->rr_fid2 = &rec->lk_fid2;
+                attr->la_ctime = rec->lk_time;
+                attr->la_mtime = rec->lk_time;
 
-        attr->la_uid = rec->lk_fsuid;
-        attr->la_gid = rec->lk_fsgid;
-        rr->rr_fid1 = &rec->lk_fid1;
-        rr->rr_fid2 = &rec->lk_fid2;
-        attr->la_ctime = rec->lk_time;
-        attr->la_mtime = rec->lk_time;
-
-        rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
-        if (rr->rr_name == NULL)
-                RETURN(-EFAULT);
-        RETURN(0);
+                rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
+                if (rr->rr_name == NULL)
+                        result = -EFAULT;
+        } else
+                result = -EFAULT;
+        RETURN(result);
 }
 
 static int mdt_unlink_unpack(struct mdt_thread_info *info)
 {
-        struct mdt_rec_unlink *rec;
-        struct lu_attr *attr = &info->mti_attr.ma_attr;
+        struct mdt_rec_unlink   *rec;
+        struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule *pill = &info->mti_pill;
+        struct req_capsule      *pill = &info->mti_pill;
+        int                      result = 0;
         ENTRY;
 
         rec = req_capsule_client_get(pill, &RMF_REC_UNLINK);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+        if (rec != NULL) {
+                attr->la_uid = rec->ul_fsuid;
+                attr->la_gid = rec->ul_fsgid;
+                rr->rr_fid1 = &rec->ul_fid1;
+                rr->rr_fid2 = &rec->ul_fid2;
+                attr->la_ctime = rec->ul_time;
+                attr->la_mtime = rec->ul_time;
+                attr->la_mode  = rec->ul_mode;
 
-        attr->la_uid = rec->ul_fsuid;
-        attr->la_gid = rec->ul_fsgid;
-        rr->rr_fid1 = &rec->ul_fid1;
-        rr->rr_fid2 = &rec->ul_fid2;
-        attr->la_ctime = rec->ul_time;
-        attr->la_mtime = rec->ul_time;
-        attr->la_mode  = rec->ul_mode;
-
-        rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
-        if (rr->rr_name == NULL)
-                RETURN(-EFAULT);
-        RETURN(0);
+                rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
+                if (rr->rr_name == NULL)
+                        result = -EFAULT; 
+        } else
+                result = -EFAULT; 
+        RETURN(result);
 }
 
 static int mdt_rename_unpack(struct mdt_thread_info *info)
 {
-        struct mdt_rec_rename *rec;
-        struct lu_attr *attr = &info->mti_attr.ma_attr;
+        struct mdt_rec_rename   *rec;
+        struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule *pill = &info->mti_pill;
+        struct req_capsule      *pill = &info->mti_pill;
+        int                      result = 0;
         ENTRY;
 
         rec = req_capsule_client_get(pill, &RMF_REC_RENAME);
-        if (rec == NULL)
-                RETURN(-EFAULT);
+        if (rec != NULL) {
+                attr->la_uid = rec->rn_fsuid;
+                attr->la_gid = rec->rn_fsgid;
+                rr->rr_fid1 = &rec->rn_fid1;
+                rr->rr_fid2 = &rec->rn_fid2;
+                attr->la_ctime = rec->rn_time;
+                attr->la_mtime = rec->rn_time;
 
-        attr->la_uid = rec->rn_fsuid;
-        attr->la_gid = rec->rn_fsgid;
-        rr->rr_fid1 = &rec->rn_fid1;
-        rr->rr_fid2 = &rec->rn_fid2;
-        attr->la_ctime = rec->rn_time;
-        attr->la_mtime = rec->rn_time;
-
-        rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
-        if (rr->rr_name == NULL)
-                RETURN(-EFAULT);
-        rr->rr_tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
-        if (rr->rr_tgt == NULL)
-                RETURN(-EFAULT);
-        RETURN(0);
+                rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
+                rr->rr_tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
+                if (rr->rr_name == NULL || rr->rr_tgt == NULL)
+                        result = -EFAULT;
+        } else
+                result = -EFAULT;
+        RETURN(result);
 }
 
 static int mdt_open_unpack(struct mdt_thread_info *info)
@@ -242,7 +249,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct req_capsule      *pill = &info->mti_pill;
         struct mdt_reint_record *rr   = &info->mti_rr;
-        int result;
+        int                     result;
         ENTRY;
 
         rec = req_capsule_client_get(pill, &RMF_REC_CREATE);
