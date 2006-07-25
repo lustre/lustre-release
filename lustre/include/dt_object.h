@@ -189,7 +189,7 @@ struct dt_object_operations {
          */
         int   (*do_xattr_list)(const struct lu_context *ctxt,
                                struct dt_object *dt,
-                               const void *buf, int buf_len);
+                               void *buf, int buf_len);
         /*
          * Create new object on this device.
          *
