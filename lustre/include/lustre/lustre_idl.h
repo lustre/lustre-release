@@ -262,6 +262,24 @@ static inline void fid_le_to_cpu(struct lu_fid *fid)
         fid->f_ver = le32_to_cpu(fid_ver(fid));
 }
 
+#define LU_NAME_LEN 255
+
+/*
+ * lustre directory entry. This is used for sending directory content to the
+ * client, where it later gets converted to what Linux expects.
+ */
+struct lu_dir_entry {
+        struct lu_fid            de_fid;               /* file fid */
+        __u16                    de_rec_len;           /* rec len */
+        __u16                    de_name_len;          /* name len */
+	char	                 de_name[LU_NAME_LEN]; /* file name */
+};
+
+#define LU_DIR_PAD          4
+#define LU_DIR_ROUND        (LU_DIR_PAD - 1)
+
+#define LU_DIR_REC_LEN(len) ((sizeof(struct lu_fid) + 2*sizeof(__u16) + \
+                              len + 1 + LU_DIR_ROUND) & ~LU_DIR_ROUND)
 
 #define MEA_MAGIC_LAST_CHAR      0xb2221ca1
 #define MEA_MAGIC_ALL_CHARS      0xb222a11c

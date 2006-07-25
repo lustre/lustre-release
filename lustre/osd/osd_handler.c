@@ -891,6 +891,10 @@ int osd_readpage(const struct lu_context *ctxt,
                  struct dt_object *dt, struct lu_rdpg *rdpg)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+        int i, rc, tmpcount, tmpsize = 0;
+        struct dt_it_ops *iops;
+        struct dt_it *it;
+
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
         LASSERT(osd_invariant(obj));
 
@@ -913,10 +917,66 @@ int osd_readpage(const struct lu_context *ctxt,
         rdpg->rp_size = obj->oo_inode->i_size;
 
         /*
-         * XXX: here should be filling pages by dir data in ext3 format and
-         * ->rp_pages already should be allocated.
+         * iterating directory and fill pages from @rdpg
          */
-        return 0;
+        iops = &dt->do_index_ops->dio_it;
+        it = iops->init(ctxt, dt);
+        if (it == NULL)
+                return -ENOMEM;
+        
+        rc = iops->get(ctxt, it, (const void *)"");
+        if (rc > 0) {
+                for (i = 0, tmpcount = rdpg->rp_count;
+                     i < rdpg->rp_npages; i++, tmpcount -= tmpsize) {
+                        struct lu_dir_entry *entry, *last;
+                        int page_space = PAGE_SIZE;
+                        
+                        tmpsize = tmpcount > PAGE_SIZE ? PAGE_SIZE : tmpcount;
+                        entry = kmap(rdpg->rp_pages[i]);
+                        last = entry;
+
+                        for (rc = 0; rc == 0; ) {
+                                rc = iops->next(ctxt, it);
+
+                                if (rc == 0) {
+                                        struct lu_fid *fid;
+                                        char          *name;
+                                        int            len;
+
+                                        fid  = (void *)iops->rec(ctxt, it);
+                                        name = (void *)iops->key(ctxt, it);
+                                        len  = iops->key_size(ctxt, it);
+
+                                        entry->de_fid = *fid;
+                                        fid_cpu_to_le(&entry->de_fid);
+                                        
+                                        entry->de_name_len = cpu_to_le16(len + 1);
+                                        entry->de_rec_len = cpu_to_le16(LU_DIR_REC_LEN(len + 1));
+                                        
+                                        strncpy(entry->de_name, name, len);
+                                        entry->de_name[len] = '\0';
+
+                                        page_space -= LU_DIR_REC_LEN(len + 1);
+                                        last = entry;
+                                        
+                                        entry = (struct lu_dir_entry *)((char *)entry +
+                                                                        LU_DIR_REC_LEN(len + 1));
+                                }
+                        }
+                        /* last entry fills whole space in the page */
+                        if (page_space < PAGE_SIZE)
+                                last->de_rec_len += page_space;
+                        kunmap(rdpg->rp_pages[i]);
+                }
+                iops->put(ctxt, it);
+                
+                rc = 0;
+        } else if (rc == 0) {
+                rc = -EIO;
+        }
+        iops->fini(ctxt, it);
+                
+        return rc;
 }
 
 static struct dt_object_operations osd_obj_ops = {

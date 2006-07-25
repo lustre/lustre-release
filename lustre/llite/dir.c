@@ -49,8 +49,6 @@
 #include <lustre_dlm.h>
 #include "llite_internal.h"
 
-typedef struct ext2_dir_entry_2 ext2_dirent;
-
 #define PageChecked(page)        test_bit(PG_checked, &(page)->flags)
 #define SetPageChecked(page)     set_bit(PG_checked, &(page)->flags)
 
@@ -75,8 +73,8 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 LASSERT (body != NULL);         /* checked by md_readpage() */
                 LASSERT_REPSWABBED (request, 0); /* swabbed by md_readpage() */
 
-                LASSERT((body->valid & OBD_MD_FLSIZE) != 0);
-                inode->i_size = body->size;
+                if (body->valid & OBD_MD_FLSIZE)
+                        inode->i_size = body->size;
                 SetPageUptodate(page);
         }
         ptlrpc_req_finished(request);
@@ -90,113 +88,26 @@ struct address_space_operations ll_dir_aops = {
         .readpage  = ll_dir_readpage,
 };
 
-/*
- * ext2 uses block-sized chunks. Arguably, sector-sized ones would be
- * more robust, but we have what we have
- */
-static inline unsigned ext2_chunk_size(struct inode *inode)
-{
-        return inode->i_sb->s_blocksize;
-}
-
-static inline void ext2_put_page(struct page *page)
-{
-        kunmap(page);
-        page_cache_release(page);
-}
-
 static inline unsigned long dir_pages(struct inode *inode)
 {
         return (inode->i_size+PAGE_CACHE_SIZE-1)>>PAGE_CACHE_SHIFT;
 }
 
-
-static void ext2_check_page(struct inode *dir, struct page *page)
+static inline unsigned ll_chunk_size(struct inode *inode)
 {
-        unsigned chunk_size = ext2_chunk_size(dir);
-        char *kaddr = page_address(page);
-        //      u32 max_inumber = le32_to_cpu(sb->u.ext2_sb.s_es->s_inodes_count);
-        unsigned offs, rec_len;
-        unsigned limit = PAGE_CACHE_SIZE;
-        ext2_dirent *p;
-        char *error;
+        return inode->i_sb->s_blocksize;
+}
 
-        if ((dir->i_size >> PAGE_CACHE_SHIFT) == page->index) {
-                limit = dir->i_size & ~PAGE_CACHE_MASK;
-                if (limit & (chunk_size - 1)) {
-                        CERROR("limit %d dir size %lld index %ld\n",
-                               limit, dir->i_size, page->index);
-                        goto Ebadsize;
-                }
-                for (offs = limit; offs<PAGE_CACHE_SIZE; offs += chunk_size) {
-                        ext2_dirent *p = (ext2_dirent*)(kaddr + offs);
-                        p->rec_len = cpu_to_le16(chunk_size);
-                        p->name_len = 0;
-                        p->inode = 0;
-                }
-                if (!limit)
-                        goto out;
-        }
-        for (offs = 0; offs <= limit - EXT2_DIR_REC_LEN(1); offs += rec_len) {
-                p = (ext2_dirent *)(kaddr + offs);
-                rec_len = le16_to_cpu(p->rec_len);
-
-                if (rec_len < EXT2_DIR_REC_LEN(1))
-                        goto Eshort;
-                if (rec_len & 3)
-                        goto Ealign;
-                if (rec_len < EXT2_DIR_REC_LEN(p->name_len))
-                        goto Enamelen;
-                if (((offs + rec_len - 1) ^ offs) & ~(chunk_size-1))
-                        goto Espan;
-                //              if (le32_to_cpu(p->inode) > max_inumber)
-                //goto Einumber;
-        }
-        if (offs != limit)
-                goto Eend;
-out:
+static void ll_check_page(struct inode *dir, struct page *page)
+{
+        /* XXX: check page format later */
         SetPageChecked(page);
-        return;
+}
 
-        /* Too bad, we had an error */
-
-Ebadsize:
-        CERROR("%s: directory %lu/%u size %llu is not a multiple of %u\n",
-               ll_i2mdexp(dir)->exp_obd->obd_name, dir->i_ino,
-               dir->i_generation, dir->i_size, chunk_size);
-        goto fail;
-Eshort:
-        error = "rec_len is smaller than minimal";
-        goto bad_entry;
-Ealign:
-        error = "unaligned directory entry";
-        goto bad_entry;
-Enamelen:
-        error = "rec_len is too small for name_len";
-        goto bad_entry;
-Espan:
-        error = "directory entry across blocks";
-        goto bad_entry;
-        //Einumber:
-        // error = "inode out of bounds";
-bad_entry:
-        CERROR("%s: bad entry in directory %lu/%u: %s - "
-                "offset=%lu+%u, inode=%lu, rec_len=%d, name_len=%d\n",
-                ll_i2mdexp(dir)->exp_obd->obd_name, dir->i_ino,
-                dir->i_generation, error, (page->index<<PAGE_CACHE_SHIFT), offs,
-                (unsigned long)le32_to_cpu(p->inode),
-                rec_len, p->name_len);
-        goto fail;
-Eend:
-        p = (ext2_dirent *)(kaddr + offs);
-        CERROR("ext2_check_page"
-                "entry in directory #%lu spans the page boundary"
-                "offset=%lu, inode=%lu\n",
-                dir->i_ino, (page->index<<PAGE_CACHE_SHIFT)+offs,
-                (unsigned long) le32_to_cpu(p->inode));
-fail:
-        SetPageChecked(page);
-        SetPageError(page);
+static inline void ll_put_page(struct page *page)
+{
+        kunmap(page);
+        page_cache_release(page);
 }
 
 static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
@@ -241,7 +152,7 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
         if (!PageUptodate(page))
                 goto fail;
         if (!PageChecked(page))
-                ext2_check_page(dir, page);
+                ll_check_page(dir, page);
         if (PageError(page))
                 goto fail;
 
@@ -250,67 +161,38 @@ out_unlock:
         return page;
 
 fail:
-        ext2_put_page(page);
+        ll_put_page(page);
         page = ERR_PTR(-EIO);
         goto out_unlock;
 }
 
-/*
- * p is at least 6 bytes before the end of page
- */
-static inline ext2_dirent *ext2_next_entry(ext2_dirent *p)
+static inline struct lu_dir_entry *ll_next_entry(struct lu_dir_entry *p)
 {
-        return (ext2_dirent *)((char*)p + le16_to_cpu(p->rec_len));
+        return (struct lu_dir_entry *)((char *)p + le16_to_cpu(p->de_rec_len));
 }
-
-static inline unsigned
-ext2_validate_entry(char *base, unsigned offset, unsigned mask)
-{
-        ext2_dirent *de = (ext2_dirent*)(base + offset);
-        ext2_dirent *p = (ext2_dirent*)(base + (offset&mask));
-        while ((char*)p < (char*)de)
-                p = ext2_next_entry(p);
-        return (char *)p - base;
-}
-
-static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
-        [EXT2_FT_UNKNOWN]       DT_UNKNOWN,
-        [EXT2_FT_REG_FILE]      DT_REG,
-        [EXT2_FT_DIR]           DT_DIR,
-        [EXT2_FT_CHRDEV]        DT_CHR,
-        [EXT2_FT_BLKDEV]        DT_BLK,
-        [EXT2_FT_FIFO]          DT_FIFO,
-        [EXT2_FT_SOCK]          DT_SOCK,
-        [EXT2_FT_SYMLINK]       DT_LNK,
-};
-
 
 int ll_readdir(struct file *filp, void *dirent, filldir_t filldir)
 {
         struct inode *inode = filp->f_dentry->d_inode;
         loff_t pos = filp->f_pos;
-        // XXX struct super_block *sb = inode->i_sb;
         unsigned offset = pos & ~PAGE_CACHE_MASK;
         unsigned long n = pos >> PAGE_CACHE_SHIFT;
         unsigned long npages = dir_pages(inode);
-        unsigned chunk_mask = ~(ext2_chunk_size(inode)-1);
-        unsigned char *types = ext2_filetype_table;
-        int need_revalidate = (filp->f_version != inode->i_version);
         int rc = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %llu/%llu\n",
                inode->i_ino, inode->i_generation, inode, pos, inode->i_size);
 
-        if (pos > inode->i_size - EXT2_DIR_REC_LEN(1))
+        if (pos > inode->i_size - LU_DIR_REC_LEN(1))
                 RETURN(0);
 
         for ( ; n < npages; n++, offset = 0) {
                 char *kaddr, *limit;
-                ext2_dirent *de;
+                struct lu_dir_entry *de;
                 struct page *page;
 
-                CDEBUG(D_EXT2,"read %lu of dir %lu/%u page %lu/%lu size %llu\n",
+                CDEBUG(D_VFSTRACE,"read %lu of dir %lu/%u page %lu/%lu size %llu\n",
                        PAGE_CACHE_SIZE, inode->i_ino, inode->i_generation,
                        n, npages, inode->i_size);
                 page = ll_get_dir_page(inode, n);
@@ -326,32 +208,29 @@ int ll_readdir(struct file *filp, void *dirent, filldir_t filldir)
                 }
 
                 kaddr = page_address(page);
-                if (need_revalidate) {
-                        /* page already checked from ll_get_dir_page() */
-                        offset = ext2_validate_entry(kaddr, offset, chunk_mask);
-                        need_revalidate = 0;
-                }
-                de = (ext2_dirent *)(kaddr+offset);
-                limit = kaddr + PAGE_CACHE_SIZE - EXT2_DIR_REC_LEN(1);
-                for ( ;(char*)de <= limit; de = ext2_next_entry(de)) {
-                        if (de->inode) {
+                
+                de = (struct lu_dir_entry *)(kaddr + offset);
+                limit = kaddr + PAGE_CACHE_SIZE - LU_DIR_REC_LEN(1);
+                for ( ;(char*)de <= limit; de = ll_next_entry(de)) {
+                        if (fid_oid(&de->de_fid) && fid_seq(&de->de_fid)) {
+                                struct ll_sb_info *sbi = ll_i2sbi(inode);
                                 int over;
 
                                 rc = 0; /* no error if we return something */
 
                                 offset = (char *)de - kaddr;
-                                over = filldir(dirent, de->name, de->name_len,
-                                               (n<<PAGE_CACHE_SHIFT) | offset,
-                                               le32_to_cpu(de->inode),
-                                               types[de->file_type &
-                                                     (EXT2_FT_MAX - 1)]);
+                                fid_le_to_cpu(&de->de_fid);
+                                over = filldir(dirent, de->de_name, de->de_name_len,
+                                               (n << PAGE_CACHE_SHIFT) | offset,
+                                               ll_fid_build_ino(sbi, &de->de_fid),
+                                               0);
                                 if (over) {
-                                        ext2_put_page(page);
+                                        ll_put_page(page);
                                         GOTO(done, rc);
                                 }
                         }
                 }
-                ext2_put_page(page);
+                ll_put_page(page);
         }
 
 done:
