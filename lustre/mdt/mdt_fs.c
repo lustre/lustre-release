@@ -89,12 +89,11 @@ int mdt_client_add(const struct lu_context *ctxt,
         if (new_client) {
                 loff_t off = med->med_lr_off;
                 int rc = 0;
-
 /*
                 rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt,
                                                            mdt->mdt_last,
                                                            mcd, sizeof(*mcd),
-                                                           &off);
+                                                           &off, NULL);
 */
                 if (rc)
                         return rc;
@@ -121,7 +120,7 @@ int mdt_update_server_data(const struct lu_context *ctxt,
         rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt,
                                                    mdt->mdt_last,
                                                    msd,
-                                                   sizeof(*msd), &off);
+                                                   sizeof(*msd), &off, NULL);
 */
         RETURN(rc);
 
@@ -165,7 +164,7 @@ int mdt_client_free(const struct lu_context *ctxt,
         rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt,
                                                    mdt->mdt_last,
                                                    mcd,
-                                                   sizeof(*mcd), &off);
+                                                   sizeof(*mcd), &off, NULL);
 */
         CDEBUG_EX(rc == 0 ? D_INFO : D_ERROR,
                   "zeroing out client idx %u in %s rc %d\n",

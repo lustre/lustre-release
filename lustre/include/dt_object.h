@@ -242,18 +242,14 @@ struct dt_body_operations {
         /*
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
-        int (*dbo_read)(const struct lu_context *ctxt,
-                        struct dt_object *dt, ...);
+        ssize_t (*dbo_read)(const struct lu_context *ctxt, struct dt_object *dt,
+                            char *buf, size_t count, loff_t *pos);
         /*
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
-        int (*dbo_write)(const struct lu_context *ctxt,
-                         struct dt_object *dt, ...);
-        /*
-         * precondition: lu_object_exists(ctxt, &dt->do_lu);
-         */
-        int (*dbo_truncate)(const struct lu_context *ctxt,
-                            struct dt_object *dt, ...);
+        ssize_t (*dbo_write)(const struct lu_context *ctxt,
+                             struct dt_object *dt, const char *buf,
+                             size_t count, loff_t *pos, struct thandle *handle);
 };
 
 /*

@@ -57,6 +57,7 @@ static int mdd_lov_read_objids(struct obd_device *obd, struct md_lov_info *mli,
         struct lu_attr *lu_attr = NULL;
         obd_id *ids;
         int i, rc;
+        loff_t off = 0;
         ENTRY;
 
         LASSERT(!mli->md_lov_objids_size);
@@ -83,14 +84,13 @@ static int mdd_lov_read_objids(struct obd_device *obd, struct md_lov_info *mli,
         mli->md_lov_objids = ids;
         mli->md_lov_objids_size = lu_attr->la_size;
 
-#if 0
-        rc = obj_ids->do_body_ops->dbo_read(ctxt, obj_ids, ids,
+        rc = obj_ids->do_body_ops->dbo_read(ctxt, obj_ids, (char *)ids,
                                             lu_attr->la_size, &off);
         if (rc < 0) {
                 CERROR("Error reading objids %d\n", rc);
                 RETURN(rc);
         }
-#endif
+
         mli->md_lov_objids_in_file = lu_attr->la_size / sizeof(*ids);
 
         for (i = 0; i < mli->md_lov_objids_in_file; i++) {
@@ -121,9 +121,10 @@ int mdd_lov_write_objids(struct obd_device *obd, struct md_lov_info *mli,
                 CDEBUG(D_INFO, "writing last object "LPU64" for idx %d\n",
                        mli->md_lov_objids[i], i);
 #if 0
-        rc = ids_obj->do_body_ops->dbo_write(ctxt, ids_obj,
-                                             mli->mdd_lov_objids,
-                                             tgts * sizeof(obd_id), &off);
+        rc = ids_obj->do_body_ops->dbo_write(ctxt, obj_ids,
+                                             (char *)mli->mdd_lov_objids,
+                                             tgts * sizeof(obd_id), &off,
+                                             NULL /* XXX transaction handle */);
         if (rc >= 0) {
                 mli->mdd_lov_objids_dirty = 0;
                 rc = 0;
@@ -145,7 +146,7 @@ static int mdd_lov_read_catlist(struct obd_device *obd, void *idarray, int size,
         RETURN(rc);
 }
 
-struct md_lov_ops mdd_lov_ops = {
+static struct md_lov_ops mdd_lov_ops = {
         .ml_read_objids = mdd_lov_read_objids,
         .ml_write_objids = mdd_lov_write_objids,
         .ml_read_catlist = mdd_lov_read_catlist,

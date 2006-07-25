@@ -69,6 +69,10 @@ struct osd_thread_info {
          * XXX temporary: fake dentry used by xattr calls.
          */
         struct dentry       oti_dentry;
+        /*
+         * XXX temporary: fake file for body operations.
+         */
+        struct file         oti_file;
 };
 
 #endif /* __KERNEL__ */

@@ -370,7 +370,7 @@ static int osd_object_print(const struct lu_context *ctx, void *cookie,
 static int osd_statfs(const struct lu_context *ctx,
                       struct dt_device *d, struct kstatfs *sfs)
 {
-	struct osd_device *osd = osd_dt_dev(d);
+        struct osd_device *osd = osd_dt_dev(d);
         struct super_block *sb = osd_sb(osd);
         int result;
 
@@ -923,14 +923,14 @@ int osd_readpage(const struct lu_context *ctxt,
         it = iops->init(ctxt, dt);
         if (it == NULL)
                 return -ENOMEM;
-        
+
         rc = iops->get(ctxt, it, (const void *)"");
         if (rc > 0) {
                 for (i = 0, tmpcount = rdpg->rp_count;
                      i < rdpg->rp_npages; i++, tmpcount -= tmpsize) {
                         struct lu_dir_entry *entry, *last;
                         int page_space = PAGE_SIZE;
-                        
+
                         tmpsize = tmpcount > PAGE_SIZE ? PAGE_SIZE : tmpcount;
                         entry = kmap(rdpg->rp_pages[i]);
                         last = entry;
@@ -949,16 +949,16 @@ int osd_readpage(const struct lu_context *ctxt,
 
                                         entry->de_fid = *fid;
                                         fid_cpu_to_le(&entry->de_fid);
-                                        
+
                                         entry->de_name_len = cpu_to_le16(len + 1);
                                         entry->de_rec_len = cpu_to_le16(LU_DIR_REC_LEN(len + 1));
-                                        
+
                                         strncpy(entry->de_name, name, len);
                                         entry->de_name[len] = '\0';
 
                                         page_space -= LU_DIR_REC_LEN(len + 1);
                                         last = entry;
-                                        
+
                                         entry = (struct lu_dir_entry *)((char *)entry +
                                                                         LU_DIR_REC_LEN(len + 1));
                                 }
@@ -969,13 +969,13 @@ int osd_readpage(const struct lu_context *ctxt,
                         kunmap(rdpg->rp_pages[i]);
                 }
                 iops->put(ctxt, it);
-                
+
                 rc = 0;
         } else if (rc == 0) {
                 rc = -EIO;
         }
         iops->fini(ctxt, it);
-                
+
         return rc;
 }
 
@@ -994,7 +994,63 @@ static struct dt_object_operations osd_obj_ops = {
         .do_readpage   = osd_readpage
 };
 
+/*
+ * Body operations.
+ */
+
+static struct file *osd_rw_init(const struct lu_context *ctxt,
+                                struct inode *inode, mm_segment_t *seg)
+{
+        struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
+        struct dentry          *dentry = &info->oti_dentry;
+        struct file            *file   = &info->oti_file;
+
+        file->f_dentry = dentry;
+        file->f_mapping = inode->i_mapping;
+        dentry->d_inode = inode;
+
+        *seg = get_fs();
+        set_fs(KERNEL_DS);
+        return file;
+}
+
+static void osd_rw_fini(mm_segment_t *seg)
+{
+        set_fs(*seg);
+}
+
+static ssize_t osd_read(const struct lu_context *ctxt, struct dt_object *dt,
+                        char *buf, size_t count, loff_t *pos)
+{
+        struct inode *inode = osd_dt_obj(dt)->oo_inode;
+        struct file  *file;
+        mm_segment_t  seg;
+        ssize_t       result;
+
+        file = osd_rw_init(ctxt, inode, &seg);
+        result = inode->i_fop->read(file, buf, count, pos);
+        osd_rw_fini(&seg);
+        return result;
+}
+
+static int osd_write(const struct lu_context *ctxt, struct dt_object *dt,
+                     const char *buf, size_t count, loff_t *pos,
+                     struct thandle *handle)
+{
+        struct inode *inode = osd_dt_obj(dt)->oo_inode;
+        struct file  *file;
+        mm_segment_t  seg;
+        ssize_t       result;
+
+        file = osd_rw_init(ctxt, inode, &seg);
+        result = inode->i_fop->write(file, buf, count, pos);
+        osd_rw_fini(&seg);
+        return result;
+}
+
 static struct dt_body_operations osd_body_ops = {
+        .dbo_read  = osd_read,
+        .dbo_write = osd_write
 };
 
 /*
@@ -1542,7 +1598,7 @@ static struct lu_device *osd_device_fini(const struct lu_context *ctx,
                 server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
 
         o->od_mount = NULL;
-	RETURN(NULL);
+        RETURN(NULL);
 }
 
 static struct lu_device *osd_device_alloc(const struct lu_context *ctx,
@@ -1667,18 +1723,18 @@ static struct inode *osd_iget(struct osd_thread_info *info,
 {
         struct inode *inode;
 
-	inode = iget(osd_sb(dev), id->oii_ino);
-	if (inode == NULL) {
+        inode = iget(osd_sb(dev), id->oii_ino);
+        if (inode == NULL) {
                 CERROR("no inode\n");
-		inode = ERR_PTR(-EACCES);
-	} else if (is_bad_inode(inode)) {
+                inode = ERR_PTR(-EACCES);
+        } else if (is_bad_inode(inode)) {
                 CERROR("bad inode\n");
-		iput(inode);
-		inode = ERR_PTR(-ENOENT);
-	} else if (inode->i_generation != id->oii_gen) {
+                iput(inode);
+                inode = ERR_PTR(-ENOENT);
+        } else if (inode->i_generation != id->oii_gen) {
                 CERROR("stale inode\n");
-		iput(inode);
-		inode = ERR_PTR(-ESTALE);
+                iput(inode);
+                inode = ERR_PTR(-ESTALE);
         }
         return inode;
 
@@ -1799,7 +1855,7 @@ static struct super_block *osd_sb(const struct osd_device *dev)
 
 static journal_t *osd_journal(const struct osd_device *dev)
 {
-	return LDISKFS_SB(osd_sb(dev))->s_journal;
+        return LDISKFS_SB(osd_sb(dev))->s_journal;
 }
 
 static int osd_has_index(const struct osd_object *obj)
