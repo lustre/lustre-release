@@ -312,7 +312,8 @@ skip_packing:
                                         repbody->valid |= OBD_MD_FLEASIZE;
                                 repbody->eadatasize = rc;
                                 rc = 0;
-                        }
+                        } else if (rc == -ENODATA || rc == -EOPNOTSUPP)
+                                rc = 0;
                 }
         } else if (S_ISLNK(la->la_mode) &&
                           (reqbody->valid & OBD_MD_LINKNAME) != 0) {
@@ -348,7 +349,10 @@ skip_packing:
                         rc = mo_xattr_get(ctxt, next, buffer,
                                           length, XATTR_NAME_ACL_ACCESS);
                         if (rc < 0) {
-                                CERROR("got acl size: %d\n", rc);
+                                if (rc == -ENODATA || rc == -EOPNOTSUPP)
+                                        rc = 0;
+                                else 
+                                        CERROR("got acl size: %d\n", rc);
                         } else {
                                 repbody->aclsize = rc;
                                 repbody->valid |= OBD_MD_FLACL;
