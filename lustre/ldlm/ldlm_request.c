@@ -472,11 +472,17 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 }
 
                 if (memcmp(reply->lock_desc.l_resource.lr_name.name,
-                    lock->l_resource->lr_name.name, sizeof(struct ldlm_res_id))) { 
-                        CDEBUG(D_INFO, "remote intent success, locking %ld "
-                               "instead of %ld\n",
+                          lock->l_resource->lr_name.name, 
+                          sizeof(struct ldlm_res_id))) {
+                        CDEBUG(D_INFO, "remote intent success, locking "
+                                        "(%ld,%ld,%ld) instead of "
+                                        "(%ld,%ld,%ld)\n",
                               (long)reply->lock_desc.l_resource.lr_name.name[0],
-                               (long)lock->l_resource->lr_name.name[0]);
+                              (long)reply->lock_desc.l_resource.lr_name.name[1],
+                              (long)reply->lock_desc.l_resource.lr_name.name[2],
+                              (long)lock->l_resource->lr_name.name[0],
+                              (long)lock->l_resource->lr_name.name[1],
+                              (long)lock->l_resource->lr_name.name[2]);
 
                         ldlm_lock_change_resource(ns, lock,
                                            reply->lock_desc.l_resource.lr_name);

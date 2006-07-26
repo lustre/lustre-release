@@ -301,6 +301,7 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
         lock->l_resource = ldlm_resource_get(ns, NULL, new_resid,
                                              lock->l_resource->lr_type, 1);
         if (lock->l_resource == NULL) {
+                l_unlock(&ns->ns_lock);
                 LBUG();
                 RETURN(-ENOMEM);
         }
@@ -1252,9 +1253,11 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                        libcfs_nid2str(imp->imp_connection->c_peer.nid),
                        lock->l_remote_handle.cookie);
         }
-        CDEBUG_EX(level, "  Resource: %p ("LPU64"/"LPU64")\n", lock->l_resource,
-               lock->l_resource->lr_name.name[0],
-               lock->l_resource->lr_name.name[1]);
+        CDEBUG_EX(level, "  Resource: %p ("LPU64"/"LPU64"/"LPU64")\n", 
+                  lock->l_resource,
+                  lock->l_resource->lr_name.name[0],
+                  lock->l_resource->lr_name.name[1],
+                  lock->l_resource->lr_name.name[2]);
         CDEBUG_EX(level, "  Req mode: %s, grant mode: %s, rc: %u, read: %d, "
                "write: %d flags: %#x\n", ldlm_lockname[lock->l_req_mode],
                ldlm_lockname[lock->l_granted_mode],

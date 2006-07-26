@@ -676,11 +676,9 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */
-        if (fid_is_sane(&op_data->fid2)){
-/* FIXME: This is commented out by huanghua@clusterfs.com,
- * if anything wrong, please restore that */
-//                        !it_disposition(it, DISP_OPEN_CREATE)) {
-//                it_set_disposition(it, DISP_ENQ_COMPLETE);
+        if (fid_is_sane(&op_data->fid2) &&
+                        !it_disposition(it, DISP_OPEN_CREATE)) {
+                it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
                 if (memcmp(&op_data->fid2, &mdt_body->fid1, sizeof(op_data->fid2)))
                         RETURN(-ESTALE);

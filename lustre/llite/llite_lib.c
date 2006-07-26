@@ -1404,6 +1404,7 @@ void ll_delete_inode(struct inode *inode)
         if (rc) {
                 CERROR("fid_delete() failed, rc %d\n", rc);
         }
+        clear_inode(inode);
 
         EXIT;
 }

@@ -603,6 +603,7 @@ static int mdt_readpage(struct mdt_thread_info *info)
         int                rc;
         int                i;
         ENTRY;
+        RETURN(-EOPNOTSUPP);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
                 RETURN(-ENOMEM);
@@ -1119,29 +1120,6 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
         LASSERT(mdt != NULL);
         last_committed = mdt->mdt_last_committed;
 
-#if 0
-        last_transno = req->rq_reqmsg->transno;
-        if (rc != 0) {
-                if (last_transno != 0) {
-                        CERROR("replay %s transno "LPU64" failed: rc %d\n",
-                   libcfs_nid2str(req->rq_export->exp_connection->c_peer.nid),
-                   last_transno, rc);
-                        last_transno = 0;
-                }
-        } else { /* rc == 0 */
-                spin_lock(&mdt->mdt_transno_lock);
-                if (last_transno == 0) {
-                        last_transno = ++mdt->mdt_last_transno;
-                } else {
-                        if (last_transno > mdt->mdt_last_transno)
-                                mdt->mdt_last_transno = last_transno;
-                }
-                spin_unlock(&mdt->mdt_transno_lock);
-        }
-
-        /*last_committed = (mdt->mdt_last_committed);*/
-        last_committed = last_transno;
-#endif
         if (rc == 0) {
                 last_transno = info->mti_transno;
                 CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n",
@@ -1150,7 +1128,7 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
                 last_transno = 0;
                 CERROR("replay %s transno "LPU64" failed: rc %d\n",
                        libcfs_nid2str(exp->exp_connection->c_peer.nid),
-                       last_transno, rc);
+                       info->mti_transno, rc);
         }
         req->rq_repmsg->transno = req->rq_transno = last_transno;
         req->rq_repmsg->last_xid = req->rq_xid;
@@ -1271,6 +1249,7 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
 
         info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
         info->mti_ctxt = req->rq_svc_thread->t_ctx;
+        info->mti_transno = req->rq_reqmsg->transno;
         /* it can be NULL while CONNECT */
         if (req->rq_export)
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);

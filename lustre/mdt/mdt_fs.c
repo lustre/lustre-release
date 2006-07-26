@@ -428,12 +428,15 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
                 mti->mti_transno = ++ mdt->mdt_last_transno;
         } else {
                 /* replay */
+                CDEBUG(D_HA, "replaying transno: "LPD64" stopped\n", 
+                              mti->mti_transno);
                 if (mti->mti_transno > mdt->mdt_last_transno)
                         mdt->mdt_last_transno = mti->mti_transno;
         }
         spin_unlock(&mdt->mdt_transno_lock);
         /* save transno for the commit callback */
         txni->txi_transno = mti->mti_transno;
+        CDEBUG(D_HA, "transno "LPD64" stopped\n", txni->txi_transno);
 /*
         TODO: write last_rcvd
 */
@@ -452,7 +455,7 @@ static int mdt_txn_commit_cb(const struct lu_context *ctx,
         txi = lu_context_key_get(&txn->th_ctx, &mdt_txn_key);
         if (txi->txi_transno > mdt->mdt_last_committed) {
                 mdt->mdt_last_committed = txi->txi_transno;
-                ptlrpc_commit_replies (obd);
+                ptlrpc_commit_replies(obd);
         }
         CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
                obd->obd_name, txi->txi_transno);
