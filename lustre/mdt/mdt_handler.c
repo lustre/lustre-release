@@ -1122,14 +1122,15 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
 
         if (rc == 0) {
                 last_transno = info->mti_transno;
-                CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n",
-                       last_transno, last_committed);
         } else {
                 last_transno = 0;
                 CERROR("replay %s transno "LPU64" failed: rc %d\n",
                        libcfs_nid2str(exp->exp_connection->c_peer.nid),
                        info->mti_transno, rc);
         }
+        CDEBUG(D_HA, "last_transno = %llu, last_committed = %llu\n",
+               last_transno, last_committed);
+
         req->rq_repmsg->transno = req->rq_transno = last_transno;
         req->rq_repmsg->last_xid = req->rq_xid;
         req->rq_repmsg->last_committed = last_committed;
@@ -1218,8 +1219,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         if (h->mh_opc != MDS_DISCONNECT &&
             h->mh_opc != MDS_READPAGE &&
             h->mh_opc != LDLM_ENQUEUE) {
-                /* FIXME: fake untill journal callback is OK.*/
-                mdt_update_last_transno(info, result);
+                        mdt_update_last_transno(info, result);
         }
         RETURN(result);
 }
@@ -2259,6 +2259,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         m->mdt_opts.mo_user_xattr = 0;
         m->mdt_opts.mo_acl = 0;
         m->mdt_opts.mo_compat_resname = 0;
+        obd->obd_replayable = 1;
 
 
         OBD_ALLOC_PTR(s);

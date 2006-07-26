@@ -132,6 +132,7 @@ void ll_intent_release(struct lookup_intent *it)
 {
         ENTRY;
 
+        CDEBUG(D_INFO, "intent %p released\n", it);
         ll_intent_drop_lock(it);
         it->it_magic = 0;
         it->it_op_release = 0;
@@ -267,8 +268,9 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
         struct lookup_intent *it = *itp;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         if (it) {
-                LASSERTF(it->it_magic == INTENT_MAGIC, "bad intent magic: %x\n",
-                         it->it_magic);
+                LASSERTF(it->it_magic == INTENT_MAGIC, 
+                         "%p has bad intent magic: %x\n",
+                         it, it->it_magic);
         }
 #endif
 
