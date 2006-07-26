@@ -316,6 +316,7 @@ static int mds_lov_update_mds(struct obd_device *obd,
                 llog_cat_initialize(obd, mli->md_lov_desc.ld_tgt_count);
                 up(&mli->md_lov_orphan_recovery_sem);
         }
+#else
         CDEBUG(D_CONFIG, "reset llogs idx=%d\n", idx);
         llog_cat_initialize(obd, mli->md_lov_desc.ld_tgt_count);
 #endif
@@ -685,6 +686,7 @@ static int __mds_lov_synchronize(void *data)
 {
         struct mds_lov_sync_info *mlsi = data;
         struct obd_device *obd = mlsi->mlsi_obd;
+        struct mds_obd *mds = &obd->u.mds;
         struct obd_device *watched = mlsi->mlsi_watched;
         struct md_lov_info *mli = mlsi->mlsi_mli;
         const void *ctxt = mlsi->mlsi_ctxt;
@@ -709,7 +711,6 @@ static int __mds_lov_synchronize(void *data)
         if (rc != 0)
                 GOTO(out, rc);
 
-#if 0
         rc = llog_connect(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT),
                           mds->mds_lov_desc.ld_tgt_count,
                           NULL, NULL, uuid);
@@ -719,7 +720,6 @@ static int __mds_lov_synchronize(void *data)
                        obd->obd_name, rc);
                 GOTO(out, rc);
         }
-#endif
         LCONSOLE_INFO("MDS %s: %s now active, resetting orphans\n",
               obd->obd_name, obd_uuid2str(uuid));
 

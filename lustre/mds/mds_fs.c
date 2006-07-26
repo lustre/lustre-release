@@ -413,6 +413,24 @@ err_msd:
         RETURN(rc);
 }
 
+void mds_init_ctxt(struct obd_device *obd, struct vfsmount *mnt)
+{
+        struct mds_obd *mds = &obd->u.mds;
+
+        mds->mds_vfsmnt = mnt;
+        /* why not mnt->mnt_sb instead of mnt->mnt_root->d_inode->i_sb? */
+        obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
+
+        fsfilt_setup(obd, obd->u.obt.obt_sb);
+        
+        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+        obd->obd_lvfs_ctxt.pwdmnt = mnt;
+        obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
+        obd->obd_lvfs_ctxt.fs = get_ds();
+        obd->obd_lvfs_ctxt.cb_ops = mds_lvfs_ops;
+        return;
+}
+
 int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 {
         struct mds_obd *mds = &obd->u.mds;
@@ -426,18 +444,8 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         if (rc)
                 RETURN(rc);
 
-        mds->mds_vfsmnt = mnt;
-        /* why not mnt->mnt_sb instead of mnt->mnt_root->d_inode->i_sb? */
-        obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
-
-        fsfilt_setup(obd, obd->u.obt.obt_sb);
-
-        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
-        obd->obd_lvfs_ctxt.pwdmnt = mnt;
-        obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
-        obd->obd_lvfs_ctxt.fs = get_ds();
-        obd->obd_lvfs_ctxt.cb_ops = mds_lvfs_ops;
-
+        mds_init_ctxt(obd, mnt);
+        
         /* setup the directory tree */
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         dentry = simple_mkdir(current->fs->pwd, "ROOT", 0755, 0);
@@ -651,6 +659,10 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         /* the owner of object file should always be root */
         ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
 
+        if (strcmp(exp->exp_obd->obd_name, MDD_OBD_NAME)) {
+                RETURN(0);
+        }
+        
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
 
         sprintf(fidname, "OBJECTS/%u.%u", tmpname, current->pid);

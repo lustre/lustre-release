@@ -2678,27 +2678,81 @@ static __attribute__((unused)) void /*__exit*/ mds_exit(void)
 static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct mds_obd *mds = &obd->u.mds;
+        struct lvfs_run_ctxt saved;
+        const char     *dev;
+        struct vfsmount *mnt;
+        struct lustre_sb_info *lsi;
+        struct lustre_mount_info *lmi;
+        struct dentry  *dentry;
         int rc = 0;
         ENTRY;
 
         CDEBUG(D_INFO, "obd %s setup \n", obd->obd_name);
         if (strcmp(obd->obd_name, MDD_OBD_NAME))
                 RETURN(0);
+     
+        if (lcfg->lcfg_bufcount < 5) {
+                CERROR("invalid arg for setup %s\n", MDD_OBD_NAME);
+                RETURN(-EINVAL);
+        }
+        dev = lustre_cfg_string(lcfg, 4);
+        lmi = server_get_mount(dev);
+        LASSERT(lmi != NULL); 
         
+        lsi = s2lsi(lmi->lmi_sb);
+        mnt = lmi->lmi_mnt;
+        
+        obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
+        mds_init_ctxt(obd, mnt);
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        dentry = simple_mkdir(current->fs->pwd, "OBJECTS", 0777, 1);
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
+                CERROR("cannot create OBJECTS directory: rc = %d\n", rc);
+                GOTO(err_pop, rc);
+        }
+        mds->mds_objects_dir = dentry;
+
+        dentry = lookup_one_len("__iopen__", current->fs->pwd,
+                                strlen("__iopen__"));
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
+                CERROR("cannot lookup __iopen__ directory: rc = %d\n", rc);
+                GOTO(err_pop, rc);
+        }
+
+        mds->mds_fid_de = dentry;
+        if (!dentry->d_inode || is_bad_inode(dentry->d_inode)) {
+                rc = -ENOENT;
+                CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
+                GOTO(err_fid, rc);
+        }
+
         rc = mds_lov_presetup(mds, lcfg);
         if (rc < 0)
-                RETURN(rc);
+                GOTO(err_objects, rc);
 
         /* Don't wait for mds_postrecov trying to clear orphans */
         obd->obd_async_recov = 1;
         rc = mds_postsetup(obd);
         obd->obd_async_recov = 0;
-
+        
+        if (rc)
+                GOTO(err_objects, rc);
+        
         sema_init(&mds->mds_orphan_recovery_sem, 1);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
-        
+
+err_pop:
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
+err_fid:
+        dput(mds->mds_fid_de);
+err_objects:
+        dput(mds->mds_objects_dir);
+        goto err_pop;
 }
 
 static int mds_cmd_cleanup(struct obd_device *obd)
