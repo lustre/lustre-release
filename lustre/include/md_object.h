@@ -92,7 +92,7 @@ struct md_object_operations {
         int (*moo_close)(const struct lu_context *, struct md_object *);
 
         int (*moo_readpage)(const struct lu_context *, struct md_object *,
-                            struct lu_rdpg *);
+                            const struct lu_rdpg *);
 };
 
 /*
@@ -249,7 +249,7 @@ static inline int mo_close(const struct lu_context *cx, struct md_object *m)
 }
 
 static inline int mo_readpage(const struct lu_context *cx, struct md_object *m,
-                              struct lu_rdpg *rdpg)
+                              const struct lu_rdpg *rdpg)
 {
         LASSERT(m->mo_ops->moo_readpage);
         return m->mo_ops->moo_readpage(cx, m, rdpg);

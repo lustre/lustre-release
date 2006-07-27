@@ -355,7 +355,7 @@ skip_packing:
                         if (rc < 0) {
                                 if (rc == -ENODATA || rc == -EOPNOTSUPP)
                                         rc = 0;
-                                else 
+                                else
                                         CERROR("got acl size: %d\n", rc);
                         } else {
                                 repbody->aclsize = rc;
@@ -470,7 +470,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 if (lock) {
                         res_id = &lock->l_resource->lr_name;
                         LDLM_DEBUG(lock, "we will return this lock client\n");
-                        LASSERTF(fid_res_name_eq(mdt_object_fid(child), 
+                        LASSERTF(fid_res_name_eq(mdt_object_fid(child),
                                                 &lock->l_resource->lr_name),
                                 "Lock res_id: %lu/%lu/%lu, Fid: "DFID3".\n",
                          (unsigned long)res_id->name[0],
@@ -557,7 +557,7 @@ static int mdt_sendpage(struct mdt_thread_info *info,
 
         for (i = 0, tmpcount = rdpg->rp_count;
                 i < rdpg->rp_npages; i++, tmpcount -= tmpsize) {
-                tmpsize = tmpcount > PAGE_SIZE ? PAGE_SIZE : tmpcount;
+                tmpsize = min(tmpcount, CFS_PAGE_SIZE);
                 ptlrpc_prep_bulk_page(desc, rdpg->rp_pages[i], 0, tmpsize);
         }
 
@@ -607,15 +607,12 @@ static int mdt_readpage(struct mdt_thread_info *info)
         int                rc;
         int                i;
         ENTRY;
-        RETURN(-EOPNOTSUPP);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
                 RETURN(-ENOMEM);
 
-        reqbody = req_capsule_client_get(&info->mti_pill,
-                                         &RMF_MDT_BODY);
-        repbody = req_capsule_server_get(&info->mti_pill,
-                                         &RMF_MDT_BODY);
+        reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL || repbody == NULL)
                 RETURN(-EFAULT);
 
@@ -624,14 +621,17 @@ static int mdt_readpage(struct mdt_thread_info *info)
          * reqbody->size contains offset of where to start to read and
          * reqbody->nlink contains number bytes to read.
          */
-        rdpg->rp_offset = reqbody->size;
-        rdpg->rp_count = reqbody->nlink;
-        rdpg->rp_npages = (rdpg->rp_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
-        LASSERT((rdpg->rp_offset & (PAGE_SIZE - 1)) == 0);
-
+        rdpg->rp_hash = reqbody->size;
+        if ((__u64)rdpg->rp_hash != reqbody->size) {
+                CERROR("Invalid hash: %#llx != %#llx\n",
+                       (__u64)rdpg->rp_hash, reqbody->size);
+                RETURN(-EFAULT);
+        }
+        rdpg->rp_count  = reqbody->nlink;
+        rdpg->rp_npages = rdpg->rp_count + CFS_PAGE_SIZE - 1 >> CFS_PAGE_SHIFT;
         OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
         if (rdpg->rp_pages == NULL)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         for (i = 0; i < rdpg->rp_npages; ++i) {
                 rdpg->rp_pages[i] = alloc_pages(GFP_KERNEL, 0);
@@ -644,9 +644,6 @@ static int mdt_readpage(struct mdt_thread_info *info)
         if (rc)
                 GOTO(free_rdpg, rc);
 
-        repbody->size = rdpg->rp_size;
-        repbody->valid = OBD_MD_FLSIZE;
-
         /* send pages to client */
         rc = mdt_sendpage(info, rdpg);
 
@@ -655,8 +652,7 @@ free_rdpg:
         for (i = 0; i < rdpg->rp_npages; i++)
                 if (rdpg->rp_pages[i] != NULL)
                         __free_pages(rdpg->rp_pages[i], 0);
-         OBD_FREE(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
-out:
+        OBD_FREE(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
         return rc;
 }
 

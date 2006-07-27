@@ -1768,10 +1768,14 @@ static int lmv_readpage(struct obd_export *exp, struct lu_fid *fid,
         rc = md_readpage(lmv->tgts[i].ltd_exp, &rid,
                          offset, page, request);
 
-        if (rc == 0 && !lu_fid_eq(&rid, fid))
+        if (0 && rc == 0 && !lu_fid_eq(&rid, fid))
                 /* this page isn't from master object. To avoid "." and ".."
                  * duplication in directory, we have to remove them from all
-                 * slave objects */
+                 * slave objects
+                 *
+                 * XXX this is not needed for cmd3 readdir, because only
+                 * master directory has dot and dotdot.
+                 */
                 lmv_remove_dots(page);
 
         RETURN(rc);

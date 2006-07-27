@@ -308,7 +308,7 @@ static int cml_close(const struct lu_context *ctx, struct md_object *mo)
 }
 
 static int cml_readpage(const struct lu_context *ctxt, struct md_object *mo,
-                        struct lu_rdpg *rdpg)
+                        const struct lu_rdpg *rdpg)
 {
         int rc;
         ENTRY;
@@ -585,6 +585,12 @@ static int cmr_close(const struct lu_context *ctx, struct md_object *mo)
         RETURN(-EFAULT);
 }
 
+static int cmr_readpage(const struct lu_context *ctxt, struct md_object *mo,
+                        const struct lu_rdpg *rdpg)
+{
+        RETURN(-EREMOTE);
+}
+
 static struct md_object_operations cmr_mo_ops = {
         .moo_attr_get      = cmr_attr_get,
         .moo_attr_set      = cmr_attr_set,
@@ -596,7 +602,8 @@ static struct md_object_operations cmr_mo_ops = {
         .moo_ref_add       = cmr_ref_add,
         .moo_ref_del       = cmr_ref_del,
         .moo_open          = cmr_open,
-        .moo_close         = cmr_close
+        .moo_close         = cmr_close,
+        .moo_readpage      = cmr_readpage
 };
 
 /* remote part of md_dir operations */

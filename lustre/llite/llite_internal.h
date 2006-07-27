@@ -14,7 +14,7 @@
 #include <lustre_debug.h>
 #include <lustre_ver.h>
 #include <lustre_disk.h>  /* for s2sbi */
- 
+
 /*
 struct lustre_intent_data {
         __u64 it_lock_handle[2];
@@ -217,7 +217,7 @@ struct ll_readahead_state {
         unsigned long   ras_consecutive_pages;
         /*
          * number of read requests after the last read-ahead window reset
-         * As window is reset on each seek, this is effectively the number 
+         * As window is reset on each seek, this is effectively the number
          * on consecutive read request and is used to trigger read-ahead.
          */
         unsigned long   ras_consecutive_requests;
@@ -244,7 +244,7 @@ struct ll_readahead_state {
          */
         unsigned long   ras_requests;
         /*
-         * Page index with respect to the current request, these value 
+         * Page index with respect to the current request, these value
          * will not be accurate when dealing with reads issued via mmap.
          */
         unsigned long   ras_request_index;
@@ -256,6 +256,11 @@ struct ll_readahead_state {
         struct list_head ras_read_beads;
 };
 
+struct ll_file_dir {
+        int           lfd_dup;
+        loff_t        lfd_duppos;
+};
+
 extern kmem_cache_t *ll_file_data_slab;
 struct lustre_handle;
 struct ll_file_data {
@@ -264,6 +269,7 @@ struct ll_file_data {
         __u32 fd_flags;
         struct lustre_handle fd_cwlockh;
         unsigned long fd_gid;
+        struct ll_file_dir fd_dir;
 };
 
 struct lov_stripe_md;
@@ -444,7 +450,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
 void ll_umount_begin(struct super_block *sb);
 int ll_remount_fs(struct super_block *sb, int *flags, char *data);
-int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req, 
+int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
                   int offset, struct super_block *);
 void lustre_dump_dentry(struct dentry *, int recur);
 void lustre_dump_inode(struct inode *);

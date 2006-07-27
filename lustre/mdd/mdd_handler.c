@@ -621,22 +621,8 @@ static int mdd_dir_is_empty(const struct lu_context *ctx,
                 result = iops->get(ctx, it, (const void *)"");
                 if (result > 0) {
                         int i;
-                        for (result = 0, i = 0; result == 0 && i < 3; ++i) {
+                        for (result = 0, i = 0; result == 0 && i < 3; ++i)
                                 result = iops->next(ctx, it);
-#if 0
-                                if (result == 0) {
-                                        struct lu_fid *fid;
-                                        char          *name;
-                                        int            len;
-
-                                        fid  = (void *)iops->rec(ctx, it);
-                                        name = (void *)iops->key(ctx, it);
-                                        len  = iops->key_size(ctx, it);
-                                        CERROR("entry: "DFID3": \"%*.*s\"\n",
-                                               PFID3(fid), len, len, name);
-                                }
-#endif
-                        }
                         iops->put(ctx, it);
                         if (result == 0)
                                 result = -ENOTEMPTY;
@@ -1223,7 +1209,7 @@ static int mdd_close(const struct lu_context *ctxt, struct md_object *obj)
 }
 
 static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
-                        struct lu_rdpg *rdpg)
+                        const struct lu_rdpg *rdpg)
 {
         struct dt_object *next;
         int rc;

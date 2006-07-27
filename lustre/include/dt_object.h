@@ -232,7 +232,7 @@ struct dt_object_operations {
                             struct dt_object *dt, struct thandle *th);
 
         int (*do_readpage)(const struct lu_context *ctxt,
-                           struct dt_object *dt, struct lu_rdpg *rdpg);
+                           struct dt_object *dt, const struct lu_rdpg *rdpg);
 };
 
 /*

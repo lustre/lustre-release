@@ -823,8 +823,8 @@ static void osd_object_ref_del(const struct lu_context *ctxt,
         LASSERT(osd_invariant(obj));
 }
 
-int osd_xattr_get(const struct lu_context *ctxt, struct dt_object *dt,
-                  void *buf, int size, const char *name)
+static int osd_xattr_get(const struct lu_context *ctxt, struct dt_object *dt,
+                         void *buf, int size, const char *name)
 {
         struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
         struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
@@ -836,9 +836,9 @@ int osd_xattr_get(const struct lu_context *ctxt, struct dt_object *dt,
         return inode->i_op->getxattr(dentry, name, buf, size);
 }
 
-int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
-                  const void *buf, int size, const char *name, int fl,
-                  struct thandle *handle)
+static int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
+                         const void *buf, int size, const char *name, int fl,
+                         struct thandle *handle)
 {
         int fs_flags;
 
@@ -860,8 +860,8 @@ int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
         return inode->i_op->setxattr(dentry, name, buf, size, fs_flags);
 }
 
-int osd_xattr_list(const struct lu_context *ctxt, struct dt_object *dt,
-                   void *buf, int size)
+static int osd_xattr_list(const struct lu_context *ctxt, struct dt_object *dt,
+                          void *buf, int size)
 {
         struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
         struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
@@ -873,8 +873,8 @@ int osd_xattr_list(const struct lu_context *ctxt, struct dt_object *dt,
         return inode->i_op->listxattr(dentry, buf, size);
 }
 
-int osd_xattr_del(const struct lu_context *ctxt, struct dt_object *dt,
-                  const char *name, struct thandle *handle)
+static int osd_xattr_del(const struct lu_context *ctxt, struct dt_object *dt,
+                         const char *name, struct thandle *handle)
 {
         struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
         struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
@@ -886,26 +886,89 @@ int osd_xattr_del(const struct lu_context *ctxt, struct dt_object *dt,
         return inode->i_op->removexattr(dentry, name);
 }
 
-
-int osd_readpage(const struct lu_context *ctxt,
-                 struct dt_object *dt, struct lu_rdpg *rdpg)
+static int osd_dir_page_build(const struct lu_context *ctx, int first,
+                              void *area, int nob,
+                              struct dt_it_ops  *iops, struct dt_it *it,
+                              __u32 *start, __u32 *end,
+                              struct lu_dirent **last)
 {
+        int result;
+        struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
+        struct lu_fid          *fid  = &info->oti_fid;
+        struct lu_dirent       *ent;
+
+        if (first) {
+                area += sizeof (struct lu_dirpage);
+                nob  -= sizeof (struct lu_dirpage);
+        }
+
+        LASSERT(nob > sizeof *ent);
+
+        ent  = area;
+        result = 0;
+        do {
+                char  *name;
+                int    len;
+                int    recsize;
+                __u32  hash;
+
+                name = (char *)iops->key(ctx, it);
+                len  = iops->key_size(ctx, it);
+
+                *fid  = *(struct lu_fid *)iops->rec(ctx, it);
+                fid_cpu_to_le(fid);
+
+                recsize = (sizeof *ent + len + 3) & ~3;
+                /*
+                 * XXX an interface is needed to obtain a hash.
+                 *
+                 * XXX this is horrible, most horrible hack.
+                 */
+                hash = *(__u32 *)(name - sizeof(__u16) - sizeof(__u32));
+                *end = hash;
+                if (nob >= recsize) {
+                        ent->lde_fid = *fid;
+                        ent->lde_hash = hash;
+                        ent->lde_namelen = cpu_to_le16(len);
+                        ent->lde_reclen  = cpu_to_le16(recsize);
+                        memcpy(ent->lde_name, name, len);
+                        if (first && ent == area)
+                                *start = hash;
+                        *last = ent;
+                        ent = (void *)ent + recsize;
+                        nob -= recsize;
+                        result = iops->next(ctx, it);
+                } else {
+                        /*
+                         * record doesn't fit into page, enlarge previous one.
+                         */
+                        LASSERT(*last != NULL);
+                        (*last)->lde_reclen =
+                                cpu_to_le16(le16_to_cpu((*last)->lde_reclen) +
+                                            nob);
+                        break;
+                }
+        } while (result == 0);
+        return result;
+}
+
+static int osd_readpage(const struct lu_context *ctxt,
+                        struct dt_object *dt, const struct lu_rdpg *rdpg)
+{
+        struct dt_it      *it;
         struct osd_object *obj = osd_dt_obj(dt);
-        int i, rc, tmpcount, tmpsize = 0;
-        struct dt_it_ops *iops;
-        struct dt_it *it;
+        struct dt_it_ops  *iops;
+        int i;
+        int rc;
+        int nob;
 
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
         LASSERT(osd_invariant(obj));
 
         LASSERT(rdpg->rp_pages != NULL);
 
-        /* check input params */
-        if ((rdpg->rp_offset & (obj->oo_inode->i_blksize - 1)) != 0) {
-                CERROR("offset "LPU64" not on a block boundary of %lu\n",
-                       rdpg->rp_offset, obj->oo_inode->i_blksize);
+        if (rdpg->rp_count <= 0)
                 return -EFAULT;
-        }
 
         if (rdpg->rp_count & (obj->oo_inode->i_blksize - 1)) {
                 CERROR("size %u is not multiple of blocksize %lu\n",
@@ -913,67 +976,58 @@ int osd_readpage(const struct lu_context *ctxt,
                 return -EFAULT;
         }
 
-        /* prepare output */
-        rdpg->rp_size = obj->oo_inode->i_size;
-
         /*
-         * iterating directory and fill pages from @rdpg
+         * iterating through directory and fill pages from @rdpg
          */
         iops = &dt->do_index_ops->dio_it;
         it = iops->init(ctxt, dt);
         if (it == NULL)
                 return -ENOMEM;
-
+        /*
+         * XXX position iterator at rdpg->rp_hash
+         */
         rc = iops->get(ctxt, it, (const void *)"");
         if (rc > 0) {
-                for (i = 0, tmpcount = rdpg->rp_count;
-                     i < rdpg->rp_npages; i++, tmpcount -= tmpsize) {
-                        struct lu_dir_entry *entry, *last;
-                        int page_space = PAGE_SIZE;
+                struct page      *pg; /* no, Richard, it _is_ initialized */
+                struct lu_dirent *last;
+                __u32             hash_start;
+                __u32             hash_end;
 
-                        tmpsize = tmpcount > PAGE_SIZE ? PAGE_SIZE : tmpcount;
-                        entry = kmap(rdpg->rp_pages[i]);
-                        last = entry;
+                for (i = 0, rc = 0, nob = rdpg->rp_count;
+                     rc == 0 && nob > 0; i++, nob -= CFS_PAGE_SIZE) {
 
-                        for (rc = 0; rc == 0; ) {
-                                rc = iops->next(ctxt, it);
-
-                                if (rc == 0) {
-                                        struct lu_fid *fid;
-                                        char          *name;
-                                        int            len;
-
-                                        fid  = (void *)iops->rec(ctxt, it);
-                                        name = (void *)iops->key(ctxt, it);
-                                        len  = iops->key_size(ctxt, it);
-
-                                        entry->de_fid = *fid;
-                                        fid_cpu_to_le(&entry->de_fid);
-
-                                        entry->de_name_len = cpu_to_le16(len + 1);
-                                        entry->de_rec_len = cpu_to_le16(LU_DIR_REC_LEN(len + 1));
-
-                                        strncpy(entry->de_name, name, len);
-                                        entry->de_name[len] = '\0';
-
-                                        page_space -= LU_DIR_REC_LEN(len + 1);
-                                        last = entry;
-
-                                        entry = (struct lu_dir_entry *)((char *)entry +
-                                                                        LU_DIR_REC_LEN(len + 1));
-                                }
-                        }
-                        /* last entry fills whole space in the page */
-                        if (page_space < PAGE_SIZE)
-                                last->de_rec_len += page_space;
-                        kunmap(rdpg->rp_pages[i]);
+                        LASSERT(i < rdpg->rp_npages);
+                        pg = rdpg->rp_pages[i];
+                        rc = osd_dir_page_build(ctxt, !i, kmap(pg),
+                                                min_t(int, nob, CFS_PAGE_SIZE),
+                                                iops, it,
+                                                &hash_start, &hash_end, &last);
+                        kunmap(pg);
                 }
                 iops->put(ctxt, it);
+                if (rc > 0) {
+                        /*
+                         * end of directory.
+                         */
+                        hash_end = ~0ul;
+                        rc = 0;
+                }
+                if (rc == 0) {
+                        struct lu_dirpage *dp;
 
-                rc = 0;
-        } else if (rc == 0) {
+                        dp = kmap(rdpg->rp_pages[0]);
+                        dp->ldp_hash_start = hash_start;
+                        dp->ldp_hash_end   = hash_end;
+                        kunmap(rdpg->rp_pages[0]);
+                        kmap(pg);
+                        LASSERT(page_address(pg) <= (void *)last &&
+                                (void *)last < page_address(pg) + CFS_PAGE_SIZE);
+                        last->lde_reclen = 0;
+                        kunmap(pg);
+                }
+        } else if (rc == 0)
                 rc = -EIO;
-        }
+        iops->put(ctxt, it);
         iops->fini(ctxt, it);
 
         return rc;
@@ -990,6 +1044,7 @@ static struct dt_object_operations osd_obj_ops = {
         .do_ref_del    = osd_object_ref_del,
         .do_xattr_get  = osd_xattr_get,
         .do_xattr_set  = osd_xattr_set,
+        .do_xattr_del  = osd_xattr_del,
         .do_xattr_list = osd_xattr_list,
         .do_readpage   = osd_readpage
 };
