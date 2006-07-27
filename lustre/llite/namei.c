@@ -836,7 +836,8 @@ static int ll_unlink_generic(struct inode * dir, struct qstr *name)
                name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
         ll_prepare_md_op_data(&op_data, dir, NULL, name->name,
-                              name->len, 0);
+                              name->len,  
+                              0);
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, &op_data, &request);
         if (rc)
                 GOTO(out, rc);

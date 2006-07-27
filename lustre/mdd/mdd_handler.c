@@ -665,6 +665,12 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         int rc;
         ENTRY;
 
+        rc = mdd_attr_get(ctxt, cobj, &ma->ma_attr);
+        if (rc == 0)
+                ma->ma_valid |= MA_INODE;
+        else
+                RETURN(rc);
+
         /* sanity checks */
         if (dt_try_as_dir(ctxt, dt_cobj)) {
                 if (!S_ISDIR(ma->ma_attr.la_mode))
@@ -672,6 +678,13 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         } else {
                 if (S_ISDIR(ma->ma_attr.la_mode))
                         RETURN(rc = -ENOTDIR);
+        }
+
+        if (S_ISREG(ma->ma_attr.la_mode) && ma &&
+            ma->ma_lmm != 0 && ma->ma_lmm_size > 0) {
+                rc = mdd_get_md(ctxt, cobj, ma->ma_lmm, &ma->ma_lmm_size, 0);
+                if (rc > 0)
+                        ma->ma_valid |= MA_LOV;
         }
 
         mdd_txn_param_build(ctxt, &MDD_TXN_UNLINK);

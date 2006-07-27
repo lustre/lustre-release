@@ -243,12 +243,13 @@ lcfg_cleanup:
         RETURN(rc);
 }
 
-static int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
-                      void *md, int *md_size, int lock)
+int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
+               void *md, int *md_size, int lock)
 {
         struct dt_object *next;
         int rc = 0;
         int lmm_size;
+        ENTRY;
 
         next = mdd_object_child(md2mdd_obj(obj));
         rc = next->do_ops->do_xattr_get(ctxt, next, md, *md_size,

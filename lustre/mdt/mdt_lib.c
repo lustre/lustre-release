@@ -40,6 +40,8 @@
 
 #include "mdt_internal.h"
 
+
+/* copied from lov/lov_ea.c, just for debugging, will be removed later */
 static void mdt_dump_lmm(int level, struct lov_mds_md *lmm)
 {
         struct lov_ost_data_v1 *lod;
@@ -59,10 +61,37 @@ static void mdt_dump_lmm(int level, struct lov_mds_md *lmm)
                        le64_to_cpu(lod->l_object_id));
 }
 
+void mdt_shrink_reply(struct mdt_thread_info *info)
+{
+        struct ptlrpc_request *req = mdt_info_req(info);
+        struct mdt_body *body;
+        struct lov_mds_md *lmm;
+        int cookie_size = 0;
+        int md_size = 0;
+
+        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+
+        if (body && body->valid & OBD_MD_FLEASIZE) {
+                md_size = body->eadatasize;
+        }
+        if (body && body->valid & OBD_MD_FLCOOKIE) {
+                LASSERT(body->valid & OBD_MD_FLEASIZE);
+                lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
+                cookie_size = le32_to_cpu(lmm->lmm_stripe_count) * 
+                                sizeof(struct llog_cookie);
+        }
+
+        CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n", 
+                       md_size, cookie_size);
+
+        lustre_shrink_reply(req, 1, md_size, 1);
+        lustre_shrink_reply(req, md_size? 2:1, cookie_size, 0);
+}
+
+
 /* if object is dying, pack the lov/llog data,
  * parameter info->mti_attr should be valid at this point! */
-int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
-                           int need_get_attr, const struct req_format *fmt)
+int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo)
 {
         struct mdt_body *repbody;
         struct md_attr  *ma = &info->mti_attr;
@@ -70,54 +99,26 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         int              rc = 0;
         ENTRY;
 
-        /* if last unlinked object reference so client should destroy ost
-         * objects*/
+
+        /* if this is the last unlinked object reference,
+         * so client should destroy ost objects*/
         if (S_ISREG(la->la_mode) &&
             la->la_nlink == 0 && mo->mot_header.loh_ref == 1) {
 
-                CDEBUG(D_INODE, "Last reference is released on "DFID3
-                                "need_get_attr = %d for it?\n",
-                                PFID3(mdt_object_fid(mo)),
-                                need_get_attr);
-                /* reply should contains more data,
-                 * * so we need to extend it */
-                req_capsule_extend(&info->mti_pill, fmt);
-                
-                req_capsule_pack(&info->mti_pill);
-                if (need_get_attr) {
-                        ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
-                                                            &RMF_MDT_MD);
-                        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
-                                                               &RMF_MDT_MD,
-                                                               RCL_SERVER);
-                        rc = mo_attr_get(info->mti_ctxt, 
-                                         mdt_object_child(mo), la);
-                        if (rc == 0) {
-                                ma->ma_valid |= MA_INODE;
-                                rc = mo_xattr_get(info->mti_ctxt,
-                                                  mdt_object_child(mo),
-                                                  ma->ma_lmm,
-                                                  ma->ma_lmm_size,
-                                                  XATTR_NAME_LOV);
-                                if (rc >= 0) {
-                                        ma->ma_lmm_size = rc;
-                                        rc = 0;
-                                        ma->ma_valid |= MA_LOV;
-                                        mdt_dump_lmm(D_ERROR, ma->ma_lmm);
-                                }
-                        }
-                }
+                CDEBUG(D_INODE, "Last reference is released on "DFID3"\n",
+                                PFID3(mdt_object_fid(mo)));
 
+                CDEBUG(D_INODE, "ma_valid = "LPX64"\n", ma->ma_valid);
                 repbody = req_capsule_server_get(&info->mti_pill, 
                                                  &RMF_MDT_BODY);
                 if (ma->ma_valid & MA_INODE)
                         mdt_pack_attr2body(repbody, la, mdt_object_fid(mo));
                 if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
+                        mdt_dump_lmm(D_ERROR, ma->ma_lmm);
                         repbody->eadatasize = ma->ma_lmm_size;
                         repbody->valid |= OBD_MD_FLEASIZE;
                 }
-        } else 
-                req_capsule_pack(&info->mti_pill);
+        }
 
         RETURN(rc);
 }

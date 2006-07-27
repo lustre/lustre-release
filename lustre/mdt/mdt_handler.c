@@ -336,9 +336,10 @@ skip_packing:
                 repbody->max_cookiesize = info->mti_mdt->mdt_max_cookiesize;
                 repbody->max_mdsize = info->mti_mdt->mdt_max_mdsize;
                 repbody->valid |= OBD_MD_FLMODEASIZE;
-                CDEBUG(D_INODE, "I am going to change the MAX_MD_SIZE to : %d:%d\n",
-                        repbody->max_cookiesize,
-                        repbody->max_mdsize);
+                CDEBUG(D_INODE, "I am going to change the MAX_MD_SIZE & MAX_COOKIE"
+                                "to : %d:%d\n",
+                                repbody->max_cookiesize,
+                                repbody->max_mdsize);
         }
 
         if (rc != 0)
@@ -696,7 +697,7 @@ static long mdt_reint_opcode(struct mdt_thread_info *info,
 static int mdt_reint(struct mdt_thread_info *info)
 {
         long opc;
-        int  rc = 0;
+        int  rc;
 
         static const struct req_format *reint_fmts[REINT_MAX] = {
                 [REINT_SETATTR] = &RQF_MDS_REINT_SETATTR,
@@ -713,8 +714,7 @@ static int mdt_reint(struct mdt_thread_info *info)
         if (opc >= 0) {
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
 
-                if (opc != REINT_UNLINK)
-                        rc = req_capsule_pack(&info->mti_pill);
+                rc = req_capsule_pack(&info->mti_pill);
                 if (rc == 0)
                         rc = mdt_reint_internal(info, opc);
         } else
@@ -2816,7 +2816,7 @@ DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
 DEF_MDT_HNDL_F(0                        |MUTABOR,
                                           REINT,        mdt_reint),
-DEF_MDT_HNDL_F(HABEO_CORPUS,              CLOSE,        mdt_close),
+DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, CLOSE,        mdt_close),
 DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),
 DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),

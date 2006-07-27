@@ -63,6 +63,10 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *child, struct lov_mds_md **lmm,
                    int *lmm_size);
+int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
+               void *md, int *md_size, int lock);
+
+
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx);
 extern struct lu_device_operations mdd_lu_ops;
 static inline int lu_device_is_mdd(struct lu_device *d)

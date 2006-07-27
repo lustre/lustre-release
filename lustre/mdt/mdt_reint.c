@@ -223,13 +223,13 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 {
         struct mdt_reint_record *rr = &info->mti_rr;
         struct ptlrpc_request   *req = mdt_info_req(info);
+        struct md_attr          *ma = &info->mti_attr;
+        struct lu_fid           *child_fid = &info->mti_tmp_fid1;
         struct mdt_object       *mp;
         struct mdt_object       *mc;
         struct mdt_lock_handle  *lhp;
         struct mdt_lock_handle  *lhc;
-        struct lu_fid           *child_fid = &info->mti_tmp_fid1;
         int                      rc;
-
         ENTRY;
 
         DEBUG_REQ(D_INODE, req, "unlink "DFID3"/%s\n", PFID3(rr->rr_fid1),
@@ -246,8 +246,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 
         if (strlen(rr->rr_name) == 0) {
                 /* remote partial operation */
-                rc = mo_ref_del(info->mti_ctxt, mdt_object_child(mp),
-                                &info->mti_attr);
+                rc = mo_ref_del(info->mti_ctxt, mdt_object_child(mp), ma);
                 GOTO(out_unlock_parent, rc);
         }
 
@@ -268,19 +267,23 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 
         /* step 4: delete it */
         /* cmm will take care if child is local or remote */
-        rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mp),
-                        mdt_object_child(mc), rr->rr_name, &info->mti_attr);
+        ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
+        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                                               &RMF_MDT_MD, RCL_SERVER);
 
+        rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mp),
+                        mdt_object_child(mc), rr->rr_name, ma);
         if (rc)
                 GOTO(out_unlock_child, rc);
 
-        rc = mdt_handle_last_unlink(info, mc, 0, &RQF_MDS_REINT_UNLINK_LAST);
-        GOTO(out_unlock_child, rc);
+        rc = mdt_handle_last_unlink(info, mc);
 
+        GOTO(out_unlock_child, rc);
 out_unlock_child:
         mdt_object_unlock_put(info, mc, lhc, rc);
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, lhp, rc);
+        mdt_shrink_reply(info);
         return rc;
 }
 

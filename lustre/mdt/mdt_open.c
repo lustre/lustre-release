@@ -351,8 +351,11 @@ int mdt_mfd_close(const struct lu_context *ctxt,
 
 int mdt_close(struct mdt_thread_info *info)
 {
+        struct md_attr         *ma = &info->mti_attr;
+        struct lu_attr         *la = &ma->ma_attr;
         struct mdt_export_data *med;
         struct mdt_file_data   *mfd;
+        struct mdt_object      *o;
         int rc;
         ENTRY;
 
@@ -371,11 +374,31 @@ int mdt_close(struct mdt_thread_info *info)
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
 
-                rc = mdt_handle_last_unlink(info, mfd->mfd_object, 1,
-                                            &RQF_MDS_CLOSE_LAST);
+                o = mfd->mfd_object;
+                ma->ma_lmm = req_capsule_server_get(&info->mti_pill, 
+                                                    &RMF_MDT_MD);
+                ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                                                       &RMF_MDT_MD, RCL_SERVER);
+                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), la);
+                if (rc == 0) {
+                        ma->ma_valid |= MA_INODE;
+                        rc = mo_xattr_get(info->mti_ctxt,
+                                          mdt_object_child(o),
+                                          ma->ma_lmm,
+                                          ma->ma_lmm_size,
+                                          XATTR_NAME_LOV);
+                        if (rc >= 0) {
+                                ma->ma_lmm_size = rc;
+                                rc = 0;
+                                ma->ma_valid |= MA_LOV;
+                        }
+                        if (rc == 0)
+                                rc = mdt_handle_last_unlink(info, o);
+                }
 
                 mdt_mfd_close(info->mti_ctxt, mfd);
         }
+        mdt_shrink_reply(info);
         RETURN(rc);
 }
 
