@@ -436,7 +436,7 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
         spin_unlock(&mdt->mdt_transno_lock);
         /* save transno for the commit callback */
         txni->txi_transno = mti->mti_transno;
-        CDEBUG(D_HA, "transno "LPD64" stopped\n", txni->txi_transno);
+        CDEBUG(D_INFO, "transno "LPD64" stopped\n", txni->txi_transno);
 /*
         TODO: write last_rcvd
 */
@@ -457,7 +457,7 @@ static int mdt_txn_commit_cb(const struct lu_context *ctx,
                 mdt->mdt_last_committed = txi->txi_transno;
                 ptlrpc_commit_replies(obd);
         }
-        CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
+        CDEBUG(D_INFO, "%s: transno "LPD64" committed\n",
                obd->obd_name, txi->txi_transno);
 
         return 0;

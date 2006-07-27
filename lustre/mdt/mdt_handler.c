@@ -1128,7 +1128,7 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
                        libcfs_nid2str(exp->exp_connection->c_peer.nid),
                        info->mti_transno, rc);
         }
-        CDEBUG(D_HA, "last_transno = %llu, last_committed = %llu\n",
+        CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n",
                last_transno, last_committed);
 
         req->rq_repmsg->transno = req->rq_transno = last_transno;
@@ -1663,6 +1663,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                 RETURN(-EFAULT);
         rep->lock_policy_res2 = mdt_reint_internal(info, opc);
         intent_set_disposition(rep, DISP_IT_EXECD);
+
         mdt_update_last_transno(info, rep->lock_policy_res2);
 
         RETURN(ELDLM_LOCK_ABORTED);

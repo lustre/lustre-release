@@ -122,11 +122,12 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 rc = ll_extent_unlock(fd, inode, lsm, LCK_GROUP,
                                       &fd->fd_cwlockh);
         }
-        CDEBUG(D_INFO, "closing ino = %lu file = %p has open req = %p:%x"
-                       " handle="LPX64"\n",
+        CDEBUG(D_INFO, "closing ino = %lu file = %p has open req = %p, type = %x, "
+                       "transno = "LPU64", handle = "LPX64"\n",
                        inode->i_ino, file,
                        och->och_mod->mod_open_req,
                        och->och_mod->mod_open_req->rq_type,
+                       och->och_mod->mod_open_req->rq_transno,
                        och->och_fh.cookie);
         
         rc = ll_close_inode_openhandle(md_exp, inode, och);
@@ -317,10 +318,10 @@ int ll_file_open(struct inode *inode, struct file *file)
         rc = ll_local_open(file, it, fd);
         req = it->d.lustre.it_data;
         LASSERTF(rc == 0, "rc = %d\n", rc);
-        CDEBUG(D_INFO, "opening ino = %lu file = %p has open req = %p:%x"
-                       " handle="LPX64"\n",
+        CDEBUG(D_INFO, "opening ino = %lu file = %p has open req = %p, type = %x, "
+                       "transno = "LPU64", handle = "LPX64"\n",
                        inode->i_ino, file, req, req->rq_type, 
-                       fd->fd_mds_och.och_fh.cookie);
+                       req->rq_transno, fd->fd_mds_och.och_fh.cookie);
 
         if (!S_ISREG(inode->i_mode))
                 GOTO(out, rc);

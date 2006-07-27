@@ -142,6 +142,25 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 /*mds_deny_write_access*/
         }
 
+        /* (1) client wants transno when open to keep a ref count for replay;
+         *     see after_reply() and mdc_close_commit();
+         * (2) we need to record the transaction related stuff onto disk;
+         * But, question is: when do a rean only open, do we still need transno?
+         */
+        if (1) {
+                struct txn_param txn;
+                struct thandle *th;
+                struct dt_device *dt = info->mti_mdt->mdt_bottom;
+                txn.tp_credits = 1;
+
+                LASSERT(dt);
+                th = dt->dd_ops->dt_trans_start(info->mti_ctxt, dt, &txn);
+                if (!IS_ERR(th)) 
+                        dt->dd_ops->dt_trans_stop(info->mti_ctxt, th);
+                else 
+                        RETURN(PTR_ERR(th));
+        }
+
         mfd = mdt_mfd_new();
         if (mfd != NULL) {
                 /* keep a reference on this object for this open,

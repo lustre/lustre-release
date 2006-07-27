@@ -641,11 +641,12 @@ static int after_reply(struct ptlrpc_request *req)
         }
 
         /* Store transno in reqmsg for replay. */
-        CDEBUG(D_INFO, "req->replayable = %d, transno = "LPU64
-                        " committed = "LPU64"\n",
-                        req->rq_import->imp_replayable,
-                        req->rq_repmsg->transno,
-                        req->rq_repmsg->last_committed);
+        CDEBUG(D_INFO, "req@%p: replayable = %d, transno = "LPU64
+                       " committed = "LPU64"\n",
+                       req,
+                       req->rq_import->imp_replayable,
+                       req->rq_repmsg->transno,
+                       req->rq_repmsg->last_committed);
         req->rq_reqmsg->transno = req->rq_transno = req->rq_repmsg->transno;
 
         if (req->rq_import->imp_replayable) {
