@@ -336,6 +336,9 @@ skip_packing:
                 repbody->max_cookiesize = info->mti_mdt->mdt_max_cookiesize;
                 repbody->max_mdsize = info->mti_mdt->mdt_max_mdsize;
                 repbody->valid |= OBD_MD_FLMODEASIZE;
+                CDEBUG(D_INODE, "I am going to change the MAX_MD_SIZE to : %d:%d\n",
+                        repbody->max_cookiesize,
+                        repbody->max_mdsize);
         }
 
         if (rc != 0)
@@ -401,7 +404,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         ENTRY;
 
         LASSERT(info->mti_object != NULL);
-        CDEBUG(D_INFO, "getattr with lock for "DFID3"/%s, ldlm_rep = %p\n",
+        CDEBUG(D_INODE, "getattr with lock for "DFID3"/%s, ldlm_rep = %p\n",
                         PFID3(mdt_object_fid(parent)), name, ldlm_rep);
 
         name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
@@ -413,7 +416,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 /* only open the child. parent is on another node. */
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
                 child = parent;
-                CDEBUG(D_INFO, "partial getattr_name child_fid = "DFID3
+                CDEBUG(D_INODE, "partial getattr_name child_fid = "DFID3
                                ", ldlm_rep=%p\n",
                                PFID3(mdt_object_fid(child)), ldlm_rep);
 
@@ -693,7 +696,7 @@ static long mdt_reint_opcode(struct mdt_thread_info *info,
 static int mdt_reint(struct mdt_thread_info *info)
 {
         long opc;
-        int  rc;
+        int  rc = 0;
 
         static const struct req_format *reint_fmts[REINT_MAX] = {
                 [REINT_SETATTR] = &RQF_MDS_REINT_SETATTR,
@@ -710,7 +713,8 @@ static int mdt_reint(struct mdt_thread_info *info)
         if (opc >= 0) {
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
 
-                rc = req_capsule_pack(&info->mti_pill);
+                if (opc != REINT_UNLINK)
+                        rc = req_capsule_pack(&info->mti_pill);
                 if (rc == 0)
                         rc = mdt_reint_internal(info, opc);
         } else
@@ -1123,12 +1127,13 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
         if (rc == 0) {
                 last_transno = info->mti_transno;
         } else {
+                if (info->mti_transno != 0)
+                        CERROR("replay %s transno "LPU64" failed: rc %d\n",
+                               libcfs_nid2str(exp->exp_connection->c_peer.nid),
+                               info->mti_transno, rc);
                 last_transno = 0;
-                CERROR("replay %s transno "LPU64" failed: rc %d\n",
-                       libcfs_nid2str(exp->exp_connection->c_peer.nid),
-                       info->mti_transno, rc);
         }
-        CDEBUG(D_INFO, "last_transno = %llu, last_committed = %llu\n",
+        CDEBUG(D_INODE, "last_transno = %llu, last_committed = %llu\n",
                last_transno, last_committed);
 
         req->rq_repmsg->transno = req->rq_transno = last_transno;
@@ -2390,7 +2395,7 @@ static int mdt_object_init(const struct lu_context *ctxt, struct lu_object *o)
         int                rc = 0;
         ENTRY;
 
-        CDEBUG(D_INFO, "object init, fid = "DFID3"\n",
+        CDEBUG(D_INODE, "object init, fid = "DFID3"\n",
                        PFID3(&o->lo_header->loh_fid));
 
         under = &d->mdt_child->md_lu_dev;
@@ -2409,7 +2414,7 @@ static void mdt_object_free(const struct lu_context *ctxt, struct lu_object *o)
         ENTRY;
 
         h = o->lo_header;
-        CDEBUG(D_INFO, "object free, fid = "DFID3"\n", PFID3(&h->loh_fid));
+        CDEBUG(D_INODE, "object free, fid = "DFID3"\n", PFID3(&h->loh_fid));
 
         lu_object_fini(o);
         lu_object_header_fini(h);
@@ -2811,7 +2816,7 @@ DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
 DEF_MDT_HNDL_F(0                        |MUTABOR,
                                           REINT,        mdt_reint),
-DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, CLOSE,        mdt_close),
+DEF_MDT_HNDL_F(HABEO_CORPUS,              CLOSE,        mdt_close),
 DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),
 DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),

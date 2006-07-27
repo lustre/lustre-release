@@ -227,7 +227,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         struct mdt_object       *mc;
         struct mdt_lock_handle  *lhp;
         struct mdt_lock_handle  *lhc;
-        struct mdt_body         *repbody;
         struct lu_fid           *child_fid = &info->mti_tmp_fid1;
         int                      rc;
 
@@ -252,8 +251,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
                 GOTO(out_unlock_parent, rc);
         }
 
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-
         /*step 2: find & lock the child */
         lhc = &info->mti_lh[MDT_LH_CHILD];
         lhc->mlh_mode = LCK_EX;
@@ -277,7 +274,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         if (rc)
                 GOTO(out_unlock_child, rc);
 
-        rc = mdt_handle_last_unlink(info, mc, &RQF_MDS_REINT_UNLINK_LAST);
+        rc = mdt_handle_last_unlink(info, mc, 0, &RQF_MDS_REINT_UNLINK_LAST);
         GOTO(out_unlock_child, rc);
 
 out_unlock_child:

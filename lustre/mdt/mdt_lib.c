@@ -40,48 +40,84 @@
 
 #include "mdt_internal.h"
 
+static void mdt_dump_lmm(int level, struct lov_mds_md *lmm)
+{
+        struct lov_ost_data_v1 *lod;
+        int i;
+
+        CDEBUG_EX(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
+               le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
+               le32_to_cpu(lmm->lmm_pattern));
+        CDEBUG_EX(level,"stripe_size %u, stripe_count %u\n",
+               le32_to_cpu(lmm->lmm_stripe_size),
+               le32_to_cpu(lmm->lmm_stripe_count));
+        for (i = 0, lod = lmm->lmm_objects;
+             i < le32_to_cpu(lmm->lmm_stripe_count); i++, lod++)
+                CDEBUG_EX(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
+                       i, le32_to_cpu(lod->l_ost_idx),
+                       le64_to_cpu(lod->l_object_gr),
+                       le64_to_cpu(lod->l_object_id));
+}
+
 /* if object is dying, pack the lov/llog data,
  * parameter info->mti_attr should be valid at this point! */
-int mdt_handle_last_unlink(struct mdt_thread_info *info,
-                           struct mdt_object *mo, const struct req_format *fmt)
+int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
+                           int need_get_attr, const struct req_format *fmt)
 {
-        struct mdt_body *body;
-        struct lu_attr  *la = &info->mti_attr.ma_attr;
+        struct mdt_body *repbody;
+        struct md_attr  *ma = &info->mti_attr;
+        struct lu_attr  *la = &ma->ma_attr;
         int              rc = 0;
         ENTRY;
-
-        body = req_capsule_server_get(&info->mti_pill,
-                                      &RMF_MDT_BODY);
-        mdt_pack_attr2body(body, la, mdt_object_fid(mo));
 
         /* if last unlinked object reference so client should destroy ost
          * objects*/
         if (S_ISREG(la->la_mode) &&
             la->la_nlink == 0 && mo->mot_header.loh_ref == 1) {
-                struct lov_mds_md  *lmm;
 
+                CDEBUG(D_INODE, "Last reference is released on "DFID3
+                                "need_get_attr = %d for it?\n",
+                                PFID3(mdt_object_fid(mo)),
+                                need_get_attr);
                 /* reply should contains more data,
                  * * so we need to extend it */
                 req_capsule_extend(&info->mti_pill, fmt);
+                
+                req_capsule_pack(&info->mti_pill);
+                if (need_get_attr) {
+                        ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
+                                                            &RMF_MDT_MD);
+                        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                                                               &RMF_MDT_MD,
+                                                               RCL_SERVER);
+                        rc = mo_attr_get(info->mti_ctxt, 
+                                         mdt_object_child(mo), la);
+                        if (rc == 0) {
+                                ma->ma_valid |= MA_INODE;
+                                rc = mo_xattr_get(info->mti_ctxt,
+                                                  mdt_object_child(mo),
+                                                  ma->ma_lmm,
+                                                  ma->ma_lmm_size,
+                                                  XATTR_NAME_LOV);
+                                if (rc >= 0) {
+                                        ma->ma_lmm_size = rc;
+                                        rc = 0;
+                                        ma->ma_valid |= MA_LOV;
+                                        mdt_dump_lmm(D_ERROR, ma->ma_lmm);
+                                }
+                        }
+                }
 
-                lmm = req_capsule_server_get(&info->mti_pill,
-                                &RMF_MDT_MD);
-
-
-                /*TODO: lmm data & llog cookie
-                 * rc = mo_xattr_get(info->mti_ctxt, mdt_object_child(o),
-                 * lmm, info->mti_mdt->mdt_max_mdsize,
-                 * MDS_LOV_MD_NAME);
-                 * if (rc >= 0) {
-                 * if (S_ISDIR(info->mti_attr.la_mode))
-                 * body->valid |= OBD_MD_FLDIREA;
-                 * else
-                 * body->valid |= OBD_MD_FLEASIZE;
-                 * body->eadatasize = rc;
-                 * rc = 0;
-                 * }
-                 */
-        }
+                repbody = req_capsule_server_get(&info->mti_pill, 
+                                                 &RMF_MDT_BODY);
+                if (ma->ma_valid & MA_INODE)
+                        mdt_pack_attr2body(repbody, la, mdt_object_fid(mo));
+                if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
+                        repbody->eadatasize = ma->ma_lmm_size;
+                        repbody->valid |= OBD_MD_FLEASIZE;
+                }
+        } else 
+                req_capsule_pack(&info->mti_pill);
 
         RETURN(rc);
 }

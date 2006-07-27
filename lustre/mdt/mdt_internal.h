@@ -360,7 +360,7 @@ int mdt_close(struct mdt_thread_info *info);
 
 int mdt_done_writing(struct mdt_thread_info *info);
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
-                           const struct req_format *);
+                           int need_get_attr, const struct req_format *);
 
 
 /* debug issues helper starts here*/

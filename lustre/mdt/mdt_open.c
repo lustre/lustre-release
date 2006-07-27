@@ -363,7 +363,7 @@ int mdt_close(struct mdt_thread_info *info)
         if (mfd == NULL) {
                 spin_unlock(&med->med_open_lock);
                 CDEBUG(D_INODE, "no handle for file close: fid = "DFID3
-                       ": cookie = "LPX64, PFID3(&info->mti_body->fid1),
+                       ": cookie = "LPX64"\n", PFID3(&info->mti_body->fid1),
                        info->mti_body->handle.cookie);
                 rc = -ESTALE;
         } else {
@@ -371,7 +371,7 @@ int mdt_close(struct mdt_thread_info *info)
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
 
-                rc = mdt_handle_last_unlink(info, mfd->mfd_object,
+                rc = mdt_handle_last_unlink(info, mfd->mfd_object, 1,
                                             &RQF_MDS_CLOSE_LAST);
 
                 mdt_mfd_close(info->mti_ctxt, mfd);
