@@ -114,7 +114,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo)
                 if (ma->ma_valid & MA_INODE)
                         mdt_pack_attr2body(repbody, la, mdt_object_fid(mo));
                 if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
-                        mdt_dump_lmm(D_ERROR, ma->ma_lmm);
+                        mdt_dump_lmm(D_INFO, ma->ma_lmm);
                         repbody->eadatasize = ma->ma_lmm_size;
                         repbody->valid |= OBD_MD_FLEASIZE;
                 }
