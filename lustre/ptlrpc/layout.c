@@ -249,6 +249,7 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_CLOSE,
         &RQF_MDS_PIN,
         &RQF_MDS_READPAGE,
+        &RQF_MDS_DONE_WRITING
 };
 
 struct req_msg_field {
@@ -540,7 +541,6 @@ EXPORT_SYMBOL(RQF_LDLM_INTENT_UNLINK);
 
 const struct req_format RQF_MDS_CLOSE =
         DEFINE_REQ_FMT0("MDS_CLOSE",
-//                        mdt_body_only, mdt_body_only);
                         mdt_body_only, mds_last_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_CLOSE);
 
@@ -548,6 +548,11 @@ const struct req_format RQF_MDS_PIN =
         DEFINE_REQ_FMT0("MDS_PIN",
                         mdt_body_only, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_PIN);
+
+const struct req_format RQF_MDS_DONE_WRITING =
+        DEFINE_REQ_FMT0("MDS_DONE_WRITING",
+                        mdt_body_only, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_DONE_WRITING);
 
 const struct req_format RQF_MDS_READPAGE =
         DEFINE_REQ_FMT0("MDS_READPAGE",

@@ -100,6 +100,7 @@ extern const struct req_format RQF_MDS_PIN;
 extern const struct req_format RQF_MDS_CONNECT;
 extern const struct req_format RQF_MDS_DISCONNECT;
 extern const struct req_format RQF_MDS_READPAGE;
+extern const struct req_format RQF_MDS_DONE_WRITING;
 
 /*
  * This is format of direct (non-intent) MDS_GETATTR_NAME request.

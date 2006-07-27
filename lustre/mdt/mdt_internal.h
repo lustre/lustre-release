@@ -353,8 +353,8 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
 
 int mdt_reint_open(struct mdt_thread_info *info);
 
-int mdt_mfd_close(const struct lu_context *ctxt,
-                  struct mdt_file_data *mfd);
+void mdt_mfd_close(const struct lu_context *ctxt,
+                   struct mdt_file_data *mfd);
 
 int mdt_close(struct mdt_thread_info *info);
 

@@ -192,7 +192,7 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
 
         o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid);
         if (!IS_ERR(o)) {
-                if (mdt_object_exists(info->mti_ctxt, &o->mot_obj.mo_lu)) {
+                if (mdt_object_exists(info->mti_ctxt, &o->mot_obj.mo_lu) > 0) {
                         if (la->la_flags & MDS_OPEN_EXCL &&
                             la->la_flags & MDS_OPEN_CREAT)
                                 rc = -EEXIST;
@@ -329,8 +329,8 @@ out:
         return result;
 }
 
-int mdt_mfd_close(const struct lu_context *ctxt,
-                  struct mdt_file_data *mfd)
+void mdt_mfd_close(const struct lu_context *ctxt,
+                   struct mdt_file_data *mfd)
 {
         ENTRY;
 
@@ -346,7 +346,7 @@ int mdt_mfd_close(const struct lu_context *ctxt,
         mdt_object_put(ctxt, mfd->mfd_object);
 
         mdt_mfd_free(mfd);
-        RETURN(0);
+        EXIT;
 }
 
 int mdt_close(struct mdt_thread_info *info)
@@ -395,7 +395,6 @@ int mdt_close(struct mdt_thread_info *info)
                         if (rc == 0)
                                 rc = mdt_handle_last_unlink(info, o);
                 }
-
                 mdt_mfd_close(info->mti_ctxt, mfd);
         }
         mdt_shrink_reply(info);
@@ -404,7 +403,11 @@ int mdt_close(struct mdt_thread_info *info)
 
 int mdt_done_writing(struct mdt_thread_info *info)
 {
+        int rc;
         ENTRY;
+
+        req_capsule_set(&info->mti_pill, &RQF_MDS_DONE_WRITING);
+        rc = req_capsule_pack(&info->mti_pill);
 
         RETURN(0);
 }
