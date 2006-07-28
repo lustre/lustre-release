@@ -44,6 +44,7 @@
 #include <md_object.h>
 #include <dt_object.h>
 #include <lustre_mds.h>
+#include <lustre_fid.h>
 #include <lustre/lustre_idl.h>
 
 #include "mdd_internal.h"
@@ -308,6 +309,15 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
         RETURN(rc);
 }
 
+/*FIXME: this is for create lsm object id, which should identify the 
+ * lsm object unique in the whole mds, as I see. But it seems, we
+ * still not need it now. right? so just borrow the ll_fid_build_ino
+ */
+static obd_id mdd_lov_create_id(struct lu_fid *fid)
+{
+        return ((fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid));
+}
+
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *child, struct lov_mds_md **lmm,
                    int *lmm_size)
@@ -324,6 +334,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
         oa->o_mode = S_IFREG | 0600;
+        oa->o_id = mdd_lov_create_id(&mdd2lu_obj(child)->lo_header->loh_fid);
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
         oa->o_size = 0;
