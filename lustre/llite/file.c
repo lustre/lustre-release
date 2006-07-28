@@ -73,7 +73,7 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                 op_data.flags = MDS_BFLAG_UNCOMMITTED_WRITES;
                 op_data.valid |= OBD_MD_FLFLAGS;
         }
-        
+
         rc = md_close(md_exp, &op_data, och, &req);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
@@ -129,7 +129,7 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                        och->och_mod->mod_open_req->rq_type,
                        och->och_mod->mod_open_req->rq_transno,
                        och->och_fh.cookie);
-        
+
         rc = ll_close_inode_openhandle(md_exp, inode, och);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         LUSTRE_FPRIVATE(file) = NULL;
@@ -157,13 +157,16 @@ int ll_file_release(struct inode *inode, struct file *file)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
-        /* don't do anything for / */
-        if (inode->i_sb->s_root == file->f_dentry)
-                RETURN(0);
-
         lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_RELEASE);
         fd = LUSTRE_FPRIVATE(file);
         LASSERT(fd != NULL);
+
+        /* don't do anything for / */
+        if (inode->i_sb->s_root == file->f_dentry) {
+                LUSTRE_FPRIVATE(file) = NULL;
+                ll_file_data_put(fd);
+                RETURN(0);
+        }
 
         if (lsm)
                 lov_test_and_clear_async_rc(lsm);
@@ -187,7 +190,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         if (!parent)
                 RETURN(-ENOENT);
 
-        ll_prepare_md_op_data(&op_data, parent->d_inode, NULL, 
+        ll_prepare_md_op_data(&op_data, parent->d_inode, NULL,
                               name, len, O_RDWR);
 
         rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, itp, LCK_PW, &op_data,
@@ -205,7 +208,7 @@ out:
         RETURN(rc);
 }
 
-static void ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli, 
+static void ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
                         struct lookup_intent *it, struct obd_client_handle *och)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
@@ -236,7 +239,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
 
         ll_och_fill(ll_i2sbi(inode)->ll_md_exp,
                     ll_i2info(inode), it, &fd->fd_mds_och);
-                    
+
         LUSTRE_FPRIVATE(file) = fd;
         ll_readahead_init(inode, &fd->fd_ras);
 
@@ -272,19 +275,21 @@ int ll_file_open(struct inode *inode, struct file *file)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), flags %o\n", inode->i_ino,
                inode->i_generation, inode, file->f_flags);
 
-        /* don't do anything for / */
-        if (inode->i_sb->s_root == file->f_dentry)
-                RETURN(0);
-
         it = file->f_it;
 
         fd = ll_file_data_get();
         if (fd == NULL)
                 RETURN(-ENOMEM);
 
+        /* don't do anything for / */
+        if (inode->i_sb->s_root == file->f_dentry) {
+                LUSTRE_FPRIVATE(file) = fd;
+                RETURN(0);
+        }
+
         if (!it || !it->d.lustre.it_disposition) {
                 struct ll_sb_info *sbi = ll_i2sbi(inode);
-                
+
                 /* Convert f_flags into access mode. We cannot use file->f_mode,
                  * because everything but O_ACCMODE mask was stripped from
                  * there */
@@ -306,7 +311,7 @@ int ll_file_open(struct inode *inode, struct file *file)
                         ll_file_data_put(fd);
                         GOTO(out, rc);
                 }
-                
+
                 md_set_lock_data(sbi->ll_md_exp, &it->d.lustre.it_lock_handle,
                                  file->f_dentry->d_inode);
         }
@@ -325,7 +330,7 @@ int ll_file_open(struct inode *inode, struct file *file)
         LASSERTF(rc == 0, "rc = %d\n", rc);
         CDEBUG(D_INFO, "opening ino = %lu file = %p has open req = %p, type = %x, "
                        "transno = "LPU64", handle = "LPX64"\n",
-                       inode->i_ino, file, req, req->rq_type, 
+                       inode->i_ino, file, req, req->rq_type,
                        req->rq_transno, fd->fd_mds_och.och_fh.cookie);
 
         if (!S_ISREG(inode->i_mode))
@@ -1480,7 +1485,7 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         ll_prepare_md_op_data(op_data, head_inode, tail_parent,
                               tail_dentry->d_name.name,
                               tail_dentry->d_name.len, 0);
-        
+
         rc = md_enqueue(ll_i2mdexp(head_inode), LDLM_IBITS, &oit, LCK_PW,
                         op_data, &lockh, &tsize, 0, ldlm_completion_ast,
                         ll_md_blocking_ast, &hsize, 0);
@@ -1628,7 +1633,7 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
         ll_och_fill(ll_i2sbi(inode)->ll_md_exp,
                     ll_i2info(inode), it, och);
 
-        rc = ll_close_inode_openhandle(ll_i2sbi(inode)->ll_md_exp, 
+        rc = ll_close_inode_openhandle(ll_i2sbi(inode)->ll_md_exp,
                                        inode, och);
 
         OBD_FREE(och, sizeof(*och));
@@ -1931,7 +1936,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         }
         sbi = ll_i2sbi(inode);
         lli = ll_i2info(inode);
-        
+
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),name=%s\n",
                inode->i_ino, inode->i_generation, inode, dentry->d_name.name);
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
@@ -1939,7 +1944,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 #endif
 
         ll_prepare_md_op_data(&op_data, inode, inode, NULL, 0, 0);
-        
+
         rc = md_intent_lock(sbi->ll_md_exp, &op_data, NULL, 0, &oit, 0,
                             &req, ll_md_blocking_ast, 0);
 
@@ -1951,7 +1956,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 GOTO(out, rc);
 
         ll_lookup_finish_locks(&oit, dentry);
-        
+
         /* object is allocated, validate size */
         if (lli->lli_smd) {
                 /* ll_glimpse_size will prefer locally cached writes if they

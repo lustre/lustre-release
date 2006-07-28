@@ -926,6 +926,8 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
                  */
                 hash = *(__u32 *)(name - sizeof(__u16) - sizeof(__u32));
                 *end = hash;
+                CERROR("%p %p %d "DFID3": %#8.8x (%d)\"%*.*s\"\n",
+                       area, ent, nob, PFID3(fid), hash, len, len, len, name);
                 if (nob >= recsize) {
                         ent->lde_fid = *fid;
                         ent->lde_hash = hash;
@@ -964,6 +966,7 @@ static int osd_readpage(const struct lu_context *ctxt,
 
         LASSERT(lu_object_exists(ctxt, &dt->do_lu));
         LASSERT(osd_invariant(obj));
+        LASSERT(osd_has_index(obj));
 
         LASSERT(rdpg->rp_pages != NULL);
 
@@ -995,13 +998,14 @@ static int osd_readpage(const struct lu_context *ctxt,
 
                 for (i = 0, rc = 0, nob = rdpg->rp_count;
                      rc == 0 && nob > 0; i++, nob -= CFS_PAGE_SIZE) {
-
                         LASSERT(i < rdpg->rp_npages);
                         pg = rdpg->rp_pages[i];
                         rc = osd_dir_page_build(ctxt, !i, kmap(pg),
                                                 min_t(int, nob, CFS_PAGE_SIZE),
                                                 iops, it,
                                                 &hash_start, &hash_end, &last);
+                        if (rc != 0 || i == rdpg->rp_npages - 1)
+                                last->lde_reclen = 0;
                         kunmap(pg);
                 }
                 iops->put(ctxt, it);
@@ -1019,11 +1023,6 @@ static int osd_readpage(const struct lu_context *ctxt,
                         dp->ldp_hash_start = hash_start;
                         dp->ldp_hash_end   = hash_end;
                         kunmap(rdpg->rp_pages[0]);
-                        kmap(pg);
-                        LASSERT(page_address(pg) <= (void *)last &&
-                                (void *)last < page_address(pg) + CFS_PAGE_SIZE);
-                        last->lde_reclen = 0;
-                        kunmap(pg);
                 }
         } else if (rc == 0)
                 rc = -EIO;
@@ -1062,6 +1061,8 @@ static struct file *osd_rw_init(const struct lu_context *ctxt,
 
         file->f_dentry = dentry;
         file->f_mapping = inode->i_mapping;
+        file->f_op      = inode->i_fop;
+        file->f_mode    = FMODE_WRITE|FMODE_READ;
         dentry->d_inode = inode;
 
         *seg = get_fs();
@@ -1083,7 +1084,11 @@ static ssize_t osd_read(const struct lu_context *ctxt, struct dt_object *dt,
         ssize_t       result;
 
         file = osd_rw_init(ctxt, inode, &seg);
-        result = inode->i_fop->read(file, buf, count, pos);
+        /*
+         * We'd like to use vfs_read() here, but it messes with
+         * dnotify_parent() and locks.
+         */
+        result = file->f_op->read(file, buf, count, pos);
         osd_rw_fini(&seg);
         return result;
 }
@@ -1098,7 +1103,7 @@ static int osd_write(const struct lu_context *ctxt, struct dt_object *dt,
         ssize_t       result;
 
         file = osd_rw_init(ctxt, inode, &seg);
-        result = inode->i_fop->write(file, buf, count, pos);
+        result = file->f_op->write(file, buf, count, pos);
         osd_rw_fini(&seg);
         return result;
 }

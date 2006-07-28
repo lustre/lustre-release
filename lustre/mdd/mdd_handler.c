@@ -450,6 +450,7 @@ static int __mdd_attr_set(const struct lu_context *ctxt, struct md_object *obj,
 static int mdd_attr_set(const struct lu_context *ctxt,
                         struct md_object *obj, const struct lu_attr *attr)
 {
+        struct mdd_object *mdo = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
         int  rc;
@@ -460,7 +461,9 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
+        mdd_lock(ctxt, mdo, DT_WRITE_LOCK);
         rc = __mdd_attr_set(ctxt, obj, attr, handle);
+        mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -483,6 +486,7 @@ static int __mdd_xattr_set(const struct lu_context *ctxt,struct mdd_device *mdd,
 int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
                   const void *buf, int buf_len, const char *name, int fl)
 {
+        struct mdd_object *mdo = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
         int  rc;
@@ -493,8 +497,10 @@ int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
+        mdd_lock(ctxt, mdo, DT_WRITE_LOCK);
         rc = __mdd_xattr_set(ctxt, mdd, md2mdd_obj(obj), buf, buf_len, name,
                              fl, handle);
+        mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -515,6 +521,7 @@ static int __mdd_xattr_del(const struct lu_context *ctxt,struct mdd_device *mdd,
 int mdd_xattr_del(const struct lu_context *ctxt, struct md_object *obj,
                   const char *name)
 {
+        struct mdd_object *mdo = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
         int  rc;
@@ -525,7 +532,9 @@ int mdd_xattr_del(const struct lu_context *ctxt, struct md_object *obj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
+        mdd_lock(ctxt, mdo, DT_WRITE_LOCK);
         rc = __mdd_xattr_del(ctxt, mdd, md2mdd_obj(obj), name, handle);
+        mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -661,10 +670,8 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         if (dt_try_as_dir(ctxt, dt_cobj)) {
                 if (!S_ISDIR(ma->ma_attr.la_mode))
                         RETURN(rc = -EISDIR);
-        } else {
-                if (S_ISDIR(ma->ma_attr.la_mode))
+        } else if (S_ISDIR(ma->ma_attr.la_mode))
                         RETURN(rc = -ENOTDIR);
-        }
 
         if (S_ISREG(ma->ma_attr.la_mode) && ma &&
             ma->ma_lmm != 0 && ma->ma_lmm_size > 0) {
@@ -845,16 +852,19 @@ cleanup:
 static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
                       const char *name, struct lu_fid* fid)
 {
-        struct dt_object    *dir    = mdd_object_child(md2mdd_obj(pobj));
+        struct mdd_object   *mdo = md2mdd_obj(pobj);
+        struct dt_object    *dir = mdd_object_child(mdo);
         struct dt_rec       *rec    = (struct dt_rec *)fid;
         const struct dt_key *key = (const struct dt_key *)name;
         int rc;
         ENTRY;
 
+        mdd_lock(ctxt, mdo, DT_READ_LOCK);
         if (dt_try_as_dir(ctxt, dir))
                 rc = dir->do_index_ops->dio_lookup(ctxt, dir, rec, key);
         else
                 rc = -ENOTDIR;
+        mdd_unlock(ctxt, mdo, DT_READ_LOCK);
         RETURN(rc);
 }
 
@@ -1156,7 +1166,10 @@ static int mdd_ref_add(const struct lu_context *ctxt, struct md_object *obj)
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
                 RETURN(-ENOMEM);
+
+        mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
         __mdd_ref_add(ctxt, mdd_obj, handle);
+        mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -1191,7 +1204,10 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
                 RETURN(-ENOMEM);
+
+        mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
         __mdd_ref_del(ctxt, mdd_obj, handle, ma);
+        mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -1212,11 +1228,18 @@ static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
                         const struct lu_rdpg *rdpg)
 {
         struct dt_object *next;
+        struct mdd_object *mdd = md2mdd_obj(obj);
         int rc;
 
         LASSERT(lu_object_exists(ctxt, mdd2lu_obj(md2mdd_obj(obj))));
         next = mdd_object_child(md2mdd_obj(obj));
+
+        mdd_lock(ctxt, mdd, DT_READ_LOCK);
+        if (dt_try_as_dir(ctxt, next))
         rc = next->do_ops->do_readpage(ctxt, next, rdpg);
+        else
+                rc = -ENOTDIR;
+        mdd_unlock(ctxt, mdd, DT_READ_LOCK);
         return rc;
 }
 

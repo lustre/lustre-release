@@ -229,7 +229,7 @@ static inline int fid_is_sane(const struct lu_fid *fid)
                 fid_seq_is_sane(fid_seq(fid)) && fid_oid(fid) != 0;
 }
 
-#define DFID3 "["LPU64"/%u:%u]"
+#define DFID3 "[%16.16"LPF64"x/%8.8x:%8.8x]"
 
 #define PFID3(fid)    \
         fid_seq(fid), \
