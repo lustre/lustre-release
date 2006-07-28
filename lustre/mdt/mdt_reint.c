@@ -356,7 +356,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         /* step 1: lookup & lock the tgt dir */
         lh_tgt = &info->mti_lh[MDT_LH_CHILD];
         lh_tgtdir = &info->mti_lh[MDT_LH_PARENT];
-        lh_tgtdir->mlh_mode = LCK_PW;
+        lh_tgtdir->mlh_mode = LCK_EX;
         mtgtdir = mdt_object_find_lock(info, rr->rr_fid1, lh_tgtdir,
                                        MDS_INODELOCK_UPDATE);
         if (IS_ERR(mtgtdir))

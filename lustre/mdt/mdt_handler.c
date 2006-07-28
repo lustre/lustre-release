@@ -405,12 +405,12 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         ENTRY;
 
         LASSERT(info->mti_object != NULL);
-        CDEBUG(D_INODE, "getattr with lock for "DFID3"/%s, ldlm_rep = %p\n",
-                        PFID3(mdt_object_fid(parent)), name, ldlm_rep);
-
         name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
         if (name == NULL)
                 RETURN(-EFAULT);
+
+        CDEBUG(D_INODE, "getattr with lock for "DFID3"/%s, ldlm_rep = %p\n",
+                        PFID3(mdt_object_fid(parent)), name, ldlm_rep);
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
         if (strlen(name) == 0) {
@@ -557,7 +557,7 @@ static int mdt_sendpage(struct mdt_thread_info *info,
 
         for (i = 0, tmpcount = rdpg->rp_count;
                 i < rdpg->rp_npages; i++, tmpcount -= tmpsize) {
-                tmpsize = min(tmpcount, CFS_PAGE_SIZE);
+                tmpsize = min_t(int, tmpcount, CFS_PAGE_SIZE);
                 ptlrpc_prep_bulk_page(desc, rdpg->rp_pages[i], 0, tmpsize);
         }
 
@@ -628,7 +628,7 @@ static int mdt_readpage(struct mdt_thread_info *info)
                 RETURN(-EFAULT);
         }
         rdpg->rp_count  = reqbody->nlink;
-        rdpg->rp_npages = rdpg->rp_count + CFS_PAGE_SIZE - 1 >> CFS_PAGE_SHIFT;
+        rdpg->rp_npages = (rdpg->rp_count + CFS_PAGE_SIZE - 1)>> CFS_PAGE_SHIFT;
         OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
         if (rdpg->rp_pages == NULL)
                 RETURN(-ENOMEM);

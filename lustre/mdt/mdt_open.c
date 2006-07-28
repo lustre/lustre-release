@@ -264,9 +264,9 @@ int mdt_reint_open(struct mdt_thread_info *info)
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
         lh = &info->mti_lh[MDT_LH_PARENT];
         if (!(la->la_flags & MDS_OPEN_CREAT))
-                lh->mlh_mode = LCK_PR;
+                lh->mlh_mode = LCK_CR;
         else
-                lh->mlh_mode = LCK_PW;
+                lh->mlh_mode = LCK_EX;
         parent = mdt_object_find_lock(info, rr->rr_fid1, lh,
                                       MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
