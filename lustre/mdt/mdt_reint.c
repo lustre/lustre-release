@@ -52,7 +52,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
         lh = &info->mti_lh[MDT_LH_PARENT];
-        lh->mlh_mode = LCK_PW;
+        lh->mlh_mode = LCK_EX;
 
         parent = mdt_object_find_lock(info, rr->rr_fid1,
                                       lh, MDS_INODELOCK_UPDATE);

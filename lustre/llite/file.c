@@ -283,6 +283,8 @@ int ll_file_open(struct inode *inode, struct file *file)
                 RETURN(-ENOMEM);
 
         if (!it || !it->d.lustre.it_disposition) {
+                struct ll_sb_info *sbi = ll_i2sbi(inode);
+                
                 /* Convert f_flags into access mode. We cannot use file->f_mode,
                  * because everything but O_ACCMODE mask was stripped from
                  * there */
@@ -304,6 +306,9 @@ int ll_file_open(struct inode *inode, struct file *file)
                         ll_file_data_put(fd);
                         GOTO(out, rc);
                 }
+                
+                md_set_lock_data(sbi->ll_md_exp, &it->d.lustre.it_lock_handle,
+                                 file->f_dentry->d_inode);
         }
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
