@@ -49,7 +49,8 @@ struct md_object;
 /* metadata attributes */
 enum ma_valid {
         MA_INODE = (1 << 0),
-        MA_LOV   = (1 << 1)
+        MA_LOV   = (1 << 1),
+        MA_COOKIE = (1 << 2)
 };
 
 struct md_attr {
@@ -57,6 +58,8 @@ struct md_attr {
         struct lu_attr          ma_attr;
         struct lov_mds_md      *ma_lmm;
         int                     ma_lmm_size;
+        struct llog_cookie     *ma_cookie;
+        int                     ma_cookie_size;
 };
 
 /*

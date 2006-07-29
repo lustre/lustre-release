@@ -65,9 +65,10 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    int *lmm_size);
 int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
                void *md, int *md_size, int lock);
-
-
+int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd, 
+                   struct mdd_object *mdd_cobj, struct md_attr *ma);
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx);
+
 extern struct lu_device_operations mdd_lu_ops;
 static inline int lu_device_is_mdd(struct lu_device *d)
 {
@@ -116,5 +117,8 @@ static inline struct dt_object* mdd_object_child(struct mdd_object *o)
         return container_of0(lu_object_next(mdd2lu_obj(o)),
                              struct dt_object, do_lu);
 }
-
+static inline struct obd_device *mdd2_obd(struct mdd_device *mdd)
+{
+        return mdd->mdd_md_dev.md_lu_dev.ld_obd; 
+}
 #endif

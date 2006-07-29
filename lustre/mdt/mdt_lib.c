@@ -118,6 +118,9 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo)
                         repbody->eadatasize = ma->ma_lmm_size;
                         repbody->valid |= OBD_MD_FLEASIZE;
                 }
+                
+                if (ma->ma_cookie_size && ma->ma_valid & MA_COOKIE) 
+                        repbody->valid |= OBD_MD_FLCOOKIE;
         }
 
         RETURN(rc);

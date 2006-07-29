@@ -90,6 +90,13 @@ int md_lov_notity_pre(struct obd_device *obd, struct md_lov_info *mli,
 int md_lov_start_synchronize(struct obd_device *obd, struct md_lov_info *mli,
                              struct obd_device *watched,
                              void *data, int nonblock, const void *ctxt);
+int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
+                      struct lov_mds_md *lmm, int lmm_size,
+                      struct llog_cookie *logcookies, int cookies_size);
+int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
+                      struct lov_mds_md *lmm, int lmm_size,
+                      struct llog_cookie *logcookies, int cookies_size);
+
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'
 #define IOC_REQUEST_MIN_NR                 30

@@ -123,7 +123,7 @@ out:
         obd_free_memmd(mds->mds_osc_exp, &lsm);
         RETURN(rc);
 }
-
+EXPORT_SYMBOL(mds_log_op_unlink);
 int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size)

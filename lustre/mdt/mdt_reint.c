@@ -271,6 +271,14 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                &RMF_MDT_MD, RCL_SERVER);
 
+        ma->ma_cookie = req_capsule_server_get(&info->mti_pill, 
+                                                &RMF_LOGCOOKIES);
+        ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
+                                               &RMF_LOGCOOKIES, RCL_SERVER);
+        
+        if (!ma->ma_lmm || !ma->ma_cookie)
+                GOTO(out_unlock_parent, rc = -EINVAL);
+
         rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mp),
                         mdt_object_child(mc), rr->rr_name, ma);
         if (rc)

@@ -322,7 +322,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *child, struct lov_mds_md **lmm,
                    int *lmm_size)
 {
-        struct obd_device *obd = mdd->mdd_md_dev.md_lu_dev.ld_obd;
+        struct obd_device *obd = mdd2_obd(mdd);
         struct obd_export *lov_exp = obd->u.mds.mds_osc_exp;
         struct obdo *oa;
         struct lov_stripe_md *lsm = NULL;
@@ -353,4 +353,16 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
 out_oa:
         obdo_free(oa);
         RETURN(rc);
+}
+
+int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd, 
+                   struct mdd_object *mdd_cobj, struct md_attr *ma)
+{
+        struct obd_device *obd = mdd2_obd(mdd);
+        
+        if (mds_log_op_unlink(obd, NULL, ma->ma_lmm, ma->ma_lmm_size,
+                                 ma->ma_cookie, ma->ma_cookie_size)) {
+                ma->ma_valid |= MA_COOKIE;
+        }
+        return 0;
 }
