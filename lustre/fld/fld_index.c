@@ -66,7 +66,7 @@ static const struct dt_index_features fld_index_features = {
  */
 enum {
         FLD_TXN_INDEX_INSERT_CREDITS  = 20,
-        FLD_TXN_INDEX_DELETE_CREDITS  = 20
+        FLD_TXN_INDEX_DELETE_CREDITS  = 20,
 };
 
 struct fld_thread_info {
@@ -140,7 +140,7 @@ int fld_index_create(struct lu_server_fld *fld,
         int rc;
         ENTRY;
 
-        /*stub here, will fix it later*/
+        /* stub here, will fix it later */
         txn.tp_credits = FLD_TXN_INDEX_INSERT_CREDITS;
 
         th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);

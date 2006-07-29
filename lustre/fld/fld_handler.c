@@ -367,7 +367,6 @@ fld_server_fini(struct lu_server_fld *fld,
                 fld_index_fini(fld, ctx);
                 fld->fld_dt = NULL;
         }
-        CDEBUG(D_INFO|D_WARNING, "Server FLD\n");
         EXIT;
 }
 EXPORT_SYMBOL(fld_server_fini);

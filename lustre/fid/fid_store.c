@@ -48,22 +48,78 @@
 #include "fid_internal.h"
 
 #ifdef __KERNEL__
+struct seq_store_capsule {
+        struct lu_range ssc_space;
+        struct lu_range ssc_super;
+};
+
+enum {
+        SEQ_TXN_STORE_CREDITS = 20
+};
+
+/* this function implies that caller takes about locking */
 int
 seq_store_write(struct lu_server_seq *seq,
 		const struct lu_context *ctx)
 {
-	int rc = 0;
+        struct dt_object *dt_obj = seq->seq_obj;
+        struct dt_device *dt_dev = seq->seq_dev;
+        struct seq_store_capsule capsule;
+        loff_t pos = 0;
+        struct txn_param txn;
+        struct thandle *th;
+	int rc;
 	ENTRY;
 
+        /* stub here, will fix it later */
+        txn.tp_credits = SEQ_TXN_STORE_CREDITS;
+
+        th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &txn);
+        if (!IS_ERR(th)) {
+                rc = dt_obj->do_body_ops->dbo_write(ctx, dt_obj,
+                                                    (char *)&capsule,
+                                                    sizeof(capsule),
+                                                    &pos, th);
+                if (rc == sizeof(capsule)) {
+                        rc = 0;
+                } else if (rc >= 0) {
+                        rc = -EIO;
+                }
+                
+                dt_dev->dd_ops->dt_trans_stop(ctx, th);
+        } else {
+                rc = PTR_ERR(th);
+        }
+	
 	RETURN(rc);
 }
 
+/* this function implies that caller takes care about locking or locking is not
+ * needed (init time). */
 int
 seq_store_read(struct lu_server_seq *seq,
 	       const struct lu_context *ctx)
 {
-	int rc = -ENODATA;
+        struct dt_object *dt_obj = seq->seq_obj;
+        struct seq_store_capsule capsule;
+        loff_t pos = 0;
+	int rc;
 	ENTRY;
+
+        rc = dt_obj->do_body_ops->dbo_read(ctx, dt_obj,
+                                           (char *)&capsule,
+                                           sizeof(capsule), &pos);
+        if (rc == sizeof(capsule)) {
+                seq->seq_space = capsule.ssc_space;
+                seq->seq_super = capsule.ssc_super;
+                rc = 0;
+        } else if (rc == 0) {
+                rc = -ENODATA;
+        } else if (rc >= 0) {
+                CERROR("read only %d bytes of %d\n",
+                       rc, sizeof(capsule));
+                rc = -EIO;
+        }
 	
 	RETURN(rc);
 }

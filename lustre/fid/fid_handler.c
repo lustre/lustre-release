@@ -537,8 +537,6 @@ seq_server_fini(struct lu_server_seq *seq,
                 seq->seq_dev = NULL;
         }
 
-        CDEBUG(D_INFO|D_WARNING, "Server Sequence "
-               "Manager\n");
         EXIT;
 }
 EXPORT_SYMBOL(seq_server_fini);
