@@ -45,10 +45,11 @@ int mdt_client_add(const struct lu_context *ctxt,
                    struct mdt_export_data *med,
                    int cl_idx)
 {
-        unsigned long *bitmap = mdt->mdt_client_bitmap;
+        unsigned long          *bitmap = mdt->mdt_client_bitmap;
         struct mdt_client_data *mcd = med->med_mcd;
         struct mdt_server_data *msd = &mdt->mdt_msd;
-        int new_client = (cl_idx == -1);
+        int                     new_client = (cl_idx == -1);
+        int                     rc = 0;
         ENTRY;
 
         LASSERT(bitmap != NULL);
@@ -63,7 +64,7 @@ int mdt_client_add(const struct lu_context *ctxt,
                 if (cl_idx >= LR_MAX_CLIENTS ||
                     OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_CLIENT_ADD)) {
                         CERROR("no room for clients - fix LR_MAX_CLIENTS\n");
-                        return -EOVERFLOW;
+                        RETURN(-EOVERFLOW);
                 }
                 if (test_and_set_bit(cl_idx, bitmap)) {
                         cl_idx = find_next_zero_bit(bitmap, LR_MAX_CLIENTS,
@@ -87,20 +88,19 @@ int mdt_client_add(const struct lu_context *ctxt,
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
 
         if (new_client) {
+                struct dt_object *last =  mdt->mdt_last_rcvd;
                 loff_t off = med->med_lr_off;
-                int rc = 0;
-/*
-                rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt,
-                                                           mdt->mdt_last,
-                                                           mcd, sizeof(*mcd),
-                                                           &off, NULL);
-*/
-                if (rc)
-                        return rc;
-                CDEBUG(D_INFO, "wrote client mcd at idx %u off %llu (len %u)\n",
-                       cl_idx, off, sizeof(mcd));
+                rc = last->do_body_ops->dbo_write(ctxt, last, mcd,
+                                                  sizeof(*mcd), &off, NULL);
+                CDEBUG(D_INFO, "wrote client mcd at idx %u off %llu (len %u)"
+                               " rc = %d\n",
+                               cl_idx, off, sizeof(mcd), rc);
+                if (rc == sizeof(*mcd))
+                        rc = 0;
+                else if (rc >= 0)
+                        rc = -EFAULT;
         }
-        return 0;
+        RETURN(rc);
 }
 
 int mdt_update_server_data(const struct lu_context *ctxt,
@@ -108,20 +108,21 @@ int mdt_update_server_data(const struct lu_context *ctxt,
                            int sync)
 {
         struct mdt_server_data *msd = &mdt->mdt_msd;
-        //loff_t off = 0;
-        int rc = 0;
+        loff_t                  off = 0;
+        int                     rc = 0;
+        struct dt_object       *last =  mdt->mdt_last_rcvd;
         ENTRY;
 
-        CDEBUG(D_SUPER, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
-                mdt->mdt_mount_count, mdt->mdt_last_transno);
+        CDEBUG(D_INODE, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
+                        mdt->mdt_mount_count, mdt->mdt_last_transno);
 
         msd->msd_last_transno = cpu_to_le64(mdt->mdt_last_transno);
-/*
-        rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt,
-                                                   mdt->mdt_last,
-                                                   msd,
-                                                   sizeof(*msd), &off, NULL);
-*/
+        rc = last->do_body_ops->dbo_write(ctxt, last, msd,
+                                          sizeof(*msd), &off, NULL);
+        if (rc == sizeof(*msd))
+                rc = 0;
+        else if (rc >= 0)
+                rc = -EFAULT;
         RETURN(rc);
 
 }
@@ -131,8 +132,9 @@ int mdt_client_free(const struct lu_context *ctxt,
                     struct mdt_export_data *med)
 {
         struct mdt_client_data *mcd = med->med_mcd;
-        int rc = 0;
-        loff_t off;
+        struct dt_object       *last =  mdt->mdt_last_rcvd;
+        int                     rc = 0;
+        loff_t                  off;
         ENTRY;
 
         if (!mcd)
@@ -160,12 +162,13 @@ int mdt_client_free(const struct lu_context *ctxt,
         }
 
         memset(mcd, 0, sizeof *mcd);
-/*
-        rc = mdt->mdt_last->do_body_ops->dbo_write(ctxt,
-                                                   mdt->mdt_last,
-                                                   mcd,
-                                                   sizeof(*mcd), &off, NULL);
-*/
+        rc = last->do_body_ops->dbo_write(ctxt, last, mcd,
+                                          sizeof(*mcd), &off, NULL);
+        if (rc == sizeof(*mcd))
+                rc = 0;
+        else if (rc >= 0)
+                rc = -EFAULT;
+
         CDEBUG_EX(rc == 0 ? D_INFO : D_ERROR,
                   "zeroing out client idx %u in %s rc %d\n",
                   med->med_lr_idx, LAST_RCVD, rc);
@@ -193,12 +196,15 @@ static int mdt_init_server_data(const struct lu_context *ctxt,
 {
         struct mdt_server_data *msd = &mdt->mdt_msd;
         struct mdt_client_data *mcd = NULL;
-        struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
-        loff_t off = 0;
-        unsigned long last_rcvd_size = 0; // = getsize(mdt->mdt_last)
-        __u64 mount_count;
-        int cl_idx;
-        int rc = 0;
+        struct obd_device      *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
+        loff_t                  off = 0;
+        unsigned long           last_rcvd_size = 0; // = getsize(mdt->mdt_last)
+        __u64                   mount_count;
+        int                     cl_idx;
+        int                     rc;
+        struct mdt_thread_info *info;
+        struct dt_object       *last = mdt->mdt_last_rcvd;
+        struct lu_attr         *la;
         ENTRY;
 
         /* ensure padding in the struct is the correct size */
@@ -206,6 +212,15 @@ static int mdt_init_server_data(const struct lu_context *ctxt,
                 sizeof(msd->msd_padding) == LR_SERVER_SIZE);
         LASSERT(offsetof(struct mdt_client_data, mcd_padding) +
                 sizeof(mcd->mcd_padding) == LR_CLIENT_SIZE);
+
+        info = lu_context_key_get(ctxt, &mdt_thread_key);
+        LASSERT(info != NULL);
+        la = &info->mti_attr.ma_attr;
+
+        rc = last->do_ops->do_attr_get(ctxt, last, la);
+        if (rc)
+                RETURN(rc);
+        last_rcvd_size = la->la_size;
 
         if (last_rcvd_size == 0) {
                 LCONSOLE_WARN("%s: new disk, initializing\n", obd->obd_name);
@@ -220,12 +235,13 @@ static int mdt_init_server_data(const struct lu_context *ctxt,
                 msd->msd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_MDT |
                                                         OBD_INCOMPAT_COMMON_LR);
         } else {
-/*
-                rc = mdt->mdt_last->do_body_ops->dbo_read(ctxt,
-                                                          mdt->mdt_last,
-                                                          msd,
-                                                          sizeof(*msd), &off);
-*/
+                rc = last->do_body_ops->dbo_read(ctxt, last, msd,
+                                                 sizeof(*msd), &off);
+                if (rc == sizeof(*msd))
+                        rc = 0;
+                else if (rc >= 0)
+                        rc = -EFAULT;
+
                 if (rc) {
                         CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
                         GOTO(out, rc);
@@ -266,6 +282,7 @@ static int mdt_init_server_data(const struct lu_context *ctxt,
 
         mdt->mdt_last_transno = le64_to_cpu(msd->msd_last_transno);
 
+        CDEBUG(D_INODE, "========BEGIN DUMPING LAST_RCVD========\n");
         CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
                obd->obd_name, mdt->mdt_last_transno);
         CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
@@ -282,6 +299,7 @@ static int mdt_init_server_data(const struct lu_context *ctxt,
                last_rcvd_size <= le32_to_cpu(msd->msd_client_start) ? 0 :
                (last_rcvd_size - le32_to_cpu(msd->msd_client_start)) /
                 le16_to_cpu(msd->msd_client_size));
+        CDEBUG(D_INODE, "========END DUMPING LAST_RCVD========\n");
 
         if (!msd->msd_server_size || !msd->msd_client_start ||
             !msd->msd_client_size) {
@@ -306,12 +324,13 @@ static int mdt_init_server_data(const struct lu_context *ctxt,
 
                 off = le32_to_cpu(msd->msd_client_start) +
                         cl_idx * le16_to_cpu(msd->msd_client_size);
-/*
-                rc = mdt->mdt_last->do_body_ops->dbo_read(ctxt,
-                                                          mdt->mdt_last,
-                                                          mcd,
-                                                          sizeof(*mcd), &off);
-*/
+                rc = last->do_body_ops->dbo_read(ctxt, last, mcd,
+                                                 sizeof(*mcd), &off);
+                if (rc == sizeof(*mcd))
+                        rc = 0;
+                else if (rc >= 0)
+                        rc = -EFAULT;
+
                 if (rc) {
                         CERROR("error reading MDS %s idx %d, off %llu: rc %d\n",
                                LAST_RCVD, cl_idx, off, rc);
@@ -466,8 +485,8 @@ static int mdt_txn_commit_cb(const struct lu_context *ctx,
 int mdt_fs_setup(const struct lu_context *ctxt,
                  struct mdt_device *mdt)
 {
-        //struct lu_fid last_fid;
-        //struct dt_object *last;
+        struct lu_fid last_fid;
+        struct dt_object *last;
         int rc = 0;
         ENTRY;
 
@@ -478,20 +497,20 @@ int mdt_fs_setup(const struct lu_context *ctxt,
         mdt->mdt_txn_cb.dtc_cookie = mdt;
 
         dt_txn_callback_add(mdt->mdt_bottom, &mdt->mdt_txn_cb);
-/*
+
         last = dt_store_open(ctxt, mdt->mdt_bottom, LAST_RCVD, &last_fid);
         if(!IS_ERR(last)) {
                 mdt->mdt_last_rcvd = last;
                 rc = mdt_init_server_data(ctxt, mdt);
                 if (rc) {
                         lu_object_put(ctxt, &last->do_lu);
-                        mdt->mdt_last = NULL;
+                        mdt->mdt_last_rcvd = NULL;
                 }
         } else {
                 rc = PTR_ERR(last);
                 CERROR("cannot open %s: rc = %d\n", LAST_RCVD, rc);
         }
-*/
+
         RETURN (rc);
 }
 

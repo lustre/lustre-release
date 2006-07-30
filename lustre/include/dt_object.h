@@ -243,12 +243,12 @@ struct dt_body_operations {
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         ssize_t (*dbo_read)(const struct lu_context *ctxt, struct dt_object *dt,
-                            char *buf, size_t count, loff_t *pos);
+                            void *buf, size_t count, loff_t *pos);
         /*
          * precondition: lu_object_exists(ctxt, &dt->do_lu);
          */
         ssize_t (*dbo_write)(const struct lu_context *ctxt,
-                             struct dt_object *dt, const char *buf,
+                             struct dt_object *dt, const void *buf,
                              size_t count, loff_t *pos, struct thandle *handle);
 };
 

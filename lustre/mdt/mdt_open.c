@@ -380,18 +380,19 @@ int mdt_close(struct mdt_thread_info *info)
                 ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                        &RMF_MDT_MD, RCL_SERVER);
                 rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), la);
-                if (rc == 0) {
+                if (rc == 0 && S_ISREG(la->la_mode)) {
                         ma->ma_valid |= MA_INODE;
                         rc = mo_xattr_get(info->mti_ctxt,
                                           mdt_object_child(o),
                                           ma->ma_lmm,
                                           ma->ma_lmm_size,
                                           XATTR_NAME_LOV);
-                        if (rc >= 0) {
+                        if (rc > 0) {
                                 ma->ma_lmm_size = rc;
                                 rc = 0;
                                 ma->ma_valid |= MA_LOV;
-                        }
+                        } else if (rc == -ENODATA || rc == -EOPNOTSUPP)
+                                rc = 0;
                         if (rc == 0)
                                 rc = mdt_handle_last_unlink(info, o);
                 }

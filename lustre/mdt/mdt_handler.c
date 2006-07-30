@@ -122,7 +122,6 @@ static int                    mdt_handle    (struct ptlrpc_request *req);
 static struct mdt_device     *mdt_dev       (struct lu_device *d);
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
 
-struct lu_context_key       mdt_thread_key;
 static struct lu_object_operations mdt_obj_ops;
 
 
