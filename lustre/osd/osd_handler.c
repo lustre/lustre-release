@@ -1624,11 +1624,17 @@ static int osd_mount(const struct lu_context *ctx,
                 if (!IS_ERR(d)) {
                         o->od_obj_area = d;
                         /*
-                         * XXX temporary resolution: OBJ_IDS should also be
-                         * done in mkfs
+                         * XXX temporary resolution: OBJ_IDS and last_rcvd should 
+                         * also be done in mkfs
                          */
                         d = simple_mknod(osd_sb(o)->s_root,
-                                         "lov_objid", 0777, 1);
+                                         LOV_OBJID, 0777, 1);
+                        if (!IS_ERR(d))
+                                dput(d);
+                        else
+                                result = PTR_ERR(d);
+                        d = simple_mknod(osd_sb(o)->s_root,
+                                        LAST_RCVD, 0777, 1);
                         if (!IS_ERR(d))
                                 dput(d);
                         else
