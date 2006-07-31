@@ -223,7 +223,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 RETURN(-ENOMEM);
         }
 
-        rc = mo_attr_get(ctxt, next, la);
+        rc = mo_attr_get(ctxt, next, &info->mti_attr);
         if (rc == -EREMOTE) {
                 /* FIXME: This object is located on remote node.
                  * What value should we return to client?
@@ -413,7 +413,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
         if (strlen(name) == 0) {
-                /* only open the child. parent is on another node. */
+                /* only getattr on the child. parent is on another node. */
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
                 child = parent;
                 CDEBUG(D_INODE, "partial getattr_name child_fid = "DFID3
@@ -761,7 +761,7 @@ static int mdt_sync(struct mdt_thread_info *info)
                                 next = mdt_object_child(info->mti_object);
                                 fid = mdt_object_fid(info->mti_object);
                                 rc = mo_attr_get(info->mti_ctxt,
-                                                 next, &info->mti_attr.ma_attr);
+                                                 next, &info->mti_attr);
                                 if (rc == 0) {
                                         body = req_capsule_server_get(pill,
                                                                 &RMF_MDT_BODY);

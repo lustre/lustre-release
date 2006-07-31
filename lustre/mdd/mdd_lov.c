@@ -249,7 +249,6 @@ int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
 {
         struct dt_object *next;
         int rc = 0;
-        int lmm_size;
         ENTRY;
 
         next = mdd_object_child(md2mdd_obj(obj));
@@ -265,10 +264,8 @@ int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
         } else if (rc < 0) {
                 CERROR("Error %d reading eadata \n", rc);
         } else if (rc > 0) {
-                lmm_size = rc;
                 /*FIXME convert lov EA necessary for this version?*/
-                *md_size = lmm_size;
-                rc = lmm_size;
+                *md_size = rc;
         }
 
         RETURN (rc);

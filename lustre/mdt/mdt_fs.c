@@ -6,6 +6,7 @@
  *
  *  Copyright (C) 2002-2006 Cluster File Systems, Inc.
  *   Author: Huang Hua <huanghua@clusterfs.com>
+ *   Author; Pershin Mike <tappro@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.

@@ -221,7 +221,7 @@ static int cml_object_create(const struct lu_context *ctx,
 }
 
 static int cml_attr_get(const struct lu_context *ctx, struct md_object *mo,
-                        struct lu_attr *attr)
+                        struct md_attr *attr)
 {
         int rc;
         ENTRY;
@@ -529,7 +529,7 @@ static int cmr_object_create(const struct lu_context *ctx,
 }
 
 static int cmr_attr_get(const struct lu_context *ctx, struct md_object *mo,
-                        struct lu_attr *attr)
+                        struct md_attr *attr)
 {
         RETURN(-EREMOTE);
 }

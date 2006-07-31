@@ -155,7 +155,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         if (rc != 0)
                 GOTO(out_unlock, rc);
 
-        rc = mo_attr_get(info->mti_ctxt, next, attr);
+        rc = mo_attr_get(info->mti_ctxt, next,  &info->mti_attr);
         if (rc != 0)
                 GOTO(out_unlock, rc);
 

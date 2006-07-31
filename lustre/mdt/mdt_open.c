@@ -88,22 +88,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
 
         if (!created) {
                 /* we have to get attr & lov ea for this object*/
-                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), la);
-                if (rc == 0) {
-                        ma->ma_valid |= MA_INODE;
-                        if (S_ISREG(la->la_mode)) {
-                                rc = mo_xattr_get(info->mti_ctxt,
-                                                  mdt_object_child(o),
-                                                  ma->ma_lmm,
-                                                  ma->ma_lmm_size,
-                                                  XATTR_NAME_LOV);
-                                if (rc >= 0) {
-                                        ma->ma_lmm_size = rc;
-                                        rc = 0;
-                                        ma->ma_valid |= MA_LOV;
-                                }
-                        }
-                }
+                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);
         }
         if (rc == 0){
                 if (!S_ISREG(la->la_mode) &&
@@ -352,7 +337,6 @@ void mdt_mfd_close(const struct lu_context *ctxt,
 int mdt_close(struct mdt_thread_info *info)
 {
         struct md_attr         *ma = &info->mti_attr;
-        struct lu_attr         *la = &ma->ma_attr;
         struct mdt_export_data *med;
         struct mdt_file_data   *mfd;
         struct mdt_object      *o;
@@ -379,23 +363,10 @@ int mdt_close(struct mdt_thread_info *info)
                                                     &RMF_MDT_MD);
                 ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                        &RMF_MDT_MD, RCL_SERVER);
-                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), la);
-                if (rc == 0 && S_ISREG(la->la_mode)) {
-                        ma->ma_valid |= MA_INODE;
-                        rc = mo_xattr_get(info->mti_ctxt,
-                                          mdt_object_child(o),
-                                          ma->ma_lmm,
-                                          ma->ma_lmm_size,
-                                          XATTR_NAME_LOV);
-                        if (rc > 0) {
-                                ma->ma_lmm_size = rc;
-                                rc = 0;
-                                ma->ma_valid |= MA_LOV;
-                        } else if (rc == -ENODATA || rc == -EOPNOTSUPP)
-                                rc = 0;
-                        if (rc == 0)
-                                rc = mdt_handle_last_unlink(info, o);
-                }
+                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);
+                if (rc == 0)
+                        rc = mdt_handle_last_unlink(info, o);
+
                 mdt_mfd_close(info->mti_ctxt, mfd);
         }
         mdt_shrink_reply(info);

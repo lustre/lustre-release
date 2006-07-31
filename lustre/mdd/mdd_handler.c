@@ -127,7 +127,7 @@ static void mdd_object_free(const struct lu_context *ctxt, struct lu_object *o)
 }
 
 static int mdd_attr_get(const struct lu_context *ctxt,
-                        struct md_object *obj, struct lu_attr *attr)
+                        struct md_object *obj, struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct dt_object  *next;
@@ -138,8 +138,19 @@ static int mdd_attr_get(const struct lu_context *ctxt,
         LASSERT(lu_object_exists(ctxt, &obj->mo_lu));
 
         next = mdd_object_child(mdd_obj);
-        rc = next->do_ops->do_attr_get(ctxt, next, attr);
-
+        rc = next->do_ops->do_attr_get(ctxt, next, &ma->ma_attr);
+        if (rc == 0) {
+                ma->ma_valid |= MA_INODE;
+                if (S_ISREG(ma->ma_attr.la_mode) && 
+                    ma->ma_lmm != 0 && ma->ma_lmm_size > 0) {
+                        rc = mdd_get_md(ctxt, obj, ma->ma_lmm, &ma->ma_lmm_size, 0);
+                        if (rc >= 0) {                                
+                                ma->ma_valid |= MA_LOV;
+                                rc = 0;
+                        }
+                }
+                /*TODO: get DIREA for directory */
+        }
         RETURN(rc);
 }
 
@@ -403,11 +414,8 @@ static int __mdd_object_create(const struct lu_context *ctxt,
         if (!lu_object_exists(ctxt, mdd2lu_obj(obj))) {
                 next = mdd_object_child(obj);
                 rc = next->do_ops->do_create(ctxt, next, attr, handle);
-                if (rc == 0) {
-                        rc = mdd_attr_get(ctxt, &obj->mod_obj, &ma->ma_attr);
-                        if (rc == 0)
-                                ma->ma_valid |= MA_INODE;
-                }
+                if (rc == 0)
+                        rc = mdd_attr_get(ctxt, &obj->mod_obj, ma);
         } else
                 rc = -EEXIST;
 
@@ -660,25 +668,12 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         int rc;
         ENTRY;
 
-        rc = mdd_attr_get(ctxt, cobj, &ma->ma_attr);
-        if (rc == 0)
-                ma->ma_valid |= MA_INODE;
-        else
-                RETURN(rc);
-
         /* sanity checks */
         if (dt_try_as_dir(ctxt, dt_cobj)) {
                 if (!S_ISDIR(ma->ma_attr.la_mode))
                         RETURN(rc = -EISDIR);
         } else if (S_ISDIR(ma->ma_attr.la_mode))
                         RETURN(rc = -ENOTDIR);
-
-        if (S_ISREG(ma->ma_attr.la_mode) && ma &&
-            ma->ma_lmm != 0 && ma->ma_lmm_size > 0) {
-                rc = mdd_get_md(ctxt, cobj, ma->ma_lmm, &ma->ma_lmm_size, 0);
-                if (rc > 0)
-                        ma->ma_valid |= MA_LOV;
-        }
 
         mdd_txn_param_build(ctxt, &MDD_TXN_UNLINK);
         handle = mdd_trans_start(ctxt, mdd);
@@ -1188,11 +1183,8 @@ __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
         LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
 
         next->do_ops->do_ref_del(ctxt, next, handle);
-        if (ma != NULL) {
-                int rc = mdd_attr_get(ctxt, &obj->mod_obj, &ma->ma_attr);
-                if (rc == 0)
-                        ma->ma_valid |= MA_INODE;
-        }
+        if (ma != NULL)
+                mdd_attr_get(ctxt, &obj->mod_obj, ma);
 }
 
 static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,

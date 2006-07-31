@@ -67,7 +67,7 @@ struct md_attr {
  */
 struct md_object_operations {
         int (*moo_attr_get)(const struct lu_context *ctxt, struct md_object *dt,
-                            struct lu_attr *attr);
+                            struct md_attr *attr);
         int (*moo_attr_set)(const struct lu_context *ctxt, struct md_object *dt,
                             const struct lu_attr *attr);
 
@@ -194,7 +194,7 @@ static inline void md_device_fini(struct md_device *md)
 
 /* md operations */
 static inline int mo_attr_get(const struct lu_context *cx, struct md_object *m,
-                              struct lu_attr *at)
+                              struct md_attr *at)
 {
         LASSERT(m->mo_ops->moo_attr_get);
         return m->mo_ops->moo_attr_get(cx, m, at);
