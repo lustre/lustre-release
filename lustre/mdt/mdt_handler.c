@@ -2006,6 +2006,10 @@ static void mdt_stop_ptlrpc_service(struct mdt_device *m)
                 ptlrpc_unregister_service(m->mdt_readpage_service);
                 m->mdt_readpage_service = NULL;
         }
+        if (m->mdt_setattr_service != NULL) {
+                ptlrpc_unregister_service(m->mdt_setattr_service);
+                m->mdt_setattr_service = NULL;
+        }
 }
 
 static int mdt_start_ptlrpc_service(struct mdt_device *m)
@@ -2073,6 +2077,37 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         }
 
         rc = ptlrpc_start_threads(NULL, m->mdt_readpage_service, "mdt_rdpg");
+
+        /*
+         * setattr service configuration.
+         */
+        conf = (typeof(conf)) {
+                .psc_nbufs            = MDS_NBUFS,
+                .psc_bufsize          = MDS_BUFSIZE,
+                .psc_max_req_size     = MDS_MAXREQSIZE,
+                .psc_max_reply_size   = MDS_MAXREPSIZE,
+                .psc_req_portal       = MDS_SETATTR_PORTAL,
+                .psc_rep_portal       = MDC_REPLY_PORTAL,
+                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_num_threads   = min(max(mdt_num_threads, MDT_MIN_THREADS),
+                                       MDT_MAX_THREADS),
+                .psc_ctx_tags      = LCT_MD_THREAD
+        };
+
+        m->mdt_setattr_service = 
+                ptlrpc_init_svc_conf(&conf, mdt_handle, 
+                                     LUSTRE_MDT0_NAME "_setattr",
+                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
+                                     NULL);
+
+        if (!m->mdt_setattr_service) {
+                CERROR("failed to start setattr service\n");
+                GOTO(err_mdt_svc, rc = -ENOMEM);
+        }
+
+        rc = ptlrpc_start_threads(NULL, m->mdt_setattr_service, "mdt_attr");
+        if (rc)
+                GOTO(err_mdt_svc, rc);
 
         EXIT;
 err_mdt_svc:

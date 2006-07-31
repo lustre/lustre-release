@@ -102,6 +102,7 @@ struct mdt_device {
         struct md_device           mdt_md_dev;
         struct ptlrpc_service     *mdt_service;
         struct ptlrpc_service     *mdt_readpage_service;
+        struct ptlrpc_service     *mdt_setattr_service;
         /* DLM name-space for meta-data locks maintained by this server */
         struct ldlm_namespace     *mdt_namespace;
         /* ptlrpc handle for MDS->client connections (for lock ASTs). */
