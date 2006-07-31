@@ -787,7 +787,7 @@ static void mdd_rename_unlock(const struct lu_context *ctxt,
 {
         mdd_unlock(ctxt, src_pobj, DT_WRITE_LOCK);
         if (src_pobj != tgt_pobj)
-                mdd_unlock(ctxt, src_pobj, DT_WRITE_LOCK);
+                mdd_unlock(ctxt, tgt_pobj, DT_WRITE_LOCK);
 }
 
 static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
