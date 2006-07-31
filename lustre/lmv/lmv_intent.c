@@ -164,8 +164,7 @@ repeat:
         }
 
         op_data.fid1 = rpid;
-        if ((it->it_op & IT_CREAT) && cid == NULL)
-                CERROR("IT_CREAT but without FID\n");
+
         if (cid)
                 op_data.fid2 = *cid;
         op_data.name = name;
