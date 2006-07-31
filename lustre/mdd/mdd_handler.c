@@ -131,7 +131,7 @@ static int mdd_attr_get(const struct lu_context *ctxt,
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct dt_object  *next;
-        int rc;
+        int                rc;
 
         ENTRY;
 
@@ -151,6 +151,8 @@ static int mdd_attr_get(const struct lu_context *ctxt,
                 }
                 /*TODO: get DIREA for directory */
         }
+        CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n", 
+                        rc, ma->ma_valid);
         RETURN(rc);
 }
 
@@ -414,8 +416,6 @@ static int __mdd_object_create(const struct lu_context *ctxt,
         if (!lu_object_exists(ctxt, mdd2lu_obj(obj))) {
                 next = mdd_object_child(obj);
                 rc = next->do_ops->do_create(ctxt, next, attr, handle);
-                if (rc == 0)
-                        rc = mdd_attr_get(ctxt, &obj->mod_obj, ma);
         } else
                 rc = -EEXIST;
 
@@ -694,6 +694,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
                 GOTO(cleanup, rc);
 
         __mdd_ref_del(ctxt, mdd_cobj, handle, ma);
+        mdd_attr_get(ctxt, cobj, ma);
 
         if (S_ISDIR(ma->ma_attr.la_mode)) {
                 /* unlink dot */
@@ -930,12 +931,6 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 rc = mdd_lov_create(ctxt, mdd, son, &lmm, &lmm_size);
                 if (rc)
                         RETURN(rc);
-                if (lmm_size < ma->ma_lmm_size)
-                        ma->ma_lmm_size = lmm_size;
-                if (ma->ma_lmm_size > 0) {
-                        memcpy(ma->ma_lmm, lmm, ma->ma_lmm_size);
-                        ma->ma_valid |= MA_LOV;
-                }
         }
 
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
@@ -990,7 +985,6 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         rc = __mdd_object_create(ctxt, son, ma, handle);
         if (rc)
                 GOTO(cleanup, rc);
-
         created = 1;
 
         rc = __mdd_object_initialize(ctxt, mdo, son, ma, handle);
@@ -1010,9 +1004,10 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         inserted = 1;
 
         rc = mdd_lov_set_md(ctxt, pobj, child, lmm, lmm_size);
-        if (rc) {
+        if (rc == 0) 
+                rc = mdd_attr_get(ctxt, child, ma);
+        else 
                 CERROR("error on stripe info copy %d \n", rc);
-        }
 cleanup:
         if (rc && created) {
                 int rc2 = 0;
@@ -1183,8 +1178,6 @@ __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
         LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
 
         next->do_ops->do_ref_del(ctxt, next, handle);
-        if (ma != NULL)
-                mdd_attr_get(ctxt, &obj->mod_obj, ma);
 }
 
 static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
@@ -1202,6 +1195,7 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
 
         mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
         __mdd_ref_del(ctxt, mdd_obj, handle, ma);
+        mdd_attr_get(ctxt, obj, ma);
         mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
 
         mdd_trans_stop(ctxt, mdd, handle);

@@ -42,7 +42,7 @@
 
 
 /* copied from lov/lov_ea.c, just for debugging, will be removed later */
-static void mdt_dump_lmm(int level, struct lov_mds_md *lmm)
+void mdt_dump_lmm(int level, struct lov_mds_md *lmm)
 {
         struct lov_ost_data_v1 *lod;
         int i;

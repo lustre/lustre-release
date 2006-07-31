@@ -111,6 +111,10 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         }
         if (rc != 0)
                 RETURN(rc);
+
+        CDEBUG(D_INODE, "after open, ma_valid bit = "LPX64"\n", ma->ma_valid);
+        CDEBUG(D_INODE, "after open, lmm_size = %d\n", ma->ma_lmm_size);
+
         if (ma->ma_valid & MA_INODE)
                 mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
         if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
@@ -132,7 +136,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
          * (2) we need to record the transaction related stuff onto disk;
          * But, question is: when do a rean only open, do we still need transno?
          */
-        if (1) {
+        if (!created) {
                 struct txn_param txn;
                 struct thandle *th;
                 struct dt_device *dt = info->mti_mdt->mdt_bottom;

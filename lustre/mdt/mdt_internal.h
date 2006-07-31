@@ -363,6 +363,7 @@ int mdt_done_writing(struct mdt_thread_info *info);
 void mdt_shrink_reply(struct mdt_thread_info *info);
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *);
 
+void mdt_dump_lmm(int level, struct lov_mds_md *lmm);
 
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/
