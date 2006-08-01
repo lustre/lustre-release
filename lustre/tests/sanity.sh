@@ -15,6 +15,7 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
 # Tests that fail on uml
 [ "$UML" = "true" ] && EXCEPT="$EXCEPT 31d"
 
+EXCEPT="$EXCEPT 24o"
 # Tests that always fail with mountconf -- FIXME
 # 48a moving the working dir succeeds
 EXCEPT="$EXCEPT 48a"
