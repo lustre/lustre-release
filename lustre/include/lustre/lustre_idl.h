@@ -146,7 +146,7 @@ static inline void range_zero(struct lu_range *r)
 static inline int range_within(struct lu_range *r,
                                __u64 s)
 {
-        return s >= r->lr_start && s <= r->lr_end;
+        return s >= r->lr_start && s < r->lr_end;
 }
 
 static inline void range_alloc(struct lu_range *r,
@@ -160,9 +160,7 @@ static inline void range_alloc(struct lu_range *r,
 
 static inline int range_is_sane(struct lu_range *r)
 {
-        if (r->lr_end >= r->lr_start)
-                return 1;
-        return 0;
+        return (r->lr_end >= r->lr_start);
 }
 
 static inline int range_is_zero(struct lu_range *r)

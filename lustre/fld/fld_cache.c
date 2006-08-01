@@ -60,6 +60,9 @@ fld_cache_init(int size)
         int i;
         ENTRY;
 
+        /* check if size is power of two */
+        LASSERT((size & -size) == size);
+        
         OBD_ALLOC_PTR(cache);
         if (cache == NULL)
                 RETURN(ERR_PTR(-ENOMEM));

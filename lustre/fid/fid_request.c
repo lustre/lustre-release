@@ -47,7 +47,7 @@
 #include <lustre_fid.h>
 #include "fid_internal.h"
 
-/* client seq mgr interface */
+/* XXX: this should use new req-layout interface */
 static int 
 seq_client_rpc(struct lu_client_seq *seq, 
                struct lu_range *range,
@@ -180,12 +180,10 @@ __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
         }
         
         *seqnr = seq->seq_range.lr_start;
-        seq->seq_range.lr_start += 1;
+        seq->seq_range.lr_start++;
         
-        if (rc == 0) {
-                CDEBUG(D_INFO, "SEQ-MGR(cli): allocated "
-                       "sequence ["LPX64"]\n", *seqnr);
-        }
+        CDEBUG(D_INFO, "SEQ-MGR(cli): allocated "
+               "sequence ["LPX64"]\n", *seqnr);
         RETURN(rc);
 }
 
@@ -235,7 +233,7 @@ seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                  * to setup FLD for it. */
                 rc = -ERESTART;
         } else {
-                seq->seq_fid.f_oid += 1;
+                seq->seq_fid.f_oid++;
                 rc = 0;
         }
 
@@ -274,11 +272,13 @@ seq_client_proc_init(struct lu_client_seq *seq)
         if (rc) {
                 CERROR("can't init sequence manager "
                        "proc, rc %d\n", rc);
-                GOTO(err, rc);
+                GOTO(err_dir, rc);
         }
 
         RETURN(0);
 
+err_dir:
+        lprocfs_remove(seq->seq_proc_dir);
 err:
         seq->seq_proc_dir = NULL;
         return rc;

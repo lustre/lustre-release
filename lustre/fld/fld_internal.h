@@ -4,6 +4,8 @@
  *  fld/fld_internal.h
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Yury Umanets <umka@clusterfs.com>
+ *           Tom WangDi <wangdi@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.

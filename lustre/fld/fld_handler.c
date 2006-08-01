@@ -261,11 +261,13 @@ fld_server_proc_init(struct lu_server_fld *fld)
                               fld_server_proc_list, fld);
         if (rc) {
                 CERROR("can't init FLD proc, rc %d\n", rc);
-                GOTO(err_type, rc);
+                GOTO(err_entry, rc);
         }
 
         RETURN(0);
 
+err_entry:
+        lprocfs_remove(fld->fld_proc_entry);
 err_type:
         lprocfs_remove(fld->fld_proc_dir);
 err:
@@ -375,5 +377,5 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre FLD");
 MODULE_LICENSE("GPL");
 
-cfs_module(mdd, "0.0.4", fld_mod_init, fld_mod_exit);
+cfs_module(mdd, "0.1.0", fld_mod_init, fld_mod_exit);
 #endif

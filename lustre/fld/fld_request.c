@@ -1,7 +1,7 @@
 /* -*- MODE: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/fld/fld_handler.c
+ *  lustre/fld/fld_request.c
  *  FLD (Fids Location Database)
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
@@ -211,11 +211,13 @@ fld_client_proc_init(struct lu_client_fld *fld)
         if (rc) {
                 CERROR("can't init FLD "
                        "proc, rc %d\n", rc);
-                GOTO(err, rc);
+                GOTO(err_dir, rc);
         }
 
         RETURN(0);
 
+err_dir:
+        lprocfs_remove(fld->fld_proc_dir);
 err:
         fld->fld_proc_dir = NULL;
         return rc;
@@ -320,6 +322,7 @@ fld_client_fini(struct lu_client_fld *fld)
 }
 EXPORT_SYMBOL(fld_client_fini);
 
+/* XXX: this should use new req-layout interface. */
 static int
 fld_client_rpc(struct obd_export *exp,
                struct md_fld *mf, __u32 fld_op)

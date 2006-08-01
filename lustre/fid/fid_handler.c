@@ -84,6 +84,8 @@ seq_server_init_ctlr(struct lu_server_seq *seq,
                "sequence controller client %s\n",
                cli->seq_exp->exp_client_uuid.uuid);
 
+        /* asking client for new range, assign that range to ->seq_super and
+         * write seq state to backing store should be atomic. */
         down(&seq->seq_sem);
 
         /* assign controller */
@@ -96,7 +98,7 @@ seq_server_init_ctlr(struct lu_server_seq *seq,
                 if (rc) {
                         CERROR("can't allocate super-sequence, "
                                "rc %d\n", rc);
-                        RETURN(rc);
+                        GOTO(out_up, rc);
                 }
 
                 /* take super-seq from client seq mgr */
@@ -111,8 +113,11 @@ seq_server_init_ctlr(struct lu_server_seq *seq,
                                "rc = %d\n", rc);
                 }
         }
+
+        EXIT;
+out_up:
         up(&seq->seq_sem);
-        RETURN(rc);
+        return rc;
 }
 EXPORT_SYMBOL(seq_server_init_ctlr);
 
@@ -129,7 +134,7 @@ seq_server_fini_ctlr(struct lu_server_seq *seq)
 }
 EXPORT_SYMBOL(seq_server_fini_ctlr);
 
-/* on controller node, allocate new super sequence for regular sequnece
+/* on controller node, allocate new super sequence for regular sequence
  * server. */
 static int
 __seq_server_alloc_super(struct lu_server_seq *seq,
@@ -157,10 +162,12 @@ __seq_server_alloc_super(struct lu_server_seq *seq,
                 rc = 0;
         }
 
-        rc = seq_store_write(seq, ctx);
-        if (rc) {
-                CERROR("can't save state, rc = %d\n",
-		       rc);
+        if (rc == 0) {
+                rc = seq_store_write(seq, ctx);
+                if (rc) {
+                        CERROR("can't save state, rc = %d\n",
+                               rc);
+                }
         }
 
         if (rc == 0) {
@@ -248,35 +255,10 @@ seq_server_alloc_meta(struct lu_server_seq *seq,
 }
 
 static int
-seq_server_handle(struct lu_server_seq *seq,
-                  const struct lu_context *ctx,
-                  struct lu_range *range,
-                  __u32 opc)
-{
-        int rc;
-        ENTRY;
-
-        switch (opc) {
-        case SEQ_ALLOC_SUPER:
-                rc = seq_server_alloc_super(seq, range, ctx);
-                break;
-        case SEQ_ALLOC_META:
-                rc = seq_server_alloc_meta(seq, range, ctx);
-                break;
-        default:
-                CERROR("wrong opc 0x%x\n", opc);
-                rc = -EINVAL;
-                break;
-        }
-        RETURN(rc);
-}
-
-static int
 seq_req_handle0(const struct lu_context *ctx,
                 struct ptlrpc_request *req)
 {
         int rep_buf_size[2] = { 0, };
-        struct obd_device *obd;
         struct req_capsule pill;
         struct lu_site *site;
         struct lu_range *out;
@@ -284,8 +266,7 @@ seq_req_handle0(const struct lu_context *ctx,
         __u32 *opc;
         ENTRY;
 
-        obd = req->rq_export->exp_obd;
-        site = obd->obd_lu_dev->ld_site;
+        site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
         LASSERT(site != NULL);
 			
         req_capsule_init(&pill, req, RCL_SERVER,
@@ -302,20 +283,24 @@ seq_req_handle0(const struct lu_context *ctx,
                         GOTO(out_pill, rc= -EPROTO);
                 }
 
-                if (*opc == SEQ_ALLOC_META) {
+                switch (*opc) {
+                case SEQ_ALLOC_META:
                         if (!site->ls_server_seq) {
                                 CERROR("sequence-server is not initialized\n");
                                 GOTO(out_pill, rc == -EINVAL);
                         }
-                        rc = seq_server_handle(site->ls_server_seq,
-                                               ctx, out, *opc);
-                } else {
+                        rc = seq_server_alloc_meta(site->ls_server_seq, out, ctx);
+                        break;
+                case SEQ_ALLOC_SUPER:
                         if (!site->ls_ctlr_seq) {
                                 CERROR("sequence-controller is not initialized\n");
                                 GOTO(out_pill, rc == -EINVAL);
                         }
-                        rc = seq_server_handle(site->ls_ctlr_seq,
-                                               ctx, out, *opc);
+                        rc = seq_server_alloc_super(site->ls_ctlr_seq, out, ctx);
+                        break;
+                default:
+                        CERROR("wrong opc 0x%x\n", *opc);
+                        break;
                 }
         } else {
                 CERROR("cannot unpack client request\n");
@@ -346,7 +331,6 @@ seq_req_handle(struct ptlrpc_request *req)
                 } else {
                         CERROR("Unconnected request\n");
                         req->rq_status = -ENOTCONN;
-                        GOTO(out, rc = -ENOTCONN);
                 }
         } else {
                 CERROR("Wrong opcode: %d\n",
@@ -356,10 +340,8 @@ seq_req_handle(struct ptlrpc_request *req)
                 RETURN(rc);
         }
 
-        EXIT;
-out:
         target_send_reply(req, rc, fail);
-        return 0;
+        RETURN(0);
 }
 
 #ifdef LPROCFS
@@ -392,11 +374,13 @@ seq_server_proc_init(struct lu_server_seq *seq)
         if (rc) {
                 CERROR("can't init sequence manager "
                        "proc, rc %d\n", rc);
-                GOTO(err_type, rc);
+                GOTO(err_entry, rc);
         }
 
         RETURN(0);
 
+err_entry:
+        lprocfs_remove(seq->seq_proc_entry);
 err_type:
         lprocfs_remove(seq->seq_proc_dir);
 err:
@@ -574,5 +558,5 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre FID Module");
 MODULE_LICENSE("GPL");
 
-cfs_module(fid, "0.0.4", fid_mod_init, fid_mod_exit);
+cfs_module(fid, "0.1.0", fid_mod_init, fid_mod_exit);
 #endif

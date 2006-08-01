@@ -57,7 +57,7 @@ enum {
         SEQ_TXN_STORE_CREDITS = 20
 };
 
-/* this function implies that caller takes about locking */
+/* this function implies that caller takes care about locking */
 int
 seq_store_write(struct lu_server_seq *seq,
 		const struct lu_context *ctx)
