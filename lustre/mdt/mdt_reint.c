@@ -482,6 +482,9 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
 
         if (rc == 0) {
                 /* the new_fid should have been filled at this moment*/
+                if (lu_fid_eq(old_fid, new_fid))
+                       GOTO(out_unlock_old, rc); 
+                
                 lh_newp->mlh_mode = LCK_EX;
                 mnew = mdt_object_find_lock(info, new_fid, lh_newp,
                                             MDS_INODELOCK_FULL);
