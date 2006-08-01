@@ -85,6 +85,8 @@ struct md_object_operations {
         int (*moo_xattr_del)(const struct lu_context *ctxt,
                              struct md_object *obj, const char *name);
 
+        int (*moo_readpage)(const struct lu_context *, struct md_object *,
+                            const struct lu_rdpg *);
         int (*moo_readlink)(const struct lu_context *ctxt,
                             struct md_object *obj,
                             void *buf, int buf_len);
@@ -97,9 +99,6 @@ struct md_object_operations {
                            struct md_attr *);
         int (*moo_open)(const struct lu_context *, struct md_object *);
         int (*moo_close)(const struct lu_context *, struct md_object *);
-
-        int (*moo_readpage)(const struct lu_context *, struct md_object *,
-                            const struct lu_rdpg *);
 };
 
 /*

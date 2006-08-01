@@ -644,7 +644,7 @@ static void osd_fid_build_name(const struct lu_fid *fid, char *name)
 }
 
 static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
-                      umode_t mode, const char *target_name, struct thandle *th)
+                      umode_t mode, struct thandle *th)
 {
         int result;
         struct osd_device *osd = osd_obj2dev(obj);
@@ -668,10 +668,7 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 
         dentry = d_alloc(osd->od_obj_area, &info->oti_str);
         if (dentry != NULL) {
-                if (S_ISLNK(mode))
-                        result = dir->i_op->symlink(dir, dentry, target_name);
-                else
-                        result = dir->i_op->create(dir, dentry, mode, NULL);
+                result = dir->i_op->create(dir, dentry, mode, NULL);
                 if (result == 0) {
                         LASSERT(dentry->d_inode != NULL);
                         obj->oo_inode = dentry->d_inode;
@@ -693,8 +690,7 @@ enum {
 };
 
 static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
-                     struct lu_attr *attr, const char *target_name, 
-                     struct thandle *th)
+                     struct lu_attr *attr, struct thandle *th)
 {
         int result;
         struct osd_thandle *oth;
@@ -703,7 +699,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
         LASSERT(S_ISDIR(attr->la_mode));
         result = osd_mkfile(info, obj,
                             S_IFDIR | (attr->la_mode & (S_IRWXUGO|S_ISVTX)),
-                            target_name, th);
+                            th);
         if (result == 0) {
                 LASSERT(obj->oo_inode != NULL);
                 /*
@@ -717,38 +713,32 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
 }
 
 static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
-                     struct lu_attr *attr, const char *target_name, 
-                     struct thandle *th)
+                     struct lu_attr *attr, struct thandle *th)
 {
         LASSERT(S_ISREG(attr->la_mode));
         return osd_mkfile(info, obj,
                           S_IFREG | (attr->la_mode & (S_IRWXUGO|S_ISVTX)), 
-                          target_name, th);
+                          th);
 }
 
 static int osd_mksym(struct osd_thread_info *info, struct osd_object *obj,
-                     struct lu_attr *attr, const char *target_name, 
-                     struct thandle *th)
+                     struct lu_attr *attr, struct thandle *th)
 {
         LASSERT(S_ISLNK(attr->la_mode));
-        LASSERT(target_name);
-        LASSERT(target_name[0] != 0);
 
-        CDEBUG(D_INODE, "I am going to symlink: "DFID3" to %s\n", 
-               PFID3(lu_object_fid(&obj->oo_dt.do_lu)), target_name);
-        return osd_mkfile(info, obj, S_IFLNK, target_name, th);
+        return osd_mkfile(info, obj,
+                          S_IFLNK | (attr->la_mode & (S_IRWXUGO|S_ISVTX)), 
+                          th);
 }
 
 static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
-                     struct lu_attr *attr, const char *target_name, 
-                     struct thandle *th)
+                     struct lu_attr *attr, struct thandle *th)
 {
         return -EOPNOTSUPP;
 }
 
 typedef int (*osd_obj_type_f)(struct osd_thread_info *, struct osd_object *,
-                              struct lu_attr *, const char *target_name,
-                              struct thandle *);
+                              struct lu_attr *, struct thandle *);
 
 static osd_obj_type_f osd_create_type_f(__u32 mode)
 {
@@ -778,8 +768,7 @@ static osd_obj_type_f osd_create_type_f(__u32 mode)
 }
 
 static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
-                             struct lu_attr *attr, const char *target_name,
-                             struct thandle *th)
+                             struct lu_attr *attr, struct thandle *th)
 {
         const struct lu_fid    *fid  = lu_object_fid(&dt->do_lu);
         struct osd_object      *obj  = osd_dt_obj(dt);
@@ -807,9 +796,7 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
         result = osd_create_pre(info, obj, attr, th);
         if (result == 0) {
                 result = osd_create_type_f(attr->la_mode & S_IFMT)(info, obj,
-                                                                   attr,
-                                                                   target_name,
-                                                                   th);
+                                                                   attr, th);
                 if (result == 0)
                         result = osd_create_post(info, obj, attr, th);
         }
@@ -1074,28 +1061,6 @@ static int osd_readpage(const struct lu_context *ctxt,
         return rc;
 }
 
-static int osd_readlink(const struct lu_context *ctxt, struct dt_object *dt,
-                        void *buf, int size)
-{
-        struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
-        struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
-        struct dentry          *dentry = &info->oti_dentry;
-        struct file            *file;
-        mm_segment_t            seg;
-        int                     rc;
-
-        LASSERT(lu_object_exists(ctxt, &dt->do_lu));
-        LASSERT(inode->i_op != NULL && inode->i_op->readlink != NULL);
-        LASSERT(buf != NULL);
-        dentry->d_inode = inode;
-
-        file = osd_rw_init(ctxt, inode, &seg);
-        rc = inode->i_op->readlink(dentry, buf, size);
-        osd_rw_fini(&seg);
-        return rc;
-
-}
-
 static struct dt_object_operations osd_obj_ops = {
         .do_lock       = osd_object_lock,
         .do_unlock     = osd_object_unlock,
@@ -1106,11 +1071,10 @@ static struct dt_object_operations osd_obj_ops = {
         .do_ref_add    = osd_object_ref_add,
         .do_ref_del    = osd_object_ref_del,
         .do_xattr_get  = osd_xattr_get,
-        .do_readlink   = osd_readlink,
         .do_xattr_set  = osd_xattr_set,
         .do_xattr_del  = osd_xattr_del,
         .do_xattr_list = osd_xattr_list,
-        .do_readpage   = osd_readpage
+        .do_readpage   = osd_readpage,
 };
 
 /*

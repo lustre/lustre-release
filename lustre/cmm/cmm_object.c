@@ -329,7 +329,6 @@ static struct md_object_operations cml_mo_ops = {
         .moo_attr_get      = cml_attr_get,
         .moo_attr_set      = cml_attr_set,
         .moo_xattr_get     = cml_xattr_get,
-        .moo_readlink      = cml_readlink,
         .moo_xattr_list    = cml_xattr_list,
         .moo_xattr_set     = cml_xattr_set,
         .moo_xattr_del     = cml_xattr_del,
@@ -338,7 +337,8 @@ static struct md_object_operations cml_mo_ops = {
         .moo_ref_del       = cml_ref_del,
         .moo_open          = cml_open,
         .moo_close         = cml_close,
-        .moo_readpage      = cml_readpage
+        .moo_readpage      = cml_readpage,
+        .moo_readlink      = cml_readlink
 };
 
 /* md_dir operations */
@@ -611,7 +611,6 @@ static struct md_object_operations cmr_mo_ops = {
         .moo_attr_get      = cmr_attr_get,
         .moo_attr_set      = cmr_attr_set,
         .moo_xattr_get     = cmr_xattr_get,
-        .moo_readlink      = cmr_readlink,
         .moo_xattr_set     = cmr_xattr_set,
         .moo_xattr_list    = cmr_xattr_list,
         .moo_xattr_del     = cmr_xattr_del,
@@ -620,7 +619,8 @@ static struct md_object_operations cmr_mo_ops = {
         .moo_ref_del       = cmr_ref_del,
         .moo_open          = cmr_open,
         .moo_close         = cmr_close,
-        .moo_readpage      = cmr_readpage
+        .moo_readpage      = cmr_readpage,
+        .moo_readlink      = cmr_readlink
 };
 
 /* remote part of md_dir operations */

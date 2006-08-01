@@ -178,14 +178,14 @@ static int mdd_readlink(const struct lu_context *ctxt, struct md_object *obj,
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct dt_object  *next;
-        int rc;
+        loff_t             pos = 0;
+        int                rc;
         ENTRY;
 
         LASSERT(lu_object_exists(ctxt, &obj->mo_lu));
 
         next = mdd_object_child(mdd_obj);
-        rc = next->do_ops->do_readlink(ctxt, next, buf, buf_len);
-
+        rc = next->do_body_ops->dbo_read(ctxt, next, buf, buf_len, &pos);
         RETURN(rc);
 }
 static int mdd_xattr_list(const struct lu_context *ctxt, struct md_object *obj,
@@ -421,7 +421,6 @@ static void mdd_trans_stop(const struct lu_context *ctxt,
 
 static int __mdd_object_create(const struct lu_context *ctxt,
                                struct mdd_object *obj, struct md_attr *ma,
-                               const char *target_name,
                                struct thandle *handle)
 {
         struct dt_object *next;
@@ -431,8 +430,7 @@ static int __mdd_object_create(const struct lu_context *ctxt,
 
         if (!lu_object_exists(ctxt, mdd2lu_obj(obj))) {
                 next = mdd_object_child(obj);
-                rc = next->do_ops->do_create(ctxt, next, attr, 
-                                             target_name, handle);
+                rc = next->do_ops->do_create(ctxt, next, attr, handle);
         } else
                 rc = -EEXIST;
 
@@ -455,7 +453,7 @@ static int mdd_object_create(const struct lu_context *ctxt,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        rc = __mdd_object_create(ctxt, md2mdd_obj(obj), attr, NULL, handle);
+        rc = __mdd_object_create(ctxt, md2mdd_obj(obj), attr, handle);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -999,7 +997,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
          * Maybe we should do the same. For now: creation-first.
          */
 
-        rc = __mdd_object_create(ctxt, son, ma, target_name, handle);
+        rc = __mdd_object_create(ctxt, son, ma, handle);
         if (rc)
                 GOTO(cleanup, rc);
         
@@ -1022,6 +1020,21 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         inserted = 1;
 
         rc = mdd_lov_set_md(ctxt, pobj, child, lmm, lmm_size, attr->la_mode);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        if (S_ISLNK(attr->la_mode)) {
+                struct dt_object *dt = mdd_object_child(son);
+                loff_t pos = 0;
+                int sym_len = strlen(target_name);
+                rc = dt->do_body_ops->dbo_write(ctxt, dt, target_name,
+                                                sym_len, &pos, handle);
+                if (rc == sym_len)
+                        rc = 0;
+                else
+                        rc = -EFAULT;
+        }
+
         if (rc == 0) 
                 rc = mdd_attr_get(ctxt, child, ma);
         else 
@@ -1271,7 +1284,6 @@ static struct md_object_operations mdd_obj_ops = {
         .moo_attr_get      = mdd_attr_get,
         .moo_attr_set      = mdd_attr_set,
         .moo_xattr_get     = mdd_xattr_get,
-        .moo_readlink      = mdd_readlink,
         .moo_xattr_set     = mdd_xattr_set,
         .moo_xattr_list    = mdd_xattr_list,
         .moo_xattr_del     = mdd_xattr_del,
@@ -1280,7 +1292,8 @@ static struct md_object_operations mdd_obj_ops = {
         .moo_ref_del       = mdd_ref_del,
         .moo_open          = mdd_open,
         .moo_close         = mdd_close,
-        .moo_readpage      = mdd_readpage
+        .moo_readpage      = mdd_readpage,
+        .moo_readlink      = mdd_readlink
 };
 
 static struct obd_ops mdd_obd_device_ops = {
