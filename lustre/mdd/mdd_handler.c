@@ -914,7 +914,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         struct lu_fid *fid;
         struct lov_mds_md *lmm = NULL;
         struct thandle *handle;
-        int rc, created = 0, inserted = 0, lmm_size;
+        int rc, created = 0, inserted = 0, lmm_size = 0;
         ENTRY;
 
         /* sanity checks before big job */
@@ -932,7 +932,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 if (rc)
                         RETURN(rc);
         }
-
+        
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
@@ -983,8 +983,10 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
          */
 
         rc = __mdd_object_create(ctxt, son, ma, handle);
+
         if (rc)
                 GOTO(cleanup, rc);
+        
         created = 1;
 
         rc = __mdd_object_initialize(ctxt, mdo, son, ma, handle);
@@ -1003,7 +1005,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
 
         inserted = 1;
 
-        rc = mdd_lov_set_md(ctxt, pobj, child, lmm, lmm_size);
+        rc = mdd_lov_set_md(ctxt, pobj, child, lmm, lmm_size, attr->la_mode);
         if (rc == 0) 
                 rc = mdd_attr_get(ctxt, child, ma);
         else 
