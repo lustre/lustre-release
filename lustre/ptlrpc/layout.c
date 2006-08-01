@@ -641,7 +641,7 @@ static struct lustre_msg *__req_msg(const struct req_capsule *pill,
 
 void req_capsule_set(struct req_capsule *pill, const struct req_format *fmt)
 {
-//        LASSERT(pill->rc_fmt == NULL);
+        LASSERT(pill->rc_fmt == NULL);
         LASSERT(__req_format_is_sane(fmt));
 
         pill->rc_fmt = fmt;
