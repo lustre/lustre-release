@@ -173,6 +173,21 @@ static int mdd_xattr_get(const struct lu_context *ctxt, struct md_object *obj,
         RETURN(rc);
 }
 
+static int mdd_readlink(const struct lu_context *ctxt, struct md_object *obj,
+                        void *buf, int buf_len)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+        struct dt_object  *next;
+        int rc;
+        ENTRY;
+
+        LASSERT(lu_object_exists(ctxt, &obj->mo_lu));
+
+        next = mdd_object_child(mdd_obj);
+        rc = next->do_ops->do_readlink(ctxt, next, buf, buf_len);
+
+        RETURN(rc);
+}
 static int mdd_xattr_list(const struct lu_context *ctxt, struct md_object *obj,
                           void *buf, int buf_len)
 {
@@ -406,6 +421,7 @@ static void mdd_trans_stop(const struct lu_context *ctxt,
 
 static int __mdd_object_create(const struct lu_context *ctxt,
                                struct mdd_object *obj, struct md_attr *ma,
+                               const char *target_name,
                                struct thandle *handle)
 {
         struct dt_object *next;
@@ -415,7 +431,8 @@ static int __mdd_object_create(const struct lu_context *ctxt,
 
         if (!lu_object_exists(ctxt, mdd2lu_obj(obj))) {
                 next = mdd_object_child(obj);
-                rc = next->do_ops->do_create(ctxt, next, attr, handle);
+                rc = next->do_ops->do_create(ctxt, next, attr, 
+                                             target_name, handle);
         } else
                 rc = -EEXIST;
 
@@ -438,7 +455,7 @@ static int mdd_object_create(const struct lu_context *ctxt,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        rc = __mdd_object_create(ctxt, md2mdd_obj(obj), attr, handle);
+        rc = __mdd_object_create(ctxt, md2mdd_obj(obj), attr, NULL, handle);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -982,8 +999,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
          * Maybe we should do the same. For now: creation-first.
          */
 
-        rc = __mdd_object_create(ctxt, son, ma, handle);
-
+        rc = __mdd_object_create(ctxt, son, ma, target_name, handle);
         if (rc)
                 GOTO(cleanup, rc);
         
@@ -1255,6 +1271,7 @@ static struct md_object_operations mdd_obj_ops = {
         .moo_attr_get      = mdd_attr_get,
         .moo_attr_set      = mdd_attr_set,
         .moo_xattr_get     = mdd_xattr_get,
+        .moo_readlink      = mdd_readlink,
         .moo_xattr_set     = mdd_xattr_set,
         .moo_xattr_list    = mdd_xattr_list,
         .moo_xattr_del     = mdd_xattr_del,

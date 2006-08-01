@@ -85,6 +85,10 @@ struct md_object_operations {
         int (*moo_xattr_del)(const struct lu_context *ctxt,
                              struct md_object *obj, const char *name);
 
+        int (*moo_readlink)(const struct lu_context *ctxt,
+                            struct md_object *obj,
+                            void *buf, int buf_len);
+
         /* part of cross-ref operation */
         int (*moo_object_create)(const struct lu_context *,
                                  struct md_object *, struct md_attr *);
@@ -198,6 +202,13 @@ static inline int mo_attr_get(const struct lu_context *cx, struct md_object *m,
 {
         LASSERT(m->mo_ops->moo_attr_get);
         return m->mo_ops->moo_attr_get(cx, m, at);
+}
+
+static inline int mo_readlink(const struct lu_context *cx, struct md_object *m,
+                              void *buf, int buf_len)
+{
+        LASSERT(m->mo_ops->moo_attr_get);
+        return m->mo_ops->moo_readlink(cx, m, buf, buf_len);
 }
 
 static inline int mo_attr_set(const struct lu_context *cx, struct md_object *m,

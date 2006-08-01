@@ -201,12 +201,14 @@ struct dt_object_operations {
                                struct dt_object *dt, void *buf, int buf_len);
         /*
          * Create new object on this device.
+         * @target_name is the symbolic target.
          *
          * precondition: !lu_object_exists(ctxt, &dt->do_lu);
          * postcondition: ergo(result == 0, lu_object_exists(ctxt, &dt->do_lu));
          */
         int   (*do_create)(const struct lu_context *ctxt, struct dt_object *dt,
-                           struct lu_attr *attr, struct thandle *th);
+                           struct lu_attr *attr, const char *target_name, 
+                           struct thandle *th);
         /*
          * Announce that this object is going to be used as an index. This
          * operation check that object supports indexing operations and
@@ -233,6 +235,9 @@ struct dt_object_operations {
 
         int (*do_readpage)(const struct lu_context *ctxt,
                            struct dt_object *dt, const struct lu_rdpg *rdpg);
+        int (*do_readlink)(const struct lu_context *ctxt,
+                           struct dt_object *dt,
+                           void *buf, int buf_len);
 };
 
 /*

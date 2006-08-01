@@ -221,6 +221,11 @@ static const struct req_msg_field *mds_getattr_server[] = {
 #endif
 };
 
+static const struct req_msg_field *mds_readlink_server[] = {
+        &RMF_MDT_BODY,
+        &RMF_MDT_MD,
+};
+
 static const struct req_format *req_formats[] = {
         &RQF_MDS_CONNECT,
         &RQF_MDS_DISCONNECT,
@@ -249,7 +254,8 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_CLOSE,
         &RQF_MDS_PIN,
         &RQF_MDS_READPAGE,
-        &RQF_MDS_DONE_WRITING
+        &RQF_MDS_DONE_WRITING,
+        &RQF_MDS_READLINK
 };
 
 struct req_msg_field {
@@ -452,6 +458,10 @@ const struct req_format RQF_MDS_GETATTR =
         DEFINE_REQ_FMT0("MDS_GETATTR", mdt_body_only, mds_getattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETATTR);
 
+const struct req_format RQF_MDS_READLINK =
+        DEFINE_REQ_FMT0("MDS_READLINK", mdt_body_only, mds_readlink_server);
+EXPORT_SYMBOL(RQF_MDS_READLINK);
+
 const struct req_format RQF_MDS_GETXATTR =
         DEFINE_REQ_FMT0("MDS_GETXATTR",
                         mds_getxattr_client, mds_getxattr_server);
@@ -631,7 +641,7 @@ static struct lustre_msg *__req_msg(const struct req_capsule *pill,
 
 void req_capsule_set(struct req_capsule *pill, const struct req_format *fmt)
 {
-        LASSERT(pill->rc_fmt == NULL);
+//        LASSERT(pill->rc_fmt == NULL);
         LASSERT(__req_format_is_sane(fmt));
 
         pill->rc_fmt = fmt;

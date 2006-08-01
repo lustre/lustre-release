@@ -250,27 +250,19 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 goto skip_packing;
 
         /* pre-getattr: to guess how many bytes we need. */
-        if (mdt_body_has_lov(la, reqbody)) {
-                /* this should return the total length, or error */
-                rc = mo_xattr_get(ctxt, next, NULL, 0, XATTR_NAME_LOV);
-
-                CDEBUG(D_INODE, "got %d(max=%d) bytes MD data for "DFID3"\n",
-                       rc, info->mti_mdt->mdt_max_mdsize,
-                       PFID3(mdt_object_fid(o)));
-                if (rc < 0) {
-                        if (rc != -ENODATA && rc != -EOPNOTSUPP) {
-                                RETURN(rc);
-                        }
-                        rc = 0;
-                } else if (rc > info->mti_mdt->mdt_max_mdsize) {
-                        rc = 0;
-                }
-        } else if (S_ISLNK(la->la_mode) && (reqbody->valid & OBD_MD_LINKNAME)) {
-                /* NB: It also uses the mdt_md to hold symname. */
+        if (S_ISLNK(la->la_mode) && (reqbody->valid & OBD_MD_LINKNAME)) {
+                /*FIXME: temporary using old style, will fix it soon */
+                int size[2] = {sizeof (struct mdt_body) };
+                CDEBUG(D_INODE, "LNK name len = %lu, space in body = %d\n",
+                                (unsigned long)la->la_size + 1, 
+                                reqbody->eadatasize);
                 rc = min_t(int, la->la_size + 1, reqbody->eadatasize);
+                size[1] = rc;
+                rc = lustre_pack_reply(req, 2, size, NULL);
+                if (rc)
+                        RETURN(rc);
+                goto skip_packing; 
         }
-        req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER, rc);
-
 #ifdef CONFIG_FS_POSIX_ACL
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
             (reqbody->valid & OBD_MD_FLACL)) {
@@ -296,11 +288,10 @@ skip_packing:
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
         mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
 
-        buffer = req_capsule_server_get(pill, &RMF_MDT_MD);
-        length = req_capsule_get_size(pill, &RMF_MDT_MD, RCL_SERVER);
-
         /* now, to getattr*/
         if (mdt_body_has_lov(la, reqbody)) {
+                buffer = req_capsule_server_get(pill, &RMF_MDT_MD);
+                length = req_capsule_get_size(pill, &RMF_MDT_MD, RCL_SERVER);
                 if (length > 0) {
                         rc = mo_xattr_get(ctxt, next,
                                           buffer, length, XATTR_NAME_LOV);
@@ -316,9 +307,12 @@ skip_packing:
                 }
         } else if (S_ISLNK(la->la_mode) &&
                           (reqbody->valid & OBD_MD_LINKNAME) != 0) {
-                /* FIXME How to readlink??
-                rc = mo_xattr_get(ctxt, next, buffer, length, "readlink");
-                */ rc = 10;
+                /*FIXME: temporary using old style, will fix it soon */
+                buffer = lustre_msg_buf(req->rq_repmsg, 1, 0);
+                LASSERT(buffer != NULL);       /* caller prepped reply */
+                length = req->rq_repmsg->buflens[1];
+
+                rc = mo_readlink(ctxt, next, buffer, length);
                 if (rc <= 0) {
                         CERROR("readlink failed: %d\n", rc);
                         rc = -EFAULT;
@@ -326,9 +320,11 @@ skip_packing:
                         repbody->valid |= OBD_MD_LINKNAME;
                         repbody->eadatasize = rc + 1;
                         ((char*)buffer)[rc] = 0;        /* NULL terminate */
+                        CDEBUG(D_INODE, "symlink dest %s, len = %d\n", 
+                                        (char*)buffer, rc);
                         rc = 0;
-                        CDEBUG(D_INODE, "symlink dest %s\n", (char*)buffer);
                 }
+                RETURN(0);
         }
 
         if (reqbody->valid & OBD_MD_FLMODEASIZE) {
@@ -336,9 +332,9 @@ skip_packing:
                 repbody->max_mdsize = info->mti_mdt->mdt_max_mdsize;
                 repbody->valid |= OBD_MD_FLMODEASIZE;
                 CDEBUG(D_INODE, "I am going to change the MAX_MD_SIZE & MAX_COOKIE"
-                                "to : %d:%d\n",
-                                repbody->max_cookiesize,
-                                repbody->max_mdsize);
+                                " to : %d:%d\n",
+                                repbody->max_mdsize,
+                                repbody->max_cookiesize);
         }
 
         if (rc != 0)

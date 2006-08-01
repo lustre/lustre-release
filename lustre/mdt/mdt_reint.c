@@ -466,6 +466,9 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         if (rc != 0)
                 GOTO(out_unlock_target, rc);
 
+        if (lu_fid_eq(old_fid, rr->rr_fid1) || lu_fid_eq(old_fid, rr->rr_fid2))
+                GOTO(out_unlock_target, rc = -EINVAL);
+
         lh_oldp = &info->mti_lh[MDT_LH_OLD];
         lh_oldp->mlh_mode = LCK_EX;
         mold = mdt_object_find_lock(info, old_fid, lh_oldp,
@@ -485,6 +488,10 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                 if (lu_fid_eq(old_fid, new_fid))
                        GOTO(out_unlock_old, rc); 
                 
+                if (lu_fid_eq(new_fid, rr->rr_fid1) || 
+                    lu_fid_eq(new_fid, rr->rr_fid2))
+                        GOTO(out_unlock_old, rc = -EINVAL);
+
                 lh_newp->mlh_mode = LCK_EX;
                 mnew = mdt_object_find_lock(info, new_fid, lh_newp,
                                             MDS_INODELOCK_FULL);
