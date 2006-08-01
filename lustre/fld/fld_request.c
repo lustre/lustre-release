@@ -322,7 +322,6 @@ fld_client_fini(struct lu_client_fld *fld)
 }
 EXPORT_SYMBOL(fld_client_fini);
 
-/* XXX: this should use new req-layout interface. */
 static int
 fld_client_rpc(struct obd_export *exp,
                struct md_fld *mf, __u32 fld_op)
@@ -330,6 +329,7 @@ fld_client_rpc(struct obd_export *exp,
         int size[2] = {sizeof(__u32), sizeof(struct md_fld)}, rc;
         int mf_size = sizeof(struct md_fld);
         struct ptlrpc_request *req;
+        struct req_capsule pill;
         struct md_fld *pmf;
         __u32 *op;
         ENTRY;
@@ -342,10 +342,15 @@ fld_client_rpc(struct obd_export *exp,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        op = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*op));
+        req_capsule_init(&pill, req, RCL_CLIENT,
+                         &mf_size);
+
+        req_capsule_set(&pill, &RQF_FLD_QUERY);
+
+        op = req_capsule_client_get(&pill, &RMF_FLD_OPC);
         *op = fld_op;
 
-        pmf = lustre_msg_buf(req->rq_reqmsg, 1, sizeof (*pmf));
+        pmf = req_capsule_client_get(&pill, &RMF_FLD_MDFLD);
         *pmf = *mf;
 
         req->rq_replen = lustre_msg_size(1, &mf_size);
@@ -355,12 +360,17 @@ fld_client_rpc(struct obd_export *exp,
         if (rc)
                 GOTO(out_req, rc);
 
-        pmf = lustre_swab_repbuf(req, 0, sizeof(*pmf),
-                                 lustre_swab_md_fld);
+        pmf = req_capsule_server_get(&pill, &RMF_FLD_MDFLD);
+        if (pmf == NULL) {
+                CERROR("Can't unpack FLD response\n");
+                GOTO(out_req, rc = -EFAULT);
+        }
         *mf = *pmf;
+        EXIT;
 out_req:
+        req_capsule_fini(&pill);
         ptlrpc_req_finished(req);
-        RETURN(rc);
+        return rc;
 }
 
 static int

@@ -47,7 +47,6 @@
 #include <lustre_fid.h>
 #include "fid_internal.h"
 
-/* XXX: this should use new req-layout interface */
 static int 
 seq_client_rpc(struct lu_client_seq *seq, 
                struct lu_range *range,
@@ -57,6 +56,7 @@ seq_client_rpc(struct lu_client_seq *seq,
         int repsize = sizeof(struct lu_range);
         int rc, reqsize = sizeof(__u32);
         struct ptlrpc_request *req;
+        struct req_capsule pill;
         struct lu_range *ran;
         __u32 *op;
         ENTRY;
@@ -68,7 +68,12 @@ seq_client_rpc(struct lu_client_seq *seq,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        op = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*op));
+        req_capsule_init(&pill, req, RCL_CLIENT,
+                         &repsize);
+
+        req_capsule_set(&pill, &RQF_SEQ_QUERY);
+
+        op = req_capsule_client_get(&pill, &RMF_SEQ_OPC);
         *op = opc;
 
         req->rq_replen = lustre_msg_size(1, &repsize);
@@ -80,9 +85,7 @@ seq_client_rpc(struct lu_client_seq *seq,
         if (rc)
                 GOTO(out_req, rc);
 
-        ran = lustre_swab_repbuf(req, 0, sizeof(*ran),
-                                 lustre_swab_lu_range);
-
+        ran = req_capsule_server_get(&pill, &RMF_SEQ_RANGE);
         if (ran == NULL) {
                 CERROR("invalid range is returned\n");
                 GOTO(out_req, rc = -EPROTO);
@@ -94,6 +97,7 @@ seq_client_rpc(struct lu_client_seq *seq,
         
         EXIT;
 out_req:
+        req_capsule_fini(&pill);
         ptlrpc_req_finished(req); 
         return rc;
 }
