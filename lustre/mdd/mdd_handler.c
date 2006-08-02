@@ -718,7 +718,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
                 /* unlink dotdot */
                 __mdd_ref_del(ctxt, mdd_pobj, handle, NULL);
         }
-        if (S_ISREG(ma->ma_attr.la_mode) &&
+        if (S_ISREG(ma->ma_attr.la_mode) && (ma->ma_valid & MA_LOV) &&
             ma->ma_attr.la_nlink == 0 && cobj->mo_lu.lo_header->loh_ref == 1) {
                 rc = mdd_unlink_log(ctxt, mdd, mdd_cobj, ma);
         }
