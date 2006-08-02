@@ -717,7 +717,7 @@ static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
 {
         LASSERT(S_ISREG(attr->la_mode));
         return osd_mkfile(info, obj,
-                          S_IFREG | (attr->la_mode & (S_IRWXUGO|S_ISVTX)), 
+                          S_IFREG | (attr->la_mode & (S_IRWXUGO|S_ISVTX)),
                           th);
 }
 
@@ -727,7 +727,7 @@ static int osd_mksym(struct osd_thread_info *info, struct osd_object *obj,
         LASSERT(S_ISLNK(attr->la_mode));
 
         return osd_mkfile(info, obj,
-                          S_IFLNK | (attr->la_mode & (S_IRWXUGO|S_ISVTX)), 
+                          S_IFLNK | (attr->la_mode & (S_IRWXUGO|S_ISVTX)),
                           th);
 }
 
@@ -1099,9 +1099,9 @@ static ssize_t osd_read(const struct lu_context *ctxt, struct dt_object *dt,
         return result;
 }
 
-static int osd_write(const struct lu_context *ctxt, struct dt_object *dt,
-                     const void *buf, size_t count, loff_t *pos,
-                     struct thandle *handle)
+static ssize_t osd_write(const struct lu_context *ctxt, struct dt_object *dt,
+                         const void *buf, size_t count, loff_t *pos,
+                         struct thandle *handle)
 {
         struct inode *inode = osd_dt_obj(dt)->oo_inode;
         struct file  *file;
