@@ -138,6 +138,8 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
 
         CDEBUG(D_INODE, "after open, ma_valid bit = "LPX64"\n", ma->ma_valid);
         CDEBUG(D_INODE, "after open, lmm_size = %d\n", ma->ma_lmm_size);
+        repbody->eadatasize = 0;
+        repbody->aclsize = 0;
 
         if (ma->ma_valid & MA_INODE)
                 mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
@@ -148,6 +150,10 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 else
                         repbody->valid |= OBD_MD_FLEASIZE;
         }
+
+        /*FIXME: should determine the offset dynamicly */
+        lustre_shrink_reply(req, 2, repbody->eadatasize, 1);
+        lustre_shrink_reply(req, repbody->eadatasize ? 3 : 2, repbody->aclsize, 0);
 
         if (flags & FMODE_WRITE) {
                 /*mds_get_write_access*/

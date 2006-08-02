@@ -216,14 +216,7 @@ static const struct req_msg_field *mds_setxattr_client[] = {
 static const struct req_msg_field *mds_getattr_server[] = {
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
-#ifdef CONFIG_FS_POSIX_ACL
         &RMF_EADATA
-#endif
-};
-
-static const struct req_msg_field *mds_readlink_server[] = {
-        &RMF_MDT_BODY,
-        &RMF_MDT_MD,
 };
 
 static const struct req_format *req_formats[] = {
@@ -255,7 +248,6 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_PIN,
         &RQF_MDS_READPAGE,
         &RQF_MDS_DONE_WRITING,
-        &RQF_MDS_READLINK
 };
 
 struct req_msg_field {
@@ -391,9 +383,9 @@ const struct req_msg_field RMF_REC_SETATTR =
                     lustre_swab_mdt_rec_setattr);
 EXPORT_SYMBOL(RMF_REC_SETATTR);
 
-/* Huang Hua changed the size from 0 to 16 to avoid ASSERT failure */
-
-const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, 16, NULL);
+/* FIXME: this length should be defined as a macro*/
+const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, 
+                                4 + 32 * 8, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
 const struct req_msg_field RMF_LOGCOOKIES =
@@ -457,10 +449,6 @@ EXPORT_SYMBOL(RQF_MDS_SYNC);
 const struct req_format RQF_MDS_GETATTR =
         DEFINE_REQ_FMT0("MDS_GETATTR", mdt_body_only, mds_getattr_server);
 EXPORT_SYMBOL(RQF_MDS_GETATTR);
-
-const struct req_format RQF_MDS_READLINK =
-        DEFINE_REQ_FMT0("MDS_READLINK", mdt_body_only, mds_readlink_server);
-EXPORT_SYMBOL(RQF_MDS_READLINK);
 
 const struct req_format RQF_MDS_GETXATTR =
         DEFINE_REQ_FMT0("MDS_GETXATTR",

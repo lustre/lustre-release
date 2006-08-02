@@ -187,9 +187,15 @@ int mdc_getattr(struct obd_export *exp, struct lu_fid *fid,
         mdc_pack_req_body(req, MDS_REQ_REC_OFF, valid, fid, ea_size);
 
         /* currently only root inode will call us with FLACL */
-        if (valid & OBD_MD_FLACL)
-                acl_size = LUSTRE_POSIX_ACL_MAX_SIZE;
 
+        /* FIXME:XXX:reserve enough space regardless the flag temporarily.
+         * server will do lustre_shrink_reply();
+         * 
+         *if (valid & OBD_MD_FLACL)
+         */
+        acl_size = LUSTRE_POSIX_ACL_MAX_SIZE;
+
+         
         rc = mdc_getattr_common(exp, ea_size, acl_size, req);
         if (rc != 0) {
                 ptlrpc_req_finished (req);

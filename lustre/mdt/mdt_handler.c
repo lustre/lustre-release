@@ -204,13 +204,13 @@ static inline int mdt_body_has_lov(const struct lu_attr *la,
 }
 
 static int mdt_getattr_internal(struct mdt_thread_info *info,
-                                struct mdt_object *o,
-                                int need_pack_reply)
+                                struct mdt_object *o, int offset)
 {
         struct md_object        *next = mdt_object_child(o);
         const struct mdt_body   *reqbody = info->mti_body;
         struct ptlrpc_request   *req = mdt_info_req(info);
-        struct lu_attr          *la = &info->mti_attr.ma_attr;
+        struct md_attr          *ma = &info->mti_attr;
+        struct lu_attr          *la = &ma->ma_attr;
         struct req_capsule      *pill = &info->mti_pill;
         const struct lu_context *ctxt = info->mti_ctxt;
         struct mdt_body         *repbody;
@@ -222,109 +222,50 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 RETURN(-ENOMEM);
         }
+        repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
+        repbody->eadatasize = 0;
+        repbody->aclsize = 0;
+
+        ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
+        ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD, RCL_SERVER);
 
         rc = mo_attr_get(ctxt, next, &info->mti_attr);
         if (rc == -EREMOTE) {
-                /* FIXME: This object is located on remote node.
-                 * What value should we return to client?
-                 * also in mdt_md_create() and mdt_object_open()
-                 */
-                if (need_pack_reply) {
-                        rc = req_capsule_pack(pill);
-                        if (rc)
-                                RETURN(rc);
-                }
-
-                repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
+                /* This object is located on remote node.*/
                 repbody->fid1 = *mdt_object_fid(o);
                 repbody->valid |= OBD_MD_FLID;
-                RETURN(0);
-        }
-        if (rc){
+                GOTO(shrink, rc = 0);
+        } else if (rc){
                 CERROR("getattr error for "DFID3": %d\n",
                         PFID3(mdt_object_fid(o)), rc);
                 RETURN(rc);
         }
 
-        if ( !need_pack_reply)
-                goto skip_packing;
+        if (ma->ma_valid & MA_INODE)
+                mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
 
-        /* pre-getattr: to guess how many bytes we need. */
-        if (S_ISLNK(la->la_mode) && (reqbody->valid & OBD_MD_LINKNAME)) {
-                /*FIXME: temporary using old style, will fix it soon */
-                int size[2] = {sizeof (struct mdt_body) };
-                CDEBUG(D_INODE, "LNK name len = %lu, space in body = %d\n",
-                                (unsigned long)la->la_size + 1, 
-                                reqbody->eadatasize);
-                rc = min_t(int, la->la_size + 1, reqbody->eadatasize);
-                size[1] = rc;
-                rc = lustre_pack_reply(req, 2, size, NULL);
-                if (rc)
-                        RETURN(rc);
-                goto skip_packing; 
-        }
-#ifdef CONFIG_FS_POSIX_ACL
-        if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
-            (reqbody->valid & OBD_MD_FLACL)) {
-
-                rc = mo_xattr_get(ctxt, next, NULL, 0, XATTR_NAME_ACL_ACCESS);
-                if (rc < 0) {
-                        if (rc != -ENODATA && rc != -EOPNOTSUPP) {
-                                CERROR("got acl size: %d\n", rc);
-                                RETURN(rc);
-                        }
-                        rc = 0;
-                }
-                req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, rc);
-        }
-#endif
-        rc = req_capsule_pack(pill);
-        if (rc) {
-                CERROR("lustre pack reply for getattr failed: rc %d\n", rc);
-                RETURN(rc);
-        }
-
-skip_packing:
-        repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
-        mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
-
-        /* now, to getattr*/
         if (mdt_body_has_lov(la, reqbody)) {
-                buffer = req_capsule_server_get(pill, &RMF_MDT_MD);
-                length = req_capsule_get_size(pill, &RMF_MDT_MD, RCL_SERVER);
-                if (length > 0) {
-                        rc = mo_xattr_get(ctxt, next,
-                                          buffer, length, XATTR_NAME_LOV);
-                        if (rc > 0) {
-                                if (S_ISDIR(la->la_mode))
-                                        repbody->valid |= OBD_MD_FLDIREA;
-                                else
-                                        repbody->valid |= OBD_MD_FLEASIZE;
-                                repbody->eadatasize = rc;
-                                rc = 0;
-                        } else if (rc == -ENODATA || rc == -EOPNOTSUPP)
-                                rc = 0;
+                if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
+                        CDEBUG(D_INODE, "packing ea for "DFID3"\n",
+                                        PFID3(mdt_object_fid(o)));
+                        mdt_dump_lmm(D_INFO, ma->ma_lmm);
+                        repbody->eadatasize = ma->ma_lmm_size;
+                        repbody->valid |= OBD_MD_FLEASIZE;
                 }
         } else if (S_ISLNK(la->la_mode) &&
-                          (reqbody->valid & OBD_MD_LINKNAME) != 0) {
-                /*FIXME: temporary using old style, will fix it soon */
-                buffer = lustre_msg_buf(req->rq_repmsg, 1, 0);
-                LASSERT(buffer != NULL);       /* caller prepped reply */
-                length = req->rq_repmsg->buflens[1];
-
-                rc = mo_readlink(ctxt, next, buffer, length);
+                          reqbody->valid & OBD_MD_LINKNAME) {
+                rc = mo_readlink(ctxt, next, ma->ma_lmm, ma->ma_lmm_size);
                 if (rc <= 0) {
                         CERROR("readlink failed: %d\n", rc);
                         rc = -EFAULT;
                 } else {
                         repbody->valid |= OBD_MD_LINKNAME;
                         repbody->eadatasize = rc + 1;
-                        ((char*)buffer)[rc] = 0;        /* NULL terminate */
+                        ((char*)ma->ma_lmm)[rc] = 0;        /* NULL terminate */
                         CDEBUG(D_INODE, "symlink dest %s, len = %d\n", 
                                         (char*)buffer, rc);
                         rc = 0;
                 }
-                RETURN(0);
         }
 
         if (reqbody->valid & OBD_MD_FLMODEASIZE) {
@@ -337,8 +278,6 @@ skip_packing:
                                 repbody->max_cookiesize);
         }
 
-        if (rc != 0)
-                RETURN(rc);
 #ifdef CONFIG_FS_POSIX_ACL
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
             (reqbody->valid & OBD_MD_FLACL)) {
@@ -359,6 +298,19 @@ skip_packing:
                 }
         }
 #endif
+
+shrink:
+        /* FIXME: determine the offset of MDT_MD. but it does not work */
+/*
+        if (req_capsule_has_field(pill, &RMF_DLM_REP)) {
+                offset = 2;
+        } else 
+                offset = 1;
+*/
+        lustre_shrink_reply(req, offset, repbody->eadatasize, 1);
+        if (repbody->eadatasize) 
+                offset ++;
+        lustre_shrink_reply(req, offset, repbody->aclsize, 0);
         RETURN(rc);
 }
 
@@ -421,8 +373,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 result = mdt_object_lock(info, child, lhc, child_bits);
                 if (result != 0) {
                         /* finally, we can get attr for child. */
-                        result = mdt_getattr_internal(info, child,
-                                                      ldlm_rep ? 0 : 1);
+                        result = mdt_getattr_internal(info, child, 
+                                                      ldlm_rep ? 2 : 1);
                         if (result != 0)
                                 mdt_object_unlock(info, child, lhc, 1);
                 }
@@ -455,7 +407,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 GOTO(out_parent, result = PTR_ERR(child));
 
         /* finally, we can get attr for child. */
-        result = mdt_getattr_internal(info, child, ldlm_rep ? 0 : 1);
+        result = mdt_getattr_internal(info, child,
+                                      ldlm_rep ? 2 : 1);
         if (result != 0)
                 mdt_object_unlock(info, child, lhc, 1);
         else {
@@ -2830,8 +2783,8 @@ static struct mdt_handler mdt_mds_ops[] = {
 DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
 DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
-DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR,      mdt_getattr),
-DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR_NAME, mdt_getattr_name),
+DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR,      mdt_getattr),
+DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR_NAME, mdt_getattr_name),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO|MUTABOR,
                                           SETXATTR,     mdt_setxattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
