@@ -360,12 +360,12 @@ static int cml_create(const struct lu_context *ctx, struct md_object *mo_p,
         int rc;
         ENTRY;
         rc = mdo_create(ctx, md_object_next(mo_p), child_name,
-                        md_object_next(mo_c), target_name, eadata, eadatalen, 
+                        md_object_next(mo_c), target_name, eadata, eadatalen,
                         ma);
         RETURN(rc);
 }
 
-static int cml_create_data_object(const struct lu_context *ctx, 
+static int cml_create_data_object(const struct lu_context *ctx,
                                   struct md_object *p, struct md_object *o,
                                   const void *eadata, int eadatalen,
                                   struct md_attr *ma)
@@ -660,7 +660,7 @@ static int cmr_lookup(const struct lu_context *ctx, struct md_object *mo_p,
  */
 static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
                       const char *child_name, struct md_object *mo_c,
-                      const char *target_name, const char *eadata,
+                      const char *target_name, const void *eadata,
                       int eadatasize, struct md_attr *ma)
 {
         int rc;
