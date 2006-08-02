@@ -61,10 +61,11 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
                    struct md_object *child, struct lov_mds_md *lmm,
                    int lmm_size, int mode);
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
-                   struct mdd_object *child, struct lov_mds_md **lmm,
-                   int *lmm_size);
+                   struct mdd_object *parent, struct mdd_object *child, 
+                   struct lov_mds_md **lmm, int *lmm_size, const void *eadata,
+                   int eadatasize, struct lu_attr *la);
 int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
-               void *md, int *md_size, int lock);
+               void *md, int *md_size);
 int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd, 
                    struct mdd_object *mdd_cobj, struct md_attr *ma);
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx);

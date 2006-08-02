@@ -141,10 +141,11 @@ static int mdd_attr_get(const struct lu_context *ctxt,
         rc = next->do_ops->do_attr_get(ctxt, next, &ma->ma_attr);
         if (rc == 0) {
                 ma->ma_valid |= MA_INODE;
-                if (S_ISREG(ma->ma_attr.la_mode) && 
-                    ma->ma_lmm != 0 && ma->ma_lmm_size > 0) {
-                        rc = mdd_get_md(ctxt, obj, ma->ma_lmm, &ma->ma_lmm_size, 0);
-                        if (rc >= 0) {                                
+                if ((S_ISREG(ma->ma_attr.la_mode) 
+                     || S_ISDIR(ma->ma_attr.la_mode))
+                     && ma->ma_lmm != 0 && ma->ma_lmm_size > 0) {
+                        rc = mdd_get_md(ctxt, obj, ma->ma_lmm,&ma->ma_lmm_size);
+                        if (rc > 0) {                                
                                 ma->ma_valid |= MA_LOV;
                                 rc = 0;
                         }
@@ -915,12 +916,40 @@ static int __mdd_object_initialize(const struct lu_context *ctxt,
         return rc;
 }
 
+static int mdd_create_data_object(const struct lu_context *ctxt, 
+                                 struct md_object *pobj, struct md_object *cobj,
+                                 const void *eadata, int eadatasize,
+                                 struct md_attr *ma)
+{
+        struct mdd_device *mdd = mdo2mdd(pobj);
+        struct mdd_object *mdo = md2mdd_obj(pobj);
+        struct mdd_object *son = md2mdd_obj(cobj);
+        struct lu_attr *attr = &ma->ma_attr;
+        struct lov_mds_md *lmm = NULL;
+        int lmm_size = 0;
+        int rc;
+        ENTRY;
+        
+        rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size, eadata,
+                            eadatasize, attr);
+        if (rc)
+                RETURN(rc);
+
+        rc = mdd_lov_set_md(ctxt, pobj, cobj, lmm, lmm_size, attr->la_mode);
+        if (rc)
+                RETURN(rc);
+
+        rc = mdd_attr_get(ctxt, cobj, ma);
+
+        RETURN(rc);
+}
 /*
  * Create object and insert it into namespace.
  */
 static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                       const char *name, struct md_object *child,
-                      const char *target_name, struct md_attr* ma)
+                      const char *target_name, const void *eadata, 
+                      int eadatasize, struct md_attr* ma)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdo = md2mdd_obj(pobj);
@@ -943,7 +972,8 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
          * first */
 
         if (S_ISREG(attr->la_mode)) {
-                rc = mdd_lov_create(ctxt, mdd, son, &lmm, &lmm_size);
+                rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size, 
+                                    eadata, eadatasize, attr);
                 if (rc)
                         RETURN(rc);
         }
@@ -1020,9 +1050,10 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         inserted = 1;
 
         rc = mdd_lov_set_md(ctxt, pobj, child, lmm, lmm_size, attr->la_mode);
-        if (rc)
+        if (rc) {
+                CERROR("error on stripe info copy %d \n", rc);
                 GOTO(cleanup, rc);
-
+        }
         if (S_ISLNK(attr->la_mode)) {
                 struct dt_object *dt = mdd_object_child(son);
                 loff_t pos = 0;
@@ -1034,11 +1065,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 else
                         rc = -EFAULT;
         }
-
-        if (rc == 0) 
-                rc = mdd_attr_get(ctxt, child, ma);
-        else 
-                CERROR("error on stripe info copy %d \n", rc);
+        rc = mdd_attr_get(ctxt, child, ma);
 cleanup:
         if (rc && created) {
                 int rc2 = 0;
@@ -1277,6 +1304,7 @@ static struct md_dir_operations mdd_dir_ops = {
         .mdo_name_insert   = mdd_mkname,
         .mdo_name_remove   = mdd_name_remove,
         .mdo_rename_tgt    = mdd_rename_tgt,
+        .mdo_create_data_object = mdd_create_data_object,
 };
 
 

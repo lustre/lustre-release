@@ -307,6 +307,13 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         } else
                 result = -EFAULT;
 
+        if (req_capsule_field_present(pill, &RMF_EADATA)) {
+                rr->rr_eadata = req_capsule_client_get(pill, &RMF_EADATA);
+                rr->rr_eadatalen = req_capsule_get_size(pill,
+                                                        &RMF_EADATA,
+                                                        RCL_CLIENT);
+        }
+
         RETURN(result);
 }
 

@@ -1857,7 +1857,7 @@ static int osd_inode_getattr(const struct lu_context *ctx,
         attr->la_blocks     = inode->i_blocks;
         attr->la_uid        = inode->i_uid;
         attr->la_gid        = inode->i_gid;
-        attr->la_flags      = inode->i_flags;
+//      attr->la_flags      = inode->i_flags;
         attr->la_nlink      = inode->i_nlink;
         return 0;
 }

@@ -245,7 +245,7 @@ lcfg_cleanup:
 }
 
 int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
-               void *md, int *md_size, int lock)
+               void *md, int *md_size)
 {
         struct dt_object *next;
         int rc = 0;
@@ -287,7 +287,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
         }else  if (S_ISDIR(mode)) {
                 struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
                 int size = sizeof(lmm);
-                rc = mdd_get_md(ctxt, pobj, &lmm, &size, 1);
+                rc = mdd_get_md(ctxt, pobj, &lmm, &size);
                 if (rc > 0) {
                         rc = mdd_xattr_set(ctxt, child, lmm, size,
                                            /*
@@ -301,7 +301,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
                                         rc);
                 }
         }
-        
+
         RETURN(rc);
 }
 
@@ -315,8 +315,9 @@ static obd_id mdd_lov_create_id(struct lu_fid *fid)
 }
 
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
-                   struct mdd_object *child, struct lov_mds_md **lmm,
-                   int *lmm_size)
+                   struct mdd_object *parent, struct mdd_object *child, 
+                   struct lov_mds_md **lmm, int *lmm_size, const void *eadata,
+                   int eadatasize, struct lu_attr *la)
 {
         struct obd_device *obd = mdd2_obd(mdd);
         struct obd_export *lov_exp = obd->u.mds.mds_osc_exp;
@@ -324,6 +325,10 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         struct lov_stripe_md *lsm = NULL;
         int rc = 0;
         ENTRY;
+
+        if (la->la_flags & MDS_OPEN_DELAY_CREATE ||
+                        !(la->la_flags & FMODE_WRITE))
+                RETURN(0);
 
         oa = obdo_alloc();
 
@@ -335,9 +340,39 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
         oa->o_size = 0;
 
-        rc = obd_create(lov_exp, oa, &lsm, NULL);
-        if (rc)
-                GOTO(out_oa, rc);
+        if (!(la->la_flags & MDS_OPEN_HAS_OBJS)) {
+                if (la->la_flags & MDS_OPEN_HAS_EA) {
+                        LASSERT(eadata != NULL);
+                        rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, lov_exp,
+                                           0, &lsm, (void*)eadata);
+                        if (rc)
+                                GOTO(out_oa, rc);
+                } else {
+                        LASSERT(*lmm == NULL);
+                        rc = mdd_get_md(ctxt, &parent->mod_obj, *lmm, 
+                                        lmm_size);
+                        if (rc > 0)
+                                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
+                                                   lov_exp, 0, &lsm, *lmm);
+                }
+                rc = obd_create(lov_exp, oa, &lsm, NULL);
+                if (rc) {
+                        if (rc > 0) {
+                                CERROR("obd_create returned invalid "
+                                       "rc %d\n", rc);
+                                rc = -EIO;
+                        }
+                        GOTO(out_oa, rc);
+                }
+        } else {
+                LASSERT(eadata != NULL);
+                rc = obd_iocontrol(OBD_IOC_LOV_SETEA, lov_exp, 0, &lsm, 
+                                   (void*)eadata);
+                if (rc) {
+                        GOTO(out_oa, rc);
+                }
+                lsm->lsm_object_id = oa->o_id;
+        }
 
         rc = obd_packmd(lov_exp, lmm, lsm);
         if (rc < 0) {

@@ -187,7 +187,7 @@ static const struct req_msg_field *ldlm_intent_open_client[] = {
         &RMF_LDLM_INTENT,
         &RMF_REC_CREATE,    /* coincides with mds_reint_open_client[] */
         &RMF_NAME,
-        &RMF_SYMTGT
+        &RMF_EADATA
 };
 
 static const struct req_msg_field *ldlm_intent_unlink_client[] = {

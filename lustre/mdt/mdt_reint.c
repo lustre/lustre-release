@@ -64,7 +64,8 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 struct md_object *next = mdt_object_child(parent);
 
                 rc = mdo_create(info->mti_ctxt, next, rr->rr_name,
-                                mdt_object_child(child), rr->rr_tgt, ma);
+                                mdt_object_child(child), rr->rr_tgt, NULL, 0,
+                                ma);
                 if (rc == 0) {
                         /* return fid & attr to client. */
                         if (ma->ma_valid & MA_INODE)

@@ -70,7 +70,19 @@ static void mdt_mfd_free(struct mdt_file_data *mfd)
         OBD_FREE_PTR(mfd);
 }
 
+static int mdt_create_data_obj(struct mdt_thread_info *info, 
+                              struct mdt_object *p, struct mdt_object *o)
+{
+        struct md_attr   *ma = &info->mti_attr;
+        struct mdt_reint_record *mrr = &info->mti_rr;
+
+        return mdo_create_data_object(info->mti_ctxt, mdt_object_child(p),
+                                 mdt_object_child(o), mrr->rr_eadata, 
+                                 mrr->rr_eadatalen, ma);
+}
+
 static int mdt_mfd_open(struct mdt_thread_info *info,
+                        struct mdt_object *p,
                         struct mdt_object *o,
                         int flags, int created)
 {
@@ -98,7 +110,19 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                         /* If client supports this, do not return open handle
                         *  for special nodes */
                         RETURN(0);
-
+                if ((S_ISREG(la->la_mode) || S_ISDIR(la->la_mode))
+                     && !created && !(ma->ma_valid & MA_LOV)) {
+                        /*No EA, check whether it is will set regEA and dirEA
+                         *since in above attr get, these size might be zero,
+                         *so reset it, to retrieve the MD after create obj*/
+                        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                                                            &RMF_MDT_MD,
+                                                            RCL_SERVER);
+                        LASSERT(p != NULL);
+                        rc = mdt_create_data_obj(info, p, o);
+                        if (rc)
+                                RETURN(rc);
+                }
                 /* FIXME:maybe this can be done earlier? */
                 if (S_ISDIR(la->la_mode)) {
                         if (flags & (MDS_OPEN_CREAT | FMODE_WRITE)) {
@@ -186,7 +210,7 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
                             la->la_flags & MDS_OPEN_CREAT)
                                 rc = -EEXIST;
                         else
-                                rc = mdt_mfd_open(info, o, flags, 0);
+                                rc = mdt_mfd_open(info, NULL, o, flags, 0);
                 } else {
                         rc = -ENOENT;
                         if (la->la_flags & MDS_OPEN_CREAT) {
@@ -194,7 +218,7 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
                                                       mdt_object_child(o),
                                                       &info->mti_attr);
                                 if (rc == 0)
-                                        rc = mdt_mfd_open(info, o, flags, 1);
+                                        rc = mdt_mfd_open(info, NULL, o, flags, 1);
                         }
                 }
                 mdt_object_put(info->mti_ctxt, o);
@@ -274,8 +298,8 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 /* new object will be created. see the following */
         } else {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
-                if (la->la_flags & MDS_OPEN_EXCL &&
-                    la->la_flags & MDS_OPEN_CREAT)
+                if ((la->la_flags & MDS_OPEN_EXCL &&
+                         la->la_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result = -EEXIST);
         }
 
@@ -289,8 +313,8 @@ int mdt_reint_open(struct mdt_thread_info *info)
                                     mdt_object_child(parent),
                                     rr->rr_name,
                                     mdt_object_child(child),
-                                    rr->rr_tgt,
-                                    &info->mti_attr);
+                                    rr->rr_tgt, rr->rr_eadata,
+                                    rr->rr_eadatalen, &info->mti_attr);
                 intent_set_disposition(ldlm_rep, DISP_OPEN_CREATE);
                 if (result != 0)
                         GOTO(out_child, result);
@@ -298,7 +322,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
         }
 
         /* Open it now. */
-        result = mdt_mfd_open(info, child, la->la_flags, created);
+        result = mdt_mfd_open(info, parent, child, la->la_flags, created);
         intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
         GOTO(finish_open, result);
 
