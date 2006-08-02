@@ -52,8 +52,8 @@
 #include <lustre_fld.h>
 #include "fld_internal.h"
 
-static int
-fld_rrb_hash(struct lu_client_fld *fld, seqno_t seq)
+static int fld_rrb_hash(struct lu_client_fld *fld,
+                        seqno_t seq)
 {
         if (fld->fld_count == 0)
                 return 0;
@@ -61,8 +61,8 @@ fld_rrb_hash(struct lu_client_fld *fld, seqno_t seq)
         return do_div(seq, fld->fld_count);
 }
 
-static int
-fld_dht_hash(struct lu_client_fld *fld, seqno_t seq)
+static int fld_dht_hash(struct lu_client_fld *fld,
+                        seqno_t seq)
 {
         /* XXX: here should be DHT hash */
         return fld_rrb_hash(fld, seq);
@@ -86,15 +86,16 @@ struct lu_fld_hash fld_hash[3] = {
  * passed @hash. In case of usual round-robin hash, this is decided by comparing
  * hash and target's index. In the case of DHT, algorithm is a bit more
  * complicated. */
-static int
-fld_client_apt_target(struct fld_target *target, int hash)
+static int fld_client_apt_target(struct fld_target *target,
+                                 int hash)
 {
         /* XXX: DHT case should be worked out. */
         return (target->fldt_idx == hash);
 }
 
 static struct fld_target *
-fld_client_get_target(struct lu_client_fld *fld, seqno_t seq)
+fld_client_get_target(struct lu_client_fld *fld,
+                      seqno_t seq)
 {
         struct fld_target *target;
         int hash;
@@ -122,9 +123,8 @@ fld_client_get_target(struct lu_client_fld *fld, seqno_t seq)
 
 /* add export to FLD. This is usually done by CMM and LMV as they are main users
  * of FLD module. */
-int
-fld_client_add_target(struct lu_client_fld *fld,
-                      struct obd_export *exp)
+int fld_client_add_target(struct lu_client_fld *fld,
+                          struct obd_export *exp)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct fld_target *target, *tmp;
@@ -132,8 +132,8 @@ fld_client_add_target(struct lu_client_fld *fld,
 
         LASSERT(exp != NULL);
 
-        CDEBUG(D_INFO|D_WARNING, "FLD(cli): adding export %s\n",
-	       cli->cl_target_uuid.uuid);
+        CDEBUG(D_INFO|D_WARNING, "%s: adding export %s\n",
+	       fld->fld_name, cli->cl_target_uuid.uuid);
 
         OBD_ALLOC_PTR(target);
         if (target == NULL)
@@ -163,9 +163,8 @@ fld_client_add_target(struct lu_client_fld *fld,
 EXPORT_SYMBOL(fld_client_add_target);
 
 /* remove export from FLD */
-int
-fld_client_del_target(struct lu_client_fld *fld,
-                      struct obd_export *exp)
+int fld_client_del_target(struct lu_client_fld *fld,
+                          struct obd_export *exp)
 {
         struct fld_target *target, *tmp;
         ENTRY;
@@ -190,8 +189,7 @@ fld_client_del_target(struct lu_client_fld *fld,
 EXPORT_SYMBOL(fld_client_del_target);
 
 #ifdef LPROCFS
-static int
-fld_client_proc_init(struct lu_client_fld *fld)
+static int fld_client_proc_init(struct lu_client_fld *fld)
 {
         int rc;
         ENTRY;
@@ -223,8 +221,7 @@ err:
         return rc;
 }
 
-static void
-fld_client_proc_fini(struct lu_client_fld *fld)
+static void fld_client_proc_fini(struct lu_client_fld *fld)
 {
         ENTRY;
         if (fld->fld_proc_dir) {
@@ -240,9 +237,8 @@ static inline int hash_is_sane(int hash)
         return (hash >= 0 && hash < ARRAY_SIZE(fld_hash));
 }
 
-int
-fld_client_init(struct lu_client_fld *fld,
-                const char *uuid, int hash)
+int fld_client_init(struct lu_client_fld *fld,
+                    const char *uuid, int hash)
 {
         int rc = 0;
         ENTRY;
@@ -260,7 +256,7 @@ fld_client_init(struct lu_client_fld *fld,
         fld->fld_count = 0;
 
         snprintf(fld->fld_name, sizeof(fld->fld_name),
-                 "%s-%s", LUSTRE_FLD_NAME, uuid);
+                 "%s-cli-%s", LUSTRE_FLD_NAME, uuid);
 
 #ifdef __KERNEL__
         fld->fld_cache = fld_cache_init(FLD_HTABLE_SIZE);
@@ -290,8 +286,7 @@ out:
 }
 EXPORT_SYMBOL(fld_client_init);
 
-void
-fld_client_fini(struct lu_client_fld *fld)
+void fld_client_fini(struct lu_client_fld *fld)
 {
         struct fld_target *target, *tmp;
         ENTRY;
@@ -322,9 +317,8 @@ fld_client_fini(struct lu_client_fld *fld)
 }
 EXPORT_SYMBOL(fld_client_fini);
 
-static int
-fld_client_rpc(struct obd_export *exp,
-               struct md_fld *mf, __u32 fld_op)
+static int fld_client_rpc(struct obd_export *exp,
+                          struct md_fld *mf, __u32 fld_op)
 {
         int size[2] = {sizeof(__u32), sizeof(struct md_fld)}, rc;
         int mf_size = sizeof(struct md_fld);
@@ -373,9 +367,8 @@ out_req:
         return rc;
 }
 
-static int
-__fld_client_create(struct lu_client_fld *fld,
-                    seqno_t seq, mdsno_t mds,
+static int __fld_client_create(struct lu_client_fld *fld,
+                               seqno_t seq, mdsno_t mds,
                     struct md_fld *md_fld)
 {
         struct fld_target *target;
@@ -399,9 +392,8 @@ __fld_client_create(struct lu_client_fld *fld,
         RETURN(rc);
 }
 
-int
-fld_client_create(struct lu_client_fld *fld,
-                  seqno_t seq, mdsno_t mds)
+int fld_client_create(struct lu_client_fld *fld,
+                      seqno_t seq, mdsno_t mds)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = mds };
         __u32 rc;
@@ -412,9 +404,8 @@ fld_client_create(struct lu_client_fld *fld,
 }
 EXPORT_SYMBOL(fld_client_create);
 
-static int
-__fld_client_delete(struct lu_client_fld *fld,
-                    seqno_t seq, struct md_fld *md_fld)
+static int __fld_client_delete(struct lu_client_fld *fld,
+                               seqno_t seq, struct md_fld *md_fld)
 {
         struct fld_target *target;
         __u32 rc;
@@ -430,9 +421,8 @@ __fld_client_delete(struct lu_client_fld *fld,
         RETURN(rc);
 }
 
-int
-fld_client_delete(struct lu_client_fld *fld,
-                  seqno_t seq)
+int fld_client_delete(struct lu_client_fld *fld,
+                      seqno_t seq)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
         __u32 rc;
@@ -442,10 +432,9 @@ fld_client_delete(struct lu_client_fld *fld,
 }
 EXPORT_SYMBOL(fld_client_delete);
 
-static int
-__fld_client_lookup(struct lu_client_fld *fld,
-                    seqno_t seq, mdsno_t *mds,
-                    struct md_fld *md_fld)
+static int __fld_client_lookup(struct lu_client_fld *fld,
+                               seqno_t seq, mdsno_t *mds,
+                               struct md_fld *md_fld)
 {
         struct fld_target *target;
         int rc;
@@ -473,9 +462,8 @@ __fld_client_lookup(struct lu_client_fld *fld,
         RETURN(rc);
 }
 
-int
-fld_client_lookup(struct lu_client_fld *fld,
-                  seqno_t seq, mdsno_t *mds)
+int fld_client_lookup(struct lu_client_fld *fld,
+                      seqno_t seq, mdsno_t *mds)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
         int rc;

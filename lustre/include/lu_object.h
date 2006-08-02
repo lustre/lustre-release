@@ -520,15 +520,15 @@ struct lu_site {
         /*
          * Controller Seq Manager
          */
-        struct lu_server_seq *ls_ctlr_seq;
+        struct lu_server_seq *ls_control_seq;
 
         /*
-         * Clienbt Seq Manager
+         * Client Seq Manager
          */
         struct lu_client_seq *ls_client_seq;
 
-        /* sequence controller node */
-        struct obd_export    *ls_ctlr_exp;
+        /* Sequence controller node */
+        struct obd_export    *ls_client_exp;
 
         /* statistical counters. Protected by nothing, races are accepted. */
         struct {

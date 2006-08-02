@@ -47,10 +47,9 @@
 #include <lustre_fid.h>
 #include "fid_internal.h"
 
-static int 
-seq_client_rpc(struct lu_client_seq *seq, 
-               struct lu_range *range,
-               __u32 opc)
+static int seq_client_rpc(struct lu_client_seq *seq, 
+                          struct lu_range *range,
+                          __u32 opc)
 {
         struct obd_export *exp = seq->seq_exp;
         int repsize = sizeof(struct lu_range);
@@ -102,33 +101,29 @@ out_req:
         return rc;
 }
 
-static int
-__seq_client_alloc_opc(struct lu_client_seq *seq,
-                       int opc, const char *opcname)
+static int __seq_client_alloc_opc(struct lu_client_seq *seq,
+                                  int opc, const char *opcname)
 {
         int rc;
         ENTRY;
 
         rc = seq_client_rpc(seq, &seq->seq_range, opc);
         if (rc == 0) {
-                CDEBUG(D_INFO, "SEQ-MGR(cli): allocated "
-                       "%s-sequence ["LPX64"-"LPX64"]\n",
-                       opcname, seq->seq_range.lr_start,
-                       seq->seq_range.lr_end);
+                CDEBUG(D_INFO, "%s: allocated %s-sequence ["
+                       LPX64"-"LPX64"]\n", seq->seq_name, opcname,
+                       seq->seq_range.lr_start, seq->seq_range.lr_end);
         }
         RETURN(rc);
 }
 
 /* request sequence-controller node to allocate new super-sequence. */
-static int
-__seq_client_alloc_super(struct lu_client_seq *seq)
+static int __seq_client_alloc_super(struct lu_client_seq *seq)
 {
         ENTRY;
         RETURN(__seq_client_alloc_opc(seq, SEQ_ALLOC_SUPER, "super"));
 }
 
-int
-seq_client_alloc_super(struct lu_client_seq *seq)
+int seq_client_alloc_super(struct lu_client_seq *seq)
 {
         int rc;
         ENTRY;
@@ -142,15 +137,13 @@ seq_client_alloc_super(struct lu_client_seq *seq)
 EXPORT_SYMBOL(seq_client_alloc_super);
 
 /* request sequence-controller node to allocate new meta-sequence. */
-static int
-__seq_client_alloc_meta(struct lu_client_seq *seq)
+static int __seq_client_alloc_meta(struct lu_client_seq *seq)
 {
         ENTRY;
         RETURN(__seq_client_alloc_opc(seq, SEQ_ALLOC_META, "meta"));
 }
 
-int
-seq_client_alloc_meta(struct lu_client_seq *seq)
+int seq_client_alloc_meta(struct lu_client_seq *seq)
 {
         int rc;
         ENTRY;
@@ -164,8 +157,7 @@ seq_client_alloc_meta(struct lu_client_seq *seq)
 EXPORT_SYMBOL(seq_client_alloc_meta);
 
 /* allocate new sequence for client (llite or MDC are expected to use this) */
-static int
-__seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
+static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
 {
         int rc = 0;
         ENTRY;
@@ -186,13 +178,12 @@ __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
         *seqnr = seq->seq_range.lr_start;
         seq->seq_range.lr_start++;
         
-        CDEBUG(D_INFO, "SEQ-MGR(cli): allocated "
-               "sequence ["LPX64"]\n", *seqnr);
+        CDEBUG(D_INFO, "%s: allocated sequence ["LPX64"]\n",
+               seq->seq_name, *seqnr);
         RETURN(rc);
 }
 
-int
-seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
+int seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
 {
         int rc = 0;
         ENTRY;
@@ -205,8 +196,7 @@ seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
 }
 EXPORT_SYMBOL(seq_client_alloc_seq);
 
-int
-seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
+int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
 {
         seqno_t seqnr = 0;
         int rc;
@@ -244,8 +234,8 @@ seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
         *fid = seq->seq_fid;
         LASSERT(fid_is_sane(fid));
         
-        CDEBUG(D_INFO, "SEQ-MGR(cli): allocated FID "DFID3"\n",
-               PFID3(fid));
+        CDEBUG(D_INFO, "%s: allocated FID "DFID3"\n",
+               seq->seq_name, PFID3(fid));
 
         EXIT;
 out:
@@ -255,8 +245,7 @@ out:
 EXPORT_SYMBOL(seq_client_alloc_fid);
 
 #ifdef LPROCFS
-static int
-seq_client_proc_init(struct lu_client_seq *seq)
+static int seq_client_proc_init(struct lu_client_seq *seq)
 {
         int rc;
         ENTRY;
@@ -288,8 +277,7 @@ err:
         return rc;
 }
 
-static void
-seq_client_proc_fini(struct lu_client_seq *seq)
+static void seq_client_proc_fini(struct lu_client_seq *seq)
 {
         ENTRY;
         if (seq->seq_proc_dir) {
@@ -300,10 +288,9 @@ seq_client_proc_fini(struct lu_client_seq *seq)
 }
 #endif
 
-int 
-seq_client_init(struct lu_client_seq *seq,
-                const char *uuid,
-                struct obd_export *exp)
+int seq_client_init(struct lu_client_seq *seq,
+                    const char *uuid,
+                    struct obd_export *exp)
 {
         int rc = 0;
         ENTRY;
@@ -317,7 +304,7 @@ seq_client_init(struct lu_client_seq *seq,
         seq->seq_width = LUSTRE_SEQ_MAX_WIDTH;
 
         snprintf(seq->seq_name, sizeof(seq->seq_name),
-                 "%s-%s", LUSTRE_SEQ_NAME, uuid);
+                 "%s-cli-%s", LUSTRE_SEQ_NAME, uuid);
 
 #ifdef LPROCFS
         rc = seq_client_proc_init(seq);

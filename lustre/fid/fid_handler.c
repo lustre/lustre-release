@@ -64,24 +64,29 @@ const struct lu_range LUSTRE_SEQ_ZERO_RANGE = {
 EXPORT_SYMBOL(LUSTRE_SEQ_ZERO_RANGE);
 
 /* assigns client to sequence controller node */
-int
-seq_server_init_ctlr(struct lu_server_seq *seq,
-                     struct lu_client_seq *cli,
-                     const struct lu_context *ctx)
+int seq_server_set_cli(struct lu_server_seq *seq,
+                       struct lu_client_seq *cli,
+                       const struct lu_context *ctx)
 {
         int rc = 0;
         ENTRY;
 
-        LASSERT(cli != NULL);
+        if (cli == NULL) {
+                CDEBUG(D_INFO|D_WARNING, "%s: detached "
+                       "sequence mgr client %s\n", seq->seq_name,
+                       cli->seq_exp->exp_client_uuid.uuid);
+                seq->seq_cli = cli;
+                RETURN(0);
+        }
 
         if (seq->seq_cli) {
-                CERROR("SEQ-MGR(srv): sequence-controller "
-                       "is already assigned\n");
+                CERROR("%s: sequence-controller is already "
+                       "assigned\n", seq->seq_name);
                 RETURN(-EINVAL);
         }
 
-        CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): assign "
-               "sequence controller client %s\n",
+        CDEBUG(D_INFO|D_WARNING, "%s: attached "
+               "sequence client %s\n", seq->seq_name,
                cli->seq_exp->exp_client_uuid.uuid);
 
         /* asking client for new range, assign that range to ->seq_super and
@@ -119,27 +124,13 @@ out_up:
         up(&seq->seq_sem);
         return rc;
 }
-EXPORT_SYMBOL(seq_server_init_ctlr);
-
-void
-seq_server_fini_ctlr(struct lu_server_seq *seq)
-{
-        ENTRY;
-
-        down(&seq->seq_sem);
-        seq->seq_cli = NULL;
-        up(&seq->seq_sem);
-
-        EXIT;
-}
-EXPORT_SYMBOL(seq_server_fini_ctlr);
+EXPORT_SYMBOL(seq_server_set_cli);
 
 /* on controller node, allocate new super sequence for regular sequence
  * server. */
-static int
-__seq_server_alloc_super(struct lu_server_seq *seq,
-                         struct lu_range *range,
-                         const struct lu_context *ctx)
+static int __seq_server_alloc_super(struct lu_server_seq *seq,
+                                    struct lu_range *range,
+                                    const struct lu_context *ctx)
 {
         struct lu_range *space = &seq->seq_space;
         int rc;
@@ -171,17 +162,17 @@ __seq_server_alloc_super(struct lu_server_seq *seq,
         }
 
         if (rc == 0) {
-                CDEBUG(D_INFO, "SEQ-MGR(srv): allocated super-sequence "
-                       "["LPX64"-"LPX64"]\n", range->lr_start, range->lr_end);
+                CDEBUG(D_INFO, "%s: allocated super-sequence "
+                       "["LPX64"-"LPX64"]\n", seq->seq_name,
+                       range->lr_start, range->lr_end);
         }
 
         RETURN(rc);
 }
 
-static int
-seq_server_alloc_super(struct lu_server_seq *seq,
-                       struct lu_range *range,
-                       const struct lu_context *ctx)
+static int seq_server_alloc_super(struct lu_server_seq *seq,
+                                  struct lu_range *range,
+                                  const struct lu_context *ctx)
 {
         int rc;
         ENTRY;
@@ -193,10 +184,9 @@ seq_server_alloc_super(struct lu_server_seq *seq,
         RETURN(rc);
 }
 
-static int
-__seq_server_alloc_meta(struct lu_server_seq *seq,
-                        struct lu_range *range,
-                        const struct lu_context *ctx)
+static int __seq_server_alloc_meta(struct lu_server_seq *seq,
+                                   struct lu_range *range,
+                                   const struct lu_context *ctx)
 {
         struct lu_range *super = &seq->seq_super;
         int rc = 0;
@@ -232,17 +222,17 @@ __seq_server_alloc_meta(struct lu_server_seq *seq,
         }
 
         if (rc == 0) {
-                CDEBUG(D_INFO, "SEQ-MGR(srv): allocated meta-sequence "
-                       "["LPX64"-"LPX64"]\n", range->lr_start, range->lr_end);
+                CDEBUG(D_INFO, "%s: allocated meta-sequence "
+                       "["LPX64"-"LPX64"]\n", seq->seq_name,
+                       range->lr_start, range->lr_end);
         }
 
         RETURN(rc);
 }
 
-static int
-seq_server_alloc_meta(struct lu_server_seq *seq,
-                      struct lu_range *range,
-                      const struct lu_context *ctx)
+static int seq_server_alloc_meta(struct lu_server_seq *seq,
+                                 struct lu_range *range,
+                                 const struct lu_context *ctx)
 {
         int rc;
         ENTRY;
@@ -254,9 +244,8 @@ seq_server_alloc_meta(struct lu_server_seq *seq,
         RETURN(rc);
 }
 
-static int
-seq_req_handle0(const struct lu_context *ctx,
-                struct ptlrpc_request *req)
+static int seq_req_handle0(const struct lu_context *ctx,
+                           struct ptlrpc_request *req)
 {
         int rep_buf_size[2] = { 0, };
         struct req_capsule pill;
@@ -292,11 +281,11 @@ seq_req_handle0(const struct lu_context *ctx,
                         rc = seq_server_alloc_meta(site->ls_server_seq, out, ctx);
                         break;
                 case SEQ_ALLOC_SUPER:
-                        if (!site->ls_ctlr_seq) {
+                        if (!site->ls_control_seq) {
                                 CERROR("sequence-controller is not initialized\n");
                                 GOTO(out_pill, rc == -EINVAL);
                         }
-                        rc = seq_server_alloc_super(site->ls_ctlr_seq, out, ctx);
+                        rc = seq_server_alloc_super(site->ls_control_seq, out, ctx);
                         break;
                 default:
                         CERROR("wrong opc 0x%x\n", *opc);
@@ -312,8 +301,7 @@ out_pill:
         return rc;
 }
 
-static int
-seq_req_handle(struct ptlrpc_request *req)
+static int seq_req_handle(struct ptlrpc_request *req)
 {
         int fail = OBD_FAIL_SEQ_ALL_REPLY_NET;
         const struct lu_context *ctx;
@@ -345,8 +333,7 @@ seq_req_handle(struct ptlrpc_request *req)
 }
 
 #ifdef LPROCFS
-static int
-seq_server_proc_init(struct lu_server_seq *seq)
+static int seq_server_proc_init(struct lu_server_seq *seq)
 {
         int rc;
         ENTRY;
@@ -389,8 +376,7 @@ err:
         return rc;
 }
 
-static void
-seq_server_proc_fini(struct lu_server_seq *seq)
+static void seq_server_proc_fini(struct lu_server_seq *seq)
 {
         ENTRY;
         if (seq->seq_proc_entry) {
@@ -406,12 +392,11 @@ seq_server_proc_fini(struct lu_server_seq *seq)
 }
 #endif
 
-int
-seq_server_init(struct lu_server_seq *seq,
-                struct dt_device *dev,
-                const char *uuid,
-                lu_server_type_t type,
-                const struct lu_context *ctx)
+int seq_server_init(struct lu_server_seq *seq,
+                    struct dt_device *dev,
+                    const char *uuid,
+                    lu_server_type_t type,
+                    const struct lu_context *ctx)
 {
         int rc, portal = (type == LUSTRE_SEQ_SRV) ?
                 SEQ_SRV_PORTAL : SEQ_CTLR_PORTAL;
@@ -441,7 +426,7 @@ seq_server_init(struct lu_server_seq *seq,
         seq->seq_meta_width = LUSTRE_SEQ_META_WIDTH;
 
         snprintf(seq->seq_name, sizeof(seq->seq_name), "%s-%s-%s",
-                 LUSTRE_SEQ_NAME, (type == LUSTRE_SEQ_SRV ? "srv" : "ctlr"),
+                 LUSTRE_SEQ_NAME, (type == LUSTRE_SEQ_SRV ? "srv" : "ctl"),
                  uuid);
 
         seq->seq_space = LUSTRE_SEQ_SPACE_RANGE;
@@ -457,11 +442,13 @@ seq_server_init(struct lu_server_seq *seq,
         rc = seq_store_read(seq, ctx);
         if (rc == -ENODATA) {
                 if (type == LUSTRE_SEQ_SRV) {
-                        CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(srv): no data on "
-                               "disk found, waiting for controller assign\n");
+                        CDEBUG(D_INFO|D_WARNING, "%s: no data on "
+                               "disk found, wait for controller "
+                               "attach\n", seq->seq_name);
                 } else {
-                        CDEBUG(D_INFO|D_WARNING, "SEQ-MGR(ctlr): no data on "
-                               "disk found, this is first controller run\n");
+                        CDEBUG(D_INFO|D_WARNING, "%s: no data on "
+                               "disk found, this is first controller "
+                               "run\n", seq->seq_name);
                 }
         } else if (rc) {
 		CERROR("can't read sequence state, rc = %d\n",
@@ -499,9 +486,8 @@ out:
 }
 EXPORT_SYMBOL(seq_server_init);
 
-void
-seq_server_fini(struct lu_server_seq *seq,
-                const struct lu_context *ctx)
+void seq_server_fini(struct lu_server_seq *seq,
+                     const struct lu_context *ctx)
 {
         ENTRY;
 
@@ -537,17 +523,14 @@ static int fid_fini(void)
 	RETURN(0);
 }
 
-static int
-__init fid_mod_init(void)
-
+static int __init fid_mod_init(void)
 {
         /* init caches if any */
         fid_init();
         return 0;
 }
 
-static void
-__exit fid_mod_exit(void)
+static void __exit fid_mod_exit(void)
 {
         /* free caches if any */
         fid_fini();

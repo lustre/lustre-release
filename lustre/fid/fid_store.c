@@ -58,9 +58,8 @@ enum {
 };
 
 /* this function implies that caller takes care about locking */
-int
-seq_store_write(struct lu_server_seq *seq,
-		const struct lu_context *ctx)
+int seq_store_write(struct lu_server_seq *seq,
+                    const struct lu_context *ctx)
 {
         struct dt_object *dt_obj = seq->seq_obj;
         struct dt_device *dt_dev = seq->seq_dev;
@@ -96,9 +95,8 @@ seq_store_write(struct lu_server_seq *seq,
 
 /* this function implies that caller takes care about locking or locking is not
  * needed (init time). */
-int
-seq_store_read(struct lu_server_seq *seq,
-	       const struct lu_context *ctx)
+int seq_store_read(struct lu_server_seq *seq,
+                   const struct lu_context *ctx)
 {
         struct dt_object *dt_obj = seq->seq_obj;
         struct seq_store_capsule capsule;
@@ -124,9 +122,8 @@ seq_store_read(struct lu_server_seq *seq,
 	RETURN(rc);
 }
 
-int
-seq_store_init(struct lu_server_seq *seq,
-	       const struct lu_context *ctx)
+int seq_store_init(struct lu_server_seq *seq,
+                   const struct lu_context *ctx)
 {
         struct dt_device *dt = seq->seq_dev;
         struct dt_object *dt_obj;
@@ -148,9 +145,8 @@ seq_store_init(struct lu_server_seq *seq,
         RETURN(rc);
 }
 
-void
-seq_store_fini(struct lu_server_seq *seq,
-	       const struct lu_context *ctx)
+void seq_store_fini(struct lu_server_seq *seq,
+                    const struct lu_context *ctx)
 {
         ENTRY;
         if (seq->seq_obj != NULL) {

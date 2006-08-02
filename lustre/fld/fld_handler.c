@@ -67,10 +67,9 @@ static void __exit fld_mod_exit(void)
 }
 
 /* insert index entry and update cache */
-int
-fld_server_create(struct lu_server_fld *fld,
-                  const struct lu_context *ctx,
-                  seqno_t seq, mdsno_t mds)
+int fld_server_create(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      seqno_t seq, mdsno_t mds)
 {
         ENTRY;
         RETURN(fld_index_create(fld, ctx, seq, mds));
@@ -78,10 +77,9 @@ fld_server_create(struct lu_server_fld *fld,
 EXPORT_SYMBOL(fld_server_create);
 
 /* delete index entry */
-int
-fld_server_delete(struct lu_server_fld *fld,
-                  const struct lu_context *ctx,
-                  seqno_t seq)
+int fld_server_delete(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      seqno_t seq)
 {
         ENTRY;
         RETURN(fld_index_delete(fld, ctx, seq));
@@ -89,20 +87,18 @@ fld_server_delete(struct lu_server_fld *fld,
 EXPORT_SYMBOL(fld_server_delete);
 
 /* issue on-disk index lookup */
-int
-fld_server_lookup(struct lu_server_fld *fld,
-                  const struct lu_context *ctx,
-                  seqno_t seq, mdsno_t *mds)
+int fld_server_lookup(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      seqno_t seq, mdsno_t *mds)
 {
         ENTRY;
         RETURN(fld_index_lookup(fld, ctx, seq, mds));
 }
 EXPORT_SYMBOL(fld_server_lookup);
 
-static int
-fld_server_handle(struct lu_server_fld *fld,
-                  const struct lu_context *ctx,
-                  __u32 opc, struct md_fld *mf)
+static int fld_server_handle(struct lu_server_fld *fld,
+                             const struct lu_context *ctx,
+                             __u32 opc, struct md_fld *mf)
 {
         int rc;
         ENTRY;
@@ -127,10 +123,9 @@ fld_server_handle(struct lu_server_fld *fld,
 
 }
 
-static int
-fld_req_handle0(const struct lu_context *ctx,
-                struct lu_server_fld *fld,
-                struct ptlrpc_request *req)
+static int fld_req_handle0(const struct lu_context *ctx,
+                           struct lu_server_fld *fld,
+                           struct ptlrpc_request *req)
 {
         int rep_buf_size[3] = { 0, };
         struct req_capsule pill;
@@ -174,7 +169,7 @@ static int fld_req_handle(struct ptlrpc_request *req)
 {
         int fail = OBD_FAIL_FLD_ALL_REPLY_NET;
         const struct lu_context *ctx;
-        struct lu_site    *site;
+        struct lu_site *site;
         int rc = -EPROTO;
         ENTRY;
 
@@ -233,8 +228,7 @@ int fid_is_local(struct lu_site *site, const struct lu_fid *fid)
 EXPORT_SYMBOL(fid_is_local);
 
 #ifdef LPROCFS
-static int
-fld_server_proc_init(struct lu_server_fld *fld)
+static int fld_server_proc_init(struct lu_server_fld *fld)
 {
         int rc;
         ENTRY;
@@ -276,8 +270,7 @@ err:
         return rc;
 }
 
-static void
-fld_server_proc_fini(struct lu_server_fld *fld)
+static void fld_server_proc_fini(struct lu_server_fld *fld)
 {
         ENTRY;
         if (fld->fld_proc_entry) {
@@ -293,11 +286,10 @@ fld_server_proc_fini(struct lu_server_fld *fld)
 }
 #endif
 
-int
-fld_server_init(struct lu_server_fld *fld,
-                const struct lu_context *ctx,
-                struct dt_device *dt,
-                const char *uuid)
+int fld_server_init(struct lu_server_fld *fld,
+                    const struct lu_context *ctx,
+                    struct dt_device *dt,
+                    const char *uuid)
 {
         int rc;
         struct ptlrpc_service_conf fld_conf = {
@@ -317,7 +309,7 @@ fld_server_init(struct lu_server_fld *fld,
         lu_device_get(&dt->dd_lu_dev);
 
         snprintf(fld->fld_name, sizeof(fld->fld_name),
-                 "%s-%s", LUSTRE_FLD_NAME, uuid);
+                 "%s-srv-%s", LUSTRE_FLD_NAME, uuid);
 
         rc = fld_index_init(fld, ctx);
         if (rc)
@@ -349,9 +341,8 @@ out:
 }
 EXPORT_SYMBOL(fld_server_init);
 
-void
-fld_server_fini(struct lu_server_fld *fld,
-                const struct lu_context *ctx)
+void fld_server_fini(struct lu_server_fld *fld,
+                     const struct lu_context *ctx)
 {
         ENTRY;
 
