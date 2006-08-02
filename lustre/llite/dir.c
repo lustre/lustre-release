@@ -52,6 +52,84 @@
 #define PageChecked(page)        test_bit(PG_checked, &(page)->flags)
 #define SetPageChecked(page)     set_bit(PG_checked, &(page)->flags)
 
+/*
+ * (new) readdir implementation overview.
+ *
+ * Original lustre readdir implementation cached exact copy of raw directory
+ * pages on the client. These pages were indexed in client page cache by
+ * logical offset in the directory file. This design, while very simple and
+ * intuitive had some inherent problems:
+ *
+ *     . it implies that byte offset to the directory entry serves as a
+ *     telldir(3)/seekdir(3) cookie, but that offset is not stable: in
+ *     ext3/htree directory entries may move due to splits, and more
+ *     importantly,
+ *
+ *     . it is incompatible with the design of split directories for cmd3,
+ *     that assumes that names are distributed across nodes based on their
+ *     hash, and so readdir should be done in hash order.
+ *
+ * New readdir implementation does readdir in hash order, and uses hash of a
+ * file name as a telldir/seekdir cookie. This led to number of complications:
+ *
+ *     . hash is not unique, so it cannot be used to index cached directory
+ *     pages on the client (note, that it requires a whole pageful of hash
+ *     collided entries to cause two pages to have identical hashes);
+ *
+ *     . hash is not unique, so it cannot, strictly speaking, be used as an
+ *     entry cookie. ext3/htree has the same problem and lustre implementation
+ *     mimics their solution: seekdir(hash) positions directory at the first
+ *     entry with the given hash.
+ *
+ * Client side.
+ *
+ * 0. caching
+ *
+ * Client caches directory pages using hash of the first entry as an index. As
+ * noted above hash is not unique, so this solution doesn't work as is:
+ * special processing is needed for "page hash chains" (i.e., sequences of
+ * pages filled with entries all having the same hash value).
+ *
+ * First, such chains have to be detected. To this end, server returns to the
+ * client the hash of the first entry on the page next to one returned. When
+ * client detects that this hash is the same as hash of the first entry on the
+ * returned page, page hash collision has to be handled. Pages in the
+ * hash chain, except first one, are termed "overflow pages".
+ *
+ * Solution to index uniqueness problem is to not cache overflow
+ * pages. Instead, when page hash collision is detected, all overflow pages
+ * from emerging chain are immediately requested from the server and placed in
+ * a special data structure (struct ll_dir_chain). This data structure is used
+ * by ll_readdir() to process entries from overflow pages. When readdir
+ * invocation finishes, overflow pages are discarded. If page hash collision
+ * chain weren't completely processed, next call to readdir will again detect
+ * page hash collision, again read overflow pages in, process next portion of
+ * entries and again discard the pages. This is not as wasteful as it looks,
+ * because, given reasonable hash, page hash collisions are extremely rare.
+ *
+ * 1. directory positioning
+ *
+ * When seekdir(hash) is called, original
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+ * Server.
+ *
+ * identification of and access to overflow pages
+ *
+ * page format
+ *
+ *
+ *
+ *
+ *
+ */
+
 static __u32 hash_x_index(__u32 value)
 {
         return ((__u32)~0) - value;
@@ -226,6 +304,20 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
                 GOTO(out_unlock, page);
 
         if (page != NULL) {
+                /*
+                 * XXX nikita: not entirely correct handling of a corner case:
+                 * suppose hash chain of entries with hash value HASH crosses
+                 * border between pages P0 and P1. First both P0 and P1 are
+                 * cached, seekdir() is called for some entry from the P0 part
+                 * of the chain. Later P0 goes out of cache. telldir(HASH)
+                 * happens and finds P1, as it starts with matching hash
+                 * value. Remaining entries from P0 part of the chain are
+                 * skipped. (Is that really a bug?)
+                 *
+                 * Possible solutions: 0. don't cache P1 is such case, handle
+                 * it as an "overflow" page. 1. invalidate all pages at
+                 * once. 2. use HASH|1 as an index for P1.
+                 */
                 if (exact && hash != start) {
                         /*
                          * readdir asked for a page starting _exactly_ from
