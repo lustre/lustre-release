@@ -95,8 +95,10 @@ int ll_fid_dt_init(struct ll_sb_info *sbi)
         ENTRY;
         RETURN(ll_fid_init(sbi->ll_dt_exp));
 #endif
-        /* XXX: enable this again when OSD is starting sequence-management
-         * service. */
+        /* 
+         * XXX: enable this when DT stack supports new FIDs and has implemented
+         * obd_fid_init().
+         */
         ENTRY;
         RETURN(0);
 }
@@ -123,8 +125,17 @@ int ll_fid_md_fini(struct ll_sb_info *sbi)
 
 int ll_fid_dt_fini(struct ll_sb_info *sbi)
 {
+#if 0
         ENTRY;
         RETURN(ll_fid_fini(sbi->ll_dt_exp));
+#else
+        /* 
+         * XXX: enable this when DT stack supports new FIDs and has implemented
+         * obd_fid_fini().
+         */
+        ENTRY;
+        RETURN(0);
+#endif
 }
 
 /* build inode number on passed @fid */
