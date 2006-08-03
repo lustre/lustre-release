@@ -732,7 +732,14 @@ static int __mds_lov_synchronize(void *data)
                        obd->obd_name, rc);
                 GOTO(out, rc);
         }
-
+        if (obd->obd_upcall.onu_owner) {
+                /*This is an hack for mds_notify->mdd_notify,
+                 *When the mds obd in mdd is removed, 
+                 *This hack should be removed*/
+                LASSERT(obd->obd_upcall.onu_upcall != NULL);
+                obd->obd_upcall.onu_upcall(NULL, NULL, 0,
+                                 obd->obd_upcall.onu_owner);
+        }
 out:
         class_decref(obd);
         RETURN(rc);

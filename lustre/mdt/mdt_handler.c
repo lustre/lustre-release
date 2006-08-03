@@ -657,7 +657,7 @@ static int mdt_reint(struct mdt_thread_info *info)
         opc = mdt_reint_opcode(info, reint_fmts);
         if (opc >= 0) {
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
-
+                
                 rc = req_capsule_pack(&info->mti_pill);
                 if (rc == 0)
                         rc = mdt_reint_internal(info, opc);
@@ -2135,7 +2135,7 @@ static struct lu_device *mdt_layer_setup(const struct lu_context *ctx,
                 GOTO(out_alloc, rc);
         }
         lu_device_get(d);
-
+      
         RETURN(d);
 out_alloc:
         ldt->ldt_ops->ldto_device_free(ctx, d);
@@ -2151,6 +2151,7 @@ static int mdt_stack_init(const struct lu_context *ctx,
 {
         struct lu_device  *d = &m->mdt_md_dev.md_lu_dev;
         struct lu_device  *tmp;
+        struct md_device *md;
         int rc;
         ENTRY;
 
@@ -2166,11 +2167,20 @@ static int mdt_stack_init(const struct lu_context *ctx,
                 GOTO(out, rc = PTR_ERR(tmp));
         }
         d = tmp;
+        md = lu2md_dev(d);
+        
         tmp = mdt_layer_setup(ctx, LUSTRE_CMM0_NAME, d, cfg);
         if (IS_ERR(tmp)) {
                 GOTO(out, rc = PTR_ERR(tmp));
         }
         d = tmp;
+        /*set mdd upcall device*/
+        md->md_upcall.mu_upcall_dev = lu2md_dev(d);
+       
+        md = lu2md_dev(d);
+        /*set cmm upcall device*/
+        md->md_upcall.mu_upcall_dev = &m->mdt_md_dev;
+
         m->mdt_child = lu2md_dev(d);
 
         /* process setup config */
@@ -2325,7 +2335,9 @@ err_free_site:
 static int mdt_process_config(const struct lu_context *ctx,
                               struct lu_device *d, struct lustre_cfg *cfg)
 {
-        struct lu_device *next = md2lu_dev(mdt_dev(d)->mdt_child);
+        struct mdt_device *m = mdt_dev(d);
+        struct md_device *md_next  = m->mdt_child;
+        struct lu_device *next = md2lu_dev(md_next);
         int err;
         ENTRY;
 
@@ -2340,10 +2352,10 @@ static int mdt_process_config(const struct lu_context *ctx,
                         CERROR("can't initialize controller export, "
                                "rc %d\n", err);
                 }
-                /* all MDT specific commands should be here */
         default:
                 /* others are passed further */
                 err = next->ld_ops->ldo_process_config(ctx, next, cfg);
+                break;
         }
         RETURN(err);
 }
@@ -2603,6 +2615,30 @@ static int mdt_destroy_export(struct obd_export *export)
         RETURN(rc);
 }
 
+static int mdt_upcall(const struct lu_context *ctx, struct md_device *md,
+                      enum md_upcall_event ev)
+{
+        struct mdt_device *m = mdt_dev(&md->md_lu_dev);
+        struct md_device  *next  = m->mdt_child;
+        int rc = 0;
+        ENTRY;
+        
+        switch (ev) {
+                case MD_LOV_SYNC:
+                        rc = next->md_ops->mdo_get_maxsize(ctx, next, 
+                                    &m->mdt_max_mdsize, &m->mdt_max_cookiesize);
+                        CDEBUG(D_INFO, "get max mdsize %d max cookiesize %d \n",
+                                     m->mdt_max_mdsize, m->mdt_max_cookiesize);
+                        break;
+                default:
+                        CERROR("invalid event\n");
+                        rc = -EINVAL;
+                        break;
+        }
+        RETURN(rc);
+}
+
+
 static struct obd_ops mdt_obd_device_ops = {
         .o_owner          = THIS_MODULE,
         .o_connect        = mdt_obd_connect,
@@ -2636,6 +2672,7 @@ static struct lu_device *mdt_device_alloc(const struct lu_context *ctx,
                         OBD_FREE_PTR(m);
                         l = ERR_PTR(result);
                 }
+                m->mdt_md_dev.md_upcall.mu_upcall = mdt_upcall;
         } else
                 l = ERR_PTR(-ENOMEM);
         return l;

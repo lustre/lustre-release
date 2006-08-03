@@ -74,9 +74,21 @@ static int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
         RETURN (rc);
 }
 
+static int cmm_get_maxsize(const struct lu_context *ctxt, struct md_device *md,
+                           int *md_size, int *cookie_size)
+{
+        struct cmm_device *cmm_dev = md2cmm_dev(md);
+        int rc;
+        ENTRY;
+        rc = cmm_child_ops(cmm_dev)->mdo_get_maxsize(ctxt,
+                                     cmm_dev->cmm_child, md_size, cookie_size);
+        RETURN(rc);
+}
+
 static struct md_device_operations cmm_md_ops = {
         .mdo_root_get       = cmm_root_get,
         .mdo_statfs         = cmm_statfs,
+        .mdo_get_maxsize    = cmm_get_maxsize,
 };
 
 extern struct lu_device_type mdc_device_type;
@@ -191,6 +203,20 @@ static struct lu_device_operations cmm_lu_ops = {
 };
 
 /* --- lu_device_type operations --- */
+static int cmm_upcall(const struct lu_context *ctxt, struct md_device *md,
+                      enum md_upcall_event ev)
+{
+        struct md_device *upcall_dev;
+        int rc;
+        ENTRY;
+
+        upcall_dev = md->md_upcall.mu_upcall_dev;
+
+        LASSERT(upcall_dev);
+        rc = upcall_dev->md_upcall.mu_upcall(ctxt, md->md_upcall.mu_upcall_dev, ev);
+
+        RETURN(rc);
+}
 
 static struct lu_device *cmm_device_alloc(const struct lu_context *ctx,
                                           struct lu_device_type *t,
@@ -207,6 +233,7 @@ static struct lu_device *cmm_device_alloc(const struct lu_context *ctx,
         } else {
                 md_device_init(&m->cmm_md_dev, t);
                 m->cmm_md_dev.md_ops = &cmm_md_ops;
+                m->cmm_md_dev.md_upcall.mu_upcall = cmm_upcall;
 	        l = cmm2lu_dev(m);
                 l->ld_ops = &cmm_lu_ops;
         }

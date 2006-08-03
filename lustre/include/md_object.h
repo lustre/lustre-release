@@ -145,11 +145,26 @@ struct md_device_operations {
                             struct md_device *m, struct lu_fid *f);
         int (*mdo_statfs)(const struct lu_context *ctx,
                           struct md_device *m, struct kstatfs *sfs);
+        int (*mdo_get_maxsize)(const struct lu_context *ctx,
+                               struct md_device *m, int *md_size,
+                               int *cookie_size);
+};
+
+enum md_upcall_event {
+        /*sync the md layer*/
+        MD_LOV_SYNC
+};
+
+struct md_upcall {
+        struct md_device            *mu_upcall_dev;
+        int (*mu_upcall)(const struct lu_context *ctxt, struct md_device *md, 
+                         enum md_upcall_event ev);
 };
 
 struct md_device {
         struct lu_device             md_lu_dev;
         struct md_device_operations *md_ops;
+        struct md_upcall             md_upcall;
 };
 
 struct md_object {
@@ -373,4 +388,5 @@ static inline int mdo_rename_tgt(const struct lu_context *cx,
                 return p->mo_dir_ops->mdo_rename_tgt(cx, p, t, lf, name);
         }
 }
+
 #endif /* _LINUX_MD_OBJECT_H */

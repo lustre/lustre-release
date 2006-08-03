@@ -154,6 +154,26 @@ static struct md_lov_ops mdd_lov_ops = {
         .ml_write_catlist = mdd_lov_write_catlist
 };
 
+static int mdd_lov_update(struct obd_device *host,
+                          struct obd_device *watched,
+                          enum obd_notify_event ev, void *owner)
+{
+        struct mdd_device *mdd = owner;
+        struct obd_device *obd;
+        struct md_device *upcall_dev;
+        int rc;
+        ENTRY;
+        
+        LASSERT(owner != NULL);
+        obd = mdd2_obd(mdd);
+
+        upcall_dev = mdd->mdd_md_dev.md_upcall.mu_upcall_dev;
+
+        rc = upcall_dev->md_upcall.mu_upcall(NULL, upcall_dev, MD_LOV_SYNC);
+
+        RETURN(rc);
+}
+
 /*The obd is created for handling data stack for mdd*/
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd, 
                  char *dev)
@@ -201,7 +221,11 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
         rc = class_setup(obd, lcfg);
         if (rc)
                 GOTO(class_detach, rc);
+        /*Add here for obd notify mechiasm,
+         *when adding a new ost, the mds will notify this mdd*/
 
+        obd->obd_upcall.onu_owner = mdd;
+        obd->obd_upcall.onu_upcall = mdd_lov_update;
         mdd->mdd_md_dev.md_lu_dev.ld_obd = obd;
 class_detach:
         if (rc)
@@ -397,3 +421,20 @@ int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
         }
         return 0;
 }
+
+int mdd_lov_mdsize(const struct lu_context *ctxt, struct mdd_device *mdd,
+                   int *md_size)
+{
+        struct obd_device *obd = mdd2_obd(mdd);
+        *md_size = obd->u.mds.mds_max_mdsize;  
+        RETURN(0);
+}
+
+int mdd_lov_cookiesize(const struct lu_context *ctxt, struct mdd_device *mdd,
+                       int *cookie_size)
+{
+        struct obd_device *obd = mdd2_obd(mdd);
+        *cookie_size = obd->u.mds.mds_max_cookiesize;
+        RETURN(0);
+}
+
