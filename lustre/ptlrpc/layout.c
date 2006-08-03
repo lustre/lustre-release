@@ -355,7 +355,7 @@ EXPORT_SYMBOL(RMF_LDLM_INTENT);
  */
 
 const struct req_msg_field RMF_MDT_MD =
-        DEFINE_MSGF("mdt_md", 0, MAX_MD_SIZE, lustre_swab_lov_mds_md);
+        DEFINE_MSGF("mdt_md", 0, MIN_MD_SIZE, lustre_swab_lov_mds_md);
 EXPORT_SYMBOL(RMF_MDT_MD);
 
 const struct req_msg_field RMF_REC_UNLINK =
@@ -385,7 +385,7 @@ EXPORT_SYMBOL(RMF_REC_SETATTR);
 
 /* FIXME: this length should be defined as a macro*/
 const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, 
-                                4 + 32 * 8, NULL);
+                                4, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
 const struct req_msg_field RMF_LOGCOOKIES =
@@ -642,7 +642,7 @@ int req_capsule_pack(struct req_capsule *pill)
         int nr;
         int result;
         int total;
-
+        
         const struct req_format *fmt;
 
         LASSERT(pill->rc_loc == RCL_SERVER);
