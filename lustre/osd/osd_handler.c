@@ -624,7 +624,26 @@ static int osd_inode_setattr(const struct lu_context *ctx,
 static int osd_create_pre(struct osd_thread_info *info, struct osd_object *obj,
                           struct lu_attr *attr, struct thandle *th)
 {
-        return 0;
+        int result = 0;
+
+        /*sanity check the attr mode*/
+        switch (attr->la_mode & S_IFMT) {
+        case S_IFDIR:
+        case S_IFREG:
+        case S_IFLNK:
+        case S_IFCHR:
+        case S_IFBLK:
+        case S_IFIFO:
+        case S_IFSOCK:
+                result = 0;
+                break;
+        default:
+                CERROR("bad file type %o creating %s\n", attr->la_mode, 
+                       info->oti_name);
+                result = -EINVAL;
+                break;
+        }
+        return result;
 }
 
 static int osd_create_post(struct osd_thread_info *info, struct osd_object *obj,
@@ -644,7 +663,7 @@ static void osd_fid_build_name(const struct lu_fid *fid, char *name)
 }
 
 static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
-                      umode_t mode, struct thandle *th)
+                      umode_t mode, dev_t dev, struct thandle *th)
 {
         int result;
         struct osd_device *osd = osd_obj2dev(obj);
@@ -660,7 +679,7 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
         LASSERT(osd->od_obj_area != NULL);
 
         dir = osd->od_obj_area->d_inode;
-        LASSERT(dir->i_op != NULL && dir->i_op->mkdir != NULL);
+        LASSERT(dir->i_op != NULL && dir->i_op->create != NULL);
 
         osd_fid_build_name(lu_object_fid(&obj->oo_dt.do_lu), info->oti_name);
         info->oti_str.name = info->oti_name;
@@ -668,7 +687,22 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 
         dentry = d_alloc(osd->od_obj_area, &info->oti_str);
         if (dentry != NULL) {
-                result = dir->i_op->create(dir, dentry, mode, NULL);
+                switch (mode & S_IFMT) {
+                case S_IFDIR:
+                case S_IFREG:
+                case S_IFLNK:
+                        result = dir->i_op->create(dir, dentry, mode, NULL);
+                        break;
+                case S_IFCHR:
+                case S_IFBLK:
+                case S_IFIFO:
+                case S_IFSOCK:
+                        result = dir->i_op->mknod(dir, dentry, mode, dev);
+                        break;
+                default:
+                        result = -EINVAL;
+                        break;
+                }
                 if (result == 0) {
                         LASSERT(dentry->d_inode != NULL);
                         obj->oo_inode = dentry->d_inode;
@@ -697,9 +731,8 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
 
         oth = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(S_ISDIR(attr->la_mode));
-        result = osd_mkfile(info, obj,
-                            S_IFDIR | (attr->la_mode & (S_IRWXUGO|S_ISVTX)),
-                            th);
+        result = osd_mkfile(info, obj, (attr->la_mode & 
+                            (S_IFMT |(S_IRWXUGO|S_ISVTX))), 0, th);
         if (result == 0) {
                 LASSERT(obj->oo_inode != NULL);
                 /*
@@ -716,25 +749,26 @@ static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
                      struct lu_attr *attr, struct thandle *th)
 {
         LASSERT(S_ISREG(attr->la_mode));
-        return osd_mkfile(info, obj,
-                          S_IFREG | (attr->la_mode & (S_IRWXUGO|S_ISVTX)),
-                          th);
+        return osd_mkfile(info, obj, (attr->la_mode & 
+                               (S_IFMT|S_IRWXUGO|S_ISVTX)), 
+                          0, th);
 }
 
 static int osd_mksym(struct osd_thread_info *info, struct osd_object *obj,
                      struct lu_attr *attr, struct thandle *th)
 {
         LASSERT(S_ISLNK(attr->la_mode));
-
-        return osd_mkfile(info, obj,
-                          S_IFLNK | (attr->la_mode & (S_IRWXUGO|S_ISVTX)),
-                          th);
+        return osd_mkfile(info, obj, (attr->la_mode & 
+                              (S_IFMT|S_IRWXUGO|S_ISVTX)), 
+                          0, th);
 }
 
 static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
                      struct lu_attr *attr, struct thandle *th)
 {
-        return -EOPNOTSUPP;
+        return osd_mkfile(info, obj, (attr->la_mode & 
+                           (S_IFMT | S_IRWXUGO | S_ISVTX)), 
+                          attr->la_rdev, th);
 }
 
 typedef int (*osd_obj_type_f)(struct osd_thread_info *, struct osd_object *,
@@ -1859,6 +1893,7 @@ static int osd_inode_getattr(const struct lu_context *ctx,
         attr->la_gid        = inode->i_gid;
 //      attr->la_flags      = inode->i_flags;
         attr->la_nlink      = inode->i_nlink;
+        attr->la_rdev       = inode->i_rdev;
         return 0;
 }
 

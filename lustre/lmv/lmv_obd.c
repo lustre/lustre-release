@@ -1985,7 +1985,10 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                                 RETURN(0);
                 }
                 RETURN(-EINVAL);
-        } else if (keylen >= strlen("lovdesc") && !strcmp(key, "lovdesc")) {
+        } else if ((keylen >= strlen("lovdesc") && !strcmp(key, "lovdesc")) ||
+                   (keylen == strlen("max_easize") && 
+                    !memcmp(key, "max_easize", strlen("max_easize")))) {
+                
                 rc = lmv_check_connect(obd);
                 if (rc)
                         RETURN(rc);
@@ -1995,7 +1998,11 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 rc = obd_get_info(lmv->tgts[0].ltd_exp, keylen, key,
                                   vallen, val);
                 RETURN(rc);
-        }/* else if (keylen >= strlen("getext") && !strcmp(key, "getext")) {
+        } else if (keylen == strlen("max_easize") &&
+                   memcmp(key, "max_easize", strlen("max_easize")) == 0) {
+                
+        }
+        /* else if (keylen >= strlen("getext") && !strcmp(key, "getext")) {
                 struct lmv_tgt_desc *tgts;
                 int i;
 

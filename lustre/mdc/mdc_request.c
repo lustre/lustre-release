@@ -1027,6 +1027,30 @@ int mdc_sync(struct obd_export *exp, struct lu_fid *fid,
         RETURN(rc);
 }
 
+int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
+                 __u32 *vallen, void *val)
+{
+        int rc = -EINVAL;
+
+        if (keylen == strlen("max_easize") &&
+            memcmp(key, "max_easize", strlen("max_easize")) == 0) {
+                int mdsize, *max_easize;
+
+                if (*vallen != sizeof(int))
+                        RETURN(-EINVAL);
+                /*FIXME: Huanghua will fix this soon. set fixed size
+                 * temporarily*/
+                *(int*)val = MAX_MD_SIZE;
+                mdsize = *(int*)val;
+                if (mdsize > exp->exp_obd->u.cli.cl_max_mds_easize)
+                        exp->exp_obd->u.cli.cl_max_mds_easize = mdsize;
+                max_easize = val;
+                *max_easize = exp->exp_obd->u.cli.cl_max_mds_easize;
+                RETURN(0);
+        }
+        RETURN(rc);
+}
+
 static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
                             enum obd_import_event event)
 {
@@ -1272,6 +1296,7 @@ struct obd_ops mdc_obd_ops = {
         .o_import_event     = mdc_import_event,
         .o_llog_init        = mdc_llog_init,
         .o_llog_finish      = mdc_llog_finish,
+        .o_get_info         = mdc_get_info,
 };
 
 struct md_ops mdc_md_ops = {
