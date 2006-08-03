@@ -103,21 +103,22 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);
         }
         if (rc == 0){
+                if (ma->ma_valid & MA_INODE)
+                        mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
+
                 if (!S_ISREG(la->la_mode) &&
                     !S_ISDIR(la->la_mode) &&
-                    (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH ||
-                     S_ISLNK(la->la_mode)))
+                    (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))
                         /* If client supports this, do not return open handle
                         *  for special nodes */
                         RETURN(0);
+
                 if ((S_ISREG(la->la_mode) || S_ISDIR(la->la_mode))
                      && !created && !(ma->ma_valid & MA_LOV)) {
                         /*No EA, check whether it is will set regEA and dirEA
                          *since in above attr get, these size might be zero,
                          *so reset it, to retrieve the MD after create obj*/
-                        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
-                                                            &RMF_MDT_MD,
-                                                            RCL_SERVER);
+
                         LASSERT(p != NULL);
                         rc = mdt_create_data_obj(info, p, o);
                         if (rc)
@@ -141,8 +142,6 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
 
-        if (ma->ma_valid & MA_INODE)
-                mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
         if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
                 repbody->eadatasize = ma->ma_lmm_size;
                 if (S_ISDIR(la->la_mode))

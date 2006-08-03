@@ -680,16 +680,22 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *mdd_cobj = md2mdd_obj(cobj);
         struct dt_object  *dt_cobj = mdd_object_child(mdd_cobj);
-        struct thandle *handle;
+        struct thandle    *handle;
+        __u32             mode_copy = ma->ma_attr.la_mode;
         int rc;
         ENTRY;
 
         /* sanity checks */
-        if (dt_try_as_dir(ctxt, dt_cobj)) {
-                if (!S_ISDIR(ma->ma_attr.la_mode))
-                        RETURN(rc = -EISDIR);
-        } else if (S_ISDIR(ma->ma_attr.la_mode))
-                        RETURN(rc = -ENOTDIR);
+        rc = mdd_attr_get(ctxt, cobj, ma);
+        if (rc == 0) {
+                if (S_ISDIR(ma->ma_attr.la_mode)) {
+                        if (!S_ISDIR(mode_copy))
+                                rc = -EISDIR;
+                } else if (S_ISDIR(mode_copy))
+                                rc = -ENOTDIR;
+        }
+        if (rc != 0)
+                RETURN(rc);
 
         mdd_txn_param_build(ctxt, &MDD_TXN_UNLINK);
         handle = mdd_trans_start(ctxt, mdd);

@@ -1242,7 +1242,7 @@ static int mdt_recovery(struct ptlrpc_request *req)
                        req->rq_reqmsg->opc,
                        libcfs_id2str(req->rq_peer));
                 req->rq_status = -ENOTCONN;
-                RETURN(0);
+                RETURN(-ENOTCONN);
         }
 
         /* sanity check: if the xid matches, the request must be marked as a
