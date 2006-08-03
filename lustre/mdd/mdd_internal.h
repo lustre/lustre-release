@@ -48,7 +48,7 @@ struct mdd_object {
 struct mdd_thread_info {
         struct txn_param mti_param;
         struct lu_fid    mti_fid;
-        struct lu_attr   mti_attr;
+        struct lu_attr   mti_la;
         struct lov_desc  mti_ld;
         struct lov_mds_md mti_lmm;
 };

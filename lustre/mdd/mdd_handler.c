@@ -681,17 +681,17 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         struct mdd_object *mdd_cobj = md2mdd_obj(cobj);
         struct dt_object  *dt_cobj = mdd_object_child(mdd_cobj);
         struct thandle    *handle;
-        __u32             mode_copy = ma->ma_attr.la_mode;
+        struct lu_attr    *la = &mdd_ctx_info(ctxt)->mti_la;
         int rc;
         ENTRY;
 
         /* sanity checks */
-        rc = mdd_attr_get(ctxt, cobj, ma);
+        rc = dt_cobj->do_ops->do_attr_get(ctxt, dt_cobj, la);
         if (rc == 0) {
-                if (S_ISDIR(ma->ma_attr.la_mode)) {
-                        if (!S_ISDIR(mode_copy))
+                if (S_ISDIR(la->la_mode)) {
+                        if (!S_ISDIR(ma->ma_attr.la_mode))
                                 rc = -EISDIR;
-                } else if (S_ISDIR(mode_copy))
+                } else if (S_ISDIR(ma->ma_attr.la_mode))
                                 rc = -ENOTDIR;
         }
         if (rc != 0)
@@ -705,7 +705,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         mdd_lock2(ctxt, mdd_pobj, mdd_cobj);
 
         /* rmdir checks */
-        if (S_ISDIR(ma->ma_attr.la_mode)) {
+        if (S_ISDIR(la->la_mode)) {
                 rc = mdd_dir_is_empty(ctxt, mdd_cobj);
                 if (rc != 0)
                         GOTO(cleanup, rc);
