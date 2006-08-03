@@ -1038,9 +1038,6 @@ int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
 
                 if (*vallen != sizeof(int))
                         RETURN(-EINVAL);
-                /*FIXME: Huanghua will fix this soon. set fixed size
-                 * temporarily*/
-                *(int*)val = MAX_MD_SIZE;
                 mdsize = *(int*)val;
                 if (mdsize > exp->exp_obd->u.cli.cl_max_mds_easize)
                         exp->exp_obd->u.cli.cl_max_mds_easize = mdsize;

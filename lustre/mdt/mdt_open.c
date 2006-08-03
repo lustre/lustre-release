@@ -263,6 +263,12 @@ int mdt_reint_open(struct mdt_thread_info *info)
         struct mdt_reint_record *rr = &info->mti_rr;
         ENTRY;
 
+        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
+                             mdt->mdt_max_mdsize);
+        result = req_capsule_pack(&info->mti_pill);
+        if (result)
+                RETURN(result);
+
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
                                             &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,

@@ -131,6 +131,10 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         DEBUG_REQ(D_INODE, req, "setattr "DFID3" %x", PFID3(rr->rr_fid1),
                   (unsigned int)attr->la_valid);
 
+        /*pack the reply*/
+        rc = req_capsule_pack(&info->mti_pill);
+        if (rc)
+                RETURN(rc);
         /* MDS_CHECK_RESENT */
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_EX;
@@ -192,7 +196,11 @@ static int mdt_reint_create(struct mdt_thread_info *info)
 {
         int rc;
         ENTRY;
-
+       
+        rc = req_capsule_pack(&info->mti_pill);
+        if (rc)
+                RETURN(rc);
+        
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFREG:
         case S_IFDIR:{
@@ -235,6 +243,14 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 
         DEBUG_REQ(D_INODE, req, "unlink "DFID3"/%s\n", PFID3(rr->rr_fid1),
                   rr->rr_name);
+        /*pack the reply*/
+        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER, 
+                             info->mti_mdt->mdt_max_mdsize);
+        req_capsule_set_size(&info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER, 
+                             info->mti_mdt->mdt_max_cookiesize);
+        rc = req_capsule_pack(&info->mti_pill);
+        if (rc)
+                RETURN(rc);
 
         /* MDS_CHECK_RESENT here */
 
@@ -265,6 +281,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
                 GOTO(out_unlock_parent, rc = PTR_ERR(mc));
 
         /*step 3:  do some checking ...*/
+
+        
 
         /* step 4: delete it */
         /* cmm will take care if child is local or remote */
@@ -313,6 +331,9 @@ static int mdt_reint_link(struct mdt_thread_info *info)
 
         /* MDS_CHECK_RESENT here */
 
+        rc = req_capsule_pack(&info->mti_pill);
+        if (rc)
+                RETURN(rc);
         /* step 1: lock the source */
         lhs = &info->mti_lh[MDT_LH_PARENT];
         lhs->mlh_mode = LCK_EX;
@@ -437,6 +458,10 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         /* if (rr->rr_name[0] == 0) {*/
                 RETURN(mdt_reint_rename_tgt(info));
         }
+
+        rc = req_capsule_pack(&info->mti_pill);
+        if (rc)
+                RETURN(rc);
 
         lh_newp = &info->mti_lh[MDT_LH_NEW];
 

@@ -657,10 +657,9 @@ static int mdt_reint(struct mdt_thread_info *info)
         opc = mdt_reint_opcode(info, reint_fmts);
         if (opc >= 0) {
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
-                
-                rc = req_capsule_pack(&info->mti_pill);
-                if (rc == 0)
-                        rc = mdt_reint_internal(info, opc);
+
+                rc = mdt_reint_internal(info, opc);
+        
         } else
                 rc = opc;
         RETURN(rc);
@@ -1603,14 +1602,13 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                 RETURN(-EPROTO);
         }
 
-        rc = req_capsule_pack(&info->mti_pill);
-        if (rc)
-                RETURN(rc);
-
+        rc = mdt_reint_internal(info, opc);
+        
         rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         if (rep == NULL)
                 RETURN(-EFAULT);
-        rep->lock_policy_res2 = mdt_reint_internal(info, opc);
+        rep->lock_policy_res2 = rc;
+        
         intent_set_disposition(rep, DISP_IT_EXECD);
 
         mdt_update_last_transno(info, rep->lock_policy_res2);
