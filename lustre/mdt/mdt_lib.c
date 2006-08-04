@@ -77,11 +77,11 @@ void mdt_shrink_reply(struct mdt_thread_info *info)
         if (body && body->valid & OBD_MD_FLCOOKIE) {
                 LASSERT(body->valid & OBD_MD_FLEASIZE);
                 lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
-                cookie_size = le32_to_cpu(lmm->lmm_stripe_count) * 
+                cookie_size = le32_to_cpu(lmm->lmm_stripe_count) *
                                 sizeof(struct llog_cookie);
         }
 
-        CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n", 
+        CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n",
                        md_size, cookie_size);
 
         lustre_shrink_reply(req, 1, md_size, 1);
@@ -91,12 +91,11 @@ void mdt_shrink_reply(struct mdt_thread_info *info)
 
 /* if object is dying, pack the lov/llog data,
  * parameter info->mti_attr should be valid at this point! */
-int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo)
+int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
+                           const struct md_attr *ma)
 {
-        struct mdt_body *repbody;
-        struct md_attr  *ma = &info->mti_attr;
-        struct lu_attr  *la = &ma->ma_attr;
-        int              rc = 0;
+        struct mdt_body       *repbody;
+        const struct lu_attr *la = &ma->ma_attr;
         ENTRY;
 
 
@@ -109,7 +108,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo)
                                 PFID3(mdt_object_fid(mo)));
 
                 CDEBUG(D_INODE, "ma_valid = "LPX64"\n", ma->ma_valid);
-                repbody = req_capsule_server_get(&info->mti_pill, 
+                repbody = req_capsule_server_get(&info->mti_pill,
                                                  &RMF_MDT_BODY);
                 if (ma->ma_valid & MA_INODE)
                         mdt_pack_attr2body(repbody, la, mdt_object_fid(mo));
@@ -118,12 +117,12 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo)
                         repbody->eadatasize = ma->ma_lmm_size;
                         repbody->valid |= OBD_MD_FLEASIZE;
                 }
-                
-                if (ma->ma_cookie_size && ma->ma_valid & MA_COOKIE) 
+
+                if (ma->ma_cookie_size && ma->ma_valid & MA_COOKIE)
                         repbody->valid |= OBD_MD_FLCOOKIE;
         }
 
-        RETURN(rc);
+        RETURN(0);
 }
 
 /* unpacking */

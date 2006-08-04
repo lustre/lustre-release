@@ -314,7 +314,7 @@ void mdt_object_unlock_put(struct mdt_thread_info *,
 
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 int mdt_reint_rec(struct mdt_thread_info *);
-void mdt_pack_attr2body(struct mdt_body *b, struct lu_attr *attr,
+void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
                         const struct lu_fid *fid);
 
 int mdt_getxattr(struct mdt_thread_info *info);
@@ -361,7 +361,8 @@ int mdt_close(struct mdt_thread_info *info);
 
 int mdt_done_writing(struct mdt_thread_info *info);
 void mdt_shrink_reply(struct mdt_thread_info *info);
-int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *);
+int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
+                           const struct md_attr *);
 
 void mdt_dump_lmm(int level, struct lov_mds_md *lmm);
 

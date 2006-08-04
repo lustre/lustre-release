@@ -168,8 +168,7 @@ static int mdt_statfs(struct mdt_thread_info *info)
         RETURN(result);
 }
 
-void mdt_pack_attr2body(struct mdt_body *b,
-                        struct lu_attr *attr,
+void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
                         const struct lu_fid *fid)
 {
         b->valid |= OBD_MD_FLCTIME | OBD_MD_FLUID |

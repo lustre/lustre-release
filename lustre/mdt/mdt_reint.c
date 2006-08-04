@@ -196,11 +196,11 @@ static int mdt_reint_create(struct mdt_thread_info *info)
 {
         int rc;
         ENTRY;
-       
+
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
                 RETURN(rc);
-        
+
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFREG:
         case S_IFDIR:{
@@ -244,9 +244,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         DEBUG_REQ(D_INODE, req, "unlink "DFID3"/%s\n", PFID3(rr->rr_fid1),
                   rr->rr_name);
         /*pack the reply*/
-        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER, 
+        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
                              info->mti_mdt->mdt_max_mdsize);
-        req_capsule_set_size(&info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER, 
+        req_capsule_set_size(&info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
                              info->mti_mdt->mdt_max_cookiesize);
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
@@ -282,7 +282,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 
         /*step 3:  do some checking ...*/
 
-        
+
 
         /* step 4: delete it */
         /* cmm will take care if child is local or remote */
@@ -290,11 +290,11 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                &RMF_MDT_MD, RCL_SERVER);
 
-        ma->ma_cookie = req_capsule_server_get(&info->mti_pill, 
+        ma->ma_cookie = req_capsule_server_get(&info->mti_pill,
                                                 &RMF_LOGCOOKIES);
         ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
                                                &RMF_LOGCOOKIES, RCL_SERVER);
-        
+
         if (!ma->ma_lmm || !ma->ma_cookie)
                 GOTO(out_unlock_parent, rc = -EINVAL);
 
@@ -303,7 +303,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         if (rc)
                 GOTO(out_unlock_child, rc);
 
-        rc = mdt_handle_last_unlink(info, mc);
+        rc = mdt_handle_last_unlink(info, mc, ma);
 
         GOTO(out_unlock_child, rc);
 out_unlock_child:
@@ -512,9 +512,9 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         if (rc == 0) {
                 /* the new_fid should have been filled at this moment*/
                 if (lu_fid_eq(old_fid, new_fid))
-                       GOTO(out_unlock_old, rc); 
-                
-                if (lu_fid_eq(new_fid, rr->rr_fid1) || 
+                       GOTO(out_unlock_old, rc);
+
+                if (lu_fid_eq(new_fid, rr->rr_fid1) ||
                     lu_fid_eq(new_fid, rr->rr_fid2))
                         GOTO(out_unlock_old, rc = -EINVAL);
 
