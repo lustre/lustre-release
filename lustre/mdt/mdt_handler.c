@@ -1080,7 +1080,9 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
         __u64 last_transno;
         __u64 last_committed;
 
-        LASSERT(mdt != NULL);
+        if (mdt == NULL || req == NULL || req->rq_repmsg == NULL)
+                return -EFAULT;
+
         last_committed = mdt->mdt_last_committed;
 
         if (rc == 0) {
