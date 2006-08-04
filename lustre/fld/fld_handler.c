@@ -123,34 +123,35 @@ static int fld_server_handle(struct lu_server_fld *fld,
 
 }
 
+struct fld_thread_info {
+        struct req_capsule fti_pill;
+        int                fti_rep_buf_size[3];
+};
+
 static int fld_req_handle0(const struct lu_context *ctx,
                            struct lu_server_fld *fld,
-                           struct ptlrpc_request *req)
+                           struct ptlrpc_request *req,
+                           struct fld_thread_info *info)
 {
-        int rep_buf_size[3] = { -1, -1 };
-        struct req_capsule pill;
         struct md_fld *in;
         struct md_fld *out;
         int rc = -EPROTO;
         __u32 *opc;
         ENTRY;
 
-        req_capsule_init(&pill, req, RCL_SERVER, rep_buf_size);
+        req_capsule_pack(&info->fti_pill);
 
-        req_capsule_set(&pill, &RQF_FLD_QUERY);
-        req_capsule_pack(&pill);
-
-        opc = req_capsule_client_get(&pill, &RMF_FLD_OPC);
+        opc = req_capsule_client_get(&info->fti_pill, &RMF_FLD_OPC);
         if (opc != NULL) {
-                in = req_capsule_client_get(&pill, &RMF_FLD_MDFLD);
+                in = req_capsule_client_get(&info->fti_pill, &RMF_FLD_MDFLD);
                 if (in == NULL) {
                         CERROR("cannot unpack fld request\n");
-                        GOTO(out_pill, rc = -EPROTO);
+                        RETURN(-EPROTO);
                 }
-                out = req_capsule_server_get(&pill, &RMF_FLD_MDFLD);
+                out = req_capsule_server_get(&info->fti_pill, &RMF_FLD_MDFLD);
                 if (out == NULL) {
                         CERROR("cannot allocate fld response\n");
-                        GOTO(out_pill, rc = -EPROTO);
+                        RETURN(-EPROTO);
                 }
                 *out = *in;
                 rc = fld_server_handle(fld, ctx, *opc, out);
@@ -158,18 +159,65 @@ static int fld_req_handle0(const struct lu_context *ctx,
                 CERROR("cannot unpack FLD operation\n");
         }
 
-out_pill:
-        EXIT;
-        req_capsule_fini(&pill);
-        return rc;
+        RETURN(rc);
+}
+
+static void *fld_thread_init(const struct lu_context *ctx,
+                             struct lu_context_key *key)
+{
+        struct fld_thread_info *info;
+
+        /*
+         * check that no high order allocations are incurred.
+         */
+        CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
+        OBD_ALLOC_PTR(info);
+        if (info == NULL)
+                info = ERR_PTR(-ENOMEM);
+        return info;
+}
+
+static void fld_thread_fini(const struct lu_context *ctx,
+                            struct lu_context_key *key, void *data)
+{
+        struct fld_thread_info *info = data;
+        OBD_FREE_PTR(info);
+}
+
+struct lu_context_key fld_thread_key = {
+        .lct_tags = LCT_MD_THREAD,
+        .lct_init = fld_thread_init,
+        .lct_fini = fld_thread_fini
+};
+
+static void fld_thread_info_init(struct ptlrpc_request *req,
+                                 struct fld_thread_info *info)
+{
+        int i;
+
+        /* mark rep buffer as req-layout stuff expects */
+        for (i = 0; i < ARRAY_SIZE(info->fti_rep_buf_size); i++)
+                info->fti_rep_buf_size[i] = -1;
+
+        /* init request capsule */
+        req_capsule_init(&info->fti_pill, req, RCL_SERVER,
+                         info->fti_rep_buf_size);
+
+        req_capsule_set(&info->fti_pill, &RQF_FLD_QUERY);
+}
+
+static void fld_thread_info_fini(struct fld_thread_info *info)
+{
+        req_capsule_fini(&info->fti_pill);
 }
 
 static int fld_req_handle(struct ptlrpc_request *req)
 {
         int fail = OBD_FAIL_FLD_ALL_REPLY_NET;
         const struct lu_context *ctx;
+        struct fld_thread_info *info;
         struct lu_site *site;
-        int rc = -EPROTO;
+        int rc = 0;
         ENTRY;
 
         OBD_FAIL_RETURN(OBD_FAIL_FLD_ALL_REPLY_NET | OBD_FAIL_ONCE, 0);
@@ -177,27 +225,38 @@ static int fld_req_handle(struct ptlrpc_request *req)
         ctx = req->rq_svc_thread->t_ctx;
         LASSERT(ctx != NULL);
         LASSERT(ctx->lc_thread == req->rq_svc_thread);
+
+        info = lu_context_key_get(ctx, &fld_thread_key);
+        LASSERT(info != NULL);
+
+        fld_thread_info_init(req, info);
+
         if (req->rq_reqmsg->opc == FLD_QUERY) {
                 if (req->rq_export != NULL) {
                         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
                         LASSERT(site != NULL);
-                        rc = fld_req_handle0(ctx, site->ls_server_fld, req);
+                        /* 
+                         * no need to return error here and overwrite @rc, this
+                         * function should return 0 even if fld_req_handle0()
+                         * returns some error code.
+                         */
+                        fld_req_handle0(ctx, site->ls_server_fld, req, info);
                 } else {
                         CERROR("Unconnected request\n");
                         req->rq_status = -ENOTCONN;
-                        GOTO(out, rc = -ENOTCONN);
                 }
         } else {
                 CERROR("Wrong opcode: %d\n", req->rq_reqmsg->opc);
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req);
-                RETURN(rc);
+                GOTO(out_info, rc);
         }
 
-        EXIT;
-out:
         target_send_reply(req, rc, fail);
-        return 0;
+        EXIT;
+out_info:
+        fld_thread_info_fini(info);
+        return rc;
 }
 
 /*

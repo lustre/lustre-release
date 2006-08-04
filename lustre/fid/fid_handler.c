@@ -244,11 +244,15 @@ static int seq_server_alloc_meta(struct lu_server_seq *seq,
         RETURN(rc);
 }
 
+struct seq_thread_info {
+        struct req_capsule sti_pill;
+        int                sti_rep_buf_size[2];
+};
+
 static int seq_req_handle0(const struct lu_context *ctx,
-                           struct ptlrpc_request *req)
+                           struct ptlrpc_request *req,
+                           struct seq_thread_info *info)
 {
-        int rep_buf_size[2] = { -1, -1 };
-        struct req_capsule pill;
         struct lu_site *site;
         struct lu_range *out;
         int rc = -EPROTO;
@@ -258,31 +262,30 @@ static int seq_req_handle0(const struct lu_context *ctx,
         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
         LASSERT(site != NULL);
 			
-        req_capsule_init(&pill, req, RCL_SERVER, rep_buf_size);
+        req_capsule_pack(&info->sti_pill);
 
-        req_capsule_set(&pill, &RQF_SEQ_QUERY);
-        req_capsule_pack(&pill);
-
-        opc = req_capsule_client_get(&pill, &RMF_SEQ_OPC);
+        opc = req_capsule_client_get(&info->sti_pill,
+                                     &RMF_SEQ_OPC);
         if (opc != NULL) {
-                out = req_capsule_server_get(&pill, &RMF_SEQ_RANGE);
+                out = req_capsule_server_get(&info->sti_pill,
+                                             &RMF_SEQ_RANGE);
                 if (out == NULL) {
                         CERROR("can't get range buffer\n");
-                        GOTO(out_pill, rc= -EPROTO);
+                        RETURN(-EPROTO);
                 }
 
                 switch (*opc) {
                 case SEQ_ALLOC_META:
                         if (!site->ls_server_seq) {
                                 CERROR("sequence-server is not initialized\n");
-                                GOTO(out_pill, rc == -EINVAL);
+                                RETURN(-EINVAL);
                         }
                         rc = seq_server_alloc_meta(site->ls_server_seq, out, ctx);
                         break;
                 case SEQ_ALLOC_SUPER:
                         if (!site->ls_control_seq) {
                                 CERROR("sequence-controller is not initialized\n");
-                                GOTO(out_pill, rc == -EINVAL);
+                                RETURN(-EINVAL);
                         }
                         rc = seq_server_alloc_super(site->ls_control_seq, out, ctx);
                         break;
@@ -294,17 +297,64 @@ static int seq_req_handle0(const struct lu_context *ctx,
                 CERROR("cannot unpack client request\n");
         }
 
-out_pill:
-        EXIT;
-        req_capsule_fini(&pill);
-        return rc;
+        RETURN(rc);
+}
+
+static void *seq_thread_init(const struct lu_context *ctx,
+                             struct lu_context_key *key)
+{
+        struct seq_thread_info *info;
+
+        /*
+         * check that no high order allocations are incurred.
+         */
+        CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
+        OBD_ALLOC_PTR(info);
+        if (info == NULL)
+                info = ERR_PTR(-ENOMEM);
+        return info;
+}
+
+static void seq_thread_fini(const struct lu_context *ctx,
+                            struct lu_context_key *key, void *data)
+{
+        struct seq_thread_info *info = data;
+        OBD_FREE_PTR(info);
+}
+
+struct lu_context_key seq_thread_key = {
+        .lct_tags = LCT_MD_THREAD,
+        .lct_init = seq_thread_init,
+        .lct_fini = seq_thread_fini
+};
+
+static void seq_thread_info_init(struct ptlrpc_request *req,
+                                 struct seq_thread_info *info)
+{
+        int i;
+
+        /* mark rep buffer as req-layout stuff expects */
+        for (i = 0; i < ARRAY_SIZE(info->sti_rep_buf_size); i++)
+                info->sti_rep_buf_size[i] = -1;
+
+        /* init request capsule */
+        req_capsule_init(&info->sti_pill, req, RCL_SERVER,
+                         info->sti_rep_buf_size);
+
+        req_capsule_set(&info->sti_pill, &RQF_SEQ_QUERY);
+}
+
+static void seq_thread_info_fini(struct seq_thread_info *info)
+{
+        req_capsule_fini(&info->sti_pill);
 }
 
 static int seq_req_handle(struct ptlrpc_request *req)
 {
         int fail = OBD_FAIL_SEQ_ALL_REPLY_NET;
         const struct lu_context *ctx;
-        int rc = -EPROTO;
+        struct seq_thread_info *info;
+        int rc = 0;
         ENTRY;
 
         OBD_FAIL_RETURN(OBD_FAIL_SEQ_ALL_REPLY_NET | OBD_FAIL_ONCE, 0);
@@ -312,9 +362,20 @@ static int seq_req_handle(struct ptlrpc_request *req)
         ctx = req->rq_svc_thread->t_ctx;
         LASSERT(ctx != NULL);
         LASSERT(ctx->lc_thread == req->rq_svc_thread);
+
+        info = lu_context_key_get(ctx, &seq_thread_key);
+        LASSERT(info != NULL);
+
+        seq_thread_info_init(req, info);
+
         if (req->rq_reqmsg->opc == SEQ_QUERY) {
                 if (req->rq_export != NULL) {
-                        rc = seq_req_handle0(ctx, req);
+                        /* 
+                         * no need to return error here and overwrite @rc, this
+                         * function should return 0 even if seq_req_handle0()
+                         * returns some error code.
+                         */
+                        seq_req_handle0(ctx, req, info);
                 } else {
                         CERROR("Unconnected request\n");
                         req->rq_status = -ENOTCONN;
@@ -324,11 +385,14 @@ static int seq_req_handle(struct ptlrpc_request *req)
                        req->rq_reqmsg->opc);
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req);
-                RETURN(rc);
+                GOTO(out_info, rc);
         }
 
         target_send_reply(req, rc, fail);
-        RETURN(0);
+        EXIT;
+out_info:
+        seq_thread_info_fini(info);
+        return rc;
 }
 
 #ifdef LPROCFS
