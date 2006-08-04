@@ -697,7 +697,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
 
         oth = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(S_ISDIR(attr->la_mode));
-        result = osd_mkfile(info, obj, (attr->la_mode & 
+        result = osd_mkfile(info, obj, (attr->la_mode &
                             (S_IFMT | S_IRWXUGO | S_ISVTX)), th);
         if (result == 0) {
                 LASSERT(obj->oo_inode != NULL);
@@ -715,7 +715,7 @@ static int osd_mkreg(struct osd_thread_info *info, struct osd_object *obj,
                      struct lu_attr *attr, struct thandle *th)
 {
         LASSERT(S_ISREG(attr->la_mode));
-        return osd_mkfile(info, obj, (attr->la_mode & 
+        return osd_mkfile(info, obj, (attr->la_mode &
                                (S_IFMT | S_IRWXUGO | S_ISVTX)), th);
 }
 
@@ -723,7 +723,7 @@ static int osd_mksym(struct osd_thread_info *info, struct osd_object *obj,
                      struct lu_attr *attr, struct thandle *th)
 {
         LASSERT(S_ISLNK(attr->la_mode));
-        return osd_mkfile(info, obj, (attr->la_mode & 
+        return osd_mkfile(info, obj, (attr->la_mode &
                               (S_IFMT | S_IRWXUGO | S_ISVTX)), th);
 }
 
@@ -877,7 +877,7 @@ static void osd_object_ref_del(const struct lu_context *ctxt,
                 mark_inode_dirty(inode);
         } else
                 LU_OBJECT_DEBUG(D_ERROR, ctxt, &dt->do_lu,
-                                "Overflowed nlink\n");
+                                "Underflowed nlink\n");
         LASSERT(osd_invariant(obj));
 }
 
