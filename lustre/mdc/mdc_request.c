@@ -111,21 +111,22 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         void            *eadata;
         int              rc;
         int              size[3] = {sizeof(*body)};
-        int              bufcount = 1;
+        int              bufcount = 3, offset = 1;
         ENTRY;
-
+        
         /* request message already built */
-
         if (ea_size != 0) {
-                size[bufcount++] = ea_size;
+                size[offset++] = ea_size;
                 CDEBUG(D_INODE, "reserved %u bytes for MD/symlink in packet\n",
                        ea_size);
         }
         if (acl_size) {
-                size[bufcount++] = acl_size;
+                size[offset++] = acl_size;
                 CDEBUG(D_INODE, "reserved %u bytes for ACL\n", acl_size);
         }
-
+        /*For new req layout, different bufcount will cause different 
+         *replen, so we should make client/server has same bufcount,
+         *so we set bufcount to 3 here, although some msg size might be 0*/
         req->rq_replen = lustre_msg_size(bufcount, size);
 
         mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);

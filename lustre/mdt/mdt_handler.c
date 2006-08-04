@@ -455,9 +455,11 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
 
         ENTRY;
 
+        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD,
+                             RCL_SERVER, info->mti_mdt->mdt_max_mdsize);
         req_capsule_set_size(&info->mti_pill, &RMF_EADATA,
                              RCL_SERVER, LUSTRE_POSIX_ACL_MAX_SIZE);
-       
+        
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
                 RETURN(rc);
