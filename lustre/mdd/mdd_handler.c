@@ -806,6 +806,11 @@ static void mdd_rename_unlock(const struct lu_context *ctxt,
                 mdd_unlock(ctxt, tgt_pobj, DT_WRITE_LOCK);
 }
 
+static umode_t mdd_object_type(const struct mdd_object *obj)
+{
+        return obj->mod_obj.mo_lu.lo_header->loh_attr;
+}
+
 static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                       struct md_object *tgt_pobj, const struct lu_fid *lf,
                       const char *sname, struct md_object *tobj,
@@ -850,10 +855,8 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
 
 
         if (tobj && lu_object_exists(ctxt, &tobj->mo_lu)) {
-                struct dt_object *dt_tobj = mdd_object_child(mdd_tobj);
-
                 __mdd_ref_del(ctxt, mdd_tobj, handle, NULL);
-                if (dt_try_as_dir(ctxt, dt_tobj))
+                if (S_ISDIR(mdd_object_type(mdd_tobj)))
                         __mdd_ref_del(ctxt, mdd_tpobj, handle, NULL);
         }
 cleanup:
@@ -875,7 +878,7 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
         ENTRY;
 
         mdd_lock(ctxt, mdo, DT_READ_LOCK);
-        if (dt_try_as_dir(ctxt, dir))
+        if (S_ISDIR(mdd_object_type(mdo)) && dt_try_as_dir(ctxt, dir))
                 rc = dir->do_index_ops->dio_lookup(ctxt, dir, rec, key);
         else
                 rc = -ENOTDIR;
@@ -1330,7 +1333,7 @@ static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
         next = mdd_object_child(md2mdd_obj(obj));
 
         mdd_lock(ctxt, mdd, DT_READ_LOCK);
-        if (dt_try_as_dir(ctxt, next))
+        if (S_ISDIR(mdd_object_type(mdd)) && dt_try_as_dir(ctxt, next))
                 rc = next->do_ops->do_readpage(ctxt, next, rdpg);
         else
                 rc = -ENOTDIR;
