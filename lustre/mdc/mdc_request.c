@@ -243,7 +243,7 @@ int mdc_xattr_common(struct obd_export *exp, struct lu_fid *fid,
 {
         struct ptlrpc_request *req;
         struct mdt_body *body;
-        int size[3] = {sizeof(*body)}, bufcnt = 1;
+        int size[3] = {sizeof(*body)}, bufcnt = 1, offset;
         int xattr_namelen = 0, rc;
         void *tmp;
         ENTRY;
@@ -279,13 +279,15 @@ int mdc_xattr_common(struct obd_export *exp, struct lu_fid *fid,
         /* reply buffers */
         if (opcode == MDS_GETXATTR) {
                 size[0] = sizeof(*body);
-                bufcnt = 1;
+                bufcnt = 2;
+                offset = 1;
         } else {
-                bufcnt = 0;
+                bufcnt = 1;
+                offset = 0;
         }
 
         if (output_size)
-                size[bufcnt++] = output_size;
+                size[offset++] = output_size;
         req->rq_replen = lustre_msg_size(bufcnt, size);
 
         /* make rpc */
@@ -330,10 +332,10 @@ int mdc_setxattr(struct obd_export *exp, struct lu_fid *fid,
 int mdc_getxattr(struct obd_export *exp, struct lu_fid *fid,
                  obd_valid valid, const char *xattr_name,
                  const char *input, int input_size,
-                 int output_size, struct ptlrpc_request **request)
+                 int output_size, int flags, struct ptlrpc_request **request)
 {
         return mdc_xattr_common(exp, fid, MDS_GETXATTR, valid, xattr_name,
-                                input, input_size, output_size, 0, request);
+                                input, input_size, output_size, flags, request);
 }
 
 #ifdef CONFIG_FS_POSIX_ACL
@@ -1310,6 +1312,8 @@ struct md_ops mdc_md_ops = {
         .m_link             = mdc_link,
         .m_rename           = mdc_rename,
         .m_setattr          = mdc_setattr,
+        .m_setxattr         = mdc_setxattr,
+        .m_getxattr         = mdc_getxattr,
         .m_sync             = mdc_sync,
         .m_readpage         = mdc_readpage,
         .m_unlink           = mdc_unlink,

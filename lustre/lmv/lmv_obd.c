@@ -936,6 +936,59 @@ static int lmv_getstatus(struct obd_export *exp, struct lu_fid *fid)
 
         RETURN(rc);
 }
+static int lmv_getxattr(struct obd_export *exp, struct lu_fid *fid,
+                        obd_valid valid, const char *name,
+                        const char *input, int input_size,
+                        int output_size, int flags,
+                        struct ptlrpc_request **request)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        int rc, i;
+        ENTRY;
+
+        rc = lmv_check_connect(obd);
+        if (rc)
+                RETURN(rc);
+
+        i = lmv_fld_lookup(obd, fid);
+        if (i < 0)
+                RETURN(i);
+
+        LASSERT(i < lmv->desc.ld_tgt_count);
+
+        rc = md_getxattr(lmv->tgts[i].ltd_exp, fid, valid, name,
+                         input, input_size, output_size, flags, request);
+
+        RETURN(rc);
+}
+
+static int lmv_setxattr(struct obd_export *exp, struct lu_fid *fid,
+                        obd_valid valid, const char *name,
+                        const char *input, int input_size,
+                        int output_size, int flags,
+                        struct ptlrpc_request **request)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        int rc, i;
+        ENTRY;
+
+        rc = lmv_check_connect(obd);
+        if (rc)
+                RETURN(rc);
+
+        i = lmv_fld_lookup(obd, fid);
+        if (i < 0)
+                RETURN(i);
+
+        LASSERT(i < lmv->desc.ld_tgt_count);
+
+        rc = md_setxattr(lmv->tgts[i].ltd_exp, fid, valid, name,
+                         input, input_size, output_size, flags, request);
+        
+        RETURN(rc);
+}
 
 static int lmv_getattr(struct obd_export *exp, struct lu_fid *fid,
                        obd_valid valid, int ea_size,
@@ -1986,8 +2039,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 }
                 RETURN(-EINVAL);
         } else if ((keylen >= strlen("lovdesc") && !strcmp(key, "lovdesc")) ||
-                   (keylen == strlen("max_easize") && 
-                    !memcmp(key, "max_easize", strlen("max_easize")))) {
+                   (keylen >= strlen("max_easize") && !strcmp(key, "max_easize"))) {
                 
                 rc = lmv_check_connect(obd);
                 if (rc)
@@ -1998,11 +2050,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 rc = obd_get_info(lmv->tgts[0].ltd_exp, keylen, key,
                                   vallen, val);
                 RETURN(rc);
-        } else if (keylen == strlen("max_easize") &&
-                   memcmp(key, "max_easize", strlen("max_easize")) == 0) {
-                
-        }
-        /* else if (keylen >= strlen("getext") && !strcmp(key, "getext")) {
+        } /* else if (keylen >= strlen("getext") && !strcmp(key, "getext")) {
                 struct lmv_tgt_desc *tgts;
                 int i;
 
@@ -2530,11 +2578,13 @@ struct md_ops lmv_md_ops = {
         .m_done_writing         = lmv_done_writing,
         .m_enqueue              = lmv_enqueue,
         .m_getattr              = lmv_getattr,
+        .m_getxattr             = lmv_getxattr,
         .m_getattr_name         = lmv_getattr_name,
         .m_intent_lock          = lmv_intent_lock,
         .m_link                 = lmv_link,
         .m_rename               = lmv_rename,
         .m_setattr              = lmv_setattr,
+        .m_setxattr              = lmv_setxattr,
         .m_sync                 = lmv_sync,
         .m_readpage             = lmv_readpage,
         .m_unlink               = lmv_unlink,

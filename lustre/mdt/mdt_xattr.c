@@ -52,7 +52,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         char                   *xattr_name;
         __u64                   valid = info->mti_body->valid;
         static const char       user_string[] = "user.";
-        int                     rc;
+        int                     rc, rc1;
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
                 return -ENOMEM;
@@ -90,9 +90,10 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 rc =  min_t(int, info->mti_body->eadatasize, rc);
         }
         req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, rc);
-
-        rc = req_capsule_pack(pill);
-        return rc;
+        
+        rc1 = req_capsule_pack(pill);
+        
+        return rc = !rc1? rc1 : rc;
 }
 
 
@@ -119,14 +120,16 @@ int mdt_getxattr(struct mdt_thread_info *info)
         next = mdt_object_child(info->mti_object);
 
         rc = mdt_getxattr_pack_reply(info);
-        if (rc != 0)
+        if (rc < 0) 
                 RETURN(rc);
+        
+        rep_body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        /*No EA, just go back*/
+        if (rc == 0)
+                GOTO(no_xattr, rc);
 
         buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
-        rep_body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        buflen = req_capsule_get_size(&info->mti_pill, &RMF_EADATA, RCL_SERVER);
-        if (buflen == 0)
-                GOTO(no_xattr, rc = 0);
+        buflen = rc; 
 
         if (info->mti_body->valid & OBD_MD_FLXATTR) {
                 char *xattr_name = req_capsule_client_get(&info->mti_pill,

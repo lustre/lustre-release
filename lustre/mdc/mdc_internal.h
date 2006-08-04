@@ -149,7 +149,7 @@ int mdc_setxattr(struct obd_export *exp, struct lu_fid *fid,
 int mdc_getxattr(struct obd_export *exp, struct lu_fid *fid,
                  obd_valid valid, const char *xattr_name,
                  const char *input, int input_size,
-                 int output_size, struct ptlrpc_request **request);
+                 int output_size, int flags, struct ptlrpc_request **request);
 int mdc_open(struct obd_export *exp, obd_id ino, int type, int flags,
              struct lov_mds_md *lmm, int lmm_size, struct lustre_handle *fh,
              struct ptlrpc_request **);
