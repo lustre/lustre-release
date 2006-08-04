@@ -71,14 +71,14 @@ static void mdt_mfd_free(struct mdt_file_data *mfd)
         OBD_FREE_PTR(mfd);
 }
 
-static int mdt_create_data_obj(struct mdt_thread_info *info, 
+static int mdt_create_data_obj(struct mdt_thread_info *info,
                               struct mdt_object *p, struct mdt_object *o)
 {
         struct md_attr   *ma = &info->mti_attr;
         struct mdt_reint_record *mrr = &info->mti_rr;
 
         return mdo_create_data_object(info->mti_ctxt, mdt_object_child(p),
-                                 mdt_object_child(o), mrr->rr_eadata, 
+                                 mdt_object_child(o), mrr->rr_eadata,
                                  mrr->rr_eadatalen, ma);
 }
 
@@ -94,6 +94,8 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         struct lu_attr         *la = &ma->ma_attr;
         struct ptlrpc_request  *req = mdt_info_req(info);
         int                     rc = 0;
+        int                     isreg;
+        int                     isdir;
         ENTRY;
 
         med = &req->rq_export->exp_mdt_data;
@@ -103,19 +105,19 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 /* we have to get attr & lov ea for this object*/
                 rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);
         }
+        isreg = S_ISREG(la->la_mode);
+        isdir = S_ISDIR(la->la_mode);
         if (rc == 0){
                 if (ma->ma_valid & MA_INODE)
                         mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
 
-                if (!S_ISREG(la->la_mode) &&
-                    !S_ISDIR(la->la_mode) &&
+                if (!isreg && !isdir &&
                     (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))
                         /* If client supports this, do not return open handle
                         *  for special nodes */
                         RETURN(0);
 
-                if ((S_ISREG(la->la_mode) || S_ISDIR(la->la_mode))
-                     && !created && !(ma->ma_valid & MA_LOV)) {
+                if ((isreg || isdir) && !created && !(ma->ma_valid & MA_LOV)) {
                         /*No EA, check whether it is will set regEA and dirEA
                          *since in above attr get, these size might be zero,
                          *so reset it, to retrieve the MD after create obj*/
@@ -128,7 +130,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                                 RETURN(rc);
                 }
                 /* FIXME:maybe this can be done earlier? */
-                if (S_ISDIR(la->la_mode)) {
+                if (isdir) {
                         if (flags & (MDS_OPEN_CREAT | FMODE_WRITE)) {
                                 /* we are trying to create or
                                  * write an existing dir. */
@@ -147,7 +149,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
 
         if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
                 repbody->eadatasize = ma->ma_lmm_size;
-                if (S_ISDIR(la->la_mode))
+                if (isdir)
                         repbody->valid |= OBD_MD_FLDIREA;
                 else
                         repbody->valid |= OBD_MD_FLEASIZE;
@@ -176,9 +178,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
 
                 LASSERT(dt);
                 th = dt->dd_ops->dt_trans_start(info->mti_ctxt, dt, &txn);
-                if (!IS_ERR(th)) 
+                if (!IS_ERR(th))
                         dt->dd_ops->dt_trans_stop(info->mti_ctxt, th);
-                else 
+                else
                         RETURN(PTR_ERR(th));
         }
 
@@ -405,13 +407,13 @@ int mdt_close(struct mdt_thread_info *info)
                 spin_unlock(&med->med_open_lock);
 
                 o = mfd->mfd_object;
-                ma->ma_lmm = req_capsule_server_get(&info->mti_pill, 
+                ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
                                                     &RMF_MDT_MD);
                 ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                        &RMF_MDT_MD, RCL_SERVER);
                 rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);
                 if (rc == 0)
-                        rc = mdt_handle_last_unlink(info, o);
+                        rc = mdt_handle_last_unlink(info, o, ma);
 
                 mdt_mfd_close(info->mti_ctxt, mfd);
         }
