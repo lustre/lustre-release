@@ -300,6 +300,7 @@ static void osd_object_init0(struct osd_object *obj)
 {
         LASSERT(obj->oo_inode != NULL);
         obj->oo_dt.do_body_ops = &osd_body_ops;
+        obj->oo_dt.do_lu.lo_header->loh_attr |= obj->oo_inode->i_mode & S_IFMT;
 }
 
 static int osd_object_init(const struct lu_context *ctxt, struct lu_object *l)

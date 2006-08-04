@@ -48,12 +48,11 @@ struct mdd_object {
 struct mdd_thread_info {
         struct txn_param mti_param;
         struct lu_fid    mti_fid;
-        struct lu_attr   mti_la;
         struct lov_desc  mti_ld;
         struct lov_mds_md mti_lmm;
 };
 
-int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd, 
+int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                  char *dev);
 int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
                   const void *buf, int buf_len, const char *name, int fl);
@@ -61,12 +60,12 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
                    struct md_object *child, struct lov_mds_md *lmm,
                    int lmm_size, int mode);
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
-                   struct mdd_object *parent, struct mdd_object *child, 
+                   struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size, const void *eadata,
                    int eadatasize, struct lu_attr *la);
 int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
                void *md, int *md_size);
-int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd, 
+int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma);
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx);
 
@@ -120,7 +119,7 @@ static inline struct dt_object* mdd_object_child(struct mdd_object *o)
 }
 static inline struct obd_device *mdd2_obd(struct mdd_device *mdd)
 {
-        return mdd->mdd_md_dev.md_lu_dev.ld_obd; 
+        return mdd->mdd_md_dev.md_lu_dev.ld_obd;
 }
 
 int mdd_lov_mdsize(const struct lu_context *ctxt, struct mdd_device *mdd,

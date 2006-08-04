@@ -404,6 +404,14 @@ enum lu_object_header_flags {
         LU_OBJECT_HEARD_BANSHEE = 0,
 };
 
+enum lu_object_header_attr {
+        /*
+         * UNIX file type is stored in S_IFMT bits.
+         */
+        LU_OBJECT_FT_START = (1 << 12), /* S_IFIFO */
+        LU_OBJECT_FT_END   = (1 << 15), /* S_IFREG */
+};
+
 /*
  * "Compound" object, consisting of multiple layers.
  *
@@ -429,6 +437,11 @@ struct lu_object_header {
          * Fid, uniquely identifying this object.
          */
         struct lu_fid     loh_fid;
+        /*
+         * Common object attributes, cached for efficiency. From enum
+         * lu_object_header_attr.
+         */
+        __u32             loh_attr;
         /*
          * Linkage into per-site hash table. Protected by site guard lock.
          */

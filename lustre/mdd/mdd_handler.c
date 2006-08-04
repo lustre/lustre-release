@@ -140,19 +140,21 @@ static int mdd_attr_get(const struct lu_context *ctxt,
         next = mdd_object_child(mdd_obj);
         rc = next->do_ops->do_attr_get(ctxt, next, &ma->ma_attr);
         if (rc == 0) {
+                LASSERT((ma->ma_attr.la_mode & S_IFMT) ==
+                        (obj->mo_lu.lo_header->loh_attr & S_IFMT));
                 ma->ma_valid |= MA_INODE;
-                if ((S_ISREG(ma->ma_attr.la_mode) 
+                if ((S_ISREG(ma->ma_attr.la_mode)
                      || S_ISDIR(ma->ma_attr.la_mode))
                      && ma->ma_lmm != 0 && ma->ma_lmm_size > 0) {
                         rc = mdd_get_md(ctxt, obj, ma->ma_lmm,&ma->ma_lmm_size);
-                        if (rc > 0) {                                
+                        if (rc > 0) {
                                 ma->ma_valid |= MA_LOV;
                                 rc = 0;
                         }
                 }
                 /*TODO: get DIREA for directory */
         }
-        CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n", 
+        CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n",
                         rc, ma->ma_valid);
         RETURN(rc);
 }
@@ -679,23 +681,15 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *mdd_cobj = md2mdd_obj(cobj);
-        struct dt_object  *dt_cobj = mdd_object_child(mdd_cobj);
         struct thandle    *handle;
-        struct lu_attr    *la = &mdd_ctx_info(ctxt)->mti_la;
         int rc;
         ENTRY;
 
-        /* sanity checks */
-        rc = dt_cobj->do_ops->do_attr_get(ctxt, dt_cobj, la);
-        if (rc == 0) {
-                if (S_ISDIR(la->la_mode)) {
-                        if (!S_ISDIR(ma->ma_attr.la_mode))
-                                rc = -EISDIR;
-                } else if (S_ISDIR(ma->ma_attr.la_mode))
-                                rc = -ENOTDIR;
-        }
-        if (rc != 0)
-                RETURN(rc);
+        if (S_ISDIR(cobj->mo_lu.lo_header->loh_attr)) {
+                if (!S_ISDIR(ma->ma_attr.la_mode))
+                        RETURN(-EISDIR);
+        } else if (S_ISDIR(ma->ma_attr.la_mode))
+                RETURN(-ENOTDIR);
 
         mdd_txn_param_build(ctxt, &MDD_TXN_UNLINK);
         handle = mdd_trans_start(ctxt, mdd);
@@ -705,7 +699,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         mdd_lock2(ctxt, mdd_pobj, mdd_cobj);
 
         /* rmdir checks */
-        if (S_ISDIR(la->la_mode)) {
+        if (S_ISDIR(cobj->mo_lu.lo_header->loh_attr)) {
                 rc = mdd_dir_is_empty(ctxt, mdd_cobj);
                 if (rc != 0)
                         GOTO(cleanup, rc);
@@ -922,7 +916,7 @@ static int __mdd_object_initialize(const struct lu_context *ctxt,
         return rc;
 }
 
-static int mdd_create_data_object(const struct lu_context *ctxt, 
+static int mdd_create_data_object(const struct lu_context *ctxt,
                                  struct md_object *pobj, struct md_object *cobj,
                                  const void *eadata, int eadatasize,
                                  struct md_attr *ma)
@@ -935,7 +929,7 @@ static int mdd_create_data_object(const struct lu_context *ctxt,
         int lmm_size = 0;
         int rc;
         ENTRY;
-        
+
         rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size, eadata,
                             eadatasize, attr);
         if (rc)
@@ -950,14 +944,14 @@ static int mdd_create_data_object(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
-static int mdd_create_sanity_check(const struct lu_context *ctxt, 
+static int mdd_create_sanity_check(const struct lu_context *ctxt,
                                    struct mdd_device *mdd,
-                                   struct md_object *pobj, 
+                                   struct md_object *pobj,
                                    const char *name, struct md_attr *ma)
 {
         struct lu_fid *fid;
         int rc;
-        
+
         fid = &mdd_ctx_info(ctxt)->mti_fid;
         rc = mdd_lookup(ctxt, pobj, name, fid);
         if (rc != -ENOENT) {
@@ -976,10 +970,10 @@ static int mdd_create_sanity_check(const struct lu_context *ctxt,
                 rc = 0;
                 break;
         default:
-                rc = -EINVAL;     
+                rc = -EINVAL;
                 break;
         }
-        RETURN(rc); 
+        RETURN(rc);
 }
 
 /*
@@ -987,7 +981,7 @@ static int mdd_create_sanity_check(const struct lu_context *ctxt,
  */
 static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                       const char *name, struct md_object *child,
-                      const char *target_name, const void *eadata, 
+                      const char *target_name, const void *eadata,
                       int eadatasize, struct md_attr* ma)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
@@ -1008,12 +1002,12 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
          * first */
 
         if (S_ISREG(attr->la_mode)) {
-                rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size, 
+                rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size,
                                     eadata, eadatasize, attr);
                 if (rc)
                         RETURN(rc);
         }
-        
+
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
@@ -1066,7 +1060,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         rc = __mdd_object_create(ctxt, son, ma, handle);
         if (rc)
                 GOTO(cleanup, rc);
-        
+
         created = 1;
 
         rc = __mdd_object_initialize(ctxt, mdo, son, ma, handle);
@@ -1221,7 +1215,7 @@ static int mdd_root_get(const struct lu_context *ctx,
 }
 
 static int mdd_statfs(const struct lu_context *ctx,
-                      struct md_device *m, struct kstatfs *sfs) 
+                      struct md_device *m, struct kstatfs *sfs)
 {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         int rc;
@@ -1235,7 +1229,7 @@ static int mdd_statfs(const struct lu_context *ctx,
 
 static int mdd_get_maxsize(const struct lu_context *ctx,
                            struct md_device *m, int *md_size,
-                           int *cookie_size) 
+                           int *cookie_size)
 {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         int rc;
@@ -1246,7 +1240,7 @@ static int mdd_get_maxsize(const struct lu_context *ctx,
         if (rc)
                 RETURN(rc);
         rc = mdd_lov_cookiesize(ctx, mdd, cookie_size);
-        
+
         RETURN(rc);
 }
 
@@ -1337,7 +1331,7 @@ static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
 
         mdd_lock(ctxt, mdd, DT_READ_LOCK);
         if (dt_try_as_dir(ctxt, next))
-        rc = next->do_ops->do_readpage(ctxt, next, rdpg);
+                rc = next->do_ops->do_readpage(ctxt, next, rdpg);
         else
                 rc = -ENOTDIR;
         mdd_unlock(ctxt, mdd, DT_READ_LOCK);
