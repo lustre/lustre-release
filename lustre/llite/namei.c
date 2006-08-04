@@ -612,9 +612,10 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, stru
 }
 #endif
 
-static int ll_symlink_generic(struct inode *dir, struct qstr *name,
+static int ll_symlink_generic(struct inode *dir, struct dentry *dchild,
                               const char *tgt)
 {
+        struct qstr *name = &dchild->d_name;
         struct lu_placement_hint hint = { .ph_pname = NULL,
                                           .ph_cname = name,
                                           .ph_opc = LUSTRE_OPC_SYMLINK };
@@ -622,6 +623,7 @@ static int ll_symlink_generic(struct inode *dir, struct qstr *name,
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct md_op_data op_data = { { 0 } };
+        struct inode *inode = NULL;
         int err;
         ENTRY;
 
@@ -643,8 +645,16 @@ static int ll_symlink_generic(struct inode *dir, struct qstr *name,
                         tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                         current->fsuid, current->fsgid, current->cap_effective,
                         0, &request);
-        if (err == 0)
+        if (err == 0) {
                 ll_update_times(request, 0, dir);
+
+                if (dchild) {
+                        err = ll_prep_inode(&inode, request, 0,
+                                            dchild->d_sb);
+                        if (err == 0)
+                                d_instantiate(dchild, inode);
+                }
+        }
 
         ptlrpc_req_finished(request);
         RETURN(err);
@@ -894,7 +904,7 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
 }
 static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
 {
-        return ll_symlink_generic(nd->dentry->d_inode, &nd->last, tgt);
+        return -EOPNOTSUPP;
 }
 static int ll_rmdir_raw(struct nameidata *nd)
 {
@@ -932,7 +942,7 @@ static int ll_rmdir(struct inode *dir, struct dentry *dentry)
 static int ll_symlink(struct inode *dir, struct dentry *dentry,
                       const char *oldname)
 {
-        return ll_symlink_generic(dir, &dentry->d_name, oldname);
+        return ll_symlink_generic(dir, dentry, oldname);
 }
 static int ll_link(struct dentry *old_dentry, struct inode *dir,
                    struct dentry *new_dentry)
