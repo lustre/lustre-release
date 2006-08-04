@@ -247,7 +247,7 @@ static int seq_server_alloc_meta(struct lu_server_seq *seq,
 static int seq_req_handle0(const struct lu_context *ctx,
                            struct ptlrpc_request *req)
 {
-        int rep_buf_size[2] = { 0, };
+        int rep_buf_size[2] = { -1, -1 };
         struct req_capsule pill;
         struct lu_site *site;
         struct lu_range *out;
@@ -258,8 +258,7 @@ static int seq_req_handle0(const struct lu_context *ctx,
         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
         LASSERT(site != NULL);
 			
-        req_capsule_init(&pill, req, RCL_SERVER,
-                         rep_buf_size);
+        req_capsule_init(&pill, req, RCL_SERVER, rep_buf_size);
 
         req_capsule_set(&pill, &RQF_SEQ_QUERY);
         req_capsule_pack(&pill);

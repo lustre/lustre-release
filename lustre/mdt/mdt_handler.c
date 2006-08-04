@@ -53,7 +53,7 @@
 #include <obd.h>
 /* lu2dt_dev() */
 #include <dt_object.h>
-#include <lustre_mds.h> 
+#include <lustre_mds.h>
 #include "mdt_internal.h"
 
 /*
@@ -263,7 +263,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         repbody->valid |= OBD_MD_LINKNAME;
                         repbody->eadatasize = rc + 1;
                         ((char*)ma->ma_lmm)[rc] = 0;        /* NULL terminate */
-                        CDEBUG(D_INODE, "symlink dest %s, len = %d\n", 
+                        CDEBUG(D_INODE, "symlink dest %s, len = %d\n",
                                         (char*)buffer, rc);
                         rc = 0;
                 }
@@ -305,11 +305,11 @@ shrink:
 /*
         if (req_capsule_has_field(pill, &RMF_DLM_REP)) {
                 offset = 2;
-        } else 
+        } else
                 offset = 1;
 */
         lustre_shrink_reply(req, offset, repbody->eadatasize, 1);
-        if (repbody->eadatasize) 
+        if (repbody->eadatasize)
                 offset ++;
         lustre_shrink_reply(req, offset, repbody->aclsize, 0);
         RETURN(rc);
@@ -323,11 +323,11 @@ static int mdt_getattr(struct mdt_thread_info *info)
         LASSERT(lu_object_assert_exists(info->mti_ctxt,
                                         &info->mti_object->mot_obj.mo_lu));
         ENTRY;
-        
+
 
         req_capsule_set_size(&info->mti_pill, &RMF_EADATA,
                              RCL_SERVER, LUSTRE_POSIX_ACL_MAX_SIZE);
-       
+
         result = req_capsule_pack(&info->mti_pill);
         if (result)
                 RETURN(result);
@@ -382,7 +382,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 result = mdt_object_lock(info, child, lhc, child_bits);
                 if (result != 0) {
                         /* finally, we can get attr for child. */
-                        result = mdt_getattr_internal(info, child, 
+                        result = mdt_getattr_internal(info, child,
                                                       ldlm_rep ? 2 : 1);
                         if (result != 0)
                                 mdt_object_unlock(info, child, lhc, 1);
@@ -459,7 +459,7 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
                              RCL_SERVER, info->mti_mdt->mdt_max_mdsize);
         req_capsule_set_size(&info->mti_pill, &RMF_EADATA,
                              RCL_SERVER, LUSTRE_POSIX_ACL_MAX_SIZE);
-        
+
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
                 RETURN(rc);
@@ -676,7 +676,7 @@ static int mdt_reint(struct mdt_thread_info *info)
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
 
                 rc = mdt_reint_internal(info, opc);
-        
+
         } else
                 rc = opc;
         RETURN(rc);
@@ -1209,6 +1209,9 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
         memset(info, 0, sizeof(*info));
 
         info->mti_rep_buf_nr = ARRAY_SIZE(info->mti_rep_buf_size);
+        for (i = 0; i < ARRAY_SIZE(info->mti_rep_buf_size); i++)
+                info->mti_rep_buf_size[i] = -1;
+
         for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
                 mdt_lock_handle_init(&info->mti_lh[i]);
 
@@ -1218,7 +1221,8 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
         /* it can be NULL while CONNECT */
         if (req->rq_export)
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
-        req_capsule_init(&info->mti_pill, req, RCL_SERVER, info->mti_rep_buf_size);
+        req_capsule_init(&info->mti_pill, req, RCL_SERVER,
+                         info->mti_rep_buf_size);
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)
@@ -1620,12 +1624,12 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         }
 
         rc = mdt_reint_internal(info, opc);
-        
+
         rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         if (rep == NULL)
                 RETURN(-EFAULT);
         rep->lock_policy_res2 = rc;
-        
+
         intent_set_disposition(rep, DISP_IT_EXECD);
 
         mdt_update_last_transno(info, rep->lock_policy_res2);
@@ -2062,8 +2066,8 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 .psc_ctx_tags      = LCT_MD_THREAD
         };
 
-        m->mdt_setattr_service = 
-                ptlrpc_init_svc_conf(&conf, mdt_handle, 
+        m->mdt_setattr_service =
+                ptlrpc_init_svc_conf(&conf, mdt_handle,
                                      LUSTRE_MDT0_NAME "_setattr",
                                      m->mdt_md_dev.md_lu_dev.ld_proc_entry,
                                      NULL);
@@ -2150,7 +2154,7 @@ static struct lu_device *mdt_layer_setup(const struct lu_context *ctx,
                 GOTO(out_alloc, rc);
         }
         lu_device_get(d);
-      
+
         RETURN(d);
 out_alloc:
         ldt->ldt_ops->ldto_device_free(ctx, d);
@@ -2183,7 +2187,7 @@ static int mdt_stack_init(const struct lu_context *ctx,
         }
         d = tmp;
         md = lu2md_dev(d);
-        
+
         tmp = mdt_layer_setup(ctx, LUSTRE_CMM0_NAME, d, cfg);
         if (IS_ERR(tmp)) {
                 GOTO(out, rc = PTR_ERR(tmp));
@@ -2191,7 +2195,7 @@ static int mdt_stack_init(const struct lu_context *ctx,
         d = tmp;
         /*set mdd upcall device*/
         md->md_upcall.mu_upcall_dev = lu2md_dev(d);
-       
+
         md = lu2md_dev(d);
         /*set cmm upcall device*/
         md->md_upcall.mu_upcall_dev = &m->mdt_md_dev;
@@ -2637,10 +2641,10 @@ static int mdt_upcall(const struct lu_context *ctx, struct md_device *md,
         struct md_device  *next  = m->mdt_child;
         int rc = 0;
         ENTRY;
-        
+
         switch (ev) {
                 case MD_LOV_SYNC:
-                        rc = next->md_ops->mdo_get_maxsize(ctx, next, 
+                        rc = next->md_ops->mdo_get_maxsize(ctx, next,
                                     &m->mdt_max_mdsize, &m->mdt_max_cookiesize);
                         CDEBUG(D_INFO, "get max mdsize %d max cookiesize %d \n",
                                      m->mdt_max_mdsize, m->mdt_max_cookiesize);

@@ -47,7 +47,7 @@
 #include <lustre_fid.h>
 #include "fid_internal.h"
 
-static int seq_client_rpc(struct lu_client_seq *seq, 
+static int seq_client_rpc(struct lu_client_seq *seq,
                           struct lu_range *range,
                           __u32 opc)
 {
@@ -60,15 +60,14 @@ static int seq_client_rpc(struct lu_client_seq *seq,
         __u32 *op;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), 
+        req = ptlrpc_prep_req(class_exp2cliimp(exp),
 			      LUSTRE_MDS_VERSION,
                               SEQ_QUERY, 1, &reqsize,
                               NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        req_capsule_init(&pill, req, RCL_CLIENT,
-                         &repsize);
+        req_capsule_init(&pill, req, RCL_CLIENT, NULL);
 
         req_capsule_set(&pill, &RQF_SEQ_QUERY);
 
@@ -76,7 +75,7 @@ static int seq_client_rpc(struct lu_client_seq *seq,
         *op = opc;
 
         req->rq_replen = lustre_msg_size(1, &repsize);
-        
+
         req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
                 SEQ_CTLR_PORTAL : SEQ_SRV_PORTAL;
 
@@ -90,14 +89,14 @@ static int seq_client_rpc(struct lu_client_seq *seq,
                 GOTO(out_req, rc = -EPROTO);
         }
         *range = *ran;
-        
+
         LASSERT(range_is_sane(range));
         LASSERT(!range_is_exhausted(range));
-        
+
         EXIT;
 out_req:
         req_capsule_fini(&pill);
-        ptlrpc_req_finished(req); 
+        ptlrpc_req_finished(req);
         return rc;
 }
 
@@ -127,7 +126,7 @@ int seq_client_alloc_super(struct lu_client_seq *seq)
 {
         int rc;
         ENTRY;
-        
+
         down(&seq->seq_sem);
         rc = __seq_client_alloc_super(seq);
         up(&seq->seq_sem);
@@ -174,10 +173,10 @@ static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
                         RETURN(rc);
                 }
         }
-        
+
         *seqnr = seq->seq_range.lr_start;
         seq->seq_range.lr_start++;
-        
+
         CDEBUG(D_INFO, "%s: allocated sequence ["LPX64"]\n",
                seq->seq_name, *seqnr);
         RETURN(rc);
@@ -233,7 +232,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
 
         *fid = seq->seq_fid;
         LASSERT(fid_is_sane(fid));
-        
+
         CDEBUG(D_INFO, "%s: allocated FID "DFID3"\n",
                seq->seq_name, PFID3(fid));
 
@@ -253,7 +252,7 @@ static int seq_client_proc_init(struct lu_client_seq *seq)
         seq->seq_proc_dir = lprocfs_register(seq->seq_name,
                                              proc_lustre_root,
                                              NULL, NULL);
-        
+
         if (IS_ERR(seq->seq_proc_dir)) {
                 CERROR("LProcFS failed in seq-init\n");
                 rc = PTR_ERR(seq->seq_proc_dir);
@@ -296,7 +295,7 @@ int seq_client_init(struct lu_client_seq *seq,
         ENTRY;
 
         LASSERT(exp != NULL);
-        
+
         fid_zero(&seq->seq_fid);
         range_zero(&seq->seq_range);
         sema_init(&seq->seq_sem, 1);
@@ -326,14 +325,14 @@ void seq_client_fini(struct lu_client_seq *seq)
 #ifdef LPROCFS
         seq_client_proc_fini(seq);
 #endif
-        
+
         if (seq->seq_exp != NULL) {
                 class_export_put(seq->seq_exp);
                 seq->seq_exp = NULL;
         }
-        
+
         CDEBUG(D_INFO|D_WARNING, "Client Sequence Manager\n");
-        
+
         EXIT;
 }
 EXPORT_SYMBOL(seq_client_fini);

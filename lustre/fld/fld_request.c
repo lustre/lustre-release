@@ -336,8 +336,7 @@ static int fld_client_rpc(struct obd_export *exp,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        req_capsule_init(&pill, req, RCL_CLIENT,
-                         &mf_size);
+        req_capsule_init(&pill, req, RCL_CLIENT, NULL);
 
         req_capsule_set(&pill, &RQF_FLD_QUERY);
 

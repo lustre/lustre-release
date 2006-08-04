@@ -252,6 +252,9 @@ static const struct req_format *req_formats[] = {
 struct req_msg_field {
         __u32       rmf_flags;
         const char *rmf_name;
+        /*
+         * Field length. (-1) means "variable length".
+         */
         int         rmf_size;
         void      (*rmf_swabber)(void *);
         int         rmf_offset[ARRAY_SIZE(req_formats)][RCL_NR];
@@ -304,11 +307,11 @@ const struct req_msg_field RMF_OBD_STATFS =
 EXPORT_SYMBOL(RMF_OBD_STATFS);
 
 const struct req_msg_field RMF_NAME =
-        DEFINE_MSGF("name", RMF_F_STRING, 0, NULL);
+        DEFINE_MSGF("name", RMF_F_STRING, -1, NULL);
 EXPORT_SYMBOL(RMF_NAME);
 
 const struct req_msg_field RMF_SYMTGT =
-        DEFINE_MSGF("symtgt", RMF_F_STRING, 0, NULL);
+        DEFINE_MSGF("symtgt", RMF_F_STRING, -1, NULL);
 EXPORT_SYMBOL(RMF_SYMTGT);
 
 const struct req_msg_field RMF_TGTUUID =
@@ -383,8 +386,7 @@ const struct req_msg_field RMF_REC_SETATTR =
 EXPORT_SYMBOL(RMF_REC_SETATTR);
 
 /* FIXME: this length should be defined as a macro*/
-const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, 
-                                0, NULL);
+const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
 const struct req_msg_field RMF_LOGCOOKIES =
@@ -641,7 +643,7 @@ int req_capsule_pack(struct req_capsule *pill)
         int nr;
         int result;
         int total;
-        
+
         const struct req_format *fmt;
 
         LASSERT(pill->rc_loc == RCL_SERVER);
@@ -653,9 +655,9 @@ int req_capsule_pack(struct req_capsule *pill)
                 int *size;
 
                 size = &pill->rc_area[i];
-                if (*size == 0) {
+                if (*size == -1) {
                         *size = fmt->rf_fields[RCL_SERVER].d[i]->rmf_size;
-                        LASSERT(*size != 0);
+                        LASSERT(*size != -1);
                 }
                 total += *size;
         }
@@ -689,6 +691,7 @@ static void *__req_capsule_get(struct req_capsule *pill,
         const struct req_format *fmt;
         struct lustre_msg       *msg;
         void                    *value;
+        int                      len;
         int                      offset;
 
         void *(*getter)(struct lustre_msg *m, int n, int minlen);
@@ -709,7 +712,8 @@ static void *__req_capsule_get(struct req_capsule *pill,
         getter = (field->rmf_flags & RMF_F_STRING) ?
                 (typeof(getter))lustre_msg_string : lustre_msg_buf;
 
-        value = getter(msg, offset, field->rmf_size);
+        len = max(field->rmf_size, 0);
+        value = getter(msg, offset, len);
 
         if (!(pill->rc_swabbed & (1 << offset)) && loc != pill->rc_loc &&
             field->rmf_swabber != NULL && value != NULL &&

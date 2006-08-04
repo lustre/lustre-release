@@ -127,7 +127,7 @@ static int fld_req_handle0(const struct lu_context *ctx,
                            struct lu_server_fld *fld,
                            struct ptlrpc_request *req)
 {
-        int rep_buf_size[3] = { 0, };
+        int rep_buf_size[3] = { -1, -1 };
         struct req_capsule pill;
         struct md_fld *in;
         struct md_fld *out;
@@ -135,8 +135,7 @@ static int fld_req_handle0(const struct lu_context *ctx,
         __u32 *opc;
         ENTRY;
 
-        req_capsule_init(&pill, req, RCL_SERVER,
-                         rep_buf_size);
+        req_capsule_init(&pill, req, RCL_SERVER, rep_buf_size);
 
         req_capsule_set(&pill, &RQF_FLD_QUERY);
         req_capsule_pack(&pill);
