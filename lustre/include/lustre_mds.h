@@ -78,6 +78,8 @@ struct mds_file_data {
 #endif
 
 /* mds/mds_reint.c */
+struct inode;
+
 int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *);
 
