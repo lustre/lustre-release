@@ -152,8 +152,7 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
 
         if (req_capsule_field_present(pill, &RMF_EADATA)) {
                 rr->rr_eadata = req_capsule_client_get(pill, &RMF_EADATA);
-                rr->rr_eadatalen = req_capsule_get_size(pill,
-                                                        &RMF_EADATA,
+                rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
                                                         RCL_CLIENT);
         }
         if (req_capsule_field_present(pill, &RMF_LOGCOOKIES)) {

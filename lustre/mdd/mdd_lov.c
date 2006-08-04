@@ -163,7 +163,7 @@ static int mdd_lov_update(struct obd_device *host,
         struct md_device *upcall_dev;
         int rc;
         ENTRY;
-        
+
         LASSERT(owner != NULL);
         obd = mdd2_obd(mdd);
 
@@ -175,7 +175,7 @@ static int mdd_lov_update(struct obd_device *host,
 }
 
 /*The obd is created for handling data stack for mdd*/
-int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd, 
+int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                  char *dev)
 {
         struct lustre_cfg_bufs bufs;
@@ -329,7 +329,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
         RETURN(rc);
 }
 
-/*FIXME: this is for create lsm object id, which should identify the 
+/*FIXME: this is for create lsm object id, which should identify the
  * lsm object unique in the whole mds, as I see. But it seems, we
  * still not need it now. right? so just borrow the ll_fid_build_ino
  */
@@ -339,7 +339,7 @@ static obd_id mdd_lov_create_id(struct lu_fid *fid)
 }
 
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
-                   struct mdd_object *parent, struct mdd_object *child, 
+                   struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size, const void *eadata,
                    int eadatasize, struct lu_attr *la)
 {
@@ -359,7 +359,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
         oa->o_mode = S_IFREG | 0600;
-        oa->o_id = mdd_lov_create_id(&mdd2lu_obj(child)->lo_header->loh_fid);
+        oa->o_id = mdd_lov_create_id(lu_object_fid(mdd2lu_obj(child)));
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
         oa->o_size = 0;
@@ -373,7 +373,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                                 GOTO(out_oa, rc);
                 } else {
                         LASSERT(*lmm == NULL);
-                        rc = mdd_get_md(ctxt, &parent->mod_obj, *lmm, 
+                        rc = mdd_get_md(ctxt, &parent->mod_obj, *lmm,
                                         lmm_size);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
@@ -390,7 +390,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 }
         } else {
                 LASSERT(eadata != NULL);
-                rc = obd_iocontrol(OBD_IOC_LOV_SETEA, lov_exp, 0, &lsm, 
+                rc = obd_iocontrol(OBD_IOC_LOV_SETEA, lov_exp, 0, &lsm,
                                    (void*)eadata);
                 if (rc) {
                         GOTO(out_oa, rc);
@@ -410,11 +410,11 @@ out_oa:
         RETURN(rc);
 }
 
-int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd, 
+int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma)
 {
         struct obd_device *obd = mdd2_obd(mdd);
-        
+
         if (mds_log_op_unlink(obd, NULL, ma->ma_lmm, ma->ma_lmm_size,
                                  ma->ma_cookie, ma->ma_cookie_size)) {
                 ma->ma_valid |= MA_COOKIE;
@@ -426,7 +426,7 @@ int mdd_lov_mdsize(const struct lu_context *ctxt, struct mdd_device *mdd,
                    int *md_size)
 {
         struct obd_device *obd = mdd2_obd(mdd);
-        *md_size = obd->u.mds.mds_max_mdsize;  
+        *md_size = obd->u.mds.mds_max_mdsize;
         RETURN(0);
 }
 

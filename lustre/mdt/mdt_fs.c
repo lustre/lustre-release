@@ -448,7 +448,7 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
                 mti->mti_transno = ++ mdt->mdt_last_transno;
         } else {
                 /* replay */
-                CDEBUG(D_HA, "replaying transno: "LPD64" stopped\n", 
+                CDEBUG(D_HA, "replaying transno: "LPD64" stopped\n",
                               mti->mti_transno);
                 if (mti->mti_transno > mdt->mdt_last_transno)
                         mdt->mdt_last_transno = mti->mti_transno;
