@@ -50,7 +50,6 @@
 
 /* __REQ_LAYOUT_USER__ */
 #endif
-
 /* struct ptlrpc_request, lustre_msg* */
 #include <lustre_req_layout.h>
 
@@ -385,7 +384,7 @@ EXPORT_SYMBOL(RMF_REC_SETATTR);
 
 /* FIXME: this length should be defined as a macro*/
 const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, 
-                                4, NULL);
+                                0, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
 const struct req_msg_field RMF_LOGCOOKIES =

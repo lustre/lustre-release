@@ -53,6 +53,7 @@
 #include <obd.h>
 /* lu2dt_dev() */
 #include <dt_object.h>
+#include <lustre_mds.h> 
 #include "mdt_internal.h"
 
 /*
@@ -322,6 +323,14 @@ static int mdt_getattr(struct mdt_thread_info *info)
         LASSERT(lu_object_assert_exists(info->mti_ctxt,
                                         &info->mti_object->mot_obj.mo_lu));
         ENTRY;
+        
+
+        req_capsule_set_size(&info->mti_pill, &RMF_EADATA,
+                             RCL_SERVER, LUSTRE_POSIX_ACL_MAX_SIZE);
+       
+        result = req_capsule_pack(&info->mti_pill);
+        if (result)
+                RETURN(result);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 result = -ENOMEM;
@@ -446,6 +455,12 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
 
         ENTRY;
 
+        req_capsule_set_size(&info->mti_pill, &RMF_EADATA,
+                             RCL_SERVER, LUSTRE_POSIX_ACL_MAX_SIZE);
+       
+        rc = req_capsule_pack(&info->mti_pill);
+        if (rc)
+                RETURN(rc);
         rc = mdt_getattr_name_lock(info, lhc, MDS_INODELOCK_UPDATE, NULL);
         if (lustre_handle_is_used(&lhc->mlh_lh)) {
                 ldlm_lock_decref(&lhc->mlh_lh, lhc->mlh_mode);
@@ -1511,10 +1526,10 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD,
                              RCL_SERVER, mdt->mdt_max_mdsize);
-#ifdef CONFIG_FS_POSIX_ACL
+
         req_capsule_set_size(&info->mti_pill, &RMF_EADATA,
-                             RCL_SERVER, mdt->mdt_max_cookiesize);
-#endif
+                             RCL_SERVER, LUSTRE_POSIX_ACL_MAX_SIZE);
+
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
                 RETURN(rc);
@@ -2824,8 +2839,8 @@ static struct mdt_handler mdt_mds_ops[] = {
 DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
 DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
-DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR,      mdt_getattr),
-DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR_NAME, mdt_getattr_name),
+DEF_MDT_HNDL_F(HABEO_CORPUS             , GETATTR,      mdt_getattr),
+DEF_MDT_HNDL_F(HABEO_CORPUS             , GETATTR_NAME, mdt_getattr_name),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO|MUTABOR,
                                           SETXATTR,     mdt_setxattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),

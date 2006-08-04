@@ -949,6 +949,39 @@ static int mdd_create_data_object(const struct lu_context *ctxt,
 
         RETURN(rc);
 }
+
+static int mdd_create_sanity_check(const struct lu_context *ctxt, 
+                                   struct mdd_device *mdd,
+                                   struct md_object *pobj, 
+                                   const char *name, struct md_attr *ma)
+{
+        struct lu_fid *fid;
+        int rc;
+        
+        fid = &mdd_ctx_info(ctxt)->mti_fid;
+        rc = mdd_lookup(ctxt, pobj, name, fid);
+        if (rc != -ENOENT) {
+                rc = rc ? rc : -EEXIST;
+                RETURN(rc);
+        }
+
+        switch (ma->ma_attr.la_mode & S_IFMT) {
+        case S_IFREG:
+        case S_IFDIR:
+        case S_IFLNK:
+        case S_IFCHR:
+        case S_IFBLK:
+        case S_IFIFO:
+        case S_IFSOCK:
+                rc = 0;
+                break;
+        default:
+                rc = -EINVAL;     
+                break;
+        }
+        RETURN(rc); 
+}
+
 /*
  * Create object and insert it into namespace.
  */
@@ -961,19 +994,16 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         struct mdd_object *mdo = md2mdd_obj(pobj);
         struct mdd_object *son = md2mdd_obj(child);
         struct lu_attr *attr = &ma->ma_attr;
-        struct lu_fid *fid;
         struct lov_mds_md *lmm = NULL;
         struct thandle *handle;
         int rc, created = 0, inserted = 0, lmm_size = 0;
         ENTRY;
 
         /* sanity checks before big job */
-        fid = &mdd_ctx_info(ctxt)->mti_fid;
-        rc = mdd_lookup(ctxt, pobj, name, fid);
-        if (rc != -ENOENT) {
-                rc = rc ? rc : -EEXIST;
+        rc = mdd_create_sanity_check(ctxt, mdd, pobj, name, ma);
+        if (rc)
                 RETURN(rc);
-        }
+
         /* no RPC inside the transaction, so OST objects should be created at
          * first */
 

@@ -31,6 +31,7 @@
 #endif
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <lustre_mds.h>
 #include "mdt_internal.h"
 
 /* we do nothing because we do not have refcount now */
@@ -264,6 +265,10 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
                              mdt->mdt_max_mdsize);
+
+        req_capsule_set_size(&info->mti_pill, &RMF_EADATA, RCL_SERVER,
+                             LUSTRE_POSIX_ACL_MAX_SIZE);
+
         result = req_capsule_pack(&info->mti_pill);
         if (result)
                 RETURN(result);
