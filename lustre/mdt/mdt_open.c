@@ -119,7 +119,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                         /*No EA, check whether it is will set regEA and dirEA
                          *since in above attr get, these size might be zero,
                          *so reset it, to retrieve the MD after create obj*/
-
+                        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                                                               &RMF_MDT_MD,
+                                                               RCL_SERVER);
                         LASSERT(p != NULL);
                         rc = mdt_create_data_obj(info, p, o);
                         if (rc)
