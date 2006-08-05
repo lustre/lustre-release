@@ -114,10 +114,9 @@ struct md_dir_operations {
                           const char *target_name, const void *eadata,
                           int eadatalen, struct md_attr *);
         /* This method is used for creating data object for this meta object*/
-        int (*mdo_create_data_object)(const struct lu_context *cx, 
-                                      struct md_object *p, struct md_object *o,
-                                       const void *eadata, int eadatalen,
-                                       struct md_attr *ma);
+        int (*mdo_create_data)(const struct lu_context *cx, struct md_object *p,
+                               struct md_object *o, const void *eadata,
+                               int eadatalen, struct md_attr *ma);
         int (*mdo_rename)(const struct lu_context *ctxt,
                           struct md_object *spobj, struct md_object *tpobj,
                           const struct lu_fid *lf, const char *sname,
@@ -157,7 +156,7 @@ enum md_upcall_event {
 
 struct md_upcall {
         struct md_device            *mu_upcall_dev;
-        int (*mu_upcall)(const struct lu_context *ctxt, struct md_device *md, 
+        int (*mu_upcall)(const struct lu_context *ctxt, struct md_device *md,
                          enum md_upcall_event ev);
 };
 
@@ -319,21 +318,20 @@ static inline int mdo_lookup(const struct lu_context *cx, struct md_object *p,
 
 static inline int mdo_create(const struct lu_context *cx, struct md_object *p,
                              const char *child_name, struct md_object *c,
-                             const char *target_name, const void *eadata, 
+                             const char *target_name, const void *eadata,
                              int eadatalen, struct md_attr *at)
 {
         LASSERT(c->mo_dir_ops->mdo_create);
-        return c->mo_dir_ops->mdo_create(cx, p, child_name, c, target_name, 
+        return c->mo_dir_ops->mdo_create(cx, p, child_name, c, target_name,
                                          eadata, eadatalen, at);
 }
-static inline int mdo_create_data_object(const struct lu_context *cx, 
-                                       struct md_object *p, struct md_object *c,
-                                       const void *eadata, int eadatalen,
-                                       struct md_attr *ma)
+static inline int mdo_create_data(const struct lu_context *cx,
+                                  struct md_object *p, struct md_object *c,
+                                  const void *eadata, int eadatalen,
+                                  struct md_attr *ma)
 {
-        LASSERT(c->mo_dir_ops->mdo_create_data_object);
-        return c->mo_dir_ops->mdo_create_data_object(cx, p, c, eadata, 
-                                                     eadatalen, ma);
+        LASSERT(c->mo_dir_ops->mdo_create_data);
+        return c->mo_dir_ops->mdo_create_data(cx, p, c, eadata, eadatalen, ma);
 }
 
 static inline int mdo_rename(const struct lu_context *cx,

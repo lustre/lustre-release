@@ -365,15 +365,15 @@ static int cml_create(const struct lu_context *ctx, struct md_object *mo_p,
         RETURN(rc);
 }
 
-static int cml_create_data_object(const struct lu_context *ctx,
-                                  struct md_object *p, struct md_object *o,
-                                  const void *eadata, int eadatalen,
-                                  struct md_attr *ma)
+static int cml_create_data(const struct lu_context *ctx,
+                           struct md_object *p, struct md_object *o,
+                           const void *eadata, int eadatalen,
+                           struct md_attr *ma)
 {
         int rc;
         ENTRY;
-        rc = mdo_create_data_object(ctx, md_object_next(p), md_object_next(o),
-                                    eadata, eadatalen, ma);
+        rc = mdo_create_data(ctx, md_object_next(p), md_object_next(o),
+                             eadata, eadatalen, ma);
         RETURN(rc);
 }
 
@@ -454,7 +454,7 @@ static struct md_dir_operations cml_dir_ops = {
         .mdo_name_insert = cml_name_insert,
         .mdo_rename      = cml_rename,
         .mdo_rename_tgt  = cml_rename_tgt,
-        .mdo_create_data_object = cml_create_data_object,
+        .mdo_create_data = cml_create_data
 };
 
 /* -------------------------------------------------------------------

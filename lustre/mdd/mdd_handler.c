@@ -940,10 +940,10 @@ static int __mdd_object_initialize(const struct lu_context *ctxt,
         return rc;
 }
 
-static int mdd_create_data_object(const struct lu_context *ctxt,
-                                 struct md_object *pobj, struct md_object *cobj,
-                                 const void *eadata, int eadatasize,
-                                 struct md_attr *ma)
+static int mdd_create_data(const struct lu_context *ctxt,
+                           struct md_object *pobj, struct md_object *cobj,
+                           const void *eadata, int eadatasize,
+                           struct md_attr *ma)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdo = md2mdd_obj(pobj);
@@ -1370,7 +1370,7 @@ static struct md_dir_operations mdd_dir_ops = {
         .mdo_name_insert   = mdd_mkname,
         .mdo_name_remove   = mdd_name_remove,
         .mdo_rename_tgt    = mdd_rename_tgt,
-        .mdo_create_data_object = mdd_create_data_object
+        .mdo_create_data   = mdd_create_data
 };
 
 

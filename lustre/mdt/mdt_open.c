@@ -78,9 +78,9 @@ static int mdt_create_data_obj(struct mdt_thread_info *info,
         struct md_attr   *ma = &info->mti_attr;
         struct mdt_reint_record *mrr = &info->mti_rr;
 
-        return mdo_create_data_object(info->mti_ctxt, mdt_object_child(p),
-                                 mdt_object_child(o), mrr->rr_eadata,
-                                 mrr->rr_eadatalen, ma);
+        return mdo_create_data(info->mti_ctxt, mdt_object_child(p),
+                               mdt_object_child(o), mrr->rr_eadata,
+                               mrr->rr_eadatalen, ma);
 }
 
 static int mdt_mfd_open(struct mdt_thread_info *info,
