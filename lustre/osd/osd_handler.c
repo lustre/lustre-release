@@ -84,6 +84,9 @@ struct osd_object {
         struct iam_container   oo_container;
         struct iam_descr       oo_descr;
         struct iam_path_descr *oo_ipd;
+#if OSD_DEBUG_LOCKS
+        const struct lu_context *oo_owner;
+#endif
 };
 
 /*
@@ -126,6 +129,8 @@ static void  osd_device_free   (const struct lu_context *ctx,
 static void *osd_key_init      (const struct lu_context *ctx,
                                 struct lu_context_key *key);
 static void  osd_key_fini      (const struct lu_context *ctx,
+                                struct lu_context_key *key, void *data);
+static void  osd_key_exit      (const struct lu_context *ctx,
                                 struct lu_context_key *key, void *data);
 static int   osd_has_index     (const struct osd_object *obj);
 static void  osd_object_init0  (struct osd_object *obj);
@@ -451,10 +456,11 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
                                        struct dt_device *d,
                                        struct txn_param *p)
 {
-        struct osd_device  *dev = osd_dt_dev(d);
-        handle_t           *jh;
-        struct osd_thandle *oh;
-        struct thandle     *th;
+        struct osd_device      *dev = osd_dt_dev(d);
+        handle_t               *jh;
+        struct osd_thandle     *oh;
+        struct thandle         *th;
+        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
         int hook_res;
 
         ENTRY;
@@ -464,7 +470,7 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
                 RETURN(ERR_PTR(hook_res));
 
         if (osd_param_is_sane(dev, p)) {
-                OBD_ALLOC_PTR(oh);
+                OBD_ALLOC_GFP(oh, sizeof *oh, GFP_NOFS);
                 /*TODO: it seems we need something like that:
                  * OBD_SLAB_ALLOC(oh, oh_cache, GFP_NOFS, sizeof *oh);
                  */
@@ -483,6 +489,10 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
                                 lu_context_init(&th->th_ctx, LCT_TX_HANDLE);
                                 journal_callback_set(jh, osd_trans_commit_cb,
                                                      (struct journal_callback *)&oh->ot_jcb);
+                                LASSERT(oti->oti_txns == 0);
+                                LASSERT(oti->oti_r_locks == 0);
+                                LASSERT(oti->oti_w_locks == 0);
+                                oti->oti_txns++;
                         } else {
                                 OBD_FREE_PTR(oh);
                                 th = (void *)jh;
@@ -500,7 +510,8 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
 static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
 {
         int result;
-        struct osd_thandle *oh;
+        struct osd_thandle     *oh;
+        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
 
         ENTRY;
 
@@ -516,6 +527,10 @@ static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
                 if (result != 0)
                         CERROR("Failure to stop transaction: %d\n", result);
                 oh->ot_handle = NULL;
+                LASSERT(oti->oti_txns == 1);
+                LASSERT(oti->oti_r_locks == 0);
+                LASSERT(oti->oti_w_locks == 0);
+                oti->oti_txns--;
         }
 /*
         if (th->th_dev != NULL) {
@@ -537,29 +552,50 @@ static struct dt_device_operations osd_dt_ops = {
 static void osd_object_lock(const struct lu_context *ctx, struct dt_object *dt,
                             enum dt_lock_mode mode)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
+        struct osd_object      *obj = osd_dt_obj(dt);
+        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
 
         LASSERT(mode == DT_WRITE_LOCK || mode == DT_READ_LOCK);
         LASSERT(osd_invariant(obj));
 
-        if (mode == DT_WRITE_LOCK)
+        LASSERT(obj->oo_owner != ctx);
+
+        if (mode == DT_WRITE_LOCK) {
                 down_write(&obj->oo_sem);
-        else
+                LASSERT(obj->oo_owner == NULL);
+                /*
+                 * Write lock assumes transaction.
+                 */
+                LASSERT(oti->oti_txns > 0);
+                obj->oo_owner = ctx;
+                oti->oti_w_locks++;
+        } else {
                 down_read(&obj->oo_sem);
+                LASSERT(obj->oo_owner == NULL);
+                oti->oti_r_locks++;
+        }
 }
 
 static void osd_object_unlock(const struct lu_context *ctx,
                               struct dt_object *dt, enum dt_lock_mode mode)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
+        struct osd_object      *obj = osd_dt_obj(dt);
+        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
 
         LASSERT(mode == DT_WRITE_LOCK || mode == DT_READ_LOCK);
         LASSERT(osd_invariant(obj));
 
-        if (mode == DT_WRITE_LOCK)
+        if (mode == DT_WRITE_LOCK) {
+                LASSERT(obj->oo_owner == ctx);
+                LASSERT(oti->oti_w_locks > 0);
+                oti->oti_w_locks--;
+                obj->oo_owner = NULL;
                 up_write(&obj->oo_sem);
-        else
+        } else {
+                LASSERT(oti->oti_r_locks > 0);
+                oti->oti_r_locks--;
                 up_read(&obj->oo_sem);
+        }
 }
 
 static int osd_attr_get(const struct lu_context *ctxt, struct dt_object *dt,
@@ -1597,7 +1633,8 @@ static void osd_type_fini(struct lu_device_type *t)
 static struct lu_context_key osd_key = {
         .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD,
         .lct_init = osd_key_init,
-        .lct_fini = osd_key_fini
+        .lct_fini = osd_key_fini,
+        .lct_exit = osd_key_exit
 };
 
 static void *osd_key_init(const struct lu_context *ctx,
@@ -1618,6 +1655,16 @@ static void osd_key_fini(const struct lu_context *ctx,
 {
         struct osd_thread_info *info = data;
         OBD_FREE_PTR(info);
+}
+
+static void osd_key_exit(const struct lu_context *ctx,
+                         struct lu_context_key *key, void *data)
+{
+        struct osd_thread_info *info = data;
+
+        LASSERT(info->oti_r_locks == 0);
+        LASSERT(info->oti_w_locks == 0);
+        LASSERT(info->oti_txns    == 0);
 }
 
 static int osd_device_init(const struct lu_context *ctx,

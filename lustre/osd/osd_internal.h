@@ -51,6 +51,8 @@ struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode);
 int osd_lookup_id(struct dt_device *dev, const char *name, mode_t mode,
                   struct osd_inode_id *id);
 
+#define OSD_DEBUG_LOCKS (1)
+
 struct osd_thread_info {
         const struct lu_context  *oti_ctx;
 
@@ -73,6 +75,11 @@ struct osd_thread_info {
          * XXX temporary: fake file for body operations.
          */
         struct file         oti_file;
+#if OSD_DEBUG_LOCKS
+        int                 oti_r_locks;
+        int                 oti_w_locks;
+        int                 oti_txns;
+#endif
 };
 
 #endif /* __KERNEL__ */
