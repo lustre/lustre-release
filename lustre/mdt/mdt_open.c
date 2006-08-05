@@ -105,43 +105,44 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         if (!created) {
                 /* we have to get attr & lov ea for this object*/
                 rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);
+                if (rc)
+                        RETURN(rc);
         }
         isreg = S_ISREG(la->la_mode);
         isdir = S_ISDIR(la->la_mode);
-        if (rc == 0){
-                if (ma->ma_valid & MA_INODE)
-                        mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
 
-                if (!isreg && !isdir &&
-                    (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))
-                        /* If client supports this, do not return open handle
-                        *  for special nodes */
-                        RETURN(0);
+        if (ma->ma_valid & MA_INODE)
+                mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
 
-                if ((isreg || isdir) && !created && !(ma->ma_valid & MA_LOV)) {
-                        /*No EA, check whether it is will set regEA and dirEA
-                         *since in above attr get, these size might be zero,
-                         *so reset it, to retrieve the MD after create obj*/
-                        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
-                                                               &RMF_MDT_MD,
-                                                               RCL_SERVER);
-                        LASSERT(p != NULL);
-                        rc = mdt_create_data_obj(info, p, o);
-                        if (rc)
-                                RETURN(rc);
+        /* FIXME:maybe this can be done earlier? */
+        if (isdir) {
+                if (flags & (MDS_OPEN_CREAT | FMODE_WRITE)) {
+                        /* we are trying to create or
+                         * write an existing dir. */
+                        RETURN(-EISDIR);
                 }
-                /* FIXME:maybe this can be done earlier? */
-                if (isdir) {
-                        if (flags & (MDS_OPEN_CREAT | FMODE_WRITE)) {
-                                /* we are trying to create or
-                                 * write an existing dir. */
-                                rc = -EISDIR;
-                        }
-                } else if (flags & MDS_OPEN_DIRECTORY)
-                        rc = -ENOTDIR;
+        } else if (flags & MDS_OPEN_DIRECTORY)
+                RETURN(-ENOTDIR);
+
+
+        if (!isreg && !isdir &&
+            (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))
+                /* If client supports this, do not return open handle
+                *  for special nodes */
+                RETURN(0);
+
+        if ((isreg) && !(ma->ma_valid & MA_LOV)) {
+                /*No EA, check whether it is will set regEA and dirEA
+                 *since in above attr get, these size might be zero,
+                 *so reset it, to retrieve the MD after create obj*/
+                ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                                                       &RMF_MDT_MD,
+                                                       RCL_SERVER);
+                LASSERT(p != NULL);
+                rc = mdt_create_data_obj(info, p, o);
+                if (rc)
+                        RETURN(rc);
         }
-        if (rc != 0)
-                RETURN(rc);
 
         CDEBUG(D_INODE, "after open, ma_valid bit = "LPX64"\n", ma->ma_valid);
         CDEBUG(D_INODE, "after open, lmm_size = %d\n", ma->ma_lmm_size);
