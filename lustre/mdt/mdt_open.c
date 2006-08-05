@@ -288,8 +288,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 RETURN(result);
 
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
-                                               &RMF_MDT_MD, RCL_SERVER);
+        ma->ma_lmm_size = mdt->mdt_max_mdsize;
 
         if (rr->rr_name[0] == 0) {
                 /* reint partial remote open */

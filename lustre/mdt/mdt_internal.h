@@ -177,8 +177,9 @@ struct mdt_reint_record {
 
 };
 
-#define MDT_NONEED_TANSNO  0x0000001 /*Do not need transno for this req*/
-
+enum {
+        MDT_NONEED_TANSNO = (1 << 0) /*Do not need transno for this req*/
+};
 /*
  * Common data shared by mdt-level handlers. This is allocated per-thread to
  * reduce stack consumption.
