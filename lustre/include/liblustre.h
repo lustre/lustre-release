@@ -883,6 +883,10 @@ void posix_acl_release(struct posix_acl *acl)
 {
 }
 
+#define LUSTRE_POSIX_ACL_MAX_ENTRIES    (32)
+#define LUSTRE_POSIX_ACL_MAX_SIZE       \
+        (sizeof(xattr_acl_header) + 32 * sizeof(xattr_acl_entry))
+
 #ifndef ENOTSUPP
 #define ENOTSUPP ENOTSUP
 #endif
