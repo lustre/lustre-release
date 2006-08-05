@@ -1080,7 +1080,9 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
 
         if (mdt == NULL || req == NULL || req->rq_repmsg == NULL)
                 return -EFAULT;
-
+        if (info->mti_trans_flags & MDT_NONEED_TANSNO)
+                return 0;
+        
         last_committed = mdt->mdt_last_committed;
 
         if (rc == 0) {

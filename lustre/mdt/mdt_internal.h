@@ -177,6 +177,7 @@ struct mdt_reint_record {
 
 };
 
+#define MDT_NONEED_TANSNO  0x0000001 /*Do not need transno for this req*/
 
 /*
  * Common data shared by mdt-level handlers. This is allocated per-thread to
@@ -246,7 +247,8 @@ struct mdt_thread_info {
         } mti_u;
         /* transaction number of current request */
         __u64                      mti_transno;
-
+        __u32                      mti_trans_flags;
+        
         /* readdir hint structure */
         struct lu_rdpg             mti_rdpg;
 };

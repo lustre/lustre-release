@@ -94,9 +94,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         struct md_attr         *ma = &info->mti_attr;
         struct lu_attr         *la = &ma->ma_attr;
         struct ptlrpc_request  *req = mdt_info_req(info);
+        struct ldlm_reply      *ldlm_rep;
         int                     rc = 0;
-        int                     isreg;
-        int                     isdir;
+        int                     isreg, isdir, islnk;
         ENTRY;
 
         med = &req->rq_export->exp_mdt_data;
@@ -110,10 +110,16 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         }
         isreg = S_ISREG(la->la_mode);
         isdir = S_ISDIR(la->la_mode);
-
+        islnk = S_ISLNK(la->la_mode);
         if (ma->ma_valid & MA_INODE)
                 mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
 
+        /* if we are following a symlink, don't open */
+        if (islnk || (!isreg && !isdir &&
+            (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))) {
+                info->mti_trans_flags |= MDT_NONEED_TANSNO; 
+                RETURN(0);
+        }
         /* FIXME:maybe this can be done earlier? */
         if (isdir) {
                 if (flags & (MDS_OPEN_CREAT | FMODE_WRITE)) {
@@ -157,10 +163,14 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                         repbody->valid |= OBD_MD_FLEASIZE;
         }
 
+        ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
+        
+        intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
         /*FIXME: should determine the offset dynamicly, 
          *did not get ACL before shrink*/
         lustre_shrink_reply(req, 2, repbody->eadatasize, 1);
-        lustre_shrink_reply(req, repbody->eadatasize ? 3 : 2, repbody->aclsize, 0);
+        lustre_shrink_reply(req, repbody->eadatasize ? 3 : 2, repbody->aclsize,
+                            0);
 
         if (flags & FMODE_WRITE) {
                 /*mds_get_write_access*/
@@ -341,7 +351,6 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         /* Open it now. */
         result = mdt_mfd_open(info, parent, child, la->la_flags, created);
-        intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
         GOTO(finish_open, result);
 
 finish_open:
