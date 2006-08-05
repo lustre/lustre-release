@@ -1001,16 +1001,6 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         if (rc)
                 RETURN(rc);
 
-        /* no RPC inside the transaction, so OST objects should be created at
-         * first */
-
-        if (S_ISREG(attr->la_mode)) {
-                rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size,
-                                    eadata, eadatasize, attr);
-                if (rc)
-                        RETURN(rc);
-        }
-
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
@@ -1082,11 +1072,6 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
 
         inserted = 1;
 
-        rc = mdd_lov_set_md(ctxt, pobj, child, lmm, lmm_size, attr->la_mode);
-        if (rc) {
-                CERROR("error on stripe info copy %d \n", rc);
-                GOTO(cleanup, rc);
-        }
         if (S_ISLNK(attr->la_mode)) {
                 struct dt_object *dt = mdd_object_child(son);
                 loff_t pos = 0;
