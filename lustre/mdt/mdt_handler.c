@@ -193,6 +193,8 @@ void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
         if (fid) {
                 b->fid1 = *fid;
                 b->valid |= OBD_MD_FLID;
+                CDEBUG(D_INODE, ""DFID3": nlink=%d, mode=%o, size="LPU64"\n",
+                                PFID3(fid), b->nlink, b->mode, b->size);
         }
 }
 
@@ -2271,6 +2273,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
 
+        spin_lock_init(&m->mdt_epoch_lock);
         /* Temporary. should parse mount option. */
         m->mdt_opts.mo_user_xattr = 0;
         m->mdt_opts.mo_acl = 0;
@@ -2621,7 +2624,7 @@ static int mdt_destroy_export(struct obd_export *export)
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
-                mdt_mfd_close(&ctxt, mfd);
+                mdt_mfd_close(&ctxt, mdt, mfd);
                 spin_lock(&med->med_open_lock);
         }
         spin_unlock(&med->med_open_lock);

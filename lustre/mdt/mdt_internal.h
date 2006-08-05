@@ -118,10 +118,18 @@ struct mdt_device {
                 signed int         mo_acl        :1;
                 signed int         mo_compat_resname:1;
         } mdt_opts;
+        
+        /* lock to pretect epoch and write count
+         * because we need not allocate memory, spinlock is fast.
+         */
+        spinlock_t                 mdt_epoch_lock;
+        __u64                      mdt_io_epoch;
+
         /* Transaction related stuff here */
         spinlock_t                 mdt_transno_lock;
         __u64                      mdt_last_transno;
         __u64                      mdt_last_committed;
+
         /* transaction callbacks */
         struct dt_txn_callback     mdt_txn_cb;
         /* last_rcvd file */
@@ -145,6 +153,8 @@ struct mdt_device {
 struct mdt_object {
         struct lu_object_header mot_header;
         struct md_object        mot_obj;
+        __u64                   mot_io_epoch;
+        atomic_t                mot_writecount;
 };
 
 struct mdt_lock_handle {
@@ -357,7 +367,7 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
 
 int mdt_reint_open(struct mdt_thread_info *info);
 
-void mdt_mfd_close(const struct lu_context *ctxt,
+void mdt_mfd_close(const struct lu_context *ctxt, struct mdt_device *mdt,
                    struct mdt_file_data *mfd);
 
 int mdt_close(struct mdt_thread_info *info);
