@@ -50,6 +50,7 @@
 # include <linux/locks.h>
 #endif
 
+#include <linux/lustre_acl.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
 #include <obd_lov.h>

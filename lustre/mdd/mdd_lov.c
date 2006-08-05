@@ -333,7 +333,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
  * lsm object unique in the whole mds, as I see. But it seems, we
  * still not need it now. right? so just borrow the ll_fid_build_ino
  */
-static obd_id mdd_lov_create_id(struct lu_fid *fid)
+static obd_id mdd_lov_create_id(const struct lu_fid *fid)
 {
         return ((fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid));
 }

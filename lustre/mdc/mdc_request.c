@@ -31,6 +31,7 @@
 # include <linux/module.h>
 # include <linux/pagemap.h>
 # include <linux/miscdevice.h>
+# include <linux/lustre_acl.h>
 # include <linux/init.h>
 #else
 # include <liblustre.h>
@@ -39,7 +40,6 @@
 #include <obd_class.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
-#include <lustre_mds.h> /* for LUSTRE_POSIX_ACL_MAX_SIZE */
 #include <md_object.h>
 #include <lprocfs_status.h>
 #include "mdc_internal.h"

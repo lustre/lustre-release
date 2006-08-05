@@ -68,14 +68,6 @@ struct mds_file_data {
         struct dentry        *mfd_dentry;
 };
 
-/* ACL */
-#ifdef CONFIG_FS_POSIX_ACL
-#define LUSTRE_POSIX_ACL_MAX_ENTRIES    (32)
-#define LUSTRE_POSIX_ACL_MAX_SIZE       \
-                (xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES))
-#else
-#define LUSTRE_POSIX_ACL_MAX_SIZE       0
-#endif
 
 /* mds/mds_reint.c */
 struct inode;

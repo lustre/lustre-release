@@ -52,6 +52,7 @@
 #endif
 /* struct ptlrpc_request, lustre_msg* */
 #include <lustre_req_layout.h>
+#include <linux/lustre_acl.h>
 
 static const struct req_msg_field *empty[] = {}; /* none */
 
@@ -104,6 +105,7 @@ static const struct req_msg_field *mds_reint_open_client[] = {
 static const struct req_msg_field *mds_reint_open_server[] = {
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
+        &RMF_ACL
 };
 
 static const struct req_msg_field *mds_reint_unlink_client[] = {
@@ -163,7 +165,7 @@ static const struct req_msg_field *ldlm_intent_server[] = {
         &RMF_DLM_REP,
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
-        &RMF_EADATA
+        &RMF_ACL
 };
 
 static const struct req_msg_field *ldlm_intent_getattr_client[] = {
@@ -215,7 +217,7 @@ static const struct req_msg_field *mds_setxattr_client[] = {
 static const struct req_msg_field *mds_getattr_server[] = {
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
-        &RMF_EADATA
+        &RMF_ACL
 };
 
 static const struct req_format *req_formats[] = {
@@ -388,6 +390,10 @@ EXPORT_SYMBOL(RMF_REC_SETATTR);
 /* FIXME: this length should be defined as a macro*/
 const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
+
+const struct req_msg_field RMF_ACL = DEFINE_MSGF("acl", 0, 
+                                     LUSTRE_POSIX_ACL_MAX_SIZE, NULL);
+EXPORT_SYMBOL(RMF_ACL);
 
 const struct req_msg_field RMF_LOGCOOKIES =
         DEFINE_MSGF("logcookies", 0, sizeof(struct llog_cookie), NULL);

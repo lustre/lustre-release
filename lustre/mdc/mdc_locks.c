@@ -32,13 +32,13 @@
 # include <linux/pagemap.h>
 # include <linux/miscdevice.h>
 # include <linux/init.h>
+#include <linux/lustre_acl.h>
 #else
 # include <liblustre.h>
 #endif
 
 #include <obd_class.h>
 #include <lustre_dlm.h>
-#include <lustre_mds.h>
 #include <lprocfs_status.h>
 #include "mdc_internal.h"
 
@@ -417,7 +417,6 @@ int mdc_enqueue(struct obd_export *exp,
                 RETURN(-EINVAL);
         }
 
-        /* get ready for the reply */
         req->rq_replen = lustre_msg_size(repbufcnt, repsize);
 
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);

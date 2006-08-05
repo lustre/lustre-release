@@ -141,6 +141,7 @@ extern const struct req_msg_field RMF_REC_UNLINK;
 extern const struct req_msg_field RMF_REC_RENAME;
 extern const struct req_msg_field RMF_REC_SETATTR;
 extern const struct req_msg_field RMF_EADATA;
+extern const struct req_msg_field RMF_ACL;
 extern const struct req_msg_field RMF_LOGCOOKIES;
 extern const struct req_msg_field RMF_REINT_OPC;
 

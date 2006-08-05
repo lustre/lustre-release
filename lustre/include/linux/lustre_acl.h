@@ -17,20 +17,15 @@
 # include <linux/xattr_acl.h>
 # endif
 #endif
-#include <linux/lustre_handles.h>
-#include <libcfs/kp30.h>
-#include <linux/lustre_idl.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_log.h>
-#include <linux/lustre_export.h>
 
+/* ACL */
 #ifdef CONFIG_FS_POSIX_ACL
 #define LUSTRE_POSIX_ACL_MAX_ENTRIES    (32)
 #define LUSTRE_POSIX_ACL_MAX_SIZE       \
-                (xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES))
+        (sizeof(xattr_acl_header) + 32 * sizeof(xattr_acl_entry))
 #else
 #define LUSTRE_POSIX_ACL_MAX_SIZE       0
 #endif
+
 
 #endif

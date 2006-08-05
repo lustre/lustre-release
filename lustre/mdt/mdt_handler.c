@@ -55,7 +55,7 @@
 #include <dt_object.h>
 #include <lustre_mds.h>
 #include "mdt_internal.h"
-
+#include <linux/lustre_acl.h>
 /*
  * Initialized in mdt_mod_init().
  */
@@ -281,8 +281,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 #ifdef CONFIG_FS_POSIX_ACL
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
             (reqbody->valid & OBD_MD_FLACL)) {
-                buffer = req_capsule_server_get(pill, &RMF_EADATA);
-                length = req_capsule_get_size(pill, &RMF_EADATA, RCL_SERVER);
+                buffer = req_capsule_server_get(pill, &RMF_ACL);
+                length = req_capsule_get_size(pill, &RMF_ACL, RCL_SERVER);
                 if (length > 0) {
                         rc = mo_xattr_get(ctxt, next, buffer,
                                           length, XATTR_NAME_ACL_ACCESS);
@@ -324,8 +324,8 @@ static int mdt_getattr(struct mdt_thread_info *info)
         ENTRY;
 
 
-        req_capsule_set_size(&info->mti_pill, &RMF_EADATA,
-                             RCL_SERVER, LUSTRE_POSIX_ACL_MAX_SIZE);
+        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD,
+                             RCL_SERVER, info->mti_mdt->mdt_max_mdsize);
 
         result = req_capsule_pack(&info->mti_pill);
         if (result)
@@ -456,8 +456,6 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
 
         req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD,
                              RCL_SERVER, info->mti_mdt->mdt_max_mdsize);
-        req_capsule_set_size(&info->mti_pill, &RMF_EADATA,
-                             RCL_SERVER, LUSTRE_POSIX_ACL_MAX_SIZE);
 
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
@@ -1533,9 +1531,6 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD,
                              RCL_SERVER, mdt->mdt_max_mdsize);
-
-        req_capsule_set_size(&info->mti_pill, &RMF_EADATA,
-                             RCL_SERVER, LUSTRE_POSIX_ACL_MAX_SIZE);
 
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)

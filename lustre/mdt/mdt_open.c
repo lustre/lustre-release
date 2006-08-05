@@ -31,6 +31,7 @@
 #endif
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/lustre_acl.h>
 #include <lustre_mds.h>
 #include "mdt_internal.h"
 
@@ -155,7 +156,8 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                         repbody->valid |= OBD_MD_FLEASIZE;
         }
 
-        /*FIXME: should determine the offset dynamicly */
+        /*FIXME: should determine the offset dynamicly, 
+         *did not get ACL before shrink*/
         lustre_shrink_reply(req, 2, repbody->eadatasize, 1);
         lustre_shrink_reply(req, repbody->eadatasize ? 3 : 2, repbody->aclsize, 0);
 
@@ -269,9 +271,6 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
                              mdt->mdt_max_mdsize);
-
-        req_capsule_set_size(&info->mti_pill, &RMF_EADATA, RCL_SERVER,
-                             LUSTRE_POSIX_ACL_MAX_SIZE);
 
         result = req_capsule_pack(&info->mti_pill);
         if (result)
