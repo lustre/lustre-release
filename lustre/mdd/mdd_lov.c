@@ -297,29 +297,29 @@ int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
 
 int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
                    struct md_object *child, struct lov_mds_md *lmmp,
-                   int lmm_size, int mode)
+                   int lmm_size, int mode, struct thandle *handle)
 {
         int rc = 0;
         ENTRY;
 
         if (S_ISREG(mode) && lmm_size > 0) {
                 LASSERT(lmmp != NULL);
-                rc = mdd_xattr_set(ctxt, child, lmmp, lmm_size,
-                                   MDS_LOV_MD_NAME, 0);
+                rc = mdd_xattr_set_txn(ctxt, child, lmmp, lmm_size,
+                                       MDS_LOV_MD_NAME, 0, handle);
                 if (rc)
                         CERROR("error on set stripe info: rc = %d\n", rc);
-        }else  if (S_ISDIR(mode)) {
+        } else  if (S_ISDIR(mode)) {
                 struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
                 int size = sizeof(lmm);
                 rc = mdd_get_md(ctxt, pobj, &lmm, &size);
                 if (rc > 0) {
-                        rc = mdd_xattr_set(ctxt, child, lmm, size,
-                                           /*
-                                            * Flags are 0: we don't care
-                                            * whether attribute exists
-                                            * already.
-                                            */
-                                           MDS_LOV_MD_NAME, 0);
+                        rc = mdd_xattr_set_txn(ctxt, child, lmm, size,
+                                               /*
+                                                * Flags are 0: we don't care
+                                                * whether attribute exists
+                                                * already.
+                                                */
+                                               MDS_LOV_MD_NAME, 0, handle);
                         if (rc)
                                 CERROR("error on copy stripe info: rc = %d\n",
                                         rc);

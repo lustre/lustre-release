@@ -54,11 +54,12 @@ struct mdd_thread_info {
 
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                  char *dev);
-int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
-                  const void *buf, int buf_len, const char *name, int fl);
+int mdd_xattr_set_txn(const struct lu_context *ctxt, struct md_object *obj,
+                      const void *buf, int buf_len, const char *name, int fl,
+                      struct thandle *txn);
 int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
                    struct md_object *child, struct lov_mds_md *lmm,
-                   int lmm_size, int mode);
+                   int lmm_size, int mode, struct thandle *handle);
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size, const void *eadata,

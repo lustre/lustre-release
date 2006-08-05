@@ -218,6 +218,7 @@ enum mdd_txn_op {
         MDD_TXN_LINK_OP,
         MDD_TXN_UNLINK_OP,
         MDD_TXN_RENAME_OP,
+        MDD_TXN_CREATE_DATA_OP,
         MDD_TXN_MKDIR_OP
 };
 
@@ -236,6 +237,7 @@ enum {
         MDD_TXN_LINK_CREDITS           = 20,
         MDD_TXN_UNLINK_CREDITS         = 20,
         MDD_TXN_RENAME_CREDITS         = 20,
+        MDD_TXN_CREATE_DATA_CREDITS    = 20,
         MDD_TXN_MKDIR_CREDITS          = 20
 };
 
@@ -258,6 +260,7 @@ DEFINE_MDD_TXN_OP_DESC(MDD_TXN_INDEX_DELETE);
 DEFINE_MDD_TXN_OP_DESC(MDD_TXN_LINK);
 DEFINE_MDD_TXN_OP_DESC(MDD_TXN_UNLINK);
 DEFINE_MDD_TXN_OP_DESC(MDD_TXN_RENAME);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_CREATE_DATA);
 DEFINE_MDD_TXN_OP_DESC(MDD_TXN_MKDIR);
 
 static void mdd_txn_param_build(const struct lu_context *ctx,
@@ -509,10 +512,27 @@ static int __mdd_xattr_set(const struct lu_context *ctxt,struct mdd_device *mdd,
                                           handle);
 }
 
-int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
-                  const void *buf, int buf_len, const char *name, int fl)
+int mdd_xattr_set_txn(const struct lu_context *ctxt, struct md_object *obj,
+                      const void *buf, int buf_len, const char *name, int fl,
+                      struct thandle *handle)
 {
         struct mdd_object *mdo = md2mdd_obj(obj);
+        struct mdd_device *mdd = mdo2mdd(obj);
+        int  rc;
+        ENTRY;
+
+
+        mdd_lock(ctxt, mdo, DT_WRITE_LOCK);
+        rc = __mdd_xattr_set(ctxt, mdd, md2mdd_obj(obj), buf, buf_len, name,
+                             fl, handle);
+        mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
+
+        RETURN(rc);
+}
+
+static int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
+                         const void *buf, int buf_len, const char *name, int fl)
+{
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
         int  rc;
@@ -523,10 +543,7 @@ int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        mdd_lock(ctxt, mdo, DT_WRITE_LOCK);
-        rc = __mdd_xattr_set(ctxt, mdd, md2mdd_obj(obj), buf, buf_len, name,
-                             fl, handle);
-        mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
+        rc = mdd_xattr_set_txn(ctxt, obj, buf, buf_len, name, fl, handle);
 
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -719,7 +736,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
                 __mdd_ref_del(ctxt, mdd_pobj, handle, NULL);
         }
 #if 0
-        /*This should be moved to handle last unlink. wait open 
+        /*This should be moved to handle last unlink. wait open
          * orphan prototype finished*/
         if (S_ISREG(ma->ma_attr.la_mode) && (ma->ma_valid & MA_LOV) &&
             ma->ma_attr.la_nlink == 0 && cobj->mo_lu.lo_header->loh_ref == 1) {
@@ -931,23 +948,31 @@ static int mdd_create_data_object(const struct lu_context *ctxt,
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdo = md2mdd_obj(pobj);
         struct mdd_object *son = md2mdd_obj(cobj);
-        struct lu_attr *attr = &ma->ma_attr;
+        struct lu_attr    *attr = &ma->ma_attr;
         struct lov_mds_md *lmm = NULL;
+        struct thandle    *handle;
         int lmm_size = 0;
         int rc;
         ENTRY;
 
+        mdd_txn_param_build(ctxt, &MDD_TXN_CREATE_DATA);
+        handle = mdd_trans_start(ctxt, mdd);
+        if (IS_ERR(handle))
+                RETURN(PTR_ERR(handle));
+
+        /*
+         * XXX: should take transaction handle.
+         */
         rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size, eadata,
                             eadatasize, attr);
-        if (rc)
-                RETURN(rc);
+        if (rc == 0) {
+                rc = mdd_lov_set_md(ctxt, pobj, cobj, lmm,
+                                    lmm_size, attr->la_mode, handle);
+                if (rc == 0)
+                        rc = mdd_attr_get(ctxt, cobj, ma);
+        }
 
-        rc = mdd_lov_set_md(ctxt, pobj, cobj, lmm, lmm_size, attr->la_mode);
-        if (rc)
-                RETURN(rc);
-
-        rc = mdd_attr_get(ctxt, cobj, ma);
-
+        mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
 }
 
@@ -1345,7 +1370,7 @@ static struct md_dir_operations mdd_dir_ops = {
         .mdo_name_insert   = mdd_mkname,
         .mdo_name_remove   = mdd_name_remove,
         .mdo_rename_tgt    = mdd_rename_tgt,
-        .mdo_create_data_object = mdd_create_data_object,
+        .mdo_create_data_object = mdd_create_data_object
 };
 
 
