@@ -872,6 +872,13 @@ struct lu_context_key {
         void   (*lct_fini)(const struct lu_context *ctx,
                            struct lu_context_key *key, void *data);
         /*
+         * Optional method called on lu_context_exit() for all allocated
+         * keys. Can be used by debugging code checking that locks are
+         * released, etc.
+         */
+        void   (*lct_exit)(const struct lu_context *ctx,
+                           struct lu_context_key *key, void *data);
+        /*
          * Internal implementation detail: index within ->lc_value[] reserved
          * for this key.
          */

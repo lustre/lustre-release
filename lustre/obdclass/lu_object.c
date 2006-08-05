@@ -819,6 +819,21 @@ EXPORT_SYMBOL(lu_context_enter);
  */
 void lu_context_exit(struct lu_context *ctx)
 {
+        int i;
+
+        if (ctx->lc_value != NULL) {
+                for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
+                        if (ctx->lc_value[i] != NULL) {
+                                struct lu_context_key *key;
+
+                                key = lu_keys[i];
+                                LASSERT(key != NULL);
+                                if (key->lct_exit != NULL)
+                                        key->lct_exit(ctx,
+                                                      key, ctx->lc_value[i]);
+                        }
+                }
+        }
 }
 EXPORT_SYMBOL(lu_context_exit);
 
