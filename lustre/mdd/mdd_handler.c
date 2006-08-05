@@ -994,8 +994,8 @@ static int mdd_create_sanity_check(const struct lu_context *ctxt,
  */
 static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                       const char *name, struct md_object *child,
-                      const char *target_name, const void *eadata,
-                      int eadatasize, struct md_attr* ma)
+                      const struct md_create_spec *spec,
+                      struct md_attr* ma)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdo = md2mdd_obj(pobj);
@@ -1013,6 +1013,9 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         /* no RPC inside the transaction, so OST objects should be created at
          * first */
         if (S_ISREG(attr->la_mode)) {
+                const void *eadata = spec->u.sp_ea.eadata;
+                int eadatasize = spec->u.sp_ea.eadatalen;
+
                 rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size,
                                     eadata, eadatasize, attr);
                 if (rc)
@@ -1098,8 +1101,10 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         
         if (S_ISLNK(attr->la_mode)) {
                 struct dt_object *dt = mdd_object_child(son);
-                loff_t pos = 0;
+                const char *target_name = spec->u.sp_symname;
                 int sym_len = strlen(target_name);
+                loff_t pos = 0;
+                
                 rc = dt->do_body_ops->dbo_write(ctxt, dt, target_name,
                                                 sym_len, &pos, handle);
                 if (rc == sym_len)
@@ -1129,7 +1134,9 @@ cleanup:
 }
 /* partial operation */
 static int mdd_object_create(const struct lu_context *ctxt,
-                             struct md_object *obj, struct md_attr *ma)
+                             struct md_object *obj, 
+                             const struct md_create_spec *spec,
+                             struct md_attr *ma)
 {
 
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -1146,7 +1153,7 @@ static int mdd_object_create(const struct lu_context *ctxt,
 /* XXX: parent fid is needed here
         rc = __mdd_object_initialize(ctxt, mdo, son, ma, handle);
 */
-        mdd_attr_get(ctxt, md2mdd_obj(obj), ma);
+        mdd_attr_get(ctxt, obj, ma);
 
         mdd_trans_stop(ctxt, mdd, handle);
 

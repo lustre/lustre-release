@@ -221,9 +221,11 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                                                        &RMF_MDT_MD,
                                                        RCL_SERVER);
                 LASSERT(p != NULL);
+                /*XXX: Tom, do we need this?
                 rc = mdt_create_data_obj(info, p, o);
                 if (rc)
                         RETURN(rc);
+                */
         }
 
         CDEBUG(D_INODE, "after open, ma_valid bit = "LPX64" lmm_size = %d\n", 
@@ -320,6 +322,7 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
                         if (la->la_flags & MDS_OPEN_CREAT) {
                                 rc = mo_object_create(info->mti_ctxt,
                                                       mdt_object_child(o),
+                                                      &info->mti_spec,
                                                       &info->mti_attr);
                                 if (rc == 0)
                                         rc = mdt_mfd_open(info, NULL, o, flags, 1);
@@ -425,8 +428,9 @@ int mdt_reint_open(struct mdt_thread_info *info)
                                     mdt_object_child(parent),
                                     rr->rr_name,
                                     mdt_object_child(child),
-                                    rr->rr_tgt, rr->rr_eadata,
-                                    rr->rr_eadatalen, &info->mti_attr);
+                                    &info->mti_spec,
+                                    /* rr->rr_tgt, rr->rr_eadata, rr->rr_eadatalen,*/
+                                    &info->mti_attr);
                 intent_set_disposition(ldlm_rep, DISP_OPEN_CREATE);
                 if (result != 0)
                         GOTO(out_child, result);

@@ -189,10 +189,12 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (rr->rr_name) {
                         if (req_capsule_field_present(pill, &RMF_SYMTGT)) {
-                                rr->rr_tgt = req_capsule_client_get(pill,
-                                                                &RMF_SYMTGT);
-                                if (rr->rr_tgt == NULL)
+                                const char *tgt;
+                                tgt = req_capsule_client_get(pill,
+                                                             &RMF_SYMTGT);
+                                if (tgt == NULL)
                                         result = -EFAULT;
+                                info->mti_spec.u.sp_symname = tgt;
                         }
                 } else
                         result = -EFAULT;
@@ -299,6 +301,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (rr->rr_name == NULL)
+                        /*XXX: what about open by FID? */
                         result = -EFAULT;
                 else
                         result = 0;
@@ -306,10 +309,12 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
                 result = -EFAULT;
 
         if (req_capsule_field_present(pill, &RMF_EADATA)) {
-                rr->rr_eadata = req_capsule_client_get(pill, &RMF_EADATA);
-                rr->rr_eadatalen = req_capsule_get_size(pill,
-                                                        &RMF_EADATA,
-                                                        RCL_CLIENT);
+                struct md_create_spec *sp = &info->mti_spec;
+                sp->u.sp_ea.eadata = req_capsule_client_get(pill,
+                                                            &RMF_EADATA);
+                sp->u.sp_ea.eadatalen = req_capsule_get_size(pill,
+                                                             &RMF_EADATA,
+                                                             RCL_CLIENT);
         }
 
         RETURN(result);

@@ -61,6 +61,20 @@ struct md_attr {
         struct llog_cookie     *ma_cookie;
         int                     ma_cookie_size;
 };
+/* additional parameters for create */
+struct md_create_spec {
+        union {
+                /* symlink target */
+                const char               *sp_symname;
+                /* parent FID for cross-ref mkdir */
+                const struct lu_fid      sp_pfid;
+                /* eadata for regular files */
+                struct md_spec_reg {
+                        const void *eadata;
+                        int  eadatalen;
+                } sp_ea;
+        } u;
+};
 
 /*
  * Operations implemented for each md object (both directory and leaf).
@@ -93,7 +107,9 @@ struct md_object_operations {
 
         /* part of cross-ref operation */
         int (*moo_object_create)(const struct lu_context *,
-                                 struct md_object *, struct md_attr *);
+                                 struct md_object *, 
+                                 const struct md_create_spec *spec, 
+                                 struct md_attr *);
         int (*moo_ref_add)(const struct lu_context *, struct md_object *);
         int (*moo_ref_del)(const struct lu_context *, struct md_object *,
                            struct md_attr *);
@@ -111,8 +127,8 @@ struct md_dir_operations {
         /* target_name is valid iff this is a symlink operation. */
         int (*mdo_create)(const struct lu_context *, struct md_object *,
                           const char *child_name, struct md_object *,
-                          const char *target_name, const void *eadata,
-                          int eadatalen, struct md_attr *);
+                          const struct md_create_spec *spec,
+                          struct md_attr *);
         /* This method is used for creating data object for this meta object*/
         int (*mdo_create_data)(const struct lu_context *cx, struct md_object *p,
                                struct md_object *o, const void *eadata,
@@ -289,10 +305,12 @@ static inline int mo_readpage(const struct lu_context *cx, struct md_object *m,
 }
 
 static inline int mo_object_create(const struct lu_context *cx,
-                                   struct md_object *m, struct md_attr *at)
+                                   struct md_object *m,
+                                   const struct md_create_spec *spc,
+                                   struct md_attr *at)
 {
         LASSERT(m->mo_ops->moo_object_create);
-        return m->mo_ops->moo_object_create(cx, m, at);
+        return m->mo_ops->moo_object_create(cx, m, spc, at);
 }
 
 static inline int mo_ref_add(const struct lu_context *cx,
@@ -318,12 +336,11 @@ static inline int mdo_lookup(const struct lu_context *cx, struct md_object *p,
 
 static inline int mdo_create(const struct lu_context *cx, struct md_object *p,
                              const char *child_name, struct md_object *c,
-                             const char *target_name, const void *eadata,
-                             int eadatalen, struct md_attr *at)
+                             const struct md_create_spec *spc,
+                             struct md_attr *at)
 {
         LASSERT(c->mo_dir_ops->mdo_create);
-        return c->mo_dir_ops->mdo_create(cx, p, child_name, c, target_name,
-                                         eadata, eadatalen, at);
+        return c->mo_dir_ops->mdo_create(cx, p, child_name, c, spc, at);
 }
 static inline int mdo_create_data(const struct lu_context *cx,
                                   struct md_object *p, struct md_object *c,

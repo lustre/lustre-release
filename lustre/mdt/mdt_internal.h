@@ -222,6 +222,10 @@ struct mdt_thread_info {
          */
         struct md_attr             mti_attr;
         /*
+         * Create specification
+         */
+        struct md_create_spec mti_spec;
+        /*
          * reint record. contains information for reint operations.
          */
         struct mdt_reint_record    mti_rr;

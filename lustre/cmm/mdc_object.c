@@ -91,7 +91,9 @@ static struct lu_object_operations mdc_obj_ops = {
 
 /* md_object_operations */
 static int mdc_object_create(const struct lu_context *ctx,
-                             struct md_object *mo, struct md_attr *ma)
+                             struct md_object *mo, 
+                             const struct md_create_spec *spec,
+                             struct md_attr *ma)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct lu_attr *attr = &ma->ma_attr;
@@ -105,7 +107,7 @@ static int mdc_object_create(const struct lu_context *ctx,
         memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
         mci->mci_opdata.mod_time = attr->la_mtime;
-
+        /*TODO: pack create_spec properly */
         rc = md_create(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
                        attr->la_mode, attr->la_uid, attr->la_gid, 0, 0,
                        &mci->mci_req);

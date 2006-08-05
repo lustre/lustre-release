@@ -2268,8 +2268,8 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
 
         spin_lock_init(&m->mdt_transno_lock);
         /* FIXME: We need to load them from disk. But now fake it */
-        m->mdt_last_transno = 100;
-        m->mdt_last_committed = 99;
+        m->mdt_last_transno = 1;
+        m->mdt_last_committed = 1;
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
 

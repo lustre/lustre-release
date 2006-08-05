@@ -64,7 +64,8 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 struct md_object *next = mdt_object_child(parent);
 
                 rc = mdo_create(info->mti_ctxt, next, rr->rr_name,
-                                mdt_object_child(child), rr->rr_tgt, NULL, 0,
+                                mdt_object_child(child), &info->mti_spec,
+                                /* rr->rr_tgt, NULL, 0, */
                                 ma);
                 if (rc == 0) {
                         /* return fid & attr to client. */
@@ -95,7 +96,8 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         if (!IS_ERR(o)) {
                 struct md_object *next = mdt_object_child(o);
 
-                rc = mo_object_create(info->mti_ctxt, next, ma);
+                rc = mo_object_create(info->mti_ctxt, next,
+                                      &info->mti_spec, ma);
                 if (rc == 0) {
                         /* return fid & attr to client. */
                         if (ma->ma_valid & MA_INODE)
@@ -204,11 +206,10 @@ static int mdt_reint_create(struct mdt_thread_info *info)
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFREG:
         case S_IFDIR:{
-                if (strlen(info->mti_rr.rr_name) > 0)
-                        rc = mdt_md_create(info);
-                else
+                if (strlen(info->mti_rr.rr_name) == 0) {
                         rc = mdt_md_mkobj(info);
-                break;
+                        break;
+                }
         }
         case S_IFLNK:
         case S_IFCHR:

@@ -212,11 +212,12 @@ static struct lu_object_operations cml_obj_ops = {
 /* CMM local md_object operations */
 static int cml_object_create(const struct lu_context *ctx,
                              struct md_object *mo,
+                             const struct md_create_spec *spec,
                              struct md_attr *attr)
 {
         int rc;
         ENTRY;
-        rc = mo_object_create(ctx, md_object_next(mo), attr);
+        rc = mo_object_create(ctx, md_object_next(mo), spec, attr);
         RETURN(rc);
 }
 
@@ -354,14 +355,13 @@ static int cml_lookup(const struct lu_context *ctx, struct md_object *mo_p,
 
 static int cml_create(const struct lu_context *ctx, struct md_object *mo_p,
                       const char *child_name, struct md_object *mo_c,
-                      const char *target_name, const void *eadata,
-                      int eadatalen, struct md_attr *ma)
+                      const struct md_create_spec *spec,
+                      struct md_attr *ma)
 {
         int rc;
         ENTRY;
         rc = mdo_create(ctx, md_object_next(mo_p), child_name,
-                        md_object_next(mo_c), target_name, eadata, eadatalen,
-                        ma);
+                        md_object_next(mo_c), spec, ma);
         RETURN(rc);
 }
 
@@ -548,6 +548,7 @@ static struct lu_object_operations cmr_obj_ops = {
 /* CMM remote md_object operations. All are invalid */
 static int cmr_object_create(const struct lu_context *ctx,
                              struct md_object *mo,
+                             const struct md_create_spec *spec,
                              struct md_attr *ma)
 {
         RETURN(-EFAULT);
@@ -660,8 +661,8 @@ static int cmr_lookup(const struct lu_context *ctx, struct md_object *mo_p,
  */
 static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
                       const char *child_name, struct md_object *mo_c,
-                      const char *target_name, const void *eadata,
-                      int eadatasize, struct md_attr *ma)
+                      const struct md_create_spec *spec,
+                      struct md_attr *ma)
 {
         int rc;
 
@@ -670,7 +671,7 @@ static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
         //XXX: make sure that MDT checks name isn't exist
 
         /* remote object creation and local name insert */
-        rc = mo_object_create(ctx, md_object_next(mo_c), ma);
+        rc = mo_object_create(ctx, md_object_next(mo_c), spec, ma);
         if (rc == 0) {
                 rc = mdo_name_insert(ctx, md_object_next(mo_p),
                                      child_name, lu_object_fid(&mo_c->mo_lu));
