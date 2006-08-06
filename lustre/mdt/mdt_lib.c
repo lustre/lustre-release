@@ -112,13 +112,14 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
                                                  &RMF_MDT_BODY);
                 if (ma->ma_valid & MA_INODE)
                         mdt_pack_attr2body(repbody, la, mdt_object_fid(mo));
-                if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
+                if (/*ma->ma_lmm_size && */(ma->ma_valid & MA_LOV)) {
+                        LASSERT(ma->ma_lmm_size);
                         mdt_dump_lmm(D_INFO, ma->ma_lmm);
                         repbody->eadatasize = ma->ma_lmm_size;
                         repbody->valid |= OBD_MD_FLEASIZE;
                 }
 
-                if (ma->ma_cookie_size && ma->ma_valid & MA_COOKIE)
+                if (ma->ma_cookie_size && (ma->ma_valid & MA_COOKIE))
                         repbody->valid |= OBD_MD_FLCOOKIE;
         }
 
@@ -129,7 +130,8 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 static int mdt_setattr_unpack(struct mdt_thread_info *info)
 {
         struct mdt_rec_setattr  *rec;
-        struct lu_attr          *attr = &info->mti_attr.ma_attr;
+        struct md_attr          *ma = &info->mti_attr;
+        struct lu_attr          *la = &ma->ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule      *pill = &info->mti_pill;
         ENTRY;
@@ -140,27 +142,30 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
                 RETURN(-EFAULT);
 
         rr->rr_fid1 = &rec->sa_fid;
-        attr->la_valid = rec->sa_valid;
-        attr->la_mode  = rec->sa_mode;
-        attr->la_uid   = rec->sa_uid;
-        attr->la_gid   = rec->sa_gid;
-        attr->la_size  = rec->sa_size;
-        attr->la_flags = rec->sa_attr_flags;
-        attr->la_ctime = rec->sa_ctime;
-        attr->la_atime = rec->sa_atime;
-        attr->la_mtime = rec->sa_mtime;
+        la->la_valid = rec->sa_valid;
+        la->la_mode  = rec->sa_mode;
+        la->la_uid   = rec->sa_uid;
+        la->la_gid   = rec->sa_gid;
+        la->la_size  = rec->sa_size;
+        la->la_flags = rec->sa_attr_flags;
+        la->la_ctime = rec->sa_ctime;
+        la->la_atime = rec->sa_atime;
+        la->la_mtime = rec->sa_mtime;
+        ma->ma_valid = MA_INODE;
 
         if (req_capsule_field_present(pill, &RMF_EADATA)) {
-                rr->rr_eadata = req_capsule_client_get(pill, &RMF_EADATA);
-                rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
-                                                        RCL_CLIENT);
+                ma->ma_lmm = req_capsule_client_get(pill, &RMF_EADATA);
+                ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_EADATA,
+                                                       RCL_CLIENT);
+                ma->ma_valid |= MA_LOV;
         }
         if (req_capsule_field_present(pill, &RMF_LOGCOOKIES)) {
-                rr->rr_logcookies = req_capsule_client_get(pill,
-                                                           &RMF_LOGCOOKIES);
-                rr->rr_logcookielen = req_capsule_get_size(pill,
-                                                           &RMF_LOGCOOKIES,
-                                                           RCL_CLIENT);
+                ma->ma_cookie = req_capsule_client_get(pill,
+                                                       &RMF_LOGCOOKIES);
+                ma->ma_cookie_size = req_capsule_get_size(pill,
+                                                          &RMF_LOGCOOKIES,
+                                                          RCL_CLIENT);
+                ma->ma_valid |= MA_COOKIE;
         }
 
         RETURN(0);

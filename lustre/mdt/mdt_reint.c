@@ -158,11 +158,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         if (lu_object_exists(info->mti_ctxt, &mo->mot_obj.mo_lu) <= 0)
                 GOTO(out_unlock, rc = -ENOENT);
 
-        rc = mo_attr_set(info->mti_ctxt, next, attr);
-        if (rc != 0)
-                GOTO(out_unlock, rc);
-
-        rc = mo_attr_get(info->mti_ctxt, next,  &info->mti_attr);
+        /* all attrs are packed into mti_attr in unpack_setattr */
+        rc = mo_attr_set(info->mti_ctxt, next, &info->mti_attr);
         if (rc != 0)
                 GOTO(out_unlock, rc);
 
@@ -177,16 +174,6 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         if (valid & (ATTR_ATIME | ATTR_ATIME_SET))
                 repbody->valid |= OBD_MD_FLATIME;
         */
-        /* FIXME: I have to combine the attr_set & xattr_set into one single
-                  transaction. How can I?
-         */
-
-        if (rr->rr_eadatalen > 0)
-                rc = mo_xattr_set(info->mti_ctxt, next,
-                                  rr->rr_eadata, rr->rr_eadatalen,
-                                  XATTR_NAME_LOV, 0);
-
-        /* FIXME & TODO Please deal with logcookies here*/
         GOTO(out_unlock, rc);
 out_unlock:
         mdt_object_unlock_put(info, mo, lh, rc);

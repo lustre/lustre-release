@@ -247,7 +247,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
 
         if (mdt_body_has_lov(la, reqbody)) {
-                if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
+                if (/*ma->ma_lmm_size && */(ma->ma_valid & MA_LOV)) {
+                        LASSERT(ma->ma_lmm_size);
                         CDEBUG(D_INODE, "packing ea for "DFID3"\n",
                                         PFID3(mdt_object_fid(o)));
                         mdt_dump_lmm(D_INFO, ma->ma_lmm);
@@ -263,9 +264,9 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 } else {
                         repbody->valid |= OBD_MD_LINKNAME;
                         repbody->eadatasize = rc + 1;
-                        ((char*)ma->ma_lmm)[rc] = 0;        /* NULL terminate */
+                        ((char*)ma->ma_lmm)[rc] = 0; /* NULL terminate */
                         CDEBUG(D_INODE, "symlink dest %s, len = %d\n",
-                                        (char*)buffer, rc);
+                                        (char*)ma->ma_lmm, rc);
                         rc = 0;
                 }
         }

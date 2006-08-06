@@ -189,11 +189,17 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 if (rc)
                         RETURN(rc);
         }
+
         isreg = S_ISREG(la->la_mode);
         isdir = S_ISDIR(la->la_mode);
         islnk = S_ISLNK(la->la_mode);
         if (ma->ma_valid & MA_INODE)
                 mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
+
+        /* this check need to return the exists object's fid back, so it is done
+         * here, after preparing the reply */
+        if (!created && (flags & MDS_OPEN_EXCL) && (flags & MDS_OPEN_CREAT))
+                RETURN (-EEXIST);
 
         /* if we are following a symlink, don't open
          * do not return open handle for special nodes as client required
@@ -203,7 +209,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 info->mti_trans_flags |= MDT_NONEED_TANSNO; 
                 RETURN(0);
         }
-        /* FIXME:maybe this can be done earlier? */
+        /* This can't be done earlier, we need to return reply body */
         if (isdir) {
                 if (flags & (MDS_OPEN_CREAT | FMODE_WRITE)) {
                         /* we are trying to create or
@@ -213,6 +219,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         } else if (flags & MDS_OPEN_DIRECTORY)
                 RETURN(-ENOTDIR);
 
+#if 0
         if ((isreg) && !(ma->ma_valid & MA_LOV)) {
                 /*No EA, check whether it is will set regEA and dirEA
                  *since in above attr get, these size might be zero,
@@ -227,13 +234,14 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                         RETURN(rc);
                 */
         }
-
+#endif
         CDEBUG(D_INODE, "after open, ma_valid bit = "LPX64" lmm_size = %d\n", 
                         ma->ma_valid, ma->ma_lmm_size);
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
 
-        if (ma->ma_lmm_size && ma->ma_valid & MA_LOV) {
+        if (/*ma->ma_lmm_size && */ma->ma_valid & MA_LOV) {
+                LASSERT(ma->ma_lmm_size);
                 repbody->eadatasize = ma->ma_lmm_size;
                 if (isdir)
                         repbody->valid |= OBD_MD_FLDIREA;
@@ -413,10 +421,10 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 /* new object will be created. see the following */
         } else {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
-                if ((la->la_flags & MDS_OPEN_EXCL &&
-                         la->la_flags & MDS_OPEN_CREAT))
-                        GOTO(out_parent, result = -EEXIST);
+                /* check for O_EXCL is moved to the mdt_mfd_open, we need to
+                 * return FID back in that case */
         }
+
 
         child = mdt_object_find(info->mti_ctxt, mdt, child_fid);
         if (IS_ERR(child))
@@ -437,7 +445,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 created = 1;
         }
 
-        /* Open it now. */
+        /* Try to open it now. */
         result = mdt_mfd_open(info, parent, child, la->la_flags, created);
         GOTO(finish_open, result);
 
@@ -504,7 +512,7 @@ int mdt_close(struct mdt_thread_info *info)
 
                 o = mfd->mfd_object;
                 ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
-                                                    &RMF_MDT_MD);
+                                                        &RMF_MDT_MD);
                 ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                        &RMF_MDT_MD, RCL_SERVER);
                 rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);

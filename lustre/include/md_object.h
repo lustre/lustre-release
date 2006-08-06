@@ -83,7 +83,7 @@ struct md_object_operations {
         int (*moo_attr_get)(const struct lu_context *ctxt, struct md_object *dt,
                             struct md_attr *attr);
         int (*moo_attr_set)(const struct lu_context *ctxt, struct md_object *dt,
-                            const struct lu_attr *attr);
+                            struct md_attr *attr);
 
         int (*moo_xattr_get)(const struct lu_context *ctxt,
                              struct md_object *obj,
@@ -247,7 +247,7 @@ static inline int mo_readlink(const struct lu_context *cx, struct md_object *m,
 }
 
 static inline int mo_attr_set(const struct lu_context *cx, struct md_object *m,
-                              const struct lu_attr *at)
+                              struct md_attr *at)
 {
         LASSERT(m->mo_ops->moo_attr_set);
         return m->mo_ops->moo_attr_set(cx, m, at);

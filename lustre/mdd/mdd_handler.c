@@ -142,12 +142,12 @@ static int mdd_attr_get(const struct lu_context *ctxt,
         if (rc == 0) {
                 LASSERT((ma->ma_attr.la_mode & S_IFMT) ==
                         (obj->mo_lu.lo_header->loh_attr & S_IFMT));
-                ma->ma_valid |= MA_INODE;
+                ma->ma_valid = MA_INODE;
                 /* get LOV EA also */
                 if ((S_ISREG(ma->ma_attr.la_mode)
                      || S_ISDIR(ma->ma_attr.la_mode))
                      && ma->ma_lmm != 0 && ma->ma_lmm_size > 0) {
-                        rc = mdd_get_md(ctxt, obj, ma->ma_lmm,&ma->ma_lmm_size);
+                        rc = mdd_get_md(ctxt, obj, ma->ma_lmm, &ma->ma_lmm_size);
                         if (rc > 0) {
                                 ma->ma_valid |= MA_LOV;
                                 rc = 0;
@@ -445,18 +445,32 @@ static int __mdd_object_create(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
-static int __mdd_attr_set(const struct lu_context *ctxt, struct md_object *obj,
+static int __mdd_attr_set(const struct lu_context *ctxt, struct mdd_object *o,
                           const struct lu_attr *attr, struct thandle *handle)
 {
         struct dt_object *next;
 
-        LASSERT(lu_object_exists(ctxt, &obj->mo_lu));
-        next = mdd_object_child(md2mdd_obj(obj));
+        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(o)));
+        next = mdd_object_child(o);
         return next->do_ops->do_attr_set(ctxt, next, attr, handle);
 }
 
+static int __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_object *o,
+                           const void *buf, int buf_len, const char *name,
+                           int fl, struct thandle *handle)
+{
+        struct dt_object *next;
+
+        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(o)));
+        next = mdd_object_child(o);
+        return next->do_ops->do_xattr_set(ctxt, next, buf, buf_len, name, fl,
+                                          handle);
+}
+
+
+/* set attr and LOV EA at once, return updated attr */
 static int mdd_attr_set(const struct lu_context *ctxt,
-                        struct md_object *obj, const struct lu_attr *attr)
+                        struct md_object *obj, struct md_attr *ma)
 {
         struct mdd_object *mdo = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -470,25 +484,23 @@ static int mdd_attr_set(const struct lu_context *ctxt,
                 RETURN(PTR_ERR(handle));
 
         mdd_lock(ctxt, mdo, DT_WRITE_LOCK);
-        rc = __mdd_attr_set(ctxt, obj, attr, handle);
-        mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
 
+        rc = __mdd_attr_set(ctxt, md2mdd_obj(obj), &ma->ma_attr, handle);
+        if (rc == 0 && (ma->ma_valid & MA_LOV)) {
+                /* set LOV ea now */
+                rc = __mdd_xattr_set(ctxt, md2mdd_obj(obj),
+                                     ma->ma_lmm, ma->ma_lmm_size,
+                                     XATTR_NAME_LOV, 0, handle);
+        }
+        /* XXX: llog cancel cookie? */
+
+        if (rc == 0)
+                rc = mdd_attr_get(ctxt, obj, ma);
+        
+        mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
         mdd_trans_stop(ctxt, mdd, handle);
 
         RETURN(rc);
-}
-
-static int __mdd_xattr_set(const struct lu_context *ctxt,struct mdd_device *mdd,
-                           struct mdd_object *obj, const void *buf,
-                           int buf_len, const char *name, int fl,
-                           struct thandle *handle)
-{
-        struct dt_object *next;
-
-        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
-        next = mdd_object_child(obj);
-        return next->do_ops->do_xattr_set(ctxt, next, buf, buf_len, name, fl,
-                                          handle);
 }
 
 int mdd_xattr_set_txn(const struct lu_context *ctxt, struct md_object *obj,
@@ -496,13 +508,11 @@ int mdd_xattr_set_txn(const struct lu_context *ctxt, struct md_object *obj,
                       struct thandle *handle)
 {
         struct mdd_object *mdo = md2mdd_obj(obj);
-        struct mdd_device *mdd = mdo2mdd(obj);
         int  rc;
         ENTRY;
 
-
         mdd_lock(ctxt, mdo, DT_WRITE_LOCK);
-        rc = __mdd_xattr_set(ctxt, mdd, md2mdd_obj(obj), buf, buf_len, name,
+        rc = __mdd_xattr_set(ctxt, md2mdd_obj(obj), buf, buf_len, name,
                              fl, handle);
         mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
 
