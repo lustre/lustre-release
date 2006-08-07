@@ -519,7 +519,7 @@ static int mdd_attr_set(const struct lu_context *ctxt,
 
         if (rc == 0)
                 rc = mdd_attr_get(ctxt, obj, ma);
-        
+
         mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
         mdd_trans_stop(ctxt, mdd, handle);
 
@@ -880,7 +880,7 @@ static void mdd_rename_unlock(const struct lu_context *ctxt,
 
 static umode_t mdd_object_type(const struct mdd_object *obj)
 {
-        return obj->mod_obj.mo_lu.lo_header->loh_attr;
+        return lu_object_attr(&obj->mod_obj.mo_lu);
 }
 
 static int mdd_rename_sanity_check (const struct lu_context *ctxt,
@@ -1175,7 +1175,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 if (rc)
                         RETURN(rc);
         }
-        
+
         mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
@@ -1246,19 +1246,19 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 GOTO(cleanup, rc);
 
         inserted = 1;
-        rc = mdd_lov_set_md(ctxt, pobj, child, lmm, lmm_size, attr->la_mode, 
+        rc = mdd_lov_set_md(ctxt, pobj, child, lmm, lmm_size, attr->la_mode,
                             handle);
         if (rc) {
                 CERROR("error on stripe info copy %d \n", rc);
                 GOTO(cleanup, rc);
         }
-        
+
         if (S_ISLNK(attr->la_mode)) {
                 struct dt_object *dt = mdd_object_child(son);
                 const char *target_name = spec->u.sp_symname;
                 int sym_len = strlen(target_name);
                 loff_t pos = 0;
-                
+
                 rc = dt->do_body_ops->dbo_write(ctxt, dt, target_name,
                                                 sym_len, &pos, handle);
                 if (rc == sym_len)
@@ -1288,7 +1288,7 @@ cleanup:
 }
 /* partial operation */
 static int mdd_object_create(const struct lu_context *ctxt,
-                             struct md_object *obj, 
+                             struct md_object *obj,
                              const struct md_create_spec *spec,
                              struct md_attr *ma)
 {
