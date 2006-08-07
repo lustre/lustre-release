@@ -281,7 +281,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 {
         int rc;
         struct it_cb_data icbd;
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
@@ -310,11 +310,17 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
         parent = de->d_parent->d_inode;
 
-        ll_prepare_md_op_data(&op_data, parent, de->d_inode,
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+
+        ll_prepare_md_op_data(op_data, parent, de->d_inode,
                               de->d_name.name, de->d_name.len, 0);
 
-        rc = md_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
+        rc = md_intent_lock(exp, op_data, NULL, 0, it, lookup_flags,
                             &req, ll_md_blocking_ast, 0);
+
+        OBD_FREE_PTR(op_data);
         /* If req is NULL, then md_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)

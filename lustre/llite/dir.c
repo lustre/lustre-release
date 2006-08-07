@@ -280,14 +280,20 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
         if (!rc) {
                 struct lookup_intent it = { .it_op = IT_READDIR };
                 struct ptlrpc_request *request;
-                struct md_op_data op_data;
+                struct md_op_data *op_data;
 
-                ll_prepare_md_op_data(&op_data, dir, NULL, NULL, 0, 0);
+                OBD_ALLOC_PTR(op_data);
+                if (op_data == NULL)
+                        return ERR_PTR(-ENOMEM);
+
+                ll_prepare_md_op_data(op_data, dir, NULL, NULL, 0, 0);
 
                 rc = md_enqueue(ll_i2sbi(dir)->ll_md_exp, LDLM_IBITS, &it,
-                                LCK_CR, &op_data, &lockh, NULL, 0,
+                                LCK_CR, op_data, &lockh, NULL, 0,
                                 ldlm_completion_ast, ll_md_blocking_ast, dir,
                                 0);
+
+                OBD_FREE_PTR(op_data);
 
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
@@ -609,11 +615,15 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         case LL_IOC_LOV_SETSTRIPE: {
                 struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
                 struct ptlrpc_request *request = NULL;
-                struct md_op_data op_data;
+                struct md_op_data *op_data;
                 struct iattr attr = { 0 };
                 int rc = 0;
 
-                ll_prepare_md_op_data(&op_data, inode,
+                OBD_ALLOC_PTR(op_data);
+                if (op_data == NULL)
+                        RETURN(-ENOMEM);
+                
+                ll_prepare_md_op_data(op_data, inode,
                                       NULL, NULL, 0, 0);
 
                 LASSERT(sizeof(lum) == sizeof(*lump));
@@ -621,7 +631,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         sizeof(lump->lmm_objects[0]));
                 rc = copy_from_user(&lum, lump, sizeof(lum));
                 if (rc)
-                        return(-EFAULT);
+                        RETURN(-EFAULT);
 
                 /*
                  * This is coming from userspace, so should be in
@@ -635,17 +645,15 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         lustre_swab_lov_user_md(&lum);
 
                 /* swabbing is done in lov_setstripe() on server side */
-                rc = md_setattr(sbi->ll_md_exp, &op_data,
+                rc = md_setattr(sbi->ll_md_exp, op_data,
                                 &attr, &lum, sizeof(lum), NULL, 0, &request);
                 if (rc) {
-                        ptlrpc_req_finished(request);
                         if (rc != -EPERM && rc != -EACCES)
                                 CERROR("md_setattr fails: rc = %d\n", rc);
-                        return rc;
                 }
+                OBD_FREE_PTR(op_data);
                 ptlrpc_req_finished(request);
-
-                return rc;
+                RETURN(rc);
         }
         case LL_IOC_LOV_GETSTRIPE: {
                 struct ptlrpc_request *request = NULL;

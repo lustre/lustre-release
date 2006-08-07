@@ -52,29 +52,35 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                                      struct inode *inode,
                                      struct obd_client_handle *och)
 {
-        struct md_op_data op_data = { { 0 } };
+        struct md_op_data *op_data;
         struct ptlrpc_request *req = NULL;
         int rc;
+        ENTRY;
 
-        op_data.fid1 = ll_i2info(inode)->lli_fid;
-        op_data.valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                        OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                        OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                        OBD_MD_FLCTIME;
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
 
-        op_data.atime = LTIME_S(inode->i_atime);
-        op_data.mtime = LTIME_S(inode->i_mtime);
-        op_data.ctime = LTIME_S(inode->i_ctime);
-        op_data.size = inode->i_size;
-        op_data.blocks = inode->i_blocks;
-        op_data.flags = inode->i_flags;
+        op_data->fid1 = ll_i2info(inode)->lli_fid;
+        op_data->valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                         OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                         OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                         OBD_MD_FLCTIME;
+
+        op_data->atime = LTIME_S(inode->i_atime);
+        op_data->mtime = LTIME_S(inode->i_mtime);
+        op_data->ctime = LTIME_S(inode->i_ctime);
+        op_data->size = inode->i_size;
+        op_data->blocks = inode->i_blocks;
+        op_data->flags = inode->i_flags;
 
         if (0 /* ll_is_inode_dirty(inode) */) {
-                op_data.flags = MDS_BFLAG_UNCOMMITTED_WRITES;
-                op_data.valid |= OBD_MD_FLFLAGS;
+                op_data->flags = MDS_BFLAG_UNCOMMITTED_WRITES;
+                op_data->valid |= OBD_MD_FLFLAGS;
         }
 
-        rc = md_close(md_exp, &op_data, och, &req);
+        rc = md_close(md_exp, op_data, och, &req);
+        OBD_FREE_PTR(op_data);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
@@ -184,18 +190,23 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         const char *name = file->f_dentry->d_name.name;
         const int len = file->f_dentry->d_name.len;
         struct lustre_handle lockh;
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         int rc;
 
         if (!parent)
                 RETURN(-ENOENT);
 
-        ll_prepare_md_op_data(&op_data, parent->d_inode, NULL,
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+
+        ll_prepare_md_op_data(op_data, parent->d_inode, NULL,
                               name, len, O_RDWR);
 
-        rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, itp, LCK_PW, &op_data,
+        rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, itp, LCK_PW, op_data,
                         &lockh, lmm, lmmsize, ldlm_completion_ast,
                         ll_md_blocking_ast, NULL, 0);
+        OBD_FREE_PTR(op_data);
         if (rc < 0) {
                 CERROR("lock enqueue: err: %d\n", rc);
                 RETURN(rc);
@@ -1923,7 +1934,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         struct lookup_intent oit = { .it_op = IT_GETATTR };
         struct inode *inode = dentry->d_inode;
         struct ptlrpc_request *req = NULL;
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         struct ll_inode_info *lli;
         struct ll_sb_info *sbi;
         int rc;
@@ -1942,10 +1953,15 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_REVALIDATE);
 #endif
 
-        ll_prepare_md_op_data(&op_data, inode, inode, NULL, 0, 0);
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
 
-        rc = md_intent_lock(sbi->ll_md_exp, &op_data, NULL, 0, &oit, 0,
+        ll_prepare_md_op_data(op_data, inode, inode, NULL, 0, 0);
+
+        rc = md_intent_lock(sbi->ll_md_exp, op_data, NULL, 0, &oit, 0,
                             &req, ll_md_blocking_ast, 0);
+        OBD_FREE_PTR(op_data);
 
         if (rc < 0)
                 GOTO(out, rc);

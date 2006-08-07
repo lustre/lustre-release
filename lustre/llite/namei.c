@@ -372,7 +372,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct dentry *save = dentry, *retval;
         struct ptlrpc_request *req = NULL;
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         struct it_cb_data icbd;
         int rc;
         ENTRY;
@@ -392,9 +392,13 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_childp = &dentry;
         icbd.icbd_parent = parent;
 
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(ERR_PTR(-ENOMEM));
+
         /* prepare operatoin hint first */
-        ll_prepare_md_op_data(&op_data, parent, NULL, dentry->d_name.name,
-                               dentry->d_name.len, lookup_flags);
+        ll_prepare_md_op_data(op_data, parent, NULL, dentry->d_name.name,
+                              dentry->d_name.len, lookup_flags);
 
         /* allocate new fid for child */
         if (it->it_op & IT_CREAT ||
@@ -403,7 +407,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                                   .ph_cname = &dentry->d_name,
                                                   .ph_opc = LUSTRE_OPC_CREATE };
 
-                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data.fid2, &hint);
+                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2, &hint);
                 if (rc) {
                         CERROR("can't allocate new fid, rc %d\n", rc);
                         LBUG();
@@ -412,9 +416,10 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 
         it->it_create_mode &= ~current->fs->umask;
 
-        rc = md_intent_lock(ll_i2mdexp(parent), &op_data, NULL, 0, it,
+        rc = md_intent_lock(ll_i2mdexp(parent), op_data, NULL, 0, it,
                             lookup_flags, &req, ll_md_blocking_ast, 0);
-
+        OBD_FREE_PTR(op_data);
+        
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
 
@@ -554,7 +559,7 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
         struct ptlrpc_request *request = NULL;
         struct inode *inode = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         struct lu_placement_hint hint = {
                 .ph_pname = NULL,
                 .ph_cname = name,
@@ -577,14 +582,18 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
-                ll_prepare_md_op_data(&op_data, dir, NULL, name->name,
+                OBD_ALLOC_PTR(op_data);
+                if (op_data == NULL)
+                        RETURN(-ENOMEM);
+                ll_prepare_md_op_data(op_data, dir, NULL, name->name,
                                       name->len, 0);
-                err = ll_fid_md_alloc(sbi, &op_data.fid2, &hint);
+                err = ll_fid_md_alloc(sbi, &op_data->fid2, &hint);
                 if (err)
                         break;
-                err = md_create(sbi->ll_md_exp, &op_data, NULL, 0, mode,
+                err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,
                                 current->fsuid, current->fsgid,
                                 current->cap_effective, rdev, &request);
+                OBD_FREE_PTR(op_data);
                 if (err)
                         break;
                 ll_update_times(request, 0, dir);
@@ -631,7 +640,7 @@ static int ll_symlink_generic(struct inode *dir, struct dentry *dchild,
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct inode *inode = NULL;
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         int err;
         ENTRY;
 
@@ -639,20 +648,25 @@ static int ll_symlink_generic(struct inode *dir, struct dentry *dchild,
                name->len, name->name, dir->i_ino, dir->i_generation,
                dir, tgt);
 
-        ll_prepare_md_op_data(&op_data, dir, NULL,
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        
+        ll_prepare_md_op_data(op_data, dir, NULL,
                               name->name, name->len, 0);
 
         /* allocate new fid */
-        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data.fid2, &hint);
+        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data->fid2, &hint);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 LBUG();
         }
 
-        err = md_create(sbi->ll_md_exp, &op_data,
+        err = md_create(sbi->ll_md_exp, op_data,
                         tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                         current->fsuid, current->fsgid, current->cap_effective,
                         0, &request);
+        OBD_FREE_PTR(op_data);
         if (err == 0) {
                 ll_update_times(request, 0, dir);
 
@@ -673,7 +687,7 @@ static int ll_link_generic(struct inode *src,  struct inode *dir,
 {
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         int err;
 
         ENTRY;
@@ -682,19 +696,22 @@ static int ll_link_generic(struct inode *src,  struct inode *dir,
                src->i_ino, src->i_generation, src, dir->i_ino,
                dir->i_generation, dir, name->len, name->name);
 
-        ll_prepare_md_op_data(&op_data, src, dir, name->name,
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        ll_prepare_md_op_data(op_data, src, dir, name->name,
                               name->len, 0);
-        err = md_link(sbi->ll_md_exp, &op_data, &request);
+        err = md_link(sbi->ll_md_exp, op_data, &request);
+        OBD_FREE_PTR(op_data);
         if (err == 0)
                 ll_update_times(request, 0, dir);
 
         ptlrpc_req_finished(request);
-
         RETURN(err);
 }
 
-static int ll_mkdir_generic(struct inode *dir, struct qstr *name, int mode,
-                            struct dentry *dchild)
+static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
+                            int mode, struct dentry *dchild)
 
 {
         struct lu_placement_hint hint = { .ph_pname = NULL,
@@ -703,7 +720,7 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name, int mode,
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct inode *inode = NULL;
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         int err;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
@@ -711,19 +728,23 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name, int mode,
 
         mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
 
-        ll_prepare_md_op_data(&op_data, dir, NULL,
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        ll_prepare_md_op_data(op_data, dir, NULL,
                               name->name, name->len, 0);
 
         /* allocate new fid */
-        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data.fid2, &hint);
+        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data->fid2, &hint);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 LBUG();
         }
 
-        err = md_create(sbi->ll_md_exp, &op_data, NULL, 0, mode,
-                        current->fsuid, current->fsgid, current->cap_effective,
-                        0, &request);
+        err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,
+                        current->fsuid, current->fsgid,
+                        current->cap_effective, 0, &request);
+        OBD_FREE_PTR(op_data);
         ll_update_times(request, 0, dir);
         if (!err && dchild) {
                 err = ll_prep_inode(&inode, request, 0,
@@ -742,7 +763,7 @@ static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
                             struct qstr *name)
 {
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         struct dentry *dentry;
         int rc;
         ENTRY;
@@ -761,9 +782,14 @@ static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
                 }
         }
 
-        ll_prepare_md_op_data(&op_data, dir, NULL, name->name,
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+
+        ll_prepare_md_op_data(op_data, dir, NULL, name->name,
                               name->len, S_IFDIR);
-        rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, &op_data, &request);
+        rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
+        OBD_FREE_PTR(op_data);
         if (rc == 0)
                 ll_update_times(request, 0, dir);
         ptlrpc_req_finished(request);
@@ -847,16 +873,17 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
 static int ll_unlink_generic(struct inode * dir, struct qstr *name)
 {
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
-        ll_prepare_md_op_data(&op_data, dir, NULL, name->name,
-                              name->len,  
-                              0);
-        rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, &op_data, &request);
+        ll_prepare_md_op_data(op_data, dir, NULL, name->name,
+                              name->len, 0);
+        rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
+        OBD_FREE_PTR(op_data);
+        
         if (rc)
                 GOTO(out, rc);
 
@@ -873,7 +900,7 @@ static int ll_rename_generic(struct inode *src, struct qstr *src_name,
 {
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(src);
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         int err;
         ENTRY;
         CDEBUG(D_VFSTRACE,"VFS Op:oldname=%.*s,src_dir=%lu/%u(%p),newname=%.*s,"
@@ -881,10 +908,15 @@ static int ll_rename_generic(struct inode *src, struct qstr *src_name,
                src->i_ino, src->i_generation, src, tgt_name->len,
                tgt_name->name, tgt->i_ino, tgt->i_generation, tgt);
 
-        ll_prepare_md_op_data(&op_data, src, tgt, NULL, 0, 0);
-        err = md_rename(sbi->ll_md_exp, &op_data,
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+
+        ll_prepare_md_op_data(op_data, src, tgt, NULL, 0, 0);
+        err = md_rename(sbi->ll_md_exp, op_data,
                         src_name->name, src_name->len,
                         tgt_name->name, tgt_name->len, &request);
+        OBD_FREE_PTR(op_data);
         if (!err) {
                 ll_update_times(request, 0, src);
                 ll_update_times(request, 0, tgt);

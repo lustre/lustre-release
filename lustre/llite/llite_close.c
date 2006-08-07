@@ -122,7 +122,7 @@ static void ll_close_done_writing(struct inode *inode)
         struct ll_inode_info *lli = ll_i2info(inode);
         ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
-        struct md_op_data op_data;
+        struct md_op_data *op_data;
         struct obdo obdo;
         obd_flag valid;
         int rc, ast_flags = 0;
@@ -163,12 +163,20 @@ static void ll_close_done_writing(struct inode *inode)
                 CERROR("unlock failed (%d)?  proceeding anyways...\n", rc);
 
  rpc:
-        op_data.fid1 = lli->lli_fid;
-        op_data.size = inode->i_size;
-        op_data.blocks = inode->i_blocks;
-        op_data.valid = OBD_MD_FLID | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL) {
+                CERROR("can't allocate op_data\n");
+                EXIT;
+                return;
+        }
+        
+        op_data->fid1 = lli->lli_fid;
+        op_data->size = inode->i_size;
+        op_data->blocks = inode->i_blocks;
+        op_data->valid = OBD_MD_FLID | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
-        rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, &op_data);
+        rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data);
+        OBD_FREE_PTR(op_data);
  out:
 }
 #endif
