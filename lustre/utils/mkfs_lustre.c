@@ -1327,6 +1327,7 @@ static int create_iam(enum iam_fmt_t fmt, int keysize, int recsize,
                 goto out;
         }
 
+        /* form leaf */
         memset(buf, 0, blocksize);
         if (fmt == FMT_LFIX) {
                 lfix_leaf(buf, blocksize, keysize, ptrsize, recsize);
@@ -1383,15 +1384,15 @@ enum iam_ioctl_cmd {
         IAM_IOC_POLYMORPH = _IOR('i', 9, unsigned long)
 };
 
-static int doop(int fd, const void *key, const void *rec,
+static int doop(int fd, void *key, void *rec,
                 int cmd, const char *name)
 {
         int result;
-
         struct iam_uapi_op op = {
                 .iul_key = key,
                 .iul_rec = rec
         };
+
         result = ioctl(fd, cmd, &op);
         if (result != 0)
                 fprintf(stderr, "ioctl(%s): %i/%i (%m)\n", name, result, errno);
@@ -1432,24 +1433,11 @@ static int iam_insert(int key_need_convert, char *keybuf,
         int keysize;
         int recsize;
         int fd = -1;
+        struct iam_uapi_info ua;
         char *key_opt;
         char *rec_opt;
         char *key = NULL;
         char *rec = NULL;
-        void *(*copier)(void *, void *, size_t);
-        struct iam_uapi_info ua;
-
-        if (key_need_convert) {
-                key_opt = packdigit(keybuf);
-        } else {
-                key_opt = keybuf;
-        }
-
-        if (rec_need_convert) {
-                rec_opt = packdigit(recbuf);
-        } else {
-                rec_opt = recbuf;
-        }
 
         if (source == NULL) {
                 fprintf(stderr, "source must not be NULL\n");
@@ -1460,22 +1448,21 @@ static int iam_insert(int key_need_convert, char *keybuf,
         if (fd < 0) {
                 fprintf(stderr, "%s: failed to open %s, errno = %d\n",
                         __FUNCTION__, source, errno);
-                rc = 1;
-                goto out;
+                return 1;
         }
 
         rc = ioctl(fd, IAM_IOC_INIT, &ua);
         if (rc != 0) {
                 fprintf(stderr, "ioctl(IAM_IOC_INIT): %i (%m)\n", rc);
-                rc = 1;
-                goto out;
+                close(fd);
+                return 1;
         }
 
         rc = ioctl(fd, IAM_IOC_GETINFO, &ua);
         if (rc != 0) {
                 fprintf(stderr, "ioctl(IAM_IOC_GETATTR): %i (%m)\n", rc);
-                rc = 1;
-                goto out;
+                close(fd);
+                return 1;
         }
 
         keysize = ua.iui_keysize;
@@ -1493,18 +1480,26 @@ static int iam_insert(int key_need_convert, char *keybuf,
                 goto out;
         }
 
-        copier = (key_need_convert == 0) ? &strncpy : &memcpy;
-        copier(key, key_opt ? : "RIVERRUN", keysize + 1);
         if (key_need_convert) {
-                free(key_opt);
-                key_opt = NULL;
+                key_opt = packdigit(keybuf);
+                memcpy(key, key_opt ? : "RIVERRUN", keysize + 1);
+                if (key_opt != NULL) {
+                        free(key_opt);
+                        key_opt = NULL;
+                }
+        } else {
+                strncpy(key, keybuf ? : "RIVERRUN", keysize + 1);
         }
 
-        copier = (rec_need_convert == 0) ? &strncpy : &memcpy;
-        copier(rec, rec_opt ? : "PALEFIRE", recsize + 1);
         if (rec_need_convert) {
-                free(rec_opt);
-                rec_opt = NULL;
+                rec_opt = packdigit(recbuf);
+                memcpy(rec, rec_opt ? : "PALEFIRE", recsize + 1);
+                if (rec_opt != NULL) {
+                        free(rec_opt);
+                        rec_opt = NULL;
+                }
+        } else {
+                strncpy(rec, recbuf ? : "PALEFIRE", recsize + 1);
         }
 
         rc = doop(fd, key, rec, IAM_IOC_INSERT, "IAM_IOC_INSERT");
