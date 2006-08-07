@@ -327,6 +327,7 @@ int main(int argc, char **argv)
         rc = write(1, buf, blocksize);
         if (rc != blocksize) {
                 fprintf(stderr, "Unable to write root node: %m (%i)\n", rc);
+                free(buf);
                 return 1;
         }
 
@@ -341,6 +342,7 @@ int main(int argc, char **argv)
         rc = write(1, buf, blocksize);
         if (rc != blocksize) {
                 fprintf(stderr, "Unable to write leaf node: %m (%i)\n", rc);
+                free(buf);
                 return 1;
         }
         if (verbose > 0)
