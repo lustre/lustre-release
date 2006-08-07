@@ -1086,7 +1086,8 @@ static int lmv_change_cbdata(struct obd_export *exp,
         RETURN(0);
 }
 
-static int lmv_close(struct obd_export *exp, struct md_op_data *op_data,
+static int lmv_close(struct obd_export *exp,
+                     struct md_op_data *op_data,
                      struct obd_client_handle *och,
                      struct ptlrpc_request **request)
 {
@@ -1255,10 +1256,10 @@ lmv_enqueue_slaves(struct obd_export *exp, int locktype,
         struct lmv_obd *lmv = &obd->u.lmv;
         struct lmv_stripe_md *mea = op_data->mea1;
         struct md_op_data *op_data2;
-        int i, rc, mds;
+        int i, rc = 0, mds;
         ENTRY;
 
-        OBD_ALLOC(op_data2, sizeof(*op_data2));
+        OBD_ALLOC_PTR(op_data2);
         if (op_data2 == NULL)
                 RETURN(-ENOMEM);
 
@@ -1268,7 +1269,7 @@ lmv_enqueue_slaves(struct obd_export *exp, int locktype,
                 op_data2->fid1 = mea->mea_ids[i];
                 mds = lmv_fld_lookup(obd, &op_data2->fid1);
                 if (mds < 0)
-                        RETURN(mds);
+                        GOTO(cleanup, rc = mds);
 
                 if (lmv->tgts[mds].ltd_exp == NULL)
                         continue;
@@ -1291,16 +1292,17 @@ lmv_enqueue_slaves(struct obd_export *exp, int locktype,
                         GOTO(cleanup, rc = it->d.lustre.it_status);
         }
 
-        OBD_FREE(op_data2, sizeof(*op_data2));
-        RETURN(0);
+        EXIT;
 cleanup:
-        OBD_FREE(op_data2, sizeof(*op_data2));
+        OBD_FREE_PTR(op_data2);
 
-        /* drop all taken locks */
-        while (--i >= 0) {
-                if (lockh[i].cookie)
-                        ldlm_lock_decref(lockh + i, lockmode);
-                lockh[i].cookie = 0;
+        if (rc != 0) {
+                /* drop all taken locks */
+                while (--i >= 0) {
+                        if (lockh[i].cookie)
+                                ldlm_lock_decref(lockh + i, lockmode);
+                        lockh[i].cookie = 0;
+                }
         }
         return rc;
 }
@@ -1316,9 +1318,9 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         struct ptlrpc_request *req = it->d.lustre.it_data;
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct lustre_handle plock;
-        struct md_op_data rdata;
         struct mdt_body *body = NULL;
+        struct lustre_handle plock;
+        struct md_op_data *rdata;
         int i, rc = 0, pmode;
         ENTRY;
 
@@ -1338,23 +1340,29 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         it->d.lustre.it_lock_mode = 0;
         it->d.lustre.it_data = NULL;
 
-        memcpy(&rdata, op_data, sizeof(rdata));
-        rdata.fid1 = body->fid1;
-        rdata.name = NULL;
-        rdata.namelen = 0;
+        OBD_ALLOC_PTR(rdata);
+        if (rdata == NULL)
+                RETURN(-ENOMEM);
+        rdata->fid1 = body->fid1;
+        rdata->name = NULL;
+        rdata->namelen = 0;
 
         it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
         ptlrpc_req_finished(req);
 
-        i = lmv_fld_lookup(obd, &rdata.fid1);
+        i = lmv_fld_lookup(obd, &rdata->fid1);
         if (i < 0)
-                RETURN(i);
+                GOTO(out_free_rdata, rc = i);
         rc = md_enqueue(lmv->tgts[i].ltd_exp,
-                        lock_type, it, lock_mode, &rdata, lockh, lmm,
+                        lock_type, it, lock_mode, rdata, lockh, lmm,
                         lmmsize, cb_compl, cb_blocking, cb_data,
                         extra_lock_flags);
         ldlm_lock_decref(&plock, pmode);
-        RETURN(rc);
+
+        EXIT;
+out_free_rdata:
+        OBD_FREE_PTR(rdata);
+        return rc;
 }
 
 static int
@@ -1834,7 +1842,8 @@ static int lmv_readpage(struct obd_export *exp, struct lu_fid *fid,
         RETURN(rc);
 }
 
-static int lmv_unlink_slaves(struct obd_export *exp, struct md_op_data *op_data,
+static int lmv_unlink_slaves(struct obd_export *exp,
+                             struct md_op_data *op_data,
                              struct ptlrpc_request **req)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -1844,7 +1853,7 @@ static int lmv_unlink_slaves(struct obd_export *exp, struct md_op_data *op_data,
         int i, mds, rc = 0;
         ENTRY;
 
-        OBD_ALLOC(op_data2, sizeof(*op_data2));
+        OBD_ALLOC_PTR(op_data2);
         if (op_data2 == NULL)
                 RETURN(-ENOMEM);
 
@@ -1856,7 +1865,7 @@ static int lmv_unlink_slaves(struct obd_export *exp, struct md_op_data *op_data,
 
                 mds = lmv_fld_lookup(obd, &op_data2->fid1);
                 if (mds < 0)
-                        RETURN(mds);
+                        GOTO(out_free_op_data2, rc = mds);
                 if (lmv->tgts[mds].ltd_exp == NULL)
                         continue;
 
@@ -1871,10 +1880,13 @@ static int lmv_unlink_slaves(struct obd_export *exp, struct md_op_data *op_data,
                         *req = NULL;
                 }
                 if (rc)
-                        RETURN(rc);
+                        GOTO(out_free_op_data2, rc);
         }
-        OBD_FREE(op_data2, sizeof(*op_data2));
-        RETURN(rc);
+
+        EXIT;
+out_free_op_data2:
+        OBD_FREE_PTR(op_data2);
+        return rc;
 }
 
 static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,

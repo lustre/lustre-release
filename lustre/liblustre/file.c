@@ -78,7 +78,9 @@ void llu_prepare_md_op_data(struct md_op_data *op_data,
                             int namelen,
                             int mode)
 {
+        LASSERT(op_data);
         LASSERT(i1);
+        memset(op_data, 0, sizeof(*op_data));
 
         ll_i2gids(op_data->suppgids, i1, i2);
         op_data->fid1 = *ll_inode2fid(i1);

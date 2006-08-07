@@ -279,8 +279,8 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
                            ll_inode2fid(dir), LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
                 struct lookup_intent it = { .it_op = IT_READDIR };
-                struct md_op_data op_data = { { 0 } };
                 struct ptlrpc_request *request;
+                struct md_op_data op_data;
 
                 ll_prepare_md_op_data(&op_data, dir, NULL, NULL, 0, 0);
 
@@ -607,10 +607,10 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 return rc;
         }
         case LL_IOC_LOV_SETSTRIPE: {
-                struct ptlrpc_request *request = NULL;
-                struct md_op_data op_data = { { 0 } };
-                struct iattr attr = { 0 };
                 struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
+                struct ptlrpc_request *request = NULL;
+                struct md_op_data op_data;
+                struct iattr attr = { 0 };
                 int rc = 0;
 
                 ll_prepare_md_op_data(&op_data, inode,

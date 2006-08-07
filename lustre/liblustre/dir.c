@@ -73,7 +73,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct lustre_handle lockh;
         struct mdt_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
-        struct md_op_data op_data = { { 0 } };
+        struct md_op_data op_data;
         struct obd_device *obddev = class_exp2obd(sbi->ll_md_exp);
         struct ldlm_res_id res_id =
                 { .name = {fid_seq(&lli->lli_fid), 

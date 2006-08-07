@@ -15,14 +15,6 @@
 #include <lustre_ver.h>
 #include <lustre_disk.h>  /* for s2sbi */
 
-/*
-struct lustre_intent_data {
-        __u64 it_lock_handle[2];
-        __u32 it_disposition;
-        __u32 it_status;
-        __u32 it_lock_mode;
-        }; */
-
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 
 #if (LUSTRE_KERNEL_VERSION < 46)

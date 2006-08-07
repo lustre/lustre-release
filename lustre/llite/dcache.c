@@ -281,7 +281,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 {
         int rc;
         struct it_cb_data icbd;
-        struct md_op_data op_data = { { 0 } };
+        struct md_op_data op_data;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
@@ -310,8 +310,8 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
         parent = de->d_parent->d_inode;
 
-        ll_prepare_md_op_data(&op_data, parent, NULL, de->d_name.name,
-                              de->d_name.len, 0);
+        ll_prepare_md_op_data(&op_data, parent, de->d_inode,
+                              de->d_name.name, de->d_name.len, 0);
 
         rc = md_intent_lock(exp, &op_data, NULL, 0, it, lookup_flags,
                             &req, ll_md_blocking_ast, 0);

@@ -180,11 +180,11 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                                int lmmsize, struct lookup_intent *itp)
 {
         struct ll_sb_info *sbi = ll_i2sbi(file->f_dentry->d_inode);
-        struct lustre_handle lockh;
-        struct md_op_data op_data = { { 0 } };
         struct dentry *parent = file->f_dentry->d_parent;
         const char *name = file->f_dentry->d_name.name;
         const int len = file->f_dentry->d_name.len;
+        struct lustre_handle lockh;
+        struct md_op_data op_data;
         int rc;
 
         if (!parent)
@@ -198,13 +198,12 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                         ll_md_blocking_ast, NULL, 0);
         if (rc < 0) {
                 CERROR("lock enqueue: err: %d\n", rc);
-                GOTO(out, rc);
+                RETURN(rc);
         }
 
         rc = ll_prep_inode(&file->f_dentry->d_inode,
-                           (struct ptlrpc_request *)itp->d.lustre.it_data, 1,
-                            NULL);
-out:
+                           (struct ptlrpc_request *)itp->d.lustre.it_data,
+                           1, NULL);
         RETURN(rc);
 }
 
@@ -1922,9 +1921,9 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 {
         struct lookup_intent oit = { .it_op = IT_GETATTR };
-        struct md_op_data op_data = { { 0 } };
         struct inode *inode = dentry->d_inode;
         struct ptlrpc_request *req = NULL;
+        struct md_op_data op_data;
         struct ll_inode_info *lli;
         struct ll_sb_info *sbi;
         int rc;

@@ -623,8 +623,8 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct intnl_stat *st = llu_i2stat(inode);
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data = { { 0 } };
         int ia_valid = attr->ia_valid;
+        struct md_op_data op_data;
         int rc = 0;
         ENTRY;
 
@@ -667,6 +667,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
          * inode ourselves so we can call obdo_from_inode() always. */
         if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
                 struct lustre_md md;
+    
                 llu_prepare_md_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
                 rc = md_setattr(sbi->ll_md_exp, &op_data,
@@ -849,7 +850,7 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
         struct llu_sb_info *sbi = llu_i2sbi(dir);
-        struct md_op_data op_data = { { 0 } };
+        struct md_op_data op_data;
         struct lu_placement_hint hint = {
                 .ph_pname = NULL,
                 .ph_cname = qstr,
@@ -862,13 +863,14 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         if (llu_i2stat(dir)->st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
+        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, 0);
+
         /* allocate new fid */
         err = llu_fid_md_alloc(sbi, &op_data.fid2, &hint);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 RETURN(err);
         }
-        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, 0);
         err = md_create(sbi->ll_md_exp, &op_data,
                         tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                         current->fsuid, current->fsgid, current->cap_effective,
@@ -971,7 +973,7 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         struct ptlrpc_request *request = NULL;
         struct inode *dir = pno->p_parent->p_base->pb_ino;
         struct llu_sb_info *sbi = llu_i2sbi(dir);
-        struct md_op_data op_data = { { 0 } };
+        struct md_op_data op_data;
         int err = -EMLINK;
         struct lu_placement_hint hint = {
                 .ph_pname = NULL,
@@ -996,6 +998,10 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
+                llu_prepare_md_op_data(&op_data, dir, NULL,
+                                       pno->p_base->pb_name.name,
+                                       pno->p_base->pb_name.len,
+                                       0);
                 /* allocate new fid */
                 err = llu_fid_md_alloc(sbi, &op_data.fid2, &hint);
                 if (err) {
@@ -1003,10 +1009,6 @@ static int llu_iop_mknod_raw(struct pnode *pno,
                         RETURN(err);
                 }
 
-                llu_prepare_md_op_data(&op_data, dir, NULL,
-                                       pno->p_base->pb_name.name,
-                                       pno->p_base->pb_name.len,
-                                       0);
                 err = md_create(sbi->ll_md_exp, &op_data, NULL, 0, mode,
                                 current->fsuid, current->fsgid,
                                 current->cap_effective, dev, &request);
@@ -1029,7 +1031,7 @@ static int llu_iop_link_raw(struct pnode *old, struct pnode *new)
         const char *name = new->p_base->pb_name.name;
         int namelen = new->p_base->pb_name.len;
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data = { { 0 } };
+        struct md_op_data op_data;
         int rc;
         ENTRY;
 
@@ -1056,7 +1058,7 @@ static int llu_iop_unlink_raw(struct pnode *pno)
         int len = qstr->len;
         struct inode *target = pno->p_base->pb_ino;
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data = { { 0 } };
+        struct md_op_data op_data;
         int rc;
         ENTRY;
 
@@ -1082,7 +1084,7 @@ static int llu_iop_rename_raw(struct pnode *old, struct pnode *new)
         const char *newname = new->p_base->pb_name.name;
         int newnamelen = new->p_base->pb_name.len;
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data = { { 0 } };
+        struct md_op_data op_data;
         int rc;
         ENTRY;
 
@@ -1225,7 +1227,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
         struct intnl_stat *st = llu_i2stat(dir);
-        struct md_op_data op_data = { { 0 } };
+        struct md_op_data op_data;
         struct lu_placement_hint hint = {
                 .ph_pname = NULL,
                 .ph_cname = qstr,
@@ -1242,13 +1244,14 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         if (st->st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
+        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, 0);
+
         /* allocate new fid */
         err = llu_fid_md_alloc(llu_i2sbi(dir), &op_data.fid2, &hint);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 RETURN(err);
         }
-        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, 0);
         err = md_create(llu_i2sbi(dir)->ll_md_exp, &op_data, NULL, 0, mode,
                         current->fsuid, current->fsgid, current->cap_effective,
                         0, &request);
@@ -1264,7 +1267,7 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
         const char *name = qstr->name;
         int len = qstr->len;
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data = { { 0 } };
+        struct md_op_data op_data;
         int rc;
         ENTRY;
 

@@ -59,12 +59,12 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
                       ldlm_blocking_callback cb_blocking,
                       int extra_lock_flags)
 {
-        struct md_op_data op_data = { { 0 } };
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct ptlrpc_request *req = NULL;
         struct mdt_body *body = NULL;
         struct lustre_handle plock;
+        struct md_op_data *op_data;
         struct lu_fid nid;
         int pmode, i, rc = 0;
         ENTRY;
@@ -100,29 +100,40 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
 
         nid = body->fid1;
         it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
-        op_data.fid1 = nid;
+
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                GOTO(out, rc = -ENOMEM);
+        
+        op_data->fid1 = nid;
         i = lmv_fld_lookup(obd, &nid);
         if (i < 0)
                 RETURN(i);
-        rc = md_intent_lock(lmv->tgts[i].ltd_exp, &op_data,
+        rc = md_intent_lock(lmv->tgts[i].ltd_exp, op_data,
                             lmm, lmmsize, it, flags, &req,
                             cb_blocking, extra_lock_flags);
 
-        /*llite needs LOOKUP lock to track dentry revocation in order to
+        /*
+         * llite needs LOOKUP lock to track dentry revocation in order to
          * maintain dcache consistency. Thus drop UPDATE lock here and put
-         * LOOKUP in request. */
+         * LOOKUP in request.
+         */
         if (rc == 0) {
                 lmv_drop_intent_lock(it);
                 memcpy(&it->d.lustre.it_lock_handle, &plock,
                        sizeof(plock));
                 it->d.lustre.it_lock_mode = pmode;
-        } else if (pmode) {
-                ldlm_lock_decref(&plock, pmode);
         }
+
+        OBD_FREE_PTR(op_data);
+        EXIT;
+out:
+        if (pmode)
+                ldlm_lock_decref(&plock, pmode);
 
         ptlrpc_req_finished(*reqp);
         *reqp = req;
-        RETURN(rc);
+        return rc;
 }
 
 int lmv_intent_open(struct obd_export *exp, struct lu_fid *pid,
@@ -132,16 +143,20 @@ int lmv_intent_open(struct obd_export *exp, struct lu_fid *pid,
                     ldlm_blocking_callback cb_blocking,
                     int extra_lock_flags)
 {
-        struct md_op_data op_data = { { 0 } };
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mdt_body *body = NULL;
+        struct md_op_data *op_data;
+        struct lmv_stripe_md *mea;
         struct lu_fid rpid = *pid;
         int rc, mds, loop = 0;
         struct lmv_obj *obj;
-        struct lmv_stripe_md *mea;
         ENTRY;
 
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        
         /* IT_OPEN is intended to open (and create, possible) an object. Parent
          * (pid) may be splitted dir */
 
@@ -149,7 +164,7 @@ repeat:
         LASSERT(++loop <= 2);
         mds = lmv_fld_lookup(obd, &rpid);
         if (mds < 0)
-                RETURN(mds);
+                GOTO(out_free_op_data, rc = mds);
         obj = lmv_obj_grab(obd, &rpid);
         if (obj) {
                 /* directory is already splitted, so we have to forward
@@ -163,15 +178,15 @@ repeat:
                 lmv_obj_put(obj);
         }
 
-        op_data.fid1 = rpid;
+        op_data->fid1 = rpid;
 
         if (cid)
-                op_data.fid2 = *cid;
-        op_data.name = name;
-        op_data.namelen = len;
+                op_data->fid2 = *cid;
+        op_data->name = name;
+        op_data->namelen = len;
 
         //mds = lmv_fld_lookup(obd, &rpid);
-        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data,
+        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, op_data,
                             lmm, lmmsize, it, flags, reqp,
                             cb_blocking, extra_lock_flags);
         if (rc == -ERESTART) {
@@ -181,11 +196,12 @@ repeat:
                 rc = lmv_handle_split(exp, &rpid);
                 if (rc == 0) {
                         ptlrpc_req_finished(*reqp);
+                        memset(op_data, 0, sizeof(*op_data));
                         goto repeat;
                 }
         }
         if (rc != 0)
-                RETURN(rc);
+                GOTO(out_free_op_data, rc);
 
         /* okay, MDS has returned success. Probably name has been resolved in
          * remote inode */
@@ -203,7 +219,7 @@ repeat:
                 CDEBUG(D_OTHER, "can't handle remote %s: dir "DFID3"("DFID3"):"
                        "%*s: %d\n", LL_IT2STR(it), PFID3(pid), PFID3(&rpid),
                        len, name, rc);
-                RETURN(rc);
+                GOTO(out_free_op_data, rc);
         }
 
         /*
@@ -213,7 +229,7 @@ repeat:
         if ((it->d.lustre.it_disposition & DISP_LOOKUP_NEG) &&
             !(it->d.lustre.it_disposition & DISP_OPEN_CREATE) &&
             !(it->d.lustre.it_disposition & DISP_OPEN_OPEN))
-                RETURN(0);
+                GOTO(out_free_op_data, rc = 0);
 
         /* caller may use attrs MDS returns on IT_OPEN lock request so, we have
          * to update them for splitted dir */
@@ -222,7 +238,7 @@ repeat:
 
         /* could not find object, FID is not present in response. */
         if (!(body->valid & OBD_MD_FLID))
-                RETURN(0);
+                GOTO(out_free_op_data, rc = 0);
 
         cid = &body->fid1;
         obj = lmv_obj_grab(obd, cid);
@@ -230,7 +246,7 @@ repeat:
                 /* wow! this is splitted dir, we'd like to handle it */
                 obj = lmv_obj_create(exp, &body->fid1, mea);
                 if (IS_ERR(obj))
-                        RETURN(PTR_ERR(obj));
+                        GOTO(out_free_op_data, rc = (int)PTR_ERR(obj));
         }
 
         if (obj) {
@@ -248,7 +264,10 @@ repeat:
         if (obj)
                 lmv_obj_put(obj);
 
-        RETURN(rc);
+        EXIT;
+out_free_op_data:
+        OBD_FREE_PTR(op_data);
+        return rc;
 }
 
 int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
@@ -259,22 +278,26 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                        int extra_lock_flags)
 {
         struct lmv_obj *obj = NULL, *obj2 = NULL;
-        struct md_op_data op_data = { { 0 } };
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mdt_body *body = NULL;
+        struct md_op_data *op_data;
         struct lu_fid rpid = *pid;
         struct lmv_stripe_md *mea;
         int rc = 0, mds;
         ENTRY;
 
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        
         if (cid) {
                 /* caller wants to revalidate attrs of obj we have to revalidate
                  * slaves if requested object is splitted directory */
                 CDEBUG(D_OTHER, "revalidate attrs for "DFID3"\n", PFID3(cid));
                 mds = lmv_fld_lookup(obd, cid);
                 if (mds < 0)
-                        RETURN(mds);
+                        GOTO(out_free_op_data, rc = mds);
 #if 0
                 obj = lmv_obj_grab(obd, cid);
                 if (obj) {
@@ -284,18 +307,18 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                                 rpid = obj->lo_inodes[mds].li_fid;
                                 mds = lmv_fld_lookup(obd, &rpid);
                                 if (mds < 0)
-                                        RETURN(mds);
+                                        GOTO(out_free_op_data, rc = mds);
                         }
                         lmv_obj_put(obj);
                 }
 #endif
-                op_data.fid2 = *cid;
+                op_data->fid2 = *cid;
         } else {
                 CDEBUG(D_OTHER, "INTENT getattr for %*s on "DFID3"\n",
                        len, name, PFID3(pid));
                 mds = lmv_fld_lookup(obd, pid);
                 if (mds < 0)
-                        RETURN(mds);
+                        GOTO(out_free_op_data, rc = mds);
                 obj = lmv_obj_grab(obd, pid);
                 if (obj && len) {
                         /* directory is already splitted. calculate mds */
@@ -310,24 +333,26 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                 }
         }
 
-        op_data.fid1 = rpid;
-        op_data.name = name;
-        op_data.namelen = len;
+        op_data->fid1 = rpid;
+        op_data->name = name;
+        op_data->namelen = len;
 
         /* the same about fid returning. */
-        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data, lmm,
+        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, op_data, lmm,
                             lmmsize, it, flags, reqp, cb_blocking,
                             extra_lock_flags);
         if (rc < 0)
-                RETURN(rc);
+                GOTO(out_free_op_data, rc);
 
         if (obj && rc > 0) {
-                /* this is splitted dir. In order to optimize things a
-                 * bit, we consider obj valid updating missing parts.
+                /*
+                 * this is splitted dir. In order to optimize things a bit, we
+                 * consider obj valid updating missing parts.
 
-                 * FIXME: do we need to return any lock here? It would
-                 * be fine if we don't. this means that nobody should
-                 * use UPDATE lock to notify about object * removal */
+                 * FIXME: do we need to return any lock here? It would be fine
+                 * if we don't. this means that nobody should use UPDATE lock to
+                 * notify about object * removal.
+                 */
                 CDEBUG(D_OTHER,
                        "revalidate slaves for "DFID3", rc %d\n",
                        PFID3(cid), rc);
@@ -335,32 +360,34 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                 LASSERT(cid != 0);
                 rc = lmv_revalidate_slaves(exp, reqp, cid, it, rc,
                                            cb_blocking, extra_lock_flags);
-                RETURN(rc);
+                GOTO(out_free_op_data, rc);
         }
 
         if (*reqp == NULL)
-                RETURN(rc);
+                GOTO(out_free_op_data, rc);
 
-        /* okay, MDS has returned success. probably name has been
-         * resolved in remote inode */
+        /*
+         * okay, MDS has returned success. probably name has been resolved in
+         * remote inode.
+         */
         rc = lmv_intent_remote(exp, lmm, lmmsize, it, flags,
                                reqp, cb_blocking, extra_lock_flags);
         if (rc < 0)
-                RETURN(rc);
+                GOTO(out_free_op_data, rc);
 
         /*
          * nothing is found, do not access body->fid1 as it is zero and thus
          * pointless.
          */
         if (it->d.lustre.it_disposition & DISP_LOOKUP_NEG)
-                RETURN(0);
+                GOTO(out_free_op_data, rc = 0);
 
         body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
         LASSERT(body != NULL);
 
         /* could not find object, FID is not present in response. */
         if (!(body->valid & OBD_MD_FLID))
-                RETURN(0);
+                GOTO(out_free_op_data, rc = 0);
 
         cid = &body->fid1;
         obj2 = lmv_obj_grab(obd, cid);
@@ -372,7 +399,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
 
                 obj2 = lmv_obj_create(exp, &body->fid1, mea);
                 if (IS_ERR(obj2))
-                        RETURN(PTR_ERR(obj2));
+                        GOTO(out_free_op_data, rc = (int)PTR_ERR(obj2));
         }
 
         if (obj2) {
@@ -384,7 +411,11 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                                            cb_blocking, extra_lock_flags);
                 lmv_obj_put(obj2);
         }
-        RETURN(rc);
+
+        EXIT;
+out_free_op_data:
+        OBD_FREE_PTR(op_data);
+        return rc;
 }
 
 void lmv_update_body(struct mdt_body *body, struct lmv_inode *lino)
@@ -400,6 +431,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mdt_body *body = NULL;
         struct lustre_handle *lockh;
+        struct md_op_data *op_data;
         struct ldlm_lock *lock;
         struct mdt_body *body2;
         struct lmv_obj *obj;
@@ -429,11 +461,14 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         CDEBUG(D_OTHER, "lookup slaves for "DFID3"\n",
                PFID3(&body->fid1));
 
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        
         lmv_obj_lock(obj);
 
         for (i = 0; i < obj->lo_objcount; i++) {
                 struct lu_fid fid = obj->lo_inodes[i].li_fid;
-                struct md_op_data op_data = { { 0 } };
                 struct ptlrpc_request *req = NULL;
                 struct lookup_intent it;
                 int mds;
@@ -448,13 +483,14 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
 
-                op_data.fid1 = fid;
-                op_data.fid2 = fid;
+                memset(op_data, 0, sizeof(*op_data));
+                op_data->fid1 = fid;
+                op_data->fid2 = fid;
 
                 mds = lmv_fld_lookup(obd, &fid);
                 if (mds < 0)
                         GOTO(cleanup, rc = mds);
-                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data,
+                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, op_data,
                                     NULL, 0, &it, 0, &req,
                                     lmv_blocking_ast, 0);
 
@@ -496,6 +532,7 @@ release_lock:
 
         EXIT;
 cleanup:
+        OBD_FREE_PTR(op_data);
         lmv_obj_unlock(obj);
         lmv_obj_put(obj);
         return rc;
@@ -508,16 +545,20 @@ int lmv_intent_lookup(struct obd_export *exp, struct lu_fid *pid,
                       ldlm_blocking_callback cb_blocking,
                       int extra_lock_flags)
 {
-        struct md_op_data op_data = { { 0 } };
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mdt_body *body = NULL;
         struct lu_fid rpid = *pid;
-        struct lmv_obj *obj;
+        struct md_op_data *op_data;
         struct lmv_stripe_md *mea;
         int rc, mds, loop = 0;
+        struct lmv_obj *obj;
         ENTRY;
 
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        
         /*
          * IT_LOOKUP is intended to produce name -> fid resolving (let's call
          * this lookup below) or to confirm requested resolving is still valid
@@ -539,23 +580,24 @@ int lmv_intent_lookup(struct obd_export *exp, struct lu_fid *pid,
                 }
                 mds = lmv_fld_lookup(obd, &rpid);
                 if (mds < 0)
-                        RETURN(mds);
+                        GOTO(out_free_op_data, rc = mds);
 
                 CDEBUG(D_OTHER, "revalidate lookup for "DFID3" to %d MDS\n",
                        PFID3(cid), mds);
 
-                op_data.fid2 = *cid;
+                op_data->fid2 = *cid;
         } else {
                 mds = lmv_fld_lookup(obd, pid);
                 if (mds < 0)
-                        RETURN(mds);
+                        GOTO(out_free_op_data, rc = mds);
 repeat:
                 LASSERT(++loop <= 2);
 
-                /* this is lookup. during lookup we have to update all the
+                /*
+                 * this is lookup. during lookup we have to update all the
                  * attributes, because returned values will be put in struct
-                 * inode */
-
+                 * inode.
+                 */
                 obj = lmv_obj_grab(obd, pid);
                 if (obj) {
                         if (len) {
@@ -565,37 +607,39 @@ repeat:
                                 rpid = obj->lo_inodes[mds].li_fid;
                                 mds = lmv_fld_lookup(obd, &rpid);
                                 if (mds < 0)
-                                        RETURN(mds);
+                                        GOTO(out_free_op_data, rc = mds);
                         }
                         lmv_obj_put(obj);
                 }
-                memset(&op_data.fid2, 0, sizeof op_data.fid2);
+                memset(&op_data->fid2, 0, sizeof(op_data->fid2));
         }
 
-        op_data.fid1 = rpid;
-        op_data.name = name;
-        op_data.namelen = len;
+        op_data->fid1 = rpid;
+        op_data->name = name;
+        op_data->namelen = len;
 
-        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data, lmm, lmmsize,
+        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, op_data, lmm, lmmsize,
                             it, flags, reqp, cb_blocking, extra_lock_flags);
         if (rc > 0) {
                 LASSERT(cid != 0);
-                RETURN(rc);
+                GOTO(out_free_op_data, rc);
         }
         if (rc > 0) {
-                /* very interesting. it seems object is still valid but for some
-                 * reason llite calls lookup, not revalidate */
+                /*
+                 * very interesting. it seems object is still valid but for some
+                 * reason llite calls lookup, not revalidate.
+                 */
                 CDEBUG(D_OTHER, "lookup for "DFID3" and data should be uptodate\n",
                       PFID3(&rpid));
                 LASSERT(*reqp == NULL);
-                RETURN(rc);
+                GOTO(out_free_op_data, rc);
         }
 
         if (rc == 0 && *reqp == NULL) {
                 /* once again, we're asked for lookup, not revalidate */
                 CDEBUG(D_OTHER, "lookup for "DFID3" and data should be uptodate\n",
                       PFID3(&rpid));
-                RETURN(rc);
+                GOTO(out_free_op_data, rc);
         }
 
         if (rc == -ERESTART) {
@@ -607,13 +651,14 @@ repeat:
 
                 obj = lmv_obj_create(exp, &rpid, NULL);
                 if (IS_ERR(obj))
-                        RETURN(PTR_ERR(obj));
+                        GOTO(out_free_op_data, rc = (int)PTR_ERR(obj));
                 lmv_obj_put(obj);
+                memset(op_data, 0, sizeof(*op_data));
                 goto repeat;
         }
 
         if (rc < 0)
-                RETURN(rc);
+                GOTO(out_free_op_data, rc);
 
         /* okay, MDS has returned success. Probably name has been resolved in
          * remote inode. */
@@ -630,12 +675,15 @@ repeat:
                 if (!obj) {
                         obj = lmv_obj_create(exp, &body->fid1, mea);
                         if (IS_ERR(obj))
-                                RETURN(PTR_ERR(obj));
+                                GOTO(out_free_op_data, rc = (int)PTR_ERR(obj));
                 }
                 lmv_obj_put(obj);
         }
 
-        RETURN(rc);
+        EXIT;
+out_free_op_data:
+        OBD_FREE_PTR(op_data);
+        return rc;
 }
 
 int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
@@ -692,6 +740,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
         struct ptlrpc_request *mreq = *reqp;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct lustre_handle master_lockh;
+        struct md_op_data *op_data;
         struct ldlm_lock *lock;
         unsigned long size = 0;
         struct mdt_body *body;
@@ -700,6 +749,10 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
         int i, mds, rc = 0;
         ENTRY;
 
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        
         /* we have to loop over the subobjects, check validity and update them
          * from MDSs if needed. it's very useful that we need not to update all
          * the fields. say, common fields (that are equal on all the subojects
@@ -714,7 +767,6 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
         for (i = 0; i < obj->lo_objcount; i++) {
                 struct lu_fid fid = obj->lo_inodes[i].li_fid;
-                struct md_op_data op_data = { { 0 } };
                 struct lustre_handle *lockh = NULL;
                 struct ptlrpc_request *req = NULL;
                 ldlm_blocking_callback cb;
@@ -724,6 +776,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 CDEBUG(D_OTHER, "revalidate subobj "DFID3"\n",
                        PFID3(&fid));
 
+                memset(op_data, 0, sizeof(*op_data));
                 memset(&it, 0, sizeof(it));
                 it.it_op = IT_GETATTR;
 
@@ -750,14 +803,14 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                         cb = cb_blocking;
                 }
 
-                op_data.fid1 = fid;
-                op_data.fid2 = fid;
+                op_data->fid1 = fid;
+                op_data->fid2 = fid;
 
                 /* is obj valid? */
                 mds = lmv_fld_lookup(obd, &fid);
                 if (mds < 0)
-                        RETURN(mds);
-                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &op_data,
+                        GOTO(out_free_op_data, rc = mds);
+                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, op_data,
                                     NULL, 0, &it, 0, &req, cb, extra_lock_flags);
                 lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
                 if (rc > 0 && req == NULL) {
@@ -826,10 +879,11 @@ release_lock:
                 body->size = size;
 
                 if (mreq == NULL) {
-                        /* very important to maintain mds num the
-                         * same because of revalidation. mreq == NULL means that
-                         * caller has no reply and the only attr we can return
-                         * is size */
+                        /*
+                         * very important to maintain mds num the same because
+                         * of revalidation. mreq == NULL means that caller has
+                         * no reply and the only attr we can return is size.
+                         */
                         body->valid = OBD_MD_FLSIZE;
 //                        body->mds = lmv_fld_lookup(obd, &obj->lo_fid);
                 }
@@ -851,5 +905,7 @@ release_lock:
 cleanup:
         lmv_obj_unlock(obj);
         lmv_obj_put(obj);
+out_free_op_data:
+        OBD_FREE_PTR(op_data);
         return rc;
 }

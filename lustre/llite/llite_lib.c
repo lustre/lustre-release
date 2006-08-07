@@ -901,8 +901,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
-        struct md_op_data op_data = { { 0 } };
         int ia_valid = attr->ia_valid;
+        struct md_op_data op_data;
         int rc = 0;
         ENTRY;
 
@@ -955,6 +955,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
          * inode ourselves so we can call obdo_from_inode() always. */
         if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
                 struct lustre_md md;
+
                 ll_prepare_md_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
                 rc = md_setattr(sbi->ll_md_exp, &op_data,
@@ -1442,10 +1443,10 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 RETURN(put_user(flags, (int *)arg));
         }
         case EXT3_IOC_SETFLAGS: {
-                struct md_op_data op_data = { { 0 } };
-                struct ll_iattr_struct attr;
-                struct obdo *oa;
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+                struct ll_iattr_struct attr;
+                struct md_op_data op_data;
+                struct obdo *oa;
 
                 if (get_user(flags, (int *)arg))
                         RETURN(-EFAULT);
