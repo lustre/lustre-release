@@ -903,10 +903,47 @@ static int __mdd_object_initialize(const struct lu_context *ctxt,
                                    struct mdd_object *child,
                                    struct md_attr *ma, struct thandle *handle)
 {
-        int rc;
+        struct lu_attr    *la = &mdd_ctx_info(ctxt)->mti_la;
+        struct dt_object  *dt_parent = mdd_object_child(parent);
+        struct dt_object  *dt_child = mdd_object_child(child);
+        int                rc;
+        ENTRY;
 
-        rc = 0;
+        /* FIXME & TODO: valid code need some convertion from Lustre to linux */
+        ma->ma_attr.la_valid = ATTR_UID   | ATTR_GID   | ATTR_ATIME |
+                               ATTR_MTIME | ATTR_CTIME;
+
+        rc = dt_parent->do_ops->do_attr_get(ctxt, dt_parent, la);
+        if (rc != 0)
+                RETURN(rc);
+        if (la->la_mode & S_ISGID) {
+                CDEBUG(D_ERROR, "Parent "DFID3" is a GID\n", 
+                                PFID3(mdo2fid(parent)));
+                ma->ma_attr.la_gid = la->la_gid;
+                rc = dt_child->do_ops->do_attr_get(ctxt, dt_child, la);
+                if (rc != 0)
+                        RETURN(rc);
+
+                if (S_ISDIR(la->la_mode)) {
+                        ma->ma_attr.la_mode = la->la_mode | S_ISGID;
+                        ma->ma_attr.la_valid |= ATTR_MODE;
+                }
+        }
+
+        CDEBUG(D_ERROR, "Child "DFID3" has u/gid: %d:%d\n", 
+                        PFID3(mdo2fid(child)), ma->ma_attr.la_uid, 
+                        ma->ma_attr.la_gid);
+        rc = dt_child->do_ops->do_attr_set(ctxt, dt_child, &ma->ma_attr,handle);
+        if (rc != 0)
+                RETURN(rc); 
+
+        ma->ma_attr.la_valid = ATTR_MTIME | ATTR_CTIME;
+        rc = dt_parent->do_ops->do_attr_set(ctxt, dt_parent, &ma->ma_attr, handle);
+        if (rc != 0)
+                RETURN(rc); 
+        
         if (S_ISDIR(ma->ma_attr.la_mode)) {
+                /* add . and .. for newly created dir */
                 __mdd_ref_add(ctxt, child, handle);
                 rc = __mdd_index_insert(ctxt, child,
                                         mdo2fid(child), dot, handle);
@@ -928,7 +965,7 @@ static int __mdd_object_initialize(const struct lu_context *ctxt,
                         }
                 }
         }
-        return rc;
+        RETURN(rc);
 }
 
 static int mdd_create_data(const struct lu_context *ctxt,
