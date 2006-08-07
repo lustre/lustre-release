@@ -1327,7 +1327,6 @@ static int create_iam(enum iam_fmt_t fmt, int keysize, int recsize,
                 goto out;
         }
 
-        /* form leaf */
         memset(buf, 0, blocksize);
         if (fmt == FMT_LFIX) {
                 lfix_leaf(buf, blocksize, keysize, ptrsize, recsize);
