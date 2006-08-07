@@ -60,6 +60,13 @@ static void __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
                           struct thandle *handle);
 static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
                       const char *name, struct lu_fid* fid);
+
+static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
+{
+        return lu_object_fid(&obj->mod_obj.mo_lu);
+}
+
+
 static struct md_object_operations mdd_obj_ops;
 static struct md_dir_operations    mdd_dir_ops;
 static struct lu_object_operations mdd_lu_obj_ops;
@@ -657,7 +664,7 @@ static int mdd_may_delete(const struct lu_context *ctxt,
                 if (!S_ISDIR(cla->la_mode))
                         RETURN(-ENOTDIR);
 
-                if (lu_fid_eq(mdd2_lu_fid(cobj), 
+                if (lu_fid_eq(mdo2fid(cobj), 
                                         &mdd->mdd_root_fid))
                         RETURN(-EBUSY);
                 
@@ -809,11 +816,6 @@ static int mdd_parent_fid(const struct lu_context *ctxt,
         rc = mdd_lookup(ctxt, &obj->mod_obj, dotdot, fid);
 
         return rc;
-}
-
-static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
-{
-        return lu_object_fid(&obj->mod_obj.mo_lu);
 }
 
 static int mdd_is_parent(const struct lu_context *ctxt,

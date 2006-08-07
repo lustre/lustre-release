@@ -311,7 +311,6 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
                 attr->la_ctime = rec->cr_time;
                 attr->la_mtime = rec->cr_time;
                 attr->la_atime = rec->cr_time;
-
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (rr->rr_name == NULL)
                         /*XXX: what about open by FID? */
