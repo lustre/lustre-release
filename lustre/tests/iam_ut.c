@@ -173,11 +173,13 @@ enum op {
 
 unsigned char hex2dec(unsigned char hex)
 {
-        if ('0' <= hex && hex <= '9')
+        if ('0' <= hex && hex <= '9') {
                 return hex - '0';
-        else if ('a' <= hex && hex <= 'f')
-                return hex - 'a';
-        else {
+        } else if ('a' <= hex && hex <= 'f') {
+                return hex - 'a' + 10;
+        } else if ('A' <= hex && hex <= 'F') {
+                return hex - 'A' + 10;
+        } else {
                 fprintf(stderr, "Wrong hex digit '%c'\n", hex);
                 exit(1);
         }
@@ -317,59 +319,80 @@ int main(int argc, char **argv)
 
         if (key == NULL || rec == NULL) {
                 fprintf(stderr, "cannot allocate memory\n");
-                return 1;
+                rc = 1;
+                goto out;
         }
 
         copier = keynul ? &strncpy : &memcpy;
         copier(key, key_opt ? : "RIVERRUN", keysize + 1);
+        if (keynul == 0) {
+                free(key_opt);
+                key_opt = NULL;
+        }
         copier = recnul ? &strncpy : &memcpy;
         copier(rec, rec_opt ? : "PALEFIRE", recsize + 1);
+        if (recnul == 0) {
+                free(rec_opt);
+                rec_opt = NULL;
+        }
 
-        if (op == OP_INSERT)
-                return doop(0, key, rec, IAM_IOC_INSERT, "IAM_IOC_INSERT");
-        else if (op == OP_DELETE)
-                return doop(0, key, rec, IAM_IOC_DELETE, "IAM_IOC_DELETE");
-        else if (op == OP_LOOKUP) {
+        if (op == OP_INSERT) {
+                rc = doop(0, key, rec, IAM_IOC_INSERT, "IAM_IOC_INSERT");
+                goto out;
+        } else if (op == OP_DELETE) {
+                rc = doop(0, key, rec, IAM_IOC_DELETE, "IAM_IOC_DELETE");
+                goto out;
+        } else if (op == OP_LOOKUP) {
                 rc = doop(0, key, rec, IAM_IOC_LOOKUP, "IAM_IOC_LOOKUP");
                 if (rc == 0)
                         print_rec(rec, recsize);
-                return rc;
+                goto out;
         } else if (op == OP_IT_START) {
                 rc = doop(0, key, rec, IAM_IOC_IT_START, "IAM_IOC_IT_START");
                 if (rc == 0) {
                         print_rec(key, keysize);
                         print_rec(rec, recsize);
                 }
-                return rc;
+                goto out;
         } else if (op == OP_IT_STOP) {
-                return doop(0, key, rec, IAM_IOC_IT_STOP, "IAM_IOC_IT_STOP");
+                rc = doop(0, key, rec, IAM_IOC_IT_STOP, "IAM_IOC_IT_STOP");
+                goto out;
         } else if (op == OP_IT_NEXT) {
                 rc = doop(0, key, rec, IAM_IOC_IT_NEXT, "IAM_IOC_IT_NEXT");
                 if (rc == 0) {
                         print_rec(key, keysize);
                         print_rec(rec, recsize);
                 }
-                return rc;
+                goto out;
         }
 
         rc = insert(0, key, rec);
-        if (rc != 0)
-                return 1;
+        if (rc != 0) {
+                rc = 1;
+                goto out;
+        }
 
         rc = insert(0, "DAEDALUS", "FINNEGAN");
-        if (rc != 0)
-                return 1;
+        if (rc != 0) {
+                rc = 1;
+                goto out;
+        }
 
         rc = insert(0, "DAEDALUS", "FINNEGAN");
         if (errno != EEXIST) {
                 if (rc == 0)
                         fprintf(stderr, "Duplicate key not detected!\n");
-                return 1;
+                if (rc != 0) {
+                        rc = 1;
+                        goto out;
+                }
         }
 
         rc = lookup(0, "RIVERRUN", rec);
-        if (rc != 0)
-                return 1;
+        if (rc != 0) {
+                rc = 1;
+                goto out;
+        }
 
         print_rec(rec, recsize);
 
@@ -379,11 +402,22 @@ int main(int argc, char **argv)
                 snprintf(key, keysize + 1, "y-%x-x", i);
                 snprintf(rec, recsize + 1, "p-%x-q", 1000 - i);
                 rc = insert(0, key, rec);
-                if (rc != 0)
-                        return 1;
+                if (rc != 0) {
+                        rc = 1;
+                        goto out;
+                }
                 if (verbose > 1)
                         printf("key %#x inserted\n", i);
         }
 
-        return 0;
+        rc = 0;
+
+out:
+        if (key) {
+                free(key);
+        }
+        if (rec) {
+                free(rec);
+        }
+        return rc;
 }
