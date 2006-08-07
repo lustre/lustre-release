@@ -126,6 +126,29 @@ static void mdd_object_free(const struct lu_context *ctxt, struct lu_object *o)
         OBD_FREE_PTR(mdd);
 }
 
+struct mdd_object *mdd_object_find(const struct lu_context *ctxt,
+                                   struct mdd_device *d,
+                                   const struct lu_fid *f)
+{
+        struct lu_object *o;
+        struct mdd_object *m;
+        ENTRY;
+
+        o = lu_object_find(ctxt, d->mdd_md_dev.md_lu_dev.ld_site, f);
+        if (IS_ERR(o))
+                m = (struct mdd_object *)o;
+        else
+                m = lu2mdd_obj(lu_object_locate(o->lo_header, 
+                                 d->mdd_md_dev.md_lu_dev.ld_type));
+        RETURN(m);
+}
+
+static inline void mdd_object_put(const struct lu_context *ctxt,
+                                  struct mdd_object *o)
+{
+        lu_object_put(ctxt, &o->mod_obj.mo_lu);
+}
+
 static int mdd_attr_get(const struct lu_context *ctxt,
                         struct md_object *obj, struct md_attr *ma)
 {
@@ -606,6 +629,45 @@ static int __mdd_index_delete(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
+/*Check whether it may create the cobj under the pobj*/ 
+static int mdd_may_create(const struct lu_context *ctxt, 
+                          struct mdd_object *pobj, struct mdd_object *cobj)
+{
+        ENTRY;
+        if (cobj && lu_object_exists(ctxt, &cobj->mod_obj.mo_lu))
+                RETURN(-EEXIST);
+
+        /*check pobj may create or not*/
+        RETURN(0);
+}
+/*Check whether it may delete the cobj under the pobj*/
+static int mdd_may_delete(const struct lu_context *ctxt,
+                          struct mdd_object *pobj, struct mdd_object *cobj,
+                          struct lu_attr *cla, int is_dir)
+{
+        struct mdd_device *mdd = mdo2mdd(&pobj->mod_obj);
+        int rc = 0;
+        
+        ENTRY;
+        if (!cobj || !lu_object_exists(ctxt, &cobj->mod_obj.mo_lu))
+                RETURN(-ENOENT);
+      
+        /*TODO:check append flags*/
+        if (is_dir) {
+                if (!S_ISDIR(cla->la_mode))
+                        RETURN(-ENOTDIR);
+
+                if (lu_fid_eq(mdd2_lu_fid(cobj), 
+                                        &mdd->mdd_root_fid))
+                        RETURN(-EBUSY);
+                
+        } else if (S_ISDIR(cla->la_mode))
+                        RETURN(-EISDIR);
+                
+        /*DEAD dir checking*/
+        RETURN(rc);
+}
+
 static int mdd_link(const struct lu_context *ctxt, struct md_object *tgt_obj,
                     struct md_object *src_obj, const char *name)
 {
@@ -821,6 +883,49 @@ static umode_t mdd_object_type(const struct mdd_object *obj)
         return obj->mod_obj.mo_lu.lo_header->loh_attr;
 }
 
+static int mdd_rename_sanity_check (const struct lu_context *ctxt,
+                                    struct md_object *src_pobj,
+                                    struct md_object *tgt_pobj,
+                                    const struct lu_fid *lf,
+                                    struct md_object *tobj)
+{
+        struct mdd_device *mdd =mdo2mdd(src_pobj);
+        struct mdd_object *sobj = mdd_object_find(ctxt, mdd, lf);
+        struct lu_attr *la = &mdd_ctx_info(ctxt)->mti_la; 
+        struct dt_object  *next;
+        int rc = 0, src_is_dir, tgt_is_dir;
+        ENTRY;
+
+        next = mdd_object_child(sobj);
+        rc = next->do_ops->do_attr_get(ctxt, next, la);
+        if (rc) 
+                GOTO(out, rc);
+        src_is_dir = S_ISDIR(la->la_mode);
+        rc = mdd_may_delete(ctxt, md2mdd_obj(src_pobj), sobj, la, src_is_dir);
+        if (rc)
+                GOTO(out, rc);
+        if (!tobj) {
+                rc = mdd_may_create(ctxt, md2mdd_obj(tgt_pobj), NULL);
+                GOTO(out, rc);
+        }
+        
+        next = mdd_object_child(md2mdd_obj(tobj));
+        rc = next->do_ops->do_attr_get(ctxt, next, la);
+        if (rc)
+                GOTO(out, rc);
+        rc = mdd_may_delete(ctxt, md2mdd_obj(tgt_pobj),md2mdd_obj(tobj),
+                            la, src_is_dir);
+        if (rc)
+                GOTO(out, rc);
+
+        tgt_is_dir = S_ISDIR(la->la_mode);
+        if (tgt_is_dir && mdd_dir_is_empty(ctxt, md2mdd_obj(tobj)))
+                GOTO(out, rc = -ENOTEMPTY);
+out:
+        mdd_object_put(ctxt, sobj);
+        RETURN(rc);
+}
+
 static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                       struct md_object *tgt_pobj, const struct lu_fid *lf,
                       const char *sname, struct md_object *tobj,
@@ -834,6 +939,9 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         int rc, locked = 0;
         ENTRY;
 
+        rc = mdd_rename_sanity_check(ctxt, src_pobj, tgt_pobj, lf, tobj);
+        if (rc)
+                RETURN(rc);
         mdd_txn_param_build(ctxt, &MDD_TXN_RENAME);
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
@@ -862,7 +970,6 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         rc = __mdd_index_insert(ctxt, mdd_tpobj, lf, tname, handle);
         if (rc)
                 GOTO(cleanup, rc);
-
 
         if (tobj && lu_object_exists(ctxt, &tobj->mo_lu)) {
                 __mdd_ref_del(ctxt, mdd_tobj, handle);

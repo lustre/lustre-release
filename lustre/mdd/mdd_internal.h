@@ -123,6 +123,10 @@ static inline struct obd_device *mdd2_obd(struct mdd_device *mdd)
 {
         return mdd->mdd_md_dev.md_lu_dev.ld_obd;
 }
+static inline const struct lu_fid *mdd2_lu_fid(struct mdd_object *mdd)
+{
+        return lu_object_fid(&mdd->mod_obj.mo_lu);
+}
 
 int mdd_lov_mdsize(const struct lu_context *ctxt, struct mdd_device *mdd,
                    int *md_size);
