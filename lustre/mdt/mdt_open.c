@@ -76,11 +76,14 @@ static int mdt_create_data_obj(struct mdt_thread_info *info,
                               struct mdt_object *p, struct mdt_object *o)
 {
         struct md_attr   *ma = &info->mti_attr;
-        struct mdt_reint_record *mrr = &info->mti_rr;
+        /* XXX: md_create_spec using should be made clear
+         * struct mdt_reint_record *mrr = &info->mti_rr;
+         */
+        struct md_create_spec *spec = &info->mti_spec;
 
         return mdo_create_data(info->mti_ctxt, mdt_object_child(p),
-                               mdt_object_child(o), mrr->rr_eadata,
-                               mrr->rr_eadatalen, ma);
+                               mdt_object_child(o), spec->u.sp_ea.eadata,
+                               spec->u.sp_ea.eadatalen, ma);
 }
 
 
@@ -219,7 +222,6 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         } else if (flags & MDS_OPEN_DIRECTORY)
                 RETURN(-ENOTDIR);
 
-#if 0
         if ((isreg) && !(ma->ma_valid & MA_LOV)) {
                 /*No EA, check whether it is will set regEA and dirEA
                  *since in above attr get, these size might be zero,
@@ -228,13 +230,10 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                                                        &RMF_MDT_MD,
                                                        RCL_SERVER);
                 LASSERT(p != NULL);
-                /*XXX: Tom, do we need this?
                 rc = mdt_create_data_obj(info, p, o);
                 if (rc)
                         RETURN(rc);
-                */
         }
-#endif
         CDEBUG(D_INODE, "after open, ma_valid bit = "LPX64" lmm_size = %d\n", 
                         ma->ma_valid, ma->ma_lmm_size);
         repbody->eadatasize = 0;
