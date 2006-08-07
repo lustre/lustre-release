@@ -1012,40 +1012,8 @@ static int __mdd_object_initialize(const struct lu_context *ctxt,
                                    struct mdd_object *child,
                                    struct md_attr *ma, struct thandle *handle)
 {
-        struct lu_attr    *la = &mdd_ctx_info(ctxt)->mti_la;
-        struct dt_object  *dt_parent = mdd_object_child(parent);
-        struct dt_object  *dt_child = mdd_object_child(child);
-        int                rc = 0;
+        int rc = 0;
         ENTRY;
-
-        /* FIXME & TODO: valid code need some convertion from Lustre to linux */
-        ma->ma_attr.la_valid = ATTR_UID   | ATTR_GID   | ATTR_ATIME |
-                               ATTR_MTIME | ATTR_CTIME;
-
-        rc = dt_parent->do_ops->do_attr_get(ctxt, dt_parent, la);
-        if (rc != 0)
-                RETURN(rc);
-        if (la->la_mode & S_ISGID) {
-                ma->ma_attr.la_gid = la->la_gid;
-                rc = dt_child->do_ops->do_attr_get(ctxt, dt_child, la);
-                if (rc != 0)
-                        RETURN(rc);
-
-                if (S_ISDIR(la->la_mode)) {
-                        ma->ma_attr.la_mode = la->la_mode | S_ISGID;
-                        ma->ma_attr.la_valid |= ATTR_MODE;
-                }
-        }
-
-        rc = dt_child->do_ops->do_attr_set(ctxt, dt_child, &ma->ma_attr,handle);
-        if (rc != 0)
-                RETURN(rc); 
-
-        ma->ma_attr.la_valid = ATTR_MTIME | ATTR_CTIME;
-        rc = dt_parent->do_ops->do_attr_set(ctxt, dt_parent, &ma->ma_attr, handle);
-        if (rc != 0)
-                RETURN(rc); 
- 
         if (S_ISDIR(ma->ma_attr.la_mode)) {
                 /* add . and .. for newly created dir */
                 __mdd_ref_add(ctxt, child, handle);
@@ -1113,14 +1081,29 @@ static int mdd_create_sanity_check(const struct lu_context *ctxt,
                                    struct md_object *pobj,
                                    const char *name, struct md_attr *ma)
 {
-        struct lu_fid *fid;
+        struct lu_attr   *la = &mdd_ctx_info(ctxt)->mti_la;
+        struct dt_object *dt_pobj = mdd_object_child(md2mdd_obj(pobj));
+        struct lu_fid    *fid = &mdd_ctx_info(ctxt)->mti_fid;
         int rc;
 
-        fid = &mdd_ctx_info(ctxt)->mti_fid;
+        ENTRY;
+        /* EEXIST check */
         rc = mdd_lookup(ctxt, pobj, name, fid);
         if (rc != -ENOENT) {
                 rc = rc ? rc : -EEXIST;
                 RETURN(rc);
+        }
+        /* sgid check */
+        rc = dt_pobj->do_ops->do_attr_get(ctxt, dt_pobj, la);
+        if (rc != 0)
+                RETURN(rc);
+        
+        if (la->la_mode & S_ISGID) {
+                ma->ma_attr.la_gid = la->la_gid;
+                if (S_ISDIR(ma->ma_attr.la_mode)) {
+                        ma->ma_attr.la_mode |= S_ISGID;
+                        ma->ma_attr.la_valid |= ATTR_MODE;
+                }
         }
 
         switch (ma->ma_attr.la_mode & S_IFMT) {
@@ -1263,6 +1246,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 else
                         rc = -EFAULT;
         }
+        /* return attr back */
         mdd_attr_get(ctxt, child, ma);
 cleanup:
         if (rc && created) {
