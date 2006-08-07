@@ -51,7 +51,7 @@
 #define INDEX_UNASSIGNED 0xFFFF
 
 static char *progname;
-static int verbose = 1;
+static int verbose = 0;
 static int print_only = 0;
 
 
@@ -95,7 +95,7 @@ void usage(FILE *out)
         return;
 }
 
-#define vprint if (verbose > 0) printf
+#define vprint(i, fmt, arg...) if(verbose > i) printf(fmt, ## arg)
 
 static void fatal(void)
 {
@@ -146,9 +146,7 @@ int run_command(char *cmd)
         char log[] = "/tmp/mkfs_logXXXXXX";
         int fd, rc;
 
-        if (verbose > 1)
-                printf("cmd: %s\n", cmd);
-
+        vprint(1, "cmd: %s\n", cmd);
         if ((fd = mkstemp(log)) >= 0) {
                 close(fd);
                 strcat(cmd, " >");
@@ -164,8 +162,7 @@ int run_command(char *cmd)
                 fp = fopen(log, "r");
                 if (fp) {
                         while (fgets(buf, sizeof(buf), fp) != NULL) {
-                                if (rc || verbose > 2)
-                                        printf("   %s", buf);
+                                vprint(2, "   %s", buf);
                         }
                         fclose(fp);
                 }
@@ -294,7 +291,7 @@ __u64 get_device_size(char* device)
                 return 0;
         }
 
-        vprint("device size = "LPU64"MB\n", size >> 20);
+        vprint(0, "device size = "LPU64"MB\n", size >> 20);
         /* return value in KB */
         return size >> 10;
 }
@@ -348,7 +345,7 @@ static int file_in_dev(char *file_name, char *dev_name)
         i = fread(debugfs_cmd, 1, sizeof(debugfs_cmd), fp);
         if (i) {
                 /* Filesystem has unsupported feature */
-                vprint("%.*s", i, debugfs_cmd);
+                vprint(0, "%.*s", i, debugfs_cmd);
                 /* in all likelihood, the "unsupported feature" is
                   'extents', which older debugfs does not understand.
                   Use e2fsprogs-1.38-cfs1 or later, available from
@@ -363,11 +360,11 @@ static int file_in_dev(char *file_name, char *dev_name)
 static int is_lustre_target(struct mkfs_opts *mop)
 {
         int rc;
-        vprint("checking for existing Lustre data\n");
+        vprint(0, "checking for existing Lustre data\n");
 
         if ((rc = file_in_dev(MOUNT_DATA_FILE, mop->mo_device))
             || (rc = file_in_dev(LAST_RCVD, mop->mo_device))) {
-                vprint("found Lustre data\n");
+                vprint(0, "found Lustre data\n");
                 /* in the -1 case, 'extents' means this really IS a lustre
                    target */
                 return rc;
@@ -503,11 +500,11 @@ int make_lustre_backfs(struct mkfs_opts *mop)
         if (mop->mo_flags & MO_IS_LOOP)
                 dev = mop->mo_loopdev;
 
-        vprint("formatting backing filesystem %s on %s\n",
+        vprint(0, "formatting backing filesystem %s on %s\n",
                MT_STR(&mop->mo_ldd), dev);
-        vprint("\ttarget name  %s\n", mop->mo_ldd.ldd_svname);
-        vprint("\t4k blocks     %d\n", block_count);
-        vprint("\toptions       %s\n", mop->mo_mkfsopts);
+        vprint(0, "\ttarget name  %s\n", mop->mo_ldd.ldd_svname);
+        vprint(0, "\t4k blocks     %d\n", block_count);
+        vprint(0, "\toptions       %s\n", mop->mo_mkfsopts);
 
         /* mkfs_cmd's trailing space is important! */
         strcat(mkfs_cmd, mop->mo_mkfsopts);
@@ -518,7 +515,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 strcat(mkfs_cmd, buf);
         }
 
-        vprint("mkfs_cmd = %s\n", mkfs_cmd);
+        vprint(0, "mkfs_cmd = %s\n", mkfs_cmd);
         ret = run_command(mkfs_cmd);
         if (ret) {
                 fatal();
@@ -612,7 +609,7 @@ int write_local_files(struct mkfs_opts *mop)
 
         /* Save the persistent mount data into a file. Lustre must pre-read
            this file to get the real mount options. */
-        vprint("Writing %s\n", MOUNT_DATA_FILE);
+        vprint(0, "Writing %s\n", MOUNT_DATA_FILE);
         sprintf(filepnm, "%s/%s", mntpt, MOUNT_DATA_FILE);
         filep = fopen(filepnm, "w");
         if (!filep) {
@@ -630,7 +627,7 @@ int write_local_files(struct mkfs_opts *mop)
             == (LDD_F_UPGRADE14 | LDD_F_SV_TYPE_MGS)) {
                 char cmd[128];
                 char *term;
-                vprint("Copying old logs\n");
+                vprint(0, "Copying old logs\n");
 #if 0
  /* Generate new client log as servers upgrade.  Starting a new client 
     may end up with short lov's, so will be degraded until all servers
@@ -640,8 +637,7 @@ int write_local_files(struct mkfs_opts *mop)
                         mntpt, MOUNT_CONFIGS_DIR, mop->mo_ldd.ldd_fsname);
                 sprintf(cmd, "cp %s/%s/client %s", mntpt, MDT_LOGS_DIR,
                         filepnm);
-                if (verbose > 1) 
-                        printf("cmd: %s\n", cmd);
+                vprint(1, "cmd: %s\n", cmd);
                 ret = run_command(cmd);
                 if (ret) {
                         fprintf(stderr, "%s: Can't copy 1.4 config %s/client "
@@ -670,8 +666,7 @@ int write_local_files(struct mkfs_opts *mop)
                                 mntpt, MDT_LOGS_DIR, filepnm, 
                                 mntpt, MOUNT_CONFIGS_DIR,
                                 mop->mo_ldd.ldd_svname);
-                        if (verbose > 1) 
-                                printf("cmd: %s\n", cmd);
+                        vprint(1, "cmd: %s\n", cmd);
                         ret = run_command(cmd);
                 }
                 if (ret) {
@@ -727,13 +722,13 @@ int read_local_files(struct mkfs_opts *mop)
         sprintf(filepnm, "%s/%s", mntpt, MOUNT_DATA_FILE);
         filep = fopen(filepnm, "r");
         if (filep) {
-                vprint("Reading %s\n", MOUNT_DATA_FILE);
+                vprint(0, "Reading %s\n", MOUNT_DATA_FILE);
                 fread(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
         } else {
                 /* COMPAT_146 */
                 /* Try to read pre-1.6 config from last_rcvd */
                 struct lr_server_data lsd;
-                vprint("%s: Unable to read %s, trying last_rcvd\n",
+                vprint(0, "%s: Unable to read %s, trying last_rcvd\n",
                        progname, MOUNT_DATA_FILE);
                 sprintf(filepnm, "%s/%s", mntpt, LAST_RCVD);
                 filep = fopen(filepnm, "r");
@@ -743,7 +738,7 @@ int read_local_files(struct mkfs_opts *mop)
                         ret = -errno;
                         goto out_umnt;
                 }
-                vprint("Reading %s\n", LAST_RCVD);
+                vprint(0, "Reading %s\n", LAST_RCVD);
                 ret = fread(&lsd, 1, sizeof(lsd), filep);
                 if (ret < sizeof(lsd)) {
                         fprintf(stderr, "%s: Short read (%d of %d)\n",
@@ -1296,7 +1291,7 @@ static int create_iam(enum iam_fmt_t fmt, int keysize, int recsize,
                 return 1;
         }
 
-        vprint("fmt: %i, key: %i, rec: %i, ptr: %i, block: %i\n",
+        vprint(0, "fmt: %i, key: %i, rec: %i, ptr: %i, block: %i\n",
                (int)fmt, keysize, recsize, ptrsize, blocksize);
 
         fd = open(target, O_WRONLY | O_TRUNC | O_CREAT, 0600);
@@ -1467,7 +1462,7 @@ static int iam_insert(int key_need_convert, char *keybuf,
 
         keysize = ua.iui_keysize;
         recsize = ua.iui_recsize;
-        vprint("keysize: %i, recsize: %i, ptrsize: %i, "
+        vprint(0, "keysize: %i, recsize: %i, ptrsize: %i, "
                "height: %i, name: %s\n",
                keysize, recsize, ua.iui_ptrsize,
                ua.iui_height, ua.iui_fmt_name);
@@ -1786,7 +1781,7 @@ int main(int argc, char *const argv[])
         }
 
         if (IS_MDT(ldd) && !IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
-                vprint("No management node specified, adding MGS to this "
+                vprint(0, "No management node specified, adding MGS to this "
                        "MDT\n");
                 ldd->ldd_flags |= LDD_F_SV_TYPE_MGS;
         }
