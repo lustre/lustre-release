@@ -879,8 +879,11 @@ static int ll_unlink_generic(struct inode * dir, struct qstr *name)
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
-        ll_prepare_md_op_data(op_data, dir, NULL, name->name,
-                              name->len, 0);
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+       
+        ll_prepare_md_op_data(op_data, dir, NULL, name->name, name->len, 0);
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         OBD_FREE_PTR(op_data);
         
