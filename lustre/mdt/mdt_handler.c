@@ -383,7 +383,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 mdt_lock_handle_init(lhc);
                 lhc->mlh_mode = LCK_CR;
                 result = mdt_object_lock(info, child, lhc, child_bits);
-                if (result != 0) {
+                if (result == 0) {
                         /* finally, we can get attr for child. */
                         result = mdt_getattr_internal(info, child,
                                                       ldlm_rep ? 2 : 1);
