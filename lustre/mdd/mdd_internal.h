@@ -124,6 +124,11 @@ static inline struct obd_device *mdd2_obd(struct mdd_device *mdd)
         return mdd->mdd_md_dev.md_lu_dev.ld_obd;
 }
 
+static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
+{
+        return lu_object_fid(&obj->mod_obj.mo_lu);
+}
+
 int mdd_lov_mdsize(const struct lu_context *ctxt, struct mdd_device *mdd,
                    int *md_size);
 int mdd_lov_cookiesize(const struct lu_context *ctxt, struct mdd_device *mdd,

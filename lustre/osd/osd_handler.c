@@ -634,7 +634,7 @@ static int osd_inode_setattr(const struct lu_context *ctx,
         LTIME_S(iattr.ia_ctime) = attr->la_ctime;
 
         /* TODO: handle ATTR_SIZE & truncate in the future */
-        iattr.ia_valid &= ~ATTR_SIZE;
+        //iattr.ia_valid &= ~ATTR_SIZE;
 
         /* Don't allow setattr to change file type */
         if (iattr.ia_valid & ATTR_MODE)

@@ -61,11 +61,6 @@ static void __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
 static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
                       const char *name, struct lu_fid* fid);
 
-static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
-{
-        return lu_object_fid(&obj->mod_obj.mo_lu);
-}
-
 
 static struct md_object_operations mdd_obj_ops;
 static struct md_dir_operations    mdd_dir_ops;

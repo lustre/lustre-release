@@ -338,6 +338,51 @@ static obd_id mdd_lov_create_id(const struct lu_fid *fid)
         return ((fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid));
 }
 
+/*FIXME: it is just the helper function used by mdd lov obd to 
+ * get attr from obdo, copied from obdo_from_inode*/
+static void obdo_from_la(struct obdo *dst, struct lu_attr *la, obd_flag valid)
+{
+        obd_flag newvalid = 0;
+
+        if (valid & OBD_MD_FLATIME) {
+                dst->o_atime = la->la_atime;
+                newvalid |= OBD_MD_FLATIME;
+        }
+        if (valid & OBD_MD_FLMTIME) {
+                dst->o_mtime = la->la_mtime;
+                newvalid |= OBD_MD_FLMTIME;
+        }
+        if (valid & OBD_MD_FLCTIME) {
+                dst->o_ctime = la->la_ctime;
+                newvalid |= OBD_MD_FLCTIME;
+        }
+        if (valid & OBD_MD_FLSIZE) {
+                dst->o_size = la->la_size;
+                newvalid |= OBD_MD_FLSIZE;
+        }
+        if (valid & OBD_MD_FLBLOCKS) {  /* allocation of space (x512 bytes) */
+                dst->o_blocks = la->la_blocks;
+                newvalid |= OBD_MD_FLBLOCKS;
+        }
+        if (valid & OBD_MD_FLTYPE) {
+                dst->o_mode = (la->la_mode & S_IALLUGO)|(la->la_mode & S_IFMT);
+                newvalid |= OBD_MD_FLTYPE;
+        }
+        if (valid & OBD_MD_FLMODE) {
+                dst->o_mode = (la->la_mode & S_IFMT)|(la->la_mode & S_IALLUGO);
+                newvalid |= OBD_MD_FLMODE;
+        }
+        if (valid & OBD_MD_FLUID) {
+                dst->o_uid = la->la_uid;
+                newvalid |= OBD_MD_FLUID;
+        }
+        if (valid & OBD_MD_FLGID) {
+                dst->o_gid = la->la_gid;
+                newvalid |= OBD_MD_FLGID;
+        }
+        dst->o_valid |= newvalid;
+}
+
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size, const void *eadata,
@@ -382,8 +427,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 rc = obd_create(lov_exp, oa, &lsm, NULL);
                 if (rc) {
                         if (rc > 0) {
-                                CERROR("obd_create returned invalid "
-                                       "rc %d\n", rc);
+                                CERROR("create errro for "DFID3": %d \n",
+                                       PFID3(mdo2fid(child)), rc);
                                 rc = -EIO;
                         }
                         GOTO(out_oa, rc);
@@ -397,6 +442,35 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 }
                 lsm->lsm_object_id = oa->o_id;
         }
+        /*after creating the object, if the la_size is not zero. 
+         *since truncate when no lsm, we should set the size to 
+         *ost object*/
+        if (la->la_size) {
+                oa->o_size = la->la_size;
+                obdo_from_la(oa, la, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
+
+                /* FIXME:pack lustre id to OST, in OST, it will be packed 
+                 * by filter_fid, but can not see what is the usages. So just 
+                 * pack o_seq o_ver here, maybe fix it after this cycle*/
+                oa->o_fid = lu_object_fid(mdd2lu_obj(child))->f_seq;
+                oa->o_generation = lu_object_fid(mdd2lu_obj(child))->f_ver;
+                oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
+
+                rc = obd_setattr(lov_exp, oa, lsm, NULL);
+                if (rc) {
+                        CERROR("error setting attrs for "DFID3": rc %d\n",
+                               PFID3(mdo2fid(child)), rc);
+                        if (rc > 0) {
+                                CERROR("obd_setattr for "DFID3" rc %d\n", 
+                                        PFID3(mdo2fid(child)), rc);
+                                rc = -EIO;
+                        }
+                        GOTO(out_oa, rc);
+                }
+        }
+        /*set blksize after create data object*/
+        la->la_valid |= OBD_MD_FLBLKSZ | OBD_MD_FLEASIZE;
 
         rc = obd_packmd(lov_exp, lmm, lsm);
         if (rc < 0) {
