@@ -390,9 +390,10 @@ int mdt_reint_open(struct mdt_thread_info *info)
         /*TODO: remove this and add MDS_CHECK_RESENT if resent enabled*/
         LASSERT(info->mti_pill.rc_fmt == &RQF_LDLM_INTENT_OPEN);
 
-        CDEBUG(D_INODE, "I am going to create "DFID3"/("DFID3":%s) flag=%x\n",
+        CDEBUG(D_INODE, "I am going to create "DFID3"/("DFID3":%s) "
+                        "flag=%x mode=%06o\n",
                         PFID3(rr->rr_fid1), PFID3(rr->rr_fid2), 
-                        rr->rr_name, la->la_flags);
+                        rr->rr_name, la->la_flags, la->la_mode);
 
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);

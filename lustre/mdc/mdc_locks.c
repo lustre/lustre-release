@@ -304,7 +304,7 @@ int mdc_enqueue(struct obd_export *exp,
 //                          ldlm_it2str(it->it_op), it_name, it_inode->i_ino);
 
         if (it->it_op & IT_OPEN) {
-                it->it_create_mode |= S_IFREG;
+                it->it_create_mode = (it->it_create_mode & ~S_IFMT) | S_IFREG;
 
                 size[req_buffers++] = sizeof(struct mdt_rec_create);
                 size[req_buffers++] = op_data->namelen + 1;

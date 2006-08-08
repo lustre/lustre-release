@@ -1012,8 +1012,30 @@ static int __mdd_object_initialize(const struct lu_context *ctxt,
                                    struct mdd_object *child,
                                    struct md_attr *ma, struct thandle *handle)
 {
-        int rc = 0;
+        struct dt_object *dt_parent = mdd_object_child(parent);
+        struct dt_object *dt_child = mdd_object_child(child);
+        int               rc;
         ENTRY;
+
+        /* update attributes for child and parent.
+         * FIXME: 
+         *  (1) the valid bits should be converted between Lustre and Linux;
+         *  (2) maybe, the child attributes should be set in OSD when creation.
+         */
+        ma->ma_attr.la_valid = ATTR_UID   | ATTR_GID   | ATTR_ATIME |
+                               ATTR_MTIME | ATTR_CTIME;
+        rc = dt_child->do_ops->do_attr_set(ctxt, dt_child, 
+                                           &ma->ma_attr, handle);
+        if (rc != 0)
+                RETURN(rc);
+
+        ma->ma_attr.la_valid = ATTR_MTIME | ATTR_CTIME;
+        rc = dt_parent->do_ops->do_attr_set(ctxt, dt_parent, 
+                                            &ma->ma_attr, handle);
+        if (rc != 0)
+                RETURN(rc);
+
+
         if (S_ISDIR(ma->ma_attr.la_mode)) {
                 /* add . and .. for newly created dir */
                 __mdd_ref_add(ctxt, child, handle);
