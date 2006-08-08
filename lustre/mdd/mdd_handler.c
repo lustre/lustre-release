@@ -755,6 +755,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *mdd_cobj = md2mdd_obj(cobj);
+        struct dt_object  *dt_cobj  = mdd_object_child(mdd_cobj);
         struct thandle    *handle;
         int rc;
         ENTRY;
@@ -773,7 +774,8 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         mdd_lock2(ctxt, mdd_pobj, mdd_cobj);
 
         /* rmdir checks */
-        if (S_ISDIR(lu_object_attr(&cobj->mo_lu))) {
+        if (S_ISDIR(lu_object_attr(&cobj->mo_lu)) && 
+                        dt_try_as_dir(ctxt, dt_cobj)) {
                 rc = mdd_dir_is_empty(ctxt, mdd_cobj);
                 if (rc != 0)
                         GOTO(cleanup, rc);
