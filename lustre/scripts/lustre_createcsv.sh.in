@@ -147,87 +147,6 @@ mgs_node() {
 	return 0
 }
 
-# remote_error fn_name host_addr ret_str
-# Verify the return result from remote command
-remote_error() {
-	local fn_name host_addr ret_str
-
-	fn_name=$1
-	shift
-	host_addr=$1
-	shift
-	ret_str=$*
-
-	if [ "${ret_str}" != "${ret_str#*connect:*}" ]; then
-		echo >&2 "`basename $0`: ${fn_name}() error: remote error:" \
-		     "${ret_str}"
-		return 0
-	fi
-
-	if [ -z "${ret_str}" ]; then
-		echo >&2 "`basename $0`: ${fn_name}() error: remote error:" \
-		     "No results from remote!" \
-		     "Check network connectivity between the local host"\
-		     "and ${host_addr}!"
-		return 0
-	fi
-
-	return 1
-}
-
-# nid2hostname nid
-# Convert @nid to hostname of the lustre cluster node
-nid2hostname() {
-	local nid=$1
-	local host_name=
-	local addr nettype ip_addr
-	local ret_str
-
-	addr=${nid%@*}
-	nettype=${nid#*@}
-	if [ -z "${addr}" ]; then
-		echo "`basename $0`: nid2hostname() error:" \
-		     "Invalid nid - \"${nid}\"!"
-		return 1
-	fi
-		
-	case "${nettype}" in
-	lo*)	host_name=`hostname`;;
-	elan*)	# QsNet
-	  # FIXME: Parse the /etc/elanhosts configuration file to
-	  # convert ElanID to hostname
-	  ;;
-	gm*)	# Myrinet
-	  # FIXME: Use /usr/sbin/gmlndnid to find the hostname of
-	  # the specified GM Global node ID 
-	  ;;
-	ptl*)	# Portals
-	  # FIXME: Convert portal ID to hostname
-	  ;;
-	*)	# tcp, o2ib, cib, openib, iib, vib, ra
-	  ip_addr=${addr}
-
-	  # Execute remote command to get the host name
-	  ret_str=`${REMOTE} ${ip_addr} "hostname" 2>&1`
-	  if [ $? -ne 0 -a -n "${ret_str}" ]; then
-		echo "`basename $0`: nid2hostname() error:" \
-		     "remote command error: ${ret_str}"
-		return 1
-	  fi
-	  remote_error "nid2hostname" ${ip_addr} "${ret_str}" && return 1
-
-	  if is_pdsh; then
-	  	host_name=`echo ${ret_str} | awk '{print $2}'`
-	  else
-	  	host_name=`echo ${ret_str} | awk '{print $1}'`
-	  fi
-	  ;;
-	esac
-
-	echo ${host_name}
-	return 0
-}
-
 # get_hostnames
 # Get lustre cluster node names
 get_hostnames() {
@@ -1238,43 +1157,6 @@ get_mntopts() {
 	return 0
 }
 
-# ip2hostname nids
-# Convert IP addresses in @nids into hostnames
-ip2hostname() {
-	local orig_nids=$1
-	local nids=
-	local nid nids_str
-	local nettype
-
-        nids_str=`echo ${orig_nids}|awk '{split($orig_nids, a, ",")}\
-		  END {for (i in a) print a[i]}'`
-        for nid in ${nids_str}; do
-		nettype=${nid#*@}
-
-		case "${nettype}" in
-		lo* | elan* | gm* | ptl*) ;;
-		*)
-			nid=$(nid2hostname ${nid})
-			if [ $? -ne 0 ]; then
-				echo "${nid}"
-				return 1
-			fi
-			
-			nid=${nid}@${nettype}
-	  		;;
-		esac
-
-		if [ -z "${nids}" ]; then
-			nids=${nid}
-		else
-			nids=${nids},${nid}
-		fi
-        done
-
-	echo ${nids}
-	return 0
-}
-
 # get_mgsnids ldd_params
 # Get the mgs nids of lustre target from @ldd_params
 get_mgsnids() {
@@ -1286,11 +1168,6 @@ get_mgsnids() {
 	for param in ${ldd_params}; do
 		if [ -n "`echo ${param}|awk '/mgsnode=/ {print $0}'`" ]; then
 			mgs_nids=`echo ${param#${PARAM_MGSNODE}}`
-			mgs_nids=$(ip2hostname ${mgs_nids})
-			if [ $? -ne 0 ]; then
-				echo >&2 "${mgs_nids}"
-				return 1
-			fi
 
 			if [ -n "${all_mgs_nids}" ]; then
 				all_mgs_nids=${all_mgs_nids}:${mgs_nids}
@@ -1318,11 +1195,6 @@ get_failnids() {
 	for param in ${ldd_params}; do
 		if [ -n "`echo ${param}|awk '/failover.node=/ {print $0}'`" ]; then
 			fail_nids=`echo ${param#${PARAM_FAILNODE}}`
-			fail_nids=$(ip2hostname ${fail_nids})
-			if [ $? -ne 0 ]; then
-				echo >&2 "${fail_nids}"
-				return 1
-			fi
 
 			if [ -n "${all_fail_nids}" ]; then
 				all_fail_nids=${all_fail_nids}:${fail_nids}

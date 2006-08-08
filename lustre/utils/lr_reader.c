@@ -1,8 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *   Copyright (C) 2002 Cluster File Systems, Inc.
- *   Author: Lin Song Tao <lincent@clusterfs.com>
+ *   Copyright (C) 2006 Cluster File Systems, Inc.
  *   Author: Nathan Rutman <nathan@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
@@ -21,7 +20,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
- /* This source file is compiled into both mkfs.lustre and tunefs.lustre */
+ /* Safely read the last_rcvd file from a device */
 
 #define _GNU_SOURCE
 #include <stdlib.h>
@@ -38,7 +37,6 @@
 #include <string.h>
 #include <getopt.h>
 
-#include <linux/types.h>
 #include <lustre_disk.h>
 #include <lustre_ver.h>
 
