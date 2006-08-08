@@ -340,9 +340,9 @@ int main(int argc, char **argv)
                 lvar_leaf(buf, blocksize, keysize, ptrsize, recsize);
 
         rc = write(1, buf, blocksize);
+        free(buf);
         if (rc != blocksize) {
                 fprintf(stderr, "Unable to write leaf node: %m (%i)\n", rc);
-                free(buf);
                 return 1;
         }
         if (verbose > 0)
