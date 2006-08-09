@@ -173,7 +173,7 @@ void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
 {
         b->valid |= OBD_MD_FLCTIME | OBD_MD_FLUID   |
                     OBD_MD_FLGID   | OBD_MD_FLTYPE  |
-                    OBD_MD_FLMODE  | OBD_MD_FLNLINK |
+                    OBD_MD_FLMODE  | OBD_MD_FLNLINK | OBD_MD_FLFLAGS |
                     OBD_MD_FLATIME | OBD_MD_FLMTIME ; /* added by huanghua */
 
         if (!S_ISREG(attr->la_mode))

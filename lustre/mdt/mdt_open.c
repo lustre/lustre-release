@@ -82,8 +82,7 @@ static int mdt_create_data_obj(struct mdt_thread_info *info,
         struct md_create_spec *spec = &info->mti_spec;
 
         return mdo_create_data(info->mti_ctxt, mdt_object_child(p),
-                               mdt_object_child(o), spec->u.sp_ea.eadata,
-                               spec->u.sp_ea.eadatalen, ma);
+                               mdt_object_child(o), spec, ma);
 }
 
 
@@ -312,21 +311,20 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
                     __u32 flags)
 {
         struct mdt_object *o;
-        struct lu_attr    *la = &info->mti_attr.ma_attr;
         int                rc;
         ENTRY;
 
         o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid);
         if (!IS_ERR(o)) {
                 if (mdt_object_exists(info->mti_ctxt, &o->mot_obj.mo_lu) > 0) {
-                        if (la->la_flags & MDS_OPEN_EXCL &&
-                            la->la_flags & MDS_OPEN_CREAT)
+                        if (flags & MDS_OPEN_EXCL &&
+                            flags & MDS_OPEN_CREAT)
                                 rc = -EEXIST;
                         else
                                 rc = mdt_mfd_open(info, NULL, o, flags, 0);
                 } else {
                         rc = -ENOENT;
-                        if (la->la_flags & MDS_OPEN_CREAT) {
+                        if (flags & MDS_OPEN_CREAT) {
                                 rc = mo_object_create(info->mti_ctxt,
                                                       mdt_object_child(o),
                                                       &info->mti_spec,
@@ -366,9 +364,10 @@ int mdt_reint_open(struct mdt_thread_info *info)
         struct lu_fid          *child_fid = &info->mti_tmp_fid1;
         struct md_attr         *ma = &info->mti_attr;
         struct lu_attr         *la = &ma->ma_attr;
+        __u32                   create_flags = info->mti_spec.sp_cr_flags;
+        struct mdt_reint_record *rr = &info->mti_rr;
         int                     result;
         int                     created = 0;
-        struct mdt_reint_record *rr = &info->mti_rr;
         ENTRY;
 
         req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
@@ -383,7 +382,8 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         if (rr->rr_name[0] == 0) {
                 /* reint partial remote open */
-                RETURN(mdt_open_by_fid(info, rr->rr_fid1, la->la_flags));
+                result = mdt_open_by_fid(info, rr->rr_fid1, create_flags);
+                RETURN(result);
         }
 
         /* we now have no resent message, so it must be an intent */
@@ -391,15 +391,15 @@ int mdt_reint_open(struct mdt_thread_info *info)
         LASSERT(info->mti_pill.rc_fmt == &RQF_LDLM_INTENT_OPEN);
 
         CDEBUG(D_INODE, "I am going to create "DFID3"/("DFID3":%s) "
-                        "flag=%x mode=%06o\n",
+                        "cr_flag=%x mode=%06o\n",
                         PFID3(rr->rr_fid1), PFID3(rr->rr_fid2), 
-                        rr->rr_name, la->la_flags, la->la_mode);
+                        rr->rr_name, create_flags, la->la_mode);
 
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
 
         lh = &info->mti_lh[MDT_LH_PARENT];
-        if (!(la->la_flags & MDS_OPEN_CREAT))
+        if (!(create_flags & MDS_OPEN_CREAT))
                 lh->mlh_mode = LCK_CR;
         else
                 lh->mlh_mode = LCK_EX;
@@ -415,7 +415,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         if (result == -ENOENT) {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
-                if (!(la->la_flags & MDS_OPEN_CREAT))
+                if (!(create_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
                 *child_fid = *info->mti_rr.rr_fid2;
                 /* new object will be created. see the following */
@@ -446,7 +446,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
         }
 
         /* Try to open it now. */
-        result = mdt_mfd_open(info, parent, child, la->la_flags, created);
+        result = mdt_mfd_open(info, parent, child, create_flags, created);
         GOTO(finish_open, result);
 
 finish_open:

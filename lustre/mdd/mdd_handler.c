@@ -1078,7 +1078,7 @@ static int __mdd_object_initialize(const struct lu_context *ctxt,
 
 static int mdd_create_data(const struct lu_context *ctxt,
                            struct md_object *pobj, struct md_object *cobj,
-                           const void *eadata, int eadatasize,
+                           const struct md_create_spec *spec,
                            struct md_attr *ma)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
@@ -1086,9 +1086,9 @@ static int mdd_create_data(const struct lu_context *ctxt,
         struct mdd_object *son = md2mdd_obj(cobj);
         struct lu_attr    *attr = &ma->ma_attr;
         struct lov_mds_md *lmm = NULL;
+        int                lmm_size = 0;
         struct thandle    *handle;
-        int lmm_size = 0;
-        int rc;
+        int                rc;
         ENTRY;
 
         mdd_txn_param_build(ctxt, &MDD_TXN_CREATE_DATA);
@@ -1099,8 +1099,7 @@ static int mdd_create_data(const struct lu_context *ctxt,
         /*
          * XXX: should take transaction handle.
          */
-        rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size, eadata,
-                            eadatasize, attr);
+        rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size, spec, attr);
         if (rc == 0) {
                 rc = mdd_lov_set_md(ctxt, pobj, cobj, lmm,
                                     lmm_size, attr->la_mode, handle);
@@ -1183,11 +1182,8 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         /* no RPC inside the transaction, so OST objects should be created at
          * first */
         if (S_ISREG(attr->la_mode)) {
-                const void *eadata = spec->u.sp_ea.eadata;
-                int eadatasize = spec->u.sp_ea.eadatalen;
-
                 rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size,
-                                    eadata, eadatasize, attr);
+                                    spec, attr);
                 if (rc)
                         RETURN(rc);
         }

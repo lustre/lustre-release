@@ -385,18 +385,21 @@ static void obdo_from_la(struct obdo *dst, struct lu_attr *la, obd_flag valid)
 
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
-                   struct lov_mds_md **lmm, int *lmm_size, const void *eadata,
-                   int eadatasize, struct lu_attr *la)
+                   struct lov_mds_md **lmm, int *lmm_size,
+                   const struct md_create_spec *spec, struct lu_attr *la)
 {
-        struct obd_device *obd = mdd2_obd(mdd);
-        struct obd_export *lov_exp = obd->u.mds.mds_osc_exp;
-        struct obdo *oa;
-        struct lov_stripe_md *lsm = NULL;
-        int rc = 0;
+        struct obd_device       *obd = mdd2_obd(mdd);
+        struct obd_export       *lov_exp = obd->u.mds.mds_osc_exp;
+        struct obdo             *oa;
+        struct lov_stripe_md    *lsm = NULL;
+        const void              *eadata = spec->u.sp_ea.eadata;
+/*      int                      eadatasize  = spec->u.sp_ea.eadatalen;*/
+        __u32                    create_flags = spec->sp_cr_flags;
+        int                      rc = 0;
         ENTRY;
 
-        if (la->la_flags & MDS_OPEN_DELAY_CREATE ||
-                        !(la->la_flags & FMODE_WRITE))
+        if (create_flags & MDS_OPEN_DELAY_CREATE ||
+                        !(create_flags & FMODE_WRITE))
                 RETURN(0);
 
         oa = obdo_alloc();
@@ -409,8 +412,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
         oa->o_size = 0;
 
-        if (!(la->la_flags & MDS_OPEN_HAS_OBJS)) {
-                if (la->la_flags & MDS_OPEN_HAS_EA) {
+        if (!(create_flags & MDS_OPEN_HAS_OBJS)) {
+                if (create_flags & MDS_OPEN_HAS_EA) {
                         LASSERT(eadata != NULL);
                         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, lov_exp,
                                            0, &lsm, (void*)eadata);

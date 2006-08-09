@@ -621,33 +621,46 @@ static int osd_attr_set(const struct lu_context *ctxt,
 static int osd_inode_setattr(const struct lu_context *ctx,
                              struct inode *inode, const struct lu_attr *attr)
 {
-        struct iattr iattr;
-        int rc;
+        struct osd_thread_info *info   = lu_context_key_get(ctx, &osd_key);
+        struct dentry          *dentry = &info->oti_dentry;
+        struct iattr           *iattr  = &info->oti_iattr;
+        int                     rc;
 
-        iattr.ia_valid = attr->la_valid;
-        iattr.ia_mode  = attr->la_mode;
-        iattr.ia_uid   = attr->la_uid;
-        iattr.ia_gid   = attr->la_gid;
-        iattr.ia_size  = attr->la_size;
-        LTIME_S(iattr.ia_atime) = attr->la_atime;
-        LTIME_S(iattr.ia_mtime) = attr->la_mtime;
-        LTIME_S(iattr.ia_ctime) = attr->la_ctime;
+        dentry->d_inode = inode;
+        if (attr->la_valid & ATTR_ATTR_FLAG) {  
+                /* this is ioctl */
+                rc = -ENOTTY;
+                if (inode->i_fop->ioctl)
+                        rc = inode->i_fop->ioctl(inode, NULL, EXT3_IOC_SETFLAGS,
+                                                (long)&attr->la_flags);
+                return rc;
+        }
+
+        iattr->ia_valid = attr->la_valid;
+        iattr->ia_mode  = attr->la_mode;
+        iattr->ia_uid   = attr->la_uid;
+        iattr->ia_gid   = attr->la_gid;
+        iattr->ia_size  = attr->la_size;
+        iattr->ia_attr_flags = attr->la_flags;
+        LTIME_S(iattr->ia_atime) = attr->la_atime;
+        LTIME_S(iattr->ia_mtime) = attr->la_mtime;
+        LTIME_S(iattr->ia_ctime) = attr->la_ctime;
+
 
         /* TODO: handle ATTR_SIZE & truncate in the future */
-        //iattr.ia_valid &= ~ATTR_SIZE;
+        //iattr->ia_valid &= ~ATTR_SIZE;
 
         /* Don't allow setattr to change file type */
-        if (iattr.ia_valid & ATTR_MODE)
-                iattr.ia_mode = (inode->i_mode & S_IFMT) |
-                                 (iattr.ia_mode & ~S_IFMT);
+        if (iattr->ia_valid & ATTR_MODE)
+                iattr->ia_mode = (inode->i_mode & S_IFMT) |
+                                 (iattr->ia_mode & ~S_IFMT);
 
-//        if (inode->i_op->setattr) {
-//                rc = inode->i_op->setattr(dentry, iattr);
-//        } else
-        {
-                rc = inode_change_ok(inode, &iattr);
+        if (inode->i_op->setattr) {
+                rc = inode->i_op->setattr(dentry, iattr);
+        } else {
+                rc = inode_change_ok(inode, iattr);
                 if (!rc)
-                        rc = inode_setattr(inode, &iattr);
+                        rc = inode_setattr(inode, iattr);
         }
         return rc;
 }
@@ -1934,7 +1947,7 @@ static int osd_inode_getattr(const struct lu_context *ctx,
         attr->la_blocks     = inode->i_blocks;
         attr->la_uid        = inode->i_uid;
         attr->la_gid        = inode->i_gid;
-//      attr->la_flags      = inode->i_flags;
+        attr->la_flags      = inode->i_flags;
         attr->la_nlink      = inode->i_nlink;
         attr->la_rdev       = inode->i_rdev;
         return 0;

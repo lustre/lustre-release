@@ -367,13 +367,13 @@ static int cml_create(const struct lu_context *ctx, struct md_object *mo_p,
 
 static int cml_create_data(const struct lu_context *ctx,
                            struct md_object *p, struct md_object *o,
-                           const void *eadata, int eadatalen,
+                           const struct md_create_spec *spec,
                            struct md_attr *ma)
 {
         int rc;
         ENTRY;
         rc = mdo_create_data(ctx, md_object_next(p), md_object_next(o),
-                             eadata, eadatalen, ma);
+                             spec, ma);
         RETURN(rc);
 }
 

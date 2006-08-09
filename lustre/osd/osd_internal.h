@@ -58,6 +58,7 @@ struct osd_thread_info {
 
         struct lu_fid       oti_fid;
         struct osd_inode_id oti_id;
+        struct iattr        oti_iattr;
         /*
          * XXX temporary: Buffer for fid->name conversion.
          */

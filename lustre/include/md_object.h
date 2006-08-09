@@ -74,6 +74,8 @@ struct md_create_spec {
                         int  eadatalen;
                 } sp_ea;
         } u;
+        /* create flag from client: such as MDS_OPEN_CREAT, and others */
+        __u32 sp_cr_flags;
 };
 
 /*
@@ -131,8 +133,9 @@ struct md_dir_operations {
                           struct md_attr *);
         /* This method is used for creating data object for this meta object*/
         int (*mdo_create_data)(const struct lu_context *cx, struct md_object *p,
-                               struct md_object *o, const void *eadata,
-                               int eadatalen, struct md_attr *ma);
+                               struct md_object *o, 
+                               const struct md_create_spec *spec,
+                               struct md_attr *ma);
         int (*mdo_rename)(const struct lu_context *ctxt,
                           struct md_object *spobj, struct md_object *tpobj,
                           const struct lu_fid *lf, const char *sname,
@@ -344,11 +347,11 @@ static inline int mdo_create(const struct lu_context *cx, struct md_object *p,
 }
 static inline int mdo_create_data(const struct lu_context *cx,
                                   struct md_object *p, struct md_object *c,
-                                  const void *eadata, int eadatalen,
+                                  const struct md_create_spec *spec,
                                   struct md_attr *ma)
 {
         LASSERT(c->mo_dir_ops->mdo_create_data);
-        return c->mo_dir_ops->mdo_create_data(cx, p, c, eadata, eadatalen, ma);
+        return c->mo_dir_ops->mdo_create_data(cx, p, c, spec, ma);
 }
 
 static inline int mdo_rename(const struct lu_context *cx,
