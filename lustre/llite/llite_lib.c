@@ -317,7 +317,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_dt_fid, err);
         }
-        CDEBUG(D_SUPER, "rootfid "DFID3"\n", PFID3(&rootfid));
+        CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&rootfid));
         sbi->ll_root_fid = rootfid;
 
         sb->s_op = &lustre_super_operations;

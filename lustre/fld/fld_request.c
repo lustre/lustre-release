@@ -230,6 +230,16 @@ static void fld_client_proc_fini(struct lu_client_fld *fld)
         }
         EXIT;
 }
+#else
+static int fld_client_proc_init(struct lu_client_fld *fld)
+{
+        return 0;
+}
+
+static void fld_client_proc_fini(struct lu_client_fld *fld)
+{
+        return;
+}
 #endif
 
 static inline int hash_is_sane(int hash)
@@ -267,15 +277,11 @@ int fld_client_init(struct lu_client_fld *fld,
         }
 #endif
 
-#ifdef LPROCFS
         rc = fld_client_proc_init(fld);
         if (rc)
                 GOTO(out, rc);
-#endif
         EXIT;
-#ifdef __KERNEL__
 out:
-#endif
         if (rc)
                 fld_client_fini(fld);
         else
@@ -291,9 +297,7 @@ void fld_client_fini(struct lu_client_fld *fld)
         struct fld_target *target, *tmp;
         ENTRY;
 
-#ifdef LPROCFS
         fld_client_proc_fini(fld);
-#endif
 
         spin_lock(&fld->fld_lock);
         list_for_each_entry_safe(target, tmp,
@@ -354,10 +358,8 @@ static int fld_client_rpc(struct obd_export *exp,
                 GOTO(out_req, rc);
 
         pmf = req_capsule_server_get(&pill, &RMF_FLD_MDFLD);
-        if (pmf == NULL) {
-                CERROR("Can't unpack FLD response\n");
+        if (pmf == NULL)
                 GOTO(out_req, rc = -EFAULT);
-        }
         *mf = *pmf;
         EXIT;
 out_req:

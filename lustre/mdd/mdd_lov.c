@@ -430,8 +430,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 rc = obd_create(lov_exp, oa, &lsm, NULL);
                 if (rc) {
                         if (rc > 0) {
-                                CERROR("create errro for "DFID3": %d \n",
-                                       PFID3(mdo2fid(child)), rc);
+                                CERROR("create errro for "DFID": %d \n",
+                                       PFID(mdo2fid(child)), rc);
                                 rc = -EIO;
                         }
                         GOTO(out_oa, rc);
@@ -464,11 +464,11 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
 
                 rc = obd_setattr(lov_exp, oa, lsm, NULL);
                 if (rc) {
-                        CERROR("error setting attrs for "DFID3": rc %d\n",
-                               PFID3(mdo2fid(child)), rc);
+                        CERROR("error setting attrs for "DFID": rc %d\n",
+                               PFID(mdo2fid(child)), rc);
                         if (rc > 0) {
-                                CERROR("obd_setattr for "DFID3" rc %d\n", 
-                                        PFID3(mdo2fid(child)), rc);
+                                CERROR("obd_setattr for "DFID" rc %d\n", 
+                                        PFID(mdo2fid(child)), rc);
                                 rc = -EIO;
                         }
                         GOTO(out_oa, rc);

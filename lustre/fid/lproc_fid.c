@@ -48,7 +48,12 @@
 #include "fid_internal.h"
 
 #ifdef LPROCFS
-/* server side procfs stuff */
+/*
+ * Server side procfs stuff.
+ *
+ * Note: this function is only used for testing, it is no safe for production
+ * use.
+ */
 static int
 seq_proc_write_common(struct file *file, const char *buffer,
                       unsigned long count, void *data,
@@ -60,13 +65,12 @@ seq_proc_write_common(struct file *file, const char *buffer,
 
 	LASSERT(range != NULL);
 
-        rc = sscanf(buffer, "["LPU64"-"LPU64"]\n",
+        rc = sscanf(buffer, DRANGE"\n",
 		    &tmp.lr_start, &tmp.lr_end);
 
 	/* did not match 2 values */
 	if (rc != 2 || !range_is_sane(&tmp) || range_is_zero(&tmp)) {
-		CERROR("can't parse input string or "
-		       "input is not correct\n");
+		CERROR("can't parse input string or input is not correct\n");
 		RETURN(-EINVAL);
 	}
 
@@ -83,8 +87,8 @@ seq_proc_read_common(char *page, char **start, off_t off,
 	ENTRY;
 
         *eof = 1;
-        rc = snprintf(page, count, "["LPU64"-"LPU64"]\n",
-		      range->lr_start, range->lr_end);
+        rc = snprintf(page, count, DRANGE"]\n",
+		      PRANGE(range));
 	RETURN(rc);
 }
 
@@ -102,9 +106,8 @@ seq_proc_write_space(struct file *file, const char *buffer,
 	rc = seq_proc_write_common(file, buffer, count,
                                    data, &seq->seq_space);
 	if (rc == 0) {
-		CDEBUG(D_WARNING, "SEQ-MGR(srv): sequences space has changed "
-		       "to ["LPU64"-"LPU64"]\n", seq->seq_space.lr_start,
-		       seq->seq_space.lr_end);
+		CDEBUG(D_WARNING, "SEQ-MGR(srv): sequences space has "
+                       "changed to "DRANGE"\n", PRANGE(&seq->seq_space));
 	}
 	
 	up(&seq->seq_sem);
@@ -145,9 +148,8 @@ seq_proc_write_super(struct file *file, const char *buffer,
                                    data, &seq->seq_super);
 
 	if (rc == 0) {
-		CDEBUG(D_WARNING, "SEQ-MGR(srv): super-sequence has changed to "
-		       "["LPU64"-"LPU64"]\n", seq->seq_super.lr_start,
-		       seq->seq_super.lr_end);
+		CDEBUG(D_WARNING, "SEQ-MGR(srv): super-sequence has "
+                       "changed to "DRANGE"\n", PRANGE(&seq->seq_super));
 	}
 	
 	up(&seq->seq_sem);
@@ -304,8 +306,7 @@ seq_proc_write_range(struct file *file, const char *buffer,
 
 	if (rc == 0) {
 		CDEBUG(D_WARNING, "SEQ-MGR(cli): range has changed to "
-		       "["LPU64"-"LPU64"]\n", seq->seq_range.lr_start,
-		       seq->seq_range.lr_end);
+		       DRANGE"\n", PRANGE(&seq->seq_range));
 	}
 	
 	up(&seq->seq_sem);
@@ -390,8 +391,8 @@ seq_proc_read_next_fid(char *page, char **start, off_t off,
         LASSERT(seq != NULL);
 
 	down(&seq->seq_sem);
-        rc = snprintf(page, count, DFID3"\n",
-                      PFID3(&seq->seq_fid));
+        rc = snprintf(page, count, DFID"\n",
+                      PFID(&seq->seq_fid));
 	up(&seq->seq_sem);
 	
 	RETURN(rc);

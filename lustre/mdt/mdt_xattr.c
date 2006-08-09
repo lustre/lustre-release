@@ -111,8 +111,8 @@ int mdt_getxattr(struct mdt_thread_info *info)
         LASSERT(lu_object_assert_exists(info->mti_ctxt,
                                  &info->mti_object->mot_obj.mo_lu));
 
-        CDEBUG(D_INODE, "getxattr "DFID3"\n",
-                        PFID3(&info->mti_body->fid1));
+        CDEBUG(D_INODE, "getxattr "DFID"\n",
+                        PFID(&info->mti_body->fid1));
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
                 RETURN(-ENOMEM);
@@ -179,7 +179,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
         int                     rc;
         ENTRY;
 
-        CDEBUG(D_INODE, "setxattr "DFID3"\n", PFID3(&body->fid1));
+        CDEBUG(D_INODE, "setxattr "DFID"\n", PFID(&body->fid1));
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(-ENOMEM);

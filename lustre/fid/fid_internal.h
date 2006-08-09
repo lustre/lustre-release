@@ -34,6 +34,20 @@ extern struct lprocfs_vars seq_client_proc_list[];
 #endif
 
 #ifdef __KERNEL__
+struct seq_store_record {
+        struct lu_range ssr_space;
+        struct lu_range ssr_super;
+};
+
+struct seq_thread_info {
+        struct txn_param        sti_txn;
+        struct req_capsule      sti_pill;
+        struct seq_store_record sti_record;
+        int                     sti_rep_buf_size[2];
+};
+
+extern struct lu_context_key seq_thread_key;
+
 int seq_store_init(struct lu_server_seq *seq,
                    const struct lu_context *ctx);
 

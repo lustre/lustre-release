@@ -93,8 +93,8 @@ lmv_obj_alloc(struct obd_device *obd,
 
         /* put all ids in */
         for (i = 0; i < mea->mea_count; i++) {
-                CDEBUG(D_OTHER, "subobj "DFID3"\n",
-                       PFID3(&mea->mea_ids[i]));
+                CDEBUG(D_OTHER, "subobj "DFID"\n",
+                       PFID(&mea->mea_ids[i]));
                 obj->lo_inodes[i].li_fid = mea->mea_ids[i];
                 LASSERT(fid_is_sane(&obj->lo_inodes[i].li_fid));
         }
@@ -177,8 +177,8 @@ __lmv_obj_put(struct lmv_obj *obj)
 
         if (atomic_dec_and_test(&obj->lo_count)) {
                 struct lu_fid *fid = &obj->lo_fid;
-                CDEBUG(D_OTHER, "last reference to "DFID3" - "
-                       "destroying\n", PFID3(fid));
+                CDEBUG(D_OTHER, "last reference to "DFID" - "
+                       "destroying\n", PFID(fid));
                 __lmv_obj_del(obj);
         }
 }
@@ -270,8 +270,8 @@ __lmv_obj_create(struct obd_device *obd, struct lu_fid *fid,
 
         spin_unlock(&obj_list_lock);
 
-        CDEBUG(D_OTHER, "new obj in lmv cache: "DFID3"\n",
-               PFID3(fid));
+        CDEBUG(D_OTHER, "new obj in lmv cache: "DFID"\n",
+               PFID(fid));
 
         RETURN(new);
 
@@ -291,8 +291,8 @@ lmv_obj_create(struct obd_export *exp, struct lu_fid *fid,
         int mealen, rc, mds;
         ENTRY;
 
-        CDEBUG(D_OTHER, "get mea for "DFID3" and create lmv obj\n",
-               PFID3(fid));
+        CDEBUG(D_OTHER, "get mea for "DFID" and create lmv obj\n",
+               PFID(fid));
 
         md.mea = NULL;
 	
@@ -331,8 +331,8 @@ lmv_obj_create(struct obd_export *exp, struct lu_fid *fid,
         /* got mea, now create obj for it. */
         obj = __lmv_obj_create(obd, fid, mea);
         if (!obj) {
-                CERROR("Can't create new object "DFID3"\n",
-                       PFID3(fid));
+                CERROR("Can't create new object "DFID"\n",
+                       PFID(fid));
                 GOTO(cleanup, obj = ERR_PTR(-ENOMEM));
         }
 	
@@ -404,8 +404,8 @@ lmv_mgr_cleanup(struct obd_device *obd)
 
                 obj->lo_state |= O_FREEING;
                 if (atomic_read(&obj->lo_count) > 1) {
-                        CERROR("obj "DFID3" has count > 1 (%d)\n",
-                               PFID3(&obj->lo_fid), atomic_read(&obj->lo_count));
+                        CERROR("obj "DFID" has count > 1 (%d)\n",
+                               PFID(&obj->lo_fid), atomic_read(&obj->lo_count));
                 }
                 __lmv_obj_put(obj);
         }

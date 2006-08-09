@@ -66,3 +66,25 @@ void fid_to_be(struct lu_fid *dst, const struct lu_fid *src)
 }
 EXPORT_SYMBOL(fid_to_be);
 
+void range_to_le(struct lu_range *dst, const struct lu_range *src)
+{
+        /* check that all fields are converted */
+        CLASSERT(sizeof *src ==
+                 sizeof src->lr_start +
+                 sizeof src->lr_end);
+        dst->lr_start = le64_to_cpu(src->lr_start);
+        dst->lr_end = le64_to_cpu(src->lr_end);
+}
+EXPORT_SYMBOL(range_to_le);
+
+void range_to_be(struct lu_range *dst, const struct lu_range *src)
+{
+        /* check that all fields are converted */
+        CLASSERT(sizeof *src ==
+                 sizeof src->lr_start +
+                 sizeof src->lr_end);
+        dst->lr_start = be64_to_cpu(src->lr_start);
+        dst->lr_end = be64_to_cpu(src->lr_end);
+}
+EXPORT_SYMBOL(range_to_be);
+

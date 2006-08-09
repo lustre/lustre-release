@@ -194,8 +194,8 @@ void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
         if (fid) {
                 b->fid1 = *fid;
                 b->valid |= OBD_MD_FLID;
-                CDEBUG(D_INODE, ""DFID3": nlink=%d, mode=%o, size="LPU64"\n",
-                                PFID3(fid), b->nlink, b->mode, b->size);
+                CDEBUG(D_INODE, ""DFID": nlink=%d, mode=%o, size="LPU64"\n",
+                                PFID(fid), b->nlink, b->mode, b->size);
         }
 }
 
@@ -239,8 +239,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 repbody->valid |= OBD_MD_FLID;
                 GOTO(shrink, rc = 0);
         } else if (rc){
-                CERROR("getattr error for "DFID3": %d\n",
-                        PFID3(mdt_object_fid(o)), rc);
+                CERROR("getattr error for "DFID": %d\n",
+                        PFID(mdt_object_fid(o)), rc);
                 RETURN(rc);
         }
 
@@ -250,8 +250,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         if (mdt_body_has_lov(la, reqbody)) {
                 if (/*ma->ma_lmm_size && */(ma->ma_valid & MA_LOV)) {
                         LASSERT(ma->ma_lmm_size);
-                        CDEBUG(D_INODE, "packing ea for "DFID3"\n",
-                                        PFID3(mdt_object_fid(o)));
+                        CDEBUG(D_INODE, "packing ea for "DFID"\n",
+                                        PFID(mdt_object_fid(o)));
                         mdt_dump_lmm(D_INFO, ma->ma_lmm);
                         repbody->eadatasize = ma->ma_lmm_size;
                         repbody->valid |= OBD_MD_FLEASIZE;
@@ -368,17 +368,17 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         if (name == NULL)
                 RETURN(-EFAULT);
 
-        CDEBUG(D_INODE, "getattr with lock for "DFID3"/%s, ldlm_rep = %p\n",
-                        PFID3(mdt_object_fid(parent)), name, ldlm_rep);
+        CDEBUG(D_INODE, "getattr with lock for "DFID"/%s, ldlm_rep = %p\n",
+                        PFID(mdt_object_fid(parent)), name, ldlm_rep);
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
         if (strlen(name) == 0) {
                 /* only getattr on the child. parent is on another node. */
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
                 child = parent;
-                CDEBUG(D_INODE, "partial getattr_name child_fid = "DFID3
+                CDEBUG(D_INODE, "partial getattr_name child_fid = "DFID
                                ", ldlm_rep=%p\n",
-                               PFID3(mdt_object_fid(child)), ldlm_rep);
+                               PFID(mdt_object_fid(child)), ldlm_rep);
 
                 mdt_lock_handle_init(lhc);
                 lhc->mlh_mode = LCK_CR;
@@ -432,11 +432,11 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                         LDLM_DEBUG(lock, "we will return this lock client\n");
                         LASSERTF(fid_res_name_eq(mdt_object_fid(child),
                                                 &lock->l_resource->lr_name),
-                                "Lock res_id: %lu/%lu/%lu, Fid: "DFID3".\n",
+                                "Lock res_id: %lu/%lu/%lu, Fid: "DFID".\n",
                          (unsigned long)res_id->name[0],
                          (unsigned long)res_id->name[1],
                          (unsigned long)res_id->name[2],
-                         PFID3(mdt_object_fid(child)));
+                         PFID(mdt_object_fid(child)));
                         LDLM_LOCK_PUT(lock);
                 }
 
@@ -1044,7 +1044,7 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
                         } else
                                 result = PTR_ERR(obj);
                 } else {
-                        CERROR("Invalid fid: "DFID3"\n", PFID3(&body->fid1));
+                        CERROR("Invalid fid: "DFID"\n", PFID(&body->fid1));
                         result = -EINVAL;
                 }
         } else
@@ -1793,7 +1793,7 @@ static int mdt_seq_init(const struct lu_context *ctx,
                 if (ls->ls_control_seq != NULL) {
                         rc = seq_server_init(ls->ls_control_seq,
                                              m->mdt_bottom, uuid,
-                                             LUSTRE_SEQ_CTLR,
+                                             LUSTRE_SEQ_CONTROLLER,
                                              ctx);
                 } else
                         rc = -ENOMEM;
@@ -1805,7 +1805,7 @@ static int mdt_seq_init(const struct lu_context *ctx,
         if (ls->ls_server_seq != NULL) {
                 rc = seq_server_init(ls->ls_server_seq,
                                      m->mdt_bottom, uuid,
-                                     LUSTRE_SEQ_SRV,
+                                     LUSTRE_SEQ_SERVER,
                                      ctx);
         } else
                 rc = -ENOMEM;
@@ -2414,8 +2414,8 @@ static int mdt_object_init(const struct lu_context *ctxt, struct lu_object *o)
         int                rc = 0;
         ENTRY;
 
-        CDEBUG(D_INODE, "object init, fid = "DFID3"\n",
-               PFID3(lu_object_fid(o)));
+        CDEBUG(D_INODE, "object init, fid = "DFID"\n",
+               PFID(lu_object_fid(o)));
 
         under = &d->mdt_child->md_lu_dev;
         below = under->ld_ops->ldo_object_alloc(ctxt, o->lo_header, under);
@@ -2433,8 +2433,8 @@ static void mdt_object_free(const struct lu_context *ctxt, struct lu_object *o)
         ENTRY;
 
         h = o->lo_header;
-        CDEBUG(D_INODE, "object free, fid = "DFID3"\n",
-               PFID3(lu_object_fid(o)));
+        CDEBUG(D_INODE, "object free, fid = "DFID"\n",
+               PFID(lu_object_fid(o)));
 
         lu_object_fini(o);
         lu_object_header_fini(h);

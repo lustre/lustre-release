@@ -730,7 +730,9 @@ static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
         rc = obd_fid_alloc(lmv->tgts[mds].ltd_exp, fid, hint);
 
         /* client switches to new sequence, setup fld */
-        if (rc == -ERESTART) {
+        if (rc > 0) {
+                LASSERT(fid_is_sane(fid));
+                
                 rc = fld_client_create(&lmv->lmv_fld,
                                        fid_seq(fid),
                                        mds);
@@ -749,8 +751,8 @@ static int lmv_fid_delete(struct obd_export *exp, struct lu_fid *fid)
 
         LASSERT(exp && fid);
         if (lmv_obj_delete(exp, fid)) {
-                CDEBUG(D_OTHER, "lmv object "DFID3" is destroyed.\n",
-                       PFID3(fid));
+                CDEBUG(D_OTHER, "lmv object "DFID" is destroyed.\n",
+                       PFID(fid));
         }
         RETURN(0);
 }
@@ -1017,8 +1019,8 @@ static int lmv_getattr(struct obd_export *exp, struct lu_fid *fid,
 
         obj = lmv_obj_grab(obd, fid);
 
-        CDEBUG(D_OTHER, "GETATTR for "DFID3" %s\n",
-               PFID3(fid), obj ? "(splitted)" : "");
+        CDEBUG(D_OTHER, "GETATTR for "DFID" %s\n",
+               PFID(fid), obj ? "(splitted)" : "");
 
         /* if object is splitted, then we loop over all the slaves and gather
          * size attribute. In ideal world we would have to gather also mds field
@@ -1075,7 +1077,7 @@ static int lmv_change_cbdata(struct obd_export *exp,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_OTHER, "CBDATA for "DFID3"\n", PFID3(fid));
+        CDEBUG(D_OTHER, "CBDATA for "DFID"\n", PFID(fid));
 
         /* with CMD every object can have two locks in different namespaces:
          * lookup lock in space of mds storing direntry and update/open lock in
@@ -1105,7 +1107,7 @@ static int lmv_close(struct obd_export *exp,
                 RETURN(i);
 
         LASSERT(i < lmv->desc.ld_tgt_count);
-        CDEBUG(D_OTHER, "CLOSE "DFID3"\n", PFID3(&op_data->fid1));
+        CDEBUG(D_OTHER, "CLOSE "DFID"\n", PFID(&op_data->fid1));
         rc = md_close(lmv->tgts[i].ltd_exp, op_data, och, request);
         RETURN(rc);
 }
@@ -1195,8 +1197,8 @@ repeat:
                 lmv_obj_put(obj);
         }
 
-        CDEBUG(D_OTHER, "CREATE '%*s' on "DFID3"\n", op_data->namelen,
-               op_data->name, PFID3(&op_data->fid1));
+        CDEBUG(D_OTHER, "CREATE '%*s' on "DFID"\n", op_data->namelen,
+               op_data->name, PFID(&op_data->fid1));
 
         mds = lmv_fld_lookup(obd, &op_data->fid1);
         if (mds < 0)
@@ -1213,7 +1215,7 @@ repeat:
                 if (body == NULL)
                         RETURN(-ENOMEM);
 
-                CDEBUG(D_OTHER, "created. "DFID3"\n", PFID3(&op_data->fid1));
+                CDEBUG(D_OTHER, "created. "DFID"\n", PFID(&op_data->fid1));
         } else if (rc == -ERESTART) {
                 /* directory got splitted. time to update local object and
                  * repeat the request with proper MDS. */
@@ -1278,8 +1280,8 @@ lmv_enqueue_slaves(struct obd_export *exp, int locktype,
                                 lockmode, op_data2, lockh + i, lmm, lmmsize,
                                 cb_compl, cb_blocking, cb_data, 0);
 
-                CDEBUG(D_OTHER, "take lock on slave "DFID3" -> %d/%d\n",
-                       PFID3(&mea->mea_ids[i]), rc, it->d.lustre.it_status);
+                CDEBUG(D_OTHER, "take lock on slave "DFID" -> %d/%d\n",
+                       PFID(&mea->mea_ids[i]), rc, it->d.lustre.it_status);
                 if (rc)
                         GOTO(cleanup, rc);
                 if (it->d.lustre.it_data) {
@@ -1330,8 +1332,8 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         if (!(body->valid & OBD_MD_MDS))
                 RETURN(0);
 
-        CDEBUG(D_OTHER, "ENQUEUE '%s' on "DFID3" -> "DFID3"\n",
-               LL_IT2STR(it), PFID3(&op_data->fid1), PFID3(&body->fid1));
+        CDEBUG(D_OTHER, "ENQUEUE '%s' on "DFID" -> "DFID"\n",
+               LL_IT2STR(it), PFID(&op_data->fid1), PFID(&body->fid1));
 
         /* we got LOOKUP lock, but we really need attrs */
         pmode = it->d.lustre.it_lock_mode;
@@ -1401,8 +1403,8 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
                         lmv_obj_put(obj);
                 }
         }
-        CDEBUG(D_OTHER, "ENQUEUE '%s' on "DFID3"\n", LL_IT2STR(it),
-               PFID3(&op_data->fid1));
+        CDEBUG(D_OTHER, "ENQUEUE '%s' on "DFID"\n", LL_IT2STR(it),
+               PFID(&op_data->fid1));
 
         mds = lmv_fld_lookup(obd, &op_data->fid1);
         if (mds < 0)
@@ -1450,8 +1452,8 @@ repeat:
                 lmv_obj_put(obj);
         }
 
-        CDEBUG(D_OTHER, "getattr_lock for %*s on "DFID3" -> "DFID3"\n",
-               namelen, filename, PFID3(fid), PFID3(&rid));
+        CDEBUG(D_OTHER, "getattr_lock for %*s on "DFID" -> "DFID"\n",
+               namelen, filename, PFID(fid), PFID(&rid));
 
         mds = lmv_fld_lookup(obd, &rid);
         if (mds < 0)
@@ -1468,7 +1470,7 @@ repeat:
                         struct ptlrpc_request *req = NULL;
 
                         rid = body->fid1;
-                        CDEBUG(D_OTHER, "request attrs for "DFID3"\n", PFID3(&rid));
+                        CDEBUG(D_OTHER, "request attrs for "DFID"\n", PFID(&rid));
 
                         /*
                          * XXX check for error.
@@ -1522,21 +1524,21 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
                 if (mds < 0)
                         RETURN(mds);
 
-                CDEBUG(D_OTHER,"link "DFID3":%*s to "DFID3"\n",
-                       PFID3(&op_data->fid2), op_data->namelen,
-                       op_data->name, PFID3(&op_data->fid1));
+                CDEBUG(D_OTHER,"link "DFID":%*s to "DFID"\n",
+                       PFID(&op_data->fid2), op_data->namelen,
+                       op_data->name, PFID(&op_data->fid1));
         } else {
                 mds = lmv_fld_lookup(obd, &op_data->fid1);
                 if (mds < 0)
                         RETURN(mds);
 
                 /* request from MDS to acquire i_links for inode by fid1 */
-                CDEBUG(D_OTHER, "inc i_nlinks for "DFID3"\n",
-                       PFID3(&op_data->fid1));
+                CDEBUG(D_OTHER, "inc i_nlinks for "DFID"\n",
+                       PFID(&op_data->fid1));
         }
 
-        CDEBUG(D_OTHER, "forward to MDS #%u ("DFID3")\n",
-               mds, PFID3(&op_data->fid1));
+        CDEBUG(D_OTHER, "forward to MDS #%u ("DFID")\n",
+               mds, PFID(&op_data->fid1));
         rc = md_link(lmv->tgts[mds].ltd_exp, op_data, request);
 
         RETURN(rc);
@@ -1552,9 +1554,9 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
         int rc, mds, mds2;
         ENTRY;
 
-        CDEBUG(D_OTHER, "rename %*s in "DFID3" to %*s in "DFID3"\n",
-               oldlen, old, PFID3(&op_data->fid1), newlen, new,
-               PFID3(&op_data->fid2));
+        CDEBUG(D_OTHER, "rename %*s in "DFID" to %*s in "DFID"\n",
+               oldlen, old, PFID(&op_data->fid1), newlen, new,
+               PFID(&op_data->fid2));
 
         rc = lmv_check_connect(obd);
 	if (rc)
@@ -1566,9 +1568,9 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                  * there.
                  */
                 CDEBUG(D_OTHER,
-                       "create %*s(%d/%d) in "DFID3" pointing "
-                       "to "DFID3"\n", newlen, new, oldlen, newlen,
-                       PFID3(&op_data->fid2), PFID3(&op_data->fid1));
+                       "create %*s(%d/%d) in "DFID" pointing "
+                       "to "DFID"\n", newlen, new, oldlen, newlen,
+                       PFID(&op_data->fid2), PFID(&op_data->fid1));
 
                 mds = lmv_fld_lookup(obd, &op_data->fid2);
                 if (mds < 0)
@@ -1583,8 +1585,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                         mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                            (char *)new, newlen);
                         op_data->fid2 = obj->lo_inodes[mds].li_fid;
-                        CDEBUG(D_OTHER, "forward to MDS #%u ("DFID3")\n", mds,
-                               PFID3(&op_data->fid2));
+                        CDEBUG(D_OTHER, "forward to MDS #%u ("DFID")\n", mds,
+                               PFID(&op_data->fid2));
                         lmv_obj_put(obj);
                 }
                 goto request;
@@ -1599,8 +1601,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                 mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                    (char *)old, oldlen);
                 op_data->fid1 = obj->lo_inodes[mds].li_fid;
-                CDEBUG(D_OTHER, "forward to MDS #%u ("DFID3")\n", mds,
-                       PFID3(&op_data->fid1));
+                CDEBUG(D_OTHER, "forward to MDS #%u ("DFID")\n", mds,
+                       PFID(&op_data->fid1));
                 lmv_obj_put(obj);
         }
 
@@ -1614,8 +1616,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                                    (char *)new, newlen);
 
                 op_data->fid2 = obj->lo_inodes[mds].li_fid;
-                CDEBUG(D_OTHER, "forward to MDS #%u ("DFID3")\n", mds,
-                       PFID3(&op_data->fid2));
+                CDEBUG(D_OTHER, "forward to MDS #%u ("DFID")\n", mds,
+                       PFID(&op_data->fid2));
                 lmv_obj_put(obj);
         }
 
@@ -1630,8 +1632,8 @@ request:
                 RETURN(mds2);
 
         if (mds != mds2) {
-                CDEBUG(D_OTHER,"cross-node rename "DFID3"/%*s to "DFID3"/%*s\n",
-                       PFID3(&op_data->fid1), oldlen, old, PFID3(&op_data->fid2),
+                CDEBUG(D_OTHER,"cross-node rename "DFID"/%*s to "DFID"/%*s\n",
+                       PFID(&op_data->fid1), oldlen, old, PFID(&op_data->fid2),
                        newlen, new);
         }
 
@@ -1658,8 +1660,8 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
 
         obj = lmv_obj_grab(obd, &op_data->fid1);
 
-        CDEBUG(D_OTHER, "SETATTR for "DFID3", valid 0x%x%s\n",
-               PFID3(&op_data->fid1), iattr->ia_valid, obj ? ", splitted" : "");
+        CDEBUG(D_OTHER, "SETATTR for "DFID", valid 0x%x%s\n",
+               PFID(&op_data->fid1), iattr->ia_valid, obj ? ", splitted" : "");
 
         if (obj) {
                 for (i = 0; i < obj->lo_objcount; i++) {
@@ -1751,12 +1753,12 @@ int lmv_blocking_ast(struct ldlm_lock *lock,
                 obj = lock->l_ast_data;
                 if (obj) {
                         CDEBUG(D_OTHER, "cancel %s on "LPU64"/"LPU64
-                               ", master "DFID3"\n",
+                               ", master "DFID"\n",
                                lock->l_resource->lr_name.name[3] == 1 ?
                                "LOOKUP" : "UPDATE",
                                lock->l_resource->lr_name.name[0],
                                lock->l_resource->lr_name.name[1],
-                               PFID3(&obj->lo_fid));
+                               PFID(&obj->lo_fid));
                         lmv_obj_put(obj);
                 }
                 break;
@@ -1802,8 +1804,8 @@ static int lmv_readpage(struct obd_export *exp, struct lu_fid *fid,
         if (i < 0)
                 RETURN(i);
         LASSERT(i < lmv->desc.ld_tgt_count);
-        CDEBUG(D_OTHER, "READPAGE at %llu from "DFID3"\n",
-               offset, PFID3(&rid));
+        CDEBUG(D_OTHER, "READPAGE at %llu from "DFID"\n",
+               offset, PFID(&rid));
 
         obj = lmv_obj_grab(obd, fid);
         if (obj) {
@@ -1820,8 +1822,8 @@ static int lmv_readpage(struct obd_export *exp, struct lu_fid *fid,
                 lmv_obj_unlock(obj);
                 lmv_obj_put(obj);
 
-                CDEBUG(D_OTHER, "forward to "DFID3" with offset %lu\n",
-                       PFID3(&rid), (unsigned long)offset);
+                CDEBUG(D_OTHER, "forward to "DFID" with offset %lu\n",
+                       PFID(&rid), (unsigned long)offset);
         }
         i = lmv_fld_lookup(obd, &rid);
         if (i < 0)
@@ -1872,8 +1874,8 @@ static int lmv_unlink_slaves(struct obd_export *exp,
                 rc = md_unlink(lmv->tgts[mds].ltd_exp,
                                op_data2, req);
 
-                CDEBUG(D_OTHER, "unlink slave "DFID3" -> %d\n",
-                       PFID3(&mea->mea_ids[i]), rc);
+                CDEBUG(D_OTHER, "unlink slave "DFID" -> %d\n",
+                       PFID(&mea->mea_ids[i]), rc);
 
                 if (*req) {
                         ptlrpc_req_finished(*req);
@@ -1917,12 +1919,12 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                         op_data->fid1 = obj->lo_inodes[i].li_fid;
                         lmv_obj_put(obj);
                 }
-                CDEBUG(D_OTHER, "unlink '%*s' in "DFID3" -> %u\n",
-                       op_data->namelen, op_data->name, PFID3(&op_data->fid1),
+                CDEBUG(D_OTHER, "unlink '%*s' in "DFID" -> %u\n",
+                       op_data->namelen, op_data->name, PFID(&op_data->fid1),
                        i);
         } else {
-                CDEBUG(D_OTHER, "drop i_nlink on "DFID3"\n",
-                       PFID3(&op_data->fid1));
+                CDEBUG(D_OTHER, "drop i_nlink on "DFID"\n",
+                       PFID(&op_data->fid1));
         }
         i = lmv_fld_lookup(obd, &op_data->fid1);
         if (i < 0)
@@ -2500,7 +2502,7 @@ int lmv_lock_match(struct obd_export *exp, int flags,
         int i, rc = 0;
         ENTRY;
 
-        CDEBUG(D_OTHER, "lock match for "DFID3"\n", PFID3(fid));
+        CDEBUG(D_OTHER, "lock match for "DFID"\n", PFID(fid));
 
         /* with CMD every object can have two locks in different namespaces:
          * lookup lock in space of mds storing direntry and update/open lock in

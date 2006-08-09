@@ -81,8 +81,8 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
 
         rc = md_getattr(sbi->ll_md_exp, fid, valid, eadatalen, &req);
         if (rc) {
-                CERROR("can't get object attrs, fid "DFID3", rc %d\n",
-                       PFID3(fid), rc);
+                CERROR("can't get object attrs, fid "DFID", rc %d\n",
+                       PFID(fid), rc);
                 return ERR_PTR(rc);
         }
 
@@ -116,8 +116,8 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb,
 
         if (is_bad_inode(inode)) {
                 /* we didn't find the right inode.. */
-                CERROR("can't get inode by fid "DFID3"\n",
-                       PFID3(fid));
+                CERROR("can't get inode by fid "DFID"\n",
+                       PFID(fid));
                 iput(inode);
                 return ERR_PTR(-ESTALE);
         }

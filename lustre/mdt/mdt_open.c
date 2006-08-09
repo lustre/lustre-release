@@ -109,16 +109,16 @@ static int mdt_get_write_access(struct mdt_device *mdt, struct mdt_object *o,
                 rc = -ETXTBSY;
         } else {
                 if (o->mot_io_epoch != 0) {
-                        CDEBUG(D_INODE, "continue epoch "LPU64" for "DFID3"\n",
-                               o->mot_io_epoch, PFID3(mdt_object_fid(o)));
+                        CDEBUG(D_INODE, "continue epoch "LPU64" for "DFID"\n",
+                               o->mot_io_epoch, PFID(mdt_object_fid(o)));
                 } else {
                         if (epoch > mdt->mdt_io_epoch)
                                 mdt->mdt_io_epoch = epoch;
                         else
                                 mdt->mdt_io_epoch++;
                         o->mot_io_epoch = mdt->mdt_io_epoch;
-                        CDEBUG(D_INODE, "starting epoch "LPU64" for "DFID3"\n",
-                               mdt->mdt_io_epoch, PFID3(mdt_object_fid(o)));
+                        CDEBUG(D_INODE, "starting epoch "LPU64" for "DFID"\n",
+                               mdt->mdt_io_epoch, PFID(mdt_object_fid(o)));
                 }
                 atomic_inc(&o->mot_writecount);
         }
@@ -390,9 +390,9 @@ int mdt_reint_open(struct mdt_thread_info *info)
         /*TODO: remove this and add MDS_CHECK_RESENT if resent enabled*/
         LASSERT(info->mti_pill.rc_fmt == &RQF_LDLM_INTENT_OPEN);
 
-        CDEBUG(D_INODE, "I am going to create "DFID3"/("DFID3":%s) "
+        CDEBUG(D_INODE, "I am going to create "DFID"/("DFID":%s) "
                         "cr_flag=%x mode=%06o\n",
-                        PFID3(rr->rr_fid1), PFID3(rr->rr_fid2), 
+                        PFID(rr->rr_fid1), PFID(rr->rr_fid2), 
                         rr->rr_name, create_flags, la->la_mode);
 
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
@@ -501,8 +501,8 @@ int mdt_close(struct mdt_thread_info *info)
         mfd = mdt_handle2mfd(&(info->mti_body->handle));
         if (mfd == NULL) {
                 spin_unlock(&med->med_open_lock);
-                CDEBUG(D_INODE, "no handle for file close: fid = "DFID3
-                       ": cookie = "LPX64"\n", PFID3(&info->mti_body->fid1),
+                CDEBUG(D_INODE, "no handle for file close: fid = "DFID
+                       ": cookie = "LPX64"\n", PFID(&info->mti_body->fid1),
                        info->mti_body->handle.cookie);
                 rc = -ESTALE;
         } else {

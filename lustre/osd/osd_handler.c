@@ -1034,8 +1034,8 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
                  */
                 hash = *(__u32 *)(name - sizeof(__u16) - sizeof(__u32));
                 *end = hash;
-                CERROR("%p %p %d "DFID3": %#8.8x (%d)\"%*.*s\"\n",
-                       area, ent, nob, PFID3(fid), hash, len, len, len, name);
+                CERROR("%p %p %d "DFID": %#8.8x (%d)\"%*.*s\"\n",
+                       area, ent, nob, PFID(fid), hash, len, len, len, name);
                 if (nob >= recsize) {
                         ent->lde_fid = *fid;
                         ent->lde_hash = hash;

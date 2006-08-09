@@ -104,8 +104,8 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         if (S_ISREG(la->la_mode) &&
             la->la_nlink == 0 && mo->mot_header.loh_ref == 1) {
 
-                CDEBUG(D_INODE, "Last reference is released on "DFID3"\n",
-                                PFID3(mdt_object_fid(mo)));
+                CDEBUG(D_INODE, "Last reference is released on "DFID"\n",
+                                PFID(mdt_object_fid(mo)));
 
                 CDEBUG(D_INODE, "ma_valid = "LPX64"\n", ma->ma_valid);
                 repbody = req_capsule_server_get(&info->mti_pill,

@@ -140,8 +140,8 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
 
         if (range_space(space) < seq->seq_super_width) {
                 CWARN("sequences space is going to exhaust soon. "
-                      "Only can allocate "LPU64" sequences\n",
-                      space->lr_end - space->lr_start);
+                      "Can allocate only "LPU64" sequences\n",
+                      range_space(space));
                 *range = *space;
                 space->lr_start = space->lr_end;
                 rc = 0;
@@ -163,8 +163,7 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
 
         if (rc == 0) {
                 CDEBUG(D_INFO, "%s: allocated super-sequence "
-                       "["LPX64"-"LPX64"]\n", seq->seq_name,
-                       range->lr_start, range->lr_end);
+                       DRANGE"\n", seq->seq_name, PRANGE(range));
         }
 
         RETURN(rc);
@@ -223,8 +222,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 
         if (rc == 0) {
                 CDEBUG(D_INFO, "%s: allocated meta-sequence "
-                       "["LPX64"-"LPX64"]\n", seq->seq_name,
-                       range->lr_start, range->lr_end);
+                       DRANGE"\n", seq->seq_name, PRANGE(range));
         }
 
         RETURN(rc);
@@ -243,11 +241,6 @@ static int seq_server_alloc_meta(struct lu_server_seq *seq,
 
         RETURN(rc);
 }
-
-struct seq_thread_info {
-        struct req_capsule sti_pill;
-        int                sti_rep_buf_size[2];
-};
 
 static int seq_req_handle0(const struct lu_context *ctx,
                            struct ptlrpc_request *req,
@@ -269,32 +262,32 @@ static int seq_req_handle0(const struct lu_context *ctx,
         if (opc != NULL) {
                 out = req_capsule_server_get(&info->sti_pill,
                                              &RMF_SEQ_RANGE);
-                if (out == NULL) {
-                        CERROR("can't get range buffer\n");
+                if (out == NULL)
                         RETURN(-EPROTO);
-                }
 
                 switch (*opc) {
                 case SEQ_ALLOC_META:
                         if (!site->ls_server_seq) {
-                                CERROR("sequence-server is not initialized\n");
+                                CERROR("sequence-server is not "
+                                       "initialized\n");
                                 RETURN(-EINVAL);
                         }
-                        rc = seq_server_alloc_meta(site->ls_server_seq, out, ctx);
+                        rc = seq_server_alloc_meta(site->ls_server_seq,
+                                                   out, ctx);
                         break;
                 case SEQ_ALLOC_SUPER:
                         if (!site->ls_control_seq) {
-                                CERROR("sequence-controller is not initialized\n");
+                                CERROR("sequence-controller is not "
+                                       "initialized\n");
                                 RETURN(-EINVAL);
                         }
-                        rc = seq_server_alloc_super(site->ls_control_seq, out, ctx);
+                        rc = seq_server_alloc_super(site->ls_control_seq,
+                                                    out, ctx);
                         break;
                 default:
-                        CERROR("wrong opc 0x%x\n", *opc);
+                        CERROR("wrong opc %#x\n", *opc);
                         break;
                 }
-        } else {
-                CERROR("cannot unpack client request\n");
         }
 
         RETURN(rc);
@@ -351,7 +344,6 @@ static void seq_thread_info_fini(struct seq_thread_info *info)
 
 static int seq_req_handle(struct ptlrpc_request *req)
 {
-        int fail = OBD_FAIL_SEQ_ALL_REPLY_NET;
         const struct lu_context *ctx;
         struct seq_thread_info *info;
         int rc = 0;
@@ -381,19 +373,20 @@ static int seq_req_handle(struct ptlrpc_request *req)
                         req->rq_status = -ENOTCONN;
                 }
         } else {
-                CERROR("Wrong opcode: %d\n",
-                       req->rq_reqmsg->opc);
+                CERROR("Wrong opcode: %d\n", req->rq_reqmsg->opc);
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req);
                 GOTO(out_info, rc);
         }
 
-        target_send_reply(req, rc, fail);
+        target_send_reply(req, rc, OBD_FAIL_SEQ_ALL_REPLY_NET);
         EXIT;
 out_info:
         seq_thread_info_fini(info);
         return rc;
 }
+
+static void seq_server_proc_fini(struct lu_server_seq *seq);
 
 #ifdef LPROCFS
 static int seq_server_proc_init(struct lu_server_seq *seq)
@@ -407,7 +400,7 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
         if (IS_ERR(seq->seq_proc_dir)) {
                 CERROR("LProcFS failed in seq-init\n");
                 rc = PTR_ERR(seq->seq_proc_dir);
-                GOTO(err, rc);
+                RETURN(rc);
         }
 
         seq->seq_proc_entry = lprocfs_register("services",
@@ -416,7 +409,7 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
         if (IS_ERR(seq->seq_proc_entry)) {
                 CERROR("LProcFS failed in seq-init\n");
                 rc = PTR_ERR(seq->seq_proc_entry);
-                GOTO(err_type, rc);
+                GOTO(out_cleanup, rc);
         }
 
         rc = lprocfs_add_vars(seq->seq_proc_dir,
@@ -424,45 +417,54 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
         if (rc) {
                 CERROR("can't init sequence manager "
                        "proc, rc %d\n", rc);
-                GOTO(err_entry, rc);
+                GOTO(out_cleanup, rc);
         }
 
         RETURN(0);
 
-err_entry:
-        lprocfs_remove(seq->seq_proc_entry);
-err_type:
-        lprocfs_remove(seq->seq_proc_dir);
-err:
-        seq->seq_proc_dir = NULL;
-        seq->seq_proc_entry = NULL;
+out_cleanup:
+        seq_server_proc_fini(seq);
         return rc;
 }
 
 static void seq_server_proc_fini(struct lu_server_seq *seq)
 {
         ENTRY;
-        if (seq->seq_proc_entry) {
-                lprocfs_remove(seq->seq_proc_entry);
+        if (seq->seq_proc_entry != NULL) {
+                if (!IS_ERR(seq->seq_proc_entry))
+                        lprocfs_remove(seq->seq_proc_entry);
                 seq->seq_proc_entry = NULL;
         }
 
-        if (seq->seq_proc_dir) {
-                lprocfs_remove(seq->seq_proc_dir);
+        if (seq->seq_proc_dir != NULL) {
+                if (!IS_ERR(seq->seq_proc_dir))
+                        lprocfs_remove(seq->seq_proc_dir);
                 seq->seq_proc_dir = NULL;
         }
         EXIT;
+}
+#else
+static int seq_server_proc_init(struct lu_server_seq *seq)
+{
+        return 0;
+}
+
+static void seq_server_proc_fini(struct lu_server_seq *seq)
+{
+        return;
 }
 #endif
 
 int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
                     const char *uuid,
-                    lu_server_type_t type,
+                    enum lu_mgr_type type,
                     const struct lu_context *ctx)
 {
-        int rc, portal = (type == LUSTRE_SEQ_SRV) ?
-                SEQ_SRV_PORTAL : SEQ_CTLR_PORTAL;
+        int is_srv = type == LUSTRE_SEQ_SERVER;
+        
+        int rc, portal = is_srv ?
+                SEQ_SERVER_PORTAL : SEQ_CONTROLLER_PORTAL;
 
         struct ptlrpc_service_conf seq_conf = {
                 .psc_nbufs = MDS_NBUFS,
@@ -489,7 +491,7 @@ int seq_server_init(struct lu_server_seq *seq,
         seq->seq_meta_width = LUSTRE_SEQ_META_WIDTH;
 
         snprintf(seq->seq_name, sizeof(seq->seq_name), "%s-%s-%s",
-                 LUSTRE_SEQ_NAME, (type == LUSTRE_SEQ_SRV ? "srv" : "ctl"),
+                 LUSTRE_SEQ_NAME, (is_srv ? "srv" : "ctl"),
                  uuid);
 
         seq->seq_space = LUSTRE_SEQ_SPACE_RANGE;
@@ -504,26 +506,19 @@ int seq_server_init(struct lu_server_seq *seq,
         /* request backing store for saved sequence info */
         rc = seq_store_read(seq, ctx);
         if (rc == -ENODATA) {
-                if (type == LUSTRE_SEQ_SRV) {
-                        CDEBUG(D_INFO|D_WARNING, "%s: no data on "
-                               "disk found, wait for controller "
-                               "attach\n", seq->seq_name);
-                } else {
-                        CDEBUG(D_INFO|D_WARNING, "%s: no data on "
-                               "disk found, this is first controller "
-                               "run\n", seq->seq_name);
-                }
+                CDEBUG(D_INFO|D_WARNING, "%s: no data on "
+                       "storage was found, %s\n", seq->seq_name,
+                       is_srv ? "wait for controller attach" :
+                       "this is first controller run");
         } else if (rc) {
 		CERROR("can't read sequence state, rc = %d\n",
 		       rc);
 		GOTO(out, rc);
 	}
 
-#ifdef LPROCFS
         rc  = seq_server_proc_init(seq);
         if (rc)
 		GOTO(out, rc);
-#endif
 
         seq->seq_service =  ptlrpc_init_svc_conf(&seq_conf,
 						 seq_req_handle,
@@ -543,7 +538,7 @@ out:
 		seq_server_fini(seq, ctx);
         } else {
                 CDEBUG(D_INFO|D_WARNING, "%s Sequence Manager\n",
-                       (type == LUSTRE_SEQ_SRV ? "Server" : "Controller"));
+                       (is_srv ? "Server" : "Controller"));
         }
 	return rc;
 }
@@ -559,10 +554,7 @@ void seq_server_fini(struct lu_server_seq *seq,
                 seq->seq_service = NULL;
         }
 
-#ifdef LPROCFS
         seq_server_proc_fini(seq);
-#endif
-
         seq_store_fini(seq, ctx);
 
         if (seq->seq_dev != NULL) {

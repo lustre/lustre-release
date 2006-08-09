@@ -130,7 +130,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
 
         ENTRY;
 
-        DEBUG_REQ(D_INODE, req, "setattr "DFID3" %x", PFID3(rr->rr_fid1),
+        DEBUG_REQ(D_INODE, req, "setattr "DFID" %x", PFID(rr->rr_fid1),
                   (unsigned int)attr->la_valid);
 
         /*pack the reply*/
@@ -229,7 +229,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         int                      rc;
         ENTRY;
 
-        DEBUG_REQ(D_INODE, req, "unlink "DFID3"/%s\n", PFID3(rr->rr_fid1),
+        DEBUG_REQ(D_INODE, req, "unlink "DFID"/%s\n", PFID(rr->rr_fid1),
                   rr->rr_name);
         /*pack the reply*/
         req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
@@ -314,8 +314,8 @@ static int mdt_reint_link(struct mdt_thread_info *info)
 
         ENTRY;
 
-        DEBUG_REQ(D_INODE, req, "link original "DFID3" to "DFID3" %s",
-                  PFID3(rr->rr_fid1), PFID3(rr->rr_fid2), rr->rr_name);
+        DEBUG_REQ(D_INODE, req, "link original "DFID" to "DFID" %s",
+                  PFID(rr->rr_fid1), PFID(rr->rr_fid2), rr->rr_name);
 
         /* MDS_CHECK_RESENT here */
 
@@ -367,9 +367,9 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
 
         ENTRY;
 
-        DEBUG_REQ(D_INODE, req, "rename_tgt "DFID3" to "DFID3" %s",
-                  PFID3(rr->rr_fid2),
-                  PFID3(rr->rr_fid1), rr->rr_tgt);
+        DEBUG_REQ(D_INODE, req, "rename_tgt "DFID" to "DFID" %s",
+                  PFID(rr->rr_fid2),
+                  PFID(rr->rr_fid1), rr->rr_tgt);
 
         /* step 1: lookup & lock the tgt dir */
         lh_tgt = &info->mti_lh[MDT_LH_CHILD];
@@ -435,9 +435,9 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
 
         ENTRY;
 
-        DEBUG_REQ(D_INODE, req, "rename "DFID3"/%s to "DFID3"/%s",
-                  PFID3(rr->rr_fid1), rr->rr_name,
-                  PFID3(rr->rr_fid2), rr->rr_tgt);
+        DEBUG_REQ(D_INODE, req, "rename "DFID"/%s to "DFID"/%s",
+                  PFID(rr->rr_fid1), rr->rr_name,
+                  PFID(rr->rr_fid2), rr->rr_tgt);
 
         /* MDS_CHECK_RESENT here */
 

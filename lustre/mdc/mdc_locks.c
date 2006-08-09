@@ -578,10 +578,10 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         ENTRY;
         LASSERT(it);
 
-        CDEBUG(D_DLMTRACE, "(name: %.*s,"DFID3") in obj "DFID3
+        CDEBUG(D_DLMTRACE, "(name: %.*s,"DFID") in obj "DFID
                            ", intent: %s flags %#o\n",
-               op_data->namelen, op_data->name, PFID3(&op_data->fid2), 
-               PFID3(&op_data->fid1), ldlm_it2str(it->it_op), it->it_flags);
+               op_data->namelen, op_data->name, PFID(&op_data->fid2), 
+               PFID(&op_data->fid1), ldlm_it2str(it->it_op), it->it_flags);
 
         if (fid_is_sane(&op_data->fid2) &&
             (it->it_op & (IT_LOOKUP | IT_GETATTR))) {

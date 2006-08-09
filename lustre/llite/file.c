@@ -1941,7 +1941,7 @@ int ll_have_md_lock(struct inode *inode, __u64 bits)
                RETURN(0);
 
         fid = &ll_i2info(inode)->lli_fid;
-        CDEBUG(D_INFO, "trying to match res "DFID3"\n", PFID3(fid));
+        CDEBUG(D_INFO, "trying to match res "DFID"\n", PFID(fid));
 
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
         if (md_lock_match(ll_i2mdexp(inode), flags, fid, LDLM_IBITS, &policy, 

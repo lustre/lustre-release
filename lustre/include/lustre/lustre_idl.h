@@ -98,8 +98,8 @@
 #define MGS_REPLY_PORTAL               27
 #define OST_REQUEST_PORTAL             28
 #define FLD_REQUEST_PORTAL             29
-#define SEQ_SRV_PORTAL                 30
-#define SEQ_CTLR_PORTAL                31
+#define SEQ_SERVER_PORTAL              30
+#define SEQ_CONTROLLER_PORTAL          31
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2
@@ -173,6 +173,12 @@ static inline int range_is_exhausted(struct lu_range *r)
         return range_space(r) == 0;
 }
 
+#define DRANGE "["LPU64"-"LPU64"]"
+
+#define PRANGE(range)      \
+        (range)->lr_start, \
+        (range)->lr_end
+
 struct lu_fid {
         __u64 f_seq;  /* holds fid sequence. Lustre should support 2 ^ 64
                        * objects, thus even if one sequence has one object we
@@ -227,12 +233,12 @@ static inline int fid_is_sane(const struct lu_fid *fid)
                 fid_seq_is_sane(fid_seq(fid)) && fid_oid(fid) != 0;
 }
 
-#define DFID3 "[%16.16"LPF64"x/%8.8x:%8.8x]"
+#define DFID "[%16.16"LPF64"x/%8.8x:%8.8x]"
 
-#define PFID3(fid)    \
-        fid_seq(fid), \
-        fid_oid(fid), \
-        fid_ver(fid)
+#define PFID(fid)       \
+        fid_seq((fid)), \
+        fid_oid((fid)), \
+        fid_ver((fid))
 
 extern void lustre_swab_lu_fid(struct lu_fid *fid);
 extern void lustre_swab_lu_range(struct lu_range *range);

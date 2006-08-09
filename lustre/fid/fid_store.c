@@ -48,11 +48,6 @@
 #include "fid_internal.h"
 
 #ifdef __KERNEL__
-struct seq_store_capsule {
-        struct lu_range ssc_space;
-        struct lu_range ssc_super;
-};
-
 enum {
         SEQ_TXN_STORE_CREDITS = 20
 };
@@ -63,23 +58,29 @@ int seq_store_write(struct lu_server_seq *seq,
 {
         struct dt_object *dt_obj = seq->seq_obj;
         struct dt_device *dt_dev = seq->seq_dev;
-        struct seq_store_capsule capsule;
-        loff_t pos = 0;
-        struct txn_param txn;
+        struct seq_thread_info *info;
         struct thandle *th;
+        loff_t pos = 0;
 	int rc;
 	ENTRY;
 
-        /* stub here, will fix it later */
-        txn.tp_credits = SEQ_TXN_STORE_CREDITS;
+        info = lu_context_key_get(ctx, &seq_thread_key);
+        LASSERT(info != NULL);
 
-        th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &txn);
+        /* stub here, will fix it later */
+        info->sti_txn.tp_credits = SEQ_TXN_STORE_CREDITS;
+
+        th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &info->sti_txn);
         if (!IS_ERR(th)) {
+                /* store ranges in le format */
+                range_to_le(&info->sti_record.ssr_space, &seq->seq_space);
+                range_to_le(&info->sti_record.ssr_super, &seq->seq_super);
+
                 rc = dt_obj->do_body_ops->dbo_write(ctx, dt_obj,
-                                                    (char *)&capsule,
-                                                    sizeof(capsule),
+                                                    (char *)&info->sti_record,
+                                                    sizeof(info->sti_record),
                                                     &pos, th);
-                if (rc == sizeof(capsule)) {
+                if (rc == sizeof(info->sti_record)) {
                         rc = 0;
                 } else if (rc >= 0) {
                         rc = -EIO;
@@ -99,23 +100,29 @@ int seq_store_read(struct lu_server_seq *seq,
                    const struct lu_context *ctx)
 {
         struct dt_object *dt_obj = seq->seq_obj;
-        struct seq_store_capsule capsule;
+        struct seq_thread_info *info;
         loff_t pos = 0;
 	int rc;
 	ENTRY;
 
+        info = lu_context_key_get(ctx, &seq_thread_key);
+        LASSERT(info != NULL);
+
         rc = dt_obj->do_body_ops->dbo_read(ctx, dt_obj,
-                                           (char *)&capsule,
-                                           sizeof(capsule), &pos);
-        if (rc == sizeof(capsule)) {
-                seq->seq_space = capsule.ssc_space;
-                seq->seq_super = capsule.ssc_super;
+                                           (char *)&info->sti_record,
+                                           sizeof(info->sti_record), &pos);
+        if (rc == sizeof(info->sti_record)) {
+                seq->seq_space = info->sti_record.ssr_space;
+                lustre_swab_lu_range(&seq->seq_space);
+                
+                seq->seq_super = info->sti_record.ssr_super;
+                lustre_swab_lu_range(&seq->seq_super);
                 rc = 0;
         } else if (rc == 0) {
                 rc = -ENODATA;
         } else if (rc >= 0) {
                 CERROR("read only %d bytes of %d\n",
-                       rc, sizeof(capsule));
+                       rc, sizeof(info->sti_record));
                 rc = -EIO;
         }
 	
@@ -127,12 +134,13 @@ int seq_store_init(struct lu_server_seq *seq,
 {
         struct dt_device *dt = seq->seq_dev;
         struct dt_object *dt_obj;
+        struct lu_fid fid;
         int rc;
         ENTRY;
 
         LASSERT(seq->seq_service == NULL);
 
-        dt_obj = dt_store_open(ctx, dt, "seq", &seq->seq_fid);
+        dt_obj = dt_store_open(ctx, dt, "seq", &fid);
         if (!IS_ERR(dt_obj)) {
                 seq->seq_obj = dt_obj;
 		rc = 0;

@@ -172,8 +172,8 @@ repeat:
                 mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                    (char *)name, len);
 
-                CDEBUG(D_OTHER, "forward to MDS #%u ("DFID3")\n",
-                       mds, PFID3(&rpid));
+                CDEBUG(D_OTHER, "forward to MDS #%u ("DFID")\n",
+                       mds, PFID(&rpid));
                 rpid = obj->lo_inodes[mds].li_fid;
                 lmv_obj_put(obj);
         }
@@ -216,8 +216,8 @@ repeat:
                  * this is "usual" situation, we should not print error here,
                  * only debug info.
                  */
-                CDEBUG(D_OTHER, "can't handle remote %s: dir "DFID3"("DFID3"):"
-                       "%*s: %d\n", LL_IT2STR(it), PFID3(pid), PFID3(&rpid),
+                CDEBUG(D_OTHER, "can't handle remote %s: dir "DFID"("DFID"):"
+                       "%*s: %d\n", LL_IT2STR(it), PFID(pid), PFID(&rpid),
                        len, name, rc);
                 GOTO(out_free_op_data, rc);
         }
@@ -251,14 +251,14 @@ repeat:
 
         if (obj) {
                 /* this is splitted dir and we'd want to get attrs */
-                CDEBUG(D_OTHER, "attrs from slaves for "DFID3"\n",
-                       PFID3(cid));
+                CDEBUG(D_OTHER, "attrs from slaves for "DFID"\n",
+                       PFID(cid));
 
                 rc = lmv_revalidate_slaves(exp, reqp, cid, it, 1,
                                            cb_blocking, extra_lock_flags);
         } else if (S_ISDIR(body->mode)) {
-                CDEBUG(D_OTHER, "object "DFID3" has not lmv obj?\n",
-                       PFID3(cid));
+                CDEBUG(D_OTHER, "object "DFID" has not lmv obj?\n",
+                       PFID(cid));
         }
 
         if (obj)
@@ -294,7 +294,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         if (cid) {
                 /* caller wants to revalidate attrs of obj we have to revalidate
                  * slaves if requested object is splitted directory */
-                CDEBUG(D_OTHER, "revalidate attrs for "DFID3"\n", PFID3(cid));
+                CDEBUG(D_OTHER, "revalidate attrs for "DFID"\n", PFID(cid));
                 mds = lmv_fld_lookup(obd, cid);
                 if (mds < 0)
                         GOTO(out_free_op_data, rc = mds);
@@ -314,8 +314,8 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
 #endif
                 op_data->fid2 = *cid;
         } else {
-                CDEBUG(D_OTHER, "INTENT getattr for %*s on "DFID3"\n",
-                       len, name, PFID3(pid));
+                CDEBUG(D_OTHER, "INTENT getattr for %*s on "DFID"\n",
+                       len, name, PFID(pid));
                 mds = lmv_fld_lookup(obd, pid);
                 if (mds < 0)
                         GOTO(out_free_op_data, rc = mds);
@@ -328,8 +328,8 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                         mds = lmv_fld_lookup(obd, &rpid);
                         lmv_obj_put(obj);
 
-                        CDEBUG(D_OTHER, "forward to MDS #%u (slave "DFID3")\n",
-                               mds, PFID3(&rpid));
+                        CDEBUG(D_OTHER, "forward to MDS #%u (slave "DFID")\n",
+                               mds, PFID(&rpid));
                 }
         }
 
@@ -354,8 +354,8 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
                  * notify about object * removal.
                  */
                 CDEBUG(D_OTHER,
-                       "revalidate slaves for "DFID3", rc %d\n",
-                       PFID3(cid), rc);
+                       "revalidate slaves for "DFID", rc %d\n",
+                       PFID(cid), rc);
 
                 LASSERT(cid != 0);
                 rc = lmv_revalidate_slaves(exp, reqp, cid, it, rc,
@@ -404,8 +404,8 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
 
         if (obj2) {
                 /* this is splitted dir and we'd want to get attrs */
-                CDEBUG(D_OTHER, "attrs from slaves for "DFID3", rc %d\n",
-                       PFID3(cid), rc);
+                CDEBUG(D_OTHER, "attrs from slaves for "DFID", rc %d\n",
+                       PFID(cid), rc);
 
                 rc = lmv_revalidate_slaves(exp, reqp, cid, it, 1,
                                            cb_blocking, extra_lock_flags);
@@ -458,8 +458,8 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         obj = lmv_obj_grab(obd, &body->fid1);
         LASSERT(obj != NULL);
 
-        CDEBUG(D_OTHER, "lookup slaves for "DFID3"\n",
-               PFID3(&body->fid1));
+        CDEBUG(D_OTHER, "lookup slaves for "DFID"\n",
+               PFID(&body->fid1));
 
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL)
@@ -477,7 +477,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                         /* skip master obj */
                         continue;
 
-                CDEBUG(D_OTHER, "lookup slave "DFID3"\n", PFID3(&fid));
+                CDEBUG(D_OTHER, "lookup slave "DFID"\n", PFID(&fid));
 
                 /* is obj valid? */
                 memset(&it, 0, sizeof(it));
@@ -582,8 +582,8 @@ int lmv_intent_lookup(struct obd_export *exp, struct lu_fid *pid,
                 if (mds < 0)
                         GOTO(out_free_op_data, rc = mds);
 
-                CDEBUG(D_OTHER, "revalidate lookup for "DFID3" to %d MDS\n",
-                       PFID3(cid), mds);
+                CDEBUG(D_OTHER, "revalidate lookup for "DFID" to %d MDS\n",
+                       PFID(cid), mds);
 
                 op_data->fid2 = *cid;
         } else {
@@ -629,16 +629,16 @@ repeat:
                  * very interesting. it seems object is still valid but for some
                  * reason llite calls lookup, not revalidate.
                  */
-                CDEBUG(D_OTHER, "lookup for "DFID3" and data should be uptodate\n",
-                      PFID3(&rpid));
+                CDEBUG(D_OTHER, "lookup for "DFID" and data should be uptodate\n",
+                      PFID(&rpid));
                 LASSERT(*reqp == NULL);
                 GOTO(out_free_op_data, rc);
         }
 
         if (rc == 0 && *reqp == NULL) {
                 /* once again, we're asked for lookup, not revalidate */
-                CDEBUG(D_OTHER, "lookup for "DFID3" and data should be uptodate\n",
-                      PFID3(&rpid));
+                CDEBUG(D_OTHER, "lookup for "DFID" and data should be uptodate\n",
+                      PFID(&rpid));
                 GOTO(out_free_op_data, rc);
         }
 
@@ -707,8 +707,8 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         i = lmv_fld_lookup(obd, pid);
         if (i < 0)
                 RETURN(i);
-        CDEBUG(D_OTHER, "INTENT LOCK '%s' for '%*s' on "DFID3" -> %d\n",
-               LL_IT2STR(it), len, name, PFID3(pid), i);
+        CDEBUG(D_OTHER, "INTENT LOCK '%s' for '%*s' on "DFID" -> %d\n",
+               LL_IT2STR(it), len, name, PFID(pid), i);
 
         rc = lmv_check_connect(obd);
         if (rc)
@@ -773,8 +773,8 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 struct lookup_intent it;
                 int master = 0;
 
-                CDEBUG(D_OTHER, "revalidate subobj "DFID3"\n",
-                       PFID3(&fid));
+                CDEBUG(D_OTHER, "revalidate subobj "DFID"\n",
+                       PFID(&fid));
 
                 memset(op_data, 0, sizeof(*op_data));
                 memset(&it, 0, sizeof(it));

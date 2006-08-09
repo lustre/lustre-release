@@ -1880,7 +1880,7 @@ llu_fsswop_mount(const char *source,
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_dt_fid, err);
         }
-        CDEBUG(D_SUPER, "rootfid "DFID3"\n", PFID3(&rootfid));
+        CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&rootfid));
         sbi->ll_root_fid = rootfid;
 
         /* fetch attr of root inode */

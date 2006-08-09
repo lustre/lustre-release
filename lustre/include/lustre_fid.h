@@ -38,23 +38,23 @@ struct lu_context;
 extern const struct lu_range LUSTRE_SEQ_SPACE_RANGE;
 extern const struct lu_range LUSTRE_SEQ_ZERO_RANGE;
 
-/* this is how may FIDs may be allocated in one sequence. */
-#define LUSTRE_SEQ_MAX_WIDTH  0x00000000000002800
+enum {
+        /* this is how may FIDs may be allocated in one sequence. */
+        LUSTRE_SEQ_MAX_WIDTH = 0x00000000000002800ULL,
 
-/* how many sequences may be allocate for meta-sequence (this is 10240
- * sequences). */
-#define LUSTRE_SEQ_META_WIDTH 0x00000000000002800
+        /* how many sequences may be allocate for meta-sequence (this is 10240
+         * sequences). */
+        LUSTRE_SEQ_META_WIDTH = 0x00000000000002800ULL,
 
-/* this is how many sequneces (10240 * 10240) may be in one super-sequence
- * allocated to MDTs. */
-#define LUSTRE_SEQ_SUPER_WIDTH (LUSTRE_SEQ_META_WIDTH * LUSTRE_SEQ_META_WIDTH)
-
-enum lu_server_type {
-        LUSTRE_SEQ_SRV,
-        LUSTRE_SEQ_CTLR
+        /* this is how many sequneces (10240 * 10240) may be in one
+         * super-sequence allocated to MDTs. */
+        LUSTRE_SEQ_SUPER_WIDTH = (LUSTRE_SEQ_META_WIDTH * LUSTRE_SEQ_META_WIDTH)
 };
-
-typedef enum lu_server_type lu_server_type_t;
+        
+enum lu_mgr_type {
+        LUSTRE_SEQ_SERVER,
+        LUSTRE_SEQ_CONTROLLER
+};
 
 /* client sequence manager interface */
 struct lu_client_seq {
@@ -99,15 +99,12 @@ struct lu_server_seq {
         /* /seq file object device */
         struct dt_object       *seq_obj;
 
-        /* /seq file fid */
-        struct lu_fid           seq_fid;
-
         /* seq related proc */
         cfs_proc_dir_entry_t   *seq_proc_entry;
         cfs_proc_dir_entry_t   *seq_proc_dir;
 
         /* LUSTRE_SEQ_SRV or LUSTRE_SEQ_CTLR */
-        lu_server_type_t        seq_type;
+        enum lu_mgr_type       seq_type;
 
         /* server side seq service */
         struct ptlrpc_service  *seq_service;
@@ -134,7 +131,7 @@ struct lu_server_seq {
 int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
                     const char *uuid,
-                    lu_server_type_t type,
+                    enum lu_mgr_type type,
                     const struct lu_context *ctx);
 
 void seq_server_fini(struct lu_server_seq *seq,
@@ -163,5 +160,9 @@ int seq_client_alloc_fid(struct lu_client_seq *seq,
 int fid_is_local(struct lu_site *site, const struct lu_fid *fid);
 void fid_to_le(struct lu_fid *dst, const struct lu_fid *src);
 void fid_to_be(struct lu_fid *dst, const struct lu_fid *src);
+
+/* Range common stuff */
+void range_to_le(struct lu_range *dst, const struct lu_range *src);
+void range_to_be(struct lu_range *dst, const struct lu_range *src);
 
 #endif /* __LINUX_OBD_CLASS_H */

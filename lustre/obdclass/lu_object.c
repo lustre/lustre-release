@@ -325,8 +325,8 @@ static void lu_object_header_print(const struct lu_context *ctx,
                                    void *cookie, lu_printer_t printer,
                                    const struct lu_object_header *hdr)
 {
-        (*printer)(ctx, cookie, "header@%p[%#lx, %d, "DFID3"%s%s]",
-                   hdr, hdr->loh_flags, hdr->loh_ref, PFID3(&hdr->loh_fid),
+        (*printer)(ctx, cookie, "header@%p[%#lx, %d, "DFID"%s%s]",
+                   hdr, hdr->loh_flags, hdr->loh_ref, PFID(&hdr->loh_fid),
                    hlist_unhashed(&hdr->loh_hash) ? "" : " hash",
                    list_empty(&hdr->loh_lru) ? "" : " lru");
 }

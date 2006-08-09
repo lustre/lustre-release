@@ -49,7 +49,7 @@
 
 static int seq_client_rpc(struct lu_client_seq *seq,
                           struct lu_range *range,
-                          __u32 opc)
+                          __u32 opc, const char *opcname)
 {
         struct obd_export *exp = seq->seq_exp;
         int repsize = sizeof(struct lu_range);
@@ -77,22 +77,35 @@ static int seq_client_rpc(struct lu_client_seq *seq,
         req->rq_replen = lustre_msg_size(1, &repsize);
 
         req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
-                SEQ_CTLR_PORTAL : SEQ_SRV_PORTAL;
+                SEQ_CONTROLLER_PORTAL : SEQ_SERVER_PORTAL;
 
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out_req, rc);
 
         ran = req_capsule_server_get(&pill, &RMF_SEQ_RANGE);
-        if (ran == NULL) {
-                CERROR("invalid range is returned\n");
+        if (ran == NULL)
                 GOTO(out_req, rc = -EPROTO);
-        }
         *range = *ran;
 
-        LASSERT(range_is_sane(range));
-        LASSERT(!range_is_exhausted(range));
+        if (!range_is_sane(range)) {
+                CERROR("invalid seq range obtained from server: "
+                       DRANGE"\n", PRANGE(range));
+                GOTO(out_req, rc = -EINVAL);
+        }
 
+        if (range_is_exhausted(range)) {
+                CERROR("seq range obtained from server is exhausted: "
+                       DRANGE"]\n", PRANGE(range));
+                GOTO(out_req, rc = -EINVAL);
+        }
+
+        if (rc == 0) {
+                CDEBUG(D_INFO, "%s: allocated %s-sequence "
+                       DRANGE"]\n", seq->seq_name, opcname,
+                       PRANGE(range));
+        }
+        
         EXIT;
 out_req:
         req_capsule_fini(&pill);
@@ -100,26 +113,11 @@ out_req:
         return rc;
 }
 
-static int __seq_client_alloc_opc(struct lu_client_seq *seq,
-                                  int opc, const char *opcname)
-{
-        int rc;
-        ENTRY;
-
-        rc = seq_client_rpc(seq, &seq->seq_range, opc);
-        if (rc == 0) {
-                CDEBUG(D_INFO, "%s: allocated %s-sequence ["
-                       LPX64"-"LPX64"]\n", seq->seq_name, opcname,
-                       seq->seq_range.lr_start, seq->seq_range.lr_end);
-        }
-        RETURN(rc);
-}
-
 /* request sequence-controller node to allocate new super-sequence. */
 static int __seq_client_alloc_super(struct lu_client_seq *seq)
 {
-        ENTRY;
-        RETURN(__seq_client_alloc_opc(seq, SEQ_ALLOC_SUPER, "super"));
+        return seq_client_rpc(seq, &seq->seq_range,
+                              SEQ_ALLOC_SUPER, "super");
 }
 
 int seq_client_alloc_super(struct lu_client_seq *seq)
@@ -138,8 +136,8 @@ EXPORT_SYMBOL(seq_client_alloc_super);
 /* request sequence-controller node to allocate new meta-sequence. */
 static int __seq_client_alloc_meta(struct lu_client_seq *seq)
 {
-        ENTRY;
-        RETURN(__seq_client_alloc_opc(seq, SEQ_ALLOC_META, "meta"));
+        return seq_client_rpc(seq, &seq->seq_range,
+                              SEQ_ALLOC_META, "meta");
 }
 
 int seq_client_alloc_meta(struct lu_client_seq *seq)
@@ -174,6 +172,7 @@ static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
                 }
         }
 
+        LASSERT(range_space(&seq->seq_range) > 0);
         *seqnr = seq->seq_range.lr_start;
         seq->seq_range.lr_start++;
 
@@ -197,7 +196,6 @@ EXPORT_SYMBOL(seq_client_alloc_seq);
 
 int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
 {
-        seqno_t seqnr = 0;
         int rc;
         ENTRY;
 
@@ -208,8 +206,10 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
         if (!fid_is_sane(&seq->seq_fid) ||
             fid_oid(&seq->seq_fid) >= seq->seq_width)
         {
-                /* allocate new sequence for case client hass no sequence at all
-                 * or sequnece is exhausted and should be switched. */
+                seqno_t seqnr;
+                
+                /* allocate new sequence for case client has no sequence at all
+                 * or sequence is exhausted and should be switched. */
                 rc = __seq_client_alloc_seq(seq, &seqnr);
                 if (rc) {
                         CERROR("can't allocate new sequence, "
@@ -222,9 +222,9 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                 seq->seq_fid.f_seq = seqnr;
                 seq->seq_fid.f_ver = 0;
 
-                /* inform caller that sequnece switch is performed to allow it
+                /* inform caller that sequence switch is performed to allow it
                  * to setup FLD for it. */
-                rc = -ERESTART;
+                rc = 1;
         } else {
                 seq->seq_fid.f_oid++;
                 rc = 0;
@@ -233,8 +233,8 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
         *fid = seq->seq_fid;
         LASSERT(fid_is_sane(fid));
 
-        CDEBUG(D_INFO, "%s: allocated FID "DFID3"\n",
-               seq->seq_name, PFID3(fid));
+        CDEBUG(D_INFO, "%s: allocated FID "DFID"\n",
+               seq->seq_name, PFID(fid));
 
         EXIT;
 out:
@@ -285,6 +285,16 @@ static void seq_client_proc_fini(struct lu_client_seq *seq)
         }
         EXIT;
 }
+#else
+static int seq_client_proc_init(struct lu_client_seq *seq)
+{
+        return 0;
+}
+
+static void seq_client_proc_fini(struct lu_client_seq *seq)
+{
+        return;
+}
 #endif
 
 int seq_client_init(struct lu_client_seq *seq,
@@ -305,10 +315,7 @@ int seq_client_init(struct lu_client_seq *seq,
         snprintf(seq->seq_name, sizeof(seq->seq_name),
                  "%s-cli-%s", LUSTRE_SEQ_NAME, uuid);
 
-#ifdef LPROCFS
         rc = seq_client_proc_init(seq);
-#endif
-
         if (rc)
                 seq_client_fini(seq);
         else
@@ -322,9 +329,7 @@ void seq_client_fini(struct lu_client_seq *seq)
 {
         ENTRY;
 
-#ifdef LPROCFS
         seq_client_proc_fini(seq);
-#endif
 
         if (seq->seq_exp != NULL) {
                 class_export_put(seq->seq_exp);

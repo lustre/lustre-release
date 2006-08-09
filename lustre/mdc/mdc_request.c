@@ -84,9 +84,9 @@ static int send_getstatus(struct obd_import *imp, struct lu_fid *rootfid,
 
                 memcpy(rootfid, &body->fid1, sizeof(*rootfid));
 
-                CDEBUG(D_NET, "root fid="DFID3", last_committed="LPU64
+                CDEBUG(D_NET, "root fid="DFID", last_committed="LPU64
                        ", last_xid="LPU64"\n",
-                       PFID3(rootfid), req->rq_repmsg->last_committed,
+                       PFID(rootfid), req->rq_repmsg->last_committed,
                        req->rq_repmsg->last_xid);
         }
 
@@ -716,7 +716,7 @@ int mdc_readpage(struct obd_export *exp, struct lu_fid *fid, __u64 offset,
         int rc, size[] = { sizeof(*body) };
         ENTRY;
 
-        CDEBUG(D_INODE, "object: "DFID3"\n", PFID3(fid));
+        CDEBUG(D_INODE, "object: "DFID"\n", PFID(fid));
 
         req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_READPAGE,
                               1, size, NULL);

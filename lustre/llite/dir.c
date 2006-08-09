@@ -524,8 +524,8 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                 pos = hash;
                 } else {
                         rc = PTR_ERR(page);
-                        CERROR("error reading dir "DFID3" at %lu: rc %d\n",
-                               PFID3(&info->lli_fid), (unsigned long)pos, rc);
+                        CERROR("error reading dir "DFID" at %lu: rc %d\n",
+                               PFID(&info->lli_fid), (unsigned long)pos, rc);
                 }
         }
 
