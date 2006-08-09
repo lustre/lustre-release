@@ -1750,7 +1750,7 @@ run_test 43 "execution of file opened for write should return -ETXTBSY"
 
 test_43a() {
         mkdir -p $DIR/d43
-	cp -p `which multiop` $DIR/d43/multiop
+	cp -p `which multiop` $DIR/d43/multiop || cp -p multiop $DIR/d43/multiop
         $DIR/d43/multiop $TMP/test43.junk O_c &
         MULTIPID=$!
         sleep 1
@@ -1763,7 +1763,7 @@ run_test 43a "open(RDWR) of file being executed should return -ETXTBSY"
 
 test_43b() {
         mkdir -p $DIR/d43
-	cp -p `which multiop` $DIR/d43/multiop
+	cp -p `which multiop` $DIR/d43/multiop || cp -p multiop $DIR/d43/multiop
         $DIR/d43/multiop $TMP/test43.junk O_c &
         MULTIPID=$!
         sleep 1
@@ -1802,21 +1802,23 @@ test_44a() {
     OFFSETS="0 $((stride/2)) $((stride-1))"
     for offset in $OFFSETS ; do
       for i in `seq 0 $((nstripe-1))`; do
-        rm -f $DIR/d44a
         local GLOBALOFFSETS=""
         local size=$((((i + 2 * $nstripe )*$stride + $offset)))  # Bytes
-        ll_sparseness_write $DIR/d44a $size  || error "ll_sparseness_write"
+	local myfn=$DIR/d44a-$size
+	echo "--------writing $myfn at $size"
+        ll_sparseness_write $myfn $size  || error "ll_sparseness_write"
         GLOBALOFFSETS="$GLOBALOFFSETS $size"
-        ll_sparseness_verify $DIR/d44a $GLOBALOFFSETS \
+        ll_sparseness_verify $myfn $GLOBALOFFSETS \
                             || error "ll_sparseness_verify $GLOBALOFFSETS"
 
         for j in `seq 0 $((nstripe-1))`; do
             size=$((((j + $nstripe )*$stride + $offset)))  # Bytes
-            ll_sparseness_write $DIR/d44a $size || error "ll_sparseness_write"
+            ll_sparseness_write $myfn $size || error "ll_sparseness_write"
             GLOBALOFFSETS="$GLOBALOFFSETS $size"
         done
-        ll_sparseness_verify $DIR/d44a $GLOBALOFFSETS \
+        ll_sparseness_verify $myfn $GLOBALOFFSETS \
                             || error "ll_sparseness_verify $GLOBALOFFSETS"
+	rm -f $myfn
       done
     done
 }
