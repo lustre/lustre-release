@@ -1637,7 +1637,7 @@ static int mkfs_mdt(struct mkfs_opts *mop)
                 goto out_umount;
         }
 
-        ret = ioctl(fd, IAM_IOC_POLYMORPH, 040700);
+        ret = ioctl(fd, IAM_IOC_POLYMORPH, 040755);
         close(fd);
         if (ret) {
                 perror("IAM_IOC_POLYMORPH");
