@@ -1929,6 +1929,29 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         RETURN(rc);
 }
 
+int ll_have_md_lock(struct inode *inode, __u64 bits)
+{
+        struct lustre_handle lockh;
+        ldlm_policy_data_t policy = { .l_inodebits = {bits}};
+        struct lu_fid *fid;
+        int flags;
+        ENTRY;
+
+        if (!inode)
+               RETURN(0);
+
+        fid = &ll_i2info(inode)->lli_fid;
+        CDEBUG(D_INFO, "trying to match res "DFID3"\n", PFID3(fid));
+
+        flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
+        if (md_lock_match(ll_i2mdexp(inode), flags, fid, LDLM_IBITS, &policy, 
+                                LCK_CR|LCK_CW|LCK_PR, &lockh)) {
+                RETURN(1);
+        }
+
+        RETURN(0);
+}
+
 int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 {
         struct lookup_intent oit = { .it_op = IT_GETATTR };
@@ -1969,7 +1992,13 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         rc = ll_revalidate_it_finish(req, 1, &oit, dentry);
         if (rc)
                 GOTO(out, rc);
-
+        
+        if (!dentry->d_inode->i_nlink) {
+                spin_lock(&dcache_lock);
+                ll_drop_dentry(dentry);
+                spin_unlock(&dcache_lock);
+        }
+        
         ll_lookup_finish_locks(&oit, dentry);
 
         /* object is allocated, validate size */

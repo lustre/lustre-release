@@ -141,6 +141,64 @@ void ll_intent_release(struct lookup_intent *it)
         EXIT;
 }
 
+/* Drop dentry if it is not used already, unhash otherwise.
+   Should be called with dcache lock held!
+   Returns: 1 if dentry was dropped, 0 if unhashed. */
+int ll_drop_dentry(struct dentry *dentry)
+{
+        lock_dentry(dentry);
+                CDEBUG(D_DENTRY, "dentry in drop %.*s (%p) parent %p "
+                       "inode %p flags %d\n", dentry->d_name.len,
+                       dentry->d_name.name, dentry, dentry->d_parent,
+                       dentry->d_inode, dentry->d_flags);
+
+        if (atomic_read(&dentry->d_count) == 0) {
+                CDEBUG(D_DENTRY, "deleting dentry %.*s (%p) parent %p "
+                       "inode %p\n", dentry->d_name.len,
+                       dentry->d_name.name, dentry, dentry->d_parent,
+                       dentry->d_inode);
+                dget_locked(dentry);
+                __d_drop(dentry);
+                unlock_dentry(dentry);
+                spin_unlock(&dcache_lock);
+                dput(dentry);
+                spin_lock(&dcache_lock);
+                return 1;
+        }
+
+#ifdef LUSTRE_KERNEL_VERSION
+        if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
+#else
+        if (!d_unhashed(dentry)) {
+                struct inode *inode = dentry->d_inode;
+#endif
+                CDEBUG(D_DENTRY, "unhashing dentry %.*s (%p) parent %p "
+                       "inode %p refc %d\n", dentry->d_name.len,
+                       dentry->d_name.name, dentry, dentry->d_parent,
+                       dentry->d_inode, atomic_read(&dentry->d_count));
+                /* actually we don't unhash the dentry, rather just
+                 * mark it inaccessible for to __d_lookup(). otherwise
+                 * sys_getcwd() could return -ENOENT -bzzz */
+#ifdef LUSTRE_KERNEL_VERSION
+                dentry->d_flags |= DCACHE_LUSTRE_INVALID;
+#else
+                if (!inode || !S_ISDIR(inode->i_mode))
+                        __d_drop(dentry);
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                __d_drop(dentry);
+                if (inode) {
+                        /* Put positive dentries to orphan list */
+                        hlist_add_head(&dentry->d_hash,
+                                       &ll_i2sbi(inode)->ll_orphan_dentry_list);
+                }
+#endif
+        }
+        unlock_dentry(dentry);
+        return 0;
+}
+
 void ll_unhash_aliases(struct inode *inode)
 {
         struct list_head *tmp, *head;
@@ -151,15 +209,20 @@ void ll_unhash_aliases(struct inode *inode)
                 return;
         }
 
-        CDEBUG(D_INODE, "marking dentries for ino %lu/%u(%p) invalid\n",
+        CDEBUG(D_INODE, "marking dentries for 111 ino %lu/%u(%p) invalid\n",
                inode->i_ino, inode->i_generation, inode);
 
         head = &inode->i_dentry;
-restart:
         spin_lock(&dcache_lock);
+restart:
         tmp = head;
         while ((tmp = tmp->next) != head) {
                 struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
+
+                CDEBUG(D_DENTRY, "dentry in drop %.*s (%p) parent %p "
+                       "inode %p flags %d\n", dentry->d_name.len,
+                       dentry->d_name.name, dentry, dentry->d_parent,
+                       dentry->d_inode, dentry->d_flags);
 
                 if (dentry->d_name.len == 1 && dentry->d_name.name[0] == '/') {
                         CERROR("called on root (?) dentry=%p, inode=%p "
@@ -178,35 +241,9 @@ restart:
 
                         continue;
                 }
-
-                lock_dentry(dentry);
-                if (atomic_read(&dentry->d_count) == 0) {
-                        CDEBUG(D_DENTRY, "deleting dentry %.*s (%p) parent %p "
-                               "inode %p\n", dentry->d_name.len,
-                               dentry->d_name.name, dentry, dentry->d_parent,
-                               dentry->d_inode);
-                        dget_locked(dentry);
-                        __d_drop(dentry);
-                        unlock_dentry(dentry);
-                        spin_unlock(&dcache_lock);
-                        dput(dentry);
-                        goto restart;
-                } else if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
-                        CDEBUG(D_DENTRY, "unhashing dentry %.*s (%p) parent %p "
-                               "inode %p refc %d\n", dentry->d_name.len,
-                               dentry->d_name.name, dentry, dentry->d_parent,
-                               dentry->d_inode, atomic_read(&dentry->d_count));
-                        /* actually we don't unhash the dentry, rather just
-                         * mark it inaccessible for to __d_lookup(). otherwise
-                         * sys_getcwd() could return -ENOENT -bzzz */
-                        dentry->d_flags |= DCACHE_LUSTRE_INVALID;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                        __d_drop(dentry);
-                        hlist_add_head(&dentry->d_hash,
-                                       &ll_i2sbi(inode)->ll_orphan_dentry_list);
-#endif
-                }
-                unlock_dentry(dentry);
+                
+                if (ll_drop_dentry(dentry))
+                          goto restart;
         }
         spin_unlock(&dcache_lock);
         EXIT;

@@ -382,6 +382,7 @@ extern struct file_operations ll_file_operations;
 extern struct file_operations ll_file_operations_flock;
 extern struct inode_operations ll_file_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
+extern int ll_have_md_lock(struct inode *inode, __u64 bits);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lov_stripe_md *, int mode, ldlm_policy_data_t *,
                    struct lustre_handle *, int ast_flags);
@@ -411,6 +412,7 @@ int ll_inode_permission(struct inode *inode, int mask);
 /* llite/dcache.c */
 void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
+int ll_drop_dentry(struct dentry *dentry);
 extern void ll_set_dd(struct dentry *de);
 void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);

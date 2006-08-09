@@ -355,9 +355,15 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 *de = ll_find_alias(inode, *de);
         } else {
                 ENTRY;
-                spin_lock(&dcache_lock);
-                ll_d_add(*de, inode);
-                spin_unlock(&dcache_lock);
+                /* Check that parent has UPDATE lock. If there is none, we
+                 * cannot afford to hash this dentry (done by ll_d_add) as it
+                 * might get picked up later when UPDATE lock will appear */
+                if (ll_have_md_lock(parent, MDS_INODELOCK_UPDATE)) {
+                        spin_lock(&dcache_lock);
+                        ll_d_add(*de, inode);
+                        spin_unlock(&dcache_lock);
+                } else
+                        (*de)->d_inode = NULL;
         }
 
         ll_set_dd(*de);

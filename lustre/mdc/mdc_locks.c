@@ -32,11 +32,11 @@
 # include <linux/pagemap.h>
 # include <linux/miscdevice.h>
 # include <linux/init.h>
-#include <linux/lustre_acl.h>
 #else
 # include <liblustre.h>
 #endif
 
+#include <linux/lustre_acl.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
 #include <lprocfs_status.h>
@@ -617,7 +617,9 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                                sizeof(lockh));
                         it->d.lustre.it_lock_mode = mode;
                 }
-                RETURN(rc);
+        
+                if (rc || op_data->namelen != 0)
+                        RETURN(rc);
         }
 
         /* lookup_it may be called only after revalidate_it has run, because
@@ -676,10 +678,11 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */
         if (fid_is_sane(&op_data->fid2) &&
-                        !it_disposition(it, DISP_OPEN_CREATE)) {
+                        !it_disposition(it, DISP_OPEN_CREATE) && 
+                        !(it->it_op & IT_GETATTR)) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
-                if (!((it->it_create_mode & O_CREAT) || it->it_op & IT_CREAT)
+                if (!(it->it_create_mode & O_CREAT || it->it_op & IT_CREAT)
                     && memcmp(&op_data->fid2, &mdt_body->fid1,
                               sizeof(op_data->fid2)))
                         RETURN(-ESTALE);

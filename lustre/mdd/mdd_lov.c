@@ -442,9 +442,11 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 }
                 lsm->lsm_object_id = oa->o_id;
         }
-        /*after creating the object, if the la_size is not zero. 
-         *since truncate when no lsm, we should set the size to 
-         *ost object*/
+        /*Sometimes, we may truncate some object(without lsm) 
+         *then open (with write flags)it, so creating lsm above. 
+         *The Nonzero(truncated) size should tell ost. since size 
+         *attr is in charged by OST.
+         */
         if (la->la_size) {
                 oa->o_size = la->la_size;
                 obdo_from_la(oa, la, OBD_MD_FLTYPE | OBD_MD_FLATIME |

@@ -31,12 +31,12 @@
 # include <linux/module.h>
 # include <linux/pagemap.h>
 # include <linux/miscdevice.h>
-# include <linux/lustre_acl.h>
 # include <linux/init.h>
 #else
 # include <liblustre.h>
 #endif
 
+#include <linux/lustre_acl.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
 #include <lustre_fid.h>
