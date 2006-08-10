@@ -193,7 +193,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
                 RETURN(rc);
 
         CDEBUG(D_CONFIG, "llog init with %d targets\n", count);
-        LASSERT(lov->desc.ld_tgt_count == count);
+        /* count may not match ld_tgt_count during dynamic ost add */
         for (i = 0, ctgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, ctgt++) {
                 struct obd_device *child;
                 if (!ctgt->active)
