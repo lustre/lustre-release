@@ -17,8 +17,8 @@ rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest \
 	mount_lustre mkfs_lustre mkfs.lustre \
 	tunefs_lustre tunefs.lustre l_getgroups
-bin_PROGRAMS = lfs llog_reader create_iam req_layout
-lib_LIBRARIES = liblustreapi.a
+bin_PROGRAMS = lfs llog_reader req_layout
+lib_LIBRARIES = liblustreapi.a libiam.a
 sbin_SCRIPTS = $(sbin_scripts)
 bin_SCRIPTS = $(bin_scripts)
 endif # UTILS
@@ -36,6 +36,7 @@ lload_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
 lload_DEPENDENCIES := $(LIBPTLCTL)
 
 liblustreapi_a_SOURCES = liblustreapi.c
+libiam_a_SOURCES = libiam.c
 
 wirecheck_SOURCES = wirecheck.c
 wirecheck_CPPFLAGS = -DCC="\"$(CC)\""
@@ -44,7 +45,6 @@ wiretest_SOURCES = wiretest.c
 
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
-create_iam_SOURCES = create_iam.c
 req_layout_SOURCES = req-layout.c
 
 llog_reader_SOURCES = llog_reader.c
@@ -57,8 +57,8 @@ mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
 mkfs_lustre_SOURCES = mkfs_lustre.c
 mkfs_lustre_CPPFLAGS = -UTUNEFS $(AM_CPPFLAGS)
-mkfs_lustre_LDADD := $(LIBPTLCTL)
-mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL)
+mkfs_lustre_LDADD := libiam.a $(LIBPTLCTL)
+mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL) libiam.a
 
 tunefs_lustre_SOURCES = $(mkfs_lustre_SOURCES)
 tunefs_lustre_CPPFLAGS = -DTUNEFS $(AM_CPPFLAGS)
