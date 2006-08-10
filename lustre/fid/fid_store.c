@@ -138,7 +138,8 @@ int seq_store_init(struct lu_server_seq *seq,
         int rc;
         ENTRY;
 
-        LASSERT(seq->lss_service == NULL);
+        LASSERT(seq->lss_md_service == NULL);
+        LASSERT(seq->lss_dt_service == NULL);
 
         dt_obj = dt_store_open(ctx, dt, "seq", &fid);
         if (!IS_ERR(dt_obj)) {

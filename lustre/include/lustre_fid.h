@@ -106,8 +106,11 @@ struct lu_server_seq {
         /* LUSTRE_SEQ_SERVER or LUSTRE_SEQ_CONTROLLER */
         enum lu_mgr_type       lss_type;
 
-        /* server side seq service */
-        struct ptlrpc_service  *lss_service;
+        /* server side seq service for metadata stack */
+        struct ptlrpc_service  *lss_md_service;
+
+        /* server side seq service for data stack */
+        struct ptlrpc_service  *lss_dt_service;
 
         /* client interafce to request controller */
         struct lu_client_seq   *lss_cli;

@@ -455,6 +455,10 @@ static void seq_server_proc_fini(struct lu_server_seq *seq)
 }
 #endif
 
+#define LUSTRE_MD_SEQ_NAME "md-seq"
+#define LUSTRE_CT_SEQ_NAME "ct-seq"
+#define LUSTRE_DT_SEQ_NAME "dt-seq"
+
 int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
                     const char *uuid,
@@ -463,16 +467,27 @@ int seq_server_init(struct lu_server_seq *seq,
 {
         int is_srv = type == LUSTRE_SEQ_SERVER;
         
-        int rc, portal = is_srv ?
+        int rc, req_portal = is_srv ?
                 SEQ_SERVER_PORTAL : SEQ_CONTROLLER_PORTAL;
 
-        struct ptlrpc_service_conf seq_conf = {
+        struct ptlrpc_service_conf seq_md_conf = {
                 .psc_nbufs = MDS_NBUFS,
                 .psc_bufsize = MDS_BUFSIZE,
                 .psc_max_req_size = SEQ_MAXREQSIZE,
                 .psc_max_reply_size = SEQ_MAXREPSIZE,
-                .psc_req_portal = portal,
+                .psc_req_portal = req_portal,
                 .psc_rep_portal = MDC_REPLY_PORTAL,
+                .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_num_threads = SEQ_NUM_THREADS,
+                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
+        };
+        struct ptlrpc_service_conf seq_dt_conf = {
+                .psc_nbufs = MDS_NBUFS,
+                .psc_bufsize = MDS_BUFSIZE,
+                .psc_max_req_size = SEQ_MAXREQSIZE,
+                .psc_max_reply_size = SEQ_MAXREPSIZE,
+                .psc_req_portal = SEQ_SERVER_PORTAL,
+                .psc_rep_portal = OSC_REPLY_PORTAL,
                 .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT,
                 .psc_num_threads = SEQ_NUM_THREADS,
                 .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
@@ -520,19 +535,36 @@ int seq_server_init(struct lu_server_seq *seq,
         if (rc)
 		GOTO(out, rc);
 
-        seq->lss_service =  ptlrpc_init_svc_conf(&seq_conf,
-						 seq_req_handle,
-                                                 LUSTRE_SEQ_NAME,
-						 seq->lss_proc_entry,
-						 NULL);
-	if (seq->lss_service != NULL)
-		rc = ptlrpc_start_threads(NULL, seq->lss_service,
-                                          LUSTRE_SEQ_NAME);
+        seq->lss_md_service = ptlrpc_init_svc_conf(&seq_md_conf,
+                                                   seq_req_handle,
+                                                   LUSTRE_SEQ_NAME,
+                                                   seq->lss_proc_entry,
+                                                   NULL);
+	if (seq->lss_md_service != NULL)
+		rc = ptlrpc_start_threads(NULL, seq->lss_md_service,
+                                          is_srv ? LUSTRE_MD_SEQ_NAME :
+                                                   LUSTRE_CT_SEQ_NAME);
 	else
-		rc = -ENOMEM;
+                GOTO(out, rc = -ENOMEM);
 
+        /* 
+         * we want to have really cluster-wide sequences space. This is why we
+         * start only one sequence controller which manages space.
+         */
+        if (is_srv) {
+                seq->lss_dt_service =  ptlrpc_init_svc_conf(&seq_dt_conf,
+                                                            seq_req_handle,
+                                                            LUSTRE_SEQ_NAME,
+                                                            seq->lss_proc_entry,
+                                                            NULL);
+                if (seq->lss_dt_service != NULL)
+                        rc = ptlrpc_start_threads(NULL, seq->lss_dt_service,
+                                                  LUSTRE_DT_SEQ_NAME);
+                else
+                        GOTO(out, rc = -ENOMEM);
+        }
+        
 	EXIT;
-
 out:
 	if (rc) {
 		seq_server_fini(seq, ctx);
@@ -549,9 +581,14 @@ void seq_server_fini(struct lu_server_seq *seq,
 {
         ENTRY;
 
-        if (seq->lss_service != NULL) {
-                ptlrpc_unregister_service(seq->lss_service);
-                seq->lss_service = NULL;
+        if (seq->lss_md_service != NULL) {
+                ptlrpc_unregister_service(seq->lss_md_service);
+                seq->lss_md_service = NULL;
+        }
+
+        if (seq->lss_dt_service != NULL) {
+                ptlrpc_unregister_service(seq->lss_dt_service);
+                seq->lss_dt_service = NULL;
         }
 
         seq_server_proc_fini(seq);
