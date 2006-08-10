@@ -178,7 +178,7 @@ void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
 
         if (!S_ISREG(attr->la_mode))
                 b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLATIME |
-                            OBD_MD_FLMTIME;
+                            OBD_MD_FLMTIME| OBD_MD_FLRDEV;
 
         b->atime      = attr->la_atime;
         b->mtime      = attr->la_mtime;
@@ -190,6 +190,7 @@ void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
         b->gid        = attr->la_gid;
         b->flags      = attr->la_flags;
         b->nlink      = attr->la_nlink;
+        b->rdev       = attr->la_rdev;
 
         if (fid) {
                 b->fid1 = *fid;

@@ -1205,7 +1205,7 @@ repeat:
                 RETURN(mds);
 
         rc = md_create(lmv->tgts[mds].ltd_exp, op_data, data, datalen,
-                       mode, uid, gid, rdev, cap_effective, request);
+                       mode, uid, gid, cap_effective, rdev, request);
         if (rc == 0) {
                 if (*request == NULL)
                         RETURN(rc);

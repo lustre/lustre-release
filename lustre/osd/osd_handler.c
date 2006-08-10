@@ -803,8 +803,8 @@ static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
 
         dentry = d_alloc(osd->od_obj_area, &info->oti_str);
         if (dentry != NULL) {
-               result = dir->i_op->mknod(dir, dentry, mode, attr->la_rdev);
-               if (result == 0) {
+                result = dir->i_op->mknod(dir, dentry, mode, attr->la_rdev);
+                if (result == 0) {
                         LASSERT(dentry->d_inode != NULL);
                         obj->oo_inode = dentry->d_inode;
                         igrab(obj->oo_inode);
