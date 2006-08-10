@@ -682,9 +682,8 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                         !(it->it_op & IT_GETATTR)) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
-                if (!(it->it_create_mode & O_CREAT || it->it_op & IT_CREAT)
-                    && memcmp(&op_data->fid2, &mdt_body->fid1,
-                              sizeof(op_data->fid2)))
+                if (!(it->it_op & IT_CREAT) && memcmp(&op_data->fid2, 
+                              &mdt_body->fid1, sizeof(op_data->fid2)))
                         RETURN(-ESTALE);
         }
 

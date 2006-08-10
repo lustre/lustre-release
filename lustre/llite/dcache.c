@@ -373,20 +373,22 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         
-        ll_prepare_md_op_data(op_data, parent, NULL,
-                              de->d_name.name, de->d_name.len, 0);
-        if (it->it_op & IT_CREAT ||
-            (it->it_op & IT_OPEN && it->it_create_mode & O_CREAT)) {
+        if (it->it_op & IT_CREAT) {
                 struct lu_placement_hint hint = { .ph_pname = NULL,
                                           .ph_cname = &de->d_name,
                                           .ph_opc = LUSTRE_OPC_CREATE };
 
+                ll_prepare_md_op_data(op_data, parent, NULL,
+                                      de->d_name.name, de->d_name.len, 0);
                 rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2, 
                                      &hint);
                 if (rc) {
                         CERROR("can't allocate new fid, rc %d\n", rc);
                         LBUG();
                 }
+        } else {
+                ll_prepare_md_op_data(op_data, parent, de->d_inode,
+                                      de->d_name.name, de->d_name.len, 0);
         }
 
         rc = md_intent_lock(exp, op_data, NULL, 0, it, lookup_flags,
@@ -409,7 +411,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
         rc = ll_revalidate_it_finish(req, 1, it, de);
         if (rc != 0) {
-                if (rc != -ESTALE) 
+                if (rc != -ESTALE && rc != -ENOENT)
                         ll_intent_release(it);
                 GOTO(out, rc = 0);
         }
