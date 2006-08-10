@@ -102,15 +102,15 @@ seq_proc_write_space(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
+	down(&seq->lss_sem);
 	rc = seq_proc_write_common(file, buffer, count,
-                                   data, &seq->seq_space);
+                                   data, &seq->lss_space);
 	if (rc == 0) {
 		CDEBUG(D_WARNING, "SEQ-MGR(srv): sequences space has "
-                       "changed to "DRANGE"\n", PRANGE(&seq->seq_space));
+                       "changed to "DRANGE"\n", PRANGE(&seq->lss_space));
 	}
 	
-	up(&seq->seq_sem);
+	up(&seq->lss_sem);
 	
         RETURN(count);
 }
@@ -125,10 +125,10 @@ seq_proc_read_space(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
+	down(&seq->lss_sem);
 	rc = seq_proc_read_common(page, start, off, count, eof,
-                                  data, &seq->seq_space);
-	up(&seq->seq_sem);
+                                  data, &seq->lss_space);
+	up(&seq->lss_sem);
 	
 	RETURN(rc);
 }
@@ -143,16 +143,16 @@ seq_proc_write_super(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
+	down(&seq->lss_sem);
 	rc = seq_proc_write_common(file, buffer, count,
-                                   data, &seq->seq_super);
+                                   data, &seq->lss_super);
 
 	if (rc == 0) {
 		CDEBUG(D_WARNING, "SEQ-MGR(srv): super-sequence has "
-                       "changed to "DRANGE"\n", PRANGE(&seq->seq_super));
+                       "changed to "DRANGE"\n", PRANGE(&seq->lss_super));
 	}
 	
-	up(&seq->seq_sem);
+	up(&seq->lss_sem);
 	
         RETURN(count);
 }
@@ -167,10 +167,10 @@ seq_proc_read_super(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
+	down(&seq->lss_sem);
 	rc = seq_proc_read_common(page, start, off, count, eof,
-                                  data, &seq->seq_super);
-	up(&seq->seq_sem);
+                                  data, &seq->lss_super);
+	up(&seq->lss_sem);
 	
 	RETURN(rc);
 }
@@ -186,8 +186,8 @@ seq_proc_read_controller(char *page, char **start, off_t off,
         LASSERT(seq != NULL);
 
 	*eof = 1;
-	if (seq->seq_cli) {
-		struct obd_export *exp = seq->seq_cli->seq_exp;
+	if (seq->lss_cli) {
+		struct obd_export *exp = seq->lss_cli->lcs_exp;
 
 		rc = snprintf(page, count, "%s\n",
 			      exp->exp_client_uuid.uuid);
@@ -208,20 +208,20 @@ seq_proc_write_super_width(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
+	down(&seq->lss_sem);
 
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 RETURN(rc);
 
-        seq->seq_super_width = val;
+        seq->lss_super_width = val;
         
 	if (rc == 0) {
 		CDEBUG(D_WARNING, "SEQ-MGR(srv): super-sequence width "
-                       "has changed to "LPU64"\n", seq->seq_super_width);
+                       "has changed to "LPU64"\n", seq->lss_super_width);
 	}
 	
-	up(&seq->seq_sem);
+	up(&seq->lss_sem);
 	
         RETURN(count);
 }
@@ -236,9 +236,9 @@ seq_proc_read_super_width(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
-        rc = snprintf(page, count, LPU64"\n", seq->seq_super_width);
-	up(&seq->seq_sem);
+	down(&seq->lss_sem);
+        rc = snprintf(page, count, LPU64"\n", seq->lss_super_width);
+	up(&seq->lss_sem);
 	
 	RETURN(rc);
 }
@@ -253,22 +253,22 @@ seq_proc_write_meta_width(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
+	down(&seq->lss_sem);
 
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 RETURN(rc);
 
-        if (val <= seq->seq_super_width) {
-                seq->seq_meta_width = val;
+        if (val <= seq->lss_super_width) {
+                seq->lss_meta_width = val;
                 
                 if (rc == 0) {
                         CDEBUG(D_WARNING, "SEQ-MGR(srv): meta-sequence width "
-                               "has changed to "LPU64"\n", seq->seq_meta_width);
+                               "has changed to "LPU64"\n", seq->lss_meta_width);
                 }
         }
 	
-	up(&seq->seq_sem);
+	up(&seq->lss_sem);
         RETURN(count);
 }
 
@@ -282,9 +282,9 @@ seq_proc_read_meta_width(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
-        rc = snprintf(page, count, LPU64"\n", seq->seq_meta_width);
-	up(&seq->seq_sem);
+	down(&seq->lss_sem);
+        rc = snprintf(page, count, LPU64"\n", seq->lss_meta_width);
+	up(&seq->lss_sem);
 	
 	RETURN(rc);
 }
@@ -300,16 +300,16 @@ seq_proc_write_range(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
+	down(&seq->lcs_sem);
 	rc = seq_proc_write_common(file, buffer, count,
-                                   data, &seq->seq_range);
+                                   data, &seq->lcs_range);
 
 	if (rc == 0) {
 		CDEBUG(D_WARNING, "SEQ-MGR(cli): range has changed to "
-		       DRANGE"\n", PRANGE(&seq->seq_range));
+		       DRANGE"\n", PRANGE(&seq->lcs_range));
 	}
 	
-	up(&seq->seq_sem);
+	up(&seq->lcs_sem);
 	
         RETURN(count);
 }
@@ -324,10 +324,10 @@ seq_proc_read_range(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
+	down(&seq->lcs_sem);
 	rc = seq_proc_read_common(page, start, off, count, eof,
-                                  data, &seq->seq_range);
-	up(&seq->seq_sem);
+                                  data, &seq->lcs_range);
+	up(&seq->lcs_sem);
 	
 	RETURN(rc);
 }
@@ -342,22 +342,22 @@ seq_proc_write_seq_width(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
+	down(&seq->lcs_sem);
 
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 RETURN(rc);
 
         if (val <= LUSTRE_SEQ_MAX_WIDTH) {
-                seq->seq_width = val;
+                seq->lcs_width = val;
                 
                 if (rc == 0) {
                         CDEBUG(D_WARNING, "SEQ-MGR(cli): sequence width "
-                               "has changed to "LPU64"\n", seq->seq_width);
+                               "has changed to "LPU64"\n", seq->lcs_width);
                 }
         }
 	
-	up(&seq->seq_sem);
+	up(&seq->lcs_sem);
 	
         RETURN(count);
 }
@@ -372,10 +372,9 @@ seq_proc_read_seq_width(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
-        rc = snprintf(page, count, LPU64"\n",
-                      seq->seq_width);
-	up(&seq->seq_sem);
+	down(&seq->lcs_sem);
+        rc = snprintf(page, count, LPU64"\n", seq->lcs_width);
+	up(&seq->lcs_sem);
 	
 	RETURN(rc);
 }
@@ -390,10 +389,9 @@ seq_proc_read_next_fid(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-	down(&seq->seq_sem);
-        rc = snprintf(page, count, DFID"\n",
-                      PFID(&seq->seq_fid));
-	up(&seq->seq_sem);
+	down(&seq->lcs_sem);
+        rc = snprintf(page, count, DFID"\n", PFID(&seq->lcs_fid));
+	up(&seq->lcs_sem);
 	
 	RETURN(rc);
 }
@@ -403,7 +401,7 @@ seq_proc_read_server(char *page, char **start, off_t off,
                      int count, int *eof, void *data)
 {
         struct lu_client_seq *seq = (struct lu_client_seq *)data;
-        struct client_obd *cli = &seq->seq_exp->exp_obd->u.cli;
+        struct client_obd *cli = &seq->lcs_exp->exp_obd->u.cli;
 	int rc;
 	ENTRY;
 

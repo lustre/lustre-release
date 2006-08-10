@@ -56,8 +56,8 @@ enum {
 int seq_store_write(struct lu_server_seq *seq,
                     const struct lu_context *ctx)
 {
-        struct dt_object *dt_obj = seq->seq_obj;
-        struct dt_device *dt_dev = seq->seq_dev;
+        struct dt_object *dt_obj = seq->lss_obj;
+        struct dt_device *dt_dev = seq->lss_dev;
         struct seq_thread_info *info;
         struct thandle *th;
         loff_t pos = 0;
@@ -73,8 +73,8 @@ int seq_store_write(struct lu_server_seq *seq,
         th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &info->sti_txn);
         if (!IS_ERR(th)) {
                 /* store ranges in le format */
-                range_to_le(&info->sti_record.ssr_space, &seq->seq_space);
-                range_to_le(&info->sti_record.ssr_super, &seq->seq_super);
+                range_to_le(&info->sti_record.ssr_space, &seq->lss_space);
+                range_to_le(&info->sti_record.ssr_super, &seq->lss_super);
 
                 rc = dt_obj->do_body_ops->dbo_write(ctx, dt_obj,
                                                     (char *)&info->sti_record,
@@ -99,7 +99,7 @@ int seq_store_write(struct lu_server_seq *seq,
 int seq_store_read(struct lu_server_seq *seq,
                    const struct lu_context *ctx)
 {
-        struct dt_object *dt_obj = seq->seq_obj;
+        struct dt_object *dt_obj = seq->lss_obj;
         struct seq_thread_info *info;
         loff_t pos = 0;
 	int rc;
@@ -112,11 +112,11 @@ int seq_store_read(struct lu_server_seq *seq,
                                            (char *)&info->sti_record,
                                            sizeof(info->sti_record), &pos);
         if (rc == sizeof(info->sti_record)) {
-                seq->seq_space = info->sti_record.ssr_space;
-                lustre_swab_lu_range(&seq->seq_space);
+                seq->lss_space = info->sti_record.ssr_space;
+                lustre_swab_lu_range(&seq->lss_space);
                 
-                seq->seq_super = info->sti_record.ssr_super;
-                lustre_swab_lu_range(&seq->seq_super);
+                seq->lss_super = info->sti_record.ssr_super;
+                lustre_swab_lu_range(&seq->lss_super);
                 rc = 0;
         } else if (rc == 0) {
                 rc = -ENODATA;
@@ -132,17 +132,17 @@ int seq_store_read(struct lu_server_seq *seq,
 int seq_store_init(struct lu_server_seq *seq,
                    const struct lu_context *ctx)
 {
-        struct dt_device *dt = seq->seq_dev;
+        struct dt_device *dt = seq->lss_dev;
         struct dt_object *dt_obj;
         struct lu_fid fid;
         int rc;
         ENTRY;
 
-        LASSERT(seq->seq_service == NULL);
+        LASSERT(seq->lss_service == NULL);
 
         dt_obj = dt_store_open(ctx, dt, "seq", &fid);
         if (!IS_ERR(dt_obj)) {
-                seq->seq_obj = dt_obj;
+                seq->lss_obj = dt_obj;
 		rc = 0;
         } else {
                 CERROR("cannot find \"seq\" obj %d\n",
@@ -157,9 +157,9 @@ void seq_store_fini(struct lu_server_seq *seq,
                     const struct lu_context *ctx)
 {
         ENTRY;
-        if (seq->seq_obj != NULL) {
-                lu_object_put(ctx, &seq->seq_obj->do_lu);
-                seq->seq_obj = NULL;
+        if (seq->lss_obj != NULL) {
+                lu_object_put(ctx, &seq->lss_obj->do_lu);
+                seq->lss_obj = NULL;
         }
         EXIT;
 }

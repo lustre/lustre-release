@@ -73,32 +73,32 @@ int seq_server_set_cli(struct lu_server_seq *seq,
 
         if (cli == NULL) {
                 CDEBUG(D_INFO|D_WARNING, "%s: detached "
-                       "sequence mgr client %s\n", seq->seq_name,
-                       cli->seq_exp->exp_client_uuid.uuid);
-                seq->seq_cli = cli;
+                       "sequence mgr client %s\n", seq->lss_name,
+                       cli->lcs_exp->exp_client_uuid.uuid);
+                seq->lss_cli = cli;
                 RETURN(0);
         }
 
-        if (seq->seq_cli) {
+        if (seq->lss_cli) {
                 CERROR("%s: sequence-controller is already "
-                       "assigned\n", seq->seq_name);
+                       "assigned\n", seq->lss_name);
                 RETURN(-EINVAL);
         }
 
         CDEBUG(D_INFO|D_WARNING, "%s: attached "
-               "sequence client %s\n", seq->seq_name,
-               cli->seq_exp->exp_client_uuid.uuid);
+               "sequence client %s\n", seq->lss_name,
+               cli->lcs_exp->exp_client_uuid.uuid);
 
         /* asking client for new range, assign that range to ->seq_super and
          * write seq state to backing store should be atomic. */
-        down(&seq->seq_sem);
+        down(&seq->lss_sem);
 
         /* assign controller */
-        seq->seq_cli = cli;
+        seq->lss_cli = cli;
 
         /* get new range from controller only if super-sequence is not yet
          * initialized from backing store or something else. */
-        if (range_is_zero(&seq->seq_super)) {
+        if (range_is_zero(&seq->lss_super)) {
                 rc = seq_client_alloc_super(cli);
                 if (rc) {
                         CERROR("can't allocate super-sequence, "
@@ -107,9 +107,9 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 }
 
                 /* take super-seq from client seq mgr */
-                LASSERT(range_is_sane(&cli->seq_range));
+                LASSERT(range_is_sane(&cli->lcs_range));
 
-                seq->seq_super = cli->seq_range;
+                seq->lss_super = cli->lcs_range;
 
                 /* save init seq to backing store. */
                 rc = seq_store_write(seq, ctx);
@@ -121,7 +121,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
 
         EXIT;
 out_up:
-        up(&seq->seq_sem);
+        up(&seq->lss_sem);
         return rc;
 }
 EXPORT_SYMBOL(seq_server_set_cli);
@@ -132,13 +132,13 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
                                     struct lu_range *range,
                                     const struct lu_context *ctx)
 {
-        struct lu_range *space = &seq->seq_space;
+        struct lu_range *space = &seq->lss_space;
         int rc;
         ENTRY;
 
         LASSERT(range_is_sane(space));
 
-        if (range_space(space) < seq->seq_super_width) {
+        if (range_space(space) < seq->lss_super_width) {
                 CWARN("sequences space is going to exhaust soon. "
                       "Can allocate only "LPU64" sequences\n",
                       range_space(space));
@@ -149,7 +149,7 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
                 CERROR("sequences space is exhausted\n");
                 rc = -ENOSPC;
         } else {
-                range_alloc(range, space, seq->seq_super_width);
+                range_alloc(range, space, seq->lss_super_width);
                 rc = 0;
         }
 
@@ -163,7 +163,7 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
 
         if (rc == 0) {
                 CDEBUG(D_INFO, "%s: allocated super-sequence "
-                       DRANGE"\n", seq->seq_name, PRANGE(range));
+                       DRANGE"\n", seq->lss_name, PRANGE(range));
         }
 
         RETURN(rc);
@@ -176,9 +176,9 @@ static int seq_server_alloc_super(struct lu_server_seq *seq,
         int rc;
         ENTRY;
 
-        down(&seq->seq_sem);
+        down(&seq->lss_sem);
         rc = __seq_server_alloc_super(seq, range, ctx);
-        up(&seq->seq_sem);
+        up(&seq->lss_sem);
 
         RETURN(rc);
 }
@@ -187,7 +187,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                                    struct lu_range *range,
                                    const struct lu_context *ctx)
 {
-        struct lu_range *super = &seq->seq_super;
+        struct lu_range *super = &seq->lss_super;
         int rc = 0;
         ENTRY;
 
@@ -196,12 +196,12 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
         /* XXX: here we should avoid cascading RPCs using kind of async
          * preallocation when meta-sequence is close to exhausting. */
         if (range_is_exhausted(super)) {
-                if (!seq->seq_cli) {
+                if (!seq->lss_cli) {
                         CERROR("no seq-controller client is setup\n");
                         RETURN(-EOPNOTSUPP);
                 }
 
-                rc = seq_client_alloc_super(seq->seq_cli);
+                rc = seq_client_alloc_super(seq->lss_cli);
                 if (rc) {
                         CERROR("can't allocate new super-sequence, "
                                "rc %d\n", rc);
@@ -209,10 +209,10 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                 }
 
                 /* saving new range into allocation space. */
-                *super = seq->seq_cli->seq_range;
+                *super = seq->lss_cli->lcs_range;
                 LASSERT(range_is_sane(super));
         }
-        range_alloc(range, super, seq->seq_meta_width);
+        range_alloc(range, super, seq->lss_meta_width);
 
         rc = seq_store_write(seq, ctx);
         if (rc) {
@@ -222,7 +222,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 
         if (rc == 0) {
                 CDEBUG(D_INFO, "%s: allocated meta-sequence "
-                       DRANGE"\n", seq->seq_name, PRANGE(range));
+                       DRANGE"\n", seq->lss_name, PRANGE(range));
         }
 
         RETURN(rc);
@@ -235,9 +235,9 @@ static int seq_server_alloc_meta(struct lu_server_seq *seq,
         int rc;
         ENTRY;
 
-        down(&seq->seq_sem);
+        down(&seq->lss_sem);
         rc = __seq_server_alloc_meta(seq, range, ctx);
-        up(&seq->seq_sem);
+        up(&seq->lss_sem);
 
         RETURN(rc);
 }
@@ -394,25 +394,25 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
         int rc;
         ENTRY;
 
-        seq->seq_proc_dir = lprocfs_register(seq->seq_name,
+        seq->lss_proc_dir = lprocfs_register(seq->lss_name,
                                              proc_lustre_root,
                                              NULL, NULL);
-        if (IS_ERR(seq->seq_proc_dir)) {
+        if (IS_ERR(seq->lss_proc_dir)) {
                 CERROR("LProcFS failed in seq-init\n");
-                rc = PTR_ERR(seq->seq_proc_dir);
+                rc = PTR_ERR(seq->lss_proc_dir);
                 RETURN(rc);
         }
 
-        seq->seq_proc_entry = lprocfs_register("services",
-                                               seq->seq_proc_dir,
+        seq->lss_proc_entry = lprocfs_register("services",
+                                               seq->lss_proc_dir,
                                                NULL, NULL);
-        if (IS_ERR(seq->seq_proc_entry)) {
+        if (IS_ERR(seq->lss_proc_entry)) {
                 CERROR("LProcFS failed in seq-init\n");
-                rc = PTR_ERR(seq->seq_proc_entry);
+                rc = PTR_ERR(seq->lss_proc_entry);
                 GOTO(out_cleanup, rc);
         }
 
-        rc = lprocfs_add_vars(seq->seq_proc_dir,
+        rc = lprocfs_add_vars(seq->lss_proc_dir,
                               seq_server_proc_list, seq);
         if (rc) {
                 CERROR("can't init sequence manager "
@@ -430,16 +430,16 @@ out_cleanup:
 static void seq_server_proc_fini(struct lu_server_seq *seq)
 {
         ENTRY;
-        if (seq->seq_proc_entry != NULL) {
-                if (!IS_ERR(seq->seq_proc_entry))
-                        lprocfs_remove(seq->seq_proc_entry);
-                seq->seq_proc_entry = NULL;
+        if (seq->lss_proc_entry != NULL) {
+                if (!IS_ERR(seq->lss_proc_entry))
+                        lprocfs_remove(seq->lss_proc_entry);
+                seq->lss_proc_entry = NULL;
         }
 
-        if (seq->seq_proc_dir != NULL) {
-                if (!IS_ERR(seq->seq_proc_dir))
-                        lprocfs_remove(seq->seq_proc_dir);
-                seq->seq_proc_dir = NULL;
+        if (seq->lss_proc_dir != NULL) {
+                if (!IS_ERR(seq->lss_proc_dir))
+                        lprocfs_remove(seq->lss_proc_dir);
+                seq->lss_proc_dir = NULL;
         }
         EXIT;
 }
@@ -469,8 +469,8 @@ int seq_server_init(struct lu_server_seq *seq,
         struct ptlrpc_service_conf seq_conf = {
                 .psc_nbufs = MDS_NBUFS,
                 .psc_bufsize = MDS_BUFSIZE,
-                .psc_max_req_size = MDS_MAXREQSIZE,
-                .psc_max_reply_size = MDS_MAXREPSIZE,
+                .psc_max_req_size = SEQ_MAXREQSIZE,
+                .psc_max_reply_size = SEQ_MAXREPSIZE,
                 .psc_req_portal = portal,
                 .psc_rep_portal = MDC_REPLY_PORTAL,
                 .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT,
@@ -482,22 +482,22 @@ int seq_server_init(struct lu_server_seq *seq,
 	LASSERT(dev != NULL);
         LASSERT(uuid != NULL);
 
-        seq->seq_dev = dev;
-        seq->seq_cli = NULL;
-        seq->seq_type = type;
-        sema_init(&seq->seq_sem, 1);
+        seq->lss_dev = dev;
+        seq->lss_cli = NULL;
+        seq->lss_type = type;
+        sema_init(&seq->lss_sem, 1);
 
-        seq->seq_super_width = LUSTRE_SEQ_SUPER_WIDTH;
-        seq->seq_meta_width = LUSTRE_SEQ_META_WIDTH;
+        seq->lss_super_width = LUSTRE_SEQ_SUPER_WIDTH;
+        seq->lss_meta_width = LUSTRE_SEQ_META_WIDTH;
 
-        snprintf(seq->seq_name, sizeof(seq->seq_name), "%s-%s-%s",
+        snprintf(seq->lss_name, sizeof(seq->lss_name), "%s-%s-%s",
                  LUSTRE_SEQ_NAME, (is_srv ? "srv" : "ctl"),
                  uuid);
 
-        seq->seq_space = LUSTRE_SEQ_SPACE_RANGE;
-        seq->seq_super = LUSTRE_SEQ_ZERO_RANGE;
+        seq->lss_space = LUSTRE_SEQ_SPACE_RANGE;
+        seq->lss_super = LUSTRE_SEQ_ZERO_RANGE;
 
-        lu_device_get(&seq->seq_dev->dd_lu_dev);
+        lu_device_get(&seq->lss_dev->dd_lu_dev);
 
         rc = seq_store_init(seq, ctx);
         if (rc)
@@ -507,7 +507,7 @@ int seq_server_init(struct lu_server_seq *seq,
         rc = seq_store_read(seq, ctx);
         if (rc == -ENODATA) {
                 CDEBUG(D_INFO|D_WARNING, "%s: no data on "
-                       "storage was found, %s\n", seq->seq_name,
+                       "storage was found, %s\n", seq->lss_name,
                        is_srv ? "wait for controller attach" :
                        "this is first controller run");
         } else if (rc) {
@@ -520,13 +520,13 @@ int seq_server_init(struct lu_server_seq *seq,
         if (rc)
 		GOTO(out, rc);
 
-        seq->seq_service =  ptlrpc_init_svc_conf(&seq_conf,
+        seq->lss_service =  ptlrpc_init_svc_conf(&seq_conf,
 						 seq_req_handle,
                                                  LUSTRE_SEQ_NAME,
-						 seq->seq_proc_entry,
+						 seq->lss_proc_entry,
 						 NULL);
-	if (seq->seq_service != NULL)
-		rc = ptlrpc_start_threads(NULL, seq->seq_service,
+	if (seq->lss_service != NULL)
+		rc = ptlrpc_start_threads(NULL, seq->lss_service,
                                           LUSTRE_SEQ_NAME);
 	else
 		rc = -ENOMEM;
@@ -549,17 +549,17 @@ void seq_server_fini(struct lu_server_seq *seq,
 {
         ENTRY;
 
-        if (seq->seq_service != NULL) {
-                ptlrpc_unregister_service(seq->seq_service);
-                seq->seq_service = NULL;
+        if (seq->lss_service != NULL) {
+                ptlrpc_unregister_service(seq->lss_service);
+                seq->lss_service = NULL;
         }
 
         seq_server_proc_fini(seq);
         seq_store_fini(seq, ctx);
 
-        if (seq->seq_dev != NULL) {
-                lu_device_put(&seq->seq_dev->dd_lu_dev);
-                seq->seq_dev = NULL;
+        if (seq->lss_dev != NULL) {
+                lu_device_put(&seq->lss_dev->dd_lu_dev);
+                seq->lss_dev = NULL;
         }
 
         EXIT;

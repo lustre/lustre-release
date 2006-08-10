@@ -188,6 +188,8 @@ int fld_client_del_target(struct lu_client_fld *fld,
 }
 EXPORT_SYMBOL(fld_client_del_target);
 
+static void fld_client_proc_fini(struct lu_client_fld *fld);
+
 #ifdef LPROCFS
 static int fld_client_proc_init(struct lu_client_fld *fld)
 {
@@ -201,7 +203,7 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
         if (IS_ERR(fld->fld_proc_dir)) {
                 CERROR("LProcFS failed in fld-init\n");
                 rc = PTR_ERR(fld->fld_proc_dir);
-                GOTO(err, rc);
+                RETURN(rc);
         }
 
         rc = lprocfs_add_vars(fld->fld_proc_dir,
@@ -209,15 +211,13 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
         if (rc) {
                 CERROR("can't init FLD "
                        "proc, rc %d\n", rc);
-                GOTO(err_dir, rc);
+                GOTO(out_cleanup, rc);
         }
 
         RETURN(0);
 
-err_dir:
-        lprocfs_remove(fld->fld_proc_dir);
-err:
-        fld->fld_proc_dir = NULL;
+out_cleanup:
+        fld_client_proc_fini(fld);
         return rc;
 }
 
@@ -225,7 +225,8 @@ static void fld_client_proc_fini(struct lu_client_fld *fld)
 {
         ENTRY;
         if (fld->fld_proc_dir) {
-                lprocfs_remove(fld->fld_proc_dir);
+                if (!IS_ERR(fld->fld_proc_dir))
+                        lprocfs_remove(fld->fld_proc_dir);
                 fld->fld_proc_dir = NULL;
         }
         EXIT;
