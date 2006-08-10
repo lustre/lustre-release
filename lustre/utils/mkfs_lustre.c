@@ -182,8 +182,8 @@ static int check_mtab_entry(char *spec, char *type)
                 return(0);
 
         while ((mnt = getmntent(fp)) != NULL) {
-                if (strcmp(mnt->mnt_fsname, spec) == 0 &&
-                        strcmp(mnt->mnt_type, type) == 0) {
+                if ((strcmp(mnt->mnt_fsname, spec) == 0) &&
+                        (strcmp(mnt->mnt_type, type) == 0)) {
                         endmntent(fp);
                         fprintf(stderr, "%s: according to %s %s is "
                                 "already mounted on %s\n",
@@ -203,14 +203,15 @@ int loop_setup(struct mkfs_opts *mop)
 {
         char loop_base[20];
         char l_device[64];
-        int i,ret = 0;
+        int i;
+        int ret = 0;
 
         /* Figure out the loop device names */
-        if (!access("/dev/loop0", F_OK | R_OK))
+        if (!access("/dev/loop0", F_OK | R_OK)) {
                 strcpy(loop_base, "/dev/loop\0");
-        else if (!access("/dev/loop/0", F_OK | R_OK))
+        } else if (!access("/dev/loop/0", F_OK | R_OK)) {
                 strcpy(loop_base, "/dev/loop/\0");
-        else {
+        } else {
                 fprintf(stderr, "%s: can't access loop devices\n", progname);
                 return 1;
         }
@@ -308,10 +309,18 @@ int loop_format(struct mkfs_opts *mop)
         }
 
         ret = creat(mop->mo_device, S_IRUSR|S_IWUSR);
+        if (ret < 0) {
+                ret = errno;
+                fprintf(stderr, "%s: Unable to create backing store: %d\n",
+                        progname, ret);
+        } else {
+                close(ret);
+        }
+
         ret = truncate(mop->mo_device, mop->mo_device_sz * 1024);
         if (ret != 0) {
                 ret = errno;
-                fprintf(stderr, "%s: Unable to create backing store: %d\n",
+                fprintf(stderr, "%s: Unable to truncate backing store: %d\n",
                         progname, ret);
         }
 
@@ -360,8 +369,8 @@ static int file_in_dev(char *file_name, char *dev_name)
 static int is_lustre_target(struct mkfs_opts *mop)
 {
         int rc;
-        vprint(0, "checking for existing Lustre data\n");
 
+        vprint(0, "checking for existing Lustre data\n");
         if ((rc = file_in_dev(MOUNT_DATA_FILE, mop->mo_device))
             || (rc = file_in_dev(LAST_RCVD, mop->mo_device))) {
                 vprint(0, "found Lustre data\n");
@@ -1059,461 +1068,34 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
         return 0;
 }
 
-
-#include <errno.h>
-#include <assert.h>
-
-#ifdef HAVE_ENDIAN_H
-#include <endian.h>
-#endif
-
-#include <libcfs/libcfs.h>
-
-/* Move from create_iam.c */
-enum {
-        IAM_LFIX_ROOT_MAGIC = 0xbedabb1edULL,
-        IAM_LVAR_ROOT_MAGIC = 0xb01dface
-};
-
-struct iam_lfix_root {
-        u_int64_t  ilr_magic;
-        u_int16_t  ilr_keysize;
-        u_int16_t  ilr_recsize;
-        u_int16_t  ilr_ptrsize;
-        u_int16_t  ilr_indirect_levels;
-};
-
-enum {
-        IAM_LEAF_HEADER_MAGIC = 0x1976,
-        IAM_LVAR_LEAF_MAGIC   = 0x1973
-};
-
-struct iam_leaf_head {
-        u_int16_t ill_magic;
-        u_int16_t ill_count;
-};
-
-struct dx_countlimit {
-        u_int16_t limit;
-        u_int16_t count;
-};
-
-typedef __u32 lvar_hash_t;
-
-struct lvar_leaf_header {
-        u_int16_t vlh_magic; /* magic number IAM_LVAR_LEAF_MAGIC */
-        u_int16_t vlh_used;  /* used bytes, including header */
-};
-
-struct lvar_root {
-        u_int32_t vr_magic;
-        u_int16_t vr_recsize;
-        u_int16_t vr_ptrsize;
-        u_int8_t  vr_indirect_levels;
-        u_int8_t  vr_padding0;
-        u_int16_t vr_padding1;
-};
-
-struct lvar_leaf_entry {
-        u_int32_t vle_hash;
-        u_int16_t vle_keysize;
-        u_int8_t  vle_key[0];
-};
-
-enum {
-        LVAR_PAD   = 4,
-        LVAR_ROUND = LVAR_PAD - 1
-};
-
-static void lfix_root(void *buf,
-                      int blocksize, int keysize, int ptrsize, int recsize)
-{
-        struct iam_lfix_root *root;
-        struct dx_countlimit *limit;
-        void                 *entry;
-
-        root = buf;
-        *root = (typeof(*root)) {
-                .ilr_magic           = cpu_to_le64(IAM_LFIX_ROOT_MAGIC),
-                .ilr_keysize         = cpu_to_le16(keysize),
-                .ilr_recsize         = cpu_to_le16(recsize),
-                .ilr_ptrsize         = cpu_to_le16(ptrsize),
-                .ilr_indirect_levels = 0
-        };
-
-        limit = (void *)(root + 1);
-        *limit = (typeof(*limit)){
-                /*
-                 * limit itself + one pointer to the leaf.
-                 */
-                .count = cpu_to_le16(2),
-                .limit = (blocksize - sizeof *root) / (keysize + ptrsize)
-        };
-
-        entry = root + 1;
-        /*
-         * Skip over @limit.
-         */
-        entry += keysize + ptrsize;
-
-        /*
-         * Entry format is <key> followed by <ptr>. In the minimal tree
-         * consisting of a root and single node, <key> is a minimal possible
-         * key.
-         *
-         * XXX: this key is hard-coded to be a sequence of 0's.
-         */
-        entry += keysize;
-        /* now @entry points to <ptr> */
-        if (ptrsize == 4)
-                *(u_int32_t *)entry = cpu_to_le32(1);
-        else
-                *(u_int64_t *)entry = cpu_to_le64(1);
-}
-
-static void lfix_leaf(void *buf,
-                      int blocksize, int keysize, int ptrsize, int recsize)
-{
-        struct iam_leaf_head *head;
-
-        /* form leaf */
-        head = buf;
-        *head = (struct iam_leaf_head) {
-                .ill_magic = cpu_to_le16(IAM_LEAF_HEADER_MAGIC),
-                /*
-                 * Leaf contains an entry with the smallest possible key
-                 * (created by zeroing).
-                 */
-                .ill_count = cpu_to_le16(1),
-        };
-}
-
-static void lvar_root(void *buf,
-                      int blocksize, int keysize, int ptrsize, int recsize)
-{
-        struct lvar_root *root;
-        struct dx_countlimit *limit;
-        void                 *entry;
-        int isize;
-
-        isize = sizeof(lvar_hash_t) + ptrsize;
-        root = buf;
-        *root = (typeof(*root)) {
-                .vr_magic            = cpu_to_le32(IAM_LVAR_ROOT_MAGIC),
-                .vr_recsize          = cpu_to_le16(recsize),
-                .vr_ptrsize          = cpu_to_le16(ptrsize),
-                .vr_indirect_levels  = 0
-        };
-
-        limit = (void *)(root + 1);
-        *limit = (typeof(*limit)){
-                /*
-                 * limit itself + one pointer to the leaf.
-                 */
-                .count = cpu_to_le16(2),
-                .limit = (blocksize - sizeof *root) / isize
-        };
-
-        entry = root + 1;
-        /*
-         * Skip over @limit.
-         */
-        entry += isize;
-
-        /*
-         * Entry format is <key> followed by <ptr>. In the minimal tree
-         * consisting of a root and single node, <key> is a minimal possible
-         * key.
-         *
-         * XXX: this key is hard-coded to be a sequence of 0's.
-         */
-        entry += sizeof(lvar_hash_t);
-        /* now @entry points to <ptr> */
-        if (ptrsize == 4)
-                *(u_int32_t *)entry = cpu_to_le32(1);
-        else
-                *(u_int64_t *)entry = cpu_to_le64(1);
-}
-
-static int lvar_esize(int namelen, int recsize)
-{
-        return (offsetof(struct lvar_leaf_entry, vle_key) +
-                namelen + recsize + LVAR_ROUND) & ~LVAR_ROUND;
-}
-
-static void lvar_leaf(void *buf,
-                      int blocksize, int keysize, int ptrsize, int recsize)
-{
-        struct lvar_leaf_header *head;
-
-        /* form leaf */
-        head = buf;
-        *head = (typeof(*head)) {
-                .vlh_magic = cpu_to_le16(IAM_LVAR_LEAF_MAGIC),
-                .vlh_used  = cpu_to_le16(sizeof *head + lvar_esize(0, recsize))
-        };
-}
-
-enum iam_fmt_t {
-        FMT_LFIX,
-        FMT_LVAR
-};
-
-static int create_iam(enum iam_fmt_t fmt, int keysize, int recsize,
-                      char *target)
-{
-        int rc;
-        int blocksize = 4096;
-        int ptrsize   = 4;
-        int fd = -1;
-        void *buf = NULL;
-
-        if ((fmt != FMT_LFIX) && (fmt != FMT_LVAR)) {
-                fprintf(stderr, "Wrong format %i\n", (int)fmt);
-                return 1;
-        }
-
-        if (keysize <= 0) {
-                keysize = 8;
-        }
-
-        if (recsize <= 0) {
-                recsize = 8;
-        }
-
-        if (target == NULL) {
-                fprintf(stderr, "Target must not be NULL\n");
-                return 1;
-        }
-
-        if (keysize + recsize + sizeof(struct iam_leaf_head) > blocksize / 3) {
-                fprintf(stderr, "Too large (record, key) or too small block\n");
-                return 1;
-        }
-
-        vprint(0, "fmt: %i, key: %i, rec: %i, ptr: %i, block: %i\n",
-               (int)fmt, keysize, recsize, ptrsize, blocksize);
-
-        fd = open(target, O_WRONLY | O_TRUNC | O_CREAT, 0600);
-        if (fd < 0) {
-                fprintf(stderr, "%s: failed to open %s, errno = %d\n",
-                        __FUNCTION__, target, errno);
-                return 1;
-        }
-
-        buf = malloc(blocksize);
-        if (buf == NULL) {
-                fprintf(stderr, "Unable to allocate %i bytes\n", blocksize);
-                close(fd);
-                return 1;
-        }
-
-        memset(buf, 0, blocksize);
-        if (fmt == FMT_LFIX) {
-                lfix_root(buf, blocksize, keysize, ptrsize, recsize);
-        } else {
-                lvar_root(buf, blocksize, keysize, ptrsize, recsize);
-        }
-
-        rc = write(fd, buf, blocksize);
-        if (rc != blocksize) {
-                fprintf(stderr, "Unable to write root node: %m (%i)\n", rc);
-                rc = 1;
-                goto out;
-        }
-
-        /* form leaf */
-        memset(buf, 0, blocksize);
-        if (fmt == FMT_LFIX) {
-                lfix_leaf(buf, blocksize, keysize, ptrsize, recsize);
-        } else {
-                lvar_leaf(buf, blocksize, keysize, ptrsize, recsize);
-        }
-
-        rc = write(fd, buf, blocksize);
-        if (rc != blocksize) {
-                fprintf(stderr, "Unable to write leaf node: %m (%i)\n", rc);
-                rc = 1;
-                goto out;
-        }
-
-        rc = 0;
-
-out:
-        close(fd);
-        free(buf);
-        return rc;
-}
-/* End of create_iam.c */
-
-/* Copy from iam_ut.c */
-enum {
-        /*
-         * Maximal format name length.
-         */
-        DX_FMT_NAME_LEN    = 16
-};
-
-struct iam_uapi_info {
-        __u16 iui_keysize;
-        __u16 iui_recsize;
-        __u16 iui_ptrsize;
-        __u16 iui_height;
-        char  iui_fmt_name[DX_FMT_NAME_LEN];
-};
-
-struct iam_uapi_op {
-        void *iul_key;
-        void *iul_rec;
-};
-
-struct iam_uapi_it {
-        struct iam_uapi_op iui_op;
-        __u16              iui_state;
-};
-
-enum iam_ioctl_cmd {
-        IAM_IOC_INIT     = _IOW('i', 1, struct iam_uapi_info),
-        IAM_IOC_GETINFO  = _IOR('i', 2, struct iam_uapi_info),
-        IAM_IOC_INSERT   = _IOR('i', 3, struct iam_uapi_op),
-        IAM_IOC_POLYMORPH = _IOR('i', 9, unsigned long)
-};
-
-static int doop(int fd, void *key, void *rec,
-                int cmd, const char *name)
-{
-        int result;
-        struct iam_uapi_op op = {
-                .iul_key = key,
-                .iul_rec = rec
-        };
-
-        result = ioctl(fd, cmd, &op);
-        if (result != 0)
-                fprintf(stderr, "ioctl(%s): %i/%i (%m)\n", name, result, errno);
-        return result;
-}
-
-static unsigned char hex2dec(unsigned char hex)
-{
-        if ('0' <= hex && hex <= '9') {
-                return hex - '0';
-        } else if ('a' <= hex && hex <= 'f') {
-                return hex - 'a' + 10;
-        } else if ('A' <= hex && hex <= 'F') {
-                return hex - 'A' + 10;
-        } else {
-                fprintf(stderr, "Wrong hex digit '%c'\n", hex);
-                exit(1);
-        }
-}
-
-static unsigned char *packdigit(unsigned char *number)
-{
-        unsigned char *area;
-        unsigned char *scan;
-
-        area = calloc(strlen(number) / 2 + 2, sizeof area[0]);
-        if (area != NULL) {
-                for (scan = area; *number; number += 2, scan++)
-                        *scan = (hex2dec(number[0]) << 4) | hex2dec(number[1]);
-        }
-        return area;
-}
-
-static int iam_insert(int key_need_convert, char *keybuf,
-                      int rec_need_convert, char *recbuf, char *source)
-{
-        int rc;
-        int keysize;
-        int recsize;
-        int fd = -1;
-        struct iam_uapi_info ua;
-        char *key_opt;
-        char *rec_opt;
-        char *key = NULL;
-        char *rec = NULL;
-
-        if (source == NULL) {
-                fprintf(stderr, "source must not be NULL\n");
-                return 1;
-        }
-
-        fd = open(source, O_RDONLY);
-        if (fd < 0) {
-                fprintf(stderr, "%s: failed to open %s, errno = %d\n",
-                        __FUNCTION__, source, errno);
-                return 1;
-        }
-
-        rc = ioctl(fd, IAM_IOC_INIT, &ua);
-        if (rc != 0) {
-                fprintf(stderr, "ioctl(IAM_IOC_INIT): %i (%m)\n", rc);
-                close(fd);
-                return 1;
-        }
-
-        rc = ioctl(fd, IAM_IOC_GETINFO, &ua);
-        if (rc != 0) {
-                fprintf(stderr, "ioctl(IAM_IOC_GETATTR): %i (%m)\n", rc);
-                close(fd);
-                return 1;
-        }
-
-        keysize = ua.iui_keysize;
-        recsize = ua.iui_recsize;
-        vprint(0, "keysize: %i, recsize: %i, ptrsize: %i, "
-               "height: %i, name: %s\n",
-               keysize, recsize, ua.iui_ptrsize,
-               ua.iui_height, ua.iui_fmt_name);
-
-        key = calloc(keysize + 1, sizeof key[0]);
-        rec = calloc(recsize + 1, sizeof rec[0]);
-        if ((key == NULL) || (rec == NULL)) {
-                fprintf(stderr, "cannot allocate memory\n");
-                rc = 1;
-                goto out;
-        }
-
-        if (key_need_convert) {
-                key_opt = packdigit(keybuf);
-                memcpy(key, key_opt ? : "RIVERRUN", keysize + 1);
-                if (key_opt != NULL) {
-                        free(key_opt);
-                        key_opt = NULL;
-                }
-        } else {
-                strncpy(key, keybuf ? : "RIVERRUN", keysize + 1);
-        }
-
-        if (rec_need_convert) {
-                rec_opt = packdigit(recbuf);
-                memcpy(rec, rec_opt ? : "PALEFIRE", recsize + 1);
-                if (rec_opt != NULL) {
-                        free(rec_opt);
-                        rec_opt = NULL;
-                }
-        } else {
-                strncpy(rec, recbuf ? : "PALEFIRE", recsize + 1);
-        }
-
-        rc = doop(fd, key, rec, IAM_IOC_INSERT, "IAM_IOC_INSERT");
-
-out:
-        if (fd >= 0) {
-                close(fd);
-        }
-        if (key != NULL) {
-                free(key);
-        }
-        if (rec != NULL) {
-                free(rec);
-        }
-        return rc;
-}
-/* End of iam_ut.c */
+#include <lustre/libiam.h>
 
 #define LDISKFS_IOC_GETVERSION _IOR('f', 3, long)
+
+static int mkfs_iam_insert(int key_need_convert, char *keybuf,
+                           int rec_need_convert, char *recbuf, char *filename)
+{
+        int fd;
+        int ret;
+        struct iam_uapi_info ua;
+
+        fd = iam_open(filename, &ua);
+        if (fd < 0) {
+                fprintf(stderr, "failed to iam_open %s\n", filename);
+                return 1;
+        }
+
+        ret = iam_insert(fd, &ua,
+                         key_need_convert, keybuf,
+                         rec_need_convert, recbuf);
+        iam_close(fd);
+        if (ret) {
+                fprintf(stderr, "failed to iam_insert %s\n", filename);
+                return 1;
+        } else {
+                return 0;
+        }
+}
 
 static int touch_file(char *filename)
 {
@@ -1562,7 +1144,6 @@ static int mkfs_mdt(struct mkfs_opts *mop)
         char recbuf[64];
         char *source;
         int ret;
-        int fd;
         unsigned long generation;
         struct stat st;
 
@@ -1605,19 +1186,22 @@ static int mkfs_mdt(struct mkfs_opts *mop)
         }
 
         snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "root");
-        ret = create_iam(FMT_LVAR, 0, 16, filepnm);
+        ret = iam_creat(filepnm, FMT_LVAR,
+                        SET_DEFAULT, SET_DEFAULT, 16, SET_DEFAULT);
         if (ret) {
                 goto out_umount;
         }
 
         snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "fld");
-        ret = create_iam(FMT_LFIX, 8, 8, filepnm);
+        ret = iam_creat(filepnm, FMT_LFIX,
+                        SET_DEFAULT, 8, 8, SET_DEFAULT);
         if (ret) {
                 goto out_umount;
         }
 
         snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "oi");
-        ret = create_iam(FMT_LFIX, 16, 16, filepnm);
+        ret = iam_creat(filepnm, FMT_LFIX,
+                        SET_DEFAULT, 16, 16, SET_DEFAULT);
         if (ret) {
                 goto out_umount;
         }
@@ -1629,16 +1213,7 @@ static int mkfs_mdt(struct mkfs_opts *mop)
         }
 
         snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "root");
-        fd = open(filepnm, O_RDONLY);
-        if (fd < 0) {
-                fprintf(stderr, "%s: failed to open %s, errno = %d\n",
-                        __FUNCTION__, filepnm, errno);
-                ret = 1;
-                goto out_umount;
-        }
-
-        ret = ioctl(fd, IAM_IOC_POLYMORPH, 040755);
-        close(fd);
+        ret = iam_polymorph(filepnm, 040755);
         if (ret) {
                 perror("IAM_IOC_POLYMORPH");
                 goto out_umount;
@@ -1651,12 +1226,12 @@ static int mkfs_mdt(struct mkfs_opts *mop)
         }
 
         snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "fld");
-        ret = iam_insert(1, "0000000000000002", 1, "0000000000000000", filepnm);
+        ret = mkfs_iam_insert(1, "0000000000000002", 1, "0000000000000000", filepnm);
         if (ret) {
                 goto out_umount;
         }
 
-        ret = iam_insert(1, "0000000000000001", 1, "0000000000000000", filepnm);
+        ret = mkfs_iam_insert(1, "0000000000000001", 1, "0000000000000000", filepnm);
         if (ret) {
                 goto out_umount;
         }
@@ -1674,12 +1249,12 @@ static int mkfs_mdt(struct mkfs_opts *mop)
 
         snprintf(recbuf, sizeof(recbuf) - 1, "0000000000000001%8.8x%8.8x",
                  (unsigned int)generation, (unsigned int)st.st_ino);
-        ret = iam_insert(0, ".", 1, recbuf, filepnm);
+        ret = mkfs_iam_insert(0, ".", 1, recbuf, filepnm);
         if (ret) {
                 goto out_umount;
         }
 
-        ret = iam_insert(0, "..", 1, recbuf, filepnm);
+        ret = mkfs_iam_insert(0, "..", 1, recbuf, filepnm);
         if (ret) {
                 goto out_umount;
         }
@@ -1691,14 +1266,14 @@ out_rmdir:
         return ret;
 }
 
-int main(int argc, char *const argv[])
+int main(int argc, char *argv[])
 {
         struct mkfs_opts mop;
         struct lustre_disk_data *ldd;
         char *mountopts = NULL;
         char always_mountopts[512] = "";
         char default_mountopts[512] = "";
-        int  ret = 0;
+        int ret = 0;
 
         //printf("pad %d\n", offsetof(struct lustre_disk_data, ldd_padding));
         assert(offsetof(struct lustre_disk_data, ldd_padding) == 200);
@@ -1795,38 +1370,38 @@ int main(int argc, char *const argv[])
 
         /* These are the permanent mount options (always included) */ 
         switch (ldd->ldd_mount_type) {
-        case LDD_MT_EXT3:
-        case LDD_MT_LDISKFS: {
-                sprintf(always_mountopts, "errors=remount-ro");
-                if (IS_MDT(ldd) || IS_MGS(ldd))
-                        strcat(always_mountopts,
-                               ",iopen_nopriv,user_xattr");
-                if ((get_os_version() == 24) && IS_OST(ldd))
-                        strcat(always_mountopts, ",asyncdel");
+                case LDD_MT_EXT3:
+                case LDD_MT_LDISKFS: {
+                        sprintf(always_mountopts, "errors=remount-ro");
+                        if (IS_MDT(ldd) || IS_MGS(ldd))
+                                strcat(always_mountopts,
+                                       ",iopen_nopriv,user_xattr");
+                        if ((get_os_version() == 24) && IS_OST(ldd))
+                                strcat(always_mountopts, ",asyncdel");
 #if 0
-                /* Files created while extents are enabled cannot be read if
-                   mounted with a kernel that doesn't include the CFS patches.*/
-                if (IS_OST(ldd) && 
-                    ldd->ldd_mount_type == LDD_MT_LDISKFS) {
-                        strcat(default_mountopts, ",extents,mballoc");
-                }
+                        /* Files created while extents are enabled cannot be
+                           read if mounted with a kernel that doesn't include
+                           the CFS patches.*/
+                        if (IS_OST(ldd) && 
+                            ldd->ldd_mount_type == LDD_MT_LDISKFS) {
+                                strcat(default_mountopts, ",extents,mballoc");
+                        }
 #endif 
-                break;
-        }
-        case LDD_MT_SMFS: {
-                mop.mo_flags |= MO_IS_LOOP;
-                sprintf(always_mountopts, "type=ext3,dev=%s",
-                        mop.mo_device);
-                break;
-        }
-        default: {
-                fatal();
-                fprintf(stderr, "unknown fs type %d '%s'\n",
-                        ldd->ldd_mount_type,
-                        MT_STR(ldd));
-                ret = EINVAL;
-                goto out;
-        }
+                        break;
+                }
+                case LDD_MT_SMFS: {
+                        mop.mo_flags |= MO_IS_LOOP;
+                        sprintf(always_mountopts, "type=ext3,dev=%s",
+                                mop.mo_device);
+                        break;
+                }
+                default: {
+                        fatal();
+                        fprintf(stderr, "unknown fs type %d '%s'\n",
+                                ldd->ldd_mount_type, MT_STR(ldd));
+                        ret = EINVAL;
+                        goto out;
+                }
         }               
 
         if (mountopts) {
