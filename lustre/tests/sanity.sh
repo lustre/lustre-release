@@ -2257,7 +2257,7 @@ test_57a() {
 run_test 57a "verify MDS filesystem created with large inodes =="
 
 test_57b() {
-	FILECOUNT=100
+	FILECOUNT=10
 	FILE1=$DIR/d57b/f1
 	FILEN=$DIR/d57b/f$FILECOUNT
 	rm -rf $DIR/d57b || error "removing $DIR/d57b"
@@ -2410,7 +2410,7 @@ run_test 65a "directory with no stripe info ===================="
 
 test_65b() {
 	mkdir -p $DIR/d65
-	$LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+ 	$LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
 	touch $DIR/d65/f2
 	$LVERIFY $DIR/d65 $DIR/d65/f2 || error "lverify failed"
 }

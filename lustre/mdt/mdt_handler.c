@@ -247,6 +247,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
         if (ma->ma_valid & MA_INODE)
                 mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
+        else
+                RETURN(-EFAULT);
 
         if (mdt_body_has_lov(la, reqbody)) {
                 if (/*ma->ma_lmm_size && */(ma->ma_valid & MA_LOV)) {
@@ -255,7 +257,11 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                                         PFID(mdt_object_fid(o)));
                         mdt_dump_lmm(D_INFO, ma->ma_lmm);
                         repbody->eadatasize = ma->ma_lmm_size;
-                        repbody->valid |= OBD_MD_FLEASIZE;
+                        if (S_ISDIR(la->la_mode))
+                                repbody->valid |= OBD_MD_FLDIREA;
+                        else
+                                repbody->valid |= OBD_MD_FLEASIZE;
+
                 }
         } else if (S_ISLNK(la->la_mode) &&
                           reqbody->valid & OBD_MD_LINKNAME) {

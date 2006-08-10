@@ -54,11 +54,18 @@ void mdt_dump_lmm(int level, struct lov_mds_md *lmm)
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
         for (i = 0, lod = lmm->lmm_objects;
-             i < le32_to_cpu(lmm->lmm_stripe_count); i++, lod++)
+             i < le32_to_cpu(lmm->lmm_stripe_count); i++, lod++) {
                 CDEBUG_EX(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
                        i, le32_to_cpu(lod->l_ost_idx),
                        le64_to_cpu(lod->l_object_gr),
                        le64_to_cpu(lod->l_object_id));
+                if (i > LOV_MAX_STRIPE_COUNT) {
+                        CDEBUG_EX(level, "Do we really have so much"
+                                         " stripe:0x%x?\n",
+                                        le32_to_cpu(lmm->lmm_stripe_count));
+                        return;
+                }
+        }
 }
 
 void mdt_shrink_reply(struct mdt_thread_info *info)

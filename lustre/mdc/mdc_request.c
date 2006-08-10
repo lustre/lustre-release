@@ -395,6 +395,10 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
         LASSERT_REPSWABBED (req, offset);
         offset++;
 
+        if (!(md->body->valid & OBD_MD_FLEASIZE) &&
+            !(md->body->valid & OBD_MD_FLDIREA))
+                RETURN(0);
+
         if (md->body->valid & OBD_MD_FLEASIZE) {
                 int lmmsize;
                 struct lov_mds_md *lmm;
@@ -417,6 +421,11 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                 LASSERT (rc >= sizeof (*md->lsm));
                 rc = 0;
 
+                offset++;
+        } else if (md->body->valid & OBD_MD_FLDIREA) {
+                /* TODO: umka, please handle this case */
+                LASSERT(S_ISDIR(md->body->mode));
+                CDEBUG(D_ERROR, "I got ea for dir. What to do?\n");
                 offset++;
         }
 
