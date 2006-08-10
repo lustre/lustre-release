@@ -93,7 +93,7 @@ fld_dht_scan(struct lu_client_fld *fld, seqno_t seq)
         return fld_dht_scan(fld, seq);
 }
 
-struct lu_fld_hash fld_hash[2] = {
+struct lu_fld_hash fld_hash[3] = {
         {
                 .fh_name = "DHT",
                 .fh_hash_func = fld_dht_hash,
@@ -103,6 +103,9 @@ struct lu_fld_hash fld_hash[2] = {
                 .fh_name = "RRB",
                 .fh_hash_func = fld_rrb_hash,
                 .fh_scan_func = fld_rrb_scan
+        },
+        {
+                0,
         }
 };
 
@@ -372,47 +375,39 @@ out_req:
         return rc;
 }
 
-static int __fld_client_create(struct lu_client_fld *fld,
-                               seqno_t seq, mdsno_t mds,
-                    struct md_fld *md_fld)
+int fld_client_create(struct lu_client_fld *fld,
+                      seqno_t seq, mdsno_t mds)
 {
+        struct md_fld md_fld = { .mf_seq = seq, .mf_mds = mds };
         struct fld_target *target;
-        __u32 rc;
+        int rc;
         ENTRY;
 
         target = fld_client_get_target(fld, seq);
         LASSERT(target != NULL);
 
-        rc = fld_client_rpc(target->fldt_exp, md_fld, FLD_CREATE);
+        rc = fld_client_rpc(target->fldt_exp, &md_fld, FLD_CREATE);
 
-        if (rc  == 0) {
-                /* do not return result of calling fld_cache_insert()
+        if (rc == 0) {
+                /*
+                 * Do not return result of calling fld_cache_insert()
                  * here. First of all because it may return -EEXISTS. Another
                  * reason is that, we do not want to stop proceeding because of
-                 * cache errors. --umka */
+                 * cache errors. --umka
+                 */
                 fld_cache_insert(fld->fld_cache, seq, mds);
         }
-
-        RETURN(rc);
-}
-
-int fld_client_create(struct lu_client_fld *fld,
-                      seqno_t seq, mdsno_t mds)
-{
-        struct md_fld md_fld = { .mf_seq = seq, .mf_mds = mds };
-        __u32 rc;
-        ENTRY;
-
-        rc = __fld_client_create(fld, seq, mds, &md_fld);
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_create);
 
-static int __fld_client_delete(struct lu_client_fld *fld,
-                               seqno_t seq, struct md_fld *md_fld)
+int fld_client_delete(struct lu_client_fld *fld,
+                      seqno_t seq)
 {
+        struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
         struct fld_target *target;
-        __u32 rc;
+        int rc;
+        ENTRY;
 
         fld_cache_delete(fld->fld_cache, seq);
 
@@ -420,25 +415,16 @@ static int __fld_client_delete(struct lu_client_fld *fld,
         LASSERT(target != NULL);
 
         rc = fld_client_rpc(target->fldt_exp,
-                            md_fld, FLD_DELETE);
-        RETURN(rc);
-}
-
-int fld_client_delete(struct lu_client_fld *fld,
-                      seqno_t seq)
-{
-        struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
-        __u32 rc;
-
-        rc = __fld_client_delete(fld, seq, &md_fld);
+                            &md_fld, FLD_DELETE);
+        
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_delete);
 
-static int __fld_client_lookup(struct lu_client_fld *fld,
-                               seqno_t seq, mdsno_t *mds,
-                               struct md_fld *md_fld)
+int fld_client_lookup(struct lu_client_fld *fld,
+                      seqno_t seq, mdsno_t *mds)
 {
+        struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
         struct fld_target *target;
         int rc;
         ENTRY;
@@ -453,25 +439,16 @@ static int __fld_client_lookup(struct lu_client_fld *fld,
         LASSERT(target != NULL);
 
         rc = fld_client_rpc(target->fldt_exp,
-                            md_fld, FLD_LOOKUP);
-        if (rc == 0)
-                *mds = md_fld->mf_mds;
+                            &md_fld, FLD_LOOKUP);
+        if (rc == 0) {
+                *mds = md_fld.mf_mds;
 
-        /* do not return error here as well. See previous comment in same
-         * situation in function fld_client_create(). --umka */
-        fld_cache_insert(fld->fld_cache, seq, *mds);
-
-        RETURN(rc);
-}
-
-int fld_client_lookup(struct lu_client_fld *fld,
-                      seqno_t seq, mdsno_t *mds)
-{
-        struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
-        int rc;
-        ENTRY;
-
-        rc = __fld_client_lookup(fld, seq, mds, &md_fld);
+                /*
+                 * Do not return error here as well. See previous comment in
+                 * same situation in function fld_client_create(). --umka
+                 */
+                fld_cache_insert(fld->fld_cache, seq, *mds);
+        }
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_lookup);

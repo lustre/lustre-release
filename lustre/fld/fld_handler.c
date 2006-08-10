@@ -67,31 +67,28 @@ static void __exit fld_mod_exit(void)
 }
 
 /* insert index entry and update cache */
-int fld_server_create(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
-                      seqno_t seq, mdsno_t mds)
+static int fld_server_create(struct lu_server_fld *fld,
+                             const struct lu_context *ctx,
+                             seqno_t seq, mdsno_t mds)
 {
         return fld_index_create(fld, ctx, seq, mds);
 }
-EXPORT_SYMBOL(fld_server_create);
 
 /* delete index entry */
-int fld_server_delete(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
-                      seqno_t seq)
+static int fld_server_delete(struct lu_server_fld *fld,
+                             const struct lu_context *ctx,
+                             seqno_t seq)
 {
         return fld_index_delete(fld, ctx, seq);
 }
-EXPORT_SYMBOL(fld_server_delete);
 
 /* issue on-disk index lookup */
-int fld_server_lookup(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
-                      seqno_t seq, mdsno_t *mds)
+static int fld_server_lookup(struct lu_server_fld *fld,
+                             const struct lu_context *ctx,
+                             seqno_t seq, mdsno_t *mds)
 {
         return fld_index_lookup(fld, ctx, seq, mds);
 }
-EXPORT_SYMBOL(fld_server_lookup);
 
 static int fld_server_handle(struct lu_server_fld *fld,
                              const struct lu_context *ctx,

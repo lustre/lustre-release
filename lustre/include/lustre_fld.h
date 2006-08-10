@@ -117,18 +117,6 @@ int fld_server_init(struct lu_server_fld *fld,
 void fld_server_fini(struct lu_server_fld *fld,
                      const struct lu_context *ctx);
 
-int fld_server_lookup(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
-                      seqno_t seq, mdsno_t *mds);
-        
-int fld_server_create(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
-                      seqno_t seq, mdsno_t mds);
-
-int fld_server_delete(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
-                      seqno_t seq);
-
 /* client methods */
 int fld_client_init(struct lu_client_fld *fld,
                     const char *uuid,

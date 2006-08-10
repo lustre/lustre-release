@@ -40,7 +40,7 @@ enum {
         FLD_HTABLE_SIZE = 256
 };
 
-extern struct lu_fld_hash fld_hash[2];
+extern struct lu_fld_hash fld_hash[];
 
 #ifdef __KERNEL__
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
