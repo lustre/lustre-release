@@ -425,7 +425,6 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
         } else if (md->body->valid & OBD_MD_FLDIREA) {
                 /* TODO: umka, please handle this case */
                 LASSERT(S_ISDIR(md->body->mode));
-                CDEBUG(D_ERROR, "I got ea for dir. What to do?\n");
                 offset++;
         }
 

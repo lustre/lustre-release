@@ -420,12 +420,23 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         if (rc)
                                 GOTO(out_oa, rc);
                 } else {
-                        LASSERT(*lmm == NULL);
-                        rc = mdd_get_md(ctxt, &parent->mod_obj, *lmm,
-                                        lmm_size);
+                        /* get lov ea from parent and set to lov */
+                        struct lov_mds_md *__lmm;
+                        int __lmm_size, returned_lmm_size;
+                        __lmm_size = mdd2_obd(mdd)->u.mds.mds_max_mdsize;
+
+                        OBD_ALLOC(__lmm, __lmm_size);
+                        if (__lmm == NULL)
+                                GOTO(out_oa, rc = -ENOMEM);
+
+                        rc = mdd_get_md(ctxt, &parent->mod_obj, __lmm,
+                                        &returned_lmm_size);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                                   lov_exp, 0, &lsm, *lmm);
+                                                   lov_exp, 0, &lsm, __lmm);
+                        OBD_FREE(__lmm, __lmm_size);
+                        if (rc)
+                                GOTO(out_oa, rc);
                 }
                 rc = obd_create(lov_exp, oa, &lsm, NULL);
                 if (rc) {
@@ -440,9 +451,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 LASSERT(eadata != NULL);
                 rc = obd_iocontrol(OBD_IOC_LOV_SETEA, lov_exp, 0, &lsm,
                                    (void*)eadata);
-                if (rc) {
+                if (rc) 
                         GOTO(out_oa, rc);
-                }
                 lsm->lsm_object_id = oa->o_id;
         }
         /*Sometimes, we may truncate some object(without lsm) 
@@ -486,6 +496,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         rc = 0;
 out_oa:
         obdo_free(oa);
+        if (lsm)
+                obd_free_memmd(lov_exp, &lsm);
         RETURN(rc);
 }
 
