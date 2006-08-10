@@ -30,21 +30,17 @@
 
 #include <linux/types.h>
 
-struct fld_target {
-        struct list_head   fldt_chain;
-        struct obd_export *fldt_exp;
-        __u64              fldt_idx;
-};
-
 enum fld_op {
         FLD_CREATE = 0,
         FLD_DELETE = 1,
         FLD_LOOKUP = 2
 };
 
-#define FLD_HTABLE_SIZE 256
+enum {
+        FLD_HTABLE_SIZE = 256
+};
 
-extern struct lu_fld_hash fld_hash[3];
+extern struct lu_fld_hash fld_hash[2];
 
 #ifdef __KERNEL__
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
@@ -66,11 +62,6 @@ int fld_index_delete(struct lu_server_fld *fld,
 int fld_index_lookup(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
                      seqno_t seq, mdsno_t *mds);
-
-static inline __u32 fld_cache_hash(seqno_t seq)
-{
-        return (__u32)seq;
-}
 #endif
 
 #ifdef LPROCFS

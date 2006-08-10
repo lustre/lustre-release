@@ -71,8 +71,7 @@ int fld_server_create(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
                       seqno_t seq, mdsno_t mds)
 {
-        ENTRY;
-        RETURN(fld_index_create(fld, ctx, seq, mds));
+        return fld_index_create(fld, ctx, seq, mds);
 }
 EXPORT_SYMBOL(fld_server_create);
 
@@ -81,8 +80,7 @@ int fld_server_delete(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
                       seqno_t seq)
 {
-        ENTRY;
-        RETURN(fld_index_delete(fld, ctx, seq));
+        return fld_index_delete(fld, ctx, seq);
 }
 EXPORT_SYMBOL(fld_server_delete);
 
@@ -91,8 +89,7 @@ int fld_server_lookup(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
                       seqno_t seq, mdsno_t *mds)
 {
-        ENTRY;
-        RETURN(fld_index_lookup(fld, ctx, seq, mds));
+        return fld_index_lookup(fld, ctx, seq, mds);
 }
 EXPORT_SYMBOL(fld_server_lookup);
 
@@ -139,24 +136,20 @@ static int fld_req_handle0(const struct lu_context *ctx,
         __u32 *opc;
         ENTRY;
 
-        req_capsule_pack(&info->fti_pill);
+        rc = req_capsule_pack(&info->fti_pill);
+        if (rc)
+                RETURN(rc);
 
         opc = req_capsule_client_get(&info->fti_pill, &RMF_FLD_OPC);
         if (opc != NULL) {
                 in = req_capsule_client_get(&info->fti_pill, &RMF_FLD_MDFLD);
-                if (in == NULL) {
-                        CERROR("cannot unpack fld request\n");
+                if (in == NULL)
                         RETURN(-EPROTO);
-                }
                 out = req_capsule_server_get(&info->fti_pill, &RMF_FLD_MDFLD);
-                if (out == NULL) {
-                        CERROR("cannot allocate fld response\n");
+                if (out == NULL)
                         RETURN(-EPROTO);
-                }
                 *out = *in;
                 rc = fld_server_handle(fld, ctx, *opc, out);
-        } else {
-                CERROR("cannot unpack FLD operation\n");
         }
 
         RETURN(rc);
@@ -185,7 +178,7 @@ static void fld_thread_fini(const struct lu_context *ctx,
 }
 
 struct lu_context_key fld_thread_key = {
-        .lct_tags = LCT_MD_THREAD,
+        .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD,
         .lct_init = fld_thread_init,
         .lct_fini = fld_thread_fini
 };
@@ -213,7 +206,6 @@ static void fld_thread_info_fini(struct fld_thread_info *info)
 
 static int fld_req_handle(struct ptlrpc_request *req)
 {
-        int fail = OBD_FAIL_FLD_ALL_REPLY_NET;
         const struct lu_context *ctx;
         struct fld_thread_info *info;
         struct lu_site *site;
@@ -252,7 +244,7 @@ static int fld_req_handle(struct ptlrpc_request *req)
                 GOTO(out_info, rc);
         }
 
-        target_send_reply(req, rc, fail);
+        target_send_reply(req, rc, OBD_FAIL_FLD_ALL_REPLY_NET);
         EXIT;
 out_info:
         fld_thread_info_fini(info);
@@ -297,7 +289,6 @@ static int fld_server_proc_init(struct lu_server_fld *fld)
                                              proc_lustre_root,
                                              NULL, NULL);
         if (IS_ERR(fld->fld_proc_dir)) {
-                CERROR("LProcFS failed in fld-init\n");
                 rc = PTR_ERR(fld->fld_proc_dir);
                 RETURN(rc);
         }
@@ -306,7 +297,6 @@ static int fld_server_proc_init(struct lu_server_fld *fld)
                                                fld->fld_proc_dir,
                                                NULL, NULL);
         if (IS_ERR(fld->fld_proc_entry)) {
-                CERROR("LProcFS failed in fld-init\n");
                 rc = PTR_ERR(fld->fld_proc_entry);
                 GOTO(out_cleanup, rc);
         }

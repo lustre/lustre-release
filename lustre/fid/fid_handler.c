@@ -255,7 +255,9 @@ static int seq_req_handle0(const struct lu_context *ctx,
         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
         LASSERT(site != NULL);
 			
-        req_capsule_pack(&info->sti_pill);
+        rc = req_capsule_pack(&info->sti_pill);
+        if (rc)
+                RETURN(rc);
 
         opc = req_capsule_client_get(&info->sti_pill,
                                      &RMF_SEQ_OPC);
@@ -398,7 +400,6 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
                                              proc_lustre_root,
                                              NULL, NULL);
         if (IS_ERR(seq->lss_proc_dir)) {
-                CERROR("LProcFS failed in seq-init\n");
                 rc = PTR_ERR(seq->lss_proc_dir);
                 RETURN(rc);
         }
@@ -407,7 +408,6 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
                                                seq->lss_proc_dir,
                                                NULL, NULL);
         if (IS_ERR(seq->lss_proc_entry)) {
-                CERROR("LProcFS failed in seq-init\n");
                 rc = PTR_ERR(seq->lss_proc_entry);
                 GOTO(out_cleanup, rc);
         }

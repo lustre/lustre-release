@@ -106,7 +106,7 @@ fld_proc_write_hash(struct file *file, const char *buffer,
 
         LASSERT(fld != NULL);
 
-        for (i = 0; i < sizeof(fld_hash) / sizeof(*hash); i++) {
+        for (i = 0; i < ARRAY_SIZE(fld_hash); i++) {
                 if (fld_hash[i].fh_name == NULL ||
                     count != strlen(fld_hash[i].fh_name))
                         continue;

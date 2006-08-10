@@ -49,8 +49,6 @@
 
 #ifdef LPROCFS
 /*
- * Server side procfs stuff.
- *
  * Note: this function is only used for testing, it is no safe for production
  * use.
  */
@@ -78,6 +76,9 @@ seq_proc_write_common(struct file *file, const char *buffer,
         RETURN(0);
 }
 
+/*
+ * Server side procfs stuff.
+ */
 static int
 seq_proc_read_common(char *page, char **start, off_t off,
                      int count, int *eof, void *data,

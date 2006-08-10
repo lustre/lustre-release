@@ -53,6 +53,11 @@
 #include "fld_internal.h"
 
 #ifdef __KERNEL__
+static inline __u32 fld_cache_hash(seqno_t seq)
+{
+        return (__u32)seq;
+}
+
 struct fld_cache_info *fld_cache_init(int size)
 {
 	struct fld_cache_info *cache;
@@ -60,7 +65,7 @@ struct fld_cache_info *fld_cache_init(int size)
         ENTRY;
 
         /* check if size is power of two */
-        LASSERT((size & -size) == size);
+        LASSERT(IS_PO2(size));
         
         OBD_ALLOC_PTR(cache);
         if (cache == NULL)
@@ -71,8 +76,7 @@ struct fld_cache_info *fld_cache_init(int size)
 
         /* init fld cache info */
         cache->fci_hash_mask = size - 1;
-        OBD_ALLOC(cache->fci_hash, size *
-                  sizeof(*cache->fci_hash));
+        OBD_ALLOC(cache->fci_hash, size * sizeof(*cache->fci_hash));
         if (cache->fci_hash == NULL) {
                 OBD_FREE_PTR(cache);
                 RETURN(ERR_PTR(-ENOMEM));
@@ -119,6 +123,13 @@ void fld_cache_fini(struct fld_cache_info *cache)
 }
 EXPORT_SYMBOL(fld_cache_fini);
 
+static inline struct hlist_head *
+fld_cache_bucket(struct fld_cache_info *cache, seqno_t seq)
+{
+        return cache->fci_hash + (fld_cache_hash(seq) &
+                                  cache->fci_hash_mask);
+}
+
 int fld_cache_insert(struct fld_cache_info *cache,
                      seqno_t seq, mdsno_t mds)
 {
@@ -128,31 +139,36 @@ int fld_cache_insert(struct fld_cache_info *cache,
         int rc = 0;
         ENTRY;
 
-        OBD_ALLOC_PTR(flde);
-        if (!flde)
-                RETURN(-ENOMEM);
-
-        bucket = cache->fci_hash + (fld_cache_hash(seq) &
-				    cache->fci_hash_mask);
+        bucket = fld_cache_bucket(cache, seq);
 
         spin_lock(&cache->fci_lock);
         hlist_for_each_entry(fldt, scan, bucket, fce_list) {
                 if (fldt->fce_seq == seq)
-                        GOTO(exit_unlock, rc = -EEXIST);
+                        spin_unlock(&cache->fci_lock);
+                        RETURN(rc = -EEXIST);
         }
+        spin_unlock(&cache->fci_lock);
 
+        OBD_ALLOC_PTR(flde);
+        if (!flde)
+                RETURN(-ENOMEM);
+
+        spin_lock(&cache->fci_lock);
+        hlist_for_each_entry(fldt, scan, bucket, fce_list) {
+                if (fldt->fce_seq == seq) {
+                        spin_unlock(&cache->fci_lock);
+                        OBD_FREE_PTR(flde);
+                        RETURN(0);
+                }
+        }
         INIT_HLIST_NODE(&flde->fce_list);
         flde->fce_mds = mds;
         flde->fce_seq = seq;
 
         hlist_add_head(&flde->fce_list, bucket);
-
-        EXIT;
-exit_unlock:
         spin_unlock(&cache->fci_lock);
-        if (rc != 0)
-                OBD_FREE_PTR(flde);
-        return rc;
+
+        RETURN(0);
 }
 EXPORT_SYMBOL(fld_cache_insert);
 
@@ -163,8 +179,7 @@ void fld_cache_delete(struct fld_cache_info *cache, seqno_t seq)
         struct hlist_node *scan;
         ENTRY;
 
-        bucket = cache->fci_hash + (fld_cache_hash(seq) &
-				    cache->fci_hash_mask);
+        bucket = fld_cache_bucket(cache, seq);
 	
         spin_lock(&cache->fci_lock);
         hlist_for_each_entry(flde, scan, bucket, fce_list) {
@@ -189,8 +204,7 @@ int fld_cache_lookup(struct fld_cache_info *cache,
         struct hlist_node *scan;
         ENTRY;
 
-        bucket = cache->fci_hash + (fld_cache_hash(seq) &
-				    cache->fci_hash_mask);
+        bucket = fld_cache_bucket(cache, seq);
 
         spin_lock(&cache->fci_lock);
         hlist_for_each_entry(flde, scan, bucket, fce_list) {

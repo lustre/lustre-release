@@ -34,11 +34,19 @@ enum {
         LUSTRE_CLI_FLD_HASH_RRB
 };
 
+struct fld_target {
+        struct list_head   fldt_chain;
+        struct obd_export *fldt_exp;
+        __u64              fldt_idx;
+};
+
 typedef int (*fld_hash_func_t) (struct lu_client_fld *, __u64);
+typedef struct fld_target * (*fld_scan_func_t) (struct lu_client_fld *, __u64);
 
 struct lu_fld_hash {
         const char              *fh_name;
-        fld_hash_func_t          fh_func;
+        fld_hash_func_t          fh_hash_func;
+        fld_scan_func_t          fh_scan_func;
 };
 
 struct lu_server_fld {

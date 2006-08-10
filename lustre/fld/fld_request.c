@@ -55,10 +55,28 @@
 static int fld_rrb_hash(struct lu_client_fld *fld,
                         seqno_t seq)
 {
-        if (fld->fld_count == 0)
-                return 0;
-
+        LASSERT(fld->fld_count > 0);
         return do_div(seq, fld->fld_count);
+}
+
+static struct fld_target *
+fld_rrb_scan(struct lu_client_fld *fld, seqno_t seq)
+{
+        struct fld_target *target;
+        int hash;
+        ENTRY;
+
+        hash = fld_rrb_hash(fld, seq);
+
+        list_for_each_entry(target, &fld->fld_targets, fldt_chain) {
+                if (target->fldt_idx == hash)
+                        RETURN(target);
+        }
+
+        /* if target is not found, there is logical error anyway, so here is
+         * LBUG() to catch this situation. */
+        LBUG();
+        RETURN(NULL);
 }
 
 static int fld_dht_hash(struct lu_client_fld *fld,
@@ -68,61 +86,46 @@ static int fld_dht_hash(struct lu_client_fld *fld,
         return fld_rrb_hash(fld, seq);
 }
 
-struct lu_fld_hash fld_hash[3] = {
+static struct fld_target *
+fld_dht_scan(struct lu_client_fld *fld, seqno_t seq)
+{
+        /* XXX: here should be DHT scan code */
+        return fld_dht_scan(fld, seq);
+}
+
+struct lu_fld_hash fld_hash[2] = {
         {
                 .fh_name = "DHT",
-                .fh_func = fld_dht_hash
+                .fh_hash_func = fld_dht_hash,
+                .fh_scan_func = fld_dht_scan
         },
         {
-                .fh_name = "Round Robin",
-                .fh_func = fld_rrb_hash
-        },
-        {
-                0,
+                .fh_name = "RRB",
+                .fh_hash_func = fld_rrb_hash,
+                .fh_scan_func = fld_rrb_scan
         }
 };
-
-/* this function makes decision if passed @target appropriate acoordingly to
- * passed @hash. In case of usual round-robin hash, this is decided by comparing
- * hash and target's index. In the case of DHT, algorithm is a bit more
- * complicated. */
-static int fld_client_apt_target(struct fld_target *target,
-                                 int hash)
-{
-        /* XXX: DHT case should be worked out. */
-        return (target->fldt_idx == hash);
-}
 
 static struct fld_target *
 fld_client_get_target(struct lu_client_fld *fld,
                       seqno_t seq)
 {
         struct fld_target *target;
-        int hash;
         ENTRY;
 
         LASSERT(fld->fld_hash != NULL);
 
         spin_lock(&fld->fld_lock);
-        hash = fld->fld_hash->fh_func(fld, seq);
-
-        list_for_each_entry(target,
-                            &fld->fld_targets, fldt_chain) {
-                if (fld_client_apt_target(target, hash)) {
-                        spin_unlock(&fld->fld_lock);
-                        RETURN(target);
-                }
-        }
+        target = fld->fld_hash->fh_scan_func(fld, seq);
         spin_unlock(&fld->fld_lock);
-
-        /* if target is not found, there is logical error anyway, so here is
-         * LBUG() to catch that situation. */
-        LBUG();
-        RETURN(NULL);
+        
+        RETURN(target);
 }
 
-/* add export to FLD. This is usually done by CMM and LMV as they are main users
- * of FLD module. */
+/*
+ * Add export to FLD. This is usually done by CMM and LMV as they are main users
+ * of FLD module.
+ */
 int fld_client_add_target(struct lu_client_fld *fld,
                           struct obd_export *exp)
 {
@@ -257,7 +260,7 @@ int fld_client_init(struct lu_client_fld *fld,
         LASSERT(fld != NULL);
 
         if (!hash_is_sane(hash)) {
-                CERROR("wrong hash function 0x%x\n", hash);
+                CERROR("wrong hash function %#x\n", hash);
                 RETURN(-EINVAL);
         }
 
@@ -378,8 +381,7 @@ static int __fld_client_create(struct lu_client_fld *fld,
         ENTRY;
 
         target = fld_client_get_target(fld, seq);
-        if (!target)
-                RETURN(-EINVAL);
+        LASSERT(target != NULL);
 
         rc = fld_client_rpc(target->fldt_exp, md_fld, FLD_CREATE);
 
@@ -415,8 +417,7 @@ static int __fld_client_delete(struct lu_client_fld *fld,
         fld_cache_delete(fld->fld_cache, seq);
 
         target = fld_client_get_target(fld, seq);
-        if (!target)
-                RETURN(-EINVAL);
+        LASSERT(target != NULL);
 
         rc = fld_client_rpc(target->fldt_exp,
                             md_fld, FLD_DELETE);
@@ -449,8 +450,7 @@ static int __fld_client_lookup(struct lu_client_fld *fld,
 
         /* can not find it in the cache */
         target = fld_client_get_target(fld, seq);
-        if (!target)
-                RETURN(-EINVAL);
+        LASSERT(target != NULL);
 
         rc = fld_client_rpc(target->fldt_exp,
                             md_fld, FLD_LOOKUP);
