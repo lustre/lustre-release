@@ -410,6 +410,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (it->it_op & IT_CREAT ||
             (it->it_op & IT_OPEN && it->it_create_mode & O_CREAT)) {
                 struct lu_placement_hint hint = { .ph_pname = NULL,
+                                                  .ph_pfid = ll_inode2fid(parent),
                                                   .ph_cname = &dentry->d_name,
                                                   .ph_opc = LUSTRE_OPC_CREATE };
 
@@ -568,6 +569,7 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
         struct md_op_data *op_data;
         struct lu_placement_hint hint = {
                 .ph_pname = NULL,
+                .ph_pfid = ll_inode2fid(dir),
                 .ph_cname = name,
                 .ph_opc = LUSTRE_OPC_MKNOD
         };
@@ -640,6 +642,7 @@ static int ll_symlink_generic(struct inode *dir, struct dentry *dchild,
 {
         struct qstr *name = &dchild->d_name;
         struct lu_placement_hint hint = { .ph_pname = NULL,
+                                          .ph_pfid = ll_inode2fid(dir),
                                           .ph_cname = name,
                                           .ph_opc = LUSTRE_OPC_SYMLINK };
 
@@ -721,6 +724,7 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
 
 {
         struct lu_placement_hint hint = { .ph_pname = NULL,
+                                          .ph_pfid = ll_inode2fid(dir),
                                           .ph_cname = name,
                                           .ph_opc = LUSTRE_OPC_MKDIR };
         struct ptlrpc_request *request = NULL;

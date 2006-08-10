@@ -375,6 +375,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         
         if (it->it_op & IT_CREAT) {
                 struct lu_placement_hint hint = { .ph_pname = NULL,
+                                          .ph_pfid = ll_inode2fid(parent),
                                           .ph_cname = &de->d_name,
                                           .ph_opc = LUSTRE_OPC_CREATE };
 

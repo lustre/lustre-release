@@ -646,7 +646,19 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 static int lmv_fids_balanced(struct obd_device *obd)
 {
         ENTRY;
-        RETURN(0);
+        /* assume all is balansed for now */
+        RETURN(1);
+}
+
+static int lmv_all_chars_policy(int count, struct qstr *name)
+{
+        unsigned int c = 0;
+        unsigned int len = name->len;
+
+        while (len > 0)
+                c += name->name[-- len];
+        c = c % count;
+        return c;
 }
 
 /* returns number of target where new fid should be allocated using passed @hint
@@ -655,22 +667,35 @@ static int lmv_placement_policy(struct obd_device *obd,
                                 struct lu_placement_hint *hint)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
+        int tgt;
         ENTRY;
 
         /* here are some policies to allocate new fid */
-        if (hint->ph_cname && lmv_fids_balanced(obd)) {
+        if (lmv_fids_balanced(obd)) {
                 /* allocate new fid basing on its name in the case fids are
                  * balanced, that is all sequences have more or less equal
                  * number of objects created. */
+                if (hint->ph_cname && (hint->ph_opc == LUSTRE_OPC_MKDIR))
+                        tgt = lmv_all_chars_policy(lmv->desc.ld_tgt_count,
+                                                   hint->ph_cname);
+                else {
+                        /* default policy is to use parent MDS */
+                        LASSERT(fid_is_sane(hint->ph_pfid));
+                        tgt = lmv_fld_lookup(obd, hint->ph_pfid);
+                }
         } else {
                 /* sequences among all tgts are not well balanced, allocate new
                  * fid taking this into account to balance them. */
+                tgt = -EINVAL;
         }
-        //stub to place new dir on second MDS
-        if (hint->ph_opc == LUSTRE_OPC_MKDIR)
-                RETURN(lmv->desc.ld_tgt_count - 1);
 
-        RETURN(0);
+        /* if cannot get proper MDS, use master one */
+        if (tgt < 0) {
+                CERROR("Cannot choose MDS, err = %i\n", tgt);
+                tgt = 0;
+        }
+
+        RETURN(tgt);
 }
 
 static int lmv_fid_init(struct obd_export *exp)

@@ -579,9 +579,10 @@ struct niobuf_local {
 #define LUSTRE_OPC_CREATE    (1 << 3)
 
 struct lu_placement_hint {
-        struct qstr *ph_pname;
-        struct qstr *ph_cname;
-        int          ph_opc;
+        struct qstr   *ph_pname;
+        struct lu_fid *ph_pfid;
+        struct qstr   *ph_cname;
+        int           ph_opc;
 };
 
 #define LUSTRE_FLD_NAME  "fld"
