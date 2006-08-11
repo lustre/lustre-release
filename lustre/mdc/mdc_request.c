@@ -1107,7 +1107,8 @@ static int mdc_fid_init(struct obd_export *exp)
 
         /* init client side sequence-manager */
         rc = seq_client_init(cli->cl_seq,
-                             exp->exp_obd->obd_name, exp);
+                             exp->exp_obd->obd_name,
+                             exp, LUSTRE_SEQ_METADATA);
         if (rc)
                 GOTO(out_free_seq, rc);
 

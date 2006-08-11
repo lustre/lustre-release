@@ -76,8 +76,13 @@ static int seq_client_rpc(struct lu_client_seq *seq,
 
         req->rq_replen = lustre_msg_size(1, &repsize);
 
-        req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
-                SEQ_CONTROLLER_PORTAL : SEQ_SERVER_PORTAL;
+        if (seq->lcs_type == LUSTRE_SEQ_METADATA) {
+                req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
+                        SEQ_CONTROLLER_PORTAL : SEQ_METADATA_PORTAL;
+        } else {
+                req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
+                        SEQ_CONTROLLER_PORTAL : SEQ_DATA_PORTAL;
+        }
 
         rc = ptlrpc_queue_wait(req);
         if (rc)
@@ -300,13 +305,15 @@ static void seq_client_proc_fini(struct lu_client_seq *seq)
 
 int seq_client_init(struct lu_client_seq *seq,
                     const char *uuid,
-                    struct obd_export *exp)
+                    struct obd_export *exp,
+                    enum lu_cli_type type)
 {
         int rc = 0;
         ENTRY;
 
         LASSERT(exp != NULL);
 
+        seq->lcs_type = type;
         fid_zero(&seq->lcs_fid);
         range_zero(&seq->lcs_range);
         sema_init(&seq->lcs_sem, 1);

@@ -56,6 +56,11 @@ enum lu_mgr_type {
         LUSTRE_SEQ_CONTROLLER
 };
 
+enum lu_cli_type {
+        LUSTRE_SEQ_METADATA,
+        LUSTRE_SEQ_DATA
+};
+
 /* client sequence manager interface */
 struct lu_client_seq {
         /* sequence-controller export. */
@@ -72,6 +77,9 @@ struct lu_client_seq {
 
         /* this holds last allocated fid in last obtained seq */
         struct lu_fid           lcs_fid;
+
+        /* LUSTRE_SEQ_METADATA or LUSTRE_SEQ_DATA */
+        enum lu_cli_type        lcs_type;
 
         /* service uuid, passed from MDT + seq name to form unique seq name to
          * use it with procfs. */
@@ -147,7 +155,8 @@ int seq_server_set_cli(struct lu_server_seq *seq,
 
 int seq_client_init(struct lu_client_seq *seq,
                     const char *uuid,
-                    struct obd_export *exp);
+                    struct obd_export *exp,
+                    enum lu_cli_type type);
 
 void seq_client_fini(struct lu_client_seq *seq);
 

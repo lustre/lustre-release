@@ -465,17 +465,16 @@ int seq_server_init(struct lu_server_seq *seq,
                     enum lu_mgr_type type,
                     const struct lu_context *ctx)
 {
-        int is_srv = type == LUSTRE_SEQ_SERVER;
+        int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
         
-        int rc, req_portal = is_srv ?
-                SEQ_SERVER_PORTAL : SEQ_CONTROLLER_PORTAL;
-
         struct ptlrpc_service_conf seq_md_conf = {
                 .psc_nbufs = MDS_NBUFS,
                 .psc_bufsize = MDS_BUFSIZE,
                 .psc_max_req_size = SEQ_MAXREQSIZE,
                 .psc_max_reply_size = SEQ_MAXREPSIZE,
-                .psc_req_portal = req_portal,
+                .psc_req_portal = (is_srv ?
+                                   SEQ_METADATA_PORTAL :
+                                   SEQ_CONTROLLER_PORTAL),
                 .psc_rep_portal = MDC_REPLY_PORTAL,
                 .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT,
                 .psc_num_threads = SEQ_NUM_THREADS,
@@ -486,7 +485,7 @@ int seq_server_init(struct lu_server_seq *seq,
                 .psc_bufsize = MDS_BUFSIZE,
                 .psc_max_req_size = SEQ_MAXREQSIZE,
                 .psc_max_reply_size = SEQ_MAXREPSIZE,
-                .psc_req_portal = SEQ_SERVER_PORTAL,
+                .psc_req_portal = SEQ_DATA_PORTAL,
                 .psc_rep_portal = OSC_REPLY_PORTAL,
                 .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT,
                 .psc_num_threads = SEQ_NUM_THREADS,

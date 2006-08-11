@@ -1886,7 +1886,8 @@ static int mdt_seq_init_cli(const struct lu_context *ctx,
                         if (ls->ls_client_seq != NULL) {
                                 rc = seq_client_init(ls->ls_client_seq,
                                                      mdc->obd_name,
-                                                     ls->ls_client_exp);
+                                                     ls->ls_client_exp,
+                                                     LUSTRE_SEQ_METADATA);
                         } else
                                 rc = -ENOMEM;
 
