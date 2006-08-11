@@ -495,7 +495,7 @@ static int __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_object *o,
 
 /* set attr and LOV EA at once, return updated attr */
 static int mdd_attr_set(const struct lu_context *ctxt,
-                        struct md_object *obj, struct md_attr *ma)
+                        struct md_object *obj, const struct md_attr *ma)
 {
         struct mdd_object *mdo = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -519,9 +519,13 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         }
         /* XXX: llog cancel cookie? */
 
+        /*
+         * XXX: Hmmm... what is this? attr_get in attr_set?
+         */
+        /*
         if (rc == 0)
                 rc = mdd_attr_get(ctxt, obj, ma);
-
+        */
         mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
         mdd_trans_stop(ctxt, mdd, handle);
 

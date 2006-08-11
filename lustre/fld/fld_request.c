@@ -121,7 +121,7 @@ fld_client_get_target(struct lu_client_fld *fld,
         spin_lock(&fld->fld_lock);
         target = fld->fld_hash->fh_scan_func(fld, seq);
         spin_unlock(&fld->fld_lock);
-        
+
         RETURN(target);
 }
 
@@ -417,7 +417,7 @@ int fld_client_delete(struct lu_client_fld *fld,
 
         rc = fld_client_rpc(target->fldt_exp,
                             &md_fld, FLD_DELETE);
-        
+
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_delete);

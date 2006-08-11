@@ -85,7 +85,7 @@ struct md_object_operations {
         int (*moo_attr_get)(const struct lu_context *ctxt, struct md_object *dt,
                             struct md_attr *attr);
         int (*moo_attr_set)(const struct lu_context *ctxt, struct md_object *dt,
-                            struct md_attr *attr);
+                            const struct md_attr *attr);
 
         int (*moo_xattr_get)(const struct lu_context *ctxt,
                              struct md_object *obj,
@@ -109,8 +109,8 @@ struct md_object_operations {
 
         /* part of cross-ref operation */
         int (*moo_object_create)(const struct lu_context *,
-                                 struct md_object *, 
-                                 const struct md_create_spec *spec, 
+                                 struct md_object *,
+                                 const struct md_create_spec *spec,
                                  struct md_attr *);
         int (*moo_ref_add)(const struct lu_context *, struct md_object *);
         int (*moo_ref_del)(const struct lu_context *, struct md_object *,
@@ -133,7 +133,7 @@ struct md_dir_operations {
                           struct md_attr *);
         /* This method is used for creating data object for this meta object*/
         int (*mdo_create_data)(const struct lu_context *cx, struct md_object *p,
-                               struct md_object *o, 
+                               struct md_object *o,
                                const struct md_create_spec *spec,
                                struct md_attr *ma);
         int (*mdo_rename)(const struct lu_context *ctxt,
@@ -250,7 +250,7 @@ static inline int mo_readlink(const struct lu_context *cx, struct md_object *m,
 }
 
 static inline int mo_attr_set(const struct lu_context *cx, struct md_object *m,
-                              struct md_attr *at)
+                              const struct md_attr *at)
 {
         LASSERT(m->mo_ops->moo_attr_set);
         return m->mo_ops->moo_attr_set(cx, m, at);
