@@ -591,11 +591,6 @@ void seq_server_fini(struct lu_server_seq *seq,
         seq_server_proc_fini(seq);
         seq_store_fini(seq, ctx);
 
-        if (seq->lss_dev != NULL) {
-                lu_device_put(&seq->lss_dev->dd_lu_dev);
-                seq->lss_dev = NULL;
-        }
-
         EXIT;
 }
 EXPORT_SYMBOL(seq_server_fini);
