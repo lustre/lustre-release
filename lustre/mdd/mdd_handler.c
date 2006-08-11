@@ -519,13 +519,6 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         }
         /* XXX: llog cancel cookie? */
 
-        /*
-         * XXX: Hmmm... what is this? attr_get in attr_set?
-         */
-        /*
-        if (rc == 0)
-                rc = mdd_attr_get(ctxt, obj, ma);
-        */
         mdd_unlock(ctxt, mdo, DT_WRITE_LOCK);
         mdd_trans_stop(ctxt, mdd, handle);
 
