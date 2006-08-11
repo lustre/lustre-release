@@ -146,7 +146,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
                                      rr->rr_fid1);
         } else {
                 __u64 lockpart = MDS_INODELOCK_UPDATE;
-                if (attr->la_valid & (ATTR_MODE|ATTR_UID|ATTR_GID))
+                if (attr->la_valid & (LA_MODE|LA_UID|LA_GID))
                         lockpart |= MDS_INODELOCK_LOOKUP;
 
                 mo = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart);

@@ -133,6 +133,32 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         RETURN(0);
 }
 
+static __u64 mdt_attr_valid_xlate(__u64 in)
+{
+        __u64 out;
+
+        out = 0;
+        if (in & ATTR_MODE)
+                out |= LA_MODE;
+        if (in & ATTR_UID)
+                out |= LA_UID;
+        if (in & ATTR_GID)
+                out |= LA_GID;
+        if (in & ATTR_SIZE)
+                out |= LA_SIZE;
+        if (in & ATTR_ATIME)
+                out |= LA_ATIME;
+        if (in & ATTR_MTIME)
+                out |= LA_MTIME;
+        if (in & ATTR_CTIME)
+                out |= LA_CTIME;
+        in &= ~(ATTR_MODE|ATTR_UID|ATTR_GID|ATTR_SIZE|
+                ATTR_ATIME|ATTR_MTIME|ATTR_CTIME);
+        if (in != 0)
+                CERROR("Unknown attr bits: %#llx\n", in);
+        return out;
+}
+
 /* unpacking */
 static int mdt_setattr_unpack(struct mdt_thread_info *info)
 {
@@ -149,7 +175,7 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
                 RETURN(-EFAULT);
 
         rr->rr_fid1 = &rec->sa_fid;
-        la->la_valid = rec->sa_valid;
+        la->la_valid = mdt_attr_valid_xlate(rec->sa_valid);
         la->la_mode  = rec->sa_mode;
         la->la_uid   = rec->sa_uid;
         la->la_gid   = rec->sa_gid;
