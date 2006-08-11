@@ -76,6 +76,7 @@ struct osd_thread_info {
          * XXX temporary: fake file for body operations.
          */
         struct file         oti_file;
+        struct timespec     oti_time;
 #if OSD_DEBUG_LOCKS
         int                 oti_r_locks;
         int                 oti_w_locks;

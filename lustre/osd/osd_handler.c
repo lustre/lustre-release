@@ -199,8 +199,10 @@ static struct dt_key      *osd_it_key       (const struct lu_context *ctx,
                                              const struct dt_it *di);
 static struct dt_rec      *osd_it_rec       (const struct lu_context *ctx,
                                              const struct dt_it *di);
+static struct timespec    *osd_inode_time   (const struct lu_context *ctx,
+                                             struct inode *inode,
+                                             __u64 seconds);
 static journal_t          *osd_journal      (const struct osd_device *dev);
-
 
 static struct lu_device_type_operations osd_device_type_ops;
 static struct lu_device_type            osd_device_type;
@@ -494,7 +496,7 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
                          * XXX temporary stuff. Some abstraction layer should
                          * be used.
                          */
-                        
+
                         jh = journal_start(osd_journal(dev), p->tp_credits);
                         if (!IS_ERR(jh)) {
                                 oh->ot_handle = jh;
@@ -633,51 +635,60 @@ static int osd_attr_set(const struct lu_context *ctxt,
         return osd_inode_setattr(ctxt, obj->oo_inode, attr);
 }
 
+static struct timespec *osd_inode_time(const struct lu_context *ctx,
+                                       struct inode *inode, __u64 seconds)
+{
+        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct timespec        *t   = &oti->oti_time;
+
+        t->tv_sec  = seconds;
+        t->tv_nsec = 0;
+        *t = timespec_trunc(*t, get_sb_time_gran(inode->i_sb));
+        return t;
+}
+
 static int osd_inode_setattr(const struct lu_context *ctx,
                              struct inode *inode, const struct lu_attr *attr)
 {
-        struct osd_thread_info *info   = lu_context_key_get(ctx, &osd_key);
-        struct dentry          *dentry = &info->oti_dentry;
-        struct iattr           *iattr  = &info->oti_iattr;
-        int                     rc;
+        __u64 bits;
 
-        dentry->d_inode = inode;
-        if (attr->la_valid & ATTR_ATTR_FLAG) {  
-                /* this is ioctl */
-                rc = -ENOTTY;
-                if (inode->i_fop->ioctl)
-                        rc = inode->i_fop->ioctl(inode, NULL, EXT3_IOC_SETFLAGS,
-                                                (long)&attr->la_flags);
-                return rc;
+        bits = attr->la_valid;
+
+        LASSERT(!(bits & LA_TYPE)); /* Huh? You want too much. */
+
+        if (bits & LA_ATIME)
+                inode->i_atime  = *osd_inode_time(ctx, inode, attr->la_atime);
+        if (bits & LA_CTIME)
+                inode->i_atime  = *osd_inode_time(ctx, inode, attr->la_ctime);
+        if (bits & LA_MTIME)
+                inode->i_atime  = *osd_inode_time(ctx, inode, attr->la_mtime);
+        if (bits & LA_SIZE)
+                inode->i_size   = attr->la_size;
+        if (bits & LA_BLOCKS)
+                inode->i_blocks = attr->la_blocks;
+        if (bits & LA_MODE)
+                inode->i_mode   = (inode->i_mode & S_IFMT) |
+                        (attr->la_mode & ~S_IFMT);
+        if (bits & LA_UID)
+                inode->i_uid    = attr->la_uid;
+        if (bits & LA_GID)
+                inode->i_gid    = attr->la_gid;
+        if (bits & LA_NLINK)
+                inode->i_nlink  = attr->la_nlink;
+        if (bits & LA_RDEV)
+                inode->i_rdev   = attr->la_rdev;
+        if (bits & LA_FLAGS) {
+                /*
+                 * Horrible ext3 legacy. Flags are better to be handled in
+                 * mdd.
+                 */
+                struct ldiskfs_inode_info *li = LDISKFS_I(inode);
+
+                li->i_flags = (li->i_flags & ~LDISKFS_FL_USER_MODIFIABLE) |
+                        (attr->la_flags & LDISKFS_FL_USER_MODIFIABLE);
         }
-
-        iattr->ia_valid = attr->la_valid;
-        iattr->ia_mode  = attr->la_mode;
-        iattr->ia_uid   = attr->la_uid;
-        iattr->ia_gid   = attr->la_gid;
-        iattr->ia_size  = attr->la_size;
-        iattr->ia_attr_flags = attr->la_flags;
-        LTIME_S(iattr->ia_atime) = attr->la_atime;
-        LTIME_S(iattr->ia_mtime) = attr->la_mtime;
-        LTIME_S(iattr->ia_ctime) = attr->la_ctime;
-
-
-        /* TODO: handle ATTR_SIZE & truncate in the future */
-        //iattr->ia_valid &= ~ATTR_SIZE;
-
-        /* Don't allow setattr to change file type */
-        if (iattr->ia_valid & ATTR_MODE)
-                iattr->ia_mode = (inode->i_mode & S_IFMT) |
-                                 (iattr->ia_mode & ~S_IFMT);
-
-        if (inode->i_op->setattr) {
-                rc = inode->i_op->setattr(dentry, iattr);
-        } else {
-                rc = inode_change_ok(inode, iattr);
-                if (!rc)
-                        rc = inode_setattr(inode, iattr);
-        }
-        return rc;
+	mark_inode_dirty(inode);
+        return 0;
 }
 
 /*
