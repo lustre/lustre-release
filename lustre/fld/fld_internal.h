@@ -28,6 +28,12 @@
 #ifndef _FLD_INTERNAL_H
 #define _FLD_INTERNAL_H
 
+#include <lustre/lustre_idl.h>
+#include <dt_object.h>
+
+#include <libcfs/list.h>
+#include <libcfs/kp30.h>
+
 #include <linux/types.h>
 
 enum fld_op {
@@ -46,7 +52,8 @@ extern struct lu_fld_hash fld_hash[];
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
 int fld_index_init(struct lu_server_fld *fld,
-                   const struct lu_context *ctx);
+                   const struct lu_context *ctx,
+                   struct dt_device *dt);
 
 void fld_index_fini(struct lu_server_fld *fld,
                     const struct lu_context *ctx);
@@ -62,11 +69,12 @@ int fld_index_delete(struct lu_server_fld *fld,
 int fld_index_lookup(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
                      seqno_t seq, mdsno_t *mds);
-#endif
 
 #ifdef LPROCFS
 extern struct lprocfs_vars fld_server_proc_list[];
 extern struct lprocfs_vars fld_client_proc_list[];
+#endif
+
 #endif
 
 #endif

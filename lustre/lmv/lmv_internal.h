@@ -24,6 +24,15 @@
 
 #include <lustre/lustre_idl.h>
 
+#ifndef __KERNEL__
+/* XXX: dirty hack, needs to be fixed more clever way. */
+struct qstr {
+        const char *name;
+        size_t      len;
+        unsigned    hashval;
+};
+#endif
+
 #define LMV_MAX_TGT_COUNT 128
 
 #define lmv_init_lock(lmv)   down(&lmv->init_sem);

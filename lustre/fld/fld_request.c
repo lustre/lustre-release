@@ -318,7 +318,8 @@ void fld_client_fini(struct lu_client_fld *fld)
 
 #ifdef __KERNEL__
         if (fld->fld_cache != NULL) {
-                fld_cache_fini(fld->fld_cache);
+                if (!IS_ERR(fld->fld_cache))
+                        fld_cache_fini(fld->fld_cache);
                 fld->fld_cache = NULL;
         }
 #endif

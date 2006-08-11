@@ -528,7 +528,6 @@ static inline void intent_init(struct lookup_intent *it, int op, int flags)
         it->it_flags = flags;
 }
 
-
 struct dentry {
         int d_count;
 };

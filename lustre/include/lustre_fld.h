@@ -23,6 +23,12 @@
 #ifndef __LINUX_FLD_H
 #define __LINUX_FLD_H
 
+#include <lustre/lustre_idl.h>
+#include <dt_object.h>
+
+#include <libcfs/list.h>
+#include <libcfs/kp30.h>
+
 struct lu_client_fld;
 struct lu_server_fld;
 
@@ -59,14 +65,8 @@ struct lu_server_fld {
         /* pointer to started server service */
         struct ptlrpc_service   *fld_service;
 
-        /* device for access object index methods */
-        struct dt_device        *fld_dt;
-
         /* /fld file object device */
         struct dt_object        *fld_obj;
-
-        /* /fld file fid */
-        struct lu_fid            fld_fid;
 
         /* fld service name in form "fld-MDTXXX" */
         char                     fld_name[80];

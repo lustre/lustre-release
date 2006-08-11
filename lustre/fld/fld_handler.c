@@ -359,13 +359,10 @@ int fld_server_init(struct lu_server_fld *fld,
         };
         ENTRY;
 
-        fld->fld_dt = dt;
-        lu_device_get(&dt->dd_lu_dev);
-
         snprintf(fld->fld_name, sizeof(fld->fld_name),
                  "%s-srv-%s", LUSTRE_FLD_NAME, uuid);
 
-        rc = fld_index_init(fld, ctx);
+        rc = fld_index_init(fld, ctx, dt);
         if (rc)
                 GOTO(out, rc);
 
@@ -405,11 +402,8 @@ void fld_server_fini(struct lu_server_fld *fld,
                 fld->fld_service = NULL;
         }
 
-        if (fld->fld_dt != NULL) {
-                lu_device_put(&fld->fld_dt->dd_lu_dev);
-                fld_index_fini(fld, ctx);
-                fld->fld_dt = NULL;
-        }
+        fld_index_fini(fld, ctx);
+        
         EXIT;
 }
 EXPORT_SYMBOL(fld_server_fini);

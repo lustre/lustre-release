@@ -26,12 +26,15 @@
 #ifndef _FID_INTERNAL_H
 #define _FID_INTERNAL_H
 
-#define SEQ_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
+#include <lustre/lustre_idl.h>
+#include <dt_object.h>
 
-#ifdef LPROCFS
-extern struct lprocfs_vars seq_server_proc_list[];
-extern struct lprocfs_vars seq_client_proc_list[];
-#endif
+#include <libcfs/list.h>
+#include <libcfs/kp30.h>
+
+#include <linux/types.h>
+
+#define SEQ_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
 #ifdef __KERNEL__
 struct seq_store_record {
@@ -49,7 +52,8 @@ struct seq_thread_info {
 extern struct lu_context_key seq_thread_key;
 
 int seq_store_init(struct lu_server_seq *seq,
-                   const struct lu_context *ctx);
+                   const struct lu_context *ctx,
+                   struct dt_device *dt);
 
 void seq_store_fini(struct lu_server_seq *seq,
                     const struct lu_context *ctx);
@@ -59,6 +63,12 @@ int seq_store_write(struct lu_server_seq *seq,
 
 int seq_store_read(struct lu_server_seq *seq,
                    const struct lu_context *ctx);
+
+#ifdef LPROCFS
+extern struct lprocfs_vars seq_server_proc_list[];
+extern struct lprocfs_vars seq_client_proc_list[];
+#endif
+
 #endif
 
 #endif

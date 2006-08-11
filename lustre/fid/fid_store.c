@@ -57,13 +57,14 @@ int seq_store_write(struct lu_server_seq *seq,
                     const struct lu_context *ctx)
 {
         struct dt_object *dt_obj = seq->lss_obj;
-        struct dt_device *dt_dev = seq->lss_dev;
         struct seq_thread_info *info;
+        struct dt_device *dt_dev;
         struct thandle *th;
         loff_t pos = 0;
 	int rc;
 	ENTRY;
 
+        dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
         info = lu_context_key_get(ctx, &seq_thread_key);
         LASSERT(info != NULL);
 
@@ -130,9 +131,9 @@ int seq_store_read(struct lu_server_seq *seq,
 }
 
 int seq_store_init(struct lu_server_seq *seq,
-                   const struct lu_context *ctx)
+                   const struct lu_context *ctx,
+                   struct dt_device *dt)
 {
-        struct dt_device *dt = seq->lss_dev;
         struct dt_object *dt_obj;
         struct lu_fid fid;
         int rc;
@@ -158,10 +159,13 @@ void seq_store_fini(struct lu_server_seq *seq,
                     const struct lu_context *ctx)
 {
         ENTRY;
+
         if (seq->lss_obj != NULL) {
-                lu_object_put(ctx, &seq->lss_obj->do_lu);
+                if (!IS_ERR(seq->lss_obj))
+                        lu_object_put(ctx, &seq->lss_obj->do_lu);
                 seq->lss_obj = NULL;
         }
+        
         EXIT;
 }
 #endif

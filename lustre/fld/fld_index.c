@@ -133,22 +133,24 @@ int fld_index_create(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
                      seqno_t seq, mdsno_t mds)
 {
-        struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
+        struct dt_device *dt_dev;
         struct txn_param txn;
         struct thandle *th;
         int rc;
         ENTRY;
 
+        dt_dev = lu2dt_dev(fld->fld_obj->do_lu.lo_dev);
+        
         /* stub here, will fix it later */
         txn.tp_credits = FLD_TXN_INDEX_INSERT_CREDITS;
 
-        th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
+        th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &txn);
         if (!IS_ERR(th)) {
                 rc = dt_obj->do_index_ops->dio_insert(ctx, dt_obj,
                                                       fld_rec(ctx, mds),
                                                       fld_key(ctx, seq), th);
-                dt->dd_ops->dt_trans_stop(ctx, th);
+                dt_dev->dd_ops->dt_trans_stop(ctx, th);
         } else
                 rc = PTR_ERR(th);
         RETURN(rc);
@@ -158,19 +160,20 @@ int fld_index_delete(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
                      seqno_t seq)
 {
-        struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj = fld->fld_obj;
+        struct dt_device *dt_dev;
         struct txn_param txn;
         struct thandle *th;
         int rc;
         ENTRY;
 
+        dt_dev = lu2dt_dev(fld->fld_obj->do_lu.lo_dev);
         txn.tp_credits = FLD_TXN_INDEX_DELETE_CREDITS;
-        th = dt->dd_ops->dt_trans_start(ctx, dt, &txn);
+        th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &txn);
         if (!IS_ERR(th)) {
                 rc = dt_obj->do_index_ops->dio_delete(ctx, dt_obj,
                                                       fld_key(ctx, seq), th);
-                dt->dd_ops->dt_trans_stop(ctx, th);
+                dt_dev->dd_ops->dt_trans_stop(ctx, th);
         } else
                 rc = PTR_ERR(th);
         RETURN(rc);
@@ -193,10 +196,11 @@ int fld_index_lookup(struct lu_server_fld *fld,
 }
 
 int fld_index_init(struct lu_server_fld *fld,
-                   const struct lu_context *ctx)
+                   const struct lu_context *ctx,
+                   struct dt_device *dt)
 {
-        struct dt_device *dt = fld->fld_dt;
         struct dt_object *dt_obj;
+        struct lu_fid fid;
         int rc;
         ENTRY;
 
@@ -213,7 +217,7 @@ int fld_index_init(struct lu_server_fld *fld,
          */
         LASSERT(fld->fld_service == NULL);
 
-        dt_obj = dt_store_open(ctx, dt, fld_index_name, &fld->fld_fid);
+        dt_obj = dt_store_open(ctx, dt, fld_index_name, &fid);
         if (!IS_ERR(dt_obj)) {
                 fld->fld_obj = dt_obj;
                 rc = dt_obj->do_ops->do_index_try(ctx, dt_obj,
@@ -236,7 +240,8 @@ void fld_index_fini(struct lu_server_fld *fld,
 {
         ENTRY;
         if (fld->fld_obj != NULL) {
-                lu_object_put(ctx, &fld->fld_obj->do_lu);
+                if (!IS_ERR(fld->fld_obj))
+                        lu_object_put(ctx, &fld->fld_obj->do_lu);
                 fld->fld_obj = NULL;
         }
         if (fld_key_registered > 0) {

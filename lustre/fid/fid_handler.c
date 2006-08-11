@@ -497,7 +497,6 @@ int seq_server_init(struct lu_server_seq *seq,
 	LASSERT(dev != NULL);
         LASSERT(uuid != NULL);
 
-        seq->lss_dev = dev;
         seq->lss_cli = NULL;
         seq->lss_type = type;
         sema_init(&seq->lss_sem, 1);
@@ -512,9 +511,7 @@ int seq_server_init(struct lu_server_seq *seq,
         seq->lss_space = LUSTRE_SEQ_SPACE_RANGE;
         seq->lss_super = LUSTRE_SEQ_ZERO_RANGE;
 
-        lu_device_get(&seq->lss_dev->dd_lu_dev);
-
-        rc = seq_store_init(seq, ctx);
+        rc = seq_store_init(seq, ctx, dev);
         if (rc)
                 GOTO(out, rc);
 
