@@ -162,7 +162,6 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr)
                 CERROR("Unknown attr bits: %#llx\n", in);
         return out;
 }
-
 /* unpacking */
 static int mdt_setattr_unpack(struct mdt_thread_info *info)
 {
@@ -228,6 +227,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 attr->la_ctime = rec->cr_time;
                 attr->la_mtime = rec->cr_time;
                 attr->la_atime = rec->cr_time;
+                attr->la_valid = LA_MODE | LA_RDEV | LA_UID | LA_GID |
+                                 LA_CTIME | LA_MTIME | LA_ATIME; 
                 info->mti_spec.sp_cr_flags = rec->cr_flags;
 
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
@@ -264,7 +265,7 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
                 rr->rr_fid2 = &rec->lk_fid2;
                 attr->la_ctime = rec->lk_time;
                 attr->la_mtime = rec->lk_time;
-
+                attr->la_valid = LA_UID | LA_GID | LA_CTIME | LA_MTIME;
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (rr->rr_name == NULL)
                         result = -EFAULT;
@@ -292,6 +293,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
                 attr->la_mtime = rec->ul_time;
                 attr->la_mode  = rec->ul_mode;
 
+                attr->la_valid = LA_UID | LA_GID | LA_CTIME | LA_MTIME | LA_MODE;
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (rr->rr_name == NULL)
                         result = -EFAULT;
@@ -317,7 +319,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
                 rr->rr_fid2 = &rec->rn_fid2;
                 attr->la_ctime = rec->rn_time;
                 attr->la_mtime = rec->rn_time;
-
+                attr->la_valid = LA_UID | LA_GID | LA_CTIME | LA_MTIME;
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 rr->rr_tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
                 if (rr->rr_name == NULL || rr->rr_tgt == NULL)
@@ -347,6 +349,8 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
                 attr->la_ctime = rec->cr_time;
                 attr->la_mtime = rec->cr_time;
                 attr->la_atime = rec->cr_time;
+                attr->la_valid = LA_MODE | LA_RDEV | LA_UID | LA_GID | LA_CTIME
+                                 | LA_MTIME | LA_ATIME;
                 info->mti_spec.sp_cr_flags = rec->cr_flags;
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (rr->rr_name == NULL)

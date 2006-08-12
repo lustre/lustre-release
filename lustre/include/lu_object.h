@@ -334,18 +334,20 @@ enum lu_object_flags {
  */
 /* valid flags */
 enum la_valid {
-        LA_ATIME  = OBD_MD_FLATIME,
-        LA_MTIME  = OBD_MD_FLMTIME,
-        LA_CTIME  = OBD_MD_FLCTIME,
-        LA_SIZE   = OBD_MD_FLSIZE,
-        LA_BLOCKS = OBD_MD_FLBLOCKS,
-        LA_MODE   = OBD_MD_FLMODE,
-        LA_TYPE   = OBD_MD_FLTYPE,
-        LA_UID    = OBD_MD_FLUID,
-        LA_GID    = OBD_MD_FLGID,
-        LA_FLAGS  = OBD_MD_FLFLAGS,
-        LA_NLINK  = OBD_MD_FLNLINK,
-        LA_RDEV   = OBD_MD_FLRDEV,
+        /*mapped ATTR flag*/
+        LA_ATIME = 1 << 0,
+        LA_MTIME = 1 << 1,
+        LA_CTIME = 1 << 2,
+        LA_SIZE  = 1 << 3,
+        LA_MODE  = 1 << 4,
+        LA_UID   = 1 << 5,
+        LA_GID   = 1 << 6,
+        LA_BLOCKS = 1 << 7,
+        LA_TYPE   = 1 << 8,
+        LA_FLAGS  = 1 << 9,
+        LA_NLINK  = 1 << 10,
+        LA_RDEV   = 1 << 11,
+        LA_BLKSIZE = 1 << 12,
 };
 
 struct lu_attr {
@@ -360,6 +362,8 @@ struct lu_attr {
         __u32          la_flags;  /* object flags */
         __u32          la_nlink;  /* number of persistent references to this
                                    * object */
+        __u32          la_blksize; /* blk size of the object*/
+
         __u32          la_rdev;   /* real device */
         __u64          la_valid;  /* valid bits */
 };

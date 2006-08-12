@@ -171,14 +171,14 @@ static int mdt_statfs(struct mdt_thread_info *info)
 void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
                         const struct lu_fid *fid)
 {
+        /*XXX should pack the reply body according to lu_valid*/
         b->valid |= OBD_MD_FLCTIME | OBD_MD_FLUID   |
                     OBD_MD_FLGID   | OBD_MD_FLTYPE  |
                     OBD_MD_FLMODE  | OBD_MD_FLNLINK | OBD_MD_FLFLAGS |
                     OBD_MD_FLATIME | OBD_MD_FLMTIME ; /* added by huanghua */
 
         if (!S_ISREG(attr->la_mode))
-                b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLATIME |
-                            OBD_MD_FLMTIME| OBD_MD_FLRDEV;
+                b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLRDEV;
 
         b->atime      = attr->la_atime;
         b->mtime      = attr->la_mtime;

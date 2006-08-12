@@ -297,18 +297,28 @@ int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
 
 int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
                    struct md_object *child, struct lov_mds_md *lmmp,
-                   int lmm_size, int mode, struct thandle *handle)
+                   int lmm_size, struct lu_attr *la, struct thandle *handle)
 {
+        struct lu_attr *tmp_la = &mdd_ctx_info(ctxt)->mti_la;
         int rc = 0;
         ENTRY;
 
-        if (S_ISREG(mode) && lmm_size > 0) {
+        LASSERT(la->la_valid & LA_MODE);
+        if (S_ISREG(la->la_mode) && lmm_size > 0) {
                 LASSERT(lmmp != NULL);
                 rc = mdd_xattr_set_txn(ctxt, child, lmmp, lmm_size,
                                        MDS_LOV_MD_NAME, 0, handle);
-                if (rc)
+                if (rc) {
                         CERROR("error on set stripe info: rc = %d\n", rc);
-        } else  if (S_ISDIR(mode)) {
+                        RETURN(rc);
+                }
+                if (la->la_valid & LA_BLKSIZE) {
+                        tmp_la->la_valid = LA_BLKSIZE;
+                        tmp_la->la_blksize = la->la_blksize;
+                        rc = mdd_attr_set_internal(ctxt, md2mdd_obj(child), tmp_la,
+                                              handle);
+                }
+        } else  if (S_ISDIR(la->la_mode)) {
                 struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
                 int size = sizeof(lmm);
                 rc = mdd_get_md(ctxt, pobj, &lmm, &size);
@@ -460,7 +470,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
          *The Nonzero(truncated) size should tell ost. since size 
          *attr is in charged by OST.
          */
-        if (la->la_size) {
+        if (la->la_size && la->la_valid & LA_SIZE) {
                 oa->o_size = la->la_size;
                 obdo_from_la(oa, la, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
@@ -484,8 +494,9 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         GOTO(out_oa, rc);
                 }
         }
-        /*set blksize after create data object*/
-        la->la_valid |= OBD_MD_FLBLKSZ | OBD_MD_FLEASIZE;
+        /*blksize should be changed after create data object*/
+        la->la_valid |= LA_BLKSIZE;
+        la->la_blksize = oa->o_blksize;
 
         rc = obd_packmd(lov_exp, lmm, lsm);
         if (rc < 0) {
