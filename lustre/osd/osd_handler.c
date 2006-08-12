@@ -219,7 +219,6 @@ static struct dt_index_operations       osd_index_compat_ops;
 
 struct osd_thandle {
         struct thandle          ot_super;
-        int                     ot_ref;
         handle_t               *ot_handle;
         struct journal_callback ot_jcb;
 };
@@ -438,27 +437,6 @@ static int osd_param_is_sane(const struct osd_device *dev,
         return param->tp_credits <= osd_journal(dev)->j_max_transaction_buffers;
 }
 
-static inline void osd_thandle_get(struct osd_thandle *oh)
-{
-        LASSERT(oh->ot_ref > 0);
-        oh->ot_ref ++;
-}
-
-static inline void osd_thandle_put(struct osd_thandle *oh)
-{
-        LASSERT(oh->ot_ref > 0);
-        if (-- oh->ot_ref == 0) {
-                struct thandle *th = &oh->ot_super;
-
-                if (th->th_dev != NULL) {
-                        lu_device_put(&th->th_dev->dd_lu_dev);
-                        th->th_dev = NULL;
-                }
-                lu_context_fini(&th->th_ctx);
-                OBD_FREE_PTR(oh);
-        }
-}
-
 static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
 {
         struct osd_thandle *oh = container_of0(jcb, struct osd_thandle, ot_jcb);
@@ -466,7 +444,13 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
 
         /* there is no thread context available */
         dt_txn_hook_commit(&th->th_ctx, th->th_dev, th);
-        osd_thandle_put(oh);
+
+        if (th->th_dev != NULL) {
+                lu_device_put(&th->th_dev->dd_lu_dev);
+                th->th_dev = NULL;
+        }
+        lu_context_fini(&th->th_ctx);
+        OBD_FREE_PTR(oh);
 }
 
 static struct thandle *osd_trans_start(const struct lu_context *ctx,
@@ -503,7 +487,6 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
                                 /* hmm, since oh init and start are done together
                                  * the ref starts from 2
                                  */
-                                oh->ot_ref = 2;
                                 th = &oh->ot_super;
                                 th->th_dev = d;
                                 lu_device_get(&d->dd_lu_dev);
@@ -539,17 +522,20 @@ static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
 
         oh = container_of0(th, struct osd_thandle, ot_super);
         if (oh->ot_handle != NULL) {
+                handle_t *hdl = oh->ot_handle;
                 /*
                  * XXX temporary stuff. Some abstraction layer should be used.
                  */
                 result = dt_txn_hook_stop(ctx, th->th_dev, th);
                 if (result != 0)
                         CERROR("Failure in transaction hook: %d\n", result);
-                result = journal_stop(oh->ot_handle);
+                
+                /**/
+                oh->ot_handle = NULL;
+                result = journal_stop(hdl);
                 if (result != 0)
                         CERROR("Failure to stop transaction: %d\n", result);
-                oh->ot_handle = NULL;
-                osd_thandle_put(oh);
+
                 LASSERT(oti->oti_txns == 1);
                 LASSERT(oti->oti_r_locks == 0);
                 LASSERT(oti->oti_w_locks == 0);
