@@ -151,6 +151,69 @@ static inline void mdd_object_put(const struct lu_context *ctxt,
         lu_object_put(ctxt, &o->mod_obj.mo_lu);
 }
 
+static umode_t mdd_object_type(const struct mdd_object *obj)
+{
+        return lu_object_attr(&obj->mod_obj.mo_lu);
+}
+
+static void mdd_set_dead_obj(struct mdd_object *obj)
+{
+        if (obj)
+                obj->mod_flags |= DEAD_OBJ;
+}
+
+static int mdd_is_dead_obj(struct mdd_object *obj)
+{
+        if (obj && obj->mod_flags & DEAD_OBJ)
+                return 1;
+        return 0;
+}
+
+/*Check whether it may create the cobj under the pobj*/ 
+static int mdd_may_create(const struct lu_context *ctxt, 
+                          struct mdd_object *pobj, struct mdd_object *cobj)
+{
+        ENTRY;
+        if (cobj && lu_object_exists(ctxt, &cobj->mod_obj.mo_lu))
+                RETURN(-EEXIST);
+
+        if (mdd_is_dead_obj(pobj))
+                RETURN(-ENOENT);
+
+        /*check pobj may create or not*/
+        RETURN(0);
+}
+/*Check whether it may delete the cobj under the pobj*/
+static int mdd_may_delete(const struct lu_context *ctxt,
+                          struct mdd_object *pobj, struct mdd_object *cobj,
+                          int is_dir)
+{
+        struct mdd_device *mdd = mdo2mdd(&pobj->mod_obj);
+        int rc = 0;
+        ENTRY;
+        
+        LASSERT(cobj && pobj);
+
+        if (!lu_object_exists(ctxt, &cobj->mod_obj.mo_lu))
+                RETURN(-ENOENT);
+      
+        /*TODO:check append flags*/
+        if (is_dir) {
+                if (!S_ISDIR(mdd_object_type(cobj)))
+                        RETURN(-ENOTDIR);
+
+                if (lu_fid_eq(mdo2fid(cobj), &mdd->mdd_root_fid))
+                        RETURN(-EBUSY);
+                
+        } else if (S_ISDIR(mdd_object_type(cobj)))
+                        RETURN(-EISDIR);
+                
+        if (mdd_is_dead_obj(pobj))
+                RETURN(-ENOENT);
+        
+        RETURN(rc);
+}
+
 static int mdd_attr_get(const struct lu_context *ctxt,
                         struct md_object *obj, struct md_attr *ma)
 {
@@ -628,41 +691,18 @@ static int __mdd_index_delete(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
-/*Check whether it may create the cobj under the pobj*/
-static int mdd_may_create(const struct lu_context *ctxt,
-                          struct mdd_object *pobj, struct mdd_object *cobj)
+static int mdd_link_sanity_check(const struct lu_context *ctxt, 
+                                 struct mdd_object *tgt_obj,
+                                 struct mdd_object *src_obj)
 {
-        ENTRY;
-        if (cobj && lu_object_exists(ctxt, &cobj->mod_obj.mo_lu))
-                RETURN(-EEXIST);
+        int rc;
+        
+        rc = mdd_may_create(ctxt, tgt_obj, NULL);
+        if (rc)
+                RETURN(rc);
+        if (S_ISDIR(mdd_object_type(src_obj)))
+                RETURN(-EPERM);
 
-        /*check pobj may create or not*/
-        RETURN(0);
-}
-/*Check whether it may delete the cobj under the pobj*/
-static int mdd_may_delete(const struct lu_context *ctxt,
-                          struct mdd_object *pobj, struct mdd_object *cobj,
-                          umode_t mode, int is_dir)
-{
-        struct mdd_device *mdd = mdo2mdd(&pobj->mod_obj);
-        int rc = 0;
-
-        ENTRY;
-        if (!cobj || !lu_object_exists(ctxt, &cobj->mod_obj.mo_lu))
-                RETURN(-ENOENT);
-
-        /*TODO:check append flags*/
-        if (is_dir) {
-                if (!S_ISDIR(mode))
-                        RETURN(-ENOTDIR);
-
-                if (lu_fid_eq(mdo2fid(cobj), &mdd->mdd_root_fid))
-                        RETURN(-EBUSY);
-
-        } else if (S_ISDIR(mode))
-                        RETURN(-EISDIR);
-
-        /*DEAD dir checking*/
         RETURN(rc);
 }
 
@@ -683,15 +723,16 @@ static int mdd_link(const struct lu_context *ctxt, struct md_object *tgt_obj,
 
         mdd_lock2(ctxt, mdd_tobj, mdd_sobj);
 
-        /*
-         * XXX Check that link can be added to the child.
-         */
-
+        rc = mdd_link_sanity_check(ctxt, mdd_tobj, mdd_sobj);
+        if (rc)
+                GOTO(out, rc);
+        
         rc = __mdd_index_insert(ctxt, mdd_tobj, lu_object_fid(&src_obj->mo_lu),
                                 name, handle);
         if (rc == 0)
                 __mdd_ref_add(ctxt, mdd_sobj, handle);
 
+out:
         mdd_unlock2(ctxt, mdd_tobj, mdd_sobj);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
@@ -740,6 +781,29 @@ static int mdd_dir_is_empty(const struct lu_context *ctx,
         return result;
 }
 
+static int mdd_unlink_sanity_check(const struct lu_context *ctxt,
+                                   struct mdd_object *pobj,
+                                   struct mdd_object *cobj,
+                                   struct md_attr *ma)
+{
+        struct dt_object  *dt_cobj  = mdd_object_child(cobj);
+        int rc = 0;
+        ENTRY;
+
+        rc = mdd_may_delete(ctxt, pobj, cobj, S_ISDIR(ma->ma_attr.la_mode));
+        if (rc)
+                RETURN(rc);
+
+        if (S_ISDIR(mdd_object_type(cobj)) && 
+                        dt_try_as_dir(ctxt, dt_cobj)) {
+                rc = mdd_dir_is_empty(ctxt, cobj);
+                if (rc != 0)
+                        RETURN(rc);
+        }
+        
+        RETURN(rc);
+}
+
 static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
                       struct md_object *cobj, const char *name,
                       struct md_attr *ma)
@@ -747,16 +811,9 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *mdd_cobj = md2mdd_obj(cobj);
-        struct dt_object  *dt_cobj  = mdd_object_child(mdd_cobj);
         struct thandle    *handle;
         int rc;
         ENTRY;
-
-        if (S_ISDIR(lu_object_attr(&cobj->mo_lu))) {
-                if (!S_ISDIR(ma->ma_attr.la_mode))
-                        RETURN(-EISDIR);
-        } else if (S_ISDIR(ma->ma_attr.la_mode))
-                RETURN(-ENOTDIR);
 
         mdd_txn_param_build(ctxt, &MDD_TXN_UNLINK);
         handle = mdd_trans_start(ctxt, mdd);
@@ -765,13 +822,10 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
 
         mdd_lock2(ctxt, mdd_pobj, mdd_cobj);
 
-        /* rmdir checks */
-        if (S_ISDIR(lu_object_attr(&cobj->mo_lu)) &&
-                        dt_try_as_dir(ctxt, dt_cobj)) {
-                rc = mdd_dir_is_empty(ctxt, mdd_cobj);
-                if (rc != 0)
-                        GOTO(cleanup, rc);
-        }
+        rc = mdd_unlink_sanity_check(ctxt, mdd_pobj, mdd_cobj, ma);
+        if (rc)
+                GOTO(cleanup, rc);
+
 
         rc = __mdd_index_delete(ctxt, mdd_pobj, name, handle);
         if (rc)
@@ -786,6 +840,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         }
         mdd_attr_get(ctxt, cobj, ma);
 
+        mdd_set_dead_obj(mdd_cobj);
 #if 0
         /*This should be moved to handle last unlink. wait open
          * orphan prototype finished*/
@@ -804,11 +859,7 @@ static int mdd_parent_fid(const struct lu_context *ctxt,
                           struct mdd_object *obj,
                           struct lu_fid *fid)
 {
-        int rc = 0;
-
-        rc = mdd_lookup(ctxt, &obj->mod_obj, dotdot, fid);
-
-        return rc;
+        return mdd_lookup(ctxt, &obj->mod_obj, dotdot, fid);
 }
 
 /*
@@ -868,16 +919,14 @@ static int mdd_rename_lock(const struct lu_context *ctxt,
                 mdd_lock2(ctxt, tgt_pobj, src_pobj);
                 RETURN(0);
         }
+
         if (!mdd_is_parent(ctxt, mdd, src_pobj, tgt_pobj)) {
                 mdd_lock2(ctxt, tgt_pobj, src_pobj);
                 RETURN(0);
         }
-        if (!mdd_is_parent(ctxt, mdd, tgt_pobj, src_pobj)) {
-                mdd_lock2(ctxt, src_pobj, tgt_pobj);
-                RETURN(0);
-        }
 
         mdd_lock2(ctxt, src_pobj, tgt_pobj);
+        
         RETURN(0);
 }
 
@@ -890,49 +939,40 @@ static void mdd_rename_unlock(const struct lu_context *ctxt,
                 mdd_unlock(ctxt, tgt_pobj, DT_WRITE_LOCK);
 }
 
-static umode_t mdd_object_type(const struct mdd_object *obj)
-{
-        return lu_object_attr(&obj->mod_obj.mo_lu);
-}
-
 static int mdd_rename_sanity_check (const struct lu_context *ctxt,
-                                    struct md_object *src_pobj,
-                                    struct md_object *tgt_pobj,
-                                    const struct lu_fid *lf,
-                                    struct md_object *tobj)
+                                    struct mdd_object *src_pobj,
+                                    struct mdd_object *tgt_pobj,
+                                    struct mdd_object *sobj,
+                                    struct mdd_object *tobj)
 {
-        struct mdd_device *mdd =mdo2mdd(src_pobj);
-        struct mdd_object *sobj = mdd_object_find(ctxt, mdd, lf);
+        struct mdd_device *mdd =mdo2mdd(&src_pobj->mod_obj);
         int rc = 0, src_is_dir, tgt_is_dir;
         ENTRY;
 
         src_is_dir = S_ISDIR(mdd_object_type(sobj));
-        rc = mdd_may_delete(ctxt, md2mdd_obj(src_pobj), sobj,
-                            mdd_object_type(sobj), src_is_dir);
+        rc = mdd_may_delete(ctxt, src_pobj, sobj, src_is_dir);
         if (rc)
                 GOTO(out, rc);
+
         if (!tobj) {
-                rc = mdd_may_create(ctxt, md2mdd_obj(tgt_pobj), NULL);
+                rc = mdd_may_create(ctxt, tgt_pobj, NULL);
                 if (rc)
                         GOTO(out, rc);
-                                GOTO(out, rc);
+                if (!mdd_is_parent(ctxt, mdd, tgt_pobj, sobj))
+                        GOTO(out, rc = -EINVAL);
+                GOTO(out, rc);
         }
-        if (lu_fid_eq(mdo2fid(md2mdd_obj(tobj)), &mdd->mdd_root_fid) ||
-            lu_fid_eq(mdo2fid(sobj), &mdd->mdd_root_fid))
-                GOTO(out, rc = -EBUSY);
-
-        rc = mdd_may_delete(ctxt, md2mdd_obj(tgt_pobj),md2mdd_obj(tobj),
-                            mdd_object_type(md2mdd_obj(tobj)), src_is_dir);
+ 
+        /* source should not be ancestor of target */
+        if (!mdd_is_parent(ctxt, mdd, tobj, sobj))
+                GOTO(out, rc = -EINVAL);
+       
+        rc = mdd_may_delete(ctxt, tgt_pobj, tobj, src_is_dir);
         if (rc)
                 GOTO(out, rc);
 
-        /* source should not be ancestor of target */
-        if (!mdd_is_parent(ctxt, mdd, md2mdd_obj(tgt_pobj),
-                                md2mdd_obj(src_pobj)))
-                GOTO(out, rc = -EINVAL);
-
-        tgt_is_dir = S_ISDIR(mdd_object_type(md2mdd_obj(tobj)));
-        if (tgt_is_dir && mdd_dir_is_empty(ctxt, md2mdd_obj(tobj)))
+        tgt_is_dir = S_ISDIR(mdd_object_type(tobj));
+        if (tgt_is_dir && mdd_dir_is_empty(ctxt, tobj))
                 GOTO(out, rc = -ENOTEMPTY);
 out:
         mdd_object_put(ctxt, sobj);
@@ -942,19 +982,25 @@ out:
 static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                       struct md_object *tgt_pobj, const struct lu_fid *lf,
                       const char *sname, struct md_object *tobj,
-                      const char *tname)
+                      const char *tname, struct md_attr *ma)
 {
         struct mdd_device *mdd = mdo2mdd(src_pobj);
         struct mdd_object *mdd_spobj = md2mdd_obj(src_pobj);
         struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
+        struct mdd_object *mdd_sobj = mdd_object_find(ctxt, mdd, lf);
         struct mdd_object *mdd_tobj = NULL;
         struct thandle *handle;
         int rc, locked = 0;
         ENTRY;
 
-        rc = mdd_rename_sanity_check(ctxt, src_pobj, tgt_pobj, lf, tobj);
+        if (tobj)
+                mdd_tobj = md2mdd_obj(tobj);
+
+        rc = mdd_rename_sanity_check(ctxt, mdd_spobj, mdd_tpobj,
+                                     mdd_sobj, mdd_tobj);
         if (rc)
-                RETURN(rc);
+                GOTO(cleanup, rc);
+
         mdd_txn_param_build(ctxt, &MDD_TXN_RENAME);
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
@@ -965,15 +1011,16 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         if (rc)
                 GOTO(cleanup, rc);
         locked = 1;
-        if (tobj)
-                mdd_tobj = md2mdd_obj(tobj);
+
 
         rc = __mdd_index_delete(ctxt, mdd_spobj, sname, handle);
         if (rc)
                 GOTO(cleanup, rc);
-        /*FIXME: no sobj now, we should check sobj type, if it is dir,
-         * the nlink of its parent should be dec
-         */
+
+        /*if sobj is dir, its parent object nlink should be dec too*/
+        if (S_ISDIR(mdd_object_type(mdd_sobj))) 
+                __mdd_ref_del(ctxt, mdd_spobj, handle);
+
         if (tobj) {
                 rc = __mdd_index_delete(ctxt, mdd_tpobj, tname, handle);
                 if (rc)
@@ -988,11 +1035,11 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                 __mdd_ref_del(ctxt, mdd_tobj, handle);
                 if (S_ISDIR(mdd_object_type(mdd_tobj)))
                         __mdd_ref_del(ctxt, mdd_tpobj, handle);
-                /* XXX: mdd_attr_get(ctxt, tobj, ma); needed here */
+                else 
+                        rc = mdd_attr_get(ctxt, tobj, ma);
+                mdd_set_dead_obj(mdd_tobj);
         }
-
 cleanup:
-       /*FIXME: should we do error handling here?*/
         if (locked)
                 mdd_rename_unlock(ctxt, mdd_spobj, mdd_tpobj);
         mdd_trans_stop(ctxt, mdd, handle);
@@ -1009,6 +1056,8 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
         int rc;
         ENTRY;
 
+        if (mdd_is_dead_obj(mdo))
+                RETURN(-ESTALE);
         mdd_lock(ctxt, mdo, DT_READ_LOCK);
         if (S_ISDIR(mdd_object_type(mdo)) && dt_try_as_dir(ctxt, dir))
                 rc = dir->do_index_ops->dio_lookup(ctxt, dir, rec, key);
@@ -1092,9 +1141,6 @@ static int mdd_create_data(const struct lu_context *ctxt,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        /*
-         * XXX: should take transaction handle.
-         */
         rc = mdd_lov_create(ctxt, mdd, mdo, son, &lmm, &lmm_size, spec, attr);
         if (rc == 0) {
                 rc = mdd_lov_set_md(ctxt, pobj, cobj, lmm,
@@ -1119,6 +1165,8 @@ static int mdd_create_sanity_check(const struct lu_context *ctxt,
 
         ENTRY;
         /* EEXIST check */
+        if (mdd_is_dead_obj(md2mdd_obj(pobj)))
+                RETURN(-ENOENT);
         rc = mdd_lookup(ctxt, pobj, name, fid);
         if (rc != -ENOENT) {
                 rc = rc ? rc : -EEXIST;
@@ -1393,6 +1441,7 @@ static int mdd_rename_tgt(const struct lu_context *ctxt, struct md_object *pobj,
 
         mdd_lock2(ctxt, mdd_tpobj, mdd_tobj);
 
+        /*TODO rename sanity checking*/
         if (tobj) {
                 rc = __mdd_index_delete(ctxt, mdd_tpobj, name, handle);
                 if (rc)
@@ -1406,7 +1455,6 @@ static int mdd_rename_tgt(const struct lu_context *ctxt, struct md_object *pobj,
         if (tobj && lu_object_exists(ctxt, &tobj->mo_lu))
                 __mdd_ref_del(ctxt, mdd_tobj, handle);
 cleanup:
-       /*FIXME: should we do error handling here?*/
         mdd_unlock2(ctxt, mdd_tpobj, mdd_tobj);
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);

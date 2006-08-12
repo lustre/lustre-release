@@ -163,6 +163,10 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         if (rc != 0)
                 GOTO(out_unlock, rc);
 
+        rc = mo_attr_get(info->mti_ctxt, next, &info->mti_attr);
+        if (rc != 0)
+                GOTO(out_unlock, rc);
+
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         mdt_pack_attr2body(repbody, attr, mdt_object_fid(mo));
 
@@ -421,6 +425,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule      *pill = &info->mti_pill;
         struct ptlrpc_request   *req = mdt_info_req(info);
+        struct md_attr          *ma = &info->mti_attr;
         struct mdt_object       *msrcdir;
         struct mdt_object       *mtgtdir;
         struct mdt_object       *mold;
@@ -447,6 +452,11 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                 RETURN(mdt_reint_rename_tgt(info));
         }
 
+        /*pack reply*/
+        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
+                             info->mti_mdt->mdt_max_mdsize);
+        req_capsule_set_size(&info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
+                             info->mti_mdt->mdt_max_cookiesize);
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
                 RETURN(rc);
@@ -514,13 +524,24 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         }
 
         /* step 5: dome some checking ...*/
-
         /* step 6: rename it */
+        ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
+        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                                               &RMF_MDT_MD, RCL_SERVER);
+
+        ma->ma_cookie = req_capsule_server_get(&info->mti_pill,
+                                                &RMF_LOGCOOKIES);
+        ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
+                                               &RMF_LOGCOOKIES, RCL_SERVER);
+
+        if (!ma->ma_lmm || !ma->ma_cookie)
+                GOTO(out_unlock_new, rc = -EINVAL);
+
         rc = mdo_rename(info->mti_ctxt, mdt_object_child(msrcdir),
                         mdt_object_child(mtgtdir), old_fid,
                         rr->rr_name, mnew ? mdt_object_child(mnew): NULL,
-                        rr->rr_tgt);
-        GOTO(out_unlock_new, rc);
+                        rr->rr_tgt, ma);
+        /*TODO: handle tgt object*/
 
 out_unlock_new:
         if (mnew) {

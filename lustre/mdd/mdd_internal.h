@@ -41,8 +41,14 @@ struct mdd_device {
         struct dt_device_param           mdd_dt_conf;
 };
 
+enum mod_flags {
+        /*The dir object has been unlinked*/
+        DEAD_OBJ = 1 << 0,        
+};
+
 struct mdd_object {
         struct md_object  mod_obj;
+        unsigned long     mod_flags;
 };
 
 struct mdd_thread_info {

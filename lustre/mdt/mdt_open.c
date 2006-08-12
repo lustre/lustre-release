@@ -397,7 +397,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
-
+        
         lh = &info->mti_lh[MDT_LH_PARENT];
         if (!(create_flags & MDS_OPEN_CREAT))
                 lh->mlh_mode = LCK_CR;
@@ -410,11 +410,17 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         result = mdo_lookup(info->mti_ctxt, mdt_object_child(parent),
                             rr->rr_name, child_fid);
-        if (result != 0 && result != -ENOENT)
+        if (result != 0 && result != -ENOENT && result != -ESTALE)
                 GOTO(out_parent, result);
 
-        if (result == -ENOENT) {
+        if (result == -ENOENT || result == -ESTALE) {
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
+                if (result == -ESTALE) {
+                        /*ESTALE means the parent is a dead(unlinked) dir,
+                         *so it should return -ENOENT to in accordance 
+                         *with the original mds implemantaion.*/
+                        GOTO(out_parent, result = -ENOENT);
+                }
                 if (!(create_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
                 *child_fid = *info->mti_rr.rr_fid2;
@@ -424,7 +430,6 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 /* check for O_EXCL is moved to the mdt_mfd_open, we need to
                  * return FID back in that case */
         }
-
 
         child = mdt_object_find(info->mti_ctxt, mdt, child_fid);
         if (IS_ERR(child))
@@ -456,7 +461,7 @@ finish_open:
                                      &info->mti_attr);
                 if (rc2 != 0)
                         CERROR("error in cleanup of open");
-        }
+        } 
 out_child:
         mdt_object_put(info->mti_ctxt, child);
 out_parent:

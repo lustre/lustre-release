@@ -402,7 +402,7 @@ static int cml_unlink(const struct lu_context *ctx, struct md_object *mo_p,
 static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
                        struct md_object *mo_pn, const struct lu_fid *lf,
                        const char *s_name, struct md_object *mo_t,
-                       const char *t_name)
+                       const char *t_name, struct md_attr *ma)
 {
         int rc;
         ENTRY;
@@ -417,7 +417,7 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
         /* local rename, mo_t can be NULL */
         rc = mdo_rename(ctx, md_object_next(mo_po),
                         md_object_next(mo_pn), lf, s_name,
-                        md_object_next(mo_t), t_name);
+                        md_object_next(mo_t), t_name, ma);
 
         RETURN(rc);
 }
@@ -716,7 +716,7 @@ static int cmr_unlink(const struct lu_context *ctx, struct md_object *mo_p,
 static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
                        struct md_object *mo_pn, const struct lu_fid *lf,
                        const char *s_name, struct md_object *mo_t,
-                       const char *t_name)
+                       const char *t_name, struct md_attr *ma)
 {
         int rc;
         ENTRY;

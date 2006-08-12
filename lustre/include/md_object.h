@@ -139,7 +139,8 @@ struct md_dir_operations {
         int (*mdo_rename)(const struct lu_context *ctxt,
                           struct md_object *spobj, struct md_object *tpobj,
                           const struct lu_fid *lf, const char *sname,
-                          struct md_object *tobj, const char *tname);
+                          struct md_object *tobj, const char *tname, 
+                          struct md_attr *);
 
         int (*mdo_link)(const struct lu_context *ctxt, struct md_object *tobj,
                         struct md_object *sobj, const char *name);
@@ -357,10 +358,11 @@ static inline int mdo_create_data(const struct lu_context *cx,
 static inline int mdo_rename(const struct lu_context *cx,
                              struct md_object *sp, struct md_object *tp,
                              const struct lu_fid *lf, const char *sname,
-                             struct md_object *t, const char *tname)
+                             struct md_object *t, const char *tname,
+                             struct md_attr *ma)
 {
         LASSERT(tp->mo_dir_ops->mdo_rename);
-        return tp->mo_dir_ops->mdo_rename(cx, sp, tp, lf, sname, t, tname);
+        return tp->mo_dir_ops->mdo_rename(cx, sp, tp, lf, sname, t, tname, ma);
 }
 
 static inline int mdo_link(const struct lu_context *cx, struct md_object *p,
