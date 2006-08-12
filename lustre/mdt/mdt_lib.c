@@ -53,6 +53,7 @@ void mdt_dump_lmm(int level, struct lov_mds_md *lmm)
         CDEBUG_EX(level,"stripe_size %u, stripe_count %u\n",
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
+        LASSERT(lmm->lmm_stripe_count < LOV_MAX_STRIPE_COUNT);
         for (i = 0, lod = lmm->lmm_objects;
              i < le32_to_cpu(lmm->lmm_stripe_count); i++, lod++) {
                 CDEBUG_EX(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
