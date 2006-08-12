@@ -497,7 +497,7 @@ EXPORT_SYMBOL(RQF_MDS_REINT_LINK);
 
 const struct req_format RQF_MDS_REINT_RENAME =
         DEFINE_REQ_FMT0("MDS_REINT_RENAME", mds_reint_rename_client,
-                        mdt_body_only);
+                        mds_last_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_REINT_RENAME);
 
 const struct req_format RQF_MDS_REINT_SETATTR =
