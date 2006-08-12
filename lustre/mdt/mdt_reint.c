@@ -115,7 +115,8 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
 /* In the raw-setattr case, we lock the child inode.
  * In the write-back case or if being called from open,
  *               the client holds a lock already.
- * We use the ATTR_FROM_OPEN flag to tell these cases apart. */
+ * We use the ATTR_FROM_OPEN (translated into MRF_SETATTR_LOCKED by
+ * mdt_setattr_unpack()) flag to tell these cases apart. */
 static int mdt_reint_setattr(struct mdt_thread_info *info)
 {
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
@@ -125,7 +126,6 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         struct md_object        *next;
         struct mdt_lock_handle  *lh;
         struct mdt_body         *repbody;
-        /*__u64                   valid = attr->la_valid;*/
         int                      rc;
 
         ENTRY;
@@ -141,7 +141,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_EX;
 
-        if (attr->la_valid & ATTR_FROM_OPEN) {
+        if (rr->rr_flags & MRF_SETATTR_LOCKED) {
                 mo = mdt_object_find(info->mti_ctxt, info->mti_mdt,
                                      rr->rr_fid1);
         } else {

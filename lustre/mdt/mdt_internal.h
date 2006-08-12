@@ -118,7 +118,7 @@ struct mdt_device {
                 signed int         mo_acl        :1;
                 signed int         mo_compat_resname:1;
         } mdt_opts;
-        
+
         /* lock to pretect epoch and write count
          * because we need not allocate memory, spinlock is fast.
          */
@@ -184,7 +184,11 @@ struct mdt_reint_record {
         const void          *rr_eadata;
         int                  rr_logcookielen;
         const struct llog_cookie  *rr_logcookies;
+        __u32                rr_flags;
+};
 
+enum mdt_reint_flag {
+        MRF_SETATTR_LOCKED = 1 << 0
 };
 
 enum {
@@ -263,7 +267,7 @@ struct mdt_thread_info {
         /* transaction number of current request */
         __u64                      mti_transno;
         __u32                      mti_trans_flags;
-        
+
         /* readdir hint structure */
         struct lu_rdpg             mti_rdpg;
 };
