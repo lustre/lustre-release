@@ -48,6 +48,8 @@ enum mod_flags {
 
 struct mdd_object {
         struct md_object  mod_obj;
+        /* open count */
+        atomic_t          mod_count;
         unsigned long     mod_flags;
 };
 

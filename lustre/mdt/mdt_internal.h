@@ -357,11 +357,6 @@ void mdt_fs_cleanup(const struct lu_context *ctxt,
 int mdt_client_free(const struct lu_context *ctxt,
                     struct mdt_device *mdt,
                     struct mdt_export_data *med);
-
-int mdt_update_server_data(const struct lu_context *ctxt,
-                           struct mdt_device *mdt,
-                           int sync);
-
 int mdt_client_add(const struct lu_context *ctxt,
                    struct mdt_device *mdt,
                    struct mdt_export_data *med,
@@ -376,7 +371,7 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
 int mdt_reint_open(struct mdt_thread_info *info);
 
 void mdt_mfd_close(const struct lu_context *ctxt, struct mdt_device *mdt,
-                   struct mdt_file_data *mfd);
+                   struct mdt_file_data *mfd, struct md_attr *ma);
 
 int mdt_close(struct mdt_thread_info *info);
 

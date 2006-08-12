@@ -309,11 +309,12 @@ static int cml_open(const struct lu_context *ctx, struct md_object *mo)
         RETURN(rc);
 }
 
-static int cml_close(const struct lu_context *ctx, struct md_object *mo)
+static int cml_close(const struct lu_context *ctx, struct md_object *mo,
+                     struct md_attr *ma)
 {
         int rc;
         ENTRY;
-        rc = mo_close(ctx, md_object_next(mo));
+        rc = mo_close(ctx, md_object_next(mo), ma);
         RETURN(rc);
 }
 
@@ -612,7 +613,8 @@ static int cmr_open(const struct lu_context *ctx, struct md_object *mo)
         RETURN(-EREMOTE);
 }
 
-static int cmr_close(const struct lu_context *ctx, struct md_object *mo)
+static int cmr_close(const struct lu_context *ctx, struct md_object *mo,
+                     struct md_attr *ma)
 {
         RETURN(-EFAULT);
 }

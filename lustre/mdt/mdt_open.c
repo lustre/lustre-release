@@ -290,7 +290,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 /* keep a reference on this object for this open,
                 * and is released by mdt_mfd_close() */
                 mdt_object_get(info->mti_ctxt, o);
-
+                /* open hanling */
+                mo_open(info->mti_ctxt, mdt_object_child(o));
+                
                 mfd->mfd_mode = flags;
                 mfd->mfd_object = o;
                 mfd->mfd_xid = mdt_info_req(info)->rq_xid;
@@ -470,8 +472,9 @@ out:
         return result;
 }
 
-void mdt_mfd_close(const struct lu_context *ctxt, struct mdt_device *mdt,
-                   struct mdt_file_data *mfd)
+void mdt_mfd_close(const struct lu_context *ctxt,
+                   struct mdt_device *mdt, struct mdt_file_data *mfd,
+                   struct md_attr *ma)
 {
         struct mdt_object *o = mfd->mfd_object;
         ENTRY;
@@ -481,22 +484,18 @@ void mdt_mfd_close(const struct lu_context *ctxt, struct mdt_device *mdt,
         } else if (mfd->mfd_mode & MDS_FMODE_EXEC) {
                 mdt_allow_write_access(o);
         }
-
-        /* release reference on this object.
-         * it will be destroyed by lower layer if necessary.
-         */
-        mdt_object_put(ctxt, mfd->mfd_object);
-
+        
         mdt_mfd_free(mfd);
-        EXIT;
+
+        mo_close(ctxt, mdt_object_child(o), ma);
 }
 
 int mdt_close(struct mdt_thread_info *info)
 {
-        struct md_attr         *ma = &info->mti_attr;
         struct mdt_export_data *med;
         struct mdt_file_data   *mfd;
         struct mdt_object      *o;
+        struct md_attr         *ma = &info->mti_attr;
         int rc;
         ENTRY;
 
@@ -514,17 +513,17 @@ int mdt_close(struct mdt_thread_info *info)
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
-
-                o = mfd->mfd_object;
+                
                 ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
-                                                        &RMF_MDT_MD);
+                                                    &RMF_MDT_MD);
                 ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
-                                                       &RMF_MDT_MD, RCL_SERVER);
-                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);
-                if (rc == 0)
-                        rc = mdt_handle_last_unlink(info, o, ma);
-
-                mdt_mfd_close(info->mti_ctxt, info->mti_mdt, mfd);
+                                                       &RMF_MDT_MD,
+                                                       RCL_SERVER);
+                o = mfd->mfd_object;
+                mdt_mfd_close(info->mti_ctxt, info->mti_mdt, mfd, ma);
+                rc = mdt_handle_last_unlink(info, o, ma);
+                /* release reference on this object. */
+                mdt_object_put(info->mti_ctxt, o);
         }
         mdt_shrink_reply(info);
         RETURN(rc);

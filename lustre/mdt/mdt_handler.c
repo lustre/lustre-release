@@ -1307,7 +1307,7 @@ static int mdt_recovery(struct ptlrpc_request *req)
 
                 rc = mds_filter_recovery_request(req, obd, &should_process);
                 if (rc != 0 || !should_process) {
-                        LASSERT(rc < 0);
+                        //LASSERT(rc < 0);
                         RETURN(rc);
                 }
         }
@@ -2608,6 +2608,7 @@ static int mdt_destroy_export(struct obd_export *export)
         struct obd_device *obd = export->exp_obd;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
         struct lu_context ctxt;
+        struct md_attr ma;
         int rc = 0;
         ENTRY;
 
@@ -2628,13 +2629,17 @@ static int mdt_destroy_export(struct obd_export *export)
                 struct list_head *tmp = med->med_open_head.next;
                 struct mdt_file_data *mfd =
                         list_entry(tmp, struct mdt_file_data, mfd_list);
+                struct mdt_object *o = mfd->mfd_object;
 
                 /* Remove mfd handle so it can't be found again.
                  * We are consuming the mfd_list reference here. */
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
-                mdt_mfd_close(&ctxt, mdt, mfd);
+                mdt_mfd_close(&ctxt, mdt, mfd, &ma);
+                /* TODO: if we close the unlinked file,
+                 * we need to remove it's objects from OST */
+                mdt_object_put(&ctxt, o);
                 spin_lock(&med->med_open_lock);
         }
         spin_unlock(&med->med_open_lock);

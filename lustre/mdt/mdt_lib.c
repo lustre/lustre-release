@@ -105,31 +105,26 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         const struct lu_attr *la = &ma->ma_attr;
         ENTRY;
 
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        
+        if (ma->ma_valid & MA_INODE)
+                mdt_pack_attr2body(repbody, la, mdt_object_fid(mo));
 
-        /* if this is the last unlinked object reference,
-         * so client should destroy ost objects*/
-        if (S_ISREG(la->la_mode) &&
-            la->la_nlink == 0 && mo->mot_header.loh_ref == 1) {
-
-                CDEBUG(D_INODE, "Last reference is released on "DFID"\n",
-                                PFID(mdt_object_fid(mo)));
-
-                CDEBUG(D_INODE, "ma_valid = "LPX64"\n", ma->ma_valid);
-                repbody = req_capsule_server_get(&info->mti_pill,
-                                                 &RMF_MDT_BODY);
-                if (ma->ma_valid & MA_INODE)
-                        mdt_pack_attr2body(repbody, la, mdt_object_fid(mo));
-                if (/*ma->ma_lmm_size && */(ma->ma_valid & MA_LOV)) {
-                        LASSERT(ma->ma_lmm_size);
-                        mdt_dump_lmm(D_INFO, ma->ma_lmm);
-                        repbody->eadatasize = ma->ma_lmm_size;
+        if (ma->ma_valid & MA_LOV) {
+                LASSERT(ma->ma_lmm_size);
+                mdt_dump_lmm(D_INFO, ma->ma_lmm);
+                repbody->eadatasize = ma->ma_lmm_size;
+                if (S_ISREG(lu_object_attr(&mo->mot_obj.mo_lu)))
                         repbody->valid |= OBD_MD_FLEASIZE;
-                }
-
-                if (ma->ma_cookie_size && (ma->ma_valid & MA_COOKIE))
-                        repbody->valid |= OBD_MD_FLCOOKIE;
+                else if (S_ISDIR(lu_object_attr(&mo->mot_obj.mo_lu)))
+                        repbody->valid |= OBD_MD_FLDIREA;
+                else 
+                        LBUG();
         }
-
+        
+        if (ma->ma_cookie_size && (ma->ma_valid & MA_COOKIE))
+                repbody->valid |= OBD_MD_FLCOOKIE;
+        
         RETURN(0);
 }
 
