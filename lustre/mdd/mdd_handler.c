@@ -96,6 +96,7 @@ static struct lu_object *mdd_object_alloc(const struct lu_context *ctxt,
                 lu_object_init(o, NULL, d);
                 mdd_obj->mod_obj.mo_ops = &mdd_obj_ops;
                 mdd_obj->mod_obj.mo_dir_ops = &mdd_dir_ops;
+                atomic_set(&mdd_obj->mod_count, 0);
                 o->lo_ops = &mdd_lu_obj_ops;
                 return o;
         } else {
@@ -1634,13 +1635,11 @@ static int mdd_open(const struct lu_context *ctxt, struct md_object *obj)
 static int mdd_close(const struct lu_context *ctxt, struct md_object *obj,
                      struct md_attr *ma)
 {
-        __mdd_attr_get(ctxt, md2mdd_obj(obj), ma);
-        
         if (atomic_dec_and_test(&md2mdd_obj(obj)->mod_count)) {
-                CWARN("File closed\n");
+                /*TODO: Remove it from orphan list */
         }
-
-        return 0;
+        
+        return __mdd_finish_unlink(ctxt, md2mdd_obj(obj), ma);
 }
 
 static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
