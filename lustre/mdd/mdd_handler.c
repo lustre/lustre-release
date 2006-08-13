@@ -239,30 +239,37 @@ static int __mdd_lmm_get(const struct lu_context *ctxt,
 
 static int mdd_attr_get_internal (const struct lu_context *ctxt,
                                     struct mdd_object *mdd_obj, 
-                                    struct md_attr *ma, int need_locked)
+                                    struct md_attr *ma)
 {
         int rc = 0;
         ENTRY;
 
-        if (need_locked)
-                mdd_lock(ctxt, mdd_obj, DT_READ_LOCK);
         if (ma->ma_need & MA_INODE)
                 rc = __mdd_iattr_get(ctxt, mdd_obj, ma);
         
         if (rc == 0 && ma->ma_need & MA_LOV) {
-                 if ((S_ISREG(ma->ma_attr.la_mode)
-                     || S_ISDIR(ma->ma_attr.la_mode))) {
+                 if (S_ISREG(lu_object_attr(mdd2lu_obj(mdd_obj))) ||
+                     S_ISDIR(lu_object_attr(mdd2lu_obj(mdd_obj)))) {
                         rc = __mdd_lmm_get(ctxt, mdd_obj, ma);
                  }
         }
-out:
+
         CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n",
                         rc, ma->ma_valid);
-        if (need_locked)
-                mdd_unlock(ctxt, mdd_obj, DT_READ_LOCK);
         RETURN(rc);
 }
-        
+
+static inline int mdd_attr_get_internal_locked (const struct lu_context *ctxt,
+                                                struct mdd_object *mdd_obj, 
+                                                struct md_attr *ma)
+{
+        int rc;
+        mdd_lock(ctxt, mdd_obj, DT_READ_LOCK);
+        rc = mdd_attr_get_internal(ctxt, mdd_obj, ma);
+        mdd_unlock(ctxt, mdd_obj, DT_READ_LOCK);
+        return rc;
+}
+
 static int mdd_attr_get(const struct lu_context *ctxt,
                         struct md_object *obj, struct md_attr *ma)
 {
@@ -270,10 +277,7 @@ static int mdd_attr_get(const struct lu_context *ctxt,
         int                rc;
 
         ENTRY;
-
-        mdd_lock(ctxt, mdd_obj, DT_READ_LOCK);
-        rc = mdd_attr_get_internal(ctxt, mdd_obj, ma, 0);
-        mdd_unlock(ctxt, mdd_obj, DT_READ_LOCK);
+        rc = mdd_attr_get_internal_locked(ctxt, mdd_obj, ma);
         RETURN(rc);
 }
 
@@ -1336,11 +1340,12 @@ static int mdd_create_data(const struct lu_context *ctxt,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
+        /*XXX: setting the lov ea is not locked but setting the attr is locked? */
         if (rc == 0) {
                 rc = mdd_lov_set_md(ctxt, mdd_pobj, son, lmm, lmm_size, 
                                     handle, 0);
                 if (rc == 0)
-                        rc = mdd_attr_get_internal(ctxt, son, ma, 1);
+                        rc = mdd_attr_get_internal_locked(ctxt, son, ma);
         }
 
         mdd_trans_stop(ctxt, mdd, handle);
@@ -1516,7 +1521,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                         rc = -EFAULT;
         }
         /* return attr back */
-        rc = mdd_attr_get_internal(ctxt, son, ma, 1);
+        rc = mdd_attr_get_internal(ctxt, son, ma);
 cleanup:
         if (rc && created) {
                 int rc2 = 0;
@@ -1560,7 +1565,7 @@ static int mdd_object_create(const struct lu_context *ctxt,
         if (rc)
                 GOTO(out, rc);
 
-        rc = mdd_attr_get_internal(ctxt, md2mdd_obj(obj), ma, 1);
+        rc = mdd_attr_get_internal(ctxt, md2mdd_obj(obj), ma);
 
         mdd_trans_stop(ctxt, mdd, handle);
 out:
