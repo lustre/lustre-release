@@ -97,7 +97,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         if (!IS_ERR(o)) {
                 struct md_object *next = mdt_object_child(o);
 
-                ma->ma_need = MA_INODE | MA_LOV;
+                ma->ma_need = MA_INODE;
                 rc = mo_object_create(info->mti_ctxt, next,
                                       &info->mti_spec, ma);
                 if (rc == 0) {
