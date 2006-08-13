@@ -201,6 +201,8 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
         struct lustre_dquot *dquot = NULL;
         __u64 *usage = NULL;
         __u32 hlimit = 0, slimit = 0;
+        __u32 qdata_type = qdata->qd_flags & QUOTA_IS_GRP;
+        __u32 is_blk = (qdata->qd_flags & QUOTA_IS_BLOCK) >> 1;
         time_t *time = NULL;
         unsigned int grace = 0;
         int rc = 0;
@@ -209,14 +211,15 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
         OBD_FAIL_RETURN(OBD_FAIL_OBD_DQACQ, -EIO);
 
         /* slaves never acquires qunit for user root */
-        LASSERT(qdata->qd_id || qdata->qd_type == GRPQUOTA);
+        LASSERT(qdata->qd_id || qdata_type);
 
-        dquot = lustre_dqget(obd, info, qdata->qd_id, qdata->qd_type);
+        dquot = lustre_dqget(obd, info, qdata->qd_id, qdata_type);
         if (IS_ERR(dquot))
                 RETURN(PTR_ERR(dquot));
 
         DQUOT_DEBUG(dquot, "get dquot in dqacq_handler\n");
         QINFO_DEBUG(dquot->dq_info, "get dquot in dqadq_handler\n");
+        QDATA_DEBUG(qdata,": in dqacq_handler\n");
 
         down(&mds->mds_qonoff_sem);
         down(&dquot->dq_sem);
@@ -226,14 +229,14 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
                 GOTO(out, rc = -EBUSY);
         }
 
-        if (qdata->qd_isblk) {
-                grace = info->qi_info[qdata->qd_type].dqi_bgrace;
+        if (is_blk) {
+                grace = info->qi_info[qdata_type].dqi_bgrace;
                 usage = &dquot->dq_dqb.dqb_curspace;
                 hlimit = dquot->dq_dqb.dqb_bhardlimit;
                 slimit = dquot->dq_dqb.dqb_bsoftlimit;
                 time = &dquot->dq_dqb.dqb_btime;
         } else {
-                grace = info->qi_info[qdata->qd_type].dqi_igrace;
+                grace = info->qi_info[qdata_type].dqi_igrace;
                 usage = (__u64 *) & dquot->dq_dqb.dqb_curinodes;
                 hlimit = dquot->dq_dqb.dqb_ihardlimit;
                 slimit = dquot->dq_dqb.dqb_isoftlimit;
@@ -250,11 +253,11 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
         switch (opc) {
         case QUOTA_DQACQ:
                 if (hlimit && 
-                    QUSG(*usage + qdata->qd_count, qdata->qd_isblk) > hlimit)
+                    QUSG(*usage + qdata->qd_count, is_blk) > hlimit)
                         GOTO(out, rc = -EDQUOT);
 
                 if (slimit &&
-                    QUSG(*usage + qdata->qd_count, qdata->qd_isblk) > slimit) {
+                    QUSG(*usage + qdata->qd_count, is_blk) > slimit) {
                         if (*time && cfs_time_current_sec() >= *time)
                                 GOTO(out, rc = -EDQUOT);
                         else if (!*time)
@@ -272,12 +275,15 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
                         *usage -= qdata->qd_count;
 
                 /* (usage <= soft limit) but not (usage < soft limit) */
-                if (!slimit || QUSG(*usage, qdata->qd_isblk) <= slimit)
+                if (!slimit || QUSG(*usage, is_blk) <= slimit)
                         *time = 0;
                 break;
         default:
                 LBUG();
         }
+
+        DQUOT_DEBUG(dquot, "get dquot in dqacq_handler\n");
+        QINFO_DEBUG(dquot->dq_info, "get dquot in dqadq_handler\n");
 
         rc = fsfilt_dquot(obd, dquot, QFILE_WR_DQUOT);
         EXIT;
