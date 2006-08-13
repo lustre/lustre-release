@@ -137,9 +137,6 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                                 __u64 child_lockpart);
 int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
                        struct lustre_handle *child_lockh);
-int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
-                          struct lov_mds_md *lmm, int lmm_size,
-                          struct llog_cookie *logcookies, struct ll_fid *fid);
 
 int mds_get_parents_children_locked(struct obd_device *obd,
                                     struct mds_obd *mds,

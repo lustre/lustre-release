@@ -54,13 +54,24 @@ enum ma_valid {
 };
 
 struct md_attr {
-        __u64                   ma_valid;
+        __u64                   ma_valid;  
+        __u64                   ma_need;  
+        __u64                   ma_attr_flags;
         struct lu_attr          ma_attr;
         struct lov_mds_md      *ma_lmm;
         int                     ma_lmm_size;
         struct llog_cookie     *ma_cookie;
         int                     ma_cookie_size;
 };
+
+enum md_attr_flags {
+        MD_ATIME_SET      = 1 << 0,
+        MD_MTIME_SET      = 1 << 1,
+        MD_CTIME_SET      = 1 << 2,
+        MD_ATTR_FLAG      = 1 << 3, 
+        MD_ATTR_RAW       = 1 << 4
+};
+
 /* additional parameters for create */
 struct md_create_spec {
         union {

@@ -233,7 +233,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD, RCL_SERVER);
 
-        rc = mo_attr_get(ctxt, next, &info->mti_attr);
+        ma->ma_need = MA_INODE | MA_LOV;
+        rc = mo_attr_get(ctxt, next, ma);
         if (rc == -EREMOTE) {
                 /* This object is located on remote node.*/
                 repbody->fid1 = *mdt_object_fid(o);
@@ -733,6 +734,7 @@ static int mdt_sync(struct mdt_thread_info *info)
                                 const struct lu_fid *fid;
                                 next = mdt_object_child(info->mti_object);
                                 fid = mdt_object_fid(info->mti_object);
+                                info->mti_attr.ma_need = MA_INODE;
                                 rc = mo_attr_get(info->mti_ctxt,
                                                  next, &info->mti_attr);
                                 if (rc == 0) {
@@ -2870,7 +2872,7 @@ DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
 DEF_MDT_HNDL_F(0                        |MUTABOR,
                                           REINT,        mdt_reint),
-DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, CLOSE,        mdt_close),
+DEF_MDT_HNDL_F(HABEO_CORPUS             , CLOSE,        mdt_close),
 DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),
 DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),

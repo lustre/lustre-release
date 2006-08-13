@@ -63,6 +63,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(parent);
 
+                ma->ma_need = MA_INODE;
                 rc = mdo_create(info->mti_ctxt, next, rr->rr_name,
                                 mdt_object_child(child), &info->mti_spec,
                                 /* rr->rr_tgt, NULL, 0, */
@@ -96,6 +97,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         if (!IS_ERR(o)) {
                 struct md_object *next = mdt_object_child(o);
 
+                ma->ma_need = MA_INODE | MA_LOV;
                 rc = mo_object_create(info->mti_ctxt, next,
                                       &info->mti_spec, ma);
                 if (rc == 0) {
@@ -163,6 +165,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         if (rc != 0)
                 GOTO(out_unlock, rc);
 
+        info->mti_attr.ma_need = MA_INODE;
         rc = mo_attr_get(info->mti_ctxt, next, &info->mti_attr);
         if (rc != 0)
                 GOTO(out_unlock, rc);
@@ -290,11 +293,15 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         if (!ma->ma_lmm || !ma->ma_cookie)
                 GOTO(out_unlock_parent, rc = -EINVAL);
 
+        /*Now we can only make sure we need MA_INODE, in mdd layer,
+         *will check whether need MA_LOV and MA_COOKIE*/
+        ma->ma_need = MA_INODE;
         rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mp),
                         mdt_object_child(mc), rr->rr_name, ma);
         if (rc)
                 GOTO(out_unlock_child, rc);
 
+        
         rc = mdt_handle_last_unlink(info, mc, ma);
 
         GOTO(out_unlock_child, rc);
@@ -537,11 +544,12 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         if (!ma->ma_lmm || !ma->ma_cookie)
                 GOTO(out_unlock_new, rc = -EINVAL);
 
+        ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
         rc = mdo_rename(info->mti_ctxt, mdt_object_child(msrcdir),
                         mdt_object_child(mtgtdir), old_fid,
                         rr->rr_name, mnew ? mdt_object_child(mnew): NULL,
                         rr->rr_tgt, ma);
-        /*TODO: handle tgt object*/
+        /*TODO: handle last link of tgt object*/
 
 out_unlock_new:
         if (mnew) {

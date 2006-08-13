@@ -63,27 +63,36 @@ struct mdd_thread_info {
 
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                  char *dev);
-int mdd_xattr_set_txn(const struct lu_context *ctxt, struct md_object *obj,
+int mdd_xattr_set_txn(const struct lu_context *ctxt, struct mdd_object *obj,
                       const void *buf, int buf_len, const char *name, int fl,
                       struct thandle *txn);
-int mdd_lov_set_md(const struct lu_context *ctxt, struct md_object *pobj,
-                   struct md_object *child, struct lov_mds_md *lmm,
-                   int lmm_size, struct lu_attr *la, struct thandle *handle);
+int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
+                   struct mdd_object *child, struct lov_mds_md *lmm,
+                   int lmm_size, struct thandle *handle, int set_stripe);
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size,
                    const struct md_create_spec *spec, struct lu_attr *la);
 
-int mdd_get_md(const struct lu_context *ctxt, struct md_object *obj,
-               void *md, int *md_size);
+int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
+               void *md, int *md_size, int need_locked);
 int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma);
 
 int mdd_attr_set_internal(const struct lu_context *ctxt, struct mdd_object *o,
                           const struct lu_attr *attr, struct thandle *handle);
+int mdd_get_cookie_size(const struct lu_context *ctxt, struct mdd_device *mdd,
+                        struct lov_mds_md *lmm);
+
+int mdd_lov_setattr_async(const struct lu_context *ctxt, struct mdd_object *obj,
+                          struct lov_mds_md *lmm, int lmm_size);
 
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx);
 
+void mdd_lock(const struct lu_context *ctxt, struct mdd_object *obj, 
+              enum dt_lock_mode mode);
+void mdd_unlock(const struct lu_context *ctxt, struct mdd_object *obj, 
+                enum dt_lock_mode mode);
 extern struct lu_device_operations mdd_lu_ops;
 static inline int lu_device_is_mdd(struct lu_device *d)
 {
@@ -140,6 +149,11 @@ static inline struct obd_device *mdd2_obd(struct mdd_device *mdd)
 static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
 {
         return lu_object_fid(&obj->mod_obj.mo_lu);
+}
+
+static inline umode_t mdd_object_type(const struct mdd_object *obj)
+{
+        return lu_object_attr(&obj->mod_obj.mo_lu);
 }
 
 int mdd_lov_mdsize(const struct lu_context *ctxt, struct mdd_device *mdd,

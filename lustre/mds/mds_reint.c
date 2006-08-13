@@ -390,9 +390,9 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
         l_dput(de);
 }
 
-int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
+int mds_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
                           struct lov_mds_md *lmm, int lmm_size,
-                          struct llog_cookie *logcookies, struct ll_fid *fid)
+                          struct llog_cookie *logcookies, __u64 id, __u32 gen)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
@@ -413,7 +413,7 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 
         rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0) {
-                CERROR("Error unpack md %p for inode %lu\n", lmm, inode->i_ino);
+                CERROR("Error unpack md %p for inode "LPU64"\n", lmm, id);
                 GOTO(out, rc);
         }
 
@@ -425,17 +425,16 @@ int mds_osc_setattr_async(struct obd_device *obd, struct inode *inode,
 
         /* then fill oa */
         oa->o_id = lsm->lsm_object_id;
-        oa->o_uid = inode->i_uid;
-        oa->o_gid = inode->i_gid;
+        oa->o_uid = uid;
+        oa->o_gid = gid;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID;
         if (logcookies) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies = logcookies;
         }
 
-        LASSERT(fid != NULL);
-        oa->o_fid = fid->id;
-        oa->o_generation = fid->generation;
+        oa->o_fid = id;
+        oa->o_generation = gen;
         oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
 
         /* do setattr from mds to ost asynchronously */
@@ -449,6 +448,7 @@ out:
         obdo_free(oa);
         RETURN(rc);
 }
+EXPORT_SYMBOL(mds_osc_setattr_async);
 
 /* In the raw-setattr case, we lock the child inode.
  * In the write-back case or if being called from open, the client holds a lock
@@ -644,8 +644,9 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         err = mds_finish_transno(mds, inode, handle, req, rc, 0);
         /* do mds to ost setattr if needed */
         if (!rc && !err && lmm_size)
-                mds_osc_setattr_async(obd, inode, lmm, lmm_size,
-                                      logcookies, rec->ur_fid1);
+                mds_osc_setattr_async(obd, inode->i_ino, inode->i_generation, lmm, 
+                                      lmm_size, logcookies, rec->ur_fid1->id,
+                                      rec->ur_fid1->generation);
 
         switch (cleanup_phase) {
         case 2:

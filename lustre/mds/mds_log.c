@@ -166,6 +166,7 @@ int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
         obd_free_memmd(mds->mds_osc_exp, &lsm);
         RETURN(rc);
 }
+EXPORT_SYMBOL(mds_log_op_setattr);
 
 static struct llog_operations mds_ost_orig_logops = {
         lop_add:        mds_llog_origin_add,

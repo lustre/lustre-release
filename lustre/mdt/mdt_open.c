@@ -72,8 +72,8 @@ static void mdt_mfd_free(struct mdt_file_data *mfd)
         OBD_FREE_PTR(mfd);
 }
 
-static int mdt_create_data_obj(struct mdt_thread_info *info,
-                              struct mdt_object *p, struct mdt_object *o)
+static int mdt_create_data(struct mdt_thread_info *info,
+                           struct mdt_object *p, struct mdt_object *o)
 {
         struct md_attr   *ma = &info->mti_attr;
         /* XXX: md_create_spec using should be made clear
@@ -81,6 +81,7 @@ static int mdt_create_data_obj(struct mdt_thread_info *info,
          */
         struct md_create_spec *spec = &info->mti_spec;
 
+        ma->ma_need = MA_INODE | MA_LOV;
         return mdo_create_data(info->mti_ctxt, mdt_object_child(p),
                                mdt_object_child(o), spec, ma);
 }
@@ -187,6 +188,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
 
         if (!created) {
                 /* we have to get attr & lov ea for this object*/
+                ma->ma_need = MA_INODE | MA_LOV;
                 rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);
                 if (rc)
                         RETURN(rc);
@@ -229,7 +231,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                                                        &RMF_MDT_MD,
                                                        RCL_SERVER);
                 LASSERT(p != NULL);
-                rc = mdt_create_data_obj(info, p, o);
+                rc = mdt_create_data(info, p, o);
                 if (rc)
                         RETURN(rc);
         }
@@ -327,6 +329,7 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
                 } else {
                         rc = -ENOENT;
                         if (flags & MDS_OPEN_CREAT) {
+                                info->mti_attr.ma_need = MA_INODE | MA_LOV;
                                 rc = mo_object_create(info->mti_ctxt,
                                                       mdt_object_child(o),
                                                       &info->mti_spec,
@@ -439,6 +442,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         if (result == -ENOENT) {
                 /* not found and with MDS_OPEN_CREAT: let's create it */
+                ma->ma_need = MA_INODE | MA_LOV;
                 result = mdo_create(info->mti_ctxt,
                                     mdt_object_child(parent),
                                     rr->rr_name,
@@ -458,6 +462,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
 finish_open:
         if (result != 0 && created) {
+                ma->ma_need = 0;
                 int rc2 = mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
                                      mdt_object_child(child), rr->rr_name,
                                      &info->mti_attr);
@@ -499,6 +504,14 @@ int mdt_close(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
+        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
+                             info->mti_mdt->mdt_max_mdsize);
+        req_capsule_set_size(&info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
+                             info->mti_mdt->mdt_max_cookiesize);
+        rc = req_capsule_pack(&info->mti_pill);
+        if (rc)
+                RETURN(rc);
+
         med = &mdt_info_req(info)->rq_export->exp_mdt_data;
 
         spin_lock(&med->med_open_lock);
@@ -519,6 +532,13 @@ int mdt_close(struct mdt_thread_info *info)
                 ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                        &RMF_MDT_MD,
                                                        RCL_SERVER);
+                
+                ma->ma_cookie = req_capsule_server_get(&info->mti_pill,
+                                                    &RMF_LOGCOOKIES);
+                ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
+                                                       &RMF_LOGCOOKIES,
+                                                       RCL_SERVER);
+                ma->ma_need = MA_INODE;
                 o = mfd->mfd_object;
                 mdt_mfd_close(info->mti_ctxt, info->mti_mdt, mfd, ma);
                 rc = mdt_handle_last_unlink(info, o, ma);
