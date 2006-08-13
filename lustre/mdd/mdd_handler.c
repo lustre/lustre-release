@@ -207,13 +207,29 @@ static int mdd_may_delete(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
+/* get only inode attributes */
+static int __mdd_iattr_get (const struct lu_context *ctxt,
+                                  struct mdd_object *mdd_obj, 
+                                  struct md_attr *ma)
+{
+        struct dt_object  *next = mdd_object_child(mdd_obj);
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(mdd_obj)));
+        rc = next->do_ops->do_attr_get(ctxt, next, &ma->ma_attr);
+        if (rc == 0)
+                ma->ma_valid = MA_INODE;
+        RETURN(rc);
+}
+/* get lov EA only */
 static int __mdd_lmm_get(const struct lu_context *ctxt,
-                         struct mdd_object *obj, struct md_attr *ma)
+                         struct mdd_object *mdd_obj, struct md_attr *ma)
 {
         int rc;
 
         LASSERT(ma->ma_lmm != NULL && ma->ma_lmm_size > 0);
-        rc = mdd_get_md(ctxt, obj, ma->ma_lmm, &ma->ma_lmm_size, 0);
+        rc = mdd_get_md(ctxt, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size, 0);
         if (rc > 0) {
                 ma->ma_valid |= MA_LOV;
                 rc = 0;
@@ -222,24 +238,18 @@ static int __mdd_lmm_get(const struct lu_context *ctxt,
 }
 
 static int mdd_attr_get_internal (const struct lu_context *ctxt,
-                                  struct mdd_object *mdd_obj, 
-                                  struct md_attr *ma, int need_locked)
+                                    struct mdd_object *mdd_obj, 
+                                    struct md_attr *ma, int need_locked)
 {
-        struct dt_object  *next;
         int rc = 0;
         ENTRY;
 
         if (need_locked)
                 mdd_lock(ctxt, mdd_obj, DT_READ_LOCK);
-        if (ma->ma_need & MA_INODE) {
-                next = mdd_object_child(mdd_obj);
-                rc = next->do_ops->do_attr_get(ctxt, next, &ma->ma_attr);
-                if (rc)
-                        GOTO(out, rc);
-                ma->ma_valid = MA_INODE;
-        }
-
-        if (ma->ma_need & MA_LOV) {
+        if (ma->ma_need & MA_INODE)
+                rc = __mdd_iattr_get(ctxt, mdd_obj, ma);
+        
+        if (rc == 0 && ma->ma_need & MA_LOV) {
                  if ((S_ISREG(ma->ma_attr.la_mode)
                      || S_ISDIR(ma->ma_attr.la_mode))) {
                         rc = __mdd_lmm_get(ctxt, mdd_obj, ma);
@@ -260,8 +270,6 @@ static int mdd_attr_get(const struct lu_context *ctxt,
         int                rc;
 
         ENTRY;
-
-        LASSERT(lu_object_exists(ctxt, &obj->mo_lu));
 
         mdd_lock(ctxt, mdd_obj, DT_READ_LOCK);
         rc = mdd_attr_get_internal(ctxt, mdd_obj, ma, 0);
@@ -737,7 +745,7 @@ static int mdd_attr_set(const struct lu_context *ctxt,
 
         if (rc == 0 && ma->ma_valid & MA_LOV) {
                 if ((S_ISREG(mdd_object_type(mdd_obj)) || 
-                             S_ISDIR(mdd_object_type(mdd_obj)))) {
+                     S_ISDIR(mdd_object_type(mdd_obj)))) {
                         /*TODO check permission*/
                         rc = mdd_lov_set_md(ctxt, NULL, mdd_obj, ma->ma_lmm,
                                             ma->ma_lmm_size, handle, 1);
@@ -950,22 +958,25 @@ static int mdd_dir_is_empty(const struct lu_context *ctx,
         return result;
 }
 
+/* return md_attr back,
+ * if it is last unlink then return lov ea + llog cookie*/
 static int __mdd_finish_unlink(const struct lu_context *ctxt,
                                struct mdd_object *obj, struct md_attr *ma)
 {
         int rc;
         ENTRY;
  
-        rc = mdd_attr_get_internal(ctxt, obj, ma, 0);
-        if (rc)
-                RETURN(rc);
-
-        if (atomic_read(&obj->mod_count) == 0 &&
-            ma->ma_attr.la_nlink == 0 && S_ISREG(mdd_object_type(obj))) {
-                rc = __mdd_lmm_get(ctxt, obj, ma);
-                if(S_ISREG(ma->ma_attr.la_mode) && ma->ma_valid & MA_LOV)
-                        rc = mdd_unlink_log(ctxt, mdo2mdd(&obj->mod_obj),
-                                    obj, ma);                
+        rc = __mdd_iattr_get(ctxt, obj, ma);
+        if (rc == 0) {
+                if (atomic_read(&obj->mod_count) == 0 &&
+                    ma->ma_attr.la_nlink == 0 &&
+                    S_ISREG(mdd_object_type(obj))) {
+                        rc = __mdd_lmm_get(ctxt, obj, ma);
+                        if (rc == 0)
+                                rc = mdd_unlink_log(ctxt,
+                                                    mdo2mdd(&obj->mod_obj),
+                                                    obj, ma);                
+                }
         }
         RETURN(rc);
 }
@@ -1027,10 +1038,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
                 /* unlink dotdot */
                 __mdd_ref_del(ctxt, mdd_pobj, handle);
         }
-        rc = mdd_attr_get_internal(ctxt, mdd_cobj, ma, 0);
-        if (rc)
-                GOTO(cleanup, rc);
-        
+
         rc = __mdd_finish_unlink(ctxt, mdd_cobj, ma);
 
 cleanup:
@@ -1194,9 +1202,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         /*FIXME: Should consider tobj and sobj too in rename_lock*/
         rc = mdd_rename_lock(ctxt, mdd, mdd_spobj, mdd_tpobj);
         if (rc)
-                GOTO(cleanup, rc);
-        locked = 1;
-
+                GOTO(cleanup_unlocked, rc);
 
         rc = __mdd_index_delete(ctxt, mdd_spobj, sname, handle);
         if (rc)
@@ -1218,19 +1224,16 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
 
         if (tobj && lu_object_exists(ctxt, &tobj->mo_lu)) {
                 __mdd_ref_del(ctxt, mdd_tobj, handle);
+                /* remove dot reference */
                 if (S_ISDIR(mdd_object_type(mdd_tobj)))
-                        __mdd_ref_del(ctxt, mdd_tpobj, handle);
-                else {
-                        rc = mdd_attr_get_internal(ctxt, mdd_tobj, ma, 0);
-                        if (rc)
-                                GOTO(cleanup, rc);
-                }
-                
+                        __mdd_ref_del(ctxt, mdd_tobj, handle);
+
+                rc = __mdd_finish_unlink(ctxt, mdd_tobj, ma);
                 mdd_set_dead_obj(mdd_tobj);
         }
 cleanup:
-        if (locked)
-                mdd_rename_unlock(ctxt, mdd_spobj, mdd_tpobj);
+        mdd_rename_unlock(ctxt, mdd_spobj, mdd_tpobj);
+cleanup_unlocked:
         mdd_trans_stop(ctxt, mdd, handle);
         RETURN(rc);
 }
