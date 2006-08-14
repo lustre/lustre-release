@@ -149,6 +149,8 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
                 out |= LA_MTIME;
         if (in & ATTR_CTIME)
                 out |= LA_CTIME;
+        if (in & ATTR_ATTR_FLAG)
+                out |= LA_FLAGS;
 
         if (in & ATTR_FROM_OPEN)
                 rr->rr_flags |= MRF_SETATTR_LOCKED;
@@ -161,9 +163,6 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 
         if (in & ATTR_MTIME_SET)
                 ma->ma_attr_flags |= MD_MTIME_SET;
-
-        if (in & ATTR_ATTR_FLAG)
-                ma->ma_attr_flags |= MD_ATTR_FLAG;
 
         if (in & ATTR_RAW)
                 ma->ma_attr_flags |= MD_ATTR_RAW;

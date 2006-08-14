@@ -604,23 +604,22 @@ static int __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_object *o,
 int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
                  const struct md_attr *ma)
 {
-        time_t now = CURRENT_SECONDS;
-        struct lu_attr *la = (struct lu_attr *)&ma->ma_attr;
-        struct lu_attr *tmp_la = &mdd_ctx_info(ctxt)->mti_la;
+        struct lu_attr   *la = (struct lu_attr*)&ma->ma_attr;
+        struct lu_attr   *tmp_la = &mdd_ctx_info(ctxt)->mti_la;
         struct dt_object *next = mdd_object_child(obj);
-        int rc = 0;
+        time_t            now = CURRENT_SECONDS;
+        int               rc = 0;
         ENTRY;
 
         rc = next->do_ops->do_attr_get(ctxt, next, tmp_la);
         if (rc)
                 RETURN(rc);
 
-        if (!(ma->ma_attr_flags & ATTR_CTIME_SET))
+        if (!(ma->ma_attr_flags & MD_CTIME_SET))
                 la->la_ctime = now;
-        
-        if (!(ma->ma_attr_flags & ATTR_ATIME_SET))
+        if (!(ma->ma_attr_flags & MD_ATIME_SET))
                 la->la_atime = now;
-        if (!(ma->ma_attr_flags & ATTR_MTIME_SET))
+        if (!(ma->ma_attr_flags & MD_MTIME_SET))
                 la->la_mtime = now;
 
         /*XXX Check permission */
@@ -652,7 +651,7 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
                         la->la_uid = tmp_la->la_uid;
                 if (la->la_gid == (gid_t) -1)
                         la->la_gid = tmp_la->la_gid;
-                if (!(la->la_valid & ATTR_MODE))
+                if (!(la->la_valid & LA_MODE))
                         la->la_mode = tmp_la->la_mode;
                 /*
                  * If the user or group of a non-directory has been
@@ -734,9 +733,7 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         rc = mdd_fix_attr(ctxt, mdd_obj, ma);
         if (rc)
                 GOTO(cleanup, rc);
-        if (ma->ma_attr_flags & MD_ATTR_FLAG) {  /* ioctl */
-                rc = -ENOTSUPP;
-        } else if (ma->ma_attr.la_valid) {            /* setattr */
+        if (ma->ma_attr.la_valid) {            /* setattr */
                 mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
                 rc = mdd_attr_set_internal(ctxt, mdd_obj, &ma->ma_attr, handle);
                 mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);

@@ -462,8 +462,9 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
 finish_open:
         if (result != 0 && created) {
+                int rc2;
                 ma->ma_need = 0;
-                int rc2 = mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
+                rc2 = mdo_unlink(info->mti_ctxt, mdt_object_child(parent),
                                      mdt_object_child(child), rr->rr_name,
                                      &info->mti_attr);
                 if (rc2 != 0)

@@ -68,8 +68,7 @@ enum md_attr_flags {
         MD_ATIME_SET      = 1 << 0,
         MD_MTIME_SET      = 1 << 1,
         MD_CTIME_SET      = 1 << 2,
-        MD_ATTR_FLAG      = 1 << 3, 
-        MD_ATTR_RAW       = 1 << 4
+        MD_ATTR_RAW       = 1 << 3
 };
 
 /* additional parameters for create */

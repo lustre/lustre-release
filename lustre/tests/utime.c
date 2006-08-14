@@ -90,9 +90,9 @@ int main(int argc, char *argv[])
 	}
 
 	if (st.st_atime != utb.actime ) {
-		fprintf(stderr, "%s: bad utime mtime %lu should be  %lu\n",
+		fprintf(stderr, "%s: bad utime atime %lu should be  %lu\n",
 			prog, st.st_atime, utb.actime);
-		return 7;
+		return 8;
 	}
 
 	printf("%s: good utime mtimes %lu, atime %lu\n",

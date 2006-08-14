@@ -645,9 +645,9 @@ static int osd_inode_setattr(const struct lu_context *ctx,
         if (bits & LA_ATIME)
                 inode->i_atime  = *osd_inode_time(ctx, inode, attr->la_atime);
         if (bits & LA_CTIME)
-                inode->i_atime  = *osd_inode_time(ctx, inode, attr->la_ctime);
+                inode->i_ctime  = *osd_inode_time(ctx, inode, attr->la_ctime);
         if (bits & LA_MTIME)
-                inode->i_atime  = *osd_inode_time(ctx, inode, attr->la_mtime);
+                inode->i_mtime  = *osd_inode_time(ctx, inode, attr->la_mtime);
         if (bits & LA_SIZE)
                 inode->i_size   = attr->la_size;
         if (bits & LA_BLOCKS)

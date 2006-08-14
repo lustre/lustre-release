@@ -387,7 +387,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
                        rc = mdd_lov_set_dir_md(ctxt, child, lmmp, lmm_size, handle);
                 }
         }
-        CDEBUG(D_INFO, "Set lov md %p size %d for fid "DFID" rc%d/n",
+        CDEBUG(D_INFO, "Set lov md %p size %d for fid "DFID" rc%d\n",
                         lmmp, lmm_size, PFID(mdo2fid(child)), rc);
         RETURN(rc);
 }
