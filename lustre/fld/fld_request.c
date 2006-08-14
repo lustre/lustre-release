@@ -254,10 +254,16 @@ static inline int hash_is_sane(int hash)
         return (hash >= 0 && hash < ARRAY_SIZE(fld_hash));
 }
 
+/* 1M of FLD cache will not hurt client a lot */
+#define FLD_CACHE_SIZE 1024000
+
+/* cache threshold is 10 persent of size */
+#define FLD_CACHE_THRESHOLD 10
+
 int fld_client_init(struct lu_client_fld *fld,
                     const char *uuid, int hash)
 {
-        int rc = 0;
+        int cache_size, cache_threshold, rc = 0;
         ENTRY;
 
         LASSERT(fld != NULL);
@@ -276,7 +282,15 @@ int fld_client_init(struct lu_client_fld *fld,
                  "%s-cli-%s", LUSTRE_FLD_NAME, uuid);
 
 #ifdef __KERNEL__
-        fld->fld_cache = fld_cache_init(FLD_HTABLE_SIZE);
+        cache_size = FLD_CACHE_SIZE /
+                sizeof(struct fld_cache_entry);
+        
+        cache_threshold = cache_size *
+                FLD_CACHE_THRESHOLD / 100;
+        
+        fld->fld_cache = fld_cache_init(FLD_HTABLE_SIZE,
+                                        cache_size,
+                                        cache_threshold);
         if (IS_ERR(fld->fld_cache)) {
                 rc = PTR_ERR(fld->fld_cache);
                 fld->fld_cache = NULL;

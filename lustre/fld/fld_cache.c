@@ -58,35 +58,45 @@ static inline __u32 fld_cache_hash(seqno_t seq)
         return (__u32)seq;
 }
 
-struct fld_cache_info *fld_cache_init(int size)
+struct fld_cache_info *fld_cache_init(int hash_size, int cache_size,
+                                      int cache_threshold)
 {
 	struct fld_cache_info *cache;
         int i;
         ENTRY;
 
         /* check if size is power of two */
-        LASSERT(IS_PO2(size));
+        LASSERT(IS_PO2(hash_size));
+
+        LASSERT(cache_threshold < cache_size);
         
         OBD_ALLOC_PTR(cache);
         if (cache == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
 
-	cache->fci_size = size;
+        INIT_LIST_HEAD(&cache->fci_lru);
+
+	cache->fci_cache_count = 0;
         spin_lock_init(&cache->fci_lock);
+	cache->fci_hash_size = hash_size;
+	cache->fci_cache_size = cache_size;
+        cache->fci_threshold = cache_threshold;
 
         /* init fld cache info */
-        cache->fci_hash_mask = size - 1;
-        OBD_ALLOC(cache->fci_hash, size * sizeof(*cache->fci_hash));
-        if (cache->fci_hash == NULL) {
+        cache->fci_hash_mask = hash_size - 1;
+        OBD_ALLOC(cache->fci_hash_table,
+                  hash_size * sizeof(*cache->fci_hash_table));
+        if (cache->fci_hash_table == NULL) {
                 OBD_FREE_PTR(cache);
                 RETURN(ERR_PTR(-ENOMEM));
         }
 
-        for (i = 0; i < size; i++)
-                INIT_HLIST_HEAD(&cache->fci_hash[i]);
+        for (i = 0; i < hash_size; i++)
+                INIT_HLIST_HEAD(&cache->fci_hash_table[i]);
 
-        CDEBUG(D_INFO|D_WARNING, "FLD cache size %d\n",
-               size);
+        CDEBUG(D_INFO|D_WARNING, "FLD cache - htable size: %d, "
+               "cache size: %d, cache threshold: %d\n",
+               hash_size, cache_size, cache_threshold);
 
         RETURN(cache);
 }
@@ -105,18 +115,19 @@ void fld_cache_fini(struct fld_cache_info *cache)
 
 	/* free all cache entries */
 	spin_lock(&cache->fci_lock);
-	for (i = 0; i < cache->fci_size; i++) {
-		bucket = cache->fci_hash + i;
+	for (i = 0; i < cache->fci_hash_size; i++) {
+		bucket = cache->fci_hash_table + i;
 		hlist_for_each_entry_safe(flde, scan, next, bucket, fce_list) {
 			hlist_del_init(&flde->fce_list);
+                        list_del_init(&flde->fce_lru);
 			OBD_FREE_PTR(flde);
 		}
 	}
         spin_unlock(&cache->fci_lock);
 
 	/* free cache hash table and cache itself */
-	OBD_FREE(cache->fci_hash, cache->fci_size *
-		 sizeof(*cache->fci_hash));
+	OBD_FREE(cache->fci_hash_table, cache->fci_hash_size *
+		 sizeof(*cache->fci_hash_table));
 	OBD_FREE_PTR(cache);
 	
         EXIT;
@@ -126,8 +137,40 @@ EXPORT_SYMBOL(fld_cache_fini);
 static inline struct hlist_head *
 fld_cache_bucket(struct fld_cache_info *cache, seqno_t seq)
 {
-        return cache->fci_hash + (fld_cache_hash(seq) &
-                                  cache->fci_hash_mask);
+        return cache->fci_hash_table + (fld_cache_hash(seq) &
+                                        cache->fci_hash_mask);
+}
+
+/*
+ * check if cache needs to be shrinked. If so - do it. Tries to keep all
+ * collision lists wel balanced. That is, checks all of them and removes one
+ * entry in list and so on.
+ */
+static int fld_cache_shrink(struct fld_cache_info *cache)
+{
+        struct fld_cache_entry *flde;
+        struct list_head *curr;
+        ENTRY;
+        
+        LASSERT(cache != NULL);
+
+        if (cache->fci_cache_count < cache->fci_cache_size)
+                RETURN(0);
+
+        curr = cache->fci_lru.prev;
+        
+        while (cache->fci_cache_count + cache->fci_threshold >
+               cache->fci_cache_size && curr != &cache->fci_lru)
+        {
+                flde = list_entry(curr, struct fld_cache_entry, fce_lru);
+                curr = curr->prev;
+
+                hlist_del_init(&flde->fce_list);
+                list_del_init(&flde->fce_lru);
+                OBD_FREE_PTR(flde);
+        }
+
+        RETURN(0);
 }
 
 int fld_cache_insert(struct fld_cache_info *cache,
@@ -136,12 +179,20 @@ int fld_cache_insert(struct fld_cache_info *cache,
         struct fld_cache_entry *flde, *fldt;
         struct hlist_head *bucket;
         struct hlist_node *scan;
-        int rc = 0;
+        int rc;
         ENTRY;
 
-        bucket = fld_cache_bucket(cache, seq);
-
         spin_lock(&cache->fci_lock);
+
+        /* check if need to shrink cache */
+        rc = fld_cache_shrink(cache);
+        if (rc) {
+                spin_unlock(&cache->fci_lock);
+                RETURN(rc);
+        }
+
+        /* check if cache already has the entry with such a seq */
+        bucket = fld_cache_bucket(cache, seq);
         hlist_for_each_entry(fldt, scan, bucket, fce_list) {
                 if (fldt->fce_seq == seq)
                         spin_unlock(&cache->fci_lock);
@@ -149,10 +200,15 @@ int fld_cache_insert(struct fld_cache_info *cache,
         }
         spin_unlock(&cache->fci_lock);
 
+        /* allocate new entry */
         OBD_ALLOC_PTR(flde);
         if (!flde)
                 RETURN(-ENOMEM);
 
+        /* 
+         * check if cache has the entry with such a seq again. It could be added
+         * while we were allocating new entry.
+         */
         spin_lock(&cache->fci_lock);
         hlist_for_each_entry(fldt, scan, bucket, fce_list) {
                 if (fldt->fce_seq == seq) {
@@ -161,11 +217,16 @@ int fld_cache_insert(struct fld_cache_info *cache,
                         RETURN(0);
                 }
         }
+
+        /* add new entry to cache and lru list */
         INIT_HLIST_NODE(&flde->fce_list);
         flde->fce_mds = mds;
         flde->fce_seq = seq;
 
         hlist_add_head(&flde->fce_list, bucket);
+        list_add(&flde->fce_lru, &cache->fci_lru);
+        cache->fci_cache_count++;
+        
         spin_unlock(&cache->fci_lock);
 
         RETURN(0);
@@ -175,16 +236,17 @@ EXPORT_SYMBOL(fld_cache_insert);
 void fld_cache_delete(struct fld_cache_info *cache, seqno_t seq)
 {
         struct fld_cache_entry *flde;
+        struct hlist_node *scan, *n;
         struct hlist_head *bucket;
-        struct hlist_node *scan;
         ENTRY;
 
         bucket = fld_cache_bucket(cache, seq);
 	
         spin_lock(&cache->fci_lock);
-        hlist_for_each_entry(flde, scan, bucket, fce_list) {
+        hlist_for_each_entry_safe(flde, scan, n, bucket, fce_list) {
                 if (flde->fce_seq == seq) {
                         hlist_del_init(&flde->fce_list);
+                        list_del_init(&flde->fce_lru);
 			OBD_FREE_PTR(flde);
                         GOTO(out_unlock, 0);
                 }
@@ -200,16 +262,21 @@ int fld_cache_lookup(struct fld_cache_info *cache,
                      seqno_t seq, mdsno_t *mds)
 {
         struct fld_cache_entry *flde;
+        struct hlist_node *scan, *n;
         struct hlist_head *bucket;
-        struct hlist_node *scan;
         ENTRY;
 
         bucket = fld_cache_bucket(cache, seq);
 
         spin_lock(&cache->fci_lock);
-        hlist_for_each_entry(flde, scan, bucket, fce_list) {
+        hlist_for_each_entry_safe(flde, scan, n, bucket, fce_list) {
                 if (flde->fce_seq == seq) {
                         *mds = flde->fce_mds;
+
+                        /* move found entry to the head of lru list */
+                        list_del(&flde->fce_lru);
+                        list_add(&flde->fce_lru, &cache->fci_lru);
+                        
                         spin_unlock(&cache->fci_lock);
                         RETURN(0);
                 }

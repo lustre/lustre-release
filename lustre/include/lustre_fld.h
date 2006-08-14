@@ -74,15 +74,38 @@ struct lu_server_fld {
 
 struct fld_cache_entry {
         struct hlist_node        fce_list;
+        struct list_head         fce_lru;
         mdsno_t                  fce_mds;
         seqno_t                  fce_seq;
 };
 
 struct fld_cache_info {
-        struct hlist_head       *fci_hash;
+        /* 
+         * cache guard, protects fci_hash mostly because others immutable after
+         * init is finished.
+         */
         spinlock_t               fci_lock;
-        int                      fci_size;
+
+        /* cache shrink threshold */
+        int                      fci_threshold;
+        
+        /* prefered number of cached entries */
+        int                      fci_cache_size;
+
+        /* current number of cached entries. Protected by @fci_lock */
+        int                      fci_cache_count;
+
+        /* hash table size (number of collision lists) */
+        int                      fci_hash_size;
+
+        /* hash table mask */
         int                      fci_hash_mask;
+
+        /* hash table for all collision lists */
+        struct hlist_head       *fci_hash_table;
+
+        /* lru list */
+        struct list_head         fci_lru;
 };
 
 struct lu_client_fld {
@@ -140,7 +163,9 @@ int fld_client_del_target(struct lu_client_fld *fld,
                           struct obd_export *exp);
 
 /* cache methods */
-struct fld_cache_info *fld_cache_init(int size);
+struct fld_cache_info *fld_cache_init(int hash_size,
+                                      int cache_size,
+                                      int cache_threshold);
 
 void fld_cache_fini(struct fld_cache_info *cache);
 
