@@ -93,9 +93,11 @@ int osd_oi_init(struct osd_thread_info *info,
                 if (result == 0) {
                         LASSERT(obj->do_index_ops != NULL);
                         oi->oi_dir = obj;
-                } else
+                } else {
                         CERROR("Wrong index \"%s\": %d\n",
                                oi_dirname, result);
+                        lu_object_put(ctx, &obj->do_lu);
+                }
         } else {
                 result = PTR_ERR(obj);
                 CERROR("Cannot open \"%s\": %d\n", oi_dirname, result);
