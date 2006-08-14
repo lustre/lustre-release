@@ -571,14 +571,13 @@ int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
         struct obd_device *obd = mdd2_obd(mdd);
 
         if (mds_log_op_unlink(obd, NULL, ma->ma_lmm, ma->ma_lmm_size,
-                                 ma->ma_cookie, ma->ma_cookie_size) == 0) {
+                                 ma->ma_cookie, ma->ma_cookie_size) > 0) {
                 ma->ma_valid |= MA_COOKIE;
         }
         return 0;
 }
 
-int mdd_lov_setattr_async(const struct lu_context *ctxt,
-                          struct mdd_object *obj,
+int mdd_lov_setattr_async(const struct lu_context *ctxt, struct mdd_object *obj,
                           struct lov_mds_md *lmm, int lmm_size)
 {
         struct mdd_device       *mdd = mdo2mdd(&obj->mod_obj);
