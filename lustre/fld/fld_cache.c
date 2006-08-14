@@ -120,6 +120,7 @@ void fld_cache_fini(struct fld_cache_info *cache)
 		hlist_for_each_entry_safe(flde, scan, next, bucket, fce_list) {
 			hlist_del_init(&flde->fce_list);
                         list_del_init(&flde->fce_lru);
+                        cache->fci_cache_count--;
 			OBD_FREE_PTR(flde);
 		}
 	}
@@ -167,6 +168,7 @@ static int fld_cache_shrink(struct fld_cache_info *cache)
 
                 hlist_del_init(&flde->fce_list);
                 list_del_init(&flde->fce_lru);
+                cache->fci_cache_count--;
                 OBD_FREE_PTR(flde);
         }
 
@@ -247,6 +249,7 @@ void fld_cache_delete(struct fld_cache_info *cache, seqno_t seq)
                 if (flde->fce_seq == seq) {
                         hlist_del_init(&flde->fce_list);
                         list_del_init(&flde->fce_lru);
+                        cache->fci_cache_count--;
 			OBD_FREE_PTR(flde);
                         GOTO(out_unlock, 0);
                 }
