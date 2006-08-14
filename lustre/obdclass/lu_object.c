@@ -451,7 +451,7 @@ struct lu_object *lu_object_find(const struct lu_context *ctxt,
         shadow = htable_lookup(s, bucket, f);
         if (shadow == NULL) {
                 hlist_add_head(&o->lo_header->loh_hash, bucket);
-                list_add_tail(&s->ls_lru, &o->lo_header->loh_lru);
+                list_add_tail(&o->lo_header->loh_lru, &s->ls_lru);
                 ++ s->ls_busy;
                 shadow = o;
                 o = NULL;
