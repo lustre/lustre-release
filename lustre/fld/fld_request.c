@@ -257,7 +257,7 @@ static inline int hash_is_sane(int hash)
 /* 1M of FLD cache will not hurt client a lot */
 #define FLD_CACHE_SIZE 1024000
 
-/* cache threshold is 10 persent of size */
+/* cache threshold is 10 percent of size */
 #define FLD_CACHE_THRESHOLD 10
 
 int fld_client_init(struct lu_client_fld *fld,
