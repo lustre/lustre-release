@@ -486,7 +486,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         /* get lov ea from parent and set to lov */
                         struct lov_mds_md *__lmm;
                         int __lmm_size, returned_lmm_size;
-                        __lmm_size = mdd2_obd(mdd)->u.mds.mds_max_mdsize;
+                        __lmm_size = mdd_lov_mdsize(ctxt, mdd);
 
                         OBD_ALLOC(__lmm, __lmm_size);
                         if (__lmm == NULL)
@@ -597,21 +597,5 @@ int mdd_lov_setattr_async(const struct lu_context *ctxt, struct mdd_object *obj,
                                    lmm_size, NULL, seq, oid);
 
         RETURN(rc);
-}
-
-int mdd_lov_mdsize(const struct lu_context *ctxt, struct mdd_device *mdd,
-                   int *md_size)
-{
-        struct obd_device *obd = mdd2_obd(mdd);
-        *md_size = obd->u.mds.mds_max_mdsize;
-        RETURN(0);
-}
-
-int mdd_lov_cookiesize(const struct lu_context *ctxt, struct mdd_device *mdd,
-                       int *cookie_size)
-{
-        struct obd_device *obd = mdd2_obd(mdd);
-        *cookie_size = obd->u.mds.mds_max_cookiesize;
-        RETURN(0);
 }
 

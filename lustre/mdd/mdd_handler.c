@@ -602,13 +602,13 @@ static int __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_object *o,
  * and port to 
  */
 int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
-                 const struct md_attr *ma)
+                 struct md_attr *ma)
 {
-        struct lu_attr   *la = (struct lu_attr*)&ma->ma_attr;
+        struct lu_attr   *la = &ma->ma_attr;
         struct lu_attr   *tmp_la = &mdd_ctx_info(ctxt)->mti_la;
         struct dt_object *next = mdd_object_child(obj);
         time_t            now = CURRENT_SECONDS;
-        int               rc = 0;
+        int               rc;
         ENTRY;
 
         rc = next->do_ops->do_attr_get(ctxt, next, tmp_la);
@@ -682,7 +682,7 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
                 if (((tmp_la->la_mode & (S_ISGID | S_IXGRP)) ==
                      (S_ISGID | S_IXGRP)) && !S_ISDIR(tmp_la->la_mode)) {
                         la->la_mode &= ~S_ISGID;
-                        la->la_valid |= ATTR_MODE;
+                        la->la_valid |= LA_MODE;
                 }
         } else if (la->la_valid & LA_MODE) {
                 int mode = la->la_mode;
@@ -698,7 +698,7 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
 
 /* set attr and LOV EA at once, return updated attr */
 static int mdd_attr_set(const struct lu_context *ctxt,
-                        struct md_object *obj, const struct md_attr *ma)
+                        struct md_object *obj, struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -715,7 +715,7 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         /* start a log jounal handle if needed */
         if (S_ISREG(mdd_object_type(mdd_obj)) &&
             ma->ma_attr.la_valid & (LA_UID | LA_GID)) {
-                mdd_lov_mdsize(ctxt, mdd, &max_size);
+                max_size = mdd_lov_mdsize(ctxt, mdd);
                 OBD_ALLOC(lmm, max_size);
                 if (lmm == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
@@ -1183,7 +1183,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         struct mdd_object *mdd_sobj = mdd_object_find(ctxt, mdd, lf);
         struct mdd_object *mdd_tobj = NULL;
         struct thandle *handle;
-        int rc, locked = 0;
+        int rc;
         ENTRY;
 
         if (tobj)
@@ -1686,16 +1686,12 @@ static int mdd_get_maxsize(const struct lu_context *ctx,
                            int *cookie_size)
 {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
-        int rc;
-
         ENTRY;
 
-        rc = mdd_lov_mdsize(ctx, mdd, md_size);
-        if (rc)
-                RETURN(rc);
-        rc = mdd_lov_cookiesize(ctx, mdd, cookie_size);
+        *md_size =  mdd_lov_mdsize(ctx, mdd);
+        *cookie_size = mdd_lov_cookiesize(ctx, mdd);
 
-        RETURN(rc);
+        RETURN(0);
 }
 
 static void __mdd_ref_add(const struct lu_context *ctxt, struct mdd_object *obj,

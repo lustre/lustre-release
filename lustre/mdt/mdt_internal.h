@@ -120,7 +120,6 @@ struct mdt_device {
         } mdt_opts;
 
         /* lock to pretect epoch and write count
-         * because we need not allocate memory, spinlock is fast.
          */
         spinlock_t                 mdt_epoch_lock;
         __u64                      mdt_io_epoch;

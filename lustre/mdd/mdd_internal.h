@@ -156,8 +156,18 @@ static inline umode_t mdd_object_type(const struct mdd_object *obj)
         return lu_object_attr(&obj->mod_obj.mo_lu);
 }
 
-int mdd_lov_mdsize(const struct lu_context *ctxt, struct mdd_device *mdd,
-                   int *md_size);
-int mdd_lov_cookiesize(const struct lu_context *ctxt, struct mdd_device *mdd,
-                       int *cookie_size);
+static inline int mdd_lov_mdsize(const struct lu_context *ctxt, 
+                                 struct mdd_device *mdd)
+{
+        struct obd_device *obd = mdd2_obd(mdd);
+        return obd->u.mds.mds_max_mdsize;
+}
+
+static inline int mdd_lov_cookiesize(const struct lu_context *ctxt, 
+                                     struct mdd_device *mdd)
+{
+        struct obd_device *obd = mdd2_obd(mdd);
+        return obd->u.mds.mds_max_cookiesize;
+}
+
 #endif
