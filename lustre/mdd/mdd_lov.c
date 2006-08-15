@@ -187,22 +187,23 @@ static int mdd_lov_set_stripe_md(const struct lu_context *ctxt,
         struct lov_stripe_md    *lsm = NULL;
         int rc;
         ENTRY;
-        
-        LASSERT(S_ISDIR(mdd_object_type(obj)) || S_ISREG(mdd_object_type(obj)));
+
+        LASSERT(S_ISDIR(mdd_object_type(ctxt, obj)) ||
+                S_ISREG(mdd_object_type(ctxt, obj)));
 
         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, lov_exp, 0, &lsm, lmmp);
         if (rc)
                 RETURN(rc);
         obd_free_memmd(lov_exp, &lsm);
 
-        rc = mdd_xattr_set_txn(ctxt, obj, lmmp, lmm_size, MDS_LOV_MD_NAME, 0, 
+        rc = mdd_xattr_set_txn(ctxt, obj, lmmp, lmm_size, MDS_LOV_MD_NAME, 0,
                                handle);
-        
+
         CDEBUG(D_INFO, "set lov ea of "DFID" rc %d \n", PFID(mdo2fid(obj)), rc);
         RETURN(rc);
 }
-                
-static int mdd_lov_set_dir_md(const struct lu_context *ctxt, 
+
+static int mdd_lov_set_dir_md(const struct lu_context *ctxt,
                               struct mdd_object *obj, struct lov_mds_md *lmmp,
                               int lmm_size, struct thandle *handle)
 {
@@ -211,35 +212,37 @@ static int mdd_lov_set_dir_md(const struct lu_context *ctxt,
         ENTRY;
 
         /*TODO check permission*/
-        LASSERT(S_ISDIR(mdd_object_type(obj)));
+        LASSERT(S_ISDIR(mdd_object_type(ctxt, obj)));
         lum = (struct lov_user_md*)lmmp;
 
         /* if { size, offset, count } = { 0, -1, 0 } (i.e. all default
          * values specified) then delete default striping from dir. */
-        if ((lum->lmm_stripe_size == 0 && lum->lmm_stripe_count == 0 && 
+        if ((lum->lmm_stripe_size == 0 && lum->lmm_stripe_count == 0 &&
              lum->lmm_stripe_offset == (typeof(lum->lmm_stripe_offset))(-1)) ||
              /* lmm_stripe_size == -1 is deprecated in 1.4.6 */
              lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1)){
-                rc = mdd_xattr_set_txn(ctxt, obj, NULL, 0, MDS_LOV_MD_NAME, 0, 
+                rc = mdd_xattr_set_txn(ctxt, obj, NULL, 0, MDS_LOV_MD_NAME, 0,
                                        handle);
                 if (rc == -ENODATA)
                         rc = 0;
                 CDEBUG(D_INFO, "delete lov ea of "DFID" rc %d \n",
                                 PFID(mdo2fid(obj)), rc);
         } else {
-                rc = mdd_lov_set_stripe_md(ctxt, obj, lmmp, lmm_size, handle); 
+                rc = mdd_lov_set_stripe_md(ctxt, obj, lmmp, lmm_size, handle);
         }
         RETURN(rc);
 }
-        
+
 int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
                    struct mdd_object *child, struct lov_mds_md *lmmp,
                    int lmm_size, struct thandle *handle, int set_stripe)
 {
         int rc = 0;
+        umode_t mode;
         ENTRY;
 
-        if (S_ISREG(mdd_object_type(child)) && lmm_size > 0) {
+        mode = mdd_object_type(ctxt, child);
+        if (S_ISREG(mode) && lmm_size > 0) {
                 if (set_stripe) {
                         rc = mdd_lov_set_stripe_md(ctxt, child, lmmp, lmm_size,
                                                    handle);
@@ -247,7 +250,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
                         rc = mdd_xattr_set_txn(ctxt, child, lmmp, lmm_size,
                                                MDS_LOV_MD_NAME, 0, handle);
                 }
-        } else  if (S_ISDIR(mdd_object_type(child))) {
+        } else  if (S_ISDIR(mode)) {
                 if (lmmp == NULL && lmm_size == 0) {
                         struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
                         int size = sizeof(lmm);
@@ -280,7 +283,7 @@ static obd_id mdd_lov_create_id(const struct lu_fid *fid)
         return ((fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid));
 }
 
-/*FIXME: it is just the helper function used by mdd lov obd to 
+/*FIXME: it is just the helper function used by mdd lov obd to
  * get attr from obdo, copied from obdo_from_inode*/
 static void obdo_from_la(struct obdo *dst, struct lu_attr *la, obd_flag valid)
 {
@@ -394,13 +397,13 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 LASSERT(eadata != NULL);
                 rc = obd_iocontrol(OBD_IOC_LOV_SETEA, lov_exp, 0, &lsm,
                                    (void*)eadata);
-                if (rc) 
+                if (rc)
                         GOTO(out_oa, rc);
                 lsm->lsm_object_id = oa->o_id;
         }
-        /*Sometimes, we may truncate some object(without lsm) 
-         *then open (with write flags)it, so creating lsm above. 
-         *The Nonzero(truncated) size should tell ost. since size 
+        /*Sometimes, we may truncate some object(without lsm)
+         *then open (with write flags)it, so creating lsm above.
+         *The Nonzero(truncated) size should tell ost. since size
          *attr is in charged by OST.
          */
         if (la->la_size && la->la_valid & LA_SIZE) {
@@ -408,8 +411,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 obdo_from_la(oa, la, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
 
-                /* FIXME:pack lustre id to OST, in OST, it will be packed 
-                 * by filter_fid, but can not see what is the usages. So just 
+                /* FIXME:pack lustre id to OST, in OST, it will be packed
+                 * by filter_fid, but can not see what is the usages. So just
                  * pack o_seq o_ver here, maybe fix it after this cycle*/
                 oa->o_fid = lu_object_fid(mdd2lu_obj(child))->f_seq;
                 oa->o_generation = lu_object_fid(mdd2lu_obj(child))->f_oid;
@@ -420,7 +423,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         CERROR("error setting attrs for "DFID": rc %d\n",
                                PFID(mdo2fid(child)), rc);
                         if (rc > 0) {
-                                CERROR("obd_setattr for "DFID" rc %d\n", 
+                                CERROR("obd_setattr for "DFID" rc %d\n",
                                         PFID(mdo2fid(child)), rc);
                                 rc = -EIO;
                         }

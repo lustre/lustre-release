@@ -41,7 +41,7 @@ struct mdd_device {
 
 enum mod_flags {
         /*The dir object has been unlinked*/
-        DEAD_OBJ = 1 << 0,        
+        DEAD_OBJ = 1 << 0,
 };
 
 struct mdd_object {
@@ -87,9 +87,9 @@ int mdd_lov_setattr_async(const struct lu_context *ctxt, struct mdd_object *obj,
 
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx);
 
-void mdd_lock(const struct lu_context *ctxt, struct mdd_object *obj, 
+void mdd_lock(const struct lu_context *ctxt, struct mdd_object *obj,
               enum dt_lock_mode mode);
-void mdd_unlock(const struct lu_context *ctxt, struct mdd_object *obj, 
+void mdd_unlock(const struct lu_context *ctxt, struct mdd_object *obj,
                 enum dt_lock_mode mode);
 extern struct lu_device_operations mdd_lu_ops;
 static inline int lu_device_is_mdd(struct lu_device *d)
@@ -149,19 +149,20 @@ static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
         return lu_object_fid(&obj->mod_obj.mo_lu);
 }
 
-static inline umode_t mdd_object_type(const struct mdd_object *obj)
+static inline umode_t mdd_object_type(const struct lu_context *ctxt,
+                                      const struct mdd_object *obj)
 {
-        return lu_object_attr(&obj->mod_obj.mo_lu);
+        return lu_object_attr(ctxt, &obj->mod_obj.mo_lu);
 }
 
-static inline int mdd_lov_mdsize(const struct lu_context *ctxt, 
+static inline int mdd_lov_mdsize(const struct lu_context *ctxt,
                                  struct mdd_device *mdd)
 {
         struct obd_device *obd = mdd2_obd(mdd);
         return obd->u.mds.mds_max_mdsize;
 }
 
-static inline int mdd_lov_cookiesize(const struct lu_context *ctxt, 
+static inline int mdd_lov_cookiesize(const struct lu_context *ctxt,
                                      struct mdd_device *mdd)
 {
         struct obd_device *obd = mdd2_obd(mdd);

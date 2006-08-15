@@ -710,14 +710,6 @@ static inline const struct lu_fid *lu_object_fid(const struct lu_object *o)
 }
 
 /*
- * Attr of this object.
- */
-static inline const __u32 lu_object_attr(const struct lu_object *o)
-{
-        return o->lo_header->loh_attr;
-}
-
-/*
  * return device operations vector for this object
  */
 static inline struct lu_device_operations *
@@ -794,6 +786,16 @@ static inline int lu_object_assert_not_exists(const struct lu_context *ctx,
                                               const struct lu_object *o)
 {
         return lu_object_exists(ctx, o) <= 0;
+}
+
+/*
+ * Attr of this object.
+ */
+static inline const __u32 lu_object_attr(const struct lu_context *ctx,
+                                         const struct lu_object *o)
+{
+        LASSERT(lu_object_exists(ctx, o) > 0);
+        return o->lo_header->loh_attr;
 }
 
 struct lu_rdpg {

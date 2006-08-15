@@ -190,13 +190,13 @@ static int mdd_may_delete(const struct lu_context *ctxt,
 
         /*TODO:check append flags*/
         if (is_dir) {
-                if (!S_ISDIR(mdd_object_type(cobj)))
+                if (!S_ISDIR(mdd_object_type(ctxt, cobj)))
                         RETURN(-ENOTDIR);
 
                 if (lu_fid_eq(mdo2fid(cobj), &mdd->mdd_root_fid))
                         RETURN(-EBUSY);
 
-        } else if (S_ISDIR(mdd_object_type(cobj)))
+        } else if (S_ISDIR(mdd_object_type(ctxt, cobj)))
                         RETURN(-EISDIR);
 
         if (mdd_is_dead_obj(pobj))
@@ -245,8 +245,8 @@ static int mdd_attr_get_internal(const struct lu_context *ctxt,
                 rc = __mdd_iattr_get(ctxt, mdd_obj, ma);
 
         if (rc == 0 && ma->ma_need & MA_LOV) {
-                 if (S_ISREG(lu_object_attr(mdd2lu_obj(mdd_obj))) ||
-                     S_ISDIR(lu_object_attr(mdd2lu_obj(mdd_obj)))) {
+                if (S_ISREG(lu_object_attr(ctxt, mdd2lu_obj(mdd_obj))) ||
+                    S_ISDIR(lu_object_attr(ctxt, mdd2lu_obj(mdd_obj)))) {
                         rc = __mdd_lmm_get(ctxt, mdd_obj, ma);
                  }
         }
@@ -572,9 +572,9 @@ int mdd_attr_set_internal(const struct lu_context *ctxt, struct mdd_object *o,
         return next->do_ops->do_attr_set(ctxt, next, attr, handle);
 }
 
-int mdd_attr_set_internal_locked(const struct lu_context *ctxt, 
+int mdd_attr_set_internal_locked(const struct lu_context *ctxt,
                                  struct mdd_object *o,
-                                 const struct lu_attr *attr, 
+                                 const struct lu_attr *attr,
                                  struct thandle *handle)
 {
         int rc;
@@ -730,7 +730,7 @@ static int mdd_attr_set(const struct lu_context *ctxt,
                 RETURN(PTR_ERR(handle));
         /*TODO: add lock here*/
         /* start a log jounal handle if needed */
-        if (S_ISREG(mdd_object_type(mdd_obj)) &&
+        if (S_ISREG(mdd_object_type(ctxt, mdd_obj)) &&
             ma->ma_attr.la_valid & (LA_UID | LA_GID)) {
                 max_size = mdd_lov_mdsize(ctxt, mdd);
                 OBD_ALLOC(lmm, max_size);
@@ -751,13 +751,13 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         rc = mdd_fix_attr(ctxt, mdd_obj, ma, la_copy);
         if (rc)
                 GOTO(cleanup, rc);
-        
+
         if (ma->ma_valid & MA_FLAGS) {
                 la_copy->la_flags = ma->ma_attr_flags;
                 la_copy->la_valid |= LA_FLAGS;
                 rc = mdd_attr_set_internal_locked(ctxt, mdd_obj, la_copy,
                                                   handle);
-        }else if (la_copy->la_valid) {            /* setattr */
+        } else if (la_copy->la_valid) {            /* setattr */
                 rc = mdd_attr_set_internal_locked(ctxt, mdd_obj, la_copy,
                                                   handle);
                 /* journal chown/chgrp in llog, just like unlink */
@@ -767,8 +767,10 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         }
 
         if (rc == 0 && ma->ma_valid & MA_LOV) {
-                if ((S_ISREG(mdd_object_type(mdd_obj)) ||
-                     S_ISDIR(mdd_object_type(mdd_obj)))) {
+                umode_t mode;
+
+                mode = mdd_object_type(ctxt, mdd_obj);
+                if (S_ISREG(mode) || S_ISDIR(mode)) {
                         /*TODO check permission*/
                         rc = mdd_lov_set_md(ctxt, NULL, mdd_obj, ma->ma_lmm,
                                             ma->ma_lmm_size, handle, 1);
@@ -900,7 +902,7 @@ static int mdd_link_sanity_check(const struct lu_context *ctxt,
         rc = mdd_may_create(ctxt, tgt_obj, NULL);
         if (rc)
                 RETURN(rc);
-        if (S_ISDIR(mdd_object_type(src_obj)))
+        if (S_ISDIR(mdd_object_type(ctxt, src_obj)))
                 RETURN(-EPERM);
 
         RETURN(rc);
@@ -993,7 +995,7 @@ static int __mdd_finish_unlink(const struct lu_context *ctxt,
         if (rc == 0) {
                 if (atomic_read(&obj->mod_count) == 0 &&
                     ma->ma_attr.la_nlink == 0 &&
-                    S_ISREG(mdd_object_type(obj))) {
+                    S_ISREG(mdd_object_type(ctxt, obj))) {
                         rc = __mdd_lmm_get(ctxt, obj, ma);
                         if (rc == 0 && ma->ma_valid & MA_LOV)
                                 rc = mdd_unlink_log(ctxt,
@@ -1017,7 +1019,7 @@ static int mdd_unlink_sanity_check(const struct lu_context *ctxt,
         if (rc)
                 RETURN(rc);
 
-        if (S_ISDIR(mdd_object_type(cobj)) &&
+        if (S_ISDIR(mdd_object_type(ctxt, cobj)) &&
             dt_try_as_dir(ctxt, dt_cobj)) {
                 rc = mdd_dir_is_empty(ctxt, cobj);
                 if (rc != 0)
@@ -1055,7 +1057,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
                 GOTO(cleanup, rc);
 
         __mdd_ref_del(ctxt, mdd_cobj, handle);
-        if (S_ISDIR(lu_object_attr(&cobj->mo_lu))) {
+        if (S_ISDIR(lu_object_attr(ctxt, &cobj->mo_lu))) {
                 /* unlink dot */
                 __mdd_ref_del(ctxt, mdd_cobj, handle);
                 /* unlink dotdot */
@@ -1164,7 +1166,7 @@ static int mdd_rename_sanity_check(const struct lu_context *ctxt,
         int rc = 0, src_is_dir, tgt_is_dir;
         ENTRY;
 
-        src_is_dir = S_ISDIR(mdd_object_type(sobj));
+        src_is_dir = S_ISDIR(mdd_object_type(ctxt, sobj));
         rc = mdd_may_delete(ctxt, src_pobj, sobj, src_is_dir);
         if (rc)
                 GOTO(out, rc);
@@ -1186,7 +1188,7 @@ static int mdd_rename_sanity_check(const struct lu_context *ctxt,
         if (rc)
                 GOTO(out, rc);
 
-        tgt_is_dir = S_ISDIR(mdd_object_type(tobj));
+        tgt_is_dir = S_ISDIR(mdd_object_type(ctxt, tobj));
         if (tgt_is_dir && mdd_dir_is_empty(ctxt, tobj))
                 GOTO(out, rc = -ENOTEMPTY);
 out:
@@ -1232,7 +1234,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                 GOTO(cleanup, rc);
 
         /*if sobj is dir, its parent object nlink should be dec too*/
-        if (S_ISDIR(mdd_object_type(mdd_sobj)))
+        if (S_ISDIR(mdd_object_type(ctxt, mdd_sobj)))
                 __mdd_ref_del(ctxt, mdd_spobj, handle);
 
         if (tobj) {
@@ -1248,7 +1250,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         if (tobj && lu_object_exists(ctxt, &tobj->mo_lu)) {
                 __mdd_ref_del(ctxt, mdd_tobj, handle);
                 /* remove dot reference */
-                if (S_ISDIR(mdd_object_type(mdd_tobj)))
+                if (S_ISDIR(mdd_object_type(ctxt, mdd_tobj)))
                         __mdd_ref_del(ctxt, mdd_tobj, handle);
 
                 rc = __mdd_finish_unlink(ctxt, mdd_tobj, ma);
@@ -1274,7 +1276,7 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
         if (mdd_is_dead_obj(mdd_obj))
                 RETURN(-ESTALE);
         mdd_lock(ctxt, mdd_obj, DT_READ_LOCK);
-        if (S_ISDIR(mdd_object_type(mdd_obj)) && dt_try_as_dir(ctxt, dir))
+        if (S_ISDIR(mdd_object_type(ctxt, mdd_obj)) && dt_try_as_dir(ctxt, dir))
                 rc = dir->do_index_ops->dio_lookup(ctxt, dir, rec, key);
         else
                 rc = -ENOTDIR;
@@ -1775,7 +1777,7 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
         mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
 
         /* rmdir checks */
-        if (S_ISDIR(lu_object_attr(&obj->mo_lu)) &&
+        if (S_ISDIR(lu_object_attr(ctxt, &obj->mo_lu)) &&
             dt_try_as_dir(ctxt, mdd_object_child(mdd_obj))) {
                 rc = mdd_dir_is_empty(ctxt, mdd_obj);
                 if (rc != 0)
@@ -1784,7 +1786,7 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
 
         __mdd_ref_del(ctxt, mdd_obj, handle);
 
-        if (S_ISDIR(lu_object_attr(&obj->mo_lu))) {
+        if (S_ISDIR(lu_object_attr(ctxt, &obj->mo_lu))) {
                 /* unlink dot */
                 __mdd_ref_del(ctxt, mdd_obj, handle);
         }
@@ -1824,7 +1826,8 @@ static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
         next = mdd_object_child(mdd_obj);
 
         mdd_lock(ctxt, mdd_obj, DT_READ_LOCK);
-        if (S_ISDIR(mdd_object_type(mdd_obj)) && dt_try_as_dir(ctxt, next))
+        if (S_ISDIR(mdd_object_type(ctxt, mdd_obj)) &&
+            dt_try_as_dir(ctxt, next))
                 rc = next->do_ops->do_readpage(ctxt, next, rdpg);
         else
                 rc = -ENOTDIR;
