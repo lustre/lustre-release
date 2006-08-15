@@ -159,6 +159,26 @@ static int cmm_add_mdc(const struct lu_context *ctx,
         RETURN(rc);
 }
 
+static void cmm_device_shutdown(const struct lu_context *ctx,
+                                struct cmm_device *cm)
+{
+        struct mdc_device *mc, *tmp;
+        ENTRY;
+
+        /* finish all mdc devices */
+        spin_lock(&cm->cmm_tgt_guard);
+        list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
+                struct lu_device *ld_m = mdc2lu_dev(mc);
+
+                list_del_init(&mc->mc_linkage);
+                lu_device_put(cmm2lu_dev(cm));
+                ld_m->ld_type->ldt_ops->ldto_device_fini(ctx, ld_m);
+                ld_m->ld_type->ldt_ops->ldto_device_free(ctx, ld_m);
+                cm->cmm_tgt_count--;
+        }
+        spin_unlock(&cm->cmm_tgt_guard);
+        EXIT;
+}
 
 static int cmm_process_config(const struct lu_context *ctx,
                               struct lu_device *d, struct lustre_cfg *cfg)
@@ -190,6 +210,10 @@ static int cmm_process_config(const struct lu_context *ctx,
                         }
                 }
                 break;
+        }
+        case LCFG_CLEANUP:
+        {
+                cmm_device_shutdown(ctx, m);
         }
         default:
                 err = next->ld_ops->ldo_process_config(ctx, next, cfg);
@@ -292,7 +316,6 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
                                          struct lu_device *ld)
 {
 	struct cmm_device *cm = lu2cmm_dev(ld);
-        struct mdc_device *mc, *tmp;
         struct lu_site *ls;
         ENTRY;
 
@@ -300,19 +323,6 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
         fld_client_fini(ls->ls_client_fld);
         OBD_FREE_PTR(ls->ls_client_fld);
         ls->ls_client_fld = NULL;
-
-        /* finish all mdc devices */
-        spin_lock(&cm->cmm_tgt_guard);
-        list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
-                struct lu_device *ld_m = mdc2lu_dev(mc);
-
-                list_del_init(&mc->mc_linkage);
-                lu_device_put(cmm2lu_dev(cm));
-                ld->ld_type->ldt_ops->ldto_device_fini(ctx, ld_m);
-                ld->ld_type->ldt_ops->ldto_device_free(ctx, ld_m);
-                cm->cmm_tgt_count--;
-        }
-        spin_unlock(&cm->cmm_tgt_guard);
 
         RETURN (md2lu_dev(cm->cmm_child));
 }
