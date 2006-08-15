@@ -60,7 +60,7 @@ static int mdd_lov_update(struct obd_device *host,
         ENTRY;
 
         LASSERT(owner != NULL);
-        obd = mdd2_obd(mdd);
+        obd = mdd2obd_dev(mdd);
 
         upcall_dev = mdd->mdd_md_dev.md_upcall.mu_upcall_dev;
 
@@ -104,10 +104,10 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                 GOTO(class_detach, rc);
         /*Add here for obd notify mechiasm,
          *when adding a new ost, the mds will notify this mdd*/
-
         obd->obd_upcall.onu_owner = mdd;
         obd->obd_upcall.onu_upcall = mdd_lov_update;
-        mdd->mdd_md_dev.md_lu_dev.ld_obd = obd;
+
+        mdd->mdd_obd_dev = obd;
 class_detach:
         if (rc)
                 class_detach(obd, lcfg);
@@ -116,7 +116,7 @@ lcfg_cleanup:
         RETURN(rc);
 }
 
-int mdd_cleanup_obd(struct mdd_device *mdd)
+int mdd_fini_obd(const struct lu_context *ctxt, struct mdd_device *mdd)
 {
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg      *lcfg;
@@ -124,7 +124,7 @@ int mdd_cleanup_obd(struct mdd_device *mdd)
         int rc;
         ENTRY;
 
-        obd = mdd->mdd_md_dev.md_lu_dev.ld_obd;
+        obd = mdd2obd_dev(mdd);
         LASSERT(obd);
 
         lustre_cfg_bufs_reset(&bufs, MDD_OBD_NAME);
@@ -139,7 +139,7 @@ int mdd_cleanup_obd(struct mdd_device *mdd)
         rc = class_detach(obd, lcfg);
         if (rc)
                 GOTO(lcfg_cleanup, rc);
-        mdd->mdd_md_dev.md_lu_dev.ld_obd = NULL;
+        mdd->mdd_obd_dev = NULL;
 lcfg_cleanup:
         lustre_cfg_free(lcfg);
         RETURN(rc);
@@ -182,7 +182,7 @@ static int mdd_lov_set_stripe_md(const struct lu_context *ctxt,
                                  int lmm_size, struct thandle *handle)
 {
         struct mdd_device       *mdd = mdo2mdd(&obj->mod_obj);
-        struct obd_device       *obd = mdd2_obd(mdd);
+        struct obd_device       *obd = mdd2obd_dev(mdd);
         struct obd_export       *lov_exp = obd->u.mds.mds_osc_exp;
         struct lov_stripe_md    *lsm = NULL;
         int rc;
@@ -333,7 +333,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct lov_mds_md **lmm, int *lmm_size,
                    const struct md_create_spec *spec, struct lu_attr *la)
 {
-        struct obd_device       *obd = mdd2_obd(mdd);
+        struct obd_device       *obd = mdd2obd_dev(mdd);
         struct obd_export       *lov_exp = obd->u.mds.mds_osc_exp;
         struct obdo             *oa;
         struct lov_stripe_md    *lsm = NULL;
@@ -451,7 +451,7 @@ out_oa:
 int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma)
 {
-        struct obd_device *obd = mdd2_obd(mdd);
+        struct obd_device *obd = mdd2obd_dev(mdd);
 
         if (mds_log_op_unlink(obd, NULL, ma->ma_lmm, ma->ma_lmm_size,
                                  ma->ma_cookie, ma->ma_cookie_size) > 0) {
@@ -464,7 +464,7 @@ int mdd_lov_setattr_async(const struct lu_context *ctxt, struct mdd_object *obj,
                           struct lov_mds_md *lmm, int lmm_size)
 {
         struct mdd_device       *mdd = mdo2mdd(&obj->mod_obj);
-        struct obd_device       *obd = mdd2_obd(mdd);
+        struct obd_device       *obd = mdd2obd_dev(mdd);
         struct lu_attr          *tmp_la = &mdd_ctx_info(ctxt)->mti_la;
         struct dt_object        *next = mdd_object_child(obj);
         __u32  seq  = lu_object_fid(mdd2lu_obj(obj))->f_seq;

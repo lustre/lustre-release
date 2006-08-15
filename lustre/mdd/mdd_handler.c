@@ -414,33 +414,19 @@ static int mdd_mount(const struct lu_context *ctx, struct mdd_device *mdd)
                 rc = 0;
         } else
                 rc = PTR_ERR(root);
+
         RETURN(rc);
-}
-
-static int mdd_fs_setup(const struct lu_context *ctx, struct mdd_device *mdd)
-{
-        /*create PENDING and OBJECTS dir for open and llog*/
-        return 0;
-}
-
-static int mdd_fs_cleanup(struct mdd_device *mdd)
-{
-        /*create PENDING and OBJECTS dir for open and llog*/
-        return 0;
 }
 
 static int mdd_device_init(const struct lu_context *ctx,
                            struct lu_device *d, struct lu_device *next)
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
-        int rc;
+        int rc = 0;
         ENTRY;
 
         mdd->mdd_child = lu2dt_dev(next);
 
-        rc = mdd_fs_setup(ctx, mdd);
-        if (rc)
-                mdd_fs_cleanup(mdd);
         RETURN(rc);
 }
 
@@ -451,6 +437,11 @@ static struct lu_device *mdd_device_fini(const struct lu_context *ctx,
         struct lu_device *next = &m->mdd_child->dd_lu_dev;
 
         return next;
+}
+static void mdd_device_shutdown(const struct lu_context *ctxt,
+                                struct mdd_device *m)
+{
+        mdd_fini_obd(ctxt, m);
 }
 
 static int mdd_process_config(const struct lu_context *ctxt,
@@ -478,6 +469,8 @@ static int mdd_process_config(const struct lu_context *ctxt,
                         GOTO(out, rc);
                 }
                 break;
+        case LCFG_CLEANUP:
+                mdd_device_shutdown(ctxt, m);
         default:
                 rc = next->ld_ops->ldo_process_config(ctxt, next, cfg);
                 break;
@@ -1874,9 +1867,9 @@ static struct obd_ops mdd_obd_device_ops = {
         .o_owner = THIS_MODULE
 };
 
-struct lu_device *mdd_device_alloc(const struct lu_context *ctx,
-                                   struct lu_device_type *t,
-                                   struct lustre_cfg *lcfg)
+static struct lu_device *mdd_device_alloc(const struct lu_context *ctx,
+                                          struct lu_device_type *t,
+                                          struct lustre_cfg *lcfg)
 {
         struct lu_device  *l;
         struct mdd_device *m;
@@ -1894,7 +1887,8 @@ struct lu_device *mdd_device_alloc(const struct lu_context *ctx,
         return l;
 }
 
-static void mdd_device_free(const struct lu_context *ctx, struct lu_device *lu)
+static void mdd_device_free(const struct lu_context *ctx,
+                            struct lu_device *lu)
 {
         struct mdd_device *m = lu2mdd_dev(lu);
 

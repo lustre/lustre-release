@@ -35,6 +35,7 @@ struct dt_device;
 struct mdd_device {
         struct md_device                 mdd_md_dev;
         struct dt_device                *mdd_child;
+        struct obd_device               *mdd_obd_dev;
         struct lu_fid                    mdd_root_fid;
         struct dt_device_param           mdd_dt_conf;
 };
@@ -61,6 +62,7 @@ struct mdd_thread_info {
 
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                  char *dev);
+int mdd_fini_obd(const struct lu_context *, struct mdd_device *);
 int mdd_xattr_set_txn(const struct lu_context *ctxt, struct mdd_object *obj,
                       const void *buf, int buf_len, const char *name, int fl,
                       struct thandle *txn);
@@ -139,9 +141,9 @@ static inline struct dt_object* mdd_object_child(struct mdd_object *o)
         return container_of0(lu_object_next(mdd2lu_obj(o)),
                              struct dt_object, do_lu);
 }
-static inline struct obd_device *mdd2_obd(struct mdd_device *mdd)
+static inline struct obd_device *mdd2obd_dev(struct mdd_device *mdd)
 {
-        return mdd->mdd_md_dev.md_lu_dev.ld_obd;
+        return mdd->mdd_obd_dev;
 }
 
 static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
@@ -158,14 +160,14 @@ static inline umode_t mdd_object_type(const struct lu_context *ctxt,
 static inline int mdd_lov_mdsize(const struct lu_context *ctxt,
                                  struct mdd_device *mdd)
 {
-        struct obd_device *obd = mdd2_obd(mdd);
+        struct obd_device *obd = mdd2obd_dev(mdd);
         return obd->u.mds.mds_max_mdsize;
 }
 
 static inline int mdd_lov_cookiesize(const struct lu_context *ctxt,
                                      struct mdd_device *mdd)
 {
-        struct obd_device *obd = mdd2_obd(mdd);
+        struct obd_device *obd = mdd2obd_dev(mdd);
         return obd->u.mds.mds_max_cookiesize;
 }
 
