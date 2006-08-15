@@ -252,7 +252,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 RETURN(-EFAULT);
 
         if (mdt_body_has_lov(la, reqbody)) {
-                if (/*ma->ma_lmm_size && */(ma->ma_valid & MA_LOV)) {
+                if (ma->ma_valid & MA_LOV) {
                         LASSERT(ma->ma_lmm_size);
                         CDEBUG(D_INODE, "packing ea for "DFID"\n",
                                         PFID(mdt_object_fid(o)));
@@ -2102,11 +2102,23 @@ err_mdt_svc:
 }
 
 static void mdt_stack_fini(const struct lu_context *ctx,
-                           struct mdt_device *m, struct lu_device *d)
+                           struct mdt_device *m, struct lu_device *top)
 {
-        /* goes through all stack */
+        struct lu_device *d = top, *n;
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg     *lcfg;
+        
+        /* process cleanup */
+        lustre_cfg_bufs_reset(&bufs, NULL);
+        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+        if (!lcfg) {
+                CERROR("Cannot alloc lcfg!\n");
+                return;
+        }
+        top->ld_ops->ldo_process_config(ctx, top, lcfg);
+        
+        lu_site_purge(ctx, top->ld_site, ~0);
         while (d != NULL) {
-                struct lu_device *n;
                 struct obd_type *type;
                 struct lu_device_type *ldt = d->ld_type;
 
@@ -2116,7 +2128,6 @@ static void mdt_stack_fini(const struct lu_context *ctx,
                  * * so we can avoid the recursion */
                 n = ldt->ldt_ops->ldto_device_fini(ctx, d);
                 ldt->ldt_ops->ldto_device_free(ctx, d);
-
                 type = ldt->ldt_obd_type;
                 type->typ_refcnt--;
                 class_put_type(type);
@@ -2217,7 +2228,6 @@ static int mdt_stack_init(const struct lu_context *ctx,
         /* process setup config */
         tmp = &m->mdt_md_dev.md_lu_dev;
         rc = tmp->ld_ops->ldo_process_config(ctx, tmp, cfg);
-
         GOTO(out, rc);
 out:
         /* fini from last known good lu_device */
@@ -2239,12 +2249,11 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
         ping_evictor_stop();
         mdt_stop_ptlrpc_service(m);
 
-        /* finish the stack */
-        mdt_stack_fini(ctx, m, md2lu_dev(m->mdt_child));
-
         mdt_fld_fini(ctx, m);
         mdt_seq_fini(ctx, m);
         mdt_seq_fini_cli(m);
+        /* finish the stack */
+        mdt_stack_fini(ctx, m, md2lu_dev(m->mdt_child));
 
         LASSERT(atomic_read(&d->ld_ref) == 0);
         md_device_fini(&m->mdt_md_dev);
@@ -2685,7 +2694,8 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_destroy_export = mdt_destroy_export, /* By Huang Hua*/
 };
 
-static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)
+static struct lu_device *mdt_device_free(const struct lu_context *ctx,
+                                         struct lu_device *d)
 {
         struct mdt_device *m = mdt_dev(d);
 
