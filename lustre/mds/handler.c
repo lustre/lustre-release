@@ -2133,6 +2133,7 @@ static int mds_lov_early_clean(struct obd_device *obd)
 
 static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
+        struct mds_obd *mds = &obd->u.mds;
         int rc = 0;
         ENTRY;
 
@@ -2140,7 +2141,11 @@ static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         case OBD_CLEANUP_EARLY:
                 break;
         case OBD_CLEANUP_EXPORTS:
-                target_cleanup_recovery(obd);
+                /*XXX Use this for mdd mds cleanup, so comment out 
+                 *this target_cleanup_recovery for this tmp MDD MDS
+                 *Wangdi*/
+                if (strcmp(obd->obd_name, MDD_OBD_NAME))
+                        target_cleanup_recovery(obd); 
                 mds_lov_early_clean(obd);
                 break;
         case OBD_CLEANUP_SELF_EXP:
@@ -2712,7 +2717,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create OBJECTS directory: rc = %d\n", rc);
-                GOTO(err_pop, rc);
+                GOTO(err_putfs, rc);
         }
         mds->mds_objects_dir = dentry;
 
@@ -2721,7 +2726,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot lookup __iopen__ directory: rc = %d\n", rc);
-                GOTO(err_pop, rc);
+                GOTO(err_objects, rc);
         }
 
         mds->mds_fid_de = dentry;
@@ -2757,7 +2762,6 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
                 GOTO(err_objects, rc);
         
-        //sema_init(&mds->mds_orphan_recovery_sem, 1);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
 
@@ -2772,22 +2776,49 @@ err_fid:
         dput(mds->mds_fid_de);
 err_objects:
         dput(mds->mds_objects_dir);
+err_putfs:
+        fsfilt_put_ops(obd->obd_fsops);
         goto err_pop;
 }
 
 static int mds_cmd_cleanup(struct obd_device *obd)
 {
+        struct mds_obd *mds = &obd->u.mds;
+        struct lvfs_run_ctxt saved;
+        int rc = 0;
         ENTRY;
 
-        RETURN(0);
+        if (obd->obd_fail)
+                LCONSOLE_WARN("%s: shutting down for failover; client state "
+                              "will be preserved.\n", obd->obd_name);
+
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        if (mds->mds_lov_objid_filp) {
+                rc = filp_close((struct file *)mds->mds_lov_objid_filp, 0);
+                mds->mds_lov_objid_filp = NULL;
+                if (rc)
+                        CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
+        }
+        if (mds->mds_objects_dir != NULL) {
+                l_dput(mds->mds_objects_dir);
+                mds->mds_objects_dir = NULL;
+        }
+
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+        shrink_dcache_parent(mds->mds_fid_de);
+        dput(mds->mds_fid_de);
+        LL_DQUOT_OFF(obd->u.obt.obt_sb);
+        fsfilt_put_ops(obd->obd_fsops);
+        
+        RETURN(rc);
 }
 
-
+#if 0
 static int mds_cmd_health_check(struct obd_device *obd)
 {
         return 0;
 }
-
+#endif
 static struct obd_ops mds_cmd_obd_ops = {
         .o_owner           = THIS_MODULE,
         .o_setup           = mds_cmd_setup,
@@ -2798,7 +2829,7 @@ static struct obd_ops mds_cmd_obd_ops = {
         .o_llog_init       = mds_llog_init,
         .o_llog_finish     = mds_llog_finish,
         .o_notify          = mds_notify,
-        .o_health_check    = mds_cmd_health_check,
+     //   .o_health_check    = mds_cmd_health_check,
 };
 
 static int __init mds_cmd_init(void)
