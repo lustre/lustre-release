@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
 --- iam.orig/fs/ext3/Makefile	2006-05-31 20:24:32.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-08-11 20:55:34.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-08-14 23:16:52.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,8 +14,8 @@ Index: iam/fs/ext3/Makefile
 Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam.c	2006-07-21 22:21:17.000000000 +0400
-@@ -0,0 +1,1280 @@
++++ iam/fs/ext3/iam.c	2006-08-14 21:23:00.000000000 +0400
+@@ -0,0 +1,1324 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -342,13 +342,11 @@ Index: iam/fs/ext3/iam.c
 +	return iam_leaf_ops(leaf)->key_size(leaf);
 +}
 +
-+#if 0
 +static struct iam_ikey *iam_leaf_ikey(const struct iam_leaf *leaf,
 +                                      struct iam_ikey *key)
 +{
 +	return iam_leaf_ops(leaf)->ikey(leaf, key);
 +}
-+#endif
 +
 +static int iam_leaf_keycmp(const struct iam_leaf *leaf,
 +                           const struct iam_key *key)
@@ -642,7 +640,7 @@ Index: iam/fs/ext3/iam.c
 + * Performs tree top-to-bottom traversal starting from root, and loads leaf
 + * node.
 + */
-+static int iam_path_lookup(struct iam_path *path)
++static int iam_path_lookup(struct iam_path *path, int index)
 +{
 +	struct iam_container *c;
 +	struct iam_descr *descr;
@@ -657,33 +655,28 @@ Index: iam/fs/ext3/iam.c
 +	if (result == 0) {
 +		result = iam_leaf_load(path);
 +                assert(ergo(result == 0, iam_leaf_check(leaf)));
-+		if (result == 0)
-+			result = iam_leaf_ops(leaf)->
-+                                lookup(leaf, path->ip_key_target);
++		if (result == 0) {
++                        if (index)
++                                result = iam_leaf_ops(leaf)->
++                                        ilookup(leaf, path->ip_ikey_target);
++                        else
++                                result = iam_leaf_ops(leaf)->
++                                        lookup(leaf, path->ip_key_target);
++                }
 +	}
 +	return result;
 +}
 +
 +/*
-+ * Attach iterator. After successful completion, @it points to record with
-+ * least key not larger than @k.
-+ *
-+ * Return value: 0: positioned on existing record,
-+ *             +ve: exact position found,
-+ *             -ve: error.
-+ *
-+ * precondition:  it_state(it) == IAM_IT_DETACHED
-+ * postcondition: ergo(result == 0 && it_state(it) == IAM_IT_ATTACHED,
-+ *                     it_keycmp(it, k) <= 0)
++ * Common part of iam_it_{i,}get().
 + */
-+int iam_it_get(struct iam_iterator *it, const struct iam_key *k)
++static int __iam_it_get(struct iam_iterator *it, int index)
 +{
 +        int result;
 +        assert(it_state(it) == IAM_IT_DETACHED);
 +
-+        it->ii_path.ip_key_target = k;
 +        iam_it_lock(it);
-+        result = iam_path_lookup(&it->ii_path);
++        result = iam_path_lookup(&it->ii_path, index);
 +        if (result >= 0) {
 +                switch (result) {
 +                case IAM_LOOKUP_EXACT:
@@ -704,16 +697,52 @@ Index: iam/fs/ext3/iam.c
 +                }
 +        } else
 +                iam_it_unlock(it);
-+        assert(ergo(result > 0, it_keycmp(it, k) == 0));
-+	assert(ergo(result == 0 && it_state(it) == IAM_IT_ATTACHED,
-+                    it_keycmp(it, k) <= 0));
 +        /*
 +         * See iam_it_get_exact() for explanation.
 +         */
 +        assert(result != -ENOENT);
 +        return result;
 +}
++
++/*
++ * Attach iterator. After successful completion, @it points to record with
++ * least key not larger than @k.
++ *
++ * Return value: 0: positioned on existing record,
++ *             +ve: exact position found,
++ *             -ve: error.
++ *
++ * precondition:  it_state(it) == IAM_IT_DETACHED
++ * postcondition: ergo(result == 0 && it_state(it) == IAM_IT_ATTACHED,
++ *                     it_keycmp(it, k) <= 0)
++ */
++int iam_it_get(struct iam_iterator *it, const struct iam_key *k)
++{
++        int result;
++        assert(it_state(it) == IAM_IT_DETACHED);
++
++        it->ii_path.ip_ikey_target = NULL;
++        it->ii_path.ip_key_target  = k;
++
++        result = __iam_it_get(it, 0);
++
++        assert(ergo(result > 0, it_keycmp(it, k) == 0));
++	assert(ergo(result == 0 && it_state(it) == IAM_IT_ATTACHED,
++                    it_keycmp(it, k) <= 0));
++        return result;
++}
 +EXPORT_SYMBOL(iam_it_get);
++
++/*
++ * Attach iterator by index key.
++ */
++static int iam_it_iget(struct iam_iterator *it, const struct iam_ikey *k)
++{
++        assert(it_state(it) == IAM_IT_DETACHED);
++
++        it->ii_path.ip_ikey_target = k;
++        return __iam_it_get(it, 1);
++}
 +
 +/*
 + * Attach iterator, and assure it points to the record (not skewed).
@@ -890,6 +919,21 @@ Index: iam/fs/ext3/iam.c
 +        return result;
 +}
 +EXPORT_SYMBOL(iam_it_rec_set);
++
++/*
++ * Return pointer to the index key under iterator.
++ *
++ * precondition:  it_state(it) == IAM_IT_ATTACHED ||
++ *                it_state(it) == IAM_IT_SKEWED
++ */
++static struct iam_ikey *iam_it_ikey_get(const struct iam_iterator *it,
++                                        struct iam_ikey *ikey)
++{
++        assert(it_state(it) == IAM_IT_ATTACHED ||
++               it_state(it) == IAM_IT_SKEWED);
++        assert(it_at_rec(it));
++        return iam_leaf_ikey(&it->ii_path.ip_leaf, ikey);
++}
 +
 +/*
 + * Return pointer to the key under iterator.
@@ -1109,10 +1153,10 @@ Index: iam/fs/ext3/iam.c
 +
 +        assert(it_state(it) == IAM_IT_ATTACHED);
 +        assert(it_at_rec(it));
-+        assert(iam_it_container(it)->ic_descr->id_key_size <= sizeof result);
++        assert(iam_it_container(it)->ic_descr->id_ikey_size <= sizeof result);
 +
-+        result = *(iam_pos_t *)iam_it_key_get(it);
-+        return result;
++        result = 0;
++        return *(iam_pos_t *)iam_it_ikey_get(it, (void *)&result);
 +}
 +EXPORT_SYMBOL(iam_it_store);
 +
@@ -1127,8 +1171,8 @@ Index: iam/fs/ext3/iam.c
 +int iam_it_load(struct iam_iterator *it, iam_pos_t pos)
 +{
 +        assert(it_state(it) == IAM_IT_DETACHED && it->ii_flags&IAM_IT_MOVE);
-+        assert(iam_it_container(it)->ic_descr->id_key_size <= sizeof pos);
-+        return iam_it_get(it, (struct iam_key *)&pos);
++        assert(iam_it_container(it)->ic_descr->id_ikey_size <= sizeof pos);
++        return iam_it_iget(it, (struct iam_ikey *)&pos);
 +}
 +EXPORT_SYMBOL(iam_it_load);
 +
@@ -1299,8 +1343,8 @@ Index: iam/fs/ext3/iam.c
 Index: iam/fs/ext3/iam_htree.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_htree.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_htree.c	2006-07-01 19:09:16.000000000 +0400
-@@ -0,0 +1,655 @@
++++ iam/fs/ext3/iam_htree.c	2006-08-14 21:29:47.000000000 +0400
+@@ -0,0 +1,664 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1589,6 +1633,12 @@ Index: iam/fs/ext3/iam_htree.c
 +        return result;
 +}
 +
++static int iam_htree_ilookup(struct iam_leaf *l, const struct iam_ikey *ik)
++{
++        assert(0);
++        return IAM_LOOKUP_OK;
++}
++
 +static void iam_htree_key_set(struct iam_leaf *l, const struct iam_key *k)
 +{
 +        assert(iam_leaf_at_rec(l));
@@ -1733,6 +1783,7 @@ Index: iam/fs/ext3/iam_htree.c
 +        .key_size       = iam_htree_key_size,
 +        .rec_set        = iam_htree_rec_set,
 +        .lookup         = iam_htree_lookup,
++        .ilookup        = iam_htree_ilookup,
 +        .at_end         = iam_htree_at_end,
 +        .rec_add        = iam_htree_rec_add,
 +        .rec_del        = iam_htree_rec_del,
@@ -1827,8 +1878,10 @@ Index: iam/fs/ext3/iam_htree.c
 +                }
 +                if (name != NULL)
 +                        ext3fs_dirhash(name, namelen, ipc->ipc_hinfo);
-+		path->ip_ikey_target = iam_path_ikey(path, 4);
-+                *(__u32 *)path->ip_ikey_target = ipc->ipc_hinfo->hash;
++                if (path->ip_ikey_target == NULL) {
++                        path->ip_ikey_target = iam_path_ikey(path, 4);
++                        *(__u32 *)path->ip_ikey_target = ipc->ipc_hinfo->hash;
++                }
 +	} else {
 +		/* non-root index */
 +		assert(entries == data + iam_path_descr(path)->id_node_gap);
@@ -1959,8 +2012,8 @@ Index: iam/fs/ext3/iam_htree.c
 Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lfix.c	2006-07-01 19:19:48.000000000 +0400
-@@ -0,0 +1,660 @@
++++ iam/fs/ext3/iam_lfix.c	2006-08-14 21:24:50.000000000 +0400
+@@ -0,0 +1,669 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2231,6 +2284,12 @@ Index: iam/fs/ext3/iam_lfix.c
 +        return result;
 +}
 +
++static int iam_lfix_ilookup(struct iam_leaf *l, const struct iam_ikey *ik)
++{
++        assert(0);
++        return IAM_LOOKUP_OK;
++}
++
 +static void iam_lfix_key_set(struct iam_leaf *l, const struct iam_key *k)
 +{
 +        assert(iam_leaf_at_rec(l));
@@ -2397,6 +2456,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +        .key_size       = iam_lfix_key_size,
 +        .rec_set        = iam_lfix_rec_set,
 +        .lookup         = iam_lfix_lookup,
++        .ilookup        = iam_lfix_ilookup,
 +        .at_end         = iam_lfix_at_end,
 +        .rec_add        = iam_lfix_rec_add,
 +        .rec_del        = iam_lfix_rec_del,
@@ -2506,7 +2566,9 @@ Index: iam/fs/ext3/iam_lfix.c
 +
 +                root = data;
 +                path->ip_indirect = root->ilr_indirect_levels;
-+                path->ip_ikey_target = (struct iam_ikey *)path->ip_key_target;
++                if (path->ip_ikey_target == NULL)
++                        path->ip_ikey_target =
++                                (struct iam_ikey *)path->ip_key_target;
 +        }
 +        frame->entries = frame->at = entries;
 +        return 0;
@@ -2624,8 +2686,8 @@ Index: iam/fs/ext3/iam_lfix.c
 Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lvar.c	2006-07-21 22:23:04.000000000 +0400
-@@ -0,0 +1,837 @@
++++ iam/fs/ext3/iam_lvar.c	2006-08-14 23:16:11.000000000 +0400
+@@ -0,0 +1,863 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2868,7 +2930,6 @@ Index: iam/fs/ext3/iam_lvar.c
 +
 +        hash = (void *)key;
 +        *hash = e_hash(n_cur(l));
-+        BUG(); /* shouldn't be called currently */
 +        return key;
 +}
 +
@@ -2985,6 +3046,29 @@ Index: iam/fs/ext3/iam_lvar.c
 +                assert(n_at_rec(leaf));
 +        }
 +        return result;
++}
++
++static int lvar_ilookup(struct iam_leaf *leaf, const struct iam_ikey *ik)
++{
++        struct lvar_leaf_entry *scan;
++        struct lvar_leaf_entry *end;
++        lvar_hash_t             hash;
++
++        end  = n_end(leaf);
++        hash = *(const lvar_hash_t *)ik;
++
++        for (scan = n_start(leaf); scan < end; scan = e_next(leaf, scan)) {
++                lvar_hash_t scan_hash;
++
++                scan_hash = e_hash(scan);
++                if (scan_hash >= hash) {
++                        leaf->il_at = lvar_lentry(scan);
++                        return scan_hash == hash ?
++                                IAM_LOOKUP_EXACT : IAM_LOOKUP_OK;
++                }
++        }
++        assert(0);
++        return IAM_LOOKUP_OK;
 +}
 +
 +static void lvar_key_set(struct iam_leaf *l, const struct iam_key *k)
@@ -3177,6 +3261,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +        .key_size       = lvar_key_size,
 +        .rec_set        = lvar_rec_set,
 +        .lookup         = lvar_lookup,
++        .ilookup        = lvar_ilookup,
 +        .at_end         = lvar_at_end,
 +        .rec_add        = lvar_rec_add,
 +        .rec_del        = lvar_rec_del,
@@ -3281,9 +3366,12 @@ Index: iam/fs/ext3/iam_lvar.c
 +                root = data;
 +                name = kchar(path->ip_key_target);
 +                path->ip_indirect = root->vr_indirect_levels;
-+		path->ip_ikey_target = iam_path_ikey(path, 4);
-+                *(lvar_hash_t *)path->ip_ikey_target =
-+                        get_hash(path->ip_container, name, strlen(name));
++                if (path->ip_ikey_target == NULL) {
++                        path->ip_ikey_target = iam_path_ikey(path, 4);
++                        *(lvar_hash_t *)path->ip_ikey_target =
++                                get_hash(path->ip_container, name,
++                                         strlen(name));
++                }
 +        }
 +        frame->entries = frame->at = entries;
 +        return 0;
@@ -5461,7 +5549,7 @@ Index: iam/fs/ext3/namei.c
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
 --- iam.orig/include/linux/lustre_iam.h	2006-05-31 20:24:32.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-08-11 20:55:34.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-08-14 23:16:52.000000000 +0400
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:

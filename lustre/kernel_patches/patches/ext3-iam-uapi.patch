@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
---- iam.orig/fs/ext3/Makefile	2006-08-11 20:55:34.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-08-11 20:55:34.000000000 +0400
+--- iam.orig/fs/ext3/Makefile	2006-08-14 23:16:52.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-08-14 23:16:52.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -13,8 +13,8 @@ Index: iam/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
 Index: iam/fs/ext3/dir.c
 ===================================================================
---- iam.orig/fs/ext3/dir.c	2006-08-11 20:55:34.000000000 +0400
-+++ iam/fs/ext3/dir.c	2006-08-11 20:55:34.000000000 +0400
+--- iam.orig/fs/ext3/dir.c	2006-08-14 23:16:52.000000000 +0400
++++ iam/fs/ext3/dir.c	2006-08-14 23:16:52.000000000 +0400
 @@ -28,6 +28,7 @@
  #include <linux/smp_lock.h>
  #include <linux/slab.h>
@@ -112,8 +112,8 @@ Index: iam/fs/ext3/dir.c
  		    (filp->f_version != inode->i_version)) {
 Index: iam/fs/ext3/file.c
 ===================================================================
---- iam.orig/fs/ext3/file.c	2006-08-11 20:55:34.000000000 +0400
-+++ iam/fs/ext3/file.c	2006-08-11 20:55:34.000000000 +0400
+--- iam.orig/fs/ext3/file.c	2006-08-14 23:16:52.000000000 +0400
++++ iam/fs/ext3/file.c	2006-08-14 23:16:52.000000000 +0400
 @@ -23,6 +23,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -149,7 +149,7 @@ Index: iam/fs/ext3/file.c
 Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
 --- iam.orig/fs/ext3/iam-uapi.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam-uapi.c	2006-08-11 20:55:34.000000000 +0400
++++ iam/fs/ext3/iam-uapi.c	2006-08-14 23:16:52.000000000 +0400
 @@ -0,0 +1,361 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -514,8 +514,8 @@ Index: iam/fs/ext3/iam-uapi.c
 +}
 Index: iam/fs/ext3/ioctl.c
 ===================================================================
---- iam.orig/fs/ext3/ioctl.c	2006-08-11 20:55:34.000000000 +0400
-+++ iam/fs/ext3/ioctl.c	2006-08-11 20:55:34.000000000 +0400
+--- iam.orig/fs/ext3/ioctl.c	2006-08-14 23:16:52.000000000 +0400
++++ iam/fs/ext3/ioctl.c	2006-08-14 23:16:52.000000000 +0400
 @@ -250,6 +250,6 @@ flags_err:
  
  
@@ -526,8 +526,8 @@ Index: iam/fs/ext3/ioctl.c
  }
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- iam.orig/include/linux/lustre_iam.h	2006-08-11 20:55:34.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-08-11 20:55:34.000000000 +0400
+--- iam.orig/include/linux/lustre_iam.h	2006-08-14 23:16:52.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-08-14 23:16:53.000000000 +0400
 @@ -30,9 +30,6 @@
  #ifndef __LINUX_LUSTRE_IAM_H__
  #define __LINUX_LUSTRE_IAM_H__
@@ -713,7 +713,15 @@ Index: iam/include/linux/lustre_iam.h
          /*
           * Search leaf @l for a record with key @k or for a place
           * where such record is to be inserted.
-@@ -221,12 +277,13 @@ struct iam_leaf_operations {
+@@ -210,6 +266,7 @@ struct iam_leaf_operations {
+          * Scratch keys from @path can be used.
+          */
+         int (*lookup)(struct iam_leaf *l, const struct iam_key *k);
++        int (*ilookup)(struct iam_leaf *l, const struct iam_ikey *ik);
+ 
+         int (*can_add)(const struct iam_leaf *l,
+                        const struct iam_key *k, const struct iam_rec *r);
+@@ -221,12 +278,13 @@ struct iam_leaf_operations {
          /*
           * remove rec for a leaf
           */
@@ -729,7 +737,7 @@ Index: iam/include/linux/lustre_iam.h
  };
  
  struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
-@@ -241,6 +298,10 @@ struct iam_descr {
+@@ -241,6 +299,10 @@ struct iam_descr {
  	 */
   	size_t       id_key_size;
  	/*
@@ -740,7 +748,7 @@ Index: iam/include/linux/lustre_iam.h
  	 * Size of a pointer to the next level (stored in index nodes), in
  	 * bytes.
  	 */
-@@ -264,6 +325,9 @@ struct iam_descr {
+@@ -264,6 +326,9 @@ struct iam_descr {
          struct iam_leaf_operations      *id_leaf_ops;
  };
  
@@ -750,7 +758,7 @@ Index: iam/include/linux/lustre_iam.h
  struct iam_container {
  	/*
  	 * Underlying flat file. IO against this object is issued to
-@@ -284,7 +348,7 @@ struct iam_path_descr {
+@@ -284,7 +349,7 @@ struct iam_path_descr {
  	/*
  	 * Scratch-pad area for temporary keys.
  	 */
@@ -759,15 +767,15 @@ Index: iam/include/linux/lustre_iam.h
  };
  
  /*
-@@ -316,6 +380,7 @@ struct iam_path {
+@@ -316,6 +381,7 @@ struct iam_path {
  	 * Key searched for.
  	 */
  	const struct iam_key  *ip_key_target;
-+	struct iam_ikey       *ip_ikey_target;
++	const struct iam_ikey       *ip_ikey_target;
  	/*
  	 * Description-specific data.
  	 */
-@@ -334,6 +399,7 @@ struct iam_path_compat {
+@@ -334,6 +400,7 @@ struct iam_path_compat {
  	struct dx_hash_info  *ipc_hinfo;
  	struct dentry        *ipc_dentry;
  	struct iam_path_descr ipc_descr;
@@ -775,7 +783,7 @@ Index: iam/include/linux/lustre_iam.h
  };
  
  /*
-@@ -347,7 +413,9 @@ enum iam_it_state {
+@@ -347,7 +414,9 @@ enum iam_it_state {
  	/* initial state */
  	IAM_IT_DETACHED,
  	/* iterator is above particular record in the container */
@@ -786,7 +794,7 @@ Index: iam/include/linux/lustre_iam.h
  };
  
  /*
-@@ -355,7 +423,7 @@ enum iam_it_state {
+@@ -355,7 +424,7 @@ enum iam_it_state {
   */
  enum iam_it_flags {
  	/*
@@ -795,7 +803,7 @@ Index: iam/include/linux/lustre_iam.h
  	 */
  	IAM_IT_MOVE  = (1 << 0),
  	/*
-@@ -372,15 +440,26 @@ enum iam_it_flags {
+@@ -372,15 +441,26 @@ enum iam_it_flags {
   * doesn't point to any particular record in this container.
   *
   * After successful call to iam_it_get() and until corresponding call to
@@ -825,7 +833,7 @@ Index: iam/include/linux/lustre_iam.h
   *
   */
  struct iam_iterator {
-@@ -390,7 +469,8 @@ struct iam_iterator {
+@@ -390,7 +470,8 @@ struct iam_iterator {
  	__u32                 ii_flags;
  	enum iam_it_state     ii_state;
  	/*
@@ -835,7 +843,7 @@ Index: iam/include/linux/lustre_iam.h
  	 */
  	struct iam_path       ii_path;
  };
-@@ -405,133 +485,25 @@ void iam_path_compat_fini(struct iam_pat
+@@ -405,133 +486,25 @@ void iam_path_compat_fini(struct iam_pat
  struct iam_path_descr *iam_ipd_alloc(int keysize);
  void iam_ipd_free(struct iam_path_descr *ipd);
  
@@ -972,7 +980,7 @@ Index: iam/include/linux/lustre_iam.h
  int iam_it_load(struct iam_iterator *it, iam_pos_t pos);
  
  int iam_lookup(struct iam_container *c, const struct iam_key *k,
-@@ -577,16 +549,65 @@ static inline struct inode *iam_path_obj
+@@ -577,16 +550,65 @@ static inline struct inode *iam_path_obj
  	return p->ip_container->ic_object;
  }
  
@@ -1044,7 +1052,7 @@ Index: iam/include/linux/lustre_iam.h
  }
  
  static inline void iam_reccpy(const struct iam_path *p, struct iam_rec *rec_dst,
-@@ -604,7 +625,7 @@ static inline void *iam_entry_off(struct
+@@ -604,7 +626,7 @@ static inline void *iam_entry_off(struct
  static inline unsigned dx_get_block(struct iam_path *p, struct iam_entry *entry)
  {
  	return le32_to_cpu(*(u32*)iam_entry_off(entry,
@@ -1053,7 +1061,7 @@ Index: iam/include/linux/lustre_iam.h
  		& 0x00ffffff;
  }
  
-@@ -612,21 +633,64 @@ static inline void dx_set_block(struct i
+@@ -612,21 +634,64 @@ static inline void dx_set_block(struct i
  				struct iam_entry *entry, unsigned value)
  {
  	*(u32*)iam_entry_off(entry,
@@ -1122,7 +1130,7 @@ Index: iam/include/linux/lustre_iam.h
  static inline unsigned dx_get_count(struct iam_entry *entries)
  {
  	return le16_to_cpu(((struct dx_countlimit *) entries)->count);
-@@ -647,9 +711,18 @@ static inline unsigned dx_node_limit(str
+@@ -647,9 +712,18 @@ static inline unsigned dx_node_limit(str
  	struct iam_descr *param = iam_path_descr(p);
  	unsigned entry_space   = iam_path_obj(p)->i_sb->s_blocksize -
  		param->id_node_gap;
@@ -1142,7 +1150,7 @@ Index: iam/include/linux/lustre_iam.h
  static inline struct iam_entry *dx_get_entries(struct iam_path *path,
  					       void *data, int root)
  {
-@@ -665,7 +738,8 @@ static inline struct iam_entry *dx_node_
+@@ -665,7 +739,8 @@ static inline struct iam_entry *dx_node_
  			      frame->bh->b_data, frame == path->ip_frames);
  }
  
@@ -1152,7 +1160,7 @@ Index: iam/include/linux/lustre_iam.h
  {
  	assert(0 <= nr && nr < ARRAY_SIZE(path->ip_data->ipd_key_scratch));
  	return path->ip_data->ipd_key_scratch[nr];
-@@ -674,6 +748,7 @@ static inline struct iam_key *iam_path_k
+@@ -674,6 +749,7 @@ static inline struct iam_key *iam_path_k
  int dx_lookup(struct iam_path *path);
  void dx_insert_block(struct iam_path *path, struct iam_frame *frame,
  		     u32 hash, u32 block);
@@ -1160,7 +1168,7 @@ Index: iam/include/linux/lustre_iam.h
  
  int ext3_htree_next_block(struct inode *dir, __u32 hash,
  			  struct iam_path *path, __u32 *start_hash);
-@@ -681,6 +756,20 @@ int ext3_htree_next_block(struct inode *
+@@ -681,6 +757,20 @@ int ext3_htree_next_block(struct inode *
  struct buffer_head *ext3_append(handle_t *handle, struct inode *inode,
  				u32 *block, int *err);
  int split_index_node(handle_t *handle, struct iam_path *path);
@@ -1181,7 +1189,7 @@ Index: iam/include/linux/lustre_iam.h
  
  /*
   * external
-@@ -698,10 +787,12 @@ int iam_node_read(struct iam_container *
+@@ -698,10 +788,12 @@ int iam_node_read(struct iam_container *
  		  handle_t *handle, struct buffer_head **bh);
  
  void iam_insert_key(struct iam_path *path, struct iam_frame *frame,
@@ -1195,7 +1203,7 @@ Index: iam/include/linux/lustre_iam.h
  
  struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
  struct iam_container *iam_leaf_container(const struct iam_leaf *leaf);
-@@ -709,14 +800,79 @@ struct iam_descr *iam_leaf_descr(const s
+@@ -709,14 +801,79 @@ struct iam_descr *iam_leaf_descr(const s
  struct iam_leaf_operations *iam_leaf_ops(const struct iam_leaf *leaf);
  
  

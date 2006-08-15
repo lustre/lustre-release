@@ -313,6 +313,10 @@ struct dt_index_operations {
                                       const struct dt_it *di);
                 struct dt_rec *(*rec)(const struct lu_context *ctxt,
                                       const struct dt_it *di);
+                __u32        (*store)(const struct lu_context *ctxt,
+                                      const struct dt_it *di);
+                int           (*load)(const struct lu_context *ctxt,
+                                      const struct dt_it *di, __u32 hash);
         } dio_it;
 };
 

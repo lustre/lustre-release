@@ -529,7 +529,7 @@ static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
                 result = dt_txn_hook_stop(ctx, th->th_dev, th);
                 if (result != 0)
                         CERROR("Failure in transaction hook: %d\n", result);
-                
+
                 /**/
                 oh->ot_handle = NULL;
                 result = journal_stop(hdl);
@@ -1042,14 +1042,9 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
                 fid_cpu_to_le(fid);
 
                 recsize = (sizeof *ent + len + 3) & ~3;
-                /*
-                 * XXX an interface is needed to obtain a hash.
-                 *
-                 * XXX this is horrible, most horrible hack.
-                 */
-                hash = *(__u32 *)(name - sizeof(__u16) - sizeof(__u32));
+                hash = iops->store(ctx, it);
                 *end = hash;
-                CERROR("%p %p %d "DFID": %#8.8x (%d)\"%*.*s\"\n",
+                CDEBUG(D_INODE, "%p %p %d "DFID": %#8.8x (%d)\"%*.*s\"\n",
                        area, ent, nob, PFID(fid), hash, len, len, len, name);
                 if (nob >= recsize) {
                         ent->lde_fid = *fid;
@@ -1112,7 +1107,7 @@ static int osd_readpage(const struct lu_context *ctxt,
         /*
          * XXX position iterator at rdpg->rp_hash
          */
-        rc = iops->get(ctxt, it, (const void *)"");
+        rc = iops->load(ctxt, it, rdpg->rp_hash);
         if (rc > 0) {
                 struct page      *pg; /* no, Richard, it _is_ initialized */
                 struct lu_dirent *last;
@@ -1439,6 +1434,19 @@ static struct dt_rec *osd_it_rec(const struct lu_context *ctx,
         return (struct dt_rec *)iam_it_rec_get(&it->oi_it);
 }
 
+static __u32 osd_it_store(const struct lu_context *ctxt, const struct dt_it *di)
+{
+        struct osd_it *it = (struct osd_it *)di;
+        return iam_it_store(&it->oi_it);
+}
+
+static int osd_it_load(const struct lu_context *ctxt,
+                       const struct dt_it *di, __u32 hash)
+{
+        struct osd_it *it = (struct osd_it *)di;
+        return iam_it_load(&it->oi_it, hash);
+}
+
 static struct dt_index_operations osd_index_ops = {
         .dio_lookup = osd_index_lookup,
         .dio_insert = osd_index_insert,
@@ -1451,7 +1459,9 @@ static struct dt_index_operations osd_index_ops = {
                 .next     = osd_it_next,
                 .key      = osd_it_key,
                 .key_size = osd_it_key_size,
-                .rec      = osd_it_rec
+                .rec      = osd_it_rec,
+                .store    = osd_it_store,
+                .load     = osd_it_load
         }
 };
 
@@ -1955,9 +1965,9 @@ static int osd_inode_getattr(const struct lu_context *ctx,
                              struct inode *inode, struct lu_attr *attr)
 {
         attr->la_valid      |= LA_ATIME | LA_MTIME | LA_CTIME | LA_MODE |
-                               LA_SIZE | LA_BLOCKS | LA_UID | LA_GID | 
+                               LA_SIZE | LA_BLOCKS | LA_UID | LA_GID |
                                LA_FLAGS | LA_NLINK | LA_RDEV | LA_BLKSIZE;
-        
+
         attr->la_atime      = LTIME_S(inode->i_atime);
         attr->la_mtime      = LTIME_S(inode->i_mtime);
         attr->la_ctime      = LTIME_S(inode->i_ctime);
