@@ -125,7 +125,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 }
 
 static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
-                                  struct md_attr *ma)
+                                  struct md_attr *ma, __u32 attr_flags)
 {
         __u64 out;
 
@@ -138,34 +138,28 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
                 out |= LA_GID;
         if (in & ATTR_SIZE)
                 out |= LA_SIZE;
-        if (in & ATTR_ATIME)
-                out |= LA_ATIME;
-        if (in & ATTR_MTIME)
-                out |= LA_MTIME;
-        if (in & ATTR_CTIME)
-                out |= LA_CTIME;
-        if (in & ATTR_ATTR_FLAG)
-                out |= LA_FLAGS;
 
         if (in & ATTR_FROM_OPEN)
                 rr->rr_flags |= MRF_SETATTR_LOCKED;
 
         if (in & ATTR_ATIME_SET)
-                ma->ma_attr_flags |= MD_ATIME_SET;
+                out |= LA_ATIME;
 
         if (in & ATTR_CTIME_SET)
-                ma->ma_attr_flags |= MD_CTIME_SET;
+                out |= LA_CTIME;
 
         if (in & ATTR_MTIME_SET)
-                ma->ma_attr_flags |= MD_MTIME_SET;
+                out |= LA_MTIME;
 
-        if (in & ATTR_RAW)
-                ma->ma_attr_flags |= MD_ATTR_RAW;
-
+        if (in & ATTR_ATTR_FLAG) {
+                ma->ma_valid |= MA_FLAGS;
+                ma->ma_attr_flags = attr_flags;
+        }
+        /*XXX need ATTR_RAW?*/
         in &= ~(ATTR_MODE|ATTR_UID|ATTR_GID|ATTR_SIZE|
                 ATTR_ATIME|ATTR_MTIME|ATTR_CTIME|ATTR_FROM_OPEN|
                 ATTR_ATIME_SET|ATTR_CTIME_SET|ATTR_MTIME_SET|
-                ATTR_ATTR_FLAG|ATTR_RAW);
+                ATTR_ATTR_FLAG|ATTR_RAW); 
         if (in != 0)
                 CERROR("Unknown attr bits: %#llx\n", in);
         return out;
@@ -186,12 +180,12 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
                 RETURN(-EFAULT);
 
         rr->rr_fid1 = &rec->sa_fid;
-        la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma);
+        la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma, 
+                                            rec->sa_attr_flags);
         la->la_mode  = rec->sa_mode;
         la->la_uid   = rec->sa_uid;
         la->la_gid   = rec->sa_gid;
         la->la_size  = rec->sa_size;
-        la->la_flags = rec->sa_attr_flags;
         la->la_ctime = rec->sa_ctime;
         la->la_atime = rec->sa_atime;
         la->la_mtime = rec->sa_mtime;

@@ -50,7 +50,8 @@ struct md_object;
 enum ma_valid {
         MA_INODE = (1 << 0),
         MA_LOV   = (1 << 1),
-        MA_COOKIE = (1 << 2)
+        MA_COOKIE = (1 << 2),
+        MA_FLAGS = (1 << 3)
 };
 
 struct md_attr {
@@ -62,13 +63,6 @@ struct md_attr {
         int                     ma_lmm_size;
         struct llog_cookie     *ma_cookie;
         int                     ma_cookie_size;
-};
-
-enum md_attr_flags {
-        MD_ATIME_SET      = 1 << 0,
-        MD_MTIME_SET      = 1 << 1,
-        MD_CTIME_SET      = 1 << 2,
-        MD_ATTR_RAW       = 1 << 3
 };
 
 /* additional parameters for create */

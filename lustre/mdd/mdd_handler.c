@@ -572,6 +572,18 @@ int mdd_attr_set_internal(const struct lu_context *ctxt, struct mdd_object *o,
         return next->do_ops->do_attr_set(ctxt, next, attr, handle);
 }
 
+int mdd_attr_set_internal_locked(const struct lu_context *ctxt, 
+                                 struct mdd_object *o,
+                                 const struct lu_attr *attr, 
+                                 struct thandle *handle)
+{
+        int rc;
+        mdd_lock(ctxt, o, DT_WRITE_LOCK);
+        rc = mdd_attr_set_internal(ctxt, o, attr, handle);
+        mdd_unlock(ctxt, o, DT_WRITE_LOCK);
+        return rc;
+}
+
 static int __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_object *o,
                            const void *buf, int buf_len, const char *name,
                            int fl, struct thandle *handle)
@@ -610,12 +622,20 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
         if (rc)
                 RETURN(rc);
 
-        if (!(ma->ma_attr_flags & MD_CTIME_SET))
+        if (!(la->la_valid & LA_CTIME)) {
                 la->la_ctime = now;
-        if (!(ma->ma_attr_flags & MD_ATIME_SET))
+                la->la_valid |= LA_CTIME;
+        } else
+                la->la_valid &= ~LA_CTIME;
+
+        if (!(la->la_valid & LA_ATIME)) {
                 la->la_atime = now;
-        if (!(ma->ma_attr_flags & MD_MTIME_SET))
+                la->la_valid |= LA_ATIME;
+        }
+        if (!(la->la_valid & LA_MTIME)) {
                 la->la_mtime = now;
+                la->la_valid |= LA_MTIME;
+        }
 
         /*XXX Check permission */
 #if 0
@@ -731,11 +751,15 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         rc = mdd_fix_attr(ctxt, mdd_obj, ma, la_copy);
         if (rc)
                 GOTO(cleanup, rc);
-        if (la_copy->la_valid) {            /* setattr */
-                mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
-                rc = mdd_attr_set_internal(ctxt, mdd_obj, la_copy, handle);
-                mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
-
+        
+        if (ma->ma_valid & MA_FLAGS) {
+                la_copy->la_flags = ma->ma_attr_flags;
+                la_copy->la_valid |= LA_FLAGS;
+                rc = mdd_attr_set_internal_locked(ctxt, mdd_obj, la_copy,
+                                                  handle);
+        }else if (la_copy->la_valid) {            /* setattr */
+                rc = mdd_attr_set_internal_locked(ctxt, mdd_obj, la_copy,
+                                                  handle);
                 /* journal chown/chgrp in llog, just like unlink */
                 if (rc == 0 && lmm_size){
                         /*TODO set_attr llog */
