@@ -188,7 +188,7 @@ static int mdd_lov_set_stripe_md(const struct lu_context *ctxt,
         int rc;
         ENTRY;
         
-        LASSERT(S_ISDIR(mdd_object_type(obj)) && S_ISREG(mdd_object_type(obj)));
+        LASSERT(S_ISDIR(mdd_object_type(obj)) || S_ISREG(mdd_object_type(obj)));
 
         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, lov_exp, 0, &lsm, lmmp);
         if (rc)

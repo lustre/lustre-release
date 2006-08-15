@@ -46,26 +46,21 @@ void mdt_dump_lmm(int level, struct lov_mds_md *lmm)
 {
         struct lov_ost_data_v1 *lod;
         int i;
+        int stripe_count = 
+                le16_to_cpu(((struct lov_user_md*)lmm)->lmm_stripe_count);
 
         CDEBUG_EX(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
                le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
                le32_to_cpu(lmm->lmm_pattern));
-        CDEBUG_EX(level,"stripe_size %u, stripe_count %u\n",
+        CDEBUG_EX(level,"stripe_size=0x%x, stripe_count=0x%x\n",
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
-        LASSERT(lmm->lmm_stripe_count < LOV_MAX_STRIPE_COUNT);
-        for (i = 0, lod = lmm->lmm_objects;
-             i < le32_to_cpu(lmm->lmm_stripe_count); i++, lod++) {
+        LASSERT(stripe_count < (int)LOV_MAX_STRIPE_COUNT);
+        for (i = 0, lod = lmm->lmm_objects; i < stripe_count; i++, lod++) {
                 CDEBUG_EX(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
                        i, le32_to_cpu(lod->l_ost_idx),
                        le64_to_cpu(lod->l_object_gr),
                        le64_to_cpu(lod->l_object_id));
-                if (i > LOV_MAX_STRIPE_COUNT) {
-                        CDEBUG_EX(level, "Do we really have so much"
-                                         " stripe:0x%x?\n",
-                                        le32_to_cpu(lmm->lmm_stripe_count));
-                        return;
-                }
         }
 }
 
