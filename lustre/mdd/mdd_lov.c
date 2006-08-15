@@ -222,6 +222,8 @@ static int mdd_lov_set_dir_md(const struct lu_context *ctxt,
              lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1)){
                 rc = mdd_xattr_set_txn(ctxt, obj, NULL, 0, MDS_LOV_MD_NAME, 0, 
                                        handle);
+                if (rc == -ENODATA)
+                        rc = 0;
                 CDEBUG(D_INFO, "delete lov ea of "DFID" rc %d \n",
                                 PFID(mdo2fid(obj)), rc);
         } else {
@@ -364,6 +366,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         struct lov_mds_md *__lmm;
                         int __lmm_size, returned_lmm_size;
                         __lmm_size = mdd_lov_mdsize(ctxt, mdd);
+                        returned_lmm_size = __lmm_size;
 
                         OBD_ALLOC(__lmm, __lmm_size);
                         if (__lmm == NULL)

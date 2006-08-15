@@ -237,9 +237,9 @@ static int __mdd_lmm_get(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
-static int mdd_attr_get_internal (const struct lu_context *ctxt,
-                                    struct mdd_object *mdd_obj, 
-                                    struct md_attr *ma)
+static int mdd_attr_get_internal(const struct lu_context *ctxt,
+                                 struct mdd_object *mdd_obj, 
+                                 struct md_attr *ma)
 {
         int rc = 0;
         ENTRY;
@@ -581,6 +581,7 @@ static int __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_object *o,
 {
         struct dt_object *next;
         int rc = 0;
+        ENTRY;
         
         LASSERT(lu_object_exists(ctxt, mdd2lu_obj(o)));
         next = mdd_object_child(o);
