@@ -1711,6 +1711,23 @@ static int osd_device_init(const struct lu_context *ctx,
         return 0;
 }
 
+static int osd_shutdown(const struct lu_context *ctx, struct osd_device *o)
+{
+        struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
+        ENTRY;
+        if (o->od_obj_area != NULL) {
+                dput(o->od_obj_area);
+                o->od_obj_area = NULL;
+        }
+        osd_oi_fini(info, &o->od_oi);
+
+        if (o->od_mount)
+                server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
+        o->od_mount = NULL;
+
+        RETURN(0);
+}
+
 static int osd_mount(const struct lu_context *ctx,
                      struct osd_device *o, struct lustre_cfg *cfg)
 {
@@ -1748,7 +1765,7 @@ static int osd_mount(const struct lu_context *ctx,
                         result = PTR_ERR(d);
         }
         if (result != 0)
-                osd_device_fini(ctx, osd2lu_dev(o));
+                osd_shutdown(ctx, o);
         RETURN(result);
 }
 
@@ -1759,16 +1776,6 @@ static struct lu_device *osd_device_fini(const struct lu_context *ctx,
         struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
 
         ENTRY;
-        if (o->od_obj_area != NULL) {
-                dput(o->od_obj_area);
-                o->od_obj_area = NULL;
-        }
-        osd_oi_fini(info, &o->od_oi);
-
-        if (o->od_mount)
-                server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
-
-        o->od_mount = NULL;
         RETURN(NULL);
 }
 
@@ -1812,6 +1819,9 @@ static int osd_process_config(const struct lu_context *ctx,
         switch(cfg->lcfg_command) {
         case LCFG_SETUP:
                 err = osd_mount(ctx, o, cfg);
+                break;
+        case LCFG_CLEANUP:
+                osd_shutdown(ctx, o);
                 break;
         default:
                 err = -ENOTTY;
