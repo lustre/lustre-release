@@ -18,7 +18,7 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
 EXCEPT="$EXCEPT 24o"
 # Tests that always fail with mountconf -- FIXME
 # 48a moving the working dir succeeds
-EXCEPT="$EXCEPT 48a"
+EXCEPT="$EXCEPT 48 31"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3};    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76" ;;

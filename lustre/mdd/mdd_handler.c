@@ -601,9 +601,8 @@ static int __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_object *o,
  * and port to 
  */
 int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
-                 struct md_attr *ma)
+                 const struct md_attr *ma, struct lu_attr *la)
 {
-        struct lu_attr   *la = &ma->ma_attr;
         struct lu_attr   *tmp_la = &mdd_ctx_info(ctxt)->mti_la;
         struct dt_object *next = mdd_object_child(obj);
         time_t            now = CURRENT_SECONDS;
@@ -697,13 +696,15 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
 
 /* set attr and LOV EA at once, return updated attr */
 static int mdd_attr_set(const struct lu_context *ctxt,
-                        struct md_object *obj, struct md_attr *ma)
+                        struct md_object *obj, 
+                        const struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
         struct lov_mds_md *lmm = NULL;
         int  rc = 0, lmm_size = 0, max_size;
+        struct lu_attr *la_copy = &mdd_ctx_info(ctxt)->mti_la_for_fix;
         ENTRY;
 
         mdd_txn_param_build(ctxt, &MDD_TXN_ATTR_SET);
@@ -728,13 +729,14 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         if (ma->ma_attr.la_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime "LPU64", ctime "LPU64"\n",
                        ma->ma_attr.la_mtime, ma->ma_attr.la_ctime);
-        
-        rc = mdd_fix_attr(ctxt, mdd_obj, ma);
+       
+        *la_copy = ma->ma_attr;
+        rc = mdd_fix_attr(ctxt, mdd_obj, ma, la_copy);
         if (rc)
                 GOTO(cleanup, rc);
-        if (ma->ma_attr.la_valid) {            /* setattr */
+        if (la_copy->la_valid) {            /* setattr */
                 mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
-                rc = mdd_attr_set_internal(ctxt, mdd_obj, &ma->ma_attr, handle);
+                rc = mdd_attr_set_internal(ctxt, mdd_obj, la_copy, handle);
                 mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
 
                 /* journal chown/chgrp in llog, just like unlink */
