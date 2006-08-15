@@ -210,7 +210,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
          */
         if (islnk || (!isreg && !isdir &&
             (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))) {
-                info->mti_trans_flags |= MDT_NONEED_TANSNO; 
+                info->mti_trans_flags |= MDT_NONEED_TANSNO;
                 RETURN(0);
         }
         /* This can't be done earlier, we need to return reply body */
@@ -223,7 +223,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         } else if (flags & MDS_OPEN_DIRECTORY)
                 RETURN(-ENOTDIR);
 
-        if ((isreg) && !(ma->ma_valid & MA_LOV)) {
+        if (isreg && !(ma->ma_valid & MA_LOV)) {
                 /*No EA, check whether it is will set regEA and dirEA
                  *since in above attr get, these size might be zero,
                  *so reset it, to retrieve the MD after create obj*/
@@ -235,7 +235,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 if (rc)
                         RETURN(rc);
         }
-        CDEBUG(D_INODE, "after open, ma_valid bit = "LPX64" lmm_size = %d\n", 
+        CDEBUG(D_INODE, "after open, ma_valid bit = "LPX64" lmm_size = %d\n",
                         ma->ma_valid, ma->ma_lmm_size);
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
@@ -248,7 +248,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 else
                         repbody->valid |= OBD_MD_FLEASIZE;
         }
-        /*FIXME: should determine the offset dynamicly, 
+        /*FIXME: should determine the offset dynamicly,
          *did not get ACL before shrink*/
         lustre_shrink_reply(req, 2, repbody->eadatasize, 1);
         lustre_shrink_reply(req, repbody->eadatasize ? 3 : 2, repbody->aclsize,
@@ -294,7 +294,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 mdt_object_get(info->mti_ctxt, o);
                 /* open hanling */
                 mo_open(info->mti_ctxt, mdt_object_child(o));
-                
+
                 mfd->mfd_mode = flags;
                 mfd->mfd_object = o;
                 mfd->mfd_xid = mdt_info_req(info)->rq_xid;
@@ -397,12 +397,12 @@ int mdt_reint_open(struct mdt_thread_info *info)
 
         CDEBUG(D_INODE, "I am going to create "DFID"/("DFID":%s) "
                         "cr_flag=%x mode=%06o\n",
-                        PFID(rr->rr_fid1), PFID(rr->rr_fid2), 
+                        PFID(rr->rr_fid1), PFID(rr->rr_fid2),
                         rr->rr_name, create_flags, la->la_mode);
 
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
-        
+
         lh = &info->mti_lh[MDT_LH_PARENT];
         if (!(create_flags & MDS_OPEN_CREAT))
                 lh->mlh_mode = LCK_CR;
@@ -422,7 +422,7 @@ int mdt_reint_open(struct mdt_thread_info *info)
                 intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
                 if (result == -ESTALE) {
                         /*ESTALE means the parent is a dead(unlinked) dir,
-                         *so it should return -ENOENT to in accordance 
+                         *so it should return -ENOENT to in accordance
                          *with the original mds implemantaion.*/
                         GOTO(out_parent, result = -ENOENT);
                 }
@@ -469,7 +469,7 @@ finish_open:
                                      &info->mti_attr);
                 if (rc2 != 0)
                         CERROR("error in cleanup of open");
-        } 
+        }
 out_child:
         mdt_object_put(info->mti_ctxt, child);
 out_parent:
@@ -490,7 +490,7 @@ void mdt_mfd_close(const struct lu_context *ctxt,
         } else if (mfd->mfd_mode & MDS_FMODE_EXEC) {
                 mdt_allow_write_access(o);
         }
-        
+
         mdt_mfd_free(mfd);
 
         mo_close(ctxt, mdt_object_child(o), ma);
@@ -527,13 +527,13 @@ int mdt_close(struct mdt_thread_info *info)
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
-                
+
                 ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
                                                     &RMF_MDT_MD);
                 ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                        &RMF_MDT_MD,
                                                        RCL_SERVER);
-                
+
                 ma->ma_cookie = req_capsule_server_get(&info->mti_pill,
                                                     &RMF_LOGCOOKIES);
                 ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
