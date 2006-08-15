@@ -973,7 +973,7 @@ static int __mdd_finish_unlink(const struct lu_context *ctxt,
                     ma->ma_attr.la_nlink == 0 &&
                     S_ISREG(mdd_object_type(obj))) {
                         rc = __mdd_lmm_get(ctxt, obj, ma);
-                        if (rc == 0)
+                        if (rc == 0 && ma->ma_valid & MA_LOV)
                                 rc = mdd_unlink_log(ctxt,
                                                     mdo2mdd(&obj->mod_obj),
                                                     obj, ma);                
