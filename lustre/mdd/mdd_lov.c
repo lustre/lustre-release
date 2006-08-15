@@ -49,111 +49,6 @@
 
 #include "mdd_internal.h"
 
-static const char mdd_lov_objid_name[] = "lov_objid";
-
-static int mdd_lov_read_objids(struct obd_device *obd, struct md_lov_info *mli,
-                               const void *ctxt)
-{
-        struct dt_object *obj_ids = mli->md_lov_objid_obj;
-        struct lu_attr *lu_attr = NULL;
-        obd_id *ids;
-        int i, rc;
-        loff_t off = 0;
-        ENTRY;
-
-        LASSERT(!mli->md_lov_objids_size);
-        LASSERT(!mli->md_lov_objids_dirty);
-
-        /* Read everything in the file, even if our current lov desc
-           has fewer targets. Old targets not in the lov descriptor
-           during mds setup may still have valid objids. */
-
-        OBD_ALLOC_PTR(lu_attr);
-        if (!lu_attr)
-                GOTO(out, rc = -ENOMEM);
-        rc = obj_ids->do_ops->do_attr_get(ctxt, obj_ids, lu_attr);
-        if (rc)
-                GOTO(out, rc);
-
-        if (lu_attr->la_size == 0)
-                GOTO(out, rc);
-
-        OBD_ALLOC(ids, lu_attr->la_size);
-        if (ids == NULL)
-                RETURN(-ENOMEM);
-
-        mli->md_lov_objids = ids;
-        mli->md_lov_objids_size = lu_attr->la_size;
-
-        rc = obj_ids->do_body_ops->dbo_read(ctxt, obj_ids, (char *)ids,
-                                            lu_attr->la_size, &off);
-        if (rc < 0) {
-                CERROR("Error reading objids %d\n", rc);
-                RETURN(rc);
-        }
-
-        mli->md_lov_objids_in_file = lu_attr->la_size / sizeof(*ids);
-
-        for (i = 0; i < mli->md_lov_objids_in_file; i++) {
-                CDEBUG(D_INFO, "read last object "LPU64" for idx %d\n",
-                       mli->md_lov_objids[i], i);
-        }
-out:
-        if (lu_attr)
-                OBD_FREE_PTR(lu_attr);
-        RETURN(0);
-}
-
-int mdd_lov_write_objids(struct obd_device *obd, struct md_lov_info *mli,
-                         const void *ctxt)
-{
-        int i, rc = 0, tgts;
-        ENTRY;
-
-        if (!mli->md_lov_objids_dirty)
-                RETURN(0);
-
-        tgts = max(mli->md_lov_desc.ld_tgt_count,
-                   mli->md_lov_objids_in_file);
-        if (!tgts)
-                RETURN(0);
-
-        for (i = 0; i < tgts; i++)
-                CDEBUG(D_INFO, "writing last object "LPU64" for idx %d\n",
-                       mli->md_lov_objids[i], i);
-#if 0
-        rc = ids_obj->do_body_ops->dbo_write(ctxt, obj_ids,
-                                             (char *)mli->mdd_lov_objids,
-                                             tgts * sizeof(obd_id), &off,
-                                             NULL /* XXX transaction handle */);
-        if (rc >= 0) {
-                mli->mdd_lov_objids_dirty = 0;
-                rc = 0;
-        }
-#endif
-        RETURN(rc);
-}
-static int mdd_lov_write_catlist(struct obd_device *obd, void *idarray, int size,
-                                 const void *ctxt)
-{
-        int rc = 0;
-        RETURN(rc);
-}
-
-static int mdd_lov_read_catlist(struct obd_device *obd, void *idarray, int size,
-                                const void *ctxt)
-{
-        int rc = 0;
-        RETURN(rc);
-}
-
-static struct md_lov_ops mdd_lov_ops = {
-        .ml_read_objids = mdd_lov_read_objids,
-        .ml_write_objids = mdd_lov_write_objids,
-        .ml_read_catlist = mdd_lov_read_catlist,
-        .ml_write_catlist = mdd_lov_write_catlist
-};
-
 static int mdd_lov_update(struct obd_device *host,
                           struct obd_device *watched,
                           enum obd_notify_event ev, void *owner)
@@ -181,8 +76,6 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg      *lcfg;
         struct obd_device      *obd;
-        struct dt_object *obj_id;
-        struct md_lov_info    *mli;
         int rc;
         ENTRY;
 
@@ -206,18 +99,6 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                 LBUG();
         }
 
-        /*init mli, which will be used in following mds setup*/
-        mli = &obd->u.mds.mds_lov_info;
-        mli->md_lov_ops = &mdd_lov_ops;
-
-        obj_id = dt_store_open(ctxt, mdd->mdd_child, mdd_lov_objid_name,
-                               &mli->md_lov_objid_fid);
-        if (IS_ERR(obj_id)){
-                rc = PTR_ERR(obj_id);
-                RETURN(rc);
-        }
-        mli->md_lov_objid_obj = obj_id;
-
         rc = class_setup(obd, lcfg);
         if (rc)
                 GOTO(class_detach, rc);
@@ -238,7 +119,6 @@ lcfg_cleanup:
 int mdd_cleanup_obd(struct mdd_device *mdd)
 {
         struct lustre_cfg_bufs bufs;
-        struct md_lov_info     *mli;
         struct lustre_cfg      *lcfg;
         struct obd_device      *obd;
         int rc;
@@ -246,9 +126,6 @@ int mdd_cleanup_obd(struct mdd_device *mdd)
 
         obd = mdd->mdd_md_dev.md_lu_dev.ld_obd;
         LASSERT(obd);
-
-        mli = &obd->u.mds.mds_lov_info;
-        dt_object_fini(mli->md_lov_objid_obj);
 
         lustre_cfg_bufs_reset(&bufs, MDD_OBD_NAME);
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);

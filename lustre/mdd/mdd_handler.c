@@ -453,8 +453,6 @@ static struct lu_device *mdd_device_fini(const struct lu_context *ctx,
 	struct mdd_device *m = lu2mdd_dev(d);
         struct lu_device *next = &m->mdd_child->dd_lu_dev;
 
-        dt_device_fini(&m->mdd_lov_dev);
-
         return next;
 }
 

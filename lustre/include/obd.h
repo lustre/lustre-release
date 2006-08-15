@@ -416,39 +416,6 @@ struct md_lov_ops {
                                const void *ctxt);
 
 };
-struct md_lov_info {
-        struct obd_device               *md_lov_obd; /* XXX lov_obd */
-        struct obd_uuid                  md_lov_uuid;
-        struct obd_export               *md_lov_exp; /* XXX lov_exp */
-        struct lov_desc                  md_lov_desc;
-        obd_id                          *md_lov_objids;
-        int                              md_lov_objids_size;
-        __u32                            md_lov_objids_in_file;
-        unsigned int                     md_lov_objids_dirty:1;
-        int                              md_lov_nextid_set;
-        void                            *md_lov_objid_obj;
-        struct lu_fid                    md_lov_objid_fid;
-        unsigned long                    md_lov_objids_valid:1;
-        int                              md_lov_max_mdsize;
-        int                              md_lov_max_cookiesize;
-        struct semaphore                 md_lov_orphan_recovery_sem;
-        struct md_lov_ops                *md_lov_ops;
-};
-
-#define mds_osc_obd             mds_lov_info.md_lov_obd
-#define mds_lov_uuid            mds_lov_info.md_lov_uuid
-#define mds_osc_exp             mds_lov_info.md_lov_exp
-#define mds_lov_desc            mds_lov_info.md_lov_desc
-#define mds_lov_objids          mds_lov_info.md_lov_objids
-#define mds_lov_objids_size     mds_lov_info.md_lov_objids_size
-#define mds_lov_objids_in_file  mds_lov_info.md_lov_objids_in_file
-#define mds_lov_objids_dirty    mds_lov_info.md_lov_objids_dirty
-#define mds_lov_nextid_set      mds_lov_info.md_lov_nextid_set
-#define mds_lov_objid_filp      mds_lov_info.md_lov_objid_obj
-#define mds_lov_objids_valid    mds_lov_info.md_lov_objids_valid
-#define mds_max_mdsize          mds_lov_info.md_lov_max_mdsize
-#define mds_max_cookiesize      mds_lov_info.md_lov_max_cookiesize
-#define mds_orphan_recovery_sem mds_lov_info.md_lov_orphan_recovery_sem
 
 struct mds_obd {
         /* NB this field MUST be first */
@@ -458,6 +425,8 @@ struct mds_obd {
         struct ptlrpc_service           *mds_readpage_service;
         struct vfsmount                 *mds_vfsmnt;
         cfs_dentry_t                    *mds_fid_de;
+        int                              mds_max_mdsize;
+        int                              mds_max_cookiesize;
         struct file                     *mds_rcvd_filp;
         spinlock_t                       mds_transno_lock;
         __u64                            mds_last_transno;
@@ -472,8 +441,17 @@ struct mds_obd {
         cfs_dentry_t                    *mds_objects_dir;
         struct llog_handle              *mds_cfg_llh;
 //        struct llog_handle              *mds_catalog;
-        struct md_lov_info              mds_lov_info;
+        struct obd_device               *mds_osc_obd; /* XXX lov_obd */
+        struct obd_uuid                  mds_lov_uuid;
         char                            *mds_profile;
+        struct obd_export               *mds_osc_exp; /* XXX lov_exp */
+        struct lov_desc                  mds_lov_desc;
+        obd_id                          *mds_lov_objids;
+        int                              mds_lov_objids_size;
+        __u32                            mds_lov_objids_in_file;
+        unsigned int                     mds_lov_objids_dirty:1;
+        int                              mds_lov_nextid_set;
+        struct file                     *mds_lov_objid_filp;
         struct file                     *mds_health_check_filp;
         unsigned long                   *mds_client_bitmap;
         struct upcall_cache             *mds_group_hash;
@@ -481,7 +459,8 @@ struct mds_obd {
         struct lustre_quota_info         mds_quota_info;
         struct semaphore                 mds_qonoff_sem;
         struct semaphore                 mds_health_sem;
-        unsigned long                    mds_fl_user_xattr:1,
+        unsigned long                    mds_lov_objids_valid:1,
+                                         mds_fl_user_xattr:1,
                                          mds_fl_acl:1;
 };
 

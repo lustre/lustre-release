@@ -1892,7 +1892,7 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 
         LASSERT(!lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb)));
 
-        sema_init(&mds->mds_orphan_recovery_sem, 1);
+        //sema_init(&mds->mds_orphan_recovery_sem, 1);
         sema_init(&mds->mds_epoch_sem, 1);
         spin_lock_init(&mds->mds_transno_lock);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
@@ -2685,6 +2685,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         struct lustre_sb_info *lsi;
         struct lustre_mount_info *lmi;
         struct dentry  *dentry;
+        struct file *file;
         int rc = 0;
         ENTRY;
 
@@ -2729,6 +2730,20 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
                 GOTO(err_fid, rc);
         }
+        
+        /* open and test the lov objd file */
+        file = filp_open(LOV_OBJID, O_RDWR | O_CREAT, 0644);
+        if (IS_ERR(file)) {
+                rc = PTR_ERR(file);
+                CERROR("cannot open/create %s file: rc = %d\n", LOV_OBJID, rc);
+                GOTO(err_fid, rc = PTR_ERR(file));
+        }
+        mds->mds_lov_objid_filp = file;
+        if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
+                CERROR("%s is not a regular file!: mode = %o\n", LOV_OBJID,
+                       file->f_dentry->d_inode->i_mode);
+                GOTO(err_lov_objid, rc = -ENOENT);
+        }
 
         rc = mds_lov_presetup(mds, lcfg);
         if (rc < 0)
@@ -2742,13 +2757,17 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
                 GOTO(err_objects, rc);
         
-        sema_init(&mds->mds_orphan_recovery_sem, 1);
+        //sema_init(&mds->mds_orphan_recovery_sem, 1);
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
 
 err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
+err_lov_objid:
+        if (mds->mds_lov_objid_filp && 
+                filp_close((struct file *)mds->mds_lov_objid_filp, 0))
+                CERROR("can't close %s after error\n", LOV_OBJID);
 err_fid:
         dput(mds->mds_fid_de);
 err_objects:
