@@ -163,6 +163,7 @@ static void cmm_device_shutdown(const struct lu_context *ctx,
                                 struct cmm_device *cm)
 {
         struct mdc_device *mc, *tmp;
+        struct lu_site *ls;
         ENTRY;
 
         /* finish all mdc devices */
@@ -177,7 +178,41 @@ static void cmm_device_shutdown(const struct lu_context *ctx,
                 cm->cmm_tgt_count--;
         }
         spin_unlock(&cm->cmm_tgt_guard);
+
+        ls = cm->cmm_md_dev.md_lu_dev.ld_site;
+        fld_client_fini(ls->ls_client_fld);
+        OBD_FREE_PTR(ls->ls_client_fld);
+        ls->ls_client_fld = NULL;
+
         EXIT;
+}
+static int cmm_device_mount(const struct lu_context *ctx,
+                            struct cmm_device *m, struct lustre_cfg *cfg)
+{
+        struct lu_site *ls;
+        const char *index = lustre_cfg_string(cfg, 2);
+        char *p;
+        int rc;
+        
+        LASSERT(index);
+
+        m->cmm_local_num = simple_strtol(index, &p, 10);
+        if (*p) {
+                CERROR("Invalid index in lustre_cgf\n");
+                RETURN(-EINVAL);
+        }
+        
+        ls = m->cmm_md_dev.md_lu_dev.ld_site;
+        OBD_ALLOC_PTR(ls->ls_client_fld);
+        if (!ls->ls_client_fld)
+                RETURN(-ENOMEM);
+
+        rc = fld_client_init(ls->ls_client_fld, "CMM_UUID",
+                             LUSTRE_CLI_FLD_HASH_RRB);
+        if (rc) {
+                CERROR("can't init FLD, err %d\n",  rc);        
+        }
+        RETURN(rc);
 }
 
 static int cmm_process_config(const struct lu_context *ctx,
@@ -196,19 +231,10 @@ static int cmm_process_config(const struct lu_context *ctx,
                 break;
         case LCFG_SETUP:
         {
-                const char *index = lustre_cfg_string(cfg, 2);
-                char *p;
-                LASSERT(index);
-
                 /* lower layers should be set up at first */
                 err = next->ld_ops->ldo_process_config(ctx, next, cfg);
-                if (err == 0) {
-                        m->cmm_local_num = simple_strtol(index, &p, 10);
-                        if (*p) {
-                                CERROR("Invalid index in lustre_cgf\n");
-                                RETURN(-EINVAL);
-                        }
-                }
+                if (err == 0)
+                        err = cmm_device_mount(ctx, m, cfg);
                 break;
         }
         case LCFG_CLEANUP:
@@ -290,7 +316,6 @@ static int cmm_device_init(const struct lu_context *ctx,
                            struct lu_device *d, struct lu_device *next)
 {
         struct cmm_device *m = lu2cmm_dev(d);
-        struct lu_site *ls;
         int err = 0;
         ENTRY;
 
@@ -299,16 +324,6 @@ static int cmm_device_init(const struct lu_context *ctx,
         m->cmm_tgt_count = 0;
         m->cmm_child = lu2md_dev(next);
 
-        ls = m->cmm_md_dev.md_lu_dev.ld_site;
-        OBD_ALLOC_PTR(ls->ls_client_fld);
-        if (!ls->ls_client_fld)
-                RETURN(-ENOMEM);
-
-        err = fld_client_init(ls->ls_client_fld, "CMM_UUID",
-                              LUSTRE_CLI_FLD_HASH_RRB);
-        if (err) {
-                CERROR("can't init FLD, err %d\n",  err);
-        }
         RETURN(err);
 }
 
@@ -316,14 +331,7 @@ static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
                                          struct lu_device *ld)
 {
 	struct cmm_device *cm = lu2cmm_dev(ld);
-        struct lu_site *ls;
         ENTRY;
-
-        ls = cm->cmm_md_dev.md_lu_dev.ld_site;
-        fld_client_fini(ls->ls_client_fld);
-        OBD_FREE_PTR(ls->ls_client_fld);
-        ls->ls_client_fld = NULL;
-
         RETURN (md2lu_dev(cm->cmm_child));
 }
 
