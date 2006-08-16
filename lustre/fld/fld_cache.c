@@ -196,9 +196,10 @@ int fld_cache_insert(struct fld_cache_info *cache,
         /* check if cache already has the entry with such a seq */
         bucket = fld_cache_bucket(cache, seq);
         hlist_for_each_entry(fldt, scan, bucket, fce_list) {
-                if (fldt->fce_seq == seq)
+                if (fldt->fce_seq == seq) {
                         spin_unlock(&cache->fci_lock);
                         RETURN(rc = -EEXIST);
+                }
         }
         spin_unlock(&cache->fci_lock);
 
