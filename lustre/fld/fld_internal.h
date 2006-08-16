@@ -35,6 +35,8 @@
 #include <libcfs/kp30.h>
 
 #include <linux/types.h>
+#include <lustre_req_layout.h>
+#include <lustre_fld.h>
 
 enum fld_op {
         FLD_CREATE = 0,
@@ -50,6 +52,12 @@ extern struct lu_fld_hash fld_hash[];
 
 #ifdef __KERNEL__
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
+struct fld_thread_info {
+        struct req_capsule fti_pill;
+        int                fti_rep_buf_size[3];
+        __u64              fti_key;
+        __u64              fti_rec;
+};
 
 int fld_index_init(struct lu_server_fld *fld,
                    const struct lu_context *ctx,

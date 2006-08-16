@@ -69,39 +69,7 @@ enum {
         FLD_TXN_INDEX_DELETE_CREDITS  = 20,
 };
 
-struct fld_thread_info {
-        __u64 fti_key;
-        __u64 fti_rec;
-};
-
-static void *fld_key_init(const struct lu_context *ctx,
-                          struct lu_context_key *key)
-{
-        struct fld_thread_info *info;
-        ENTRY;
-
-        OBD_ALLOC_PTR(info);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        RETURN(info);
-}
-
-static void fld_key_fini(const struct lu_context *ctx,
-                         struct lu_context_key *key, void *data)
-{
-        struct fld_thread_info *info = data;
-        ENTRY;
-        OBD_FREE_PTR(info);
-        EXIT;
-}
-
-static int fld_key_registered = 0;
-
-static struct lu_context_key fld_thread_key = {
-        .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD,
-        .lct_init = fld_key_init,
-        .lct_fini = fld_key_fini
-};
+extern struct lu_context_key fld_thread_key;
 
 static struct dt_key *fld_key(const struct lu_context *ctx,
                               const seqno_t seq)
@@ -204,13 +172,6 @@ int fld_index_init(struct lu_server_fld *fld,
         int rc;
         ENTRY;
 
-        if (fld_key_registered == 0) {
-                rc = lu_context_key_register(&fld_thread_key);
-                if (rc != 0)
-                        RETURN(rc);
-        }
-        fld_key_registered++;
-
         /*
          * lu_context_key has to be registered before threads are started,
          * check this.
@@ -243,10 +204,6 @@ void fld_index_fini(struct lu_server_fld *fld,
                 if (!IS_ERR(fld->fld_obj))
                         lu_object_put(ctx, &fld->fld_obj->do_lu);
                 fld->fld_obj = NULL;
-        }
-        if (fld_key_registered > 0) {
-                if (--fld_key_registered == 0)
-                        lu_context_key_degister(&fld_thread_key);
         }
         EXIT;
 }

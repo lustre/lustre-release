@@ -47,22 +47,47 @@
 #include <obd_support.h>
 #include <lprocfs_status.h>
 
-#include <dt_object.h>
 #include <md_object.h>
-#include <lustre_req_layout.h>
-#include <lustre_fld.h>
+
 #include "fld_internal.h"
 
 #ifdef __KERNEL__
+static void *fld_key_init(const struct lu_context *ctx,
+                          struct lu_context_key *key)
+{
+        struct fld_thread_info *info;
+        ENTRY;
+
+        OBD_ALLOC_PTR(info);
+        if (info == NULL)
+                info = ERR_PTR(-ENOMEM);
+        RETURN(info);
+}
+
+static void fld_key_fini(const struct lu_context *ctx,
+                         struct lu_context_key *key, void *data)
+{
+        struct fld_thread_info *info = data;
+        ENTRY;
+        OBD_FREE_PTR(info);
+        EXIT;
+}
+
+struct lu_context_key fld_thread_key = {
+        .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD,
+        .lct_init = fld_key_init,
+        .lct_fini = fld_key_fini
+};
+
 static int __init fld_mod_init(void)
 {
-        /* nothing to init seems */
+        lu_context_key_register(&fld_thread_key);
         return 0;
 }
 
 static void __exit fld_mod_exit(void)
 {
-        /* nothing to fini seems */
+        lu_context_key_degister(&fld_thread_key);
         return;
 }
 
@@ -117,11 +142,6 @@ static int fld_server_handle(struct lu_server_fld *fld,
 
 }
 
-struct fld_thread_info {
-        struct req_capsule fti_pill;
-        int                fti_rep_buf_size[3];
-};
-
 static int fld_req_handle0(const struct lu_context *ctx,
                            struct lu_server_fld *fld,
                            struct ptlrpc_request *req,
@@ -151,34 +171,6 @@ static int fld_req_handle0(const struct lu_context *ctx,
 
         RETURN(rc);
 }
-
-static void *fld_thread_init(const struct lu_context *ctx,
-                             struct lu_context_key *key)
-{
-        struct fld_thread_info *info;
-
-        /*
-         * check that no high order allocations are incurred.
-         */
-        CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
-        OBD_ALLOC_PTR(info);
-        if (info == NULL)
-                info = ERR_PTR(-ENOMEM);
-        return info;
-}
-
-static void fld_thread_fini(const struct lu_context *ctx,
-                            struct lu_context_key *key, void *data)
-{
-        struct fld_thread_info *info = data;
-        OBD_FREE_PTR(info);
-}
-
-struct lu_context_key fld_thread_key = {
-        .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD,
-        .lct_init = fld_thread_init,
-        .lct_fini = fld_thread_fini
-};
 
 static void fld_thread_info_init(struct ptlrpc_request *req,
                                  struct fld_thread_info *info)
