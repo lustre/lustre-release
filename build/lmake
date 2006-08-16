@@ -394,7 +394,8 @@ depend_kernel()
         #timed_run 300 $TOPDIR/build/update_oldconfig $logfile
         #local RC=${PIPESTATUS[0]}
         #local RC=$(strace -f -o update_oldconfig.strace bash -c "$TOPDIR/build/update_oldconfig $logfile; echo \$?")
-        local RC=$($TOPDIR/build/update_oldconfig $logfile; echo \$?)
+        $TOPDIR/build/update_oldconfig $logfile
+        local RC=${PIPESTATUS[0]}
         #$TOPDIR/build/update_oldconfig $logfile
         #local RC=${PIPESTATUS[0]}
         if [ $RC -eq 143 ]; then
