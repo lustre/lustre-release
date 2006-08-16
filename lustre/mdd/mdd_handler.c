@@ -653,7 +653,7 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
         if (la->la_valid & (LA_UID | LA_GID)) {
                 /* chown */
 
-                rc = -EPERM;
+/*                rc = -EPERM; */
 
                 if (la->la_uid == (uid_t) -1)
                         la->la_uid = tmp_la->la_uid;
