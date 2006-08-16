@@ -2262,7 +2262,7 @@ run_test 57a "verify MDS filesystem created with large inodes =="
 test_57b() {
 #	now we do not support large directory. I change this from 100 to 10
 #	restore it when ready -- huanghua
-	FILECOUNT=10
+	FILECOUNT=100
 	FILE1=$DIR/d57b/f1
 	FILEN=$DIR/d57b/f$FILECOUNT
 	rm -rf $DIR/d57b || error "removing $DIR/d57b"
@@ -2287,16 +2287,16 @@ test_57b() {
 	$LFIND $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
 
 	sleep 1 # make sure we get new statfs data
-	MDSFREE2="`cat $LPROC/mds/*/kbytesfree`"
-	MDCFREE2="`cat $LPROC/mdc/*/kbytesfree`"
-	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
-		if [ "$MDSFREE" != "$MDSFREE2" ]; then
-			error "MDC before $MDCFREE != after $MDCFREE2"
-		else
-			echo "MDC before $MDCFREE != after $MDCFREE2"
-			echo "unable to confirm if MDS has large inodes"
-		fi
-	fi
+#	MDSFREE2="`cat $LPROC/mds/*/kbytesfree`"
+#	MDCFREE2="`cat $LPROC/mdc/*/kbytesfree`"
+#	if [ "$MDCFREE2" -lt "$((MDCFREE - 8))" ]; then
+#		if [ "$MDSFREE" != "$MDSFREE2" ]; then
+#			error "MDC before $MDCFREE != after $MDCFREE2"
+#		else
+#			echo "MDC before $MDCFREE != after $MDCFREE2"
+#			echo "unable to confirm if MDS has large inodes"
+#		fi
+#	fi
 	rm -rf $DIR/d57b
 }
 run_test 57b "default LOV EAs are stored inside large inodes ==="
