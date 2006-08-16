@@ -384,12 +384,33 @@ static inline int obd_precleanup(struct obd_device *obd,
                                  enum obd_cleanup_stage cleanup_stage)
 {
         int rc;
+        DECLARE_LU_VARS(ldt, d);
         ENTRY;
 
-        OBD_CHECK_DT_OP(obd, precleanup, 0);
-        OBD_COUNTER_INCREMENT(obd, precleanup);
+        OBD_CHECK_DEV(obd);
+#ifdef __KERNEL__
+        ldt = obd->obd_type->typ_lu;
+        d = obd->obd_lu_dev;
+        if (ldt != NULL && d != NULL) {
+                struct lu_context ctx;
 
-        rc = OBP(obd, precleanup)(obd, cleanup_stage);
+                rc = lu_context_init(&ctx, ldt->ldt_ctx_tags);
+                if (rc == 0) {
+                        lu_context_enter(&ctx);
+                        ldt->ldt_ops->ldto_device_fini(&ctx, d);
+                        lu_context_exit(&ctx);
+                        lu_context_fini(&ctx);
+                        obd->obd_lu_dev = NULL;
+                        rc = 0;
+                }
+        } else
+#endif
+        {
+                OBD_CHECK_DT_OP(obd, precleanup, 0);
+                rc = OBP(obd, precleanup)(obd, cleanup_stage);
+        }
+        
+        OBD_COUNTER_INCREMENT(obd, precleanup);
         RETURN(rc);
 }
 

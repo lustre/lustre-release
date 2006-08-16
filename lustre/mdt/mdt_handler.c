@@ -2238,14 +2238,13 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
         ping_evictor_stop();
         mdt_stop_ptlrpc_service(m);
 
-        mdt_fld_fini(ctx, m);
         mdt_seq_fini(ctx, m);
         mdt_seq_fini_cli(m);
+        
+        mdt_fld_fini(ctx, m);
+
         /* finish the stack */
         mdt_stack_fini(ctx, m, md2lu_dev(m->mdt_child));
-
-        LASSERT(atomic_read(&d->ld_ref) == 0);
-        md_device_fini(&m->mdt_md_dev);
 
         if (m->mdt_namespace != NULL) {
                 ldlm_namespace_free(m->mdt_namespace, 0);
@@ -2256,6 +2255,8 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
                 lu_site_fini(ls);
                 OBD_FREE_PTR(ls);
         }
+        LASSERT(atomic_read(&d->ld_ref) == 0);
+        md_device_fini(&m->mdt_md_dev);
 
         EXIT;
 }
@@ -2357,6 +2358,7 @@ err_fini_site:
         lu_site_fini(s);
 err_free_site:
         OBD_FREE_PTR(s);
+        
         md_device_fini(&m->mdt_md_dev);
         return (rc);
 }
@@ -2675,12 +2677,18 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_init_export    = mdt_init_export,    /* By Huang Hua*/
         .o_destroy_export = mdt_destroy_export, /* By Huang Hua*/
 };
+      
+static void mdt_device_fini(const struct lu_context *ctx, struct lu_device *d)
+{
+        struct mdt_device *m = mdt_dev(d);
+
+        mdt_fini(ctx, m);
+}
 
 static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)
 {
         struct mdt_device *m = mdt_dev(d);
 
-        mdt_fini(ctx, m);
         OBD_FREE_PTR(m);
 }
 
@@ -2789,7 +2797,8 @@ static struct lu_device_type_operations mdt_device_type_ops = {
         .ldto_fini = mdt_type_fini,
 
         .ldto_device_alloc = mdt_device_alloc,
-        .ldto_device_free  = mdt_device_free
+        .ldto_device_free  = mdt_device_free,
+        .ldto_device_fini  = mdt_device_fini
 };
 
 static struct lu_device_type mdt_device_type = {
