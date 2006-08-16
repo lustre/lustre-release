@@ -47,10 +47,6 @@ enum mod_flags {
         IMMUTE_OBJ = 1 << 2
 };
 
-enum mod_valid_flags {
-        MOD_VALID = 1 << 0,
-};
-
 struct mdd_object {
         struct md_object  mod_obj;
         /* open count */
