@@ -57,7 +57,6 @@ static void __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
 static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
                       const char *name, struct lu_fid* fid);
 
-
 static struct md_object_operations mdd_obj_ops;
 static struct md_dir_operations    mdd_dir_ops;
 static struct lu_object_operations mdd_lu_obj_ops;
@@ -148,6 +147,16 @@ static inline void mdd_object_put(const struct lu_context *ctxt,
         lu_object_put(ctxt, &o->mod_obj.mo_lu);
 }
 
+static inline int mdd_is_immutable(struct mdd_object *obj)
+{
+        return obj->mod_flags & IMMUTE_OBJ;
+}
+
+static inline int mdd_is_append(struct mdd_object *obj)
+{
+        return obj->mod_flags & APPEND_OBJ;
+}
+
 static void mdd_set_dead_obj(struct mdd_object *obj)
 {
         if (obj)
@@ -174,6 +183,37 @@ static int mdd_may_create(const struct lu_context *ctxt,
         RETURN(0);
 }
 
+static inline int __mdd_la_get(const struct lu_context *ctxt,
+                               struct mdd_object *obj, struct lu_attr *la)
+{
+        struct dt_object  *next = mdd_object_child(obj);
+        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
+        return next->do_ops->do_attr_get(ctxt, next, la);
+
+}
+
+static int mdd_get_flags(const struct lu_context *ctxt, struct mdd_object *obj)
+{
+        struct lu_attr *la = &mdd_ctx_info(ctxt)->mti_la;
+        int rc;
+       
+        if (obj->mod_valid & MOD_VALID)
+                RETURN(0);
+        rc = __mdd_la_get(ctxt, obj, la);
+        if (rc)
+                RETURN(rc);
+
+        obj->mod_flags = 0;
+        if (la->la_flags & S_APPEND)
+                obj->mod_flags |= APPEND_OBJ;
+        
+        if (la->la_flags & S_IMMUTABLE)
+                obj->mod_flags |= IMMUTE_OBJ; 
+        
+        obj->mod_valid |= MOD_VALID;
+        return 0;
+}
+
 /*Check whether it may delete the cobj under the pobj*/
 static int mdd_may_delete(const struct lu_context *ctxt,
                           struct mdd_object *pobj, struct mdd_object *cobj,
@@ -188,7 +228,12 @@ static int mdd_may_delete(const struct lu_context *ctxt,
         if (!lu_object_exists(ctxt, &cobj->mod_obj.mo_lu))
                 RETURN(-ENOENT);
 
-        /*TODO:check append flags*/
+        if (mdd_get_flags(ctxt, pobj) || mdd_get_flags(ctxt, cobj))
+                RETURN(-EPERM);
+                      
+        if (mdd_is_immutable(cobj) || mdd_is_append(cobj))
+                RETURN(-EPERM);
+
         if (is_dir) {
                 if (!S_ISDIR(mdd_object_type(ctxt, cobj)))
                         RETURN(-ENOTDIR);
@@ -204,17 +249,14 @@ static int mdd_may_delete(const struct lu_context *ctxt,
 
         RETURN(rc);
 }
-
 /* get only inode attributes */
 static int __mdd_iattr_get(const struct lu_context *ctxt,
                            struct mdd_object *mdd_obj, struct md_attr *ma)
 {
-        struct dt_object  *next = mdd_object_child(mdd_obj);
         int rc = 0;
         ENTRY;
 
-        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(mdd_obj)));
-        rc = next->do_ops->do_attr_get(ctxt, next, &ma->ma_attr);
+        rc = __mdd_la_get(ctxt, mdd_obj, &ma->ma_attr);
         if (rc == 0)
                 ma->ma_valid = MA_INODE;
         RETURN(rc);
@@ -606,19 +648,37 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
                  const struct md_attr *ma, struct lu_attr *la)
 {
         struct lu_attr   *tmp_la = &mdd_ctx_info(ctxt)->mti_la;
-        struct dt_object *next = mdd_object_child(obj);
         time_t            now = CURRENT_SECONDS;
         int               rc;
         ENTRY;
 
-        rc = next->do_ops->do_attr_get(ctxt, next, tmp_la);
+        rc = __mdd_la_get(ctxt, obj, tmp_la);
         if (rc)
                 RETURN(rc);
-
+        /*XXX Check permission */
+        if (mdd_get_flags(ctxt, obj) || mdd_is_immutable(obj) ||
+                                        mdd_is_append(obj)) {
+                
+                /*If only change flags of the object, we should 
+                 * let it pass, but also need capability check 
+                 * here if (!capable(CAP_LINUX_IMMUTABLE)), 
+                 * fix it, when implement capable in mds*/
+                if (la->la_valid & ~LA_FLAGS) 
+                        RETURN(-EPERM);
+                
+                /*According to Ext3 implementation on this, the
+                 *Ctime will be changed, but not clear why?*/
+                la->la_ctime = now;
+                la->la_valid |= LA_CTIME;
+                RETURN(0);
+        }
         if (!(la->la_valid & LA_CTIME)) {
                 la->la_ctime = now;
                 la->la_valid |= LA_CTIME;
         } else
+                /*According to original MDS implementation, it 
+                 * will clear ATTR_CTIME_SET flags, but seems
+                 * no sense, should clear ATTR_CTIME? XXX*/
                 la->la_valid &= ~LA_CTIME;
 
         if (!(la->la_valid & LA_ATIME)) {
@@ -630,11 +690,8 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
                 la->la_valid |= LA_MTIME;
         }
 
-        /*XXX Check permission */
-#if 0
-        if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
-                RETURN((attr->ia_valid & ~ATTR_ATTR_FLAG) ? -EPERM : 0);
 
+#if 0
         /* times */
         if ((ia_valid & (ATTR_MTIME|ATTR_ATIME)) == (ATTR_MTIME|ATTR_ATIME)) {
                 if (current->fsuid != inode->i_uid &&
@@ -653,8 +710,9 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
         if (la->la_valid & (LA_UID | LA_GID)) {
                 /* chown */
 
-/*                rc = -EPERM; */
-
+                if (mdd_get_flags(ctxt, obj) || mdd_is_immutable(obj) ||
+                                        mdd_is_append(obj))
+                        RETURN(-EPERM); 
                 if (la->la_uid == (uid_t) -1)
                         la->la_uid = tmp_la->la_uid;
                 if (la->la_gid == (gid_t) -1)
@@ -744,12 +802,12 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         rc = mdd_fix_attr(ctxt, mdd_obj, ma, la_copy);
         if (rc)
                 GOTO(cleanup, rc);
-
-        if (ma->ma_valid & MA_FLAGS) {
-                la_copy->la_flags = ma->ma_attr_flags;
-                la_copy->la_valid |= LA_FLAGS;
+        
+        if (la_copy->la_valid & LA_FLAGS) {
                 rc = mdd_attr_set_internal_locked(ctxt, mdd_obj, la_copy,
                                                   handle);
+                if (rc == 0)
+                        mdd_obj->mod_valid &= ~MOD_VALID;
         } else if (la_copy->la_valid) {            /* setattr */
                 rc = mdd_attr_set_internal_locked(ctxt, mdd_obj, la_copy,
                                                   handle);
@@ -898,6 +956,10 @@ static int mdd_link_sanity_check(const struct lu_context *ctxt,
         if (S_ISDIR(mdd_object_type(ctxt, src_obj)))
                 RETURN(-EPERM);
 
+        if (mdd_get_flags(ctxt, src_obj) || mdd_is_immutable(src_obj) || 
+                                            mdd_is_append(src_obj))
+                RETURN(-EPERM);
+       
         RETURN(rc);
 }
 
@@ -987,13 +1049,15 @@ static int __mdd_finish_unlink(const struct lu_context *ctxt,
         rc = __mdd_iattr_get(ctxt, obj, ma);
         if (rc == 0) {
                 if (atomic_read(&obj->mod_count) == 0 &&
-                    ma->ma_attr.la_nlink == 0 &&
-                    S_ISREG(mdd_object_type(ctxt, obj))) {
-                        rc = __mdd_lmm_get(ctxt, obj, ma);
-                        if (rc == 0 && ma->ma_valid & MA_LOV)
-                                rc = mdd_unlink_log(ctxt,
+                    ma->ma_attr.la_nlink == 0) {
+                        mdd_set_dead_obj(obj);
+                        if (S_ISREG(mdd_object_type(ctxt, obj))) {
+                                rc = __mdd_lmm_get(ctxt, obj, ma);
+                                if (ma->ma_valid & MA_LOV)
+                                        rc = mdd_unlink_log(ctxt,
                                                     mdo2mdd(&obj->mod_obj),
                                                     obj, ma);
+                        }
                 }
         }
         RETURN(rc);
@@ -1247,7 +1311,6 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                         __mdd_ref_del(ctxt, mdd_tobj, handle);
 
                 rc = __mdd_finish_unlink(ctxt, mdd_tobj, ma);
-                mdd_set_dead_obj(mdd_tobj);
         }
 cleanup:
         mdd_rename_unlock(ctxt, mdd_spobj, mdd_tpobj);
@@ -1372,7 +1435,6 @@ static int mdd_create_sanity_check(const struct lu_context *ctxt,
                                    const char *name, struct md_attr *ma)
 {
         struct lu_attr   *la = &mdd_ctx_info(ctxt)->mti_la;
-        struct dt_object *dt_pobj = mdd_object_child(md2mdd_obj(pobj));
         struct lu_fid    *fid = &mdd_ctx_info(ctxt)->mti_fid;
         int rc;
 
@@ -1386,7 +1448,7 @@ static int mdd_create_sanity_check(const struct lu_context *ctxt,
                 RETURN(rc);
         }
         /* sgid check */
-        rc = dt_pobj->do_ops->do_attr_get(ctxt, dt_pobj, la);
+        rc = __mdd_la_get(ctxt, md2mdd_obj(pobj), la);
         if (rc != 0)
                 RETURN(rc);
 
@@ -1794,6 +1856,7 @@ cleanup:
 
 static int mdd_open(const struct lu_context *ctxt, struct md_object *obj)
 {
+        /*XXX access mod checking*/
         atomic_inc(&md2mdd_obj(obj)->mod_count);
         return 0;
 }

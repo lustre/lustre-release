@@ -2133,7 +2133,6 @@ static int mds_lov_early_clean(struct obd_device *obd)
 
 static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 {
-        struct mds_obd *mds = &obd->u.mds;
         int rc = 0;
         ENTRY;
 

@@ -121,7 +121,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
 }
 
 static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
-                                  struct md_attr *ma, __u32 attr_flags)
+                                  struct md_attr *ma)
 {
         __u64 out;
 
@@ -147,10 +147,9 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
         if (in & ATTR_MTIME_SET)
                 out |= LA_MTIME;
 
-        if (in & ATTR_ATTR_FLAG) {
-                ma->ma_valid |= MA_FLAGS;
-                ma->ma_attr_flags = attr_flags;
-        }
+        if (in & ATTR_ATTR_FLAG)
+                out |= LA_FLAGS;
+        
         /*XXX need ATTR_RAW?*/
         in &= ~(ATTR_MODE|ATTR_UID|ATTR_GID|ATTR_SIZE|
                 ATTR_ATIME|ATTR_MTIME|ATTR_CTIME|ATTR_FROM_OPEN|
@@ -176,9 +175,9 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
                 RETURN(-EFAULT);
 
         rr->rr_fid1 = &rec->sa_fid;
-        la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma,
-                                            rec->sa_attr_flags);
+        la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma);
         la->la_mode  = rec->sa_mode;
+        la->la_flags = rec->sa_attr_flags;
         la->la_uid   = rec->sa_uid;
         la->la_gid   = rec->sa_gid;
         la->la_size  = rec->sa_size;

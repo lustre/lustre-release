@@ -43,12 +43,19 @@ struct mdd_device {
 enum mod_flags {
         /*The dir object has been unlinked*/
         DEAD_OBJ = 1 << 0,
+        APPEND_OBJ = 1 << 1,
+        IMMUTE_OBJ = 1 << 2
+};
+
+enum mod_valid_flags {
+        MOD_VALID = 1 << 0,
 };
 
 struct mdd_object {
         struct md_object  mod_obj;
         /* open count */
         atomic_t          mod_count;
+        __u32             mod_valid;
         unsigned long     mod_flags;
 };
 
