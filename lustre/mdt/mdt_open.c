@@ -318,7 +318,7 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
 
         o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid);
         if (!IS_ERR(o)) {
-                if (mdt_object_exists(info->mti_ctxt, &o->mot_obj.mo_lu) > 0) {
+                if (lu_object_exists(&o->mot_obj.mo_lu) > 0) {
                         if (flags & MDS_OPEN_EXCL &&
                             flags & MDS_OPEN_CREAT)
                                 rc = -EEXIST;

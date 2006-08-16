@@ -55,8 +55,8 @@ enum ma_valid {
 };
 
 struct md_attr {
-        __u64                   ma_valid;  
-        __u64                   ma_need;  
+        __u64                   ma_valid;
+        __u64                   ma_need;
         __u64                   ma_attr_flags;
         struct lu_attr          ma_attr;
         struct lov_mds_md      *ma_lmm;
@@ -145,7 +145,7 @@ struct md_dir_operations {
         int (*mdo_rename)(const struct lu_context *ctxt,
                           struct md_object *spobj, struct md_object *tpobj,
                           const struct lu_fid *lf, const char *sname,
-                          struct md_object *tobj, const char *tname, 
+                          struct md_object *tobj, const char *tname,
                           struct md_attr *);
 
         int (*mdo_link)(const struct lu_context *ctxt, struct md_object *tobj,

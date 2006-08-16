@@ -195,12 +195,6 @@ struct lu_object_operations {
          */
         void (*loo_object_release)(const struct lu_context *ctx,
                                    struct lu_object *o);
-
-        /*
-         * Return true off object @o exists on a storage.
-         */
-        int (*loo_object_exists)(const struct lu_context *ctx,
-                                 const struct lu_object *o);
         /*
          * Debugging helper. Print given object.
          */
@@ -416,11 +410,13 @@ enum lu_object_header_flags {
 };
 
 enum lu_object_header_attr {
+        LOHA_EXISTS   = 1 << 0,
+        LOHA_REMOTE   = 1 << 1,
         /*
          * UNIX file type is stored in S_IFMT bits.
          */
-        LU_OBJECT_FT_START = (1 << 12), /* S_IFIFO */
-        LU_OBJECT_FT_END   = (1 << 15), /* S_IFREG */
+        LOHA_FT_START = 1 << 12, /* S_IFIFO */
+        LOHA_FT_END   = 1 << 15, /* S_IFREG */
 };
 
 /*
@@ -777,31 +773,35 @@ int lu_object_invariant(const struct lu_object *o);
  * Returns 1 iff object @o exists on the stable storage,
  * returns -1 iff object @o is on remote server.
  */
-static inline int lu_object_exists(const struct lu_context *ctx,
-                                   const struct lu_object *o)
+static inline int lu_object_exists(const struct lu_object *o)
 {
-        return o->lo_ops->loo_object_exists(ctx, o);
+        __u32 attr;
+
+        attr = o->lo_header->loh_attr;
+        if (attr & LOHA_REMOTE)
+                return -1;
+        else if (attr & LOHA_EXISTS)
+                return +1;
+        else
+                return 0;
 }
 
-static inline int lu_object_assert_exists(const struct lu_context *ctx,
-                                          const struct lu_object *o)
+static inline int lu_object_assert_exists(const struct lu_object *o)
 {
-        return lu_object_exists(ctx, o) != 0;
+        return lu_object_exists(o) != 0;
 }
 
-static inline int lu_object_assert_not_exists(const struct lu_context *ctx,
-                                              const struct lu_object *o)
+static inline int lu_object_assert_not_exists(const struct lu_object *o)
 {
-        return lu_object_exists(ctx, o) <= 0;
+        return lu_object_exists(o) <= 0;
 }
 
 /*
  * Attr of this object.
  */
-static inline const __u32 lu_object_attr(const struct lu_context *ctx,
-                                         const struct lu_object *o)
+static inline const __u32 lu_object_attr(const struct lu_object *o)
 {
-        LASSERT(lu_object_exists(ctx, o) > 0);
+        LASSERT(lu_object_exists(o) > 0);
         return o->lo_header->loh_attr;
 }
 

@@ -120,7 +120,7 @@ static int mdd_get_flags(const struct lu_context *ctxt, struct mdd_object *obj);
 
 static int mdd_object_start(const struct lu_context *ctxt, struct lu_object *o)
 {
-        if (lu_object_exists(ctxt, o))
+        if (lu_object_exists(o))
                 return mdd_get_flags(ctxt, lu2mdd_obj(o));
         else
                 return 0;
@@ -183,7 +183,7 @@ static int mdd_may_create(const struct lu_context *ctxt,
                           struct mdd_object *pobj, struct mdd_object *cobj)
 {
         ENTRY;
-        if (cobj && lu_object_exists(ctxt, &cobj->mod_obj.mo_lu))
+        if (cobj && lu_object_exists(&cobj->mod_obj.mo_lu))
                 RETURN(-EEXIST);
 
         if (mdd_is_dead_obj(pobj))
@@ -197,7 +197,7 @@ static inline int __mdd_la_get(const struct lu_context *ctxt,
                                struct mdd_object *obj, struct lu_attr *la)
 {
         struct dt_object  *next = mdd_object_child(obj);
-        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
+        LASSERT(lu_object_exists(mdd2lu_obj(obj)));
         return next->do_ops->do_attr_get(ctxt, next, la);
 
 }
@@ -235,7 +235,7 @@ static int mdd_may_delete(const struct lu_context *ctxt,
 
         LASSERT(cobj && pobj);
 
-        if (!lu_object_exists(ctxt, &cobj->mod_obj.mo_lu))
+        if (!lu_object_exists(&cobj->mod_obj.mo_lu))
                 RETURN(-ENOENT);
 
         if (mdd_is_immutable(cobj) || mdd_is_append(cobj))
@@ -294,10 +294,11 @@ static int mdd_attr_get_internal(const struct lu_context *ctxt,
                 rc = __mdd_iattr_get(ctxt, mdd_obj, ma);
 
         if (rc == 0 && ma->ma_need & MA_LOV) {
-                if (S_ISREG(lu_object_attr(ctxt, mdd2lu_obj(mdd_obj))) ||
-                    S_ISDIR(lu_object_attr(ctxt, mdd2lu_obj(mdd_obj)))) {
+                __u32 mode;
+
+                mode = lu_object_attr(mdd2lu_obj(mdd_obj));
+                if (S_ISREG(mode) || S_ISDIR(mode))
                         rc = __mdd_lmm_get(ctxt, mdd_obj, ma);
-                 }
         }
 
         CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n",
@@ -336,7 +337,7 @@ static int mdd_xattr_get(const struct lu_context *ctxt, struct md_object *obj,
 
         ENTRY;
 
-        LASSERT(lu_object_exists(ctxt, &obj->mo_lu));
+        LASSERT(lu_object_exists(&obj->mo_lu));
 
         next = mdd_object_child(mdd_obj);
         rc = next->do_ops->do_xattr_get(ctxt, next, buf, buf_len, name);
@@ -353,7 +354,7 @@ static int mdd_readlink(const struct lu_context *ctxt, struct md_object *obj,
         int                rc;
         ENTRY;
 
-        LASSERT(lu_object_exists(ctxt, &obj->mo_lu));
+        LASSERT(lu_object_exists(&obj->mo_lu));
 
         next = mdd_object_child(mdd_obj);
         rc = next->do_body_ops->dbo_read(ctxt, next, buf, buf_len, &pos);
@@ -368,7 +369,7 @@ static int mdd_xattr_list(const struct lu_context *ctxt, struct md_object *obj,
 
         ENTRY;
 
-        LASSERT(lu_object_exists(ctxt, &obj->mo_lu));
+        LASSERT(lu_object_exists(&obj->mo_lu));
 
         next = mdd_object_child(mdd_obj);
         rc = next->do_ops->do_xattr_list(ctxt, next, buf, buf_len);
@@ -441,12 +442,6 @@ static int mdd_object_print(const struct lu_context *ctxt, void *cookie,
                             lu_printer_t p, const struct lu_object *o)
 {
         return (*p)(ctxt, cookie, LUSTRE_MDD0_NAME"-object@%p", o);
-}
-
-static int mdd_object_exists(const struct lu_context *ctx,
-                             const struct lu_object *o)
-{
-        return lu_object_exists(ctx, lu_object_next(o));
 }
 
 static int mdd_mount(const struct lu_context *ctx, struct mdd_device *mdd)
@@ -537,8 +532,7 @@ static struct lu_object_operations mdd_lu_obj_ops = {
 	.loo_object_init    = mdd_object_init,
 	.loo_object_start   = mdd_object_start,
 	.loo_object_free    = mdd_object_free,
-	.loo_object_print   = mdd_object_print,
-	.loo_object_exists  = mdd_object_exists,
+	.loo_object_print   = mdd_object_print
 };
 
 void mdd_lock(const struct lu_context *ctxt, struct mdd_object *obj,
@@ -594,13 +588,13 @@ static int __mdd_object_create(const struct lu_context *ctxt,
         int rc;
         ENTRY;
 
-        if (!lu_object_exists(ctxt, mdd2lu_obj(obj))) {
+        if (!lu_object_exists(mdd2lu_obj(obj))) {
                 next = mdd_object_child(obj);
                 rc = next->do_ops->do_create(ctxt, next, attr, handle);
         } else
                 rc = -EEXIST;
 
-        LASSERT(ergo(rc == 0, lu_object_exists(ctxt, mdd2lu_obj(obj))));
+        LASSERT(ergo(rc == 0, lu_object_exists(mdd2lu_obj(obj))));
 
         RETURN(rc);
 }
@@ -610,7 +604,7 @@ int mdd_attr_set_internal(const struct lu_context *ctxt, struct mdd_object *o,
 {
         struct dt_object *next;
 
-        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(o)));
+        LASSERT(lu_object_exists(mdd2lu_obj(o)));
         next = mdd_object_child(o);
         return next->do_ops->do_attr_set(ctxt, next, attr, handle);
 }
@@ -635,7 +629,7 @@ static int __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_object *o,
         int rc = 0;
         ENTRY;
 
-        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(o)));
+        LASSERT(lu_object_exists(mdd2lu_obj(o)));
         next = mdd_object_child(o);
         if (buf && buf_len > 0) {
                 rc = next->do_ops->do_xattr_set(ctxt, next, buf, buf_len, name,
@@ -889,7 +883,7 @@ static int __mdd_xattr_del(const struct lu_context *ctxt,struct mdd_device *mdd,
 {
         struct dt_object *next;
 
-        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
+        LASSERT(lu_object_exists(mdd2lu_obj(obj)));
         next = mdd_object_child(obj);
         return next->do_ops->do_xattr_del(ctxt, next, name, handle);
 }
@@ -1119,7 +1113,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
                 GOTO(cleanup, rc);
 
         __mdd_ref_del(ctxt, mdd_cobj, handle);
-        if (S_ISDIR(lu_object_attr(ctxt, &cobj->mo_lu))) {
+        if (S_ISDIR(lu_object_attr(&cobj->mo_lu))) {
                 /* unlink dot */
                 __mdd_ref_del(ctxt, mdd_cobj, handle);
                 /* unlink dotdot */
@@ -1309,7 +1303,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
-        if (tobj && lu_object_exists(ctxt, &tobj->mo_lu)) {
+        if (tobj && lu_object_exists(&tobj->mo_lu)) {
                 __mdd_ref_del(ctxt, mdd_tobj, handle);
                 /* remove dot reference */
                 if (S_ISDIR(mdd_object_type(ctxt, mdd_tobj)))
@@ -1734,7 +1728,7 @@ static int mdd_rename_tgt(const struct lu_context *ctxt, struct md_object *pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
-        if (tobj && lu_object_exists(ctxt, &tobj->mo_lu))
+        if (tobj && lu_object_exists(&tobj->mo_lu))
                 __mdd_ref_del(ctxt, mdd_tobj, handle);
 cleanup:
         mdd_unlock2(ctxt, mdd_tpobj, mdd_tobj);
@@ -1783,7 +1777,7 @@ static void __mdd_ref_add(const struct lu_context *ctxt, struct mdd_object *obj,
 {
         struct dt_object *next;
 
-        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
+        LASSERT(lu_object_exists(mdd2lu_obj(obj)));
         next = mdd_object_child(obj);
         next->do_ops->do_ref_add(ctxt, next, handle);
 }
@@ -1815,7 +1809,7 @@ __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
 {
         struct dt_object *next = mdd_object_child(obj);
 
-        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(obj)));
+        LASSERT(lu_object_exists(mdd2lu_obj(obj)));
 
         next->do_ops->do_ref_del(ctxt, next, handle);
 }
@@ -1826,6 +1820,7 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
+        int isdir;
         int rc;
         ENTRY;
 
@@ -1836,9 +1831,9 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
 
         mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
 
+        isdir = S_ISDIR(lu_object_attr(&obj->mo_lu));
         /* rmdir checks */
-        if (S_ISDIR(lu_object_attr(ctxt, &obj->mo_lu)) &&
-            dt_try_as_dir(ctxt, mdd_object_child(mdd_obj))) {
+        if (isdir && dt_try_as_dir(ctxt, mdd_object_child(mdd_obj))) {
                 rc = mdd_dir_is_empty(ctxt, mdd_obj);
                 if (rc != 0)
                         GOTO(cleanup, rc);
@@ -1846,7 +1841,7 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
 
         __mdd_ref_del(ctxt, mdd_obj, handle);
 
-        if (S_ISDIR(lu_object_attr(ctxt, &obj->mo_lu))) {
+        if (isdir) {
                 /* unlink dot */
                 __mdd_ref_del(ctxt, mdd_obj, handle);
         }
@@ -1883,7 +1878,7 @@ static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         int rc;
 
-        LASSERT(lu_object_exists(ctxt, mdd2lu_obj(mdd_obj)));
+        LASSERT(lu_object_exists(mdd2lu_obj(mdd_obj)));
         next = mdd_object_child(mdd_obj);
 
         mdd_lock(ctxt, mdd_obj, DT_READ_LOCK);

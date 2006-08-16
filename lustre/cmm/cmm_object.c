@@ -124,6 +124,7 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                         cro->cmm_obj.cmo_obj.mo_dir_ops = &cmr_dir_ops;
                         lo->lo_ops = &cmr_obj_ops;
                         cro->cmo_num = mdsnum;
+                        lo->lo_header->loh_attr |= LOHA_REMOTE;
                 }
         }
         RETURN(lo);
@@ -190,12 +191,6 @@ static int cml_object_init(const struct lu_context *ctx, struct lu_object *lo)
         RETURN(rc);
 }
 
-static int cml_object_exists(const struct lu_context *ctx,
-                             const struct lu_object *lo)
-{
-        return lu_object_exists(ctx, lu_object_next(lo));
-}
-
 static int cml_object_print(const struct lu_context *ctx, void *cookie,
                             lu_printer_t p, const struct lu_object *lo)
 {
@@ -205,8 +200,7 @@ static int cml_object_print(const struct lu_context *ctx, void *cookie,
 static struct lu_object_operations cml_obj_ops = {
 	.loo_object_init    = cml_object_init,
 	.loo_object_free    = cml_object_free,
-	.loo_object_print   = cml_object_print,
-	.loo_object_exists  = cml_object_exists
+	.loo_object_print   = cml_object_print
 };
 
 /* CMM local md_object operations */
@@ -408,7 +402,7 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
         int rc;
         ENTRY;
 
-        if (mo_t && lu_object_exists(ctx, &mo_t->mo_lu) < 0) {
+        if (mo_t && lu_object_exists(&mo_t->mo_lu) < 0) {
                 /* mo_t is remote object and there is RPC to unlink it */
                 rc = mo_ref_del(ctx, md_object_next(mo_t), NULL);
                 if (rc)
@@ -526,13 +520,6 @@ static int cmr_object_init(const struct lu_context *ctx, struct lu_object *lo)
         RETURN(rc);
 }
 
-/* -1 is returned for remote object */
-static int cmr_object_exists(const struct lu_context *ctx,
-                             const struct lu_object *lo)
-{
-        return -1;
-}
-
 static int cmr_object_print(const struct lu_context *ctx, void *cookie,
                             lu_printer_t p, const struct lu_object *lo)
 {
@@ -542,8 +529,7 @@ static int cmr_object_print(const struct lu_context *ctx, void *cookie,
 static struct lu_object_operations cmr_obj_ops = {
 	.loo_object_init    = cmr_object_init,
 	.loo_object_free    = cmr_object_free,
-	.loo_object_print   = cmr_object_print,
-	.loo_object_exists  = cmr_object_exists
+	.loo_object_print   = cmr_object_print
 };
 
 /* CMM remote md_object operations. All are invalid */

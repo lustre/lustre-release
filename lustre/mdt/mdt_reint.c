@@ -157,7 +157,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
                 RETURN(rc = PTR_ERR(mo));
 
         next = mdt_object_child(mo);
-        if (lu_object_exists(info->mti_ctxt, &mo->mot_obj.mo_lu) <= 0)
+        if (lu_object_assert_not_exists(&mo->mot_obj.mo_lu))
                 GOTO(out_unlock, rc = -ENOENT);
 
         /* all attrs are packed into mti_attr in unpack_setattr */
@@ -301,7 +301,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         if (rc)
                 GOTO(out_unlock_child, rc);
 
-        
+
         rc = mdt_handle_last_unlink(info, mc, ma);
 
         GOTO(out_unlock_child, rc);

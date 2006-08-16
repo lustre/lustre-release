@@ -157,7 +157,7 @@ static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
 static inline umode_t mdd_object_type(const struct lu_context *ctxt,
                                       const struct mdd_object *obj)
 {
-        return lu_object_attr(ctxt, &obj->mod_obj.mo_lu);
+        return lu_object_attr(&obj->mod_obj.mo_lu);
 }
 
 static inline int mdd_lov_mdsize(const struct lu_context *ctxt,

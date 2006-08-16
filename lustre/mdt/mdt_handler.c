@@ -317,10 +317,11 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 static int mdt_getattr(struct mdt_thread_info *info)
 {
         int result;
+        struct mdt_object *obj;
 
-        LASSERT(info->mti_object != NULL);
-        LASSERT(lu_object_assert_exists(info->mti_ctxt,
-                                        &info->mti_object->mot_obj.mo_lu));
+        obj = info->mti_object;
+        LASSERT(obj != NULL);
+        LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
         ENTRY;
 
 
@@ -334,7 +335,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 result = -ENOMEM;
         } else {
-                result = mdt_getattr_internal(info, info->mti_object);
+                result = mdt_getattr_internal(info, obj);
         }
         mdt_shrink_reply(info, 1);
         RETURN(result);
@@ -1030,8 +1031,7 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
                         obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1);
                         if (!IS_ERR(obj)) {
                                 if ((flags & HABEO_CORPUS) &&
-                                    !lu_object_exists(ctx,
-                                                      &obj->mot_obj.mo_lu)) {
+                                    !lu_object_exists(&obj->mot_obj.mo_lu)) {
                                         mdt_object_put(ctx, obj);
                                         result = -ENOENT;
                                 } else {
@@ -1083,7 +1083,7 @@ int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
                 return -EFAULT;
         if (info->mti_trans_flags & MDT_NONEED_TANSNO)
                 return 0;
-        
+
         last_committed = mdt->mdt_last_committed;
 
         if (rc == 0) {
@@ -2096,7 +2096,7 @@ static void mdt_stack_fini(const struct lu_context *ctx,
         struct lu_device *d = top, *n;
         struct lustre_cfg_bufs bufs;
         struct lustre_cfg     *lcfg;
-        
+
         /* process cleanup */
         lustre_cfg_bufs_reset(&bufs, NULL);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
@@ -2105,7 +2105,7 @@ static void mdt_stack_fini(const struct lu_context *ctx,
                 return;
         }
         top->ld_ops->ldo_process_config(ctx, top, lcfg);
-        
+
         lu_site_purge(ctx, top->ld_site, ~0);
         while (d != NULL) {
                 struct obd_type *type;
@@ -2456,12 +2456,6 @@ static int mdt_object_print(const struct lu_context *ctxt, void *cookie,
         return (*p)(ctxt, cookie, LUSTRE_MDT0_NAME"-object@%p", o);
 }
 
-int mdt_object_exists(const struct lu_context *ctx,
-                      const struct lu_object *o)
-{
-        return lu_object_exists(ctx, lu_object_next(o));
-}
-
 static struct lu_device_operations mdt_lu_ops = {
         .ldo_object_alloc   = mdt_object_alloc,
         .ldo_process_config = mdt_process_config
@@ -2470,8 +2464,7 @@ static struct lu_device_operations mdt_lu_ops = {
 static struct lu_object_operations mdt_obj_ops = {
         .loo_object_init    = mdt_object_init,
         .loo_object_free    = mdt_object_free,
-        .loo_object_print   = mdt_object_print,
-        .loo_object_exists  = mdt_object_exists
+        .loo_object_print   = mdt_object_print
 };
 
 /* mds_connect_internal */

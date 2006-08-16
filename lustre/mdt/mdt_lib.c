@@ -102,7 +102,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         if (ma->ma_valid & MA_LOV) {
                 __u32 mode;
 
-                mode = lu_object_attr(info->mti_ctxt, &mo->mot_obj.mo_lu);
+                mode = lu_object_attr(&mo->mot_obj.mo_lu);
                 LASSERT(ma->ma_lmm_size);
                 mdt_dump_lmm(D_INFO, ma->ma_lmm);
                 repbody->eadatasize = ma->ma_lmm_size;
@@ -149,7 +149,7 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 
         if (in & ATTR_ATTR_FLAG)
                 out |= LA_FLAGS;
-        
+
         /*XXX need ATTR_RAW?*/
         in &= ~(ATTR_MODE|ATTR_UID|ATTR_GID|ATTR_SIZE|
                 ATTR_ATIME|ATTR_MTIME|ATTR_CTIME|ATTR_FROM_OPEN|

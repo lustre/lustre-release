@@ -344,9 +344,6 @@ void mdt_lock_handle_init(struct mdt_lock_handle *lh);
 void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
 
 
-int mdt_object_exists(const struct lu_context *ctx,
-                      const struct lu_object *o);
-
 int mdt_fs_setup(const struct lu_context *ctxt,
                  struct mdt_device *mdt);
 

@@ -90,9 +90,9 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 rc =  min_t(int, info->mti_body->eadatasize, rc);
         }
         req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, rc);
-        
+
         rc1 = req_capsule_pack(pill);
-        
+
         return rc = !rc1? rc1 : rc;
 }
 
@@ -108,8 +108,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         ENTRY;
 
         LASSERT(info->mti_object != NULL);
-        LASSERT(lu_object_assert_exists(info->mti_ctxt,
-                                 &info->mti_object->mot_obj.mo_lu));
+        LASSERT(lu_object_assert_exists(&info->mti_object->mot_obj.mo_lu));
 
         CDEBUG(D_INODE, "getxattr "DFID"\n",
                         PFID(&info->mti_body->fid1));
@@ -120,16 +119,16 @@ int mdt_getxattr(struct mdt_thread_info *info)
         next = mdt_object_child(info->mti_object);
 
         rc = mdt_getxattr_pack_reply(info);
-        if (rc < 0) 
+        if (rc < 0)
                 RETURN(rc);
-        
+
         rep_body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         /*No EA, just go back*/
         if (rc == 0)
                 GOTO(no_xattr, rc);
 
         buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
-        buflen = rc; 
+        buflen = rc;
 
         if (info->mti_body->valid & OBD_MD_FLXATTR) {
                 char *xattr_name = req_capsule_client_get(&info->mti_pill,
