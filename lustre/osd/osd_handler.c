@@ -1772,9 +1772,6 @@ static int osd_mount(const struct lu_context *ctx,
 static struct lu_device *osd_device_fini(const struct lu_context *ctx,
                                          struct lu_device *d)
 {
-        struct osd_device      *o = osd_dev(d);
-        struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
-
         ENTRY;
         RETURN(NULL);
 }
@@ -1821,7 +1818,7 @@ static int osd_process_config(const struct lu_context *ctx,
                 err = osd_mount(ctx, o, cfg);
                 break;
         case LCFG_CLEANUP:
-                osd_shutdown(ctx, o);
+                err = osd_shutdown(ctx, o);
                 break;
         default:
                 err = -ENOTTY;
