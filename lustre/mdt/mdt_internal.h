@@ -375,7 +375,7 @@ void mdt_mfd_close(const struct lu_context *ctxt, struct mdt_device *mdt,
 int mdt_close(struct mdt_thread_info *info);
 
 int mdt_done_writing(struct mdt_thread_info *info);
-void mdt_shrink_reply(struct mdt_thread_info *info);
+void mdt_shrink_reply(struct mdt_thread_info *info, int offset);
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
                            const struct md_attr *);
 

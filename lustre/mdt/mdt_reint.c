@@ -309,7 +309,7 @@ out_unlock_child:
         mdt_object_unlock_put(info, mc, lhc, rc);
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, lhp, rc);
-        mdt_shrink_reply(info);
+        mdt_shrink_reply(info, 1);
         return rc;
 }
 

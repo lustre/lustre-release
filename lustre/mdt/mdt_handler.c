@@ -208,7 +208,7 @@ static inline int mdt_body_has_lov(const struct lu_attr *la,
 }
 
 static int mdt_getattr_internal(struct mdt_thread_info *info,
-                                struct mdt_object *o, int offset)
+                                struct mdt_object *o)
 {
         struct md_object        *next = mdt_object_child(o);
         const struct mdt_body   *reqbody = info->mti_body;
@@ -239,7 +239,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 /* This object is located on remote node.*/
                 repbody->fid1 = *mdt_object_fid(o);
                 repbody->valid |= OBD_MD_FLID;
-                GOTO(shrink, rc = 0);
+                RETURN(rc);
         } else if (rc){
                 CERROR("getattr error for "DFID": %d\n",
                         PFID(mdt_object_fid(o)), rc);
@@ -311,18 +311,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         }
 #endif
 
-shrink:
-        /* FIXME: determine the offset of MDT_MD. but it does not work */
-/*
-        if (req_capsule_has_field(pill, &RMF_DLM_REP)) {
-                offset = 2;
-        } else
-                offset = 1;
-*/
-        lustre_shrink_reply(req, offset, repbody->eadatasize, 1);
-        if (repbody->eadatasize)
-                offset ++;
-        lustre_shrink_reply(req, offset, repbody->aclsize, 0);
         RETURN(rc);
 }
 
@@ -346,8 +334,9 @@ static int mdt_getattr(struct mdt_thread_info *info)
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 result = -ENOMEM;
         } else {
-                result = mdt_getattr_internal(info, info->mti_object, 1);
+                result = mdt_getattr_internal(info, info->mti_object);
         }
+        mdt_shrink_reply(info, 1);
         RETURN(result);
 }
 
@@ -393,8 +382,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 result = mdt_object_lock(info, child, lhc, child_bits);
                 if (result == 0) {
                         /* finally, we can get attr for child. */
-                        result = mdt_getattr_internal(info, child,
-                                                      ldlm_rep ? 2 : 1);
+                        result = mdt_getattr_internal(info, child);
                         if (result != 0)
                                 mdt_object_unlock(info, child, lhc, 1);
                 }
@@ -427,8 +415,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 GOTO(out_parent, result = PTR_ERR(child));
 
         /* finally, we can get attr for child. */
-        result = mdt_getattr_internal(info, child,
-                                      ldlm_rep ? 2 : 1);
+        result = mdt_getattr_internal(info, child);
         if (result != 0)
                 mdt_object_unlock(info, child, lhc, 1);
         else {
@@ -477,6 +464,7 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
                 ldlm_lock_decref(&lhc->mlh_lh, lhc->mlh_mode);
                 lhc->mlh_lh.cookie = 0;
         }
+        mdt_shrink_reply(info, 1);
         RETURN(rc);
 }
 
@@ -1555,6 +1543,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         ldlm_rep->lock_policy_res2 =
                 mdt_getattr_name_lock(info, lhc, child_bits, ldlm_rep);
+        mdt_shrink_reply(info, 2);
 
         if (intent_disposition(ldlm_rep, DISP_LOOKUP_NEG))
                 ldlm_rep->lock_policy_res2 = 0;
@@ -2694,8 +2683,7 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_destroy_export = mdt_destroy_export, /* By Huang Hua*/
 };
 
-static struct lu_device *mdt_device_free(const struct lu_context *ctx,
-                                         struct lu_device *d)
+static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)
 {
         struct mdt_device *m = mdt_dev(d);
 

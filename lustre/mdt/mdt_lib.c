@@ -64,31 +64,24 @@ void mdt_dump_lmm(int level, struct lov_mds_md *lmm)
         }
 }
 
-void mdt_shrink_reply(struct mdt_thread_info *info)
+void mdt_shrink_reply(struct mdt_thread_info *info, int offset)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
         struct mdt_body *body;
-        struct lov_mds_md *lmm;
-        int cookie_size = 0;
+        int acl_size = 0;
         int md_size = 0;
 
         body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        LASSERT(body != NULL);
 
-        if (body && body->valid & OBD_MD_FLEASIZE) {
-                md_size = body->eadatasize;
-        }
-        if (body && body->valid & OBD_MD_FLCOOKIE) {
-                LASSERT(body->valid & OBD_MD_FLEASIZE);
-                lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
-                cookie_size = le32_to_cpu(lmm->lmm_stripe_count) *
-                                sizeof(struct llog_cookie);
-        }
+        md_size = body->eadatasize;
+        acl_size = body->aclsize;
 
         CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n",
-                       md_size, cookie_size);
+                       md_size, acl_size);
 
-        lustre_shrink_reply(req, 1, md_size, 1);
-        lustre_shrink_reply(req, md_size? 2:1, cookie_size, 0);
+        lustre_shrink_reply(req, offset, md_size, 1);
+        lustre_shrink_reply(req, md_size? offset + 1: offset, acl_size, 0);
 }
 
 

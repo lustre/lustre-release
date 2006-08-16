@@ -250,9 +250,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         }
         /*FIXME: should determine the offset dynamicly,
          *did not get ACL before shrink*/
-        lustre_shrink_reply(req, 2, repbody->eadatasize, 1);
-        lustre_shrink_reply(req, repbody->eadatasize ? 3 : 2, repbody->aclsize,
-                            0);
+        mdt_shrink_reply(info, 2);
 
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
@@ -502,6 +500,7 @@ int mdt_close(struct mdt_thread_info *info)
         struct mdt_file_data   *mfd;
         struct mdt_object      *o;
         struct md_attr         *ma = &info->mti_attr;
+        struct mdt_body        *repbody;
         int rc;
         ENTRY;
 
@@ -512,6 +511,10 @@ int mdt_close(struct mdt_thread_info *info)
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
                 RETURN(rc);
+
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody->eadatasize = 0;
+        repbody->aclsize = 0;
 
         med = &mdt_info_req(info)->rq_export->exp_mdt_data;
 
@@ -546,7 +549,7 @@ int mdt_close(struct mdt_thread_info *info)
                 /* release reference on this object. */
                 mdt_object_put(info->mti_ctxt, o);
         }
-        mdt_shrink_reply(info);
+        mdt_shrink_reply(info, 1);
         RETURN(rc);
 }
 
