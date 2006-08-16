@@ -66,4 +66,9 @@ expect {
         send "m\r"
         exp_continue
     }
+    -re "\n *(\[^\n]* \\\[Y\/\\?] \\(NEW\\)) " {
+        puts "$expect_out(1,string) y"
+        send "y\r"
+        exp_continue
+    }
 }
