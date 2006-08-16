@@ -169,6 +169,13 @@ struct lu_object_operations {
         int (*loo_object_init)(const struct lu_context *ctx,
                                struct lu_object *o);
         /*
+         * Called (in top-to-bottom order) during object allocation after all
+         * layers were allocated and initialized. Can be used to perform
+         * initialization depending on lower layers.
+         */
+        int (*loo_object_start)(const struct lu_context *ctx,
+                                struct lu_object *o);
+        /*
          * Called before ->loo_object_free() to signal that object is being
          * destroyed. Dual to ->loo_object_init().
          */

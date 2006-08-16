@@ -111,6 +111,7 @@ static struct lu_object *lu_object_alloc(const struct lu_context *ctxt,
 {
         struct lu_object *scan;
         struct lu_object *top;
+        struct list_head *layers;
         int clean;
         int result;
 
@@ -128,14 +129,14 @@ static struct lu_object *lu_object_alloc(const struct lu_context *ctxt,
          * after this point.
          */
         top->lo_header->loh_fid = *f;
+        layers = &top->lo_header->loh_layers;
         do {
                 /*
                  * Call ->loo_object_init() repeatedly, until no more new
                  * object slices are created.
                  */
                 clean = 1;
-                list_for_each_entry(scan,
-                                    &top->lo_header->loh_layers, lo_linkage) {
+                list_for_each_entry(scan, layers, lo_linkage) {
                         if (scan->lo_flags & LU_OBJECT_ALLOCATED)
                                 continue;
                         clean = 0;
@@ -148,6 +149,17 @@ static struct lu_object *lu_object_alloc(const struct lu_context *ctxt,
                         scan->lo_flags |= LU_OBJECT_ALLOCATED;
                 }
         } while (!clean);
+
+        list_for_each_entry_reverse(scan, layers, lo_linkage) {
+                if (scan->lo_ops->loo_object_start != NULL) {
+                        result = scan->lo_ops->loo_object_start(ctxt, scan);
+                        if (result != 0) {
+                                lu_object_free(ctxt, top);
+                                RETURN(ERR_PTR(result));
+                        }
+                }
+        }
+
         s->ls_stats.s_created ++;
         RETURN(top);
 }
