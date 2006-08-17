@@ -138,8 +138,10 @@ struct lu_device_operations {
         /*
          * process config specific for device
          */
-        int  (*ldo_process_config)(const struct lu_context *ctx,
-                                   struct lu_device *, struct lustre_cfg *);
+        int (*ldo_process_config)(const struct lu_context *ctx,
+                                  struct lu_device *, struct lustre_cfg *);
+        int (*ldo_recovery_complete)(const struct lu_context *,
+                                     struct lu_device *);
 
 };
 
@@ -293,8 +295,8 @@ struct lu_device_type_operations {
         /*
          * Free device. Dual to ->ldto_device_alloc().
          */
-        void (*ldto_device_free)(const struct lu_context *ctx,
-                                 struct lu_device *d);
+        void (*ldto_device_free)(const struct lu_context *,
+                                 struct lu_device *);
 
         /*
          * Initialize the devices after allocation

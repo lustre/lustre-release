@@ -369,6 +369,7 @@ struct txn_param {
 struct thandle {
         struct dt_device *th_dev;
         struct lu_context th_ctx;
+        __s32             th_result;
 };
 
 /*
