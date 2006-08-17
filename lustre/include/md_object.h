@@ -132,7 +132,6 @@ struct md_dir_operations {
         int (*mdo_lookup)(const struct lu_context *, struct md_object *,
                           const char *, struct lu_fid *);
 
-        /* target_name is valid iff this is a symlink operation. */
         int (*mdo_create)(const struct lu_context *, struct md_object *,
                           const char *child_name, struct md_object *,
                           const struct md_create_spec *spec,
