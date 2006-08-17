@@ -271,12 +271,12 @@ static void fld_server_proc_fini(struct lu_server_fld *fld);
 #ifdef LPROCFS
 static int fld_server_proc_init(struct lu_server_fld *fld)
 {
-        int rc;
+        int rc = 0;
         ENTRY;
 
         fld->fld_proc_dir = lprocfs_register(fld->fld_name,
                                              proc_lustre_root,
-                                             NULL, NULL);
+                                             fld_server_proc_list, fld);
         if (IS_ERR(fld->fld_proc_dir)) {
                 rc = PTR_ERR(fld->fld_proc_dir);
                 RETURN(rc);
@@ -289,15 +289,7 @@ static int fld_server_proc_init(struct lu_server_fld *fld)
                 rc = PTR_ERR(fld->fld_proc_entry);
                 GOTO(out_cleanup, rc);
         }
-
-        rc = lprocfs_add_vars(fld->fld_proc_dir,
-                              fld_server_proc_list, fld);
-        if (rc) {
-                CERROR("can't init FLD proc, rc %d\n", rc);
-                GOTO(out_cleanup, rc);
-        }
-
-        RETURN(0);
+        RETURN(rc);
 
 out_cleanup:
         fld_server_proc_fini(fld);
@@ -387,12 +379,12 @@ void fld_server_fini(struct lu_server_fld *fld,
 {
         ENTRY;
 
-        fld_server_proc_fini(fld);
-
         if (fld->fld_service != NULL) {
                 ptlrpc_unregister_service(fld->fld_service);
                 fld->fld_service = NULL;
         }
+
+        fld_server_proc_fini(fld);
 
         fld_index_fini(fld, ctx);
         
