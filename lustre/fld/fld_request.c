@@ -263,7 +263,10 @@ static inline int hash_is_sane(int hash)
 int fld_client_init(struct lu_client_fld *fld,
                     const char *uuid, int hash)
 {
-        int cache_size, cache_threshold, rc = 0;
+#ifdef __KERNEL__
+        int cache_size, cache_threshold;
+#endif
+        int rc;
         ENTRY;
 
         LASSERT(fld != NULL);
@@ -284,10 +287,10 @@ int fld_client_init(struct lu_client_fld *fld,
 #ifdef __KERNEL__
         cache_size = FLD_CACHE_SIZE /
                 sizeof(struct fld_cache_entry);
-        
+
         cache_threshold = cache_size *
                 FLD_CACHE_THRESHOLD / 100;
-        
+
         fld->fld_cache = fld_cache_init(FLD_HTABLE_SIZE,
                                         cache_size,
                                         cache_threshold);
