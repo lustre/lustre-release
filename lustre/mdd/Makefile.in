@@ -1,4 +1,6 @@
 MODULES := mdd
 mdd-objs := mdd_handler.o mdd_lov.o
 
+EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LUSTRE@ -I@LUSTRE@/ldiskfs
+
 @INCLUDE_RULES@

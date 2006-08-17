@@ -47,6 +47,9 @@ enum mod_flags {
         IMMUTE_OBJ = 1 << 2
 };
 
+#define LUSTRE_APPEND_FL LDISKFS_APPEND_FL
+#define LUSTRE_IMMUTABLE_FL LDISKFS_IMMUTABLE_FL
+
 struct mdd_object {
         struct md_object  mod_obj;
         /* open count */

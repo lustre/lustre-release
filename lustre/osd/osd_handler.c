@@ -32,7 +32,6 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
-#include <linux/fs.h>
 
 /* LUSTRE_VERSION_CODE */
 #include <lustre_ver.h>
@@ -629,7 +628,8 @@ static int osd_inode_setattr(const struct lu_context *ctx,
                              struct inode *inode, const struct lu_attr *attr)
 {
         __u64 bits;
-
+        int rc = 0;
+        
         bits = attr->la_valid;
 
         LASSERT(!(bits & LA_TYPE)); /* Huh? You want too much. */
@@ -669,7 +669,7 @@ static int osd_inode_setattr(const struct lu_context *ctx,
                         (attr->la_flags & LDISKFS_FL_USER_MODIFIABLE);
         }
 	mark_inode_dirty(inode);
-        return 0;
+        return rc;
 }
 
 /*
@@ -1975,7 +1975,7 @@ static int osd_inode_getattr(const struct lu_context *ctx,
         attr->la_blocks     = inode->i_blocks;
         attr->la_uid        = inode->i_uid;
         attr->la_gid        = inode->i_gid;
-        attr->la_flags      = inode->i_flags;
+        attr->la_flags      = LDISKFS_I(inode)->i_flags;
         attr->la_nlink      = inode->i_nlink;
         attr->la_rdev       = inode->i_rdev;
         attr->la_blksize    = inode->i_blksize;

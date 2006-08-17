@@ -1435,14 +1435,10 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 }
 
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-
-                if (body->flags & S_APPEND)
-                        flags |= EXT3_APPEND_FL;
-                if (body->flags & S_IMMUTABLE)
-                        flags |= EXT3_IMMUTABLE_FL;
-                if (body->flags & S_NOATIME)
-                        flags |= EXT3_NOATIME_FL;
-
+                
+                /*Now the ext3 will be packed directly back to client,
+                 *no need convert here*/
+                flags = body->flags;
                 ptlrpc_req_finished (req);
 
                 RETURN(put_user(flags, (int *)arg));

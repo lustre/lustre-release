@@ -31,6 +31,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
+#include <linux/jbd.h>
 
 #include <obd.h>
 #include <obd_class.h>
@@ -38,6 +39,7 @@
 #include <obd_support.h>
 #include <lprocfs_status.h>
 
+#include <linux/ldiskfs_fs.h>
 #include <lu_object.h>
 #include <md_object.h>
 #include <dt_object.h>
@@ -199,16 +201,16 @@ static inline int __mdd_la_get(const struct lu_context *ctxt,
         struct dt_object  *next = mdd_object_child(obj);
         LASSERT(lu_object_exists(mdd2lu_obj(obj)));
         return next->do_ops->do_attr_get(ctxt, next, la);
-
 }
 
 static void mdd_flags_xlate(struct mdd_object *obj, __u32 flags)
 {
-        obj->mod_flags = 0;
-        if (flags & S_APPEND)
+        obj->mod_flags &= ~(APPEND_OBJ|IMMUTE_OBJ);
+
+        if (flags & LUSTRE_APPEND_FL)
                 obj->mod_flags |= APPEND_OBJ;
 
-        if (flags & S_IMMUTABLE)
+        if (flags & LUSTRE_IMMUTABLE_FL)
                 obj->mod_flags |= IMMUTE_OBJ;
 }
 
