@@ -343,12 +343,10 @@ int mdt_setxattr(struct mdt_thread_info *info);
 void mdt_lock_handle_init(struct mdt_lock_handle *lh);
 void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
 
+void mdt_reconstruct(struct mdt_thread_info *);
 
-int mdt_fs_setup(const struct lu_context *ctxt,
-                 struct mdt_device *mdt);
-
-void mdt_fs_cleanup(const struct lu_context *ctxt,
-                    struct mdt_device *mdt);
+int mdt_fs_setup(const struct lu_context *, struct mdt_device *);
+void mdt_fs_cleanup(const struct lu_context *, struct mdt_device *);
 
 int mdt_client_free(const struct lu_context *ctxt,
                     struct mdt_device *mdt,

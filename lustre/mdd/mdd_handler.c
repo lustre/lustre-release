@@ -50,7 +50,8 @@
 static struct thandle* mdd_trans_start(const struct lu_context *ctxt,
                                        struct mdd_device *);
 static void mdd_trans_stop(const struct lu_context *ctxt,
-                           struct mdd_device *mdd, struct thandle *handle);
+                           struct mdd_device *mdd, int rc,
+                           struct thandle *handle);
 static struct dt_object* mdd_object_child(struct mdd_object *o);
 static void __mdd_ref_add(const struct lu_context *ctxt, struct mdd_object *obj,
                           struct thandle *handle);
@@ -525,9 +526,35 @@ out:
         RETURN(rc);
 }
 
+static int mdd_recovery_complete(const struct lu_context *ctxt,
+                                 struct lu_device *d)
+{
+        struct mdd_device *mdd = lu2mdd_dev(d);
+        struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
+        int rc;
+        ENTRY;
+/* TODO:
+        rc = mdd_lov_set_nextid(ctx, mdd);
+        if (rc) {
+                CERROR("%s: mdd_lov_set_nextid failed %d\n",
+                       obd->obd_name, rc);
+                GOTO(out, rc);
+        }
+        rc = mdd_cleanup_unlink_llog(ctx, mdd);
+      
+        obd_notify(obd->u.mds.mds_osc_obd, NULL,
+                   obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
+                   OBD_NOTIFY_SYNC, NULL);
+*/
+        /* TODO: orphans handling */
+        rc = next->ld_ops->ldo_recovery_complete(ctxt, next);
+        RETURN(rc);
+}
+
 struct lu_device_operations mdd_lu_ops = {
-	.ldo_object_alloc   = mdd_object_alloc,
-        .ldo_process_config = mdd_process_config,
+	.ldo_object_alloc      = mdd_object_alloc,
+        .ldo_process_config    = mdd_process_config,
+        .ldo_recovery_complete = mdd_recovery_complete
 };
 
 static struct lu_object_operations mdd_lu_obj_ops = {
@@ -576,8 +603,10 @@ static struct thandle* mdd_trans_start(const struct lu_context *ctxt,
 }
 
 static void mdd_trans_stop(const struct lu_context *ctxt,
-                           struct mdd_device *mdd, struct thandle *handle)
+                           struct mdd_device *mdd, int result,
+                           struct thandle *handle)
 {
+        handle->th_result = result;
         mdd_child_ops(mdd)->dt_trans_stop(ctxt, handle);
 }
 
@@ -831,7 +860,7 @@ static int mdd_attr_set(const struct lu_context *ctxt,
 
         }
 cleanup:
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
         if (rc == 0 && lmm_size) {
                 /*set obd attr, if needed*/
                 rc = mdd_lov_setattr_async(ctxt, mdd_obj, lmm, lmm_size);
@@ -874,7 +903,7 @@ static int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
         rc = mdd_xattr_set_txn(ctxt, md2mdd_obj(obj), buf, buf_len, name,
                                fl, handle);
 
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
 
         RETURN(rc);
 }
@@ -908,7 +937,7 @@ int mdd_xattr_del(const struct lu_context *ctxt, struct md_object *obj,
         rc = __mdd_xattr_del(ctxt, mdd, md2mdd_obj(obj), name, handle);
         mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
 
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
 
         RETURN(rc);
 }
@@ -992,7 +1021,7 @@ static int mdd_link(const struct lu_context *ctxt, struct md_object *tgt_obj,
 
 out:
         mdd_unlock2(ctxt, mdd_tobj, mdd_sobj);
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
 
@@ -1126,7 +1155,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
 
 cleanup:
         mdd_unlock2(ctxt, mdd_pobj, mdd_cobj);
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
 
@@ -1316,7 +1345,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
 cleanup:
         mdd_rename_unlock(ctxt, mdd_spobj, mdd_tpobj);
 cleanup_unlocked:
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
 
@@ -1426,7 +1455,7 @@ static int mdd_create_data(const struct lu_context *ctxt,
                         rc = mdd_attr_get_internal_locked(ctxt, son, ma);
         }
 
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
 
@@ -1615,7 +1644,7 @@ cleanup:
         if (lmm)
                 OBD_FREE(lmm, lmm_size);
         mdd_unlock(ctxt, mdd_pobj, DT_WRITE_LOCK);
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
 /* partial operation */
@@ -1643,9 +1672,8 @@ static int mdd_object_create(const struct lu_context *ctxt,
                 GOTO(out, rc);
 
         rc = mdd_attr_get_internal(ctxt, md2mdd_obj(obj), ma);
-
-        mdd_trans_stop(ctxt, mdd, handle);
 out:
+        mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
 /* partial operation */
@@ -1669,7 +1697,7 @@ static int mdd_name_insert(const struct lu_context *ctxt,
         rc = __mdd_index_insert(ctxt, mdd_obj, fid, name, handle);
 
         mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
 
@@ -1694,7 +1722,7 @@ static int mdd_name_remove(const struct lu_context *ctxt,
 
         mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
 
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
 
@@ -1734,7 +1762,7 @@ static int mdd_rename_tgt(const struct lu_context *ctxt, struct md_object *pobj,
                 __mdd_ref_del(ctxt, mdd_tobj, handle);
 cleanup:
         mdd_unlock2(ctxt, mdd_tpobj, mdd_tobj);
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
 
@@ -1800,7 +1828,7 @@ static int mdd_ref_add(const struct lu_context *ctxt, struct md_object *obj)
         __mdd_ref_add(ctxt, mdd_obj, handle);
         mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
 
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, 0, handle);
 
         RETURN(0);
 }
@@ -1852,7 +1880,7 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
 
 cleanup:
         mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
-        mdd_trans_stop(ctxt, mdd, handle);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
 

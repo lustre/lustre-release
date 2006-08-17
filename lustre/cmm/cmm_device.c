@@ -247,9 +247,21 @@ static int cmm_process_config(const struct lu_context *ctx,
         RETURN(err);
 }
 
+static int cmm_recovery_complete(const struct lu_context *ctxt,
+                                 struct lu_device *d)
+{
+        struct cmm_device *m = lu2cmm_dev(d);
+        struct lu_device *next = md2lu_dev(m->cmm_child);
+        int rc;
+        ENTRY;
+        rc = next->ld_ops->ldo_recovery_complete(ctxt, next);
+        RETURN(rc);
+}
+
 static struct lu_device_operations cmm_lu_ops = {
-	.ldo_object_alloc   = cmm_object_alloc,
-        .ldo_process_config = cmm_process_config,
+	.ldo_object_alloc      = cmm_object_alloc,
+        .ldo_process_config    = cmm_process_config,
+        .ldo_recovery_complete = cmm_recovery_complete
 };
 
 /* --- lu_device_type operations --- */

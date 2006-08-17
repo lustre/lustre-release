@@ -1819,6 +1819,16 @@ static int osd_process_config(const struct lu_context *ctx,
         RETURN(err);
 }
 
+static int osd_recovery_complete(const struct lu_context *ctxt,
+                                 struct lu_device *d)
+{
+        struct osd_device *o = osd_dev(d);
+        int rc = 0;
+        ENTRY;
+        /* TODO: orphans handling */
+        RETURN(rc);
+}
+
 /*
  * fid<->inode<->object functions.
  */
@@ -2054,8 +2064,9 @@ static struct lu_object_operations osd_lu_obj_ops = {
 };
 
 static struct lu_device_operations osd_lu_ops = {
-        .ldo_object_alloc   = osd_object_alloc,
-        .ldo_process_config = osd_process_config
+        .ldo_object_alloc      = osd_object_alloc,
+        .ldo_process_config    = osd_process_config,
+        .ldo_recovery_complete = osd_recovery_complete
 };
 
 static struct lu_device_type_operations osd_device_type_ops = {

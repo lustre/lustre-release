@@ -24,6 +24,7 @@ struct mds_export_data {
 struct mdt_export_data {
         struct list_head        med_open_head;
         spinlock_t              med_open_lock; /* lock med_open_head, mfd_list*/
+        struct semaphore        med_mcd_lock; 
         struct mdt_client_data *med_mcd;
         __u64                   med_ibits_known;
         loff_t                  med_lr_off;

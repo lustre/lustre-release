@@ -619,6 +619,7 @@ free_rdpg:
         return rc;
 }
 
+//extern int mdt_reconstruct(struct mdt_thread_info *);
 static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
 {
         int rc;
@@ -628,6 +629,19 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
 
         rc = mdt_reint_unpack(info, op);
         if (rc == 0) {
+                struct ptlrpc_request *req = mdt_info_req(info);
+                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
+                        struct mdt_client_data *mcd;
+                        
+                        mcd = req->rq_export->exp_mdt_data.med_mcd;
+                        if (mcd->mcd_last_xid == req->rq_xid) {
+                                mdt_reconstruct(info);
+                                RETURN(req->rq_repmsg->status);
+                        } 
+                        DEBUG_REQ(D_HA, req,
+                                  "no reply for RESENT (xid "LPD64")",
+                                  mcd->mcd_last_xid);
+                }
                 rc = mdt_reint_rec(info);
         }
 
@@ -2233,7 +2247,6 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 
         ENTRY;
 
-
         mdt_fs_cleanup(ctx, m);
         ping_evictor_stop();
         mdt_stop_ptlrpc_service(m);
@@ -2470,9 +2483,16 @@ static struct lu_object_operations mdt_obj_ops = {
 };
 
 /* mds_connect_internal */
-static int mdt_connect0(struct mdt_device *mdt,
-                        struct obd_export *exp, struct obd_connect_data *data)
+static int mdt_connect_internal(const struct lu_context *ctx,
+                                struct mdt_device *mdt,
+                                struct obd_export *exp,
+                                struct obd_uuid *cluuid,
+                                struct obd_connect_data *data)
 {
+        struct mdt_export_data *med = &exp->exp_mdt_data;
+        struct mdt_client_data *mcd;
+        int rc;
+
         if (data != NULL) {
                 data->ocd_connect_flags &= MDT_CONNECT_SUPPORTED;
                 data->ocd_ibits_known &= MDS_INODELOCK_FULL;
@@ -2501,7 +2521,18 @@ static int mdt_connect0(struct mdt_device *mdt,
                       mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
                 return -EBADE;
         }
-        return 0;
+
+        OBD_ALLOC_PTR(mcd);
+        if (mcd != NULL) {
+                memcpy(mcd->mcd_uuid, cluuid, sizeof mcd->mcd_uuid);
+                med->med_mcd = mcd;
+                rc = mdt_client_add(ctx, mdt, med, -1);
+                if (rc != 0)
+                        OBD_FREE_PTR(mcd);
+        } else
+                rc = -ENOMEM;
+
+        return rc;
 }
 
 /* mds_connect copy */
@@ -2512,8 +2543,6 @@ static int mdt_obd_connect(const struct lu_context *ctx,
 {
         struct obd_export      *exp;
         struct mdt_device      *mdt;
-        struct mdt_export_data *med;
-        struct mdt_client_data *mcd;
         int                     rc;
         ENTRY;
 
@@ -2529,22 +2558,8 @@ static int mdt_obd_connect(const struct lu_context *ctx,
 
         exp = class_conn2export(conn);
         LASSERT(exp != NULL);
-        med = &exp->exp_mdt_data;
 
-        rc = mdt_connect0(mdt, exp, data);
-        if (rc == 0) {
-                OBD_ALLOC_PTR(mcd);
-                if (mcd != NULL) {
-                        memcpy(mcd->mcd_uuid, cluuid, sizeof mcd->mcd_uuid);
-                        med->med_mcd = mcd;
-                        /*
-                         * rc = mdt_client_add(ctx, mdt, med, -1);
-                         */
-                        if (rc != 0)
-                                OBD_FREE_PTR(mcd);
-                } else
-                        rc = -ENOMEM;
-        }
+        rc = mdt_connect_internal(ctx, mdt, exp, cluuid, data);
         if (rc != 0)
                 class_disconnect(exp);
         else
@@ -2602,6 +2617,7 @@ static int mdt_destroy_export(struct obd_export *export)
         struct mdt_export_data *med;
         struct obd_device *obd = export->exp_obd;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        struct mdt_thread_info *info;
         struct lu_context ctxt;
         struct md_attr ma;
         int rc = 0;
@@ -2618,6 +2634,9 @@ static int mdt_destroy_export(struct obd_export *export)
                 RETURN(rc);
 
         lu_context_enter(&ctxt);
+
+        info = lu_context_key_get(&ctxt, &mdt_thread_key);
+        LASSERT(info != NULL);
         /* Close any open files (which may also cause orphan unlinking). */
         spin_lock(&med->med_open_lock);
         while (!list_empty(&med->med_open_head)) {
