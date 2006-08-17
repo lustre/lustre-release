@@ -8,4 +8,4 @@ modulefs_DATA = mdd$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES := $(mdd-objs:%.o=%.c) 
+DIST_SOURCES := $(mdd-objs:%.o=%.c) mdd_internal.h
