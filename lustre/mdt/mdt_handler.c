@@ -2698,7 +2698,7 @@ static struct lu_device* mdt_device_fini(const struct lu_context *ctx, struct lu
         struct mdt_device *m = mdt_dev(d);
 
         mdt_fini(ctx, m);
-        RETURN (md2lu_dev(m->mdt_child));
+        RETURN (NULL);
 }
 
 static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)

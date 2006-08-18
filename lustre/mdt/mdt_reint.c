@@ -301,8 +301,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         if (rc)
                 GOTO(out_unlock_child, rc);
 
-
-        rc = mdt_handle_last_unlink(info, mc, ma);
+        mdt_handle_last_unlink(info, mc, ma);
 
         GOTO(out_unlock_child, rc);
 out_unlock_child:
@@ -549,7 +548,9 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                         mdt_object_child(mtgtdir), old_fid,
                         rr->rr_name, mnew ? mdt_object_child(mnew): NULL,
                         rr->rr_tgt, ma);
-        /*TODO: handle last link of tgt object*/
+        /* handle last link of tgt object */
+        if (mnew)
+                mdt_handle_last_unlink(info, mnew, ma);
 
 out_unlock_new:
         if (mnew) {

@@ -1294,6 +1294,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         struct mdd_object *mdd_sobj = mdd_object_find(ctxt, mdd, lf);
         struct mdd_object *mdd_tobj = NULL;
         struct thandle *handle;
+        int is_dir = S_ISDIR(mdd_object_type(ctxt, mdd_sobj));
         int rc;
         ENTRY;
 
@@ -1321,7 +1322,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                 GOTO(cleanup, rc);
 
         /*if sobj is dir, its parent object nlink should be dec too*/
-        if (S_ISDIR(mdd_object_type(ctxt, mdd_sobj)))
+        if (is_dir)
                 __mdd_ref_del(ctxt, mdd_spobj, handle);
 
         if (tobj) {
@@ -1333,11 +1334,15 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         rc = __mdd_index_insert(ctxt, mdd_tpobj, lf, tname, handle);
         if (rc)
                 GOTO(cleanup, rc);
+        /*if sobj is dir, its new parent object nlink should be inc */
+        if (is_dir)
+                __mdd_ref_add(ctxt, mdd_tpobj, handle);
+
 
         if (tobj && lu_object_exists(&tobj->mo_lu)) {
                 __mdd_ref_del(ctxt, mdd_tobj, handle);
                 /* remove dot reference */
-                if (S_ISDIR(mdd_object_type(ctxt, mdd_tobj)))
+                if (is_dir)
                         __mdd_ref_del(ctxt, mdd_tobj, handle);
 
                 rc = __mdd_finish_unlink(ctxt, mdd_tobj, ma);
