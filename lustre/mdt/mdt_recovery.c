@@ -586,10 +586,10 @@ static int mdt_txn_commit_cb(const struct lu_context *ctx,
         spin_lock(&mdt->mdt_transno_lock);
         if (txi->txi_transno > mdt->mdt_last_committed) {
                 mdt->mdt_last_committed = txi->txi_transno;
-                spin_lock(&mdt->mdt_transno_lock);
+                spin_unlock(&mdt->mdt_transno_lock);
                 ptlrpc_commit_replies (obd);
         } else 
-                spin_lock(&mdt->mdt_transno_lock);
+                spin_unlock(&mdt->mdt_transno_lock);
 
         CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
                obd->obd_name, txi->txi_transno);
