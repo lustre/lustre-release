@@ -1884,9 +1884,39 @@ cleanup:
         RETURN(rc);
 }
 
-static int mdd_open(const struct lu_context *ctxt, struct md_object *obj)
+/* do NOT or the MAY_*'s, you'll get the weakest */
+static int accmode(struct mdd_object *mdd_obj, int flags)
 {
-        /*XXX access mod checking*/
+        int res = 0;
+
+#if 0
+        /* Sadly, NFSD reopens a file repeatedly during operation, so the
+         * "acc_mode = 0" allowance for newly-created files isn't honoured.
+         * NFSD uses the MDS_OPEN_OWNEROVERRIDE flag to say that a file
+         * owner can write to a file even if it is marked readonly to hide
+         * its brokenness. (bug 5781) */
+        if (flags & MDS_OPEN_OWNEROVERRIDE && inode->i_uid == current->fsuid)
+                return 0;
+#endif
+        if (flags & FMODE_READ)
+                res = MAY_READ;
+        if (flags & (FMODE_WRITE|MDS_OPEN_TRUNC))
+                res |= MAY_WRITE;
+        if (flags & MDS_FMODE_EXEC)
+                res = MAY_EXEC;
+        return res;
+}
+
+static int mdd_open(const struct lu_context *ctxt, struct md_object *obj,
+                    int flags)
+{
+        int mode = accmode(md2mdd_obj(obj), flags);
+
+        if (mode & MAY_WRITE) {
+                if (mdd_is_immutable(md2mdd_obj(obj)))
+                        RETURN(-EACCES);
+        }
+
         atomic_inc(&md2mdd_obj(obj)->mod_count);
         return 0;
 }

@@ -1105,10 +1105,10 @@ static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
         CDEBUG(D_INODE, "last_transno = %llu, last_committed = %llu\n",
                mdt->mdt_last_transno, exp->exp_obd->obd_last_committed);
 
-        spin_lock(mdt->mdt_transno_lock);
+        spin_lock(&mdt->mdt_transno_lock);
         req->rq_repmsg->transno = req->rq_transno = info->mti_transno;
         req->rq_repmsg->last_committed = exp->exp_obd->obd_last_committed;
-        spin_unlock(mdt->mdt_transno_lock);
+        spin_unlock(&mdt->mdt_transno_lock);
         req->rq_repmsg->last_xid = req->rq_xid;
 }
 
@@ -2692,12 +2692,13 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_init_export    = mdt_init_export,    /* By Huang Hua*/
         .o_destroy_export = mdt_destroy_export, /* By Huang Hua*/
 };
-      
-static void mdt_device_fini(const struct lu_context *ctx, struct lu_device *d)
+
+static struct lu_device* mdt_device_fini(const struct lu_context *ctx, struct lu_device *d)
 {
         struct mdt_device *m = mdt_dev(d);
 
         mdt_fini(ctx, m);
+        RETURN (md2lu_dev(m->mdt_child));
 }
 
 static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)

@@ -266,6 +266,10 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         if (rc)
                 RETURN(rc);
 
+        rc = mo_open(info->mti_ctxt, mdt_object_child(o), flags);
+        if (rc)
+                RETURN(rc);
+        
         /* (1) client wants transno when open to keep a ref count for replay;
          *     see after_reply() and mdc_close_commit();
          * (2) we need to record the transaction related stuff onto disk;
@@ -291,7 +295,6 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 * and is released by mdt_mfd_close() */
                 mdt_object_get(info->mti_ctxt, o);
                 /* open hanling */
-                mo_open(info->mti_ctxt, mdt_object_child(o));
 
                 mfd->mfd_mode = flags;
                 mfd->mfd_object = o;

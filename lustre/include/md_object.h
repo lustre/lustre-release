@@ -120,7 +120,7 @@ struct md_object_operations {
         int (*moo_ref_add)(const struct lu_context *, struct md_object *);
         int (*moo_ref_del)(const struct lu_context *, struct md_object *,
                            struct md_attr *);
-        int (*moo_open)(const struct lu_context *, struct md_object *);
+        int (*moo_open)(const struct lu_context *, struct md_object *, int flags);
         int (*moo_close)(const struct lu_context *, struct md_object *,
                          struct md_attr *);
 };
@@ -294,10 +294,11 @@ static inline int mo_xattr_list(const struct lu_context *cx,
         return m->mo_ops->moo_xattr_list(cx, m, buf, buf_len);
 }
 
-static inline int mo_open(const struct lu_context *cx, struct md_object *m)
+static inline int mo_open(const struct lu_context *cx, struct md_object *m,
+                          int flags)
 {
         LASSERT(m->mo_ops->moo_open);
-        return m->mo_ops->moo_open(cx, m);
+        return m->mo_ops->moo_open(cx, m, flags);
 }
 
 static inline int mo_close(const struct lu_context *cx, struct md_object *m,
