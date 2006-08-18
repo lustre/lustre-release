@@ -114,8 +114,10 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
                         LBUG();
         }
 
-        if (ma->ma_cookie_size && (ma->ma_valid & MA_COOKIE))
+        if (ma->ma_cookie_size && (ma->ma_valid & MA_COOKIE)) {
+                repbody->aclsize = ma->ma_cookie_size;
                 repbody->valid |= OBD_MD_FLCOOKIE;
+        }
 
         RETURN(0);
 }
