@@ -8,4 +8,4 @@ modulefs_DATA = osd$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
-DIST_SOURCES := $(osd-objs:%.o=%.c) osd_internal.h
+DIST_SOURCES := $(osd-objs:%.o=%.c) osd_internal.h osd_oi.h osd_igif.h
