@@ -305,6 +305,8 @@ static int mdt_init_server_data(const struct lu_context *ctx,
                 GOTO(err_client, rc);
 
         spin_lock(&mdt->mdt_transno_lock);
+        /* obd_last_committed is used for compatibility
+         * with other lustre recovery code */
         obd->obd_last_committed = mdt->mdt_last_transno;
         spin_unlock(&mdt->mdt_transno_lock);
 
@@ -559,16 +561,22 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
 
         /*TODO: checks for recovery cases, see mds_finish_transno */
         spin_lock(&mdt->mdt_transno_lock);
-        if (mti->mti_transno == 0) {
+        if (txn->th_result != 0) {
+                if (mti->mti_transno != 0) {
+                        CERROR("Replay transno "LPU64" failed: rc %i\n",
+                               mti->mti_transno, txn->th_result);
+                        mti->mti_transno = 0;
+                }
+        } else if (mti->mti_transno == 0) {
                 mti->mti_transno = ++ mdt->mdt_last_transno;
         } else {
                 /* replay */
                 if (mti->mti_transno > mdt->mdt_last_transno)
                         mdt->mdt_last_transno = mti->mti_transno;
         }
-        spin_unlock(&mdt->mdt_transno_lock);
         /* save transno for the commit callback */
         txi->txi_transno = mti->mti_transno;
+        spin_unlock(&mdt->mdt_transno_lock);
 
         return 0;//mdt_update_last_rcvd(mti, dev, txn);
 }
@@ -583,9 +591,11 @@ static int mdt_txn_commit_cb(const struct lu_context *ctx,
         struct mdt_txn_info *txi;
 
         txi = lu_context_key_get(&txn->th_ctx, &mdt_txn_key);
+
+        /* copy of obd_transno_commit_cb() but with locking */
         spin_lock(&mdt->mdt_transno_lock);
-        if (txi->txi_transno > mdt->mdt_last_committed) {
-                mdt->mdt_last_committed = txi->txi_transno;
+        if (txi->txi_transno > obd->obd_last_committed) {
+                obd->obd_last_committed = txi->txi_transno;
                 spin_unlock(&mdt->mdt_transno_lock);
                 ptlrpc_commit_replies (obd);
         } else 

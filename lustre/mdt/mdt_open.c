@@ -210,7 +210,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
          */
         if (islnk || (!isreg && !isdir &&
             (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))) {
-                info->mti_trans_flags |= MDT_NONEED_TANSNO;
+                info->mti_trans_flags |= MDT_NONEED_TRANSNO;
                 RETURN(0);
         }
         /* This can't be done earlier, we need to return reply body */

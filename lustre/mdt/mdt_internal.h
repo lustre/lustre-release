@@ -127,7 +127,6 @@ struct mdt_device {
         /* Transaction related stuff here */
         spinlock_t                 mdt_transno_lock;
         __u64                      mdt_last_transno;
-        __u64                      mdt_last_committed;
 
         /* transaction callbacks */
         struct dt_txn_callback     mdt_txn_cb;
@@ -191,7 +190,7 @@ enum mdt_reint_flag {
 };
 
 enum {
-        MDT_NONEED_TANSNO = (1 << 0) /*Do not need transno for this req*/
+        MDT_NONEED_TRANSNO = (1 << 0) /*Do not need transno for this req*/
 };
 /*
  * Common data shared by mdt-level handlers. This is allocated per-thread to

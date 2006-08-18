@@ -619,7 +619,6 @@ free_rdpg:
         return rc;
 }
 
-//extern int mdt_reconstruct(struct mdt_thread_info *);
 static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
 {
         int rc;
@@ -1085,38 +1084,32 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
 /* FIXME: fake untill journal callback is OK.*/
 struct lu_context_key mdt_txn_key;
 
-int mdt_update_last_transno(struct mdt_thread_info *info, int rc)
+static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
 {
         struct mdt_device     *mdt = info->mti_mdt;
         struct ptlrpc_request *req = mdt_info_req(info);
         struct obd_export     *exp = req->rq_export;
-        __u64 last_transno;
-        __u64 last_committed;
 
         if (mdt == NULL || req == NULL || req->rq_repmsg == NULL)
-                return -EFAULT;
-        if (info->mti_trans_flags & MDT_NONEED_TANSNO)
-                return 0;
+                LBUG();
 
-        last_committed = mdt->mdt_last_committed;
-
-        if (rc == 0) {
-                last_transno = info->mti_transno;
-        } else {
-                if (info->mti_transno != 0)
-                        CERROR("replay %s transno "LPU64" failed: rc %d\n",
-                               libcfs_nid2str(exp->exp_connection->c_peer.nid),
-                               info->mti_transno, rc);
-                last_transno = 0;
+        if (info->mti_trans_flags & MDT_NONEED_TRANSNO)
+                return;
+        
+        /*XXX: assert on this when all code will be finished */
+        if (rc != 0 && info->mti_transno != 0) {
+                info->mti_transno = 0;
+                CERROR("Transno is not 0 while rc is %i!\n", rc);
         }
-        CDEBUG(D_INODE, "last_transno = %llu, last_committed = %llu\n",
-               last_transno, last_committed);
 
-        req->rq_repmsg->transno = req->rq_transno = last_transno;
+        CDEBUG(D_INODE, "last_transno = %llu, last_committed = %llu\n",
+               mdt->mdt_last_transno, exp->exp_obd->obd_last_committed);
+
+        spin_lock(mdt->mdt_transno_lock);
+        req->rq_repmsg->transno = req->rq_transno = info->mti_transno;
+        req->rq_repmsg->last_committed = exp->exp_obd->obd_last_committed;
+        spin_unlock(mdt->mdt_transno_lock);
         req->rq_repmsg->last_xid = req->rq_xid;
-        req->rq_repmsg->last_committed = last_committed;
-        exp->exp_obd->obd_last_committed = last_committed;
-        return 0;
 }
 
 /*
@@ -1200,7 +1193,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         if (h->mh_opc != MDS_DISCONNECT &&
             h->mh_opc != MDS_READPAGE &&
             h->mh_opc != LDLM_ENQUEUE) {
-                        mdt_update_last_transno(info, result);
+                mdt_finish_reply(info, result);
         }
         RETURN(result);
 }
@@ -1645,8 +1638,8 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         rep->lock_policy_res2 = rc;
 
         intent_set_disposition(rep, DISP_IT_EXECD);
-
-        mdt_update_last_transno(info, rep->lock_policy_res2);
+        
+        mdt_finish_reply(info, rc);
 
         RETURN(ELDLM_LOCK_ABORTED);
 }
@@ -2289,11 +2282,14 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         LASSERT(info != NULL);
 
         obd = class_name2obd(dev);
-
+        LASSERT(obd);
+      
         spin_lock_init(&m->mdt_transno_lock);
+#if 0
         /* FIXME: We need to load them from disk. But now fake it */
         m->mdt_last_transno = 1;
         m->mdt_last_committed = 1;
+#endif
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
 
@@ -2582,7 +2578,7 @@ static int mdt_obd_disconnect(struct obd_export *exp)
         //ldlm_cancel_locks_for_export(exp);
 
         /* complete all outstanding replies */
-        spin_lock_irqsave(&exp->exp_lock, irqflags);
+        spin_lock(&exp->exp_lock);
         while (!list_empty(&exp->exp_outstanding_replies)) {
                 struct ptlrpc_reply_state *rs =
                         list_entry(exp->exp_outstanding_replies.next,
@@ -2594,7 +2590,7 @@ static int mdt_obd_disconnect(struct obd_export *exp)
                 ptlrpc_schedule_difficult_reply(rs);
                 spin_unlock(&svc->srv_lock);
         }
-        spin_unlock_irqrestore(&exp->exp_lock, irqflags);
+        spin_unlock(&exp->exp_lock);
 
         class_export_put(exp);
         RETURN(rc);
