@@ -30,6 +30,27 @@ SERVICE=${0##*/}
 : ${LUSTRE_CONFIG_XML:=/etc/lustre/config.xml}
 : ${LCONF:=/usr/sbin/lconf}
 : ${LCTL:=/usr/sbin/lctl}
+# Some distros use modprobe.conf.local
+if [ -f /etc/modprobe.conf.local ]; then
+   : ${MODPROBE_CONF:=/etc/modprobe.conf.local}
+else
+   : ${MODPROBE_CONF:=/etc/modprobe.conf}
+fi
+# Be sure the proper directories are in PATH. 
+export PATH="/sbin:$PATH"
+
+case "$SERVICE" in
+    [SK][[:digit:]][[:digit:]]lustre | lustre)
+        SERVICE="lustre"
+	: ${LCONF_START_ARGS:="${LUSTRE_CONFIG_XML}"}
+	: ${LCONF_STOP_ARGS:="--force --cleanup ${LUSTRE_CONFIG_XML}"}
+	;;
+    *)
+	: ${LCONF_START_ARGS:="--group ${SERVICE} --select ${SERVICE}=${HOSTNAME} ${LUSTRE_CONFIG_XML}"}
+	: ${LCONF_STOP_ARGS:="--group ${SERVICE} --select ${SERVICE}=${HOSTNAME} --failover --cleanup ${LUSTRE_CONFIG_XML}"}
+	;;
+esac
+LOCK=/var/lock/subsys/$SERVICE
 
 case "$SERVICE" in
     [SK][[:digit:]][[:digit:]]lustre | lustre)
@@ -101,7 +122,14 @@ EOF
 		RETVAL=4 # insufficent privileges
 		return
 	fi
-	${LCONF} ${LCONF_START_ARGS}
+	# Cat the modprobe file and place all lines that follow a trailing backslash on the same line
+	ROUTER=`cat ${MODPROBE_CONF} | sed ':a;N;$!ba;s/\\[:space:]\*\n//g' | grep lnet | grep forwarding=\"enabled\"`
+	if [[ ! -z ${ROUTER} ]]; then
+		modprobe lnet
+		${LCTL} network configure
+	else
+		${LCONF} ${LCONF_START_ARGS}
+	fi
 	RETVAL=$?
 	echo $SERVICE
 	if [ $RETVAL -eq 0 ]; then
@@ -120,7 +148,20 @@ stop() {
 		RETVAL=4 # insufficent privileges
 		return
 	fi
-	${LCONF} ${LCONF_STOP_ARGS}
+	# Cat the modprobe file and place all lines that follow a trailing backslash on the same line
+	ROUTER=`cat ${MODPROBE_CONF} | sed ':a;N;$!ba;s/\\[:space:]\*\n//g' | grep lnet | grep forwarding=\"enabled\"`
+	if [[ ! -z ${ROUTER} ]]; then
+		MODULE_LOADED=`lsmod | awk ' { print $1 } ' | grep lnet`
+		if [[ ! -z ${MODULE_LOADED} ]]; then
+			${LCTL} network unconfigure
+		fi
+		${LCTL} modules | awk '{ print $2 }' | xargs rmmod >/dev/null 2>&1
+		# do it again, in case we tried to unload ksocklnd too early
+		${LCTL} modules | awk '{ print $2 }' | xargs rmmod
+
+	else
+		${LCONF} ${LCONF_STOP_ARGS}
+	fi
 	RETVAL=$?
 	echo $SERVICE
 	rm -f $LOCK 
@@ -150,13 +191,24 @@ status() {
 	[ "`cat /proc/sys/lnet/routes 2> /dev/null`" ] && STATE="running" && RETVAL=0
 	
 	# check for any configured devices (may indicate partial startup)
-	[ "`cat /proc/fs/lustre/devices 2> /dev/null`" ] && STATE="partial" && RETVAL=150
+	if [ -d /proc/fs/lustre ]; then
+		[ "`cat /proc/fs/lustre/devices 2> /dev/null`" ] && STATE="partial" && RETVAL=150
 
-	# check for either a server or a client filesystem
-	MDS="`ls /proc/fs/lustre/mds/*/recovery_status 2> /dev/null`"
-	OST="`ls /proc/fs/lustre/obdfilter/*/recovery_status 2> /dev/null`"
-	LLITE="`ls /proc/fs/lustre/llite/fs* 2> /dev/null`"
-	[ "$MDS" -o "$OST" -o "$LLITE" ] && STATE="running" && RETVAL=0
+		# check for either a server or a client filesystem
+		MDS="`ls /proc/fs/lustre/mds/*/recovery_status 2> /dev/null`"
+		OST="`ls /proc/fs/lustre/obdfilter/*/recovery_status 2> /dev/null`"
+		LLITE="`ls /proc/fs/lustre/llite/fs* 2> /dev/null`"
+		[ "$MDS" -o "$OST" -o "$LLITE" ] && STATE="running" && RETVAL=0
+	else
+		# check if this is a router
+		if [ -d /proc/sys/lnet ]; then
+			ROUTER="`cat /proc/sys/lnet/routes | head -1 | grep -i -c \"Routing enabled\"`"
+			if [[ ! -z ${ROUTER} && ${ROUTER} -ge 1 ]]; then
+				STATE="running"
+				RETVAL=0
+			fi
+		fi
+	fi
 
 	# check for server disconnections 
 	DISCON="`grep -v FULL /proc/fs/lustre/*c/*/*server_uuid 2> /dev/null`"
