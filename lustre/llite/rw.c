@@ -63,6 +63,7 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
+        struct obd_info oinfo = { { { 0 } } };
         struct brw_page pg;
         int rc;
         ENTRY;
@@ -93,7 +94,9 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         else
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_BRW_READ, pg.count);
-        rc = obd_brw(cmd, ll_i2dtexp(inode), oa, lsm, 1, &pg, NULL);
+        oinfo.oi_oa = oa;
+        oinfo.oi_md = lsm;
+        rc = obd_brw(cmd, ll_i2dtexp(inode), &oinfo, 1, &pg, NULL);
         if (rc == 0)
                 obdo_to_inode(inode, oa, OBD_MD_FLBLOCKS);
         else if (rc != -EIO)
@@ -110,7 +113,7 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
 void ll_truncate(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
+        struct obd_info oinfo = { { { 0 } } };
         struct ost_lvb lvb;
         struct obdo oa;
         int rc;
@@ -123,7 +126,7 @@ void ll_truncate(struct inode *inode)
                 return;
         }
 
-        if (!lsm) {
+        if (!lli->lli_smd) {
                 CDEBUG(D_INODE, "truncate on inode %lu with no objects\n",
                        inode->i_ino);
                 GOTO(out_unlock, 0);
@@ -133,18 +136,18 @@ void ll_truncate(struct inode *inode)
 
         /* XXX I'm pretty sure this is a hack to paper over a more fundamental
          * race condition. */
-        lov_stripe_lock(lsm);
+        lov_stripe_lock(lli->lli_smd);
         inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(ll_i2dtexp(inode), lsm, &lvb, 0);
+        obd_merge_lvb(ll_i2dtexp(inode), lli->lli_smd, &lvb, 0);
         if (lvb.lvb_size == inode->i_size) {
                 CDEBUG(D_VFSTRACE, "skipping punch for obj "LPX64", %Lu=%#Lx\n",
-                       lsm->lsm_object_id, inode->i_size, inode->i_size);
-                lov_stripe_unlock(lsm);
+                       lli->lli_smd->lsm_object_id, inode->i_size, inode->i_size);
+                lov_stripe_unlock(lli->lli_smd);
                 GOTO(out_unlock, 0);
         }
 
-        obd_adjust_kms(ll_i2dtexp(inode), lsm, inode->i_size, 1);
-        lov_stripe_unlock(lsm);
+        obd_adjust_kms(ll_i2dtexp(inode), lli->lli_smd, inode->i_size, 1);
+        lov_stripe_unlock(lli->lli_smd);
 
         if (unlikely((ll_i2sbi(inode)->ll_flags & LL_SBI_CHECKSUM) &&
                      (inode->i_size & ~PAGE_MASK))) {
@@ -164,9 +167,13 @@ void ll_truncate(struct inode *inode)
         }
 
         CDEBUG(D_INFO, "calling punch for "LPX64" (new size %Lu=%#Lx)\n",
-               lsm->lsm_object_id, inode->i_size, inode->i_size);
+               lli->lli_smd->lsm_object_id, inode->i_size, inode->i_size);
 
-        oa.o_id = lsm->lsm_object_id;
+        oinfo.oi_md = lli->lli_smd;
+        oinfo.oi_policy.l_extent.start = inode->i_size;
+        oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
+        oinfo.oi_oa = &oa;
+        oa.o_id = lli->lli_smd->lsm_object_id;
         oa.o_valid = OBD_MD_FLID;
 
         obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
@@ -175,8 +182,7 @@ void ll_truncate(struct inode *inode)
 
         ll_inode_size_unlock(inode, 0);
 
-        rc = obd_punch(ll_i2dtexp(inode), &oa, lsm, inode->i_size,
-                       OBD_OBJECT_EOF, NULL);
+        rc = obd_punch_rqset(ll_i2dtexp(inode), &oinfo, NULL);
         if (rc)
                 CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
         else
@@ -196,6 +202,7 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
+        struct obd_info oinfo = { { { 0 } } };
         struct brw_page pga;
         struct obdo oa;
         struct ost_lvb lvb;
@@ -216,8 +223,9 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
         obdo_from_inode(&oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
 
-        rc = obd_brw(OBD_BRW_CHECK, ll_i2dtexp(inode), &oa, lsm,
-                     1, &pga, NULL);
+        oinfo.oi_oa = &oa;
+        oinfo.oi_md = lsm;
+        rc = obd_brw(OBD_BRW_CHECK, ll_i2dtexp(inode), &oinfo, 1, &pga, NULL);
         if (rc)
                 RETURN(rc);
 
@@ -360,8 +368,6 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
         if (cmd & OBD_BRW_WRITE) {
                 oa->o_valid |= OBD_MD_FLEPOCH;
                 oa->o_easize = ll_i2info(inode)->lli_io_epoch;
-                oa->o_uid = inode->i_uid;
-                oa->o_gid = inode->i_gid;
 
                 valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                         OBD_MD_FLUID | OBD_MD_FLGID |
@@ -382,10 +388,23 @@ static void ll_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         EXIT;
 }
 
+static void ll_ap_update_obdo(void *data, int cmd, struct obdo *oa,
+                              obd_valid valid)
+{
+        struct ll_async_page *llap;
+        ENTRY;
+
+        llap = LLAP_FROM_COOKIE(data);
+        obdo_from_inode(oa, llap->llap_page->mapping->host, valid);
+
+        EXIT;
+}
+
 static struct obd_async_page_ops ll_async_page_ops = {
         .ap_make_ready =        ll_ap_make_ready,
         .ap_refresh_count =     ll_ap_refresh_count,
         .ap_fill_obdo =         ll_ap_fill_obdo,
+        .ap_update_obdo =       ll_ap_update_obdo,
         .ap_completion =        ll_ap_completion,
 };
 
@@ -814,10 +833,11 @@ static void ll_ra_count_put(struct ll_sb_info *sbi, unsigned long len)
 }
 
 /* called for each page in a completed rpc.*/
-void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
+int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct ll_async_page *llap;
         struct page *page;
+        int ret = 0;
         ENTRY;
 
         llap = LLAP_FROM_COOKIE(data);
@@ -842,6 +862,7 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                         llap->llap_defer_uptodate = 0;
                 } else {
                         ll_redirty_page(page);
+                        ret = 1;
                 }
                 SetPageError(page);
         }
@@ -857,7 +878,8 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                 end_page_writeback(page);
         }
         page_cache_release(page);
-        EXIT;
+
+        RETURN(ret);
 }
 
 /* the kernel calls us here when a page is unhashed from the page cache.
@@ -1211,7 +1233,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
 
 static void ras_set_start(struct ll_readahead_state *ras, unsigned long index)
 {
-        ras->ras_window_start = index & (~(PTLRPC_MAX_BRW_PAGES - 1));
+        ras->ras_window_start = index & (~((1024 * 1024 >> PAGE_SHIFT) - 1));
 }
 
 /* called with the ras_lock held or from places where it doesn't matter */
@@ -1275,7 +1297,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
 
                 kms_pages = (inode->i_size + PAGE_SIZE - 1) >> PAGE_CACHE_SHIFT;
 
-                CDEBUG(D_READA, "kmsp %llu mwp %lu mp %lu\n", kms_pages,
+                CDEBUG(D_READA, "kmsp "LPU64" mwp %lu mp %lu\n", kms_pages,
                        ra->ra_max_read_ahead_whole_pages, ra->ra_max_pages);
 
                 if (kms_pages &&
@@ -1303,7 +1325,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
         /* Trigger RA in the mmap case where ras_consecutive_requests
          * is not incremented and thus can't be used to trigger RA */
         if (!ras->ras_window_len && ras->ras_consecutive_pages == 3) {
-                ras->ras_window_len = PTLRPC_MAX_BRW_PAGES;
+                ras->ras_window_len = 1024 * 1024 >> PAGE_SHIFT;
                 GOTO(out_unlock, 0);
         }
 
@@ -1312,7 +1334,7 @@ static void ras_update(struct ll_sb_info *sbi, struct inode *inode,
          * only increased once per consecutive request received. */
         if (ras->ras_consecutive_requests > 1 && !ras->ras_request_index) {
                 ras->ras_window_len = min(ras->ras_window_len +
-                                          PTLRPC_MAX_BRW_PAGES,
+                                          (1024 * 1024 >> PAGE_SHIFT),
                                           ra->ra_max_pages);
         }
 
@@ -1402,7 +1424,6 @@ int ll_readpage(struct file *filp, struct page *page)
                 ll_truncate_complete_page(page);
                 clear_page(page);
                 SetPageUptodate(page);
-                unlock_page(page);
                 RETURN(0);
         }
 

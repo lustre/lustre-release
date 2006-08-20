@@ -91,7 +91,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, int flags)
                 ldlm_lock_decref_internal(lock, mode);
         }
 
-        ldlm_lock_destroy(lock);
+        ldlm_lock_destroy_nolock(lock);
         EXIT;
 }
 
@@ -124,7 +124,7 @@ restart:
 
 int
 ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
-                        ldlm_error_t *err)
+                        ldlm_error_t *err, struct list_head *work_list)
 {
         struct ldlm_resource *res = req->l_resource;
         struct ldlm_namespace *ns = res->lr_namespace;
@@ -393,20 +393,18 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                                                     = CFS_LIST_HEAD_INIT(rpc_list);
                                 int rc;
 restart:
-                                res->lr_tmp = &rpc_list;
-                                ldlm_reprocess_queue(res, &res->lr_waiting);
-                                res->lr_tmp = NULL;
+                                ldlm_reprocess_queue(res, &res->lr_waiting,
+                                                     &rpc_list);
 
-                                l_unlock(&ns->ns_lock);
-                                rc = ldlm_run_ast_work(res->lr_namespace,
-                                                       &rpc_list);
-                                l_lock(&ns->ns_lock);
+                                unlock_res(res);
+                                rc = ldlm_run_bl_ast_work(&rpc_list);
+                                lock_res(res);
                                 if (rc == -ERESTART)
                                         GOTO(restart, -ERESTART);
                        }
                 } else {
                         LASSERT(req->l_completion_ast);
-                        ldlm_add_ast_work_item(req, NULL, NULL, 0);
+                        ldlm_add_ast_work_item(req, NULL, work_list);
                 }
         }
 
@@ -453,7 +451,6 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         struct ldlm_namespace *ns;
         cfs_flock_t *getlk = lock->l_ast_data;
         struct ldlm_flock_wait_data fwd;
-        unsigned long irqflags;
         struct obd_device *obd;
         struct obd_import *imp = NULL;
         ldlm_error_t err;
@@ -481,9 +478,9 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 imp = obd->u.cli.cl_import;
 
         if (imp != NULL) {
-                spin_lock_irqsave(&imp->imp_lock, irqflags);
+                spin_lock(&imp->imp_lock);
                 fwd.fwd_generation = imp->imp_generation;
-                spin_unlock_irqrestore(&imp->imp_lock, irqflags);
+                spin_unlock(&imp->imp_lock);
         }
 
         lwi = LWI_TIMEOUT_INTR(0, NULL, ldlm_flock_interrupted_wait, &fwd);
@@ -500,7 +497,7 @@ granted:
 
         LDLM_DEBUG(lock, "client-side enqueue granted");
         ns = lock->l_resource->lr_namespace;
-        l_lock(&ns->ns_lock);
+        lock_res(lock->l_resource);
 
         /* take lock off the deadlock detection waitq. */
         list_del_init(&lock->l_flock_waitq);
@@ -531,11 +528,11 @@ granted:
 
                 /* We need to reprocess the lock to do merges or splits
                  * with existing locks owned by this process. */
-                ldlm_process_flock_lock(lock, &noreproc, 1, &err);
+                ldlm_process_flock_lock(lock, &noreproc, 1, &err, NULL);
                 if (flags == 0)
                         cfs_waitq_signal(&lock->l_waitq);
         }
-        l_unlock(&ns->ns_lock);
+        unlock_res(lock->l_resource);
         RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_flock_completion_ast);
@@ -552,8 +549,8 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         ns = lock->l_resource->lr_namespace;
 
         /* take lock off the deadlock detection waitq. */
-        l_lock(&ns->ns_lock);
+        lock_res_and_lock(lock);
         list_del_init(&lock->l_flock_waitq);
-        l_unlock(&ns->ns_lock);
+        unlock_res_and_lock(lock);
         RETURN(0);
 }

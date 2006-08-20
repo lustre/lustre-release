@@ -28,3 +28,5 @@ wiretest
 llog_reader
 .*.cmd
 .*.d
+llverfs
+llverdev

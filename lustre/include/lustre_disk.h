@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
+ *  Copyright (C) 2006 Cluster File Systems, Inc.
  *   Author: Nathan Rutman <nathan@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
@@ -26,17 +26,20 @@
 #ifndef _LUSTRE_DISK_H
 #define _LUSTRE_DISK_H
 
-#include <linux/types.h>
 #include <lnet/types.h>
+
+/****************** on-disk files *********************/
+
+#define MDT_LOGS_DIR      "LOGS"  /* COMPAT_146 */
+#define MOUNT_CONFIGS_DIR "CONFIGS"
+/* Persistent mount data are stored on the disk in this file. */
+#define MOUNT_DATA_FILE    MOUNT_CONFIGS_DIR"/mountdata"
+#define LAST_RCVD         "last_rcvd"
+#define LOV_OBJID         "lov_objid"
+#define HEALTH_CHECK      "health_check"
 
 
 /****************** persistent mount data *********************/
-
-/* Persistent mount data are stored on the disk in this file.
-   Used before the setup llog can be read. */
-#define MOUNT_CONFIGS_DIR "CONFIGS"
-#define MOUNT_DATA_FILE   MOUNT_CONFIGS_DIR"/mountdata"
-#define MDT_LOGS_DIR      "LOGS"  /* COMPAT_146 */
 
 #define LDD_F_SV_TYPE_MDT   0x0001
 #define LDD_F_SV_TYPE_OST   0x0002
@@ -47,8 +50,7 @@
 #define LDD_F_REWRITE_LDD   0x0080 /* rewrite the LDD */
 #define LDD_F_WRITECONF     0x0100 /* regenerate all logs for this fs */
 #define LDD_F_UPGRADE14     0x0200 /* COMPAT_14 */
-#define MTI_F_IOCTL         0x0400 /* only used in mti  */
-
+#define LDD_F_PARAM_FNID    0x0400 /* process failover nids as params */
 
 enum ldd_mount_type {
         LDD_MT_EXT3 = 0, 
@@ -66,13 +68,8 @@ static inline char *mt_str(enum ldd_mount_type mt)
                 "smfs",
                 "reiserfs",
         };
-        //LASSERT(mt < LDD_MT_LAST);
         return mount_type_string[mt];
 }
-
-#ifndef MTI_NIDS_MAX  /* match lustre_idl.h */
-#define MTI_NIDS_MAX 64
-#endif
 
 #define LDD_INCOMPAT_SUPP 0
 #define LDD_ROCOMPAT_SUPP 0
@@ -146,36 +143,14 @@ struct lustre_mount_data {
         __u32     *lmd_exclude;       /* array of OSTs to ignore */
 };
 
-#define LMD_FLG_CLIENT       0x0002  /* Mounting a client only */
-#define LMD_FLG_RECOVER      0x0004  /* Allow recovery */
-#define LMD_FLG_NOSVC        0x0008  /* Only start MGS/MGC for servers, 
+#define LMD_FLG_SERVER       0x0001  /* Mounting a server */
+#define LMD_FLG_CLIENT       0x0002  /* Mounting a client */
+#define LMD_FLG_ABORT_RECOV  0x0008  /* Abort recovery */
+#define LMD_FLG_NOSVC        0x0010  /* Only start MGS/MGC for servers, 
                                         no other services */
 
 #define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT) 
 
-/****************** mkfs command *********************/
-
-#define MO_IS_LOOP     0x01
-#define MO_FORCEFORMAT 0x02
-
-/* used to describe the options to format the lustre disk, not persistent */
-struct mkfs_opts {
-        struct lustre_disk_data mo_ldd; /* to be written in MOUNT_DATA_FILE */
-        char  mo_mount_type_string[20]; /* "ext3", "ldiskfs", ... */
-        char  mo_device[128];           /* disk device name */
-        char  mo_mkfsopts[128];         /* options to the backing-store mkfs */
-        char  mo_loopdev[128];          /* in case a loop dev is needed */
-        __u64 mo_device_sz;             /* in KB */
-        int   mo_stripe_count;
-        int   mo_flags; 
-        int   mo_mgs_failnodes;
-};
-
-/****************** on-disk files *********************/
-
-#define LAST_RCVD    "last_rcvd"
-#define LOV_OBJID    "lov_objid"
-#define HEALTH_CHECK "health_check"
 
 /****************** last_rcvd file *********************/
 
@@ -208,8 +183,8 @@ struct mkfs_opts {
    This should be common to filter_internal.h, lustre_mds.h */
 struct lr_server_data {
         __u8  lsd_uuid[40];        /* server UUID */
-        __u64 lsd_unused;          /* was fsd_last_objid - don't use for now */
         __u64 lsd_last_transno;    /* last completed transaction ID */
+        __u64 lsd_compat14;        /* reserved - compat with old last_rcvd */
         __u64 lsd_mount_count;     /* incarnation number */
         __u32 lsd_feature_compat;  /* compatible feature flags */
         __u32 lsd_feature_rocompat;/* read-only compatible feature flags */

@@ -181,33 +181,32 @@ int client_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
 {
         struct ptlrpc_request *req;
         struct obd_quotactl *oqc;
-        int size = sizeof(*oqctl), opc, version;
-        int rc;
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
+        int ver, opc, rc;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
+                ver = LUSTRE_MDS_VERSION,
                 opc = MDS_QUOTACTL;
-                version = LUSTRE_MDS_VERSION;
         } else if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME)) {
+                ver = LUSTRE_OST_VERSION,
                 opc = OST_QUOTACTL;
-                version = LUSTRE_OST_VERSION;
         } else {
                 RETURN(-EINVAL);
         }
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), version, opc, 1, &size,
-                              NULL);
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), ver, opc, 2, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        oqc = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*oqctl));
+        oqc = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*oqctl));
         *oqc = *oqctl;
 
-        req->rq_replen = lustre_msg_size(1, &size);
+        ptlrpc_req_set_repsize(req, 2, size);
 
         rc = ptlrpc_queue_wait(req);
         if (!rc) {
-                oqc = lustre_swab_repbuf(req, 0, sizeof (*oqc),
+                oqc = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*oqc),
                                          lustre_swab_obd_quotactl);
                 if (oqc == NULL) {
                         CERROR ("Can't unpack obd_quotactl\n");
@@ -239,7 +238,7 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 int err;
 
-                if (!lov->tgts[i].active) {
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
                         if (oqctl->qc_cmd == Q_GETOQUOTA) {
                                 CERROR("ost %d is inactive\n", i);
                                 rc = -EIO;
@@ -250,9 +249,9 @@ int lov_quota_ctl(struct obd_export *exp, struct obd_quotactl *oqctl)
                         }
                 }
 
-                err = obd_quotactl(lov->tgts[i].ltd_exp, oqctl);
+                err = obd_quotactl(lov->lov_tgts[i]->ltd_exp, oqctl);
                 if (err) {
-                        if (lov->tgts[i].active && !rc)
+                        if (lov->lov_tgts[i]->ltd_active && !rc)
                                 rc = err;
                         continue;
                 }

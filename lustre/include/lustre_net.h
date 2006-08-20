@@ -124,17 +124,17 @@
 #define MDS_MAXREQSIZE  (5 * 1024)
 #define MDS_MAXREPSIZE  max(9 * 1024, 280 + LOV_MAX_STRIPE_COUNT * 56)
 
-/* FLD_MAXREQSIZE == lustre_msg + __u32 padding + opc + md_fld */
-#define FLD_MAXREQSIZE  (96)
+/* FLD_MAXREQSIZE == lustre_msg + __u32 padding + ptlrpc_body + opc + md_fld */
+#define FLD_MAXREQSIZE  (168)
 
-/* FLD_MAXREPSIZE == lustre_msg + __u32 padding + md_fld */
-#define FLD_MAXREPSIZE  (88)
+/* FLD_MAXREPSIZE == lustre_msg + __u32 padding + ptlrpc_body + md_fld */
+#define FLD_MAXREPSIZE  (160)
 
-/* SEQ_MAXREQSIZE == lustre_msg + __u32 padding + opc + __u32 padding */
-#define SEQ_MAXREQSIZE  (80)
+/* SEQ_MAXREQSIZE == lustre_msg + __u32 padding + opc + ptlrpc_body + __u32 padding */
+#define SEQ_MAXREQSIZE  (152)
 
-/* SEQ_MAXREPSIZE == lustre_msg + __u32 padding + lu_range */
-#define SEQ_MAXREPSIZE  (88)
+/* SEQ_MAXREPSIZE == lustre_msg + __u32 padding + ptlrpc_body + lu_range */
+#define SEQ_MAXREPSIZE  (160)
 
 /* FIXME fix all constants here.  Andreas suggests dyamically adding threads. */
 #define MGS_MAX_THREADS 8UL
@@ -186,26 +186,27 @@ struct ptlrpc_client {
 /* unpacking: assert idx not unpacked already */
 #define LASSERT_REQSWAB(rq, idx)                                \
 do {                                                            \
-        LASSERT ((idx) < sizeof ((rq)->rq_req_swab_mask) * 8);  \
-        LASSERT (((rq)->rq_req_swab_mask & (1 << (idx))) == 0); \
+        LASSERT((idx) < sizeof((rq)->rq_req_swab_mask) * 8);    \
+        LASSERT(((rq)->rq_req_swab_mask & (1 << (idx))) == 0);  \
         (rq)->rq_req_swab_mask |= (1 << (idx));                 \
 } while (0)
 
 #define LASSERT_REPSWAB(rq, idx)                                \
 do {                                                            \
-        LASSERT ((idx) < sizeof ((rq)->rq_rep_swab_mask) * 8);  \
-        LASSERT (((rq)->rq_rep_swab_mask & (1 << (idx))) == 0); \
+        LASSERT((idx) < sizeof((rq)->rq_rep_swab_mask) * 8);    \
+        LASSERT(((rq)->rq_rep_swab_mask & (1 << (idx))) == 0);  \
         (rq)->rq_rep_swab_mask |= (1 << (idx));                 \
 } while (0)
 
 /* just looking: assert idx already unpacked */
-#define LASSERT_REQSWABBED(rq, idx)                     \
-LASSERT ((idx) < sizeof ((rq)->rq_req_swab_mask) * 8 && \
-         ((rq)->rq_req_swab_mask & (1 << (idx))) != 0)
+#define LASSERT_REQSWABBED(rq, idx)                             \
+LASSERT((idx) < sizeof((rq)->rq_req_swab_mask) * 8 &&           \
+        ((rq)->rq_req_swab_mask & (1 << (idx))) != 0);          \
 
-#define LASSERT_REPSWABBED(rq, idx)                     \
-LASSERT ((idx) < sizeof ((rq)->rq_rep_swab_mask) * 8 && \
-         ((rq)->rq_rep_swab_mask & (1 << (idx))) != 0)
+#define LASSERT_REPSWABBED(rq, idx)                             \
+LASSERT((idx) < sizeof((rq)->rq_rep_swab_mask) * 8 &&           \
+        ((rq)->rq_rep_swab_mask & (1 << (idx))) != 0);          \
+
 #else
 #define LASSERT_REQSWAB(rq, idx)
 #define LASSERT_REPSWAB(rq, idx)
@@ -281,7 +282,7 @@ struct ptlrpc_reply_state {
         struct lustre_handle   rs_locks[RS_MAX_LOCKS];
         ldlm_mode_t            rs_modes[RS_MAX_LOCKS];
         /* last member: variable sized reply message */
-        struct lustre_msg      rs_msg;
+        struct lustre_msg     *rs_msg;
 };
 
 struct ptlrpc_thread;
@@ -428,18 +429,21 @@ CDEB_TYPE(level, "@@@ " fmt                                                    \
        " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d lens %d/%d ref %d fl "         \
        REQ_FLAGS_FMT"/%x/%x rc %d/%d\n" , ## args, req, req->rq_xid,           \
        req->rq_transno,                                                        \
-       req->rq_reqmsg ? req->rq_reqmsg->opc : -1,                              \
-       req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) : "<?>",  \
+       req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : -1,               \
+       req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :                 \
+          req->rq_export ? (char*)req->rq_export->exp_client_uuid.uuid : "<?>",\
        req->rq_import ?                                                        \
-          (char *)req->rq_import->imp_connection->c_remote_uuid.uuid : "<?>",  \
+          (char *)req->rq_import->imp_connection->c_remote_uuid.uuid :         \
+          req->rq_export ?                                                     \
+          (char *)req->rq_export->exp_connection->c_remote_uuid.uuid :  "<?>", \
        (req->rq_import && req->rq_import->imp_client) ?                        \
            req->rq_import->imp_client->cli_request_portal : -1,                \
        req->rq_reqlen, req->rq_replen,                                         \
        atomic_read(&req->rq_refcount),                                         \
        DEBUG_REQ_FLAGS(req),                                                   \
-       req->rq_reqmsg ? req->rq_reqmsg->flags : 0,                             \
-       req->rq_repmsg ? req->rq_repmsg->flags : 0,                             \
-       req->rq_status, req->rq_repmsg ? req->rq_repmsg->status : 0)
+       req->rq_reqmsg ? lustre_msg_get_flags(req->rq_reqmsg) : 0,              \
+       req->rq_repmsg ? lustre_msg_get_flags(req->rq_repmsg) : 0,              \
+       req->rq_status, req->rq_repmsg ? lustre_msg_get_status(req->rq_repmsg) : 0)
 
 /* for most callers (level is a constant) this is resolved at compile time */
 #define DEBUG_REQ(level, req, fmt, args...)                                    \
@@ -448,14 +452,6 @@ do {                                                                           \
             __DEBUG_REQ(CDEBUG_LIMIT, level, req, fmt, ## args);               \
         else                                                                   \
             __DEBUG_REQ(CDEBUG, level, req, fmt, ## args);                     \
-} while (0)
-
-#define DEBUG_REQ_EX(level, req, fmt, args...)                          \
-do {                                                                    \
-        if ((level) & (D_ERROR | D_WARNING))                            \
-            __DEBUG_REQ(CDEBUG_LIMIT, D_ERROR, req, fmt, ## args);      \
-        else                                                            \
-            __DEBUG_REQ(CDEBUG_EX, level, req, fmt, ## args);           \
 } while (0)
 
 struct ptlrpc_bulk_page {
@@ -632,12 +628,11 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req);
 
 static inline int ptlrpc_bulk_active (struct ptlrpc_bulk_desc *desc)
 {
-        unsigned long flags;
         int           rc;
 
-        spin_lock_irqsave (&desc->bd_lock, flags);
+        spin_lock(&desc->bd_lock);
         rc = desc->bd_network_rw;
-        spin_unlock_irqrestore (&desc->bd_lock, flags);
+        spin_unlock(&desc->bd_lock);
         return (rc);
 }
 
@@ -657,24 +652,22 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid);
 static inline int
 ptlrpc_client_receiving_reply (struct ptlrpc_request *req)
 {
-        unsigned long flags;
         int           rc;
 
-        spin_lock_irqsave(&req->rq_lock, flags);
+        spin_lock(&req->rq_lock);
         rc = req->rq_receiving_reply;
-        spin_unlock_irqrestore(&req->rq_lock, flags);
+        spin_unlock(&req->rq_lock);
         return (rc);
 }
 
 static inline int
 ptlrpc_client_replied (struct ptlrpc_request *req)
 {
-        unsigned long flags;
         int           rc;
 
-        spin_lock_irqsave(&req->rq_lock, flags);
+        spin_lock(&req->rq_lock);
         rc = req->rq_replied;
-        spin_unlock_irqrestore(&req->rq_lock, flags);
+        spin_unlock(&req->rq_lock);
         return (rc);
 }
 
@@ -710,11 +703,11 @@ void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq);
 struct ptlrpc_request_pool *ptlrpc_init_rq_pool(int, int,
                                                 void (*populate_pool)(struct ptlrpc_request_pool *, int));
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
-                                       int opcode, int count,
-                                       int *lengths, char **bufs);
-struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp, __u32 version,
-                                            int opcode, int count, int *lengths,
-                                            char **bufs,
+                                       int opcode, int count, int *lengths,
+                                       char **bufs);
+struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp,
+                                             __u32 version, int opcode,
+                                            int count, int *lengths, char **bufs,
                                             struct ptlrpc_request_pool *pool);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);
@@ -791,23 +784,52 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 /* ptlrpc/pack_generic.c */
 int lustre_msg_swabbed(struct lustre_msg *msg);
 int lustre_msg_check_version(struct lustre_msg *msg, __u32 version);
-int lustre_pack_request(struct ptlrpc_request *, int count, const int *lens,
-                        char **bufs);
-int lustre_pack_reply(struct ptlrpc_request *, int count, const int *lens,
+int lustre_pack_request(struct ptlrpc_request *, __u32 magic, int count,
+                        int *lens, char **bufs);
+int lustre_pack_reply(struct ptlrpc_request *, int count, int *lens,
                       char **bufs);
-void lustre_shrink_reply(struct ptlrpc_request *req,
-                         int segment, unsigned int newlen, int move_data);
+void lustre_shrink_reply(struct ptlrpc_request *req, int segment,
+                         unsigned int newlen, int move_data);
 void lustre_free_reply_state(struct ptlrpc_reply_state *rs);
-int lustre_msg_size(int count, const int *lengths);
+int lustre_msg_size(__u32 magic, int count, int *lengths);
 int lustre_unpack_msg(struct lustre_msg *m, int len);
+int lustre_unpack_ptlrpc_body(struct lustre_msg *m);
 void *lustre_msg_buf(struct lustre_msg *m, int n, int minlen);
 int lustre_msg_buflen(struct lustre_msg *m, int n);
+void lustre_msg_set_buflen(struct lustre_msg *m, int n, int len);
+int lustre_msg_bufcount(struct lustre_msg *m);
 char *lustre_msg_string (struct lustre_msg *m, int n, int max_len);
 void *lustre_swab_buf(struct lustre_msg *, int n, int minlen, void *swabber);
-void *lustre_swab_reqbuf (struct ptlrpc_request *req, int n, int minlen,
-                          void *swabber);
-void *lustre_swab_repbuf (struct ptlrpc_request *req, int n, int minlen,
-                          void *swabber);
+void *lustre_swab_reqbuf(struct ptlrpc_request *req, int n, int minlen,
+                         void *swabber);
+void *lustre_swab_repbuf(struct ptlrpc_request *req, int n, int minlen,
+                         void *swabber);
+__u32 lustre_msg_get_flags(struct lustre_msg *msg);
+void lustre_msg_add_flags(struct lustre_msg *msg, int flags);
+void lustre_msg_set_flags(struct lustre_msg *msg, int flags);
+void lustre_msg_clear_flags(struct lustre_msg *msg, int flags);
+__u32 lustre_msg_get_op_flags(struct lustre_msg *msg);
+void lustre_msg_add_op_flags(struct lustre_msg *msg, int flags);
+void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags);
+struct lustre_handle *lustre_msg_get_handle(struct lustre_msg *msg);
+__u32 lustre_msg_get_type(struct lustre_msg *msg);
+__u32 lustre_msg_get_version(struct lustre_msg *msg);
+void lustre_msg_add_version(struct lustre_msg *msg, int version);
+__u32 lustre_msg_get_opc(struct lustre_msg *msg);
+__u64 lustre_msg_get_last_xid(struct lustre_msg *msg);
+__u64 lustre_msg_get_last_committed(struct lustre_msg *msg);
+__u64 lustre_msg_get_transno(struct lustre_msg *msg);
+__u32 lustre_msg_get_status(struct lustre_msg *msg);
+__u32 lustre_msg_get_conn_cnt(struct lustre_msg *msg);
+__u32 lustre_msg_get_magic(struct lustre_msg *msg);
+void lustre_msg_set_handle(struct lustre_msg *msg,struct lustre_handle *handle);
+void lustre_msg_set_type(struct lustre_msg *msg, __u32 type);
+void lustre_msg_set_opc(struct lustre_msg *msg, __u32 opc);
+void lustre_msg_set_last_xid(struct lustre_msg *msg, __u64 last_xid);
+void lustre_msg_set_last_committed(struct lustre_msg *msg,__u64 last_committed);
+void lustre_msg_set_transno(struct lustre_msg *msg, __u64 transno);
+void lustre_msg_set_status(struct lustre_msg *msg, __u32 status);
+void lustre_msg_set_conn_cnt(struct lustre_msg *msg, __u32 conn_cnt);
 
 static inline void
 ptlrpc_rs_addref(struct ptlrpc_reply_state *rs)
@@ -822,6 +844,34 @@ ptlrpc_rs_decref(struct ptlrpc_reply_state *rs)
         LASSERT(atomic_read(&rs->rs_refcount) > 0);
         if (atomic_dec_and_test(&rs->rs_refcount))
                 lustre_free_reply_state(rs);
+}
+
+static inline __u32 lustre_request_magic(struct ptlrpc_request *req)
+{
+        return lustre_msg_get_magic(req->rq_reqmsg);
+}
+
+static inline int ptlrpc_req_get_repsize(struct ptlrpc_request *req)
+{
+        switch (req->rq_reqmsg->lm_magic) {
+        case LUSTRE_MSG_MAGIC_V1:
+                CERROR("function not supported for lustre_msg V1!\n");
+                return -ENOTSUPP;
+        case LUSTRE_MSG_MAGIC_V2:
+                return req->rq_reqmsg->lm_repsize;
+        default:
+                LASSERTF(0, "incorrect message magic: %08x\n",
+                         req->rq_reqmsg->lm_magic);
+                return -EFAULT;
+        }
+}
+
+static inline void
+ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, int *lens)
+{
+        req->rq_replen = lustre_msg_size(req->rq_reqmsg->lm_magic, count, lens);
+        if (req->rq_reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2)
+                req->rq_reqmsg->lm_repsize = req->rq_replen;
 }
 
 /* ldlm/ldlm_lib.c */

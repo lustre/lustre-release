@@ -93,7 +93,7 @@ static char rawbuf[8192];
 static char *buf = rawbuf;
 static int max = sizeof(rawbuf);
 
-static int cur_device = MAX_OBD_DEVICES;
+static int cur_device = -1;
 
 union lsm_buffer {
         char                 space [4096];
@@ -153,6 +153,8 @@ int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg)
         return rc;
 }
 
+static int do_device(char *func, char *devname);
+
 int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
 {
         struct obd_ioctl_data data;
@@ -161,7 +163,6 @@ int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
 
         /* Always operates on MGS dev */
         if (mgs_device == -1) {
-                static int do_device(char *func, char *devname);
                 do_disconnect(NULL, 1);
                 rc = do_device("mgsioc", "MGS");
                 if (rc) {
@@ -397,8 +398,7 @@ static int be_verbose(int verbose, struct timeval *next_time,
                 gettimeofday(&now, NULL);
 
         /* A positive verbosity means to print every X iterations */
-        if (verbose > 0 &&
-            (next_num == NULL || num >= *next_num || num >= num_total)) {
+        if (verbose > 0 && (num >= *next_num || num >= num_total)) {
                 *next_num += verbose;
                 if (next_time) {
                         next_time->tv_sec = now.tv_sec - verbose;
@@ -412,8 +412,7 @@ static int be_verbose(int verbose, struct timeval *next_time,
             difftime(&now, next_time) >= 0.0){
                 next_time->tv_sec = now.tv_sec - verbose;
                 next_time->tv_usec = now.tv_usec;
-                if (next_num)
-                        *next_num = num;
+                *next_num = num;
                 return 1;
         }
 
@@ -450,7 +449,7 @@ static int get_verbose(char *func, const char *arg)
 
 int do_disconnect(char *func, int verbose)
 {
-        cur_device = MAX_OBD_DEVICES;
+        cur_device = -1;
         return 0;
 }
 
@@ -896,16 +895,17 @@ int jt_obd_list(int argc, char **argv)
         int rc;
 #if HAVE_PROC_FS
         char buf[MAX_STRING_SIZE];
-        FILE *fp = fopen(DEVICES_LIST, "r");
+        FILE *fp = NULL;
 
+        if (argc != 1)
+                return CMD_HELP;
+
+        fp = fopen(DEVICES_LIST,"r");
         if (fp == NULL) {
                 fprintf(stderr, "error: %s: %s opening "DEVICES_LIST"\n",
                         jt_cmdname(argv[0]), strerror(rc =  errno));
                 return rc;
         }
-
-        if (argc != 1)
-                return CMD_HELP;
 
         while (fgets(buf, sizeof(buf), fp) != NULL)
                 printf("%s", buf);

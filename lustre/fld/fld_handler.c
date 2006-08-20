@@ -212,7 +212,7 @@ static int fld_req_handle(struct ptlrpc_request *req)
 
         fld_thread_info_init(req, info);
 
-        if (req->rq_reqmsg->opc == FLD_QUERY) {
+        if (lustre_msg_get_opc(req->rq_reqmsg) == FLD_QUERY) {
                 if (req->rq_export != NULL) {
                         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
                         LASSERT(site != NULL);
@@ -227,7 +227,8 @@ static int fld_req_handle(struct ptlrpc_request *req)
                         req->rq_status = -ENOTCONN;
                 }
         } else {
-                CERROR("Wrong opcode: %d\n", req->rq_reqmsg->opc);
+                CERROR("Wrong opcode: %d\n", 
+                       lustre_msg_get_opc(req->rq_reqmsg));
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req);
                 GOTO(out_info, rc);

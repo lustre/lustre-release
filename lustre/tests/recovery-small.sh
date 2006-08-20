@@ -2,14 +2,10 @@
 
 set -e
 
-#         bug  2986 5494 7288
-ALWAYS_EXCEPT="20b  24   27 $RECOVERY_SMALL_EXCEPT"
+#         bug  5494 7288
+ALWAYS_EXCEPT="24   27 $RECOVERY_SMALL_EXCEPT"
 
-# Tests that always fail with mountconf -- FIXME
-# 16 fails with 1, not evicted
-EXCEPT="$EXCEPT 16"
-
-
+PTLDEBUG=${PTLDEBUG:-1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
@@ -22,16 +18,13 @@ build_test_filter
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
 
-# for MCSETUP and MCCLEANUP
-. mountconf.sh
-
 setup() {
-    $MCFORMAT
-    $MCSETUP
+    formatall
+    setupall
 }
 
 cleanup() {
-	$MCCLEANUP > /dev/null || { echo "FAILed to clean up"; exit 20; }
+	cleanupall || { echo "FAILed to clean up"; exit 20; }
 }
 
 if [ ! -z "$EVAL" ]; then
@@ -201,21 +194,21 @@ test_16() {
     stop_read_ahead
 
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
-    do_facet ost sysctl -w lustre.fail_loc=0x80000504
+    do_facet ost1 sysctl -w lustre.fail_loc=0x80000504
     cancel_lru_locks osc
-    # will get evicted here
-    do_facet client "cmp /etc/termcap $MOUNT/termcap"  && return 1
+    # OST bulk will time out here, client resends
+    do_facet client "cmp /etc/termcap $MOUNT/termcap" || return 1
     sysctl -w lustre.fail_loc=0
     # give recovery a chance to finish (shouldn't take long)
     sleep $TIMEOUT
-    do_facet client "cmp /etc/termcap $MOUNT/termcap"  || return 2
+    do_facet client "cmp /etc/termcap $MOUNT/termcap" || return 2
     start_read_ahead
 }
-run_test 16 "timeout bulk put, evict client (2732)"
+run_test 16 "timeout bulk put, don't evict client (2732)"
 
 test_17() {
     # OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
-    # client will get evicted here
+    # OST bulk will time out here, client retries
     sysctl -w lustre.fail_loc=0x80000503
     # need to ensure we send an RPC
     do_facet client cp /etc/termcap $DIR/$tfile
@@ -224,14 +217,16 @@ test_17() {
     sleep $TIMEOUT
     sysctl -w lustre.fail_loc=0
     do_facet client "df $DIR"
-    # expect cmp to fail
-    do_facet client "cmp /etc/termcap $DIR/$tfile"  && return 3
+    # expect cmp to succeed, client resent bulk
+    do_facet client "cmp /etc/termcap $DIR/$tfile" || return 3
     do_facet client "rm $DIR/$tfile" || return 4
     return 0
 }
 run_test 17 "timeout bulk get, evict client (2732)"
 
 test_18a() {
+    [ -z ${ost2_svc} ] && echo Skipping, needs 2 osts && return 0
+
     do_facet client mkdir -p $MOUNT/$tdir
     f=$MOUNT/$tdir/$tfile
 
@@ -269,12 +264,7 @@ test_18b() {
 
     do_facet client cp /etc/termcap $f
     sync
-    # just use this write to trigger the client's eviction from the ost
-# OBD_FAIL_PTLRPC_BULK_GET_NET|OBD_FAIL_ONCE
-    sysctl -w lustre.fail_loc=0x80000503
-    do_facet client dd if=/dev/zero of=$f2 bs=4k count=1
-    sync
-    sysctl -w lustre.fail_loc=0
+    ost_evict_client
     # allow recovery to complete
     sleep $((TIMEOUT + 2))
     # my understanding is that there should be nothing in the page
@@ -319,7 +309,7 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	sleep 1
 	cancel_lru_locks osc
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
-	do_facet ost sysctl -w lustre.fail_loc=0x80000308
+	do_facet ost1 sysctl -w lustre.fail_loc=0x80000308
 	kill -USR1 $MULTI_PID
 	wait $MULTI_PID
 	rc=$?
@@ -332,22 +322,239 @@ test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 	touch $DIR/$tdir/${tfile}
 	cancel_lru_locks osc
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
-	do_facet ost sysctl -w lustre.fail_loc=0x80000308
+	do_facet ost1 sysctl -w lustre.fail_loc=0x80000308
 	dd if=/etc/hosts of=$DIR/$tdir/$tfile && \
 		error "didn't fail open enqueue" || true
 }
 run_test 20b "ldlm_handle_enqueue error (should return error)"
 
-#b_cray run_test 21a "drop close request while close and open are both in flight"
-#b_cray run_test 21b "drop open request while close and open are both in flight"
-#b_cray run_test 21c "drop both request while close and open are both in flight"
-#b_cray run_test 21d "drop close reply while close and open are both in flight"
-#b_cray run_test 21e "drop open reply while close and open are both in flight"
-#b_cray run_test 21f "drop both reply while close and open are both in flight"
-#b_cray run_test 21g "drop open reply and close request while close and open are both in flight"
-#b_cray run_test 21h "drop open request and close reply while close and open are both in flight"
-#b_cray run_test 22 "drop close request and do mknod"
-#b_cray run_test 23 "client hang when close a file after mds crash"
+test_21a() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       close_pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000129"
+       multiop $DIR/$tdir-2/f Oc &
+       open_pid=$!
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       kill -USR1 $close_pid
+       cancel_lru_locks mdc
+       wait $close_pid || return 1
+       wait $open_pid || return 2
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 3
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 4
+
+       rm -rf $DIR/$tdir-*
+}
+run_test 21a "drop close request while close and open are both in flight"
+
+test_21b() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       close_pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       mcreate $DIR/$tdir-2/f &
+       open_pid=$!
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       kill -USR1 $close_pid
+       cancel_lru_locks mdc
+       wait $close_pid || return 1
+       wait $open_pid || return 3
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 4
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 5
+       rm -rf $DIR/$tdir-*
+}
+run_test 21b "drop open request while close and open are both in flight"
+
+test_21c() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       close_pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       mcreate $DIR/$tdir-2/f &
+       open_pid=$!
+       sleep 3
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       kill -USR1 $close_pid
+       cancel_lru_locks mdc
+       wait $close_pid || return 1
+       wait $open_pid || return 2
+
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
+       rm -rf $DIR/$tdir-*
+}
+run_test 21c "drop both request while close and open are both in flight"
+
+test_21d() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000129"
+       multiop $DIR/$tdir-2/f Oc &
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       kill -USR1 $pid
+       cancel_lru_locks mdc
+       wait $pid || return 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
+
+       rm -rf $DIR/$tdir-*
+}
+run_test 21d "drop close reply while close and open are both in flight"
+
+test_21e() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       touch $DIR/$tdir-2/f &
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       kill -USR1 $pid
+       cancel_lru_locks mdc
+       wait $pid || return 1
+
+       sleep $TIMEOUT
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
+       rm -rf $DIR/$tdir-*
+}
+run_test 21e "drop open reply while close and open are both in flight"
+
+test_21f() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       touch $DIR/$tdir-2/f &
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       kill -USR1 $pid
+       cancel_lru_locks mdc
+       wait $pid || return 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
+       rm -rf $DIR/$tdir-*
+}
+run_test 21f "drop both reply while close and open are both in flight"
+
+test_21g() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+       touch $DIR/$tdir-2/f &
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+       kill -USR1 $pid
+       cancel_lru_locks mdc
+       wait $pid || return 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 2
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 3
+       rm -rf $DIR/$tdir-*
+}
+run_test 21g "drop open reply and close request while close and open are both in flight"
+
+test_21h() {
+       mkdir -p $DIR/$tdir-1
+       mkdir -p $DIR/$tdir-2
+       multiop $DIR/$tdir-1/f O_c &
+       pid=$!
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000107"
+       touch $DIR/$tdir-2/f &
+       touch_pid=$!
+       sleep 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       do_facet mds "sysctl -w lustre.fail_loc=0x80000122"
+       cancel_lru_locks mdc
+       kill -USR1 $pid
+       wait $pid || return 1
+       do_facet mds "sysctl -w lustre.fail_loc=0"
+
+       wait $touch_pid || return 2
+
+       $CHECKSTAT -t file $DIR/$tdir-1/f || return 3
+       $CHECKSTAT -t file $DIR/$tdir-2/f || return 4
+       rm -rf $DIR/$tdir-*
+}
+run_test 21h "drop open request and close reply while close and open are both in flight"
+
+# bug 3462 - multiple MDC requests
+test_22() {
+    f1=$DIR/${tfile}-1
+    f2=$DIR/${tfile}-2
+    
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000115"
+    multiop $f2 Oc &
+    close_pid=$!
+
+    sleep 1
+    multiop $f1 msu || return 1
+
+    cancel_lru_locks mdc
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+
+    wait $close_pid || return 2
+    rm -rf $f2 || return 4
+}
+run_test 22 "drop close request and do mknod"
+
+test_23() { #b=4561
+    multiop $DIR/$tfile O_c &
+    pid=$!
+    # give a chance for open
+    sleep 5
+
+    # try the close
+    drop_request "kill -USR1 $pid"
+
+    fail mds
+    wait $pid || return 1
+    return 0
+}
+run_test 23 "client hang when close a file after mds crash"
 
 test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	mkdir -p $DIR/$tdir
@@ -355,8 +562,7 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	multiop $DIR/$tdir/$tfile Owy_wyc &
 	MULTI_PID=$!
 	usleep 500
-# OBD_FAIL_PTLRPC_BULK_GET_NET|OBD_FAIL_ONCE
-	sysctl -w lustre.fail_loc=0x80000503
+	ost_evict_client
 	usleep 500
 	kill -USR1 $MULTI_PID
 	wait $MULTI_PID
@@ -373,8 +579,8 @@ test_26() {      # bug 5921 - evict dead exports by pinger
 	    echo "skipping test 26 (local OST)" && return
 	[ "`lsmod | grep mds`" ] && \
 	    echo "skipping test 26 (local MDS)" && return
-	OST_FILE=$LPROC/obdfilter/ost_svc/num_exports
-        OST_EXP="`do_facet ost cat $OST_FILE`"
+	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports
+        OST_EXP="`do_facet ost1 cat $OST_FILE`"
 	OST_NEXP1=`echo $OST_EXP | cut -d' ' -f2`
 	echo starting with $OST_NEXP1 OST exports
 # OBD_FAIL_PTLRPC_DROP_RPC 0x505
@@ -384,7 +590,7 @@ test_26() {      # bug 5921 - evict dead exports by pinger
 	# might have to wait for the next ping.
 	echo Waiting for $(($TIMEOUT * 4)) secs
 	sleep $(($TIMEOUT * 4))
-        OST_EXP="`do_facet ost cat $OST_FILE`"
+        OST_EXP="`do_facet ost1 cat $OST_FILE`"
 	OST_NEXP2=`echo $OST_EXP | cut -d' ' -f2`
 	echo ending with $OST_NEXP2 OST exports
 	do_facet client sysctl -w lustre.fail_loc=0x0
@@ -397,8 +603,8 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	zconf_mount `hostname` $MOUNT2
 	MDS_FILE=$LPROC/mds/${mds_svc}/num_exports
         MDS_NEXP1="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
-	OST_FILE=$LPROC/obdfilter/${ost_svc}/num_exports
-        OST_NEXP1="`do_facet ost cat $OST_FILE | cut -d' ' -f2`"
+	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports
+        OST_NEXP1="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"
 	echo starting with $OST_NEXP1 OST and $MDS_NEXP1 MDS exports
 	zconf_umount `hostname` $MOUNT2 -f
 	# evictor takes up to 2.25x to evict.  But if there's a 
@@ -406,7 +612,7 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	# might have to wait for the next ping.
 	echo Waiting for $(($TIMEOUT * 4)) secs
 	sleep $(($TIMEOUT * 4))
-        OST_NEXP2="`do_facet ost cat $OST_FILE | cut -d' ' -f2`"
+        OST_NEXP2="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"
         MDS_NEXP2="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
 	echo ending with $OST_NEXP2 OST and $MDS_NEXP2 MDS exports
         [ $OST_NEXP1 -le $OST_NEXP2 ] && error "client not evicted from OST"
@@ -511,7 +717,7 @@ test_52_guts() {
 	echo writemany pid $CLIENT_PID
 	sleep 10
 	FAILURE_MODE="SOFT"
-	fail ost
+	fail ost1
 	rc=0
 	wait $CLIENT_PID || rc=$?
 	# active client process should see an EIO for down OST

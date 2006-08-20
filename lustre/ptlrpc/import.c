@@ -56,13 +56,11 @@ do {                                                                           \
         }                                                                      \
 } while(0)
 
-#define IMPORT_SET_STATE(imp, state)                    \
-do {                                                    \
-        unsigned long flags;                            \
-                                                        \
-        spin_lock_irqsave(&imp->imp_lock, flags);       \
-        IMPORT_SET_STATE_NOLOCK(imp, state);            \
-        spin_unlock_irqrestore(&imp->imp_lock, flags);  \
+#define IMPORT_SET_STATE(imp, state)            \
+do {                                            \
+        spin_lock(&imp->imp_lock);              \
+        IMPORT_SET_STATE_NOLOCK(imp, state);    \
+        spin_unlock(&imp->imp_lock);            \
 } while(0)
 
 
@@ -77,21 +75,20 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
  * though. */
 int ptlrpc_init_import(struct obd_import *imp)
 {
-        unsigned long flags;
-
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
 
         imp->imp_generation++;
         imp->imp_state =  LUSTRE_IMP_NEW;
 
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 
         return 0;
 }
 EXPORT_SYMBOL(ptlrpc_init_import);
 
 #define UUID_STR "_UUID"
-static void deuuidify(char *uuid, const char *prefix, char **uuid_start, int *uuid_len)
+static void deuuidify(char *uuid, const char *prefix, char **uuid_start,
+                      int *uuid_len)
 {
         *uuid_start = !prefix || strncmp(uuid, prefix, strlen(prefix))
                 ? uuid : uuid + strlen(prefix);
@@ -118,10 +115,9 @@ static void deuuidify(char *uuid, const char *prefix, char **uuid_start, int *uu
  */
 int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
 {
-        unsigned long flags;
         int rc = 0;
 
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
 
         if (imp->imp_state == LUSTRE_IMP_FULL &&
             (conn_cnt == 0 || conn_cnt == imp->imp_conn_cnt)) {
@@ -140,7 +136,7 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
                                       "wait for recovery to complete" : "fail");
 
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
+                spin_unlock(&imp->imp_lock);
     
                 if (obd_dump_on_timeout)
                         libcfs_debug_dumplog();
@@ -148,7 +144,7 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_DISCON);
                 rc = 1;
         } else {
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
+                spin_unlock(&imp->imp_lock);
                 CDEBUG(D_HA, "%s: import %p already %s (conn %u, was %u): %s\n",
                        imp->imp_client->cli_name, imp,
                        (imp->imp_state == LUSTRE_IMP_FULL &&
@@ -166,14 +162,13 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
  */
 void ptlrpc_deactivate_import(struct obd_import *imp)
 {
-        unsigned long flags;
         ENTRY;
 
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
         CDEBUG(D_HA, "setting import %s INVALID\n", obd2cli_tgt(imp->imp_obd));
         imp->imp_invalid = 1;
         imp->imp_generation++;
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 
         ptlrpc_abort_inflight(imp);
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INACTIVE);
@@ -196,8 +191,8 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         LASSERT(imp->imp_invalid);
 
         /* wait for all requests to error out and call completion callbacks */
-        lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(cfs_time_seconds(obd_timeout)), 
-                               NULL, NULL, NULL);
+        lwi = LWI_TIMEOUT_INTERVAL(cfs_timeout_cap(cfs_time_seconds(obd_timeout)), 
+                                   HZ, NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq,
                           (atomic_read(&imp->imp_inflight) == 0),
                           &lwi);
@@ -214,11 +209,10 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
 void ptlrpc_activate_import(struct obd_import *imp)
 {
         struct obd_device *obd = imp->imp_obd;
-        unsigned long flags;
 
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
         imp->imp_invalid = 0;
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 
         obd_import_event(obd, imp, IMP_EVENT_ACTIVE);
 }
@@ -230,8 +224,6 @@ void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt)
         LASSERT(!imp->imp_dlm_fake);
 
         if (ptlrpc_set_import_discon(imp, conn_cnt)) {
-                unsigned long flags;
-
                 if (!imp->imp_replayable) {
                         CDEBUG(D_HA, "import %s@%s for %s not replayable, "
                                "auto-deactivating\n",
@@ -244,9 +236,9 @@ void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt)
                 CDEBUG(D_HA, "%s: waking up pinger\n",
                        obd2cli_tgt(imp->imp_obd));
 
-                spin_lock_irqsave(&imp->imp_lock, flags);
+                spin_lock(&imp->imp_lock);
                 imp->imp_force_verify = 1;
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
+                spin_unlock(&imp->imp_lock);
 
                 ptlrpc_pinger_wake_up();
         }
@@ -255,7 +247,7 @@ void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt)
 
 static int import_select_connection(struct obd_import *imp)
 {
-        struct obd_import_conn *imp_conn;
+        struct obd_import_conn *imp_conn = NULL, *conn;
         struct obd_export *dlmexp;
         ENTRY;
 
@@ -268,14 +260,42 @@ static int import_select_connection(struct obd_import *imp)
                 RETURN(-EINVAL);
         }
 
-        if (imp->imp_conn_current &&
-            imp->imp_conn_current->oic_item.next != &imp->imp_conn_list) {
-                imp_conn = list_entry(imp->imp_conn_current->oic_item.next,
-                                      struct obd_import_conn, oic_item);
-        } else {
-                imp_conn = list_entry(imp->imp_conn_list.next,
-                                      struct obd_import_conn, oic_item);
+        list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
+                CDEBUG(D_HA, "%s: connect to NID %s last attempt "LPU64"\n",
+                       imp->imp_obd->obd_name,
+                       libcfs_nid2str(conn->oic_conn->c_peer.nid),
+                       conn->oic_last_attempt);
+                /* Throttle the reconnect rate to once per RECONNECT_INTERVAL */
+                if (cfs_time_before_64(conn->oic_last_attempt + 
+                                       RECONNECT_INTERVAL * HZ,
+                                       cfs_time_current_64())) {
+                        /* If we have never tried this connection since the
+                           the last successful attempt, go with this one */
+                        if (cfs_time_before_64(conn->oic_last_attempt,
+                                               imp->imp_last_success_conn)) {
+                                imp_conn = conn;
+                                break;
+                        }
+
+                        /* Both of these connections have already been tried
+                           since the last successful connection; just choose the
+                           least recently used */
+                        if (!imp_conn)
+                                imp_conn = conn;
+                        else if (cfs_time_before_64(conn->oic_last_attempt,
+                                                    imp_conn->oic_last_attempt))
+                                imp_conn = conn;
+                }
         }
+
+        /* if not found, simply choose the current one */
+        if (!imp_conn) {
+                LASSERT(imp->imp_conn_current);
+                imp_conn = imp->imp_conn_current;
+        }
+        LASSERT(imp_conn->oic_conn);
+
+        imp_conn->oic_last_attempt = cfs_time_current_64();
 
         /* switch connection, don't mind if it's same as the current one */
         if (imp->imp_connection)
@@ -289,48 +309,53 @@ static int import_select_connection(struct obd_import *imp)
         dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
         class_export_put(dlmexp);
 
-        if (imp->imp_conn_current && (imp->imp_conn_current != imp_conn)) {
-                LCONSOLE_WARN("Changing connection for %s to %s\n",
-                              imp->imp_obd->obd_name, imp_conn->oic_uuid.uuid);
-        }
+        if (imp->imp_conn_current != imp_conn) {
+                LCONSOLE_INFO("Changing connection for %s to %s/%s\n",
+                              imp->imp_obd->obd_name, imp_conn->oic_uuid.uuid,
+                              libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
         imp->imp_conn_current = imp_conn;
-        CDEBUG(D_HA, "%s: import %p using connection %s\n",
-               imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid);
+        }
+
+        CDEBUG(D_HA, "%s: import %p using connection %s/%s\n",
+               imp->imp_obd->obd_name, imp, imp_conn->oic_uuid.uuid,
+               libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
+
         spin_unlock(&imp->imp_lock);
 
         RETURN(0);
 }
 
-int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
+int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
 {
         struct obd_device *obd = imp->imp_obd;
         int initial_connect = 0;
         int rc;
         __u64 committed_before_reconnect = 0;
         struct ptlrpc_request *request;
-        int size[] = {sizeof(imp->imp_obd->u.cli.cl_target_uuid),
-                      sizeof(obd->obd_uuid),
-                      sizeof(imp->imp_dlm_handle),
-                      sizeof(imp->imp_connect_data)};
-        char *tmp[] = {obd2cli_tgt(imp->imp_obd),
-                       obd->obd_uuid.uuid,
-                       (char *)&imp->imp_dlm_handle,
-                       (char *)&imp->imp_connect_data};
+        int size[] = { sizeof(struct ptlrpc_body),
+                       sizeof(imp->imp_obd->u.cli.cl_target_uuid),
+                       sizeof(obd->obd_uuid),
+                       sizeof(imp->imp_dlm_handle),
+                       sizeof(imp->imp_connect_data) };
+        char *tmp[] = { NULL,
+                        obd2cli_tgt(imp->imp_obd),
+                        obd->obd_uuid.uuid,
+                        (char *)&imp->imp_dlm_handle,
+                        (char *)&imp->imp_connect_data };
         struct ptlrpc_connect_async_args *aa;
-        unsigned long flags;
 
         ENTRY;
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
         if (imp->imp_state == LUSTRE_IMP_CLOSED) {
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
+                spin_unlock(&imp->imp_lock);
                 CERROR("can't connect to a closed import\n");
                 RETURN(-EINVAL);
         } else if (imp->imp_state == LUSTRE_IMP_FULL) {
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
+                spin_unlock(&imp->imp_lock);
                 CERROR("already connected\n");
                 RETURN(0);
         } else if (imp->imp_state == LUSTRE_IMP_CONNECTING) {
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
+                spin_unlock(&imp->imp_lock);
                 CERROR("already connecting\n");
                 RETURN(-EALREADY);
         }
@@ -345,7 +370,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         else
                 committed_before_reconnect = imp->imp_peer_committed_transno;
 
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 
         if (new_uuid) {
                 struct obd_uuid uuid;
@@ -360,36 +385,48 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         if (rc)
                 GOTO(out, rc);
 
-        if (imp->imp_initial_recov_bk && initial_connect &&
-            /* last in list */
-            (imp->imp_conn_current->oic_item.next == &imp->imp_conn_list)) {
-                CDEBUG(D_HA, "Last connection attempt (%d) for %s\n",
-                       imp->imp_conn_cnt, obd2cli_tgt(imp->imp_obd));
-                /* Don't retry if connect fails */
-                rc = 0;
-                obd_set_info_async(obd->obd_self_export,
-                                   strlen(KEY_INIT_RECOV), KEY_INIT_RECOV,
-                                   sizeof(rc), &rc, NULL);
+        /* last in connection list */
+        if (imp->imp_conn_current->oic_item.next == &imp->imp_conn_list) {
+                if (imp->imp_initial_recov_bk && initial_connect) {
+                        CDEBUG(D_HA, "Last connection attempt (%d) for %s\n",
+                               imp->imp_conn_cnt, obd2cli_tgt(imp->imp_obd));
+                        /* Don't retry if connect fails */
+                        rc = 0;
+                        obd_set_info_async(obd->obd_self_export,
+                                           strlen(KEY_INIT_RECOV),
+                                           KEY_INIT_RECOV,
+                                           sizeof(rc), &rc, NULL);
+                }
+                if (imp->imp_recon_bk) {
+                        CDEBUG(D_HA, "Last reconnection attempt (%d) for %s\n",
+                               imp->imp_conn_cnt, obd2cli_tgt(imp->imp_obd));
+                        imp->imp_last_recon = 1;
+                }
         }
 
+        /* Reset connect flags to the originally requested flags, in case
+         * the server is updated on-the-fly we will get the new features. */
+        imp->imp_connect_data.ocd_connect_flags = imp->imp_connect_flags_orig;
         rc = obd_reconnect(imp->imp_obd->obd_self_export, obd,
                            &obd->obd_uuid, &imp->imp_connect_data);
         if (rc)
                 GOTO(out, rc);
 
         request = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, imp->imp_connect_op,
-                                  4, size, tmp);
+                                  5, size, tmp);
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 
 #ifndef __KERNEL__
         lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
 #endif
+        lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_NEXT_VER);
 
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
         /* Allow a slightly larger reply for future growth compatibility */
-        size[0] = sizeof(struct obd_connect_data) + 16 * sizeof(__u64);
-        request->rq_replen = lustre_msg_size(1, size);
+        size[REPLY_REC_OFF] = sizeof(struct obd_connect_data) +
+                              16 * sizeof(__u64);
+        ptlrpc_req_set_repsize(request, 2, size);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
 
         CLASSERT(sizeof (*aa) <= sizeof (request->rq_async_args));
@@ -421,12 +458,11 @@ EXPORT_SYMBOL(ptlrpc_connect_import);
 static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
 {
         struct obd_import_conn *imp_conn;
-        unsigned long flags;
         int wake_pinger = 0;
 
         ENTRY;
 
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
         if (list_empty(&imp->imp_conn_list))
                 GOTO(unlock, 0);
 
@@ -440,7 +476,7 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
         }
 
  unlock:
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 
         if (wake_pinger)
                 ptlrpc_pinger_wake_up();
@@ -453,17 +489,17 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
 {
         struct ptlrpc_connect_async_args *aa = data;
         struct obd_import *imp = request->rq_import;
+        struct client_obd *cli = &imp->imp_obd->u.cli;
         struct lustre_handle old_hdl;
-        unsigned long flags;
         int msg_flags;
         ENTRY;
 
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
         if (imp->imp_state == LUSTRE_IMP_CLOSED) {
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
+                spin_unlock(&imp->imp_lock);
                 RETURN(0);
         }
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 
         if (rc)
                 GOTO(out, rc);
@@ -483,7 +519,18 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 } else {
                         imp->imp_replayable = 0;
                 }
-                imp->imp_remote_handle = request->rq_repmsg->handle;
+
+                if (msg_flags & MSG_CONNECT_NEXT_VER) {
+                        imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V2;
+                        CDEBUG(D_RPCTRACE, "connect to %s with lustre_msg_v2\n",
+                               obd2cli_tgt(imp->imp_obd));
+                } else {
+                        CDEBUG(D_RPCTRACE, "connect to %s with lustre_msg_v1\n",
+                               obd2cli_tgt(imp->imp_obd));
+                }
+
+                imp->imp_remote_handle =
+                                *lustre_msg_get_handle(request->rq_repmsg);
 
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
                 GOTO(finish, rc = 0);
@@ -492,7 +539,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
         /* Determine what recovery state to move the import to. */
         if (MSG_CONNECT_RECONNECT & msg_flags) {
                 memset(&old_hdl, 0, sizeof(old_hdl));
-                if (!memcmp(&old_hdl, &request->rq_repmsg->handle,
+                if (!memcmp(&old_hdl, lustre_msg_get_handle(request->rq_repmsg),
                             sizeof (old_hdl))) {
                         CERROR("%s@%s didn't like our handle "LPX64
                                ", failed\n", obd2cli_tgt(imp->imp_obd),
@@ -501,15 +548,25 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                         GOTO(out, rc = -ENOTCONN);
                 }
 
-                if (memcmp(&imp->imp_remote_handle, &request->rq_repmsg->handle,
+                if (memcmp(&imp->imp_remote_handle,
+                           lustre_msg_get_handle(request->rq_repmsg),
                            sizeof(imp->imp_remote_handle))) {
-                        CERROR("%s@%s changed handle from "LPX64" to "LPX64
+                        int level = D_ERROR;
+                        /* The MGC does this all the time */
+                        if (strcmp(imp->imp_obd->obd_type->typ_name,
+                                   LUSTRE_MGC_NAME) == 0) {
+                                level = D_CONFIG;
+                        }
+                        CDEBUG(level, 
+                               "%s@%s changed handle from "LPX64" to "LPX64
                                "; copying, but this may foreshadow disaster\n",
                                obd2cli_tgt(imp->imp_obd),
                                imp->imp_connection->c_remote_uuid.uuid,
                                imp->imp_remote_handle.cookie,
-                               request->rq_repmsg->handle.cookie);
-                        imp->imp_remote_handle = request->rq_repmsg->handle;
+                               lustre_msg_get_handle(request->rq_repmsg)->
+                                        cookie);
+                        imp->imp_remote_handle =
+                                     *lustre_msg_get_handle(request->rq_repmsg);
                 } else {
                         CDEBUG(D_HA, "reconnected to %s@%s after partition\n",
                                obd2cli_tgt(imp->imp_obd),
@@ -529,11 +586,13 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 }
         } else if ((MSG_CONNECT_RECOVERING & msg_flags) && !imp->imp_invalid) {
                 LASSERT(imp->imp_replayable);
-                imp->imp_remote_handle = request->rq_repmsg->handle;
+                imp->imp_remote_handle =
+                                *lustre_msg_get_handle(request->rq_repmsg);
                 imp->imp_last_replay_transno = 0;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
         } else {
-                imp->imp_remote_handle = request->rq_repmsg->handle;
+                imp->imp_remote_handle =
+                                *lustre_msg_get_handle(request->rq_repmsg);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
         }
 
@@ -543,13 +602,14 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                        "after reconnect. We should LBUG right here.\n");
         }
 
-        if (request->rq_repmsg->last_committed < aa->pcaa_peer_committed) {
+        if (lustre_msg_get_last_committed(request->rq_repmsg) <
+            aa->pcaa_peer_committed) {
                 CERROR("%s went back in time (transno "LPD64
                        " was previously committed, server now claims "LPD64
                        ")!  See https://bugzilla.clusterfs.com/"
                        "long_list.cgi?buglist=9646\n",
                        obd2cli_tgt(imp->imp_obd), aa->pcaa_peer_committed,
-                       request->rq_repmsg->last_committed);
+                       lustre_msg_get_last_committed(request->rq_repmsg));
         }
 
 finish:
@@ -567,35 +627,50 @@ finish:
                 struct obd_connect_data *ocd;
                 struct obd_export *exp;
 
-                ocd = lustre_swab_repbuf(request, 0,
-                                         sizeof *ocd, lustre_swab_connect);
+                ocd = lustre_swab_repbuf(request, REPLY_REC_OFF, sizeof(*ocd),
+                                         lustre_swab_connect);
+
+                spin_lock(&imp->imp_lock);
+                list_del(&imp->imp_conn_current->oic_item);
+                list_add(&imp->imp_conn_current->oic_item, &imp->imp_conn_list);
+                imp->imp_last_success_conn =
+                        imp->imp_conn_current->oic_last_attempt;
+
                 if (ocd == NULL) {
+                        spin_unlock(&imp->imp_lock);
                         CERROR("Wrong connect data from server\n");
                         rc = -EPROTO;
                         GOTO(out, rc);
                 }
 
-                spin_lock_irqsave(&imp->imp_lock, flags);
-                
-                /*
-                 * check that server granted subset of flags we asked for.
-                 */
-                LASSERT((ocd->ocd_connect_flags &
-                         imp->imp_connect_data.ocd_connect_flags) ==
-                        ocd->ocd_connect_flags);
-
                 imp->imp_connect_data = *ocd;
-                if (!ocd->ocd_ibits_known &&
-                    ocd->ocd_connect_flags & OBD_CONNECT_IBITS)
-                        CERROR("Inodebits aware server returned zero compatible"
-                               " bits?\n");
 
                 exp = class_conn2export(&imp->imp_dlm_handle);
-                LASSERT(exp);
+                spin_unlock(&imp->imp_lock);
+
+                /* check that server granted subset of flags we asked for. */
+                LASSERTF((ocd->ocd_connect_flags &
+                          imp->imp_connect_flags_orig) ==
+                         ocd->ocd_connect_flags, LPX64" != "LPX64,
+                         imp->imp_connect_flags_orig, ocd->ocd_connect_flags);
+
+                if (!exp) {
+                        /* This could happen if export is cleaned during the 
+                           connect attempt */
+                        spin_unlock(&imp->imp_lock);
+                        CERROR("Missing export for %s\n", 
+                               imp->imp_obd->obd_name);
+                        GOTO(out, rc = -ENODEV);
+                }
                 exp->exp_connect_flags = ocd->ocd_connect_flags;
                 class_export_put(exp);
 
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_OCD);
+
+                if (!ocd->ocd_ibits_known &&
+                    ocd->ocd_connect_flags & OBD_CONNECT_IBITS)
+                        CERROR("Inodebits aware server returned zero compatible"
+                               " bits?\n");
 
                 if ((ocd->ocd_connect_flags & OBD_CONNECT_VERSION) &&
                     (ocd->ocd_version > LUSTRE_VERSION_CODE +
@@ -618,20 +693,16 @@ finish:
                               action, LUSTRE_VERSION_STRING);
                 }
 
-                if (imp->imp_conn_current != NULL) {
-                        list_del(&imp->imp_conn_current->oic_item);
-                        list_add(&imp->imp_conn_current->oic_item,
-                                 &imp->imp_conn_list);
-                        imp->imp_conn_current = NULL;
-                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                if (ocd->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
+                        cli->cl_max_pages_per_rpc = ocd->ocd_brw_size >> PAGE_SHIFT;
                 } else {
-                        static int bug7269_dump = 0;
-                        spin_unlock_irqrestore(&imp->imp_lock, flags);
-                        CERROR("this is bug 7269 - please attach log there\n");
-                        if (bug7269_dump == 0)
-                                libcfs_debug_dumplog();
-                        bug7269_dump = 1;
+                        cli->cl_max_pages_per_rpc = min((int)PTLRPC_MAX_BRW_PAGES,
+                                                        (int)(1024 * 1024 >> PAGE_SHIFT));
                 }
+
+                LASSERT(cli->cl_max_pages_per_rpc <= PTLRPC_MAX_BRW_PAGES &&
+                        cli->cl_max_pages_per_rpc > 0);
+
         }
 
  out:
@@ -640,9 +711,15 @@ finish:
                 if (aa->pcaa_initial_connect && !imp->imp_initial_recov)
                         ptlrpc_deactivate_import(imp);
 
+                if (imp->imp_recon_bk && imp->imp_last_recon) {
+                        /* Give up trying to reconnect */
+                        imp->imp_obd->obd_no_recov = 1;
+                        ptlrpc_deactivate_import(imp);
+                }
+
                 if (rc == -EPROTO) {
                         struct obd_connect_data *ocd;
-                        ocd = lustre_swab_repbuf(request, 0,
+                        ocd = lustre_swab_repbuf(request, REPLY_REC_OFF,
                                                  sizeof *ocd,
                                                  lustre_swab_connect);
                         if (ocd &&
@@ -673,6 +750,8 @@ finish:
                        obd2cli_tgt(imp->imp_obd),
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
         }
+        
+        imp->imp_last_recon = 0;
 
         cfs_waitq_signal(&imp->imp_recovery_waitq);
         RETURN(rc);
@@ -703,16 +782,15 @@ static int signal_completed_replay(struct obd_import *imp)
         LASSERT(atomic_read(&imp->imp_replay_inflight) == 0);
         atomic_inc(&imp->imp_replay_inflight);
 
-        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING,
-                              0, NULL, NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 1, NULL, NULL);
         if (!req) {
                 atomic_dec(&imp->imp_replay_inflight);
                 RETURN(-ENOMEM);
         }
 
-        req->rq_replen = lustre_msg_size(0, NULL);
+        ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_REPLAY_WAIT;
-        req->rq_reqmsg->flags |= MSG_LAST_REPLAY;
+        lustre_msg_add_flags(req->rq_reqmsg, MSG_LAST_REPLAY);
         req->rq_timeout *= 3;
         req->rq_interpret_reply = completed_replay_interpret;
 
@@ -840,10 +918,8 @@ static int back_to_sleep(void *unused)
 
 int ptlrpc_disconnect_import(struct obd_import *imp)
 {
-        struct ptlrpc_request *request;
-        int rq_opc;
-        int rc = 0;
-        unsigned long flags;
+        struct ptlrpc_request *req;
+        int rq_opc, rc = 0;
         ENTRY;
 
         switch (imp->imp_connect_op) {
@@ -858,39 +934,40 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
 
         if (ptlrpc_import_in_recovery(imp)) {
                 struct l_wait_info lwi;
-                lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(cfs_time_seconds(obd_timeout)), 
-                                       back_to_sleep, NULL, NULL);
+                cfs_duration_t timeout = cfs_time_seconds(obd_timeout);
+
+                lwi = LWI_TIMEOUT_INTR(cfs_timeout_cap(timeout), 
+                                       back_to_sleep, LWI_ON_SIGNAL_NOOP, NULL);
                 rc = l_wait_event(imp->imp_recovery_waitq,
                                   !ptlrpc_import_in_recovery(imp), &lwi);
 
         }
 
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
         if (imp->imp_state != LUSTRE_IMP_FULL)
                 GOTO(out, 0);
 
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 
-        request = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, rq_opc,
-                                  0, NULL, NULL);
-        if (request) {
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, rq_opc, 1, NULL, NULL);
+        if (req) {
                 /* We are disconnecting, do not retry a failed DISCONNECT rpc if
                  * it fails.  We can get through the above with a down server
                  * if the client doesn't know the server is gone yet. */
-                request->rq_no_resend = 1;
-                request->rq_timeout = 5;
+                req->rq_no_resend = 1;
+                req->rq_timeout = 5;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
-                request->rq_send_state =  LUSTRE_IMP_CONNECTING;
-                request->rq_replen = lustre_msg_size(0, NULL);
-                rc = ptlrpc_queue_wait(request);
-                ptlrpc_req_finished(request);
+                req->rq_send_state =  LUSTRE_IMP_CONNECTING;
+                ptlrpc_req_set_repsize(req, 1, NULL);
+                rc = ptlrpc_queue_wait(req);
+                ptlrpc_req_finished(req);
         }
 
-        spin_lock_irqsave(&imp->imp_lock, flags);
+        spin_lock(&imp->imp_lock);
 out:
         IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_CLOSED);
         memset(&imp->imp_remote_handle, 0, sizeof(imp->imp_remote_handle));
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        spin_unlock(&imp->imp_lock);
 
         RETURN(rc);
 }

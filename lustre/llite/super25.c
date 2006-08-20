@@ -80,7 +80,6 @@ int ll_init_inodecache(void)
 void ll_destroy_inodecache(void)
 {
         int rc;
-
         rc = kmem_cache_destroy(ll_inode_cachep);
         LASSERTF(rc == 0, "ll_inode_cache: not all structures were freed\n");
 }
@@ -98,6 +97,8 @@ struct super_operations lustre_super_operations =
         .remount_fs    = ll_remount_fs,
 };
 
+
+void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg));
 
 static int __init init_lustre_lite(void)
 {
@@ -121,6 +122,7 @@ static int __init init_lustre_lite(void)
         ll_register_cache(&ll_cache_definition);
         
         lustre_register_client_fill_super(ll_fill_super);
+        lustre_register_client_process_config(ll_process_config);
         
         get_random_bytes(seed, sizeof(seed));
         ll_srand(seed[0], seed[1]);
@@ -133,10 +135,12 @@ static void __exit exit_lustre_lite(void)
         int rc;
 
         lustre_register_client_fill_super(NULL);
+        lustre_register_client_process_config(NULL);
 
         ll_unregister_cache(&ll_cache_definition);
 
         ll_destroy_inodecache();
+
         rc = kmem_cache_destroy(ll_file_data_slab);
         LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");
         if (ll_async_page_slab) {

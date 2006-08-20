@@ -30,16 +30,16 @@ struct obdio_barrier {
         uint64_t               ob_count;
 };
 
-extern struct obdio_conn * obdio_connect (int device);
+extern struct obdio_conn *obdio_connect(int device);
 extern void obdio_disconnect(struct obdio_conn *conn, int flags);
 extern int obdio_open(struct obdio_conn *conn, uint64_t oid,
                       struct lustre_handle *fh);
 extern int obdio_close(struct obdio_conn *conn, uint64_t oid,
                        struct lustre_handle *fh);
 extern int obdio_pread(struct obdio_conn *conn, uint64_t oid,
-                       char *buffer, uint32_t count, uint64_t offset);
+                       void *buffer, uint32_t count, uint64_t offset);
 extern int obdio_pwrite(struct obdio_conn *conn, uint64_t oid,
-                        char *buffer, uint32_t count, uint64_t offset);
+                        void *buffer, uint32_t count, uint64_t offset);
 extern int obdio_enqueue(struct obdio_conn *conn, uint64_t oid,
                          int mode, uint64_t offset, uint32_t count,
                          struct lustre_handle *lh);
@@ -47,8 +47,7 @@ extern int obdio_cancel(struct obdio_conn *conn, struct lustre_handle *lh);
 extern void *obdio_alloc_aligned_buffer(void **spacep, int size);
 extern struct obdio_barrier *obdio_new_barrier(uint64_t oid, uint64_t id,
                                                int npeers);
-extern int obdio_setup_barrier(struct obdio_conn *conn,
-                               struct obdio_barrier *b);
+extern int obdio_setup_barrier(struct obdio_conn *conn,struct obdio_barrier *b);
 extern int obdio_barrier(struct obdio_conn *conn, struct obdio_barrier *b);
 
 #endif

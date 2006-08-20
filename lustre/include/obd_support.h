@@ -37,6 +37,7 @@ extern unsigned int ldlm_timeout;
 extern unsigned int obd_health_check_timeout;
 extern char obd_lustre_upcall[128];
 extern cfs_waitq_t obd_race_waitq;
+extern int obd_race_state;
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
@@ -118,6 +119,7 @@ extern cfs_waitq_t obd_race_waitq;
 #define OBD_FAIL_OST_ENOENT              0x217
 #define OBD_FAIL_OST_QUOTACHECK_NET      0x218
 #define OBD_FAIL_OST_QUOTACTL_NET        0x219
+#define OBD_FAIL_OST_BRW_SIZE            0x21a
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -169,6 +171,7 @@ extern cfs_waitq_t obd_race_waitq;
 #define OBD_FAIL_MGS                     0x900
 #define OBD_FAIL_MGS_ALL_REQUEST_NET     0x901
 #define OBD_FAIL_MGS_ALL_REPLY_NET       0x902
+#define OBD_FAIL_MGC_PROCESS_LOG         0x903
 
 #define OBD_FAIL_SEQ                     0x1000
 #define OBD_FAIL_SEQ_ALL_REQUEST_NET     0x1001
@@ -183,8 +186,6 @@ extern cfs_waitq_t obd_race_waitq;
 #define OBD_FAIL_MASK_LOC    (0x000000FF | OBD_FAIL_MASK_SYS)
 #define OBD_FAIL_ONCE        0x80000000
 #define OBD_FAILED           0x40000000
-#define OBD_FAIL_MDS_ALL_NET 0x01000000
-#define OBD_FAIL_OST_ALL_NET 0x02000000
 
 #define OBD_FAIL_CHECK(id)   (((obd_fail_loc & OBD_FAIL_MASK_LOC) ==           \
                               ((id) & OBD_FAIL_MASK_LOC)) &&                   \
@@ -228,8 +229,8 @@ do {                                                                         \
  * first thread that calls this with a matching fail_loc is put to
  * sleep. The next thread that calls with the same fail_loc wakes up
  * the first and continues. */
-#define OBD_RACE(id)                                            \
-do {                                                            \
+#define OBD_RACE(id)                                                           \
+do {                                                                           \
         if  (OBD_FAIL_CHECK_ONCE(id)) {                         \
                 CERROR("obd_race id %x sleeping\n", (id));      \
                 OBD_SLEEP_ON(&obd_race_waitq);        \

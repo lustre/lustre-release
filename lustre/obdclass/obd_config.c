@@ -36,7 +36,82 @@
 #include <lustre_log.h>
 #include <lprocfs_status.h>
 #include <libcfs/list.h>
+#include <lustre_param.h>
 
+/*********** string parsing utils *********/
+
+/* returns 0 if we find this key in the buffer, else 1 */
+int class_find_param(char *buf, char *key, char **valp)
+{
+        char *ptr;
+
+        if (!buf) 
+                return 1;
+
+        if ((ptr = strstr(buf, key)) == NULL) 
+                return 1;
+
+        if (valp) 
+                *valp = ptr + strlen(key);
+        
+        return 0;
+}
+
+/* returns 0 if this is the first key in the buffer, else 1.
+   valp points to first char after key. */
+int class_match_param(char *buf, char *key, char **valp)
+{
+        if (!buf) 
+                return 1;
+
+        if (memcmp(buf, key, strlen(key)) != 0) 
+                return 1;
+
+        if (valp) 
+                *valp = buf + strlen(key);
+        
+        return 0;
+}
+
+/* 0 is good nid, 
+   1 not found
+   < 0 error
+   endh is set to next separator */
+int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
+{
+        char tmp, *endp;
+
+        if (!buf) 
+                return 1;
+        while (*buf == ',' || *buf == ':') 
+                buf++;
+        if (*buf == ' ' || *buf == '/' || *buf == '\0') 
+                return 1;
+
+        /* nid separators or end of nids */
+        endp = strpbrk(buf, ",: /");
+        if (endp == NULL) 
+                endp = buf + strlen(buf);
+
+        tmp = *endp;
+        *endp = '\0';
+        *nid = libcfs_str2nid(buf);
+        if (*nid == LNET_NID_ANY) {
+                LCONSOLE_ERROR("Can't parse NID '%s'\n", buf);
+                *endp = tmp;
+                return -EINVAL;
+        }
+        *endp = tmp;
+
+        if (endh) 
+                *endh = endp;
+        CDEBUG(D_INFO, "Nid %s\n", libcfs_nid2str(*nid));
+        return 0;
+}
+
+EXPORT_SYMBOL(class_find_param);
+EXPORT_SYMBOL(class_match_param);
+EXPORT_SYMBOL(class_parse_nid);
 
 /********************** class fns **********************/
 
@@ -45,10 +120,9 @@
  */
 int class_attach(struct lustre_cfg *lcfg)
 {
-        struct obd_type *type;
         struct obd_device *obd = NULL;
-        char *typename, *name, *namecopy, *uuid;
-        int rc, len, cleanup_phase = 0;
+        char *typename, *name, *uuid;
+        int rc, len;
         ENTRY;
 
         if (!LUSTRE_CFG_BUFLEN(lcfg, 1)) {
@@ -92,34 +166,31 @@ int class_attach(struct lustre_cfg *lcfg)
                 }
         }
 
-        /* find the type */
-        type = class_get_type(typename);
-        if (!type) {
-                CERROR("OBD: unknown type: %s\n", typename);
-                RETURN(-ENODEV);
-        }
-        cleanup_phase = 1;  /* class_put_type */
-
-        len = strlen(name) + 1;
-        OBD_ALLOC(namecopy, len);
-        if (!namecopy)
-                GOTO(out, rc = -ENOMEM);
-        memcpy(namecopy, name, len);
-        cleanup_phase = 2; /* free obd_name */
-
-        obd = class_newdev(type, namecopy);
-        if (obd == NULL) {
+        obd = class_newdev(typename, name);
+        if (IS_ERR(obd)) {
                 /* Already exists or out of obds */
-                CERROR("Can't create device %s\n", name);
-                GOTO(out, rc = -EEXIST);
+                rc = PTR_ERR(obd);
+                obd = NULL;
+                CERROR("Cannot create device %s of type %s : %d\n",
+                       name, typename, rc);
+                GOTO(out, rc);
         }
-        cleanup_phase = 3;  /* class_release_dev */
+        LASSERTF(obd != NULL, "Cannot get obd device %s of type %s\n",
+                 name, typename);
+        LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC, 
+                 "obd %p obd_magic %08X != %08X\n",
+                 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
+        LASSERTF(strncmp(obd->obd_name, name, strlen(name)) == 0, "%p obd_name %s != %s\n",
+                 obd, obd->obd_name, name);
 
         CFS_INIT_LIST_HEAD(&obd->obd_exports);
         CFS_INIT_LIST_HEAD(&obd->obd_exports_timed);
         spin_lock_init(&obd->obd_dev_lock);
+        sema_init(&obd->obd_dev_sem, 1);
         spin_lock_init(&obd->obd_osfs_lock);
-        obd->obd_osfs_age = cfs_time_shift(-1000);
+        /* obd->obd_osfs_age must be set to a value in the distant
+         * past to guarantee a fresh statfs is fetched on mount. */
+        obd->obd_osfs_age = cfs_time_shift_64(-1000);
 
         /* XXX belongs in setup not attach  */
         /* recovery data */
@@ -148,21 +219,17 @@ int class_attach(struct lustre_cfg *lcfg)
         }
 
         /* Detach drops this */
+        spin_lock(&obd->obd_dev_lock);
         atomic_set(&obd->obd_refcount, 1);
+        spin_unlock(&obd->obd_dev_lock);
 
         obd->obd_attached = 1;
-        type->typ_refcnt++;
         CDEBUG(D_IOCTL, "OBD: dev %d attached type %s with refcount %d\n",
                obd->obd_minor, typename, atomic_read(&obd->obd_refcount));
         RETURN(0);
  out:
-        switch (cleanup_phase) {
-        case 3:
+        if (obd != NULL) {
                 class_release_dev(obd);
-        case 2:
-                OBD_FREE(namecopy, strlen(namecopy) + 1);
-        case 1:
-                class_put_type(type);
         }
         return rc;
 }
@@ -173,7 +240,11 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         struct obd_export *exp;
         ENTRY;
 
-        LASSERT(obd == (obd_dev + obd->obd_minor));
+        LASSERT(obd != NULL);
+        LASSERTF(obd == class_num2obd(obd->obd_minor), "obd %p != obd_devs[%d] %p\n", 
+                 obd, obd->obd_minor, class_num2obd(obd->obd_minor));
+        LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC, "obd %p obd_magic %08x != %08x\n", 
+                 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
 
         /* have we attached a type to this device? */
         if (!obd->obd_attached) {
@@ -211,7 +282,6 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (err)
                 GOTO(err_exp, err);
 
-        obd->obd_type->typ_refcnt++;
         obd->obd_set_up = 1;
         spin_lock(&obd->obd_dev_lock);
         /* cleanup drops this */
@@ -228,32 +298,6 @@ err_exp:
         class_unlink_export(obd->obd_self_export);
         obd->obd_self_export = NULL;
         obd->obd_starting = 0;
-        RETURN(err);
-}
-
-static int __class_detach(struct obd_device *obd)
-{
-        int err = 0;
-        ENTRY;
-
-        CDEBUG(D_CONFIG, "destroying obd %d (%s)\n",
-               obd->obd_minor, obd->obd_name);
-
-        if (OBP(obd, detach))
-                err = OBP(obd,detach)(obd);
-
-        if (obd->obd_name) {
-                OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
-                obd->obd_name = NULL;
-        } else {
-                CERROR("device %d: no name at detach\n", obd->obd_minor);
-        }
-
-        LASSERT(OBT(obd));
-        /* Attach took type refcount */
-        obd->obd_type->typ_refcnt--;
-        class_put_type(obd->obd_type);
-        class_release_dev(obd);
         RETURN(err);
 }
 
@@ -365,8 +409,11 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         dump_exports(obd);
                         GOTO(out, err = -EBUSY);
                 }
+                /* refcounf - 3 might be the number of real exports 
+                   (excluding self export). But class_incref is called
+                   by other things as well, so don't count on it. */
                 CDEBUG(D_IOCTL, "%s: forcing exports to disconnect: %d\n",
-                       obd->obd_name, atomic_read(&obd->obd_refcount) - 1);
+                       obd->obd_name, atomic_read(&obd->obd_refcount) - 3);
                 dump_exports(obd);
                 class_disconnect_exports(obd);
         }
@@ -382,7 +429,6 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         class_decref(obd);
         obd->obd_set_up = 0;
-        obd->obd_type->typ_refcnt--;
 
         RETURN(0);
 out:
@@ -442,9 +488,12 @@ void class_decref(struct obd_device *obd)
                                 CERROR("Cleanup %s returned %d\n",
                                        obd->obd_name, err);
                 }
-                err = __class_detach(obd);
-                if (err)
-                        CERROR("Detach returned %d\n", err);
+                if (OBP(obd, detach)) {
+                        err = OBP(obd,detach)(obd);
+                        if (err)
+                                CERROR("Detach returned %d\n", err);
+                }
+                class_release_dev(obd);
         }
 }
 
@@ -529,8 +578,10 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
 {
         struct lustre_profile *lprof;
         int err = 0;
-
         ENTRY;
+
+        CDEBUG(D_CONFIG, "Add profile %s\n", prof);
+
         OBD_ALLOC(lprof, sizeof(*lprof));
         if (lprof == NULL)
                 RETURN(-ENOMEM);
@@ -543,27 +594,27 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
         memcpy(lprof->lp_profile, prof, proflen);
 
         LASSERT(osclen == (strlen(osc) + 1));
-        OBD_ALLOC(lprof->lp_osc, osclen);
-        if (lprof->lp_osc == NULL)
+        OBD_ALLOC(lprof->lp_dt, osclen);
+        if (lprof->lp_dt == NULL)
                 GOTO(out, err = -ENOMEM);
-        memcpy(lprof->lp_osc, osc, osclen);
+        memcpy(lprof->lp_dt, osc, osclen);
 
         if (mdclen > 0) {
                 LASSERT(mdclen == (strlen(mdc) + 1));
-                OBD_ALLOC(lprof->lp_mdc, mdclen);
-                if (lprof->lp_mdc == NULL)
+                OBD_ALLOC(lprof->lp_md, mdclen);
+                if (lprof->lp_md == NULL)
                         GOTO(out, err = -ENOMEM);
-                memcpy(lprof->lp_mdc, mdc, mdclen);
+                memcpy(lprof->lp_md, mdc, mdclen);
         }
 
         list_add(&lprof->lp_list, &lustre_profile_list);
         RETURN(err);
 
 out:
-        if (lprof->lp_mdc)
-                OBD_FREE(lprof->lp_mdc, mdclen);
-        if (lprof->lp_osc)
-                OBD_FREE(lprof->lp_osc, osclen);
+        if (lprof->lp_md)
+                OBD_FREE(lprof->lp_md, mdclen);
+        if (lprof->lp_dt)
+                OBD_FREE(lprof->lp_dt, osclen);
         if (lprof->lp_profile)
                 OBD_FREE(lprof->lp_profile, proflen);
         OBD_FREE(lprof, sizeof(*lprof));        
@@ -573,17 +624,48 @@ out:
 void class_del_profile(const char *prof)
 {
         struct lustre_profile *lprof;
+        ENTRY;
+
+        CDEBUG(D_CONFIG, "Del profile %s\n", prof);
 
         lprof = class_get_profile(prof);
         if (lprof) {
                 list_del(&lprof->lp_list);
                 OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
-                OBD_FREE(lprof->lp_osc, strlen(lprof->lp_osc) + 1);
-                if (lprof->lp_mdc)
-                        OBD_FREE(lprof->lp_mdc, strlen(lprof->lp_mdc) + 1);
+                OBD_FREE(lprof->lp_dt, strlen(lprof->lp_dt) + 1);
+                if (lprof->lp_md)
+                        OBD_FREE(lprof->lp_md, strlen(lprof->lp_md) + 1);
                 OBD_FREE(lprof, sizeof *lprof);
         }
+        EXIT;
 }
+
+/* COMPAT_146 */
+void class_del_profiles(void)
+{
+        struct lustre_profile *lprof, *n;
+        ENTRY;
+
+        list_for_each_entry_safe(lprof, n, &lustre_profile_list, lp_list) {
+                list_del(&lprof->lp_list);
+                OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
+                OBD_FREE(lprof->lp_dt, strlen(lprof->lp_dt) + 1);
+                if (lprof->lp_md)
+                        OBD_FREE(lprof->lp_md, strlen(lprof->lp_md) + 1);
+                OBD_FREE(lprof, sizeof *lprof);
+        }
+        EXIT;
+}
+
+/* We can't call ll_process_config directly because it lives in a module that
+   must be loaded after this one. */
+static int (*client_process_config)(struct lustre_cfg *lcfg) = NULL;
+
+void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg))
+{
+        client_process_config = cpc;
+}
+EXPORT_SYMBOL(lustre_register_client_process_config);
 
 int class_process_config(struct lustre_cfg *lcfg)
 {
@@ -640,8 +722,6 @@ int class_process_config(struct lustre_cfg *lcfg)
                 CDEBUG(D_IOCTL, "changing lustre timeout from %d to %d\n",
                        obd_timeout, lcfg->lcfg_num);
                 obd_timeout = max(lcfg->lcfg_num, 1U);
-                if (ldlm_timeout >= obd_timeout)
-                        ldlm_timeout = max(obd_timeout / 3, 1U);
                 GOTO(out, err = 0);
         }
         case LCFG_SET_UPCALL: {
@@ -659,6 +739,17 @@ int class_process_config(struct lustre_cfg *lcfg)
                 CDEBUG(D_IOCTL, "marker %d (%#x) %.16s %s\n", marker->cm_step,
                        marker->cm_flags, marker->cm_svname, marker->cm_comment);
                 GOTO(out, err = 0);
+        }
+        case LCFG_PARAM: {
+                /* llite has no obd */
+                if ((class_match_param(lustre_cfg_string(lcfg, 1), 
+                                      PARAM_LLITE, 0) == 0) &&
+                    client_process_config) {
+                        err = (*client_process_config)(lcfg);
+                        GOTO(out, err);
+                }
+                /* Fall through */
+                break;
         }
         }
 
@@ -702,12 +793,76 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         }
 out:
-        if ((err == -ENOSYS || err == -EINVAL) &&
-            !(lcfg->lcfg_command & LCFG_REQUIRED)) {
-                CWARN("Skipping optional command %#x\n", lcfg->lcfg_command);
+        if ((err < 0) && !(lcfg->lcfg_command & LCFG_REQUIRED)) {
+                CWARN("Ignoring error %d on optional command %#x\n", err, 
+                      lcfg->lcfg_command);
                 err = 0;
         }
         return err;
+}
+
+int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars, 
+                             struct lustre_cfg *lcfg, void *data)
+{
+        struct lprocfs_vars *var;
+        char *key, *sval;
+        int i, vallen;
+        int matched = 0, j = 0;
+        int rc = 0;
+        ENTRY;
+
+        if (lcfg->lcfg_command != LCFG_PARAM) {
+                CERROR("Unknown command: %d\n", lcfg->lcfg_command);
+                RETURN(-EINVAL);
+        }
+
+        /* e.g. tunefs.lustre --param mdt.group_upcall=foo /r/tmp/lustre-mdt
+           or   lctl conf_param lustre-MDT0000.mdt.group_upcall=bar
+           or   lctl conf_param lustre-OST0000.osc.max_dirty_mb=36 */
+        for (i = 1; i < lcfg->lcfg_bufcount; i++) {
+                key = lustre_cfg_buf(lcfg, i);
+                /* Strip off prefix */
+                class_match_param(key, prefix, &key);
+                sval = strchr(key, '=');
+                if (!sval || (*(sval + 1) == 0)) {
+                        CERROR("Can't parse param %s\n", key);
+                        rc = -EINVAL;
+                        /* continue parsing other params */
+                        continue;
+                }
+                sval++;
+                vallen = strlen(sval);
+                matched = 0;
+                j = 0;
+                /* Search proc entries */
+                while (lvars[j].name) {
+                        var = &lvars[j];
+                        if (class_match_param(key, (char *)var->name, 0) == 0) {
+                                matched++;
+                                rc = -EROFS;
+                                if (var->write_fptr) 
+                                        rc = (var->write_fptr)(NULL, sval,
+                                                               vallen, data);
+                                if (rc < 0) 
+                                        CERROR("writing proc entry %s err %d\n", 
+                                               var->name, rc);
+                                break;
+                        }
+                        j++;
+                }    
+                if (!matched) {
+                        CERROR("Unknown param %s\n", key);
+                        rc = -EINVAL;
+                        /* continue parsing other params */
+                } else {
+                        LCONSOLE_INFO("%s: set %s to %s\n", prefix,
+                                      key, sval);
+                }
+        }
+        
+        if (rc > 0) 
+                rc = 0;
+        RETURN(rc);
 }
 
 int class_config_dump_handler(struct llog_handle * handle,
@@ -749,8 +904,8 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 /* Figure out config state info */
                 if (lcfg->lcfg_command == LCFG_MARKER) {
                         struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
-                        CDEBUG(D_CONFIG, "Marker, cfg_flg=%#x\n",
-                               clli->cfg_flags);
+                        CDEBUG(D_CONFIG, "Marker, inst_flg=%#x mark_flg=%#x\n",
+                               clli->cfg_flags, marker->cm_flags);
                         if (marker->cm_flags & CM_START) {
                                 /* all previous flags off */
                                 clli->cfg_flags = CFG_F_MARKER;
@@ -768,17 +923,17 @@ static int class_config_llog_handler(struct llog_handle * handle,
                                 clli->cfg_flags = 0;
                         }
                 }
-                /* A config command without a start marker before it is
-                   illegal (1.4.6. compat must set it artificially) */
-                if (!(clli->cfg_flags & CFG_F_MARKER) && 
+                /* A config command without a start marker before it is 
+                   illegal (post 146) */
+                if (!(clli->cfg_flags & CFG_F_COMPAT146) &&
+                    !(clli->cfg_flags & CFG_F_MARKER) && 
                     (lcfg->lcfg_command != LCFG_MARKER)) {
                         CWARN("Config not inside markers, ignoring! (%#x)\n", 
                               clli->cfg_flags);
                         clli->cfg_flags |= CFG_F_SKIP;
                 }
                 if (clli->cfg_flags & CFG_F_SKIP) {
-                        // FIXME warning
-                        CDEBUG(D_CONFIG|D_WARNING, "skipping %#x\n",
+                        CDEBUG(D_CONFIG, "skipping %#x\n",
                                clli->cfg_flags);
                         rc = 0;
                         /* No processing! */
@@ -792,7 +947,8 @@ static int class_config_llog_handler(struct llog_handle * handle,
 
                 lustre_cfg_bufs_init(&bufs, lcfg);
 
-                if (clli && clli->cfg_instance && LUSTRE_CFG_BUFLEN(lcfg, 0) > 0){
+                if (clli && clli->cfg_instance && 
+                    LUSTRE_CFG_BUFLEN(lcfg, 0) > 0){
                         inst = 1;
                         inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) +
                                 strlen(clli->cfg_instance) + 1;
@@ -881,8 +1037,7 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
 
         rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
 
-        /* FIXME remove warning */
-        CDEBUG(D_CONFIG|D_WARNING, "Processed log %s gen %d-%d (rc=%d)\n", name, 
+        CDEBUG(D_CONFIG, "Processed log %s gen %d-%d (rc=%d)\n", name, 
                cd.first_idx + 1, cd.last_idx, rc);
         if (cfg)
                 cfg->cfg_last_idx = cd.last_idx;

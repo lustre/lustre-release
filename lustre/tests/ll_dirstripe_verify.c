@@ -28,25 +28,37 @@
 
 #define MAX_LOV_UUID_COUNT      1000
 
+/* Returns bytes read on success and a negative value on failure.
+ * If zero bytes are read it will be treated as failure as such
+ * zero cannot be returned from this function.
+ */
 int read_proc_entry(char *proc_path, char *buf, int len)
 {
-        int rcnt = -2, fd;
+        int rc, fd;
 
-        if ((fd = open(proc_path, O_RDONLY)) == -1) {
+        memset(buf, 0, len);
+
+        fd = open(proc_path, O_RDONLY);
+        if (fd == -1) {
                 fprintf(stderr, "open('%s') failed: %s\n",
                         proc_path, strerror(errno));
-                rcnt = -3;
-        } else if ((rcnt = read(fd, buf, len)) <= 0) {
-                fprintf(stderr, "read('%s') failed: %s\n",
-                        proc_path, strerror(errno));
-        } else {
-                buf[rcnt - 1] = '\0';
+                return -2;
         }
 
-        if (fd >= 0)
-                close(fd);
+        rc = read(fd, buf, len - 1);
+        if (rc < 0) {
+                fprintf(stderr, "read('%s') failed: %s\n",
+                        proc_path, strerror(errno));
+                rc = -3;
+        } else if (rc == 0) {
+                fprintf(stderr, "read('%s') zero bytes\n", proc_path);
+                rc = -4;
+        } else if (/* rc > 0 && */ buf[rc - 1] == '\n') {
+                buf[rc - 1] = '\0'; /* Remove trailing newline */
+        }
+        close(fd);
 
-        return (rcnt);
+        return (rc);
 }
 
 int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
@@ -59,19 +71,27 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
         char buf[128];
         char lov_path[PATH_MAX];
         char tmp_path[PATH_MAX];
-        int i, rc;
+        int i;
+        FILE *fp;
 
-        rc = read_proc_entry("/proc/fs/lustre/llite/fs0/lov/common_name",
-                             buf, sizeof(buf)) <= 0;
-        if (rc < 0)
-                return -rc;
-
-        snprintf(lov_path, sizeof(lov_path) - 1, "/proc/fs/lustre/lov/%s", buf);
+        fp = popen("\\ls -d  /proc/fs/lustre/lov/*clilov*", "r");
+        if (!fp) {
+                fprintf(stderr, "open(lustre/lov/*clilov*) failed: %s\n", 
+                        strerror(errno));
+                return 2;
+        }
+        if (fscanf(fp, "%s", lov_path) < 1) { 
+                fprintf(stderr, "read(lustre/lov/*clilov*) failed: %s\n",
+                        strerror(errno));
+                pclose(fp);
+                return 3;
+        }
+        pclose(fp);
 
         if (lum_dir == NULL) {
                 snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripecount",
                          lov_path);
-                if (read_proc_entry(tmp_path, buf, sizeof(buf)) <= 0)
+                if (read_proc_entry(tmp_path, buf, sizeof(buf)) < 0)
                         return 5;
 
                 stripe_count = atoi(buf);
@@ -82,7 +102,7 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
                 stripe_count = 1;
 
         snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/numobd", lov_path);
-        if (read_proc_entry(tmp_path, buf, sizeof(buf)) <= 0)
+        if (read_proc_entry(tmp_path, buf, sizeof(buf)) < 0)
                 return 6;
 
         ost_count = atoi(buf);
@@ -99,7 +119,7 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
         if (stripe_size == 0) {
                 snprintf(tmp_path, sizeof(tmp_path) - 1, "%s/stripesize",
                          lov_path);
-                if (read_proc_entry(tmp_path, buf, sizeof(buf)) <= 0)
+                if (read_proc_entry(tmp_path, buf, sizeof(buf)) < 0)
                         return 5;
 
                 stripe_size = atoi(buf);
@@ -149,12 +169,13 @@ int main(int argc, char **argv)
         if (argc < 3) {
                 fprintf(stderr, "Usage: %s <dirname> <filename1> [filename2]\n",
                         argv[0]);
-                exit(1);
+                return 1;
         }
 
         dir = opendir(argv[1]);
         if (dir == NULL) {
-                fprintf(stderr, "%s opendir failed\n", argv[1]);
+                fprintf(stderr, "%s opendir failed: %s\n", argv[1], 
+                        strerror(errno));
                 return errno;
         }
 
@@ -184,7 +205,7 @@ int main(int argc, char **argv)
         fname = strrchr(argv[2], '/');
         fname++;
         strncpy((char *)lum_file1, fname, lum_size);
-        rc = ioctl(dirfd(dir), IOC_MDC_GETSTRIPE, lum_file1);
+        rc = ioctl(dirfd(dir), IOC_MDC_GETFILESTRIPE, lum_file1);
         if (rc) {
                 rc = errno;
                 goto cleanup;
@@ -202,7 +223,7 @@ int main(int argc, char **argv)
                 fname = strrchr(argv[3], '/');
                 fname++;
                 strncpy((char *)lum_file2, fname, lum_size);
-                rc = ioctl(dirfd(dir), IOC_MDC_GETSTRIPE, lum_file2);
+                rc = ioctl(dirfd(dir), IOC_MDC_GETFILESTRIPE, lum_file2);
                 if (rc) {
                         rc = errno;
                         goto cleanup;

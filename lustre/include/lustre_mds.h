@@ -68,31 +68,22 @@ struct mds_file_data {
         struct dentry        *mfd_dentry;
 };
 
-
 /* mds/mds_reint.c */
 struct inode;
 
 int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *);
 
-int md_lov_connect(struct obd_device *obd, struct md_lov_info *mli,
-                   char *lov_name, struct obd_uuid *uuid,
-                   struct md_lov_ops *mlo, const void *ctxt);
-int md_lov_notity_pre(struct obd_device *obd, struct md_lov_info *mli,
-                      struct obd_device *watched, enum obd_notify_event ev,
-                      void *data);
-int md_lov_start_synchronize(struct obd_device *obd, struct md_lov_info *mli,
-                             struct obd_device *watched,
-                             void *data, int nonblock, const void *ctxt);
-int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
+int mds_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
+                          struct lov_mds_md *lmm, int lmm_size,
+                          struct llog_cookie *logcookies, __u64 id, __u32 gen);
+
+int mds_log_op_unlink(struct obd_device *obd,
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size);
 int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size);
-int mds_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
-                          struct lov_mds_md *lmm, int lmm_size,
-                          struct llog_cookie *logcookies, __u64 id, __u32 gen);
 
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'

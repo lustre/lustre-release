@@ -290,6 +290,8 @@ extern int ldlm_init(void);
 extern int osc_init(void);
 extern int lov_init(void);
 extern int mdc_init(void);
+extern int lmv_init(void);
+extern int mgc_init(void);
 extern int echo_client_init(void);
 
 
@@ -386,8 +388,6 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
         free(a);
         return 0;
 }
-#define kmem_cache_alloc(cache, prio) malloc(cache->size)
-#define kmem_cache_free(cache, obj) free(obj)
 
 #define PAGE_CACHE_SIZE  PAGE_SIZE
 #define PAGE_CACHE_SHIFT PAGE_SHIFT
@@ -563,6 +563,10 @@ static inline void init_MUTEX (struct semaphore *sem)
 {
         sema_init(sem, 1);
 }
+static inline void init_MUTEX_LOCKED (struct semaphore *sem)
+{
+        sema_init(sem, 0);
+}
 
 #define init_mutex(s)   init_MUTEX(s)
 
@@ -667,6 +671,7 @@ static inline int schedule_timeout(signed long t)
                 _ret = tv.tv_sec;               \
         _ret;                                   \
 })
+#define get_jiffies_64()  (__u64)jiffies
 #define time_after(a, b) ((long)(b) - (long)(a) < 0)
 #define time_before(a, b) time_after(b,a)
 #define time_after_eq(a,b)      ((long)(a) - (long)(b) >= 0)
@@ -707,6 +712,7 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_read(a) ((a)->counter)
 #define atomic_set(a,b) do {(a)->counter = b; } while (0)
 #define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
+#define atomic_dec_and_lock(a,b) ((--((a)->counter)) == 0)
 #define atomic_inc(a)  (((a)->counter)++)
 #define atomic_dec(a)  do { (a)->counter--; } while (0)
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)

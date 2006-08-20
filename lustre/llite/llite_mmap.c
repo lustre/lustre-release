@@ -460,6 +460,9 @@ static void ll_vm_open(struct vm_area_struct * vma)
                 int count;
 
                 spin_unlock(&lli->lli_lock);
+
+                if (!lsm)
+                        return;
                 count = obd_join_lru(sbi->ll_dt_exp, lsm, 0);
                 VMA_DEBUG(vma, "split %d unused locks from lru\n", count);
         } else {
@@ -486,6 +489,9 @@ static void ll_vm_close(struct vm_area_struct *vma)
                 int count;
 
                 spin_unlock(&lli->lli_lock);
+
+                if (!lsm)
+                        return;
                 count = obd_join_lru(sbi->ll_dt_exp, lsm, 1);
                 VMA_DEBUG(vma, "join %d unused locks to lru\n", count);
         } else {

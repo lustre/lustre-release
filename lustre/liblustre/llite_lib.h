@@ -8,7 +8,6 @@
 #include <liblustre.h>
 #include <obd.h>
 #include <obd_class.h>
-#include <lustre_mds.h>
 #include <lustre_mdc.h>
 #include <lustre_lite.h>
 #include <lustre_ver.h>
@@ -166,8 +165,8 @@ static inline __u64 ll_file_maxbytes(struct inode *inode)
 
 struct mount_option_s
 {
-        char *mdc_uuid;
-        char *osc_uuid;
+        char *md_uuid;
+        char *dt_uuid;
 };
 
 #define IS_BAD_PTR(ptr)         \
@@ -175,10 +174,10 @@ struct mount_option_s
 
 /* llite_lib.c */
 void generate_random_uuid(unsigned char uuid_out[16]);
-int liblustre_process_log(struct config_llog_instance *cfg, char *mdsnid,
-                          char *mdsname, char *profile, int allow_recov);
-int ll_parse_mount_target(const char *target, char **mdsnid,
-                          char **mdsname, char **profile);
+int liblustre_process_log(struct config_llog_instance *cfg, char *mgsnid,
+                          char *profile, int allow_recov);
+int ll_parse_mount_target(const char *target, char **mgsnid,
+                          char **fsname);
 
 extern struct mount_option_s mount_option;
 
@@ -202,8 +201,10 @@ void llu_prepare_md_op_data(struct md_op_data *op_data,
                             int namelen,
                             int mode);
 int llu_create(struct inode *dir, struct pnode_base *pnode, int mode);
+int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it);
 int llu_iop_open(struct pnode *pnode, int flags, mode_t mode);
-int llu_mdc_close(struct obd_export *md_exp, struct inode *inode);
+int llu_md_close(struct obd_export *md_exp, struct inode *inode);
+int llu_file_release(struct inode *inode);
 int llu_iop_close(struct inode *inode);
 _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off);
 int llu_vmtruncate(struct inode * inode, loff_t offset, obd_flag obd_flags);
@@ -230,13 +231,13 @@ int llu_iop_lookup(struct pnode *pnode,
                    const char *path);
 void unhook_stale_inode(struct pnode *pno);
 struct inode *llu_inode_from_lock(struct ldlm_lock *lock);
-int llu_mdc_blocking_ast(struct ldlm_lock *lock,
-                         struct ldlm_lock_desc *desc,
-                         void *data, int flag);
+int llu_md_blocking_ast(struct ldlm_lock *lock,
+                        struct ldlm_lock_desc *desc,
+                        void *data, int flag);
 
 /* dir.c */
 ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep, 
-			       char *buf, size_t nbytes);
+                               char *buf, size_t nbytes);
 
 /* liblustre/llite_fid.c*/
 int llu_fid_md_init(struct llu_sb_info *sbi);

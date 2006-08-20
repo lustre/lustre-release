@@ -17,7 +17,17 @@
 #ifdef __KERNEL__
 # include <linux/fs.h>
 # include <linux/dcache.h>
-# include <linux/xattr_acl.h>
+# ifdef CONFIG_FS_POSIX_ACL
+#  ifdef HAVE_XATTR_ACL
+#   include <linux/xattr_acl.h>
+#  endif 
+#  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
+#   include <linux/posix_acl_xattr.h>
+#  endif
+# endif
+# ifndef LUSTRE_KERNEL_VERSION
+#  include <linux/lustre_intent.h>
+# endif
 #endif
 
 struct mds_obd;

@@ -415,7 +415,7 @@ int upcall_cache_downcall(struct upcall_cache *hash, __u32 err, __u64 key,
         }
 
         if (!UC_CACHE_IS_ACQUIRING(entry)) {
-                CERROR("%s: found uptodate entry %p (key "LPU64") in ioctl\n",
+                CWARN("%s: found uptodate entry %p (key "LPU64") in ioctl\n",
                        hash->uc_name, entry, entry->ue_key);
                 GOTO(out, rc = 0);
         }

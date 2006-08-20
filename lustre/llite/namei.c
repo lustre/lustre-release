@@ -131,16 +131,77 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                                    PFID(ll_inode2fid(inode)), inode);
                 }
 
+                if (bits & MDS_INODELOCK_OPEN) {
+                        int flags = 0;
+                        switch (lock->l_req_mode) {
+                        case LCK_CW:
+                                flags = FMODE_WRITE;
+                                break;
+                        case LCK_PR:
+                                flags = FMODE_EXEC;
+                                if (!FMODE_EXEC)
+                                        CERROR("open PR lock without FMODE_EXEC\n");
+                                break;
+                        case LCK_CR:
+                                flags = FMODE_READ;
+                                break;
+                        default:
+                                CERROR("Unexpected lock mode for OPEN lock "
+                                       "%d, inode %ld\n", lock->l_req_mode,
+                                       inode->i_ino);
+                        }
+                        ll_md_real_close(inode, flags);
+                }
+
                 if (bits & MDS_INODELOCK_UPDATE)
                         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
                                   &(ll_i2info(inode)->lli_flags));
 
-
                 if (S_ISDIR(inode->i_mode) &&
-                     (bits & MDS_INODELOCK_UPDATE))  {
+                     (bits & MDS_INODELOCK_UPDATE)) {
+                        struct dentry *dentry, *tmp, *dir;
+                        struct list_head *list;
+                        
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
                         truncate_inode_pages(inode->i_mapping, 0);
+
+                        
+                        /* Drop possible cached negative dentries */
+                        list = &inode->i_dentry;
+                        dir = NULL;
+                        spin_lock(&dcache_lock);
+                        
+                        /* It is possible to have several dentries (with 
+                           racer?) */
+                        while ((list = list->next) != &inode->i_dentry) {
+                                dir = list_entry(list, struct dentry, d_alias);
+#ifdef LUSTRE_KERNEL_VERSION
+                                if (!(dir->d_flags & DCACHE_LUSTRE_INVALID))
+#else
+                                if (!d_unhashed(dir))
+#endif
+                                        break;
+
+                                dir = NULL;
+                        }
+                        
+                        if (dir) {
+restart:
+                                list_for_each_entry_safe(dentry, tmp, 
+                                                         &dir->d_subdirs, 
+                                                         d_child)
+                                {
+                                        /* XXX Print some debug here? */
+                                        if (!dentry->d_inode) 
+                                                /* Negative dentry. If we were 
+                                                   dropping dcache lock, go 
+                                                   throught the list again */
+                                                if (ll_drop_dentry(dentry))
+                                                        goto restart;
+                                }
+                        }
+                        spin_unlock(&dcache_lock);
                 }
 
                 if (inode->i_sb->s_root &&
@@ -285,7 +346,9 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 dget_locked(dentry);
                 lock_dentry(dentry);
                 __d_drop(dentry);
+#ifdef LUSTRE_KERNEL_VERSION
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
+#endif
                 unlock_dentry(dentry);
                 __d_rehash(dentry, 0); /* avoid taking dcache_lock inside */
                 spin_unlock(&dcache_lock);
@@ -308,11 +371,13 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
         struct dentry *dentry;
 
         dentry = d_add_unique(de, inode);
+#ifdef LUSTRE_KERNEL_VERSION
         if (dentry) {
                 lock_dentry(dentry);
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
                 unlock_dentry(dentry);
         }
+#endif
 
         return dentry?dentry:de;
 }
@@ -356,14 +421,15 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         } else {
                 ENTRY;
                 /* Check that parent has UPDATE lock. If there is none, we
-                 * cannot afford to hash this dentry (done by ll_d_add) as it
-                 * might get picked up later when UPDATE lock will appear */
+                   cannot afford to hash this dentry (done by ll_d_add) as it
+                   might get picked up later when UPDATE lock will appear */
                 if (ll_have_md_lock(parent, MDS_INODELOCK_UPDATE)) {
                         spin_lock(&dcache_lock);
                         ll_d_add(*de, inode);
                         spin_unlock(&dcache_lock);
-                } else
-                        (*de)->d_inode = NULL;
+                } else {
+                        (*de)->d_inode = NULL; 
+                }
         }
 
         ll_set_dd(*de);
@@ -430,7 +496,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (rc < 0)
                 GOTO(out, retval = ERR_PTR(rc));
 
-        rc = lookup_it_finish(req, 1, it, &icbd);
+        rc = lookup_it_finish(req, DLM_REPLY_REC_OFF, it, &icbd);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, retval = ERR_PTR(rc));
@@ -454,6 +520,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#ifdef LUSTRE_KERNEL_VERSION
 static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                                    struct nameidata *nd)
 {
@@ -467,6 +534,120 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 
         RETURN(de);
 }
+#else
+struct lookup_intent *ll_convert_intent(struct open_intent *oit,
+                                        int lookup_flags)
+{
+        struct lookup_intent *it;
+
+        OBD_ALLOC(it, sizeof(*it));
+        if (!it)
+                return ERR_PTR(-ENOMEM);
+
+        if (lookup_flags & LOOKUP_OPEN) {
+                it->it_op = IT_OPEN;
+                if (lookup_flags & LOOKUP_CREATE)
+                        it->it_op |= IT_CREAT;
+                it->it_create_mode = oit->create_mode;
+                it->it_flags = oit->flags;
+        } else {
+                it->it_op = IT_GETATTR;
+        }
+
+#ifndef HAVE_FILE_IN_STRUCT_INTENT
+                /* Since there is no way to pass our intent to ll_file_open,
+                 * just check the file is there. Actual open will be done
+                 * in ll_file_open */
+                if (it->it_op & IT_OPEN)
+                        it->it_op = IT_LOOKUP;
+#endif
+
+        return it;
+}
+
+static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
+                                   struct nameidata *nd)
+{
+        struct dentry *de;
+        ENTRY;
+
+        if (nd && !(nd->flags & (LOOKUP_CONTINUE|LOOKUP_PARENT))) {
+                struct lookup_intent *it;
+
+#if defined(HAVE_FILE_IN_STRUCT_INTENT) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17))
+                /* Did we came here from failed revalidate just to propagate
+                 * its error? */
+                if (nd->flags & LOOKUP_OPEN)
+                        if (IS_ERR(nd->intent.open.file))
+                                RETURN((struct dentry *)nd->intent.open.file);
+#endif
+
+                if (ll_d2d(dentry) && ll_d2d(dentry)->lld_it) {
+                        it = ll_d2d(dentry)->lld_it;
+                        ll_d2d(dentry)->lld_it = NULL;
+                } else {
+                        it = ll_convert_intent(&nd->intent.open, nd->flags);
+                        if (IS_ERR(it))
+                                RETURN((struct dentry *)it);
+                }
+
+                de = ll_lookup_it(parent, dentry, it, nd->flags);
+                if (de)
+                        dentry = de;
+                if ((nd->flags & LOOKUP_OPEN) && !IS_ERR(dentry)) { /* Open */
+                        if (dentry->d_inode && 
+                            it_disposition(it, DISP_OPEN_OPEN)) { /* nocreate */
+#ifdef HAVE_FILE_IN_STRUCT_INTENT
+                                if (S_ISFIFO(dentry->d_inode->i_mode)) {
+                                        // We cannot call open here as it would
+                                        // deadlock.
+                                        ptlrpc_req_finished(
+                                                       (struct ptlrpc_request *)
+                                                          it->d.lustre.it_data);
+                                } else {
+                                        struct file *filp;
+                                        nd->intent.open.file->private_data = it;
+                                        filp =lookup_instantiate_filp(nd,dentry,
+                                                                      NULL);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17))
+/* 2.6.1[456] have a bug in open_namei() that forgets to check
+ * nd->intent.open.file for error, so we need to return it as lookup's result
+ * instead */
+                                        if (IS_ERR(filp)) {
+                                                if (de)
+                                                        dput(de);
+                                                de = (struct dentry *) filp;
+                                        }
+#endif
+                                                
+                                }
+#else /* HAVE_FILE_IN_STRUCT_INTENT */
+                                /* Release open handle as we have no way to
+                                 * pass it to ll_file_open */
+                                ll_release_openhandle(dentry, it);
+#endif /* HAVE_FILE_IN_STRUCT_INTENT */
+                        } else if (it_disposition(it, DISP_OPEN_CREATE)) {
+                                // XXX This can only reliably work on assumption
+                                // that there are NO hashed negative dentries.
+                                ll_d2d(dentry)->lld_it = it;
+                                it = NULL; /* Will be freed in ll_create_nd */
+                                /* We absolutely depend on ll_create_nd to be
+                                 * called to not leak this intent and possible
+                                 * data attached to it */
+                        }
+                }
+
+                if (it) {
+                        ll_intent_release(it);
+                        OBD_FREE(it, sizeof(*it));
+                }
+        } else {
+                de = ll_lookup_it(parent, dentry, NULL, 0);
+        }
+
+        RETURN(de);
+}
+#endif
 #endif
 
 /* We depend on "mode" being set with the proper file type/umask by now */
@@ -483,8 +664,10 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 
         LASSERT(it && it->d.lustre.it_disposition);
 
+        LASSERT(it_disposition(it, DISP_ENQ_CREATE_REF));
         request = it->d.lustre.it_data;
-        rc = ll_prep_inode(&inode, request, 1, dir->i_sb);
+        it_clear_disposition(it, DISP_ENQ_CREATE_REF);
+        rc = ll_prep_inode(&inode, request, DLM_REPLY_REC_OFF, dir->i_sb);
         if (rc)
                 GOTO(out, inode = ERR_PTR(rc));
 
@@ -549,15 +732,21 @@ static void ll_update_times(struct ptlrpc_request *request, int offset,
                                                sizeof(*body));
         LASSERT(body);
 
-        if (body->valid & OBD_MD_FLMTIME &&
-            body->mtime > LTIME_S(inode->i_mtime)) {
-                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to "LPU64"\n",
-                       inode->i_ino, LTIME_S(inode->i_mtime), body->mtime);
-                LTIME_S(inode->i_mtime) = body->mtime;
-        }
+        /* mtime is always updated with ctime, but can be set in past.
+           As write and utime(2) may happen within 1 second, and utime's
+           mtime has a priority over write's one, so take mtime from mds 
+           for the same ctimes. */
         if (body->valid & OBD_MD_FLCTIME &&
-            body->ctime > LTIME_S(inode->i_ctime))
+            body->ctime >= LTIME_S(inode->i_ctime)) {
                 LTIME_S(inode->i_ctime) = body->ctime;
+
+                if (body->valid & OBD_MD_FLMTIME) {
+                        CDEBUG(D_INODE, "setting ino %lu mtime from %lu "
+                               "to "LPU64"\n", inode->i_ino, 
+                               LTIME_S(inode->i_mtime), body->mtime);
+                        LTIME_S(inode->i_mtime) = body->mtime;
+                }
+        }
 }
 
 static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
@@ -604,10 +793,10 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
                 OBD_FREE_PTR(op_data);
                 if (err)
                         break;
-                ll_update_times(request, 0, dir);
+                ll_update_times(request, REPLY_REC_OFF, dir);
 
                 if (dchild) {
-                        err = ll_prep_inode(&inode, request, 0,
+                        err = ll_prep_inode(&inode, request, REPLY_REC_OFF,
                                             dchild->d_sb);
                         if (err)
                                 break;
@@ -626,15 +815,49 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
 }
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#ifndef LUSTRE_KERNEL_VERSION
 static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
 {
-        if (!nd || !nd->intent.d.lustre.it_disposition) {
+        struct lookup_intent *it = ll_d2d(dentry)->lld_it;
+        int rc;
+        
+        if (!it)
+                return ll_mknod_generic(dir, &dentry->d_name, mode, 0, dentry);
+                
+        ll_d2d(dentry)->lld_it = NULL;
+        
+        /* Was there an error? Propagate it! */
+        if (it->d.lustre.it_status) {
+                rc = it->d.lustre.it_status;
+                goto out;
+        }       
+        
+        rc = ll_create_it(dir, dentry, mode, it);
+#ifdef HAVE_FILE_IN_STRUCT_INTENT
+        if (nd && (nd->flags & LOOKUP_OPEN) && dentry->d_inode) { /* Open */
+                nd->intent.open.file->private_data = it;
+                lookup_instantiate_filp(nd, dentry, NULL);
+        }
+#else
+        ll_release_openhandle(dentry,it);
+#endif
+
+out:
+        ll_intent_release(it);
+        OBD_FREE(it, sizeof(*it));
+
+        return rc;
+}
+#else
+static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
+{
+        if (!nd || !nd->intent.d.lustre.it_disposition)
                 /* No saved request? Just mknod the file */
                 return ll_mknod_generic(dir, &dentry->d_name, mode, 0, dentry);
-        }
 
         return ll_create_it(dir, dentry, mode, &nd->intent);
 }
+#endif
 #endif
 
 static int ll_symlink_generic(struct inode *dir, struct dentry *dchild,
@@ -677,10 +900,10 @@ static int ll_symlink_generic(struct inode *dir, struct dentry *dchild,
                         0, &request);
         OBD_FREE_PTR(op_data);
         if (err == 0) {
-                ll_update_times(request, 0, dir);
+                ll_update_times(request, REPLY_REC_OFF, dir);
 
                 if (dchild) {
-                        err = ll_prep_inode(&inode, request, 0,
+                        err = ll_prep_inode(&inode, request, REPLY_REC_OFF,
                                             dchild->d_sb);
                         if (err == 0)
                                 d_instantiate(dchild, inode);
@@ -713,7 +936,7 @@ static int ll_link_generic(struct inode *src,  struct inode *dir,
         err = md_link(sbi->ll_md_exp, op_data, &request);
         OBD_FREE_PTR(op_data);
         if (err == 0)
-                ll_update_times(request, 0, dir);
+                ll_update_times(request, REPLY_REC_OFF, dir);
 
         ptlrpc_req_finished(request);
         RETURN(err);
@@ -755,9 +978,9 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
                         current->fsuid, current->fsgid,
                         current->cap_effective, 0, &request);
         OBD_FREE_PTR(op_data);
-        ll_update_times(request, 0, dir);
+        ll_update_times(request, REPLY_REC_OFF, dir);
         if (!err && dchild) {
-                err = ll_prep_inode(&inode, request, 0,
+                err = ll_prep_inode(&inode, request, REPLY_REC_OFF,
                                     dchild->d_sb);
                 if (err)
                         GOTO(out, err);
@@ -801,7 +1024,7 @@ static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         OBD_FREE_PTR(op_data);
         if (rc == 0)
-                ll_update_times(request, 0, dir);
+                ll_update_times(request, REPLY_REC_OFF, dir);
         ptlrpc_req_finished(request);
         RETURN(rc);
 }
@@ -817,7 +1040,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         ENTRY;
 
         /* req is swabbed so this is safe */
-        body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
+        body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
 
         if (!(body->valid & OBD_MD_FLEASIZE))
                 RETURN(0);
@@ -831,7 +1054,8 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
          * to this file. Use this EA to unlink the objects on the OST.
          * It's opaque so we don't swab here; we leave it to obd_unpackmd() to
          * check it is complete and sensible. */
-        eadata = lustre_swab_repbuf(request, 1, body->eadatasize, NULL);
+        eadata = lustre_swab_repbuf(request, REPLY_REC_OFF + 1,
+                                    body->eadatasize, NULL);
         LASSERT(eadata != NULL);
         if (eadata == NULL) {
                 CERROR("Can't unpack MDS EA data\n");
@@ -860,7 +1084,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies =
-                        lustre_msg_buf(request->rq_repmsg, 2,
+                        lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF + 2,
                                        sizeof(struct llog_cookie) *
                                        lsm->lsm_stripe_count);
                 if (oti.oti_logcookies == NULL) {
@@ -900,7 +1124,7 @@ static int ll_unlink_generic(struct inode * dir, struct qstr *name)
         if (rc)
                 GOTO(out, rc);
 
-        ll_update_times(request, 0, dir);
+        ll_update_times(request, REPLY_REC_OFF, dir);
 
         rc = ll_objects_destroy(request, dir);
  out:
@@ -931,8 +1155,8 @@ static int ll_rename_generic(struct inode *src, struct qstr *src_name,
                         tgt_name->name, tgt_name->len, &request);
         OBD_FREE_PTR(op_data);
         if (!err) {
-                ll_update_times(request, 0, src);
-                ll_update_times(request, 0, tgt);
+                ll_update_times(request, REPLY_REC_OFF, src);
+                ll_update_times(request, REPLY_REC_OFF, tgt);
                 err = ll_objects_destroy(request, src);
         }
 
@@ -941,6 +1165,7 @@ static int ll_rename_generic(struct inode *src, struct qstr *src_name,
         RETURN(err);
 }
 
+#ifdef LUSTRE_KERNEL_VERSION
 static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
 {
         return ll_mknod_generic(nd->dentry->d_inode, &nd->last, mode,rdev,NULL);
@@ -971,6 +1196,7 @@ static int ll_unlink_raw(struct nameidata *nd)
 {
         return ll_unlink_generic(nd->dentry->d_inode, &nd->last);
 }
+#endif
 
 static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
                     ll_dev_t rdev)
@@ -1011,16 +1237,18 @@ static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
 #endif
 
 struct inode_operations ll_dir_inode_operations = {
+#ifdef LUSTRE_KERNEL_VERSION
         .link_raw           = ll_link_raw,
         .unlink_raw         = ll_unlink_raw,
         .symlink_raw        = ll_symlink_raw,
         .mkdir_raw          = ll_mkdir_raw,
         .rmdir_raw          = ll_rmdir_raw,
         .mknod_raw          = ll_mknod_raw,
-        .mknod              = ll_mknod,
         .rename_raw         = ll_rename_raw,
         .setattr            = ll_setattr,
         .setattr_raw        = ll_setattr_raw,
+#endif
+        .mknod              = ll_mknod,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         .create_it          = ll_create_it,
         .lookup_it          = ll_lookup_it,
@@ -1028,7 +1256,6 @@ struct inode_operations ll_dir_inode_operations = {
 #else
         .lookup             = ll_lookup_nd,
         .create             = ll_create_nd,
-        .getattr_it         = ll_getattr_it,
         /* We need all these non-raw things for NFSD, to not patch it. */
         .unlink             = ll_unlink,
         .mkdir              = ll_mkdir,
@@ -1047,11 +1274,13 @@ struct inode_operations ll_dir_inode_operations = {
 };
 
 struct inode_operations ll_special_inode_operations = {
+#ifdef LUSTRE_KERNEL_VERSION
         .setattr_raw    = ll_setattr_raw,
+#endif
         .setattr        = ll_setattr,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        .getattr_it     = ll_getattr_it,
-#else
+        .getattr        = ll_getattr,
+#else   
         .revalidate_it  = ll_inode_revalidate_it,
 #endif
         .permission     = ll_inode_permission,

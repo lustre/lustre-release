@@ -170,7 +170,7 @@ int mdt_client_free(const struct lu_context *ctxt,
         else if (rc >= 0)
                 rc = -EFAULT;
 
-        CDEBUG_EX(rc == 0 ? D_INFO : D_ERROR,
+        CDEBUG(rc == 0 ? D_INFO : D_ERROR,
                   "zeroing out client idx %u in %s rc %d\n",
                   med->med_lr_idx, LAST_RCVD, rc);
 

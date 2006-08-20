@@ -19,19 +19,9 @@ UPCALL=${UPCALL:-DEFAULT}
 build_test_filter
 
 assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
-assert_env ost1_HOST ost2_HOST OST_MKFS_OPTS OSTDEV
+assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 assert_env LIVE_CLIENT FSNAME
 
-####
-# Initialize all the ostN_HOST 
-NUMOST=2
-if [ "$EXTRA_OSTS" ]; then
-    for host in $EXTRA_OSTS; do
-	NUMOST=$((NUMOST + 1))
-	OST=ost$NUMOST
-	eval ${OST}_HOST=$host
-    done
-fi
 
 # This can be a regexp, to allow more clients
 CLIENTS=${CLIENTS:-"`comma_list $LIVE_CLIENT $FAIL_CLIENTS $EXTRA_CLIENTS`"}
@@ -114,25 +104,14 @@ reintegrate_clients() {
 }
 
 start_ost() {
-    local dev=`printf $OSTDEV $1`
-    start ost$1 $dev $OST_MOUNT_OPTS
+    start ost$1 `ostdevname $1` $OST_MOUNT_OPTS
 }
 
 setup() {
     cleanup
     rm -rf logs/*
-    wait_for mds
-    add mds $MDS_MKFS_OPTS --reformat $MDSDEV >> /dev/null
-    start mds $MDSDEV $MDS_MOUNT_OPTS
-    for i in `seq $NUMOST`; do
-	local dev=`printf $OSTDEV $i`
-	local index=$((i - 1))
-	wait_for ost$i
-	echo Adding ost$i at index $index dev $dev
-	add ost$i $OST_MKFS_OPTS --reformat --index=$index $dev >> /dev/null
-	start ost$i $dev $OST_MOUNT_OPTS
-    done
-    [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+    formatall
+    setupall
 
     while ! do_node $CLIENTS "ls -d $LUSTRE" > /dev/null; do sleep 5; done
     grep " $MOUNT " /proc/mounts || zconf_mount $CLIENTS $MOUNT
@@ -140,10 +119,8 @@ setup() {
 
 cleanup() {
     zconf_umount $CLIENTS $MOUNT
-    stop mds -f
-    for i in `seq $NUMOST`; do
-        stop ost$i -f
-    done
+    cleanupall
+    cleanup_check
 }
 
 trap exit INT
@@ -183,21 +160,6 @@ clients_recover_osts() {
 #    do_node $CLIENTS "$LCTL "'--device %OSC_`hostname`_'"${facet}_svc_MNT_client_facet recover"
 }
 
-node_to_ost() {
-    node=$1
-    retvar=$2
-    for i in `seq $NUMOST`; do
-	ostvar="ost${i}_HOST"
-	if [ "${!ostvar}" == $node ]; then
-	    eval $retvar=ost${i}
-	    return 0
-	fi
-    done
-    echo "No ost found for node; $node"
-    return 1
-}
-
-
 if [ "$ONLY" == "cleanup" ]; then
     $CLEANUP
     exit
@@ -222,11 +184,11 @@ test_0() {
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 1; }
 
-    facet_failover ost1
+    facet_failover ost1 || return 4
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 2; }
 
-    facet_failover ost2
+    facet_failover ost2 || return 5
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 3; }
     return 0
@@ -262,10 +224,10 @@ test_2() {
     echo "Reintegrating OST"
     reboot_facet ost1
     wait_for ost1
-    start_ost 1
+    start_ost 1 || return 2
 
     wait_for mds
-    start mds $MDSDEV $MDS_MOUNT_OPTS
+    start mds $MDSDEV $MDS_MOUNT_OPTS || return $?
 
     #Check FS
     wait $DFPID

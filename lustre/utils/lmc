@@ -699,9 +699,10 @@ def add_net(gen, lustre, options):
         if options.verbose:
             print "Testing network on", node_name
         target = string.split(nid,'@')[0]
-        out = runcmd("ping -c 1 -w 5 %s" %target)
-        if out != 0:
-            print "Could not connect to", node_name,", Please check network."
+	if target != '*' and target != '\\*':
+		out = runcmd("ping -c 1 -w 5 %s" %target)
+		if out != 0:
+		    print "Could not connect to %s, please check network." % node_name
             
     ret = findByName(lustre, node_name, "node")
     if not ret:

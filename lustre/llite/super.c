@@ -56,6 +56,9 @@ struct super_operations lustre_super_operations =
         .remount_fs     = ll_remount_fs,
 };
 
+
+void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg));
+
 static int __init init_lustre_lite(void)
 {
         int rc, seed[2];
@@ -74,6 +77,7 @@ static int __init init_lustre_lite(void)
         ll_register_cache(&ll_cache_definition);
 
         lustre_register_client_fill_super(ll_fill_super);
+        lustre_register_client_process_config(ll_process_config);
 
         get_random_bytes(seed, sizeof(seed));
         ll_srand(seed[0], seed[1]);
@@ -84,8 +88,10 @@ static int __init init_lustre_lite(void)
 static void __exit exit_lustre_lite(void)
 {
         int rc;
+        int rc;
 
         lustre_register_client_fill_super(NULL);
+        lustre_register_client_process_config(NULL);
         
         ll_unregister_cache(&ll_cache_definition);
 

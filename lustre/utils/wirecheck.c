@@ -7,6 +7,7 @@
 #include <liblustre.h>
 #include <lustre_lib.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_disk.h>
 
 #define BLANK_LINE()                                            \
 do {                                                            \
@@ -61,7 +62,7 @@ do {                                                            \
 #define CHECK_MEMBER(s,m)                                       \
 do {                                                            \
         CHECK_MEMBER_OFFSET(s, m);                              \
-                CHECK_MEMBER_SIZEOF(s, m);                      \
+        CHECK_MEMBER_SIZEOF(s, m);                              \
 } while(0)
 
 #define CHECK_STRUCT(s)                                         \
@@ -79,23 +80,91 @@ check_lustre_handle(void)
         CHECK_MEMBER(lustre_handle, cookie);
 }
 
-static void
-check_lustre_msg(void)
+void
+check_lustre_msg_v1(void)
 {
         BLANK_LINE();
-        CHECK_STRUCT(lustre_msg);
-        CHECK_MEMBER(lustre_msg, handle);
-        CHECK_MEMBER(lustre_msg, magic);
-        CHECK_MEMBER(lustre_msg, type);
-        CHECK_MEMBER(lustre_msg, version);
-        CHECK_MEMBER(lustre_msg, opc);
-        CHECK_MEMBER(lustre_msg, last_xid);
-        CHECK_MEMBER(lustre_msg, last_committed);
-        CHECK_MEMBER(lustre_msg, transno);
-        CHECK_MEMBER(lustre_msg, status);
-        CHECK_MEMBER(lustre_msg, flags);
-        CHECK_MEMBER(lustre_msg, bufcount);
-        CHECK_MEMBER(lustre_msg, buflens[7]);
+        CHECK_STRUCT(lustre_msg_v1);
+        CHECK_MEMBER(lustre_msg_v1, lm_handle);
+        CHECK_MEMBER(lustre_msg_v1, lm_magic);
+        CHECK_MEMBER(lustre_msg_v1, lm_type);
+        CHECK_MEMBER(lustre_msg_v1, lm_version);
+        CHECK_MEMBER(lustre_msg_v1, lm_opc);
+        CHECK_MEMBER(lustre_msg_v1, lm_last_xid);
+        CHECK_MEMBER(lustre_msg_v1, lm_last_committed);
+        CHECK_MEMBER(lustre_msg_v1, lm_transno);
+        CHECK_MEMBER(lustre_msg_v1, lm_status);
+        CHECK_MEMBER(lustre_msg_v1, lm_flags);
+        CHECK_MEMBER(lustre_msg_v1, lm_conn_cnt);
+        CHECK_MEMBER(lustre_msg_v1, lm_bufcount);
+        CHECK_MEMBER(lustre_msg_v1, lm_buflens[7]);
+}
+
+void
+check_lustre_msg_v2(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lustre_msg_v2);
+        CHECK_MEMBER(lustre_msg_v2, lm_bufcount);
+        CHECK_MEMBER(lustre_msg_v2, lm_secflvr);
+        CHECK_MEMBER(lustre_msg_v2, lm_magic);
+        CHECK_MEMBER(lustre_msg_v2, lm_buflens[7]);
+}
+
+void
+check_ptlrpc_body(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(ptlrpc_body);
+        CHECK_MEMBER(ptlrpc_body, pb_handle);
+        CHECK_MEMBER(ptlrpc_body, pb_type);
+        CHECK_MEMBER(ptlrpc_body, pb_version);
+        CHECK_MEMBER(ptlrpc_body, pb_opc);
+        CHECK_MEMBER(ptlrpc_body, pb_status);
+        CHECK_MEMBER(ptlrpc_body, pb_last_xid);
+        CHECK_MEMBER(ptlrpc_body, pb_last_committed);
+        CHECK_MEMBER(ptlrpc_body, pb_transno);
+        CHECK_MEMBER(ptlrpc_body, pb_flags);
+        CHECK_MEMBER(ptlrpc_body, pb_op_flags);
+        CHECK_MEMBER(ptlrpc_body, pb_conn_cnt);
+        CHECK_MEMBER(ptlrpc_body, pb_paddings[3]);
+}
+
+static void check_obd_connect_data(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(obd_connect_data);
+        CHECK_MEMBER(obd_connect_data, ocd_connect_flags);
+        CHECK_MEMBER(obd_connect_data, ocd_version);
+        CHECK_MEMBER(obd_connect_data, ocd_grant);
+        CHECK_MEMBER(obd_connect_data, ocd_index);
+        CHECK_MEMBER(obd_connect_data, ocd_brw_size);
+        CHECK_MEMBER(obd_connect_data, ocd_ibits_known);
+        CHECK_MEMBER(obd_connect_data, ocd_nllu);
+        CHECK_MEMBER(obd_connect_data, ocd_nllg);
+        CHECK_MEMBER(obd_connect_data, padding1);
+        CHECK_MEMBER(obd_connect_data, padding2);
+        CHECK_MEMBER(obd_connect_data, padding3);
+        CHECK_MEMBER(obd_connect_data, padding4);
+
+        CHECK_CDEFINE(OBD_CONNECT_RDONLY);
+        CHECK_CDEFINE(OBD_CONNECT_INDEX);
+        CHECK_CDEFINE(OBD_CONNECT_GRANT);
+        CHECK_CDEFINE(OBD_CONNECT_SRVLOCK);
+        CHECK_CDEFINE(OBD_CONNECT_VERSION);
+        CHECK_CDEFINE(OBD_CONNECT_REQPORTAL);
+        CHECK_CDEFINE(OBD_CONNECT_ACL);
+        CHECK_CDEFINE(OBD_CONNECT_XATTR);
+        CHECK_CDEFINE(OBD_CONNECT_CROW);
+        CHECK_CDEFINE(OBD_CONNECT_TRUNCLOCK);
+        CHECK_CDEFINE(OBD_CONNECT_TRANSNO);
+        CHECK_CDEFINE(OBD_CONNECT_IBITS);
+        CHECK_CDEFINE(OBD_CONNECT_JOIN);
+        CHECK_CDEFINE(OBD_CONNECT_ATTRFID);
+        CHECK_CDEFINE(OBD_CONNECT_NODEVOH);
+        CHECK_CDEFINE(OBD_CONNECT_LCL_CLIENT);
+        CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT);
+        CHECK_CDEFINE(OBD_CONNECT_BRW_SIZE);
 }
 
 static void
@@ -381,6 +450,15 @@ check_mds_body(void)
         CHECK_CDEFINE(MDS_OPEN_HAS_EA);
         CHECK_CDEFINE(MDS_OPEN_HAS_OBJS);
 
+        /* these should be identical to their EXT3_*_FL counterparts, and
+         * are redefined only to avoid dragging in ext3_fs.h */
+        CHECK_CDEFINE(MDS_SYNC_FL);
+        CHECK_CDEFINE(MDS_IMMUTABLE_FL);
+        CHECK_CDEFINE(MDS_APPEND_FL);
+        CHECK_CDEFINE(MDS_NOATIME_FL);
+        CHECK_CDEFINE(MDS_DIRSYNC_FL);
+        CHECK_CDEFINE(MDS_BFLAG_EXT_FLAGS);
+
         CHECK_CDEFINE(MDS_INODELOCK_LOOKUP);
         CHECK_CDEFINE(MDS_INODELOCK_UPDATE);
         CHECK_CDEFINE(MDS_INODELOCK_OPEN);
@@ -494,7 +572,6 @@ check_lov_desc(void)
         CHECK_MEMBER(lov_desc, ld_pattern);
         CHECK_MEMBER(lov_desc, ld_default_stripe_size);
         CHECK_MEMBER(lov_desc, ld_default_stripe_offset);
-        CHECK_MEMBER(lov_desc, ld_qos_threshold);
         CHECK_MEMBER(lov_desc, ld_qos_maxage);
         CHECK_MEMBER(lov_desc, ld_padding_1);
         CHECK_MEMBER(lov_desc, ld_padding_2);
@@ -848,6 +925,43 @@ check_qunit_data(void)
 }
 
 static void
+check_mgs_target_info(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(mgs_target_info);
+        CHECK_MEMBER(mgs_target_info, mti_lustre_ver);
+        CHECK_MEMBER(mgs_target_info, mti_stripe_index);
+        CHECK_MEMBER(mgs_target_info, mti_config_ver);
+        CHECK_MEMBER(mgs_target_info, mti_flags);
+        CHECK_MEMBER(mgs_target_info, mti_nid_count);
+        CHECK_MEMBER(mgs_target_info, mti_fsname);
+        CHECK_MEMBER(mgs_target_info, mti_svname);
+        CHECK_MEMBER(mgs_target_info, mti_uuid);
+        CHECK_MEMBER(mgs_target_info, mti_nids);
+        CHECK_MEMBER(mgs_target_info, mti_params);
+}
+
+static void
+check_lustre_disk_data(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(lustre_disk_data);
+        CHECK_MEMBER(lustre_disk_data, ldd_magic);
+        CHECK_MEMBER(lustre_disk_data, ldd_feature_compat);
+        CHECK_MEMBER(lustre_disk_data, ldd_feature_rocompat);
+        CHECK_MEMBER(lustre_disk_data, ldd_feature_incompat);
+        CHECK_MEMBER(lustre_disk_data, ldd_config_ver);
+        CHECK_MEMBER(lustre_disk_data, ldd_flags);
+        CHECK_MEMBER(lustre_disk_data, ldd_svindex);
+        CHECK_MEMBER(lustre_disk_data, ldd_mount_type);
+        CHECK_MEMBER(lustre_disk_data, ldd_fsname);
+        CHECK_MEMBER(lustre_disk_data, ldd_svname);
+        CHECK_MEMBER(lustre_disk_data, ldd_uuid);
+        CHECK_MEMBER(lustre_disk_data, ldd_mount_opts);
+        CHECK_MEMBER(lustre_disk_data, ldd_params);
+}
+
+static void
 system_string (char *cmdline, char *str, int len)
 {
         int   fds[2];
@@ -910,6 +1024,7 @@ main(int argc, char **argv)
         printf ("void lustre_assert_wire_constants(void)\n"
                 "{\n"
                 "        /* Wire protocol assertions generated by 'wirecheck'\n"
+                "         * (make -C lustre/utils newwirecheck)\n"
                 "         * running on %s\n"
                 "         * with %s */\n"
                 "\n", unameinfo, gccinfo);
@@ -917,7 +1032,8 @@ main(int argc, char **argv)
         BLANK_LINE ();
 
         COMMENT("Constants...");
-        CHECK_DEFINE(PTLRPC_MSG_MAGIC);
+        CHECK_DEFINE(LUSTRE_MSG_MAGIC_V1);
+        CHECK_DEFINE(LUSTRE_MSG_MAGIC_V2);
         CHECK_DEFINE(PTLRPC_MSG_VERSION);
 
         CHECK_VALUE(PTL_RPC_MSG_REQUEST);
@@ -1027,24 +1143,22 @@ main(int argc, char **argv)
         CHECK_VALUE(QUOTA_DQACQ);
         CHECK_VALUE(QUOTA_DQREL);
 
-        CHECK_CDEFINE(OBD_CONNECT_RDONLY);
-        CHECK_CDEFINE(OBD_CONNECT_INDEX);
-        CHECK_CDEFINE(OBD_CONNECT_GRANT);
-        CHECK_CDEFINE(OBD_CONNECT_SRVLOCK);
-        CHECK_CDEFINE(OBD_CONNECT_VERSION);
-        CHECK_CDEFINE(OBD_CONNECT_REQPORTAL);
-        CHECK_CDEFINE(OBD_CONNECT_ACL);
-        CHECK_CDEFINE(OBD_CONNECT_XATTR);
-        CHECK_CDEFINE(OBD_CONNECT_CROW);
-        CHECK_CDEFINE(OBD_CONNECT_TRUNCLOCK);
-        CHECK_CDEFINE(OBD_CONNECT_TRANSNO);
-        CHECK_CDEFINE(OBD_CONNECT_IBITS);
-        CHECK_CDEFINE(OBD_CONNECT_JOIN);
+        CHECK_VALUE(MGS_CONNECT);
+        CHECK_VALUE(MGS_DISCONNECT);
+        CHECK_VALUE(MGS_EXCEPTION);   
+        CHECK_VALUE(MGS_TARGET_REG);
+        CHECK_VALUE(MGS_TARGET_DEL);
 
         COMMENT("Sizes and Offsets");
         BLANK_LINE();
+        CHECK_STRUCT(obd_uuid);
         check_lustre_handle();
-        check_lustre_msg();
+        check_lustre_msg_v1();
+        check_lustre_msg_v2();
+        printf("        LASSERT(offsetof(struct lustre_msg_v1, lm_magic) == "
+               "offsetof(struct lustre_msg_v2, lm_magic));\n");
+        check_ptlrpc_body();
+        check_obd_connect_data();
         check_obdo();
         check_lov_mds_md_v1();
         check_lov_mds_md_join();
@@ -1092,6 +1206,9 @@ main(int argc, char **argv)
         check_llog_array_rec();
         check_mds_extent_desc();
         check_qunit_data();
+        check_mgs_target_info();
+        check_lustre_disk_data();
+
 
         printf("}\n\n");
 

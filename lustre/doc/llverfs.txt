@@ -1,0 +1,48 @@
+FILESYSTEM VERIFICATION TOOL. ( ext3vt )
+==========================================
+
+Building tool: 
+	To build this tool you just need to invoke make at command prompt.
+	e.g.  $ make 
+	
+	this will compile the sources and build ext3vt in this directory.
+
+Usage: 
+Syntax:
+
+./ext3vt [OPTION]... <filesystem path> ... 
+
+[OPTION]
+        -t {seconds} for --timestamp,  set test time(default=current time())
+        -o {fileOffset}  for --fileOffset, full path of file from which tests should start
+        -r run test in read (verify) mode
+        -w run test in write (test-pattern) mode (default=r&w)
+        -v for verbose
+        -p for --partial, for partial check (1MB files)
+        -l for --long, full check (4GB file with 4k blocks)
+        -c for --chunksize, IO chunk size (default=1048576)
+        -h display this help and exit
+        --help display this help and exit
+
+Guide lines for using this tool:
+	It is expected that ext3vt tool will be run on large size 
+filesystem (TB), So it is always better to run ext3vt tool in verbose mode, 
+So that one can easily restart device testing from the point at which it 
+had stoped. 
+for example:
+	
+	[root@Matrix ext3vt]# ./ext3vtnew -v -f -w --timestamp=1145009417 /mnt/store/
+	Timestamp: 1145009417
+	write File name: /mnt/store/dir00004/file005
+	
+If due to some reason sombody breaks execution at this point then one can 
+easily restart device from the same point by picking the same file offset 
+displayed in by verbose as explained below.
+
+	[root@tucker ext3vt]# ./bdevt -v -f -w --fileOffset=/home/dir00004/file005 
+			     --timestamp=1145009417 /mnt/store/
+	Timestamp: 1145009417
+	write File name: /mnt/store/dir00008/file007
+	write complete
+	[root@tucker ext3vt]#
+One can use similar things for read only and read write modes also.

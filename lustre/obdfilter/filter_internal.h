@@ -22,13 +22,13 @@
 
 #define FILTER_ROCOMPAT_SUPP (0)
 
-#define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
-
 #define FILTER_INCOMPAT_SUPP (OBD_INCOMPAT_GROUPS | OBD_INCOMPAT_OST | \
                               OBD_INCOMPAT_COMMON_LR)
 
 #define FILTER_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
 #define GRANT_FOR_LLOG(obd) 16
+
+#define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct filter_client_data {
@@ -44,10 +44,34 @@ struct filter_client_data {
                             OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME)
 
 struct filter_fid {
-        struct ll_fid   ff_fid;
+        struct ll_fid   ff_fid;         /* ff_fid.f_type == file stripe number */
         __u64           ff_objid;
         __u64           ff_group;
 };
+
+/* per-client-per-object persistent state (LRU) */
+struct filter_mod_data {
+        struct list_head fmd_list;      /* linked to fed_mod_list */
+        __u64            fmd_id;        /* object being written to */
+        __u64            fmd_gr;        /* group being written to */
+        __u64            fmd_mactime_xid;/* xid highest {m,a,c}time setattr */
+        unsigned long    fmd_expire;    /* jiffies when it should expire */
+        int              fmd_refcount;  /* reference counter - list holds 1 */
+};
+
+#ifdef BGL_SUPPORT
+#define FILTER_FMD_MAX_NUM_DEFAULT 128 /* many active files per client on BGL */
+#else
+#define FILTER_FMD_MAX_NUM_DEFAULT  32
+#endif
+#define FILTER_FMD_MAX_AGE_DEFAULT ((obd_timeout + 10) * HZ)
+
+struct filter_mod_data *filter_fmd_find(struct obd_export *exp,
+                                        obd_id objid, obd_gr group);
+struct filter_mod_data *filter_fmd_get(struct obd_export *exp,
+                                       obd_id objid, obd_gr group);
+void filter_fmd_put(struct obd_export *exp, struct filter_mod_data *fmd);
+void filter_fmd_expire(struct obd_export *exp);
 
 enum {
         LPROC_FILTER_READ_BYTES = 0,
@@ -73,7 +97,7 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_next_id(struct filter_obd *, struct obdo *);
-__u64 filter_last_id(struct filter_obd *, struct obdo *);
+__u64 filter_last_id(struct filter_obd *, obd_gr group);
 int filter_update_fidea(struct obd_export *exp, struct inode *inode,
                         void *handle, struct obdo *oa);
 int filter_update_server_data(struct obd_device *, struct file *,
@@ -86,8 +110,8 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                    struct obd_export *);
 int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                             struct obdo *oa, struct obd_trans_info *oti);
-int filter_setattr(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md *md, struct obd_trans_info *oti);
+int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
+                   struct obd_trans_info *oti);
 
 struct dentry *filter_create_object(struct obd_device *obd, struct obdo *oa);
 
@@ -102,9 +126,8 @@ int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
 int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, int niocount, struct niobuf_local *,
                     struct obd_trans_info *, int rc);
-int filter_brw(int cmd, struct obd_export *, struct obdo *,
-               struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
-               struct obd_trans_info *);
+int filter_brw(int cmd, struct obd_export *, struct obd_info *oinfo,
+               obd_count oa_bufs, struct brw_page *pga, struct obd_trans_info *);
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
 
 /* filter_io_*.c */
@@ -129,6 +152,7 @@ void filter_iobuf_put(struct filter_obd *filter, struct filter_iobuf *iobuf,
 int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                      struct obd_export *exp, struct iattr *attr,
                      struct obd_trans_info *oti, void **wait_handle);
+int filter_clear_truncated_page(struct inode *inode);
 
 /* filter_log.c */
 struct ost_filterdata {

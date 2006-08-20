@@ -49,18 +49,18 @@ static int target_quotacheck_callback(struct obd_export *exp,
 {
         struct ptlrpc_request *req;
         struct obd_quotactl *body;
-        int rc, size = sizeof(*oqctl);
+        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*oqctl) };
         ENTRY;
 
         req = ptlrpc_prep_req(exp->exp_imp_reverse, LUSTRE_OBD_VERSION,
-                              OBD_QC_CALLBACK, 1, &size, NULL);
+                              OBD_QC_CALLBACK, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
+        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         *body = *oqctl;
 
-        req->rq_replen = lustre_msg_size(0, NULL);
+        ptlrpc_req_set_repsize(req, 1, NULL);
 
         rc = ptlrpc_queue_wait(req);
         ptlrpc_req_finished(req);
@@ -153,29 +153,28 @@ int client_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *req;
         struct obd_quotactl *body;
-        int size = sizeof(*body), opc, version;
-        int rc;
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int ver, opc, rc;
         ENTRY;
 
         if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_MDC_NAME)) {
-                version = LUSTRE_MDS_VERSION;
+                ver = LUSTRE_MDS_VERSION;
                 opc = MDS_QUOTACHECK;
         } else if (!strcmp(exp->exp_obd->obd_type->typ_name, LUSTRE_OSC_NAME)) {
-                version = LUSTRE_OST_VERSION;
+                ver = LUSTRE_OST_VERSION;
                 opc = OST_QUOTACHECK;
         } else {
                 RETURN(-EINVAL);
         }
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), version, opc, 1, &size,
-                              NULL);
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), ver, opc, 2, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
+        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         *body = *oqctl;
 
-        req->rq_replen = lustre_msg_size(0, NULL);
+        ptlrpc_req_set_repsize(req, 1, NULL);
 
         /* the next poll will find -ENODATA, that means quotacheck is
          * going on */
@@ -224,13 +223,13 @@ int lov_quota_check(struct obd_export *exp, struct obd_quotactl *oqctl)
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 int err;
 
-                if (!lov->tgts[i].active) {
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
                         CERROR("lov idx %d inactive\n", i);
                         RETURN(-EIO);
                 }
 
-                err = obd_quotacheck(lov->tgts[i].ltd_exp, oqctl);
-                if (err && lov->tgts[i].active && !rc)
+                err = obd_quotacheck(lov->lov_tgts[i]->ltd_exp, oqctl);
+                if (err && lov->lov_tgts[i]->ltd_active && !rc)
                         rc = err;
         }
 

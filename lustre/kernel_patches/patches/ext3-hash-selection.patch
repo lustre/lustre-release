@@ -26,25 +26,25 @@ Index: linux-2.6.9/fs/ext3/hash.c
  		return -1;
 Index: linux-2.6.9/fs/ext3/super.c
 ===================================================================
---- linux-2.6.9.orig/fs/ext3/super.c	2006-04-23 22:38:55.000000000 +0800
-+++ linux-2.6.9/fs/ext3/super.c	2006-04-23 22:39:56.000000000 +0800
-@@ -598,6 +598,7 @@
- 	Opt_ignore, Opt_barrier, Opt_err, Opt_resize,
+--- super.c.orig	2006-08-17 09:26:01.000000000 +0300
++++ super.c	2006-08-17 09:31:22.000000000 +0300
+@@ -599,6 +599,7 @@ enum {
  	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
- 	Opt_extents, Opt_extdebug, Opt_mballoc,
-+ 	Opt_hashfunc,
+ 	Opt_extents, Opt_noextents, Opt_extdebug,
+ 	Opt_mballoc, Opt_nomballoc, Opt_stripe,
++        Opt_hashfunc,
  };
  
  static match_table_t tokens = {
-@@ -651,6 +652,7 @@
- 	{Opt_extdebug, "extdebug"},
- 	{Opt_mballoc, "mballoc"},
+@@ -655,6 +656,7 @@ static match_table_t tokens = {
+ 	{Opt_nomballoc, "nomballoc"},
+ 	{Opt_stripe, "stripe=%u"},
  	{Opt_barrier, "barrier=%u"},
 +	{Opt_hashfunc,"hash=%s"},
  	{Opt_err, NULL},
  	{Opt_resize, "resize"},
  };
-@@ -675,6 +677,7 @@
+@@ -679,6 +681,7 @@ static unsigned long get_sb_block(void *
  	return sb_block;
  }
  
@@ -52,27 +52,26 @@ Index: linux-2.6.9/fs/ext3/super.c
  static int parse_options (char * options, struct super_block *sb,
  			  unsigned long * inum, unsigned long *n_blocks_count, int is_remount)
  {
-@@ -963,6 +966,23 @@
- 		case Opt_mballoc:
- 			set_opt (sbi->s_mount_opt, MBALLOC);
+@@ -980,6 +983,22 @@ clear_qf_name:
+ 				return 0;
+ 			sbi->s_stripe = option;
  			break;
 +		case Opt_hashfunc:
 +			if (strncmp (args[0].from,"legacy",6) == 0){
-+               user_selected_hash_function = 0;
-+            } else if (strncmp (args[0].from,"half_md4",8) == 0){
-+               user_selected_hash_function = 1;
-+            } else if (strncmp (args[0].from,"tea",3) == 0){
-+               user_selected_hash_function = 2;
-+            } else if (strncmp (args[0].from,"r5",2) == 0){
-+               user_selected_hash_function = 3;
-+            } else if (strncmp (args[0].from,"same",4) == 0){
-+               user_selected_hash_function = 4;
-+            } else {
-+               printk ("Hashfunc name wrong\n");
-+               return 0;
-+            }
-+		 	 break;
-+	
++                                user_selected_hash_function = 0;
++                        } else if (strncmp (args[0].from,"half_md4",8) == 0){
++                                user_selected_hash_function = 1;
++                        } else if (strncmp (args[0].from,"tea",3) == 0){
++                                user_selected_hash_function = 2;
++                        } else if (strncmp (args[0].from,"r5",2) == 0){
++                                user_selected_hash_function = 3;
++                        } else if (strncmp (args[0].from,"same",4) == 0){
++                                user_selected_hash_function = 4;
++                        } else {
++                                printk ("Hashfunc name wrong\n");
++                                return 0;
++                        }
++		 	break;
  		default:
  			printk (KERN_ERR
  				"EXT3-fs: Unrecognized mount option \"%s\" "

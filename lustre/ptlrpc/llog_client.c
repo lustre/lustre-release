@@ -53,10 +53,9 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         struct llogd_body *body;
         struct llog_handle *handle;
         struct ptlrpc_request *req = NULL;
-        int size[2] = {sizeof(req_body)};
-        char *tmp[2] = {(char*) &req_body};
-        int bufcount = 1;
-        int repsize[] = {sizeof (req_body)};
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(req_body) };
+        char *bufs[3] = { NULL, (char*)&req_body };
+        int bufcount = 2;
         int rc;
         ENTRY;
 
@@ -81,21 +80,21 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
 
         if (name) {
                 size[bufcount] = strlen(name) + 1;
-                tmp[bufcount] = name;
+                bufs[bufcount] = name;
                 bufcount++;
         }
 
         req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
-                              LLOG_ORIGIN_HANDLE_CREATE, bufcount, size, tmp);
+                              LLOG_ORIGIN_HANDLE_CREATE, bufcount, size, bufs);
         if (!req)
                 GOTO(err_free, rc = -ENOMEM);
 
-        req->rq_replen = lustre_msg_size(1, repsize);
+        ptlrpc_req_set_repsize(req, 2, size);
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(err_free, rc);
 
-        body = lustre_swab_repbuf(req, 0, sizeof(*body),
+        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
                                  lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
@@ -120,21 +119,20 @@ static int llog_client_destroy(struct llog_handle *loghandle)
         struct obd_import *imp = loghandle->lgh_ctxt->loc_imp;
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
-        int size = sizeof(*body);
-        int repsize[2] = {sizeof (*body)};
+        int size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION, 
-                              LLOG_ORIGIN_HANDLE_DESTROY, 1, &size, NULL);
+                              LLOG_ORIGIN_HANDLE_DESTROY, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         body->lgd_logid = loghandle->lgh_id;
         body->lgd_llh_flags = loghandle->lgh_hdr->llh_flags;
 
-        req->rq_replen = lustre_msg_size(1, repsize);
+        ptlrpc_req_set_repsize(req, 2, size);
         rc = ptlrpc_queue_wait(req);
         
         ptlrpc_req_finished(req);
@@ -150,17 +148,16 @@ static int llog_client_next_block(struct llog_handle *loghandle,
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
         void * ptr;
-        int size = sizeof(*body);
-        int repsize[2] = {sizeof (*body)};
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
-                              LLOG_ORIGIN_HANDLE_NEXT_BLOCK, 1,&size,NULL);
+                              LLOG_ORIGIN_HANDLE_NEXT_BLOCK, 2, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         body->lgd_logid = loghandle->lgh_id;
         body->lgd_ctxt_idx = loghandle->lgh_ctxt->loc_idx - 1;
         body->lgd_llh_flags = loghandle->lgh_hdr->llh_flags;
@@ -168,14 +165,14 @@ static int llog_client_next_block(struct llog_handle *loghandle,
         body->lgd_saved_index = *cur_idx;
         body->lgd_len = len;
         body->lgd_cur_offset = *cur_offset;
-        repsize[1] = len;
 
-        req->rq_replen = lustre_msg_size(2, repsize);
+        size[REPLY_REC_OFF + 1] = len;
+        ptlrpc_req_set_repsize(req, 3, size);
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out, rc);
 
-        body = lustre_swab_repbuf(req, 0, sizeof(*body),
+        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
                                  lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
@@ -183,7 +180,7 @@ static int llog_client_next_block(struct llog_handle *loghandle,
         }
 
         /* The log records are swabbed as they are processed */
-        ptr = lustre_msg_buf(req->rq_repmsg, 1, len);
+        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1, len);
         if (ptr == NULL) {
                 CERROR ("Can't unpack bitmap\n");
                 GOTO(out, rc =-EFAULT);
@@ -207,37 +204,36 @@ static int llog_client_prev_block(struct llog_handle *loghandle,
         struct ptlrpc_request *req = NULL;
         struct llogd_body *body;
         void * ptr;
-        int size = sizeof(*body);
-        int repsize[2] = {sizeof (*body)};
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
-                              LLOG_ORIGIN_HANDLE_PREV_BLOCK, 1,&size,NULL);
+                              LLOG_ORIGIN_HANDLE_PREV_BLOCK, 2, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         body->lgd_logid = loghandle->lgh_id;
         body->lgd_ctxt_idx = loghandle->lgh_ctxt->loc_idx - 1;
         body->lgd_llh_flags = loghandle->lgh_hdr->llh_flags;
         body->lgd_index = prev_idx;
         body->lgd_len = len;
-        repsize[1] = len;
 
-        req->rq_replen = lustre_msg_size(2, repsize);
+        size[REPLY_REC_OFF + 1] = len;
+        ptlrpc_req_set_repsize(req, 3, size);
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out, rc);
 
-        body = lustre_swab_repbuf(req, 0, sizeof(*body),
+        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
                                  lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
                 GOTO(out, rc =-EFAULT);
         }
 
-        ptr = lustre_msg_buf(req->rq_repmsg, 1, len);
+        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1, len);
         if (ptr == NULL) {
                 CERROR ("Can't unpack bitmap\n");
                 GOTO(out, rc =-EFAULT);
@@ -258,27 +254,28 @@ static int llog_client_read_header(struct llog_handle *handle)
         struct llogd_body *body;
         struct llog_log_hdr *hdr;
         struct llog_rec_hdr *llh_hdr;
-        int size = sizeof(*body);
-        int repsize = sizeof (*hdr);
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int repsize[2] = { sizeof(struct ptlrpc_body), sizeof(*hdr) };
         int rc;
         ENTRY;
 
         req = ptlrpc_prep_req(imp, LUSTRE_LOG_VERSION,
-                              LLOG_ORIGIN_HANDLE_READ_HEADER, 1, &size, NULL);
+                              LLOG_ORIGIN_HANDLE_READ_HEADER, 2, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         body->lgd_logid = handle->lgh_id;
         body->lgd_ctxt_idx = handle->lgh_ctxt->loc_idx - 1;
         body->lgd_llh_flags = handle->lgh_hdr->llh_flags;
 
-        req->rq_replen = lustre_msg_size(1, &repsize);
+        ptlrpc_req_set_repsize(req, 2, repsize);
         rc = ptlrpc_queue_wait(req);
         if (rc)
                 GOTO(out, rc);
 
-        hdr = lustre_swab_repbuf(req, 0, sizeof(*hdr), lustre_swab_llog_hdr);
+        hdr = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*hdr),
+                                 lustre_swab_llog_hdr);
         if (hdr == NULL) {
                 CERROR ("Can't unpack llog_hdr\n");
                 GOTO(out, rc =-EFAULT);

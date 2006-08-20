@@ -31,6 +31,8 @@
 
 #include <libcfs/linux/portals_compat25.h>
 
+#include <linux/lustre_patchless_compat.h>
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
 struct ll_iattr_struct {
         struct iattr    iattr;
@@ -40,7 +42,30 @@ struct ll_iattr_struct {
 #define ll_iattr_struct iattr
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,16)
+#ifndef HAVE_SET_FS_PWD
+static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
+                struct dentry *dentry)
+{
+        struct dentry *old_pwd;
+        struct vfsmount *old_pwdmnt;
+
+        write_lock(&fs->lock);
+        old_pwd = fs->pwd;
+        old_pwdmnt = fs->pwdmnt;
+        fs->pwdmnt = mntget(mnt);
+        fs->pwd = dget(dentry);
+        write_unlock(&fs->lock);
+
+        if (old_pwd) {
+                dput(old_pwd);
+                mntput(old_pwdmnt);
+        }
+}
+#else
+#define ll_set_fs_pwd set_fs_pwd
+#endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
 #define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)
 #define LOCK_INODE_MUTEX(inode) do {mutex_lock(&(inode)->i_mutex); } while(0)
 #define TRYLOCK_INODE_MUTEX(inode) mutex_trylock(&(inode)->i_mutex)
@@ -51,6 +76,15 @@ struct ll_iattr_struct {
 #define LOCK_INODE_MUTEX(inode) do {down(&(inode)->i_sem); } while(0)
 #define TRYLOCK_INODE_MUTEX(inode) (!down_trylock(&(inode)->i_sem))
 #endif
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,17)
+#define UNLOCK_DQONOFF_MUTEX(dqopt) do {mutex_unlock(&(dqopt)->dqonoff_mutex); } while(0)
+#define LOCK_DQONOFF_MUTEX(dqopt) do {mutex_lock(&(dqopt)->dqonoff_mutex); } while(0)
+#else
+#define UNLOCK_DQONOFF_MUTEX(dqopt) do {up(&(dqopt)->dqonoff_sem); } while(0)
+#define LOCK_DQONOFF_MUTEX(dqopt) do {down(&(dqopt)->dqonoff_sem); } while(0)
+#endif
+
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,4)
 #define NGROUPS_SMALL           NGROUPS
@@ -177,6 +211,9 @@ static inline int cleanup_group_info(void)
 #define unlock_24kernel()       unlock_kernel()
 #define ll_kernel_locked()      (current->lock_depth >= 0)
 
+/* 2.4 kernels have HZ=100 on i386/x86_64, this should be reasonably safe */
+#define get_jiffies_64()        (__u64)jiffies
+
 #ifdef HAVE_MM_INLINE
 #include <linux/mm_inline.h>
 #endif
@@ -242,7 +279,7 @@ typedef long sector_t;
 static inline void clear_page_dirty(struct page *page)
 {
         if (PageDirty(page))
-                ClearPageDirty(page); 
+                ClearPageDirty(page);
 }
 
 static inline int clear_page_dirty_for_io(struct page *page)
@@ -326,12 +363,10 @@ static inline int page_mapped(struct page *page)
 }
 #endif /* !HAVE_PAGE_MAPPED */
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,16))
 static inline void touch_atime(struct vfsmount *mnt, struct dentry *dentry)
 {
         update_atime(dentry->d_inode);
 }
-#endif
 
 static inline void file_accessed(struct file *file)
 {

@@ -54,9 +54,18 @@
 #include <linux/iobuf.h>
 #endif
 #include <linux/lustre_compat25.h>
+#include <linux/lprocfs_status.h>
 
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
 #include <linux/ext3_extents.h>
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,15)
+#define FSFILT_DATA_TRANS_BLOCKS(sb)      EXT3_DATA_TRANS_BLOCKS
+#define FSFILT_DELETE_TRANS_BLOCKS(sb)    EXT3_DELETE_TRANS_BLOCKS
+#else
+#define FSFILT_DATA_TRANS_BLOCKS(sb)      EXT3_DATA_TRANS_BLOCKS(sb)
+#define FSFILT_DELETE_TRANS_BLOCKS(sb)    EXT3_DELETE_TRANS_BLOCKS(sb)
 #endif
 
 static kmem_cache_t *fcb_cache;
@@ -140,7 +149,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
         case FSFILT_OP_RMDIR:
         case FSFILT_OP_UNLINK:
                 /* delete one file + create/update logs for each stripe */
-                nblocks += EXT3_DELETE_TRANS_BLOCKS;
+                nblocks += FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb);
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                             EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
                 break;
@@ -177,7 +186,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
         case FSFILT_OP_LINK:
                 /* modify parent directory */
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                        EXT3_DATA_TRANS_BLOCKS;
+                         FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
                 /* create/update logs for each stripe */
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                             EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
@@ -186,7 +195,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /* Setattr on inode */
                 nblocks += 1;
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                        EXT3_DATA_TRANS_BLOCKS;
+                         FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
                 /* quota chown log for each stripe */
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                             EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
@@ -195,12 +204,12 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /* blocks for log header bitmap update OR
                  * blocks for catalog header bitmap update + unlink of logs */
                 nblocks = (LLOG_CHUNK_SIZE >> inode->i_blkbits) +
-                        EXT3_DELETE_TRANS_BLOCKS * logs;
+                        FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb) * logs;
                 break;
         case FSFILT_OP_JOIN:
                 /* delete 2 file(file + array id) + create 1 file (array id) 
                  * create/update logs for each stripe */
-                nblocks += 2 * EXT3_DELETE_TRANS_BLOCKS;
+                nblocks += 2 * FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb);
                
                 /*create array log for head file*/ 
                 nblocks += 3;
@@ -208,7 +217,7 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                             EXT3_SINGLEDATA_TRANS_BLOCKS);
                 /*update head file array */
                 nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                        EXT3_DATA_TRANS_BLOCKS;
+                         FSFILT_DATA_TRANS_BLOCKS(inode->i_sb);
                 break;
         default: CERROR("unknown transaction start op %d\n", op);
                 LBUG();
@@ -306,7 +315,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
         needed += nbitmaps + ngdblocks;
 
         /* last_rcvd update */
-        needed += EXT3_DATA_TRANS_BLOCKS;
+        needed += FSFILT_DATA_TRANS_BLOCKS(sb);
 
 #if defined(CONFIG_QUOTA)
         /* We assume that there will be 1 bit set in s_dquot.flags for each
@@ -454,26 +463,39 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                                struct iattr *iattr, int do_trunc)
 {
         struct inode *inode = dentry->d_inode;
-        int rc;
+        int rc = 0;
 
         lock_kernel();
 
-        /* A _really_ horrible hack to avoid removing the data stored
-         * in the block pointers; this is really the "small" stripe MD data.
-         * We can avoid further hackery by virtue of the MDS file size being
-         * zero all the time (which doesn't invoke block truncate at unlink
-         * time), so we assert we never change the MDS file size from zero. */
+        /* Avoid marking the inode dirty on the superblock list unnecessarily.
+         * We are already writing the inode to disk as part of this
+         * transaction and want to avoid a lot of extra inode writeout
+         * later on. b=9828 */
         if (iattr->ia_valid & ATTR_SIZE && !do_trunc) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
                 EXT3_I(inode)->i_disksize = inode->i_size = iattr->ia_size;
 
-                /* make sure _something_ gets set - so new inode
-                 * goes to disk (probably won't work over XFS */
-                if (!(iattr->ia_valid & (ATTR_MODE | ATTR_MTIME | ATTR_CTIME))){
-                        iattr->ia_valid |= ATTR_MTIME;
-                        iattr->ia_mtime = inode->i_mtime;
+                if (iattr->ia_valid & ATTR_UID)
+                        inode->i_uid = iattr->ia_uid;
+                if (iattr->ia_valid & ATTR_GID)
+                        inode->i_gid = iattr->ia_gid;
+                if (iattr->ia_valid & ATTR_ATIME)
+                        inode->i_atime = iattr->ia_atime;
+                if (iattr->ia_valid & ATTR_MTIME)
+                        inode->i_mtime = iattr->ia_mtime;
+                if (iattr->ia_valid & ATTR_CTIME)
+                        inode->i_ctime = iattr->ia_ctime;
+                if (iattr->ia_valid & ATTR_MODE) {
+                        inode->i_mode = iattr->ia_mode;
+
+                        if (!in_group_p(inode->i_gid) && !capable(CAP_FSETID))
+                                inode->i_mode &= ~S_ISGID;
                 }
+
+                inode->i_sb->s_op->dirty_inode(inode);
+
+                goto out;
         }
 
         /* Don't allow setattr to change file type */
@@ -493,8 +515,9 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
                         rc = inode_setattr(inode, iattr);
         }
 
+ out:
         unlock_kernel();
-        return rc;
+        RETURN(rc);
 }
 
 static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
@@ -646,7 +669,7 @@ static ssize_t fsfilt_ext3_readpage(struct file *file, char *buf, size_t count,
 
                                 CDEBUG(D_EXT2, "fake %u@%llu\n", blksize, *off);
                                 memset(fake, 0, sizeof(*fake));
-                                fake->rec_len = cpu_to_le32(blksize);
+                                fake->rec_len = cpu_to_le16(blksize);
                         }
                         count -= blksize;
                         buf += blksize;
@@ -733,9 +756,12 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define ext3_up_truncate_sem(inode)  up_write(&EXT3_I(inode)->truncate_sem);
 #define ext3_down_truncate_sem(inode)  down_write(&EXT3_I(inode)->truncate_sem);
-#else
+#elif (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17))
 #define ext3_up_truncate_sem(inode)  up(&EXT3_I(inode)->truncate_sem);
 #define ext3_down_truncate_sem(inode)  down(&EXT3_I(inode)->truncate_sem);
+#else
+#define ext3_up_truncate_sem(inode)  mutex_unlock(&EXT3_I(inode)->truncate_mutex);
+#define ext3_down_truncate_sem(inode)  mutex_lock(&EXT3_I(inode)->truncate_mutex);
 #endif
 
 #include <linux/lustre_version.h>
@@ -860,7 +886,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                 return EXT_CONTINUE;
         }
 
-        tgen = EXT_GENERATION(EXT_ROOT_HDR(tree));
+        tgen = EXT_GENERATION(tree);
         count = ext3_ext_calc_credits_for_insert(tree, path);
         ext3_up_truncate_sem(inode);
 
@@ -873,7 +899,7 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         }
 
         ext3_down_truncate_sem(inode);
-        if (tgen != EXT_GENERATION(EXT_ROOT_HDR(tree))) {
+        if (tgen != EXT_GENERATION(tree)) {
                 /* the tree has changed. so path can be invalid at moment */
                 lock_24kernel();
                 journal_stop(handle);
@@ -1159,11 +1185,11 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         journal = EXT3_SB(inode->i_sb)->s_journal;
         lock_24kernel();
         handle = journal_start(journal,
-                               block_count * EXT3_DATA_TRANS_BLOCKS + 2);
+                               block_count * FSFILT_DATA_TRANS_BLOCKS(inode->i_sb) + 2);
         unlock_24kernel();
         if (IS_ERR(handle)) {
                 CERROR("can't start transaction for %d blocks (%d bytes)\n",
-                       block_count * EXT3_DATA_TRANS_BLOCKS + 2, bufsize);
+                       block_count * FSFILT_DATA_TRANS_BLOCKS(inode->i_sb) + 2, bufsize);
                 return PTR_ERR(handle);
         }
 

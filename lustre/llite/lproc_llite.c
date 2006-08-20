@@ -36,8 +36,6 @@ struct proc_dir_entry *proc_lustre_fs_root;
 struct file_operations llite_dump_pgcache_fops;
 struct file_operations ll_ra_stats_fops;
 
-long long mnt_instance;
-
 static int ll_rd_blksize(char *page, char **start, off_t off, int count,
                          int *eof, void *data)
 {
@@ -46,7 +44,7 @@ static int ll_rd_blksize(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
               *eof = 1;
               rc = snprintf(page, count, "%u\n", osfs.os_bsize);
@@ -63,7 +61,7 @@ static int ll_rd_kbytestotal(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_blocks;
@@ -86,7 +84,7 @@ static int ll_rd_kbytesfree(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_bfree;
@@ -108,7 +106,7 @@ static int ll_rd_kbytesavail(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
                 __u32 blk_size = osfs.os_bsize >> 10;
                 __u64 result = osfs.os_bavail;
@@ -130,7 +128,7 @@ static int ll_rd_filestotal(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
                  *eof = 1;
                  rc = snprintf(page, count, LPU64"\n", osfs.os_files);
@@ -146,7 +144,7 @@ static int ll_rd_filesfree(char *page, char **start, off_t off, int count,
         int rc;
 
         LASSERT(sb != NULL);
-        rc = ll_statfs_internal(sb, &osfs, jiffies - HZ);
+        rc = ll_statfs_internal(sb, &osfs, cfs_time_current_64() - HZ);
         if (!rc) {
                  *eof = 1;
                  rc = snprintf(page, count, LPU64"\n", osfs.os_ffree);
@@ -180,13 +178,15 @@ static int ll_rd_max_readahead_mb(char *page, char **start, off_t off,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        unsigned val;
+        long pages_number;
+        int mult;
 
         spin_lock(&sbi->ll_lock);
-        val = sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_CACHE_SHIFT);
+        pages_number = sbi->ll_ra_info.ra_max_pages;
         spin_unlock(&sbi->ll_lock);
 
-        return snprintf(page, count, "%u\n", val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        return lprocfs_read_frac_helper(page, count, pages_number, mult);
 }
 
 static int ll_wr_max_readahead_mb(struct file *file, const char *buffer,
@@ -194,20 +194,21 @@ static int ll_wr_max_readahead_mb(struct file *file, const char *buffer,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int val, rc;
+        int mult, rc, pages_number;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
         if (rc)
                 return rc;
 
-        if (val < 0 || val > (num_physpages >> (20 - PAGE_CACHE_SHIFT - 1))) {
+        if (pages_number < 0 || pages_number > num_physpages / 2) {
                 CERROR("can't set file readahead more than %lu MB\n",
-                        num_physpages >> (20 - PAGE_CACHE_SHIFT - 1));
+                        num_physpages >> (20 - PAGE_CACHE_SHIFT + 1)); /*1/2 of RAM*/
                 return -ERANGE;
         }
 
         spin_lock(&sbi->ll_lock);
-        sbi->ll_ra_info.ra_max_pages = val << (20 - PAGE_CACHE_SHIFT);
+        sbi->ll_ra_info.ra_max_pages = pages_number;
         spin_unlock(&sbi->ll_lock);
 
         return count;
@@ -218,14 +219,15 @@ static int ll_rd_max_read_ahead_whole_mb(char *page, char **start, off_t off,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        unsigned val;
+        long pages_number;
+        int mult;
 
         spin_lock(&sbi->ll_lock);
-        val = sbi->ll_ra_info.ra_max_read_ahead_whole_pages >>
-              (20 - PAGE_CACHE_SHIFT);
+        pages_number = sbi->ll_ra_info.ra_max_read_ahead_whole_pages;
         spin_unlock(&sbi->ll_lock);
 
-        return snprintf(page, count, "%u\n", val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        return lprocfs_read_frac_helper(page, count, pages_number, mult);
 }
 
 static int ll_wr_max_read_ahead_whole_mb(struct file *file, const char *buffer,
@@ -233,16 +235,16 @@ static int ll_wr_max_read_ahead_whole_mb(struct file *file, const char *buffer,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int val, rc;
+        int mult, rc, pages_number;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
         if (rc)
                 return rc;
 
         /* Cap this at the current max readahead window size, the readahead
          * algorithm does this anyway so it's pointless to set it larger. */
-        if (val < 0 ||
-            val > (sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_CACHE_SHIFT))) {
+        if (pages_number < 0 || pages_number > sbi->ll_ra_info.ra_max_pages) {
                 CERROR("can't set max_read_ahead_whole_mb more than "
                        "max_read_ahead_mb: %lu\n",
                        sbi->ll_ra_info.ra_max_pages >> (20 - PAGE_CACHE_SHIFT));
@@ -250,8 +252,7 @@ static int ll_wr_max_read_ahead_whole_mb(struct file *file, const char *buffer,
         }
 
         spin_lock(&sbi->ll_lock);
-        sbi->ll_ra_info.ra_max_read_ahead_whole_pages =
-                val << (20 - PAGE_CACHE_SHIFT);
+        sbi->ll_ra_info.ra_max_read_ahead_whole_pages = pages_number;
         spin_unlock(&sbi->ll_lock);
 
         return count;
@@ -262,13 +263,15 @@ static int ll_rd_max_cached_mb(char *page, char **start, off_t off,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        unsigned val;
+        long pages_number;
+        int mult;
 
         spin_lock(&sbi->ll_lock);
-        val = sbi->ll_async_page_max >> (20 - PAGE_CACHE_SHIFT);
+        pages_number = sbi->ll_async_page_max;
         spin_unlock(&sbi->ll_lock);
 
-        return snprintf(page, count, "%u\n", val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        return lprocfs_read_frac_helper(page, count, pages_number, mult);;
 }
 
 static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
@@ -276,21 +279,26 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 {
         struct super_block *sb = data;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        int val, rc;
+        int mult, rc, pages_number;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
+        mult = 1 << (20 - PAGE_CACHE_SHIFT);
+        rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
         if (rc)
                 return rc;
 
-        if (val < 0 || val > (num_physpages >> (20 - PAGE_CACHE_SHIFT))) {
+        if (pages_number < 0 || pages_number > num_physpages) {
                 CERROR("can't set max cache more than %lu MB\n",
                         num_physpages >> (20 - PAGE_CACHE_SHIFT));
                 return -ERANGE;
         }
 
         spin_lock(&sbi->ll_lock);
-        sbi->ll_async_page_max = val << (20 - PAGE_CACHE_SHIFT);
+        sbi->ll_async_page_max = pages_number ;
         spin_unlock(&sbi->ll_lock);
+        
+        if (!sbi->ll_dt_exp)
+                /* Not set up yet, don't call llap_shrink_cache */
+                return count;
 
         if (sbi->ll_async_page_count >= sbi->ll_async_page_max)
                 llap_shrink_cache(sbi, 0);
@@ -315,10 +323,13 @@ static int ll_wr_checksum(struct file *file, const char *buffer,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         int val, rc;
 
+        if (!sbi->ll_dt_exp)
+                /* Not set up yet */
+                return -EAGAIN;
+
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 return rc;
-
         if (val)
                 sbi->ll_flags |= LL_SBI_CHECKSUM;
         else
@@ -329,6 +340,27 @@ static int ll_wr_checksum(struct file *file, const char *buffer,
         if (rc)
                 CWARN("Failed to set OSC checksum flags: %d\n", rc);
 
+        return count;
+}
+
+static int ll_rd_max_rw_chunk(char *page, char **start, off_t off,
+                          int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+
+        return snprintf(page, count, "%lu\n", ll_s2sbi(sb)->ll_max_rw_chunk);
+}
+
+static int ll_wr_max_rw_chunk(struct file *file, const char *buffer,
+                          unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        int rc, val;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+        ll_s2sbi(sb)->ll_max_rw_chunk = val;
         return count;
 }
 
@@ -349,6 +381,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
                                      ll_wr_max_read_ahead_whole_mb, 0 },
         { "max_cached_mb", ll_rd_max_cached_mb, ll_wr_max_cached_mb, 0 },
         { "checksum_pages", ll_rd_checksum, ll_wr_checksum, 0 },
+        { "max_rw_chunk", ll_rd_max_rw_chunk, ll_wr_max_rw_chunk, 0 },
         { 0 }
 };
 
@@ -409,10 +442,11 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                 struct super_block *sb, char *osc, char *mdc)
 {
         struct lprocfs_vars lvars[2];
+        struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
-        char name[MAX_STRING_SIZE + 1];
-        int err, id;
+        char name[MAX_STRING_SIZE + 1], *ptr;
+        int err, id, len;
         struct lprocfs_stats *svc_stats = NULL;
         struct proc_dir_entry *entry;
         ENTRY;
@@ -426,10 +460,16 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         LASSERT(mdc != NULL);
         LASSERT(osc != NULL);
 
+        /* Get fsname */
+        len = strlen(lsi->lsi_lmd->lmd_profile);
+        ptr = strrchr(lsi->lsi_lmd->lmd_profile, '-');
+        if (ptr && (strcmp(ptr, "-client") == 0))
+                len -= 7; 
+        
         /* Mount info */
-        snprintf(name, MAX_STRING_SIZE, "fs%llu", mnt_instance);
-
-        mnt_instance++;
+        snprintf(name, MAX_STRING_SIZE, "%.*s-%p", len,
+                 lsi->lsi_lmd->lmd_profile, sb);
+        
         sbi->ll_proc_root = lprocfs_register(name, parent, NULL, NULL);
         if (IS_ERR(sbi->ll_proc_root)) {
                 err = PTR_ERR(sbi->ll_proc_root);
@@ -488,7 +528,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         obd = class_name2obd(mdc);
 
         LASSERT(obd != NULL);
-        LASSERT(obd->obd_type != NULL);
+        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
         LASSERT(obd->obd_type->typ_name != NULL);
 
         snprintf(name, MAX_STRING_SIZE, "%s/common_name",
@@ -508,7 +548,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         obd = class_name2obd(osc);
 
         LASSERT(obd != NULL);
-        LASSERT(obd->obd_type != NULL);
+        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
         LASSERT(obd->obd_type->typ_name != NULL);
 
         snprintf(name, MAX_STRING_SIZE, "%s/common_name",
@@ -527,6 +567,7 @@ out:
                         lprocfs_free_stats(svc_stats);
                 if (sbi->ll_proc_root)
                         lprocfs_remove(sbi->ll_proc_root);
+                sbi->ll_proc_root = NULL;
         }
         RETURN(err);
 }
@@ -536,11 +577,10 @@ void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi)
         if (sbi->ll_proc_root) {
                 struct proc_dir_entry *file_stats =
                         lprocfs_srch(sbi->ll_proc_root, "stats");
-
-                if (file_stats) {
+                if (file_stats) 
                         lprocfs_free_stats(sbi->ll_stats);
-                        lprocfs_remove(file_stats);
-                }
+                lprocfs_remove(sbi->ll_proc_root);
+                sbi->ll_proc_root = NULL;
         }
 }
 #undef MAX_STRING_SIZE
@@ -601,7 +641,9 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
                 seq_page_flag(seq, page, referenced, has_flags);
                 seq_page_flag(seq, page, uptodate, has_flags);
                 seq_page_flag(seq, page, dirty, has_flags);
+#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,12))
                 seq_page_flag(seq, page, highmem, has_flags);
+#endif
                 if (!has_flags)
                         seq_puts(seq, "-]\n");
                 else 
@@ -817,4 +859,5 @@ struct file_operations ll_ra_stats_fops = {
         .release = seq_release,
 };
 
+LPROCFS_INIT_VARS(llite, NULL, lprocfs_obd_vars)
 #endif /* LPROCFS */

@@ -2,6 +2,9 @@
 
 my $pname = $0;
 
+my $defaultpath = "/proc/fs/lustre";
+my $obdstats = "stats";
+
 sub usage()
 {
     print STDERR "Usage: $pname <stats_file> [<interval>]\n";
@@ -9,19 +12,41 @@ sub usage()
 }
 
 
-my $statspath;
+my $statspath = "None";
 my $interval = 0;
 
 if (($#ARGV < 0) || ($#ARGV > 1)) {
     usage();
 } else {
-    $statspath = $ARGV[0];
+    if ( $ARGV[0] =~ /help$/ ) {
+	usage();
+    }
+    if ( -f $ARGV[0] ) {
+	$statspath = $ARGV[0];
+    } elsif ( -f "$ARGV[0]/$obdstats" ) {
+	$statspath = "$ARGV[0]/$obdstats";
+    } else {
+	my $st = `ls $defaultpath/*/$ARGV[0]/$obdstats 2> /dev/null`;
+	chop $st;
+	if ( -f "$st" ) {
+	    $statspath = $st;
+	} else {
+	    $st = `ls $defaultpath/*/*/$ARGV[0]/$obdstats 2> /dev/null`;
+	    chop $st;
+	    if ( -f "$st" ) {
+	        $statspath = $st;
+	    }
+	}
+    }
+    if ( $statspath =~ /^None$/ ) {
+	die "Cannot locate stat file for: $ARGV[0]\n";
+    }
     if ($#ARGV == 1) {
 	$interval = $ARGV[1];
     } 
 }
 
-
+print "$pname on $statspath\n";
 
 my %cumulhash;
 my %sumhash;
@@ -43,6 +68,7 @@ sub get_cpumhz()
     if (defined($itc_freq)) { $mhz = $itc_freq; }
     elsif (defined($cpu_freq)) { $mhz = $cpu_freq; }
     else { $mhz = 1; }
+    close CPUINFO;
 }
 
 get_cpumhz();
@@ -50,7 +76,7 @@ print "Processor counters run at $mhz MHz\n";
 
 sub readstat()
 {
-    open(STATS, $statspath) || die "Cannot open $statspath: $!\n";
+    seek STATS, 0, 0;
     while (<STATS>) {
 	chop;
 	($name, $cumulcount, $samples, $unit, $min, $max, $sum, $sumsquare) 
@@ -125,9 +151,11 @@ sub readstat()
     }
 }
 
+open(STATS, $statspath) || die "Cannot open $statspath: $!\n";
 do {
     readstat();
     if ($interval) { 
 	sleep($interval);
     }
 } while ($interval);
+close STATS;

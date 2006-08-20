@@ -48,9 +48,11 @@
 #if defined(__x86_64__) || defined(__ia64__) || defined(__ppc64__) || \
     defined(__craynv)
 typedef struct stat     lstat_t;
+#define lstat_f         lstat
 #define HAVE_LOV_USER_MDS_DATA
 #elif defined(__USE_LARGEFILE64) || defined(__KERNEL__)
 typedef struct stat64   lstat_t;
+#define lstat_f         lstat64
 #define HAVE_LOV_USER_MDS_DATA
 #endif
 

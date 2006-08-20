@@ -36,9 +36,10 @@
 extern struct list_head obd_types;
 spinlock_t obd_types_lock;
 
-cfs_mem_cache_t *obdo_cachep = NULL;
+cfs_mem_cache_t *obd_device_cachep;
+cfs_mem_cache_t *obdo_cachep;
 EXPORT_SYMBOL(obdo_cachep);
-cfs_mem_cache_t *import_cachep = NULL;
+cfs_mem_cache_t *import_cachep;
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 
@@ -46,6 +47,27 @@ int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
  * support functions: we could use inter-module communication, but this
  * is more portable to other OS's
  */
+static struct obd_device *obd_device_alloc(void)
+{
+        struct obd_device *obd;
+
+        OBD_SLAB_ALLOC(obd, obd_device_cachep, SLAB_KERNEL, sizeof(*obd));
+        if (obd != NULL) {
+                obd->obd_magic = OBD_DEVICE_MAGIC;
+        }
+        return obd;
+}
+EXPORT_SYMBOL(obd_device_alloc);
+
+static void obd_device_free(struct obd_device *obd)
+{
+        LASSERT(obd != NULL);
+        LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC, "obd %p obd_magic %08x != %08x\n", 
+                 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
+        OBD_SLAB_FREE(obd, obd_device_cachep, sizeof(*obd));
+}
+EXPORT_SYMBOL(obd_device_free);
+
 struct obd_type *class_search_type(const char *name)
 {
         struct list_head *tmp;
@@ -80,15 +102,22 @@ struct obd_type *class_get_type(const char *name)
                 }
         }
 #endif
-        if (type)
+        if (type) {
+                spin_lock(&type->obd_type_lock);
+                type->typ_refcnt++;
                 try_module_get(type->typ_dt_ops->o_owner);
+                spin_unlock(&type->obd_type_lock);
+        }
         return type;
 }
 
 void class_put_type(struct obd_type *type)
 {
         LASSERT(type);
+        spin_lock(&type->obd_type_lock);
+        type->typ_refcnt--;
         module_put(type->typ_dt_ops->o_owner);
+        spin_unlock(&type->obd_type_lock);
 }
 
 #define CLASS_MAX_NAME 1024
@@ -127,6 +156,7 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
         if (md_ops)
                 *(type->typ_md_ops) = *md_ops;
         strcpy(type->typ_name, name);
+        spin_lock_init(&type->obd_type_lock);
 
 #ifdef LPROCFS
         type->typ_procroot = lprocfs_register(type->typ_name, proc_lustre_root,
@@ -200,48 +230,90 @@ int class_unregister_type(const char *name)
         RETURN(0);
 } /* class_unregister_type */
 
-struct obd_device *class_newdev(struct obd_type *type, char *name)
+struct obd_device *class_newdev(const char *type_name, const char *name)
 {
         struct obd_device *result = NULL;
+        struct obd_type *type = NULL;
         int i;
+        int new_obd_minor = 0;
+
+        if (strlen(name) > MAX_OBD_NAME) {
+                CERROR("name/uuid must be < %u bytes long\n",MAX_OBD_NAME);
+                RETURN(ERR_PTR(-EINVAL));
+        }
+
+        type = class_get_type(type_name); 
+        if (type == NULL){
+                CERROR("OBD: unknown type: %s\n", type_name);
+                RETURN(ERR_PTR(-ENODEV));
+        }
 
         spin_lock(&obd_dev_lock);
-        for (i = 0 ; i < MAX_OBD_DEVICES; i++) {
-                struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_name && (strcmp(name, obd->obd_name) == 0)) {
+        for (i = 0 ; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd && obd->obd_name && (strcmp(name, obd->obd_name) == 0)) {
                         CERROR("Device %s already exists, won't add\n", name);
                         if (result) {
-                                result->obd_type = NULL;
-                                result->obd_name = NULL;
-                                result = NULL;
+                                LASSERTF(result->obd_magic == OBD_DEVICE_MAGIC,
+                                         "%p obd_magic %08x != %08x\n",
+                                         result, result->obd_magic, OBD_DEVICE_MAGIC);
+                                LASSERTF(result->obd_minor == new_obd_minor,
+                                         "%p obd_minor %d != %d\n",
+                                         result, result->obd_minor, new_obd_minor);
+
+                                obd_devs[result->obd_minor] = NULL;
+                                result->obd_name[0]='\0';
+                                obd_device_free(result);
                         }
+                        result = ERR_PTR(-EEXIST);
                         break;
                 }
-                if (!result && !obd->obd_type) {
-                        LASSERT(obd->obd_minor == i);
-                        memset(obd, 0, sizeof(*obd));
+                if (!result && !obd) {
+                        obd = obd_device_alloc();
+
+                        if(obd == NULL)
+                                GOTO(out,result = ERR_PTR(-ENOMEM));
+
+                        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
                         obd->obd_minor = i;
+                        new_obd_minor = i;
                         obd->obd_type = type;
-                        obd->obd_name = name;
+                        memcpy(obd->obd_name, name, strlen(name));
+
                         CDEBUG(D_IOCTL, "Adding new device %s (%p)\n",
                                obd->obd_name, obd);
                         result = obd;
+                        obd_devs[i] = result;
+                        obd = NULL;
                 }
         }
         spin_unlock(&obd_dev_lock);
+out :
+        if (IS_ERR(result)) {
+                class_put_type(type);
+        }
         return result;
 }
 
 void class_release_dev(struct obd_device *obd)
 {
-        int minor = obd->obd_minor;
+        struct obd_type *obd_type = obd->obd_type;
+
+        LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC, "%p obd_magic %08x != %08x\n",
+                 obd, obd->obd_magic, OBD_DEVICE_MAGIC);
+        LASSERTF(obd == obd_devs[obd->obd_minor], "obd %p != obd_devs[%d] %p\n",
+                 obd, obd->obd_minor, obd_devs[obd->obd_minor]);
+        LASSERT(obd_type != NULL);
+
+        CDEBUG(D_INFO, "Release obd device %s obd_type name =%s\n",
+               obd->obd_name,obd->obd_type->typ_name);
 
         spin_lock(&obd_dev_lock);
-        memset(obd, 0x5a, sizeof(*obd));
-        obd->obd_type = NULL;
-        obd->obd_minor = minor;
-        obd->obd_name = NULL;
+        obd_devs[obd->obd_minor] = NULL;
+        obd_device_free(obd);
         spin_unlock(&obd_dev_lock);
+
+        class_put_type(obd_type);
 }
 
 int class_name2dev(const char *name)
@@ -252,11 +324,12 @@ int class_name2dev(const char *name)
                 return -1;
 
         spin_lock(&obd_dev_lock);
-        for (i = 0; i < MAX_OBD_DEVICES; i++) {
-                struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_name && strcmp(name, obd->obd_name) == 0) {
+        for (i = 0; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd && obd->obd_name && strcmp(name, obd->obd_name) == 0) {
                         /* Make sure we finished attaching before we give
                            out any references */
+                        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
                         if (obd->obd_attached) {
                                 spin_unlock(&obd_dev_lock);
                                 return i;
@@ -272,9 +345,10 @@ int class_name2dev(const char *name)
 struct obd_device *class_name2obd(const char *name)
 {
         int dev = class_name2dev(name);
-        if (dev < 0)
+
+        if (dev < 0 || dev > class_devno_max())
                 return NULL;
-        return &obd_dev[dev];
+        return class_num2obd(dev);
 }
 
 int class_uuid2dev(struct obd_uuid *uuid)
@@ -282,9 +356,10 @@ int class_uuid2dev(struct obd_uuid *uuid)
         int i;
 
         spin_lock(&obd_dev_lock);
-        for (i = 0; i < MAX_OBD_DEVICES; i++) {
-                struct obd_device *obd = &obd_dev[i];
-                if (obd_uuid_equals(uuid, &obd->obd_uuid)) {
+        for (i = 0; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd && obd_uuid_equals(uuid, &obd->obd_uuid)) {
+                        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
                         spin_unlock(&obd_dev_lock);
                         return i;
                 }
@@ -299,7 +374,28 @@ struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
         int dev = class_uuid2dev(uuid);
         if (dev < 0)
                 return NULL;
-        return &obd_dev[dev];
+        return class_num2obd(dev);
+}
+
+struct obd_device *class_num2obd(int num)
+{
+        struct obd_device *obd = NULL;
+
+        if (num < class_devno_max()) {
+                obd = obd_devs[num];
+                if (obd == NULL) {
+                        return NULL;
+                }
+
+                LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
+                         "%p obd_magic %08x != %08x\n",
+                         obd, obd->obd_magic, OBD_DEVICE_MAGIC);
+                LASSERTF(obd->obd_minor == num,
+                         "%p obd_minor %0d != %0d\n",
+                         obd, obd->obd_minor, num);
+        }
+
+        return obd;
 }
 
 void class_obd_list(void)
@@ -308,9 +404,9 @@ void class_obd_list(void)
         int i;
 
         spin_lock(&obd_dev_lock);
-        for (i = 0; i < MAX_OBD_DEVICES; i++) {
-                struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_type == NULL)
+        for (i = 0; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd == NULL)
                         continue;
                 if (obd->obd_stopping)
                         status = "ST";
@@ -339,9 +435,9 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
         int i;
 
         spin_lock(&obd_dev_lock);
-        for (i = 0; i < MAX_OBD_DEVICES; i++) {
-                struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_type == NULL)
+        for (i = 0; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd == NULL)
                         continue;
                 if ((strncmp(obd->obd_type->typ_name, typ_name,
                              strlen(typ_name)) == 0)) {
@@ -381,15 +477,15 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 
         if (next == NULL)
                 i = 0;
-        else if (*next >= 0 && *next < MAX_OBD_DEVICES)
+        else if (*next >= 0 && *next < class_devno_max())
                 i = *next;
         else
                 return NULL;
 
         spin_lock(&obd_dev_lock);
-        for (; i < MAX_OBD_DEVICES; i++) {
-                struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_type == NULL)
+        for (; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd == NULL)
                         continue;
                 if (obd_uuid_equals(grp_uuid, &obd->obd_uuid)) {
                         if (next != NULL)
@@ -409,6 +505,11 @@ void obd_cleanup_caches(void)
         int rc;
 
         ENTRY;
+        if (obd_device_cachep) {
+                rc = cfs_mem_cache_destroy(obd_device_cachep);
+                LASSERTF(rc == 0, "Cannot destropy ll_obd_device_cache: rc %d\n", rc);
+                obd_device_cachep = NULL;
+        }
         if (obdo_cachep) {
                 rc = cfs_mem_cache_destroy(obdo_cachep);
                 LASSERTF(rc == 0, "Cannot destory ll_obdo_cache\n");
@@ -425,6 +526,12 @@ void obd_cleanup_caches(void)
 int obd_init_caches(void)
 {
         ENTRY;
+
+        LASSERT(obd_device_cachep == NULL);
+        obd_device_cachep = cfs_mem_cache_create("ll_obd_dev_cache",
+                                              sizeof(struct obd_device), 0, 0);
+        if (!obd_device_cachep)
+                GOTO(out, -ENOMEM);
 
         LASSERT(obdo_cachep == NULL);
         obdo_cachep = cfs_mem_cache_create("ll_obdo_cache", sizeof(struct obdo),
@@ -549,6 +656,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
         /* XXX this should be in LDLM init */
         CFS_INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
+        spin_lock_init(&export->exp_ldlm_data.led_lock);
 
         CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
         class_handle_hash(&export->exp_handle, export_handle_addref);
@@ -661,6 +769,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
         CFS_INIT_LIST_HEAD(&imp->imp_sending_list);
         CFS_INIT_LIST_HEAD(&imp->imp_delayed_list);
         spin_lock_init(&imp->imp_lock);
+        imp->imp_last_success_conn = 0;
         imp->imp_state = LUSTRE_IMP_NEW;
         imp->imp_obd = class_incref(obd);
         cfs_waitq_init(&imp->imp_recovery_waitq);
@@ -671,6 +780,10 @@ struct obd_import *class_new_import(struct obd_device *obd)
         CFS_INIT_LIST_HEAD(&imp->imp_conn_list);
         CFS_INIT_LIST_HEAD(&imp->imp_handle.h_link);
         class_handle_hash(&imp->imp_handle, import_handle_addref);
+
+        /* the default magic is V1, will be used in connect RPC, and
+         * then adjusted according to the flags in request/reply. */
+        imp->imp_msg_magic = LUSTRE_MSG_MAGIC_V1;
 
         return imp;
 }
@@ -879,27 +992,32 @@ void oig_release(struct obd_io_group *oig)
 }
 EXPORT_SYMBOL(oig_release);
 
-void oig_add_one(struct obd_io_group *oig, struct oig_callback_context *occ)
+int oig_add_one(struct obd_io_group *oig, struct oig_callback_context *occ)
 {
-        unsigned long flags;
+        int rc = 0;
         CDEBUG(D_CACHE, "oig %p ready to roll\n", oig);
-        spin_lock_irqsave(&oig->oig_lock, flags);
-        oig->oig_pending++;
-        if (occ != NULL)
-                list_add_tail(&occ->occ_oig_item, &oig->oig_occ_list);
-        spin_unlock_irqrestore(&oig->oig_lock, flags);
+        spin_lock(&oig->oig_lock);
+        if (oig->oig_rc) {
+                rc = oig->oig_rc;
+        } else {
+                oig->oig_pending++;
+                if (occ != NULL)
+                        list_add_tail(&occ->occ_oig_item, &oig->oig_occ_list);
+        }
+        spin_unlock(&oig->oig_lock);
         oig_grab(oig);
+
+        return 0;
 }
 EXPORT_SYMBOL(oig_add_one);
 
 void oig_complete_one(struct obd_io_group *oig,
                       struct oig_callback_context *occ, int rc)
 {
-        unsigned long flags;
         cfs_waitq_t *wake = NULL;
         int old_rc;
 
-        spin_lock_irqsave(&oig->oig_lock, flags);
+        spin_lock(&oig->oig_lock);
 
         if (occ != NULL)
                 list_del_init(&occ->occ_oig_item);
@@ -911,7 +1029,7 @@ void oig_complete_one(struct obd_io_group *oig,
         if (--oig->oig_pending <= 0)
                 wake = &oig->oig_waitq;
 
-        spin_unlock_irqrestore(&oig->oig_lock, flags);
+        spin_unlock(&oig->oig_lock);
 
         CDEBUG(D_CACHE, "oig %p completed, rc %d -> %d via %d, %d now "
                         "pending (racey)\n", oig, old_rc, oig->oig_rc, rc,
@@ -924,12 +1042,11 @@ EXPORT_SYMBOL(oig_complete_one);
 
 static int oig_done(struct obd_io_group *oig)
 {
-        unsigned long flags;
         int rc = 0;
-        spin_lock_irqsave(&oig->oig_lock, flags);
+        spin_lock(&oig->oig_lock);
         if (oig->oig_pending <= 0)
                 rc = 1;
-        spin_unlock_irqrestore(&oig->oig_lock, flags);
+        spin_unlock(&oig->oig_lock);
         return rc;
 }
 
@@ -937,9 +1054,8 @@ static void interrupted_oig(void *data)
 {
         struct obd_io_group *oig = data;
         struct oig_callback_context *occ;
-        unsigned long flags;
 
-        spin_lock_irqsave(&oig->oig_lock, flags);
+        spin_lock(&oig->oig_lock);
         /* We need to restart the processing each time we drop the lock, as
          * it is possible other threads called oig_complete_one() to remove
          * an entry elsewhere in the list while we dropped lock.  We need to
@@ -950,12 +1066,12 @@ restart:
                 if (occ->interrupted)
                         continue;
                 occ->interrupted = 1;
-                spin_unlock_irqrestore(&oig->oig_lock, flags);
+                spin_unlock(&oig->oig_lock);
                 occ->occ_interrupted(occ);
-                spin_lock_irqsave(&oig->oig_lock, flags);
+                spin_lock(&oig->oig_lock);
                 goto restart;
         }
-        spin_unlock_irqrestore(&oig->oig_lock, flags);
+        spin_unlock(&oig->oig_lock);
 }
 
 int oig_wait(struct obd_io_group *oig)
@@ -986,12 +1102,11 @@ EXPORT_SYMBOL(oig_wait);
 void class_fail_export(struct obd_export *exp)
 {
         int rc, already_failed;
-        unsigned long flags;
 
-        spin_lock_irqsave(&exp->exp_lock, flags);
+        spin_lock(&exp->exp_lock);
         already_failed = exp->exp_failed;
         exp->exp_failed = 1;
-        spin_unlock_irqrestore(&exp->exp_lock, flags);
+        spin_unlock(&exp->exp_lock);
 
         if (already_failed) {
                 CDEBUG(D_HA, "disconnecting dead export %p/%s; skipping\n",

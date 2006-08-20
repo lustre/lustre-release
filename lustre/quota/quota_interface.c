@@ -195,7 +195,7 @@ static int auto_quota_on(struct obd_device *obd, int type,
 local_quota:
         /* turn on local quota */
         rc = fsfilt_quotactl(obd, sb, oqctl);
-        CDEBUG_EX(rc ? D_ERROR : D_INFO, "auto-enable quota. rc=%d\n", rc);
+        CDEBUG(rc ? D_ERROR : D_INFO, "auto-enable quota. rc=%d\n", rc);
         if (rc && is_master)
                 mds_quota_off(obd, oqctl);
 out_pop:

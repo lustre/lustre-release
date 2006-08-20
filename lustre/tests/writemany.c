@@ -42,13 +42,17 @@ struct kid_list_t {
 
 struct kid_list_t *head = NULL;
 
-void push_kid(pid_t kid)
+int push_kid(pid_t kid)
 {
         struct kid_list_t *new;
         new = (struct kid_list_t *)malloc(sizeof(struct kid_list_t));
+        if (new == NULL)
+                return 1;
+
         new->kid = kid;
         new->next = head;
         head = new;
+        return 0;
 }
 
 void kill_kids(void)
@@ -258,7 +262,11 @@ int main(int argc, char *argv[])
                         return (run_one_child(directory, i, duration));
                 } else {
                         /* parent */
-                        push_kid(rc);
+                        rc = push_kid(rc);
+                        if (rc != 0) {
+                                kill_kids();
+                                exit(3);
+                        }
                 }
         }
         /* parent process */

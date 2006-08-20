@@ -2,6 +2,7 @@
 #include <liblustre.h>
 #include <lustre_lib.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_disk.h>
 
 #undef LASSERT
 #undef LASSERTF
@@ -15,11 +16,11 @@ void lustre_assert_wire_constants(void);
 
 int main()
 {
-	lustre_assert_wire_constants();
+        lustre_assert_wire_constants();
 
-	if (ret == 0)
-		printf("wire constants OK\n");
+        if (ret == 0)
+                printf("wire constants OK\n");
 
-	return ret;
+        return ret;
 }
 

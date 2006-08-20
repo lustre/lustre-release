@@ -5,12 +5,13 @@
 
 AUTOMAKE_OPTIONS = foreign
 
-ALWAYS_SUBDIRS := include fid lvfs obdclass ldlm ptlrpc osc lov obdecho \
-	mgc doc utils tests conf scripts autoconf
+# also update lustre/autoconf/lustre-core.m4 AC_CONFIG_FILES
+ALWAYS_SUBDIRS := include lvfs obdclass ldlm ptlrpc osc lov obdecho \
+	mgc fid fld doc utils tests scripts autoconf contrib
 
 SERVER_SUBDIRS := ldiskfs obdfilter ost mds mgs mdt cmm mdd osd
 
-CLIENT_SUBDIRS := mdc lmv llite fld
+CLIENT_SUBDIRS := mdc lmv llite
 
 QUOTA_SUBDIRS := quota
 
@@ -58,27 +59,11 @@ sources: $(LDISKFS) lvfs-sources obdclass-sources lustre_build_version
 
 all-recursive: lustre_build_version
 
+BUILD_VER_H=$(top_builddir)/lustre/include/linux/lustre_build_version.h
+
 lustre_build_version:
 	perl $(top_builddir)/lustre/scripts/version_tag.pl $(top_srcdir) $(top_builddir) > tmpver
 	echo "#define LUSTRE_RELEASE @RELEASE@" >> tmpver
-	cmp -s $(top_builddir)/lustre/include/linux/lustre_build_version.h tmpver \
-                2> /dev/null &&                                            \
-                $(RM) tmpver ||                                            \
-                mv tmpver $(top_builddir)/lustre/include/linux/lustre_build_version.h
-
-CSTK=/tmp/checkstack
-CSTKO=/tmp/checkstack.orig
-
-checkstack:
-	[ -f ${CSTK} -a ! -s ${CSTKO} ] && mv ${CSTK} ${CSTKO} || true
-	for i in ${SUBDIRS} lnet/klnds/*; do				     \
-		MOD=$$i/`basename $$i`.o;				     \
-		[ -f $$MOD ] && objdump -d $$MOD | perl tests/checkstack.pl; \
-	done | sort -nr > ${CSTK}
-	[ -f ${CSTKO} ] && ! diff -u ${CSTKO} ${CSTK} || head -30 ${CSTK}
-
-checkstack-update:
-	[ -f ${CSTK} ] && mv ${CSTK} ${CSTKO}
-
-checkstack-clean:
-	rm -f ${CSTK} ${CSTKO}
+	cmp -s $(BUILD_VER_H) tmpver > tmpdiff 2> /dev/null &&		\
+                $(RM) tmpver tmpdiff ||					\
+		mv -f tmpver $(BUILD_VER_H)

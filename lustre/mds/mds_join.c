@@ -218,7 +218,7 @@ static void mds_finish_join(struct mds_obd *mds, struct ptlrpc_request *req,
                                 sizeof(struct llog_cookie);
         int max_easize = sizeof(*lmmj);
 
-        CDEBUG(D_INFO, "change the max md size from %d to %d \n",
+        CDEBUG(D_INFO, "change the max md size from %d to "LPSZ"\n",
                mds->mds_max_mdsize, sizeof(*lmmj));
 
         if (mds->mds_max_mdsize < max_easize ||
@@ -354,8 +354,9 @@ int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
         struct mds_rec_join *join_rec;
         ENTRY;
 
-        join_rec = lustre_swab_reqbuf (req, 5, sizeof (*join_rec),
-                                       lustre_swab_mds_rec_join);
+        join_rec = lustre_swab_reqbuf(req, DLM_INTENT_REC_OFF + 3,
+                                      sizeof(*join_rec),
+                                      lustre_swab_mds_rec_join);
         if (join_rec == NULL)
                 RETURN (-EFAULT);
 

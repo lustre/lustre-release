@@ -54,7 +54,7 @@ extern struct lu_fld_hash fld_hash[];
 #define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 struct fld_thread_info {
         struct req_capsule fti_pill;
-        int                fti_rep_buf_size[3];
+        int                fti_rep_buf_size[4];
         __u64              fti_key;
         __u64              fti_rec;
 };

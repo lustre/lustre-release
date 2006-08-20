@@ -172,7 +172,7 @@ int mds_client_free(struct obd_export *exp)
                                          sizeof(zero_mcd), &off, 1);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-                CDEBUG_EX(rc == 0 ? D_INFO : D_ERROR,
+                CDEBUG(rc == 0 ? D_INFO : D_ERROR,
                        "zeroing out client %s idx %u in %s rc %d\n",
                        med->med_mcd->mcd_uuid, med->med_lr_idx, LAST_RCVD, rc);
         }
@@ -245,8 +245,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                 lsd->lsd_client_start = cpu_to_le32(LR_CLIENT_START);
                 lsd->lsd_client_size = cpu_to_le16(LR_CLIENT_SIZE);
                 lsd->lsd_feature_rocompat = cpu_to_le32(OBD_ROCOMPAT_LOVOBJID);
-                lsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_MDT |
-                                                        OBD_INCOMPAT_COMMON_LR);
+                lsd->lsd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_MDT);
         } else {
                 rc = fsfilt_read_record(obd, file, lsd, sizeof(*lsd), &off);
                 if (rc) {
@@ -260,6 +259,12 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                                        obd->obd_uuid.uuid, lsd->lsd_uuid);
                         GOTO(err_msd, rc = -EINVAL);
                 }
+                /* COMPAT_146 */
+                /* Assume old last_rcvd format unless I_C_LR is set */
+                if (!(lsd->lsd_feature_incompat & 
+                      cpu_to_le32(OBD_INCOMPAT_COMMON_LR)))
+                        lsd->lsd_mount_count = lsd->lsd_compat14;
+                /* end COMPAT_146 */
                 mount_count = le64_to_cpu(lsd->lsd_mount_count);
         }
 
@@ -275,15 +280,6 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                        ~MDT_ROCOMPAT_SUPP);
                 /* Do something like remount filesystem read-only */
                 GOTO(err_msd, rc = -EINVAL);
-        }
-        if (!(lsd->lsd_feature_incompat & cpu_to_le32(OBD_INCOMPAT_COMMON_LR))){
-                CDEBUG(D_WARNING, "using old last_rcvd format\n");
-                lsd->lsd_mount_count = lsd->lsd_last_transno;
-                lsd->lsd_last_transno = lsd->lsd_unused;
-                /* If we update the last_rcvd, we can never go back to
-                   an old install, so leave this in the old format for now.
-                lsd->lsd_feature_incompat |= cpu_to_le32(LR_INCOMPAT_COMMON_LR);
-                */
         }
         lsd->lsd_feature_compat = cpu_to_le32(OBD_COMPAT_MDT);
 
@@ -345,7 +341,10 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                         continue;
                 }
 
-                last_transno = le64_to_cpu(mcd->mcd_last_transno);
+                last_transno = le64_to_cpu(mcd->mcd_last_transno) >
+                               le64_to_cpu(mcd->mcd_last_close_transno) ?
+                               le64_to_cpu(mcd->mcd_last_transno) :
+                               le64_to_cpu(mcd->mcd_last_close_transno);
 
                 /* These exports are cleaned up by mds_disconnect(), so they
                  * need to be set up like real exports as mds_connect() does.
@@ -397,7 +396,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         }
 
         mds->mds_mount_count = mount_count + 1;
-        lsd->lsd_mount_count = cpu_to_le64(mds->mds_mount_count);
+        lsd->lsd_mount_count = lsd->lsd_compat14 = 
+                cpu_to_le64(mds->mds_mount_count);
 
         /* save it, so mount count and last_transno is current */
         rc = mds_update_server_data(obd, 1);
@@ -741,6 +741,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         struct lvfs_run_ctxt saved;
         struct lvfs_ucred ucred = { 0 };
         char fidname[LL_FID_NAMELEN];
+        struct inode *inode = NULL;
         struct dentry *de;
         void *handle;
         int err, namelen, rc = 0;
@@ -774,6 +775,10 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         if (IS_ERR(handle))
                 GOTO(out_dput, rc = PTR_ERR(handle));
 
+        /* take a reference to protect inode from truncation within
+           vfs_unlink() context. bug 10409 */
+        inode = de->d_inode;
+        atomic_inc(&inode->i_count);
         rc = vfs_unlink(mds->mds_objects_dir->d_inode, de);
         if (rc)
                 CERROR("error destroying object "LPU64":%u: rc %d\n",
@@ -786,6 +791,9 @@ out_dput:
         if (de != NULL)
                 l_dput(de);
         UNLOCK_INODE_MUTEX(parent_inode);
+
+        if (inode)
+                iput(inode);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &ucred);
         RETURN(rc);

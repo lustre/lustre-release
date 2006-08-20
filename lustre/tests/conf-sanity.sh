@@ -10,13 +10,18 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:      mc mc mc mc mc mc  mc mc mc
-ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT 9  10 11 12 13 13b 14 15 18"
+
+# These tests don't apply to mountconf
+MOUNTCONFSKIP="9 10 11 12 13 13b 14 15 18"
+
+# bug number for skipped test:
+ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 23"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
+PTLDEBUG=${PTLDEBUG:-1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 RLUSTRE=${RLUSTRE:-$LUSTRE}
 MOUNTLUSTRE=${MOUNTLUSTRE:-/sbin/mount.lustre}
@@ -24,20 +29,11 @@ MKFSLUSTRE=${MKFSLUSTRE:-/usr/sbin/mkfs.lustre}
 HOSTNAME=`hostname`
 
 . $LUSTRE/tests/test-framework.sh
-
 init_test_env $@
-
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 reformat() {
-        grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
-	stop ost -f
-	stop ost2 -f
-	stop mds -f
-	echo Formatting mds, ost, ost2
-	add mds $MDS_MKFS_OPTS --reformat $MDSDEV  > /dev/null
-	add ost $OST_MKFS_OPTS --reformat $OSTDEV  > /dev/null
-	add ost2 $OST2_MKFS_OPTS --reformat $OSTDEV2  > /dev/null
+        formatall
 }
 
 gen_config() {
@@ -63,19 +59,19 @@ stop_mds() {
 }
 
 start_ost() {
-	echo "start ost service on `facet_active_host ost`"
-	start ost $OSTDEV $OST_MOUNT_OPTS || return 95
+	echo "start ost1 service on `facet_active_host ost1`"
+	start ost1 `ostdevname 1` $OST_MOUNT_OPTS || return 95
 }
 
 stop_ost() {
-	echo "stop ost service on `facet_active_host ost`"
+	echo "stop ost1 service on `facet_active_host ost1`"
 	# These tests all use non-failover stop
-	stop ost -f  || return 98
+	stop ost1 -f  || return 98
 }
 
 start_ost2() {
 	echo "start ost2 service on `facet_active_host ost2`"
-	start ost2 $OSTDEV2 $OST2_MOUNT_OPTS || return 92
+	start ost2 `ostdevname 2` $OST_MOUNT_OPTS || return 92
 }
 
 stop_ost2() {
@@ -88,6 +84,15 @@ mount_client() {
 	local MOUNTPATH=$1
 	echo "mount lustre on ${MOUNTPATH}....."
 	zconf_mount `hostname` $MOUNTPATH  || return 96
+}
+
+remount_client() {
+	local SAVEMOUNTOPT=$MOUNTOPT
+	MOUNTOPT="remount,$1"
+	local MOUNTPATH=$2
+	echo "remount '$1' lustre on ${MOUNTPATH}....."
+	zconf_mount `hostname`  $MOUNTPATH  || return 96
+	MOUNTOPT=$SAVEMOUNTOPT
 }
 
 umount_client() {
@@ -166,7 +171,7 @@ test_1() {
 	check_mount || return 42
 	cleanup || return $?
 }
-run_test 1 "start up ost twice"
+run_test 1 "start up ost twice (should return errors)"
 
 test_2() {
 	start_ost
@@ -177,7 +182,7 @@ test_2() {
 	check_mount || return 43
 	cleanup || return $?
 }
-run_test 2 "start up mds twice"
+run_test 2 "start up mds twice (should return err)"
 
 test_3() {
 	setup
@@ -186,7 +191,7 @@ test_3() {
 	check_mount || return 44
 	cleanup || return $?
 }
-run_test 3 "mount client twice"
+run_test 3 "mount client twice (should return err)"
 
 test_4() {
 	setup
@@ -251,19 +256,19 @@ test_5b() {
 	cleanup_nocli || return $?
 	return 0
 }
-run_test 5b "mds down, cleanup after failed mount (bug 2712)"
+run_test 5b "mds down, cleanup after failed mount (bug 2712) (should return errs)"
 
 test_5c() {
 	start_ost
 	start_mds
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab before mount" && return 10
-	mount -t lustre `facet_nid mgs`:/wrong.$FSNAME $MOUNT || :
+	mount -t lustre $MGSNID:/wrong.$FSNAME $MOUNT || :
 	grep " $MOUNT " /etc/mtab && echo "test 5c: mtab after failed mount" && return 11
 	umount_client $MOUNT
 	cleanup_nocli  || return $?
 }
-run_test 5c "cleanup after failed mount (bug 2712)"
+run_test 5c "cleanup after failed mount (bug 2712) (should return errs)"
 
 test_5d() {
 	start_ost
@@ -589,7 +594,7 @@ test_14() {
         start_ost
         start_mds
         mount_client $MOUNT || return $?
-        if [ -z "`do_facet ost dumpe2fs -h $OSTDEV | grep label_conf_14`" ]; then
+        if [ -z "`do_facet ost1 dumpe2fs -h $OSTDEV | grep label_conf_14`" ]; then
                 echo "Error: the mkoptions not applied to mke2fs of ost."
                 return 1
         fi
@@ -626,7 +631,7 @@ test_15() {
 	# load llite module on the client if it isn't in /lib/modules
 	do_facet client "$LCONF --nosetup --node client_facet $XMLCONFIG"
 	do_facet client "mount -t lustre -o $MOUNTOPT \
-		`facet_nid mds`:/mds_svc/client_facet $MOUNT" ||return $?
+		$MGSNID:/$FSNAME $MOUNT" ||return $?
 	echo "mount lustre on $MOUNT with $MOUNTLUSTRE: success"
 	[ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
 	check_mount || return 41
@@ -635,7 +640,7 @@ test_15() {
 	[ -f "$MOUNTLUSTRE" ] && rm -f $MOUNTLUSTRE
 	echo "mount lustre on ${MOUNT} without $MOUNTLUSTRE....."
 	do_node `hostname` mount -t lustre -o nettype=$NETTYPE,$MOUNTOPT \
-		`facet_nid mds`:/mds_svc/client_facet $MOUNT &&return $?
+		$MGSNID:/$FSNAME $MOUNT &&return $?
 	echo "mount lustre on $MOUNT without $MOUNTLUSTRE failed as expected"
 	cleanup || return $?
 	cleanup_15
@@ -653,10 +658,10 @@ test_16() {
         fi
 
         echo "change the mode of $MDSDEV/OBJECTS,LOGS,PENDING to 555"
-        do_facet mds "[ -d $TMPMTPT ] || mkdir -p $TMPMTPT;
-                      mount -o loop -t ext3 $MDSDEV $TMPMTPT || return \$?;
-                      chmod 555 $TMPMTPT/{OBJECTS,LOGS,PENDING} || return \$?;
-                      umount -d $TMPMTPT || return \$?" || return $?
+        do_facet mds "mkdir -p $TMPMTPT &&
+                      mount -o loop -t ext3 $MDSDEV $TMPMTPT &&
+                      chmod 555 $TMPMTPT/{OBJECTS,LOGS,PENDING} &&
+                      umount $TMPMTPT" || return $?
 
         echo "mount Lustre to change the mode of OBJECTS/LOGS/PENDING, then umount Lustre"
 	setup
@@ -706,7 +711,7 @@ test_17() {
 	start_mds && return 42
 	gen_config
 }
-run_test 17 "Verify failed mds_postsetup won't fail assertion (2936)"
+run_test 17 "Verify failed mds_postsetup won't fail assertion (2936) (should return errs)"
 
 test_18() {
         [ -f $MDSDEV ] && echo "remove $MDSDEV" && rm -f $MDSDEV
@@ -749,23 +754,44 @@ test_19b() {
 }
 run_test 19b "start/stop OSTs without MDS"
 
-test_20a() {
+test_20() {
+	# first format the ost/mdt
+	start_ost
+	start_mds
+	mount_client $MOUNT
+	check_mount || return 43
+	rm -f $DIR/$tfile
+	remount_client ro $MOUNT || return 44
+	touch $DIR/$tfile && echo "$DIR/$tfile created incorrectly" && return 45
+	[ -e $DIR/$tfile ] && echo "$DIR/$tfile exists incorrectly" && return 46
+	remount_client rw $MOUNT || return 47
+	touch $DIR/$tfile
+	[ ! -f $DIR/$tfile ] && echo "$DIR/$tfile missing" && return 48
+	MCNT=`grep -c $MOUNT /etc/mtab`
+	[ "$MCNT" -ne 1 ] && echo "$MOUNT in /etc/mtab $MCNT times" && return 49
+	umount_client $MOUNT
+	stop_mds
+	stop_ost
+}
+run_test 20 "remount ro,rw mounts work and doesn't break /etc/mtab"
+
+test_21a() {
         start_mds
 	start_ost
 	stop_ost
 	stop_mds
 }
-run_test 20a "start mds before ost, stop ost first"
+run_test 21a "start mds before ost, stop ost first"
 
-test_20b() {
+test_21b() {
         start_ost
 	start_mds
 	stop_mds
 	stop_ost
 }
-run_test 20b "start ost before mds, stop mds first"
+run_test 21b "start ost before mds, stop mds first"
 
-test_20c() {
+test_21c() {
         start_ost
 	start_mds
 	start_ost2
@@ -773,9 +799,9 @@ test_20c() {
 	stop_ost2
 	stop_mds
 }
-run_test 20c "start mds between two osts, stop mds last"
+run_test 21c "start mds between two osts, stop mds last"
 
-test_21() {
+test_22() {
         reformat
 	start_mds
 	echo Client mount before any osts are in the logs
@@ -800,8 +826,34 @@ test_21() {
 
 	cleanup
 }
-run_test 21 "start a client before osts"
+run_test 22 "start a client before osts (should return errs)"
 
+test_23() {
+        setup
+        # fail mds
+	stop mds   
+	# force down client so that recovering mds waits for reconnect
+	zconf_umount `hostname` $MOUNT -f
+	# enter recovery on mds
+	start_mds
+	# try to start a new client
+	mount_client $MOUNT &
+	MOUNT_PID=$!
+	sleep 5
+	MOUNT_LUSTRE_PID=`ps -ef | grep mount.lustre | grep -v grep | awk '{print $2}'`
+	echo mount pid is ${MOUNT_PID}, mount.lustre pid is ${MOUNT_LUSTRE_PID}
+	ps --ppid $MOUNT_PID
+	ps --ppid $MOUNT_LUSTRE_PID
+	# why o why can't I kill these? Manual "ctrl-c" works...
+	kill -TERM $MOUNT_PID
+	echo "waiting for mount to finish"
+	ps -ef | grep mount
+	wait $MOUNT_PID
+
+	stop_mds
+	stop_ost
+}
+run_test 23 "interrupt client during recovery mount delay"
 
 umount_client $MOUNT	
 cleanup_nocli

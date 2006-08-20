@@ -389,7 +389,6 @@ int jt_lcfg_lov_setup(int argc, char **argv)
                         jt_cmdname(argv[0]), argv[5]);
                 return CMD_HELP;
         }
-        desc.ld_qos_threshold = QOS_DEFAULT_THRESHOLD;
         desc.ld_qos_maxage = QOS_DEFAULT_MAXAGE;
 
         if (argc == 7) {
@@ -703,13 +702,6 @@ int jt_lcfg_mgsparam(int argc, char **argv)
                 if (rc) 
                         return rc;
                 index_offset = 1;
-        }
-
-        if (lcfg_devname == NULL) {
-                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
-                        "device name for config commands.\n", 
-                        jt_cmdname(argv[0])); 
-                return -EINVAL;
         }
 
         lustre_cfg_bufs_reset(&bufs, lcfg_devname);

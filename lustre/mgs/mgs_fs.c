@@ -114,7 +114,7 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         int rc;
         ENTRY;
 
-        // FIXME what's this?
+        /* FIXME what's this?  Do I need it? */
         rc = cleanup_group_info();
         if (rc)
                 RETURN(rc);

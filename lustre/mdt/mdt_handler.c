@@ -324,7 +324,6 @@ static int mdt_getattr(struct mdt_thread_info *info)
         LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
         ENTRY;
 
-
         req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD,
                              RCL_SERVER, info->mti_mdt->mdt_max_mdsize);
 
@@ -337,7 +336,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
         } else {
                 result = mdt_getattr_internal(info, obj);
         }
-        mdt_shrink_reply(info, 1);
+        mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         RETURN(result);
 }
 
@@ -465,7 +464,7 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
                 ldlm_lock_decref(&lhc->mlh_lh, lhc->mlh_mode);
                 lhc->mlh_lh.cookie = 0;
         }
-        mdt_shrink_reply(info, 1);
+        mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         RETURN(rc);
 }
 
@@ -635,7 +634,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
                         mcd = req->rq_export->exp_mdt_data.med_mcd;
                         if (mcd->mcd_last_xid == req->rq_xid) {
                                 mdt_reconstruct(info);
-                                RETURN(req->rq_repmsg->status);
+                                RETURN(lustre_msg_get_status(req->rq_repmsg));
                         } 
                         DEBUG_REQ(D_HA, req,
                                   "no reply for RESENT (xid "LPD64")",
@@ -864,11 +863,10 @@ int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
         LASSERT(lh != NULL);
         LASSERT(f != NULL);
 
-        /* FIXME: is that correct to have @flags=0 here? */
-        rc = ldlm_cli_enqueue(NULL, NULL, ns, *fid_build_res_name(f, res_id),
-                              LDLM_IBITS, policy, mode, &flags,
-                              ldlm_blocking_ast, ldlm_completion_ast, NULL,
-                              NULL, NULL, 0, NULL, lh);
+        rc = ldlm_cli_enqueue_local(ns, *fid_build_res_name(f, res_id), LDLM_IBITS, 
+                                    policy, mode, &flags, ldlm_blocking_ast, 
+                                    ldlm_completion_ast, NULL, NULL, 0, NULL,
+                                    lh);
         return rc == ELDLM_OK ? 0 : -EIO;
 }
 
@@ -1106,10 +1104,14 @@ static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
                mdt->mdt_last_transno, exp->exp_obd->obd_last_committed);
 
         spin_lock(&mdt->mdt_transno_lock);
-        req->rq_repmsg->transno = req->rq_transno = info->mti_transno;
-        req->rq_repmsg->last_committed = exp->exp_obd->obd_last_committed;
+        req->rq_transno = info->mti_transno;
+        lustre_msg_set_transno(req->rq_repmsg, info->mti_transno);
+        
+        lustre_msg_set_last_committed(req->rq_repmsg, 
+                                      exp->exp_obd->obd_last_committed);
+        
         spin_unlock(&mdt->mdt_transno_lock);
-        req->rq_repmsg->last_xid = req->rq_xid;
+        lustre_msg_set_last_xid(req->rq_repmsg, req->rq_xid);
 }
 
 /*
@@ -1126,7 +1128,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         ENTRY;
 
         LASSERT(h->mh_act != NULL);
-        LASSERT(h->mh_opc == req->rq_reqmsg->opc);
+        LASSERT(h->mh_opc == lustre_msg_get_opc(req->rq_reqmsg));
         LASSERT(current->journal_info == NULL);
 
         DEBUG_REQ(D_INODE, req, "%s", h->mh_name);
@@ -1226,7 +1228,7 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
 
         info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
         info->mti_ctxt = req->rq_svc_thread->t_ctx;
-        info->mti_transno = req->rq_reqmsg->transno;
+        info->mti_transno = lustre_msg_get_transno(req->rq_reqmsg);
         /* it can be NULL while CONNECT */
         if (req->rq_export)
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
@@ -1264,12 +1266,12 @@ static int mdt_recovery(struct ptlrpc_request *req)
 
         ENTRY;
 
-        if (req->rq_reqmsg->opc == MDS_CONNECT)
+        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CONNECT)
                 RETURN(+1);
 
         if (req->rq_export == NULL) {
                 CERROR("operation %d on unconnected MDS from %s\n",
-                       req->rq_reqmsg->opc,
+                       lustre_msg_get_opc(req->rq_reqmsg),
                        libcfs_id2str(req->rq_peer));
                 req->rq_status = -ENOTCONN;
                 RETURN(-ENOTCONN);
@@ -1318,7 +1320,7 @@ static int mdt_reply(struct ptlrpc_request *req, int result,
         ENTRY;
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
-                if (req->rq_reqmsg->opc != OBD_PING)
+                if (lustre_msg_get_opc(req->rq_reqmsg) != OBD_PING)
                         DEBUG_REQ(D_ERROR, req, "Unexpected MSG_LAST_REPLAY");
 
                 obd = req->rq_export != NULL ? req->rq_export->exp_obd : NULL;
@@ -1357,7 +1359,7 @@ static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info,
                 result = mdt_recovery(req);
                 switch (result) {
                 case +1:
-                        h = mdt_handler_find(msg->opc, supported);
+                        h = mdt_handler_find(lustre_msg_get_opc(msg), supported);
                         if (h != NULL)
                                 result = mdt_req_handle(info, h, req);
                         else {
@@ -1550,7 +1552,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         ldlm_rep->lock_policy_res2 =
                 mdt_getattr_name_lock(info, lhc, child_bits, ldlm_rep);
-        mdt_shrink_reply(info, 2);
+        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
 
         if (intent_disposition(ldlm_rep, DISP_LOOKUP_NEG))
                 ldlm_rep->lock_policy_res2 = 0;
@@ -1583,7 +1585,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
          */
 
         /* Fixup the lock to be given to the client */
-        l_lock(&new_lock->l_resource->lr_namespace->ns_lock);
+        lock_res_and_lock(new_lock);
         new_lock->l_readers = 0;
         new_lock->l_writers = 0;
 
@@ -1598,7 +1600,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         new_lock->l_flags &= ~LDLM_FL_LOCAL;
 
-        l_unlock(&new_lock->l_resource->lr_namespace->ns_lock);
+        unlock_res_and_lock(new_lock);
         LDLM_LOCK_PUT(new_lock);
 
         RETURN(ELDLM_LOCK_REPLACED);
@@ -1738,7 +1740,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         pill = &info->mti_pill;
         LASSERT(pill->rc_req == req);
 
-        if (req->rq_reqmsg->bufcount > MDS_REQ_INTENT_IT_OFF) {
+        if (req->rq_reqmsg->lm_bufcount > DLM_INTENT_IT_OFF) {
                 req_capsule_extend(pill, &RQF_LDLM_INTENT);
                 it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
                 if (it != NULL) {
@@ -2566,7 +2568,6 @@ static int mdt_obd_connect(const struct lu_context *ctx,
 
 static int mdt_obd_disconnect(struct obd_export *exp)
 {
-        unsigned long irqflags;
         int rc;
         ENTRY;
 
@@ -2949,6 +2950,12 @@ static struct mdt_opc_slice mdt_handlers[] = {
 
 static struct mdt_handler mdt_mds_readpage_ops[] = {
         DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, READPAGE, mdt_readpage),
+
+        /*
+         * XXX: this is ugly and should be fixed one day, see mdc_close() for
+         * detailed comment. --umka
+         */
+        DEF_MDT_HNDL_F(HABEO_CORPUS             , CLOSE,    mdt_close),
 };
 
 static struct mdt_opc_slice mdt_readpage_handlers[] = {

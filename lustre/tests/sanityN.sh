@@ -16,8 +16,8 @@ PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 SIZE=${SIZE:-40960}
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
-LFIND=${LFIND:-lfind}
-LSTRIPE=${LSTRIPE:-lstripe}
+GETSTRIPE=${GETSTRIPE:-lfs getstripe}
+SETSTRIPE=${SETSTRIPE:-lstripe}
 LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
@@ -36,23 +36,21 @@ fi
 
 SAVE_PWD=$PWD
 
-# for MCSETUP and MCCLEANUP
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
-. mountconf.sh
 
 cleanup() {
 	echo -n "cln.."
 	grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 ${FORCE}
-	$MCCLEANUP ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
+	cleanupall ${FORCE} > /dev/null || { echo "FAILed to clean up"; exit 20; }
 }
 CLEANUP=${CLEANUP:-:}
 
 setup() {
 	echo -n "mnt.."
-	$MCSETUP || exit 10
+	setupall || exit 10
 	echo "done"
 }
 SETUP=${SETUP:-:}
@@ -70,6 +68,8 @@ trace() {
 	return 1
 }
 TRACE=${TRACE:-""}
+
+LPROC=/proc/fs/lustre
 
 run_one() {
 	if ! grep -q $DIR /proc/mounts; then
@@ -179,8 +179,8 @@ mounted_lustre_filesystems() {
 }
 MOUNTED="`mounted_lustre_filesystems`"
 if [ -z "$MOUNTED" ]; then
-    $MCFORMAT
-    $MCSETUP
+    formatall
+    setupall
     mount_client $MOUNT2
     MOUNTED="`mounted_lustre_filesystems`"
     [ -z "$MOUNTED" ] && error "NAME=$NAME not mounted"
@@ -487,12 +487,12 @@ test_19() { # bug3811
 test_20() {
 	mkdir $DIR1/d20
 	cancel_lru_locks osc
-	CNT=$((`cat /proc/fs/lustre/llite/fs0/dump_page_cache | wc -l`))
+	CNT=$((`cat /proc/fs/lustre/llite/*/dump_page_cache | wc -l`))
 	multiop $DIR1/f20 Ow8190c
 	multiop $DIR2/f20 Oz8194w8190c
 	multiop $DIR1/f20 Oz0r8190c
 	cancel_lru_locks osc
-	CNTD=$((`cat /proc/fs/lustre/llite/fs0/dump_page_cache | wc -l` - $CNT))
+	CNTD=$((`cat /proc/fs/lustre/llite/*/dump_page_cache | wc -l` - $CNT))
 	[ $CNTD -gt 0 ] && \
 	    error $CNTD" page left in cache after lock cancel" || true
 }
@@ -571,7 +571,7 @@ test_24() {
 	lfs df $DIR1/$tfile || error "lfs df $DIR1/$tfile failed"
 	lfs df -ih $DIR2/$tfile || error "lfs df -ih $DIR2/$tfile failed"
 	
-	OSC=`lctl dl | awk '/OSC.*MNT/ {print $4}' | head -n 1`
+	OSC=`lctl dl | awk '/-osc-/ {print $4}' | head -n 1`
 	lctl --device %$OSC deactivate
 	lfs df -i || error "lfs df -i with deactivated OSC failed"
 	lctl --device %$OSC recover
@@ -580,8 +580,7 @@ test_24() {
 run_test 24 "lfs df [-ih] [path] test ========================="
 
 test_25() {
-	[ -z "`mount | grep " $DIR1 .*\<acl\>"`" ] && echo "skipping $TESTNAME ($DIR1 must have acl)" && return
-	[ -z "`mount | grep " $DIR2 .*\<acl\>"`" ] && echo "skipping $TESTNAME ($DIR2 must have acl)" && return
+	[ `cat $LPROC/mdc/*-mdc-*/connect_flags | grep -c acl` -lt 2 ] && echo "skipping $TESTNAME (must have acl)" && return
 
 	mkdir $DIR1/d25 || error
 	touch $DIR1/d25/f1 || error
@@ -600,6 +599,26 @@ test_25() {
 	rm -rf $DIR1/d25
 }
 run_test 25 "change ACL on one mountpoint be seen on another ==="
+
+test_26a() {
+        utime $DIR1/f26a -s $DIR2/f26a || error
+}
+run_test 26a "allow mtime to get older"
+
+test_26b() {
+        touch $DIR1/$tfile
+        sleep 1
+        echo "aaa" >> $DIR1/$tfile
+        sleep 1
+        chmod a+x $DIR2/$tfile
+        mt1=`stat -c %Y $DIR1/$tfile`
+        mt2=`stat -c %Y $DIR2/$tfile`
+        
+        if [ x"$mt1" != x"$mt2" ]; then 
+                error "not equal mtime, client1: "$mt1", client2: "$mt2"."
+        fi
+}
+run_test 26b "sync mtime between ost and mds"
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true

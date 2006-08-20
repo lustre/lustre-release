@@ -58,7 +58,7 @@ struct ll_rpc_opcode {
         { OST_QUOTACHECK,   "ost_quotacheck" },
         { OST_QUOTACTL,     "ost_quotactl" },
         { MDS_GETATTR,      "mds_getattr" },
-        { MDS_GETATTR_NAME, "mds_getattr_name" },
+        { MDS_GETATTR_NAME, "mds_getattr_lock" },
         { MDS_CLOSE,        "mds_close" },
         { MDS_REINT,        "mds_reint" },
         { MDS_READPAGE,     "mds_readpage" },
@@ -184,7 +184,6 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
 {
         struct ptlrpc_service *svc = data;
         int                    bufpages;
-        unsigned long          flags;
         int                    val;
         int                    rc = lprocfs_write_helper(buffer, count, &val);
 
@@ -201,9 +200,9 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
         if (val > num_physpages/(2*bufpages))
                 return -ERANGE;
 
-        spin_lock_irqsave(&svc->srv_lock, flags);
+        spin_lock(&svc->srv_lock);
         svc->srv_max_history_rqbds = val;
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        spin_unlock(&svc->srv_lock);
 
         return count;
 }
@@ -257,7 +256,6 @@ ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
 {
         struct ptlrpc_service       *svc = s->private;
         struct ptlrpc_srh_iterator  *srhi;
-        unsigned long                flags;
         int                          rc;
 
         OBD_ALLOC(srhi, sizeof(*srhi));
@@ -267,9 +265,9 @@ ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
         srhi->srhi_seq = 0;
         srhi->srhi_req = NULL;
 
-        spin_lock_irqsave(&svc->srv_lock, flags);
+        spin_lock(&svc->srv_lock);
         rc = ptlrpc_lprocfs_svc_req_history_seek(svc, srhi, *pos);
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        spin_unlock(&svc->srv_lock);
 
         if (rc == 0) {
                 *pos = srhi->srhi_seq;
@@ -295,12 +293,11 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
 {
         struct ptlrpc_service       *svc = s->private;
         struct ptlrpc_srh_iterator  *srhi = iter;
-        unsigned long                flags;
         int                          rc;
 
-        spin_lock_irqsave(&svc->srv_lock, flags);
+        spin_lock(&svc->srv_lock);
         rc = ptlrpc_lprocfs_svc_req_history_seek(svc, srhi, *pos + 1);
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        spin_unlock(&svc->srv_lock);
 
         if (rc != 0) {
                 OBD_FREE(srhi, sizeof(*srhi));
@@ -316,10 +313,9 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
         struct ptlrpc_service      *svc = s->private;
         struct ptlrpc_srh_iterator *srhi = iter;
         struct ptlrpc_request      *req;
-        unsigned long               flags;
         int                         rc;
 
-        spin_lock_irqsave(&svc->srv_lock, flags);
+        spin_lock(&svc->srv_lock);
 
         rc = ptlrpc_lprocfs_svc_req_history_seek(svc, srhi, srhi->srhi_seq);
 
@@ -343,7 +339,7 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
                         svc->srv_request_history_print_fn(s, srhi->srhi_req);
         }
 
-        spin_unlock_irqrestore(&svc->srv_lock, flags);
+        spin_unlock(&svc->srv_lock);
 
         return rc;
 }
@@ -422,7 +418,7 @@ EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
 void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
 {
         struct lprocfs_stats *svc_stats;
-        int opc =  opcode_offset(req->rq_reqmsg->opc);
+        int opc = opcode_offset(lustre_msg_get_opc(req->rq_reqmsg));
 
         svc_stats = req->rq_import->imp_obd->obd_svc_stats;
         if (svc_stats == NULL || opc <= 0)
@@ -480,11 +476,11 @@ int lprocfs_wr_ping(struct file *file, const char *buffer,
         ENTRY;
 
         req = ptlrpc_prep_req(obd->u.cli.cl_import, LUSTRE_OBD_VERSION,
-                              OBD_PING, 0, NULL, NULL);
+                              OBD_PING, 1, NULL, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        req->rq_replen = lustre_msg_size(0, NULL);
+        ptlrpc_req_set_repsize(req, 1, NULL);
         req->rq_send_state = LUSTRE_IMP_FULL;
         req->rq_no_resend = 1;
 

@@ -23,12 +23,6 @@
 #include <linux/sched.h>
 #include <linux/mm.h>
 #include <linux/smp_lock.h>
-#ifdef HAVE_LINUX_XATTR_ACL_H
-#include <linux/xattr_acl.h>
-#else
-#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
-#define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
-#endif
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -37,6 +31,22 @@
 #include <lustre_dlm.h>
 #include <lustre_ver.h>
 #include <lustre_mdc.h>
+#include <linux/lustre_acl.h>
+
+#if 0
+#ifndef POSIX_ACL_XATTR_ACCESS
+#ifndef XATTR_NAME_ACL_ACCESS
+#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
+#endif
+#define POSIX_ACL_XATTR_ACCESS XATTR_NAME_ACL_ACCESS
+#endif
+#ifndef POSIX_ACL_XATTR_DEFAULT
+#ifndef XATTR_NAME_ACL_DEFAULT
+#define XATTR_NAME_ACL_DEFAULT  "system.posix_acl_default"
+#endif
+#define POSIX_ACL_XATTR_DEFAULT XATTR_NAME_ACL_DEFAULT
+#endif
+#endif
 
 #include "llite_internal.h"
 
@@ -54,10 +64,10 @@
 static
 int get_xattr_type(const char *name)
 {
-        if (!strcmp(name, XATTR_NAME_ACL_ACCESS))
+        if (!strcmp(name, POSIX_ACL_XATTR_ACCESS))
                 return XATTR_ACL_ACCESS_T;
 
-        if (!strcmp(name, XATTR_NAME_ACL_DEFAULT))
+        if (!strcmp(name, POSIX_ACL_XATTR_DEFAULT))
                 return XATTR_ACL_DEFAULT_T;
 
         if (!strncmp(name, XATTR_USER_PREFIX,
@@ -188,6 +198,7 @@ int ll_getxattr_common(struct inode *inode, const char *name,
          * we just have path resolution to the target inode, so we have great
          * chance that cached ACL is uptodate.
          */
+#ifdef CONFIG_FS_POSIX_ACL
         if (xattr_type == XATTR_ACL_ACCESS_T) {
                 struct ll_inode_info *lli = ll_i2info(inode);
                 struct posix_acl *acl;
@@ -203,6 +214,7 @@ int ll_getxattr_common(struct inode *inode, const char *name,
                 posix_acl_release(acl);
                 RETURN(rc);
         }
+#endif
 
 do_getxattr:
         rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), valid,
@@ -216,9 +228,9 @@ do_getxattr:
                 RETURN(rc);
         }
 
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
         LASSERT(body);
-        LASSERT_REPSWABBED(req, 0);
+        LASSERT_REPSWABBED(req, REPLY_REC_OFF);
 
         /* only detect the xattr size */
         if (size == 0)
@@ -230,17 +242,19 @@ do_getxattr:
                 GOTO(out, rc = -ERANGE);
         }
 
-        if (req->rq_repmsg->bufcount < 2) {
-                CERROR("reply bufcount %u\n", req->rq_repmsg->bufcount);
+        if (lustre_msg_bufcount(req->rq_repmsg) < 3) {
+                CERROR("reply bufcount %u\n",
+                       lustre_msg_bufcount(req->rq_repmsg));
                 GOTO(out, rc = -EFAULT);
         }
 
         /* do not need swab xattr data */
-        LASSERT_REPSWAB(req, 1);
-        xdata = lustre_msg_buf(req->rq_repmsg, 1, body->eadatasize);
+        LASSERT_REPSWAB(req, REPLY_REC_OFF + 1);
+        xdata = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
+                               body->eadatasize);
         if (!xdata) {
                 CERROR("can't extract: %u : %u\n", body->eadatasize,
-                       lustre_msg_buflen(req->rq_repmsg, 1));
+                       lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF + 1));
                 GOTO(out, rc = -EFAULT);
         }
 

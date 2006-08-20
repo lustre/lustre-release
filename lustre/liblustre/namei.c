@@ -47,7 +47,7 @@
 
 #include "llite_lib.h"
 
-static void ll_intent_drop_lock(struct lookup_intent *it)
+void ll_intent_drop_lock(struct lookup_intent *it)
 {
         struct lustre_handle *handle;
 
@@ -63,7 +63,7 @@ static void ll_intent_drop_lock(struct lookup_intent *it)
         }
 }
 
-static void ll_intent_release(struct lookup_intent *it)
+void ll_intent_release(struct lookup_intent *it)
 {
         ENTRY;
 
@@ -130,9 +130,9 @@ static inline void llu_invalidate_inode_pages(struct inode * inode)
         /* do nothing */
 }
 
-int llu_mdc_blocking_ast(struct ldlm_lock *lock,
-                         struct ldlm_lock_desc *desc,
-                         void *data, int flag)
+int llu_md_blocking_ast(struct ldlm_lock *lock,
+                        struct ldlm_lock_desc *desc,
+                        void *data, int flag)
 {
         struct lustre_handle lockh;
         int rc;
@@ -276,9 +276,9 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
                                 pb->pb_ino, pb->pb_name.name, pb->pb_name.len,0);
 
         rc = md_intent_lock(exp, &op_data, NULL, 0, it, flags,
-                            &req, llu_mdc_blocking_ast,
+                            &req, llu_md_blocking_ast,
                             LDLM_FL_CANCEL_ON_BLOCK);
-        /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
+        /* If req is NULL, then md_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)
                 GOTO(out, rc);
@@ -286,7 +286,7 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
         if (rc < 0)
                 GOTO(out, rc = 0);
 
-        rc = pnode_revalidate_finish(req, 1, it, pnode);
+        rc = pnode_revalidate_finish(req, DLM_REPLY_REC_OFF, it, pnode);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, rc = 0);
@@ -333,7 +333,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         if (it_disposition(it, DISP_OPEN_OPEN) &&
             it_open_error(DISP_OPEN_OPEN, it)) {
                 CDEBUG(D_INODE, "detect mds open error\n");
-                /* undo which did by mdc_intent_lock */
+                /* undo which did by md_intent_lock */
                 if (it_disposition(it, DISP_OPEN_CREATE) &&
                     !it_open_error(DISP_OPEN_CREATE, it)) {
                         LASSERT(request);
@@ -347,8 +347,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return
          */
-        if (!it_disposition(it, DISP_LOOKUP_NEG) ||
-            (it->it_op & IT_CREAT)) {
+        if (!it_disposition(it, DISP_LOOKUP_NEG) || (it->it_op & IT_CREAT)) {
                 struct lustre_md md;
                 struct llu_inode_info *lli;
                 struct intnl_stat *st;
@@ -409,7 +408,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
 {
         struct inode *inode;
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        lock_res_and_lock(lock);
 
         if (lock->l_ast_data) {
                 inode = (struct inode *)lock->l_ast_data;
@@ -417,7 +416,7 @@ struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
         } else
                 inode = NULL;
 
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        unlock_res_and_lock(lock);
         return inode;
 }
 
@@ -460,12 +459,12 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                 }
         }
         rc = md_intent_lock(llu_i2mdcexp(parent), &op_data, NULL, 0, it,
-                            flags, &req, llu_mdc_blocking_ast,
+                            flags, &req, llu_md_blocking_ast,
                             LDLM_FL_CANCEL_ON_BLOCK);
         if (rc < 0)
                 GOTO(out, rc);
 
-        rc = lookup_it_finish(req, 1, it, &icbd);
+        rc = lookup_it_finish(req, DLM_REPLY_REC_OFF, it, &icbd);
         if (rc != 0) {
                 ll_intent_release(it);
                 GOTO(out, rc);

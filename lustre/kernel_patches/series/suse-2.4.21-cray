@@ -41,3 +41,4 @@ fsprivate-2.4-suse.patch
 nfsd_iallocsem.patch
 linux-2.4.24-jbd-handle-EIO.patch
 ext3-ialloc-2.4.21-suse2.patch 
+ext3-sector_t-overflow-2.4.patch

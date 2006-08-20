@@ -40,7 +40,7 @@
 
 /* Merge the lock value block(&lvb) attributes from each of the stripes in a
  * file into a single lvb. It is expected that the caller initializes the
- * current atime, mtime, ctime to avoid regressing a more uptodate time on 
+ * current atime, mtime, ctime to avoid regressing a more uptodate time on
  * the local client.
  *
  * If @kms_only is set then we do not consider the recently seen size (rss)
@@ -74,21 +74,26 @@ int lov_merge_lvb(struct obd_export *exp, struct lov_stripe_md *lsm,
                 lov_size = lov_stripe_size(lsm, tmpsize, i);
                 if (lov_size > size)
                         size = lov_size;
-                /* merge blocks, mtime, atime */ 
+                /* merge blocks, mtime, atime */
                 blocks += loi->loi_lvb.lvb_blocks;
-                if (loi->loi_lvb.lvb_mtime > current_mtime)
-                        current_mtime = loi->loi_lvb.lvb_mtime;
                 if (loi->loi_lvb.lvb_atime > current_atime)
                         current_atime = loi->loi_lvb.lvb_atime;
-                if (loi->loi_lvb.lvb_ctime > current_ctime)
+
+                /* mtime is always updated with ctime, but can be set in past.
+                   As write and utime(2) may happen within 1 second, and utime's
+                   mtime has a priority over write's one, leave mtime from mds 
+                   for the same ctimes. */
+                if (loi->loi_lvb.lvb_ctime > current_ctime) {
                         current_ctime = loi->loi_lvb.lvb_ctime;
+                        current_mtime = loi->loi_lvb.lvb_mtime;
+                }
         }
 
         lvb->lvb_size = size;
         lvb->lvb_blocks = blocks;
-        lvb->lvb_mtime = current_mtime; 
-        lvb->lvb_atime = current_atime; 
-        lvb->lvb_ctime = current_ctime; 
+        lvb->lvb_mtime = current_mtime;
+        lvb->lvb_atime = current_atime;
+        lvb->lvb_ctime = current_ctime;
         RETURN(0);
 }
 
@@ -153,6 +158,8 @@ void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
                         tgt->o_blksize += src->o_blksize;
                 if (valid & OBD_MD_FLCTIME && tgt->o_ctime < src->o_ctime)
                         tgt->o_ctime = src->o_ctime;
+                /* Only mtime from OSTs are merged here, as they cannot be set
+                   in past (only MDS's mtime can) do not look at ctime. */
                 if (valid & OBD_MD_FLMTIME && tgt->o_mtime < src->o_mtime)
                         tgt->o_mtime = src->o_mtime;
         } else {

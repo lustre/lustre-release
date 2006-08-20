@@ -588,13 +588,13 @@ struct l_wait_info {
         .lwi_interval   = interval                      \
 })
 
-#define LWI_TIMEOUT_INTR(time, time_cb, sig_cb, data)                          \
-((struct l_wait_info) {                                                        \
-        .lwi_timeout    = time,                                                \
-        .lwi_on_timeout = time_cb,                                             \
-        .lwi_on_signal = (sig_cb == NULL) ? LWI_ON_SIGNAL_NOOP : sig_cb,       \
-        .lwi_cb_data    = data,                                                \
-        .lwi_interval    = 0                                                   \
+#define LWI_TIMEOUT_INTR(time, time_cb, sig_cb, data)   \
+((struct l_wait_info) {                                 \
+        .lwi_timeout    = time,                         \
+        .lwi_on_timeout = time_cb,                      \
+        .lwi_on_signal = sig_cb,                        \
+        .lwi_cb_data    = data,                         \
+        .lwi_interval    = 0                            \
 })
 
 #define LWI_INTR(cb, data)  LWI_TIMEOUT_INTR(0, NULL, cb, data)

@@ -318,7 +318,7 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
         LASSERT (rs != NULL);
         LASSERT (req->rq_repmsg != NULL);
         LASSERT (may_be_difficult || !rs->rs_difficult);
-        LASSERT (req->rq_repmsg == &rs->rs_msg);
+        LASSERT (req->rq_repmsg == rs->rs_msg);
         LASSERT (rs->rs_cb_id.cbid_fn == reply_out_callback);
         LASSERT (rs->rs_cb_id.cbid_arg == rs);
         LASSERT (req->rq_repmsg != NULL);
@@ -335,9 +335,9 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
         if (req->rq_type != PTL_RPC_MSG_ERR)
                 req->rq_type = PTL_RPC_MSG_REPLY;
 
-        req->rq_repmsg->type   = req->rq_type;
-        req->rq_repmsg->status = req->rq_status;
-        req->rq_repmsg->opc    = req->rq_reqmsg->opc;
+        lustre_msg_set_type(req->rq_repmsg, req->rq_type);
+        lustre_msg_set_status(req->rq_repmsg, req->rq_status);
+        lustre_msg_set_opc(req->rq_repmsg, lustre_msg_get_opc(req->rq_reqmsg));
 
         if (req->rq_export == NULL || req->rq_export->exp_connection == NULL)
                 conn = ptlrpc_get_connection(req->rq_peer, req->rq_self, NULL);
@@ -374,14 +374,14 @@ int ptlrpc_error(struct ptlrpc_request *req)
         ENTRY;
 
         if (!req->rq_repmsg) {
-                rc = lustre_pack_reply(req, 0, NULL, NULL);
+                rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc)
                         RETURN(rc);
         }
 
         req->rq_type = PTL_RPC_MSG_ERR;
 
-        rc = ptlrpc_send_reply (req, 0);
+        rc = ptlrpc_send_reply(req, 0);
         RETURN(rc);
 }
 
@@ -390,7 +390,6 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         int rc;
         int rc2;
         struct ptlrpc_connection *connection;
-        unsigned long flags;
         lnet_handle_me_t  reply_me_h;
         lnet_md_t         reply_md;
         ENTRY;
@@ -420,9 +419,11 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                         RETURN(rc);
         }
 
-        request->rq_reqmsg->handle = request->rq_import->imp_remote_handle;
-        request->rq_reqmsg->type = PTL_RPC_MSG_REQUEST;
-        request->rq_reqmsg->conn_cnt = request->rq_import->imp_conn_cnt;
+        lustre_msg_set_handle(request->rq_reqmsg,
+                              &request->rq_import->imp_remote_handle);
+        lustre_msg_set_type(request->rq_reqmsg, PTL_RPC_MSG_REQUEST);
+        lustre_msg_set_conn_cnt(request->rq_reqmsg,
+                                request->rq_import->imp_conn_cnt);
 
         if (!noreply) {
                 LASSERT (request->rq_replen != 0);
@@ -441,7 +442,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 }
         }
 
-        spin_lock_irqsave (&request->rq_lock, flags);
+        spin_lock(&request->rq_lock);
         /* If the MD attach succeeds, there _will_ be a reply_in callback */
         request->rq_receiving_reply = !noreply;
         /* Clear any flags that may be present from previous sends. */
@@ -451,7 +452,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         request->rq_net_err = 0;
         request->rq_resend = 0;
         request->rq_restart = 0;
-        spin_unlock_irqrestore (&request->rq_lock, flags);
+        spin_unlock(&request->rq_lock);
 
         if (!noreply) {
                 reply_md.start     = request->rq_repmsg;
@@ -466,10 +467,10 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 if (rc != 0) {
                         CERROR("LNetMDAttach failed: %d\n", rc);
                         LASSERT (rc == -ENOMEM);
-                        spin_lock_irqsave (&request->rq_lock, flags);
+                        spin_lock(&request->rq_lock);
                         /* ...but the MD attach didn't succeed... */
                         request->rq_receiving_reply = 0;
-                        spin_unlock_irqrestore (&request->rq_lock, flags);
+                        spin_unlock(&request->rq_lock);
                         GOTO(cleanup_me, rc -ENOMEM);
                 }
 
@@ -500,7 +501,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 
          /* drop request_out_callback refs, we couldn't start the send */
         atomic_dec(&request->rq_import->imp_inflight);
-        ptlrpc_req_finished (request);
+        ptlrpc_req_finished(request);
 
         if (noreply)
                 RETURN(rc);

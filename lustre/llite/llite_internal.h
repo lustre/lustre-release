@@ -5,25 +5,39 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
+# include <linux/lustre_acl.h>
+
 #ifdef CONFIG_FS_POSIX_ACL
 # include <linux/fs.h>
+#ifdef HAVE_XATTR_ACL
 # include <linux/xattr_acl.h>
 #endif
-#include <linux/lustre_version.h>
+#ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
+# include <linux/posix_acl_xattr.h>
+#endif
+#endif
 
 #include <lustre_debug.h>
 #include <lustre_ver.h>
 #include <lustre_disk.h>  /* for s2sbi */
 
-#define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
+/* If there is no FMODE_EXEC defined, make it to match nothing */
+#ifndef FMODE_EXEC
+#define FMODE_EXEC 0
+#endif
 
+#define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
+#if !defined(LUSTRE_KERNEL_VERSION) || (LUSTRE_KERNEL_VERSION < 46)
+#define LUSTRE_FPRIVATE(file) ((file)->private_data)
+#else
 #if (LUSTRE_KERNEL_VERSION < 46)
 #define LUSTRE_FPRIVATE(file) ((file)->private_data)
 #else
 #define LUSTRE_FPRIVATE(file) ((file)->fs_private)
 #endif
+#endif
 
-
+#ifdef LUSTRE_KERNEL_VERSION
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
 {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -32,12 +46,16 @@ static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
         return nd->intent;
 #endif
 }
+#endif
 
 struct ll_dentry_data {
         int                      lld_cwd_count;
         int                      lld_mnt_count;
         struct obd_client_handle lld_cwd_och;
         struct obd_client_handle lld_mnt_och;
+#ifndef LUSTRE_KERNEL_VERSION
+        struct lookup_intent     *lld_it;
+#endif
 };
 
 #define ll_d2d(de) ((struct ll_dentry_data*) de->d_fsdata)
@@ -54,6 +72,7 @@ struct ll_inode_info {
         struct semaphore        lli_size_sem;
         void                   *lli_size_sem_owner;
         struct semaphore        lli_open_sem;
+        struct semaphore        lli_write_sem;
         char                   *lli_symlink_name;
         __u64                   lli_maxbytes;
         __u64                   lli_io_epoch;
@@ -74,11 +93,22 @@ struct ll_inode_info {
 
         struct list_head        lli_dead_list;
 
+        struct semaphore        lli_och_sem; /* Protects access to och pointers
+                                                and their usage counters */
+        /* We need all three because every inode may be opened in different
+           modes */
+        struct obd_client_handle *lli_mds_read_och;
+        __u64                   lli_open_fd_read_count;
+        struct obd_client_handle *lli_mds_write_och;
+        __u64                   lli_open_fd_write_count;
+        struct obd_client_handle *lli_mds_exec_och;
+        __u64                   lli_open_fd_exec_count;
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode            lli_vfs_inode;
 #endif
 
-        /* indexing fields for both metadata and data stacks. */
+        /* identifying fields for both metadata and data stacks. */
         struct lu_fid           lli_fid;
         struct lov_stripe_md   *lli_smd;
 };
@@ -174,7 +204,12 @@ struct ll_sb_info {
 
         struct list_head          ll_deathrow; /* inodes to be destroyed (b1443) */
         spinlock_t                ll_deathrow_lock;
+        /* =0 - hold lock over whole read/write
+         * >0 - max. chunk to be read/written w/o lock re-acquiring */
+        unsigned long             ll_max_rw_chunk;
 };
+
+#define LL_DEFAULT_MAX_RW_CHUNK         (32 * 1024 * 1024)
 
 struct ll_ra_read {
         pgoff_t             lrr_start;
@@ -256,12 +291,12 @@ struct ll_file_dir {
 extern kmem_cache_t *ll_file_data_slab;
 struct lustre_handle;
 struct ll_file_data {
-        struct obd_client_handle fd_mds_och;
         struct ll_readahead_state fd_ras;
-        __u32 fd_flags;
+        int fd_omode;
         struct lustre_handle fd_cwlockh;
         unsigned long fd_gid;
         struct ll_file_dir fd_dir;
+        __u32 fd_flags;
 };
 
 struct lov_stripe_md;
@@ -360,13 +395,19 @@ int ll_md_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
                            struct inode *i2, const char *name, int namelen,
                            int mode);
+int ll_md_cancel_unused(struct lustre_handle *, struct inode *, int flags,
+                        void *opaque);
+#ifndef LUSTRE_KERNEL_VERSION
+struct lookup_intent *ll_convert_intent(struct open_intent *oit,
+                                        int lookup_flags);
+#endif
 
 /* llite/rw.c */
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
 int ll_commit_write(struct file *, struct page *, unsigned from, unsigned to);
 int ll_writepage(struct page *page);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
-void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
+int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction);
 extern struct cache_definition ll_cache_definition;
 void ll_removepage(struct page *page);
@@ -391,12 +432,16 @@ int ll_extent_unlock(struct ll_file_data *, struct inode *,
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
+int ll_glimpse_ioctl(struct ll_sb_info *sbi, 
+                     struct lov_stripe_md *lsm, lstat_t *st);
 int ll_glimpse_size(struct inode *inode, int ast_flags);
 int ll_local_open(struct file *file,
-                  struct lookup_intent *it, struct ll_file_data *fd);
+                  struct lookup_intent *it, struct ll_file_data *fd,
+                  struct obd_client_handle *och);
 int ll_release_openhandle(struct dentry *, struct lookup_intent *);
 int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct file *file);
+int ll_md_real_close(struct inode *inode, int flags);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
@@ -414,6 +459,7 @@ void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
 int ll_drop_dentry(struct dentry *dentry);
 extern void ll_set_dd(struct dentry *de);
+int ll_drop_dentry(struct dentry *dentry);
 void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
@@ -422,11 +468,9 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request, int offset,
                             struct lookup_intent *it, struct dentry *de);
 
 /* llite/llite_lib.c */
-
 extern struct super_operations lustre_super_operations;
 
 char *ll_read_opt(const char *opt, char *data);
-void ll_options(char *options, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb);
 void ll_put_super(struct super_block *sb);
@@ -436,7 +480,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr);
 int ll_setattr(struct dentry *de, struct iattr *attr);
 int ll_statfs(struct super_block *sb, struct kstatfs *sfs);
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
-                       unsigned long maxage);
+                       __u64 max_age);
 void ll_update_inode(struct inode *inode, struct lustre_md *md);
 void ll_read_inode2(struct inode *inode, void *opaque);
 void ll_delete_inode(struct inode *inode);
@@ -452,6 +496,7 @@ struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
                                              struct list_head *list);
 int ll_obd_statfs(struct inode *inode, void *arg);
 int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
+int ll_process_config(struct lustre_cfg *lcfg);
 
 /* llite/llite_nfs.c */
 extern struct export_operations lustre_export_operations;

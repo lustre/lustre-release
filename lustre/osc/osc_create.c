@@ -55,7 +55,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
         ENTRY;
 
         if (req->rq_repmsg) {
-                body = lustre_swab_repbuf(req, 0, sizeof(*body),
+                body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
                                           lustre_swab_ost_body);
                 if (body == NULL && rc == 0)
                         rc = -EPROTO;
@@ -80,7 +80,8 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                 spin_unlock(&oscc->oscc_lock);
                 DEBUG_REQ(D_ERROR, req,
                           "unknown rc %d from async create: failing oscc", rc);
-                ptlrpc_fail_import(req->rq_import, req->rq_reqmsg->conn_cnt);
+                ptlrpc_fail_import(req->rq_import,
+                                   lustre_msg_get_conn_cnt(req->rq_reqmsg));
         } else {
                 if (rc == 0) {
                         oscc->oscc_flags &= ~OSCC_FLAG_LOW;
@@ -91,8 +92,14 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                                                 max(diff/3, OST_MIN_PRECREATE);
                                 oscc->oscc_last_id = body->oa.o_id;
                         }
+                } else {
+                        /* filter always set body->oa.o_id as the last_id 
+                         * of filter (see filter_handle_precreate for detail)*/
+                        if (body && body->oa.o_id > oscc->oscc_last_id)
+                                oscc->oscc_last_id = body->oa.o_id;
                 }
                 spin_unlock(&oscc->oscc_lock);
+
         }
 
         CDEBUG(D_HA, "preallocated through id "LPU64" (last used "LPU64")\n",
@@ -106,7 +113,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
 {
         struct ptlrpc_request *request;
         struct ost_body *body;
-        int size = sizeof(*body);
+        int size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         spin_lock(&oscc->oscc_lock);
@@ -130,8 +137,8 @@ static int oscc_internal_create(struct osc_creator *oscc)
         spin_unlock(&oscc->oscc_lock);
 
         request = ptlrpc_prep_req(oscc->oscc_obd->u.cli.cl_import,
-                                  LUSTRE_OST_VERSION, OST_CREATE, 1,
-                                  &size, NULL);
+                                  LUSTRE_OST_VERSION, OST_CREATE, 2,
+                                  size, NULL);
         if (request == NULL) {
                 spin_lock(&oscc->oscc_lock);
                 oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
@@ -140,7 +147,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
         }
 
         request->rq_request_portal = OST_CREATE_PORTAL; //XXX FIXME bug 249
-        body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof(*body));
+        body = lustre_msg_buf(request->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
 
         spin_lock(&oscc->oscc_lock);
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
@@ -149,7 +156,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
         CDEBUG(D_HA, "preallocating through id "LPU64" (last used "LPU64")\n",
                body->oa.o_id, oscc->oscc_next_id);
 
-        request->rq_replen = lustre_msg_size(1, &size);
+        ptlrpc_req_set_repsize(request, 2, size);
 
         request->rq_async_args.pointer_arg[0] = oscc;
         request->rq_interpret_reply = osc_interpret_create;

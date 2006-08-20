@@ -5,9 +5,13 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs
 .br
-.B lfs find [--obd <uuid>] [--quiet | --verbose] [--recursive] <dir|file>
+.B lfs find [--atime|-A N] [--mtime|-M N] [--ctime|-C N] [--maxdepth|-D N]
+         \fB[--print0|-P] [--print|-p] [--obd|-O <uuid>] <dir/file>\fR
 .br
-.B lfs getstripe <filename> 
+.B lfs find [--quiet|-q] [--verbose|-v] [--recursive|-r] <dir|file>
+.br
+.B lfs getstripe [--obd|-O <uuid>] [--quiet|-q] [--verbose|-v] 
+              \fB[--recursive|-r] <dir/file>\fR
 .br
 .B lfs setstripe <filename> <stripe-size> <start-ost> <stripe-cnt>
 .br
@@ -19,13 +23,16 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotaoff [-ug] <filesystem>
 .br
-.B lfs setquota [-u|-g] <name> <block-softlimit> <block-hardlimit> <inode-softlimit> <inode-hardlimit> <filesystem>
+.B lfs setquota [-u|-g] <name> <block-softlimit> <block-hardlimit> 
+             \fB<inode-softlimit> <inode-hardlimit> <filesystem>\fR
 .br
 .B lfs quota [-o obd_uuid] [-u|-g] <name> <filesystem>
 .br
 .B lfs setstripe <filename> <stripe-size> <start-ost> <stripe-cnt>
 .br
 .B lfs check <mds| osts| servers>
+.br
+.B lfs df [-i] [-h] [path]
 .SH DESCRIPTION
 .B lfs
 can be used to create a new file with a specific striping pattern, determine the default striping pattern, gather the extended attributes (object numbers and 
@@ -38,10 +45,13 @@ The various options supported by lctl are listed and explained below:
 To create a new file with a specific striping pattern
 .TP
 .B find 
-To list the extended attributes for a given filename or files in a directory or recursively for all files in a directory tree. It can also be used to list the files that have objects on a specific OST. 
+To search the directory tree rooted at the given dir/file name for the files that match the given parameters: \fB--atime\fR (file was last accessed N*24 hours ago), \fB--ctime\fR (file's status was last changed N*24 hours ago), \fB--mtime\fR (file's data was last modified N*24 hours ago), \fB--obd\fR (file has an object on a specific OST). The option \fB--maxdepth\fR allows find to decend at most N levels of directory tree. The options \fB--print\fR and \fB--print0\fR print full file name, followed by a newline and null character correspondingly.  Using one of these options works in the new (filename only) mode.
+.TP
+.B find
+To list the striping info for a given filename or files in a directory or recursively for all files in a directory tree use one of the following options: \fB[--quiet|-q] [--verbose|-v] [--recursive|-r]\fR. If one of these options is given find works in old (obsolete, please use getstripe instead) filename and striping mode.
 .TP
 .B getstripe 
-To list the striping pattern for given filename
+To list the striping info for given filename or files in a directory or recursively for all files in a directory tree. It can also be used to list the files that have objects on a specific OST.
 .TP
 .B quotachown
 To change files' owner and group on OSTs of the specified filesystem
@@ -67,6 +77,9 @@ Display the status of MDS or OSTs (as specified in the command) or all the serve
 .B osts 
 List all the OSTs for the filesystem
 .TP
+.B df
+Report filesystem disk space usage or inodes usage of each MDT/OST.
+.TP
 .B help 
 Provides brief help on the various arguments
 .TP
@@ -74,45 +87,46 @@ Provides brief help on the various arguments
 Quit the interactive lfs session
 .SH EXAMPLES
 .TP
-.B $lfs setstripe /mnt/lustre/file1 131072 0 1
-This creats a file striped on one OST
+.B $ lfs setstripe /mnt/lustre/file1 131072 -1 2
+This creats a file striped on two OSTs with 128kB on each stripe.
 .TP
-.B $lfs find /mnt/lustre/file1
-Lists the extended attributes of a given file
+.B $ lfs find /mnt/lustre/file1
+Lists the object allocation of a given file
 .TP
-.B $lfs find /mnt/lustre/
-Lists the extended attributes of all files in a given directory
+.B $ lfs find /mnt/lustre/
+Lists the object allocationss of all files in a given directory
 .TP
-.B $lfs find -r /mnt/lustre/
-Recursively list the extended attributes of all files in a given directory tree
-.TP
-.B $lfs find -r --obd OST2-UUID /mnt/lustre/
-List all the files that have objects on a specific OST
-.TP
-.B $lfs quotachown -i /mnt/lustre
-Change file owner and group
-.TP
-.B $lfs quotacheck -ug /mnt/lustre
-Quotacheck for user and group
-.TP
-.B $lfs quotaon -ug /mnt/lustre
-Turn quotas of user and group on
-.TP
-.B $lfs quotaoff -ug /mnt/lustre
-Turn quotas of user and group off
-.TP
-.B $lfs setquota -u bob 0 1000000 0 10000 /mnt/lustre
-Set quotas of user `bob': 1GB block quota and 10,000 file quota
-.TP
-.B $lfs quota -u bob /mnt/lustre
-List quotas of user `bob'
+.B $ lfs find -r /mnt/lustre/
+Recursively list the objects of all files in a given directory tree
 .TP
 .B $ lfs find -r --obd OST2-UUID /mnt/lustre/
+Recursively list all files in a given directory that have objects on OST2-UUID.
 .TP
-.B $lfs check servers 
-Check the status of all servers(mds, osts)
+.B $ lfs quotachown -i /mnt/lustre
+Change file owner and group
 .TP
-.B $lfs osts
+.B $ lfs quotacheck -ug /mnt/lustre
+Quotacheck for user and group
+.TP
+.B $ lfs quotaon -ug /mnt/lustre
+Turn quotas of user and group on
+.TP
+.B $ lfs quotaoff -ug /mnt/lustre
+Turn quotas of user and group off
+.TP
+.B $ lfs setquota -u bob 0 1000000 0 10000 /mnt/lustre
+Set quotas of user `bob': 1GB block quota and 10,000 file quota
+.TP
+.B $ lfs quota -u bob /mnt/lustre
+List quotas of user `bob'
+.TP
+.B $ lfs check servers 
+Check the status of all servers (MDT, OST)
+.TP
+.B $ lfs osts
 List all the OSTs
+.TP
+.B $ lfs df -i 
+Lists inode consumpton per OST and MDT
 .SH BUGS
 None are known.

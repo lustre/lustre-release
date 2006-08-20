@@ -19,4 +19,3 @@ NB - The patches in the ldiskfs series should not be applied to the kernel.
 UNSUPPORTED KERNELS; BEING PHASED OUT; MAY BE MISSING CRITICAL BUG FIXES:
 hp-pnnl-2.4.20     linux-2.4.20-hp4_pnnl1   same as vanilla but no uml  ia64
 vanilla-2.4.24     linux-2.4.24             patch with uml-2.4.24-6     um
-suse-2.4.21-jvn    linux-2.4.21-241         sles8 2.4 kernel            i386

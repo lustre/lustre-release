@@ -54,29 +54,31 @@ static int ll_readlink_internal(struct inode *inode,
                 GOTO (failed, rc);
         }
 
-        body = lustre_msg_buf ((*request)->rq_repmsg, 0, sizeof (*body));
-        LASSERT (body != NULL);
-        LASSERT_REPSWABBED (*request, 0);
+        body = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF,
+                              sizeof(*body));
+        LASSERT(body != NULL);
+        LASSERT_REPSWABBED(*request, REPLY_REC_OFF);
 
         if ((body->valid & OBD_MD_LINKNAME) == 0) {
-                CERROR ("OBD_MD_LINKNAME not set on reply\n");
-                GOTO (failed, rc = -EPROTO);
+                CERROR("OBD_MD_LINKNAME not set on reply\n");
+                GOTO(failed, rc = -EPROTO);
         }
         
-        LASSERT (symlen != 0);
+        LASSERT(symlen != 0);
         if (body->eadatasize != symlen) {
-                CERROR ("inode %lu: symlink length %d not expected %d\n",
+                CERROR("inode %lu: symlink length %d not expected %d\n",
                         inode->i_ino, body->eadatasize - 1, symlen - 1);
-                GOTO (failed, rc = -EPROTO);
+                GOTO(failed, rc = -EPROTO);
         }
 
-        *symname = lustre_msg_buf ((*request)->rq_repmsg, 1, symlen);
+        *symname = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF + 1,
+                                  symlen);
         if (*symname == NULL ||
             strnlen (*symname, symlen) != symlen - 1) {
                 /* not full/NULL terminated */
-                CERROR ("inode %lu: symlink not NULL terminated string"
+                CERROR("inode %lu: symlink not NULL terminated string"
                         "of length %d\n", inode->i_ino, symlen - 1);
-                GOTO (failed, rc = -EPROTO);
+                GOTO(failed, rc = -EPROTO);
         }
 
         OBD_ALLOC(lli->lli_symlink_name, symlen);
@@ -118,12 +120,23 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
+#ifdef LUSTRE_KERNEL_VERSION
         struct lookup_intent *it = ll_nd2it(nd);
+#endif
         struct ptlrpc_request *request;
         int rc;
         char *symname;
         ENTRY;
 
+#ifdef CONFIG_4KSTACKS
+        if (current->link_count >= 5) {
+                path_release(nd); /* Kernel assumes that ->follow_link()
+                                     releases nameidata on error */
+                GOTO(out, rc = -ELOOP);
+        }
+#endif  
+
+#ifdef LUSTRE_KERNEL_VERSION
         if (it != NULL) {
                 int op = it->it_op;
                 int mode = it->it_create_mode;
@@ -132,6 +145,7 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
                 it->it_op = op;
                 it->it_create_mode = mode;
         }
+#endif
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         down(&lli->lli_open_sem);
@@ -152,12 +166,14 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 struct inode_operations ll_fast_symlink_inode_operations = {
         .readlink       = ll_readlink,
         .setattr        = ll_setattr,
+#ifdef LUSTRE_KERNEL_VERSION
         .setattr_raw    = ll_setattr_raw,
+#endif
         .follow_link    = ll_follow_link,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         .revalidate_it  = ll_inode_revalidate_it,
 #else 
-        .getattr_it     = ll_getattr_it,
+        .getattr        = ll_getattr,
 #endif
         .permission     = ll_inode_permission,
         .setxattr       = ll_setxattr,

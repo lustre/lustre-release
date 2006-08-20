@@ -80,7 +80,7 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         b->blocks = inode->i_blocks;
         b->uid = inode->i_uid;
         b->gid = inode->i_gid;
-        b->flags = inode->i_flags;
+        b->flags = ll_inode_to_ext_flags(b->flags, inode->i_flags);
         b->rdev = inode->i_rdev;
         /* Return the correct link count for orphan inodes */
         b->nlink = mds_inode_is_orphan(inode) ? 0 : inode->i_nlink;
@@ -115,23 +115,22 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         LTIME_S(attr->ia_atime) = rec->sa_atime;
         LTIME_S(attr->ia_mtime) = rec->sa_mtime;
         LTIME_S(attr->ia_ctime) = rec->sa_ctime;
-        attr->ia_attr_flags = rec->sa_attr_flags;
+        r->ur_flags = rec->sa_attr_flags;
 
         LASSERT_REQSWAB (req, offset + 1);
-        if (req->rq_reqmsg->bufcount > offset + 1) {
-                r->ur_eadata = lustre_msg_buf (req->rq_reqmsg,
-                                               offset + 1, 0);
+        if (lustre_msg_bufcount(req->rq_reqmsg) > offset + 1) {
+                r->ur_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 1, 0);
                 if (r->ur_eadata == NULL)
-                        RETURN (-EFAULT);
-                r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 1];
+                        RETURN(-EFAULT);
+                r->ur_eadatalen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
         }
 
-        if (req->rq_reqmsg->bufcount > offset + 2) {
+        if (lustre_msg_bufcount(req->rq_reqmsg) > offset + 2) {
                 r->ur_logcookies = lustre_msg_buf(req->rq_reqmsg, offset + 2,0);
                 if (r->ur_eadata == NULL)
                         RETURN (-EFAULT);
 
-                r->ur_cookielen = req->rq_reqmsg->buflens[offset + 2];
+                r->ur_cookielen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
         }
 
         RETURN(0);
@@ -143,8 +142,8 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         struct mds_rec_create *rec;
         ENTRY;
 
-        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
-                                  lustre_swab_mds_rec_create);
+        rec = lustre_swab_reqbuf(req, offset, sizeof (*rec),
+                                 lustre_swab_mds_rec_create);
         if (rec == NULL)
                 RETURN (-EFAULT);
 
@@ -160,14 +159,14 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
 
-        LASSERT_REQSWAB (req, offset + 1);
-        r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
+        LASSERT_REQSWAB(req, offset + 1);
+        r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (r->ur_name == NULL)
                 RETURN (-EFAULT);
-        r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
+        r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
 
-        LASSERT_REQSWAB (req, offset + 2);
-        if (req->rq_reqmsg->bufcount > offset + 2) {
+        LASSERT_REQSWAB(req, offset + 2);
+        if (lustre_msg_bufcount(req->rq_reqmsg) > offset + 2) {
                 /* NB for now, we only seem to pass NULL terminated symlink
                  * target strings here.  If this ever changes, we'll have
                  * to stop checking for a buffer filled completely with a
@@ -178,7 +177,7 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
                 r->ur_tgt = lustre_msg_string(req->rq_reqmsg, offset + 2, 0);
                 if (r->ur_tgt == NULL)
                         RETURN (-EFAULT);
-                r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
+                r->ur_tgtlen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
         }
         RETURN(0);
 }
@@ -189,8 +188,8 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         struct mds_rec_link *rec;
         ENTRY;
 
-        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
-                                  lustre_swab_mds_rec_link);
+        rec = lustre_swab_reqbuf(req, offset, sizeof (*rec),
+                                 lustre_swab_mds_rec_link);
         if (rec == NULL)
                 RETURN (-EFAULT);
 
@@ -203,11 +202,11 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fid2 = &rec->lk_fid2;
         r->ur_time = rec->lk_time;
 
-        LASSERT_REQSWAB (req, offset + 1);
-        r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
+        LASSERT_REQSWAB(req, offset + 1);
+        r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (r->ur_name == NULL)
                 RETURN (-EFAULT);
-        r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
+        r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
         RETURN(0);
 }
 
@@ -217,8 +216,8 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         struct mds_rec_unlink *rec;
         ENTRY;
 
-        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
-                                  lustre_swab_mds_rec_unlink);
+        rec = lustre_swab_reqbuf(req, offset, sizeof (*rec),
+                                 lustre_swab_mds_rec_unlink);
         if (rec == NULL)
                 RETURN(-EFAULT);
 
@@ -232,11 +231,11 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fid2 = &rec->ul_fid2;
         r->ur_time = rec->ul_time;
 
-        LASSERT_REQSWAB (req, offset + 1);
+        LASSERT_REQSWAB(req, offset + 1);
         r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (r->ur_name == NULL)
                 RETURN(-EFAULT);
-        r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
+        r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
         RETURN(0);
 }
 
@@ -246,8 +245,8 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         struct mds_rec_rename *rec;
         ENTRY;
 
-        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
-                                  lustre_swab_mds_rec_rename);
+        rec = lustre_swab_reqbuf(req, offset, sizeof (*rec),
+                                 lustre_swab_mds_rec_rename);
         if (rec == NULL)
                 RETURN(-EFAULT);
 
@@ -264,13 +263,13 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (r->ur_name == NULL)
                 RETURN(-EFAULT);
-        r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
+        r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
 
         LASSERT_REQSWAB (req, offset + 2);
         r->ur_tgt = lustre_msg_string(req->rq_reqmsg, offset + 2, 0);
         if (r->ur_tgt == NULL)
                 RETURN(-EFAULT);
-        r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
+        r->ur_tgtlen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
         RETURN(0);
 }
 
@@ -280,10 +279,10 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         struct mds_rec_create *rec;
         ENTRY;
 
-        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
-                                  lustre_swab_mds_rec_create);
+        rec = lustre_swab_reqbuf(req, offset, sizeof(*rec),
+                                 lustre_swab_mds_rec_create);
         if (rec == NULL)
-                RETURN (-EFAULT);
+                RETURN(-EFAULT);
 
         r->ur_uc.luc_fsuid = rec->cr_fsuid;
         r->ur_uc.luc_fsgid = rec->cr_fsgid;
@@ -297,18 +296,18 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         r->ur_time = rec->cr_time;
         r->ur_flags = rec->cr_flags;
 
-        LASSERT_REQSWAB (req, offset + 1);
-        r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
+        LASSERT_REQSWAB(req, offset + 1);
+        r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
         if (r->ur_name == NULL)
-                RETURN (-EFAULT);
-        r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
+                RETURN(-EFAULT);
+        r->ur_namelen = lustre_msg_buflen(req->rq_reqmsg, offset + 1);
 
-        LASSERT_REQSWAB (req, offset + 2);
-        if (req->rq_reqmsg->bufcount > offset + 2) {
+        LASSERT_REQSWAB(req, offset + 2);
+        if (lustre_msg_bufcount(req->rq_reqmsg) > offset + 2) {
                 r->ur_eadata = lustre_msg_buf(req->rq_reqmsg, offset + 2, 0);
                 if (r->ur_eadata == NULL)
                         RETURN (-EFAULT);
-                r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 2];
+                r->ur_eadatalen = lustre_msg_buflen(req->rq_reqmsg, offset + 2);
         }
         RETURN(0);
 }
@@ -335,13 +334,13 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
         /* NB don't lustre_swab_reqbuf() here.  We're just taking a peek
          * and we want to leave it to the specific unpacker once we've
          * identified the message type */
-        opcodep = lustre_msg_buf (req->rq_reqmsg, offset, sizeof (*opcodep));
+        opcodep = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*opcodep));
         if (opcodep == NULL)
                 RETURN(-EFAULT);
 
         opcode = *opcodep;
-        if (lustre_msg_swabbed (req->rq_reqmsg))
-                __swab32s (&opcode);
+        if (lustre_msg_swabbed(req->rq_reqmsg))
+                __swab32s(&opcode);
 
         if (opcode >= REINT_MAX || mds_unpackers[opcode] == NULL) {
                 CERROR("Unexpected opcode %d\n", opcode);

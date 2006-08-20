@@ -72,19 +72,20 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                 RETURN(-EFAULT);
 
         if (obd->obd_llog_ctxt[index]) {
-        /* During an mds_lov_add_ost, we try to tear down and resetup llogs.
-           But the mdt teardown does not flow down to the lov/osc's as the 
-           setup does, because the lov/osc must clean up only when they are
-           done, not when the mdt is done. So instead, we just assume that
-           if the lov llogs are already set up then we must cleanup first. */
+                /* mds_lov_update_mds might call here multiple times. So if the
+                   llog is already set up then don't to do it again. */
                 CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n", 
                        obd->obd_name, index);
-                llog_cleanup(obd->obd_llog_ctxt[index]);
+                ctxt = obd->obd_llog_ctxt[index];
+                LASSERT(ctxt->loc_obd == obd);
+                LASSERT(ctxt->loc_exp == disk_obd->obd_self_export);
+                LASSERT(ctxt->loc_logops == op);
+                GOTO(out, rc = 0);
         }
-
+        
         OBD_ALLOC(ctxt, sizeof(*ctxt));
         if (!ctxt)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         obd->obd_llog_ctxt[index] = ctxt;
         ctxt->loc_obd = obd;
@@ -95,7 +96,14 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
 
         if (op->lop_setup)
                 rc = op->lop_setup(obd, index, disk_obd, count, logid);
-
+        
+        if (rc) {
+                obd->obd_llog_ctxt[index] = NULL;
+                class_export_put(ctxt->loc_exp);
+                OBD_FREE(ctxt, sizeof(*ctxt));
+        }
+        
+out:
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_setup);
@@ -241,10 +249,6 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
         if (rc)
                 CERROR("llog_process with cat_cancel_cb failed: %d\n", rc);
  out:
-        if (ctxt && rc) {
-                obd->obd_llog_ctxt[index] = NULL;
-                OBD_FREE(ctxt, sizeof(*ctxt));
-        }
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_obd_origin_setup);
@@ -317,9 +321,14 @@ int llog_cat_initialize(struct obd_device *obd, int count)
         int rc;
         ENTRY;
 
+        /* We don't want multiple mdt threads here at once */
+        mutex_down(&obd->obd_dev_sem);
+
         OBD_ALLOC(idarray, size);
-        if (!idarray)
+        if (!idarray) {
+                mutex_up(&obd->obd_dev_sem);
                 RETURN(-ENOMEM);
+        }
 
         rc = llog_get_cat_list(obd, obd, name, count, idarray);
         if (rc) {
@@ -341,6 +350,7 @@ int llog_cat_initialize(struct obd_device *obd, int count)
 
  out:
         OBD_FREE(idarray, size);
+        mutex_up(&obd->obd_dev_sem);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_initialize);

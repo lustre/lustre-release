@@ -87,7 +87,7 @@ static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
         RETURN(rc);
 }
 
-int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
+int mds_log_op_unlink(struct obd_device *obd, 
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size)
 {
@@ -101,7 +101,7 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
         if (IS_ERR(mds->mds_osc_obd))
                 RETURN(PTR_ERR(mds->mds_osc_obd));
 
-        rc = obd_unpackmd(mds->mds_osc_exp,  &lsm, lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0)
                 RETURN(rc);
         rc = obd_checkmd(mds->mds_osc_exp, obd->obd_self_export, lsm);

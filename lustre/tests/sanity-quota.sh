@@ -25,7 +25,7 @@ TMP=${TMP:-/tmp}
 
 LFS=${LFS:-lfs}
 LCTL=${LCTL:-lctl}
-LSTRIPE=${LSTRIPE:-"$LFS setstripe"}
+SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
 TSTID=${TSTID:-60000}
 RUNAS=${RUNAS:-"runas -u $TSTID"}
 TSTUSR=${TSTUSR:-"quota_usr"}

@@ -86,7 +86,7 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
                 return ERR_PTR(rc);
         }
 
-        rc = ll_prep_inode(&inode, req, 0, sb);
+        rc = ll_prep_inode(&inode, req, REPLY_REC_OFF, sb);
         if (rc) {
                 ptlrpc_req_finished(req);
                 return ERR_PTR(rc);
@@ -264,7 +264,7 @@ struct dentry *ll_get_parent(struct dentry *dchild)
         struct inode *dir = dchild->d_inode;
         struct ll_sb_info *sbi;
         struct dentry *result = NULL;
-        struct mds_body *body;
+        struct mdt_body *body;
         char dotdot[] = "..";
         int  rc = 0;
         ENTRY;
@@ -280,7 +280,7 @@ struct dentry *ll_get_parent(struct dentry *dchild)
                 CERROR("failure %d inode %lu get parent\n", rc, dir->i_ino);
                 return ERR_PTR(rc);
         }
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body)); 
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (*body)); 
        
         LASSERT((body->valid & OBD_MD_FLGENER) && (body->valid & OBD_MD_FLID));
         

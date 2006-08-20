@@ -26,9 +26,6 @@ AC_SUBST(demodir)
 
 pkgexampledir='${pkgdatadir}/examples'
 AC_SUBST(pkgexampledir)
-
-pymoddir='${pkglibdir}/python/Lustre'
-AC_SUBST(pymoddir)
 ])
 
 #
@@ -363,8 +360,12 @@ case $BACKINGFS in
 		case $LINUXRELEASE in
 		2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
 		2.6.9*) LDISKFS_SERIES="2.6-rhel4.series" ;;
+		2.6.10-ac*) LDISKFS_SERIES="2.6-fc3.series" ;;
 		2.6.10*) LDISKFS_SERIES="2.6-rhel4.series" ;;
 		2.6.12*) LDISKFS_SERIES="2.6.12-vanilla.series" ;;
+		2.6.15*) LDISKFS_SERIES="2.6-fc5.series";;
+		2.6.16*) LDISKFS_SERIES="2.6-fc5.series";;
+		2.6.18*) LDISKFS_SERIES="2.6.18-vanilla.series";;
 		*) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix lustre/autoconf/lustre-core.m4])
 		esac
 		AC_MSG_RESULT([$LDISKFS_SERIES])
@@ -487,13 +488,111 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+AC_DEFUN([LC_BIT_SPINLOCK_H],
+[LB_CHECK_FILE([$LINUX/include/linux/bit_spinlock.h],[
+	AC_MSG_CHECKING([if bit_spinlock.h can be compiled])
+	LB_LINUX_TRY_COMPILE([
+		#include <asm/processor.h>
+		#include <linux/spinlock.h>
+		#include <linux/bit_spinlock.h>
+	],[],[
+		AC_MSG_RESULT([yes])
+		AC_DEFINE(HAVE_BIT_SPINLOCK_H, 1, [Kernel has bit_spinlock.h])
+	],[
+		AC_MSG_RESULT([no])
+	])
+],
+[])
+])
+
+#
+# LC_POSIX_ACL_XATTR
+#
+# If we have xattr_acl.h 
+#
+AC_DEFUN([LC_XATTR_ACL],
+[LB_CHECK_FILE([$LINUX/include/linux/xattr_acl.h],[
+	AC_MSG_CHECKING([if xattr_acl.h can be compiled])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/xattr_acl.h>
+	],[],[
+		AC_MSG_RESULT([yes])
+		AC_DEFINE(HAVE_XATTR_ACL, 1, [Kernel has xattr_acl])
+	],[
+		AC_MSG_RESULT([no])
+	])
+],
+[])
+])
+
+AC_DEFUN([LC_STRUCT_INTENT_FILE],
+[AC_MSG_CHECKING([if struct open_intent has a file field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+        #include <linux/namei.h>
+],[
+        struct open_intent intent;
+        &intent.file;
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_FILE_IN_STRUCT_INTENT, 1, [struct open_intent has a file field])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+
+AC_DEFUN([LC_POSIX_ACL_XATTR_H],
+[LB_CHECK_FILE([$LINUX/include/linux/posix_acl_xattr.h],[
+        AC_MSG_CHECKING([if linux/posix_acl_xattr.h can be compiled])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/posix_acl_xattr.h>
+        ],[],[
+                AC_MSG_RESULT([yes])
+                AC_DEFINE(HAVE_LINUX_POSIX_ACL_XATTR_H, 1, [linux/posix_acl_xattr.h found])
+
+        ],[
+                AC_MSG_RESULT([no])
+        ])
+$1
+],[
+AC_MSG_RESULT([no])
+])
+])
+
+AC_DEFUN([LC_LUSTRE_VERSION_H],
+[LB_CHECK_FILE([$LINUX/include/linux/lustre_version.h],[
+	rm -f "$LUSTRE/include/linux/lustre_version.h"
+],[
+	touch "$LUSTRE/include/linux/lustre_version.h"
+	if test x$enable_server = xyes ; then
+		AC_MSG_WARN([Patchless build detected, disabling server building])
+		enable_server='no'
+	fi
+])
+])
+
+AC_DEFUN([LC_FUNC_SET_FS_PWD],
+[AC_MSG_CHECKING([if kernel exports show_task])
+have_show_task=0
+        if grep -q "EXPORT_SYMBOL(show_task)" \
+                 "$LINUX/fs/namespace.c" 2>/dev/null ; then
+		AC_DEFINE(HAVE_SET_FS_PWD, 1, [set_fs_pwd is exported])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+        fi
+])
+
+
 #
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
 #
 AC_DEFUN([LC_PROG_LINUX],
-[if test x$enable_server = xyes ; then
+[ LC_LUSTRE_VERSION_H
+if test x$enable_server = xyes ; then
 	LC_CONFIG_BACKINGFS
 fi
 LC_CONFIG_PINGER
@@ -515,6 +614,11 @@ LC_FUNC_PAGE_MAPPED
 LC_STRUCT_FILE_OPS_UNLOCKED_IOCTL
 LC_FILEMAP_POPULATE
 LC_D_ADD_UNIQUE
+LC_BIT_SPINLOCK_H
+LC_XATTR_ACL
+LC_STRUCT_INTENT_FILE
+LC_POSIX_ACL_XATTR_H
+LC_FUNC_SET_FS_PWD
 ])
 
 #
@@ -602,7 +706,7 @@ AC_DEFUN([LC_CONFIGURE],
 [LC_CONFIG_OBD_BUFFER_SIZE
 
 # include/liblustre.h
-AC_CHECK_HEADERS([asm/page.h sys/user.h sys/vfs.h stdint.h])
+AC_CHECK_HEADERS([asm/page.h sys/user.h sys/vfs.h stdint.h blkid/blkid.h])
 
 # include/lustre/lustre_user.h
 # See note there re: __ASM_X86_64_PROCESSOR_H
@@ -618,12 +722,8 @@ AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])
 AC_CHECK_HEADERS([netinet/in.h arpa/inet.h catamount/data.h])
 AC_CHECK_FUNCS([inet_ntoa])
 
-# llite/xattr.c
-AC_CHECK_HEADERS([linux/xattr_acl.h])
-
-# use universal lustre headers 
-# i.e: include/obd.h instead of include/linux/obd.h
-AC_CHECK_FILE($PWD/lustre/include/obd.h, [AC_DEFINE(UNIV_LUSTRE_HEADERS, 1, [Use universal lustre headers])])
+# utils/llverfs.c
+AC_CHECK_HEADERS([ext2fs/ext2fs.h])
 
 # Super safe df
 AC_ARG_ENABLE([mindf],
@@ -650,6 +750,8 @@ AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
+AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
+AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 ])
 
 #
@@ -662,7 +764,7 @@ AC_DEFUN([LC_CONFIG_FILES],
 lustre/Makefile
 lustre/autoMakefile
 lustre/autoconf/Makefile
-lustre/conf/Makefile
+lustre/contrib/Makefile
 lustre/doc/Makefile
 lustre/include/Makefile
 lustre/include/lustre_ver.h
@@ -671,6 +773,8 @@ lustre/include/lustre/Makefile
 lustre/kernel_patches/targets/2.6-suse.target
 lustre/kernel_patches/targets/2.6-vanilla.target
 lustre/kernel_patches/targets/2.6-rhel4.target
+lustre/kernel_patches/targets/2.6-fc5.target
+lustre/kernel_patches/targets/2.6-patchless.target
 lustre/kernel_patches/targets/hp_pnnl-2.4.target
 lustre/kernel_patches/targets/rh-2.4.target
 lustre/kernel_patches/targets/rhel-2.4.target
@@ -727,7 +831,6 @@ lustre/quota/autoMakefile
 lustre/scripts/Makefile
 lustre/scripts/version_tag.pl
 lustre/tests/Makefile
-lustre/utils/Lustre/Makefile
 lustre/utils/Makefile
 ])
 case $lb_target_os in

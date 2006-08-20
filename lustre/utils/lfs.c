@@ -36,6 +36,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <dirent.h>
+#include <time.h>
 
 #include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
@@ -80,13 +81,20 @@ command_t cmdlist[] = {
          "\tstripe size:  Number of bytes on each OST (0 filesystem default)\n"
          "\tstripe start: OST index of first stripe (-1 filesystem default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default, -1 all)"},
-        {"find", lfs_find, 0,
-         "To list the extended attributes for a given filename or files in a\n"
-         "directory or recursively for all files in a directory tree.\n"
-         "usage: find [--obd <uuid>] [--quiet | --verbose] [--recursive] <dir|file> ..."},
         {"getstripe", lfs_getstripe, 0,
-         "To list the striping pattern for given filename.\n"
-         "usage:getstripe <filename>"},
+         "To list the striping info for a given filename or files in a\n"
+         "directory or recursively for all files in a directory tree.\n"
+         "usage: getstripe [--obd|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
+         "                 [--recursive | -r] <dir|file> ..."},
+        {"find", lfs_find, 0,
+         "To find files that match given parameters recursively in a directory tree.\n"
+         "usage: find [--atime|-A N] [--mtime|-M N] [--ctime|-C N] [--maxdepth|-D N]\n"
+         "            [--print0|-P] [--print|-p] [--obd|-O <uuid>] <dir/file> ...\n"
+         "If one of the options below is provided, find works the same as 'getstripe':\n"
+         "To list the striping info for a given filename or files in a directory or\n"
+         "recursively.\n"
+         "OBSOLETE usage: find [--quiet | -q] [--verbose | -v]\n"
+         "                     [--recursive | -r] <dir|file> ..."},
         {"check", lfs_check, 0,
          "Display the status of MDS or OSTs (as specified in the command)\n"
          "or all the servers (MDS and OSTs).\n"
@@ -185,25 +193,190 @@ static int lfs_setstripe(int argc, char **argv)
         return result;
 }
 
+static int set_time(time_t *time, time_t *set, char *str)
+{
+        time_t t;
+        int res = 0;
+        
+        if (str[0] == '+')
+                res = 1;
+        else if (str[0] == '-')
+                res = -1;
+
+        if (res)
+                str++;
+
+        t = strtol(str, NULL, 0);
+        if (*time < t * 24 * 60 * 60) {
+                if (res)
+                        str--;
+                fprintf(stderr, "Wrong time '%s' is specified.\n", str);
+                return INT_MAX;
+        }
+
+        *set = *time - t * 24 * 60 * 60;
+        return res;
+}
+
 static int lfs_find(int argc, char **argv)
 {
+        int new_fashion = 1;
+        int c, ret;
+        int zeroend;
+        time_t t;
+        unsigned int depth;
+        time_t atime, ctime, mtime;
+        int asign, msign, csign;
+        int quiet, verbose, recursive;
+        struct find_param param;
+        struct obd_uuid *obduuid = NULL;
         struct option long_opts[] = {
-                {"obd", 1, 0, 'o'},
+                /* New find options. */
+                {"atime",     required_argument, 0, 'A'},
+                {"ctime",     required_argument, 0, 'C'},
+                {"mtime",     required_argument, 0, 'M'},
+                {"maxdepth",  required_argument, 0, 'D'},
+                /* --obd is considered as a new option. */
+                {"obd",       required_argument, 0, 'O'},
+                {"print",     no_argument,       0, 'P'},
+                {"print0",    no_argument,       0, 'p'},
+                /* Old find options. */
+                {"quiet",     no_argument,       0, 'q'},
+                {"recursive", no_argument,       0, 'r'},
+                {"verbose",   no_argument,       0, 'v'},
+                {0, 0, 0, 0}
+        };
+
+        time(&t);
+        zeroend = 0;
+        depth = -1;
+        atime = ctime = mtime = 0;
+        asign = csign = msign = 0;
+        quiet = verbose = recursive = 0;
+        
+        while ((c = getopt_long_only(argc, argv, "A:C:D:M:PpOqrv", 
+                                     long_opts, NULL)) >= 0)
+        {
+                switch (c) {
+                case 0:
+                        /* Long options. */
+                        break;
+                case 'A':
+                        ret = set_time(&t, &atime, optarg);
+                        if (ret == INT_MAX)
+                                return -1;
+                        if (ret)
+                                asign = ret;
+                        break;
+                case 'C':
+                        ret = set_time(&t, &ctime, optarg);
+                        if (ret == INT_MAX)
+                                return -1;
+                        if (ret)
+                                csign = ret;
+                        break;
+                case 'D':
+                        depth = strtol(optarg, 0, 0);
+                        break;
+                case 'M':
+                        ret = set_time(&t, &mtime, optarg);
+                        if (ret == INT_MAX)
+                                return -1;
+                        if (ret)
+                                msign = ret;
+                        break;
+                case 'O':
+                        if (obduuid) {
+                                fprintf(stderr,
+                                        "error: %s: only one obduuid allowed",
+                                        argv[0]);
+                                return CMD_HELP;
+                        }
+                        obduuid = (struct obd_uuid *)optarg;
+                        break;
+                case 'p':
+                        zeroend = 1;
+                        break;
+                case 'P':
+                        break;
+                case 'q':
+                        new_fashion = 0;
+                        quiet++;
+                        verbose = 0;
+                        break;
+                case 'r':
+                        new_fashion = 0;
+                        recursive = 1;
+                        break;
+                case 'v':
+                        new_fashion = 0;
+                        verbose++;
+                        quiet = 0;
+                        break;
+                case '?':
+                        return CMD_HELP;
+                default:
+                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+                                argv[0], argv[optind - 1]);
+                        return CMD_HELP;
+                };
+        }
+        
+        if (optind >= argc)
+                return CMD_HELP;
+
+        memset(&param, 0, sizeof(param));
+        param.obduuid = obduuid;
+        if (new_fashion) {
+                param.maxdepth = depth;
+                param.atime = atime;
+                param.ctime = ctime;
+                param.mtime = mtime;
+                param.asign = asign;
+                param.csign = csign;
+                param.msign = msign;
+                param.zeroend = zeroend;
+                param.quiet = 1;
+        } else {
+                param.recursive = recursive;
+                param.verbose = verbose;
+                param.quiet = quiet;
+                param.maxdepth = recursive ? -1 : 1;
+        }
+        
+        do {
+                if (new_fashion)
+                        ret = llapi_find(argv[optind], &param);
+                else
+                        ret = llapi_getstripe(argv[optind], &param);
+        } while (++optind < argc && !ret);
+
+        if (ret)
+                fprintf(stderr, "error: %s failed for %s.\n", 
+                        argv[0], argv[optind - 1]);
+        return ret;
+}
+
+static int lfs_getstripe(int argc, char **argv)
+{
+        struct option long_opts[] = {
+                {"obd", 1, 0, 'O'},
                 {"quiet", 0, 0, 'q'},
                 {"recursive", 0, 0, 'r'},
                 {"verbose", 0, 0, 'v'},
                 {0, 0, 0, 0}
         };
-        char short_opts[] = "ho:qrv";
+        char short_opts[] = "hO:qrv";
         int quiet, verbose, recursive, c, rc;
         struct obd_uuid *obduuid = NULL;
+        struct find_param param;
 
         optind = 0;
         quiet = verbose = recursive = 0;
         while ((c = getopt_long(argc, argv, short_opts,
-                                        long_opts, NULL)) != -1) {
+                                long_opts, NULL)) != -1) {
                 switch (c) {
-                case 'o':
+                case 'O':
                         if (obduuid) {
                                 fprintf(stderr,
                                         "error: %s: only one obduuid allowed",
@@ -225,82 +398,30 @@ static int lfs_find(int argc, char **argv)
                         break;
                 case '?':
                         return CMD_HELP;
-                        break;
                 default:
                         fprintf(stderr, "error: %s: option '%s' unrecognized\n",
                                 argv[0], argv[optind - 1]);
                         return CMD_HELP;
-                        break;
                 }
         }
 
         if (optind >= argc)
                 return CMD_HELP;
 
+        memset(&param, 0, sizeof(param));
+        param.recursive = recursive;
+        param.verbose = verbose;
+        param.quiet = quiet;
+        param.obduuid = obduuid;
+        param.maxdepth = recursive ? -1 : 1;
+
         do {
-                rc = llapi_find(argv[optind], obduuid, recursive,verbose,quiet);
+                rc = llapi_getstripe(argv[optind], &param);
         } while (++optind < argc && !rc);
 
         if (rc)
-                fprintf(stderr, "error: %s: find failed\n", argv[0]);
-        return rc;
-}
-
-static int lfs_getstripe(int argc, char **argv)
-{
-        struct option long_opts[] = {
-                {"quiet", 0, 0, 'q'},
-                {"verbose", 0, 0, 'v'},
-                {0, 0, 0, 0}
-        };
-        char short_opts[] = "qv";
-        int quiet, verbose, recursive, c, rc;
-        struct obd_uuid *obduuid = NULL;
-
-        optind = 0;
-        quiet = verbose = recursive = 0;
-        while ((c = getopt_long(argc, argv, short_opts,
-                                        long_opts, NULL)) != -1) {
-                switch (c) {
-                case 'o':
-                        if (obduuid) {
-                                fprintf(stderr,
-                                        "error: %s: only one obduuid allowed",
-                                        argv[0]);
-                                return CMD_HELP;
-                        }
-                        obduuid = (struct obd_uuid *)optarg;
-                        break;
-                case 'q':
-                        quiet++;
-                        verbose = 0;
-                        break;
-                case 'v':
-                        verbose++;
-                        quiet = 0;
-                        break;
-                case '?':
-                        return CMD_HELP;
-                        break;
-                default:
-                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
-                                argv[0], argv[optind - 1]);
-                        return CMD_HELP;
-                        break;
-                }
-        }
-
-        if (optind >= argc)
-                return CMD_HELP;
-
-        do {
-                rc = llapi_find(argv[optind], obduuid, recursive,verbose,quiet);
-        } while (++optind < argc && !rc);
-
-        if (rc)
-                fprintf(stderr, "error: %s: getstripe failed for %s\n",
-                        argv[0], argv[1]);
-
+                fprintf(stderr, "error: %s failed for %s.\n", 
+                        argv[0], argv[optind - 1]);
         return rc;
 }
 
@@ -309,6 +430,7 @@ static int lfs_osts(int argc, char **argv)
         FILE *fp;
         struct mntent *mnt = NULL;
         struct obd_uuid *obduuid = NULL;
+        struct find_param param;
         int rc=0;
 
         if (argc != 1)
@@ -321,9 +443,11 @@ static int lfs_osts(int argc, char **argv)
                         strerror (errno));
         } else {
                 mnt = getmntent(fp);
+                memset(&param, 0, sizeof(param));
+                param.obduuid = obduuid;
                 while (feof(fp) == 0 && ferror(fp) ==0) {
                         if (llapi_is_lustre_mnttype(mnt)) {
-                                rc = llapi_find(mnt->mnt_dir, obduuid, 0, 0, 0);
+                                rc = llapi_getstripe(mnt->mnt_dir, &param);
                                 if (rc)
                                         fprintf(stderr,
                                                "error: %s: failed on %s\n",
@@ -393,7 +517,7 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
                   char *uuid, int ishow, int cooked,
                   char *type, int index, int rc)
 {
-        __u64 avail, used, total;
+        long long avail, used, total;
         double ratio = 0;
         char *suffix = "KMGTPEZY";
         char tbuf[10], ubuf[10], abuf[10], rbuf[10];
@@ -715,7 +839,7 @@ int lfs_join(int argc, char **argv)
         size = lseek(fd, 0, SEEK_END);
         if (size % JOIN_FILE_ALIGN) {
                 fprintf(stderr,"head file %s size %llu must be mutiple of %d\n",
-                        name_head, size, JOIN_FILE_ALIGN);
+                        name_head, (long long)size, JOIN_FILE_ALIGN);
                 rc = -EINVAL;
                 goto out;
         }
@@ -1180,9 +1304,9 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int ost_only)
                         if (bover)
                                 diff2str(dqb->dqb_btime, timebuf, now);
 
-                        sprintf(numbuf[0], "%llu", toqb(dqb->dqb_curspace));
-                        sprintf(numbuf[1], "%llu", dqb->dqb_bsoftlimit);
-                        sprintf(numbuf[2], "%llu", dqb->dqb_bhardlimit);
+                        sprintf(numbuf[0], LPU64, toqb(dqb->dqb_curspace));
+                        sprintf(numbuf[1], LPU64, dqb->dqb_bsoftlimit);
+                        sprintf(numbuf[2], LPU64, dqb->dqb_bhardlimit);
                         printf(" %7s%c %6s %7s %7s",
                                numbuf[0], bover ? '*' : ' ', numbuf[1],
                                numbuf[2], bover > 1 ? timebuf : "");
@@ -1190,9 +1314,9 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int ost_only)
                         if (iover)
                                 diff2str(dqb->dqb_itime, timebuf, now);
 
-                        sprintf(numbuf[0], "%llu", dqb->dqb_curinodes);
-                        sprintf(numbuf[1], "%llu", dqb->dqb_isoftlimit);
-                        sprintf(numbuf[2], "%llu", dqb->dqb_ihardlimit);
+                        sprintf(numbuf[0], LPU64, dqb->dqb_curinodes);
+                        sprintf(numbuf[1], LPU64, dqb->dqb_isoftlimit);
+                        sprintf(numbuf[2], LPU64, dqb->dqb_ihardlimit);
                         if (!ost_only)
                                 printf(" %7s%c %6s %7s %7s",
                                        numbuf[0], iover ? '*' : ' ', numbuf[1],

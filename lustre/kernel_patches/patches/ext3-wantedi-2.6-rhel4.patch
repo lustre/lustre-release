@@ -19,16 +19,19 @@ Index: uml-2.6.3/fs/ext3/ialloc.c
  {
  	struct super_block *sb;
  	struct buffer_head *bitmap_bh = NULL;
-@@ -448,6 +449,38 @@
+@@ -448,6 +449,41 @@
  
  	sbi = EXT3_SB(sb);
  	es = sbi->s_es;
 +	if (goal) {
 +		group = (goal - 1) / EXT3_INODES_PER_GROUP(sb);
 +		ino = (goal - 1) % EXT3_INODES_PER_GROUP(sb);
-+		gdp = ext3_get_group_desc(sb, group, &bh2);
-+
 +		err = -EIO;
++
++		gdp = ext3_get_group_desc(sb, group, &bh2);
++		if (!gdp)
++			goto fail;
++
 +		bitmap_bh = read_inode_bitmap (sb, group);
 +		if (!bitmap_bh)
 +			goto fail;

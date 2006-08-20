@@ -34,11 +34,11 @@
 #include <linux/namei.h>
 #else
 #include <liblustre.h>
-#include <lustre_log.h>
 #endif
 #include <linux/ext2_fs.h>
 
 #include <lustre/lustre_idl.h>
+#include <lustre_log.h>
 #include <obd_support.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
@@ -906,7 +906,7 @@ out:
 }
 
 static int lmv_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      unsigned long max_age)
+                      __u64 max_age)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_statfs *temp;
@@ -1060,7 +1060,7 @@ static int lmv_getattr(struct obd_export *exp, struct lu_fid *fid,
                         RETURN(rc);
                 }
 
-                body = lustre_msg_buf((*request)->rq_repmsg, 0,
+                body = lustre_msg_buf((*request)->rq_repmsg, REQ_REC_OFF,
                                       sizeof(*body));
                 LASSERT(body != NULL);
 
@@ -1235,7 +1235,7 @@ repeat:
                 if (*request == NULL)
                         RETURN(rc);
 
-                body = lustre_msg_buf((*request)->rq_repmsg, 0,
+                body = lustre_msg_buf((*request)->rq_repmsg, REQ_REC_OFF,
                                       sizeof(*body));
                 if (body == NULL)
                         RETURN(-ENOMEM);
@@ -1351,7 +1351,7 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         int i, rc = 0, pmode;
         ENTRY;
 
-        body = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*body));
+        body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
 
         if (!(body->valid & OBD_MD_MDS))
@@ -1488,7 +1488,7 @@ repeat:
                              &rid, filename, namelen,
                              valid, ea_size, request);
         if (rc == 0) {
-                body = lustre_msg_buf((*request)->rq_repmsg, 0, sizeof(*body));
+                body = lustre_msg_buf((*request)->rq_repmsg, REQ_REC_OFF, sizeof(*body));
                 LASSERT(body != NULL);
 
                 if (body->valid & OBD_MD_MDS) {
@@ -1724,7 +1724,7 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 rc = md_setattr(lmv->tgts[mds].ltd_exp, op_data, iattr, ea,
                                 ealen, ea2, ea2len, request);
                 if (rc == 0) {
-                        body = lustre_msg_buf((*request)->rq_repmsg, 0,
+                        body = lustre_msg_buf((*request)->rq_repmsg, REQ_REC_OFF,
                                               sizeof(*body));
                         LASSERT(body != NULL);
                 }
@@ -1796,7 +1796,7 @@ int lmv_blocking_ast(struct ldlm_lock *lock,
 static void lmv_remove_dots(struct page *page)
 {
         unsigned limit = PAGE_CACHE_SIZE;
-        char *kaddr = page_address(page);
+        char *kaddr = cfs_page_address(page);
         struct ext2_dir_entry_2 *p;
         unsigned offs, rec_len;
 

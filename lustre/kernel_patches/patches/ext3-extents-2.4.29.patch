@@ -181,7 +181,7 @@ Index: linux-2.4.29/fs/ext3/extents.c
 +{
 +	struct ext3_extent_header *neh = EXT_ROOT_HDR(tree);
 +	neh->eh_generation = ((EXT_FLAGS(neh) & ~EXT_FLAGS_CLR_UNKNOWN) << 24) |
-+			     (EXT_GENERATION(neh) + 1);
++			     (EXT_HDR_GEN(neh) + 1);
 +}
 +
 +static inline int ext3_ext_space_block(struct ext3_extents_tree *tree)
@@ -2465,12 +2465,14 @@ Index: linux-2.4.29/fs/ext3/super.c
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -702,6 +703,10 @@
+@@ -702,6 +703,12 @@
  				return 0;
  			}
  		}
 +		else if (!strcmp (this_char, "extents"))
 +			set_opt (*mount_options, EXTENTS);
++		else if (!strcmp (this_char, "noextents"))
++			clear_opt (*mount_options, EXTENTS);
 +		else if (!strcmp (this_char, "extdebug"))
 +			set_opt (*mount_options, EXTDEBUG);
  		else if (!strcmp (this_char, "grpid") ||
@@ -2549,11 +2551,12 @@ Index: linux-2.4.29/include/linux/ext3_fs.h
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
-@@ -702,6 +711,7 @@
+@@ -702,6 +711,8 @@
  extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
  
  /* inode.c */
 +extern int ext3_block_truncate_page(handle_t *, struct address_space *, loff_t);
++extern int ext3_writepage_trans_blocks(struct inode *inode);
  extern int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
  extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
@@ -2777,14 +2780,14 @@ Index: linux-2.4.29/include/linux/ext3_extents.h
 +	(EXT_FIRST_EXTENT((__hdr__)) + (__hdr__)->eh_max - 1)
 +#define EXT_MAX_INDEX(__hdr__) \
 +	(EXT_FIRST_INDEX((__hdr__)) + (__hdr__)->eh_max - 1)
-+#define EXT_GENERATION(__hdr__) ((__hdr__)->eh_generation & 0x00ffffff)
++#define EXT_HDR_GEN(__hdr__)	((__hdr__)->eh_generation & 0x00ffffff)
 +#define EXT_FLAGS(__hdr__)	((__hdr__)->eh_generation >> 24)
 +#define EXT_FLAGS_CLR_UNKNOWN	0x7	/* Flags cleared on modification */
 +
 +#define EXT_BLOCK_HDR(__bh__) 	((struct ext3_extent_header *)(__bh__)->b_data)
 +#define EXT_ROOT_HDR(__tree__)	((struct ext3_extent_header *)(__tree__)->root)
 +#define EXT_DEPTH(__tree__)	(EXT_ROOT_HDR(__tree__)->eh_depth)
-+
++#define EXT_GENERATION(__tree__) EXT_HDR_GEN(EXT_ROOT_HDR(__tree__))
 +
 +#define EXT_ASSERT(__x__) if (!(__x__)) BUG();
 +

@@ -86,7 +86,6 @@ static void lsm_unpackmd_common(struct lov_stripe_md *lsm,
         lsm->lsm_object_gr = le64_to_cpu(lmm->lmm_object_gr);
         lsm->lsm_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
         lsm->lsm_pattern = le32_to_cpu(lmm->lmm_pattern);
-        lsm->lsm_xfersize = lsm->lsm_stripe_size * lsm->lsm_stripe_count;
 }
 
 static void
@@ -177,6 +176,11 @@ int lsm_unpackmd_plain(struct lov_obd *lov, struct lov_stripe_md *lsm,
                         lov_dump_lmm_v1(D_WARNING, lmm);
                         return -EINVAL;
                 }
+                if (!lov->lov_tgts[loi->loi_ost_idx]) {
+                        CERROR("OST index %d missing\n", loi->loi_ost_idx);
+                        lov_dump_lmm_v1(D_WARNING, lmm);
+                        return -EINVAL;
+                }
                 loi++;
         }
 
@@ -212,7 +216,7 @@ struct lov_extent *lovea_off2le(struct lov_stripe_md *lsm, obd_off lov_off)
                ; /* empty loop */
         }
 
-        CDEBUG(D_INFO, "off "LPU64" idx%d, ext"LPU64":"LPU64"idx%d sc%d\n",
+        CDEBUG(D_INFO, "off "LPU64" idx %d, ext "LPU64":"LPU64" idx %d sc %d\n",
                lov_off, i, le->le_start, le->le_len, le->le_loi_idx,
                le->le_stripe_count);
 
@@ -237,12 +241,11 @@ struct lov_extent *lovea_idx2le(struct lov_stripe_md *lsm, int stripe_no)
                 ; /* empty loop */
         }
 
-        CDEBUG(D_INFO, "stripe %d idx%d, ext"LPU64":"LPU64"idx %d scount%d\n",
+        CDEBUG(D_INFO, "stripe %d idx %d, ext "LPU64":"LPU64" idx %d sc %d\n",
                stripe_no, i, le->le_start, le->le_len, le->le_loi_idx,
                le->le_stripe_count);
         RETURN(le);
 }
-
 
 static void lovea_free_array_info(struct lov_stripe_md *lsm)
 {

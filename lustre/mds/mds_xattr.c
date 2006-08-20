@@ -41,22 +41,26 @@
 #include <lustre_fsfilt.h>
 #include <lustre_ucache.h>
 
-#include "mds_internal.h"
+#include "mds_internal.h" 
+
+#ifndef XATTR_NAME_ACL_ACCESS
+#define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
+#endif
 
 static int mds_getxattr_pack_msg(struct ptlrpc_request *req,
                                  struct dentry *de,
                                  struct mds_body *body)
 {
         struct inode *inode = de->d_inode;
-        int size[2] = {sizeof(*body)}, bufcnt = 1;
         char *xattr_name;
-        int rc = -EOPNOTSUPP, rc2;
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int bufcnt = 2, rc = -EOPNOTSUPP, rc2;
 
         if (inode == NULL)
                 return -ENOENT;
 
         if (body->valid & OBD_MD_FLXATTR) {
-                xattr_name = lustre_msg_string(req->rq_reqmsg, 1, 0);
+                xattr_name = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF+1,0);
                 if (!xattr_name) {
                         CERROR("can't extract xattr name\n");
                         return -EFAULT;
@@ -80,7 +84,7 @@ static int mds_getxattr_pack_msg(struct ptlrpc_request *req,
                 if (rc != -ENODATA && rc != -EOPNOTSUPP)
                         CWARN("get inode %lu EA size error: %d\n",
                               inode->i_ino, rc);
-                bufcnt = 0;
+                bufcnt = 1;
         } else {
                 size[bufcnt++] = min_t(int, body->eadatasize, rc);
         }
@@ -115,15 +119,16 @@ static int mds_getxattr_internal(struct obd_device *obd,
         if (inode == NULL)
                 GOTO(out, rc = -ENOENT);
 
-        repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
+        repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
+                                 sizeof(*repbody));
         LASSERT(repbody != NULL);
 
-        buflen = lustre_msg_buflen(req->rq_repmsg, 1);
+        buflen = lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF + 1);
         if (buflen)
-                buf = lustre_msg_buf(req->rq_repmsg, 1, buflen);
+                buf = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1, buflen);
 
         if (reqbody->valid & OBD_MD_FLXATTR) {
-                xattr_name = lustre_msg_string(req->rq_reqmsg, 1, 0);
+                xattr_name = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF+1,0);
                 DEBUG_REQ(D_INODE, req, "getxattr %s\n", xattr_name);
 
                 if (inode->i_op && inode->i_op->getxattr) {
@@ -165,15 +170,16 @@ int mds_getxattr(struct ptlrpc_request *req)
         struct lvfs_run_ctxt saved;
         struct dentry *de;
         struct mds_body *body;
-        struct lvfs_ucred uc = {NULL,};
+        struct lvfs_ucred uc = { NULL, };
         int rc = 0;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
+                                  lustre_swab_mds_body);
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        rc = mds_init_ucred(&uc, req, 0);
+        rc = mds_init_ucred(&uc, req, REQ_REC_OFF);
         if (rc)
                 GOTO(out_ucred, rc);
 
@@ -219,7 +225,6 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
         __u64 lockpart;
         ENTRY;
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
         LASSERT(body);
 
         DEBUG_REQ(D_INODE, req, "setxattr "LPU64"/%u",
@@ -230,7 +235,7 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
         lockpart = MDS_INODELOCK_UPDATE;
 
         /* various sanity check for xattr name */
-        xattr_name = lustre_msg_string(req->rq_reqmsg, 1, 0);
+        xattr_name = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF + 1, 0);
         if (!xattr_name) {
                 CERROR("can't extract xattr name\n");
                 GOTO(out, rc = -EPROTO);
@@ -270,15 +275,16 @@ int mds_setxattr_internal(struct ptlrpc_request *req, struct mds_body *body)
 
         if (body->valid & OBD_MD_FLXATTR) {
                 if (inode->i_op && inode->i_op->setxattr) {
-                        if (req->rq_reqmsg->bufcount < 3) {
+                        if (lustre_msg_bufcount(req->rq_reqmsg) < 4) {
                                 CERROR("no xattr data supplied\n");
                                 GOTO(out_trans, rc = -EFAULT);
                         }
 
-                        xattrlen = lustre_msg_buflen(req->rq_reqmsg, 2);
+                        xattrlen = lustre_msg_buflen(req->rq_reqmsg,
+                                                     REQ_REC_OFF + 2);
                         if (xattrlen)
-                                xattr = lustre_msg_buf(req->rq_reqmsg, 2,
-                                                       xattrlen);
+                                xattr = lustre_msg_buf(req->rq_reqmsg,
+                                                       REQ_REC_OFF+2, xattrlen);
 
                         LOCK_INODE_MUTEX(inode);
                         lock_24kernel();
@@ -324,24 +330,25 @@ int mds_setxattr(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct lvfs_run_ctxt saved;
         struct mds_body *body;
-        struct lvfs_ucred uc = {NULL,};
+        struct lvfs_ucred uc = { NULL, };
         int rc;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_mds_body);
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
+                                  lustre_swab_mds_body);
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        if (req->rq_reqmsg->bufcount < 2)
+        if (lustre_msg_bufcount(req->rq_reqmsg) < 3)
                 RETURN(-EFAULT);
 
-        rc = mds_init_ucred(&uc, req, 0);
+        rc = mds_init_ucred(&uc, req, REQ_REC_OFF);
         if (rc)
                 GOTO(out_ucred, rc);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
 
-        rc = lustre_pack_reply(req, 0, NULL, NULL);
+        rc = lustre_pack_reply(req, 1, NULL, NULL);
         if (rc)
                 GOTO(out_pop, rc);
 

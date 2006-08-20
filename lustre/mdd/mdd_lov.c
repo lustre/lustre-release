@@ -336,6 +336,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         struct obd_device       *obd = mdd2obd_dev(mdd);
         struct obd_export       *lov_exp = obd->u.mds.mds_osc_exp;
         struct obdo             *oa;
+        struct obd_info          oinfo = { { { 0 } } };
         struct lov_stripe_md    *lsm = NULL;
         const void              *eadata = spec->u.sp_ea.eadata;
 /*      int                      eadatasize  = spec->u.sp_ea.eadatalen;*/
@@ -348,7 +349,9 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 RETURN(0);
 
         oa = obdo_alloc();
-
+        if (oa == NULL)
+                RETURN(-ENOMEM);
+        
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
         oa->o_mode = S_IFREG | 0600;
@@ -417,8 +420,10 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 oa->o_fid = lu_object_fid(mdd2lu_obj(child))->f_seq;
                 oa->o_generation = lu_object_fid(mdd2lu_obj(child))->f_oid;
                 oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
-
-                rc = obd_setattr(lov_exp, oa, lsm, NULL);
+                oinfo.oi_oa = oa;
+                oinfo.oi_md = lsm;
+                        
+                rc = obd_setattr(lov_exp, &oinfo, NULL);
                 if (rc) {
                         CERROR("error setting attrs for "DFID": rc %d\n",
                                PFID(mdo2fid(child)), rc);
@@ -453,8 +458,8 @@ int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
 
-        if (mds_log_op_unlink(obd, NULL, ma->ma_lmm, ma->ma_lmm_size,
-                                 ma->ma_cookie, ma->ma_cookie_size) > 0) {
+        if (mds_log_op_unlink(obd, ma->ma_lmm, ma->ma_lmm_size,
+                              ma->ma_cookie, ma->ma_cookie_size) > 0) {
                 ma->ma_valid |= MA_COOKIE;
         }
         return 0;

@@ -33,6 +33,16 @@
 
 struct obd_statfs;
 
+/* 
+ * The ioctl naming rules:
+ * LL_*     - works on the currently opened filehandle instead of parent dir
+ * *_OBD_*  - gets data for both OSC or MDC (LOV, LMV indirectly)
+ * *_MDC_*  - gets/sets data related to MDC
+ * *_LOV_*  - gets/sets data related to OSC/LOV
+ * *FILE*   - called on parent dir and passes in a filename
+ * *STRIPE* - set/get lov_user_md
+ * *INFO    - set/get lov_user_mds_data
+ */
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
@@ -46,15 +56,21 @@ struct obd_statfs;
 #define LL_IOC_POLL_QUOTACHECK          _IOR ('f', 161, struct if_quotacheck *)
 #define LL_IOC_QUOTACTL                 _IOWR('f', 162, struct if_quotactl *)
 #define LL_IOC_JOIN                     _IOW ('f', 163, long)
-#define LL_IOC_OBD_STATFS               _IOWR('f', 164, struct obd_statfs *)
+#define IOC_OBD_STATFS                  _IOWR('f', 164, struct obd_statfs *)
+#define IOC_LOV_GETINFO                 _IOWR('f', 165, struct lov_user_mds_data *)
 
 #define LL_STATFS_MDC           1
 #define LL_STATFS_LOV           2
 
 #define IOC_MDC_TYPE            'i'
 #define IOC_MDC_LOOKUP          _IOWR(IOC_MDC_TYPE, 20, struct obd_device *)
-#define IOC_MDC_GETSTRIPE       _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
-#define IOC_MDC_GETFILEINFO     _IOWR(IOC_MDC_TYPE, 22, struct lov_mds_data *)
+#define IOC_MDC_GETFILESTRIPE   _IOWR(IOC_MDC_TYPE, 21, struct lov_user_md *)
+#define IOC_MDC_GETFILEINFO     _IOWR(IOC_MDC_TYPE, 22, struct lov_user_mds_data *)
+#define LL_IOC_MDC_GETINFO      _IOWR(IOC_MDC_TYPE, 23, struct lov_user_mds_data *)
+
+/* Keep these for backward compartability. */
+#define LL_IOC_OBD_STATFS       IOC_OBD_STATFS
+#define IOC_MDC_GETSTRIPE       IOC_MDC_GETFILESTRIPE
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 #define O_JOIN_FILE        0400000000  /* hopefully this does not conflict */
@@ -132,9 +148,10 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, const char *tmp)
 static inline char *obd_uuid2str(struct obd_uuid *uuid) 
 {
         if (uuid->uuid[sizeof(*uuid) - 1] != '\0') {
-                /* Obviously not safe, but for printfs, no real harm done...*/
+                /* Obviously not safe, but for printfs, no real harm done...
+                   we're always null-terminated, even in a race. */
                 static char temp[sizeof(*uuid)];
-                memcpy(temp, uuid->uuid, sizeof(*uuid));
+                memcpy(temp, uuid->uuid, sizeof(*uuid) - 1);
                 temp[sizeof(*uuid) - 1] = '\0';
                 return temp;
         }

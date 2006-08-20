@@ -9,11 +9,9 @@ set -e
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
-
 init_test_env $@
-
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
-. mountconf.sh 
+
 
 # Skip these tests
 # bug number: 2766
@@ -22,7 +20,7 @@ ALWAYS_EXCEPT="0b   $REPLAY_SINGLE_EXCEPT"
 build_test_filter
 
 SETUP=${SETUP:-"setup"}
-CLEANUP=${CLEANUP:-"mcstopall"}
+CLEANUP=${CLEANUP:-"stopall"}
 
 if [ "$ONLY" == "cleanup" ]; then
     sysctl -w lnet.debug=0 || true
@@ -31,8 +29,8 @@ if [ "$ONLY" == "cleanup" ]; then
 fi
 
 setup() {
-    mcformat
-    mcsetup
+    formatall
+    setupall
 }
 
 $SETUP
@@ -52,7 +50,7 @@ run_test 0 "empty replay"
 test_0b() {
     # this test attempts to trigger a race in the precreation code, 
     # and must run before any other objects are created on the filesystem
-    fail ost
+    fail ost1
     createmany -o $DIR/$tfile 20 || return 1
     unlinkmany $DIR/$tfile 20 || return 2
 }
@@ -68,7 +66,7 @@ test_1() {
 run_test 1 "simple create"
 
 test_1a() {
-    do_facet ost "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0"
 
     rm -fr $DIR/$tfile
     local old_last_id=`cat $LPROC/obdfilter/*/last_id`
@@ -93,7 +91,7 @@ test_1a() {
     rm -fr $DIR/$tfile
 
 #define OBD_FAIL_OST_CROW_EIO | OBD_FAIL_ONCE
-    do_facet ost "sysctl -w lustre.fail_loc=0x80000801"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000801"
 
     rm -fr $DIR/1a1
     old_last_id=`cat $LPROC/obdfilter/*/last_id`
@@ -107,7 +105,7 @@ test_1a() {
     
     rm -fr $DIR/1a1
     
-    do_facet ost "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0"
 }
 #CROW run_test 1a "CROW object create (check OST last_id)"
 
@@ -848,11 +846,11 @@ run_test 41 "read from a valid osc while other oscs are invalid"
 test_42() {
     blocks=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
     createmany -o $DIR/$tfile-%d 800
-    replay_barrier ost
+    replay_barrier ost1
     unlinkmany $DIR/$tfile-%d 0 400
     DEBUG42=`sysctl -n lnet.debug`
     sysctl -w lnet.debug=-1
-    facet_failover ost
+    facet_failover ost1
     
     # osc is evicted, fs is smaller (but only with failout OSTs (bug 7287)
     #blocks_after=`df -P $MOUNT | tail -n 1 | awk '{ print $2 }'`
@@ -870,10 +868,10 @@ test_43() { # bug 2530
     replay_barrier mds
 
     # OBD_FAIL_OST_CREATE_NET 0x204
-    do_facet ost "sysctl -w lustre.fail_loc=0x80000204"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000204"
     fail mds
     sleep 10
-    do_facet ost "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0"
 
     return 0
 }
@@ -952,8 +950,8 @@ test_47() { # bug 2824
     createmany -o $DIR/$tfile 20  || return 1
 
     # OBD_FAIL_OST_CREATE_NET 0x204
-    fail ost
-    do_facet ost "sysctl -w lustre.fail_loc=0x80000204"
+    fail ost1
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000204"
     df $MOUNT || return 2
 
     # let the MDS discover the OST failure, attempt to recover, fail
@@ -964,7 +962,7 @@ test_47() { # bug 2824
     createmany -o $DIR/$tfile 20 || return 3
     unlinkmany $DIR/$tfile 20 || return 4
 
-    do_facet ost "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0"
     return 0
 }
 run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
@@ -974,19 +972,19 @@ test_48() {
     createmany -o $DIR/$tfile 20  || return 1
     # OBD_FAIL_OST_EROFS 0x216
     fail mds
-    do_facet ost "sysctl -w lustre.fail_loc=0x80000216"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000216"
     df $MOUNT || return 2
 
     createmany -o $DIR/$tfile 20 20 || return 2
     unlinkmany $DIR/$tfile 40 || return 3
 
-    do_facet ost "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0"
     return 0
 }
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_50() {
-    local oscdev=`grep ${ost_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    local oscdev=`grep ${ost1_svc}-osc- $LPROC/devices | awk '{print $1}'`
     [ "$oscdev" ] || return 1
     $LCTL --device $oscdev recover &&  $LCTL --device $oscdev recover
     # give the mds_lov_sync threads a chance to run

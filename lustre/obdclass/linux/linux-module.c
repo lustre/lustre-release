@@ -163,37 +163,37 @@ extern struct cfs_psdev_ops          obd_psdev_ops;
 /*  opening /dev/obd */
 static int obd_class_open(struct inode * inode, struct file * file)
 {
-	if (obd_psdev_ops.p_open != NULL)
-		return obd_psdev_ops.p_open(0, NULL);
-	return -EPERM;
+        if (obd_psdev_ops.p_open != NULL)
+                return obd_psdev_ops.p_open(0, NULL);
+        return -EPERM;
 }
 
 /*  closing /dev/obd */
 static int obd_class_release(struct inode * inode, struct file * file)
 {
-	if (obd_psdev_ops.p_close != NULL)
-		return obd_psdev_ops.p_close(0, NULL);
-	return -EPERM;
+        if (obd_psdev_ops.p_close != NULL)
+                return obd_psdev_ops.p_close(0, NULL);
+        return -EPERM;
 }
 
 /* to control /dev/obd */
 static int obd_class_ioctl(struct inode *inode, struct file *filp,
-			   unsigned int cmd, unsigned long arg)
+                           unsigned int cmd, unsigned long arg)
 {
-	int err = 0;
-	ENTRY;
+        int err = 0;
+        ENTRY;
 
-	if (current->fsuid != 0)
-		RETURN(err = -EACCES);
-	if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
-		RETURN(err = -ENOTTY);
+        if (current->fsuid != 0)
+                RETURN(err = -EACCES);
+        if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
+                RETURN(err = -ENOTTY);
 
-	if (obd_psdev_ops.p_ioctl != NULL)
-		err = obd_psdev_ops.p_ioctl(NULL, cmd, (void *)arg);
-	else
-		err = -EPERM;
+        if (obd_psdev_ops.p_ioctl != NULL)
+                err = obd_psdev_ops.p_ioctl(NULL, cmd, (void *)arg);
+        else
+                err = -EPERM;
 
-	RETURN(err);
+        RETURN(err);
 }
 
 /* declare character device */
@@ -225,7 +225,11 @@ int obd_proc_read_kernel_version(char *page, char **start, off_t off, int count,
                                  int *eof, void *data)
 {
         *eof = 1;
+#ifdef LUSTRE_KERNEL_VERSION
         return snprintf(page, count, "%u\n", LUSTRE_KERNEL_VERSION);
+#else
+        return snprintf(page, count, "%u\n", "patchless");
+#endif
 }
 
 int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
@@ -251,11 +255,15 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                 rc += snprintf(page + rc, count - rc, "LBUG\n");
 
         spin_lock(&obd_dev_lock);
-        for (i = 0; i < MAX_OBD_DEVICES; i++) {
+        for (i = 0; i < class_devno_max(); i++) {
                 struct obd_device *obd;
 
-                obd = &obd_dev[i];
-                if (obd->obd_type == NULL)
+                obd = class_num2obd(i);
+                if (obd == NULL)
+                        continue;
+
+                LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+                if (obd->obd_stopping)
                         continue;
 
                 class_incref(obd);
@@ -318,9 +326,10 @@ struct lprocfs_vars lprocfs_base[] = {
 #ifdef __KERNEL__
 static void *obd_device_list_seq_start(struct seq_file *p, loff_t*pos)
 {
-        if (*pos >= MAX_OBD_DEVICES)
+        if (*pos >= class_devno_max())
                 return NULL;
-        return &obd_dev[*pos];
+
+        return pos;
 }
 
 static void obd_device_list_seq_stop(struct seq_file *p, void *v)
@@ -328,21 +337,24 @@ static void obd_device_list_seq_stop(struct seq_file *p, void *v)
 }
 
 static void *obd_device_list_seq_next(struct seq_file *p, void *v, loff_t *pos)
-{
+{      
         ++*pos;
-        if (*pos >= MAX_OBD_DEVICES)
+        if (*pos >= class_devno_max())
                 return NULL;
-        return &obd_dev[*pos];
+
+        return pos;
 }
 
 static int obd_device_list_seq_show(struct seq_file *p, void *v)
 {
-        struct obd_device *obd = (struct obd_device *)v;
-        int index = obd - &obd_dev[0];
+        int index = *(int*)v;
+        struct obd_device *obd = class_num2obd(index);
         char *status;
 
-        if (!obd->obd_type)
+        if (obd == NULL)
                 return 0;
+
+        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
         if (obd->obd_stopping)
                 status = "ST";
         else if (obd->obd_set_up)
@@ -431,11 +443,13 @@ int class_procfs_clean(void)
 /* Check that we're building against the appropriate version of the Lustre
  * kernel patch */
 #include <linux/lustre_version.h>
+#ifdef LUSTRE_KERNEL_VERSION
 #define LUSTRE_MIN_VERSION 37
 #define LUSTRE_MAX_VERSION 47
 #if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
 # error Cannot continue: Your Lustre kernel patch is older than the sources
 #elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)
 # error Cannot continue: Your Lustre sources are older than the kernel patch
+#endif
 #endif
 #endif

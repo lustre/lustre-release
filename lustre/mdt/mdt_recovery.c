@@ -459,9 +459,9 @@ int mdt_client_free(const struct lu_context *ctx,
         rc = mdt_write_last_rcvd(ctx, mdt, mcd, &off, NULL);
         mutex_up(&med->med_mcd_lock);
 
-        CDEBUG_EX(rc == 0 ? D_INFO : D_ERROR,
-                  "zeroing out client idx %u in %s rc %d\n",
-                  med->med_lr_idx, LAST_RCVD, rc);
+        CDEBUG(rc == 0 ? D_INFO : D_ERROR,
+               "zeroing out client idx %u in %s rc %d\n",
+               med->med_lr_idx, LAST_RCVD, rc);
 
         if (!test_and_clear_bit(med->med_lr_idx, mdt->mdt_client_bitmap)) {
                 CERROR("MDS client %u: bit already clear in bitmap!!\n",
@@ -660,8 +660,10 @@ static inline void mdt_req_from_mcd(struct ptlrpc_request *req,
 {
         DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
                   mcd->mcd_last_transno, mcd->mcd_last_result);
-        req->rq_repmsg->transno = req->rq_transno = mcd->mcd_last_transno;
-        req->rq_repmsg->status = req->rq_status = mcd->mcd_last_result;
+        req->rq_transno = mcd->mcd_last_transno;
+        req->rq_status = mcd->mcd_last_result;
+        lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
+        lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         //mds_steal_ack_locks(req);
 }
 

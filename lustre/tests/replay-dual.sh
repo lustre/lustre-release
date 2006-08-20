@@ -5,6 +5,7 @@ set -e
 # bug number:  6088 10124
 ALWAYS_EXCEPT="8    15c   $REPLAY_DUAL_EXCEPT"
 
+PTLDEBUG=${PTLDEBUG:-1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
@@ -18,18 +19,7 @@ CLEANUP=${CLEANUP:-"cleanup"}
 build_test_filter
 
 cleanup() {
-    # make sure we are using the primary server, so test-framework will
-    # be able to clean up properly.
-    activemds=`facet_active mds`
-    if [ $activemds != "mds" ]; then
-        fail mds
-    fi
-
-    grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT
-    grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2
-    stop mds -f
-    stop ost2 -f
-    stop ost -f
+    stopall
 }
 
 if [ "$ONLY" == "cleanup" ]; then
@@ -40,16 +30,9 @@ fi
 
 setup() {
     cleanup
-    add mds $MDS_MKFS_OPTS --reformat $MDSDEV
-    add ost $OST_MKFS_OPTS --reformat $OSTDEV
-    add ost2 $OST2_MKFS_OPTS --reformat $OSTDEV2
-    start mds $MDSDEV $MDS_MOUNT_OPTS
-    start ost $OSTDEV $OST_MOUNT_OPTS
-    start ost2 $OSTDEV2 $OST2_MOUNT_OPTS
-    # client actions will get EIO until MDT contacts OSTs, so give it a sec
-    sleep 5
-    zconf_mount `hostname` $MOUNT
-    zconf_mount `hostname` $MOUNT2
+    formatall
+    setupall
+    mount_client $MOUNT2
 }
 
 $SETUP
@@ -362,11 +345,11 @@ test_15b() {
     echo "data" > "$MOUNT2/${tfile}-m2"
     umount $MOUNT2
 
-    do_facet ost "sysctl -w lustre.fail_loc=0x80000802"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000802"
     facet_failover mds
 
     df $MOUNT || return 1
-    do_facet ost "sysctl -w lustre.fail_loc=0"
+    do_facet ost1 "sysctl -w lustre.fail_loc=0"
     
     zconf_mount `hostname` $MOUNT2
     return 0
@@ -413,12 +396,12 @@ test_17() {
     createmany -o $MOUNT2/$tfile-2- 1
 
     # Make sure the disconnect is lost
-    replay_barrier ost
+    replay_barrier ost1
     umount $MOUNT2
 
-    facet_failover ost
+    facet_failover ost1
     sleep $TIMEOUT
-    facet_failover ost
+    facet_failover ost1
     df $MOUNT || return 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2

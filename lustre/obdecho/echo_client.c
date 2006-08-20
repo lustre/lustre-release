@@ -493,6 +493,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                             obd_size count, struct obd_trans_info *oti)
 {
         struct echo_client_obd *ec = &obd->u.echo_client;
+        struct obd_info         oinfo = { { { 0 } } };
         obd_count               npages;
         struct brw_page        *pga;
         struct brw_page        *pgp;
@@ -543,7 +544,9 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                                                      oa->o_id, off, pgp->count);
         }
 
-        rc = obd_brw(rw, ec->ec_exp, oa, lsm, npages, pga, oti);
+        oinfo.oi_oa = oa;
+        oinfo.oi_md = lsm;
+        rc = obd_brw(rw, ec->ec_exp, &oinfo, npages, pga, oti);
 
  out:
         if (rc != 0 || rw != OBD_BRW_READ)
@@ -574,6 +577,7 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
                             struct obd_trans_info *oti)
 {
         struct echo_client_obd *ec = &obd->u.echo_client;
+        struct obd_info         oinfo = { { { 0 } } };
         obd_count               npages;
         struct brw_page        *pga;
         struct brw_page        *pgp;
@@ -582,8 +586,7 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
         int                     i;
         int                     rc;
 
-        LASSERT (rw == OBD_BRW_WRITE ||
-                 rw == OBD_BRW_READ);
+        LASSERT (rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
 
         /* NB: for now, only whole pages, page aligned */
 
@@ -621,7 +624,9 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
                 pgp->flag = 0;
         }
 
-        rc = obd_brw(rw, ec->ec_exp, oa, lsm, npages, pga, oti);
+        oinfo.oi_oa = oa;
+        oinfo.oi_md = lsm;
+        rc = obd_brw(rw, ec->ec_exp, &oinfo, npages, pga, oti);
 
         //        if (rw == OBD_BRW_READ)
         //                mark_dirty_kiobuf (kiobuf, count);
@@ -676,12 +681,12 @@ struct echo_async_state {
 
 static int eas_should_wake(struct echo_async_state *eas)
 {
-        unsigned long flags;
         int rc = 0;
-        spin_lock_irqsave(&eas->eas_lock, flags);
+
+        spin_lock(&eas->eas_lock);
         if (eas->eas_rc == 0 && !list_empty(&eas->eas_avail))
             rc = 1;
-        spin_unlock_irqrestore(&eas->eas_lock, flags);
+        spin_unlock(&eas->eas_lock);
         return rc;
 };
 
@@ -704,11 +709,10 @@ static void ec_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         memcpy(oa, &eap->eap_eas->eas_oa, sizeof(*oa));
 }
 
-static void ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
+static int ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct echo_async_page *eap = EAP_FROM_COOKIE(data);
         struct echo_async_state *eas;
-        unsigned long flags;
 
         eas = eap->eap_eas;
 
@@ -720,13 +724,14 @@ static void ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                                              eas->eas_oa.o_id, eap->eap_off,
                                              CFS_PAGE_SIZE);
 
-        spin_lock_irqsave(&eas->eas_lock, flags);
+        spin_lock(&eas->eas_lock);
         if (rc && !eas->eas_rc)
                 eas->eas_rc = rc;
         eas->eas_in_flight--;
         list_add(&eap->eap_item, &eas->eas_avail);
         cfs_waitq_signal(&eas->eas_waitq);
-        spin_unlock_irqrestore(&eas->eas_lock, flags);
+        spin_unlock(&eas->eas_lock);
+        return 0;
 }
 
 static struct obd_async_page_ops ec_async_page_ops = {
@@ -745,7 +750,6 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         struct echo_async_page *eap;
         struct echo_async_state eas;
         int rc = 0;
-        unsigned long flags;
         struct echo_async_page **aps = NULL;
 
         ENTRY;
@@ -806,15 +810,15 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         }
 
         /* first we spin queueing io and being woken by its completion */
-        spin_lock_irqsave(&eas.eas_lock, flags);
+        spin_lock(&eas.eas_lock);
         for(;;) {
                 int rc;
 
                 /* sleep until we have a page to send */
-                spin_unlock_irqrestore(&eas.eas_lock, flags);
-                rc = wait_event_interruptible(eas.eas_waitq,
+                spin_unlock(&eas.eas_lock);
+                rc = wait_event_interruptible(eas.eas_waitq, 
                                               eas_should_wake(&eas));
-                spin_lock_irqsave(&eas.eas_lock, flags);
+                spin_lock(&eas.eas_lock);
                 if (rc && !eas.eas_rc)
                         eas.eas_rc = rc;
                 if (eas.eas_rc)
@@ -824,7 +828,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                 eap = list_entry(eas.eas_avail.next, struct echo_async_page,
                                  eap_item);
                 list_del(&eap->eap_item);
-                spin_unlock_irqrestore(&eas.eas_lock, flags);
+                spin_unlock(&eas.eas_lock);
 
                 /* unbind the eap from its old page offset */
                 if (eap->eap_cookie != NULL) {
@@ -840,7 +844,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                                          eap->eap_off, &ec_async_page_ops,
                                          eap, &eap->eap_cookie);
                 if (rc) {
-                        spin_lock_irqsave(&eas.eas_lock, flags);
+                        spin_lock(&eas.eas_lock);
                         eas.eas_rc = rc;
                         break;
                 }
@@ -857,7 +861,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                                         rw, 0, CFS_PAGE_SIZE, 0,
                                         ASYNC_READY | ASYNC_URGENT |
                                         ASYNC_COUNT_STABLE);
-                spin_lock_irqsave(&eas.eas_lock, flags);
+                spin_lock(&eas.eas_lock);
                 if (rc && !eas.eas_rc) {
                         eas.eas_rc = rc;
                         break;
@@ -871,12 +875,12 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
         /* now we just spin waiting for all the rpcs to complete */
         while(eas.eas_in_flight) {
-                spin_unlock_irqrestore(&eas.eas_lock, flags);
-                wait_event_interruptible(eas.eas_waitq,
+                spin_unlock(&eas.eas_lock);
+                wait_event_interruptible(eas.eas_waitq, 
                                          eas.eas_in_flight == 0);
-                spin_lock_irqsave(&eas.eas_lock, flags);
+                spin_lock(&eas.eas_lock);
         }
-        spin_unlock_irqrestore(&eas.eas_lock, flags);
+        spin_unlock(&eas.eas_lock);
 
 out:
         if (aps != NULL) {
@@ -1083,9 +1087,10 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
         struct obd_device      *obd = exp->exp_obd;
         struct echo_client_obd *ec = &obd->u.echo_client;
         struct lustre_handle   *ulh = obdo_handle (oa);
+        struct obd_enqueue_info einfo = { 0 };
+        struct obd_info oinfo = { { { 0 } } };
         struct ec_object       *eco;
         struct ec_lock         *ecl;
-        int                     flags;
         int                     rc;
 
         if (!(mode == LCK_PR || mode == LCK_PW))
@@ -1110,11 +1115,17 @@ echo_client_enqueue(struct obd_export *exp, struct obdo *oa,
         ecl->ecl_policy.l_extent.end =
                 (nob == 0) ? ((obd_off) -1) : (offset + nob - 1);
 
-        flags = 0;
-        rc = obd_enqueue(ec->ec_exp, eco->eco_lsm, LDLM_EXTENT,
-                         &ecl->ecl_policy, mode, &flags, echo_ldlm_callback,
-                         ldlm_completion_ast, NULL, eco, sizeof(struct ost_lvb),
-                         lustre_swab_ost_lvb, &ecl->ecl_lock_handle);
+        einfo.ei_type = LDLM_EXTENT;
+        einfo.ei_mode = mode;
+        einfo.ei_cb_bl = echo_ldlm_callback;
+        einfo.ei_cb_cp = ldlm_completion_ast;
+        einfo.ei_cb_gl = NULL;
+        einfo.ei_cbdata = eco;
+
+        oinfo.oi_policy = ecl->ecl_policy;
+        oinfo.oi_lockh = &ecl->ecl_lock_handle;
+        oinfo.oi_md = eco->eco_lsm;
+        rc = obd_enqueue(ec->ec_exp, &oinfo, &einfo);
         if (rc != 0)
                 goto failed_1;
 
@@ -1230,8 +1241,10 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
         case OBD_IOC_GETATTR:
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
-                        rc = obd_getattr(ec->ec_exp, &data->ioc_obdo1,
-                                         eco->eco_lsm);
+                        struct obd_info oinfo = { { { 0 } } };
+                        oinfo.oi_md = eco->eco_lsm;
+                        oinfo.oi_oa = &data->ioc_obdo1;
+                        rc = obd_getattr(ec->ec_exp, &oinfo);
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);
@@ -1242,8 +1255,11 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
 
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
-                        rc = obd_setattr(ec->ec_exp, &data->ioc_obdo1,
-                                         eco->eco_lsm, NULL);
+                        struct obd_info oinfo = { { { 0 } } };
+                        oinfo.oi_oa = &data->ioc_obdo1;
+                        oinfo.oi_md = eco->eco_lsm;
+
+                        rc = obd_setattr(ec->ec_exp, &oinfo, NULL);
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);

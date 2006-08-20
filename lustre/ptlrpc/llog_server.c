@@ -55,11 +55,11 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         struct llog_logid *logid = NULL;
         struct llog_ctxt *ctxt;
         char * name = NULL;
-        int size = sizeof (*body);
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc, rc2;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body),
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
                                  lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
@@ -69,8 +69,8 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         if (body->lgd_logid.lgl_oid > 0)
                 logid = &body->lgd_logid;
 
-        if (req->rq_reqmsg->bufcount > 1) {
-                name = lustre_msg_string(req->rq_reqmsg, 1, 0);
+        if (lustre_msg_bufcount(req->rq_reqmsg) > 2) {
+                name = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF + 1, 0);
                 if (name == NULL) {
                         CERROR("Can't unpack name\n");
                         GOTO(out, rc = -EFAULT);
@@ -88,11 +88,11 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_pop, rc);
 
-        rc = lustre_pack_reply(req, 1, &size, NULL);
+        rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
         body->lgd_logid = loghandle->lgh_id;
 
 out_close:
@@ -115,12 +115,12 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
         struct lvfs_run_ctxt saved;
         struct llog_logid *logid = NULL;
         struct llog_ctxt *ctxt;
-        int size = sizeof (*body);
+        int size[] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         __u32 flags;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body),
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
                                  lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
@@ -140,11 +140,11 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_pop, rc);
 
-        rc = lustre_pack_reply(req, 1, &size, NULL);
+        rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (*body));
         body->lgd_logid = loghandle->lgh_id;
         flags = body->lgd_llh_flags;
         rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN, NULL);
@@ -176,12 +176,13 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
         __u32 flags;
         __u8 *buf;
         void * ptr;
-        int size[] = {sizeof (*body),
-                      LLOG_CHUNK_SIZE};
+        int size[3] = { sizeof(struct ptlrpc_body),
+                        sizeof(*body),
+                        LLOG_CHUNK_SIZE };
         int rc, rc2;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body),
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
                                   lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
@@ -194,7 +195,7 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
 
         ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
         if (ctxt == NULL)
-                GOTO(out, rc = -EINVAL);
+                GOTO(out_free, rc = -EINVAL);
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
@@ -215,14 +216,14 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
                 GOTO(out_close, rc);
 
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        rc = lustre_pack_reply(req, 3, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
-        ptr = lustre_msg_buf(req->rq_repmsg, 0, sizeof (body));
+        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (body));
         memcpy(ptr, body, sizeof(*body));
 
-        ptr = lustre_msg_buf(req->rq_repmsg, 1, LLOG_CHUNK_SIZE);
+        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1, LLOG_CHUNK_SIZE);
         memcpy(ptr, buf, LLOG_CHUNK_SIZE);
 
 out_close:
@@ -232,6 +233,7 @@ out_close:
 
 out_pop:
         pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+out_free:
         OBD_FREE(buf, LLOG_CHUNK_SIZE);
 out:
         RETURN(rc);
@@ -249,12 +251,13 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
         __u32 flags;
         __u8 *buf;
         void * ptr;
-        int size[] = {sizeof (*body),
-                      LLOG_CHUNK_SIZE};
+        int size[] = { sizeof(struct ptlrpc_body),
+                       sizeof(*body),
+                       LLOG_CHUNK_SIZE };
         int rc, rc2;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body),
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
                                   lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
@@ -286,14 +289,14 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
                 GOTO(out_close, rc);
 
 
-        rc = lustre_pack_reply(req, 2, size, NULL);
+        rc = lustre_pack_reply(req, 3, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
-        ptr = lustre_msg_buf(req->rq_repmsg, 0, sizeof (body));
+        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(body));
         memcpy(ptr, body, sizeof(*body));
 
-        ptr = lustre_msg_buf(req->rq_repmsg, 1, LLOG_CHUNK_SIZE);
+        ptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF+1, LLOG_CHUNK_SIZE);
         memcpy(ptr, buf, LLOG_CHUNK_SIZE);
 
 out_close:
@@ -319,11 +322,11 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         struct lvfs_run_ctxt saved;
         struct llog_ctxt *ctxt;
         __u32 flags;
-        int size[] = {sizeof (*hdr)};
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*hdr) };
         int rc, rc2;
         ENTRY;
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body),
+        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
                                   lustre_swab_llogd_body);
         if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
@@ -346,11 +349,11 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_close, rc);
 
-        rc = lustre_pack_reply(req, 1, size, NULL);
+        rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 GOTO(out_close, rc = -ENOMEM);
 
-        hdr = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*hdr));
+        hdr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*hdr));
         memcpy(hdr, loghandle->lgh_hdr, sizeof(*hdr));
 
 out_close:
@@ -387,8 +390,10 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
         void *handle;
         ENTRY;
 
-        logcookies = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*logcookies));
-        num_cookies = req->rq_reqmsg->buflens[0]/sizeof(*logcookies);
+        logcookies = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
+                                    sizeof(*logcookies));
+        num_cookies = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF) /
+                      sizeof(*logcookies);
         if (logcookies == NULL || num_cookies == 0) {
                 DEBUG_REQ(D_HA, req, "no cookies sent");
                 RETURN(-EFAULT);
@@ -631,16 +636,18 @@ int llog_catinfo(struct ptlrpc_request *req)
         char *keyword;
         char *buf, *reply;
         int rc, buf_len = LLOG_CHUNK_SIZE;
+        int size[2] = { sizeof(struct ptlrpc_body), buf_len };
 
         OBD_ALLOC(buf, buf_len);
         if (buf == NULL)
                 return -ENOMEM;
         memset(buf, 0, buf_len);
 
-        keyword = lustre_msg_string(req->rq_reqmsg, 0, 0);
+        keyword = lustre_msg_string(req->rq_reqmsg, REQ_REC_OFF, 0);
 
         if (strcmp(keyword, "config") == 0) {
-                char *client = lustre_msg_string(req->rq_reqmsg, 1, 0);
+                char *client = lustre_msg_string(req->rq_reqmsg,
+                                                 REQ_REC_OFF + 1, 0);
                 rc = llog_catinfo_config(obd, buf, buf_len, client);
         } else if (strcmp(keyword, "deletions") == 0) {
                 rc = llog_catinfo_deletions(obd, buf, buf_len);
@@ -648,11 +655,11 @@ int llog_catinfo(struct ptlrpc_request *req)
                 rc = -EOPNOTSUPP;
         }
 
-        rc = lustre_pack_reply(req, 1, &buf_len, NULL);
+        rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 GOTO(out_free, rc = -ENOMEM);
 
-        reply = lustre_msg_buf(req->rq_repmsg, 0, buf_len);
+        reply = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, buf_len);
         if (strlen(buf) == 0)
                 sprintf(buf, "%s", "No log informations\n");
         memcpy(reply, buf, buf_len);

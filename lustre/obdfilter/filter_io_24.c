@@ -110,13 +110,9 @@ static void dump_page(int rw, unsigned long block, struct page *page)
  * free the buffers and drop the page from cache.  The buffers should not
  * be dirty, because we already called fdatasync/fdatawait on them.
  */
-static int filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
+static int filter_sync_inode_data(struct inode *inode)
 {
-        struct page *page;
-        int i, rc, rc2;
-
-        check_pending_bhs(KIOBUF_GET_BLOCKS(iobuf), iobuf->nr_pages,
-                          inode->i_dev, 1 << inode->i_blkbits);
+        int rc, rc2;
 
         /* This is nearly generic_osync_inode, without the waiting on the inode
         rc = generic_osync_inode(inode, inode->i_mapping,
@@ -129,6 +125,19 @@ static int filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
         rc2 = filemap_fdatawait(inode->i_mapping);
         if (rc == 0)
                 rc = rc2;
+
+        return rc;
+}
+
+static int filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
+{
+        struct page *page;
+        int i, rc;
+
+        check_pending_bhs(KIOBUF_GET_BLOCKS(iobuf), iobuf->nr_pages,
+                          inode->i_dev, 1 << inode->i_blkbits);
+
+        rc = filter_sync_inode_data(inode);
         if (rc != 0)
                 RETURN(rc);
 
@@ -139,6 +148,39 @@ static int filter_clear_page_cache(struct inode *inode, struct kiobuf *iobuf)
                                       iobuf->maplist[i]->index);
                 if (page == NULL)
                         continue;
+                if (page->mapping != NULL) {
+                        /* Now that the only source of such pages in truncate
+                         * path flushes these pages to disk and and then
+                         * discards, this is error condition */
+                        CERROR("Data page in page cache during write!\n");
+                        ll_truncate_complete_page(page);
+                }
+
+                unlock_page(page);
+                page_cache_release(page);
+        }
+
+        return 0;
+}
+
+int filter_clear_truncated_page(struct inode *inode)
+{
+        struct page *page;
+        int rc;
+
+        /* Truncate on page boundary, so nothing to flush? */
+        if (!(inode->i_size & (PAGE_CACHE_SIZE-1)))
+                return 0;
+
+        rc = filter_sync_inode_data(inode);
+        if (rc != 0)
+                RETURN(rc);
+
+        /* be careful to call this after fsync_inode_data_buffers has waited
+         * for IO to complete before we evict it from the cache */
+        page = find_lock_page(inode->i_mapping,
+                              inode->i_size >> PAGE_CACHE_SHIFT);
+        if (page) {
                 if (page->mapping != NULL)
                         ll_truncate_complete_page(page);
 
@@ -425,7 +467,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 GOTO(cleanup, rc);
         }
 
-        fsfilt_check_slow(now, obd_timeout, "brw_start");
+        fsfilt_check_slow(obd, now, obd_timeout, "brw_start");
 
         i = OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
 
@@ -461,18 +503,18 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (rc == 0)
                 obdo_from_inode(oa, inode, FILTER_VALID_FLAGS);
 
-        fsfilt_check_slow(now, obd_timeout, "direct_io");
+        fsfilt_check_slow(obd, now, obd_timeout, "direct_io");
 
         err = fsfilt_commit_wait(obd, inode, wait_handle);
         if (err) {
                 CERROR("Failure to commit OST transaction (%d)?\n", err);
                 rc = err;
         }
-        if (obd->obd_replayable && !err)
+        if (obd->obd_replayable && !rc)
                 LASSERTF(oti->oti_transno <= obd->obd_last_committed,
                          "oti_transno "LPU64" last_committed "LPU64"\n",
                          oti->oti_transno, obd->obd_last_committed);
-        fsfilt_check_slow(now, obd_timeout, "commitrw commit");
+        fsfilt_check_slow(obd, now, obd_timeout, "commitrw commit");
 
 cleanup:
         filter_grant_commit(exp, niocount, res);

@@ -39,13 +39,14 @@
 #define lustre_swab_lu_range NULL
 #define lustre_swab_md_fld NULL
 #define lustre_swab_mdt_body NULL
+#define lustre_swab_ptlrpc_body NULL
 #define lustre_swab_obd_statfs NULL
 #define lustre_swab_connect NULL
 #define lustre_swab_ldlm_request NULL
 #define lustre_swab_ldlm_reply NULL
 #define lustre_swab_ldlm_intent NULL
 #define lustre_swab_lov_mds_md NULL
-#define lustre_swab_mds_rec_unlink NULL
+#define lustre_swab_mdt_rec_unlink NULL
 #define lustre_swab_mdt_rec_link NULL
 #define lustre_swab_mdt_rec_rename NULL
 #define lustre_swab_mdt_rec_create NULL
@@ -91,7 +92,7 @@ void print_layout(const struct req_format *rf)
 
                         fld = rf->rf_fields[j].d[k];
 
-                        printf("        F%s %0i [%03.3i%s %-20.20s (",
+                        printf("        F%s %i [%03.3i%s %-20.20s (",
                                prefix[j], k, offset,
                                variable ? " + ...]" : "]      ",
                                fld->rmf_name);

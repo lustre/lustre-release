@@ -89,7 +89,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
 
                 rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, &it, LCK_CR,
                                 &op_data, &lockh, NULL, 0,
-                                ldlm_completion_ast, llu_mdc_blocking_ast,
+                                ldlm_completion_ast, llu_md_blocking_ast,
                                 inode, LDLM_FL_CANCEL_ON_BLOCK);
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
@@ -105,9 +105,11 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         rc = md_readpage(sbi->ll_md_exp, &lli->lli_fid,
                          offset, page, &request);
         if (!rc) {
-                body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
-                LASSERT (body != NULL);         /* checked by mdc_readpage() */
-                LASSERT_REPSWABBED (request, 0); /* swabbed by mdc_readpage() */
+                body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF,
+                                      sizeof(*body));
+                LASSERT(body != NULL);         /* checked by md_readpage() */
+                /* swabbed by md_readpage() */
+                LASSERT_REPSWABBED(request, REPLY_REC_OFF);
 
                 st->st_size = body->size;
         } else {
@@ -225,7 +227,7 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                 if (IS_ERR(page))
                         continue;
 
-                /* size might have been updated by mdc_readpage */
+                /* size might have been updated by md_readpage */
                 maxpages = (st->st_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
                 /* fill in buffer */

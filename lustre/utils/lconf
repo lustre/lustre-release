@@ -72,7 +72,7 @@ PORTALS_DIR = '../lnet'
 # Needed to call lconf --record
 CONFIG_FILE = ""
 
-# Please keep these in sync with the values in portals/kp30.h
+# Please keep these in sync with the values in lnet/include/libcfs/libcfs.h
 ptldebug_names = {
     "trace" :     (1 << 0),
     "inode" :     (1 << 1),
@@ -88,7 +88,8 @@ ptldebug_names = {
     "buffs" :     (1 << 11),
     "other" :     (1 << 12),
     "dentry" :    (1 << 13),
-    "portals" :   (1 << 14),
+    "portals" :   (1 << 14), # deprecated
+    "lnet" :      (1 << 14),
     "page" :      (1 << 15),
     "dlmtrace" :  (1 << 16),
     "error" :     (1 << 17),
@@ -114,22 +115,29 @@ subsystem_names = {
     "log" :          (1 << 6),
     "llite" :        (1 << 7),
     "rpc" :          (1 << 8),
-    "portals" :      (1 << 10),
-    "nal" :          (1 << 11),
+    "lnet" :         (1 << 10),
+    "portals" :      (1 << 10), # deprecated
+    "lnd" :          (1 << 11),
+    "nal" :          (1 << 11), # deprecated
     "pinger" :       (1 << 12),
     "filter" :       (1 << 13),
-    "ptlbd" :        (1 << 14),
+    "ptlbd" :        (1 << 14), # deprecated
     "echo" :         (1 << 15),
     "ldlm" :         (1 << 16),
     "lov" :          (1 << 17),
-    "ptlrouter" :    (1 << 18),
+    "ptlrouter" :    (1 << 18), # deprecated
     "cobd" :         (1 << 19),
     "sm" :           (1 << 20),
     "asobd" :        (1 << 21),
-    "confobd" :      (1 << 22),
+    "confobd" :      (1 << 22), # deprecated
     "lmv" :          (1 << 23),
     "cmobd" :        (1 << 24),
     "sec" :          (1 << 25),
+    "sec" :          (1 << 26),
+    "gss" :          (1 << 27),
+    "gks" :          (1 << 28),
+    "mgc" :          (1 << 29),
+    "mgs" :          (1 << 30),
     }
 
 
@@ -1024,6 +1032,10 @@ class kmod:
                     run('/sbin/rmmod kiiblnd')
                 if mod_loaded("kviblnd"):
                     run('/sbin/rmmod kviblnd')
+                if mod_loaded("kciblnd"):
+                    run('/sbin/rmmod kciblnd')
+                if mod_loaded("ko2iblnd"):
+                    run('/sbin/rmmod ko2iblnd')
                 if mod_loaded("kralnd"):
                     run('/sbin/rmmod kralnd')
                 if mod_loaded("kptllnd"):
@@ -1264,7 +1276,7 @@ class MDSDEV(Module):
         self.filesystem_uuids = mds.get_refs('filesystem')
         # FIXME: if fstype not set, then determine based on kernel version
         self.format = self.db.get_val('autoformat', "no")
-        if mds.get_val('failover', 0):
+        if mds.get_val('failover', '1') != '0':
             self.failover_mds = 'f'
         else:
             self.failover_mds = 'n'
@@ -1419,7 +1431,7 @@ class MDSDEV(Module):
                         if not fs_uuid in self.filesystem_uuids:
                             continue;
 
-                        debug("recording", client_name)
+                        log("Recording log", client_name, "on", self.name)
                         old_noexec = config.noexec
                         config.noexec = 0
                         noexec_opt = ('', '-n')
@@ -1538,7 +1550,7 @@ class OSD(Module):
         ost = self.db.lookup(target_uuid)
         self.name = ost.getName()
         self.format = self.db.get_val('autoformat', 'yes')
-        if ost.get_val('failover', 1):
+        if ost.get_val('failover', '1') != '0':
             self.failover_ost = 'f'
         else:
             self.failover_ost = 'n'

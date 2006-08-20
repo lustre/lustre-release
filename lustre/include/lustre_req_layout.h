@@ -120,6 +120,7 @@ extern const struct req_format RQF_LDLM_INTENT_OPEN;
 extern const struct req_format RQF_LDLM_INTENT_CREATE;
 extern const struct req_format RQF_LDLM_INTENT_UNLINK;
 
+extern const struct req_msg_field RMF_PTLRPC_BODY;
 extern const struct req_msg_field RMF_MDT_BODY;
 extern const struct req_msg_field RMF_OBD_STATFS;
 extern const struct req_msg_field RMF_NAME;

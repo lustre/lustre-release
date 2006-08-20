@@ -43,7 +43,7 @@ void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
 {
         struct mdt_body *b;
 
-        b = lustre_msg_buf(req->rq_reqmsg, pos, sizeof (*b));
+        b = lustre_msg_buf(req->rq_reqmsg, pos, sizeof(*b));
         b->fsuid = current->fsuid;
         b->fsgid = current->fsgid;
         b->capability = current->cap_effective;
@@ -63,7 +63,7 @@ static void mdc_pack_body(struct mdt_body *b)
 }
 
 void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
-                       __u64 valid, struct lu_fid *fid, int ea_size)
+                       __u64 valid, struct lu_fid *fid, int ea_size, int flags)
 {
         struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
 
@@ -71,6 +71,7 @@ void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
                 b->fid1 = *fid;
         b->valid = valid;
         b->eadatasize = ea_size;
+        b->flags = flags;
         mdc_pack_body(b);
 }
 /* packing of MDS records */
@@ -108,7 +109,8 @@ static __u32 mds_pack_open_flags(__u32 flags)
         return
                 (flags & (FMODE_READ | FMODE_WRITE |
                           MDS_OPEN_DELAY_CREATE | MDS_OPEN_HAS_EA |
-                          MDS_OPEN_HAS_OBJS | MDS_OPEN_OWNEROVERRIDE)) |
+                          MDS_OPEN_HAS_OBJS | MDS_OPEN_OWNEROVERRIDE |
+                          MDS_OPEN_LOCK)) |
                 ((flags & O_CREAT) ? MDS_OPEN_CREAT : 0) |
                 ((flags & O_EXCL) ? MDS_OPEN_EXCL : 0) |
                 ((flags & O_TRUNC) ? MDS_OPEN_TRUNC : 0) |
@@ -165,6 +167,10 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
 
         if (lmm) {
                 rec->cr_flags |= MDS_OPEN_HAS_EA;
+#ifndef __KERNEL__
+                /*XXX a hack for liblustre to set EA (LL_IOC_LOV_SETSTRIPE) */
+                rec->cr_fid2 = op_data->fid2;
+#endif
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, lmmlen);
                 memcpy (tmp, lmm, lmmlen);
         }
@@ -194,7 +200,6 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
                 rec->sa_ctime = LTIME_S(iattr->ia_ctime);
                 rec->sa_attr_flags =
                                ((struct ll_iattr_struct *)iattr)->ia_attr_flags;
-
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
                         rec->sa_suppgid = iattr->ia_gid;
                 else
@@ -297,10 +302,11 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
         b->fsgid = current->fsgid;
         b->capability = current->cap_effective;
         b->valid = valid;
-        b->flags = flags;
+        b->flags = flags | MDS_BFLAG_EXT_FLAGS;
         b->suppgid = op_data->suppgids[0];
 
         b->fid1 = op_data->fid1;
+        b->fid2 = op_data->fid2;
         if (op_data->name) {
                 char *tmp;
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
@@ -315,7 +321,7 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset,
 {
         struct mdt_body *body;
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
+        body = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*body));
 
         body->fid1 = op_data->fid1;
         memcpy(&body->handle, &och->och_fh, sizeof(body->handle));
@@ -343,4 +349,63 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset,
                 body->flags = op_data->flags;
                 body->valid |= OBD_MD_FLFLAGS;
         }
+}
+
+struct mdc_cache_waiter {       
+        struct list_head        mcw_entry;
+        wait_queue_head_t       mcw_waitq;
+};
+
+static int mdc_req_avail(struct client_obd *cli, struct mdc_cache_waiter *mcw)
+{
+        int rc;
+        ENTRY;
+        spin_lock(&cli->cl_loi_list_lock);
+        rc = list_empty(&mcw->mcw_entry);
+        spin_unlock(&cli->cl_loi_list_lock);
+        RETURN(rc);
+};
+
+/* We record requests in flight in cli->cl_r_in_flight here.
+ * There is only one write rpc possible in mdc anyway. If this to change
+ * in the future - the code may need to be revisited. */
+void mdc_enter_request(struct client_obd *cli)
+{
+        struct mdc_cache_waiter mcw;
+        struct l_wait_info lwi = { 0 };
+
+        spin_lock(&cli->cl_loi_list_lock);
+        if (cli->cl_r_in_flight >= cli->cl_max_rpcs_in_flight) {
+                list_add_tail(&mcw.mcw_entry, &cli->cl_cache_waiters);
+                init_waitqueue_head(&mcw.mcw_waitq);
+                spin_unlock(&cli->cl_loi_list_lock);
+                l_wait_event(mcw.mcw_waitq, mdc_req_avail(cli, &mcw), &lwi);
+        } else {
+                cli->cl_r_in_flight++;
+                spin_unlock(&cli->cl_loi_list_lock);
+        }
+}
+
+void mdc_exit_request(struct client_obd *cli)
+{
+        struct list_head *l, *tmp;
+        struct mdc_cache_waiter *mcw;
+
+        spin_lock(&cli->cl_loi_list_lock);
+        cli->cl_r_in_flight--;
+        list_for_each_safe(l, tmp, &cli->cl_cache_waiters) {
+                
+                if (cli->cl_r_in_flight >= cli->cl_max_rpcs_in_flight) {
+                        /* No free request slots anymore */
+                        break;
+                }
+
+                mcw = list_entry(l, struct mdc_cache_waiter, mcw_entry);
+                list_del_init(&mcw->mcw_entry);
+                cli->cl_r_in_flight++;
+                wake_up(&mcw->mcw_waitq);
+        }
+        /* Empty waiting list? Decrease reqs in-flight number */
+        
+        spin_unlock(&cli->cl_loi_list_lock);
 }

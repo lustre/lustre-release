@@ -11,11 +11,10 @@ export PATH=/sbin:/usr/sbin:$SRCDIR:$SRCDIR/../utils:$PATH
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
-. mountconf.sh
 
-SETUP=${SETUP:-mcsetup}
-FORMAT=${FORMAT:-mcformat}
-CLEANUP=${CLEANUP:-mcstopall}
+SETUP=${SETUP:-setupall}
+FORMAT=${FORMAT:-formatall}
+CLEANUP=${CLEANUP:-stopall}
 
 fail() { 
 	echo "ERROR: $1" 1>&2
@@ -92,7 +91,7 @@ mkdir $DST || fail "can't mkdir $DST" 10
 # haven't changed in the last day (hopefully they don't change during test)
 FILES=`find $SRC -type f -mtime +1 -ctime +1 | head -n $COUNT`
 log "copying files from $SRC to $DST$SRC at `date`"
-tar cf - $FILES | tar xvf - -C $DST || fail "copying $SRC" 11
+tar cf - $FILES | tar xvf - -C $DST > /dev/null || fail "copying $SRC" 11
 
 log "comparing newly copied files at `date`"
 for f in $FILES; do

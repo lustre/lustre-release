@@ -349,19 +349,23 @@ EXPORT_SYMBOL(fld_client_fini);
 static int fld_client_rpc(struct obd_export *exp,
                           struct md_fld *mf, __u32 fld_op)
 {
-        int size[2] = {sizeof(__u32), sizeof(struct md_fld)}, rc;
-        int mf_size = sizeof(struct md_fld);
+        int reqsize[3] = { sizeof(struct ptlrpc_body),
+                           sizeof(__u32),
+                           sizeof(struct md_fld) };
+        int repsize[2] = { sizeof(struct ptlrpc_body),
+                           sizeof(struct md_fld) };
         struct ptlrpc_request *req;
         struct req_capsule pill;
         struct md_fld *pmf;
         __u32 *op;
+        int rc;
         ENTRY;
 
         LASSERT(exp != NULL);
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp),
                               LUSTRE_MDS_VERSION, FLD_QUERY,
-                              2, size, NULL);
+                              3, reqsize, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -375,7 +379,7 @@ static int fld_client_rpc(struct obd_export *exp,
         pmf = req_capsule_client_get(&pill, &RMF_FLD_MDFLD);
         *pmf = *mf;
 
-        req->rq_replen = lustre_msg_size(1, &mf_size);
+        ptlrpc_req_set_repsize(req, 2, repsize);
         req->rq_request_portal = FLD_REQUEST_PORTAL;
 
         rc = ptlrpc_queue_wait(req);

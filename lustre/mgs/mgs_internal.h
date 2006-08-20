@@ -20,14 +20,23 @@
 #define MGS_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 10)
 
 /* mgs_llog.c */
-#define FSDB_EMPTY 0x0001
+#define FSDB_EMPTY      0x0001
+#define FSDB_OLDLOG14   0x0002  /* log starts in old (1.4) style */
+
 
 struct fs_db {
         char              fsdb_name[8];
-        struct list_head  fsdb_list;
+        struct list_head  fsdb_list;           /* list of databases */
         struct semaphore  fsdb_sem;
-        void*             fsdb_ost_index_map;
-        void*             fsdb_mdt_index_map;
+        void             *fsdb_ost_index_map;  /* bitmap of used indicies */
+        void             *fsdb_mdt_index_map;  /* bitmap of used indicies */
+        /* COMPAT_146 these items must be recorded out of the old client log */
+        char             *fsdb_clilov;         /* COMPAT_146 client lov name */
+        char             *fsdb_clilmv;
+        char             *fsdb_mdtlov;         /* COMPAT_146 mds lov name */
+        char             *fsdb_mdtlmv;
+        char             *fsdb_mdc;            /* COMPAT_146 mdc name */
+        /* end COMPAT_146 */
         __u32             fsdb_flags;
         __u32             fsdb_gen;
 };
@@ -38,12 +47,14 @@ int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_write_log_target(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti);
+int mgs_erase_log(struct obd_device *obd, char *name);
 int mgs_erase_logs(struct obd_device *obd, char *fsname);
-int mgs_setparam(struct obd_device *obd, char *fsname, struct lustre_cfg *lcfg);
+int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname);
 
 /* mgs_fs.c */
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);
 int mgs_fs_cleanup(struct obd_device *obddev);
 
+#define strsuf(buf, suffix) (strcmp((buf)+strlen(buf)-strlen(suffix), (suffix)))
 
 #endif

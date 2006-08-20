@@ -15,7 +15,9 @@ LUSTRE_LIBS = libllite.a \
               $(top_builddir)/lustre/osc/libosc.a \
               $(top_builddir)/lustre/fid/libfid.a \
               $(top_builddir)/lustre/fld/libfld.a \
+              $(top_builddir)/lustre/lmv/liblmv.a \
               $(top_builddir)/lustre/mdc/libmdc.a \
+              $(top_builddir)/lustre/mgc/libmgc.a \
               $(top_builddir)/lustre/ptlrpc/libptlrpc.a \
               $(top_builddir)/lustre/obdclass/liblustreclass.a \
               $(top_builddir)/lustre/lvfs/liblvfs.a
@@ -28,7 +30,7 @@ LND_LIBS =
 if BUILD_USOCKLND
 LND_LIBS +=    $(top_builddir)/lnet/ulnds/socklnd/libsocklnd.a
 endif
-if BUILD_PTLLND
+if BUILD_UPTLLND
 LND_LIBS +=   $(top_builddir)/lnet/ulnds/ptllnd/libptllnd.a
 endif
 

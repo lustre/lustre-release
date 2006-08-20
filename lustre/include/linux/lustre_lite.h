@@ -19,13 +19,10 @@
 
 #include <linux/fs.h>
 #include <linux/dcache.h>
-#include <linux/jbd.h>
-#include <linux/ext3_fs.h>
 #include <linux/proc_fs.h>
 
 #include <obd_class.h>
 #include <lustre_net.h>
-#include <lustre_mds.h>
 #include <lustre_ha.h>
 
 #include <linux/rbtree.h>

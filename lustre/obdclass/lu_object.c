@@ -320,8 +320,8 @@ int lu_cdebug_printer(const struct lu_context *ctx,
         vsnprintf(key->lck_area + used,
                   ARRAY_SIZE(key->lck_area) - used, format, args);
         if (complete) {
-                libcfs_debug_msg(info->lpi_subsys, info->lpi_mask,
-                                 info->lpi_file, info->lpi_fn,
+                libcfs_debug_msg(NULL, info->lpi_subsys, info->lpi_mask,
+                                 (char *)info->lpi_file, info->lpi_fn,
                                  info->lpi_line, "%s", key->lck_area);
                 key->lck_area[0] = 0;
         }

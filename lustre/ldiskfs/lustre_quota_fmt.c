@@ -701,9 +701,8 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
         struct lustre_disk_dqblk ddquot, empty;
         int ret = 0;
 
-        filp = dquot->dq_info->qi_files[type];
-
-        if (!filp || !dquot->dq_info) { /* Invalidated quota? */
+        /* Invalidated quota? */
+        if (!dquot->dq_info || !(filp = dquot->dq_info->qi_files[type])) {
                 printk(KERN_ERR "VFS: Quota invalidated while reading!\n");
                 return -EIO;
         }

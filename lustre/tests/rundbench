@@ -1,6 +1,6 @@
 #!/bin/sh
-MNT=${MNT:-/mnt/lustre}
-DIR=${DIR:-$MNT/`hostname`}
+MOUNT=${MOUNT:-/mnt/lustre}
+DIR=${DIR:-$MOUNT/`hostname`}
 #[ -e /proc/sys/lnet/debug ] && echo 0 > /proc/sys/lnet/debug 
 mkdir -p $DIR
 TGT=$DIR/client.txt

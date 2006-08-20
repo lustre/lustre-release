@@ -154,10 +154,10 @@ static int llu_extent_lock_callback(struct ldlm_lock *lock,
                 lsm = lli->lli_smd;
 
                 stripe = llu_lock_to_stripe_offset(inode, lock);
-                l_lock(&lock->l_resource->lr_namespace->ns_lock);
+                lock_res_and_lock(lock);
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
-                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                unlock_res_and_lock(lock);
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
@@ -179,7 +179,8 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         struct inode *inode = llu_inode_from_lock(lock);
         struct llu_inode_info *lli;
         struct ost_lvb *lvb;
-        int rc, size = sizeof(*lvb), stripe = 0;
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*lvb) };
+        int rc, stripe = 0;
         ENTRY;
 
         if (inode == NULL)
@@ -194,13 +195,13 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         if (lli->lli_smd->lsm_stripe_count > 1)
                 stripe = llu_lock_to_stripe_offset(inode, lock);
 
-        rc = lustre_pack_reply(req, 1, &size, NULL);
+        rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc) {
                 CERROR("lustre_pack_reply: %d\n", rc);
                 GOTO(iput, rc);
         }
 
-        lvb = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*lvb));
+        lvb = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*lvb));
         lvb->lvb_size = lli->lli_smd->lsm_oinfo[stripe].loi_kms;
 
         LDLM_DEBUG(lock, "i_size: %llu -> stripe number %u -> kms "LPU64,
@@ -211,7 +212,7 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         /* These errors are normal races, so we don't want to fill the console
          * with messages by calling ptlrpc_error() */
         if (rc == -ELDLM_NO_LOCK_DATA)
-                lustre_pack_reply(req, 0, NULL, NULL);
+                lustre_pack_reply(req, 1, NULL, NULL);
 
         req->rq_status = rc;
         return rc;
@@ -224,18 +225,34 @@ int llu_glimpse_size(struct inode *inode)
         struct llu_inode_info *lli = llu_i2info(inode);
         struct intnl_stat *st = llu_i2stat(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
-        ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
         struct lustre_handle lockh = { 0 };
+        struct obd_enqueue_info einfo = { 0 };
+        struct obd_info oinfo = { { { 0 } } };
         struct ost_lvb lvb;
-        int rc, flags = LDLM_FL_HAS_INTENT;
+        int rc;
         ENTRY;
 
         CDEBUG(D_DLMTRACE, "Glimpsing inode %llu\n", (long long)st->st_ino);
 
-        rc = obd_enqueue(sbi->ll_dt_exp, lli->lli_smd, LDLM_EXTENT, &policy,
-                         LCK_PR, &flags, llu_extent_lock_callback,
-                         ldlm_completion_ast, llu_glimpse_callback, inode,
-                         sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
+        if (!lli->lli_smd) {
+                CDEBUG(D_DLMTRACE, "No objects for inode %llu\n", 
+                       (long long)st->st_ino);
+                RETURN(0);
+        }
+
+        einfo.ei_type = LDLM_EXTENT;
+        einfo.ei_mode = LCK_PR;
+        einfo.ei_flags = LDLM_FL_HAS_INTENT;
+        einfo.ei_cb_bl = llu_extent_lock_callback;
+        einfo.ei_cb_cp = ldlm_completion_ast;
+        einfo.ei_cb_gl = llu_glimpse_callback;
+        einfo.ei_cbdata = inode;
+
+        oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
+        oinfo.oi_lockh = &lockh;
+        oinfo.oi_md = lli->lli_smd;
+
+        rc = obd_enqueue_rqset(sbi->ll_dt_exp, &oinfo, &einfo);
         if (rc) {
                 CERROR("obd_enqueue returned rc %d, returning -EIO\n", rc);
                 RETURN(rc > 0 ? -EIO : rc);
@@ -252,8 +269,6 @@ int llu_glimpse_size(struct inode *inode)
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
                (long long)st->st_size, (long long)st->st_blocks);
 
-        obd_cancel(sbi->ll_dt_exp, lli->lli_smd, LCK_PR, &lockh);
-
         RETURN(rc);
 }
 
@@ -264,6 +279,8 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
 {
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct intnl_stat *st = llu_i2stat(inode);
+        struct obd_enqueue_info einfo = { 0 };
+        struct obd_info oinfo = { { { 0 } } };
         struct ost_lvb lvb;
         int rc;
         ENTRY;
@@ -280,10 +297,20 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                (long long)st->st_ino, policy->l_extent.start,
                policy->l_extent.end);
 
-        rc = obd_enqueue(sbi->ll_dt_exp, lsm, LDLM_EXTENT, policy, mode,
-                         &ast_flags, llu_extent_lock_callback,
-                         ldlm_completion_ast, llu_glimpse_callback, inode,
-                         sizeof(struct ost_lvb), lustre_swab_ost_lvb, lockh);
+        einfo.ei_type = LDLM_EXTENT;
+        einfo.ei_mode = mode;
+        einfo.ei_flags = ast_flags;
+        einfo.ei_cb_bl = llu_extent_lock_callback;
+        einfo.ei_cb_cp = ldlm_completion_ast;
+        einfo.ei_cb_gl = llu_glimpse_callback;
+        einfo.ei_cbdata = inode;
+
+        oinfo.oi_policy = *policy;
+        oinfo.oi_lockh = lockh;
+        oinfo.oi_md = lsm;
+
+        rc = obd_enqueue(sbi->ll_dt_exp, &oinfo, &einfo);
+        *policy = oinfo.oi_policy;
         if (rc > 0)
                 rc = -EIO;
 
@@ -348,14 +375,28 @@ static void llu_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         oa->o_valid = OBD_MD_FLID;
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
         if (cmd & OBD_BRW_WRITE)
-                valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+                valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                        OBD_MD_FLUID | OBD_MD_FLGID |
+                        OBD_MD_FLFID | OBD_MD_FLGENER;
 
         obdo_from_inode(oa, inode, valid_flags);
         EXIT;
 }
 
+static void llu_ap_update_obdo(void *data, int cmd, struct obdo *oa,
+                               obd_valid valid)
+{
+        struct ll_async_page *llap;
+        ENTRY;
+
+        llap = LLAP_FROM_COOKIE(data);
+        obdo_from_inode(oa, llap->llap_inode, valid);
+
+        EXIT;
+}
+
 /* called for each page in a completed rpc.*/
-static void llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
+static int llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 {
         struct ll_async_page *llap;
         struct page *page;
@@ -370,13 +411,14 @@ static void llu_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                         CERROR("writeback error on page %p index %ld: %d\n",
                                page, page->index, rc);
         }
-        EXIT;
+        RETURN(0);
 }
 
 static struct obd_async_page_ops llu_async_page_ops = {
         .ap_make_ready =        NULL,
         .ap_refresh_count =     NULL,
         .ap_fill_obdo =         llu_ap_fill_obdo,
+        .ap_update_obdo =       llu_ap_update_obdo,
         .ap_completion =        llu_ap_completion,
 };
 

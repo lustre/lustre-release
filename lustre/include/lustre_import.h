@@ -45,7 +45,7 @@ struct obd_import_conn {
         struct list_head          oic_item;
         struct ptlrpc_connection *oic_conn;
         struct obd_uuid           oic_uuid;
-        cfs_time_t                oic_last_attempt; /* in cfs_time_t */
+        __u64                     oic_last_attempt; /* jiffies, 64-bit */
 };
 
 struct obd_import {
@@ -77,6 +77,7 @@ struct obd_import {
         __u64                     imp_last_transno_checked;
         struct lustre_handle      imp_remote_handle;
         cfs_time_t                imp_next_ping;   /* jiffies */
+        __u64                     imp_last_success_conn;   /* jiffies, 64-bit */
 
         /* all available obd_import_conn linked here */
         struct list_head          imp_conn_list;
@@ -86,20 +87,23 @@ struct obd_import {
         spinlock_t                imp_lock;
 
         /* flags */
-        unsigned int             
-                imp_invalid:1,          /* evicted */
-                imp_replayable:1,       /* try to recover the import */
-                imp_dlm_fake:1,         /* don't run recovery (timeout instead) */
-                imp_server_timeout:1,   /* use 1/2 timeout on MDS' OSCs */
-                imp_initial_recov:1,    /* retry the initial connection */  
-                imp_initial_recov_bk:1, /* turn off init_recov after trying all failover nids */
-                imp_force_verify:1,     /* force an immidiate ping */
-                imp_pingable:1,         /* pingable */
-                imp_resend_replay:1,    /* resend for replay */
-                imp_deactive:1;         /* administratively disabled */
+        unsigned int              imp_invalid:1,          /* evicted */
+                                  imp_deactive:1,         /* administratively disabled */
+                                  imp_replayable:1,       /* try to recover the import */
+                                  imp_dlm_fake:1,         /* don't run recovery (timeout instead) */
+                                  imp_server_timeout:1,   /* use 1/2 timeout on MDS' OSCs */
+                                  imp_initial_recov:1,    /* retry the initial connection */  
+                                  imp_initial_recov_bk:1, /* turn off init_recov after trying all failover nids */
+                                  imp_force_verify:1,     /* force an immidiate ping */
+                                  imp_pingable:1,         /* pingable */
+                                  imp_resend_replay:1,    /* resend for replay */
+                                  imp_recon_bk:1,         /* turn off reconnect if all failovers fail */
+                                  imp_last_recon:1;       /* internally used by above */
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
         __u64                     imp_connect_flags_orig;
+
+        __u32                     imp_msg_magic;
 
         struct ptlrpc_request_pool *imp_rq_pool; /* emergency request pool */
 };

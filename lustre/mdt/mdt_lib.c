@@ -49,15 +49,15 @@ void mdt_dump_lmm(int level, struct lov_mds_md *lmm)
         __s16 stripe_count =
                 le16_to_cpu(((struct lov_user_md*)lmm)->lmm_stripe_count);
 
-        CDEBUG_EX(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
+        CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
                le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
                le32_to_cpu(lmm->lmm_pattern));
-        CDEBUG_EX(level,"stripe_size=0x%x, stripe_count=0x%x\n",
+        CDEBUG(level,"stripe_size=0x%x, stripe_count=0x%x\n",
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
         LASSERT(stripe_count < (__s16)LOV_MAX_STRIPE_COUNT);
         for (i = 0, lod = lmm->lmm_objects; i < stripe_count; i++, lod++) {
-                CDEBUG_EX(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
+                CDEBUG(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
                        i, le32_to_cpu(lod->l_ost_idx),
                        le64_to_cpu(lod->l_object_gr),
                        le64_to_cpu(lod->l_object_id));
@@ -81,7 +81,7 @@ void mdt_shrink_reply(struct mdt_thread_info *info, int offset)
                        md_size, acl_size);
 
         lustre_shrink_reply(req, offset, md_size, 1);
-        lustre_shrink_reply(req, md_size? offset + 1: offset, acl_size, 0);
+        lustre_shrink_reply(req, md_size ? offset + 1: offset, acl_size, 0);
 }
 
 

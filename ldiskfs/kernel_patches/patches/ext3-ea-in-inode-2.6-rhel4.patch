@@ -2,15 +2,13 @@ Index: linux-stage/fs/ext3/ialloc.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/ialloc.c	2005-10-04 16:53:24.000000000 -0600
 +++ linux-stage/fs/ext3/ialloc.c	2005-10-04 17:07:25.000000000 -0600
-@@ -629,6 +629,11 @@
+@@ -629,6 +629,9 @@
  	spin_unlock(&sbi->s_next_gen_lock);
  
  	ei->i_state = EXT3_STATE_NEW;
-+	if (EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) {
-+		ei->i_extra_isize = sizeof(__u16)	/* i_extra_isize */
-+				+ sizeof(__u16);	/* i_pad1 */
-+	} else
-+		ei->i_extra_isize = 0;
++	ei->i_extra_isize =
++		(EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) ?
++		sizeof(struct ext3_inode) - EXT3_GOOD_OLD_INODE_SIZE : 0;
  
  	ret = inode;
  	if(DQUOT_ALLOC_INODE(inode)) {

@@ -237,6 +237,62 @@ static int lprocfs_filter_wr_itune(struct file *file, const char *buffer,
 }
 #endif
 
+int lprocfs_filter_rd_fmd_max_num(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int rc;
+
+        rc = snprintf(page, count, "%u\n", obd->u.filter.fo_fmd_max_num);
+        return rc;
+}
+
+int lprocfs_filter_wr_fmd_max_num(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val;
+        int rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val > 65536 || val < 1)
+                return -EINVAL;
+
+        obd->u.filter.fo_fmd_max_num = val;
+        return count;
+}
+
+int lprocfs_filter_rd_fmd_max_age(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int rc;
+
+        rc = snprintf(page, count, "%u\n", obd->u.filter.fo_fmd_max_age / HZ);
+        return rc;
+}
+
+int lprocfs_filter_wr_fmd_max_age(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        int val;
+        int rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val > 65536 || val < 1)
+                return -EINVAL;
+
+        obd->u.filter.fo_fmd_max_age = val * HZ;
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -268,6 +324,10 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "quota_itune_sz", lprocfs_filter_rd_itune,
                             lprocfs_filter_wr_itune, 0},
 #endif
+        { "client_cache_count", lprocfs_filter_rd_fmd_max_num,
+                          lprocfs_filter_wr_fmd_max_num, 0 },
+        { "client_cache_seconds", lprocfs_filter_rd_fmd_max_age,
+                          lprocfs_filter_wr_fmd_max_age, 0 },
         { 0 }
 };
 
@@ -427,6 +487,29 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                         break;
         }
 
+        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+        seq_printf(seq, "dio frags             rpcs   %% cum %% |");
+        seq_printf(seq, "       rpcs   %% cum %%\n");
+
+        read_tot = lprocfs_oh_sum(&filter->fo_r_dio_frags);
+        write_tot = lprocfs_oh_sum(&filter->fo_w_dio_frags);
+
+        read_cum = 0;
+        write_cum = 0;
+        for (i = 0; i < OBD_HIST_MAX; i++) {
+                unsigned long r = filter->fo_r_dio_frags.oh_buckets[i];
+                unsigned long w = filter->fo_w_dio_frags.oh_buckets[i];
+                read_cum += r;
+                write_cum += w;
+                seq_printf(seq, "%u:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                                 i, r, pct(r, read_tot),
+                                 pct(read_cum, read_tot), w,
+                                 pct(w, write_tot),
+                                 pct(write_cum, write_tot));
+                if (read_cum == read_tot && write_cum == write_tot)
+                        break;
+        }
+
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
         seq_printf(seq, "disk ios in flight     ios   %% cum %% |");
@@ -565,6 +648,8 @@ static ssize_t filter_brw_stats_seq_write(struct file *file, const char *buf,
         lprocfs_oh_clear(&filter->fo_w_discont_blocks);
         lprocfs_oh_clear(&filter->fo_r_disk_iosize);
         lprocfs_oh_clear(&filter->fo_w_disk_iosize);
+        lprocfs_oh_clear(&filter->fo_r_dio_frags);
+        lprocfs_oh_clear(&filter->fo_w_dio_frags);
 
         return len;
 }

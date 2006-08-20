@@ -50,8 +50,7 @@ struct filter_iobuf {
         int               dr_error;
         struct page     **dr_pages;
         unsigned long    *dr_blocks;
-        spinlock_t        dr_lock;
-        unsigned long     dr_start_time; /* jiffies */
+        spinlock_t        dr_lock;              /* IRQ lock */
         unsigned int      dr_ignore_quota:1;
         struct filter_obd *dr_filter;
 };
@@ -59,65 +58,48 @@ struct filter_iobuf {
 static void record_start_io(struct filter_iobuf *iobuf, int rw, int size)
 {
         struct filter_obd *filter = iobuf->dr_filter;
-        unsigned long flags;
 
         atomic_inc(&iobuf->dr_numreqs);
 
         if (rw == OBD_BRW_READ) {
+                atomic_inc(&filter->fo_r_in_flight);
                 lprocfs_oh_tally(&filter->fo_read_rpc_hist,
-                                 filter->fo_r_in_flight);
+                                 atomic_read(&filter->fo_r_in_flight));
                 lprocfs_oh_tally_log2(&filter->fo_r_disk_iosize, size);
         } else {
+                atomic_inc(&filter->fo_w_in_flight);
                 lprocfs_oh_tally(&filter->fo_write_rpc_hist,
-                                 filter->fo_w_in_flight);
+                                 atomic_read(&filter->fo_w_in_flight));
                 lprocfs_oh_tally_log2(&filter->fo_w_disk_iosize, size);
         }
-        spin_lock_irqsave(&filter->fo_stats_lock, flags);
-        if (rw == OBD_BRW_READ)
-                filter->fo_r_in_flight++;
-        else
-                filter->fo_w_in_flight++;
-        spin_unlock_irqrestore(&filter->fo_stats_lock, flags);
-        iobuf->dr_start_time = jiffies;
 }
 
 static void record_finish_io(struct filter_iobuf *iobuf, int rw, int rc)
 {
         struct filter_obd *filter = iobuf->dr_filter;
-        unsigned long flags, stop_time = jiffies;
 
-        spin_lock_irqsave(&filter->fo_stats_lock, flags);
+        /* CAVEAT EMPTOR: possibly in IRQ context 
+         * DO NOT record procfs stats here!!! */
+
         if (rw == OBD_BRW_READ)
-                filter->fo_r_in_flight--;
+                atomic_dec(&filter->fo_r_in_flight);
         else
-                filter->fo_w_in_flight--;
-        spin_unlock_irqrestore(&filter->fo_stats_lock, flags);
+                atomic_dec(&filter->fo_w_in_flight);
 
         if (atomic_dec_and_test(&iobuf->dr_numreqs))
                 wake_up(&iobuf->dr_wait);
-
-        if (rc != 0)
-                return;
-
-        if (rw == OBD_BRW_READ) {
-                lprocfs_oh_tally_log2(&filter->fo_r_io_time,
-                                      stop_time - iobuf->dr_start_time);
-        } else {
-                lprocfs_oh_tally_log2(&filter->fo_w_io_time,
-                                      stop_time - iobuf->dr_start_time);
-        }
 }
 
 static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 {
         struct filter_iobuf *iobuf = bio->bi_private;
-        unsigned long flags;
+        unsigned long        flags;
 
-        if (bio->bi_size) {
-                CWARN("gets called against non-complete bio 0x%p: %d/%d/%d\n",
-                      bio, bio->bi_size, done, error);
+        /* CAVEAT EMPTOR: possibly in IRQ context 
+         * DO NOT record procfs stats here!!! */
+
+        if (bio->bi_size)                       /* Not complete */
                 return 1;
-        }
 
         if (iobuf == NULL) {
                 CERROR("***** bio->bi_private is NULL!  This should never "
@@ -258,6 +240,8 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
         int            sector_bits = inode->i_sb->s_blocksize_bits - 9;
         unsigned int   blocksize = inode->i_sb->s_blocksize;
         struct bio    *bio = NULL;
+        int            frags = 0;
+        unsigned long  start_time = jiffies;
         struct page   *page;
         unsigned int   page_offset;
         sector_t       sector;
@@ -327,6 +311,7 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
                                         record_finish_io(iobuf, rw, rc);
                                         goto out;
                                 }
+                                frags++;
                         }
 
                         /* allocate new bio */
@@ -353,6 +338,7 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
                 record_start_io(iobuf, rw, bio->bi_size);
                 rc = fsfilt_send_bio(rw, obd, inode, bio);
                 if (rc >= 0) {
+                        frags++;
                         rc = 0;
                 } else {
                         CERROR("Can't send bio: %d\n", rc);
@@ -362,6 +348,16 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
 
  out:
         wait_event(iobuf->dr_wait, atomic_read(&iobuf->dr_numreqs) == 0);
+
+        if (rw == OBD_BRW_READ) {
+                lprocfs_oh_tally(&obd->u.filter.fo_r_dio_frags, frags);
+                lprocfs_oh_tally_log2(&obd->u.filter.fo_r_io_time, 
+                                      jiffies - start_time);
+        } else {
+                lprocfs_oh_tally(&obd->u.filter.fo_w_dio_frags, frags);
+                lprocfs_oh_tally_log2(&obd->u.filter.fo_w_io_time,
+                                      jiffies - start_time);
+        }
 
         if (rc == 0)
                 rc = iobuf->dr_error;
@@ -380,27 +376,36 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
  * to free the buffers and drop the page from cache.  The buffers should
  * not be dirty, because we already called fdatasync/fdatawait on them.
  */
+static int filter_sync_inode_data(struct inode *inode, int locked)
+{
+        int rc = 0;
+
+        /* This is nearly do_fsync(), without the waiting on the inode */
+        /* XXX: in 2.6.16 (at least) we don't need to hold i_mutex over
+         * filemap_fdatawrite() and filemap_fdatawait(), so we may no longer
+         * need this lock here at all. */
+        if (!locked)
+                LOCK_INODE_MUTEX(inode);
+        if (inode->i_mapping->nrpages) {
+                current->flags |= PF_SYNCWRITE;
+                rc = filemap_fdatawrite(inode->i_mapping);
+                if (rc == 0)
+                        rc = filemap_fdatawait(inode->i_mapping);
+                current->flags &= ~PF_SYNCWRITE;
+        }
+        if (!locked)
+                UNLOCK_INODE_MUTEX(inode);
+
+        return rc;
+}
+
 static int filter_clear_page_cache(struct inode *inode,
-                                    struct filter_iobuf *iobuf)
+                                   struct filter_iobuf *iobuf)
 {
         struct page *page;
-        int i, rc, rc2;
+        int i, rc;
 
-        /* This is nearly generic_osync_inode, without the waiting on the inode
-        rc = generic_osync_inode(inode, inode->i_mapping,
-                                 OSYNC_DATA|OSYNC_METADATA);
-         */
-        down(&inode->i_sem);
-        current->flags |= PF_SYNCWRITE;
-        rc = filemap_fdatawrite(inode->i_mapping);
-        rc2 = sync_mapping_buffers(inode->i_mapping);
-        if (rc == 0)
-                rc = rc2;
-        rc2 = filemap_fdatawait(inode->i_mapping);
-        current->flags &= ~PF_SYNCWRITE;
-        up(&inode->i_sem);
-        if (rc == 0)
-                rc = rc2;
+        rc = filter_sync_inode_data(inode, 0);
         if (rc != 0)
                 RETURN(rc);
 
@@ -412,10 +417,43 @@ static int filter_clear_page_cache(struct inode *inode,
                 if (page == NULL)
                         continue;
                 if (page->mapping != NULL) {
+                        /* Now that the only source of such pages in truncate
+                         * path flushes these pages to disk and and then
+                         * discards, this is error condition */
+                        CERROR("Data page in page cache during write!\n");
                         wait_on_page_writeback(page);
                         ll_truncate_complete_page(page);
                 }
 
+                unlock_page(page);
+                page_cache_release(page);
+        }
+
+        return 0;
+}
+
+int filter_clear_truncated_page(struct inode *inode)
+{
+        struct page *page;
+        int rc;
+
+        /* Truncate on page boundary, so nothing to flush? */
+        if (!(inode->i_size & (PAGE_CACHE_SIZE-1)))
+                return 0;
+
+        rc = filter_sync_inode_data(inode, 1);
+        if (rc != 0)
+                RETURN(rc);
+
+        /* be careful to call this after fsync_inode_data_buffers has waited
+         * for IO to complete before we evict it from the cache */
+        page = find_lock_page(inode->i_mapping,
+                              inode->i_size >> PAGE_CACHE_SHIFT);
+        if (page) {
+                if (page->mapping != NULL) {
+                        wait_on_page_writeback(page);
+                        ll_truncate_complete_page(page);
+                }
                 unlock_page(page);
                 page_cache_release(page);
         }
@@ -598,20 +636,20 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         cleanup_phase = 2;
 
         LOCK_INODE_MUTEX(inode);
-        fsfilt_check_slow(now, obd_timeout, "i_mutex");
+        fsfilt_check_slow(obd, now, obd_timeout, "i_mutex");
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
                                            oti);
         if (IS_ERR(oti->oti_handle)) {
                 UNLOCK_INODE_MUTEX(inode);
                 rc = PTR_ERR(oti->oti_handle);
-                CDEBUG_EX(rc == -ENOSPC ? D_INODE : D_ERROR,
+                CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
                        "error starting transaction: rc = %d\n", rc);
                 oti->oti_handle = NULL;
                 GOTO(cleanup, rc);
         }
         /* have to call fsfilt_commit() from this point on */
 
-        fsfilt_check_slow(now, obd_timeout, "brw_start");
+        fsfilt_check_slow(obd, now, obd_timeout, "brw_start");
 
         i = OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
 
@@ -639,6 +677,13 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                         iattr.ia_mode &= ~S_ISGID;
 
                 rc = filter_update_fidea(exp, inode, oti->oti_handle, oa);
+
+                /* To avoid problems with quotas, UID and GID must be set
+                 * in the inode before filter_direct_io() - see bug 10357. */
+                if (iattr.ia_valid & ATTR_UID)
+                        inode->i_uid = iattr.ia_uid;
+                if (iattr.ia_valid & ATTR_GID)
+                        inode->i_gid = iattr.ia_gid;
         }
 
         /* filter_direct_io drops i_mutex */
@@ -652,18 +697,20 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         lquota_getflag(quota_interface, obd, oa);
 
-        fsfilt_check_slow(now, obd_timeout, "direct_io");
+        fsfilt_check_slow(obd, now, obd_timeout, "direct_io");
 
         err = fsfilt_commit_wait(obd, inode, wait_handle);
-        if (err)
+        if (err) {
+                CERROR("Failure to commit OST transaction (%d)?\n", err);
                 rc = err;
+        }
 
-        if (obd->obd_replayable && !err)
+        if (obd->obd_replayable && !rc)
                 LASSERTF(oti->oti_transno <= obd->obd_last_committed,
                          "oti_transno "LPU64" last_committed "LPU64"\n",
                          oti->oti_transno, obd->obd_last_committed);
 
-        fsfilt_check_slow(now, obd_timeout, "commitrw commit");
+        fsfilt_check_slow(obd, now, obd_timeout, "commitrw commit");
 
 cleanup:
         filter_grant_commit(exp, niocount, res);
@@ -687,7 +734,7 @@ cleanup:
         qcids[GRPQUOTA] = oa->o_gid;
         err = lquota_adjust(quota_interface, obd, qcids, NULL, rc,
                             FSFILT_OP_CREATE);
-        CDEBUG_EX(err ? D_ERROR : D_QUOTA,
+        CDEBUG(err ? D_ERROR : D_QUOTA,
                "error filter adjust qunit! (rc:%d)\n", err);
 
         RETURN(rc);

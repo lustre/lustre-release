@@ -504,8 +504,7 @@ mkfs
 \layout Description
 
 --add\SpecialChar ~
-mtpt Creates a mount-point on the specified node.
- Either an LOV or OSC name can be used.
+mtpt Creates a mount-point on the specified node for the given LOV.
 \begin_deeper 
 \layout Description
 

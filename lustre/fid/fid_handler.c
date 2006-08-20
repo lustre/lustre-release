@@ -362,7 +362,7 @@ static int seq_req_handle(struct ptlrpc_request *req)
 
         seq_thread_info_init(req, info);
 
-        if (req->rq_reqmsg->opc == SEQ_QUERY) {
+        if (lustre_msg_get_opc(req->rq_reqmsg) == SEQ_QUERY) {
                 if (req->rq_export != NULL) {
                         /* 
                          * no need to return error here and overwrite @rc, this
@@ -375,7 +375,8 @@ static int seq_req_handle(struct ptlrpc_request *req)
                         req->rq_status = -ENOTCONN;
                 }
         } else {
-                CERROR("Wrong opcode: %d\n", req->rq_reqmsg->opc);
+                CERROR("Wrong opcode: %d\n", 
+                       lustre_msg_get_opc(req->rq_reqmsg));
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req);
                 GOTO(out_info, rc);
@@ -455,9 +456,9 @@ static void seq_server_proc_fini(struct lu_server_seq *seq)
 }
 #endif
 
-#define LUSTRE_MD_SEQ_NAME "md-seq"
-#define LUSTRE_CT_SEQ_NAME "ct-seq"
-#define LUSTRE_DT_SEQ_NAME "dt-seq"
+#define LUSTRE_MD_SEQ_NAME "seq-md"
+#define LUSTRE_CT_SEQ_NAME "seq-ct"
+#define LUSTRE_DT_SEQ_NAME "seq-dt"
 
 int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
@@ -533,7 +534,7 @@ int seq_server_init(struct lu_server_seq *seq,
 
         seq->lss_md_service = ptlrpc_init_svc_conf(&seq_md_conf,
                                                    seq_req_handle,
-                                                   LUSTRE_SEQ_NAME,
+                                                   LUSTRE_SEQ_NAME"_md",
                                                    seq->lss_proc_entry,
                                                    NULL);
 	if (seq->lss_md_service != NULL)
@@ -550,7 +551,7 @@ int seq_server_init(struct lu_server_seq *seq,
         if (is_srv) {
                 seq->lss_dt_service =  ptlrpc_init_svc_conf(&seq_dt_conf,
                                                             seq_req_handle,
-                                                            LUSTRE_SEQ_NAME,
+                                                            LUSTRE_SEQ_NAME"_dt",
                                                             seq->lss_proc_entry,
                                                             NULL);
                 if (seq->lss_dt_service != NULL)

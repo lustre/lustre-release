@@ -11,11 +11,43 @@
 typedef void (*llapi_cb_t)(char *obd_type_name, char *obd_name, char *obd_uuid, void *args);
 
 /* liblustreapi.c */
-extern int llapi_file_create(char *name, long stripe_size, int stripe_offset,
-                             int stripe_count, int stripe_pattern);
-extern int llapi_file_get_stripe(char *path, struct lov_user_md *lum);
-extern int llapi_find(char *path, struct obd_uuid *obduuid, int recursive,
-                      int verbose, int quiet);
+extern int llapi_file_create(const char *name, long stripe_size,
+                             int stripe_offset, int stripe_count,
+                             int stripe_pattern);
+extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
+#define HAVE_LLAPI_FILE_LOOKUP
+extern int llapi_file_lookup(int dirfd, const char *name);
+ 
+struct find_param {
+        unsigned int maxdepth;
+        time_t  atime;
+        time_t  mtime;
+        time_t  ctime;
+        int     asign;
+        int     csign;
+        int     msign;
+
+        int zeroend:1, recursive:1, got_uuids:1, obds_printed:1;
+
+        int     verbose;
+        int     quiet;
+
+        char   *print_fmt;
+
+        struct  obd_uuid        *obduuid;
+        int     obdindex;
+
+        int     lumlen;
+        struct  lov_user_mds_data *lmd;
+
+        /* In-precess parameters. */
+        unsigned int depth;
+        dev_t   st_dev;
+};
+
+extern int llapi_getstripe(char *path, struct find_param *param);
+extern int llapi_find(char *path, struct find_param *param);
+
 extern int llapi_obd_statfs(char *path, __u32 type, __u32 index,
                      struct obd_statfs *stat_buf,
                      struct obd_uuid *uuid_buf);

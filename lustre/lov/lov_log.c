@@ -68,7 +68,8 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
                  logcookies, numcookies, lsm->lsm_stripe_count);
 
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
-                struct obd_device *child = lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd; 
+                struct obd_device *child = 
+                        lov->lov_tgts[loi->loi_ost_idx]->ltd_exp->exp_obd; 
                 struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
 
                 /* fill mds unlink/setattr log record */
@@ -103,7 +104,6 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
-        struct lov_tgt_desc *tgt;
         int i, rc = 0;
         ENTRY;
 
@@ -112,15 +112,16 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                 CERROR("Origin connect mds cnt %d != lov cnt %d\n", count,
                        lov->desc.ld_tgt_count);
 
-        for (i = 0, tgt = lov->tgts; i < count; i++, tgt++) {
+        lov_getref(obd);
+        for (i = 0; i < count; i++) {
                 struct obd_device *child;
                 struct llog_ctxt *cctxt;
                 
-                if (!tgt->active)
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                         continue;
-                child = tgt->ltd_exp->exp_obd;
+                child = lov->lov_tgts[i]->ltd_exp->exp_obd;
                 cctxt = llog_get_context(child, ctxt->loc_idx);
-                if (uuid && !obd_uuid_equals(uuid, &lov->tgts[i].uuid))
+                if (uuid && !obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
                         continue;
 
                 rc = llog_connect(cctxt, 1, logid, gen, uuid);
@@ -129,6 +130,7 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                         break;
                 }
         }
+        lov_putref(obd);
 
         RETURN(rc);
 }
@@ -148,13 +150,16 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
 
         loi = lsm->lsm_oinfo;
         lov = &obd->u.lov;
+        lov_getref(obd);
         for (i = 0; i < count; i++, cookies++, loi++) {
-                struct obd_device *child = lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd;
-                struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
+                struct obd_device *child = 
+                        lov->lov_tgts[loi->loi_ost_idx]->ltd_exp->exp_obd;
+                struct llog_ctxt *cctxt = 
+                        llog_get_context(child, ctxt->loc_idx);
                 int err;
 
                 err = llog_cancel(cctxt, NULL, 1, cookies, flags);
-                if (err && lov->tgts[loi->loi_ost_idx].active) {
+                if (err && lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CERROR("error: objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
                                loi->loi_id, loi->loi_ost_idx, err);
@@ -162,6 +167,7 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
                                 rc = err;
                 }
         }
+        lov_putref(obd);
         RETURN(rc);
 }
 
@@ -178,8 +184,8 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
                   int count, struct llog_catid *logid)
 {
         struct lov_obd *lov = &obd->u.lov;
-        struct lov_tgt_desc *ctgt;
-        int i, rc = 0;
+        struct obd_device *child;
+        int i, rc = 0, err = 0;
         ENTRY;
 
         rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, 0, NULL,
@@ -192,20 +198,33 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_CONFIG, "llog init with %d targets\n", count);
+        CDEBUG(D_CONFIG, "llog init with %d/%d targets\n",
+               count, lov->desc.ld_tgt_count);
         /* count may not match ld_tgt_count during dynamic ost add */
-        for (i = 0, ctgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, ctgt++) {
-                struct obd_device *child;
-                if (!ctgt->active)
+
+        lov_getref(obd);
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                         continue;
-                child = ctgt->ltd_exp->exp_obd;
+                LASSERT(lov->lov_tgts[i]->ltd_exp);
+                child = lov->lov_tgts[i]->ltd_exp->exp_obd;
+                if (lov->lov_tgts[i]->ltd_exp->exp_imp_reverse) {
+                        CERROR("NZR: idx %d import state %s\n", i,
+                               ptlrpc_import_state_name(lov->lov_tgts[i]->ltd_exp->exp_imp_reverse->imp_state));                
+                } else {
+                        CERROR("NZR: idx %d no import\n", i);
+                }
                 rc = obd_llog_init(child, tgt, 1, logid + i);
                 if (rc) {
-                        CERROR("error osc_llog_init %d (%d)\n", i, rc);
-                        break;
+                        CERROR("error osc_llog_init idx %d osc '%s' tgt '%s' "
+                               "(rc=%d)\n", i, child->obd_name, tgt->obd_name,
+                               rc);
+                        if (!err) 
+                                err = rc;
                 }
         }
-        RETURN(rc);
+        lov_putref(obd);
+        RETURN(err);
 }
 
 int lov_llog_finish(struct obd_device *obd, int count)

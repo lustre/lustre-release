@@ -45,13 +45,13 @@ int ptlrpc_ping(struct obd_import *imp)
         int rc = 0;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 0, NULL, NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING, 1, NULL, NULL);
         if (req) {
                 DEBUG_REQ(D_INFO, req, "pinging %s->%s",
                           imp->imp_obd->obd_uuid.uuid,
                           obd2cli_tgt(imp->imp_obd));
                 req->rq_no_resend = req->rq_no_delay = 1;
-                req->rq_replen = lustre_msg_size(0, NULL);
+                ptlrpc_req_set_repsize(req, 1, NULL);
                 ptlrpcd_add_req(req);
         } else {
                 CERROR("OOM trying to ping %s->%s\n",
@@ -101,15 +101,14 @@ static int ptlrpc_pinger_main(void *arg)
                                 list_entry(iter, struct obd_import,
                                            imp_pinger_chain);
                         int force, level;
-                        unsigned long flags;
 
-                        spin_lock_irqsave(&imp->imp_lock, flags);
+                        spin_lock(&imp->imp_lock);
                         level = imp->imp_state;
                         force = imp->imp_force_verify;
                         imp->imp_force_verify = 0;
-                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                        spin_unlock(&imp->imp_lock);
 
-                        CDEBUG_EX(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
+                        CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
                                "level %s/%u force %u deactive %u pingable %u\n",
                                ptlrpc_import_state_name(level), level,
                                force, imp->imp_deactive, imp->imp_pingable);
@@ -373,23 +372,21 @@ static int ping_evictor_main(void *arg)
                 while (!list_empty(&obd->obd_exports_timed)) {
                         exp = list_entry(obd->obd_exports_timed.next,
                                          struct obd_export,exp_obd_chain_timed);
-
                         if (expire_time > exp->exp_last_request_time) {
                                 class_export_get(exp);
                                 spin_unlock(&obd->obd_dev_lock);
-                                LCONSOLE_WARN("%s: haven't heard from %s in %ld"
-                                              " seconds. Last request was at %ld. "
-                                              "I think it's dead, and I am evicting "
-                                              "it.\n", obd->obd_name,
+                                LCONSOLE_WARN("%s: haven't heard from client %s"
+                                              " (at %s) in %ld seconds. I think"
+                                              " it's dead, and I am evicting"
+                                              " it.\n", obd->obd_name,
+                                              obd_uuid2str(&exp->exp_client_uuid),
                                               obd_export_nid2str(exp),
                                               (long)(CURRENT_SECONDS -
-                                                     exp->exp_last_request_time),
-                                              exp->exp_last_request_time);
-
-
+                                                     exp->exp_last_request_time));
+                                CDEBUG(D_HA, "Last request was at %ld\n",
+                                       exp->exp_last_request_time);
                                 class_fail_export(exp);
                                 class_export_put(exp);
-
                                 spin_lock(&obd->obd_dev_lock);
                         } else {
                                 /* List is sorted, so everyone below is ok */
@@ -491,15 +488,14 @@ static int pinger_check_rpcs(void *arg)
                 struct obd_import *imp =
                         list_entry(iter, struct obd_import, imp_pinger_chain);
                 int generation, level;
-                unsigned long flags;
 
                 if (cfs_time_aftereq(pd->pd_this_ping, 
                                      imp->imp_next_ping - 5 * CFS_TICK)) {
                         /* Add a ping. */
-                        spin_lock_irqsave(&imp->imp_lock, flags);
+                        spin_lock(&imp->imp_lock);
                         generation = imp->imp_generation;
                         level = imp->imp_state;
-                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                        spin_unlock(&imp->imp_lock);
 
                         if (level != LUSTRE_IMP_FULL) {
                                 CDEBUG(D_HA,
@@ -509,13 +505,13 @@ static int pinger_check_rpcs(void *arg)
                         }
 
                         req = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION, OBD_PING,
-                                              0, NULL, NULL);
+                                              1, NULL, NULL);
                         if (!req) {
                                 CERROR("out of memory\n");
                                 break;
                         }
                         req->rq_no_resend = 1;
-                        req->rq_replen = lustre_msg_size(0, NULL);
+                        ptlrpc_req_set_repsize(req, 1, NULL);
                         req->rq_send_state = LUSTRE_IMP_FULL;
                         req->rq_phase = RQ_PHASE_RPC;
                         req->rq_import_generation = generation;

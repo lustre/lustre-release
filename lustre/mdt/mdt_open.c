@@ -248,9 +248,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 else
                         repbody->valid |= OBD_MD_FLEASIZE;
         }
-        /*FIXME: should determine the offset dynamicly,
-         *did not get ACL before shrink*/
-        mdt_shrink_reply(info, 2);
+        /* FIXME: should determine the offset dynamicly,
+         * did not get ACL before shrink. */
+        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
 
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         intent_set_disposition(ldlm_rep, DISP_OPEN_OPEN);
@@ -552,7 +552,7 @@ int mdt_close(struct mdt_thread_info *info)
                 /* release reference on this object. */
                 mdt_object_put(info->mti_ctxt, o);
         }
-        mdt_shrink_reply(info, 1);
+        mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         RETURN(rc);
 }
 

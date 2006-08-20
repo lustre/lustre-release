@@ -1,5 +1,91 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.6.0
+       * CONFIGURATION CHANGE.  This version of Lustre WILL NOT
+	 INTEROPERATE with older versions automatically.  In many cases a
+	 special upgrade step is needed. Please read the
+	 user documentation before upgrading any part of a live system.
+       * WIRE PROTOCOL CHANGE from previous 1.6 beta versions.  This
+         version will not interoperate with older 1.6 betas.  
+       * WARNING: Lustre configuration and startup changes are required with
+	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
+	 for details.
+       * bug fixes
+
+
+Severity   : enhancement
+Bugzilla   : 4226
+Description: Permanently set tunables
+Details    : All writable /proc/fs/lustre tunables can now be permanently
+             set on a per-server basis, at mkfs time or on a live
+	     system.
+	
+Severity   : enhancement
+Bugzilla   : 10547
+Description: Lustre message v2
+Details    : Add lustre message format v2.
+
+Severity   : enhancement
+Bugzilla   : 8007
+Description: MountConf
+Details    : Lustre configuration is now managed via mkfs and mount
+	     commands instead of lmc and lconf.  New obd types (MGS, MGC)
+	     are added for dynamic configuration management.  See
+	     https://mail.clusterfs.com/wikis/lustre/MountConf for
+	     details.
+
+Severity   : enhancement
+Bugzilla   : 4482
+Description: dynamic OST addition
+Details    : OSTs can now be added to a live filesystem
+
+Severity   : enhancement
+Bugzilla   : 9851
+Description: startup order invariance
+Details    : MDTs and OSTs can be started in any order.  Clients only
+	     require the MDT to complete startup.
+	
+Severity   : enhancement
+Bugzilla   : 4899
+Description: parallel, asynchronous orphan cleanup
+Details    : orphan cleanup is now performed in separate threads for each
+	     OST, allowing parallel non-blocking operation.
+
+Severity   : enhancement
+Bugzilla   : 9862
+Description: optimized stripe assignment
+Details    : stripe assignments are now made based on ost space available,
+	     ost previous usage, and OSS previous usage, in order to try
+	     to optimize storage space and networking resources. 
+	
+Severity   : enhancement
+Bugzilla   : 9866
+Description: client OST exclusion list
+Details    : Clients can be started with a list of OSTs that should be
+	     declared "inactive" for known non-responsive OSTs.
+
+Severity   : minor
+Bugzilla   : 6062
+Description: SPEC SFS validation failure on NFS v2 over lustre.
+Details    : Changes the blocksize for regular files to be 2x RPC size,
+             and not depend on stripe size.
+	
+Severity   : enhancement
+Bugzilla   : 9293
+Description: Multiple MD RPCs in flight.
+Details    : Further unserialise some read-only MDS RPCs - learn about intents.
+             To avoid overly-overloading MDS, introduce a limit on number of
+             MDS RPCs in flight for a single client and add /proc controls
+             to adjust this limit.
+
+	
+------------------------------------------------------------------------------
+
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.7
+       * Support for kernels:
+	2.6.9-34.EL (RHEL 4)
+	2.6.5-7.252 (SLES 9)
+	2.6.12.6 vanilla (kernel.org)
        * bug fixes
 
 Severity   : major
@@ -45,10 +131,11 @@ Severity   : enhancement
 Bugzilla   : 9340
 Description: allow number of MDS service threads to be changed at module load
 Details    : It is now possible to change the number of MDS service threads
-	     running.  Adding "options mds mds_num_threads=N" will set the
-	     number of threads for the next time Lustre is restarted (assuming
-	     the "mds" module is also reloaded at that time).  The default
-	     number of threads will stay the same, 32 for most systems.
+	     running.  Adding "options mds mds_num_threads={N}" to the MDS's
+	     /etc/modprobe.conf will set the number of threads for the next
+	     time Lustre is restarted (assuming the "mds" module is also
+	     reloaded at that time).  The default number of threads will
+	     stay the same, 32 for most systems.
 
 Severity   : major
 Frequency  : rare
@@ -109,7 +196,7 @@ Details    : When running an obd_echo server it did not start the ping_evictor
 	     service startup instead of the OBD startup.
 
 Severity   : enhancement
-Bugzilla   : 10393 (patchless)
+Bugzilla   : 10193 (patchless)
 Description: Remove dependency on various unexported kernel interfaces.
 Details    : No longer need reparent_to_init, exit_mm, exit_files,
 	     sock_getsockopt, filemap_populate, FMODE_EXEC, put_filp.
@@ -157,6 +244,7 @@ Details    : Use asynchronous set_info RPCs to send the "evict_by_nid" to
 	     and also offers similar improvements for other set_info RPCs.
 
 Severity   : minor
+Frequency  : common
 Bugzilla   : 10265
 Description: excessive CPU usage during initial read phase on client
 Details    : During the initial read phase on a client, it would agressively
@@ -167,10 +255,257 @@ Details    : During the initial read phase on a client, it would agressively
 	     /proc/fs/lustre/llite/*/max_read_ahead_whole_mb, 2MB by default).
 
 Severity   : minor
+Frequency  : rare
 Bugzilla   : 10450
 Description: MDS crash when receiving packet with unknown intent.
 Details    : Do not LBUG in unknown intent case, just return -EFAULT
 
+Severity   : enhancement
+Bugzilla   : 9293, 9385
+Description: MDS RPCs are serialised on client. This is unnecessary for some.
+Details    : Do not serialize getattr (non-intent version) and statfs.
+
+Severity   : minor
+Frequency  : occasional, when OST network is overloaded/intermittent
+Bugzilla   : 10416 
+Description: client evicted by OST after bulk IO timeout
+Details    : If a client sends a bulk IO request (read or write) the OST
+	     may evict the client if it is unresposive to its data GET/PUT
+	     request.  This is incorrect if the network is overloaded (takes
+	     too long to transfer the RPC data) or dropped the OST GET/PUT
+	     request.  There is no need to evict the client at all, since
+	     the pinger and/or lock callbacks will handle this, and the
+	     client can restart the bulk request.
+
+Severity   : minor
+Frequency  : Always when mmapping file with no objects
+Bugzilla   : 10438 
+Description: client crashes when mmapping file with no objects
+Details    : Check that we actually have objects in a file before doing any
+	     operations on objects in ll_vm_open, ll_vm_close and
+	     ll_glimpse_size.
+
+Severity   : minor
+Frequency  : Rare
+Bugzilla   : 10484
+Description: Request leak when working with deleted CWD
+Details    : Introduce advanced request refcount tracking for requests
+	     referenced from lustre intent.
+
+Severity   : Enhancement
+Bugzilla   : 10482
+Description: Cache open file handles on client.
+Details    : MDS now will return special lock along with openhandle, if
+	     requested and client is allowed to hold openhandle, even if unused,
+	     until such a lock is revoked. Helps NFS a lot, since NFS is opening
+	     closing files for every read/write openration.
+
+Severity   : Enhancement
+Bugzilla   : 9291
+Description: Cache open negative dentries on client when possible.
+Details    : Guard negative dentries with UPDATE lock on parent dir, drop
+	     negative dentries on lock revocation.
+
+Severity   : minor
+Frequency  : Always
+Bugzilla   : 10510
+Description: Remounting a client read-only wasn't possible with a zconf mount
+Details    : It wasn't possible to remount a client read-only with llmount.
+
+Severity   : enhancement
+Description: Include MPICH 1.2.6 Lustre ADIO interface patch
+Details    : In lustre/contrib/ or /usr/share/lustre in RPM a patch for
+	     MPICH is included to add Lustre-specific ADIO interfaces.
+	     This is based closely on the UFS ADIO layer and only differs
+	     in file creation, in order to allow the OST striping to be set.
+	     This is user-contributed code and not supported by CFS.
+
+Severity   : minor
+Frequency  : Always
+Bugzilla   : 9486
+Description: extended inode attributes (immutable, append-only) work improperly
+	     when 2.4 and 2.6 kernels are used on client/server or vice versa
+Details    : Introduce kernel-independent values for these flags.
+
+Severity   : enhancement
+Frequency  : Always
+Bugzilla   : 10248
+Description: Allow fractional MB tunings for lustre in /proc/ filesystem.
+Details    : Many of the /proc/ tunables can only be tuned at a megabyte
+	     granularity. Now, Fractional MB granularity is be supported,
+	     this is very useful for low memory system.
+
+Severity   : enhancement
+Bugzilla   : 9292
+Description: Getattr by fid
+Details    : Getting a file attributes by its fid, obtaining UPDATE|LOOKUP 
+	     locks, avoids extra getattr rpc requests to MDS, allows '/' to 
+	     have locks and avoids getattr rpc requests for it on every stat.
+
+Severity   : major
+Frequency  : Always, for filesystems larger than 2TB
+Bugzilla   : 6191
+Description: ldiskfs crash at mount for filesystem larger than 2TB with mballoc
+Details    : Kenrel kmalloc limits allocations to 128kB and this prevents
+	     filesystems larger than 2TB to be mounted with mballoc enabled.
+
+Severity   : critical
+Frequency  : Always, for 32-bit kernel without CONFIG_LBD and filesystem > 2TB
+Bugzilla   : 6191
+Description: ldiskfs crash at mount for filesystem larger than 2TB with mballoc
+Details    : If a 32-bit kernel is compiled without CONFIG_LBD enabled and a
+	     filesystems larger than 2TB is mounted then the kernel will
+	     silently corrupt the start of the filesystem.  CONFIG_LBD is
+	     enabled for all CFS-supported kernels, but the possibility of
+	     this happening with a modified kernel config exists.
+
+Severity   : enhancement
+Bugzilla   : 10462
+Description: add client O_DIRECT support for 2.6 kernels
+Details    : It is now possible to do O_DIRECT reads and writes to files
+	     in the Lustre client mountpoint on 2.6 kernel clients.
+
+Severity   : enhancement
+Bugzilla   : 10446
+Description: parallel glimpse, setattr, statfs, punch, destroy requests
+Details    : Sends glimpse, setattr, statfs, punch, destroy requests to OSTs in
+	     parallel, not waiting for response from every OST before sending
+	     a rpc to the next OST.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 10150
+Description: setattr vs write race when updating file timestamps
+Details    : Client processes that update a file timestamp into the past
+	     right after writing to the file (e.g. tar) it is possible that
+	     the updated file modification time can be reset to the current
+	     time due to a race between processing the setattr and write RPC.
+
+Severity   : enhancement
+Bugzilla   : 10318
+Description: Bring 'lfs find' closer in line with regular Linux find.
+Details    : lfs find util supports -atime, -mtime, -ctime, -maxdepth, -print,
+	     -print0 options and obtains all the needed info through the lustre
+	     ioctls.
+
+Severity   : enhancement
+Bugzilla   : 6221
+Description: support up to 1024 configured devices on one node
+Details    : change obd_dev array from statically allocated to dynamically
+	     allocated structs as they are first used to reduce memory usage
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 10437
+Description: Flush dirty partially truncated pages during truncate
+Details    : Immediatelly flush partially truncated pages in filter_setattr,
+	     this way we completely avoid having any pages in page cache on OST
+	     and can retire ugly workarounds during writes to flush such pages.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 10409
+Description: i_sem vs transaction deadlock in mds_obd_destroy during unlink.
+Details    : protect inode from truncation within vfs_unlink() context
+	     just take a reference before calling vfs_unlink() and release it
+	     when parent's i_sem is free.
+
+Severity   : major
+Frequency  : rare
+Bugzilla   : 4778
+Description: last_id value checked outside lock on OST caused LASSERT failure
+Details    : If there were multiple MDS->OST object precreate requests in
+	     flight, it was possible that the OST's last object id was checked
+	     outside a lock and incorrectly tripped an assertion.  Move checks
+	     inside locks, and discard old precreate requests.
+
+Severity   : minor
+Frequency  : always, if extents are used on OSTs
+Bugzilla   : 10703
+Description: index ei_leaf_hi (48-bit extension) is not zeroed in extent index
+Details    : OSTs using the extents format would not zero the high 16 bits of
+	     the index physical block number.  This is not a problem for any
+	     OST filesystems smaller than 16TB, and no kernels support ext3
+	     filesystems larger than 16TB yet.  This is fixed in 1.4.7 (all
+	     new/modified files) and can be fixed for existing filesystems
+	     with e2fsprogs-1.39-cfs1.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 9387
+Description: import connection selection may be incorrect if timer wraps
+Details    : Using a 32-bit jiffies timer with HZ=1000 may cause backup
+	     import connections to be ignored if the 32-bit jiffies counter
+	     wraps.  Use a 64-bit jiffies counter.
+
+Severity   : minor
+Frequency  : very large clusters immediately after boot
+Bugzilla   : 10083
+Description: LNET request buffers exhausted under heavy short-term load
+Details    : If a large number of client requests are generated on a service
+	     that has previously never seen so many requests it is possible
+	     that the request buffer growth cannot keep up with the spike in
+	     demand.  Instead of dropping incoming requests, they are held in
+	     the LND until the RPC service can accept more requests.
+
+Severity   : minor
+Frequency  : Sometimes during replay
+Bugzilla   : 9314
+Description: Assertion failure in ll_local_open after replay.
+Details    : If replay happened on an open request reply before we were able
+             to set replay handler, reply will become not swabbed tripping the
+             assertion in ll_local_open. Now we set the handler right after
+             recognising of open request
+
+Severity   : minor
+Frequency  : very rare
+Bugzilla   : 10669
+Description: Deadlock: extent lock cancellation callback vs import invalidation
+Details    : If extent lock cancellation callback takes long enough time, and it
+	     happens that import gets invalidated in process, there is a
+	     deadlock on page_lock in extent lock cancellation vs ns_lock in
+	     import invalidation processes. The fix is to not try to match
+	     locks from inactive OSTs.
+
+Severity   : trivial
+Frequency  : very rare
+Bugzilla   : 10584
+Description: kernel reports "badness in vsnprintf"
+Details    : Reading from the "recovery_status" /proc file in small chunks
+	     may cause a negative length in lprocfs_obd_rd_recovery_status()
+	     call to vsnprintf() (which is otherwise harmless).  Exit early
+	     if there is no more space in the output buffer.
+
+Severity   : enhancement
+Bugzilla   : 2259
+Description: clear OBD RPC statistics by writing to them
+Details    : It is now possible to clear the OBD RPC statistics by writing
+	     to the "stats" file.
+
+Severity   : minor
+Frequency  : always
+Bugzilla   : 10611
+Description: Inability to activate failout mode
+Details    : lconf script incorrectly assumed that in pythong string's numeric
+	     value is used in comparisons.
+
+Severity   : minor
+Frequency  : always with multiple stripes per file
+Bugzilla   : 10671
+Description: Inefficient object allocation for mutli-stripe files
+Details    : When selecting which OSTs to stripe files over, for files with
+	     a stripe count that divides evenly into the number of OSTs,
+	     the MDS is always picking the same starting OST for each file.
+	     Return the OST selection heuristic to the original design.
+
+Severity   : trivial
+Frequency  : rare
+Bugzilla   : 10673
+Description: mount failures may take full timeout to return an error
+Details    : Under some heavy load conditions it is possible that a
+	     failed mount can wait for the full obd_timeout interval,
+	     possibly several minutes, before reporting an error.
+	     Instead return an error as soon as the status is known.
 
 ------------------------------------------------------------------------------
 
@@ -183,9 +518,9 @@ Details    : Do not LBUG in unknown intent case, just return -EFAULT
 	 this release.  See https://bugzilla.clusterfs.com/show_bug.cgi?id=10052
 	 for details.
        * bug fixes
-       * Support for newer kernels:
-	2.6.9-22.0.2.EL (RHEL 4),
-	2.6.5-7.244 (SLES 9) - same as 1.4.5.2.
+       * Support for kernels:
+	2.6.9-22.0.2.EL (RHEL 4)
+	2.6.5-7.244 (SLES 9)
 	2.6.12.6 vanilla (kernel.org)
 
 
@@ -574,8 +909,8 @@ Severity   : enhancement
 Bugzilla   : 4928, 7341, 9758
 Description: allow number of OST service threads to be specified
 Details    : a module parameter allows the number of OST service threads
-	     to be specified via "options ost ost_num_threads=X" in
-	     /etc/modules.conf or /etc/modutils.conf.
+	     to be specified via "options ost ost_num_threads={N}" in the
+	     OSS's /etc/modules.conf or /etc/modprobe.conf.
 
 Severity   : major
 Frequency  : rare
@@ -699,6 +1034,14 @@ Details    : If a client is repeatedly creating and unlinking files it
 	     If there is no other client load running this can cause the
 	     client node to run out of memory.  Instead flush old inodes
 	     from client cache that have the same inode number as a new inode.
+
+Severity   : minor
+Frequency  : SLES9 2.6.5 kernel and long filenames only
+Bugzilla   : 9969, 10379
+Description: utime reports stale NFS file handle
+Details    : SLES9 uses out-of-dentry names in some cases, which confused
+	     the lustre dentry revalidation.  Change it to always use the
+	     in-dentry qstr.
 
 Severity   : major
 Frequency  : rare, unless heavy write-truncate concurrency is continuous

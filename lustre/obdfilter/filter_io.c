@@ -107,7 +107,7 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         /* Add some margin, since there is a small race if other RPCs arrive
          * out-or-order and have already consumed some grant.  We want to
          * leave this here in case there is a large error in accounting. */
-        CDEBUG_EX(oa->o_grant > fed->fed_grant + FILTER_GRANT_CHUNK ? mask:D_CACHE,
+        CDEBUG(oa->o_grant > fed->fed_grant + FILTER_GRANT_CHUNK ? mask:D_CACHE,
                "%s: cli %s/%p reports grant: "LPU64" dropped: %u, local: %lu\n",
                obd->obd_name, exp->exp_client_uuid.uuid, exp, oa->o_grant,
                oa->o_dropped, fed->fed_grant);
@@ -160,9 +160,10 @@ obd_size filter_grant_space_left(struct obd_export *exp)
 
         LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
 
-        if (time_before(obd->obd_osfs_age, jiffies - HZ)) {
+        if (cfs_time_before_64(obd->obd_osfs_age, cfs_time_current_64() - HZ)) {
 restat:
-                rc = fsfilt_statfs(obd, obd->u.obt.obt_sb, jiffies + 1);
+                rc = fsfilt_statfs(obd, obd->u.obt.obt_sb,
+                                   cfs_time_current_64() + HZ);
                 if (rc) /* N.B. statfs can't really fail */
                         RETURN(0);
                 statfs_done = 1;
@@ -284,7 +285,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         ENTRY;
 
         /* We are currently not supporting multi-obj BRW_READ RPCS at all.
-         * When we do this function's dentry cleanup will need to be fixed */
+         * When we do this function's dentry cleanup will need to be fixed.
+         * These values are verified in ost_brw_write() from the wire. */
         LASSERTF(objcount == 1, "%d\n", objcount);
         LASSERTF(obj->ioo_bufcnt > 0, "%d\n", obj->ioo_bufcnt);
 
@@ -310,10 +312,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         inode = dentry->d_inode;
 
-        if (oa)
-                obdo_to_inode(inode, oa, OBD_MD_FLATIME);
-
-        fsfilt_check_slow(now, obd_timeout, "preprw_read setup");
+        obdo_to_inode(inode, oa, OBD_MD_FLATIME);
+        fsfilt_check_slow(obd, now, obd_timeout, "preprw_read setup");
 
         for (i = 0, lnb = res, rnb = nb; i < obj->ioo_bufcnt;
              i++, rnb++, lnb++) {
@@ -346,7 +346,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                 filter_iobuf_add_page(obd, iobuf, inode, lnb->page);
         }
 
-        fsfilt_check_slow(now, obd_timeout, "start_page_read");
+        fsfilt_check_slow(obd, now, obd_timeout, "start_page_read");
 
         rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf,
                               exp, NULL, NULL, NULL);
@@ -458,7 +458,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
         fed->fed_pending += used;
         exp->exp_obd->u.filter.fo_tot_pending += used;
 
-        CDEBUG_EX(mask,
+        CDEBUG(mask,
                "%s: cli %s/%p used: %lu ungranted: %lu grant: %lu dirty: %lu\n",
                exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp, used,
                ungranted, fed->fed_grant, fed->fed_dirty);
@@ -510,6 +510,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         struct niobuf_remote *rnb;
         struct niobuf_local *lnb = res;
         struct fsfilt_objinfo fso;
+        struct filter_mod_data *fmd;
         struct dentry *dentry = NULL;
         void *iobuf;
         obd_size left;
@@ -540,13 +541,24 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         fso.fso_dentry = dentry;
         fso.fso_bufcnt = obj->ioo_bufcnt;
 
-        fsfilt_check_slow(now, obd_timeout, "preprw_write setup");
+        fsfilt_check_slow(exp->exp_obd, now, obd_timeout, "preprw_write setup");
+
+        /* Don't update inode timestamps if this write is older than a
+         * setattr which modifies the timestamps. b=10150 */
+        /* XXX when we start having persistent reservations this needs to
+         * be changed to filter_fmd_get() to create the fmd if it doesn't
+         * already exist so we can store the reservation handle there. */
+        fmd = filter_fmd_find(exp, obj->ioo_id, obj->ioo_gr);
 
         spin_lock(&exp->exp_obd->obd_osfs_lock);
         if (oa) {
                 filter_grant_incoming(exp, oa);
-                obdo_to_inode(dentry->d_inode, oa,
-                              OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
+                        oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                                         OBD_MD_FLATIME);
+                else
+                        obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME |
+                                      OBD_MD_FLMTIME | OBD_MD_FLCTIME);
         }
         cleanup_phase = 3;
 
@@ -563,6 +575,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         }
 
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
+        filter_fmd_put(exp, fmd);
 
         if (rc)
                 GOTO(cleanup, rc);
@@ -631,7 +644,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         rc = filter_direct_io(OBD_BRW_READ, dentry, iobuf, exp,
                               NULL, NULL, NULL);
 
-        fsfilt_check_slow(now, obd_timeout, "start_page_write");
+        fsfilt_check_slow(exp->exp_obd, now, obd_timeout, "start_page_write");
 
         lprocfs_counter_add(exp->exp_obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
                             tot_bytes);
@@ -811,9 +824,9 @@ int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         return -EPROTO;
 }
 
-int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
-               struct lov_stripe_md *lsm, obd_count oa_bufs,
-               struct brw_page *pga, struct obd_trans_info *oti)
+int filter_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
+               obd_count oa_bufs, struct brw_page *pga,
+               struct obd_trans_info *oti)
 {
         struct obd_ioobj ioo;
         struct niobuf_local *lnb;
@@ -834,14 +847,16 @@ int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 rnb[i].len = pga[i].count;
         }
 
-        obdo_to_ioobj(oa, &ioo);
+        obdo_to_ioobj(oinfo->oi_oa, &ioo);
         ioo.ioo_bufcnt = oa_bufs;
 
-        ret = filter_preprw(cmd, exp, oa, 1, &ioo, oa_bufs, rnb, lnb, oti);
+        ret = filter_preprw(cmd, exp, oinfo->oi_oa, 1, &ioo,
+                            oa_bufs, rnb, lnb, oti);
         if (ret != 0)
                 GOTO(out, ret);
 
-        ret = filter_commitrw(cmd, exp, oa, 1, &ioo, oa_bufs, lnb, oti, ret);
+        ret = filter_commitrw(cmd, exp, oinfo->oi_oa, 1, &ioo,
+                              oa_bufs, lnb, oti, ret);
 
 out:
         if (lnb)

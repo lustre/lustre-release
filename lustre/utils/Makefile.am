@@ -1,31 +1,29 @@
 # Administration utilities Makefile
 
-SUBDIRS = Lustre
-
 AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
 AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
-sbin_scripts = llanalyze llstat.pl llobdstat.pl lactive lrun 
-bin_scripts = lfind lstripe
+sbin_scripts = llstat.pl llobdstat.pl lrun 
 
 if UTILS
+noinst_PROGRAMS = mount_lustre mkfs_lustre tunefs_lustre \
+	llog_reader lr_reader wirecheck wiretest lload obdio obdbarrier
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
-sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest \
-	mount_lustre mkfs_lustre mkfs.lustre \
-	tunefs_lustre tunefs.lustre l_getgroups
-bin_PROGRAMS = lfs llog_reader req_layout
-lib_LIBRARIES = liblustreapi.a libiam.a
+sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
+	l_getgroups llverfs llverdev
+bin_PROGRAMS = lfs req_layout
 sbin_SCRIPTS = $(sbin_scripts)
-bin_SCRIPTS = $(bin_scripts)
 endif # UTILS
 
+lib_LIBRARIES = liblustreapi.a libiam.a
+
 lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h platform.h
-lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL) 
-lctl_DEPENDENCIES := $(LIBPTLCTL) 
+lctl_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
+lctl_DEPENDENCIES := $(LIBPTLCTL)
 
 lfs_SOURCES = lfs.c parser.c obd.c
 lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
@@ -34,6 +32,24 @@ lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 lload_SOURCES = lload.c 
 lload_LDADD := $(LIBREADLINE) $(LIBPTLCTL)
 lload_DEPENDENCIES := $(LIBPTLCTL)
+
+if EXT2FS_DEVEL
+EXT2FSLIB = -lext2fs
+E2PLIB = -le2p
+else
+E2PLIB = 
+EXT2FSLIB =
+endif
+
+if BLKID
+BLKIDLIB = -lblkid
+else
+BLKIDLIB =
+endif
+
+llverfs_LDADD := $(EXT2FSLIB) $(E2PLIB)
+
+llverdev_LDADD := $(EXT2FSLIB) $(BLKIDLIB)
 
 liblustreapi_a_SOURCES = liblustreapi.c
 libiam_a_SOURCES = libiam.c
@@ -51,6 +67,8 @@ llog_reader_SOURCES = llog_reader.c
 llog_reader_LDADD := $(LIBPTLCTL)
 llog_reader_DEPENDENCIES := $(LIBPTLCTL)
 
+lr_reader_SOURCES = lr_reader.c
+
 mount_lustre_SOURCES = mount_lustre.c 
 mount_lustre_LDADD := $(LIBPTLCTL)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
@@ -65,12 +83,14 @@ tunefs_lustre_CPPFLAGS = -DTUNEFS $(AM_CPPFLAGS)
 tunefs_lustre_LDADD := $(mkfs_lustre_LDADD)
 tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
 
-EXTRA_DIST = $(bin_scripts) $(sbin_scripts)
+EXTRA_DIST = $(sbin_scripts)
 
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck
 	cp wirehdr.c wiretest.c
 	./wirecheck >> wiretest.c
+	cp ../ptlrpc/wirehdr.c ../ptlrpc/wiretest.c
+	./wirecheck >> ../ptlrpc/wiretest.c
 
 # Apparently I can't use .'s in automake names
 mount.lustre$(EXEEXT): mount_lustre

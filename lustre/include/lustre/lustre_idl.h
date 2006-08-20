@@ -33,6 +33,8 @@
 #ifndef _LUSTRE_IDL_H_
 #define _LUSTRE_IDL_H_
 
+#include <libcfs/kp30.h>
+
 #if defined(__linux__)
 #include <linux/lustre_types.h>
 #elif defined(__APPLE__)
@@ -114,8 +116,14 @@
 #define PTL_RPC_MSG_ERR     4712
 #define PTL_RPC_MSG_REPLY   4713
 
-#define PTLRPC_MSG_MAGIC    0x0BD00BD0
+/* DON'T use swabbed values of MAGIC as magic! */
+#define LUSTRE_MSG_MAGIC_V1 0x0BD00BD0
+#define LUSTRE_MSG_MAGIC_V2 0x0BD00BD2
 
+#define LUSTRE_MSG_MAGIC_V1_SWABBED 0xD00BD00B
+#define LUSTRE_MSG_MAGIC_V2_SWABBED 0xD20BD00B
+
+#define LUSTRE_MSG_MAGIC LUSTRE_MSG_MAGIC_V2
 
 #define PTLRPC_MSG_VERSION  0x00000003
 #define LUSTRE_VERSION_MASK 0xffff0000
@@ -321,21 +329,70 @@ static inline void lustre_handle_copy(struct lustre_handle *tgt,
 
 /* we depend on this structure to be 8-byte aligned */
 /* this type is only endian-adjusted in lustre_unpack_msg() */
-struct lustre_msg {
-        struct lustre_handle handle;
-        __u32 magic;
-        __u32 type;
-        __u32 version;
-        __u32 opc;
-        __u64 last_xid;
-        __u64 last_committed;
-        __u64 transno;
-        __u32 status;
-        __u32 flags;
-        __u32 conn_cnt;
-        __u32 bufcount;
-        __u32 buflens[0];
+struct lustre_msg_v1 {
+        struct lustre_handle lm_handle;
+        __u32 lm_magic;
+        __u32 lm_type;
+        __u32 lm_version;
+        __u32 lm_opc;
+        __u64 lm_last_xid;
+        __u64 lm_last_committed;
+        __u64 lm_transno;
+        __u32 lm_status;
+        __u32 lm_flags;
+        __u32 lm_conn_cnt;
+        __u32 lm_bufcount;
+        __u32 lm_buflens[0];
 };
+
+#define lustre_msg lustre_msg_v2
+/* we depend on this structure to be 8-byte aligned */
+/* this type is only endian-adjusted in lustre_unpack_msg() */
+struct lustre_msg_v2 {
+        __u32 lm_bufcount;
+        __u32 lm_secflvr;
+        __u32 lm_magic;
+        __u32 lm_repsize;
+        __u32 lm_buflens[0];
+};
+
+/* without security, ptlrpc_body is put in the first buffer. */
+struct ptlrpc_body {
+        struct lustre_handle pb_handle;
+        __u32 pb_type;
+        __u32 pb_version;
+        __u32 pb_opc;
+        __u32 pb_status;
+        __u64 pb_last_xid;
+        __u64 pb_last_committed;
+        __u64 pb_transno;
+        __u32 pb_flags;
+        __u32 pb_op_flags;
+        __u32 pb_conn_cnt;
+        __u32 pb_paddings[3];
+};
+
+extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
+
+/* message body offset for lustre_msg_v2 */
+/* ptlrpc body offset in all request/reply messages */
+#define MSG_PTLRPC_BODY_OFF             0
+
+/* normal request/reply message record offset */
+#define REQ_REC_OFF                     1
+#define REPLY_REC_OFF                   1
+
+/* ldlm request message body offset */
+#define DLM_LOCKREQ_OFF                 1 /* lockreq offset */
+#define DLM_REQ_REC_OFF                 2 /* normal dlm request record offset */
+
+/* ldlm intent lock message body offset */
+#define DLM_INTENT_IT_OFF               2 /* intent lock it offset */
+#define DLM_INTENT_REC_OFF              3 /* intent lock record offset */
+
+/* ldlm reply message body offset */
+#define DLM_LOCKREPLY_OFF               1 /* lockrep offset */
+#define DLM_REPLY_REC_OFF               2 /* reply record offset */
 
 /* Flags that are operation-specific go in the top 16 bits. */
 #define MSG_OP_FLAG_MASK   0xffff0000
@@ -346,43 +403,6 @@ struct lustre_msg {
 #define MSG_LAST_REPLAY        1
 #define MSG_RESENT             2
 #define MSG_REPLAY             4
-
-static inline int lustre_msg_get_flags(struct lustre_msg *msg)
-{
-        return (msg->flags & MSG_GEN_FLAG_MASK);
-}
-
-static inline void lustre_msg_add_flags(struct lustre_msg *msg, int flags)
-{
-        msg->flags |= MSG_GEN_FLAG_MASK & flags;
-}
-
-static inline void lustre_msg_set_flags(struct lustre_msg *msg, int flags)
-{
-        msg->flags &= ~MSG_GEN_FLAG_MASK;
-        lustre_msg_add_flags(msg, flags);
-}
-
-static inline void lustre_msg_clear_flags(struct lustre_msg *msg, int flags)
-{
-        msg->flags &= ~(MSG_GEN_FLAG_MASK & flags);
-}
-
-static inline int lustre_msg_get_op_flags(struct lustre_msg *msg)
-{
-        return (msg->flags >> MSG_OP_FLAG_SHIFT);
-}
-
-static inline void lustre_msg_add_op_flags(struct lustre_msg *msg, int flags)
-{
-        msg->flags |= ((flags & MSG_GEN_FLAG_MASK) << MSG_OP_FLAG_SHIFT);
-}
-
-static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
-{
-        msg->flags &= ~MSG_OP_FLAG_MASK;
-        lustre_msg_add_op_flags(msg, flags);
-}
 
 /*
  * Flags for all connect opcodes (MDS_CONNECT, OST_CONNECT)
@@ -395,6 +415,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define MSG_CONNECT_LIBCLIENT   0x10
 #define MSG_CONNECT_INITIAL     0x20
 #define MSG_CONNECT_ASYNC       0x40
+#define MSG_CONNECT_NEXT_VER    0x80 /* use next version of lustre_msg */
 
 /* Connect flags */
 #define OBD_CONNECT_RDONLY       0x1ULL /* client allowed read-only access */
@@ -411,18 +432,22 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OBD_CONNECT_IBITS     0x1000ULL /* support for inodebits locks */
 #define OBD_CONNECT_JOIN      0x2000ULL /* files can be concatenated */
 #define OBD_CONNECT_REAL      0x4000ULL
-#define OBD_CONNECT_NODEVOH   0x8000ULL /* No open handle for special nodes */
-#define OBD_CONNECT_EMPTY 0x80000000ULL /* fake: these are empty connect flags*/
+#define OBD_CONNECT_ATTRFID   0x8000ULL /* Server supports GetAttr By Fid */
+#define OBD_CONNECT_NODEVOH   0x10000ULL /* No open handle for special nodes */
+#define OBD_CONNECT_LCL_CLIENT 0x20000ULL /* local 1.6 client */
+#define OBD_CONNECT_RMT_CLIENT 0x40000ULL /* Remote client */
+#define OBD_CONNECT_BRW_SIZE    0x80000ULL  /* Maximum pages per RPC */
 
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags() */
 
 #define MDS_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
-                                OBD_CONNECT_NODEVOH)
+                                OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
-                                OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX)
+                                OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
+                                OBD_CONNECT_BRW_SIZE)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
 
@@ -446,13 +471,14 @@ struct obd_connect_data {
         __u32 ocd_version;              /* lustre release version number */
         __u32 ocd_grant;                /* initial cache grant amount (bytes) */
         __u32 ocd_index;                /* LOV index to connect to */
-        __u32 ocd_unused;
+        __u32 ocd_brw_size;             /* Maximum BRW size in bytes */
         __u64 ocd_ibits_known;          /* inode bits this client understands */
+        __u32 ocd_nllu;                 /* non-local-lustre-user */
+        __u32 ocd_nllg;                 /* non-local-lustre-group */
+        __u64 padding1;                 /* also fix lustre_swab_connect */
         __u64 padding2;                 /* also fix lustre_swab_connect */
         __u64 padding3;                 /* also fix lustre_swab_connect */
         __u64 padding4;                 /* also fix lustre_swab_connect */
-        __u64 padding5;                 /* also fix lustre_swab_connect */
-        __u64 padding6;                 /* also fix lustre_swab_connect */
 };
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
@@ -550,7 +576,8 @@ struct obdo {
         __u32                   o_mds;
         __u32                   o_stripe_idx;   /* holds stripe idx */
         __u32                   o_padding_1;
-        char                    o_inline[OBD_INLINESZ]; /* fid in ost writes */
+        char                    o_inline[OBD_INLINESZ];
+                                /* lustre_handle + llog_cookie */
 };
 
 #define o_dirty   o_blocks
@@ -766,14 +793,6 @@ extern void lustre_swab_ost_lvb(struct ost_lvb *);
  *   MDS REQ RECORDS
  */
 
-/* FIXME: this is different from HEAD, adjust it
- * while merge GSS */
-#define MDS_REQ_REC_OFF                 0
-
-#define MDS_REQ_INTENT_LOCKREQ_OFF      0
-#define MDS_REQ_INTENT_IT_OFF           1
-#define MDS_REQ_INTENT_REC_OFF          2
-
 /* opcodes */
 typedef enum {
         MDS_GETATTR      = 33,
@@ -816,13 +835,15 @@ typedef enum {
 } mds_reint_t, mdt_reint_t;
 
 /* the disposition of the intent outlines what was executed */
-#define DISP_IT_EXECD     0x01
-#define DISP_LOOKUP_EXECD 0x02
-#define DISP_LOOKUP_NEG   0x04
-#define DISP_LOOKUP_POS   0x08
-#define DISP_OPEN_CREATE  0x10
-#define DISP_OPEN_OPEN    0x20
-#define DISP_ENQ_COMPLETE 0x40
+#define DISP_IT_EXECD        0x00000001
+#define DISP_LOOKUP_EXECD    0x00000002
+#define DISP_LOOKUP_NEG      0x00000004
+#define DISP_LOOKUP_POS      0x00000008
+#define DISP_OPEN_CREATE     0x00000010
+#define DISP_OPEN_OPEN       0x00000020
+#define DISP_ENQ_COMPLETE    0x00400000
+#define DISP_ENQ_OPEN_REF    0x00800000
+#define DISP_ENQ_CREATE_REF  0x01000000
 
 /* INODE LOCK PARTS */
 #define MDS_INODELOCK_LOOKUP 0x000001       /* dentry, mode, owner, group */
@@ -861,6 +882,48 @@ struct mds_status_req {
 extern void lustre_swab_mds_status_req (struct mds_status_req *r);
 
 #define MDS_BFLAG_UNCOMMITTED_WRITES   0x1
+#define MDS_BFLAG_EXT_FLAGS     0x80000000 /* == EXT3_RESERVED_FL */
+
+/* these should be identical to their EXT3_*_FL counterparts, and are
+ * redefined here only to avoid dragging in ext3_fs.h */
+#define MDS_SYNC_FL             0x00000008 /* Synchronous updates */
+#define MDS_IMMUTABLE_FL        0x00000010 /* Immutable file */
+#define MDS_APPEND_FL           0x00000020 /* writes to file may only append */
+#define MDS_NOATIME_FL          0x00000080 /* do not update atime */
+#define MDS_DIRSYNC_FL          0x00010000 /* dirsync behaviour (dir only) */
+
+#ifdef __KERNEL__
+/* If MDS_BFLAG_IOC_FLAGS is set it means we requested EXT3_*_FL inode flags
+ * and we need to decode these into local S_* flags in the inode.  Otherwise
+ * we pass flags straight through (see bug 9486). */
+static inline int ll_ext_to_inode_flags(int flags)
+{
+        return (flags & MDS_BFLAG_EXT_FLAGS) ?
+               (((flags & MDS_SYNC_FL)      ? S_SYNC      : 0) |
+                ((flags & MDS_NOATIME_FL)   ? S_NOATIME   : 0) |
+                ((flags & MDS_APPEND_FL)    ? S_APPEND    : 0) |
+#if defined(S_DIRSYNC)
+                ((flags & MDS_DIRSYNC_FL)   ? S_DIRSYNC   : 0) |
+#endif
+                ((flags & MDS_IMMUTABLE_FL) ? S_IMMUTABLE : 0)) :
+               (flags & ~MDS_BFLAG_EXT_FLAGS);
+}
+
+/* If MDS_BFLAG_EXT_FLAGS is set it means we requested EXT3_*_FL inode flags
+ * and we pass these straight through.  Otherwise we need to convert from
+ * S_* flags to their EXT3_*_FL equivalents (see bug 9486). */
+static inline int ll_inode_to_ext_flags(int oflags, int iflags)
+{
+        return (oflags & MDS_BFLAG_EXT_FLAGS) ? (oflags & ~MDS_BFLAG_EXT_FLAGS):
+               (((iflags & S_SYNC)      ? MDS_SYNC_FL      : 0) |
+                ((iflags & S_NOATIME)   ? MDS_NOATIME_FL   : 0) |
+                ((iflags & S_APPEND)    ? MDS_APPEND_FL    : 0) |
+#if defined(S_DIRSYNC)
+                ((iflags & S_DIRSYNC)   ? MDS_DIRSYNC_FL   : 0) |
+#endif
+                ((iflags & S_IMMUTABLE) ? MDS_IMMUTABLE_FL : 0));
+}
+#endif
 
 struct mdt_body {
         struct lu_fid  fid1;
@@ -1015,6 +1078,7 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
 #define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
 #define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file*/
+#define MDS_OPEN_LOCK         04000000000 /* This open requires open lock */
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
 
@@ -1230,14 +1294,15 @@ enum seq_op {
 
 #define LOV_DESC_MAGIC 0xB0CCDE5C
 
+/* LOV settings descriptor (should only contain static info) */
 struct lov_desc {
         __u32 ld_tgt_count;                /* how many OBD's */
         __u32 ld_active_tgt_count;         /* how many active */
         __u32 ld_default_stripe_count;     /* how many objects are used */
-        __u32 ld_pattern;                  /* PATTERN_RAID0, PATTERN_RAID1 */
+        __u32 ld_pattern;                  /* default PATTERN_RAID0 */
         __u64 ld_default_stripe_size;      /* in bytes */
         __u64 ld_default_stripe_offset;    /* in bytes */
-        __u32 ld_qos_threshold;            /* in MB */
+        __u32 ld_padding_0;                /* unused */
         __u32 ld_qos_maxage;               /* in second */
         __u32 ld_padding_1;                /* also fix lustre_swab_lov_desc */
         __u32 ld_padding_2;                /* also fix lustre_swab_lov_desc */
@@ -1382,24 +1447,20 @@ typedef enum {
         MGS_LAST_OPC
 } mgs_cmd_t;
 
+/* We pass this info to the MGS so it can write config logs */
 #define MTI_NAME_MAXLEN 64
-#define MTI_UUID_MAXLEN MTI_NAME_MAXLEN + 5
-/* each host can have multiple nids, and multiple failover hosts, and I don't
-   want to run out of room... */
-#define MTI_NIDS_MAX 64 /* match lustre_disk.h */
-
+#define MTI_NIDS_MAX 32
 struct mgs_target_info {
+        __u32            mti_lustre_ver;
+        __u32            mti_stripe_index;
+        __u32            mti_config_ver;
+        __u32            mti_flags;
+        __u32            mti_nid_count;
+        __u32            padding;                    /* 64 bit align */
         char             mti_fsname[MTI_NAME_MAXLEN];
         char             mti_svname[MTI_NAME_MAXLEN];
         char             mti_uuid[sizeof(struct obd_uuid)];
         lnet_nid_t       mti_nids[MTI_NIDS_MAX];     /* host nids */
-        lnet_nid_t       mti_failnids[MTI_NIDS_MAX]; /* partner nids */
-        __u16            mti_failnodes[8];  /* last nid index of each partner */
-        __u32            mti_stripe_index;
-        __u32            mti_nid_count;
-        __u32            mti_failnid_count;
-        __u32            mti_config_ver;
-        __u32            mti_flags;
         char             mti_params[2048];
 };
 
@@ -1412,12 +1473,14 @@ extern void lustre_swab_mgs_target_info(struct mgs_target_info *oinfo);
 #define CM_START_SKIP (CM_START | CM_SKIP)
 
 struct cfg_marker {
-        __u32             cm_step;  /* aka config version */
+        __u32             cm_step;       /* aka config version */
         __u32             cm_flags;
+        __u32             cm_vers;       /* lustre release version number */
+        __u32             padding;       /* 64 bit align */
         time_t            cm_createtime; /*when this record was first created */
         time_t            cm_canceltime; /*when this record is no longer valid*/
-        char              cm_svname[16];
-        char              cm_comment[40];
+        char              cm_svname[MTI_NAME_MAXLEN];
+        char              cm_comment[MTI_NAME_MAXLEN];
 };
 
 /*
@@ -1690,7 +1753,7 @@ extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec,
 struct lustre_cfg;
 extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);
 
-/* qutoa */
+/* quota */
 struct qunit_data {
         __u32 qd_id;    /* ID appiles to (uid, gid) */
         __u32 qd_type;  /* Quota type (USRQUOTA, GRPQUOTA) */

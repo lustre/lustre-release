@@ -60,13 +60,13 @@ ost_print_req(void *seq_file, struct ptlrpc_request *req)
         case RQ_PHASE_INTERPRET:
                 /* being handled, so basic msg swabbed, and opc is valid
                  * but racing with ost_handle() */
-                seq_printf(sf, "opc %d\n", req->rq_reqmsg->opc);
+                seq_printf(sf, "opc %d\n", lustre_msg_get_opc(req->rq_reqmsg));
                 break;
                 
         case RQ_PHASE_COMPLETE:
                 /* been handled by ost_handle() reply state possibly still
                  * volatile */
-                seq_printf(sf, "opc %d\n", req->rq_reqmsg->opc);
+                seq_printf(sf, "opc %d\n", lustre_msg_get_opc(req->rq_reqmsg));
                 break;
 
         default:

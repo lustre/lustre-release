@@ -10,19 +10,17 @@ Index: linux-2.4.21-chaos/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.4.21-chaos.orig/fs/ext3/ialloc.c	2003-12-12 17:39:10.000000000 +0300
 +++ linux-2.4.21-chaos/fs/ext3/ialloc.c	2003-12-12 17:39:55.000000000 +0300
-@@ -580,6 +580,12 @@
- 	insert_inode_hash(inode);
+@@ -580,6 +580,10 @@
  	inode->i_generation = sbi->s_next_generation++;
  
-+	if (EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) {
-+		EXT3_I(inode)->i_extra_isize = sizeof(__u16)	/* i_extra_isize */
-+				+ sizeof(__u16);	/* i_pad1 */
-+	} else
-+		EXT3_I(inode)->i_extra_isize = 0;
-+
  	inode->u.ext3_i.i_state = EXT3_STATE_NEW;
++	inode->u.ext3_i.i_extra_isize =
++		(EXT3_INODE_SIZE(inode->i_sb) > EXT3_GOOD_OLD_INODE_SIZE) ?
++		sizeof(struct ext3_inode) - EXT3_GOOD_OLD_INODE_SIZE : 0;
++
   	err = ext3_get_inode_loc_new(inode, &iloc, 1);
    	if (err) goto fail;
+ 	BUFFER_TRACE(iloc->bh, "get_write_access");
 Index: linux-2.4.21-chaos/fs/ext3/inode.c
 ===================================================================
 --- linux-2.4.21-chaos.orig/fs/ext3/inode.c	2003-12-12 17:39:11.000000000 +0300

@@ -51,9 +51,9 @@
 atomic_t libcfs_kmemory = {0};
 #endif
 
-struct obd_device obd_dev[MAX_OBD_DEVICES];
+struct obd_device *obd_devs[MAX_OBD_DEVICES];
 struct list_head obd_types;
-spinlock_t obd_dev_lock;
+spinlock_t obd_dev_lock = SPIN_LOCK_UNLOCKED;
 #ifndef __KERNEL__
 atomic_t obd_memory;
 int obd_memmax;
@@ -68,6 +68,7 @@ unsigned int obd_health_check_timeout = 120; /* seconds */
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
 
 cfs_waitq_t obd_race_waitq;
+int obd_race_state;
 
 #ifdef __KERNEL__
 unsigned int obd_print_fail_loc(void)
@@ -113,7 +114,7 @@ static inline void obd_conn2data(struct obd_ioctl_data *data,
         data->ioc_cookie = conn->cookie;
 }
 
-int class_resolve_dev_name(uint32_t len, char *name)
+int class_resolve_dev_name(uint32_t len, const char *name)
 {
         int rc;
         int dev;
@@ -159,7 +160,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 return 0;
         }
 
-        CDEBUG(D_IOCTL, "cmd = %x, obd = %p\n", cmd, obd);
+        CDEBUG(D_IOCTL, "cmd = %x\n", cmd);
         if (obd_ioctl_getdata(&buf, &len, (void *)arg)) {
                 CERROR("OBD ioctl: data error\n");
                 GOTO(out, err = -EINVAL);
@@ -280,11 +281,9 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                         CERROR("ioctl buffer too small to hold version\n");
                         GOTO(out, err = -EINVAL);
                 }
-
-                if (index >= MAX_OBD_DEVICES)
-                        GOTO(out, err = -ENOENT);
-                obd = &obd_dev[index];
-                if (!obd->obd_type)
+                                
+                obd = class_num2obd(index);
+                if (!obd)
                         GOTO(out, err = -ENOENT);
 
                 if (obd->obd_stopping)
@@ -307,12 +306,19 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
 
         }
 
-        if (data->ioc_dev >= MAX_OBD_DEVICES) {
+        if (data->ioc_dev >= class_devno_max()) {
                 CERROR("OBD ioctl: No device\n");
                 GOTO(out, err = -EINVAL);
         }
-        obd = &obd_dev[data->ioc_dev];
-        if (!(obd && obd->obd_set_up) || obd->obd_stopping) {
+
+        obd = class_num2obd(data->ioc_dev);
+        if (obd == NULL) {
+                CERROR("OBD ioctl : No Device %d\n", data->ioc_dev);
+                GOTO(out, err = -EINVAL);
+        }
+        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+
+        if (!obd->obd_set_up || obd->obd_stopping) {
                 CERROR("OBD ioctl: device not setup %d \n", data->ioc_dev);
                 GOTO(out, err = -EINVAL);
         }
@@ -371,10 +377,11 @@ extern cfs_psdev_t obd_psdev;
 void *obd_psdev = NULL;
 #endif
 
-EXPORT_SYMBOL(obd_dev);
+EXPORT_SYMBOL(obd_devs);
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
+EXPORT_SYMBOL(obd_race_state);
 EXPORT_SYMBOL(obd_dump_on_timeout);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(ldlm_timeout);
@@ -386,14 +393,12 @@ EXPORT_SYMBOL(proc_lustre_root);
 
 EXPORT_SYMBOL(class_register_type);
 EXPORT_SYMBOL(class_unregister_type);
-EXPORT_SYMBOL(class_search_type);
 EXPORT_SYMBOL(class_get_type);
 EXPORT_SYMBOL(class_put_type);
 EXPORT_SYMBOL(class_name2dev);
 EXPORT_SYMBOL(class_name2obd);
 EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
-EXPORT_SYMBOL(class_obd_list);
 EXPORT_SYMBOL(class_find_client_obd);
 EXPORT_SYMBOL(class_find_client_notype);
 EXPORT_SYMBOL(class_devices_in_group);
@@ -403,6 +408,7 @@ EXPORT_SYMBOL(class_conn2obd);
 EXPORT_SYMBOL(class_exp2cliimp);
 EXPORT_SYMBOL(class_conn2cliimp);
 EXPORT_SYMBOL(class_disconnect);
+EXPORT_SYMBOL(class_num2obd);
 
 /* uuid.c */
 EXPORT_SYMBOL(class_generate_random_uuid);
@@ -418,7 +424,9 @@ EXPORT_SYMBOL(class_incref);
 EXPORT_SYMBOL(class_decref);
 EXPORT_SYMBOL(class_get_profile);
 EXPORT_SYMBOL(class_del_profile);
+EXPORT_SYMBOL(class_del_profiles);
 EXPORT_SYMBOL(class_process_config);
+EXPORT_SYMBOL(class_process_proc_param);
 EXPORT_SYMBOL(class_config_parse_llog);
 EXPORT_SYMBOL(class_config_dump_llog);
 EXPORT_SYMBOL(class_attach);
@@ -516,15 +524,16 @@ int init_obdclass(void)
 #endif
 {
         int i, err;
-        struct obd_device *obd;
 #ifdef __KERNEL__
         int lustre_register_fs(void);
 
-        printk(KERN_INFO "Lustre: OBD class driver Build Version: "
-               BUILD_VERSION", info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre: OBD class driver, info@clusterfs.com\n");
+        printk(KERN_INFO "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
+        printk(KERN_INFO "        Build Version: "BUILD_VERSION"\n");
 #else
-        CDEBUG(D_INFO, "Lustre: OBD class driver Build Version: "
-               BUILD_VERSION", info@clusterfs.com\n");
+        CDEBUG(D_INFO, "Lustre: OBD class driver, info@clusterfs.com\n");
+        CDEBUG(D_INFO, "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
+        CDEBUG(D_INFO, "        Build Version: "BUILD_VERSION"\n");
 #endif
 
         spin_lock_init(&obd_types_lock);
@@ -550,8 +559,8 @@ int init_obdclass(void)
         }
 
         /* This struct is already zerod for us (static global) */
-        for (i = 0, obd = obd_dev; i < MAX_OBD_DEVICES; i++, obd++)
-                obd->obd_minor = i;
+        for (i = 0; i < class_devno_max(); i++)
+                obd_devs[i] = NULL;
 
         err = obd_init_caches();
         if (err)
@@ -579,11 +588,12 @@ static void cleanup_obdclass(void)
         lustre_unregister_fs();
 
         cfs_psdev_deregister(&obd_psdev);
-        for (i = 0; i < MAX_OBD_DEVICES; i++) {
-                struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_type && obd->obd_set_up &&
+        for (i = 0; i < class_devno_max(); i++) {
+                struct obd_device *obd = class_num2obd(i);
+                if (obd && obd->obd_set_up &&
                     OBT(obd) && OBP(obd, detach)) {
                         /* XXX should this call generic detach otherwise? */
+                        LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
                         OBP(obd, detach)(obd);
                 }
         }
@@ -603,5 +613,5 @@ MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Class Driver Build Version: " BUILD_VERSION);
 MODULE_LICENSE("GPL");
 
-cfs_module(obdclass, "1.0.0", init_obdclass, cleanup_obdclass);
+cfs_module(obdclass, LUSTRE_VERSION_STRING, init_obdclass, cleanup_obdclass);
 #endif

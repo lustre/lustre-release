@@ -154,16 +154,19 @@ static inline __u8 *fsfilt_uuid(struct obd_device *obd, struct super_block *sb)
 #define FSFILT_OP_JOIN          11
 #define FSFILT_OP_NOOP          15
 
-#define fsfilt_check_slow(start, timeout, msg)                          \
+#define fsfilt_check_slow(obd, start, timeout, msg)                     \
 do {                                                                    \
         if (time_before(jiffies, start + 15 * HZ))                      \
                 break;                                                  \
         else if (time_before(jiffies, start + 30 * HZ))                 \
-                CDEBUG(D_VFSTRACE,"slow %s %lus\n", msg,(jiffies-start)/HZ);\
+                CDEBUG(D_VFSTRACE, "%s: slow %s %lus\n", obd->obd_name, \
+                       msg, (jiffies-start) / HZ);                      \
         else if (time_before(jiffies, start + timeout / 2 * HZ))        \
-                CWARN("slow %s %lus\n", msg, (jiffies - start) / HZ);   \
+                CWARN("%s: slow %s %lus\n", obd->obd_name, msg,         \
+                      (jiffies - start) / HZ);                          \
         else                                                            \
-                CERROR("slow %s %lus\n", msg, (jiffies - start) / HZ);  \
+                CERROR("%s: slow %s %lus\n", obd->obd_name, msg,        \
+                       (jiffies - start) / HZ);                         \
 } while (0)
 
 static inline void *fsfilt_start_log(struct obd_device *obd,
@@ -189,7 +192,7 @@ static inline void *fsfilt_start_log(struct obd_device *obd,
                         LBUG();
                 }
         }
-        fsfilt_check_slow(now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
         return handle;
 }
 
@@ -224,7 +227,7 @@ static inline void *fsfilt_brw_start_log(struct obd_device *obd, int objcount,
                         LBUG();
                 }
         }
-        fsfilt_check_slow(now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
 
         return handle;
 }
@@ -244,7 +247,7 @@ static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
         int rc = obd->obd_fsops->fs_commit(inode, handle, force_sync);
         CDEBUG(D_INFO, "committing handle %p\n", handle);
 
-        fsfilt_check_slow(now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
 
         return rc;
 }
@@ -257,7 +260,7 @@ static inline int fsfilt_commit_async(struct obd_device *obd,
         int rc = obd->obd_fsops->fs_commit_async(inode, handle, wait_handle);
 
         CDEBUG(D_INFO, "committing handle %p (async)\n", *wait_handle);
-        fsfilt_check_slow(now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
 
         return rc;
 }
@@ -268,7 +271,7 @@ static inline int fsfilt_commit_wait(struct obd_device *obd,
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit_wait(inode, handle);
         CDEBUG(D_INFO, "waiting for completion %p\n", handle);
-        fsfilt_check_slow(now, obd_timeout, "journal start");
+        fsfilt_check_slow(obd, now, obd_timeout, "journal start");
         return rc;
 }
 
@@ -278,7 +281,7 @@ static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
         unsigned long now = jiffies;
         int rc;
         rc = obd->obd_fsops->fs_setattr(dentry, handle, iattr, do_trunc);
-        fsfilt_check_slow(now, obd_timeout, "setattr");
+        fsfilt_check_slow(obd, now, obd_timeout, "setattr");
         return rc;
 }
 
@@ -329,15 +332,16 @@ static inline int fsfilt_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
 
 /* very similar to obd_statfs(), but caller already holds obd_osfs_lock */
 static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
-                                unsigned long max_age)
+                                __u64 max_age)
 {
         int rc = 0;
 
-        CDEBUG(D_SUPER, "osfs %lu, max_age %lu\n", obd->obd_osfs_age, max_age);
-        if (time_before(obd->obd_osfs_age, max_age)) {
+        CDEBUG(D_SUPER, "osfs "LPU64", max_age "LPU64"\n",
+                obd->obd_osfs_age, max_age);
+        if (cfs_time_before_64(obd->obd_osfs_age, max_age)) {
                 rc = obd->obd_fsops->fs_statfs(sb, &obd->obd_osfs);
                 if (rc == 0) /* N.B. statfs can't really fail */
-                        obd->obd_osfs_age = jiffies;
+                        obd->obd_osfs_age = cfs_time_current_64();
         } else {
                 CDEBUG(D_SUPER, "using cached obd_statfs data\n");
         }

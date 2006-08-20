@@ -64,7 +64,6 @@ static int ll_direct_IO_24(int rw,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct brw_page *pga;
-        struct ptlrpc_request_set *set;
         struct obdo oa;
         int length, i, flags, rc = 0;
         loff_t offset;
@@ -78,15 +77,9 @@ static int ll_direct_IO_24(int rw,
             (iobuf->length & (PAGE_SIZE - 1)))
                 RETURN(-EINVAL);
 
-        set = ptlrpc_prep_set();
-        if (set == NULL)
-                RETURN(-ENOMEM);
-
         OBD_ALLOC(pga, sizeof(*pga) * iobuf->nr_pages);
-        if (!pga) {
-                ptlrpc_set_destroy(set);
+        if (!pga)
                 RETURN(-ENOMEM);
-        }
 
         flags = 0 /* | OBD_BRW_DIRECTIO */;
         offset = ((obd_off)blocknr << inode->i_blkbits);
@@ -113,17 +106,8 @@ static int ll_direct_IO_24(int rw,
         else
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_READ, iobuf->length);
-        rc = obd_brw_async(rw, ll_i2dtexp(inode), &oa, lsm, iobuf->nr_pages,
-                           pga, set, NULL);
-        if (rc) {
-                CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
-                       "error from obd_brw_async: rc = %d\n", rc);
-        } else {
-                rc = ptlrpc_set_wait(set);
-                if (rc)
-                        CERROR("error from callback: rc = %d\n", rc);
-        }
-        ptlrpc_set_destroy(set);
+        rc = obd_brw_rqset(rw, ll_i2dtexp(inode), &oa, lsm, iobuf->nr_pages,
+                           pga, NULL);
         if (rc == 0) {
                 rc = iobuf->length;
                 if (rw == OBD_BRW_WRITE) {

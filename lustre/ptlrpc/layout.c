@@ -54,89 +54,113 @@
 #include <lustre_req_layout.h>
 #include <linux/lustre_acl.h>
 
+#if __KERNEL__
+#define __POSIX_ACL_MAX_SIZE \
+        (sizeof(xattr_acl_header) + 32 * sizeof(xattr_acl_entry))
+#else
+#define __POSIX_ACL_MAX_SIZE 0
+#endif
+
 static const struct req_msg_field *empty[] = {}; /* none */
 
 static const struct req_msg_field *mdt_body_only[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY
 };
 
 static const struct req_msg_field *mds_statfs_server[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_OBD_STATFS
 };
 
 static const struct req_msg_field *seq_query_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_SEQ_OPC
 };
 
 static const struct req_msg_field *seq_query_server[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_SEQ_RANGE
 };
 
 static const struct req_msg_field *fld_query_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_FLD_OPC,
         &RMF_FLD_MDFLD
 };
 
 static const struct req_msg_field *fld_query_server[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_FLD_MDFLD
 };
 
 static const struct req_msg_field *mds_getattr_name_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
         &RMF_NAME
 };
 
 static const struct req_msg_field *mds_reint_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_REINT_OPC
 };
 
 static const struct req_msg_field *mds_reint_create_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_REC_CREATE,
         &RMF_NAME,
         &RMF_SYMTGT
 };
 
 static const struct req_msg_field *mds_reint_open_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_REC_CREATE,
         &RMF_NAME,
         &RMF_EADATA
 };
 
 static const struct req_msg_field *mds_reint_open_server[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
         &RMF_ACL
 };
 
 static const struct req_msg_field *mds_reint_unlink_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_REC_UNLINK,
         &RMF_NAME
 };
 
 static const struct req_msg_field *mds_reint_link_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_REC_LINK,
         &RMF_NAME
 };
 
 static const struct req_msg_field *mds_reint_rename_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_REC_RENAME,
         &RMF_NAME,
         &RMF_SYMTGT
 };
 
 static const struct req_msg_field *mds_last_unlink_server[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
         &RMF_LOGCOOKIES
 };
 
 static const struct req_msg_field *mds_reint_setattr_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_REC_SETATTR,
         &RMF_EADATA,
         &RMF_LOGCOOKIES
 };
 
 static const struct req_msg_field *mds_connect_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_TGTUUID,
         &RMF_CLUUID,
         &RMF_CONN,
@@ -144,24 +168,29 @@ static const struct req_msg_field *mds_connect_client[] = {
 };
 
 static const struct req_msg_field *mds_connect_server[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_CONNECT_DATA
 };
 
 static const struct req_msg_field *ldlm_enqueue_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_DLM_REQ
 };
 
 static const struct req_msg_field *ldlm_enqueue_server[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_DLM_REP
 };
 
 static const struct req_msg_field *ldlm_intent_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_DLM_REQ,
         &RMF_LDLM_INTENT,
         &RMF_REINT_OPC
 };
 
 static const struct req_msg_field *ldlm_intent_server[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_DLM_REP,
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
@@ -169,6 +198,7 @@ static const struct req_msg_field *ldlm_intent_server[] = {
 };
 
 static const struct req_msg_field *ldlm_intent_getattr_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_DLM_REQ,
         &RMF_LDLM_INTENT,
         &RMF_MDT_BODY,     /* coincides with mds_getattr_name_client[] */
@@ -176,6 +206,7 @@ static const struct req_msg_field *ldlm_intent_getattr_client[] = {
 };
 
 static const struct req_msg_field *ldlm_intent_create_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_DLM_REQ,
         &RMF_LDLM_INTENT,
         &RMF_REC_CREATE,    /* coincides with mds_reint_create_client[] */
@@ -184,6 +215,7 @@ static const struct req_msg_field *ldlm_intent_create_client[] = {
 };
 
 static const struct req_msg_field *ldlm_intent_open_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_DLM_REQ,
         &RMF_LDLM_INTENT,
         &RMF_REC_CREATE,    /* coincides with mds_reint_open_client[] */
@@ -192,6 +224,7 @@ static const struct req_msg_field *ldlm_intent_open_client[] = {
 };
 
 static const struct req_msg_field *ldlm_intent_unlink_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_DLM_REQ,
         &RMF_LDLM_INTENT,
         &RMF_REC_UNLINK,    /* coincides with mds_reint_unlink_client[] */
@@ -199,22 +232,26 @@ static const struct req_msg_field *ldlm_intent_unlink_client[] = {
 };
 
 static const struct req_msg_field *mds_getxattr_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
         &RMF_NAME
 };
 
 static const struct req_msg_field *mds_getxattr_server[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
         &RMF_EADATA
 };
 
 static const struct req_msg_field *mds_setxattr_client[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
         &RMF_NAME,
         &RMF_EADATA
 };
 
 static const struct req_msg_field *mds_getattr_server[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
         &RMF_ACL
@@ -303,6 +340,11 @@ const struct req_msg_field RMF_MDT_BODY =
                     sizeof(struct mdt_body), lustre_swab_mdt_body);
 EXPORT_SYMBOL(RMF_MDT_BODY);
 
+const struct req_msg_field RMF_PTLRPC_BODY =
+        DEFINE_MSGF("ptlrpc_body", 0,
+                    sizeof(struct ptlrpc_body), lustre_swab_ptlrpc_body);
+EXPORT_SYMBOL(RMF_PTLRPC_BODY);
+
 const struct req_msg_field RMF_OBD_STATFS =
         DEFINE_MSGF("obd_statfs", 0,
                     sizeof(struct obd_statfs), lustre_swab_obd_statfs);
@@ -364,7 +406,7 @@ EXPORT_SYMBOL(RMF_MDT_MD);
 
 const struct req_msg_field RMF_REC_UNLINK =
         DEFINE_MSGF("rec_unlink", 0, sizeof(struct mdt_rec_unlink),
-                    lustre_swab_mds_rec_unlink);
+                    lustre_swab_mdt_rec_unlink);
 EXPORT_SYMBOL(RMF_REC_UNLINK);
 
 const struct req_msg_field RMF_REC_LINK =
@@ -387,12 +429,12 @@ const struct req_msg_field RMF_REC_SETATTR =
                     lustre_swab_mdt_rec_setattr);
 EXPORT_SYMBOL(RMF_REC_SETATTR);
 
-/* FIXME: this length should be defined as a macro*/
+/* FIXME: this length should be defined as a macro */
 const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
 const struct req_msg_field RMF_ACL = DEFINE_MSGF("acl", 0, 
-                                     LUSTRE_POSIX_ACL_MAX_SIZE, NULL);
+                                     __POSIX_ACL_MAX_SIZE, NULL);
 EXPORT_SYMBOL(RMF_ACL);
 
 const struct req_msg_field RMF_LOGCOOKIES =
@@ -731,7 +773,7 @@ static void *__req_capsule_get(struct req_capsule *pill,
                 DEBUG_REQ(D_ERROR, pill->rc_req,
                           "Wrong buffer for field `%s' (%d of %d) "
                           "in format `%s': %d vs. %d (%s)\n",
-                          field->rmf_name, offset, msg->bufcount, fmt->rf_name,
+                          field->rmf_name, offset, lustre_msg_bufcount(msg), fmt->rf_name,
                           lustre_msg_buflen(msg, offset), field->rmf_size,
                           rcl_names[loc]);
         return value;
@@ -827,7 +869,7 @@ int req_capsule_field_present(const struct req_capsule *pill,
 
         loc = pill->rc_loc ^ 1;
         offset = __req_capsule_offset(pill, field, loc);
-        return __req_msg(pill, loc)->bufcount > offset;
+        return lustre_msg_bufcount(__req_msg(pill, loc)) > offset;
 }
 EXPORT_SYMBOL(req_capsule_field_present);
 

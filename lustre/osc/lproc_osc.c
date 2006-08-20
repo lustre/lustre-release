@@ -52,13 +52,14 @@ static int osc_wr_max_pages_per_rpc(struct file *file, const char *buffer,
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
+        struct obd_connect_data *ocd = &cli->cl_import->imp_connect_data;
         int val, rc;
 
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
                 return rc;
 
-        if (val < 1 || val > PTLRPC_MAX_BRW_PAGES)
+        if (val < 1 || val > ocd->ocd_brw_size >> PAGE_SHIFT)
                 return -ERANGE;
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
@@ -111,13 +112,15 @@ static int osc_rd_max_dirty_mb(char *page, char **start, off_t off, int count,
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
-        unsigned val;
+        long val;
+        int mult;
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
-        val = cli->cl_dirty_max >> 20;
+        val = cli->cl_dirty_max;
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 
-        return snprintf(page, count, "%u\n", val);
+        mult = 1 << 20;
+        return lprocfs_read_frac_helper(page, count, val, mult);
 }
 
 static int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
@@ -125,18 +128,19 @@ static int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
 {
         struct obd_device *dev = data;
         struct client_obd *cli = &dev->u.cli;
-        int val, rc;
+        int pages_number, mult, rc;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
+        mult = 1 << (20 - PAGE_SHIFT);
+        rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
         if (rc)
                 return rc;
 
-        if (val < 0 || val > OSC_MAX_DIRTY_MB_MAX ||
-            val > num_physpages >> (20 - PAGE_SHIFT - 2)) /* 1/4 of RAM */
+        if (pages_number < 0 || pages_number > OSC_MAX_DIRTY_MB_MAX << (20 - PAGE_SHIFT) ||
+            pages_number > num_physpages / 4) /* 1/4 of RAM */
                 return -ERANGE;
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
-        cli->cl_dirty_max = (obd_count)val * 1024 * 1024;
+        cli->cl_dirty_max = (obd_count)(pages_number << PAGE_SHIFT);
         osc_wake_cache_waiters(cli);
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 

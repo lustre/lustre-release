@@ -41,24 +41,23 @@ void request_out_callback(lnet_event_t *ev)
 {
         struct ptlrpc_cb_id   *cbid = ev->md.user_ptr;
         struct ptlrpc_request *req = cbid->cbid_arg;
-        unsigned long          flags;
         ENTRY;
 
         LASSERT (ev->type == LNET_EVENT_SEND ||
                  ev->type == LNET_EVENT_UNLINK);
         LASSERT (ev->unlinked);
 
-        DEBUG_REQ_EX((ev->status == 0) ? D_NET : D_ERROR, req,
-                     "type %d, status %d", ev->type, ev->status);
+        DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
+                  "type %d, status %d", ev->type, ev->status);
 
         if (ev->type == LNET_EVENT_UNLINK || ev->status != 0) {
 
                 /* Failed send: make it seem like the reply timed out, just
                  * like failing sends in client.c does currently...  */
 
-                spin_lock_irqsave(&req->rq_lock, flags);
+                spin_lock(&req->rq_lock);
                 req->rq_net_err = 1;
-                spin_unlock_irqrestore(&req->rq_lock, flags);
+                spin_unlock(&req->rq_lock);
 
                 ptlrpc_wake_client_req(req);
         }
@@ -77,7 +76,6 @@ void reply_in_callback(lnet_event_t *ev)
 {
         struct ptlrpc_cb_id   *cbid = ev->md.user_ptr;
         struct ptlrpc_request *req = cbid->cbid_arg;
-        unsigned long flags;
         ENTRY;
 
         LASSERT (ev->type == LNET_EVENT_PUT ||
@@ -87,10 +85,10 @@ void reply_in_callback(lnet_event_t *ev)
         LASSERT (ev->offset == 0);
         LASSERT (ev->mlength <= req->rq_replen);
 
-        DEBUG_REQ_EX((ev->status == 0) ? D_NET : D_ERROR, req,
-                     "type %d, status %d", ev->type, ev->status);
+        DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
+                  "type %d, status %d", ev->type, ev->status);
 
-        spin_lock_irqsave (&req->rq_lock, flags);
+        spin_lock(&req->rq_lock);
 
         LASSERT (req->rq_receiving_reply);
         req->rq_receiving_reply = 0;
@@ -104,7 +102,7 @@ void reply_in_callback(lnet_event_t *ev)
          * since we don't have our own ref */
         ptlrpc_wake_client_req(req);
 
-        spin_unlock_irqrestore (&req->rq_lock, flags);
+        spin_unlock(&req->rq_lock);
         EXIT;
 }
 
@@ -115,7 +113,6 @@ void client_bulk_callback (lnet_event_t *ev)
 {
         struct ptlrpc_cb_id     *cbid = ev->md.user_ptr;
         struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
-        unsigned long            flags;
         ENTRY;
 
         LASSERT ((desc->bd_type == BULK_PUT_SINK &&
@@ -125,11 +122,11 @@ void client_bulk_callback (lnet_event_t *ev)
                  ev->type == LNET_EVENT_UNLINK);
         LASSERT (ev->unlinked);
 
-        CDEBUG_EX((ev->status == 0) ? D_NET : D_ERROR,
+        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
                "event type %d, status %d, desc %p\n",
                ev->type, ev->status, desc);
 
-        spin_lock_irqsave (&desc->bd_lock, flags);
+        spin_lock(&desc->bd_lock);
 
         LASSERT(desc->bd_network_rw);
         desc->bd_network_rw = 0;
@@ -143,7 +140,7 @@ void client_bulk_callback (lnet_event_t *ev)
          * otherwise */
         ptlrpc_wake_client_req(desc->bd_req);
 
-        spin_unlock_irqrestore (&desc->bd_lock, flags);
+        spin_unlock(&desc->bd_lock);
         EXIT;
 }
 
@@ -156,7 +153,6 @@ void request_in_callback(lnet_event_t *ev)
         struct ptlrpc_request_buffer_desc *rqbd = cbid->cbid_arg;
         struct ptlrpc_service             *service = rqbd->rqbd_service;
         struct ptlrpc_request             *req;
-        unsigned long                     flags;
         ENTRY;
 
         LASSERT (ev->type == LNET_EVENT_PUT ||
@@ -165,7 +161,7 @@ void request_in_callback(lnet_event_t *ev)
         LASSERT ((char *)ev->md.start + ev->offset + ev->mlength <=
                  rqbd->rqbd_buffer + service->srv_buf_size);
 
-        CDEBUG_EX((ev->status == 0) ? D_NET : D_ERROR,
+        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
                "event type %d, status %d, service %s\n",
                ev->type, ev->status, service->srv_name);
 
@@ -209,23 +205,24 @@ void request_in_callback(lnet_event_t *ev)
         req->rq_uid = ev->uid;
 #endif
 
-        spin_lock_irqsave (&service->srv_lock, flags);
+        spin_lock(&service->srv_lock);
 
         req->rq_history_seq = service->srv_request_seq++;
         list_add_tail(&req->rq_history_list, &service->srv_request_history);
 
         if (ev->unlinked) {
                 service->srv_nrqbd_receiving--;
-                if (ev->type != LNET_EVENT_UNLINK &&
-                    service->srv_nrqbd_receiving == 0) {
-                        /* This service is off-air because all its request
-                         * buffers are busy.  Portals will start dropping
-                         * incoming requests until more buffers get posted.
-                         * NB don't moan if it's because we're tearing down the
-                         * service. */
-                        CERROR("All %s request buffers busy\n",
+                CDEBUG(D_RPCTRACE,"Buffer complete: %d buffers still posted\n",
+                       service->srv_nrqbd_receiving);
+
+                /* Normally, don't complain about 0 buffers posted; LNET won't
+                 * drop incoming reqs since we set the portal lazy */
+                if (test_req_buffer_pressure &&
+                    ev->type != LNET_EVENT_UNLINK &&
+                    service->srv_nrqbd_receiving == 0)
+                        CWARN("All %s request buffers busy\n",
                               service->srv_name);
-                }
+
                 /* req takes over the network's ref on rqbd */
         } else {
                 /* req takes a ref on rqbd */
@@ -239,7 +236,7 @@ void request_in_callback(lnet_event_t *ev)
          * has been queued and we unlock, so do the wake now... */
         cfs_waitq_signal(&service->srv_waitq);
 
-        spin_unlock_irqrestore(&service->srv_lock, flags);
+        spin_unlock(&service->srv_lock);
         EXIT;
 }
 
@@ -251,7 +248,6 @@ void reply_out_callback(lnet_event_t *ev)
         struct ptlrpc_cb_id       *cbid = ev->md.user_ptr;
         struct ptlrpc_reply_state *rs = cbid->cbid_arg;
         struct ptlrpc_service     *svc = rs->rs_service;
-        unsigned long              flags;
         ENTRY;
 
         LASSERT (ev->type == LNET_EVENT_SEND ||
@@ -273,10 +269,10 @@ void reply_out_callback(lnet_event_t *ev)
         if (ev->unlinked) {
                 /* Last network callback.  The net's ref on 'rs' stays put
                  * until ptlrpc_server_handle_reply() is done with it */
-                spin_lock_irqsave (&svc->srv_lock, flags);
+                spin_lock(&svc->srv_lock);
                 rs->rs_on_net = 0;
                 ptlrpc_schedule_difficult_reply (rs);
-                spin_unlock_irqrestore (&svc->srv_lock, flags);
+                spin_unlock(&svc->srv_lock);
         }
 
         EXIT;
@@ -289,7 +285,6 @@ void server_bulk_callback (lnet_event_t *ev)
 {
         struct ptlrpc_cb_id     *cbid = ev->md.user_ptr;
         struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
-        unsigned long            flags;
         ENTRY;
 
         LASSERT (ev->type == LNET_EVENT_SEND ||
@@ -299,12 +294,12 @@ void server_bulk_callback (lnet_event_t *ev)
                  (desc->bd_type == BULK_GET_SINK &&
                   ev->type == LNET_EVENT_REPLY));
 
-        CDEBUG_EX((ev->status == 0) ? D_NET : D_ERROR,
+        CDEBUG((ev->status == 0) ? D_NET : D_ERROR,
                "event type %d, status %d, desc %p\n",
                ev->type, ev->status, desc);
 
-        spin_lock_irqsave (&desc->bd_lock, flags);
-
+        spin_lock(&desc->bd_lock);
+        
         if ((ev->type == LNET_EVENT_ACK ||
              ev->type == LNET_EVENT_REPLY) &&
             ev->status == 0) {
@@ -321,7 +316,7 @@ void server_bulk_callback (lnet_event_t *ev)
                 cfs_waitq_signal(&desc->bd_waitq);
         }
 
-        spin_unlock_irqrestore (&desc->bd_lock, flags);
+        spin_unlock(&desc->bd_lock);
         EXIT;
 }
 

@@ -709,9 +709,10 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         int rc;
         int size = sizeof(*idarray) * count;
         loff_t off = 0;
+        ENTRY;
 
         if (!count) 
-                return (0);
+                RETURN(0);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
@@ -737,11 +738,12 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                 GOTO(out, rc);
         }
 
+        EXIT;
  out:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (file && !IS_ERR(file))
                 rc = filp_close(file, 0);
-        RETURN(rc);
+        return rc;
 }
 EXPORT_SYMBOL(llog_get_cat_list);
 

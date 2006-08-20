@@ -41,16 +41,15 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 {
         struct lov_ost_data_v1 *lod;
         int i;
-
-        CDEBUG_EX(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
+        CDEBUG(level, "objid "LPX64", magic 0x%08x, pattern %#x\n",
                le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
                le32_to_cpu(lmm->lmm_pattern));
-        CDEBUG_EX(level,"stripe_size %u, stripe_count %u\n",
+        CDEBUG(level,"stripe_size %u, stripe_count %u\n",
                le32_to_cpu(lmm->lmm_stripe_size),
                le32_to_cpu(lmm->lmm_stripe_count));
         for (i = 0, lod = lmm->lmm_objects;
              i < le32_to_cpu(lmm->lmm_stripe_count); i++, lod++)
-                CDEBUG_EX(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
+                CDEBUG(level, "stripe %u idx %u subobj "LPX64"/"LPX64"\n",
                        i, le32_to_cpu(lod->l_ost_idx),
                        le64_to_cpu(lod->l_object_gr),
                        le64_to_cpu(lod->l_object_id));
@@ -59,11 +58,11 @@ void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 void lov_dump_lmm_join(int level, struct lov_mds_md_join *lmmj)
 {
 
-        CDEBUG_EX(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
+        CDEBUG(level, "objid "LPX64", magic 0x%08X, pattern %#X\n",
                le64_to_cpu(lmmj->lmmj_md.lmm_object_id),
                le32_to_cpu(lmmj->lmmj_md.lmm_magic),
                le32_to_cpu(lmmj->lmmj_md.lmm_pattern));
-        CDEBUG_EX(level,"stripe_size %u, stripe_count %u extent_count %u \n",
+        CDEBUG(level,"stripe_size %u, stripe_count %u extent_count %u \n",
                le32_to_cpu(lmmj->lmmj_md.lmm_stripe_size),
                le32_to_cpu(lmmj->lmmj_md.lmm_stripe_count),
                le32_to_cpu(lmmj->lmmj_extent_count));
@@ -204,7 +203,6 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
         (*lsmp)->lsm_magic = magic;
         (*lsmp)->lsm_stripe_count = stripe_count;
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
-        (*lsmp)->lsm_xfersize = PTLRPC_MAX_BRW_SIZE * stripe_count;
         (*lsmp)->lsm_pattern = pattern;
         (*lsmp)->lsm_oinfo[0].loi_ost_idx = ~0;
 
@@ -350,7 +348,6 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
         (*lsmp)->lsm_oinfo[0].loi_ost_idx = lum.lmm_stripe_offset;
         (*lsmp)->lsm_stripe_size = lum.lmm_stripe_size;
-        (*lsmp)->lsm_xfersize = lum.lmm_stripe_size * stripe_count;
 
         RETURN(0);
 }
@@ -367,7 +364,7 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
         ENTRY;
         for (i = 0; i < lump->lmm_stripe_count; i++) {
                 __u32 len = sizeof(last_id);
-                oexp = lov->tgts[lump->lmm_objects[i].l_ost_idx].ltd_exp;
+                oexp = lov->lov_tgts[lump->lmm_objects[i].l_ost_idx]->ltd_exp;
                 rc = obd_get_info(oexp, strlen("last_id"), "last_id",
                                   &len, &last_id);
                 if (rc)

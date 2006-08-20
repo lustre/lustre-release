@@ -164,8 +164,12 @@ static inline char *lustre_cfg_string(struct lustre_cfg *lcfg, int index)
         if (s[lcfg->lcfg_buflens[index] - 1] != '\0') {
                 int last = min((int)lcfg->lcfg_buflens[index], 
                                size_round(lcfg->lcfg_buflens[index]) - 1);
+                char lost = s[last];
                 s[last] = '\0';
-                CWARN("Truncating buf %d to '%s'\n", index, s);
+                if (lost != '\0') {
+                        CWARN("Truncated buf %d to '%s' (lost '%c'...)\n",
+                              index, s, lost);
+                }
         }
         return s;
 }

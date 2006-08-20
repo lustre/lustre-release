@@ -41,7 +41,6 @@
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_dlm.h>
-#include <lustre_mds.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include "lmv_internal.h"
@@ -69,7 +68,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         int pmode, i, rc = 0;
         ENTRY;
 
-        body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
+        body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
 
         if (!(body->valid & OBD_MD_MDS))
@@ -233,7 +232,7 @@ repeat:
 
         /* caller may use attrs MDS returns on IT_OPEN lock request so, we have
          * to update them for splitted dir */
-        body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
+        body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
 
         /* could not find object, FID is not present in response. */
@@ -242,7 +241,7 @@ repeat:
 
         cid = &body->fid1;
         obj = lmv_obj_grab(obd, cid);
-        if (!obj && (mea = lmv_get_mea(*reqp, 1))) {
+        if (!obj && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
                 /* wow! this is splitted dir, we'd like to handle it */
                 obj = lmv_obj_create(exp, &body->fid1, mea);
                 if (IS_ERR(obj))
@@ -382,7 +381,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         if (it->d.lustre.it_disposition & DISP_LOOKUP_NEG)
                 GOTO(out_free_op_data, rc = 0);
 
-        body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
+        body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
 
         /* could not find object, FID is not present in response. */
@@ -392,9 +391,9 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         cid = &body->fid1;
         obj2 = lmv_obj_grab(obd, cid);
 
-        if (!obj2 && (mea = lmv_get_mea(*reqp, 1))) {
+        if (!obj2 && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
                 /* wow! this is splitted dir, we'd like to handle it. */
-                body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
+                body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body != NULL);
 
                 obj2 = lmv_obj_create(exp, &body->fid1, mea);
@@ -451,7 +450,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
          * last case possible only if all the objs (master and all slaves aren't
          * valid */
 
-        body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
+        body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
         LASSERT((body->valid & OBD_MD_FLID) != 0);
 
@@ -511,7 +510,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
                 lock->l_ast_data = lmv_obj_get(obj);
 
-                body2 = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*body2));
+                body2 = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body2));
                 LASSERT(body2);
 
                 obj->lo_inodes[i].li_size = body2->size;
@@ -665,9 +664,9 @@ repeat:
         rc = lmv_intent_remote(exp, lmm, lmmsize, it, flags, reqp,
                                cb_blocking, extra_lock_flags);
 
-        if (rc == 0 && (mea = lmv_get_mea(*reqp, 1))) {
+        if (rc == 0 && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
                 /* wow! this is splitted dir, we'd like to handle it */
-                body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
+                body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body != NULL);
                 LASSERT((body->valid & OBD_MD_FLID) != 0);
 
@@ -790,7 +789,8 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                                         /* it even got the reply refresh attrs
                                          * from that reply */
                                         body = lustre_msg_buf(mreq->rq_repmsg,
-                                                              1, sizeof(*body));
+                                                              DLM_REPLY_REC_OFF, 
+                                                              sizeof(*body));
                                         LASSERT(body != NULL);
                                         goto update;
                                 }
@@ -848,7 +848,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
                 }
 
-                body = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*body));
+                body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body);
 
 update:
@@ -872,7 +872,8 @@ release_lock:
                 CDEBUG(D_OTHER, "return refreshed attrs: size = %lu\n",
                        (unsigned long)size);
 
-                body = lustre_msg_buf((*reqp)->rq_repmsg, 1, sizeof(*body));
+                body = lustre_msg_buf((*reqp)->rq_repmsg, 
+                                      DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body);
 
                 /* FIXME: what about other attributes? */
