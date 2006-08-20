@@ -48,9 +48,9 @@ void fid_to_le(struct lu_fid *dst, const struct lu_fid *src)
         CLASSERT(sizeof *src ==
                  sizeof fid_seq(src) +
                  sizeof fid_oid(src) + sizeof fid_ver(src));
-        dst->f_seq = le64_to_cpu(fid_seq(src));
-        dst->f_oid = le32_to_cpu(fid_oid(src));
-        dst->f_ver = le32_to_cpu(fid_ver(src));
+        dst->f_seq = cpu_to_le64(fid_seq(src));
+        dst->f_oid = cpu_to_le32(fid_oid(src));
+        dst->f_ver = cpu_to_le32(fid_ver(src));
 }
 EXPORT_SYMBOL(fid_to_le);
 
@@ -60,9 +60,9 @@ void fid_to_be(struct lu_fid *dst, const struct lu_fid *src)
         CLASSERT(sizeof *src ==
                  sizeof fid_seq(src) +
                  sizeof fid_oid(src) + sizeof fid_ver(src));
-        dst->f_seq = be64_to_cpu(fid_seq(src));
-        dst->f_oid = be32_to_cpu(fid_oid(src));
-        dst->f_ver = be32_to_cpu(fid_ver(src));
+        dst->f_seq = cpu_to_be64(fid_seq(src));
+        dst->f_oid = cpu_to_be32(fid_oid(src));
+        dst->f_ver = cpu_to_be32(fid_ver(src));
 }
 EXPORT_SYMBOL(fid_to_be);
 
@@ -72,8 +72,8 @@ void range_to_le(struct lu_range *dst, const struct lu_range *src)
         CLASSERT(sizeof *src ==
                  sizeof src->lr_start +
                  sizeof src->lr_end);
-        dst->lr_start = le64_to_cpu(src->lr_start);
-        dst->lr_end = le64_to_cpu(src->lr_end);
+        dst->lr_start = cpu_to_le64(src->lr_start);
+        dst->lr_end = cpu_to_le64(src->lr_end);
 }
 EXPORT_SYMBOL(range_to_le);
 
@@ -83,8 +83,8 @@ void range_to_be(struct lu_range *dst, const struct lu_range *src)
         CLASSERT(sizeof *src ==
                  sizeof src->lr_start +
                  sizeof src->lr_end);
-        dst->lr_start = be64_to_cpu(src->lr_start);
-        dst->lr_end = be64_to_cpu(src->lr_end);
+        dst->lr_start = cpu_to_be64(src->lr_start);
+        dst->lr_end = cpu_to_be64(src->lr_end);
 }
 EXPORT_SYMBOL(range_to_be);
 
