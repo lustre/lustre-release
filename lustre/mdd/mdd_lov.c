@@ -367,7 +367,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                                            0, &lsm, (void*)eadata);
                         if (rc)
                                 GOTO(out_oa, rc);
-                } else {
+                } else if (parent != NULL) {
                         /* get lov ea from parent and set to lov */
                         struct lov_mds_md *__lmm;
                         int __lmm_size, returned_lmm_size;
