@@ -278,15 +278,8 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
         RETURN(lsm_size);
 }
 
-/* Configure object striping information on a new file.
- *
- * @lmmu is a pointer to a user struct with one or more of the fields set to
- * indicate the application preference: lmm_stripe_count, lmm_stripe_size,
- * lmm_stripe_offset, and lmm_stripe_pattern.  lmm_magic must be LOV_MAGIC.
- * @lsmp is a pointer to an in-core stripe MD that needs to be filled in.
- */
-int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
-                  struct lov_user_md *lump)
+static int __lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
+                           struct lov_user_md *lump)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
@@ -295,17 +288,9 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         int rc;
         ENTRY;
 
-#if __KERNEL__
-        if ((unsigned long)lump < USER_SPACE_TOP) {
-                rc = copy_from_user(&lum, lump, sizeof(lum));
-                if (rc)
-                        RETURN(-EFAULT);
-        } else {
-#endif
-                memcpy(&lum, lump, sizeof(lum));
-#if __KERNEL__
-        }
-#endif
+        rc = copy_from_user(&lum, lump, sizeof(lum));
+        if (rc)
+                RETURN(-EFAULT);
 
         if (lum.lmm_magic != LOV_USER_MAGIC) {
                 if (lum.lmm_magic == __swab32(LOV_USER_MAGIC)) {
@@ -353,13 +338,34 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
         rc = lov_alloc_memmd(lsmp, stripe_count, lum.lmm_pattern, LOV_MAGIC);
 
-        if (rc < 0)
-                RETURN(rc);
-
-        (*lsmp)->lsm_oinfo[0].loi_ost_idx = lum.lmm_stripe_offset;
-        (*lsmp)->lsm_stripe_size = lum.lmm_stripe_size;
+        if (rc >= 0) {
+                (*lsmp)->lsm_oinfo[0].loi_ost_idx = lum.lmm_stripe_offset;
+                (*lsmp)->lsm_stripe_size = lum.lmm_stripe_size;
+                rc = 0;
+        }
 
         RETURN(0);
+}
+
+/* Configure object striping information on a new file.
+ *
+ * @lmmu is a pointer to a user struct with one or more of the fields set to
+ * indicate the application preference: lmm_stripe_count, lmm_stripe_size,
+ * lmm_stripe_offset, and lmm_stripe_pattern.  lmm_magic must be LOV_MAGIC.
+ * @lsmp is a pointer to an in-core stripe MD that needs to be filled in.
+ */
+int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
+                  struct lov_user_md *lump)
+{
+        int rc;
+        mm_segment_t seg;
+
+        seg = get_fs();
+        set_fs(KERNEL_DS);
+
+        rc = __lov_setstripe(exp, lsmp, lump);
+        set_fs(seg);
+        RETURN(rc);
 }
 
 int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
