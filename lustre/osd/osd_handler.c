@@ -629,7 +629,7 @@ static int osd_inode_setattr(const struct lu_context *ctx,
 {
         __u64 bits;
         int rc = 0;
-        
+
         bits = attr->la_valid;
 
         LASSERT(!(bits & LA_TYPE)); /* Huh? You want too much. */
@@ -1822,11 +1822,9 @@ static int osd_process_config(const struct lu_context *ctx,
 static int osd_recovery_complete(const struct lu_context *ctxt,
                                  struct lu_device *d)
 {
-        struct osd_device *o = osd_dev(d);
-        int rc = 0;
         ENTRY;
         /* TODO: orphans handling */
-        RETURN(rc);
+        RETURN(0);
 }
 
 /*
