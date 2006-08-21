@@ -51,7 +51,7 @@ static int ll_nfs_test_inode(struct inode *inode, void *opaque)
         struct lu_fid *ifid = &ll_i2info(inode)->lli_fid;
         struct lu_fid *lfid = opaque;
 
-        if (memcmp(ifid, lfid, sizeof(struct lu_fid)) == 0)
+        if (lu_fid_eq(ifid, lfid))
                 return 1;
 
         return 0;
@@ -175,10 +175,12 @@ static void ll_fh_to_fid(struct lu_fid *fid, __u32 *mode, __u32 *datap)
 
 static void ll_fid_to_fh(struct lu_fid *fid, __u32 *mode, __u32 *datap)
 {
+        __u64 *seq = (__u64 *)datap;
+        
         /* packing ->f_seq */
-        *datap++ = (__u32)(fid_seq(fid) >> 32);
-        *datap++ = (__u32)(fid_seq(fid) & 0x00000000ffffffff);
-
+        *seq = fid_seq(fid);
+        datap += 2;
+        
         /* packing ->f_num */
         *datap++ = fid_ver(fid);
         *datap++ = fid_oid(fid);

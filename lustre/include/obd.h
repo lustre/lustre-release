@@ -952,7 +952,7 @@ struct obd_ops {
         int (*o_fid_alloc)(struct obd_export *exp, struct lu_fid *fid,
                            struct lu_placement_hint *hint);
 
-        int (*o_fid_delete)(struct obd_export *exp, struct lu_fid *fid);
+        int (*o_fid_delete)(struct obd_export *exp, const struct lu_fid *fid);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
                         __u64 max_age);
@@ -1068,7 +1068,7 @@ struct obd_ops {
         int (*o_llog_finish)(struct obd_device *obd, int count);
 
         /* metadata-only methods */
-        int (*o_pin)(struct obd_export *, struct lu_fid *fid,
+        int (*o_pin)(struct obd_export *, const struct lu_fid *fid,
                      struct obd_client_handle *, int flag);
         int (*o_unpin)(struct obd_export *, struct obd_client_handle *, int);
 
@@ -1093,7 +1093,7 @@ struct obd_ops {
 
 struct md_ops {
         int (*m_getstatus)(struct obd_export *, struct lu_fid *);
-        int (*m_change_cbdata)(struct obd_export *, struct lu_fid *,
+        int (*m_change_cbdata)(struct obd_export *, const struct lu_fid *,
                                ldlm_iterator_t, void *);
         int (*m_close)(struct obd_export *, struct md_op_data *,
                        struct obd_client_handle *, struct ptlrpc_request **);
@@ -1105,9 +1105,9 @@ struct md_ops {
                          int, struct md_op_data *, struct lustre_handle *,
                          void *, int, ldlm_completion_callback,
                          ldlm_blocking_callback, void *, int);
-        int (*m_getattr)(struct obd_export *, struct lu_fid *,
+        int (*m_getattr)(struct obd_export *, const struct lu_fid *,
                          obd_valid, int, struct ptlrpc_request **);
-        int (*m_getattr_name)(struct obd_export *, struct lu_fid *,
+        int (*m_getattr_name)(struct obd_export *, const struct lu_fid *,
                               const char *, int, obd_valid,
                               int, struct ptlrpc_request **);
         int (*m_intent_lock)(struct obd_export *, struct md_op_data *,
@@ -1122,18 +1122,18 @@ struct md_ops {
         int (*m_setattr)(struct obd_export *, struct md_op_data *,
                          struct iattr *, void *, int , void *, int,
                          struct ptlrpc_request **);
-        int (*m_sync)(struct obd_export *, struct lu_fid *,
+        int (*m_sync)(struct obd_export *, const struct lu_fid *,
                       struct ptlrpc_request **);
-        int (*m_readpage)(struct obd_export *, struct lu_fid *,
+        int (*m_readpage)(struct obd_export *, const struct lu_fid *,
                           __u64, struct page *, struct ptlrpc_request **);
         int (*m_unlink)(struct obd_export *, struct md_op_data *,
                         struct ptlrpc_request **);
 
-        int (*m_setxattr)(struct obd_export *, struct lu_fid *,
+        int (*m_setxattr)(struct obd_export *, const struct lu_fid *,
                           obd_valid, const char *, const char *,
                           int, int, int, struct ptlrpc_request **);
 
-        int (*m_getxattr)(struct obd_export *, struct lu_fid *,
+        int (*m_getxattr)(struct obd_export *, const struct lu_fid *,
                           obd_valid, const char *, const char *,
                           int, int, int, struct ptlrpc_request **);
 
@@ -1151,11 +1151,11 @@ struct md_ops {
                                         struct obd_client_handle *);
         int (*m_set_lock_data)(struct obd_export *, __u64 *, void *);
 
-        int (*m_lock_match)(struct obd_export *, int, struct lu_fid *,
+        int (*m_lock_match)(struct obd_export *, int, const struct lu_fid *,
                             ldlm_type_t, ldlm_policy_data_t *, ldlm_mode_t,
                             struct lustre_handle *);
 
-        int (*m_cancel_unused)(struct obd_export *, struct lu_fid *,
+        int (*m_cancel_unused)(struct obd_export *, const struct lu_fid *,
                                int flags, void *opaque);
 
         /*

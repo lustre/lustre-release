@@ -819,7 +819,7 @@ static inline int obd_fid_alloc(struct obd_export *exp,
 }
 
 static inline int obd_fid_delete(struct obd_export *exp,
-                                 struct lu_fid *fid)
+                                 const struct lu_fid *fid)
 {
         int rc;
         ENTRY;
@@ -1402,7 +1402,7 @@ static inline int obd_san_preprw(int cmd, struct obd_export *exp,
         return(rc);
 }
 
-static inline int obd_pin(struct obd_export *exp, struct lu_fid *fid,
+static inline int obd_pin(struct obd_export *exp, const struct lu_fid *fid,
                           struct obd_client_handle *handle, int flag)
 {
         int rc;
@@ -1557,7 +1557,8 @@ static inline int obd_register_observer(struct obd_device *obd,
 }
 
 /* metadata helpers */
-static inline int md_getstatus(struct obd_export *exp, struct lu_fid *fid)
+static inline int md_getstatus(struct obd_export *exp,
+                               struct lu_fid *fid)
 {
         int rc;
         ENTRY;
@@ -1568,7 +1569,8 @@ static inline int md_getstatus(struct obd_export *exp, struct lu_fid *fid)
         RETURN(rc);
 }
 
-static inline int md_getattr(struct obd_export *exp, struct lu_fid *fid,
+static inline int md_getattr(struct obd_export *exp,
+                             const struct lu_fid *fid,
                              obd_valid valid, int ea_size,
                              struct ptlrpc_request **request)
 {
@@ -1581,7 +1583,8 @@ static inline int md_getattr(struct obd_export *exp, struct lu_fid *fid,
         RETURN(rc);
 }
 
-static inline int md_change_cbdata(struct obd_export *exp, struct lu_fid *fid,
+static inline int md_change_cbdata(struct obd_export *exp,
+                                   const struct lu_fid *fid,
                                    ldlm_iterator_t it, void *data)
 {
         int rc;
@@ -1650,7 +1653,8 @@ static inline int md_enqueue(struct obd_export *exp, int lock_type,
         RETURN(rc);
 }
 
-static inline int md_getattr_name(struct obd_export *exp, struct lu_fid *fid,
+static inline int md_getattr_name(struct obd_export *exp,
+                                  const struct lu_fid *fid,
                                   const char *filename, int namelen,
                                   obd_valid valid, int ea_size,
                                   struct ptlrpc_request **request)
@@ -1722,7 +1726,8 @@ static inline int md_setattr(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc);
 }
 
-static inline int md_sync(struct obd_export *exp, struct lu_fid *fid,
+static inline int md_sync(struct obd_export *exp,
+                          const struct lu_fid *fid,
                           struct ptlrpc_request **request)
 {
         int rc;
@@ -1733,7 +1738,8 @@ static inline int md_sync(struct obd_export *exp, struct lu_fid *fid,
         RETURN(rc);
 }
 
-static inline int md_readpage(struct obd_export *exp, struct lu_fid *fid,
+static inline int md_readpage(struct obd_export *exp,
+                              const struct lu_fid *fid,
                               __u64 offset, struct page *page,
                               struct ptlrpc_request **request)
 {
@@ -1777,7 +1783,8 @@ static inline int md_free_lustre_md(struct obd_export *exp,
         RETURN(MDP(exp->exp_obd, free_lustre_md)(exp, md));
 }
 
-static inline int md_setxattr(struct obd_export *exp, struct lu_fid *fid,
+static inline int md_setxattr(struct obd_export *exp,
+                              const struct lu_fid *fid,
                               obd_valid valid, const char *name,
                               const char *input, int input_size,
                               int output_size, int flags,
@@ -1791,7 +1798,8 @@ static inline int md_setxattr(struct obd_export *exp, struct lu_fid *fid,
                                            request));
 }
 
-static inline int md_getxattr(struct obd_export *exp, struct lu_fid *fid,
+static inline int md_getxattr(struct obd_export *exp,
+                              const struct lu_fid *fid,
                               obd_valid valid, const char *name,
                               const char *input, int input_size,
                               int output_size, int flags,
@@ -1834,7 +1842,7 @@ static inline int md_set_lock_data(struct obd_export *exp,
 }
 
 static inline int md_cancel_unused(struct obd_export *exp,
-                                   struct lu_fid *fid,
+                                   const struct lu_fid *fid,
                                    int flags, void *opaque)
 {
         int rc;
@@ -1848,7 +1856,7 @@ static inline int md_cancel_unused(struct obd_export *exp,
 }
 
 static inline int md_lock_match(struct obd_export *exp, int flags,
-                                struct lu_fid *fid, ldlm_type_t type,
+                                const struct lu_fid *fid, ldlm_type_t type,
                                 ldlm_policy_data_t *policy, ldlm_mode_t mode,
                                 struct lustre_handle *lockh)
 {

@@ -295,13 +295,17 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         int rc;
         ENTRY;
 
+#if __KERNEL__
         if ((unsigned long)lump < USER_SPACE_TOP) {
                 rc = copy_from_user(&lum, lump, sizeof(lum));
                 if (rc)
                         RETURN(-EFAULT);
         } else {
+#endif
                 memcpy(&lum, lump, sizeof(lum));
+#if __KERNEL__
         }
+#endif
 
         if (lum.lmm_magic != LOV_USER_MAGIC) {
                 if (lum.lmm_magic == __swab32(LOV_USER_MAGIC)) {
@@ -415,14 +419,18 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (!lsm)
                 RETURN(-ENODATA);
 
+#if __KERNEL__
         if ((unsigned long)lump < USER_SPACE_TOP) {
                 rc = copy_from_user(&lum, lump, sizeof(lum));
                 if (rc)
                         RETURN(-EFAULT);
         } else {
+#endif
                 memcpy(&lum, lump, sizeof(lum));
+#if __KERNEL__
         }
-
+#endif
+        
         if (lum.lmm_magic != LOV_USER_MAGIC)
                 RETURN(-EINVAL);
 
@@ -438,21 +446,29 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* User wasn't expecting this many OST entries */
         if (lum.lmm_stripe_count == 0) {
+#if __KERNEL__
                 if ((unsigned long)lump < USER_SPACE_TOP) {
                         if (copy_to_user(lump, lmmk, sizeof(lum)))
                                 rc = -EFAULT;
                 } else {
+#endif
                         memcpy(lump, lmmk, sizeof(lum));
+#if __KERNEL__
                 }
+#endif
         } else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count) {
                 rc = -EOVERFLOW;
         } else {
+#if __KERNEL__
                 if ((unsigned long)lump < USER_SPACE_TOP) {
                         if (copy_to_user(lump, lmmk, sizeof(lum)))
                                 rc = -EFAULT;
                 } else {
+#endif
                         memcpy(lump, lmmk, sizeof(lum));
+#if __KERNEL__
                 }
+#endif
         }
 
         obd_free_diskmd(exp, &lmmk);

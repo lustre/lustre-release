@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002, 2003, 2004 Cluster File Systems, Inc.
+ * Copyright (C) 2002, 2003, 2004, 2005, 2006 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -41,10 +41,6 @@ struct qstr {
 #define LL_IT2STR(it)				        \
 	((it) ? ldlm_it2str((it)->it_op) : "0")
 
-#define MEA_SIZE_LMV(lmv)				\
-        ((lmv)->desc.ld_tgt_count *			\
-	 sizeof(struct lu_fid) + sizeof(struct lmv_stripe_md))
-        
 struct lmv_inode {
         struct lu_fid      li_fid;        /* id of dirobj */
         unsigned long      li_size;       /* slave size value */
@@ -92,17 +88,18 @@ void lmv_obj_free(struct lmv_obj *obj);
 struct lmv_obj *lmv_obj_get(struct lmv_obj *obj);
 
 struct lmv_obj *lmv_obj_grab(struct obd_device *obd,
-			     struct lu_fid *fid);
+			     const struct lu_fid *fid);
 
 struct lmv_obj *lmv_obj_alloc(struct obd_device *obd,
-			      struct lu_fid *fid,
+			      const struct lu_fid *fid,
 			      struct lmv_stripe_md *mea);
 
 struct lmv_obj *lmv_obj_create(struct obd_export *exp,
-			       struct lu_fid *fid,
+			       const struct lu_fid *fid,
 			       struct lmv_stripe_md *mea);
 
-int lmv_obj_delete(struct obd_export *exp, struct lu_fid *fid);
+int lmv_obj_delete(struct obd_export *exp,
+                   const struct lu_fid *fid);
 
 int lmv_check_connect(struct obd_device *obd);
 
@@ -112,31 +109,32 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                     ldlm_blocking_callback cb_blocking,
                     int extra_lock_flags);
 
-int lmv_intent_lookup(struct obd_export *, struct lu_fid *, 
+int lmv_intent_lookup(struct obd_export *, const struct lu_fid *, 
 		      const char *, int, void *, int,
-		      struct lu_fid *, struct lookup_intent *, int,
+		      const struct lu_fid *, struct lookup_intent *, int,
 		      struct ptlrpc_request **, ldlm_blocking_callback,
                       int extra_lock_flags);
 
-int lmv_intent_getattr(struct obd_export *, struct lu_fid *, const char *,
-                       int, void *, int, struct lu_fid *, struct lookup_intent *,
+int lmv_intent_getattr(struct obd_export *, const struct lu_fid *, const char *,
+                       int, void *, int, const struct lu_fid *, struct lookup_intent *,
                        int, struct ptlrpc_request **, ldlm_blocking_callback,
                        int extra_lock_flags);
 
-int lmv_intent_open(struct obd_export *, struct lu_fid *, const char *, 
-		    int, void *, int, struct lu_fid *, struct lookup_intent *, 
+int lmv_intent_open(struct obd_export *, const struct lu_fid *, const char *, 
+		    int, void *, int, const struct lu_fid *, struct lookup_intent *, 
 		    int, struct ptlrpc_request **, ldlm_blocking_callback,
                     int extra_lock_flags);
 
 int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
-                          struct lu_fid *, struct lookup_intent *, int,
+                          const struct lu_fid *, struct lookup_intent *, int,
 			  ldlm_blocking_callback cb_blocking,
                           int extra_lock_flags);
 
-int lmv_handle_split(struct obd_export *, struct lu_fid *);
+int lmv_handle_split(struct obd_export *, const struct lu_fid *);
 int lmv_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 		     void *, int);
-int lmv_fld_lookup(struct obd_device *obd, const struct lu_fid *fid);
+int lmv_fld_lookup(struct obd_device *obd, const struct lu_fid *fid,
+                   mdsno_t *mds);
 
 static inline struct lmv_stripe_md * 
 lmv_get_mea(struct ptlrpc_request *req, int offset)
@@ -159,6 +157,13 @@ lmv_get_mea(struct ptlrpc_request *req, int offset)
 		return NULL;
 	
 	return mea;
+}
+
+static inline int lmv_get_easize(struct lmv_obd *lmv)
+{
+        return sizeof(struct lmv_stripe_md) +
+                lmv->desc.ld_tgt_count *
+                sizeof(struct lu_fid);
 }
 
 /* lproc_lmv.c */

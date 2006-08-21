@@ -28,10 +28,11 @@
 #include <lustre_mdc.h>
 
 void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
-                       __u64 valid, struct lu_fid *fid, int ea_size, int flags);
+                       __u64 valid, const struct lu_fid *fid,
+                       int ea_size, int flags);
 void mdc_pack_rep_body(struct ptlrpc_request *);
 void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
-		      __u32 size, struct lu_fid *fid);
+		      __u32 size, const struct lu_fid *fid);
 void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
                       int flags, struct md_op_data *data);
 void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
@@ -105,8 +106,9 @@ extern quota_interface_t *quota_interface;
 int mdc_set_lock_data(struct obd_export *exp,
                       __u64 *lockh, void *data);
 
-int mdc_change_cbdata(struct obd_export *exp, struct lu_fid *fid,
+int mdc_change_cbdata(struct obd_export *exp, const struct lu_fid *fid,
                       ldlm_iterator_t it, void *data);
+
 int mdc_intent_lock(struct obd_export *exp,
                     struct md_op_data *,
                     void *lmm, int lmmsize,
@@ -130,21 +132,21 @@ int mdc_init_ea_size(struct obd_export *exp, int easize, int def_easzie,
                      int cookiesize);
 
 int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid);
-int mdc_getattr(struct obd_export *exp, struct lu_fid *fid,
+int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
                 obd_valid valid, int ea_size,
                 struct ptlrpc_request **request);
-int mdc_getattr_name(struct obd_export *exp, struct lu_fid *fid,
+int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
                      const char *filename, int namelen, obd_valid valid,
                      int ea_size, struct ptlrpc_request **request);
 int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request);
-int mdc_setxattr(struct obd_export *exp, struct lu_fid *fid,
+int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,
                  obd_valid valid, const char *xattr_name,
                  const char *input, int input_size,
                  int output_size, int flags,
                  struct ptlrpc_request **request);
-int mdc_getxattr(struct obd_export *exp, struct lu_fid *fid,
+int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
                  obd_valid valid, const char *xattr_name,
                  const char *input, int input_size,
                  int output_size, int flags, struct ptlrpc_request **request);
@@ -169,7 +171,7 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
 int mdc_close(struct obd_export *, struct md_op_data *,
               struct obd_client_handle *, struct ptlrpc_request **);
 
-int mdc_readpage(struct obd_export *exp, struct lu_fid *fid,
+int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
                  __u64 offset,  struct page *, struct ptlrpc_request **);
 
 int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
@@ -187,15 +189,15 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
                const char *old, int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request);
 
-int mdc_sync(struct obd_export *exp, struct lu_fid *fid,
+int mdc_sync(struct obd_export *exp, const struct lu_fid *fid,
              struct ptlrpc_request **);
 
 int mdc_lock_match(struct obd_export *exp, int flags,
-                   struct lu_fid *fid, ldlm_type_t type,
+                   const struct lu_fid *fid, ldlm_type_t type,
                    ldlm_policy_data_t *policy, ldlm_mode_t mode,
                    struct lustre_handle *lockh);
 
-int mdc_cancel_unused(struct obd_export *exp, struct lu_fid *fid,
+int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
                       int flags, void *opaque);
 
 int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data);

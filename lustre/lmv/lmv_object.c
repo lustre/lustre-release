@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ * Copyright (C) 2002, 2003, 2004, 2005, 2006 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -55,7 +55,7 @@ static spinlock_t obj_list_lock = SPIN_LOCK_UNLOCKED;
 /* creates new obj on passed @fid and @mea. */
 struct lmv_obj *
 lmv_obj_alloc(struct obd_device *obd,
-              struct lu_fid *fid,
+              const struct lu_fid *fid,
               struct lmv_stripe_md *mea)
 {
         int i;
@@ -192,7 +192,7 @@ lmv_obj_put(struct lmv_obj *obj)
 }
 
 static struct lmv_obj *
-__lmv_obj_grab(struct obd_device *obd, struct lu_fid *fid)
+__lmv_obj_grab(struct obd_device *obd, const struct lu_fid *fid)
 {
         struct lmv_obj *obj;
         struct list_head *cur;
@@ -210,7 +210,7 @@ __lmv_obj_grab(struct obd_device *obd, struct lu_fid *fid)
                  * passed obd. It is possible that, object manager will have two
                  * objects with the same fid belong to different obds, if client
                  * and mds runs on the same host. May be it is good idea to have
-                 * objects list assosiated with obd.
+                 * objects list associated with obd.
                  */
                 if (obj->lo_obd != obd)
                         continue;
@@ -224,7 +224,7 @@ __lmv_obj_grab(struct obd_device *obd, struct lu_fid *fid)
 }
 
 struct lmv_obj *
-lmv_obj_grab(struct obd_device *obd, struct lu_fid *fid)
+lmv_obj_grab(struct obd_device *obd, const struct lu_fid *fid)
 {
         struct lmv_obj *obj;
         ENTRY;
@@ -239,7 +239,7 @@ lmv_obj_grab(struct obd_device *obd, struct lu_fid *fid)
 /* looks in objects list for an object that matches passed @fid. If it is not
  * found -- creates it using passed @mea and puts onto list. */
 static struct lmv_obj *
-__lmv_obj_create(struct obd_device *obd, struct lu_fid *fid,
+__lmv_obj_create(struct obd_device *obd, const struct lu_fid *fid,
                  struct lmv_stripe_md *mea)
 {
         struct lmv_obj *new, *obj;
@@ -260,8 +260,8 @@ __lmv_obj_create(struct obd_device *obd, struct lu_fid *fid,
         obj = __lmv_obj_grab(obd, fid);
         if (obj) {
                 /* someone created it already - put @obj and getting out. */
-                lmv_obj_free(new);
                 spin_unlock(&obj_list_lock);
+                lmv_obj_free(new);
                 RETURN(obj);
         }
 
@@ -280,7 +280,7 @@ __lmv_obj_create(struct obd_device *obd, struct lu_fid *fid,
 /* creates object from passed @fid and @mea. If @mea is NULL, it will be
  * obtained from correct MDT and used for constructing the object. */
 struct lmv_obj *
-lmv_obj_create(struct obd_export *exp, struct lu_fid *fid,
+lmv_obj_create(struct obd_export *exp, const struct lu_fid *fid,
                struct lmv_stripe_md *mea)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -288,7 +288,8 @@ lmv_obj_create(struct obd_export *exp, struct lu_fid *fid,
         struct ptlrpc_request *req = NULL;
         struct lmv_obj *obj;
         struct lustre_md md;
-        int mealen, rc, mds;
+        int mealen, rc;
+        mdsno_t mds;
         ENTRY;
 
         CDEBUG(D_OTHER, "get mea for "DFID" and create lmv obj\n",
@@ -300,15 +301,15 @@ lmv_obj_create(struct obd_export *exp, struct lu_fid *fid,
                 __u64 valid;
 
                 CDEBUG(D_OTHER, "mea isn't passed in, get it now\n");
-                mealen = MEA_SIZE_LMV(lmv);
+                mealen = lmv_get_easize(lmv);
 
                 /* time to update mea of parent fid */
                 md.mea = NULL;
                 valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
 
-                mds = lmv_fld_lookup(obd, fid);
-                if (mds < 0)
-                        GOTO(cleanup, obj = ERR_PTR(mds));
+                rc = lmv_fld_lookup(obd, fid, &mds);
+                if (rc)
+                        GOTO(cleanup, obj = ERR_PTR(rc));
 
                 rc = md_getattr(lmv->tgts[mds].ltd_exp, fid, valid, mealen, &req);
                 if (rc) {
@@ -353,7 +354,7 @@ cleanup:
  * for subsequent callers of lmv_obj_grab().
  */
 int
-lmv_obj_delete(struct obd_export *exp, struct lu_fid *fid)
+lmv_obj_delete(struct obd_export *exp, const struct lu_fid *fid)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obj *obj;

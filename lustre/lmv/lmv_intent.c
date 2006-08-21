@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002, 2003 Cluster File Systems, Inc.
+ * Copyright (C) 2002, 2003, 2004, 2005, 2006 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -65,7 +65,8 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         struct lustre_handle plock;
         struct md_op_data *op_data;
         struct lu_fid nid;
-        int pmode, i, rc = 0;
+        int pmode, rc = 0;
+        mdsno_t mds;
         ENTRY;
 
         body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
@@ -105,10 +106,10 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
                 GOTO(out, rc = -ENOMEM);
         
         op_data->fid1 = nid;
-        i = lmv_fld_lookup(obd, &nid);
-        if (i < 0)
-                RETURN(i);
-        rc = md_intent_lock(lmv->tgts[i].ltd_exp, op_data,
+        rc = lmv_fld_lookup(obd, &nid, &mds);
+        if (rc)
+                RETURN(rc);
+        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, op_data,
                             lmm, lmmsize, it, flags, &req,
                             cb_blocking, extra_lock_flags);
 
@@ -135,9 +136,9 @@ out:
         return rc;
 }
 
-int lmv_intent_open(struct obd_export *exp, struct lu_fid *pid,
+int lmv_intent_open(struct obd_export *exp, const struct lu_fid *pid,
                     const char *name, int len, void *lmm, int lmmsize,
-                    struct lu_fid *cid, struct lookup_intent *it,
+                    const struct lu_fid *cid, struct lookup_intent *it,
                     int flags, struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking,
                     int extra_lock_flags)
@@ -148,30 +149,33 @@ int lmv_intent_open(struct obd_export *exp, struct lu_fid *pid,
         struct md_op_data *op_data;
         struct lmv_stripe_md *mea;
         struct lu_fid rpid = *pid;
-        int rc, mds, loop = 0;
         struct lmv_obj *obj;
+        int rc, loop = 0;
+        mdsno_t mds;
         ENTRY;
 
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         
-        /* IT_OPEN is intended to open (and create, possible) an object. Parent
-         * (pid) may be splitted dir */
+        /*
+         * IT_OPEN is intended to open (and create, possible) an object. Parent
+         * (pid) may be split dir.
+         */
 
 repeat:
         LASSERT(++loop <= 2);
-        mds = lmv_fld_lookup(obd, &rpid);
-        if (mds < 0)
-                GOTO(out_free_op_data, rc = mds);
+        rc = lmv_fld_lookup(obd, &rpid, &mds);
+        if (rc)
+                GOTO(out_free_op_data, rc);
         obj = lmv_obj_grab(obd, &rpid);
         if (obj) {
-                /* directory is already splitted, so we have to forward
-                 * request to the right MDS */
+                /* directory is already split, so we have to forward request to
+                 * the right MDS. */
                 mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                    (char *)name, len);
 
-                CDEBUG(D_OTHER, "forward to MDS #%u ("DFID")\n",
+                CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n",
                        mds, PFID(&rpid));
                 rpid = obj->lo_inodes[mds].li_fid;
                 lmv_obj_put(obj);
@@ -184,12 +188,11 @@ repeat:
         op_data->name = name;
         op_data->namelen = len;
 
-        //mds = lmv_fld_lookup(obd, &rpid);
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, op_data,
                             lmm, lmmsize, it, flags, reqp,
                             cb_blocking, extra_lock_flags);
         if (rc == -ERESTART) {
-                /* directory got splitted. time to update local object and
+                /* directory got split. time to update local object and
                  * repeat the request with proper MDS */
                 LASSERT(lu_fid_eq(pid, &rpid));
                 rc = lmv_handle_split(exp, &rpid);
@@ -231,7 +234,7 @@ repeat:
                 GOTO(out_free_op_data, rc = 0);
 
         /* caller may use attrs MDS returns on IT_OPEN lock request so, we have
-         * to update them for splitted dir */
+         * to update them for split dir */
         body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
 
@@ -242,14 +245,14 @@ repeat:
         cid = &body->fid1;
         obj = lmv_obj_grab(obd, cid);
         if (!obj && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
-                /* wow! this is splitted dir, we'd like to handle it */
+                /* wow! this is split dir, we'd like to handle it */
                 obj = lmv_obj_create(exp, &body->fid1, mea);
                 if (IS_ERR(obj))
                         GOTO(out_free_op_data, rc = (int)PTR_ERR(obj));
         }
 
         if (obj) {
-                /* this is splitted dir and we'd want to get attrs */
+                /* this is split dir and we'd want to get attrs */
                 CDEBUG(D_OTHER, "attrs from slaves for "DFID"\n",
                        PFID(cid));
 
@@ -269,9 +272,9 @@ out_free_op_data:
         return rc;
 }
 
-int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
+int lmv_intent_getattr(struct obd_export *exp, const struct lu_fid *pid,
                        const char *name, int len, void *lmm, int lmmsize,
-                       struct lu_fid *cid, struct lookup_intent *it,
+                       const struct lu_fid *cid, struct lookup_intent *it,
                        int flags, struct ptlrpc_request **reqp,
                        ldlm_blocking_callback cb_blocking,
                        int extra_lock_flags)
@@ -283,7 +286,8 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         struct md_op_data *op_data;
         struct lu_fid rpid = *pid;
         struct lmv_stripe_md *mea;
-        int rc = 0, mds;
+        mdsno_t mds;
+        int rc = 0;
         ENTRY;
 
         OBD_ALLOC_PTR(op_data);
@@ -292,21 +296,21 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         
         if (cid) {
                 /* caller wants to revalidate attrs of obj we have to revalidate
-                 * slaves if requested object is splitted directory */
+                 * slaves if requested object is split directory */
                 CDEBUG(D_OTHER, "revalidate attrs for "DFID"\n", PFID(cid));
-                mds = lmv_fld_lookup(obd, cid);
-                if (mds < 0)
-                        GOTO(out_free_op_data, rc = mds);
+                rc = lmv_fld_lookup(obd, cid, &mds);
+                if (rc)
+                        GOTO(out_free_op_data, rc);
 #if 0
                 obj = lmv_obj_grab(obd, cid);
                 if (obj) {
-                        /* in fact, we need not this with current intent_lock(),
-                         * but it may change some day */
+                        /* in fact, we do not need this with current
+                         * intent_lock(), but it may change some day */
                         if (!lu_fid_eq(pid, cid)){
                                 rpid = obj->lo_inodes[mds].li_fid;
-                                mds = lmv_fld_lookup(obd, &rpid);
-                                if (mds < 0)
-                                        GOTO(out_free_op_data, rc = mds);
+                                rc = lmv_fld_lookup(obd, &rpid, &mds);
+                                if (rc)
+                                        GOTO(out_free_op_data, rc);
                         }
                         lmv_obj_put(obj);
                 }
@@ -315,19 +319,21 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         } else {
                 CDEBUG(D_OTHER, "INTENT getattr for %*s on "DFID"\n",
                        len, name, PFID(pid));
-                mds = lmv_fld_lookup(obd, pid);
-                if (mds < 0)
-                        GOTO(out_free_op_data, rc = mds);
+                rc = lmv_fld_lookup(obd, pid, &mds);
+                if (rc)
+                        GOTO(out_free_op_data, rc);
                 obj = lmv_obj_grab(obd, pid);
                 if (obj && len) {
-                        /* directory is already splitted. calculate mds */
+                        /* directory is already split. calculate mds */
                         mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                            (char *)name, len);
                         rpid = obj->lo_inodes[mds].li_fid;
-                        mds = lmv_fld_lookup(obd, &rpid);
+                        rc = lmv_fld_lookup(obd, &rpid, &mds);
+                        if (rc)
+                                GOTO(out_free_op_data, rc);
                         lmv_obj_put(obj);
 
-                        CDEBUG(D_OTHER, "forward to MDS #%u (slave "DFID")\n",
+                        CDEBUG(D_OTHER, "forward to MDS #"LPU64" (slave "DFID")\n",
                                mds, PFID(&rpid));
                 }
         }
@@ -345,7 +351,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
 
         if (obj && rc > 0) {
                 /*
-                 * this is splitted dir. In order to optimize things a bit, we
+                 * this is split dir. In order to optimize things a bit, we
                  * consider obj valid updating missing parts.
 
                  * FIXME: do we need to return any lock here? It would be fine
@@ -392,7 +398,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         obj2 = lmv_obj_grab(obd, cid);
 
         if (!obj2 && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
-                /* wow! this is splitted dir, we'd like to handle it. */
+                /* wow! this is split dir, we'd like to handle it. */
                 body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body != NULL);
 
@@ -402,7 +408,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct lu_fid *pid,
         }
 
         if (obj2) {
-                /* this is splitted dir and we'd want to get attrs */
+                /* this is split dir and we'd want to get attrs */
                 CDEBUG(D_OTHER, "attrs from slaves for "DFID", rc %d\n",
                        PFID(cid), rc);
 
@@ -470,7 +476,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 struct lu_fid fid = obj->lo_inodes[i].li_fid;
                 struct ptlrpc_request *req = NULL;
                 struct lookup_intent it;
-                int mds;
+                mdsno_t mds;
 
                 if (lu_fid_eq(&fid, &obj->lo_fid))
                         /* skip master obj */
@@ -486,9 +492,9 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 op_data->fid1 = fid;
                 op_data->fid2 = fid;
 
-                mds = lmv_fld_lookup(obd, &fid);
-                if (mds < 0)
-                        GOTO(cleanup, rc = mds);
+                rc = lmv_fld_lookup(obd, &fid, &mds);
+                if (rc)
+                        GOTO(cleanup, rc);
                 rc = md_intent_lock(lmv->tgts[mds].ltd_exp, op_data,
                                     NULL, 0, &it, 0, &req,
                                     lmv_blocking_ast, 0);
@@ -537,9 +543,9 @@ cleanup:
         return rc;
 }
 
-int lmv_intent_lookup(struct obd_export *exp, struct lu_fid *pid,
+int lmv_intent_lookup(struct obd_export *exp, const struct lu_fid *pid,
                       const char *name, int len, void *lmm, int lmmsize,
-                      struct lu_fid *cid, struct lookup_intent *it,
+                      const struct lu_fid *cid, struct lookup_intent *it,
                       int flags, struct ptlrpc_request **reqp,
                       ldlm_blocking_callback cb_blocking,
                       int extra_lock_flags)
@@ -550,8 +556,9 @@ int lmv_intent_lookup(struct obd_export *exp, struct lu_fid *pid,
         struct lu_fid rpid = *pid;
         struct md_op_data *op_data;
         struct lmv_stripe_md *mea;
-        int rc, mds, loop = 0;
         struct lmv_obj *obj;
+        int rc, loop = 0;
+        mdsno_t mds;
         ENTRY;
 
         OBD_ALLOC_PTR(op_data);
@@ -577,18 +584,18 @@ int lmv_intent_lookup(struct obd_export *exp, struct lu_fid *pid,
                         rpid = obj->lo_inodes[mds].li_fid;
                         lmv_obj_put(obj);
                 }
-                mds = lmv_fld_lookup(obd, &rpid);
-                if (mds < 0)
-                        GOTO(out_free_op_data, rc = mds);
+                rc = lmv_fld_lookup(obd, &rpid, &mds);
+                if (rc)
+                        GOTO(out_free_op_data, rc);
 
-                CDEBUG(D_OTHER, "revalidate lookup for "DFID" to %d MDS\n",
+                CDEBUG(D_OTHER, "revalidate lookup for "DFID" to #"LPU64" MDS\n",
                        PFID(cid), mds);
 
                 op_data->fid2 = *cid;
         } else {
-                mds = lmv_fld_lookup(obd, pid);
-                if (mds < 0)
-                        GOTO(out_free_op_data, rc = mds);
+                rc = lmv_fld_lookup(obd, pid, &mds);
+                if (rc)
+                        GOTO(out_free_op_data, rc);
 repeat:
                 LASSERT(++loop <= 2);
 
@@ -600,13 +607,13 @@ repeat:
                 obj = lmv_obj_grab(obd, pid);
                 if (obj) {
                         if (len) {
-                                /* directory is already splitted. calculate mds */
+                                /* directory is already split. calculate mds */
                                 mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                                    (char *)name, len);
                                 rpid = obj->lo_inodes[mds].li_fid;
-                                mds = lmv_fld_lookup(obd, &rpid);
-                                if (mds < 0)
-                                        GOTO(out_free_op_data, rc = mds);
+                                rc = lmv_fld_lookup(obd, &rpid, &mds);
+                                if (rc)
+                                        GOTO(out_free_op_data, rc);
                         }
                         lmv_obj_put(obj);
                 }
@@ -642,7 +649,7 @@ repeat:
         }
 
         if (rc == -ERESTART) {
-                /* directory got splitted since last update. this shouldn't be
+                /* directory got split since last update. this shouldn't be
                  * becasue splitting causes lock revocation, so revalidate had
                  * to fail and lookup on dir had to return mea */
                 CWARN("we haven't knew about directory splitting!\n");
@@ -665,7 +672,7 @@ repeat:
                                cb_blocking, extra_lock_flags);
 
         if (rc == 0 && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
-                /* wow! this is splitted dir, we'd like to handle it */
+                /* wow! this is split dir, we'd like to handle it */
                 body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body != NULL);
                 LASSERT((body->valid & OBD_MD_FLID) != 0);
@@ -695,7 +702,8 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         const char *name = op_data->name;
         int len = op_data->namelen;
         struct lu_fid *pid, *cid;
-        int rc, i = 0;
+        mdsno_t mds;
+        int rc;
         ENTRY;
 
         LASSERT(it);
@@ -703,11 +711,11 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         pid = fid_is_sane(&op_data->fid1) ? &op_data->fid1 : NULL;
         cid = fid_is_sane(&op_data->fid2) ? &op_data->fid2 : NULL;
 
-        i = lmv_fld_lookup(obd, pid);
-        if (i < 0)
-                RETURN(i);
-        CDEBUG(D_OTHER, "INTENT LOCK '%s' for '%*s' on "DFID" -> %d\n",
-               LL_IT2STR(it), len, name, PFID(pid), i);
+        rc = lmv_fld_lookup(obd, pid, &mds);
+        if (rc)
+                RETURN(rc);
+        CDEBUG(D_OTHER, "INTENT LOCK '%s' for '%*s' on "DFID" -> #"LPU64"\n",
+               LL_IT2STR(it), len, name, PFID(pid), mds);
 
         rc = lmv_check_connect(obd);
         if (rc)
@@ -731,7 +739,7 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
-                          struct lu_fid *mid, struct lookup_intent *oit,
+                          const struct lu_fid *mid, struct lookup_intent *oit,
                           int master_valid, ldlm_blocking_callback cb_blocking,
                           int extra_lock_flags)
 {
@@ -745,7 +753,8 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
         struct mdt_body *body;
         struct lmv_obj *obj;
         int master_lock_mode;
-        int i, mds, rc = 0;
+        int i, rc = 0;
+        mdsno_t mds;
         ENTRY;
 
         OBD_ALLOC_PTR(op_data);
@@ -807,9 +816,9 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 op_data->fid2 = fid;
 
                 /* is obj valid? */
-                mds = lmv_fld_lookup(obd, &fid);
-                if (mds < 0)
-                        GOTO(out_free_op_data, rc = mds);
+                rc = lmv_fld_lookup(obd, &fid, &mds);
+                if (rc)
+                        GOTO(out_free_op_data, rc);
                 rc = md_intent_lock(lmv->tgts[mds].ltd_exp, op_data,
                                     NULL, 0, &it, 0, &req, cb, extra_lock_flags);
                 lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
@@ -876,7 +885,6 @@ release_lock:
                                       DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body);
 
-                /* FIXME: what about other attributes? */
                 body->size = size;
 
                 if (mreq == NULL) {
@@ -886,7 +894,12 @@ release_lock:
                          * no reply and the only attr we can return is size.
                          */
                         body->valid = OBD_MD_FLSIZE;
-//                        body->mds = lmv_fld_lookup(obd, &obj->lo_fid);
+                        
+#if 0
+                        rc = lmv_fld_lookup(obd, &obj->lo_fid, &body->mds);
+                        if (rc)
+                                GOTO(cleanup, rc);
+#endif
                 }
                 if (master_valid == 0) {
                         memcpy(&oit->d.lustre.it_lock_handle,

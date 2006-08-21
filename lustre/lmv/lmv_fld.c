@@ -45,26 +45,29 @@
 #include <lprocfs_status.h>
 #include "lmv_internal.h"
 
-int lmv_fld_lookup(struct obd_device *obd, const struct lu_fid *fid)
+int lmv_fld_lookup(struct obd_device *obd,
+                   const struct lu_fid *fid,
+                   mdsno_t *mds)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
-        mdsno_t mds;
         int rc;
         ENTRY;
 
         LASSERT(fid_is_sane(fid));
-        rc = fld_client_lookup(&lmv->lmv_fld, fid_seq(fid), &mds);
+        rc = fld_client_lookup(&lmv->lmv_fld, fid_seq(fid), mds);
         if (rc) {
-                CERROR("can't find mds by seq "LPU64", rc %d\n",
-                       fid_seq(fid), rc);
+                CERROR("error while looking for mds number. Seq "LPU64
+                       ", rc %d\n", fid_seq(fid), rc);
                 RETURN(rc);
         }
-        CDEBUG(D_INFO, "LMV: got MDS "LPU64" for sequence: "LPU64"\n",
-               mds, fid_seq(fid));
-        if (mds >= lmv->desc.ld_tgt_count) {
-                CERROR("Got invalid mdsno: "LPU64" (max: %d)\n",
-                       mds, lmv->desc.ld_tgt_count);
-                mds = (__u64)-EINVAL;
+        
+        CDEBUG(D_INFO, "got mds "LPU64" for sequence: "LPU64"\n",
+               *mds, fid_seq(fid));
+
+        if (*mds >= lmv->desc.ld_tgt_count) {
+                CERROR("got invalid mds: "LPU64" (max: %d)\n",
+                       *mds, lmv->desc.ld_tgt_count);
+                rc = -EINVAL;
         }
-        RETURN((int)mds);
+        RETURN(rc);
 }

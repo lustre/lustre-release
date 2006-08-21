@@ -143,7 +143,7 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data)
 }
 
 int mdc_lock_match(struct obd_export *exp, int flags,
-                   struct lu_fid *fid, ldlm_type_t type,
+                   const struct lu_fid *fid, ldlm_type_t type,
                    ldlm_policy_data_t *policy, ldlm_mode_t mode,
                    struct lustre_handle *lockh)
 {
@@ -162,7 +162,7 @@ int mdc_lock_match(struct obd_export *exp, int flags,
 }
 
 int mdc_cancel_unused(struct obd_export *exp,
-                      struct lu_fid *fid,
+                      const struct lu_fid *fid,
                       int flags, void *opaque)
 {
         struct ldlm_res_id res_id =
@@ -179,7 +179,8 @@ int mdc_cancel_unused(struct obd_export *exp,
         RETURN(rc);
 }
 
-int mdc_change_cbdata(struct obd_export *exp, struct lu_fid *fid, 
+int mdc_change_cbdata(struct obd_export *exp,
+                      const struct lu_fid *fid, 
                       ldlm_iterator_t it, void *data)
 {
         struct ldlm_res_id res_id = { .name = {0} };
