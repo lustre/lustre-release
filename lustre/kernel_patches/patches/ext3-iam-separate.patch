@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
 --- iam.orig/fs/ext3/Makefile	2006-05-31 20:24:32.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-08-16 20:48:12.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-08-21 22:18:22.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,8 +14,8 @@ Index: iam/fs/ext3/Makefile
 Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam.c	2006-08-14 21:23:00.000000000 +0400
-@@ -0,0 +1,1324 @@
++++ iam/fs/ext3/iam.c	2006-08-21 21:47:11.000000000 +0400
+@@ -0,0 +1,1325 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -900,7 +900,8 @@ Index: iam/fs/ext3/iam.c
 + * postcondition: it_state(it) == IAM_IT_ATTACHED &&
 + *                ergo(result == 0, !memcmp(iam_it_rec_get(it), r, ...))
 + */
-+int iam_it_rec_set(handle_t *h, struct iam_iterator *it, struct iam_rec *r)
++int iam_it_rec_set(handle_t *h,
++                   struct iam_iterator *it, const struct iam_rec *r)
 +{
 +        int result;
 +        struct iam_path *path;
@@ -1057,7 +1058,7 @@ Index: iam/fs/ext3/iam.c
 +
 +/*
 + * Insert new record with key @k and contents from @r, shifting records to the
-+ * right.
++ * right. On success, iterator is positioned on the newly inserted record.
 + *
 + * precondition: it->ii_flags&IAM_IT_WRITE &&
 + *               (it_state(it) == IAM_IT_ATTACHED ||
@@ -1263,7 +1264,7 @@ Index: iam/fs/ext3/iam.c
 +
 +/*
 + * Insert new record @r with key @k into container @c (within context of
-+ * transaction @h.
++ * transaction @h).
 + *
 + * Return values: 0: success, -ve: error, including -EEXIST when record with
 + * given key is already present.
@@ -1273,7 +1274,7 @@ Index: iam/fs/ext3/iam.c
 + *                                  !memcmp(r, r2, c->ic_descr->id_rec_size));
 + */
 +int iam_insert(handle_t *h, struct iam_container *c, const struct iam_key *k,
-+               struct iam_rec *r, struct iam_path_descr *pd)
++               const struct iam_rec *r, struct iam_path_descr *pd)
 +{
 +        struct iam_iterator it;
 +        int result;
@@ -1299,7 +1300,7 @@ Index: iam/fs/ext3/iam.c
 + * the given key found.
 + */
 +int iam_update(handle_t *h, struct iam_container *c, const struct iam_key *k,
-+               struct iam_rec *r, struct iam_path_descr *pd)
++               const struct iam_rec *r, struct iam_path_descr *pd)
 +{
 +        struct iam_iterator it;
 +        int result;
@@ -1343,8 +1344,8 @@ Index: iam/fs/ext3/iam.c
 Index: iam/fs/ext3/iam_htree.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_htree.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_htree.c	2006-08-14 21:29:47.000000000 +0400
-@@ -0,0 +1,664 @@
++++ iam/fs/ext3/iam_htree.c	2006-08-21 20:00:56.000000000 +0400
+@@ -0,0 +1,665 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1997,6 +1998,7 @@ Index: iam/fs/ext3/iam_htree.c
 +                        c->ic_descr = &iam_htree_compat_param;
 +                else
 +                        result = -EBADF;
++                brelse(bh);
 +        }
 +        return result;
 +}
@@ -2012,8 +2014,8 @@ Index: iam/fs/ext3/iam_htree.c
 Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lfix.c	2006-08-14 21:24:50.000000000 +0400
-@@ -0,0 +1,669 @@
++++ iam/fs/ext3/iam_lfix.c	2006-08-21 20:06:38.000000000 +0400
+@@ -0,0 +1,670 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2630,6 +2632,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +                        descr->id_leaf_ops  = &iam_lfix_leaf_ops;
 +                } else
 +                        result = -EBADF;
++                brelse(bh);
 +        }
 +        return result;
 +}
@@ -2686,8 +2689,8 @@ Index: iam/fs/ext3/iam_lfix.c
 Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lvar.c	2006-08-14 23:16:11.000000000 +0400
-@@ -0,0 +1,863 @@
++++ iam/fs/ext3/iam_lvar.c	2006-08-21 20:07:20.000000000 +0400
+@@ -0,0 +1,864 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3538,6 +3541,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +                        descr->id_leaf_ops  = &lvar_leaf_ops;
 +                } else
 +                        result = -EBADF;
++                brelse(bh);
 +        }
 +        return result;
 +}
@@ -5549,7 +5553,7 @@ Index: iam/fs/ext3/namei.c
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
 --- iam.orig/include/linux/lustre_iam.h	2006-05-31 20:24:32.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-08-16 20:48:12.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-08-21 22:18:22.000000000 +0400
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
