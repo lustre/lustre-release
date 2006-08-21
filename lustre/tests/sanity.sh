@@ -13,7 +13,8 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 63 64b 71 77 101"
 # Tests that fail on uml
-[ "$UML" = "true" ] && EXCEPT="$EXCEPT 31d"
+CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
+[ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 31d"
 
 EXCEPT="$EXCEPT 24o"
 # Tests that always fail with mountconf -- FIXME
@@ -883,7 +884,7 @@ test_27a() {
 	$SETSTRIPE $DIR/d27/f0 65536 0 1 || error "lstripe failed"
 	$CHECKSTAT -t file $DIR/d27/f0 || error "checkstat failed"
 	pass
-	log "== test_27b: write to one stripe file ========================="
+	log "== test_27a: write to one stripe file ========================="
 	cp /etc/hosts $DIR/d27/f0 || error
 }
 run_test 27a "one stripe file =================================="
