@@ -704,7 +704,8 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */
         if (fid_is_sane(&op_data->fid2) &&
-                     !(it->it_op & IT_GETATTR) && !(it->it_op & IT_CREAT)) {
+                    !(it->it_op & IT_GETATTR) && !(it->it_op & IT_CREAT)
+                    && !(it->it_op & IT_OPEN && it->it_create_mode & O_CREAT)) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
                 if (!it_disposition(it, DISP_OPEN_CREATE) && 
