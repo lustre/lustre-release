@@ -153,10 +153,6 @@ static inline void *kmalloc(int size, int prot)
 #define PTR_ERR(a) ((long)(a))
 #define ERR_PTR(a) ((void*)((long)(a)))
 
-typedef struct {
-        void *cwd;
-}mm_segment_t;
-
 typedef int (read_proc_t)(char *page, char **start, off_t off,
                           int count, int *eof, void *data);
 
@@ -891,6 +887,20 @@ void posix_acl_release(struct posix_acl *acl)
 #ifndef ENOTSUPP
 #define ENOTSUPP ENOTSUP
 #endif
+
+typedef int mm_segment_t;
+enum {
+        KERNEL_DS,
+        USER_DS
+};
+static inline mm_segment_t get_fs(void)
+{
+        return USER_DS;
+}
+
+static inline void set_fs(mm_segment_t seg)
+{
+}
 
 #include <obd_support.h>
 #include <lustre/lustre_idl.h>
