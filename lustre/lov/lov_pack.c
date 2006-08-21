@@ -37,6 +37,8 @@
 
 #include "lov_internal.h"
 
+#define USER_SPACE_TOP USER_DS.seg
+
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 {
         struct lov_ost_data_v1 *lod;
@@ -293,9 +295,13 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
         int rc;
         ENTRY;
 
-        rc = copy_from_user(&lum, lump, sizeof(lum));
-        if (rc)
-                RETURN(-EFAULT);
+        if ((unsigned long)lump < USER_SPACE_TOP) {
+                rc = copy_from_user(&lum, lump, sizeof(lum));
+                if (rc)
+                        RETURN(-EFAULT);
+        } else {
+                memcpy(&lum, lump, sizeof(lum));
+        }
 
         if (lum.lmm_magic != LOV_USER_MAGIC) {
                 if (lum.lmm_magic == __swab32(LOV_USER_MAGIC)) {
@@ -409,9 +415,13 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (!lsm)
                 RETURN(-ENODATA);
 
-        rc = copy_from_user(&lum, lump, sizeof(lum));
-        if (rc)
-                RETURN(-EFAULT);
+        if ((unsigned long)lump < USER_SPACE_TOP) {
+                rc = copy_from_user(&lum, lump, sizeof(lum));
+                if (rc)
+                        RETURN(-EFAULT);
+        } else {
+                memcpy(&lum, lump, sizeof(lum));
+        }
 
         if (lum.lmm_magic != LOV_USER_MAGIC)
                 RETURN(-EINVAL);
@@ -428,12 +438,21 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* User wasn't expecting this many OST entries */
         if (lum.lmm_stripe_count == 0) {
-                if (copy_to_user(lump, lmmk, sizeof(lum)))
-                        rc = -EFAULT;
+                if ((unsigned long)lump < USER_SPACE_TOP) {
+                        if (copy_to_user(lump, lmmk, sizeof(lum)))
+                                rc = -EFAULT;
+                } else {
+                        memcpy(lump, lmmk, sizeof(lum));
+                }
         } else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count) {
                 rc = -EOVERFLOW;
-        } else if (copy_to_user(lump, lmmk, lmm_size)) {
-                rc = -EFAULT;
+        } else {
+                if ((unsigned long)lump < USER_SPACE_TOP) {
+                        if (copy_to_user(lump, lmmk, sizeof(lum)))
+                                rc = -EFAULT;
+                } else {
+                        memcpy(lump, lmmk, sizeof(lum));
+                }
         }
 
         obd_free_diskmd(exp, &lmmk);
