@@ -411,67 +411,52 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
 int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
                   struct lov_user_md *lump)
 {
+        /*
+         * XXX huge struct allocated on stack.
+         */
         struct lov_user_md lum;
         struct lov_mds_md *lmmk = NULL;
         int rc, lmm_size;
+        mm_segment_t seg;
         ENTRY;
 
         if (!lsm)
                 RETURN(-ENODATA);
 
-#if __KERNEL__
-        if ((unsigned long)lump < USER_SPACE_TOP) {
-                rc = copy_from_user(&lum, lump, sizeof(lum));
-                if (rc)
-                        RETURN(-EFAULT);
-        } else {
-#endif
-                memcpy(&lum, lump, sizeof(lum));
-#if __KERNEL__
-        }
-#endif
-        
-        if (lum.lmm_magic != LOV_USER_MAGIC)
-                RETURN(-EINVAL);
+        /*
+         * "Switch to kernel segment" to allow copying from kernel space by
+         * copy_{to,from}_user().
+         */
+        seg = get_fs();
+        set_fs(KERNEL_DS);
+        rc = copy_from_user(&lum, lump, sizeof(lum));
+        if (rc)
+                rc = -EFAULT;
+        else if (lum.lmm_magic != LOV_USER_MAGIC)
+                rc = -EINVAL;
+        else {
+                rc = lov_packmd(exp, &lmmk, lsm);
+                if (rc < 0)
+                        RETURN(rc);
+                lmm_size = rc;
+                rc = 0;
 
-        rc = lov_packmd(exp, &lmmk, lsm);
-        if (rc < 0)
-                RETURN(rc);
-        lmm_size = rc;
-        rc = 0;
+                /* FIXME: Bug 1185 - copy fields properly when structs change */
+                CLASSERT(sizeof lum == sizeof *lmmk);
+                CLASSERT(sizeof lum.lmm_objects[0] ==
+                         sizeof lmmk->lmm_objects[0]);
 
-        /* FIXME: Bug 1185 - copy fields properly when structs change */
-        LASSERT(sizeof(lum) == sizeof(*lmmk));
-        LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lmmk->lmm_objects[0]));
-
-        /* User wasn't expecting this many OST entries */
-        if (lum.lmm_stripe_count == 0) {
-#if __KERNEL__
-                if ((unsigned long)lump < USER_SPACE_TOP) {
-                        if (copy_to_user(lump, lmmk, sizeof(lum)))
+                /* User wasn't expecting this many OST entries */
+                if (lum.lmm_stripe_count == 0) {
+                        if (copy_to_user(lump, lmmk, sizeof lum))
                                 rc = -EFAULT;
-                } else {
-#endif
-                        memcpy(lump, lmmk, sizeof(lum));
-#if __KERNEL__
-                }
-#endif
-        } else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count) {
-                rc = -EOVERFLOW;
-        } else {
-#if __KERNEL__
-                if ((unsigned long)lump < USER_SPACE_TOP) {
-                        if (copy_to_user(lump, lmmk, sizeof(lum)))
-                                rc = -EFAULT;
-                } else {
-#endif
-                        memcpy(lump, lmmk, sizeof(lum));
-#if __KERNEL__
-                }
-#endif
+                } else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count) {
+                        rc = -EOVERFLOW;
+                } else if (copy_to_user(lump, lmmk, sizeof lum))
+                        rc = -EFAULT;
+
+                obd_free_diskmd(exp, &lmmk);
         }
-
-        obd_free_diskmd(exp, &lmmk);
-
+        set_fs(seg);
         RETURN(rc);
 }
