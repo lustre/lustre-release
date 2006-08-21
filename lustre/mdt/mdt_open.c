@@ -106,7 +106,7 @@ static int mdt_get_write_access(struct mdt_device *mdt, struct mdt_object *o,
 
         spin_lock(&mdt->mdt_epoch_lock);
 
-        if (atomic_read(&o->mot_writecount) < 0) {
+        if (o->mot_writecount < 0) {
                 rc = -ETXTBSY;
         } else {
                 if (o->mot_io_epoch != 0) {
@@ -121,24 +121,22 @@ static int mdt_get_write_access(struct mdt_device *mdt, struct mdt_object *o,
                         CDEBUG(D_INODE, "starting epoch "LPU64" for "DFID"\n",
                                mdt->mdt_io_epoch, PFID(mdt_object_fid(o)));
                 }
-                atomic_inc(&o->mot_writecount);
+                o->mot_writecount ++;
         }
         spin_unlock(&mdt->mdt_epoch_lock);
         RETURN(rc);
 }
 
-static int mdt_put_write_access(struct mdt_device *mdt, struct mdt_object *o)
+static void  mdt_put_write_access(struct mdt_device *mdt, struct mdt_object *o)
 {
-        int rc;
         ENTRY;
 
         spin_lock(&mdt->mdt_epoch_lock);
-        atomic_dec(&o->mot_writecount);
-        rc = atomic_read(&o->mot_writecount);
-        if (rc == 0)
+        o->mot_writecount --;
+        if (o->mot_writecount == 0)
                 o->mot_io_epoch = 0;
         spin_unlock(&mdt->mdt_epoch_lock);
-        RETURN(rc);
+        EXIT;
 }
 
 static int mdt_deny_write_access(struct mdt_device *mdt, struct mdt_object *o)
@@ -146,25 +144,34 @@ static int mdt_deny_write_access(struct mdt_device *mdt, struct mdt_object *o)
         int rc = 0;
         ENTRY;
         spin_lock(&mdt->mdt_epoch_lock);
-        if (atomic_read(&o->mot_writecount) > 0) {
+        if (o->mot_writecount > 0) {
                 rc = -ETXTBSY;
         } else
-                atomic_dec(&o->mot_writecount);
+                o->mot_writecount --;
         spin_unlock(&mdt->mdt_epoch_lock);
         RETURN(rc);
 }
 
-static void mdt_allow_write_access(struct mdt_object *o)
+static void mdt_allow_write_access(struct mdt_device *mdt, 
+                                   struct mdt_object *o)
 {
         ENTRY;
-        atomic_inc(&o->mot_writecount);
+        spin_lock(&mdt->mdt_epoch_lock);
+        o->mot_writecount ++;
+        spin_unlock(&mdt->mdt_epoch_lock);
         EXIT;
 }
 
-int mdt_query_write_access(struct mdt_object *o)
+int mdt_query_write_access(struct mdt_device *mdt, struct mdt_object *o)
 {
+        int wc;
         ENTRY;
-        RETURN(atomic_read(&o->mot_writecount));
+
+        spin_lock(&mdt->mdt_epoch_lock);
+        wc = o->mot_writecount;
+        spin_unlock(&mdt->mdt_epoch_lock);
+
+        RETURN(wc);
 }
 
 static int mdt_mfd_open(struct mdt_thread_info *info,
@@ -200,12 +207,12 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         if (ma->ma_valid & MA_INODE)
                 mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
 
-        /* this check need to return the exists object's fid back, so it is done
+        /* we need to return the existing object's fid back, so it is done
          * here, after preparing the reply */
         if (!created && (flags & MDS_OPEN_EXCL) && (flags & MDS_OPEN_CREAT))
-                RETURN (-EEXIST);
+                RETURN(-EEXIST);
 
-        /* if we are following a symlink, don't open
+        /* if we are following a symlink, don't open;
          * do not return open handle for special nodes as client required
          */
         if (islnk || (!isreg && !isdir &&
@@ -240,7 +247,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
 
-        if (/*ma->ma_lmm_size && */ma->ma_valid & MA_LOV) {
+        if (ma->ma_valid & MA_LOV) {
                 LASSERT(ma->ma_lmm_size);
                 repbody->eadatasize = ma->ma_lmm_size;
                 if (isdir)
@@ -273,7 +280,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         /* (1) client wants transno when open to keep a ref count for replay;
          *     see after_reply() and mdc_close_commit();
          * (2) we need to record the transaction related stuff onto disk;
-         * But, question is: when do a rean only open, do we still need transno?
+         * The question is: when do a read_only open, do we still need transno?
          */
         if (!created) {
                 struct txn_param txn;
@@ -336,7 +343,8 @@ int mdt_open_by_fid(struct mdt_thread_info* info, const struct lu_fid *fid,
                                                       &info->mti_spec,
                                                       &info->mti_attr);
                                 if (rc == 0)
-                                        rc = mdt_mfd_open(info, NULL, o, flags, 1);
+                                        rc = mdt_mfd_open(info, NULL, o, 
+                                                          flags, 1);
                         }
                 }
                 mdt_object_put(info->mti_ctxt, o);
@@ -449,7 +457,6 @@ int mdt_reint_open(struct mdt_thread_info *info)
                                     rr->rr_name,
                                     mdt_object_child(child),
                                     &info->mti_spec,
-                                    /* rr->rr_tgt, rr->rr_eadata, rr->rr_eadatalen,*/
                                     &info->mti_attr);
                 intent_set_disposition(ldlm_rep, DISP_OPEN_CREATE);
                 if (result != 0)
@@ -489,7 +496,7 @@ void mdt_mfd_close(const struct lu_context *ctxt,
         if (mfd->mfd_mode & FMODE_WRITE) {
                 mdt_put_write_access(mdt, o);
         } else if (mfd->mfd_mode & MDS_FMODE_EXEC) {
-                mdt_allow_write_access(o);
+                mdt_allow_write_access(mdt, o);
         }
 
         mdt_mfd_free(mfd);

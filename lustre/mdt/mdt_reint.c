@@ -66,7 +66,6 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 ma->ma_need = MA_INODE;
                 rc = mdo_create(info->mti_ctxt, next, rr->rr_name,
                                 mdt_object_child(child), &info->mti_spec,
-                                /* rr->rr_tgt, NULL, 0, */
                                 ma);
                 if (rc == 0) {
                         /* return fid & attr to client. */
@@ -252,7 +251,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         /* step 1: lock the parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
         lhp->mlh_mode = LCK_EX;
-        mp = mdt_object_find_lock(info, rr->rr_fid1, lhp, MDS_INODELOCK_UPDATE);
+        mp = mdt_object_find_lock(info, rr->rr_fid1, lhp,
+                                  MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
                 RETURN(PTR_ERR(mp));
 
@@ -335,7 +335,8 @@ static int mdt_reint_link(struct mdt_thread_info *info)
         /* step 1: lock the source */
         lhs = &info->mti_lh[MDT_LH_PARENT];
         lhs->mlh_mode = LCK_EX;
-        ms = mdt_object_find_lock(info, rr->rr_fid1, lhs, MDS_INODELOCK_UPDATE);
+        ms = mdt_object_find_lock(info, rr->rr_fid1, lhs, 
+                                  MDS_INODELOCK_UPDATE);
         if (IS_ERR(ms))
                 RETURN(PTR_ERR(ms));
 
@@ -347,7 +348,8 @@ static int mdt_reint_link(struct mdt_thread_info *info)
         /*step 2: find & lock the target parent dir*/
         lhp = &info->mti_lh[MDT_LH_CHILD];
         lhp->mlh_mode = LCK_EX;
-        mp = mdt_object_find_lock(info, rr->rr_fid2, lhp, MDS_INODELOCK_UPDATE);
+        mp = mdt_object_find_lock(info, rr->rr_fid2, lhp, 
+                                  MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
                 GOTO(out_unlock_source, rc = PTR_ERR(mp));
 

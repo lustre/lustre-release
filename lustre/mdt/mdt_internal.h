@@ -152,7 +152,7 @@ struct mdt_object {
         struct lu_object_header mot_header;
         struct md_object        mot_obj;
         __u64                   mot_io_epoch;
-        atomic_t                mot_writecount;
+        int                     mot_writecount;
 };
 
 struct mdt_lock_handle {

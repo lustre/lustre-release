@@ -68,7 +68,7 @@ unsigned long mdt_num_threads;
 struct mdt_handler {
         /* The name of this handler. */
         const char *mh_name;
-        /* Fail id for this handler, checked at the beginning of this handler.*/
+        /* Fail id for this handler, checked at the beginning of this handler*/
         int         mh_fail_id;
         /* Operation code for this handler */
         __u32       mh_opc;
@@ -158,7 +158,7 @@ static int mdt_statfs(struct mdt_thread_info *info)
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
                 result = -ENOMEM;
         } else {
-                osfs = req_capsule_server_get(&info->mti_pill, &RMF_OBD_STATFS);
+                osfs = req_capsule_server_get(&info->mti_pill,&RMF_OBD_STATFS);
                 /* XXX max_age optimisation is needed here. See mds_statfs */
                 result = next->md_ops->mdo_statfs(info->mti_ctxt,
                                                   next, &info->mti_sfs);
@@ -175,7 +175,7 @@ void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
         b->valid |= OBD_MD_FLCTIME | OBD_MD_FLUID   |
                     OBD_MD_FLGID   | OBD_MD_FLTYPE  |
                     OBD_MD_FLMODE  | OBD_MD_FLNLINK | OBD_MD_FLFLAGS |
-                    OBD_MD_FLATIME | OBD_MD_FLMTIME ; /* added by huanghua */
+                    OBD_MD_FLATIME | OBD_MD_FLMTIME ;
 
         if (!S_ISREG(attr->la_mode))
                 b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLRDEV;
@@ -254,15 +254,12 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         if (mdt_body_has_lov(la, reqbody)) {
                 if (ma->ma_valid & MA_LOV) {
                         LASSERT(ma->ma_lmm_size);
-                        CDEBUG(D_INODE, "packing ea for "DFID"\n",
-                                        PFID(mdt_object_fid(o)));
                         mdt_dump_lmm(D_INFO, ma->ma_lmm);
                         repbody->eadatasize = ma->ma_lmm_size;
                         if (S_ISDIR(la->la_mode))
                                 repbody->valid |= OBD_MD_FLDIREA;
                         else
                                 repbody->valid |= OBD_MD_FLEASIZE;
-
                 }
         } else if (S_ISLNK(la->la_mode) &&
                           reqbody->valid & OBD_MD_LINKNAME) {
@@ -284,8 +281,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 repbody->max_cookiesize = info->mti_mdt->mdt_max_cookiesize;
                 repbody->max_mdsize = info->mti_mdt->mdt_max_mdsize;
                 repbody->valid |= OBD_MD_FLMODEASIZE;
-                CDEBUG(D_INODE, "I am going to change the MAX_MD_SIZE & MAX_COOKIE"
-                                " to : %d:%d\n",
+                CDEBUG(D_INODE, "I am going to change the MAX_MD_SIZE & "
+                                "MAX_COOKIE to : %d:%d\n",
                                 repbody->max_mdsize,
                                 repbody->max_cookiesize);
         }
@@ -419,6 +416,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         if (result != 0)
                 mdt_object_unlock(info, child, lhc, 1);
         else {
+                /* This is pure debugging code. */
                 struct ldlm_lock *lock;
                 struct ldlm_res_id *res_id;
                 lock = ldlm_handle2lock(&lhc->mlh_lh);
@@ -426,15 +424,14 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                         res_id = &lock->l_resource->lr_name;
                         LDLM_DEBUG(lock, "we will return this lock client\n");
                         LASSERTF(fid_res_name_eq(mdt_object_fid(child),
-                                                &lock->l_resource->lr_name),
+                                                 &lock->l_resource->lr_name),
                                 "Lock res_id: %lu/%lu/%lu, Fid: "DFID".\n",
-                         (unsigned long)res_id->name[0],
-                         (unsigned long)res_id->name[1],
-                         (unsigned long)res_id->name[2],
-                         PFID(mdt_object_fid(child)));
+                                (unsigned long)res_id->name[0],
+                                (unsigned long)res_id->name[1],
+                                (unsigned long)res_id->name[2],
+                                PFID(mdt_object_fid(child)));
                         LDLM_LOCK_PUT(lock);
                 }
-
         }
         mdt_object_put(info->mti_ctxt, child);
 
@@ -590,7 +587,7 @@ static int mdt_readpage(struct mdt_thread_info *info)
                 RETURN(-EFAULT);
         }
         rdpg->rp_count  = reqbody->nlink;
-        rdpg->rp_npages = (rdpg->rp_count + CFS_PAGE_SIZE - 1)>> CFS_PAGE_SHIFT;
+        rdpg->rp_npages = (rdpg->rp_count + CFS_PAGE_SIZE - 1)>>CFS_PAGE_SHIFT;
         OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
         if (rdpg->rp_pages == NULL)
                 RETURN(-ENOMEM);
@@ -686,7 +683,6 @@ static int mdt_reint(struct mdt_thread_info *info)
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
 
                 rc = mdt_reint_internal(info, opc);
-
         } else
                 rc = opc;
         RETURN(rc);
@@ -727,23 +723,24 @@ static int mdt_sync(struct mdt_thread_info *info)
                         rc = mdt_device_sync(info);
         } else {
                 /* sync an object */
-                rc = mdt_unpack_req_pack_rep(info, HABEO_CORPUS | HABEO_REFERO);
+                rc = mdt_unpack_req_pack_rep(info, HABEO_CORPUS|HABEO_REFERO);
                 if (rc == 0) {
                         rc = mdt_object_sync(info);
                         if (rc == 0) {
                                 struct md_object    *next;
                                 const struct lu_fid *fid;
+                                struct lu_attr      *la;
+
                                 next = mdt_object_child(info->mti_object);
                                 fid = mdt_object_fid(info->mti_object);
                                 info->mti_attr.ma_need = MA_INODE;
-                                rc = mo_attr_get(info->mti_ctxt,
-                                                 next, &info->mti_attr);
+                                rc = mo_attr_get(info->mti_ctxt, next, 
+                                                 &info->mti_attr);
+                                la = &info->mti_attr.ma_attr;
                                 if (rc == 0) {
                                         body = req_capsule_server_get(pill,
                                                                 &RMF_MDT_BODY);
-                                        mdt_pack_attr2body(body,
-                                                           &info->mti_attr.ma_attr,
-                                                           fid);
+                                        mdt_pack_attr2body(body, la, fid);
                                 }
                         }
                 }
@@ -863,16 +860,16 @@ int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
         LASSERT(lh != NULL);
         LASSERT(f != NULL);
 
-        rc = ldlm_cli_enqueue_local(ns, *fid_build_res_name(f, res_id), LDLM_IBITS, 
-                                    policy, mode, &flags, ldlm_blocking_ast, 
-                                    ldlm_completion_ast, NULL, NULL, 0, NULL,
-                                    lh);
+        rc = ldlm_cli_enqueue_local(ns, *fid_build_res_name(f, res_id),
+                                    LDLM_IBITS, policy, mode, &flags, 
+                                    ldlm_blocking_ast, ldlm_completion_ast, 
+                                    NULL, NULL, 0, NULL, lh);
         return rc == ELDLM_OK ? 0 : -EIO;
 }
 
 /* just call ldlm_lock_decref() if decref,
  * else we only call ptlrpc_save_lock() to save this lock in req.
- * when transaction committed, req will be released and lock will be released */
+ * when transaction committed, req will be released, and lock will, too */
 void fid_unlock(struct ptlrpc_request *req, const struct lu_fid *f,
                 struct lustre_handle *lh, ldlm_mode_t mode, int decref)
 {
@@ -928,7 +925,8 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
 
         policy->l_inodebits.bits = ibits;
 
-        rc = fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode, policy, res_id);
+        rc = fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode, 
+                      policy, res_id);
         RETURN(rc);
 }
 
@@ -1079,7 +1077,6 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
         RETURN(result);
 }
 
-/* FIXME: fake untill journal callback is OK.*/
 struct lu_context_key mdt_txn_key;
 
 static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
@@ -1088,8 +1085,9 @@ static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
         struct ptlrpc_request *req = mdt_info_req(info);
         struct obd_export     *exp = req->rq_export;
 
+        /* sometimes the reply message has not been successfully packed */
         if (mdt == NULL || req == NULL || req->rq_repmsg == NULL)
-                LBUG();
+                return;
 
         if (info->mti_trans_flags & MDT_NONEED_TRANSNO)
                 return;
@@ -1138,7 +1136,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         result = 0;
         flags = h->mh_flags;
-        LASSERT(ergo(flags & (HABEO_CORPUS | HABEO_REFERO), h->mh_fmt != NULL));
+        LASSERT(ergo(flags & (HABEO_CORPUS|HABEO_REFERO), h->mh_fmt != NULL));
 
         if (h->mh_fmt != NULL) {
                 req_capsule_set(&info->mti_pill, h->mh_fmt);
@@ -1154,7 +1152,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
                 LASSERT(h->mh_fmt != NULL);
 
-                dlm_req = req_capsule_client_get(&info->mti_pill, &RMF_DLM_REQ);
+                dlm_req = req_capsule_client_get(&info->mti_pill,&RMF_DLM_REQ);
                 if (dlm_req != NULL) {
                         if (info->mti_mdt->mdt_opts.mo_compat_resname)
                                 result = mdt_lock_resname_compat(info->mti_mdt,
@@ -1182,12 +1180,12 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         result = 0;
         LASSERT(current->journal_info == NULL);
 
-        if (flags & HABEO_CLAVIS && info->mti_mdt->mdt_opts.mo_compat_resname) {
-                struct ldlm_reply *dlm_rep;
+        if (flags & HABEO_CLAVIS && info->mti_mdt->mdt_opts.mo_compat_resname){
+                struct ldlm_reply *dlmrep;
 
-                dlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
-                if (dlm_rep != NULL)
-                        result = mdt_lock_reply_compat(info->mti_mdt, dlm_rep);
+                dlmrep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
+                if (dlmrep != NULL)
+                        result = mdt_lock_reply_compat(info->mti_mdt, dlmrep);
         }
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
@@ -1340,7 +1338,8 @@ static int mdt_reply(struct ptlrpc_request *req, int result,
 /* mds/handler.c */
 extern int mds_msg_check_version(struct lustre_msg *msg);
 
-static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info,
+static int mdt_handle0(struct ptlrpc_request *req, 
+                       struct mdt_thread_info *info,
                        struct mdt_opc_slice *supported)
 {
         struct mdt_handler *h;
@@ -1359,7 +1358,8 @@ static int mdt_handle0(struct ptlrpc_request *req, struct mdt_thread_info *info,
                 result = mdt_recovery(req);
                 switch (result) {
                 case +1:
-                        h = mdt_handler_find(lustre_msg_get_opc(msg), supported);
+                        h = mdt_handler_find(lustre_msg_get_opc(msg), 
+                                             supported);
                         if (h != NULL)
                                 result = mdt_req_handle(info, h, req);
                         else {
@@ -2673,8 +2673,9 @@ static int mdt_upcall(const struct lu_context *ctx, struct md_device *md,
         switch (ev) {
                 case MD_LOV_SYNC:
                         rc = next->md_ops->mdo_get_maxsize(ctx, next,
-                                    &m->mdt_max_mdsize, &m->mdt_max_cookiesize);
-                        CDEBUG(D_INFO, "get max mdsize %d max cookiesize %d \n",
+                                        &m->mdt_max_mdsize, 
+                                        &m->mdt_max_cookiesize);
+                        CDEBUG(D_INFO, "get max mdsize %d max cookiesize %d\n",
                                      m->mdt_max_mdsize, m->mdt_max_cookiesize);
                         break;
                 default:
@@ -2690,16 +2691,17 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_owner          = THIS_MODULE,
         .o_connect        = mdt_obd_connect,
         .o_disconnect     = mdt_obd_disconnect,
-        .o_init_export    = mdt_init_export,    /* By Huang Hua*/
-        .o_destroy_export = mdt_destroy_export, /* By Huang Hua*/
+        .o_init_export    = mdt_init_export,
+        .o_destroy_export = mdt_destroy_export,
 };
 
-static struct lu_device* mdt_device_fini(const struct lu_context *ctx, struct lu_device *d)
+static struct lu_device* mdt_device_fini(const struct lu_context *ctx, 
+                                         struct lu_device *d)
 {
         struct mdt_device *m = mdt_dev(d);
 
         mdt_fini(ctx, m);
-        RETURN (NULL);
+        RETURN(NULL);
 }
 
 static void mdt_device_free(const struct lu_context *ctx, struct lu_device *d)
