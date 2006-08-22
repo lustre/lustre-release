@@ -37,8 +37,6 @@
 
 #include "lov_internal.h"
 
-#define USER_SPACE_TOP USER_DS.seg
-
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 {
         struct lov_ost_data_v1 *lod;
