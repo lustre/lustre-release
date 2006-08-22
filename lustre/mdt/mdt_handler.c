@@ -716,6 +716,9 @@ static int mdt_sync(struct mdt_thread_info *info)
         if (body == NULL)
                 RETURN(-EINVAL);
 
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SYNC_PACK))
+                RETURN(-ENOMEM);
+
         if (fid_seq(&body->fid1) == 0) {
                 /* sync the whole device */
                 rc = req_capsule_pack(pill);

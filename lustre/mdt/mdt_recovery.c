@@ -276,7 +276,7 @@ static int mdt_init_server_data(const struct lu_context *ctx,
         spin_lock(&mdt->mdt_transno_lock);
         mdt->mdt_last_transno = le64_to_cpu(msd->msd_last_transno);
         spin_unlock(&mdt->mdt_transno_lock);
-
+        CDEBUG(D_INODE, "========BEGIN DUMPING LAST_RCVD========\n");
         CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
                obd->obd_name, mdt->mdt_last_transno);
         CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
@@ -293,6 +293,7 @@ static int mdt_init_server_data(const struct lu_context *ctx,
                last_rcvd_size <= le32_to_cpu(msd->msd_client_start) ? 0 :
                (last_rcvd_size - le32_to_cpu(msd->msd_client_start)) /
                 le16_to_cpu(msd->msd_client_size));
+        CDEBUG(D_INODE, "========END DUMPING LAST_RCVD========\n");
 
         if (!msd->msd_server_size || !msd->msd_client_start ||
             !msd->msd_client_size) {
