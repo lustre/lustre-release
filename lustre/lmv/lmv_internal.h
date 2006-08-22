@@ -23,6 +23,7 @@
 #define _LMV_INTERNAL_H_
 
 #include <lustre/lustre_idl.h>
+#include <obd.h>
 
 #ifndef __KERNEL__
 /* XXX: dirty hack, needs to be fixed more clever way. */
@@ -133,7 +134,7 @@ int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
 int lmv_handle_split(struct obd_export *, const struct lu_fid *);
 int lmv_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 		     void *, int);
-int lmv_fld_lookup(struct obd_device *obd, const struct lu_fid *fid,
+int lmv_fld_lookup(struct lmv_obd *lmv, const struct lu_fid *fid,
                    mdsno_t *mds);
 
 static inline struct lmv_stripe_md * 
@@ -164,6 +165,19 @@ static inline int lmv_get_easize(struct lmv_obd *lmv)
         return sizeof(struct lmv_stripe_md) +
                 lmv->desc.ld_tgt_count *
                 sizeof(struct lu_fid);
+}
+
+static inline struct obd_export *
+lmv_get_export(struct lmv_obd *lmv, const struct lu_fid *fid)
+{
+        mdsno_t mds;
+        int rc;
+        
+        rc = lmv_fld_lookup(lmv, fid, &mds);
+        if (rc)
+                return ERR_PTR(rc);
+
+        return lmv->tgts[mds].ltd_exp;
 }
 
 /* lproc_lmv.c */

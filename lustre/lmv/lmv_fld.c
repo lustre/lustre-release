@@ -45,11 +45,10 @@
 #include <lprocfs_status.h>
 #include "lmv_internal.h"
 
-int lmv_fld_lookup(struct obd_device *obd,
+int lmv_fld_lookup(struct lmv_obd *lmv,
                    const struct lu_fid *fid,
                    mdsno_t *mds)
 {
-        struct lmv_obd *lmv = &obd->u.lmv;
         int rc;
         ENTRY;
 

@@ -286,10 +286,10 @@ lmv_obj_create(struct obd_export *exp, const struct lu_fid *fid,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct ptlrpc_request *req = NULL;
+        struct obd_export *tgt_exp;
         struct lmv_obj *obj;
         struct lustre_md md;
         int mealen, rc;
-        mdsno_t mds;
         ENTRY;
 
         CDEBUG(D_OTHER, "get mea for "DFID" and create lmv obj\n",
@@ -307,11 +307,11 @@ lmv_obj_create(struct obd_export *exp, const struct lu_fid *fid,
                 md.mea = NULL;
                 valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
 
-                rc = lmv_fld_lookup(obd, fid, &mds);
-                if (rc)
-                        GOTO(cleanup, obj = ERR_PTR(rc));
+                tgt_exp = lmv_get_export(lmv, fid);
+                if (IS_ERR(tgt_exp))
+                        GOTO(cleanup, obj = (void *)tgt_exp);
 
-                rc = md_getattr(lmv->tgts[mds].ltd_exp, fid, valid, mealen, &req);
+                rc = md_getattr(tgt_exp, fid, valid, mealen, &req);
                 if (rc) {
                         CERROR("md_getattr() failed, error %d\n", rc);
                         GOTO(cleanup, obj = ERR_PTR(rc));
