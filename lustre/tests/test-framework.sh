@@ -42,7 +42,7 @@ init_test_env() {
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
-    export FSYTPE=${FSTYPE:-"ext3"}
+    export FSYTPE=${FSTYPE:-"ldiskfs"}
     export LPROC=/proc/fs/lustre
 
     if [ "$ACCEPTOR_PORT" ]; then
@@ -102,12 +102,18 @@ load_modules() {
     load_module lvfs/lvfs
     load_module obdclass/obdclass
     load_module ptlrpc/ptlrpc
+    load_module fid/fid
+    load_module fld/fld
     load_module mdc/mdc
     load_module osc/osc
     load_module lov/lov
     load_module mds/mds
+    load_module mdt/mdt
+    load_module cmm/cmm
+    load_module mdd/mdd
     load_module ldiskfs/ldiskfs
     load_module lvfs/fsfilt_ldiskfs
+    load_module osd/osd
     load_module ost/ost
     load_module obdfilter/obdfilter
     load_module llite/lustre
