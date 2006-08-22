@@ -61,7 +61,12 @@
 #define __POSIX_ACL_MAX_SIZE 0
 #endif
 
-static const struct req_msg_field *empty[] = {}; /* none */
+/*
+ * empty set of fields... for suitable definition of emptiness.
+ */
+static const struct req_msg_field *empty[] = {
+        &RMF_PTLRPC_BODY
+};
 
 static const struct req_msg_field *mdt_body_only[] = {
         &RMF_PTLRPC_BODY,
@@ -433,7 +438,7 @@ EXPORT_SYMBOL(RMF_REC_SETATTR);
 const struct req_msg_field RMF_EADATA = DEFINE_MSGF("eadata", 0, -1, NULL);
 EXPORT_SYMBOL(RMF_EADATA);
 
-const struct req_msg_field RMF_ACL = DEFINE_MSGF("acl", 0, 
+const struct req_msg_field RMF_ACL = DEFINE_MSGF("acl", 0,
                                      __POSIX_ACL_MAX_SIZE, NULL);
 EXPORT_SYMBOL(RMF_ACL);
 
