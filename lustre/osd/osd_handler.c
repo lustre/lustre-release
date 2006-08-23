@@ -433,8 +433,7 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
         struct osd_thandle *oh = container_of0(jcb, struct osd_thandle, ot_jcb);
         struct thandle     *th = &oh->ot_super;
 
-        /* there is no thread context available */
-        dt_txn_hook_commit(&th->th_ctx, th->th_dev, th);
+        dt_txn_hook_commit(th->th_dev, th);
 
         if (th->th_dev != NULL) {
                 lu_device_put(&th->th_dev->dd_lu_dev);

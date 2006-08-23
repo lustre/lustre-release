@@ -84,8 +84,7 @@ int dt_txn_hook_stop(const struct lu_context *ctx,
 }
 EXPORT_SYMBOL(dt_txn_hook_stop);
 
-int dt_txn_hook_commit(const struct lu_context *ctx,
-                       struct dt_device *dev, struct thandle *txn)
+int dt_txn_hook_commit(struct dt_device *dev, struct thandle *txn)
 {
         int result;
         struct dt_txn_callback *cb;
@@ -94,7 +93,7 @@ int dt_txn_hook_commit(const struct lu_context *ctx,
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_commit == NULL)
                         continue;
-                result = cb->dtc_txn_commit(ctx, dev, txn, cb->dtc_cookie);
+                result = cb->dtc_txn_commit(dev, txn, cb->dtc_cookie);
                 if (result < 0)
                         break;
         }

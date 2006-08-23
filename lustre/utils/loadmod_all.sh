@@ -12,7 +12,7 @@ modprobe mgs
 modprobe lov
 modprobe ptlrpc
 modprobe obdecho
-modprobe llite
+modprobe lustre
 modprobe mgc
 modprobe ldiskfs
 modprobe quotafmt_test

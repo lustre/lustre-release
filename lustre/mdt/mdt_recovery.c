@@ -591,8 +591,7 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
 }
 
 /* commit callback, need to update last_commited value */
-static int mdt_txn_commit_cb(const struct lu_context *ctx,
-                             struct dt_device *dev,
+static int mdt_txn_commit_cb(struct dt_device *dev,
                              struct thandle *txn, void *cookie)
 {
         struct mdt_device *mdt = cookie;

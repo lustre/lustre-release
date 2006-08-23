@@ -390,8 +390,7 @@ struct dt_txn_callback {
         int (*dtc_txn_stop)(const struct lu_context *ctx,
                             struct dt_device *dev,
                             struct thandle *txn, void *cookie);
-        int (*dtc_txn_commit)(const struct lu_context *ctx,
-                              struct dt_device *dev,
+        int (*dtc_txn_commit)(struct dt_device *dev,
                               struct thandle *txn, void *cookie);
         void            *dtc_cookie;
         struct list_head dtc_linkage;
@@ -404,8 +403,7 @@ int dt_txn_hook_start(const struct lu_context *ctx,
                       struct dt_device *dev, struct txn_param *param);
 int dt_txn_hook_stop(const struct lu_context *ctx,
                      struct dt_device *dev, struct thandle *txn);
-int dt_txn_hook_commit(const struct lu_context *ctx,
-                       struct dt_device *dev, struct thandle *txn);
+int dt_txn_hook_commit(struct dt_device *dev, struct thandle *txn);
 
 int dt_try_as_dir(const struct lu_context *ctx, struct dt_object *obj);
 struct dt_object *dt_store_open(const struct lu_context *ctx,
