@@ -998,7 +998,12 @@ static struct mdt_handler *mdt_handler_find(__u32 opc,
 
 static inline __u64 req_exp_last_xid(struct ptlrpc_request *req)
 {
-        return req->rq_export->exp_mdt_data.med_mcd->mcd_last_xid;
+        return le64_to_cpu(req->rq_export->exp_mdt_data.med_mcd->mcd_last_xid);
+}
+
+static inline __u64 req_exp_last_close_xid(struct ptlrpc_request *req)
+{
+        return le64_to_cpu(req->rq_export->exp_mdt_data.med_mcd->mcd_last_close_xid);
 }
 
 static int mdt_lock_resname_compat(struct mdt_device *m,
@@ -1101,18 +1106,18 @@ static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
                 CERROR("Transno is not 0 while rc is %i!\n", rc);
         }
 
-        CDEBUG(D_INODE, "last_transno = %llu, last_committed = %llu\n",
-               mdt->mdt_last_transno, exp->exp_obd->obd_last_committed);
+        CDEBUG(D_INODE, "transno = %llu, last_committed = %llu\n",
+               info->mti_transno, exp->exp_obd->obd_last_committed);
 
         spin_lock(&mdt->mdt_transno_lock);
         req->rq_transno = info->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, info->mti_transno);
         
-        lustre_msg_set_last_committed(req->rq_repmsg, 
-                                      exp->exp_obd->obd_last_committed);
+        target_committed_to_req(req);
         
         spin_unlock(&mdt->mdt_transno_lock);
-        lustre_msg_set_last_xid(req->rq_repmsg, req->rq_xid);
+        lustre_msg_set_last_xid(req->rq_repmsg, req_exp_last_xid(req));
+        //lustre_msg_set_last_xid(req->rq_repmsg, req->rq_xid);
 }
 
 /*
@@ -1280,7 +1285,8 @@ static int mdt_recovery(struct ptlrpc_request *req)
 
         /* sanity check: if the xid matches, the request must be marked as a
          * resent or replayed */
-        LASSERTF(ergo(req->rq_xid == req_exp_last_xid(req),
+        LASSERTF(ergo(req->rq_xid == req_exp_last_xid(req) ||
+                      req->rq_xid == req_exp_last_close_xid(req),
                       lustre_msg_get_flags(req->rq_reqmsg) &
                       (MSG_RESENT | MSG_REPLAY)),
                  "rq_xid "LPU64" matches last_xid, "
@@ -1307,7 +1313,6 @@ static int mdt_recovery(struct ptlrpc_request *req)
 
                 rc = mds_filter_recovery_request(req, obd, &should_process);
                 if (rc != 0 || !should_process) {
-                        //LASSERT(rc < 0);
                         RETURN(rc);
                 }
         }

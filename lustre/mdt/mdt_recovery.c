@@ -149,7 +149,7 @@ static int mdt_init_clients_data(const struct lu_context *ctx,
                         continue;
                 }
 
-                last_transno = le64_to_cpu(mcd->mcd_last_transno);
+                last_transno = mcd_last_transno(mcd);
 
                 /* These exports are cleaned up by mdt_obd_disconnect(), so
                  * they need to be set up like real exports as
@@ -158,7 +158,7 @@ static int mdt_init_clients_data(const struct lu_context *ctx,
                 CDEBUG(D_HA, "RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
                        " srv lr: "LPU64" lx: "LPU64"\n", mcd->mcd_uuid, cl_idx,
                        last_transno, le64_to_cpu(msd->msd_last_transno),
-                       le64_to_cpu(mcd->mcd_last_xid));
+                       mcd_last_xid(mcd));
 
                 exp = class_new_export(obd, (struct obd_uuid *)mcd->mcd_uuid);
                 if (IS_ERR(exp))
@@ -515,12 +515,20 @@ static int mdt_update_last_rcvd(struct mdt_thread_info *mti,
 
         off = med->med_lr_off;
         mutex_down(&med->med_mcd_lock);
-        mcd->mcd_last_transno = cpu_to_le64(mti->mti_transno);
-        mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
-        mcd->mcd_last_result = cpu_to_le32(rc);
-        /* XXX: how to pass op_data here? */
-        //mcd->mcd_last_data = cpu_to_le32(op_data);
-        
+        if(lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
+                mcd->mcd_last_close_transno = cpu_to_le64(mti->mti_transno);
+                mcd->mcd_last_close_xid = cpu_to_le64(req->rq_xid);
+                mcd->mcd_last_close_result = cpu_to_le32(rc);
+        } else {
+                mcd->mcd_last_transno = cpu_to_le64(mti->mti_transno);
+                mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
+                mcd->mcd_last_result = cpu_to_le32(rc);
+                /*XXX: save intent_disposition in mdt_thread_info?
+                 * also there is bug - intent_dispostion is __u64,
+                 * see struct ldlm_reply->lock_policy_res1;
+                mcd->mcd_last_data = cpu_to_le32(op_data);
+                 */
+        }
         if (off <= 0) {
                 CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);
                 err = -EINVAL;

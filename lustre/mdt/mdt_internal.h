@@ -62,8 +62,28 @@ struct mdt_client_data {
         __u64 mcd_last_xid;     /* xid for the last transaction */
         __u32 mcd_last_result;  /* result from last RPC */
         __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        __u8  mcd_padding[LR_CLIENT_SIZE - 64];
+        /* for MDS_CLOSE requests */
+        __u64 mcd_last_close_transno; /* last completed transaction ID */
+        __u64 mcd_last_close_xid;     /* xid for the last transaction */
+        __u32 mcd_last_close_result;  /* result from last RPC */
+        __u8 mcd_padding[LR_CLIENT_SIZE - 84];
 };
+
+static inline __u64 mcd_last_transno(struct mdt_client_data *mcd)
+{
+        return (le64_to_cpu(mcd->mcd_last_transno) > 
+                le64_to_cpu(mcd->mcd_last_close_transno) ?
+                le64_to_cpu(mcd->mcd_last_transno) :
+                le64_to_cpu(mcd->mcd_last_close_transno));
+}
+
+static inline __u64 mcd_last_xid(struct mdt_client_data *mcd)
+{
+        return (le64_to_cpu(mcd->mcd_last_xid) > 
+                le64_to_cpu(mcd->mcd_last_close_xid) ?
+                le64_to_cpu(mcd->mcd_last_xid) :
+                le64_to_cpu(mcd->mcd_last_close_xid));
+}
 
 /* copied from lr_server_data.
  * mds data stored at the head of last_rcvd file. In le32 order. */
