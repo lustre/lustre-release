@@ -46,11 +46,11 @@ enum {
          * sequences). */
         LUSTRE_SEQ_META_WIDTH = 0x00000000000002800ULL,
 
-        /* this is how many sequneces (10240 * 10240) may be in one
+        /* this is how many sequences (10240 * 10240) may be in one
          * super-sequence allocated to MDTs. */
         LUSTRE_SEQ_SUPER_WIDTH = (LUSTRE_SEQ_META_WIDTH * LUSTRE_SEQ_META_WIDTH)
 };
-        
+
 enum lu_mgr_type {
         LUSTRE_SEQ_SERVER,
         LUSTRE_SEQ_CONTROLLER
