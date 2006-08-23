@@ -36,7 +36,6 @@
 #define __IAM_ULIB_H__
 
 
-#define SET_DEFAULT     -1
 #define DX_FMT_NAME_LEN 16
 
 enum iam_fmt_t {

@@ -391,35 +391,27 @@ int iam_creat(char *filename, enum iam_fmt_t fmt,
                 return -1;
         }
 
-        if (blocksize == SET_DEFAULT) {
-                blocksize = 4096;
-        } else if (blocksize <= 100) {
+        if (blocksize <= 100) {
                 errno = EINVAL;
                 return -1;
         }
 
-        if (keysize == SET_DEFAULT) {
-                keysize = 8;
-        } else if (keysize < 1) {
+        if (keysize < 1) {
                 errno = EINVAL;
                 return -1;
         }
 
-        if (recsize == SET_DEFAULT) {
-                recsize = 8;
-        } else if (recsize < 0) {
+        if (recsize < 0) {
                 errno = EINVAL;
                 return -1;
         }
 
-        if (ptrsize == SET_DEFAULT) {
-                ptrsize = 4;
-        } else if ((ptrsize != 4) && (ptrsize != 8)) {
+        if (ptrsize != 4 && ptrsize != 8) {
                 errno = EINVAL;
                 return -1;
         }
 
-        if ((keysize + recsize + sizeof(struct iam_leaf_head)) > (blocksize / 3)) {
+        if (keysize + recsize + sizeof(struct iam_leaf_head) > blocksize / 3) {
                 errno = EINVAL;
                 return -1;
         }
