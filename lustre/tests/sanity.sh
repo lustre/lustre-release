@@ -8,7 +8,7 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b 42c 42d 45 68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 63 64b 71 77 101"
@@ -16,10 +16,8 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b  42c  42d  45   68"}
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 [ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 31d"
 
-EXCEPT="$EXCEPT 24o"
 # Tests that always fail with mountconf -- FIXME
 # 48a moving the working dir succeeds
-EXCEPT="$EXCEPT 76 99"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3};    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76" ;;
@@ -2687,6 +2685,8 @@ run_test 71 "Running dbench on lustre (don't segment fault) ===="
 test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	check_kernel_version 43 || return 0
 	[ "$RUNAS_ID" = "$UID" ] && echo "skipping $TESTNAME" && return
+	# We had better clear the $DIR to get enough space for dd
+	rm -rf $DIR/*
 	touch $DIR/f72
 	chmod 777 $DIR/f72
 	chmod ug+s $DIR/f72
@@ -2852,6 +2852,7 @@ test_99a() {
 }
 run_test 99a "cvs init ========================================="
 
+# For test_99b, we will get the same error on local filesystem--ext3.
 test_99b() {
 	[ ! -d $DIR/d99cvsroot ] && test_99a
 	cd /etc/init.d
