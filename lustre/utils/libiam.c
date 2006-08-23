@@ -101,6 +101,23 @@ enum {
         LVAR_ROUND = LVAR_PAD - 1
 };
 
+static int root_limit(int rootgap, int blocksize, int size)
+{
+        int limit;
+        int nlimit;
+
+        limit = (blocksize - rootgap) / size;
+        nlimit = blocksize / size;
+        if (limit == nlimit)
+                limit--;
+        return limit;
+}
+
+static int lfix_root_limit(int blocksize, int size)
+{
+        return root_limit(sizeof(struct iam_lfix_root), blocksize, size);
+}
+
 static void lfix_root(void *buf,
                       int blocksize, int keysize, int ptrsize, int recsize)
 {
@@ -123,7 +140,7 @@ static void lfix_root(void *buf,
                  * limit itself + one pointer to the leaf.
                  */
                 .count = cpu_to_le16(2),
-                .limit = (blocksize - sizeof *root) / (keysize + ptrsize)
+                .limit = lfix_root_limit(blocksize, keysize + ptrsize)
         };
 
         entry = root + 1;
@@ -154,7 +171,7 @@ static void lfix_leaf(void *buf,
 
         /* form leaf */
         head = buf;
-        *head = (struct iam_leaf_head) {
+        *head = (typeof(*head)) {
                 .ill_magic = cpu_to_le16(IAM_LEAF_HEADER_MAGIC),
                 /*
                  * Leaf contains an entry with the smallest possible key
@@ -162,6 +179,11 @@ static void lfix_leaf(void *buf,
                  */
                 .ill_count = cpu_to_le16(1),
         };
+}
+
+static int lvar_root_limit(int blocksize, int size)
+{
+        return root_limit(sizeof(struct lvar_root), blocksize, size);
 }
 
 static void lvar_root(void *buf,
@@ -182,12 +204,12 @@ static void lvar_root(void *buf,
         };
 
         limit = (void *)(root + 1);
-        *limit = (typeof(*limit)){
+        *limit = (typeof(*limit)) {
                 /*
                  * limit itself + one pointer to the leaf.
                  */
                 .count = cpu_to_le16(2),
-                .limit = (blocksize - sizeof *root) / isize
+                .limit = lvar_root_limit(blocksize, keysize + ptrsize)
         };
 
         entry = root + 1;
@@ -480,7 +502,7 @@ int iam_open(char *filename, struct iam_uapi_info *ua)
 }
 
 /*
- * Close file opened by iam_open. 
+ * Close file opened by iam_open.
  */
 int iam_close(int fd)
 {
