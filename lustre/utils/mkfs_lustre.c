@@ -61,7 +61,7 @@ struct mkfs_opts {
         char  mo_loopdev[128];          /* in case a loop dev is needed */
         __u64 mo_device_sz;             /* in KB */
         int   mo_stripe_count;
-        int   mo_flags; 
+        int   mo_flags;
         int   mo_mgs_failnodes;
 };
 
@@ -241,7 +241,7 @@ int loop_setup(struct mkfs_opts *mop)
                         break;
                 sprintf(cmd, "losetup %s > /dev/null 2>&1", l_device);
                 ret = system(cmd);
-                
+
                 /* losetup gets 1 (ret=256) for non-set-up device */
                 if (ret) {
                         /* Set up a loopback device to our file */
@@ -309,7 +309,7 @@ __u64 get_device_size(char* device)
                 __u32 lsize = 0;
                 /* size in blocks */
                 ret = ioctl(fd, BLKGETSIZE, (void*)&lsize);
-                size = (__u64)lsize * 512; 
+                size = (__u64)lsize * 512;
         }
 #endif
         close(fd);
@@ -385,7 +385,7 @@ static int file_in_dev(char *file_name, char *dev_name)
                 if (strstr(debugfs_cmd, "unsupported feature")) {
                         fprintf(stderr, "In all likelihood, the "
                                 "'unsupported feature' is 'extents', which "
-                                "older debugfs does not understand.\n"  
+                                "older debugfs does not understand.\n"
                                 "Use e2fsprogs-1.38-cfs1 or later, available "
                                 "from ftp://ftp.lustre.org/pub/lustre/other/"
                                 "e2fsprogs/\n");
@@ -659,18 +659,18 @@ int write_local_files(struct mkfs_opts *mop)
         }
         fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
         fclose(filep);
-        
+
         /* COMPAT_146 */
 #ifdef TUNEFS
         /* Check for upgrade */
-        if ((mop->mo_ldd.ldd_flags & (LDD_F_UPGRADE14 | LDD_F_SV_TYPE_MGS)) 
+        if ((mop->mo_ldd.ldd_flags & (LDD_F_UPGRADE14 | LDD_F_SV_TYPE_MGS))
             == (LDD_F_UPGRADE14 | LDD_F_SV_TYPE_MGS)) {
                 char cmd[128];
                 char *term;
                 vprint("Copying old logs\n");
-                
+
                 /* Copy the old client log to fsname-client */
-                sprintf(filepnm, "%s/%s/%s-client", 
+                sprintf(filepnm, "%s/%s/%s-client",
                         mntpt, MOUNT_CONFIGS_DIR, mop->mo_ldd.ldd_fsname);
                 sprintf(cmd, "cp %s/%s/client %s", mntpt, MDT_LOGS_DIR,
                         filepnm);
@@ -682,14 +682,14 @@ int write_local_files(struct mkfs_opts *mop)
                                 "find the client log for fs %s and "
                                 "copy it manually into %s/%s-client, "
                                 "then umount.\n",
-                                mop->mo_device, 
+                                mop->mo_device,
                                 mop->mo_ldd.ldd_fsname, MOUNT_CONFIGS_DIR,
                                 mop->mo_ldd.ldd_fsname);
                         goto out_umnt;
                 }
 
                 /* We need to use the old mdt log because otherwise mdt won't
-                   have complete lov if old clients connect before all 
+                   have complete lov if old clients connect before all
                    servers upgrade. */
                 /* Copy the old mdt log to fsname-MDT0000 (get old
                    name from mdt_UUID) */
@@ -699,7 +699,7 @@ int write_local_files(struct mkfs_opts *mop)
                 if (term) {
                         *term = '\0';
                         sprintf(cmd, "cp %s/%s/%s %s/%s/%s",
-                                mntpt, MDT_LOGS_DIR, filepnm, 
+                                mntpt, MDT_LOGS_DIR, filepnm,
                                 mntpt, MOUNT_CONFIGS_DIR,
                                 mop->mo_ldd.ldd_svname);
                         ret = run_command(cmd);
@@ -711,7 +711,7 @@ int write_local_files(struct mkfs_opts *mop)
                                 "find the MDT log for fs %s and "
                                 "copy it manually into %s/%s, "
                                 "then umount.\n",
-                                mop->mo_device, 
+                                mop->mo_device,
                                 mop->mo_ldd.ldd_fsname, MOUNT_CONFIGS_DIR,
                                 mop->mo_ldd.ldd_svname);
                         goto out_umnt;
@@ -722,7 +722,7 @@ int write_local_files(struct mkfs_opts *mop)
 
 
 out_umnt:
-        umount(mntpt);    
+        umount(mntpt);
 out_rmdir:
         rmdir(mntpt);
         return ret;
@@ -799,7 +799,7 @@ int read_local_files(struct mkfs_opts *mop)
                         fprintf(stderr, "%s: Short read (%d of %d)\n",
                                 progname, ret, sizeof(lsd));
                         ret = -ferror(filep);
-                        if (ret) 
+                        if (ret)
                                 goto out_close;
                 }
                 vprint("Feature compat=%x, incompat=%x\n",
@@ -814,7 +814,7 @@ int read_local_files(struct mkfs_opts *mop)
                         /* We must co-locate so mgs can see old logs.
                            If user doesn't want this, they can copy the old
                            logs manually and re-tunefs. */
-                        mop->mo_ldd.ldd_flags = 
+                        mop->mo_ldd.ldd_flags =
                                 LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_MGS;
                         mop->mo_ldd.ldd_svindex = lsd.lsd_mdt_index;
                 } else  {
@@ -835,9 +835,9 @@ int read_local_files(struct mkfs_opts *mop)
                                 /* If there's a LOGS dir, it's an MDT */
                                 if ((ret = access(filepnm, F_OK)) == 0) {
                                         mop->mo_ldd.ldd_flags =
-                                        LDD_F_SV_TYPE_MDT | 
+                                        LDD_F_SV_TYPE_MDT |
                                         LDD_F_SV_TYPE_MGS;
-                                        /* Old MDT's are always index 0 
+                                        /* Old MDT's are always index 0
                                            (pre CMD) */
                                         mop->mo_ldd.ldd_svindex = 0;
                                 } else {
@@ -848,14 +848,14 @@ int read_local_files(struct mkfs_opts *mop)
                                 }
                         }
                 }
-                
+
                 ret = 0;
-                memcpy(mop->mo_ldd.ldd_uuid, lsd.lsd_uuid, 
+                memcpy(mop->mo_ldd.ldd_uuid, lsd.lsd_uuid,
                        sizeof(mop->mo_ldd.ldd_uuid));
                 mop->mo_ldd.ldd_flags |= LDD_F_UPGRADE14;
         }
         /* end COMPAT_146 */
-out_close:        
+out_close:
         fclose(filep);
 
 out_rmdir:
@@ -873,11 +873,11 @@ void set_defaults(struct mkfs_opts *mop)
         mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX | LDD_F_UPDATE | LDD_F_VIRGIN;
         mop->mo_mgs_failnodes = 0;
         strcpy(mop->mo_ldd.ldd_fsname, "lustre");
-        if (get_os_version() == 24) 
+        if (get_os_version() == 24)
                 mop->mo_ldd.ldd_mount_type = LDD_MT_EXT3;
-        else 
+        else
                 mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
-        
+
         mop->mo_ldd.ldd_svindex = INDEX_UNASSIGNED;
         mop->mo_stripe_count = 1;
 }
@@ -895,7 +895,7 @@ static int add_param(char *buf, char *key, char *val)
         int start = strlen(buf);
         int keylen = 0;
 
-        if (key) 
+        if (key)
                 keylen = strlen(key);
         if (start + 1 + keylen + strlen(val) >= end) {
                 fprintf(stderr, "%s: params are too long-\n%s %s%s\n",
@@ -915,7 +915,7 @@ static char *convert_hostnames(char *s1)
         char *converted, *s2 = 0, *c;
         int left = MAXNIDSTR;
         lnet_nid_t nid;
-        
+
         converted = malloc(left);
         if (converted == NULL) {
                 return NULL;
@@ -925,20 +925,20 @@ static char *convert_hostnames(char *s1)
         while ((left > 0) && ((s2 = strsep(&s1, ",: \0")))) {
                 nid = libcfs_str2nid(s2);
                 if (nid == LNET_NID_ANY) {
-                        if (*s2 == '/') 
+                        if (*s2 == '/')
                                 /* end of nids */
                                 break;
-                        fprintf(stderr, "%s: Can't parse NID '%s'\n", 
+                        fprintf(stderr, "%s: Can't parse NID '%s'\n",
                                 progname, s2);
                         free(converted);
                         return NULL;
                 }
 
-                if (strncmp(libcfs_nid2str(nid), "127.0.0.1", 
+                if (strncmp(libcfs_nid2str(nid), "127.0.0.1",
                             strlen("127.0.0.1")) == 0) {
                         fprintf(stderr, "%s: The NID '%s' resolves to the "
                                 "loopback address '%s'.  Lustre requires a "
-                                "non-loopback address.\n", 
+                                "non-loopback address.\n",
                                 progname, s2, libcfs_nid2str(nid));
                         free(converted);
                         return NULL;
@@ -986,7 +986,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
         char opt;
         int rc, longidx;
 
-        while ((opt = getopt_long(argc, argv, optstring, long_opt, &longidx)) != 
+        while ((opt = getopt_long(argc, argv, optstring, long_opt, &longidx)) !=
                EOF) {
                 switch (opt) {
                 case 'b': {
@@ -1019,7 +1019,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         printf("Configdev not implemented\n");
                         return 1;
                 case 'd':
-                        mop->mo_device_sz = atol(optarg); 
+                        mop->mo_device_sz = atol(optarg);
                         break;
                 case 'e':
                         mop->mo_ldd.ldd_params[0] = '\0';
@@ -1028,12 +1028,12 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         break;
                 case 'f': {
                         char *nids = convert_hostnames(optarg);
-                        if (!nids) 
+                        if (!nids)
                                 return 1;
-                        rc = add_param(mop->mo_ldd.ldd_params, PARAM_FAILNODE, 
-                                       nids); 
+                        rc = add_param(mop->mo_ldd.ldd_params, PARAM_FAILNODE,
+                                       nids);
                         free(nids);
-                        if (rc) 
+                        if (rc)
                                 return rc;
                         /* Must update the mgs logs */
                         mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
@@ -1046,7 +1046,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         usage(stdout);
                         return 1;
                 case 'i':
-                        if (!(mop->mo_ldd.ldd_flags & 
+                        if (!(mop->mo_ldd.ldd_flags &
                               (LDD_F_UPGRADE14 | LDD_F_VIRGIN |
                                LDD_F_WRITECONF))) {
                                 fprintf(stderr, "%s: cannot change the index of"
@@ -1062,11 +1062,11 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         }
                         break;
                 case 'k':
-                        strncpy(mop->mo_mkfsopts, optarg, 
+                        strncpy(mop->mo_mkfsopts, optarg,
                                 sizeof(mop->mo_mkfsopts) - 1);
                         break;
                 case 'L':
-                        if (!(mop->mo_ldd.ldd_flags & 
+                        if (!(mop->mo_ldd.ldd_flags &
                               (LDD_F_UPGRADE14 | LDD_F_VIRGIN |
                                LDD_F_WRITECONF))) {
                                 fprintf(stderr, "%s: cannot change the name of"
@@ -1078,18 +1078,18 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                         "<= 8 chars\n", progname);
                                 return 1;
                         }
-                        if (optarg[0] != 0) 
-                                strncpy(mop->mo_ldd.ldd_fsname, optarg, 
+                        if (optarg[0] != 0)
+                                strncpy(mop->mo_ldd.ldd_fsname, optarg,
                                         sizeof(mop->mo_ldd.ldd_fsname) - 1);
                         break;
                 case 'm': {
                         char *nids = convert_hostnames(optarg);
-                        if (!nids) 
+                        if (!nids)
                                 return 1;
-                        rc = add_param(mop->mo_ldd.ldd_params, PARAM_MGSNODE, 
-                                       nids); 
+                        rc = add_param(mop->mo_ldd.ldd_params, PARAM_MGSNODE,
+                                       nids);
                         free(nids);
-                        if (rc) 
+                        if (rc)
                                 return rc;
                         mop->mo_mgs_failnodes++;
                         break;
@@ -1111,7 +1111,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         break;
                 case 'p':
                         rc = add_param(mop->mo_ldd.ldd_params, NULL, optarg);
-                        if (rc) 
+                        if (rc)
                                 return rc;
                         /* Must update the mgs logs */
                         mop->mo_ldd.ldd_flags |= LDD_F_UPDATE;
@@ -1227,7 +1227,7 @@ static int mkfs_mdt(struct mkfs_opts *mop)
         struct stat st;
 
         source = mop->mo_device;
-        if (mop->mo_flags & MO_IS_LOOP) { 
+        if (mop->mo_flags & MO_IS_LOOP) {
                 source = mop->mo_loopdev;
         }
 
@@ -1265,22 +1265,20 @@ static int mkfs_mdt(struct mkfs_opts *mop)
         }
 
         snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "root");
-        ret = iam_creat(filepnm, FMT_LVAR,
-                        SET_DEFAULT, SET_DEFAULT, 16, SET_DEFAULT);
+        ret = iam_creat(filepnm, FMT_LVAR, L_BLOCK_SIZE, 4, 16, 4);
         if (ret) {
                 goto out_umount;
         }
 
         snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "fld");
         ret = iam_creat(filepnm, FMT_LFIX,
-                        SET_DEFAULT, 8, 8, SET_DEFAULT);
+                        L_BLOCK_SIZE, 8, 8, 4);
         if (ret) {
                 goto out_umount;
         }
 
         snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "oi");
-        ret = iam_creat(filepnm, FMT_LFIX,
-                        SET_DEFAULT, 16, 16, SET_DEFAULT);
+        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 16, 16, 4);
         if (ret) {
                 goto out_umount;
         }
@@ -1356,7 +1354,7 @@ int main(int argc, char *argv[])
 
         //printf("pad %d\n", offsetof(struct lustre_disk_data, ldd_padding));
         assert(offsetof(struct lustre_disk_data, ldd_padding) == 200);
-        
+
         if ((progname = strrchr(argv[0], '/')) != NULL)
                 progname++;
         else
@@ -1376,15 +1374,15 @@ int main(int argc, char *argv[])
 
         /* Are we using a loop device? */
         ret = is_block(mop.mo_device);
-        if (ret < 0) 
+        if (ret < 0)
                 goto out;
-        if (ret == 0) 
+        if (ret == 0)
                 mop.mo_flags |= MO_IS_LOOP;
 
 #ifdef TUNEFS
         /* For tunefs, we must read in the old values before parsing any
            new ones. */
-        
+
         /* Check whether the disk has already been formatted by mkfs.lustre */
         ret = is_lustre_target(&mop);
         if (ret == 0) {
@@ -1405,16 +1403,16 @@ int main(int argc, char *argv[])
         if (strstr(mop.mo_ldd.ldd_params, PARAM_MGSNODE))
             mop.mo_mgs_failnodes++;
 
-        if (verbose > 0) 
+        if (verbose > 0)
                 print_ldd("Read previous values", &(mop.mo_ldd));
 #endif
 
         ret = parse_opts(argc, argv, &mop, &mountopts);
-        if (ret) 
+        if (ret)
                 goto out;
 
         ldd = &mop.mo_ldd;
-        
+
         if (!(IS_MDT(ldd) || IS_OST(ldd) || IS_MGS(ldd))) {
                 fatal();
                 fprintf(stderr, "must set target type: MDT,OST,MGS\n");
@@ -1451,7 +1449,7 @@ int main(int argc, char *argv[])
                 goto out;
         }
 
-        /* These are the permanent mount options (always included) */ 
+        /* These are the permanent mount options (always included) */
         switch (ldd->ldd_mount_type) {
         case LDD_MT_EXT3:
         case LDD_MT_LDISKFS: {
@@ -1462,9 +1460,9 @@ int main(int argc, char *argv[])
                 if ((get_os_version() == 24) && IS_OST(ldd))
                         strcat(always_mountopts, ",asyncdel");
                 /* NB: Files created while extents are enabled cannot be read
-                   if mounted with a kernel that doesn't include the CFS 
+                   if mounted with a kernel that doesn't include the CFS
                    patches! */
-                if (IS_OST(ldd) && 
+                if (IS_OST(ldd) &&
                     ldd->ldd_mount_type == LDD_MT_LDISKFS) {
                         strcat(default_mountopts, ",extents,mballoc");
                 }
@@ -1484,20 +1482,20 @@ int main(int argc, char *argv[])
                 ret = EINVAL;
                 goto out;
         }
-        }               
+        }
 
         if (mountopts) {
                 /* If user specifies mount opts, don't use defaults,
                    but always use always_mountopts */
-                sprintf(ldd->ldd_mount_opts, "%s,%s", 
+                sprintf(ldd->ldd_mount_opts, "%s,%s",
                         always_mountopts, mountopts);
         } else {
 #ifdef TUNEFS
-                if (ldd->ldd_mount_opts[0] == 0) 
+                if (ldd->ldd_mount_opts[0] == 0)
                         /* use the defaults unless old opts exist */
 #endif
                 {
-                        sprintf(ldd->ldd_mount_opts, "%s%s", 
+                        sprintf(ldd->ldd_mount_opts, "%s%s",
                                 always_mountopts, default_mountopts);
                 }
         }
@@ -1519,14 +1517,14 @@ int main(int argc, char *argv[])
         /* Create the loopback file */
         if (mop.mo_flags & MO_IS_LOOP) {
                 ret = access(mop.mo_device, F_OK);
-                if (ret) 
+                if (ret)
                         ret = errno;
 #ifndef TUNEFS /* mkfs.lustre */
                 /* Reformat the loopback file */
                 if (ret || (mop.mo_flags & MO_FORCEFORMAT))
                         ret = loop_format(&mop);
 #endif
-                if (ret == 0)  
+                if (ret == 0)
                         ret = loop_setup(&mop);
                 if (ret) {
                         fatal();
@@ -1542,7 +1540,7 @@ int main(int argc, char *argv[])
                 ret = is_lustre_target(&mop);
                 if (ret) {
                         fatal();
-                        fprintf(stderr, "Device %s was previously formatted " 
+                        fprintf(stderr, "Device %s was previously formatted "
                                 "for lustre. Use --reformat to reformat it, "
                                 "or tunefs.lustre to modify.\n",
                                 mop.mo_device);
@@ -1576,6 +1574,6 @@ int main(int argc, char *argv[])
         }
 
 out:
-        loop_cleanup(&mop);      
+        loop_cleanup(&mop);
         return ret;
 }
