@@ -82,7 +82,7 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
         lustre_cfg_bufs_reset(&bufs, MDD_OBD_NAME);
         lustre_cfg_bufs_set_string(&bufs, 1, MDD_OBD_TYPE);
         lustre_cfg_bufs_set_string(&bufs, 2, MDD_OBD_UUID);
-        lustre_cfg_bufs_set_string(&bufs, 3, MDD_OBD_PROFILE);
+        lustre_cfg_bufs_set_string(&bufs, 3, (char*)dev/*MDD_OBD_PROFILE*/);
         lustre_cfg_bufs_set_string(&bufs, 4, (char*)dev);
 
         lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
