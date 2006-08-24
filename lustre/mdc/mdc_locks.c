@@ -664,7 +664,8 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 if (rc < 0)
                         RETURN(rc);
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
-        } else if (!fid_is_sane(&op_data->fid2)) {
+        } else if (!fid_is_sane(&op_data->fid2) || 
+                        !(it->it_flags & O_CHECK_STALE)) {
                 /* DISP_ENQ_COMPLETE set means there is extra reference on
                  * request referenced from this intent, saved for subsequent
                  * lookup.  This path is executed when we proceed to this
@@ -704,13 +705,11 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */
-        if (fid_is_sane(&op_data->fid2) &&
-                    !(it->it_op & IT_GETATTR) && !(it->it_op & IT_CREAT)
-                    && !(it->it_op & IT_OPEN && it->it_create_mode & O_CREAT)) {
+        if (fid_is_sane(&op_data->fid2) && it->it_flags & O_CHECK_STALE 
+                        && it->it_op != IT_GETATTR) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
-                if (!it_disposition(it, DISP_OPEN_CREATE) && 
-                    memcmp(&op_data->fid2, &mdt_body->fid1, 
+                if (memcmp(&op_data->fid2, &mdt_body->fid1,
                             sizeof(op_data->fid2)))
                         RETURN(-ESTALE);
         }

@@ -2291,11 +2291,13 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 /* Call getattr by fid, so do not provide name at all. */
                 ll_prepare_md_op_data(op_data, dentry->d_parent->d_inode,
                                       dentry->d_inode, NULL, 0, 0);
+                it->it_flags |= O_CHECK_STALE;
                 rc = md_intent_lock(exp, op_data, NULL, 0,
                                     /* we are not interested in name
                                        based lookup */
                                     &oit, 0, &req,
                                     ll_md_blocking_ast, 0);
+                it->it_flags &= ~ O_CHECK_STALE;
                 OBD_FREE_PTR(op_data);
                 if (rc < 0) {
                         rc = ll_inode_revalidate_fini(inode, rc);

@@ -281,30 +281,8 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
         if (!request)
                 RETURN(0);
 
-        if (it_disposition(it, DISP_LOOKUP_NEG)) {
-                /* Sometimes, revalidate_it might also create node in MDS,
-                 * So we need check whether it is really created, if not,
-                 * just return the -ENOENT, if it is, return -ESTALE anyway.
-                 * which is original done in md_intent_lock, 
-                 * but no chance for new fid allocation in client. 
-                 */
-                if (it_disposition(it, DISP_OPEN_CREATE) && 
-                    !it_open_error(DISP_OPEN_CREATE, it)) {
-                         /* These 2 req finished is for balancing 2 add ref
-                          * in md_intent_lock, since there are no create_node
-                          * and file_open following revalidate_it*/
-                         it_set_disposition(it, DISP_ENQ_COMPLETE);
-                         if (it_disposition(it, DISP_OPEN_CREATE) &&
-                            !it_open_error(DISP_OPEN_CREATE, it))
-                                ptlrpc_req_finished(request); 
-                         if (it_disposition(it, DISP_OPEN_OPEN) &&
-                            !it_open_error(DISP_OPEN_OPEN, it))
-                                ptlrpc_req_finished(request); 
-                        
-                         RETURN(-ESTALE);
-                }
+        if (it_disposition(it, DISP_LOOKUP_NEG)) 
                 RETURN(-ENOENT);
-        }
 
         rc = ll_prep_inode(&de->d_inode,
                            request, offset, NULL);
@@ -414,7 +392,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL)
                 RETURN(-ENOMEM);
-        
+       
         if (it->it_op & IT_CREAT) {
                 struct lu_placement_hint hint = { .ph_pname = NULL,
                                                   .ph_pfid = ll_inode2fid(parent),
@@ -423,7 +401,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
                 ll_prepare_md_op_data(op_data, parent, NULL,
                                       de->d_name.name, de->d_name.len, 0);
-                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2, 
+                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2,
                                      &hint);
                 if (rc) {
                         CERROR("can't allocate new fid, rc %d\n", rc);
@@ -481,8 +459,11 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         }
 
 do_lock:
+        it->it_flags |= O_CHECK_STALE;
         rc = md_intent_lock(exp, op_data, NULL, 0, it, lookup_flags,
                             &req, ll_md_blocking_ast, 0);
+        it->it_flags &= ~O_CHECK_STALE;
+        
         OBD_FREE_PTR(op_data);
         /* If req is NULL, then md_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
@@ -507,6 +488,7 @@ revalidate_finish:
                         ll_intent_release(it);
                 GOTO(out, rc = 0);
         }
+
         if ((it->it_op & IT_OPEN) && de->d_inode && 
             !S_ISREG(de->d_inode->i_mode) && 
             !S_ISDIR(de->d_inode->i_mode)) {
