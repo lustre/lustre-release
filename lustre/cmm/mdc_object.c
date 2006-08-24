@@ -73,7 +73,7 @@ static void mdc_object_free(const struct lu_context *ctx, struct lu_object *lo)
 static int mdc_object_init(const struct lu_context *ctx, struct lu_object *lo)
 {
         ENTRY;
-
+        lo->lo_header->loh_attr |= LOHA_REMOTE;
         RETURN(0);
 }
 
@@ -90,27 +90,102 @@ static struct lu_object_operations mdc_obj_ops = {
 };
 
 /* md_object_operations */
+static  
+struct mdc_thread_info *mdc_info_get(const struct lu_context *ctx)
+{
+        struct mdc_thread_info *mci;
+
+        mci = lu_context_key_get(ctx, &mdc_thread_key);
+        LASSERT(mci);
+        return mci;
+}
+
+static 
+struct mdc_thread_info *mdc_info_init(const struct lu_context *ctx)
+{
+        struct mdc_thread_info *mci;
+
+        mci = mdc_info_get(ctx);
+
+        memset(mci, 0, sizeof(*mci));
+
+        return mci;
+}
+
+static void mdc_body2attr(struct mdt_body *body, struct md_attr *ma)
+{
+        struct lu_attr *la = &ma->ma_attr;
+        /* update time */
+        if (body->valid & OBD_MD_FLCTIME && body->ctime >= la->la_ctime) {
+                la->la_ctime = body->ctime;
+                if (body->valid & OBD_MD_FLMTIME)
+                        la->la_mtime = body->mtime;
+        }
+
+        if (body->valid & OBD_MD_FLMODE)
+                la->la_mode = body->mode;
+        if (body->valid & OBD_MD_FLSIZE)
+                la->la_size = body->size;
+        if (body->valid & OBD_MD_FLBLOCKS)
+                la->la_blocks = body->blocks;
+        if (body->valid & OBD_MD_FLUID)
+                la->la_uid = body->uid;
+        if (body->valid & OBD_MD_FLGID)
+                la->la_gid = body->gid;
+        if (body->valid & OBD_MD_FLFLAGS)
+                la->la_flags = body->flags;
+        if (body->valid & OBD_MD_FLNLINK)
+                la->la_nlink = body->nlink;
+        if (body->valid & OBD_MD_FLRDEV)
+                la->la_rdev = body->rdev;
+
+        ma->ma_valid = MA_INODE;
+}
+
+static void mdc_req2attr_update(const struct lu_context *ctx,
+                                struct md_attr *ma)
+{
+        struct mdc_thread_info *mci;
+        struct ptlrpc_request *req;
+        struct mdt_body *body;
+        
+        mci = mdc_info_get(ctx);
+        req = mci->mci_req;
+        LASSERT(req);
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
+        LASSERT(body);
+        mdc_body2attr(body, ma);
+}
+
 static int mdc_object_create(const struct lu_context *ctx,
                              struct md_object *mo, 
                              const struct md_create_spec *spec,
                              struct md_attr *ma)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
-        struct lu_attr *attr = &ma->ma_attr;
+        struct lu_attr *la = &ma->ma_attr;
         struct mdc_thread_info *mci;
-        int rc;
+        char *symname;
+        int rc, symlen;
         ENTRY;
 
-        mci = lu_context_key_get(ctx, &mdc_thread_key);
-        LASSERT(mci);
-
-        memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
+        mci = mdc_info_init(ctx);
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
-        mci->mci_opdata.mod_time = attr->la_mtime;
-        /*TODO: pack create_spec properly */
-        rc = md_create(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
-                       attr->la_mode, attr->la_uid, attr->la_gid, 0, 0,
+        mci->mci_opdata.mod_time = la->la_mtime;
+
+        /* get data from spec */
+        symname = spec->u.sp_symname;
+        symlen = symname ? strlen(symname) + 1 : 0;
+        
+        rc = md_create(mc->mc_desc.cl_exp, &mci->mci_opdata,
+                       symname, symlen,
+                       la->la_mode, la->la_uid, la->la_gid, 0, la->la_rdev,
                        &mci->mci_req);
+
+        if (rc == 0) {
+                /* get attr from request */
+                mdc_req2attr_update(ctx, ma);
+        }
 
         ptlrpc_req_finished(mci->mci_req);
 
@@ -144,14 +219,15 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
         struct mdc_thread_info *mci;
         int rc;
         ENTRY;
-        /*XXX: update attr after reply */
-        mci = lu_context_key_get(ctx, &mdc_thread_key);
-        LASSERT(mci);
 
-        memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
+        mci = mdc_info_init(ctx);
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
 
         rc = md_unlink(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
+        if (rc == 0) {
+                /* get attr from request */
+                mdc_req2attr_update(ctx, ma);
+        }
 
         ptlrpc_req_finished(mci->mci_req);
 
@@ -174,10 +250,7 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
         int rc;
         ENTRY;
 
-        mci = lu_context_key_get(ctx, &mdc_thread_key);
-        LASSERT(mci);
-
-        memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
+        mci = mdc_info_init(ctx);
         mci->mci_opdata.fid1 = *lu_object_fid(&mo_p->mo_lu);
         mci->mci_opdata.fid2 = *lf;
 

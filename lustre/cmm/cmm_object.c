@@ -507,7 +507,6 @@ static int cmr_object_init(const struct lu_context *ctx, struct lu_object *lo)
         if (c_dev == NULL) {
                 rc = -ENOENT;
         } else {
-                lo->lo_header->loh_attr |= LOHA_REMOTE;
                 c_obj = c_dev->ld_ops->ldo_object_alloc(ctx,
                                                         lo->lo_header, c_dev);
                 if (c_obj != NULL) {
