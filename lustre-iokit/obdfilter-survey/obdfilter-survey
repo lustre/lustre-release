@@ -41,7 +41,7 @@ fi
 rslt=${rslt:-"/tmp/obdfilter_survey_`date +%F@%R`_`uname -n`"}
 
 # lustre root (if running with own source tree)
-lustre_root=${lustre_root:-"/home_nfs/eeb/lustre"}
+# lustre_root=${lustre_root:-"/my/directory/lustre"}
 
 # what tests to run (first must be write)
 tests_str=${tests_str:-""}
@@ -56,6 +56,9 @@ else
     #tests=(write rewrite read reread rewrite_again)
     tests=(write rewrite read)
 fi
+
+# Set this true to check file contents
+verify=0
 
 # total size (MBytes) per obd instance
 # large enough to avoid cache effects 
@@ -118,8 +121,7 @@ rmmod="/sbin/rmmod"
 
 # lctl::test_brw bandwidth snapshot interval (seconds)
 snap=1
-# check file contents?
-verify=1
+
 
 if [ ${#tests[@]} -eq 0 -o "${tests[0]}" != "write" ]; then
     echo "tests: ${tests[@]}"
@@ -142,7 +144,7 @@ if [ "$lustre_root" == " " ]; then
 fi
 
 if [ -z "$lustre_root" ]; then
-    lctl=$(which lctl)
+    lctl=lctl
 else
     lctl=${lustre_root}/utils/lctl
 fi
@@ -205,7 +207,7 @@ get_ec_devno () {
 	return
     fi
     if [ -z "$ost_name" ]; then
-	echo "no echo client and ost_name not set" 1>&2
+	echo "no echo client and ost_name not set, client: $client_name, host: $host" 1>&2
 	return
     fi
     ost=`get_devno $host obdfilter $ost_name`
@@ -497,6 +499,8 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
                 t0=`date +%s.%N`
                 pidcount=0
                 for host in ${unique_hosts[@]}; do
+		    # brutal hack to deal with a non-shared /tmp
+		    scp -q ${cmdsf}_${host} ${host}:/tmp > /dev/null
                     remote_shell $host bash ${cmdsf}_${host} &
                     pidarray[$pidcount]=$!
                     pidcount=$((pidcount+1))
@@ -522,6 +526,8 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		    client_name="${host_names[$idx]}:${client_names[$idx]}"
 		    tmpfi="${tmpf}_$idx"
 		    echo "=============> $test $client_name" >> $workf
+		    host="${host_names[$idx]}"
+		    scp -q ${host}:tmpfi $tmpfi > /dev/null
 		    cat $tmpfi >> $workf
 		    get_stats $tmpfi >> $tmpf
 		    rm $tmpfi

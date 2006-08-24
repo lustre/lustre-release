@@ -52,9 +52,42 @@ The script must be customised according to the components under test and
 where it should keep its working files.  Customisation variables are
 described clearly at the start of the script.
 
-If you are driving obdfilter instances directly, set the shell array
+To run against a local disk:
+---------------------------
+
+- Create a Lustre configuraton shell script and XML using your normal
+methods
+	- You do not need to specify and MDS or LOV 
+	- List all OSTs that you wish to test
+
+- On all OSS machines:
+  # lconf --refomat <XML file> - Remember, write tests are
+destructive! This test should be run prior to startup of your actual
+Lustre filesystem. If that is the case, you will not need to reformat
+to restart Lustre - however, if the test is terminated before
+completion, you may have to remove objects from the disk. 
+
+- Determine the obdfilter instance names on all the clients, column 4
+of 'lctl dl'.  For example:
+
+# pdsh -w oss[01-02] lctl dl |grep obdfilter |sort
+oss01:   0 UP obdfilter oss01-sdb oss01-sdb_UUID 3
+oss01:   2 UP obdfilter oss01-sdd oss01-sdd_UUID 3
+oss02:   0 UP obdfilter oss02-sdi oss02-sdi_UUID 3
+...
+
+Here the obdfilter instance names are oss01-sdb, oss01-sdd, oss02-sdi.
+
+Since you are driving obdfilter instances directly, set the shell array
 variable 'ost_names' to the names of the obdfilter instances and leave
 'client_names' undefined.
+Example:
+
+ost_names_str='oss01:oss01-sdb oss01:oss01-sdd oss02:oss02-sdi' \
+   ./obdfilter-survey
+
+To run against a network:
+------------------------
 
 If you are driving obdfilter or obdecho instances over the network, you
 must instantiate the echo_clients yourself using lmc/lconf.  Set the shell
@@ -69,20 +102,59 @@ case, you need to ensure...
 (a) 'custom_remote_shell()' works on your cluster
 (b) all pathnames you specify in the script are mounted on the node you
     start the survey from and all the remote nodes.
+(c) obdfilter-survey must be installed on the clients, in the same
+ location as on the master node.
+
+- First, bring up obdecho instances on the servers and echo_client instances
+on the clients:
+   - run the included echo.sh on a node that has Lustre installed.  
+	 -shell variables:
+	 - SERVERS: Set this to a list of server hostnames, or `hostname` of
+	   the current node will be used.  This may be the wrong interface, so
+	   check it.  NOTE: echo.sh could probably be smarter about this...
+
+	   - NETS: set this if you are using a network type other than
+tcp.
+    - example: SERVERS=oss01-eth2 sh echo.sh
+
+- On the servers start the obdecho server and verify that it is up:
+
+# lconf --node (hostname) /(path)/echo.xml
+# lctl dl
+  0 UP obdecho ost_oss01.local ost_oss01.local_UUID 3
+  1 UP ost OSS OSS_UUID 3
+
+- On the clients start the other side of the echo connection:
+
+# lconf --node client /(path)/echo.xml
+# lctl dl
+  0 UP osc OSC_xfer01.local_ost_oss01.local_ECHO_client 6bc9b_ECHO_client_2a8a2cb3dd 5
+  1 UP echo_client ECHO_client 6bc9b_ECHO_client_2a8a2cb3dd 3
+
+- verify connectivity from a client:
+ - lctl ping SERVER_NID
+
+- Run the script on the master node, specifying the client names in an
+environment variable
+
+Example:
+# client_names_str='xfer01:ECHO_client xfer02:ECHO_client
+xfer03:ECHO_client xfer04:ECHO_client xfer05:ECHO_client
+xfer06:ECHO_client xfer07:ECHO_client xfer08:ECHO_client
+xfer09:ECHO_client xfer10:ECHO_client xfer11:ECHO_client
+xfer12:ECHO_client' ./obdfilter-survey
+
+
+- When done: cleanup echo_client/obdecho instances:
+       - on clients: lconf --cleanup --node client /(path)/echo.xml
+       - on server(s): lconf --cleanup --node (hostname) /(path)/echo.xml
+
+- When aborting: killall vmstat on clients:
+
+pdsh -w (clients) killall vmstat
 
 Use 'lctl device_list' to verify the obdfilter/echo_client instance names
 e.g...
-
-[root@ns9 root]# lctl device_list
-  0 UP confobd conf_ost3 OSD_ost3_ns9_UUID 1
-  1 UP obdfilter ost3 ost3_UUID 1
-  2 UP ost OSS OSS_UUID 1
-  3 AT confobd conf_ost12 OSD_ost12_ns9_UUID 1
-[root@ns9 root]# 
-
-...here device 1 is an instance of obdfilter called 'ost3'.  To exercise it
-directly, add 'ns9:ost3' to 'ost_names'.  If the script is only to be run
-on node 'ns9' you could simply add 'ost3' to 'ost_names'.
 
 When the script runs, it creates a number of working files and a pair of
 result files.  All files start with the prefix given by ${rslt}.
