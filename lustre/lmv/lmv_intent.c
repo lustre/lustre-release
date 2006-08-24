@@ -138,6 +138,10 @@ out:
         return rc;
 }
 
+/*
+ * IT_OPEN is intended to open (and create, possible) an object. Parent (pid)
+ * may be split dir.
+ */
 int lmv_intent_open(struct obd_export *exp, const struct lu_fid *pid,
                     const char *name, int len, void *lmm, int lmmsize,
                     const struct lu_fid *cid, struct lookup_intent *it,
@@ -160,11 +164,6 @@ int lmv_intent_open(struct obd_export *exp, const struct lu_fid *pid,
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         
-        /*
-         * IT_OPEN is intended to open (and create, possible) an object. Parent
-         * (pid) may be split dir.
-         */
-
 repeat:
         LASSERT(++loop <= 2);
         rc = lmv_fld_lookup(lmv, &rpid, &mds);
@@ -215,7 +214,7 @@ repeat:
                 LASSERT(rc < 0);
 
                 /*
-                 * this is possible, that some userspace application will try to
+                 * This is possible, that some userspace application will try to
                  * open file as directory and we will have -ENOTDIR here. As
                  * this is "usual" situation, we should not print error here,
                  * only debug info.
@@ -311,8 +310,10 @@ int lmv_intent_getattr(struct obd_export *exp, const struct lu_fid *pid,
                         if (!lu_fid_eq(pid, cid)){
                                 rpid = obj->lo_inodes[mds].li_fid;
                                 rc = lmv_fld_lookup(lmv, &rpid, &mds);
-                                if (rc)
+                                if (rc) {
+                                        lmv_obj_put(obj);
                                         GOTO(out_free_op_data, rc);
+                                }
                         }
                         lmv_obj_put(obj);
                 }
@@ -331,8 +332,10 @@ int lmv_intent_getattr(struct obd_export *exp, const struct lu_fid *pid,
                                            (char *)name, len);
                         rpid = obj->lo_inodes[mds].li_fid;
                         rc = lmv_fld_lookup(lmv, &rpid, &mds);
-                        if (rc)
+                        if (rc) {
+                                lmv_obj_put(obj);
                                 GOTO(out_free_op_data, rc);
+                        }
                         lmv_obj_put(obj);
 
                         CDEBUG(D_OTHER, "forward to MDS #"LPU64" (slave "DFID")\n",
@@ -575,7 +578,7 @@ int lmv_intent_lookup(struct obd_export *exp, const struct lu_fid *pid,
          */
         if (cid) {
                 /*
-                 * this is revalidation: we have to check is LOOKUP lock still
+                 * This is revalidate: we have to check is LOOKUP lock still
                  * valid for given fid. Very important part is that we have to
                  * choose right mds because namespace is per mds.
                  */
@@ -603,7 +606,7 @@ repeat:
                 LASSERT(++loop <= 2);
 
                 /*
-                 * this is lookup. during lookup we have to update all the
+                 * This is lookup. During lookup we have to update all the
                  * attributes, because returned values will be put in struct
                  * inode.
                  */
@@ -615,12 +618,14 @@ repeat:
                                                    (char *)name, len);
                                 rpid = obj->lo_inodes[mds].li_fid;
                                 rc = lmv_fld_lookup(lmv, &rpid, &mds);
-                                if (rc)
+                                if (rc) {
+                                        lmv_obj_put(obj);
                                         GOTO(out_free_op_data, rc);
+                                }
                         }
                         lmv_obj_put(obj);
                 }
-                memset(&op_data->fid2, 0, sizeof(op_data->fid2));
+                fid_zero(&op_data->fid2);
         }
 
         op_data->fid1 = rpid;
@@ -706,21 +711,19 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         const char *name = op_data->name;
         int len = op_data->namelen;
         struct lu_fid *pid, *cid;
-        mdsno_t mds;
         int rc;
         ENTRY;
 
-        LASSERT(it);
-
-        pid = fid_is_sane(&op_data->fid1) ? &op_data->fid1 : NULL;
-        cid = fid_is_sane(&op_data->fid2) ? &op_data->fid2 : NULL;
-
-        rc = lmv_fld_lookup(lmv, pid, &mds);
-        if (rc)
-                RETURN(rc);
+        LASSERT(it != NULL);
+        LASSERT(fid_is_sane(&op_data->fid1));
         
-        CDEBUG(D_OTHER, "INTENT LOCK '%s' for '%*s' on "DFID" -> #"LPU64"\n",
-               LL_IT2STR(it), len, name, PFID(pid), mds);
+        pid = &op_data->fid1;
+        
+        cid = !fid_is_sane(&op_data->fid2) ?
+                &op_data->fid2 : NULL;
+
+        CDEBUG(D_OTHER, "INTENT LOCK '%s' for '%*s' on "DFID"\n",
+               LL_IT2STR(it), len, name, PFID(pid));
 
         rc = lmv_check_connect(obd);
         if (rc)
@@ -734,7 +737,7 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 rc = lmv_intent_open(exp, pid, name, len, lmm,
                                      lmmsize, cid, it, flags, reqp,
                                      cb_blocking, extra_lock_flags);
-        else if (it->it_op & IT_GETATTR/* || it->it_op & IT_CHDIR*/)
+        else if (it->it_op & IT_GETATTR)
                 rc = lmv_intent_getattr(exp, pid, name, len, lmm,
                                         lmmsize, cid, it, flags, reqp,
                                         cb_blocking, extra_lock_flags);

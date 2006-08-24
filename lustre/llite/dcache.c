@@ -394,6 +394,14 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 RETURN(-ENOMEM);
        
         if (it->it_op & IT_CREAT) {
+                /* 
+                 * Allocate new fid for case of create or open(O_CREAT). In both
+                 * cases it->it_op will contain IT_CREAT. In case of
+                 * open(O_CREAT) agains existing file, fid allocating is not
+                 * needed, but this is not known until server returns
+                 * anything. Well, in this case new allocated fid is lost. But
+                 * this is not big deal, we have 64bit fids. --umka
+                 */
                 struct lu_placement_hint hint = { .ph_pname = NULL,
                                                   .ph_pfid = ll_inode2fid(parent),
                                                   .ph_cname = &de->d_name,
@@ -417,13 +425,16 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 struct ll_inode_info *lli = ll_i2info(inode);
                 struct obd_client_handle **och_p;
                 __u64 *och_usecount;
-                /* We used to check for MDS_INODELOCK_OPEN here, but in fact
+                
+                /*
+                 * We used to check for MDS_INODELOCK_OPEN here, but in fact
                  * just having LOOKUP lock is enough to justify inode is the
                  * same. And if inode is the same and we have suitable
                  * openhandle, then there is no point in doing another OPEN RPC
-                 * just to throw away newly received openhandle.
-                 * There are no security implications too, if file owner or
-                 * access mode is change, LOOKUP lock is revoked */
+                 * just to throw away newly received openhandle.  There are no
+                 * security implications too, if file owner or access mode is
+                 * change, LOOKUP lock is revoked.
+                 */
 
                 it->it_create_mode &= ~current->fs->umask;
 
@@ -535,7 +546,8 @@ out:
         }
         RETURN(rc);
         
-        /* This part is here to combat evil-evil race in real_lookup on 2.6
+        /*
+         * This part is here to combat evil-evil race in real_lookup on 2.6
          * kernels.  The race details are: We enter do_lookup() looking for some
          * name, there is nothing in dcache for this name yet and d_lookup()
          * returns NULL.  We proceed to real_lookup(), and while we do this,
@@ -547,7 +559,8 @@ out:
          * returns -ENOENT in such a case instead of retrying the lookup. Once
          * this is dealt with in real_lookup(), all of this ugly mess can go and
          * we can just check locks in ->d_revalidate without doing any RPCs
-         * ever. */
+         * ever.
+         */
 do_lookup:
         if (it != &lookup_it) {
                 ll_lookup_finish_locks(it, de);
@@ -559,8 +572,27 @@ do_lookup:
                 RETURN(-ENOMEM);
 
         /* do real lookup here */
-        ll_prepare_md_op_data(op_data, de->d_parent->d_inode, NULL,
+        ll_prepare_md_op_data(op_data, parent, NULL,
                               de->d_name.name, de->d_name.len, 0);
+        
+        if (it->it_op & IT_CREAT) {
+                /* 
+                 * Allocate new fid for case of create or open with O_CREAT. In
+                 * both cases it->it_op will contain IT_CREAT.
+                 */
+                struct lu_placement_hint hint = { .ph_pname = NULL,
+                                                  .ph_pfid = ll_inode2fid(parent),
+                                                  .ph_cname = &de->d_name,
+                                                  .ph_opc = LUSTRE_OPC_CREATE };
+
+                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2,
+                                     &hint);
+                if (rc) {
+                        CERROR("can't allocate new fid, rc %d\n", rc);
+                        LBUG();
+                }
+        }
+        
         rc = md_intent_lock(exp, op_data, NULL, 0,  it, 0, &req,
                             ll_md_blocking_ast, 0);
         if (rc >= 0) {
@@ -568,8 +600,7 @@ do_lookup:
                                                            DLM_REPLY_REC_OFF,
                                                            sizeof(*mdt_body));
                 /* see if we got same inode, if not - return error */
-                if(!memcmp(&op_data->fid2, &mdt_body->fid1,
-                           sizeof(op_data->fid2)))
+                if(lu_fid_eq(&op_data->fid2, &mdt_body->fid1))
                         goto revalidate_finish;
                 ll_intent_release(it);
         }

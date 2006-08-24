@@ -1474,9 +1474,6 @@ lmv_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
 	if (rc)
 		RETURN(rc);
 
-        rc = lmv_fld_lookup(lmv, fid, &mds);
-        if (rc)
-                RETURN(rc);
 repeat:
         LASSERT(++loop <= 2);
         obj = lmv_obj_grab(obd, fid);
@@ -1488,7 +1485,7 @@ repeat:
                 lmv_obj_put(obj);
         }
 
-        CDEBUG(D_OTHER, "getattr_lock for %*s on "DFID" -> "DFID"\n",
+        CDEBUG(D_OTHER, "getattr_name for %*s on "DFID" -> "DFID"\n",
                namelen, filename, PFID(fid), PFID(&rid));
 
         tgt_exp = lmv_get_export(lmv, &rid);
@@ -1579,6 +1576,7 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
 
         CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n",
                mds, PFID(&op_data->fid1));
+        
         rc = md_link(lmv->tgts[mds].ltd_exp, op_data, request);
 
         RETURN(rc);
