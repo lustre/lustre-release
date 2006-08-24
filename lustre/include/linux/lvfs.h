@@ -33,6 +33,7 @@
 #include <linux/lvfs_linux.h>
 #else
 struct group_info { /* unused */ };
+#include <liblustre.h>
 #endif
 
 #define LLOG_LVFS
