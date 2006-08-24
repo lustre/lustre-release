@@ -104,6 +104,7 @@ load_modules() {
     load_module ptlrpc/ptlrpc
     load_module fid/fid
     load_module fld/fld
+    load_module lmv/lmv
     load_module mdc/mdc
     load_module osc/osc
     load_module lov/lov
