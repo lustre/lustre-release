@@ -675,9 +675,17 @@ static int lmv_placement_policy(struct obd_device *obd,
                  * balanced, that is all sequences have more or less equal
                  * number of objects created. */
                 if (hint->ph_cname && (hint->ph_opc == LUSTRE_OPC_MKDIR)) {
+#if 0
                         *mds = lmv_all_chars_policy(lmv->desc.ld_tgt_count,
                                                     hint->ph_cname);
                         rc = 0;
+#else
+                        /* stress policy for tests - to use non-parent MDS */
+                        LASSERT(fid_is_sane(hint->ph_pfid));
+                        rc = lmv_fld_lookup(lmv, hint->ph_pfid, mds);
+                        *mds = (int)(*mds + 1) % lmv->desc.ld_tgt_count;
+
+#endif
                 } else {
                         /* default policy is to use parent MDS */
                         LASSERT(fid_is_sane(hint->ph_pfid));
@@ -1963,10 +1971,10 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                                          op_data->name, op_data->namelen);
                         op_data->fid1 = obj->lo_inodes[i].li_fid;
                         lmv_obj_put(obj);
+                        CDEBUG(D_OTHER, "unlink '%*s' in "DFID" -> %u\n",
+                               op_data->namelen, op_data->name,
+                               PFID(&op_data->fid1), i);
                 }
-                CDEBUG(D_OTHER, "unlink '%*s' in "DFID" -> %u\n",
-                       op_data->namelen, op_data->name, PFID(&op_data->fid1),
-                       i);
         } else {
                 CDEBUG(D_OTHER, "drop i_nlink on "DFID"\n",
                        PFID(&op_data->fid1));

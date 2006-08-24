@@ -130,7 +130,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         OBD_FREE_PTR(op_data);
         EXIT;
 out:
-        if (pmode)
+        if (rc && pmode)
                 ldlm_lock_decref(&plock, pmode);
 
         ptlrpc_req_finished(*reqp);
@@ -707,7 +707,6 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                     int extra_lock_flags)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct lmv_obd *lmv = &obd->u.lmv;
         const char *name = op_data->name;
         int len = op_data->namelen;
         struct lu_fid *pid, *cid;
@@ -719,8 +718,7 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         
         pid = &op_data->fid1;
         
-        cid = !fid_is_sane(&op_data->fid2) ?
-                &op_data->fid2 : NULL;
+        cid = fid_is_sane(&op_data->fid2) ? &op_data->fid2 : NULL;
 
         CDEBUG(D_OTHER, "INTENT LOCK '%s' for '%*s' on "DFID"\n",
                LL_IT2STR(it), len, name, PFID(pid));
