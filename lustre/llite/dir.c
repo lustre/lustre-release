@@ -354,11 +354,11 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
                 ll_check_page(dir, page);
         if (PageError(page))
                 goto fail;
+hash_collision:
         dp = page_address(page);
 
         start = le32_to_cpu(dp->ldp_hash_start);
         end   = le32_to_cpu(dp->ldp_hash_end);
-hash_collision:
         if (end == start) {
                 LASSERT(start == hash);
                 CWARN("Page-wide hash collision: %#lx\n", (unsigned long)end);
@@ -624,7 +624,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 OBD_ALLOC_PTR(op_data);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
-                
+
                 ll_prepare_md_op_data(op_data, inode,
                                       NULL, NULL, 0, 0);
 
@@ -682,7 +682,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                         rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode),
                                              filename, strlen(filename) + 1,
-                                             OBD_MD_FLEASIZE | OBD_MD_FLDIREA, 
+                                             OBD_MD_FLEASIZE | OBD_MD_FLDIREA,
                                              lmmsize, &request);
                         if (rc < 0) {
                                 CDEBUG(D_INFO, "md_getattr_name failed "
