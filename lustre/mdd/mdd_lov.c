@@ -153,7 +153,7 @@ int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
         ENTRY;
 
         if (need_locked)
-                mdd_lock(ctxt, obj, DT_READ_LOCK);
+                mdd_read_lock(ctxt, obj);
         next = mdd_object_child(obj);
         rc = next->do_ops->do_xattr_get(ctxt, next, md, *md_size,
                                         MDS_LOV_MD_NAME);
@@ -172,7 +172,7 @@ int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
         }
 
         if (need_locked)
-                mdd_unlock(ctxt, obj, DT_READ_LOCK);
+                mdd_read_unlock(ctxt, obj);
 
         RETURN (rc);
 }
@@ -351,7 +351,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         oa = obdo_alloc();
         if (oa == NULL)
                 RETURN(-ENOMEM);
-        
+
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
         oa->o_mode = S_IFREG | 0600;
@@ -422,7 +422,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
                 oinfo.oi_oa = oa;
                 oinfo.oi_md = lsm;
-                        
+
                 rc = obd_setattr(lov_exp, &oinfo, NULL);
                 if (rc) {
                         CERROR("error setting attrs for "DFID": rc %d\n",

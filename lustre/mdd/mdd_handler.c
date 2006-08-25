@@ -314,9 +314,9 @@ static inline int mdd_attr_get_internal_locked (const struct lu_context *ctxt,
                                                 struct md_attr *ma)
 {
         int rc;
-        mdd_lock(ctxt, mdd_obj, DT_READ_LOCK);
+        mdd_read_lock(ctxt, mdd_obj);
         rc = mdd_attr_get_internal(ctxt, mdd_obj, ma);
-        mdd_unlock(ctxt, mdd_obj, DT_READ_LOCK);
+        mdd_read_unlock(ctxt, mdd_obj);
         return rc;
 }
 
@@ -541,7 +541,7 @@ static int mdd_recovery_complete(const struct lu_context *ctxt,
                 GOTO(out, rc);
         }
         rc = mdd_cleanup_unlink_llog(ctx, mdd);
-      
+
         obd_notify(obd->u.mds.mds_osc_obd, NULL,
                    obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
                    OBD_NOTIFY_SYNC, NULL);
@@ -564,34 +564,46 @@ static struct lu_object_operations mdd_lu_obj_ops = {
 	.loo_object_print   = mdd_object_print
 };
 
-void mdd_lock(const struct lu_context *ctxt, struct mdd_object *obj,
-              enum dt_lock_mode mode)
+void mdd_write_lock(const struct lu_context *ctxt, struct mdd_object *obj)
 {
         struct dt_object  *next = mdd_object_child(obj);
 
-        next->do_ops->do_lock(ctxt, next, mode);
+        next->do_ops->do_write_lock(ctxt, next);
 }
 
-void mdd_unlock(const struct lu_context *ctxt, struct mdd_object *obj,
-                enum dt_lock_mode mode)
+void mdd_read_lock(const struct lu_context *ctxt, struct mdd_object *obj)
 {
         struct dt_object  *next = mdd_object_child(obj);
 
-        next->do_ops->do_unlock(ctxt, next, mode);
+        next->do_ops->do_read_lock(ctxt, next);
+}
+
+void mdd_write_unlock(const struct lu_context *ctxt, struct mdd_object *obj)
+{
+        struct dt_object  *next = mdd_object_child(obj);
+
+        next->do_ops->do_write_unlock(ctxt, next);
+}
+
+void mdd_read_unlock(const struct lu_context *ctxt, struct mdd_object *obj)
+{
+        struct dt_object  *next = mdd_object_child(obj);
+
+        next->do_ops->do_read_unlock(ctxt, next);
 }
 
 static void mdd_lock2(const struct lu_context *ctxt,
                       struct mdd_object *o0, struct mdd_object *o1)
 {
-        mdd_lock(ctxt, o0, DT_WRITE_LOCK);
-        mdd_lock(ctxt, o1, DT_WRITE_LOCK);
+        mdd_write_lock(ctxt, o0);
+        mdd_write_lock(ctxt, o1);
 }
 
 static void mdd_unlock2(const struct lu_context *ctxt,
                         struct mdd_object *o0, struct mdd_object *o1)
 {
-        mdd_unlock(ctxt, o0, DT_WRITE_LOCK);
-        mdd_unlock(ctxt, o1, DT_WRITE_LOCK);
+        mdd_write_unlock(ctxt, o1);
+        mdd_write_unlock(ctxt, o0);
 }
 
 static struct thandle* mdd_trans_start(const struct lu_context *ctxt,
@@ -646,9 +658,9 @@ int mdd_attr_set_internal_locked(const struct lu_context *ctxt,
                                  struct thandle *handle)
 {
         int rc;
-        mdd_lock(ctxt, o, DT_WRITE_LOCK);
+        mdd_write_lock(ctxt, o);
         rc = mdd_attr_set_internal(ctxt, o, attr, handle);
-        mdd_unlock(ctxt, o, DT_WRITE_LOCK);
+        mdd_write_unlock(ctxt, o);
         return rc;
 }
 
@@ -879,10 +891,9 @@ int mdd_xattr_set_txn(const struct lu_context *ctxt, struct mdd_object *obj,
         int  rc;
         ENTRY;
 
-        mdd_lock(ctxt, obj, DT_WRITE_LOCK);
-        rc = __mdd_xattr_set(ctxt, obj, buf, buf_len, name,
-                             fl, handle);
-        mdd_unlock(ctxt, obj, DT_WRITE_LOCK);
+        mdd_write_lock(ctxt, obj);
+        rc = __mdd_xattr_set(ctxt, obj, buf, buf_len, name, fl, handle);
+        mdd_write_unlock(ctxt, obj);
 
         RETURN(rc);
 }
@@ -933,9 +944,9 @@ int mdd_xattr_del(const struct lu_context *ctxt, struct md_object *obj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
+        mdd_write_lock(ctxt, mdd_obj);
         rc = __mdd_xattr_del(ctxt, mdd, md2mdd_obj(obj), name, handle);
-        mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
+        mdd_write_unlock(ctxt, mdd_obj);
 
         mdd_trans_stop(ctxt, mdd, rc, handle);
 
@@ -1212,7 +1223,7 @@ static int mdd_rename_lock(const struct lu_context *ctxt,
         ENTRY;
 
         if (src_pobj == tgt_pobj) {
-                mdd_lock(ctxt, src_pobj, DT_WRITE_LOCK);
+                mdd_write_lock(ctxt, src_pobj);
                 RETURN(0);
         }
         /*compared the parent child relationship of src_p&tgt_p*/
@@ -1238,9 +1249,9 @@ static void mdd_rename_unlock(const struct lu_context *ctxt,
                               struct mdd_object *src_pobj,
                               struct mdd_object *tgt_pobj)
 {
-        mdd_unlock(ctxt, src_pobj, DT_WRITE_LOCK);
+        mdd_write_unlock(ctxt, src_pobj);
         if (src_pobj != tgt_pobj)
-                mdd_unlock(ctxt, tgt_pobj, DT_WRITE_LOCK);
+                mdd_write_unlock(ctxt, tgt_pobj);
 }
 
 static int mdd_rename_sanity_check(const struct lu_context *ctxt,
@@ -1366,12 +1377,12 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
 
         if (mdd_is_dead_obj(mdd_obj))
                 RETURN(-ESTALE);
-        mdd_lock(ctxt, mdd_obj, DT_READ_LOCK);
+        mdd_read_lock(ctxt, mdd_obj);
         if (S_ISDIR(mdd_object_type(ctxt, mdd_obj)) && dt_try_as_dir(ctxt, dir))
                 rc = dir->do_index_ops->dio_lookup(ctxt, dir, rec, key);
         else
                 rc = -ENOTDIR;
-        mdd_unlock(ctxt, mdd_obj, DT_READ_LOCK);
+        mdd_read_unlock(ctxt, mdd_obj);
         RETURN(rc);
 }
 
@@ -1547,7 +1558,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        mdd_lock(ctxt, mdd_pobj, DT_WRITE_LOCK);
+        mdd_write_lock(ctxt, mdd_pobj);
 
         /*
          * XXX check that link can be added to the parent in mkdir case.
@@ -1648,7 +1659,7 @@ cleanup:
         }
         if (lmm)
                 OBD_FREE(lmm, lmm_size);
-        mdd_unlock(ctxt, mdd_pobj, DT_WRITE_LOCK);
+        mdd_write_unlock(ctxt, mdd_pobj);
         mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
@@ -1697,11 +1708,11 @@ static int mdd_name_insert(const struct lu_context *ctxt,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
+        mdd_write_lock(ctxt, mdd_obj);
 
         rc = __mdd_index_insert(ctxt, mdd_obj, fid, name, handle);
 
-        mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
+        mdd_write_unlock(ctxt, mdd_obj);
         mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
@@ -1721,11 +1732,11 @@ static int mdd_name_remove(const struct lu_context *ctxt,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
+        mdd_write_lock(ctxt, mdd_obj);
 
         rc = __mdd_index_delete(ctxt, mdd_obj, name, handle);
 
-        mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
+        mdd_write_unlock(ctxt, mdd_obj);
 
         mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
@@ -1829,9 +1840,9 @@ static int mdd_ref_add(const struct lu_context *ctxt, struct md_object *obj)
         if (IS_ERR(handle))
                 RETURN(-ENOMEM);
 
-        mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
+        mdd_write_lock(ctxt, mdd_obj);
         __mdd_ref_add(ctxt, mdd_obj, handle);
-        mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
+        mdd_write_unlock(ctxt, mdd_obj);
 
         mdd_trans_stop(ctxt, mdd, 0, handle);
 
@@ -1864,7 +1875,7 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
         if (IS_ERR(handle))
                 RETURN(-ENOMEM);
 
-        mdd_lock(ctxt, mdd_obj, DT_WRITE_LOCK);
+        mdd_write_lock(ctxt, mdd_obj);
 
         isdir = S_ISDIR(lu_object_attr(&obj->mo_lu));
         /* rmdir checks */
@@ -1884,7 +1895,7 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
         rc = __mdd_finish_unlink(ctxt, mdd_obj, ma);
 
 cleanup:
-        mdd_unlock(ctxt, mdd_obj, DT_WRITE_LOCK);
+        mdd_write_unlock(ctxt, mdd_obj);
         mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
@@ -1946,13 +1957,13 @@ static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
         LASSERT(lu_object_exists(mdd2lu_obj(mdd_obj)));
         next = mdd_object_child(mdd_obj);
 
-        mdd_lock(ctxt, mdd_obj, DT_READ_LOCK);
+        mdd_read_lock(ctxt, mdd_obj);
         if (S_ISDIR(mdd_object_type(ctxt, mdd_obj)) &&
             dt_try_as_dir(ctxt, next))
                 rc = next->do_ops->do_readpage(ctxt, next, rdpg);
         else
                 rc = -ENOTDIR;
-        mdd_unlock(ctxt, mdd_obj, DT_READ_LOCK);
+        mdd_read_unlock(ctxt, mdd_obj);
         return rc;
 }
 

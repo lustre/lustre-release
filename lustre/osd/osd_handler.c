@@ -83,9 +83,7 @@ struct osd_object {
         struct iam_container   oo_container;
         struct iam_descr       oo_descr;
         struct iam_path_descr *oo_ipd;
-#if OSD_DEBUG_LOCKS
         const struct lu_context *oo_owner;
-#endif
 };
 
 /*
@@ -542,53 +540,63 @@ static struct dt_device_operations osd_dt_ops = {
         .dt_conf_get    = osd_conf_get
 };
 
-static void osd_object_lock(const struct lu_context *ctx, struct dt_object *dt,
-                            enum dt_lock_mode mode)
+static void osd_object_read_lock(const struct lu_context *ctx,
+                                 struct dt_object *dt)
 {
         struct osd_object      *obj = osd_dt_obj(dt);
         struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
 
-        LASSERT(mode == DT_WRITE_LOCK || mode == DT_READ_LOCK);
         LASSERT(osd_invariant(obj));
 
         LASSERT(obj->oo_owner != ctx);
-
-        if (mode == DT_WRITE_LOCK) {
-                down_write(&obj->oo_sem);
-                LASSERT(obj->oo_owner == NULL);
-                /*
-                 * Write lock assumes transaction.
-                 */
-                LASSERT(oti->oti_txns > 0);
-                obj->oo_owner = ctx;
-                oti->oti_w_locks++;
-        } else {
-                down_read(&obj->oo_sem);
-                LASSERT(obj->oo_owner == NULL);
-                oti->oti_r_locks++;
-        }
+        down_read(&obj->oo_sem);
+        LASSERT(obj->oo_owner == NULL);
+        oti->oti_r_locks++;
 }
 
-static void osd_object_unlock(const struct lu_context *ctx,
-                              struct dt_object *dt, enum dt_lock_mode mode)
+static void osd_object_write_lock(const struct lu_context *ctx,
+                                  struct dt_object *dt)
 {
         struct osd_object      *obj = osd_dt_obj(dt);
         struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
 
-        LASSERT(mode == DT_WRITE_LOCK || mode == DT_READ_LOCK);
         LASSERT(osd_invariant(obj));
 
-        if (mode == DT_WRITE_LOCK) {
-                LASSERT(obj->oo_owner == ctx);
-                LASSERT(oti->oti_w_locks > 0);
-                oti->oti_w_locks--;
-                obj->oo_owner = NULL;
-                up_write(&obj->oo_sem);
-        } else {
-                LASSERT(oti->oti_r_locks > 0);
-                oti->oti_r_locks--;
-                up_read(&obj->oo_sem);
-        }
+        LASSERT(obj->oo_owner != ctx);
+        down_write(&obj->oo_sem);
+        LASSERT(obj->oo_owner == NULL);
+        /*
+         * Write lock assumes transaction.
+         */
+        LASSERT(oti->oti_txns > 0);
+        obj->oo_owner = ctx;
+        oti->oti_w_locks++;
+}
+
+static void osd_object_read_unlock(const struct lu_context *ctx,
+                                   struct dt_object *dt)
+{
+        struct osd_object      *obj = osd_dt_obj(dt);
+        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+
+        LASSERT(osd_invariant(obj));
+        LASSERT(oti->oti_r_locks > 0);
+        oti->oti_r_locks--;
+        up_read(&obj->oo_sem);
+}
+
+static void osd_object_write_unlock(const struct lu_context *ctx,
+                                    struct dt_object *dt)
+{
+        struct osd_object      *obj = osd_dt_obj(dt);
+        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+
+        LASSERT(osd_invariant(obj));
+        LASSERT(obj->oo_owner == ctx);
+        LASSERT(oti->oti_w_locks > 0);
+        oti->oti_w_locks--;
+        obj->oo_owner = NULL;
+        up_write(&obj->oo_sem);
 }
 
 static int osd_attr_get(const struct lu_context *ctxt, struct dt_object *dt,
@@ -1142,19 +1150,21 @@ static int osd_readpage(const struct lu_context *ctxt,
 }
 
 static struct dt_object_operations osd_obj_ops = {
-        .do_lock       = osd_object_lock,
-        .do_unlock     = osd_object_unlock,
-        .do_attr_get   = osd_attr_get,
-        .do_attr_set   = osd_attr_set,
-        .do_create     = osd_object_create,
-        .do_index_try  = osd_index_try,
-        .do_ref_add    = osd_object_ref_add,
-        .do_ref_del    = osd_object_ref_del,
-        .do_xattr_get  = osd_xattr_get,
-        .do_xattr_set  = osd_xattr_set,
-        .do_xattr_del  = osd_xattr_del,
-        .do_xattr_list = osd_xattr_list,
-        .do_readpage   = osd_readpage,
+        .do_read_lock    = osd_object_read_lock,
+        .do_write_lock   = osd_object_write_lock,
+        .do_read_unlock  = osd_object_read_unlock,
+        .do_write_unlock = osd_object_write_unlock,
+        .do_attr_get     = osd_attr_get,
+        .do_attr_set     = osd_attr_set,
+        .do_create       = osd_object_create,
+        .do_index_try    = osd_index_try,
+        .do_ref_add      = osd_object_ref_add,
+        .do_ref_del      = osd_object_ref_del,
+        .do_xattr_get    = osd_xattr_get,
+        .do_xattr_set    = osd_xattr_set,
+        .do_xattr_del    = osd_xattr_del,
+        .do_xattr_list   = osd_xattr_list,
+        .do_readpage     = osd_readpage,
 };
 
 /*

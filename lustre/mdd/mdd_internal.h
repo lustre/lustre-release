@@ -95,10 +95,11 @@ int mdd_lov_setattr_async(const struct lu_context *ctxt, struct mdd_object *obj,
 
 struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx);
 
-void mdd_lock(const struct lu_context *ctxt, struct mdd_object *obj,
-              enum dt_lock_mode mode);
-void mdd_unlock(const struct lu_context *ctxt, struct mdd_object *obj,
-                enum dt_lock_mode mode);
+void mdd_read_lock(const struct lu_context *ctxt, struct mdd_object *obj);
+void mdd_read_unlock(const struct lu_context *ctxt, struct mdd_object *obj);
+void mdd_write_lock(const struct lu_context *ctxt, struct mdd_object *obj);
+void mdd_write_unlock(const struct lu_context *ctxt, struct mdd_object *obj);
+
 extern struct lu_device_operations mdd_lu_ops;
 static inline int lu_device_is_mdd(struct lu_device *d)
 {

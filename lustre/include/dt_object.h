@@ -53,14 +53,6 @@ struct dt_device;
 struct dt_object;
 struct dt_index_features;
 
-/*
- * Lock mode for DT objects.
- */
-enum dt_lock_mode {
-        DT_WRITE_LOCK = 1,
-        DT_READ_LOCK  = 2,
-};
-
 struct dt_device_param {
         unsigned           ddp_max_name_len;
         unsigned           ddp_max_nlink;
@@ -134,10 +126,14 @@ extern const struct dt_index_features dt_directory_features;
  * Per-dt-object operations.
  */
 struct dt_object_operations {
-        void  (*do_lock)(const struct lu_context *ctx,
-                         struct dt_object *dt, enum dt_lock_mode mode);
-        void  (*do_unlock)(const struct lu_context *ctx,
-                           struct dt_object *dt, enum dt_lock_mode mode);
+        void  (*do_read_lock)(const struct lu_context *ctx,
+                              struct dt_object *dt);
+        void  (*do_write_lock)(const struct lu_context *ctx,
+                               struct dt_object *dt);
+        void  (*do_read_unlock)(const struct lu_context *ctx,
+                                struct dt_object *dt);
+        void  (*do_write_unlock)(const struct lu_context *ctx,
+                                 struct dt_object *dt);
         /*
          * Note: following ->do_{x,}attr_{set,get}() operations are very
          * similar to ->moo_{x,}attr_{set,get}() operations in struct
