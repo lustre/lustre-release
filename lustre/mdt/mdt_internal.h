@@ -381,7 +381,7 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
                        struct mdt_object *o,
                        struct mdt_lock_handle *child_lockh);
 
-int mdt_reint_open(struct mdt_thread_info *info);
+int mdt_open(struct mdt_thread_info *info);
 
 void mdt_mfd_close(const struct lu_context *ctxt, struct mdt_device *mdt,
                    struct mdt_file_data *mfd, struct md_attr *ma);
