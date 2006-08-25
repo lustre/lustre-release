@@ -165,7 +165,7 @@ static int mdc_object_create(const struct lu_context *ctx,
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct lu_attr *la = &ma->ma_attr;
         struct mdc_thread_info *mci;
-        char *symname;
+        const char *symname;
         int rc, symlen;
         ENTRY;
 
