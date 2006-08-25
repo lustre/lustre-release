@@ -2049,40 +2049,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
         }
 
         lmv = &obd->u.lmv;
-        if (keylen == strlen("mdsize") && !strcmp(key, "mdsize")) {
-                __u32 *mdsize = val;
-                *vallen = sizeof(__u32);
-                *mdsize = lmv_get_easize(lmv);
-                RETURN(0);
-        } else if (keylen == strlen("mdsnum") && !strcmp(key, "mdsnum")) {
-                struct obd_uuid *cluuid = &lmv->cluuid;
-                struct lmv_tgt_desc *tgts;
-                __u32 *mdsnum = val;
-                int i;
-
-                tgts = lmv->tgts;
-                for (i = 0; i < lmv->desc.ld_tgt_count; i++, tgts++) {
-                        if (obd_uuid_equals(&tgts->uuid, cluuid)) {
-                                *vallen = sizeof(__u32);
-                                *mdsnum = i;
-                                RETURN(0);
-                        }
-                }
-                LASSERT(0);
-        } else if (keylen == strlen("rootid") && !strcmp(key, "rootid")) {
-                rc = lmv_check_connect(obd);
-                if (rc)
-                        RETURN(rc);
-
-                /* getting rootid from first MDS. */
-                rc = obd_get_info(lmv->tgts[0].ltd_exp, keylen, key,
-                                  vallen, val);
-                RETURN(rc);
-        } else if (keylen >= strlen("lmvdesc") && !strcmp(key, "lmvdesc")) {
-                struct lmv_desc *desc_ret = val;
-                *desc_ret = lmv->desc;
-                RETURN(0);
-        } else if (keylen >= strlen("remote_flag") && !strcmp(key, "remote_flag")) {
+        if (keylen >= strlen("remote_flag") && !strcmp(key, "remote_flag")) {
                 struct lmv_tgt_desc *tgts;
                 int i;
 
@@ -2105,8 +2072,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                                 RETURN(0);
                 }
                 RETURN(-EINVAL);
-        } else if ((keylen >= strlen("lovdesc") && !strcmp(key, "lovdesc")) ||
-                   (keylen >= strlen("max_easize") && !strcmp(key, "max_easize"))) {
+        } else if (keylen >= strlen("max_easize") && !strcmp(key, "max_easize")) {
                 
                 rc = lmv_check_connect(obd);
                 if (rc)
@@ -2117,30 +2083,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                 rc = obd_get_info(lmv->tgts[0].ltd_exp, keylen, key,
                                   vallen, val);
                 RETURN(rc);
-        } /* else if (keylen >= strlen("getext") && !strcmp(key, "getext")) {
-                struct lmv_tgt_desc *tgts;
-                int i;
-
-                rc = lmv_check_connect(obd);
-                if (rc)
-                        RETURN(rc);
-
-                LASSERT(*vallen == sizeof(struct fid_extent));
-                for (i = 0, tgts = lmv->tgts; i < lmv->desc.ld_tgt_count;
-                     i++, tgts++) {
-
-                        if (!tgts || !tgts->ltd_exp) {
-                                CERROR("target not setup?\n");
-                                continue;
-                        }
-
-                        rc = obd_get_info(tgts->ltd_exp, keylen, key,
-                                          vallen, val);
-                        if (rc)
-                                RETURN(rc);
-                }
-                RETURN(0);
-        }*/
+        }
 
         CDEBUG(D_IOCTL, "invalid key\n");
         RETURN(-EINVAL);
@@ -2163,12 +2106,6 @@ int lmv_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(-EINVAL);
         }
         lmv = &obd->u.lmv;
-
-        if (keylen >= strlen("inter_mds") && strcmp(key, "inter_mds") == 0) {
-                lmv->server_timeout = 1;
-                lmv_set_timeouts(obd);
-                RETURN(0);
-        }
 
         /* maybe this could be default */
         if ((keylen == strlen("sec") && strcmp(key, "sec") == 0) ||
@@ -2226,12 +2163,6 @@ int lmv_set_info_async(struct obd_export *exp, obd_count keylen,
                 }
 
                 RETURN(0);
-        }
-
-        if (keylen == strlen("chkconnect") &&
-            memcmp(key, "chkconnect", keylen) == 0) {
-                rc = lmv_check_connect(obd);
-                RETURN(rc);
         }
 
         RETURN(-EINVAL);
