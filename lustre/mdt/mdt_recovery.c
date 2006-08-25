@@ -55,7 +55,7 @@ static inline int mdt_read_last_rcvd_header (const struct lu_context *ctx,
         return rc;
 }
 
-static inline int mdt_write_last_rcvd_header(const struct lu_context *ctx, 
+static inline int mdt_write_last_rcvd_header(const struct lu_context *ctx,
                                              struct mdt_device *mdt,
                                              struct mdt_server_data *msd,
                                              struct thandle *th)
@@ -77,7 +77,7 @@ static inline int mdt_write_last_rcvd_header(const struct lu_context *ctx,
 static inline int mdt_read_last_rcvd(const struct lu_context *ctx,
                                      struct mdt_device *mdt,
                                      struct mdt_client_data *mcd, loff_t *off)
-{ 
+{
         int rc;
 
         rc = mdt->mdt_last_rcvd->do_body_ops->dbo_read(ctx, mdt->mdt_last_rcvd,
@@ -89,7 +89,7 @@ static inline int mdt_read_last_rcvd(const struct lu_context *ctx,
         return rc;
 }
 
-static inline int mdt_write_last_rcvd(const struct lu_context *ctx, 
+static inline int mdt_write_last_rcvd(const struct lu_context *ctx,
                                       struct mdt_device *mdt,
                                       struct mdt_client_data *mcd,
                                       loff_t *off, struct thandle *th)
@@ -197,6 +197,7 @@ static int mdt_init_server_data(const struct lu_context *ctx,
         struct mdt_client_data *mcd = NULL;
         struct obd_device      *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
         struct mdt_thread_info *mti;
+        struct dt_object       *obj;
         struct lu_attr         *la;
         unsigned long last_rcvd_size = 0;
         __u64 mount_count;
@@ -208,13 +209,15 @@ static int mdt_init_server_data(const struct lu_context *ctx,
                 sizeof(msd->msd_padding) == LR_SERVER_SIZE);
         LASSERT(offsetof(struct mdt_client_data, mcd_padding) +
                 sizeof(mcd->mcd_padding) == LR_CLIENT_SIZE);
-        
+
         mti = lu_context_key_get(ctx, &mdt_thread_key);
         LASSERT(mti != NULL);
         la = &mti->mti_attr.ma_attr;
 
-        rc = mdt->mdt_last_rcvd->do_ops->do_attr_get(ctx,
-                                                     mdt->mdt_last_rcvd, la);
+        obj = mdt->mdt_last_rcvd;
+        obj->do_ops->do_read_lock(ctx, obj);
+        rc = obj->do_ops->do_attr_get(ctx, mdt->mdt_last_rcvd, la);
+        obj->do_ops->do_read_unlock(ctx, obj);
         if (rc)
                 RETURN(rc);
 
@@ -496,7 +499,7 @@ static int mdt_update_last_rcvd(struct mdt_thread_info *mti,
         loff_t off;
         int err;
         __s32 rc = th->th_result;
-        
+
         ENTRY;
         LASSERT(req);
         LASSERT(req->rq_export);
@@ -606,7 +609,7 @@ static int mdt_txn_commit_cb(struct dt_device *dev,
                 obd->obd_last_committed = txi->txi_transno;
                 spin_unlock(&mdt->mdt_transno_lock);
                 ptlrpc_commit_replies (obd);
-        } else 
+        } else
                 spin_unlock(&mdt->mdt_transno_lock);
 
         CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
@@ -720,11 +723,11 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti)
         struct mdt_device *mdt = mti->mti_mdt;
         struct mdt_object *obj;
         struct mdt_body *body;
-        
+
         mdt_req_from_mcd(req, med->med_mcd);
         if (req->rq_status)
                 return;
-        
+
         body = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
         obj = mdt_object_find(mti->mti_ctxt, mdt, mti->mti_rr.rr_fid1);
         LASSERT(!IS_ERR(obj));

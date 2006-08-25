@@ -221,7 +221,9 @@ static int mdd_get_flags(const struct lu_context *ctxt, struct mdd_object *obj)
         int rc;
 
         ENTRY;
+        mdd_read_lock(ctxt, obj);
         rc = __mdd_la_get(ctxt, obj, la);
+        mdd_read_unlock(ctxt, obj);
         if (rc == 0)
                 mdd_flags_xlate(obj, la->la_flags);
         RETURN(rc);
@@ -309,9 +311,9 @@ static int mdd_attr_get_internal(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
-static inline int mdd_attr_get_internal_locked (const struct lu_context *ctxt,
-                                                struct mdd_object *mdd_obj,
-                                                struct md_attr *ma)
+static inline int mdd_attr_get_internal_locked(const struct lu_context *ctxt,
+                                               struct mdd_object *mdd_obj,
+                                               struct md_attr *ma)
 {
         int rc;
         mdd_read_lock(ctxt, mdd_obj);
@@ -343,7 +345,9 @@ static int mdd_xattr_get(const struct lu_context *ctxt, struct md_object *obj,
         LASSERT(lu_object_exists(&obj->mo_lu));
 
         next = mdd_object_child(mdd_obj);
+        mdd_read_lock(ctxt, mdd_obj);
         rc = next->do_ops->do_xattr_get(ctxt, next, buf, buf_len, name);
+        mdd_read_unlock(ctxt, mdd_obj);
 
         RETURN(rc);
 }
@@ -842,7 +846,9 @@ static int mdd_attr_set(const struct lu_context *ctxt,
                        ma->ma_attr.la_mtime, ma->ma_attr.la_ctime);
 
         *la_copy = ma->ma_attr;
+        mdd_write_lock(ctxt, mdd_obj);
         rc = mdd_fix_attr(ctxt, mdd_obj, ma, la_copy);
+        mdd_write_unlock(ctxt, mdd_obj);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -1351,12 +1357,14 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
 
 
         if (tobj && lu_object_exists(&tobj->mo_lu)) {
+                mdd_write_lock(ctxt, mdd_tobj);
                 __mdd_ref_del(ctxt, mdd_tobj, handle);
                 /* remove dot reference */
                 if (is_dir)
                         __mdd_ref_del(ctxt, mdd_tobj, handle);
 
                 rc = __mdd_finish_unlink(ctxt, mdd_tobj, ma);
+                mdd_write_unlock(ctxt, mdd_tobj);
         }
 cleanup:
         mdd_rename_unlock(ctxt, mdd_spobj, mdd_tpobj);
@@ -1480,21 +1488,24 @@ static int mdd_create_sanity_check(const struct lu_context *ctxt,
                                    struct md_object *pobj,
                                    const char *name, struct md_attr *ma)
 {
-        struct lu_attr   *la = &mdd_ctx_info(ctxt)->mti_la;
-        struct lu_fid    *fid = &mdd_ctx_info(ctxt)->mti_fid;
+        struct mdd_thread_info *info = mdd_ctx_info(ctxt);
+        struct lu_attr    *la        = &info->mti_la;
+        struct lu_fid     *fid       = &info->mti_fid;
+        struct mdd_object *obj       = md2mdd_obj(pobj);
         int rc;
 
         ENTRY;
         /* EEXIST check */
-        if (mdd_is_dead_obj(md2mdd_obj(pobj)))
+        if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
         rc = mdd_lookup(ctxt, pobj, name, fid);
-        if (rc != -ENOENT) {
-                rc = rc ? rc : -EEXIST;
-                RETURN(rc);
-        }
+        if (rc != -ENOENT)
+                RETURN(rc ? : -EEXIST);
+
         /* sgid check */
-        rc = __mdd_la_get(ctxt, md2mdd_obj(pobj), la);
+        mdd_read_lock(ctxt, obj);
+        rc = __mdd_la_get(ctxt, obj, la);
+        mdd_read_unlock(ctxt, obj);
         if (rc != 0)
                 RETURN(rc);
 
@@ -1602,13 +1613,17 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
          * Maybe we should do the same. For now: creation-first.
          */
 
+        mdd_write_lock(ctxt, son);
         rc = __mdd_object_create(ctxt, son, ma, handle);
-        if (rc)
+        if (rc) {
+                mdd_write_unlock(ctxt, son);
                 GOTO(cleanup, rc);
+        }
 
         created = 1;
 
         rc = __mdd_object_initialize(ctxt, mdd_pobj, son, ma, handle);
+        mdd_write_unlock(ctxt, son);
         if (rc)
                 /*
                  * Object has no links, so it will be destroyed when last
@@ -1643,7 +1658,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                         rc = -EFAULT;
         }
         /* return attr back */
-        rc = mdd_attr_get_internal(ctxt, son, ma);
+        rc = mdd_attr_get_internal_locked(ctxt, son, ma);
 cleanup:
         if (rc && created) {
                 int rc2 = 0;
@@ -1940,11 +1955,18 @@ static int mdd_open(const struct lu_context *ctxt, struct md_object *obj,
 static int mdd_close(const struct lu_context *ctxt, struct md_object *obj,
                      struct md_attr *ma)
 {
-        if (atomic_dec_and_test(&md2mdd_obj(obj)->mod_count)) {
+        int rc;
+        struct mdd_object *mdd_obj;
+
+        mdd_obj = md2mdd_obj(obj);
+        if (atomic_dec_and_test(&mdd_obj->mod_count)) {
                 /*TODO: Remove it from orphan list */
         }
 
-        return __mdd_finish_unlink(ctxt, md2mdd_obj(obj), ma);
+        mdd_read_lock(ctxt, mdd_obj);
+        rc = __mdd_finish_unlink(ctxt, mdd_obj, ma);
+        mdd_read_unlock(ctxt, mdd_obj);
+        return rc;
 }
 
 static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
