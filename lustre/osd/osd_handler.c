@@ -169,6 +169,10 @@ static int   osd_it_key_size   (const struct lu_context *ctx,
 static void  osd_conf_get      (const struct lu_context *ctx,
                                 const struct dt_device *dev,
                                 struct dt_device_param *param);
+static int   osd_read_locked   (const struct lu_context *ctx,
+                                struct osd_object *o);
+static int   osd_write_locked  (const struct lu_context *ctx,
+                                struct osd_object *o);
 
 static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
@@ -238,6 +242,20 @@ static int osd_invariant(const struct osd_object *obj)
 #else
 #define osd_invariant(obj) (1)
 #endif
+
+static int osd_read_locked(const struct lu_context *ctx, struct osd_object *o)
+{
+        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+
+        return oti->oti_r_locks > 0;
+}
+
+static int osd_write_locked(const struct lu_context *ctx, struct osd_object *o)
+{
+        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+
+        return oti->oti_w_locks > 0 && o->oo_owner == ctx;
+}
 
 /* helper to push us into KERNEL_DS context */
 static struct file *osd_rw_init(const struct lu_context *ctxt,
@@ -605,6 +623,8 @@ static int osd_attr_get(const struct lu_context *ctxt, struct dt_object *dt,
         struct osd_object *obj = osd_dt_obj(dt);
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
+        LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
+
         return osd_inode_getattr(ctxt, obj->oo_inode, attr);
 }
 
@@ -616,6 +636,8 @@ static int osd_attr_set(const struct lu_context *ctxt,
         struct osd_object *obj = osd_dt_obj(dt);
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
+        LASSERT(osd_write_locked(ctxt, obj));
+
         return osd_inode_setattr(ctxt, obj->oo_inode, attr);
 }
 
@@ -873,6 +895,7 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
 
         LASSERT(osd_invariant(obj));
         LASSERT(!dt_object_exists(dt));
+        LASSERT(osd_write_locked(ctx, obj));
 
         /*
          * XXX missing: permission checks.
@@ -919,6 +942,8 @@ static void osd_object_ref_add(const struct lu_context *ctxt,
 
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
+        LASSERT(osd_write_locked(ctxt, obj));
+
         if (inode->i_nlink < LDISKFS_LINK_MAX) {
                 inode->i_nlink ++;
                 mark_inode_dirty(inode);
@@ -936,6 +961,8 @@ static void osd_object_ref_del(const struct lu_context *ctxt,
 
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
+        LASSERT(osd_write_locked(ctxt, obj));
+
         if (inode->i_nlink > 0) {
                 inode->i_nlink --;
                 mark_inode_dirty(inode);
@@ -948,12 +975,15 @@ static void osd_object_ref_del(const struct lu_context *ctxt,
 static int osd_xattr_get(const struct lu_context *ctxt, struct dt_object *dt,
                          void *buf, int size, const char *name)
 {
-        struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
+        struct osd_object      *obj    = osd_dt_obj(dt);
+        struct inode           *inode  = obj->oo_inode;
         struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->getxattr != NULL);
+        LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
+
         dentry->d_inode = inode;
         return inode->i_op->getxattr(dentry, name, buf, size);
 }
@@ -964,12 +994,15 @@ static int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
 {
         int fs_flags;
 
-        struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
+        struct osd_object      *obj    = osd_dt_obj(dt);
+        struct inode           *inode  = obj->oo_inode;
         struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->setxattr != NULL);
+        LASSERT(osd_write_locked(ctxt, obj));
+
         dentry->d_inode = inode;
 
         fs_flags = 0;
@@ -985,12 +1018,15 @@ static int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
 static int osd_xattr_list(const struct lu_context *ctxt, struct dt_object *dt,
                           void *buf, int size)
 {
-        struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
+        struct osd_object      *obj    = osd_dt_obj(dt);
+        struct inode           *inode  = obj->oo_inode;
         struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->listxattr != NULL);
+        LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
+
         dentry->d_inode = inode;
         return inode->i_op->listxattr(dentry, buf, size);
 }
@@ -998,12 +1034,15 @@ static int osd_xattr_list(const struct lu_context *ctxt, struct dt_object *dt,
 static int osd_xattr_del(const struct lu_context *ctxt, struct dt_object *dt,
                          const char *name, struct thandle *handle)
 {
-        struct inode           *inode  = osd_dt_obj(dt)->oo_inode;
+        struct osd_object      *obj    = osd_dt_obj(dt);
+        struct inode           *inode  = obj->oo_inode;
         struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->removexattr != NULL);
+        LASSERT(osd_write_locked(ctxt, obj));
+
         dentry->d_inode = inode;
         return inode->i_op->removexattr(dentry, name);
 }
@@ -1084,6 +1123,7 @@ static int osd_readpage(const struct lu_context *ctxt,
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
         LASSERT(osd_has_index(obj));
+        LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
 
         LASSERT(rdpg->rp_pages != NULL);
 
