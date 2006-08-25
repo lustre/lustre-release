@@ -75,7 +75,7 @@ static const struct dt_index_features oi_index_features = {
 int osd_oi_init(struct osd_thread_info *info,
                 struct osd_oi *oi, struct dt_device *dev)
 {
-        int result;
+        int rc;
         struct dt_object        *obj;
         const struct lu_context *ctx;
 
@@ -88,21 +88,19 @@ int osd_oi_init(struct osd_thread_info *info,
 
         obj = dt_store_open(ctx, dev, oi_dirname, &info->oti_fid);
         if (!IS_ERR(obj)) {
-                result = obj->do_ops->do_index_try(ctx, obj,
-                                                   &oi_index_features);
-                if (result == 0) {
+                rc = obj->do_ops->do_index_try(ctx, obj, &oi_index_features);
+                if (rc == 0) {
                         LASSERT(obj->do_index_ops != NULL);
                         oi->oi_dir = obj;
                 } else {
-                        CERROR("Wrong index \"%s\": %d\n",
-                               oi_dirname, result);
+                        CERROR("Wrong index \"%s\": %d\n", oi_dirname, rc);
                         lu_object_put(ctx, &obj->do_lu);
                 }
         } else {
-                result = PTR_ERR(obj);
-                CERROR("Cannot open \"%s\": %d\n", oi_dirname, result);
+                rc = PTR_ERR(obj);
+                CERROR("Cannot open \"%s\": %d\n", oi_dirname, rc);
         }
-        return result;
+        return rc;
 }
 
 void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi)
@@ -145,25 +143,31 @@ enum {
         OI_TXN_DELETE_CREDITS = 20
 };
 
+static inline void osd_inode_id_init(struct osd_inode_id *id,
+                                     __u64 ino, __u32 gen)
+{
+        id->oii_ino = be64_to_cpu(ino);
+        id->oii_gen = be32_to_cpu(gen);
+}
+
 /*
  * Locking: requires at least read lock on oi.
  */
 int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, struct osd_inode_id *id)
 {
-        int result;
+        int rc;
 
         if (lu_fid_is_igif(fid)) {
                 lu_igif_to_id(fid, id);
-                result = 0;
+                rc = 0;
         } else {
-                result = oi->oi_dir->do_index_ops->dio_lookup
+                rc = oi->oi_dir->do_index_ops->dio_lookup
                         (info->oti_ctx, oi->oi_dir,
                          (struct dt_rec *)id, oi_fid_key(info, fid));
-                id->oii_ino = be64_to_cpu(id->oii_ino);
-                id->oii_gen = be32_to_cpu(id->oii_gen);
+                osd_inode_id_init(id, id->oii_ino, id->oii_gen);
         }
-        return result;
+        return rc;
 }
 
 /*
@@ -183,8 +187,7 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         idx = oi->oi_dir;
         dev = lu2dt_dev(idx->do_lu.lo_dev);
         id = &info->oti_id;
-        id->oii_ino = cpu_to_be64(id0->oii_ino);
-        id->oii_gen = cpu_to_be32(id0->oii_gen);
+        osd_inode_id_init(id, id0->oii_ino, id0->oii_gen);
         return idx->do_index_ops->dio_insert(info->oti_ctx, idx,
                                              (const struct dt_rec *)id,
                                              oi_fid_key(info, fid), th);
