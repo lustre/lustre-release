@@ -2228,23 +2228,6 @@ int lmv_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
-        if (keylen == strlen("ids") && memcmp(key, "ids", keylen) == 0) {
-                struct lu_fid *fid = (struct lu_fid *)val;
-                struct obd_export *tgt_exp;
-
-                rc = lmv_check_connect(obd);
-                if (rc)
-                        RETURN(rc);
-
-                tgt_exp = lmv_get_export(lmv, fid);
-                if (IS_ERR(tgt_exp))
-                        RETURN(PTR_ERR(tgt_exp));
-
-                rc = obd_set_info_async(tgt_exp, keylen, key, vallen,
-                                        val, set);
-                RETURN(rc);
-        }
-
         if (keylen == strlen("chkconnect") &&
             memcmp(key, "chkconnect", keylen) == 0) {
                 rc = lmv_check_connect(obd);
