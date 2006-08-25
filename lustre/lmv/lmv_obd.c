@@ -1814,26 +1814,6 @@ int lmv_blocking_ast(struct ldlm_lock *lock,
         RETURN(0);
 }
 
-#if 0
-/* not needed for CMD3 because only dir on master has "." and ".." */
-static void lmv_remove_dots(struct page *page)
-{
-        unsigned limit = PAGE_CACHE_SIZE;
-        char *kaddr = cfs_page_address(page);
-        struct ext2_dir_entry_2 *p;
-        unsigned offs, rec_len;
-
-        for (offs = 0; offs <= limit - EXT2_DIR_REC_LEN(1); offs += rec_len) {
-                p = (struct ext2_dir_entry_2 *)(kaddr + offs);
-                rec_len = le16_to_cpu(p->rec_len);
-
-                if ((p->name_len == 1 && p->name[0] == '.') ||
-                    (p->name_len == 2 && p->name[0] == '.' && p->name[1] == '.'))
-                        p->inode = 0;
-        }
-}
-#endif
-
 static int lmv_readpage(struct obd_export *exp,
                         const struct lu_fid *fid,
                         __u64 offset, struct page *page,
@@ -1879,19 +1859,10 @@ static int lmv_readpage(struct obd_export *exp,
 
         rc = md_readpage(tgt_exp, &rid, offset, page, request);
 
-#if 0
-        if (rc == 0 && !lu_fid_eq(&rid, fid))
-                /*
-                 * This page isn't from master object. To avoid "." and ".."
-                 * duplication in directory, we have to remove them from all
-                 * slave objects
-                 *
-                 * XXX this is not needed for cmd3 readdir, because only master
-                 * directory has dot and dotdot.
-                 */
-                lmv_remove_dots(page);
-#endif
-        
+        /*
+         * Here we could remove "." and ".." from all pages which at not from
+         * master. But MDS has only "." and ".." for master dir.
+         */
         RETURN(rc);
 }
 
@@ -2263,166 +2234,6 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
         }
         RETURN(mea_size);
 }
-
-#if 0
-/* lmv_create() and lmv_brw() is needed anymore as they purely server stuff and
- * lmv is going to use only on client. */
-static int lmv_obd_create_single(struct obd_export *exp, struct obdo *oa,
-                                 struct lov_stripe_md **ea,
-                                 struct obd_trans_info *oti)
-{
-        struct obd_device *obd = exp->exp_obd;
-        struct lmv_obd *lmv = &obd->u.lmv;
-        struct lov_stripe_md obj_md;
-        struct lov_stripe_md *obj_mdp = &obj_md;
-        int rc = 0;
-        ENTRY;
-
-        LASSERT(ea == NULL);
-        LASSERT(oa->o_mds < lmv->desc.ld_tgt_count);
-
-        rc = obd_create(lmv->tgts[oa->o_mds].ltd_exp,
-                        oa, &obj_mdp, oti);
-
-        RETURN(rc);
-}
-
-/*
- * to be called from MDS only. @oa should have correct store cookie and o_fid
- * values for "master" object, as it will be used.
- */
-int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md **ea, struct obd_trans_info *oti)
-{
-        struct obd_device *obd = exp->exp_obd;
-        struct lmv_obd *lmv = &obd->u.lmv;
-        struct lmv_stripe_md *mea;
-        struct lu_fid mid;
-        int i, c, rc = 0;
-        ENTRY;
-
-        rc = lmv_check_connect(obd);
-        if (rc)
-                RETURN(rc);
-
-        LASSERT(oa != NULL);
-
-        if (ea == NULL) {
-                rc = lmv_obd_create_single(exp, oa, NULL, oti);
-                if (rc)
-                        CERROR("Can't create object, rc = %d\n", rc);
-                RETURN(rc);
-        }
-
-        if (*ea == NULL) {
-                rc = obd_alloc_diskmd(exp, (struct lov_mds_md **)ea);
-                if (rc < 0) {
-                        CERROR("obd_alloc_diskmd() failed, error %d\n",
-                               rc);
-                        RETURN(rc);
-                } else
-                        rc = 0;
-
-                if (*ea == NULL)
-                        RETURN(-ENOMEM);
-        }
-
-        /* here we should take care about split dir, so store cookie and fid
-         * for "master" object should already be allocated and passed in @oa. */
-        LASSERT(oa->o_id != 0);
-        LASSERT(oa->o_fid != 0);
-
-        /* save "master" object fid */
-        obdo2fid(oa, &mid);
-
-        mea = (struct lmv_stripe_md *)*ea;
-        mea->mea_master = -1;
-        mea->mea_magic = MEA_MAGIC_ALL_CHARS;
-
-        if (!mea->mea_count || mea->mea_count > lmv->desc.ld_tgt_count)
-                mea->mea_count = lmv->desc.ld_tgt_count;
-
-        for (i = 0, c = 0; c < mea->mea_count && i < lmv->desc.ld_tgt_count; i++) {
-                struct lov_stripe_md obj_md;
-                struct lov_stripe_md *obj_mdp = &obj_md;
-
-                if (lmv->tgts[i].ltd_exp == NULL) {
-                        /* this is "master" MDS */
-                        mea->mea_master = i;
-                        mea->mea_ids[c] = mid;
-                        c++;
-                        continue;
-                }
-
-                /*
-                 * "master" MDS should always be part of stripped dir,
-                 * so scan for it.
-                 */
-                if (mea->mea_master == -1 && c == mea->mea_count - 1)
-                        continue;
-
-                oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                        OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLID;
-
-                rc = obd_create(lmv->tgts[c].ltd_exp, oa, &obj_mdp, oti);
-                if (rc) {
-                        CERROR("obd_create() failed on MDT target %d, "
-                               "error %d\n", c, rc);
-                        RETURN(rc);
-                }
-
-                CDEBUG(D_OTHER, "dirobj at mds %d: "LPU64"/%u\n",
-                       i, oa->o_id, oa->o_generation);
-
-
-                /*
-                 * here, when object is created (or it is master and was passed
-                 * from caller) on desired MDS we save its fid to local mea_ids.
-                 */
-                LASSERT(oa->o_fid);
-
-                /*
-                 * store cookie should be defined here for both cases (master
-                 * object and not master), because master is already created.
-                 */
-                LASSERT(oa->o_id);
-
-                /* fill mea by store cookie and fid */
-                obdo2fid(oa, &mea->mea_ids[c]);
-                c++;
-        }
-        LASSERT(c == mea->mea_count);
-
-        CDEBUG(D_OTHER, "%d dirobjects created\n",
-               (int)mea->mea_count);
-
-        RETURN(rc);
-}
-
-int lmv_brw(int rw, struct obd_export *exp, struct obdo *oa,
-            struct lov_stripe_md *ea, obd_count oa_bufs,
-            struct brw_page *pgarr, struct obd_trans_info *oti)
-{
-        /* splitting is not needed in lmv */
-        struct obd_device *obd = exp->exp_obd;
-        struct lmv_obd *lmv = &obd->u.lmv;
-        struct lmv_stripe_md *mea = (struct lmv_stripe_md *) ea;
-        int err;
-
-        LASSERT(oa != NULL);
-        LASSERT(ea != NULL);
-        LASSERT(pgarr != NULL);
-        LASSERT(oa->o_mds < lmv->desc.ld_tgt_count);
-
-        oa->o_gr = id_gen(&mea->mea_ids[oa->o_mds]);
-        oa->o_id = id_ino(&mea->mea_ids[oa->o_mds]);
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-
-        err = obd_brw(rw, lmv->tgts[oa->o_mds].ltd_exp,
-                      oa, NULL, oa_bufs, pgarr, oti);
-        RETURN(err);
-}
-#endif
 
 static int lmv_cancel_unused(struct obd_export *exp,
                              const struct lu_fid *fid,
