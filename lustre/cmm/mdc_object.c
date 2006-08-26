@@ -170,7 +170,9 @@ static int mdc_object_create(const struct lu_context *ctx,
         ENTRY;
 
         mci = mdc_info_init(ctx);
-        mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
+        mci->mci_opdata.fid2 = *lu_object_fid(&mo->mo_lu);
+        /* parent fid is needed to create dotdot on the remote node */
+        mci->mci_opdata.fid1 = *(spec->u.sp_pfid);
         mci->mci_opdata.mod_time = la->la_mtime;
 
         /* get data from spec */

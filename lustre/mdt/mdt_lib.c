@@ -229,19 +229,21 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 attr->la_valid = LA_MODE | LA_RDEV | LA_UID | LA_GID |
                                  LA_CTIME | LA_MTIME | LA_ATIME;
                 info->mti_spec.sp_cr_flags = rec->cr_flags;
-
+                
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
-                if (rr->rr_name) {
+                if (S_ISDIR(attr->la_mode)) {
+                        /* pass parent fid for cross-ref cases */
+                        info->mti_spec.u.sp_pfid = rr->rr_fid1;
+                } else if (S_ISLNK(attr->la_mode)) {
+                        const char *tgt = NULL;
                         if (req_capsule_field_present(pill, &RMF_SYMTGT)) {
-                                const char *tgt;
                                 tgt = req_capsule_client_get(pill,
                                                              &RMF_SYMTGT);
-                                if (tgt == NULL)
-                                        result = -EFAULT;
                                 info->mti_spec.u.sp_symname = tgt;
                         }
-                } else
-                        result = -EFAULT;
+                        if (tgt == NULL)
+                                result = -EFAULT;
+                } 
         } else
                 result = -EFAULT;
         RETURN(result);

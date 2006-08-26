@@ -92,7 +92,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
-        o = mdt_object_find(info->mti_ctxt, mdt, info->mti_rr.rr_fid1);
+        o = mdt_object_find(info->mti_ctxt, mdt, info->mti_rr.rr_fid2);
         if (!IS_ERR(o)) {
                 struct md_object *next = mdt_object_child(o);
 
@@ -414,7 +414,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
                                     rr->rr_fid2, rr->rr_tgt);
         else
                 rc = mdo_name_insert(info->mti_ctxt, mdt_object_child(mtgtdir),
-                                     rr->rr_tgt, rr->rr_fid2);
+                                     rr->rr_tgt, rr->rr_fid2, 0 /* FIXME */);
         GOTO(out_unlock_tgt, rc);
 
 out_unlock_tgt:
