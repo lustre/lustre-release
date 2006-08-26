@@ -71,7 +71,7 @@ struct md_create_spec {
                 /* symlink target */
                 const char               *sp_symname;
                 /* parent FID for cross-ref mkdir */
-                const struct lu_fid      sp_pfid;
+                const struct lu_fid      *sp_pfid;
                 /* eadata for regular files */
                 struct md_spec_reg {
                         const void *eadata;
@@ -155,7 +155,7 @@ struct md_dir_operations {
 
         /* partial ops for cross-ref case */
         int (*mdo_name_insert)(const struct lu_context *, struct md_object *,
-                               const char *, const struct lu_fid *);
+                               const char *, const struct lu_fid *, int);
         int (*mdo_name_remove)(const struct lu_context *, struct md_object *,
                                const char *);
         int (*mdo_rename_tgt)(const struct lu_context *, struct md_object *,
@@ -388,11 +388,11 @@ static inline int mdo_unlink(const struct lu_context *cx, struct md_object *p,
 }
 
 static inline int mdo_name_insert(const struct lu_context *cx,
-                                  struct md_object *p,
-                                  const char *name, const struct lu_fid *f)
+                                  struct md_object *p, const char *name,
+                                  const struct lu_fid *f, int isdir)
 {
         LASSERT(p->mo_dir_ops->mdo_name_insert);
-        return p->mo_dir_ops->mdo_name_insert(cx, p, name, f);
+        return p->mo_dir_ops->mdo_name_insert(cx, p, name, f, isdir);
 }
 
 static inline int mdo_name_remove(const struct lu_context *cx,
