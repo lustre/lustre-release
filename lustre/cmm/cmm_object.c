@@ -431,12 +431,12 @@ static int cml_rename_tgt(const struct lu_context *ctx,
 /* used only in case of rename_tgt() when target is not exist */
 static int cml_name_insert(const struct lu_context *ctx,
                            struct md_object *p, const char *name,
-                           const struct lu_fid *lf)
+                           const struct lu_fid *lf, int isdir)
 {
         int rc;
         ENTRY;
 
-        rc = mdo_name_insert(ctx, md_object_next(p), name, lf);
+        rc = mdo_name_insert(ctx, md_object_next(p), name, lf, isdir);
 
         RETURN(rc);
 }
@@ -663,7 +663,8 @@ static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
         rc = mo_object_create(ctx, md_object_next(mo_c), spec, ma);
         if (rc == 0) {
                 rc = mdo_name_insert(ctx, md_object_next(mo_p),
-                                     child_name, lu_object_fid(&mo_c->mo_lu));
+                                     child_name, lu_object_fid(&mo_c->mo_lu),
+                                     S_ISDIR(ma->ma_attr.la_mode));
         }
 
         RETURN(rc);
@@ -680,7 +681,7 @@ static int cmr_link(const struct lu_context *ctx, struct md_object *mo_p,
         rc = mo_ref_add(ctx, md_object_next(mo_s));
         if (rc == 0) {
                 rc = mdo_name_insert(ctx, md_object_next(mo_p),
-                                     name, lu_object_fid(&mo_s->mo_lu));
+                                     name, lu_object_fid(&mo_s->mo_lu), 0);
         }
 
         RETURN(rc);
