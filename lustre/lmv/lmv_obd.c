@@ -1205,7 +1205,6 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_export *tgt_exp;
-        struct mdt_body *body;
         struct lmv_obj *obj;
         int rc, loop = 0;
         ENTRY;
@@ -1240,16 +1239,12 @@ repeat:
         if (rc == 0) {
                 if (*request == NULL)
                         RETURN(rc);
-
-                body = lustre_msg_buf((*request)->rq_repmsg, REQ_REC_OFF,
-                                      sizeof(*body));
-                if (body == NULL)
-                        RETURN(-ENOMEM);
-
                 CDEBUG(D_OTHER, "created. "DFID"\n", PFID(&op_data->fid1));
         } else if (rc == -ERESTART) {
-                /* directory got split. time to update local object and repeat
-                 * the request with proper MDS. */
+                /*
+                 * Directory got split. time to update local object and repeat
+                 * the request with proper MDS.
+                 */
                 rc = lmv_handle_split(exp, &op_data->fid1);
                 if (rc == 0) {
                         ptlrpc_req_finished(*request);
@@ -1364,7 +1359,8 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         int rc = 0, pmode;
         ENTRY;
 
-        body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
+        body = lustre_msg_buf(req->rq_repmsg,
+                              DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
 
         if (!(body->valid & OBD_MD_MDS))
@@ -1696,7 +1692,6 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
         struct lmv_obd *lmv = &obd->u.lmv;
         struct ptlrpc_request *req;
         struct obd_export *tgt_exp;
-        struct mdt_body *body;
         struct lmv_obj *obj;
         int rc = 0, i;
         ENTRY;
@@ -1744,11 +1739,6 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
 
                 rc = md_setattr(tgt_exp, op_data, iattr, ea, ealen, ea2,
                                 ea2len, request);
-                if (rc == 0) {
-                        body = lustre_msg_buf((*request)->rq_repmsg, REQ_REC_OFF,
-                                              sizeof(*body));
-                        LASSERT(body != NULL);
-                }
         }
         RETURN(rc);
 }

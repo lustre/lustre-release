@@ -80,7 +80,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
          * oh, MDS reports that this is remote inode case i.e. we have to ask
          * for real attrs on another MDS.
          */
-        if (it->it_op & IT_LOOKUP/* || it->it_op & IT_CHDIR*/) {
+        if (it->it_op & IT_LOOKUP) {
                 /*
                  * unfortunately, we have to lie to MDC/MDS to retrieve
                  * attributes llite needs.
@@ -455,13 +455,14 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
          * attributes to be returned from the slaves it's important that lookup
          * is called in two cases:
 
-         *  - for first time (dcache has no such a resolving yet).
-         *  - ->d_revalidate() returned false.
+         *  - for first time (dcache has no such a resolving yet).  -
+         *  ->d_revalidate() returned false.
 
          * last case possible only if all the objs (master and all slaves aren't
          * valid */
 
-        body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
+        body = lustre_msg_buf((*reqp)->rq_repmsg,
+                              DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
         LASSERT((body->valid & OBD_MD_FLID) != 0);
 
@@ -681,7 +682,8 @@ repeat:
 
         if (rc == 0 && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
                 /* wow! this is split dir, we'd like to handle it */
-                body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
+                body = lustre_msg_buf((*reqp)->rq_repmsg,
+                                      DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body != NULL);
                 LASSERT((body->valid & OBD_MD_FLID) != 0);
 
