@@ -295,8 +295,10 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         RETURN(rc);
 }
 
-int mdt_open_replay(struct mdt_thread_info* info, const struct lu_fid *fid,
-                    struct ldlm_reply *rep, __u32 flags)
+static int mdt_open_by_fid(struct mdt_thread_info* info, 
+                           const struct lu_fid *fid,
+                           struct ldlm_reply *rep, 
+                           __u32 flags)
 {
         struct md_attr    *ma = &info->mti_attr;
         struct mdt_object *o;
@@ -310,6 +312,7 @@ int mdt_open_replay(struct mdt_thread_info* info, const struct lu_fid *fid,
         rc = lu_object_exists(&o->mot_obj.mo_lu);
 
         if (rc > 0) {
+                /* successfully found the child object */
                 if (flags & MDS_OPEN_EXCL && flags & MDS_OPEN_CREAT)
                                 rc = -EEXIST;
                 else {
@@ -338,6 +341,7 @@ int mdt_open_replay(struct mdt_thread_info* info, const struct lu_fid *fid,
         } else if (rc == 0) {
                 rc = -ENOENT;
         } else  {
+                /* the child object was created on remote server */
                 struct mdt_body *repbody;
                 repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
                 repbody->fid1 = *fid;
@@ -357,6 +361,7 @@ int mdt_pin(struct mdt_thread_info* info)
 int mdt_open(struct mdt_thread_info *info)
 {
         struct mdt_device      *mdt = info->mti_mdt;
+        struct ptlrpc_request  *req = mdt_info_req(info);
         struct mdt_object      *parent;
         struct mdt_object      *child;
         struct mdt_lock_handle *lh;
@@ -382,13 +387,36 @@ int mdt_open(struct mdt_thread_info *info)
         ma->ma_need = MA_INODE | MA_LOV;
 
         LASSERT(info->mti_pill.rc_fmt == &RQF_LDLM_INTENT_OPEN);
+        ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
+
+        /* TODO: JOIN file */
+        if (create_flags & MDS_OPEN_JOIN_FILE) {
+                CERROR("JOIN file will be supported soon\n");
+                RETURN(-EOPNOTSUPP);
+        }
 
         CDEBUG(D_INODE, "I am going to create "DFID"/("DFID":%s) "
-                        "cr_flag=%x mode=%06o\n",
+                        "cr_flag=%x mode=%06o replay=%d\n",
                         PFID(rr->rr_fid1), PFID(rr->rr_fid2),
-                        rr->rr_name, create_flags, la->la_mode);
+                        rr->rr_name, create_flags, la->la_mode,
+                        lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY);
 
-        ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                /* this is a replay request. */
+                result = mdt_open_by_fid(info,rr->rr_fid1, ldlm_rep, 
+                                         create_flags);
+
+                if (result != -ENOENT)
+                        RETURN(result);
+
+                /* We didn't find the correct object, so we
+                 * need to re-create it via a regular replay. */
+                if (!(create_flags & MDS_OPEN_CREAT)) {
+                        DEBUG_REQ(D_ERROR, req,"OPEN_CREAT not in open replay");
+                        RETURN(-EFAULT);
+                }
+        }
+
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
 
         lh = &info->mti_lh[MDT_LH_PARENT];
