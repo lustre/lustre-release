@@ -464,12 +464,6 @@ fi
 AC_SUBST(LIBSYSIO_SUBDIR)
 AC_SUBST(SYSIO)
 
-RPM_LIBIAM_PATH=""
-if test -f lustre/utils/libiam.c; then
-        RPM_LIBIAM_PATH="%attr(-, root, root) %{_libdir}/libiam.a"
-fi
-AC_SUBST(RPM_LIBIAM_PATH)
-
 LB_LINUX_CONDITIONALS
 LB_DARWIN_CONDITIONALS
 
