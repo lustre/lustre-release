@@ -352,6 +352,46 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         RETURN(rc);
 }
 
+/* cross-ref request. Currently it can only be a pure open (w/o create) */
+int mdt_cross_open(struct mdt_thread_info* info, const struct lu_fid *fid,
+                       struct ldlm_reply *rep, __u32 flags)
+{
+        struct md_attr    *ma = &info->mti_attr;
+        struct mdt_object *o;
+        int                rc;
+        ENTRY;
+
+        LASSERTF(!(flags & MDS_OPEN_CREAT), "Cross-ref open+create!\n");
+
+        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid);
+        if (IS_ERR(o)) 
+                RETURN(rc = PTR_ERR(o));
+
+        rc = lu_object_exists(&o->mot_obj.mo_lu);
+        if (rc > 0) {
+                struct mdt_device *mdt = info->mti_mdt;
+                spin_lock(&mdt->mdt_transno_lock);
+                info->mti_transno = ++ mdt->mdt_last_transno;
+                spin_unlock(&mdt->mdt_transno_lock);
+                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);
+                if (rc == 0)
+                        rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
+        } else if (rc == 0) {
+                /* FIXME: something wrong here
+                 * lookup was positive but there
+                 * is no object! */
+                CERROR("Cross-ref object doesn't exists!\n");
+                rc = -EFAULT;
+        } else  {
+                /* FIXME: something wrong here
+                 * the object is on another MDS! */
+                CERROR("The object isn't on this server! FLD error?\n");
+                rc = -EFAULT;
+        }
+        mdt_object_put(info->mti_ctxt, o);
+        RETURN(rc);
+}
+
 int mdt_pin(struct mdt_thread_info* info)
 {
         ENTRY;
@@ -418,6 +458,12 @@ int mdt_open(struct mdt_thread_info *info)
         }
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
+        if (rr->rr_name[0] == 0) {
+                /* this is cross-ref open */
+                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
+                result = mdt_cross_open(info, rr->rr_fid1, ldlm_rep, create_flags);
+                RETURN(result);
+        }
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         if (!(create_flags & MDS_OPEN_CREAT))
@@ -469,29 +515,25 @@ int mdt_open(struct mdt_thread_info *info)
                         GOTO(out_child, result);
                 created = 1;
         } else {
-        /* (1) client wants transno when open to keep a ref count for replay;
-         *     see after_reply() and mdc_close_commit();
-         * (2) we need to record the transaction related stuff onto disk;
-         * The question is: when do a read_only open, do we still need transno?
-         */
-                struct txn_param txn;
-                struct thandle *th;
-                struct dt_device *dt = info->mti_mdt->mdt_bottom;
-                txn.tp_credits = 1;
+                /* we have to get attr & lov ea for this object*/
+                result = mo_attr_get(info->mti_ctxt, 
+                                     mdt_object_child(child), ma);
+                if (result == -EREMOTE) {
+                        struct mdt_body *repbody;
 
-                LASSERT(dt);
-                th = dt->dd_ops->dt_trans_start(info->mti_ctxt, dt, &txn);
-                if (!IS_ERR(th)) {
-                        dt->dd_ops->dt_trans_stop(info->mti_ctxt, th);
-                        /* we have to get attr & lov ea for this object*/
-                        result = mo_attr_get(info->mti_ctxt, 
-                                             mdt_object_child(child), ma);
-                        if (result)
-                                GOTO(out_child, result);
-                } else
-                        GOTO(out_child, result = PTR_ERR(th));
+                        repbody = req_capsule_server_get(&info->mti_pill,
+                                                         &RMF_MDT_BODY);
+
+                        /* the object is on remote node
+                         * return its FID for remote open */
+                        repbody->fid1 = *mdt_object_fid(child);
+                        repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
+                        GOTO(out_child, result = 0);
+                }
+                spin_lock(&mdt->mdt_transno_lock);
+                info->mti_transno = ++ mdt->mdt_last_transno;
+                spin_unlock(&mdt->mdt_transno_lock);
         }
-
         /* Try to open it now. */
         result = mdt_mfd_open(info, parent, child, create_flags, 
                               created, ldlm_rep);

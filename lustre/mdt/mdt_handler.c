@@ -238,7 +238,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         if (rc == -EREMOTE) {
                 /* This object is located on remote node.*/
                 repbody->fid1 = *mdt_object_fid(o);
-                repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
+                repbody->valid = OBD_MD_FLID | OBD_MD_MDS;
                 RETURN(0);
         } else if (rc){
                 CERROR("getattr error for "DFID": %d\n",
