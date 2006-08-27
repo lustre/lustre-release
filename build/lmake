@@ -10,6 +10,7 @@ TARGET_ARCH=
 TARGET_CONFIG=
 JOBS=1
 CONFIGURE_FLAGS=
+TMPDIR=${TMPDIR:-"/var/tmp"}
 
 # commands to run
 BUILD_LUSTRE=0
@@ -492,6 +493,7 @@ build_lustre()
 	< build/lustre.spec.in \
 	> build/lustre.spec
     $RPMBUILD --target ${TARGET_ARCH} -bb build/lustre.spec \
+        --define "_tmpdir $TMPDIR" \
 	--define "_topdir $(lbuild_topdir)" || \
 	fatal 1 "Error building Lustre rpms."
     # $MAKE_J "$MAKE_CC" || fatal 1 "Error building Lustre."
