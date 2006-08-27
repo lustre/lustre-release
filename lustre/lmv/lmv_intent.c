@@ -65,7 +65,6 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         struct lustre_handle plock;
         struct md_op_data *op_data;
         struct obd_export *tgt_exp;
-        struct lu_fid nid;
         int pmode, rc = 0;
         ENTRY;
 
@@ -99,16 +98,15 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
 
         LASSERT(fid_is_sane(&body->fid1));
 
-        nid = body->fid1;
         it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
 
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL)
                 GOTO(out, rc = -ENOMEM);
         
-        op_data->fid1 = nid;
+        op_data->fid1 = body->fid1;
 
-        tgt_exp = lmv_get_export(lmv, &nid);
+        tgt_exp = lmv_get_export(lmv, &body->fid1);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -392,6 +390,8 @@ int lmv_intent_getattr(struct obd_export *exp, const struct lu_fid *pid,
         if (it->d.lustre.it_disposition & DISP_LOOKUP_NEG)
                 GOTO(out_free_op_data, rc = 0);
 
+        LASSERT(*reqp);
+        LASSERT((*reqp)->rq_repmsg);
         body = lustre_msg_buf((*reqp)->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
 

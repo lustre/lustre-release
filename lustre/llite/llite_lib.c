@@ -1648,8 +1648,17 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (body->valid & OBD_MD_FLSIZE)
                 set_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
-        if (body->valid & OBD_MD_FLID)
-                lli->lli_fid = body->fid1;
+        if (body->valid & OBD_MD_FLID) {
+                /* FID shouldn't be changed! */
+                if (fid_is_sane(&lli->lli_fid)) {
+                        LASSERTF(lu_fid_eq(&lli->lli_fid, &body->fid1),
+                                 "Trying to change FID "DFID
+                                 " to the "DFID", inode %lu/%u(%p)\n",
+                                 PFID(&lli->lli_fid), PFID(&body->fid1),
+                                 inode->i_ino, inode->i_generation, inode);
+                } else 
+                        lli->lli_fid = body->fid1;
+        }
 
         LASSERT(fid_seq(&lli->lli_fid) != 0);
 }

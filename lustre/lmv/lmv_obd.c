@@ -2284,7 +2284,8 @@ int lmv_lock_match(struct obd_export *exp, int flags,
 }
 
 int lmv_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
-                      int offset, struct obd_export *dt_exp, struct lustre_md *md)
+                      int offset, struct obd_export *dt_exp,
+                      struct lustre_md *md)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -2310,10 +2311,13 @@ int lmv_set_open_replay_data(struct obd_export *exp,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
+        struct obd_export *tgt_exp;
 
         ENTRY;
-        RETURN(md_set_open_replay_data(lmv->tgts[0].ltd_exp,
-                                       och, open_req));
+
+        tgt_exp = lmv_get_export(lmv, och->och_fid);
+
+        RETURN(md_set_open_replay_data(tgt_exp, och, open_req));
 }
 
 int lmv_clear_open_replay_data(struct obd_export *exp,
@@ -2321,9 +2325,13 @@ int lmv_clear_open_replay_data(struct obd_export *exp,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
+        struct obd_export *tgt_exp;
 
         ENTRY;
-        RETURN(md_clear_open_replay_data(lmv->tgts[0].ltd_exp, och));
+
+        tgt_exp = lmv_get_export(lmv, och->och_fid);
+
+        RETURN(md_clear_open_replay_data(tgt_exp, och));
 }
 
 struct obd_ops lmv_obd_ops = {

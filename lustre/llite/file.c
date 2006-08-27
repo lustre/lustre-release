@@ -340,9 +340,10 @@ static void ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
 
         memcpy(&och->och_fh, &body->handle, sizeof(body->handle));
         och->och_magic = OBD_CLIENT_HANDLE_MAGIC;
+        och->och_fid = &lli->lli_fid;
         lli->lli_io_epoch = body->io_epoch;
 
-        md_set_open_replay_data(md_exp, och, it->d.lustre.it_data);
+        md_set_open_replay_data(md_exp, och, req);
 }
 
 int ll_local_open(struct file *file, struct lookup_intent *it,

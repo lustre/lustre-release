@@ -87,6 +87,7 @@ struct client_obd *client_conn2cli(struct lustre_handle *conn);
 struct mdc_open_data;
 struct obd_client_handle {
         struct lustre_handle och_fh;
+        struct lu_fid *och_fid;
         struct llog_cookie och_cookie;
         struct mdc_open_data *och_mod;
         __u32 och_magic;
