@@ -39,14 +39,14 @@ extern const struct lu_range LUSTRE_SEQ_SPACE_RANGE;
 extern const struct lu_range LUSTRE_SEQ_ZERO_RANGE;
 
 enum {
-        /* this is how may FIDs may be allocated in one sequence. */
-        LUSTRE_SEQ_MAX_WIDTH = 0x00000000000002800ULL,
+        /* this is how may FIDs may be allocated in one sequence. 16384 for now */
+        LUSTRE_SEQ_MAX_WIDTH = 0x0000000000004000ULL,
 
-        /* how many sequences may be allocate for meta-sequence (this is 10240
+        /* how many sequences may be allocate for meta-sequence (this is 128
          * sequences). */
-        LUSTRE_SEQ_META_WIDTH = 0x00000000000002800ULL,
+        LUSTRE_SEQ_META_WIDTH = 0x0000000000000080ULL,
 
-        /* this is how many sequences (10240 * 10240) may be in one
+        /* this is how many sequences (128 * 128) may be in one
          * super-sequence allocated to MDTs. */
         LUSTRE_SEQ_SUPER_WIDTH = (LUSTRE_SEQ_META_WIDTH * LUSTRE_SEQ_META_WIDTH)
 };
