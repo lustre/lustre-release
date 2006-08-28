@@ -101,6 +101,14 @@ struct osd_device {
          * is named by its fid.
          */
         struct dentry            *od_obj_area;
+
+        /* Thread context for transaction commit callback.
+         * Currently, OSD is based on ext3/JBD. Transaction commit in ext3/JBD
+         * is serialized, that is there is no more than one transaction commit 
+         * at a time (JBD journal_commit_transaction() is serialized). 
+         * This means that it's enough to have _one_ lu_context.
+         */
+        struct lu_context         od_ctx_for_commit;
 };
 
 static int   osd_root_get      (const struct lu_context *ctxt,
@@ -458,7 +466,7 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
                 /* This dd_ctx_for_commit is only for commit usage.
                  * see "struct dt_device" 
                  */ 
-                dt_txn_hook_commit(&dev->dd_ctx_for_commit, th);
+                dt_txn_hook_commit(&osd_dt_dev(dev)->od_ctx_for_commit, th);
         }
 
         lu_device_put(&dev->dd_lu_dev);
@@ -1754,7 +1762,11 @@ static void osd_key_exit(const struct lu_context *ctx,
 static int osd_device_init(const struct lu_context *ctx,
                            struct lu_device *d, struct lu_device *next)
 {
-        return 0;
+        int rc;
+        rc = lu_context_init(&osd_dev(d)->od_ctx_for_commit, LCT_MD_THREAD);
+        if (rc == 0)
+                lu_context_enter(&osd_dev(d)->od_ctx_for_commit);
+        return rc;
 }
 
 static int osd_shutdown(const struct lu_context *ctx, struct osd_device *o)
@@ -1819,6 +1831,8 @@ static struct lu_device *osd_device_fini(const struct lu_context *ctx,
                                          struct lu_device *d)
 {
         ENTRY;
+        lu_context_exit(&osd_dev(d)->od_ctx_for_commit);
+        lu_context_fini(&osd_dev(d)->od_ctx_for_commit);
         RETURN(NULL);
 }
 

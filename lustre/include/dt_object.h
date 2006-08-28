@@ -326,13 +326,6 @@ struct dt_device {
          * single-threaded start-up shut-down procedures.
          */
         struct list_head             dd_txn_callbacks;
-
-        /* Thread context for transaction commit callback.
-         * Transaction commit is serialized, that is there is no more than one
-         * transaction commit at a time (jbd journal_commit_transaction() is 
-         * serialized). This means that it's enough to have _one_ lu_context.
-         */ 
-        struct lu_context            dd_ctx_for_commit;
 };
 
 int  dt_device_init(struct dt_device *dev, struct lu_device_type *t);

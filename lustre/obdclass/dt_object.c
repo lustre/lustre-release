@@ -107,26 +107,14 @@ EXPORT_SYMBOL(dt_txn_hook_commit);
 
 int dt_device_init(struct dt_device *dev, struct lu_device_type *t)
 {
-        int rc;
 
         CFS_INIT_LIST_HEAD(&dev->dd_txn_callbacks);
-        rc = lu_context_init(&dev->dd_ctx_for_commit, LCT_MD_THREAD);
-        if (rc == 0) {
-                lu_context_enter(&dev->dd_ctx_for_commit);
-                rc = lu_device_init(&dev->dd_lu_dev, t);
-                if (rc != 0) {
-                        lu_context_exit(&dev->dd_ctx_for_commit);
-                        lu_context_fini(&dev->dd_ctx_for_commit);
-                }
-        }
-        return rc;
+        return lu_device_init(&dev->dd_lu_dev, t);
 }
 EXPORT_SYMBOL(dt_device_init);
 
 void dt_device_fini(struct dt_device *dev)
 {
-        lu_context_exit(&dev->dd_ctx_for_commit);
-        lu_context_fini(&dev->dd_ctx_for_commit);
         lu_device_fini(&dev->dd_lu_dev);
 }
 EXPORT_SYMBOL(dt_device_fini);
