@@ -348,6 +348,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         !(create_flags & FMODE_WRITE))
                 RETURN(0);
 
+        OBD_FAIL_RETURN((OBD_FAIL_MDS_ALLOC_OBDO), -ENOMEM);
+
         oa = obdo_alloc();
         if (oa == NULL)
                 RETURN(-ENOMEM);

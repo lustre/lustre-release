@@ -228,6 +228,11 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         } else if (flags & MDS_OPEN_DIRECTORY)
                 RETURN(-ENOTDIR);
 
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_OPEN_CREATE)) {
+                obd_fail_loc = OBD_FAIL_LDLM_REPLY | OBD_FAIL_ONCE;
+                RETURN(-EAGAIN);
+        }
+
         if (isreg && !(ma->ma_valid & MA_LOV)) {
                 /*No EA, check whether it is will set regEA and dirEA
                  *since in above attr get, these size might be zero,
@@ -415,6 +420,9 @@ int mdt_open(struct mdt_thread_info *info)
         int                     created = 0;
         ENTRY;
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PAUSE_OPEN | OBD_FAIL_ONCE,
+                         (obd_timeout + 1) / 4);
+
         req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
                              mdt->mdt_max_mdsize);
 
@@ -456,6 +464,9 @@ int mdt_open(struct mdt_thread_info *info)
                         RETURN(-EFAULT);
                 }
         }
+
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
+                RETURN(-ENOMEM);
 
         intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
         if (rr->rr_name[0] == 0) {
@@ -631,6 +642,10 @@ int mdt_close(struct mdt_thread_info *info)
                 mdt_object_put(info->mti_ctxt, o);
         }
         mdt_shrink_reply(info, REPLY_REC_OFF + 1);
+
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
+                RETURN(-ENOMEM);
+        
         RETURN(rc);
 }
 

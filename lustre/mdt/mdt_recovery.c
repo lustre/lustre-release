@@ -389,7 +389,7 @@ int mdt_client_add(const struct lu_context *ctx,
                 cl_idx = find_first_zero_bit(bitmap, LR_MAX_CLIENTS);
         repeat:
                 if (cl_idx >= LR_MAX_CLIENTS ||
-                    OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_CLIENT_ADD)) {
+                    MDT_FAIL_CHECK_ONCE(OBD_FAIL_MDS_CLIENT_ADD)) {
                         CERROR("no room for clients - fix LR_MAX_CLIENTS\n");
                         return -EOVERFLOW;
                 }

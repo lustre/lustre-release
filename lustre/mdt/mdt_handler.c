@@ -155,6 +155,11 @@ static int mdt_statfs(struct mdt_thread_info *info)
 
         ENTRY;
 
+        /* This will trigger a watchdog timeout */
+        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
+                         (MDT_SERVICE_WATCHDOG_TIMEOUT / 1000) + 1);
+        
+
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
                 result = -ENOMEM;
         } else {
@@ -223,9 +228,9 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         int                     rc;
         ENTRY;
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK))
                 RETURN(-ENOMEM);
-        }
+        
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
@@ -328,11 +333,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
         if (result)
                 RETURN(result);
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
-                result = -ENOMEM;
-        } else {
-                result = mdt_getattr_internal(info, obj);
-        }
+        result = mdt_getattr_internal(info, obj);
         mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         RETURN(result);
 }
@@ -612,6 +613,9 @@ free_rdpg:
                 if (rdpg->rp_pages[i] != NULL)
                         __free_pages(rdpg->rp_pages[i], 0);
         OBD_FREE(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
+
+        MDT_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, 0);
+
         return rc;
 }
 
@@ -620,7 +624,8 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
         int rc;
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_UNPACK, -EFAULT);
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK))
+                RETURN(-EFAULT);
 
         rc = mdt_reint_unpack(info, op);
         if (rc == 0) {
@@ -680,11 +685,11 @@ static int mdt_reint(struct mdt_thread_info *info)
 
         opc = mdt_reint_opcode(info, reint_fmts);
         if (opc >= 0) {
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET, 0);
-
                 rc = mdt_reint_internal(info, opc);
         } else
                 rc = opc;
+        
+        info->mti_fail_id = OBD_FAIL_MDS_REINT_NET_REP;
         RETURN(rc);
 }
 
@@ -1140,7 +1145,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         DEBUG_REQ(D_INODE, req, "%s", h->mh_name);
 
         if (h->mh_fail_id != 0)
-                OBD_FAIL_RETURN(h->mh_fail_id, 0);
+                MDT_FAIL_RETURN(h->mh_fail_id, 0);
 
         result = 0;
         flags = h->mh_flags;
@@ -1356,7 +1361,7 @@ static int mdt_handle0(struct ptlrpc_request *req,
 
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_MDS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
+        MDT_FAIL_RETURN(OBD_FAIL_MDS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
 
         LASSERT(current->journal_info == NULL);
 

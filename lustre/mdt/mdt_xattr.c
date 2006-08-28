@@ -113,9 +113,6 @@ int mdt_getxattr(struct mdt_thread_info *info)
         CDEBUG(D_INODE, "getxattr "DFID"\n",
                         PFID(&info->mti_body->fid1));
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
-                RETURN(-ENOMEM);
-
         next = mdt_object_child(info->mti_object);
 
         rc = mdt_getxattr_pack_reply(info);
@@ -228,6 +225,8 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
                         if (body->flags & XATTR_CREATE)
                                 flags |= LU_XATTR_CREATE;
+                        MDT_FAIL_WRITE(ctx, info->mti_mdt->mdt_bottom,
+                                       OBD_FAIL_MDS_SETXATTR_WRITE);
 
                         rc = mo_xattr_set(ctx, child, xattr,
                                           xattr_len, xattr_name, flags);

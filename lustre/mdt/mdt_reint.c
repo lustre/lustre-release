@@ -64,6 +64,9 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 struct md_object *next = mdt_object_child(parent);
 
                 ma->ma_need = MA_INODE;
+                MDT_FAIL_WRITE(info->mti_ctxt, info->mti_mdt->mdt_bottom,
+                               OBD_FAIL_MDS_REINT_CREATE_WRITE);
+
                 rc = mdo_create(info->mti_ctxt, next, rr->rr_name,
                                 mdt_object_child(child), &info->mti_spec,
                                 ma);
@@ -160,6 +163,9 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
                 GOTO(out_unlock, rc = -ENOENT);
 
         /* all attrs are packed into mti_attr in unpack_setattr */
+        MDT_FAIL_WRITE(info->mti_ctxt, info->mti_mdt->mdt_bottom,
+                       OBD_FAIL_MDS_REINT_SETATTR_WRITE);
+
         rc = mo_attr_set(info->mti_ctxt, next, &info->mti_attr);
         if (rc != 0)
                 GOTO(out_unlock, rc);
@@ -195,6 +201,9 @@ static int mdt_reint_create(struct mdt_thread_info *info)
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
                 RETURN(rc);
+        
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
+                RETURN(-ESTALE);
 
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFREG:
@@ -211,7 +220,6 @@ static int mdt_reint_create(struct mdt_thread_info *info)
         case S_IFSOCK:{
                 /* special file should stay on the same node as parent */
                 LASSERT(strlen(info->mti_rr.rr_name) > 0);
-
                 rc = mdt_md_create(info);
                 break;
         }
@@ -246,7 +254,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         if (rc)
                 RETURN(rc);
 
-        /* MDS_CHECK_RESENT here */
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
+                RETURN(-ENOENT);
 
         /* step 1: lock the parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
@@ -277,10 +286,11 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 
         /*step 3:  do some checking ...*/
 
-
-
         /* step 4: delete it */
-        /* cmm will take care if child is local or remote */
+
+        MDT_FAIL_WRITE(info->mti_ctxt, info->mti_mdt->mdt_bottom,
+                       OBD_FAIL_MDS_REINT_UNLINK_WRITE);
+
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                &RMF_MDT_MD, RCL_SERVER);
@@ -327,11 +337,13 @@ static int mdt_reint_link(struct mdt_thread_info *info)
         DEBUG_REQ(D_INODE, req, "link original "DFID" to "DFID" %s",
                   PFID(rr->rr_fid1), PFID(rr->rr_fid2), rr->rr_name);
 
-        /* MDS_CHECK_RESENT here */
-
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
                 RETURN(rc);
+
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
+                RETURN(-ENOENT);
+
         /* step 1: lock the source */
         lhs = &info->mti_lh[MDT_LH_PARENT];
         lhs->mlh_mode = LCK_EX;
@@ -354,6 +366,10 @@ static int mdt_reint_link(struct mdt_thread_info *info)
                 GOTO(out_unlock_source, rc = PTR_ERR(mp));
 
         /* step 4: link it */
+
+        MDT_FAIL_WRITE(info->mti_ctxt, info->mti_mdt->mdt_bottom,
+                       OBD_FAIL_MDS_REINT_LINK_WRITE);
+
         rc = mdo_link(info->mti_ctxt, mdt_object_child(mp),
                       mdt_object_child(ms), rr->rr_name);
         GOTO(out_unlock_target, rc);
@@ -546,6 +562,10 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                 GOTO(out_unlock_new, rc = -EINVAL);
 
         ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
+
+        MDT_FAIL_WRITE(info->mti_ctxt, info->mti_mdt->mdt_bottom,
+                       OBD_FAIL_MDS_REINT_RENAME_WRITE);
+
         rc = mdo_rename(info->mti_ctxt, mdt_object_child(msrcdir),
                         mdt_object_child(mtgtdir), old_fid,
                         rr->rr_name, mnew ? mdt_object_child(mnew): NULL,

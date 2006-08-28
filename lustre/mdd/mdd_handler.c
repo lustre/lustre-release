@@ -905,7 +905,8 @@ int mdd_xattr_set_txn(const struct lu_context *ctxt, struct mdd_object *obj,
 }
 
 static int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
-                         const void *buf, int buf_len, const char *name, int fl)
+                         const void *buf, int buf_len, const char *name,
+                         int fl)
 {
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;

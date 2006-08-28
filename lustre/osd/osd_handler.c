@@ -442,6 +442,13 @@ static void osd_conf_get(const struct lu_context *ctx,
         param->ddp_block_shift   = osd_sb(osd_dt_dev(dev))->s_blocksize_bits;
 }
 
+static void osd_ro_set(const struct lu_context *ctx,
+                       const struct dt_device *d)
+{
+        struct osd_device *osd = osd_dt_dev(d);
+        lvfs_set_rdonly(lvfs_sbdev(osd_sb(osd)));
+}
+
 /*
  * Journal
  */
@@ -568,7 +575,8 @@ static struct dt_device_operations osd_dt_ops = {
         .dt_statfs      = osd_statfs,
         .dt_trans_start = osd_trans_start,
         .dt_trans_stop  = osd_trans_stop,
-        .dt_conf_get    = osd_conf_get
+        .dt_conf_get    = osd_conf_get,
+        .dt_ro_set      = osd_ro_set
 };
 
 static void osd_object_read_lock(const struct lu_context *ctx,

@@ -90,6 +90,11 @@ struct dt_device_operations {
         void  (*dt_conf_get)(const struct lu_context *ctx,
                              const struct dt_device *dev,
                              struct dt_device_param *param);
+        /*
+         * used for test purposes to set device RO
+         */
+        void  (*dt_ro_set)(const struct lu_context *ctx,
+                           const struct dt_device *dev);
 };
 
 struct dt_index_features {
