@@ -397,7 +397,7 @@ void mdt_dump_lmm(int level, struct lov_mds_md *lmm);
 
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/
-static inline void MDT_FAIL_WRITE(const struct lu_context *ctx,
+static inline void mdt_fail_write(const struct lu_context *ctx,
                                   const struct dt_device *dd, int id)
 {
         if (OBD_FAIL_CHECK(id)) {

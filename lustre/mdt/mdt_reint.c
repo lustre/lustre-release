@@ -64,7 +64,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 struct md_object *next = mdt_object_child(parent);
 
                 ma->ma_need = MA_INODE;
-                MDT_FAIL_WRITE(info->mti_ctxt, info->mti_mdt->mdt_bottom,
+                mdt_fail_write(info->mti_ctxt, info->mti_mdt->mdt_bottom,
                                OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
                 rc = mdo_create(info->mti_ctxt, next, rr->rr_name,
@@ -163,7 +163,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
                 GOTO(out_unlock, rc = -ENOENT);
 
         /* all attrs are packed into mti_attr in unpack_setattr */
-        MDT_FAIL_WRITE(info->mti_ctxt, info->mti_mdt->mdt_bottom,
+        mdt_fail_write(info->mti_ctxt, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_SETATTR_WRITE);
 
         rc = mo_attr_set(info->mti_ctxt, next, &info->mti_attr);
@@ -288,7 +288,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 
         /* step 4: delete it */
 
-        MDT_FAIL_WRITE(info->mti_ctxt, info->mti_mdt->mdt_bottom,
+        mdt_fail_write(info->mti_ctxt, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_UNLINK_WRITE);
 
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
@@ -367,7 +367,7 @@ static int mdt_reint_link(struct mdt_thread_info *info)
 
         /* step 4: link it */
 
-        MDT_FAIL_WRITE(info->mti_ctxt, info->mti_mdt->mdt_bottom,
+        mdt_fail_write(info->mti_ctxt, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_LINK_WRITE);
 
         rc = mdo_link(info->mti_ctxt, mdt_object_child(mp),
@@ -563,7 +563,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
 
         ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
 
-        MDT_FAIL_WRITE(info->mti_ctxt, info->mti_mdt->mdt_bottom,
+        mdt_fail_write(info->mti_ctxt, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_RENAME_WRITE);
 
         rc = mdo_rename(info->mti_ctxt, mdt_object_child(msrcdir),

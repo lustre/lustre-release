@@ -225,7 +225,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
                         if (body->flags & XATTR_CREATE)
                                 flags |= LU_XATTR_CREATE;
-                        MDT_FAIL_WRITE(ctx, info->mti_mdt->mdt_bottom,
+                        mdt_fail_write(ctx, info->mti_mdt->mdt_bottom,
                                        OBD_FAIL_MDS_SETXATTR_WRITE);
 
                         rc = mo_xattr_set(ctx, child, xattr,
