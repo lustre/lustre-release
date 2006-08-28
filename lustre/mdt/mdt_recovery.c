@@ -551,7 +551,6 @@ enum {
 
 /* add credits for last_rcvd update */
 static int mdt_txn_start_cb(const struct lu_context *ctx,
-                            struct dt_device *dev,
                             struct txn_param *param, void *cookie)
 {
         param->tp_credits += MDT_TXN_LAST_RCVD_CREDITS;
@@ -560,7 +559,6 @@ static int mdt_txn_start_cb(const struct lu_context *ctx,
 
 /* Update last_rcvd records with latests transaction data */
 static int mdt_txn_stop_cb(const struct lu_context *ctx,
-                           struct dt_device *dev,
                            struct thandle *txn, void *cookie)
 {
         struct mdt_device *mdt = cookie;
@@ -594,7 +592,7 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
 }
 
 /* commit callback, need to update last_commited value */
-static int mdt_txn_commit_cb(struct dt_device *dev,
+static int mdt_txn_commit_cb(const struct lu_context *ctxt, 
                              struct thandle *txn, void *cookie)
 {
         struct mdt_device *mdt = cookie;
@@ -608,7 +606,7 @@ static int mdt_txn_commit_cb(struct dt_device *dev,
         if (txi->txi_transno > obd->obd_last_committed) {
                 obd->obd_last_committed = txi->txi_transno;
                 spin_unlock(&mdt->mdt_transno_lock);
-                ptlrpc_commit_replies (obd);
+                ptlrpc_commit_replies(obd);
         } else
                 spin_unlock(&mdt->mdt_transno_lock);
 

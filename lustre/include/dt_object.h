@@ -319,12 +319,20 @@ struct dt_index_operations {
 struct dt_device {
         struct lu_device             dd_lu_dev;
         struct dt_device_operations *dd_ops;
+
         /*
          * List of dt_txn_callback (see below). This is not protected in any
          * way, because callbacks are supposed to be added/deleted only during
          * single-threaded start-up shut-down procedures.
          */
         struct list_head             dd_txn_callbacks;
+
+        /* Thread context for transaction commit callback.
+         * Transaction commit is serialized, that is there is no more than one
+         * transaction commit at a time (jbd journal_commit_transaction() is 
+         * serialized). This means that it's enough to have _one_ lu_context.
+         */ 
+        struct lu_context            dd_ctx_for_commit;
 };
 
 int  dt_device_init(struct dt_device *dev, struct lu_device_type *t);
@@ -359,12 +367,33 @@ static inline int dt_object_exists(const struct dt_object *dt)
 }
 
 struct txn_param {
+        /* number of blocks this transaction will modify */
         unsigned int tp_credits;
 };
 
+/*
+ * This is the general purpose transaction handle.
+ * 1. Transaction Life Cycle
+ *      This transaction handle is allocated upon starting a new transaction,
+ *      and deallocated after this transaction is committed.
+ * 2. Transaction Nesting
+ *      We do _NOT_ support nested transaction. So, every thread should only
+ *      have one active transaction, and a transaction only belongs to one
+ *      thread. Due to this, transaction handle need no reference count.
+ * 3. Transaction & dt_object locking
+ *      dt_object locks should be taken inside transaction.
+ * 4. Transaction & RPC
+ *      No RPC request should be issued inside transaction.
+ */
 struct thandle {
+        /* the dt device on which the transactions are executed */
         struct dt_device *th_dev;
+
+        /* context for this transaction, tag is LCT_TX_HANDLE */
         struct lu_context th_ctx;
+
+        /* the last operation result in this transaction.
+         * this value is used in recovery */
         __s32             th_result;
 };
 
@@ -381,12 +410,10 @@ struct thandle {
  */
 struct dt_txn_callback {
         int (*dtc_txn_start)(const struct lu_context *ctx,
-                             struct dt_device *dev,
                              struct txn_param *param, void *cookie);
         int (*dtc_txn_stop)(const struct lu_context *ctx,
-                            struct dt_device *dev,
                             struct thandle *txn, void *cookie);
-        int (*dtc_txn_commit)(struct dt_device *dev,
+        int (*dtc_txn_commit)(const struct lu_context *ctx, 
                               struct thandle *txn, void *cookie);
         void            *dtc_cookie;
         struct list_head dtc_linkage;
@@ -397,9 +424,8 @@ void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb);
 
 int dt_txn_hook_start(const struct lu_context *ctx,
                       struct dt_device *dev, struct txn_param *param);
-int dt_txn_hook_stop(const struct lu_context *ctx,
-                     struct dt_device *dev, struct thandle *txn);
-int dt_txn_hook_commit(struct dt_device *dev, struct thandle *txn);
+int dt_txn_hook_stop(const struct lu_context *ctx, struct thandle *txn);
+int dt_txn_hook_commit(const struct lu_context *ctx, struct thandle *txn);
 
 int dt_try_as_dir(const struct lu_context *ctx, struct dt_object *obj);
 struct dt_object *dt_store_open(const struct lu_context *ctx,

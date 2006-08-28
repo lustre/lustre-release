@@ -448,13 +448,23 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
 {
         struct osd_thandle *oh = container_of0(jcb, struct osd_thandle, ot_jcb);
         struct thandle     *th = &oh->ot_super;
+        struct dt_device   *dev = th->th_dev;
 
-        dt_txn_hook_commit(th->th_dev, th);
+        LASSERT(dev != NULL);
 
-        if (th->th_dev != NULL) {
-                lu_device_put(&th->th_dev->dd_lu_dev);
-                th->th_dev = NULL;
+        if (error) {
+                CERROR("transaction @0x%p commit error: %d\n", th, error);
+        } else {
+                /* This dd_ctx_for_commit is only for commit usage.
+                 * see "struct dt_device" 
+                 */ 
+                dt_txn_hook_commit(&dev->dd_ctx_for_commit, th);
         }
+
+        lu_device_put(&dev->dd_lu_dev);
+        th->th_dev = NULL;
+
+        lu_context_exit(&th->th_ctx);
         lu_context_fini(&th->th_ctx);
         OBD_FREE_PTR(oh);
 }
@@ -478,9 +488,6 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
 
         if (osd_param_is_sane(dev, p)) {
                 OBD_ALLOC_GFP(oh, sizeof *oh, GFP_NOFS);
-                /*TODO: it seems we need something like that:
-                 * OBD_SLAB_ALLOC(oh, oh_cache, GFP_NOFS, sizeof *oh);
-                 */
                 if (oh != NULL) {
                         /*
                          * XXX temporary stuff. Some abstraction layer should
@@ -490,14 +497,12 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
                         jh = journal_start(osd_journal(dev), p->tp_credits);
                         if (!IS_ERR(jh)) {
                                 oh->ot_handle = jh;
-                                /* hmm, since oh init and start are done together
-                                 * the ref starts from 2
-                                 */
                                 th = &oh->ot_super;
                                 th->th_dev = d;
                                 lu_device_get(&d->dd_lu_dev);
                                 /* add commit callback */
                                 lu_context_init(&th->th_ctx, LCT_TX_HANDLE);
+                                lu_context_enter(&th->th_ctx);
                                 journal_callback_set(jh, osd_trans_commit_cb,
                                                      (struct journal_callback *)&oh->ot_jcb);
                                 LASSERT(oti->oti_txns == 0);
@@ -532,7 +537,7 @@ static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
                 /*
                  * XXX temporary stuff. Some abstraction layer should be used.
                  */
-                result = dt_txn_hook_stop(ctx, th->th_dev, th);
+                result = dt_txn_hook_stop(ctx, th);
                 if (result != 0)
                         CERROR("Failure in transaction hook: %d\n", result);
 

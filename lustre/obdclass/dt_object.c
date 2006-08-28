@@ -36,6 +36,9 @@
 #include <dt_object.h>
 #include <libcfs/list.h>
 
+/* no lock is necessary to protect the list, because call-backs 
+ * are added during system startup. Please refer to "struct dt_device".
+ */
 void dt_txn_callback_add(struct dt_device *dev, struct dt_txn_callback *cb)
 {
         list_add(&cb->dtc_linkage, &dev->dd_txn_callbacks);
@@ -48,7 +51,7 @@ void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb)
 }
 EXPORT_SYMBOL(dt_txn_callback_del);
 
-int dt_txn_hook_start(const struct lu_context *ctx,
+int dt_txn_hook_start(const struct lu_context *ctxt,
                       struct dt_device *dev, struct txn_param *param)
 {
         int result;
@@ -58,7 +61,7 @@ int dt_txn_hook_start(const struct lu_context *ctx,
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_start == NULL)
                         continue;
-                result = cb->dtc_txn_start(ctx, dev, param, cb->dtc_cookie);
+                result = cb->dtc_txn_start(ctxt, param, cb->dtc_cookie);
                 if (result < 0)
                         break;
         }
@@ -66,17 +69,17 @@ int dt_txn_hook_start(const struct lu_context *ctx,
 }
 EXPORT_SYMBOL(dt_txn_hook_start);
 
-int dt_txn_hook_stop(const struct lu_context *ctx,
-                     struct dt_device *dev, struct thandle *txn)
+int dt_txn_hook_stop(const struct lu_context *ctxt, struct thandle *txn)
 {
-        int result;
+        struct dt_device       *dev = txn->th_dev;
         struct dt_txn_callback *cb;
+        int                     result;
 
         result = 0;
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_stop == NULL)
                         continue;
-                result = cb->dtc_txn_stop(ctx, dev, txn, cb->dtc_cookie);
+                result = cb->dtc_txn_stop(ctxt, txn, cb->dtc_cookie);
                 if (result < 0)
                         break;
         }
@@ -84,16 +87,17 @@ int dt_txn_hook_stop(const struct lu_context *ctx,
 }
 EXPORT_SYMBOL(dt_txn_hook_stop);
 
-int dt_txn_hook_commit(struct dt_device *dev, struct thandle *txn)
+int dt_txn_hook_commit(const struct lu_context *ctxt, struct thandle *txn)
 {
-        int result;
+        struct dt_device       *dev = txn->th_dev;
         struct dt_txn_callback *cb;
+        int                     result;
 
         result = 0;
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_commit == NULL)
                         continue;
-                result = cb->dtc_txn_commit(dev, txn, cb->dtc_cookie);
+                result = cb->dtc_txn_commit(ctxt, txn, cb->dtc_cookie);
                 if (result < 0)
                         break;
         }
@@ -103,13 +107,26 @@ EXPORT_SYMBOL(dt_txn_hook_commit);
 
 int dt_device_init(struct dt_device *dev, struct lu_device_type *t)
 {
+        int rc;
+
         CFS_INIT_LIST_HEAD(&dev->dd_txn_callbacks);
-        return lu_device_init(&dev->dd_lu_dev, t);
+        rc = lu_context_init(&dev->dd_ctx_for_commit, LCT_MD_THREAD);
+        if (rc == 0) {
+                lu_context_enter(&dev->dd_ctx_for_commit);
+                rc = lu_device_init(&dev->dd_lu_dev, t);
+                if (rc != 0) {
+                        lu_context_exit(&dev->dd_ctx_for_commit);
+                        lu_context_fini(&dev->dd_ctx_for_commit);
+                }
+        }
+        return rc;
 }
 EXPORT_SYMBOL(dt_device_init);
 
 void dt_device_fini(struct dt_device *dev)
 {
+        lu_context_exit(&dev->dd_ctx_for_commit);
+        lu_context_fini(&dev->dd_ctx_for_commit);
         lu_device_fini(&dev->dd_lu_dev);
 }
 EXPORT_SYMBOL(dt_device_fini);
