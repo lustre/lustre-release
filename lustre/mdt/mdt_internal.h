@@ -212,6 +212,7 @@ enum mdt_reint_flag {
 enum {
         MDT_NONEED_TRANSNO = (1 << 0) /*Do not need transno for this req*/
 };
+
 /*
  * Common data shared by mdt-level handlers. This is allocated per-thread to
  * reduce stack consumption.

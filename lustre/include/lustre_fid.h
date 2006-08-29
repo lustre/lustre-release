@@ -46,8 +46,8 @@ enum {
          * sequences). */
         LUSTRE_SEQ_META_WIDTH = 0x0000000000000080ULL,
 
-        /* this is how many sequences (128 * 128) may be in one
-         * super-sequence allocated to MDTs. */
+        /* this is how many sequences may be in one super-sequence allocated to
+         * MDTs. */
         LUSTRE_SEQ_SUPER_WIDTH = (LUSTRE_SEQ_META_WIDTH * LUSTRE_SEQ_META_WIDTH)
 };
 

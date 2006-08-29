@@ -116,11 +116,11 @@ struct mdt_opc_slice {
         struct mdt_handler *mos_hs;
 };
 
-static struct mdt_opc_slice mdt_handlers[];
+static struct mdt_opc_slice mdt_regular_handlers[];
 static struct mdt_opc_slice mdt_readpage_handlers[];
 
-static int                    mdt_handle    (struct ptlrpc_request *req);
-static struct mdt_device     *mdt_dev       (struct lu_device *d);
+static struct mdt_device *mdt_dev(struct lu_device *d);
+static int mdt_regular_handle(struct ptlrpc_request *req);
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
 
 static struct lu_object_operations mdt_obj_ops;
@@ -485,7 +485,7 @@ static int mdt_connect(struct mdt_thread_info *info)
         struct ptlrpc_request *req;
 
         req = mdt_info_req(info);
-        result = target_handle_connect(req, mdt_handle);
+        result = target_handle_connect(req, mdt_regular_handle);
         if (result == 0) {
                 LASSERT(req->rq_export != NULL);
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
@@ -756,12 +756,12 @@ static int mdt_sync(struct mdt_thread_info *info)
         RETURN(rc);
 }
 
-static int mdt_handle_quotacheck(struct mdt_thread_info *info)
+static int mdt_quotacheck_handle(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
 
-static int mdt_handle_quotactl(struct mdt_thread_info *info)
+static int mdt_quotactl_handle(struct mdt_thread_info *info)
 {
         return -EOPNOTSUPP;
 }
@@ -769,7 +769,6 @@ static int mdt_handle_quotactl(struct mdt_thread_info *info)
 /*
  * OBD PING and other handlers.
  */
-
 static int mdt_obd_ping(struct mdt_thread_info *info)
 {
         int result;
@@ -1417,9 +1416,9 @@ static int mdt_handle_common(struct ptlrpc_request *req,
         RETURN(result);
 }
 
-static int mdt_handle(struct ptlrpc_request *req)
+static int mdt_regular_handle(struct ptlrpc_request *req)
 {
-        return mdt_handle_common(req, mdt_handlers);
+        return mdt_handle_common(req, mdt_regular_handlers);
 }
 
 static int mdt_readpage_handle(struct ptlrpc_request *req)
@@ -2034,7 +2033,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                            "mdt_ldlm_client", m->mdt_ldlm_client);
 
         m->mdt_service =
-                ptlrpc_init_svc_conf(&conf, mdt_handle, LUSTRE_MDT0_NAME,
+                ptlrpc_init_svc_conf(&conf, mdt_regular_handle, LUSTRE_MDT0_NAME,
                                      m->mdt_md_dev.md_lu_dev.ld_proc_entry,
                                      NULL);
         if (m->mdt_service == NULL)
@@ -2090,7 +2089,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         };
 
         m->mdt_setattr_service =
-                ptlrpc_init_svc_conf(&conf, mdt_handle,
+                ptlrpc_init_svc_conf(&conf, mdt_regular_handle,
                                      LUSTRE_MDT0_NAME "_setattr",
                                      m->mdt_md_dev.md_lu_dev.ld_proc_entry,
                                      NULL);
@@ -2750,7 +2749,6 @@ static struct lu_device *mdt_device_alloc(const struct lu_context *ctx,
 /*
  * context key constructor/destructor
  */
-
 static void *mdt_thread_init(const struct lu_context *ctx,
                              struct lu_context_key *key)
 {
@@ -2908,8 +2906,8 @@ DEF_MDT_HNDL_F(HABEO_CORPUS             , CLOSE,        mdt_close),
 DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),
 DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),
-DEF_MDT_HNDL_0(0,                         QUOTACHECK,   mdt_handle_quotacheck),
-DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_handle_quotactl)
+DEF_MDT_HNDL_0(0,                         QUOTACHECK,   mdt_quotacheck_handle),
+DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_quotactl_handle)
 };
 
 #define DEF_OBD_HNDL(flags, name, fn)                   \
@@ -2937,7 +2935,7 @@ static struct mdt_handler mdt_dlm_ops[] = {
 static struct mdt_handler mdt_llog_ops[] = {
 };
 
-static struct mdt_opc_slice mdt_handlers[] = {
+static struct mdt_opc_slice mdt_regular_handlers[] = {
         {
                 .mos_opc_start = MDS_GETATTR,
                 .mos_opc_end   = MDS_LAST_OPC,
@@ -2963,21 +2961,21 @@ static struct mdt_opc_slice mdt_handlers[] = {
         }
 };
 
-static struct mdt_handler mdt_mds_readpage_ops[] = {
+static struct mdt_handler mdt_readpage_ops[] = {
         DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, READPAGE, mdt_readpage),
 
         /*
          * XXX: this is ugly and should be fixed one day, see mdc_close() for
          * detailed comment. --umka
          */
-        DEF_MDT_HNDL_F(HABEO_CORPUS             , CLOSE,    mdt_close),
+        DEF_MDT_HNDL_F(HABEO_CORPUS,              CLOSE,    mdt_close),
 };
 
 static struct mdt_opc_slice mdt_readpage_handlers[] = {
         {
                 .mos_opc_start = MDS_GETATTR,
                 .mos_opc_end   = MDS_LAST_OPC,
-                .mos_hs        = mdt_mds_readpage_ops
+                .mos_hs        = mdt_readpage_ops
         },
         {
                 .mos_hs        = NULL

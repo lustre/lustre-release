@@ -48,8 +48,11 @@
 #include "fid_internal.h"
 
 #ifdef __KERNEL__
-/* sequence space, starts from 0x400 to have first 0x400 sequences used for
- * special purposes. */
+/*
+ * Sequence space, starts from 0x400 to have first 0x400 sequences used for
+ * special purposes. This means that if we have seq-with 10000 fids, we have
+ * ~10M fids reserved for special purposes (igifs, etc.).
+ */
 const struct lu_range LUSTRE_SEQ_SPACE_RANGE = {
         (0x400),
         ((__u64)~0ULL)

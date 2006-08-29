@@ -799,6 +799,8 @@ lustre/lmv/Makefile
 lustre/lmv/autoMakefile
 lustre/mds/Makefile
 lustre/mds/autoMakefile
+lustre/gtl/Makefile
+lustre/gtl/autoMakefile
 lustre/mdt/Makefile
 lustre/mdt/autoMakefile
 lustre/cmm/Makefile

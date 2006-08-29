@@ -60,7 +60,7 @@ int seq_store_write(struct lu_server_seq *seq,
         struct seq_thread_info *info;
         struct dt_device *dt_dev;
         struct thandle *th;
-        loff_t pos = 0;
+        loff_t pos;
 	int rc;
 	ENTRY;
 
@@ -76,6 +76,13 @@ int seq_store_write(struct lu_server_seq *seq,
                 /* store ranges in le format */
                 range_to_le(&info->sti_record.ssr_space, &seq->lss_space);
                 range_to_le(&info->sti_record.ssr_super, &seq->lss_super);
+ 
+                /* 
+                 * Regular seq server stores its ranges at posision 0 and
+                 * controller at position of sizeof(info->sti_record).
+                 */
+                pos = (seq->lss_type == LUSTRE_SEQ_SERVER) ? 0 :
+                        sizeof(info->sti_record);
 
                 rc = dt_obj->do_body_ops->dbo_write(ctx, dt_obj,
                                                     (char *)&info->sti_record,
@@ -102,16 +109,24 @@ int seq_store_read(struct lu_server_seq *seq,
 {
         struct dt_object *dt_obj = seq->lss_obj;
         struct seq_thread_info *info;
-        loff_t pos = 0;
+        loff_t pos;
 	int rc;
 	ENTRY;
 
         info = lu_context_key_get(ctx, &seq_thread_key);
         LASSERT(info != NULL);
 
+        /* 
+         * Regular seq server stores its ranges at posision 0 and controller at
+         * position of sizeof(info->sti_record).
+         */
+        pos = (seq->lss_type == LUSTRE_SEQ_SERVER) ? 0 :
+                sizeof(info->sti_record);
+
         rc = dt_obj->do_body_ops->dbo_read(ctx, dt_obj,
                                            (char *)&info->sti_record,
                                            sizeof(info->sti_record), &pos);
+        
         if (rc == sizeof(info->sti_record)) {
                 seq->lss_space = info->sti_record.ssr_space;
                 lustre_swab_lu_range(&seq->lss_space);
