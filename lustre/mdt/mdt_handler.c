@@ -1206,7 +1206,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         if (h->mh_opc != MDS_DISCONNECT &&
             h->mh_opc != MDS_READPAGE &&
             h->mh_opc != LDLM_ENQUEUE) {
-                mdt_finish_reply(info, result);
+                mdt_finish_reply(info, req->rq_status);
         }
         RETURN(result);
 }

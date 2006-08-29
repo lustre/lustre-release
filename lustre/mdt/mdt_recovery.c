@@ -237,7 +237,7 @@ static int mdt_init_server_data(const struct lu_context *ctx,
                 msd->msd_feature_incompat = cpu_to_le32(OBD_INCOMPAT_MDT |
                                                        OBD_INCOMPAT_COMMON_LR);
         } else {
-                rc = mdt_read_last_rcvd_header(mti->mti_ctxt, mdt, msd);
+                rc = mdt_read_last_rcvd_header(ctx, mdt, msd);
                 if (rc) {
                         CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
                         GOTO(out, rc);

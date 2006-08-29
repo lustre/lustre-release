@@ -592,7 +592,7 @@ int mdt_close(struct mdt_thread_info *info)
         struct mdt_file_data   *mfd;
         struct mdt_object      *o;
         struct md_attr         *ma = &info->mti_attr;
-        struct mdt_body        *repbody;
+        struct mdt_body        *repbody = NULL;
         int rc;
         ENTRY;
 
@@ -601,12 +601,13 @@ int mdt_close(struct mdt_thread_info *info)
         req_capsule_set_size(&info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
                              info->mti_mdt->mdt_max_cookiesize);
         rc = req_capsule_pack(&info->mti_pill);
-        if (rc)
-                RETURN(rc);
-
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        repbody->eadatasize = 0;
-        repbody->aclsize = 0;
+        /* Continue to close handle even if we can not pack reply */
+        if (rc == 0) {
+                repbody = req_capsule_server_get(&info->mti_pill, 
+                                                 &RMF_MDT_BODY);
+                repbody->eadatasize = 0;
+                repbody->aclsize = 0;
+        }
 
         med = &mdt_info_req(info)->rq_export->exp_mdt_data;
 
@@ -623,25 +624,33 @@ int mdt_close(struct mdt_thread_info *info)
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
 
-                ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
-                                                    &RMF_MDT_MD);
-                ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
-                                                       &RMF_MDT_MD,
-                                                       RCL_SERVER);
-
-                ma->ma_cookie = req_capsule_server_get(&info->mti_pill,
-                                                    &RMF_LOGCOOKIES);
-                ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
-                                                       &RMF_LOGCOOKIES,
-                                                       RCL_SERVER);
-                ma->ma_need = MA_INODE;
+                if (repbody != NULL) {
+                        ma->ma_lmm = 
+                                req_capsule_server_get(&info->mti_pill,
+                                                       &RMF_MDT_MD);
+                        ma->ma_lmm_size = 
+                                req_capsule_get_size(&info->mti_pill,
+                                                     &RMF_MDT_MD,
+                                                     RCL_SERVER);
+                        ma->ma_cookie = 
+                                req_capsule_server_get(&info->mti_pill,
+                                                       &RMF_LOGCOOKIES);
+                        ma->ma_cookie_size = 
+                                req_capsule_get_size(&info->mti_pill,
+                                                     &RMF_LOGCOOKIES,
+                                                     RCL_SERVER);
+                        ma->ma_need = MA_INODE;
+                }
                 o = mfd->mfd_object;
                 mdt_mfd_close(info->mti_ctxt, info->mti_mdt, mfd, ma);
-                rc = mdt_handle_last_unlink(info, o, ma);
+                if (repbody != NULL)
+                        rc = mdt_handle_last_unlink(info, o, ma);
+
                 /* release reference on this object. */
                 mdt_object_put(info->mti_ctxt, o);
         }
-        mdt_shrink_reply(info, REPLY_REC_OFF + 1);
+        if (repbody != NULL)
+                mdt_shrink_reply(info, REPLY_REC_OFF + 1);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
                 RETURN(-ENOMEM);
