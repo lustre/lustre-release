@@ -1309,7 +1309,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
 }
 
 int
-target_send_reply_msg (struct ptlrpc_request *req, int rc, int fail_id)
+target_send_reply_msg(struct ptlrpc_request *req, int rc, int fail_id)
 {
         if (OBD_FAIL_CHECK(fail_id | OBD_FAIL_ONCE)) {
                 obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED;
@@ -1317,14 +1317,17 @@ target_send_reply_msg (struct ptlrpc_request *req, int rc, int fail_id)
                 return (-ECOMM);
         }
 
-        if (rc) {
-                DEBUG_REQ(D_ERROR, req, "processing error (%d)", rc);
+        if (rc || req->rq_reply_state == NULL) {
+                if (rc == 0) {
+                        DEBUG_REQ(D_ERROR, req, "no reply message packed");
+                        rc = -ENOMEM;
+                } else
+                        DEBUG_REQ(D_ERROR, req, "processing error (%d)", rc);
                 req->rq_status = rc;
                 return (ptlrpc_error(req));
-        } else {
-                DEBUG_REQ(D_NET, req, "sending reply");
-        }
+        } 
 
+        DEBUG_REQ(D_NET, req, "sending reply");
         return (ptlrpc_send_reply(req, 1));
 }
 
@@ -1341,7 +1344,7 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         rs = req->rq_reply_state;
         if (rs == NULL || !rs->rs_difficult) {
                 /* no notifiers */
-                target_send_reply_msg (req, rc, fail_id);
+                target_send_reply_msg(req, rc, fail_id);
                 return;
         }
 
@@ -1384,7 +1387,7 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
         spin_unlock(&exp->exp_lock);
 
-        netrc = target_send_reply_msg (req, rc, fail_id);
+        netrc = target_send_reply_msg(req, rc, fail_id);
 
         spin_lock(&svc->srv_lock);
 
