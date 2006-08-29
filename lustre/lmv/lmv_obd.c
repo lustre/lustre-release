@@ -859,8 +859,8 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 }
        }
 #endif
-        rc = fld_client_init(&lmv->lmv_fld,
-                             "LMV_UUID", LUSTRE_CLI_FLD_HASH_RRB);
+        rc = fld_client_init(&lmv->lmv_fld, obd->obd_name,
+                             LUSTRE_CLI_FLD_HASH_DHT);
         if (rc) {
                 CERROR("can't init FLD, err %d\n",
                        rc);

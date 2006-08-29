@@ -90,7 +90,7 @@ static struct fld_target *
 fld_dht_scan(struct lu_client_fld *fld, seqno_t seq)
 {
         /* XXX: here should be DHT scan code */
-        return fld_dht_scan(fld, seq);
+        return fld_rrb_scan(fld, seq);
 }
 
 struct lu_fld_hash fld_hash[3] = {

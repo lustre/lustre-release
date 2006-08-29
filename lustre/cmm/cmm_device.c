@@ -189,9 +189,9 @@ static void cmm_device_shutdown(const struct lu_context *ctx,
 static int cmm_device_mount(const struct lu_context *ctx,
                             struct cmm_device *m, struct lustre_cfg *cfg)
 {
-        struct lu_site *ls;
         const char *index = lustre_cfg_string(cfg, 2);
-        char *p;
+        struct lu_site *ls;
+        char *p, *name_str;
         int rc;
         
         LASSERT(index);
@@ -207,8 +207,9 @@ static int cmm_device_mount(const struct lu_context *ctx,
         if (!ls->ls_client_fld)
                 RETURN(-ENOMEM);
 
-        rc = fld_client_init(ls->ls_client_fld, "CMM_UUID",
-                             LUSTRE_CLI_FLD_HASH_RRB);
+        name_str = lustre_cfg_string(cfg, 0);
+        rc = fld_client_init(ls->ls_client_fld, name_str,
+                             LUSTRE_CLI_FLD_HASH_DHT);
         if (rc) {
                 CERROR("can't init FLD, err %d\n",  rc);        
         }
