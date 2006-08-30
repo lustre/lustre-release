@@ -597,6 +597,7 @@ if test x$enable_server = xyes ; then
 fi
 LC_CONFIG_PINGER
 LC_CONFIG_QUOTA
+LC_CONFIG_SPLIT
 
 LC_STRUCT_KIOBUF
 LC_FUNC_COND_RESCHED
@@ -696,7 +697,27 @@ if test x$enable_quota != xno; then
    AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
 fi
 ])
-  
+ 
+#
+# LC_CONFIG_SPLIT
+#
+# whether to enable quota support
+#
+AC_DEFUN([LC_CONFIG_SPLIT],
+[AC_MSG_CHECKING([whether to enable split support])
+AC_ARG_ENABLE([split], 
+	AC_HELP_STRING([--enable-split],
+			[enable split support]),
+	[],[enable_split='no'])
+AC_MSG_RESULT([$enable_split])
+if test x$linux25 != xyes; then
+   enable_split='no'
+fi
+if test x$enable_split != xno; then
+   AC_DEFINE(HAVE_SPLIT_SUPPORT, 1, [Enable split support])
+fi
+])
+ 
 #
 # LC_CONFIGURE
 #
@@ -750,6 +771,7 @@ AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
+AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 ])

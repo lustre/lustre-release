@@ -1907,6 +1907,11 @@ static int mdt_seq_init_cli(const struct lu_context *ctx,
 
                         if (rc)
                                 RETURN(rc);
+                        /*FIXME: add client seq to mdc obd for 
+                         *allocating fid in create slave objects,
+                         *may need better way to fix it,
+                         *why not init client seq in cmm_add_mdc?*/
+                        mdc->u.cli.cl_seq = ls->ls_client_seq;
 
                         LASSERT(ls->ls_server_seq != NULL);
 

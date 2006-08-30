@@ -290,6 +290,7 @@ static int __mdd_lmm_get(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
+#ifdef HAVE_SPLIT_SUPPORT
 /* get lmv EA only*/
 static int __mdd_lmv_get(const struct lu_context *ctxt,
                          struct mdd_object *mdd_obj, struct md_attr *ma)
@@ -304,6 +305,7 @@ static int __mdd_lmv_get(const struct lu_context *ctxt,
         }
         RETURN(rc);
 }
+#endif
 
 static int mdd_attr_get_internal(const struct lu_context *ctxt,
                                  struct mdd_object *mdd_obj,
@@ -320,11 +322,12 @@ static int mdd_attr_get_internal(const struct lu_context *ctxt,
                     S_ISDIR(mdd_object_type(mdd_obj)))
                         rc = __mdd_lmm_get(ctxt, mdd_obj, ma);
         }
+#ifdef HAVE_SPLIT_SUPPORT 
         if (rc == 0 && ma->ma_need & MA_LMV) {
                 if (S_ISDIR(mdd_object_type(mdd_obj)))
                         rc = __mdd_lmv_get(ctxt, mdd_obj, ma);
         }
-        
+#endif        
         CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n",
                         rc, ma->ma_valid);
         RETURN(rc);
