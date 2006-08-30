@@ -2762,7 +2762,13 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         
         lsi = s2lsi(lmi->lmi_sb);
         mnt = lmi->lmi_mnt;
-        
+        /* FIXME: MDD LOV initialize objects.
+         * we need only lmi here but not get mount
+         * OSD did mount already, so put mount back
+         */
+        atomic_dec(&lsi->lsi_mounts);
+        mntput(mnt);
+
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
         mds_init_ctxt(obd, mnt);
 
@@ -2858,12 +2864,12 @@ static int mds_cmd_cleanup(struct obd_device *obd)
                 mds->mds_objects_dir = NULL;
         }
 
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
         LL_DQUOT_OFF(obd->u.obt.obt_sb);
         fsfilt_put_ops(obd->obd_fsops);
         
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
 }
 
