@@ -1347,6 +1347,7 @@ static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
                         result = -ENOTDIR;
         }
         LASSERT(osd_invariant(obj));
+
         return result;
 }
 
@@ -1391,6 +1392,7 @@ static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
                         (struct iam_rec *)rec, obj->oo_ipd);
 
         LASSERT(osd_invariant(obj));
+
         RETURN(rc);
 }
 
@@ -1586,7 +1588,7 @@ static int osd_index_compat_lookup(const struct lu_context *ctxt,
         parent = d_alloc_root(dir);
         if (parent == NULL)
                 return -ENOMEM;
-
+        igrab(dir);
         dentry = d_alloc(parent, &info->oti_str);
         if (dentry != NULL) {
                 struct dentry *d;
@@ -1789,10 +1791,6 @@ static int osd_shutdown(const struct lu_context *ctx, struct osd_device *o)
         }
         osd_oi_fini(info, &o->od_oi);
 
-        if (o->od_mount)
-                server_put_mount(o->od_mount->lmi_name, o->od_mount->lmi_mnt);
-        o->od_mount = NULL;
-
         RETURN(0);
 }
 
@@ -1841,6 +1839,14 @@ static struct lu_device *osd_device_fini(const struct lu_context *ctx,
                                          struct lu_device *d)
 {
         ENTRY;
+
+        shrink_dcache_sb(osd_sb(osd_dev(d)));
+
+        if (osd_dev(d)->od_mount)
+                server_put_mount(osd_dev(d)->od_mount->lmi_name,
+                                 osd_dev(d)->od_mount->lmi_mnt);
+        osd_dev(d)->od_mount = NULL;
+
         lu_context_exit(&osd_dev(d)->od_ctx_for_commit);
         lu_context_fini(&osd_dev(d)->od_ctx_for_commit);
         RETURN(NULL);
@@ -1909,15 +1915,16 @@ static int osd_recovery_complete(const struct lu_context *ctxt,
  * fid<->inode<->object functions.
  */
 
-struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode)
+static struct inode *osd_open(struct dentry *parent,
+                              const char *name, mode_t mode)
 {
         struct dentry *dentry;
-        struct dentry *result;
+        struct inode *result;
 
-        result = dentry = osd_lookup(parent, name);
+        dentry = osd_lookup(parent, name);
         if (IS_ERR(dentry)) {
                 CERROR("Error opening %s: %ld\n", name, PTR_ERR(dentry));
-                dentry = NULL; /* dput(NULL) below is OK */
+                result = NULL; /* dput(NULL) below is OK */
         } else if (dentry->d_inode == NULL) {
                 CERROR("Not found: %s\n", name);
                 result = ERR_PTR(-ENOENT);
@@ -1925,10 +1932,11 @@ struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode)
                 CERROR("Wrong mode: %s: %o != %o\n", name,
                        dentry->d_inode->i_mode, mode);
                 result = ERR_PTR(mode == S_IFDIR ? -ENOTDIR : -EISDIR);
+        } else {
+                result = dentry->d_inode;
+                igrab(result);
         }
-
-        if (IS_ERR(result))
-                dput(dentry);
+        dput(dentry);
         return result;
 }
 
@@ -1955,21 +1963,18 @@ struct dentry *osd_lookup(struct dentry *parent, const char *name)
 int osd_lookup_id(struct dt_device *dev, const char *name, mode_t mode,
                   struct osd_inode_id *id)
 {
-        struct dentry     *dent;
+        struct inode *inode;
         struct osd_device *osd = osd_dt_dev(dev);
         int result;
 
-        dent = osd_open(osd_sb(osd)->s_root, name, mode);
-        if (!IS_ERR(dent)) {
-                struct inode *inode;
-
-                inode = dent->d_inode;
+        inode = osd_open(osd_sb(osd)->s_root, name, mode);
+        if (!IS_ERR(inode)) {
                 LASSERT(inode != NULL);
                 id->oii_ino = inode->i_ino;
                 id->oii_gen = inode->i_generation;
                 result = 0;
         } else
-                result = PTR_ERR(dent);
+                result = PTR_ERR(inode);
         return result;
 }
 
@@ -1992,6 +1997,7 @@ static struct inode *osd_iget(struct osd_thread_info *info,
                 iput(inode);
                 inode = ERR_PTR(-ESTALE);
         }
+        
         return inode;
 
 }

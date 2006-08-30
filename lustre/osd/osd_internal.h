@@ -47,7 +47,6 @@
 struct inode;
 
 struct dentry *osd_lookup(struct dentry *parent, const char *name);
-struct dentry *osd_open(struct dentry *parent, const char *name, mode_t mode);
 int osd_lookup_id(struct dt_device *dev, const char *name, mode_t mode,
                   struct osd_inode_id *id);
 
