@@ -66,7 +66,9 @@ build/lustre.spec: build/lustre.spec.in config.status
 	./config.status build/lustre.spec
 
 rpms: build/lustre.spec dist Makefile
-	rpmbuild -ta $(distdir).tar.gz
+	rpmbuild -ta $(distdir).tar.gz \
+			--define "_tmppath $TMP"
 
 srpm: build/lustre.spec dist Makefile
-	rpmbuild -ts $(distdir).tar.gz
+	rpmbuild -ts $(distdir).tar.gz \
+			--define "_tmppath $TMP"

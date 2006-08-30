@@ -10,7 +10,7 @@ License: GPL
 Group: Utilities/System
 Source: lustre-%{version}.tar.gz
 URL: http://clusterfs.com/
-BuildRoot: /var/tmp/lustre-%{version}-root
+BuildRoot: %{_tmppath}/lustre-%{version}-root
 Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
 
