@@ -125,6 +125,22 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
 
 static struct lu_object_operations mdt_obj_ops;
 
+int mdt_get_disposition(struct ldlm_reply *rep, int flag)
+{
+        if (!rep)
+                return 0;
+        return (rep->lock_policy_res1 & flag);
+}
+
+void mdt_set_disposition(struct mdt_thread_info *info,
+                                struct ldlm_reply *rep, int flag)
+{
+        if (info)
+                info->mti_opdata |= flag;
+        if (rep)
+                rep->lock_policy_res1 |= flag;
+}
+
 
 static int mdt_getstatus(struct mdt_thread_info *info)
 {
@@ -366,10 +382,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         CDEBUG(D_INODE, "getattr with lock for "DFID"/%s, ldlm_rep = %p\n",
                         PFID(mdt_object_fid(parent)), name, ldlm_rep);
 
-        intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
+        mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
         if (strlen(name) == 0) {
                 /* only getattr on the child. parent is on another node. */
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
+                mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 child = parent;
                 CDEBUG(D_INODE, "partial getattr_name child_fid = "DFID
                                ", ldlm_rep=%p\n",
@@ -398,10 +414,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         result = mdo_lookup(info->mti_ctxt, next, name, child_fid);
         if (result != 0) {
                 if (result == -ENOENT)
-                        intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
+                        mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
                 GOTO(out_parent, result);
         } else
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
+                mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
         /*
          *step 3: find the child object by fid & lock it.
          *        regardless if it is local or remote.
@@ -1079,7 +1095,7 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
         ENTRY;
         pill = &info->mti_pill;
 
-        if (req_capsule_has_field(pill, &RMF_MDT_BODY))
+        if (req_capsule_has_field(pill, &RMF_MDT_BODY, RCL_CLIENT))
                 result = mdt_body_unpack(info, flags);
         else
                 result = 0;
@@ -1427,21 +1443,6 @@ static int mdt_readpage_handle(struct ptlrpc_request *req)
         return mdt_handle_common(req, mdt_readpage_handlers);
 }
 
-/*Please move these functions from mds to mdt*/
-int intent_disposition(struct ldlm_reply *rep, int flag)
-{
-        if (!rep)
-                return 0;
-        return (rep->lock_policy_res1 & flag);
-}
-
-void intent_set_disposition(struct ldlm_reply *rep, int flag)
-{
-        if (!rep)
-                return;
-        rep->lock_policy_res1 |= flag;
-}
-
 enum mdt_it_code {
         MDT_IT_OPEN,
         MDT_IT_OCREAT,
@@ -1561,15 +1562,15 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         if (rc)
                 RETURN(rc);
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
-        intent_set_disposition(ldlm_rep, DISP_IT_EXECD);
+        mdt_set_disposition(info, ldlm_rep, DISP_IT_EXECD);
 
         ldlm_rep->lock_policy_res2 =
                 mdt_getattr_name_lock(info, lhc, child_bits, ldlm_rep);
         mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
 
-        if (intent_disposition(ldlm_rep, DISP_LOOKUP_NEG))
+        if (mdt_get_disposition(ldlm_rep, DISP_LOOKUP_NEG))
                 ldlm_rep->lock_policy_res2 = 0;
-        if (!intent_disposition(ldlm_rep, DISP_LOOKUP_POS) ||
+        if (!mdt_get_disposition(ldlm_rep, DISP_LOOKUP_POS) ||
                     ldlm_rep->lock_policy_res2) {
                 RETURN(ELDLM_LOCK_ABORTED);
         }
@@ -1652,7 +1653,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                 RETURN(-EFAULT);
         rep->lock_policy_res2 = rc;
 
-        intent_set_disposition(rep, DISP_IT_EXECD);
+        mdt_set_disposition(info, rep, DISP_IT_EXECD);
         
         mdt_finish_reply(info, rc);
 

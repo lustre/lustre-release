@@ -120,6 +120,14 @@ load_modules() {
     load_module llite/lustre
     load_module mgc/mgc
     load_module mgs/mgs
+    load_module quota/lquota
+    load_module quota/quotacheck_test
+    load_module quota/quotactl_test
+    load_module obdclass/llog_test
+    load_module obdecho/obdecho
+    load_module ldiskfs/quotafmt_test
+
+
     rm -f $TMP/ogdb-`hostname`
     $LCTL modules > $TMP/ogdb-`hostname`
     # 'mount' doesn't look in $PATH, just sbin

@@ -212,7 +212,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 RETURN(0);
         }
 
-        intent_set_disposition(rep, DISP_OPEN_OPEN);
+        mdt_set_disposition(info, rep, DISP_OPEN_OPEN);
         /* we need to return the existing object's fid back, so it is done
          * here, after preparing the reply */
         if (!created && (flags & MDS_OPEN_EXCL) && (flags & MDS_OPEN_CREAT))
@@ -337,9 +337,9 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
                         else
                                 rc = PTR_ERR(th);
                         if (rc == 0) {
-                                intent_set_disposition(rep, DISP_LOOKUP_EXECD);
-                                intent_set_disposition(rep, DISP_LOOKUP_POS);
-                                intent_set_disposition(rep, DISP_OPEN_OPEN);
+                                mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
+                                mdt_set_disposition(info, rep, DISP_LOOKUP_POS);
+                                mdt_set_disposition(info, rep, DISP_OPEN_OPEN);
                                 rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
                         }
                 } 
@@ -468,10 +468,10 @@ int mdt_open(struct mdt_thread_info *info)
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
                 RETURN(-ENOMEM);
 
-        intent_set_disposition(ldlm_rep, DISP_LOOKUP_EXECD);
+        mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
         if (rr->rr_name[0] == 0) {
                 /* this is cross-ref open */
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
+                mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 result = mdt_cross_open(info, rr->rr_fid1, ldlm_rep, create_flags);
                 RETURN(result);
         }
@@ -492,7 +492,7 @@ int mdt_open(struct mdt_thread_info *info)
                 GOTO(out_parent, result);
 
         if (result == -ENOENT || result == -ESTALE) {
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_NEG);
+                mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
                 if (result == -ESTALE) {
                         /*ESTALE means the parent is a dead(unlinked) dir,
                          *so it should return -ENOENT to in accordance
@@ -504,7 +504,7 @@ int mdt_open(struct mdt_thread_info *info)
                 *child_fid = *info->mti_rr.rr_fid2;
                 /* new object will be created. see the following */
         } else {
-                intent_set_disposition(ldlm_rep, DISP_LOOKUP_POS);
+                mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 /* check for O_EXCL is moved to the mdt_mfd_open, we need to
                  * return FID back in that case */
         }
@@ -515,7 +515,7 @@ int mdt_open(struct mdt_thread_info *info)
 
         if (result == -ENOENT) {
                 /* not found and with MDS_OPEN_CREAT: let's create it */
-                intent_set_disposition(ldlm_rep, DISP_OPEN_CREATE);
+                mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
                 result = mdo_create(info->mti_ctxt,
                                     mdt_object_child(parent),
                                     rr->rr_name,

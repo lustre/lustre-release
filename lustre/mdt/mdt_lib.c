@@ -189,13 +189,13 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
         la->la_mtime = rec->sa_mtime;
         ma->ma_valid = MA_INODE;
 
-        if (req_capsule_field_present(pill, &RMF_EADATA)) {
+        if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
                 ma->ma_lmm = req_capsule_client_get(pill, &RMF_EADATA);
                 ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_EADATA,
                                                        RCL_CLIENT);
                 ma->ma_valid |= MA_LOV;
         }
-        if (req_capsule_field_present(pill, &RMF_LOGCOOKIES)) {
+        if (req_capsule_field_present(pill, &RMF_LOGCOOKIES, RCL_CLIENT)) {
                 ma->ma_cookie = req_capsule_client_get(pill,
                                                        &RMF_LOGCOOKIES);
                 ma->ma_cookie_size = req_capsule_get_size(pill,
@@ -237,7 +237,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                         info->mti_spec.u.sp_pfid = rr->rr_fid1;
                 } else if (S_ISLNK(attr->la_mode)) {
                         const char *tgt = NULL;
-                        if (req_capsule_field_present(pill, &RMF_SYMTGT)) {
+                        if (req_capsule_field_present(pill, &RMF_SYMTGT, 
+                                                      RCL_CLIENT)) {
                                 tgt = req_capsule_client_get(pill,
                                                              &RMF_SYMTGT);
                                 info->mti_spec.u.sp_symname = tgt;
@@ -363,7 +364,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         } else
                 result = -EFAULT;
 
-        if (req_capsule_field_present(pill, &RMF_EADATA)) {
+        if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
                 struct md_create_spec *sp = &info->mti_spec;
                 sp->u.sp_ea.eadata = req_capsule_client_get(pill,
                                                             &RMF_EADATA);

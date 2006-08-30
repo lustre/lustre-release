@@ -528,9 +528,8 @@ static int mdt_update_last_rcvd(struct mdt_thread_info *mti,
                 mcd->mcd_last_result = cpu_to_le32(rc);
                 /*XXX: save intent_disposition in mdt_thread_info?
                  * also there is bug - intent_dispostion is __u64,
-                 * see struct ldlm_reply->lock_policy_res1;
-                mcd->mcd_last_data = cpu_to_le32(op_data);
-                 */
+                 * see struct ldlm_reply->lock_policy_res1; */
+                 mcd->mcd_last_data = cpu_to_le32(mti->mti_opdata);
         }
         if (off <= 0) {
                 CERROR("client idx %d has offset %lld\n", med->med_lr_idx, off);

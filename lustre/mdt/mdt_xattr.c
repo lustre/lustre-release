@@ -210,7 +210,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
         if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
                 char * xattr;
-                if (!req_capsule_field_present(pill, &RMF_EADATA)) {
+                if (!req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
                         CERROR("no xattr data supplied\n");
                         GOTO(out_unlock, rc = -EFAULT);
                 }

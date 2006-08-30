@@ -858,21 +858,24 @@ void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt)
 EXPORT_SYMBOL(req_capsule_extend);
 
 int req_capsule_has_field(const struct req_capsule *pill,
-                          const struct req_msg_field *field)
+                          const struct req_msg_field *field,
+                          enum req_location loc)
 {
-        return field->rmf_offset[pill->rc_fmt->rf_idx][pill->rc_loc ^ 1];
+        LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
+
+        return field->rmf_offset[pill->rc_fmt->rf_idx][loc];
 }
 EXPORT_SYMBOL(req_capsule_has_field);
 
 int req_capsule_field_present(const struct req_capsule *pill,
-                              const struct req_msg_field *field)
+                              const struct req_msg_field *field,
+                              enum req_location loc)
 {
-        int loc;
         int offset;
 
-        LASSERT(req_capsule_has_field(pill, field));
+        LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
+        LASSERT(req_capsule_has_field(pill, field, loc));
 
-        loc = pill->rc_loc ^ 1;
         offset = __req_capsule_offset(pill, field, loc);
         return lustre_msg_bufcount(__req_msg(pill, loc)) > offset;
 }

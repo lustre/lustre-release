@@ -269,8 +269,13 @@ struct mdt_thread_info {
         __u64                      mti_transno;
         __u32                      mti_trans_flags;
 
+        /* opdata for mdt_open(), has the same as ldlm_reply:lock_policy_res1.
+         * mdt_update_last_rcvd() stores this value onto disk for recovery
+         * when mdt_trans_stop_cb() is called. 
+         */
+        __u64                      mti_opdata;
 
-        /* temporary stuff used by thread to save stack comsuption.
+        /* temporary stuff used by thread to save stack consumption. 
          * if something is in a union, make sure they do not conflict */ 
 
         struct lu_fid              mti_tmp_fid1;
@@ -329,6 +334,10 @@ static inline const struct lu_fid *mdt_object_fid(struct mdt_object *o)
 {
         return lu_object_fid(&o->mot_obj.mo_lu);
 }
+
+int mdt_get_disposition(struct ldlm_reply *rep, int flag);
+void mdt_set_disposition(struct mdt_thread_info *info,
+                        struct ldlm_reply *rep, int flag);
 
 int mdt_object_lock(struct mdt_thread_info *,
                     struct mdt_object *,

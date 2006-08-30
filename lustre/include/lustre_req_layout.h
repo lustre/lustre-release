@@ -77,9 +77,11 @@ int req_capsule_get_size(const struct req_capsule *pill,
 void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt);
 
 int req_capsule_has_field(const struct req_capsule *pill,
-                          const struct req_msg_field *field);
+                          const struct req_msg_field *field,
+                          enum req_location loc);
 int req_capsule_field_present(const struct req_capsule *pill,
-                              const struct req_msg_field *field);
+                              const struct req_msg_field *field,
+                              enum req_location loc);
 
 int  req_layout_init(void);
 void req_layout_fini(void);
