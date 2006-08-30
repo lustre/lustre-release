@@ -51,11 +51,9 @@ static int seq_client_rpc(struct lu_client_seq *seq,
                           struct lu_range *range,
                           __u32 opc, const char *opcname)
 {
+        int rc, size[2] = { sizeof(struct ptlrpc_body),
+                            sizeof(__u32) };
         struct obd_export *exp = seq->lcs_exp;
-        int repsize[2] = { sizeof(struct ptlrpc_body),
-                           sizeof(struct lu_range) };
-        int rc, reqsize[2] = { sizeof(struct ptlrpc_body),
-                               sizeof(__u32) };
         struct ptlrpc_request *req;
         struct req_capsule pill;
         struct lu_range *ran;
@@ -64,7 +62,7 @@ static int seq_client_rpc(struct lu_client_seq *seq,
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp),
 			      LUSTRE_MDS_VERSION,
-                              SEQ_QUERY, 2, reqsize,
+                              SEQ_QUERY, 2, size,
                               NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
@@ -76,7 +74,8 @@ static int seq_client_rpc(struct lu_client_seq *seq,
         op = req_capsule_client_get(&pill, &RMF_SEQ_OPC);
         *op = opc;
 
-        ptlrpc_req_set_repsize(req, 2, repsize);
+        size[1] = sizeof(struct lu_range);
+        ptlrpc_req_set_repsize(req, 2, size);
 
         if (seq->lcs_type == LUSTRE_SEQ_METADATA) {
                 req->rq_request_portal = (opc == SEQ_ALLOC_SUPER) ?
