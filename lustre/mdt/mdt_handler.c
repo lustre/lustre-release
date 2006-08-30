@@ -638,29 +638,42 @@ free_rdpg:
 
 static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
 {
-        int rc;
+        struct req_capsule      *pill = &info->mti_pill;
+        struct mdt_device       *mdt = info->mti_mdt;
+        struct ptlrpc_request   *req = mdt_info_req(info);
+        int                      rc;
         ENTRY;
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK))
                 RETURN(-EFAULT);
 
         rc = mdt_reint_unpack(info, op);
-        if (rc == 0) {
-                struct ptlrpc_request *req = mdt_info_req(info);
-                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
-                        struct mdt_client_data *mcd;
+        if (rc != 0) 
+                RETURN(rc);
+                
+        /*pack reply*/
+        if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
+                req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
+                                     mdt->mdt_max_mdsize);
+        if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
+                req_capsule_set_size(pill, &RMF_LOGCOOKIES, RCL_SERVER,
+                                     mdt->mdt_max_cookiesize);
+        rc = req_capsule_pack(pill);
+        if (rc != 0)
+                RETURN(rc);
+
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
+                struct mdt_client_data *mcd;
                         
-                        mcd = req->rq_export->exp_mdt_data.med_mcd;
-                        if (mcd->mcd_last_xid == req->rq_xid) {
-                                mdt_reconstruct(info);
-                                RETURN(lustre_msg_get_status(req->rq_repmsg));
-                        } 
-                        DEBUG_REQ(D_HA, req,
-                                  "no reply for RESENT (xid "LPD64")",
-                                  mcd->mcd_last_xid);
-                }
-                rc = mdt_reint_rec(info);
+                mcd = req->rq_export->exp_mdt_data.med_mcd;
+                if (mcd->mcd_last_xid == req->rq_xid) {
+                        mdt_reconstruct(info);
+                        RETURN(lustre_msg_get_status(req->rq_repmsg));
+                } 
+                DEBUG_REQ(D_HA, req, "no reply for RESENT (xid "LPD64")",
+                                     mcd->mcd_last_xid);
         }
+        rc = mdt_reint_rec(info);
 
         RETURN(rc);
 }

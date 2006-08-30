@@ -423,13 +423,6 @@ int mdt_open(struct mdt_thread_info *info)
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PAUSE_OPEN | OBD_FAIL_ONCE,
                          (obd_timeout + 1) / 4);
 
-        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
-                             mdt->mdt_max_mdsize);
-
-        result = req_capsule_pack(&info->mti_pill);
-        if (result)
-                RETURN(result);
-
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
         ma->ma_lmm_size = mdt->mdt_max_mdsize;
         ma->ma_need = MA_INODE | MA_LOV;

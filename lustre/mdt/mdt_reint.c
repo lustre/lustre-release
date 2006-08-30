@@ -137,11 +137,6 @@ static int mdt_reint_setattr(struct mdt_thread_info *info)
         DEBUG_REQ(D_INODE, req, "setattr "DFID" %x", PFID(rr->rr_fid1),
                   (unsigned int)attr->la_valid);
 
-        /*pack the reply*/
-        rc = req_capsule_pack(&info->mti_pill);
-        if (rc)
-                RETURN(rc);
-        /* MDS_CHECK_RESENT */
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_EX;
 
@@ -198,10 +193,6 @@ static int mdt_reint_create(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
-        rc = req_capsule_pack(&info->mti_pill);
-        if (rc)
-                RETURN(rc);
-        
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
                 RETURN(-ESTALE);
 
@@ -245,14 +236,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 
         DEBUG_REQ(D_INODE, req, "unlink "DFID"/%s\n", PFID(rr->rr_fid1),
                   rr->rr_name);
-        /*pack the reply*/
-        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
-                             info->mti_mdt->mdt_max_mdsize);
-        req_capsule_set_size(&info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
-                             info->mti_mdt->mdt_max_cookiesize);
-        rc = req_capsule_pack(&info->mti_pill);
-        if (rc)
-                RETURN(rc);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
                 RETURN(-ENOENT);
@@ -336,10 +319,6 @@ static int mdt_reint_link(struct mdt_thread_info *info)
 
         DEBUG_REQ(D_INODE, req, "link original "DFID" to "DFID" %s",
                   PFID(rr->rr_fid1), PFID(rr->rr_fid2), rr->rr_name);
-
-        rc = req_capsule_pack(&info->mti_pill);
-        if (rc)
-                RETURN(rc);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
                 RETURN(-ENOENT);
@@ -468,22 +447,11 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                   PFID(rr->rr_fid1), rr->rr_name,
                   PFID(rr->rr_fid2), rr->rr_tgt);
 
-        /* MDS_CHECK_RESENT here */
-
         rc = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
         if (rc == 1) {
         /* if (rr->rr_name[0] == 0) {*/
                 RETURN(mdt_reint_rename_tgt(info));
         }
-
-        /*pack reply*/
-        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD, RCL_SERVER,
-                             info->mti_mdt->mdt_max_mdsize);
-        req_capsule_set_size(&info->mti_pill, &RMF_LOGCOOKIES, RCL_SERVER,
-                             info->mti_mdt->mdt_max_cookiesize);
-        rc = req_capsule_pack(&info->mti_pill);
-        if (rc)
-                RETURN(rc);
 
         lh_newp = &info->mti_lh[MDT_LH_NEW];
 
