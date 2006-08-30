@@ -265,30 +265,30 @@ struct mdt_thread_info {
          * for req-layout interface.
          */
         struct req_capsule         mti_pill;
-        /*
-         * buffer for mdt_statfs().
-         *
-         * XXX this is probably huge overkill, because statfs is not that
-         * frequent.
-         */
-
-        struct kstatfs             mti_sfs;
-
-        /* temporary stuff used by thread */
-        struct lu_fid              mti_tmp_fid1;
-        struct lu_fid              mti_tmp_fid2;
-        ldlm_policy_data_t         mti_policy;
-        struct ldlm_res_id         mti_res_id;
-        union {
-                struct obd_uuid    uuid;
-                char               ns_name[48];
-        } mti_u;
         /* transaction number of current request */
         __u64                      mti_transno;
         __u32                      mti_trans_flags;
 
-        /* readdir hint structure */
-        struct lu_rdpg             mti_rdpg;
+
+        /* temporary stuff used by thread to save stack comsuption.
+         * if something is in a union, make sure they do not conflict */ 
+
+        struct lu_fid              mti_tmp_fid1;
+        struct lu_fid              mti_tmp_fid2;
+        ldlm_policy_data_t         mti_policy;    /* for mdt_object_lock()   */
+        struct ldlm_res_id         mti_res_id;    /* for mdt_object_lock()   */
+        union {
+                struct obd_uuid    uuid;          /* for mdt_seq_init_cli()  */
+                char               ns_name[48];   /* for mdt_init0()         */
+                struct lustre_cfg_bufs bufs;      /* for mdt_stack_fini()    */
+                struct kstatfs     ksfs;          /* for mdt_statfs()        */
+                struct {
+                        /* for mdt_readpage()      */
+                        struct lu_rdpg     mti_rdpg; 
+                        /* for mdt_sendpage()      */
+                        struct l_wait_info mti_wait_info; 
+                } rdpg;
+        } mti_u;
 };
 /*
  * Info allocated per-transaction.

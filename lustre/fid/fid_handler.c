@@ -471,7 +471,8 @@ int seq_server_init(struct lu_server_seq *seq,
 {
         int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
         
-        struct ptlrpc_service_conf seq_md_conf = {
+        static  struct ptlrpc_service_conf seq_conf;
+        seq_conf = (typeof(seq_conf)) {
                 .psc_nbufs = MDS_NBUFS,
                 .psc_bufsize = MDS_BUFSIZE,
                 .psc_max_req_size = SEQ_MAXREQSIZE,
@@ -484,17 +485,7 @@ int seq_server_init(struct lu_server_seq *seq,
                 .psc_num_threads = SEQ_NUM_THREADS,
                 .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
         };
-        struct ptlrpc_service_conf seq_dt_conf = {
-                .psc_nbufs = MDS_NBUFS,
-                .psc_bufsize = MDS_BUFSIZE,
-                .psc_max_req_size = SEQ_MAXREQSIZE,
-                .psc_max_reply_size = SEQ_MAXREPSIZE,
-                .psc_req_portal = SEQ_DATA_PORTAL,
-                .psc_rep_portal = OSC_REPLY_PORTAL,
-                .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT,
-                .psc_num_threads = SEQ_NUM_THREADS,
-                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
-        };
+
         ENTRY;
 
 	LASSERT(dev != NULL);
@@ -535,7 +526,7 @@ int seq_server_init(struct lu_server_seq *seq,
         if (rc)
 		GOTO(out, rc);
 
-        seq->lss_md_service = ptlrpc_init_svc_conf(&seq_md_conf,
+        seq->lss_md_service = ptlrpc_init_svc_conf(&seq_conf,
                                                    seq_req_handle,
                                                    LUSTRE_SEQ_NAME"_md",
                                                    seq->lss_proc_entry,
@@ -551,8 +542,19 @@ int seq_server_init(struct lu_server_seq *seq,
          * we want to have really cluster-wide sequences space. This is why we
          * start only one sequence controller which manages space.
          */
+        seq_conf = (typeof(seq_conf)) {
+                .psc_nbufs = MDS_NBUFS,
+                .psc_bufsize = MDS_BUFSIZE,
+                .psc_max_req_size = SEQ_MAXREQSIZE,
+                .psc_max_reply_size = SEQ_MAXREPSIZE,
+                .psc_req_portal = SEQ_DATA_PORTAL,
+                .psc_rep_portal = OSC_REPLY_PORTAL,
+                .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_num_threads = SEQ_NUM_THREADS,
+                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
+        };
         if (is_srv) {
-                seq->lss_dt_service =  ptlrpc_init_svc_conf(&seq_dt_conf,
+                seq->lss_dt_service =  ptlrpc_init_svc_conf(&seq_conf,
                                                             seq_req_handle,
                                                             LUSTRE_SEQ_NAME"_dt",
                                                             seq->lss_proc_entry,

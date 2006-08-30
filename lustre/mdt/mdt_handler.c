@@ -166,8 +166,8 @@ static int mdt_statfs(struct mdt_thread_info *info)
                 osfs = req_capsule_server_get(&info->mti_pill,&RMF_OBD_STATFS);
                 /* XXX max_age optimisation is needed here. See mds_statfs */
                 result = next->md_ops->mdo_statfs(info->mti_ctxt,
-                                                  next, &info->mti_sfs);
-                statfs_pack(osfs, &info->mti_sfs);
+                                                  next, &info->mti_u.ksfs);
+                statfs_pack(osfs, &info->mti_u.ksfs);
         }
 
         RETURN(result);
@@ -503,7 +503,7 @@ static int mdt_sendpage(struct mdt_thread_info *info,
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct ptlrpc_bulk_desc *desc;
-        struct l_wait_info       lwi;
+        struct l_wait_info      *lwi = &info->mti_u.rdpg.mti_wait_info;
         int                      tmpcount;
         int                      tmpsize;
         int                      i;
@@ -529,8 +529,8 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
                 GOTO(abort_bulk, rc);
 
-        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, NULL);
-        rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), &lwi);
+        *lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, NULL);
+        rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), lwi);
         LASSERT (rc == 0 || rc == -ETIMEDOUT);
 
         if (rc == 0) {
@@ -561,7 +561,7 @@ out:
 static int mdt_readpage(struct mdt_thread_info *info)
 {
         struct mdt_object *object = info->mti_object;
-        struct lu_rdpg    *rdpg = &info->mti_rdpg;
+        struct lu_rdpg    *rdpg = &info->mti_u.rdpg.mti_rdpg;
         struct mdt_body   *reqbody;
         struct mdt_body   *repbody;
         int                rc;
@@ -2009,7 +2009,10 @@ static void mdt_stop_ptlrpc_service(struct mdt_device *m)
 static int mdt_start_ptlrpc_service(struct mdt_device *m)
 {
         int rc;
-        struct ptlrpc_service_conf conf = {
+        static struct ptlrpc_service_conf conf;
+        ENTRY;
+
+        conf = (typeof(conf)) {
                 .psc_nbufs            = MDS_NBUFS,
                 .psc_bufsize          = MDS_BUFSIZE,
                 .psc_max_req_size     = MDS_MAXREQSIZE,
@@ -2025,8 +2028,6 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                                        MDT_MAX_THREADS),
                 .psc_ctx_tags      = LCT_MD_THREAD
         };
-
-        ENTRY;
 
         m->mdt_ldlm_client = &m->mdt_md_dev.md_lu_dev.ld_obd->obd_ldlm_client;
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
@@ -2114,13 +2115,19 @@ err_mdt_svc:
 static void mdt_stack_fini(const struct lu_context *ctx,
                            struct mdt_device *m, struct lu_device *top)
 {
-        struct lu_device *d = top, *n;
-        struct lustre_cfg_bufs bufs;
-        struct lustre_cfg     *lcfg;
+        struct lu_device        *d = top, *n;
+        struct lustre_cfg_bufs  *bufs;
+        struct lustre_cfg       *lcfg;
+        struct mdt_thread_info  *info;
+        ENTRY;
 
+        info = lu_context_key_get(ctx, &mdt_thread_key);
+        LASSERT(info != NULL);
+
+        bufs = &info->mti_u.bufs;
         /* process cleanup */
-        lustre_cfg_bufs_reset(&bufs, NULL);
-        lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+        lustre_cfg_bufs_reset(bufs, NULL);
+        lcfg = lustre_cfg_new(LCFG_CLEANUP, bufs);
         if (!lcfg) {
                 CERROR("Cannot alloc lcfg!\n");
                 return;
@@ -2628,7 +2635,6 @@ static int mdt_destroy_export(struct obd_export *export)
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
         struct mdt_thread_info *info;
         struct lu_context ctxt;
-        struct md_attr ma;
         int rc = 0;
         ENTRY;
 
@@ -2646,6 +2652,7 @@ static int mdt_destroy_export(struct obd_export *export)
 
         info = lu_context_key_get(&ctxt, &mdt_thread_key);
         LASSERT(info != NULL);
+        memset(info, 0, sizeof *info);
         /* Close any open files (which may also cause orphan unlinking). */
         spin_lock(&med->med_open_lock);
         while (!list_empty(&med->med_open_head)) {
@@ -2659,7 +2666,7 @@ static int mdt_destroy_export(struct obd_export *export)
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
-                mdt_mfd_close(&ctxt, mdt, mfd, &ma);
+                mdt_mfd_close(&ctxt, mdt, mfd, &info->mti_attr);
                 /* TODO: if we close the unlinked file,
                  * we need to remove it's objects from OST */
                 mdt_object_put(&ctxt, o);
