@@ -51,7 +51,8 @@ enum ma_valid {
         MA_INODE = (1 << 0),
         MA_LOV   = (1 << 1),
         MA_COOKIE = (1 << 2),
-        MA_FLAGS = (1 << 3)
+        MA_FLAGS = (1 << 3),
+        MA_LMV   = (1 << 4)
 };
 
 struct md_attr {
@@ -61,6 +62,8 @@ struct md_attr {
         struct lu_attr          ma_attr;
         struct lov_mds_md      *ma_lmm;
         int                     ma_lmm_size;
+        struct lmv_mds_md      *ma_lmv;
+        int                     ma_lmv_size;
         struct llog_cookie     *ma_cookie;
         int                     ma_cookie_size;
 };

@@ -582,6 +582,7 @@ static int mdt_readpage(struct mdt_thread_info *info)
          * reqbody->nlink contains number bytes to read.
          */
         rdpg->rp_hash = reqbody->size;
+        rdpg->rp_hash_end = -1;
         if ((__u64)rdpg->rp_hash != reqbody->size) {
                 CERROR("Invalid hash: %#llx != %#llx\n",
                        (__u64)rdpg->rp_hash, reqbody->size);

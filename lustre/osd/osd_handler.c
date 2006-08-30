@@ -1071,7 +1071,7 @@ static int osd_xattr_del(const struct lu_context *ctxt, struct dt_object *dt,
 static int osd_dir_page_build(const struct lu_context *ctx, int first,
                               void *area, int nob,
                               struct dt_it_ops  *iops, struct dt_it *it,
-                              __u32 *start, __u32 *end,
+                              __u32 *start, __u32 *end, __u32 hash_end,
                               struct lu_dirent **last)
 {
         int result;
@@ -1082,6 +1082,7 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
         if (first) {
                 area += sizeof (struct lu_dirpage);
                 nob  -= sizeof (struct lu_dirpage);
+                
         }
 
         LASSERT(nob > sizeof *ent);
@@ -1116,6 +1117,8 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
                         *last = ent;
                         ent = (void *)ent + recsize;
                         nob -= recsize;
+                        if (hash >= hash_end)
+                                break;
                         result = iops->next(ctx, it);
                 } else {
                         /*
@@ -1181,7 +1184,8 @@ static int osd_readpage(const struct lu_context *ctxt,
                         rc = osd_dir_page_build(ctxt, !i, kmap(pg),
                                                 min_t(int, nob, CFS_PAGE_SIZE),
                                                 iops, it,
-                                                &hash_start, &hash_end, &last);
+                                                &hash_start, &hash_end, 
+                                                rdpg->rp_hash_end, &last);
                         if (rc != 0 || i == rdpg->rp_npages - 1)
                                 last->lde_reclen = 0;
                         kunmap(pg);
@@ -1374,8 +1378,6 @@ static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
                             struct dt_rec *rec, const struct dt_key *key)
 {
         struct osd_object *obj = osd_dt_obj(dt);
-
-
         int rc;
 
         ENTRY;

@@ -195,6 +195,51 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
 }
 EXPORT_SYMBOL(obdo_from_inode);
 
+/*FIXME: Just copy from obdo_from_inode*/
+void obdo_from_la(struct obdo *dst, struct lu_attr *la, obd_flag valid)
+{
+        obd_flag newvalid = 0;
+
+        if (valid & OBD_MD_FLATIME) {
+                dst->o_atime = la->la_atime;
+                newvalid |= OBD_MD_FLATIME;
+        }
+        if (valid & OBD_MD_FLMTIME) {
+                dst->o_mtime = la->la_mtime;
+                newvalid |= OBD_MD_FLMTIME;
+        }
+        if (valid & OBD_MD_FLCTIME) {
+                dst->o_ctime = la->la_ctime;
+                newvalid |= OBD_MD_FLCTIME;
+        }
+        if (valid & OBD_MD_FLSIZE) {
+                dst->o_size = la->la_size;
+                newvalid |= OBD_MD_FLSIZE;
+        }
+        if (valid & OBD_MD_FLBLOCKS) {  /* allocation of space (x512 bytes) */
+                dst->o_blocks = la->la_blocks;
+                newvalid |= OBD_MD_FLBLOCKS;
+        }
+        if (valid & OBD_MD_FLTYPE) {
+                dst->o_mode = (la->la_mode & S_IALLUGO)|(la->la_mode & S_IFMT);
+                newvalid |= OBD_MD_FLTYPE;
+        }
+        if (valid & OBD_MD_FLMODE) {
+                dst->o_mode = (la->la_mode & S_IFMT)|(la->la_mode & S_IALLUGO);
+                newvalid |= OBD_MD_FLMODE;
+        }
+        if (valid & OBD_MD_FLUID) {
+                dst->o_uid = la->la_uid;
+                newvalid |= OBD_MD_FLUID;
+        }
+        if (valid & OBD_MD_FLGID) {
+                dst->o_gid = la->la_gid;
+                newvalid |= OBD_MD_FLGID;
+        }
+        dst->o_valid |= newvalid;
+}
+EXPORT_SYMBOL(obdo_from_la);
+
 void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 {
         valid &= src->o_valid;

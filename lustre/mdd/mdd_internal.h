@@ -64,6 +64,7 @@ struct mdd_thread_info {
         struct lu_attr    mti_la;
         struct lu_attr    mti_la_for_fix;
         struct lov_mds_md mti_lmm;
+        struct obd_info   mti_oi;
 };
 
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
@@ -81,7 +82,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    const struct md_create_spec *spec, struct lu_attr *la);
 
 int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
-               void *md, int *md_size, int need_locked);
+               void *md, int *md_size, int need_locked, const char *name);
+
 int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma);
 
@@ -158,8 +160,7 @@ static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
         return lu_object_fid(&obj->mod_obj.mo_lu);
 }
 
-static inline umode_t mdd_object_type(const struct lu_context *ctxt,
-                                      const struct mdd_object *obj)
+static inline umode_t mdd_object_type(const struct mdd_object *obj)
 {
         return lu_object_attr(&obj->mod_obj.mo_lu);
 }

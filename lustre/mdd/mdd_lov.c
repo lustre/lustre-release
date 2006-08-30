@@ -73,19 +73,23 @@ static int mdd_lov_update(struct obd_device *host,
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                  char *dev)
 {
-        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg_bufs *bufs;
         struct lustre_cfg      *lcfg;
         struct obd_device      *obd;
         int rc;
         ENTRY;
 
-        lustre_cfg_bufs_reset(&bufs, MDD_OBD_NAME);
-        lustre_cfg_bufs_set_string(&bufs, 1, MDD_OBD_TYPE);
-        lustre_cfg_bufs_set_string(&bufs, 2, MDD_OBD_UUID);
-        lustre_cfg_bufs_set_string(&bufs, 3, (char*)dev/*MDD_OBD_PROFILE*/);
-        lustre_cfg_bufs_set_string(&bufs, 4, (char*)dev);
+        OBD_ALLOC_PTR(bufs);
+        if (!bufs)
+                RETURN(-ENOMEM);
+        lustre_cfg_bufs_reset(bufs, MDD_OBD_NAME);
+        lustre_cfg_bufs_set_string(bufs, 1, MDD_OBD_TYPE);
+        lustre_cfg_bufs_set_string(bufs, 2, MDD_OBD_UUID);
+        lustre_cfg_bufs_set_string(bufs, 3, (char*)dev/*MDD_OBD_PROFILE*/);
+        lustre_cfg_bufs_set_string(bufs, 4, (char*)dev);
 
-        lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
+        lcfg = lustre_cfg_new(LCFG_ATTACH, bufs);
+        OBD_FREE_PTR(bufs);
         if (!lcfg)
                 RETURN(-ENOMEM);
 
@@ -118,7 +122,7 @@ lcfg_cleanup:
 
 int mdd_fini_obd(const struct lu_context *ctxt, struct mdd_device *mdd)
 {
-        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg_bufs *bufs;
         struct lustre_cfg      *lcfg;
         struct obd_device      *obd;
         int rc;
@@ -126,9 +130,13 @@ int mdd_fini_obd(const struct lu_context *ctxt, struct mdd_device *mdd)
 
         obd = mdd2obd_dev(mdd);
         LASSERT(obd);
-
-        lustre_cfg_bufs_reset(&bufs, MDD_OBD_NAME);
-        lcfg = lustre_cfg_new(LCFG_ATTACH, &bufs);
+        
+        OBD_ALLOC_PTR(bufs);
+        if (!bufs)
+                RETURN(-ENOMEM);
+        lustre_cfg_bufs_reset(bufs, MDD_OBD_NAME);
+        lcfg = lustre_cfg_new(LCFG_ATTACH, bufs);
+        OBD_FREE_PTR(bufs);
         if (!lcfg)
                 RETURN(-ENOMEM);
 
@@ -146,7 +154,7 @@ lcfg_cleanup:
 }
 
 int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
-               void *md, int *md_size, int need_locked)
+               void *md, int *md_size, int need_locked, const char *name)
 {
         struct dt_object *next;
         int rc = 0;
@@ -155,8 +163,7 @@ int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
         if (need_locked)
                 mdd_read_lock(ctxt, obj);
         next = mdd_object_child(obj);
-        rc = next->do_ops->do_xattr_get(ctxt, next, md, *md_size,
-                                        MDS_LOV_MD_NAME);
+        rc = next->do_ops->do_xattr_get(ctxt, next, md, *md_size, name);
         /*
          * XXX: handling of -ENODATA, the right way is to have ->do_md_get()
          * exported by dt layer.
@@ -188,9 +195,7 @@ static int mdd_lov_set_stripe_md(const struct lu_context *ctxt,
         int rc;
         ENTRY;
 
-        LASSERT(S_ISDIR(mdd_object_type(ctxt, obj)) ||
-                S_ISREG(mdd_object_type(ctxt, obj)));
-
+        LASSERT(S_ISDIR(mdd_object_type(obj)) || S_ISREG(mdd_object_type(obj)));
         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, lov_exp, 0, &lsm, lmmp);
         if (rc)
                 RETURN(rc);
@@ -212,7 +217,7 @@ static int mdd_lov_set_dir_md(const struct lu_context *ctxt,
         ENTRY;
 
         /*TODO check permission*/
-        LASSERT(S_ISDIR(mdd_object_type(ctxt, obj)));
+        LASSERT(S_ISDIR(mdd_object_type(obj)));
         lum = (struct lov_user_md*)lmmp;
 
         /* if { size, offset, count } = { 0, -1, 0 } (i.e. all default
@@ -241,7 +246,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
         umode_t mode;
         ENTRY;
 
-        mode = mdd_object_type(ctxt, child);
+        mode = mdd_object_type(child);
         if (S_ISREG(mode) && lmm_size > 0) {
                 if (set_stripe) {
                         rc = mdd_lov_set_stripe_md(ctxt, child, lmmp, lmm_size,
@@ -255,7 +260,8 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
                         struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
                         int size = sizeof(lmm);
                         /*Get parent dir stripe and set*/
-                        rc = mdd_get_md(ctxt, pobj, &lmm, &size, 0);
+                        rc = mdd_get_md(ctxt, pobj, &lmm, &size, 0, 
+                                        MDS_LOV_MD_NAME);
                         if (rc > 0) {
                                 rc = mdd_xattr_set_txn(ctxt, child, lmm, size,
                                                MDS_LOV_MD_NAME, 0, handle);
@@ -283,50 +289,6 @@ static obd_id mdd_lov_create_id(const struct lu_fid *fid)
         return ((fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid));
 }
 
-/*FIXME: it is just the helper function used by mdd lov obd to
- * get attr from obdo, copied from obdo_from_inode*/
-static void obdo_from_la(struct obdo *dst, struct lu_attr *la, obd_flag valid)
-{
-        obd_flag newvalid = 0;
-
-        if (valid & OBD_MD_FLATIME) {
-                dst->o_atime = la->la_atime;
-                newvalid |= OBD_MD_FLATIME;
-        }
-        if (valid & OBD_MD_FLMTIME) {
-                dst->o_mtime = la->la_mtime;
-                newvalid |= OBD_MD_FLMTIME;
-        }
-        if (valid & OBD_MD_FLCTIME) {
-                dst->o_ctime = la->la_ctime;
-                newvalid |= OBD_MD_FLCTIME;
-        }
-        if (valid & OBD_MD_FLSIZE) {
-                dst->o_size = la->la_size;
-                newvalid |= OBD_MD_FLSIZE;
-        }
-        if (valid & OBD_MD_FLBLOCKS) {  /* allocation of space (x512 bytes) */
-                dst->o_blocks = la->la_blocks;
-                newvalid |= OBD_MD_FLBLOCKS;
-        }
-        if (valid & OBD_MD_FLTYPE) {
-                dst->o_mode = (la->la_mode & S_IALLUGO)|(la->la_mode & S_IFMT);
-                newvalid |= OBD_MD_FLTYPE;
-        }
-        if (valid & OBD_MD_FLMODE) {
-                dst->o_mode = (la->la_mode & S_IFMT)|(la->la_mode & S_IALLUGO);
-                newvalid |= OBD_MD_FLMODE;
-        }
-        if (valid & OBD_MD_FLUID) {
-                dst->o_uid = la->la_uid;
-                newvalid |= OBD_MD_FLUID;
-        }
-        if (valid & OBD_MD_FLGID) {
-                dst->o_gid = la->la_gid;
-                newvalid |= OBD_MD_FLGID;
-        }
-        dst->o_valid |= newvalid;
-}
 
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
@@ -336,7 +298,6 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         struct obd_device       *obd = mdd2obd_dev(mdd);
         struct obd_export       *lov_exp = obd->u.mds.mds_osc_exp;
         struct obdo             *oa;
-        struct obd_info          oinfo = { { { 0 } } };
         struct lov_stripe_md    *lsm = NULL;
         const void              *eadata = spec->u.sp_ea.eadata;
 /*      int                      eadatasize  = spec->u.sp_ea.eadatalen;*/
@@ -381,7 +342,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                                 GOTO(out_oa, rc = -ENOMEM);
 
                         rc = mdd_get_md(ctxt, parent, __lmm,
-                                        &returned_lmm_size, 1);
+                                        &returned_lmm_size, 1, MDS_LOV_MD_NAME);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
                                                    lov_exp, 0, &lsm, __lmm);
@@ -412,6 +373,10 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
          *attr is in charged by OST.
          */
         if (la->la_size && la->la_valid & LA_SIZE) {
+                struct obd_info          *oinfo = &mdd_ctx_info(ctxt)->mti_oi;
+
+                memset(oinfo, 0, sizeof(*oinfo));
+
                 oa->o_size = la->la_size;
                 obdo_from_la(oa, la, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
@@ -422,10 +387,10 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 oa->o_fid = lu_object_fid(mdd2lu_obj(child))->f_seq;
                 oa->o_generation = lu_object_fid(mdd2lu_obj(child))->f_oid;
                 oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
-                oinfo.oi_oa = oa;
-                oinfo.oi_md = lsm;
+                oinfo->oi_oa = oa;
+                oinfo->oi_md = lsm;
 
-                rc = obd_setattr(lov_exp, &oinfo, NULL);
+                rc = obd_setattr(lov_exp, oinfo, NULL);
                 if (rc) {
                         CERROR("error setting attrs for "DFID": rc %d\n",
                                PFID(mdo2fid(child)), rc);

@@ -40,6 +40,7 @@
 #include <lprocfs_status.h>
 
 #include <linux/ldiskfs_fs.h>
+#include <lustre_mds.h>
 #include <lu_object.h>
 #include <md_object.h>
 #include <dt_object.h>
@@ -247,13 +248,13 @@ static int mdd_may_delete(const struct lu_context *ctxt,
                 RETURN(-EPERM);
 
         if (is_dir) {
-                if (!S_ISDIR(mdd_object_type(ctxt, cobj)))
+                if (!S_ISDIR(mdd_object_type(cobj)))
                         RETURN(-ENOTDIR);
 
                 if (lu_fid_eq(mdo2fid(cobj), &mdd->mdd_root_fid))
                         RETURN(-EBUSY);
 
-        } else if (S_ISDIR(mdd_object_type(ctxt, cobj)))
+        } else if (S_ISDIR(mdd_object_type(cobj)))
                         RETURN(-EISDIR);
 
         if (mdd_is_dead_obj(pobj))
@@ -280,9 +281,25 @@ static int __mdd_lmm_get(const struct lu_context *ctxt,
         int rc;
 
         LASSERT(ma->ma_lmm != NULL && ma->ma_lmm_size > 0);
-        rc = mdd_get_md(ctxt, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size, 0);
+        rc = mdd_get_md(ctxt, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size, 0, 
+                        MDS_LOV_MD_NAME);
         if (rc > 0) {
                 ma->ma_valid |= MA_LOV;
+                rc = 0;
+        }
+        RETURN(rc);
+}
+
+/* get lmv EA only*/
+static int __mdd_lmv_get(const struct lu_context *ctxt,
+                         struct mdd_object *mdd_obj, struct md_attr *ma)
+{
+        int rc;
+
+        rc = mdd_get_md(ctxt, mdd_obj, ma->ma_lmv, &ma->ma_lmv_size, 0,
+                        MDS_LMV_MD_NAME);
+        if (rc > 0) {
+                ma->ma_valid |= MA_LMV;
                 rc = 0;
         }
         RETURN(rc);
@@ -299,13 +316,15 @@ static int mdd_attr_get_internal(const struct lu_context *ctxt,
                 rc = __mdd_iattr_get(ctxt, mdd_obj, ma);
 
         if (rc == 0 && ma->ma_need & MA_LOV) {
-                __u32 mode;
-
-                mode = lu_object_attr(mdd2lu_obj(mdd_obj));
-                if (S_ISREG(mode) || S_ISDIR(mode))
+                if (S_ISREG(mdd_object_type(mdd_obj)) || 
+                    S_ISDIR(mdd_object_type(mdd_obj)))
                         rc = __mdd_lmm_get(ctxt, mdd_obj, ma);
         }
-
+        if (rc == 0 && ma->ma_need & MA_LMV) {
+                if (S_ISDIR(mdd_object_type(mdd_obj)))
+                        rc = __mdd_lmv_get(ctxt, mdd_obj, ma);
+        }
+        
         CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n",
                         rc, ma->ma_valid);
         RETURN(rc);
@@ -828,14 +847,15 @@ static int mdd_attr_set(const struct lu_context *ctxt,
                 RETURN(PTR_ERR(handle));
         /*TODO: add lock here*/
         /* start a log jounal handle if needed */
-        if (S_ISREG(mdd_object_type(ctxt, mdd_obj)) &&
+        if (S_ISREG(mdd_object_type(mdd_obj)) &&
             ma->ma_attr.la_valid & (LA_UID | LA_GID)) {
                 max_size = mdd_lov_mdsize(ctxt, mdd);
                 OBD_ALLOC(lmm, max_size);
                 if (lmm == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
-                rc = mdd_get_md(ctxt, mdd_obj, lmm, &lmm_size, 1);
+                rc = mdd_get_md(ctxt, mdd_obj, lmm, &lmm_size, 1, 
+                                MDS_LOV_MD_NAME);
 
                 if (rc < 0)
                         GOTO(cleanup, rc);
@@ -869,7 +889,7 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         if (rc == 0 && ma->ma_valid & MA_LOV) {
                 umode_t mode;
 
-                mode = mdd_object_type(ctxt, mdd_obj);
+                mode = mdd_object_type(mdd_obj);
                 if (S_ISREG(mode) || S_ISDIR(mode)) {
                         /*TODO check permission*/
                         rc = mdd_lov_set_md(ctxt, NULL, mdd_obj, ma->ma_lmm,
@@ -1036,7 +1056,7 @@ static int mdd_link_sanity_check(const struct lu_context *ctxt,
         rc = mdd_may_create(ctxt, tgt_obj, NULL);
         if (rc)
                 RETURN(rc);
-        if (S_ISDIR(mdd_object_type(ctxt, src_obj)))
+        if (S_ISDIR(mdd_object_type(src_obj)))
                 RETURN(-EPERM);
 
         if (mdd_is_immutable(src_obj) || mdd_is_append(src_obj))
@@ -1132,7 +1152,7 @@ static int __mdd_finish_unlink(const struct lu_context *ctxt,
         if (rc == 0 && ma->ma_attr.la_nlink == 0) {
                 if (atomic_read(&obj->mod_count) == 0) {
                         mdd_set_dead_obj(obj);
-                        if (S_ISREG(mdd_object_type(ctxt, obj))) {
+                        if (S_ISREG(mdd_object_type(obj))) {
                                 rc = __mdd_lmm_get(ctxt, obj, ma);
                                 if (ma->ma_valid & MA_LOV)
                                         rc = mdd_unlink_log(ctxt,
@@ -1160,7 +1180,7 @@ static int mdd_unlink_sanity_check(const struct lu_context *ctxt,
         if (rc)
                 RETURN(rc);
 
-        if (S_ISDIR(mdd_object_type(ctxt, cobj)) &&
+        if (S_ISDIR(mdd_object_type(cobj)) &&
             dt_try_as_dir(ctxt, dt_cobj)) {
                 rc = mdd_dir_is_empty(ctxt, cobj);
                 if (rc != 0)
@@ -1307,7 +1327,7 @@ static int mdd_rename_sanity_check(const struct lu_context *ctxt,
         int rc = 0, src_is_dir, tgt_is_dir;
         ENTRY;
 
-        src_is_dir = S_ISDIR(mdd_object_type(ctxt, sobj));
+        src_is_dir = S_ISDIR(mdd_object_type(sobj));
         rc = mdd_may_delete(ctxt, src_pobj, sobj, src_is_dir);
         if (rc)
                 GOTO(out, rc);
@@ -1329,7 +1349,7 @@ static int mdd_rename_sanity_check(const struct lu_context *ctxt,
         if (rc)
                 GOTO(out, rc);
 
-        tgt_is_dir = S_ISDIR(mdd_object_type(ctxt, tobj));
+        tgt_is_dir = S_ISDIR(mdd_object_type(tobj));
         if (tgt_is_dir && mdd_dir_is_empty(ctxt, tobj))
                 GOTO(out, rc = -ENOTEMPTY);
 out:
@@ -1348,7 +1368,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         struct mdd_object *mdd_sobj = mdd_object_find(ctxt, mdd, lf);
         struct mdd_object *mdd_tobj = NULL;
         struct thandle *handle;
-        int is_dir = S_ISDIR(mdd_object_type(ctxt, mdd_sobj));
+        int is_dir = S_ISDIR(mdd_object_type(mdd_sobj));
         int rc;
         ENTRY;
 
@@ -1419,7 +1439,7 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
         if (mdd_is_dead_obj(mdd_obj))
                 RETURN(-ESTALE);
         mdd_read_lock(ctxt, mdd_obj);
-        if (S_ISDIR(mdd_object_type(ctxt, mdd_obj)) && dt_try_as_dir(ctxt, dir))
+        if (S_ISDIR(mdd_object_type(mdd_obj)) && dt_try_as_dir(ctxt, dir))
                 rc = dir->do_index_ops->dio_lookup(ctxt, dir, rec, key);
         else
                 rc = -ENOTDIR;
@@ -2004,7 +2024,7 @@ static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
         next = mdd_object_child(mdd_obj);
 
         mdd_read_lock(ctxt, mdd_obj);
-        if (S_ISDIR(mdd_object_type(ctxt, mdd_obj)) &&
+        if (S_ISDIR(mdd_object_type(mdd_obj)) &&
             dt_try_as_dir(ctxt, next))
                 rc = next->do_ops->do_readpage(ctxt, next, rdpg);
         else

@@ -355,8 +355,16 @@ static int cml_create(const struct lu_context *ctx, struct md_object *mo_p,
 {
         int rc;
         ENTRY;
+
+#ifdef SPLIT_ENABLE
+        rc = cml_try_to_split(ctx, mo_p);
+        if (rc)
+                RETURN(rc);
+#endif
         rc = mdo_create(ctx, md_object_next(mo_p), child_name,
                         md_object_next(mo_c), spec, ma);
+
+
         RETURN(rc);
 }
 

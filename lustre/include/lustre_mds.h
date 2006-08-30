@@ -98,6 +98,7 @@ int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
 #define IOC_REQUEST_MAX_NR               35
 
 #define MDS_LOV_MD_NAME "trusted.lov"
+#define MDS_LMV_MD_NAME "trusted.lmv"
 #define MDD_OBD_NAME    "mdd_obd"
 #define MDD_OBD_UUID    "mdd_obd_uuid"
 #define MDD_OBD_TYPE    "mds"
