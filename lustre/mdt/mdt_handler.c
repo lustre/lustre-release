@@ -342,13 +342,6 @@ static int mdt_getattr(struct mdt_thread_info *info)
         LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
         ENTRY;
 
-        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD,
-                             RCL_SERVER, info->mti_mdt->mdt_max_mdsize);
-
-        result = req_capsule_pack(&info->mti_pill);
-        if (result)
-                RETURN(result);
-
         result = mdt_getattr_internal(info, obj);
         mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         RETURN(result);
@@ -467,12 +460,6 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
 
         ENTRY;
 
-        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD,
-                             RCL_SERVER, info->mti_mdt->mdt_max_mdsize);
-
-        rc = req_capsule_pack(&info->mti_pill);
-        if (rc)
-                RETURN(rc);
         rc = mdt_getattr_name_lock(info, lhc, MDS_INODELOCK_UPDATE, NULL);
         if (lustre_handle_is_used(&lhc->mlh_lh)) {
                 ldlm_lock_decref(&lhc->mlh_lh, lhc->mlh_mode);
@@ -1113,9 +1100,18 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
         else
                 result = 0;
 
-        if (result == 0 && (flags & HABEO_REFERO))
-                result = req_capsule_pack(pill);
+        if (result == 0 && (flags & HABEO_REFERO)) {
+                struct mdt_device       *mdt = info->mti_mdt;
+                /*pack reply*/
+                if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
+                        req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
+                                             mdt->mdt_max_mdsize);
+                if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
+                        req_capsule_set_size(pill, &RMF_LOGCOOKIES, RCL_SERVER,
+                                             mdt->mdt_max_cookiesize);
 
+                result = req_capsule_pack(pill);
+        }
         RETURN(result);
 }
 
@@ -1508,7 +1504,7 @@ static struct mdt_it_flavor {
         },
         [MDT_IT_GETATTR]  = {
                 .it_fmt   = &RQF_LDLM_INTENT_GETATTR,
-                .it_flags = 0,
+                .it_flags = HABEO_REFERO,
                 .it_act   = mdt_intent_getattr
         },
         [MDT_IT_READDIR]  = {
@@ -1518,7 +1514,7 @@ static struct mdt_it_flavor {
         },
         [MDT_IT_LOOKUP]   = {
                 .it_fmt   = &RQF_LDLM_INTENT_GETATTR,
-                .it_flags = 0,
+                .it_flags = HABEO_REFERO,
                 .it_act   = mdt_intent_getattr
         },
         [MDT_IT_UNLINK]   = {
@@ -1568,12 +1564,6 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                 RETURN(-EINVAL);
         }
 
-        req_capsule_set_size(&info->mti_pill, &RMF_MDT_MD,
-                             RCL_SERVER, mdt->mdt_max_mdsize);
-
-        rc = req_capsule_pack(&info->mti_pill);
-        if (rc)
-                RETURN(rc);
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         mdt_set_disposition(info, ldlm_rep, DISP_IT_EXECD);
 
@@ -2921,8 +2911,8 @@ static struct mdt_handler mdt_mds_ops[] = {
 DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
 DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
-DEF_MDT_HNDL_F(HABEO_CORPUS             , GETATTR,      mdt_getattr),
-DEF_MDT_HNDL_F(HABEO_CORPUS             , GETATTR_NAME, mdt_getattr_name),
+DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR,      mdt_getattr),
+DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR_NAME, mdt_getattr_name),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO|MUTABOR,
                                           SETXATTR,     mdt_setxattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),

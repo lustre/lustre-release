@@ -1155,7 +1155,8 @@ static int __mdd_finish_unlink(const struct lu_context *ctxt,
         if (rc == 0 && ma->ma_attr.la_nlink == 0) {
                 if (atomic_read(&obj->mod_count) == 0) {
                         mdd_set_dead_obj(obj);
-                        if (S_ISREG(mdd_object_type(obj))) {
+                        if (ma->ma_need & MA_LOV && 
+                            S_ISREG(mdd_object_type(obj))) {
                                 rc = __mdd_lmm_get(ctxt, obj, ma);
                                 if (ma->ma_valid & MA_LOV)
                                         rc = mdd_unlink_log(ctxt,

@@ -577,6 +577,7 @@ void mdt_mfd_close(const struct lu_context *ctxt,
         mdt_mfd_free(mfd);
 
         mo_close(ctxt, mdt_object_child(o), ma);
+        EXIT;
 }
 
 int mdt_close(struct mdt_thread_info *info)
