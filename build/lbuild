@@ -546,13 +546,13 @@ build_kernel()
     done
 
     $RPMBUILD $targets -bb lustre-kernel-2.4.spec \
-        --define "_tmpdir $TMPDIR" \
+        --define "_tmppath $TMPDIR" \
         --define "_topdir $TOPDIR" || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
 
     if (( $DO_SRC )) ; then
         $RPMBUILD -bs lustre-kernel-2.4.spec \
-            --define "_tmpdir $TMPDIR" \
+            --define "_tmppath $TMPDIR" \
             --define "_topdir $TOPDIR" || \
             fatal 1 "Error building .src.rpm."
     fi
@@ -578,7 +578,7 @@ build_lustre()
     ./configure "--with-linux=${LINUX}" ${CONFIGURE_FLAGS}
 
     $RPMBUILD $targets -bb build/lustre.spec \
-        --define "_tmpdir $TMPDIR" \
+        --define "_tmppath $TMPDIR" \
         --define "_topdir $TOPDIR" || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
 
