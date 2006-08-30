@@ -36,7 +36,7 @@
 #include <md_object.h>
 
 struct cmm_device {
-        struct md_device      cmm_md_dev;
+        struct md_device       cmm_md_dev;
         /* device flags, taken from enum cmm_flags */
         __u32                 cmm_flags;
         /* underlaying device in MDS stack, usually MDD */
@@ -118,6 +118,10 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *);
 
+#ifdef HAVE_SPLIT_SUPPORT
+/* cmm_split.c */
+int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo);
+#endif
 #endif /* __KERNEL__ */
 #endif /* _CMM_INTERNAL_H */
 
