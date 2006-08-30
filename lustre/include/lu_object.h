@@ -810,6 +810,8 @@ static inline const __u32 lu_object_attr(const struct lu_object *o)
 struct lu_rdpg {
         /* input params, should be filled out by mdt */
         __u32                   rp_hash;        /* hash */
+        __u32                   rp_hash_end;    /* hash end, means reading the 
+                                                   entry until this hash*/
         int                     rp_count;       /* count in bytes       */
         int                     rp_npages;      /* number of pages      */
         struct page           **rp_pages;       /* pointers to pages    */
