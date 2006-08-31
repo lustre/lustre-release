@@ -180,8 +180,10 @@ static void cmm_device_shutdown(const struct lu_context *ctx,
         spin_unlock(&cm->cmm_tgt_guard);
 
         ls = cm->cmm_md_dev.md_lu_dev.ld_site;
-        fld_client_fini(ls->ls_client_fld);
-        OBD_FREE_PTR(ls->ls_client_fld);
+        if (ls->ls_client_fld != NULL) {
+                fld_client_fini(ls->ls_client_fld);
+                OBD_FREE_PTR(ls->ls_client_fld);
+        }
         ls->ls_client_fld = NULL;
 
         EXIT;
