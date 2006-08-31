@@ -1451,6 +1451,16 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
         RETURN(rc);
 }
 
+static void mdd_init_attr(struct lu_attr *attr)
+{
+        time_t now = CURRENT_SECONDS;
+
+        attr->la_valid |= (LA_ATIME | LA_MTIME | LA_CTIME);
+        attr->la_atime = now;
+        attr->la_mtime = now;
+        attr->la_ctime = now;
+}
+
 static int __mdd_object_initialize(const struct lu_context *ctxt,
                                    const struct lu_fid *pfid,
                                    struct mdd_object *child,
@@ -1465,6 +1475,7 @@ static int __mdd_object_initialize(const struct lu_context *ctxt,
          *  (2) maybe, the child attributes should be set in OSD when creation.
          */
 
+        mdd_init_attr(&ma->ma_attr);
         rc = mdd_attr_set_internal(ctxt, child, &ma->ma_attr, handle);
         if (rc != 0)
                 RETURN(rc);
