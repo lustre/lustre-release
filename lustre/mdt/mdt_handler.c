@@ -1899,20 +1899,24 @@ static int mdt_seq_init_cli(const struct lu_context *ctx,
                         OBD_ALLOC_PTR(ls->ls_client_seq);
 
                         if (ls->ls_client_seq != NULL) {
+                                char *uuid;
+
+                                OBD_ALLOC(uuid, MAX_OBD_NAME + 5);
+                                if (!uuid)
+                                        RETURN(-ENOMEM);
+
+                                snprintf(uuid, MAX_OBD_NAME + 5, "ctl-%s",
+                                                        mdc->obd_name);
+
                                 rc = seq_client_init(ls->ls_client_seq,
-                                                     mdc->obd_name,
-                                                     ls->ls_client_exp,
+                                                     uuid, ls->ls_client_exp,
                                                      LUSTRE_SEQ_METADATA);
+                                OBD_FREE(uuid, MAX_OBD_NAME + 5);
                         } else
                                 rc = -ENOMEM;
 
                         if (rc)
                                 RETURN(rc);
-                        /*FIXME: add client seq to mdc obd for 
-                         *allocating fid in create slave objects,
-                         *may need better way to fix it,
-                         *why not init client seq in cmm_add_mdc?*/
-                        mdc->u.cli.cl_seq = ls->ls_client_seq;
 
                         LASSERT(ls->ls_server_seq != NULL);
 

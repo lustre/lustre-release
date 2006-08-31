@@ -101,6 +101,10 @@ static int mdc_add_obd(const struct lu_context *ctx,
                                mdc->obd_name, rc);
                 } else {
                         desc->cl_exp = class_conn2export(conn);
+
+                        rc = obd_fid_init(desc->cl_exp);
+                        if (rc)
+                                CERROR("fid init error %d \n", rc);
                 }
         }
 
@@ -116,7 +120,11 @@ static int mdc_del_obd(struct mdc_device *mc)
 
         CDEBUG(D_CONFIG, "disconnect from %s\n",
                class_exp2obd(desc->cl_exp)->obd_name);
-
+ 
+        rc = obd_fid_fini(desc->cl_exp);
+        if (rc)
+                CERROR("fid init error %d \n", rc);
+       
         rc = obd_disconnect(desc->cl_exp);
         if (rc) {
                 CERROR("target %s disconnect error %d\n",

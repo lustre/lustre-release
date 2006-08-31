@@ -1118,6 +1118,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
 static int mdc_fid_init(struct obd_export *exp)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
+        char *uuid;
         int rc;
         ENTRY;
 
@@ -1125,10 +1126,16 @@ static int mdc_fid_init(struct obd_export *exp)
         if (cli->cl_seq == NULL)
                 RETURN(-ENOMEM);
 
+        OBD_ALLOC(uuid, MAX_OBD_NAME + 5);
+        if (uuid == NULL)
+                GOTO(out_free_seq, rc = -ENOMEM);
+
+        snprintf(uuid, MAX_OBD_NAME + 5, "mgr-%s",
+                        exp->exp_obd->obd_name);
         /* init client side sequence-manager */
-        rc = seq_client_init(cli->cl_seq,
-                             exp->exp_obd->obd_name,
+        rc = seq_client_init(cli->cl_seq, uuid,
                              exp, LUSTRE_SEQ_METADATA);
+        OBD_FREE(uuid, MAX_OBD_NAME + 5);
         if (rc)
                 GOTO(out_free_seq, rc);
 
