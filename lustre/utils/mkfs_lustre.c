@@ -1565,6 +1565,7 @@ int main(int argc, char *argv[])
                 goto out;
         }
 
+#ifndef TUNEFS /* mkfs.lustre */
         if (IS_MDT(ldd)) {
                 ret = mkfs_mdt(&mop);
                 if (ret != 0) {
@@ -1572,6 +1573,7 @@ int main(int argc, char *argv[])
                         goto out;
                 }
         }
+#endif
 
 out:
         loop_cleanup(&mop);
