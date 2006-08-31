@@ -1103,6 +1103,12 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
 
                 recsize = (sizeof *ent + len + 3) & ~3;
                 hash = iops->store(ctx, it);
+                if (hash > hash_end) {
+                        *end = hash_end;
+                        if (first && ent == area)
+                                *start = hash_end;
+                        break;
+                }
                 *end = hash;
                 CDEBUG(D_INODE, "%p %p %d "DFID": %#8.8x (%d)\"%*.*s\"\n",
                        area, ent, nob, PFID(fid), hash, len, len, len, name);
@@ -1117,8 +1123,6 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
                         *last = ent;
                         ent = (void *)ent + recsize;
                         nob -= recsize;
-                        if (hash >= hash_end)
-                                break;
                         result = iops->next(ctx, it);
                 } else {
                         /*
