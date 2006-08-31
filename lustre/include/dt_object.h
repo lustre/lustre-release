@@ -91,10 +91,13 @@ struct dt_device_operations {
                              const struct dt_device *dev,
                              struct dt_device_param *param);
         /*
-         * used for test purposes to set device RO
+         *  handling device state, mostly for tests
          */
-        void  (*dt_ro_set)(const struct lu_context *ctx,
-                           const struct dt_device *dev);
+        void  (*dt_dev_sync)(const struct lu_context *ctx,
+                            struct dt_device *dev);
+        void  (*dt_dev_ro)(const struct lu_context *ctx,
+                          struct dt_device *dev, int sync);
+
 };
 
 struct dt_index_features {

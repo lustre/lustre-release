@@ -247,7 +247,7 @@ struct mdt_thread_info {
         /*
          * Create specification
          */
-        struct md_create_spec mti_spec;
+        struct md_create_spec      mti_spec;
         /*
          * reint record. contains information for reint operations.
          */
@@ -409,12 +409,12 @@ void mdt_dump_lmm(int level, struct lov_mds_md *lmm);
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/
 static inline void mdt_fail_write(const struct lu_context *ctx,
-                                  const struct dt_device *dd, int id)
+                                  struct dt_device *dd, int id)
 {
         if (OBD_FAIL_CHECK(id)) {
                 CERROR(LUSTRE_MDT0_NAME": obd_fail_loc=%x, fail write ops\n",
                        id);
-                dd->dd_ops->dt_ro_set(ctx, dd);
+                dd->dd_ops->dt_dev_ro(ctx, dd, 0);
                 /* We set FAIL_ONCE because we never "un-fail" a device */
                 obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;
         }
