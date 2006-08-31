@@ -564,11 +564,10 @@ static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
         EXIT;
 }
 
-static void osd_dev_sync(const struct lu_context *ctx,
+static void osd_sync(const struct lu_context *ctx,
                         struct dt_device *d)
 {
         struct osd_device *osd = osd_dt_dev(d);
-        int rc = 0;
         ENTRY;
 
         CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_OSD0_NAME);
@@ -576,14 +575,13 @@ static void osd_dev_sync(const struct lu_context *ctx,
         EXIT;
 }
 
-static void osd_dev_ro(const struct lu_context *ctx,
+static void osd_ro(const struct lu_context *ctx,
                       struct dt_device *d, int sync)
 {
         struct thandle *th;
         struct txn_param param = {
                 .tp_credits = 3
         };
-        int rc = 0; 
         ENTRY;
 
         CERROR("*** setting device %s read-only ***\n", LUSTRE_OSD0_NAME);
@@ -593,7 +591,7 @@ static void osd_dev_ro(const struct lu_context *ctx,
                 osd_trans_stop(ctx, th);
         
         if (sync)
-                osd_dev_sync(ctx, d);
+                osd_sync(ctx, d);
         
         lvfs_set_rdonly(lvfs_sbdev(osd_sb(osd_dt_dev(d))));
         EXIT;        
@@ -606,8 +604,8 @@ static struct dt_device_operations osd_dt_ops = {
         .dt_trans_start = osd_trans_start,
         .dt_trans_stop  = osd_trans_stop,
         .dt_conf_get    = osd_conf_get,
-        .dt_dev_sync    = osd_dev_sync,
-        .dt_dev_ro      = osd_dev_ro
+        .dt_sync        = osd_sync,
+        .dt_ro          = osd_ro
 };
 
 static void osd_object_read_lock(const struct lu_context *ctx,

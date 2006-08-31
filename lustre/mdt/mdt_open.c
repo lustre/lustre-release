@@ -572,7 +572,6 @@ int mdt_cross_open(struct mdt_thread_info* info, const struct lu_fid *fid,
 
         rc = lu_object_exists(&o->mot_obj.mo_lu);
         if (rc > 0) {
-                struct mdt_device *mdt = info->mti_mdt;
                 rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);
                 if (rc == 0)
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);

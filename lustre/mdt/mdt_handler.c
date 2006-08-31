@@ -2735,10 +2735,10 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         lu_context_enter(&ctxt);
         switch (cmd) {
         case OBD_IOC_SYNC:
-                dt->dd_ops->dt_dev_sync(&ctxt, dt);
+                dt->dd_ops->dt_sync(&ctxt, dt);
                 break;
         case OBD_IOC_SET_READONLY:
-                dt->dd_ops->dt_dev_ro(&ctxt, dt, 1);
+                dt->dd_ops->dt_ro(&ctxt, dt, 1);
                 break;
         default:
                 CDEBUG(D_INFO, "Trying old MDS iocontrol %x\n", cmd);
