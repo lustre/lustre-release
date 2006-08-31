@@ -402,6 +402,7 @@ int mdt_done_writing(struct mdt_thread_info *info);
 void mdt_shrink_reply(struct mdt_thread_info *info, int offset);
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
                            const struct md_attr *);
+void mdt_reconstruct_open(struct mdt_thread_info *);
 
 void mdt_dump_lmm(int level, struct lov_mds_md *lmm);
 

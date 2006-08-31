@@ -663,8 +663,8 @@ void mdt_fs_cleanup(const struct lu_context *ctx, struct mdt_device *mdt)
 }
 
 /* reconstruction code */
-static inline void mdt_req_from_mcd(struct ptlrpc_request *req,
-                                    struct mdt_client_data *mcd)
+void mdt_req_from_mcd(struct ptlrpc_request *req,
+                      struct mdt_client_data *mcd)
 {
         DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
                   mcd->mcd_last_transno, mcd->mcd_last_result);
@@ -742,16 +742,6 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti)
                 body->valid |= OBD_MD_FLATIME;
 */
         mdt_object_put(mti->mti_ctxt, obj);
-}
-
-static void mdt_reconstruct_open(struct mdt_thread_info *mti)
-{
-        struct ptlrpc_request *req = mdt_info_req(mti);
-        struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
-
-        /*TODO: after open recovery task will be finished */
-
-        mdt_req_from_mcd(req, med->med_mcd);
 }
 
 typedef void (*mdt_reconstructor)(struct mdt_thread_info *mti);
