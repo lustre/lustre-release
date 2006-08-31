@@ -476,7 +476,7 @@ static int lu_device_is_mdt(struct lu_device *d)
         return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdt_lu_ops);
 }
 
-static struct mdt_device *mdt_dev(struct lu_device *d)
+static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {
         LASSERT(lu_device_is_mdt(d));
         return container_of0(d, struct mdt_device, mdt_md_dev.md_lu_dev);
@@ -1228,11 +1228,13 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
 
+#if 0
         if (h->mh_opc != MDS_DISCONNECT &&
             h->mh_opc != MDS_READPAGE &&
             h->mh_opc != LDLM_ENQUEUE) {
                 mdt_finish_reply(info, req->rq_status);
         }
+#endif
         RETURN(result);
 }
 
@@ -1655,9 +1657,9 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         rep->lock_policy_res2 = rc;
 
         mdt_set_disposition(info, rep, DISP_IT_EXECD);
-        
+#if 0        
         mdt_finish_reply(info, rc);
-
+#endif
         RETURN(ELDLM_LOCK_ABORTED);
 }
 
@@ -2717,6 +2719,36 @@ static int mdt_upcall(const struct lu_context *ctx, struct md_device *md,
         RETURN(rc);
 }
 
+static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
+                         void *karg, void *uarg)
+{
+        struct lu_context ctxt; 
+        struct mdt_device *mdt = mdt_dev(exp->exp_obd->obd_lu_dev);
+        struct dt_device *dt = mdt->mdt_bottom;
+        int rc = 0;
+
+        ENTRY;
+        CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
+        rc = lu_context_init(&ctxt, LCT_MD_THREAD);
+        if (rc)
+                RETURN(rc);
+        lu_context_enter(&ctxt);
+        switch (cmd) {
+        case OBD_IOC_SYNC:
+                dt->dd_ops->dt_dev_sync(&ctxt, dt);
+                break;
+        case OBD_IOC_SET_READONLY:
+                dt->dd_ops->dt_dev_ro(&ctxt, dt, 1);
+                break;
+        default:
+                CDEBUG(D_INFO, "Trying old MDS iocontrol %x\n", cmd);
+                rc = -EOPNOTSUPP;
+                break;
+        }
+        lu_context_exit(&ctxt);
+        lu_context_fini(&ctxt);
+        RETURN(rc);
+}
 
 static struct obd_ops mdt_obd_device_ops = {
         .o_owner          = THIS_MODULE,
@@ -2724,6 +2756,7 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_disconnect     = mdt_obd_disconnect,
         .o_init_export    = mdt_init_export,
         .o_destroy_export = mdt_destroy_export,
+        .o_iocontrol      = mdt_iocontrol
 };
 
 static struct lu_device* mdt_device_fini(const struct lu_context *ctx, 

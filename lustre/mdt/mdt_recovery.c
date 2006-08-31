@@ -489,7 +489,6 @@ free:
  * last_rcvd & last_committed update callbacks
  */
 static int mdt_update_last_rcvd(struct mdt_thread_info *mti,
-                                struct dt_device *dt,
                                 struct thandle *th)
 {
         struct mdt_device *mdt = mti->mti_mdt;
@@ -556,6 +555,11 @@ static int mdt_txn_start_cb(const struct lu_context *ctx,
         return 0;
 }
 
+static inline __u64 req_exp_last_xid(struct ptlrpc_request *req)
+{
+        return le64_to_cpu(req->rq_export->exp_mdt_data.med_mcd->mcd_last_xid);
+}
+
 /* Update last_rcvd records with latests transaction data */
 static int mdt_txn_stop_cb(const struct lu_context *ctx,
                            struct thandle *txn, void *cookie)
@@ -563,11 +567,19 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
         struct mdt_device *mdt = cookie;
         struct mdt_txn_info *txi;
         struct mdt_thread_info *mti;
-
+        struct ptlrpc_request *req;
+        
         /* transno in two contexts - for commit_cb and for thread */
         txi = lu_context_key_get(&txn->th_ctx, &mdt_txn_key);
         mti = lu_context_key_get(ctx, &mdt_thread_key);
 
+        /* FIXME: don't handle requests from SEQ/FLD,
+         * should be fixed
+         */
+        if (mti->mti_mdt == NULL) {
+                txi->txi_transno = 0;
+                return 0;
+        }
         /*TODO: checks for recovery cases, see mds_finish_transno */
         spin_lock(&mdt->mdt_transno_lock);
         if (txn->th_result != 0) {
@@ -583,11 +595,27 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
                 if (mti->mti_transno > mdt->mdt_last_transno)
                         mdt->mdt_last_transno = mti->mti_transno;
         }
+        spin_unlock(&mdt->mdt_transno_lock);
+
+        /* filling reply data */
+        req = mdt_info_req(mti);
+
+        /* sometimes the reply message has not been successfully packed */
+        LASSERT(req != NULL && req->rq_repmsg != NULL);
+
+        CDEBUG(D_INODE, "transno = %llu, last_committed = %llu\n",
+               mti->mti_transno, req->rq_export->exp_obd->obd_last_committed);
+
+        spin_lock(&mdt->mdt_transno_lock);
+        req->rq_transno = mti->mti_transno;
+        lustre_msg_set_transno(req->rq_repmsg, mti->mti_transno);
+        target_committed_to_req(req);
+        lustre_msg_set_last_xid(req->rq_repmsg, req_exp_last_xid(req));
         /* save transno for the commit callback */
         txi->txi_transno = mti->mti_transno;
         spin_unlock(&mdt->mdt_transno_lock);
 
-        return 0;//mdt_update_last_rcvd(mti, dev, txn);
+        return mdt_update_last_rcvd(mti, txn);
 }
 
 /* commit callback, need to update last_commited value */

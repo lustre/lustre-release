@@ -174,6 +174,30 @@ int mdt_query_write_access(struct mdt_device *mdt, struct mdt_object *o)
         RETURN(wc);
 }
 
+/* there can be no real transaction so prepare the fake one */
+static void mdt_open_transno(struct mdt_thread_info* info)
+{
+        struct mdt_device *mdt = info->mti_mdt;
+        struct ptlrpc_request *req = mdt_info_req(info);
+
+        if (info->mti_transno != 0)
+                return;
+
+        CDEBUG(D_INODE, "open transno = %llu, last_committed = %llu\n",
+               info->mti_transno,
+               req->rq_export->exp_obd->obd_last_committed);
+
+        spin_lock(&mdt->mdt_transno_lock);
+        info->mti_transno = ++ mdt->mdt_last_transno;
+        req->rq_transno = info->mti_transno;
+        lustre_msg_set_transno(req->rq_repmsg, info->mti_transno);
+        
+        target_committed_to_req(req);
+        
+        spin_unlock(&mdt->mdt_transno_lock);
+        lustre_msg_set_last_xid(req->rq_repmsg, req->rq_xid);
+}
+
 static int mdt_mfd_open(struct mdt_thread_info *info,
                         struct mdt_object *p,
                         struct mdt_object *o,
@@ -208,7 +232,8 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
          */
         if (islnk || (!isreg && !isdir &&
             (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))) {
-                info->mti_trans_flags |= MDT_NONEED_TRANSNO;
+                //info->mti_trans_flags |= MDT_NONEED_TRANSNO;
+                lustre_msg_set_transno(req->rq_repmsg, 0);
                 RETURN(0);
         }
 
@@ -294,9 +319,11 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 spin_unlock(&med->med_open_lock);
 
                 repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+                
+                mdt_open_transno(info);
+
         } else
                 rc = -ENOMEM;
-
         RETURN(rc);
 }
 
@@ -546,9 +573,6 @@ int mdt_cross_open(struct mdt_thread_info* info, const struct lu_fid *fid,
         rc = lu_object_exists(&o->mot_obj.mo_lu);
         if (rc > 0) {
                 struct mdt_device *mdt = info->mti_mdt;
-                spin_lock(&mdt->mdt_transno_lock);
-                info->mti_transno = ++ mdt->mdt_last_transno;
-                spin_unlock(&mdt->mdt_transno_lock);
                 rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma);
                 if (rc == 0)
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
@@ -705,9 +729,6 @@ int mdt_open(struct mdt_thread_info *info)
                         repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
                         GOTO(out_child, result = 0);
                 }
-                spin_lock(&mdt->mdt_transno_lock);
-                info->mti_transno = ++ mdt->mdt_last_transno;
-                spin_unlock(&mdt->mdt_transno_lock);
         }
         /* Try to open it now. */
         result = mdt_mfd_open(info, parent, child, create_flags, 
