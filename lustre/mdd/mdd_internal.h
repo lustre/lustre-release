@@ -29,6 +29,7 @@
 
 #include <asm/semaphore.h>
 #include <md_object.h>
+#include <dt_object.h>
 
 struct dt_device;
 
@@ -38,6 +39,7 @@ struct mdd_device {
         struct obd_device               *mdd_obd_dev;
         struct lu_fid                    mdd_root_fid;
         struct dt_device_param           mdd_dt_conf;
+        struct dt_object                *mdd_orphans;
 };
 
 enum mod_flags {
@@ -58,13 +60,21 @@ struct mdd_object {
         unsigned long     mod_flags;
 };
 
+struct orph_key {
+        /* fid of the object*/
+        struct lu_fid ok_fid;
+        /* type of operation: unlink, truncate */
+        __u32         ok_op;
+};
+
 struct mdd_thread_info {
-        struct txn_param mti_param;
-        struct lu_fid    mti_fid;
+        struct txn_param  mti_param;
+        struct lu_fid     mti_fid;
         struct lu_attr    mti_la;
         struct lu_attr    mti_la_for_fix;
         struct lov_mds_md mti_lmm;
         struct obd_info   mti_oi;
+        struct orph_key   mti_orph_key;
 };
 
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
@@ -101,6 +111,13 @@ void mdd_read_lock(const struct lu_context *ctxt, struct mdd_object *obj);
 void mdd_read_unlock(const struct lu_context *ctxt, struct mdd_object *obj);
 void mdd_write_lock(const struct lu_context *ctxt, struct mdd_object *obj);
 void mdd_write_unlock(const struct lu_context *ctxt, struct mdd_object *obj);
+
+int inline __mdd_orphan_add(const struct lu_context *, struct mdd_object *,
+                            struct thandle *);
+int inline __mdd_orphan_del(const struct lu_context *, struct mdd_object *,
+                            struct thandle *);
+int orph_index_init(const struct lu_context *ctx, struct mdd_device *mdd);
+void orph_index_fini(const struct lu_context *ctx, struct mdd_device *mdd);
 
 extern struct lu_device_operations mdd_lu_ops;
 static inline int lu_device_is_mdd(struct lu_device *d)
