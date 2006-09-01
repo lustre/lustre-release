@@ -2028,7 +2028,7 @@ static int mdd_close(const struct lu_context *ctxt, struct md_object *obj,
 
         mdd_obj = md2mdd_obj(obj);
         mdd_read_lock(ctxt, mdd_obj);
-        rc = __mdd_iattr_get(ctxt, obj, ma);
+        rc = __mdd_iattr_get(ctxt, mdd_obj, ma);
         if (rc)
                 GOTO(out_locked, rc);
 

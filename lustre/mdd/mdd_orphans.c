@@ -147,7 +147,7 @@ void orph_index_fini(const struct lu_context *ctx, struct mdd_device *mdd)
         EXIT;
 }
 
-int inline __mdd_orphan_add(const struct lu_context *ctx,
+int __mdd_orphan_add(const struct lu_context *ctx,
                             struct mdd_object *obj,
                             struct thandle *th)
 {
@@ -155,7 +155,7 @@ int inline __mdd_orphan_add(const struct lu_context *ctx,
         return orph_index_insert(ctx, obj, ORPH_OP_UNLINK, &offset, th);
 }
 
-int inline __mdd_orphan_del(const struct lu_context *ctx,
+int __mdd_orphan_del(const struct lu_context *ctx,
                             struct mdd_object *obj,
                             struct thandle *th)
 {
