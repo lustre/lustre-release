@@ -743,21 +743,7 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
         if (!(la->la_valid & LA_CTIME)) {
                 la->la_ctime = now;
                 la->la_valid |= LA_CTIME;
-        } else
-                /*According to original MDS implementation, it
-                 * will clear ATTR_CTIME_SET flags, but seems
-                 * no sense, should clear ATTR_CTIME? XXX*/
-                la->la_valid &= ~LA_CTIME;
-
-        if (!(la->la_valid & LA_ATIME)) {
-                la->la_atime = now;
-                la->la_valid |= LA_ATIME;
         }
-        if (!(la->la_valid & LA_MTIME)) {
-                la->la_mtime = now;
-                la->la_valid |= LA_MTIME;
-        }
-
 
 #if 0
         /* times */
@@ -1458,16 +1444,6 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
         RETURN(rc);
 }
 
-static void mdd_init_attr(struct lu_attr *attr)
-{
-        time_t now = CURRENT_SECONDS;
-
-        attr->la_valid |= (LA_ATIME | LA_MTIME | LA_CTIME);
-        attr->la_atime = now;
-        attr->la_mtime = now;
-        attr->la_ctime = now;
-}
-
 static int __mdd_object_initialize(const struct lu_context *ctxt,
                                    const struct lu_fid *pfid,
                                    struct mdd_object *child,
@@ -1482,7 +1458,6 @@ static int __mdd_object_initialize(const struct lu_context *ctxt,
          *  (2) maybe, the child attributes should be set in OSD when creation.
          */
 
-        mdd_init_attr(&ma->ma_attr);
         rc = mdd_attr_set_internal(ctxt, child, &ma->ma_attr, handle);
         if (rc != 0)
                 RETURN(rc);
