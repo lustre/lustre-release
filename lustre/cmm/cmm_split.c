@@ -125,6 +125,12 @@ struct cmm_object *cmm_object_find(const struct lu_context *ctxt,
         RETURN(m);
 }
 
+static inline void cmm_object_put(const struct lu_context *ctxt,
+                                  struct cmm_object *o)
+{
+        lu_object_put(ctxt, &o->cmo_obj.mo_lu);
+}
+
 static int cmm_creat_remote_obj(const struct lu_context *ctx, 
                                 struct cmm_device *cmm,
                                 struct lu_fid *fid, struct md_attr *ma)
@@ -143,7 +149,8 @@ static int cmm_creat_remote_obj(const struct lu_context *ctx,
                               spec, ma);
         OBD_FREE_PTR(spec);
 
-        RETURN(0);
+        cmm_object_put(ctx, obj);
+        RETURN(rc);
 }
 
 static int cmm_create_slave_objects(const struct lu_context *ctx,
@@ -157,16 +164,17 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
 
         lmv_size = cmm_md_size(cmm->cmm_tgt_count + 1);
 
+        /* This lmv will be free after finish splitting. */
         OBD_ALLOC(lmv, lmv_size);
         if (!lmv)
                 RETURN(-ENOMEM);
 
-        lmv->mea_master = -1; 
+        lmv->mea_master = -1;
         lmv->mea_magic = MEA_MAGIC_ALL_CHARS;
         lmv->mea_count = cmm->cmm_tgt_count + 1;
 
         lmv->mea_ids[0] = *lf;
-        
+
         rc = cmm_alloc_fid(ctx, cmm, &lmv->mea_ids[1], cmm->cmm_tgt_count);
         if (rc)
                 GOTO(cleanup, rc);
@@ -177,33 +185,60 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
                         GOTO(cleanup, rc);
         }
 
-        rc = mo_xattr_set(ctx, md_object_next(mo), lmv, lmv_size, 
+        rc = mo_xattr_set(ctx, md_object_next(mo), lmv, lmv_size,
                           MDS_LMV_MD_NAME, 0);
+
+        ma->ma_lmv_size = lmv_size;
+        ma->ma_lmv = lmv;
 cleanup:
-        OBD_FREE(lmv, lmv_size);
         RETURN(rc);
 }
 
 static int cmm_send_split_pages(const struct lu_context *ctx, 
-                                struct md_object *mo, struct lu_rdpg *rdpg)
+                                struct md_object *mo, struct lu_rdpg *rdpg, 
+                                struct lu_fid *fid)
 {
-        RETURN(0);
+        struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
+        struct cmm_object *obj;
+        int rc = 0, i;
+        ENTRY;
+
+        obj = cmm_object_find(ctx, cmm, fid);
+        if (IS_ERR(obj))
+                RETURN(PTR_ERR(obj));
+
+        for (i = 0; i < rdpg->rp_npages; i++) {
+                rc = mo_sendpage(ctx, md_object_next(&obj->cmo_obj),
+                                  rdpg->rp_pages[i]);
+                if (rc)
+                        GOTO(cleanup, rc);
+        }
+cleanup:
+        cmm_object_put(ctx, obj);
+        RETURN(rc);
 }
 
 static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
-                             struct lu_rdpg *rdpg)
+                             struct lu_rdpg *rdpg, struct lu_fid *lf)
 {
         struct lu_dirpage *dp;
         __u32 hash_end;
-        int rc;
+        int rc, i;
         ENTRY;
 
+        /* init page with '0' */
+        for (i = 0; i < rdpg->rp_npages; i++) {
+                memset(kmap(rdpg->rp_pages[i]), 0, CFS_PAGE_SIZE);
+                kunmap(rdpg->rp_pages[i]);
+        }
+
+        /* Read splitted page and send them to the slave master */
         do {
                 rc = mo_readpage(ctx, md_object_next(mo), rdpg);
                 if (rc)
                         RETURN(rc);
 
-                rc = cmm_send_split_pages(ctx, mo, rdpg);
+                rc = cmm_send_split_pages(ctx, mo, rdpg, lf);
                 if (rc)
                         RETURN(rc);
 
@@ -218,13 +253,32 @@ static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
 }
 
 static int cmm_remove_entries(const struct lu_context *ctx, 
-                              struct md_object *mo, __u32 start, __u32 end)
+                              struct md_object *mo, struct lu_rdpg *rdpg)
 {
-        RETURN(0);
+        struct lu_dirpage *dp;
+        struct lu_dirent  *ent;
+        int rc = 0, i;
+        ENTRY;
+
+        for (i = 0; i < rdpg->rp_npages; i++) {
+                kmap(rdpg->rp_pages[i]);
+                dp = page_address(rdpg->rp_pages[i]);
+                for (ent = lu_dirent_start(dp); ent != NULL;
+                                  ent = lu_dirent_next(ent)) {
+                        rc = mdo_name_remove(ctx, md_object_next(mo),
+                                             ent->lde_name);
+                        if (rc) {
+                                kunmap(rdpg->rp_pages[i]);
+                                RETURN(rc);
+                        }
+                }
+                kunmap(rdpg->rp_pages[i]);
+        }
+        RETURN(rc);
 }
+
 #define MAX_HASH_SIZE 0x3fffffff
 #define SPLIT_PAGE_COUNT 1
-
 static int cmm_scan_and_split(const struct lu_context *ctx,
                               struct md_object *mo, struct md_attr *ma)
 {
@@ -249,16 +303,17 @@ static int cmm_scan_and_split(const struct lu_context *ctx,
                 if (rdpg->rp_pages[i] == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
         }
-        
+
         hash_segement = MAX_HASH_SIZE / cmm->cmm_tgt_count;
         for (i = 1; i < cmm->cmm_tgt_count; i++) {
+                struct lu_fid *lf = &ma->ma_lmv->mea_ids[i];
+
                 rdpg->rp_hash = i * hash_segement;
                 rdpg->rp_hash_end = rdpg->rp_hash + hash_segement;
-                rc = cmm_split_entries(ctx, mo, rdpg);
+                rc = cmm_split_entries(ctx, mo, rdpg, lf);
                 if (rc)
                         GOTO(cleanup, rc);
-                rc = cmm_remove_entries(ctx, mo, rdpg->rp_hash, 
-                                        rdpg->rp_hash_end);
+                rc = cmm_remove_entries(ctx, mo, rdpg);
                 if (rc)
                         GOTO(cleanup, rc);
         }
@@ -305,7 +360,11 @@ int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo)
 
         /* step3: scan and split the object */
         rc = cmm_scan_and_split(ctx, mo, ma);
+
 cleanup:
+        if (ma->ma_lmv_size && ma->ma_lmv)
+                OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);
+        
         OBD_FREE_PTR(ma);
 
         RETURN(rc);

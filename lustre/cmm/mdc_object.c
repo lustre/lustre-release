@@ -236,10 +236,28 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
         RETURN(rc);
 }
 
+#ifdef HAVE_SPLIT_SUPPORT
+static int mdc_sendpage(const struct lu_context *ctx, struct md_object *mo,
+                        const struct page *page)
+{
+        struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
+        int rc;
+        ENTRY;
+
+        rc = md_sendpage(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
+                         page);
+
+        RETURN(rc);
+}
+#endif
+
 static struct md_object_operations mdc_mo_ops = {
         .moo_object_create  = mdc_object_create,
         .moo_ref_add        = mdc_ref_add,
         .moo_ref_del        = mdc_ref_del,
+#ifdef HAVE_SPLIT_SUPPORT
+        .moo_sendpage      = mdc_sendpage,
+#endif
 };
 
 /* md_dir_operations */

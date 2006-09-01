@@ -611,6 +611,13 @@ const struct req_format RQF_MDS_READPAGE =
                         mdt_body_only, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_READPAGE);
 
+#ifdef HAVE_SPLIT_SUPPORT
+const struct req_format RQF_MDS_WRITEPAGE =
+        DEFINE_REQ_FMT0("MDS_WRITEPAGE",
+                        mdt_body_only, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_WRITEPAGE);
+#endif
+
 #if !defined(__REQ_LAYOUT_USER__)
 
 int req_layout_init(void)

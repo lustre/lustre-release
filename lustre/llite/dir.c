@@ -393,22 +393,6 @@ static loff_t ll_llseek(struct file *filp, loff_t off, int whence)
         return default_llseek(filp, off, whence);
 }
 
-static struct lu_dirent *lu_dirent_start(struct lu_dirpage *dp)
-{
-        return dp->ldp_entries;
-}
-
-static struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
-{
-        struct lu_dirent *next;
-
-        if (ent->lde_reclen != 0)
-                next = ((void *)ent) + le16_to_cpu(ent->lde_reclen);
-        else
-                next = NULL;
-        return next;
-}
-
 int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 {
         struct inode         *inode = filp->f_dentry->d_inode;

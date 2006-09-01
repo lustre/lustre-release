@@ -62,7 +62,7 @@ struct md_attr {
         struct lu_attr          ma_attr;
         struct lov_mds_md      *ma_lmm;
         int                     ma_lmm_size;
-        struct lmv_mds_md      *ma_lmv;
+        struct lmv_stripe_md   *ma_lmv;
         int                     ma_lmv_size;
         struct llog_cookie     *ma_cookie;
         int                     ma_cookie_size;
@@ -111,6 +111,12 @@ struct md_object_operations {
 
         int (*moo_readpage)(const struct lu_context *, struct md_object *,
                             const struct lu_rdpg *);
+#ifdef HAVE_SPLIT_SUPPORT
+        int (*moo_writepage)(const struct lu_context *, struct md_object *,
+                            const struct page *page);
+        int (*moo_sendpage)(const struct lu_context *, struct md_object *,
+                            const struct page*);
+#endif
         int (*moo_readlink)(const struct lu_context *ctxt,
                             struct md_object *obj,
                             void *buf, int buf_len);
@@ -317,6 +323,22 @@ static inline int mo_readpage(const struct lu_context *cx, struct md_object *m,
         LASSERT(m->mo_ops->moo_readpage);
         return m->mo_ops->moo_readpage(cx, m, rdpg);
 }
+
+#ifdef HAVE_SPLIT_SUPPORT
+static inline int mo_writepage(const struct lu_context *cx, struct md_object *m,
+                               const struct page *pg)
+{
+        LASSERT(m->mo_ops->moo_writepage);
+        return m->mo_ops->moo_writepage(cx, m, pg);
+}
+
+static inline int mo_sendpage(const struct lu_context *cx, struct md_object *m,
+                              const struct page *pg)
+{
+        LASSERT(m->mo_ops->moo_sendpage);
+        return m->mo_ops->moo_sendpage(cx, m, pg);
+}
+#endif
 
 static inline int mo_object_create(const struct lu_context *cx,
                                    struct md_object *m,

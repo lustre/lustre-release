@@ -92,6 +92,8 @@ extern int obd_race_state;
 #define OBD_FAIL_MDS_SETXATTR_NET        0x132
 #define OBD_FAIL_MDS_SETXATTR            0x133
 #define OBD_FAIL_MDS_SETXATTR_WRITE      0x134
+#define OBD_FAIL_MDS_WRITEPAGE_NET       0x135
+#define OBD_FAIL_MDS_WRITEPAGE_PACK      0x136
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201

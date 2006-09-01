@@ -294,6 +294,22 @@ struct lu_dirpage {
         struct lu_dirent ldp_entries[0];
 };
 
+static inline struct lu_dirent *lu_dirent_start(struct lu_dirpage *dp)
+{
+        return dp->ldp_entries;
+}
+
+static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
+{
+        struct lu_dirent *next;
+
+        if (ent->lde_reclen != 0)
+                next = ((void *)ent) + le16_to_cpu(ent->lde_reclen);
+        else
+                next = NULL;
+        return next;
+}
+
 #define MEA_MAGIC_LAST_CHAR      0xb2221ca1
 #define MEA_MAGIC_ALL_CHARS      0xb222a11c
 
@@ -813,6 +829,7 @@ typedef enum {
         MDS_QUOTACTL     = 48,
         MDS_GETXATTR     = 49,
         MDS_SETXATTR     = 50,
+        MDS_WRITEPAGE     = 51,
         MDS_LAST_OPC
 } mds_cmd_t;
 
