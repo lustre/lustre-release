@@ -75,6 +75,7 @@ struct ll_rpc_opcode {
         { MDS_QUOTACTL,     "mds_quotactl" },
         { MDS_GETXATTR,     "mds_getxattr" },
         { MDS_SETXATTR,     "mds_setxattr" },
+        { MDS_WRITEPAGE,     "mds_writepage" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },
