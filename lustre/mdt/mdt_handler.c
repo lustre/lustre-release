@@ -586,7 +586,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
                 rc = mdo_name_insert(info->mti_ctxt, 
                                      md_object_next(&object->mot_obj),
                                      ent->lde_name, lf, 0);
-                /*FIXME: add cross_flags*/
+                /* FIXME: add cross_flags */
                 if (rc) {
                         kunmap(page);
                         RETURN(rc);
