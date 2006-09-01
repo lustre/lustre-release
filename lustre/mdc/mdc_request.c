@@ -1130,8 +1130,9 @@ static int mdc_fid_init(struct obd_export *exp)
         if (uuid == NULL)
                 GOTO(out_free_seq, rc = -ENOMEM);
 
-        snprintf(uuid, MAX_OBD_NAME + 5, "mgr-%s",
-                        exp->exp_obd->obd_name);
+        snprintf(uuid, MAX_OBD_NAME + 5, "srv-%s",
+                 exp->exp_obd->obd_name);
+
         /* init client side sequence-manager */
         rc = seq_client_init(cli->cl_seq, uuid,
                              exp, LUSTRE_SEQ_METADATA);
