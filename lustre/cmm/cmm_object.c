@@ -382,12 +382,13 @@ static int cml_create_data(const struct lu_context *ctx,
 }
 
 static int cml_link(const struct lu_context *ctx, struct md_object *mo_p,
-                    struct md_object *mo_s, const char *name)
+                    struct md_object *mo_s, const char *name,
+                    struct md_attr *ma)
 {
         int rc;
         ENTRY;
-        rc = mdo_link(ctx, md_object_next(mo_p),
-                      md_object_next(mo_s), name);
+        rc = mdo_link(ctx, md_object_next(mo_p), md_object_next(mo_s),
+                      name, ma);
         RETURN(rc);
 }
 
@@ -680,7 +681,8 @@ static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
 }
 
 static int cmr_link(const struct lu_context *ctx, struct md_object *mo_p,
-                    struct md_object *mo_s, const char *name)
+                    struct md_object *mo_s, const char *name,
+                    struct md_attr *ma)
 {
         int rc;
         ENTRY;

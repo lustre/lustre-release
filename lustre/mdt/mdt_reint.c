@@ -309,6 +309,7 @@ static int mdt_reint_link(struct mdt_thread_info *info)
 {
         struct mdt_reint_record *rr = &info->mti_rr;
         struct ptlrpc_request   *req = mdt_info_req(info);
+        struct md_attr          *ma = &info->mti_attr;
         struct mdt_object       *ms;
         struct mdt_object       *mp;
         struct mdt_lock_handle  *lhs;
@@ -350,7 +351,7 @@ static int mdt_reint_link(struct mdt_thread_info *info)
                        OBD_FAIL_MDS_REINT_LINK_WRITE);
 
         rc = mdo_link(info->mti_ctxt, mdt_object_child(mp),
-                      mdt_object_child(ms), rr->rr_name);
+                      mdt_object_child(ms), rr->rr_name, ma);
         GOTO(out_unlock_target, rc);
 
 out_unlock_target:
