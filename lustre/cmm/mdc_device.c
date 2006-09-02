@@ -55,10 +55,11 @@ static int mdc_add_obd(const struct lu_context *ctx,
                        struct mdc_device *mc, struct lustre_cfg *cfg)
 {
         struct mdc_cli_desc *desc = &mc->mc_desc;
-        struct obd_device *mdc, *mdt;
+        struct obd_device *mdc;
         const char *srv = lustre_cfg_string(cfg, 0);
         const char *uuid_str = lustre_cfg_string(cfg, 1);
         const char *index = lustre_cfg_string(cfg, 2);
+        const char *mdc_uuid_str = lustre_cfg_string(cfg, 4);
         char *p;
         int rc = 0;
 
@@ -72,16 +73,11 @@ static int mdc_add_obd(const struct lu_context *ctx,
                 RETURN(-EINVAL);
         }
 
-        /* find local MDT obd to get group uuid */
-        mdt = class_name2obd(srv);
-        if (mdt == NULL) {
-                CERROR("No such OBD %s\n", srv);
-                LBUG();
-        }
         obd_str2uuid(&desc->cl_srv_uuid, uuid_str);
+        obd_str2uuid(&desc->cl_cli_uuid, mdc_uuid_str);
         /* try to find MDC OBD connected to the needed MDT */
         mdc = class_find_client_obd(&desc->cl_srv_uuid, LUSTRE_MDC_NAME,
-                                    &mdt->obd_uuid);
+                                    &desc->cl_cli_uuid);
         if (!mdc) {
                 CERROR("Cannot find MDC OBD connected to %s\n", uuid_str);
                 rc = -ENOENT;
@@ -94,7 +90,8 @@ static int mdc_add_obd(const struct lu_context *ctx,
                 CDEBUG(D_CONFIG, "connect to %s(%s)\n",
                        mdc->obd_name, mdc->obd_uuid.uuid);
 
-                rc = obd_connect(ctx, conn, mdc, &mdt->obd_uuid, NULL);
+                
+                rc = obd_connect(ctx, conn, mdc, &mdc->obd_uuid, NULL);
 
                 if (rc) {
                         CERROR("target %s connect error %d\n",

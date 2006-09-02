@@ -39,6 +39,8 @@ struct mdc_cli_desc {
         struct lustre_handle     cl_conn;
         /* uuid of remote MDT to connect */
         struct obd_uuid          cl_srv_uuid;
+        /* mdc uuid */
+        struct obd_uuid          cl_cli_uuid;
         /* export of mdc obd */
         struct obd_export        *cl_exp;
 };

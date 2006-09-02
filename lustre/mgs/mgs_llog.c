@@ -654,11 +654,12 @@ static int record_lmv_setup(struct obd_device *obd, struct llog_handle *llh,
 
 static inline int record_mdc_add(struct obd_device *obd,
                                  struct llog_handle *llh,
-                                 char *logname, char *uuid,
-                                 char *index, char *gen)
+                                 char *logname, char *mdcuuid,
+                                 char *mdtuuid, char *index,
+                                 char *gen)
 {
         return record_base(obd,llh,logname,0,LCFG_ADD_MDC,
-                           uuid,index,gen,0);
+                           mdtuuid,index,gen,mdcuuid);
 }
 
 static inline int record_lov_add(struct obd_device *obd,
@@ -1194,7 +1195,8 @@ static int mgs_write_log_mdc_to_lmv(struct obd_device *obd, struct fs_db *fsdb,
         rc = record_setup(obd, llh, mdcname, mti->mti_uuid, nodeuuid, 0, 0);
         rc = mgs_write_log_failnids(obd, mti, llh, mdcname);
         snprintf(index, sizeof(index), "%d", mti->mti_stripe_index);
-        rc = record_mdc_add(obd, llh, lmvname, mti->mti_uuid, index, "1");
+        rc = record_mdc_add(obd, llh, lmvname, mdcuuid, mti->mti_uuid,
+                            index, "1");
         rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname,
                            "add mdc"); 
         rc = record_end_log(obd, &llh);
@@ -1237,11 +1239,11 @@ static int mgs_write_log_mdc_to_mdt(struct obd_device *obd, struct fs_db *fsdb,
                        libcfs_nid2str(mti->mti_nids[i]));
                 rc = record_add_uuid(obd, llh, mti->mti_nids[i], nodeuuid);
         }
-        rc = record_attach(obd, llh, mdcname, LUSTRE_MDC_NAME, mdtuuid);
+        rc = record_attach(obd, llh, mdcname, LUSTRE_MDC_NAME, mdcuuid);
         rc = record_setup(obd, llh, mdcname, mti->mti_uuid, nodeuuid, 0, 0);
         rc = mgs_write_log_failnids(obd, mti, llh, mdcname);
         snprintf(index, sizeof(index), "%d", idx);
-        rc = record_mdc_add(obd, llh, logname, mti->mti_uuid /*mdcname*/,
+        rc = record_mdc_add(obd, llh, logname, mdcuuid, mti->mti_uuid,
                             index, "1");
         rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add mdc"); 
         rc = record_end_log(obd, &llh);

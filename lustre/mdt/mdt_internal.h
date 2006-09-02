@@ -283,7 +283,7 @@ struct mdt_thread_info {
         ldlm_policy_data_t         mti_policy;    /* for mdt_object_lock()   */
         struct ldlm_res_id         mti_res_id;    /* for mdt_object_lock()   */
         union {
-                struct obd_uuid    uuid;          /* for mdt_seq_init_cli()  */
+                struct obd_uuid    uuid[2];       /* for mdt_seq_init_cli()  */
                 char               ns_name[48];   /* for mdt_init0()         */
                 struct lustre_cfg_bufs bufs;      /* for mdt_stack_fini()    */
                 struct kstatfs     ksfs;          /* for mdt_statfs()        */

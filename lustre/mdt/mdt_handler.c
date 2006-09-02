@@ -1965,9 +1965,9 @@ static int mdt_seq_init_cli(const struct lu_context *ctx,
                             struct lustre_cfg *cfg)
 {
         struct lu_site    *ls = m->mdt_md_dev.md_lu_dev.ld_site;
-        struct obd_device *mdc;
-        struct obd_uuid   *uuidp;
-        char              *uuid_str;
+        struct obd_device *mdc, *mdt;
+        struct obd_uuid   *uuidp, *mdcuuidp;
+        char              *uuid_str, *mdc_uuid_str;
         int               rc;
         int               index;
         struct mdt_thread_info *info;
@@ -1975,7 +1975,8 @@ static int mdt_seq_init_cli(const struct lu_context *ctx,
         ENTRY;
 
         info = lu_context_key_get(ctx, &mdt_thread_key);
-        uuidp = &info->mti_u.uuid;
+        uuidp = &info->mti_u.uuid[0];
+        mdcuuidp = &info->mti_u.uuid[1];
 
         LASSERT(index_string);
 
@@ -1991,8 +1992,11 @@ static int mdt_seq_init_cli(const struct lu_context *ctx,
                 RETURN(0);
 
         uuid_str = lustre_cfg_string(cfg, 1);
+        mdc_uuid_str = lustre_cfg_string(cfg, 4);
         obd_str2uuid(uuidp, uuid_str);
-        mdc = class_find_client_obd(uuidp, LUSTRE_MDC_NAME, NULL);
+        obd_str2uuid(mdcuuidp, mdc_uuid_str);
+
+        mdc = class_find_client_obd(uuidp, LUSTRE_MDC_NAME, mdcuuidp);
         if (!mdc) {
                 CERROR("can't find controller MDC by uuid %s\n",
                        uuid_str);
