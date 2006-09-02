@@ -1053,11 +1053,13 @@ static int mdd_link_sanity_check(const struct lu_context *ctxt,
 }
 
 static int mdd_link(const struct lu_context *ctxt, struct md_object *tgt_obj,
-                    struct md_object *src_obj, const char *name)
+                    struct md_object *src_obj, const char *name,
+                    struct md_attr *ma)
 {
         struct mdd_object *mdd_tobj = md2mdd_obj(tgt_obj);
         struct mdd_object *mdd_sobj = md2mdd_obj(src_obj);
         struct mdd_device *mdd = mdo2mdd(src_obj);
+        struct lu_attr    *la_copy = &mdd_ctx_info(ctxt)->mti_la_for_fix;
         struct thandle *handle;
         int rc;
         ENTRY;
@@ -1077,6 +1079,15 @@ static int mdd_link(const struct lu_context *ctxt, struct md_object *tgt_obj,
                                      name, handle);
         if (rc == 0)
                 __mdd_ref_add(ctxt, mdd_sobj, handle);
+
+        *la_copy = ma->ma_attr;
+        la_copy->la_valid = LA_CTIME;
+        rc = mdd_attr_set_internal(ctxt, mdd_sobj, la_copy, handle);
+        if (rc)
+                GOTO(out, rc);
+
+        la_copy->la_valid = LA_CTIME | LA_MTIME;
+        rc = mdd_attr_set_internal(ctxt, mdd_tobj, la_copy, handle);
 
 out:
         mdd_unlock2(ctxt, mdd_tobj, mdd_sobj);
@@ -1194,6 +1205,7 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *mdd_cobj = md2mdd_obj(cobj);
+        struct lu_attr    *la_copy = &mdd_ctx_info(ctxt)->mti_la_for_fix;
         struct thandle    *handle;
         int rc;
         ENTRY;
@@ -1215,12 +1227,23 @@ static int mdd_unlink(const struct lu_context *ctxt, struct md_object *pobj,
                 GOTO(cleanup, rc);
 
         __mdd_ref_del(ctxt, mdd_cobj, handle);
+        *la_copy = ma->ma_attr;
         if (S_ISDIR(lu_object_attr(&cobj->mo_lu))) {
                 /* unlink dot */
                 __mdd_ref_del(ctxt, mdd_cobj, handle);
                 /* unlink dotdot */
                 __mdd_ref_del(ctxt, mdd_pobj, handle);
+        } else {
+                la_copy->la_valid = LA_CTIME;
+                rc = mdd_attr_set_internal(ctxt, mdd_cobj, la_copy, handle);
+                if (rc)
+                        GOTO(cleanup, rc);
         }
+
+        la_copy->la_valid = LA_CTIME | LA_MTIME;
+        rc = mdd_attr_set_internal(ctxt, mdd_pobj, la_copy, handle);
+        if (rc)
+                GOTO(cleanup, rc);
 
         rc = __mdd_finish_unlink(ctxt, mdd_cobj, ma, handle);
 
@@ -1364,6 +1387,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
         struct mdd_object *mdd_sobj = mdd_object_find(ctxt, mdd, lf);
         struct mdd_object *mdd_tobj = NULL;
+        struct lu_attr    *la_copy = &mdd_ctx_info(ctxt)->mti_la_for_fix;
         struct thandle *handle;
         int is_dir = S_ISDIR(mdd_object_type(mdd_sobj));
         int rc;
@@ -1406,6 +1430,12 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
+        *la_copy = ma->ma_attr;
+        la_copy->la_valid = LA_CTIME;
+        rc = mdd_attr_set_internal_locked(ctxt, mdd_sobj, la_copy, handle);
+        if (rc)
+                GOTO(cleanup, rc);
+
         if (tobj && lu_object_exists(&tobj->mo_lu)) {
                 mdd_write_lock(ctxt, mdd_tobj);
                 __mdd_ref_del(ctxt, mdd_tobj, handle);
@@ -1413,9 +1443,27 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                 if (is_dir)
                         __mdd_ref_del(ctxt, mdd_tobj, handle);
 
+                la_copy->la_valid = LA_CTIME;
+                rc = mdd_attr_set_internal(ctxt, mdd_tobj, la_copy, handle);
+                if (rc)
+                        GOTO(cleanup, rc);
+
                 rc = __mdd_finish_unlink(ctxt, mdd_tobj, ma, handle);
                 mdd_write_unlock(ctxt, mdd_tobj);
+                if (rc)
+                        GOTO(cleanup, rc);
         }
+
+        la_copy->la_valid = LA_CTIME | LA_MTIME;
+        rc = mdd_attr_set_internal(ctxt, mdd_spobj, la_copy, handle);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        if (mdd_spobj != mdd_tpobj) {
+                la_copy->la_valid = LA_CTIME | LA_MTIME;
+                rc = mdd_attr_set_internal(ctxt, mdd_tpobj, la_copy, handle);
+        }
+
 cleanup:
         mdd_rename_unlock(ctxt, mdd_spobj, mdd_tpobj);
 cleanup_unlocked:
@@ -1585,6 +1633,7 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *son = md2mdd_obj(child);
+        struct lu_attr    *la_copy = &mdd_ctx_info(ctxt)->mti_la_for_fix;
         struct lu_attr *attr = &ma->ma_attr;
         struct lov_mds_md *lmm = NULL;
         struct thandle *handle;
@@ -1698,6 +1747,13 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 else
                         rc = -EFAULT;
         }
+
+        *la_copy = ma->ma_attr;
+        la_copy->la_valid = LA_CTIME | LA_MTIME;
+        rc = mdd_attr_set_internal(ctxt, mdd_pobj, la_copy, handle);
+        if (rc)
+                GOTO(cleanup, rc);
+
         /* return attr back */
         rc = mdd_attr_get_internal_locked(ctxt, son, ma);
 cleanup:
