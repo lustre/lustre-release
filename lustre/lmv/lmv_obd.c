@@ -838,7 +838,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         spin_lock_init(&lmv->lmv_lock);
         sema_init(&lmv->init_sem, 1);
 
-        rc = lmv_mgr_setup(obd);
+        rc = lmv_obj_setup(obd);
         if (rc) {
                 CERROR("Can't setup LMV object manager, "
                        "error %d.\n", rc);
@@ -885,7 +885,7 @@ static int lmv_cleanup(struct obd_device *obd)
 
         fld_client_fini(&lmv->lmv_fld);
         lprocfs_obd_cleanup(obd);
-        lmv_mgr_cleanup(obd);
+        lmv_obj_cleanup(obd);
         OBD_FREE(lmv->datas, lmv->datas_size);
         OBD_FREE(lmv->tgts, lmv->tgts_size);
 

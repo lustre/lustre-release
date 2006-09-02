@@ -63,8 +63,8 @@ struct lmv_obj {
         struct obd_device *lo_obd;        /* pointer to LMV itself */
 };
 
-int lmv_mgr_setup(struct obd_device *obd);
-void lmv_mgr_cleanup(struct obd_device *obd);
+int lmv_obj_setup(struct obd_device *obd);
+void lmv_obj_cleanup(struct obd_device *obd);
 
 static inline void
 lmv_obj_lock(struct lmv_obj *obj)

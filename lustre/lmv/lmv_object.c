@@ -375,7 +375,7 @@ lmv_obj_delete(struct obd_export *exp, const struct lu_fid *fid)
 }
 
 int
-lmv_mgr_setup(struct obd_device *obd)
+lmv_obj_setup(struct obd_device *obd)
 {
         ENTRY;
         LASSERT(obd != NULL);
@@ -387,7 +387,7 @@ lmv_mgr_setup(struct obd_device *obd)
 }
 
 void
-lmv_mgr_cleanup(struct obd_device *obd)
+lmv_obj_cleanup(struct obd_device *obd)
 {
         struct list_head *cur, *tmp;
         struct lmv_obj *obj;
