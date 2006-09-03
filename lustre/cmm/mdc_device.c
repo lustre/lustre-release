@@ -47,6 +47,18 @@ static inline int lu_device_is_mdc(struct lu_device *ld)
 
 static struct md_device_operations mdc_md_ops = { 0 };
 
+static int mdc_obd_update(struct obd_device *host,
+                          struct obd_device *watched,
+                          enum obd_notify_event ev, void *owner)
+{
+        struct mdc_device *mc = owner;
+        int rc = 0;
+        ENTRY;
+
+        LASSERT(mc != NULL);
+        CDEBUG(D_CONFIG, "notify %s ev=%d\n", watched->obd_name, ev);
+        RETURN(rc);
+}
 /* MDC OBD is set up already and connected to the proper MDS
  * mdc_add_obd() find that obd by uuid and connects to it.
  * Local MDT uuid is used for connection
@@ -56,7 +68,6 @@ static int mdc_add_obd(const struct lu_context *ctx,
 {
         struct mdc_cli_desc *desc = &mc->mc_desc;
         struct obd_device *mdc;
-        const char *srv = lustre_cfg_string(cfg, 0);
         const char *uuid_str = lustre_cfg_string(cfg, 1);
         const char *index = lustre_cfg_string(cfg, 2);
         const char *mdc_uuid_str = lustre_cfg_string(cfg, 4);
@@ -102,6 +113,15 @@ static int mdc_add_obd(const struct lu_context *ctx,
                         rc = obd_fid_init(desc->cl_exp);
                         if (rc)
                                 CERROR("fid init error %d \n", rc);
+                        else {
+                                /* obd notify mechanism */
+                                mdc->obd_upcall.onu_owner = mc;
+                                mdc->obd_upcall.onu_upcall = mdc_obd_update;
+                        }
+                }
+                if (rc) {
+                        obd_disconnect(desc->cl_exp);
+                        desc->cl_exp = NULL;
                 }
         }
 
@@ -111,22 +131,31 @@ static int mdc_add_obd(const struct lu_context *ctx,
 static int mdc_del_obd(struct mdc_device *mc)
 {
         struct mdc_cli_desc *desc = &mc->mc_desc;
+        struct obd_device *mdc_obd = class_exp2obd(desc->cl_exp);
         int rc;
 
         ENTRY;
 
         CDEBUG(D_CONFIG, "disconnect from %s\n",
-               class_exp2obd(desc->cl_exp)->obd_name);
+               mdc_obd->obd_name);
  
         rc = obd_fid_fini(desc->cl_exp);
         if (rc)
                 CERROR("fid init error %d \n", rc);
-       
+
+        obd_register_observer(mdc_obd, NULL);
+        
+        /*TODO: Give the same shutdown flags as we have */
+        /*
+        desc->cl_exp->exp_obd->obd_force = mdt_obd->obd_force;
+        desc->cl_exp->exp_obd->obd_fail = mdt_obd->obd_fail;
+        */
         rc = obd_disconnect(desc->cl_exp);
         if (rc) {
                 CERROR("target %s disconnect error %d\n",
-                       class_exp2obd(desc->cl_exp)->obd_name, rc);
+                       mdc_obd->obd_name, rc);
         }
+        class_manual_cleanup(mdc_obd);
         desc->cl_exp = NULL;
 
         RETURN(rc);

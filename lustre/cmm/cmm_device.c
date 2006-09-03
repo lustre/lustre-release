@@ -153,8 +153,7 @@ static int cmm_add_mdc(const struct lu_context *ctx,
                 lu_device_get(cmm2lu_dev(cm));
 
                 ls = cm->cmm_md_dev.md_lu_dev.ld_site;
-                fld_client_add_target(ls->ls_client_fld,
-                                      mc->mc_desc.cl_exp);
+                fld_client_add_target(ls->ls_client_fld, mc->mc_desc.cl_exp);
         }
         RETURN(rc);
 }
@@ -165,6 +164,13 @@ static void cmm_device_shutdown(const struct lu_context *ctx,
         struct mdc_device *mc, *tmp;
         struct lu_site *ls;
         ENTRY;
+
+        ls = cm->cmm_md_dev.md_lu_dev.ld_site;
+        if (ls->ls_client_fld != NULL) {
+                fld_client_fini(ls->ls_client_fld);
+                OBD_FREE_PTR(ls->ls_client_fld);
+                ls->ls_client_fld = NULL;
+        }
 
         /* finish all mdc devices */
         spin_lock(&cm->cmm_tgt_guard);
@@ -178,13 +184,6 @@ static void cmm_device_shutdown(const struct lu_context *ctx,
                 cm->cmm_tgt_count--;
         }
         spin_unlock(&cm->cmm_tgt_guard);
-
-        ls = cm->cmm_md_dev.md_lu_dev.ld_site;
-        if (ls->ls_client_fld != NULL) {
-                fld_client_fini(ls->ls_client_fld);
-                OBD_FREE_PTR(ls->ls_client_fld);
-        }
-        ls->ls_client_fld = NULL;
 
         EXIT;
 }
