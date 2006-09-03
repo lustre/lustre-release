@@ -95,23 +95,74 @@ static int orph_index_delete(const struct lu_context *ctx,
         RETURN(rc);
 
 }
-#if 0
-static int orph_index_iterate(struct lu_server_orph *orph,
-                       const struct lu_context *ctx,
-                       seqno_t seq, mdsno_t *mds)
+
+static inline struct orph_key *orph_key_empty(const struct lu_context *ctx,
+                                              __u32 op)
 {
-        struct dt_object *dt_obj = orph->orph_obj;
-        struct dt_rec    *rec = orph_rec(ctx, 0);
-        int rc;
+        struct orph_key *key = &mdd_ctx_info(ctx)->mti_orph_key;
+        LASSERT(key);
+        key->ok_fid.f_seq = 0;
+        key->ok_fid.f_oid = 0;
+        key->ok_fid.f_ver = 0;
+        key->ok_op = cpu_to_be32(op);
+        return key;
+}
+
+static void orph_key_test_and_del(const struct lu_context *ctx,
+                                  struct mdd_device *mdd,
+                                  const struct orph_key *key)
+{
+        struct mdd_object *mdo;
+
+        mdo = mdd_object_find(ctx, mdd, &key->ok_fid);
+        if (IS_ERR(mdo))
+                CERROR("Invalid orphan!\n");
+        else {
+                if (mdo->mod_count == 0) {
+                        /* non-opened orphan, let's delete it */
+                        struct md_attr *ma = &mdd_ctx_info(ctx)->mti_ma;
+                        __mdd_object_kill(ctx, mdo, ma);
+                        /* TODO: now handle OST objects */
+                        //mdd_ost_objects_destroy(ctx, ma);
+                        /* TODO: destroy index entry */
+                }
+                mdd_object_put(ctx, mdo);
+        }        
+}
+
+static int orph_index_iterate(const struct lu_context *ctx,
+                              struct mdd_device *mdd)
+{
+        struct dt_object *dt_obj = mdd->mdd_orphans;
+        struct dt_it     *it;
+        struct dt_it_ops *iops;
+        struct orph_key  *key = orph_key_empty(ctx, 0);
+        int result;
         ENTRY;
 
-        rc = dt_obj->do_index_ops->dio_lookup(ctx, dt_obj, rec,
-                                              orph_key(ctx, seq));
-        if (rc == 0)
-                *mds = be64_to_cpu(*(__u64 *)rec);
-        RETURN(rc);
+        iops = &dt_obj->do_index_ops->dio_it;
+        it = iops->init(ctx, dt_obj, 1);
+        if (it != NULL) {
+                result = iops->get(ctx, it, (const void *)key);
+                if (result > 0) {
+                        int i;
+                        /* main cycle */
+                        for (result = 0, i = 0; result == +1; ++i) {
+                                key = (void *)iops->key(ctx, it);
+                                orph_key_test_and_del(ctx, mdd, key);
+                                result = iops->next(ctx, it);
+                        }
+                        iops->put(ctx, it);
+                } else if (result == 0)
+                        /* Index contains no zero key? */
+                        result = -EIO;
+                iops->fini(ctx, it);
+        } else
+                result = -ENOMEM;
+
+        RETURN(result);
 }
-#endif
+
 int orph_index_init(const struct lu_context *ctx, struct mdd_device *mdd)
 {
         struct lu_fid fid;

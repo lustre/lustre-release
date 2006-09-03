@@ -91,7 +91,7 @@ static struct lu_object *mdd_object_alloc(const struct lu_context *ctxt,
                 lu_object_init(o, NULL, d);
                 mdd_obj->mod_obj.mo_ops = &mdd_obj_ops;
                 mdd_obj->mod_obj.mo_dir_ops = &mdd_dir_ops;
-                atomic_set(&mdd_obj->mod_count, 0);
+                mdd_obj->mod_count = 0;
                 o->lo_ops = &mdd_lu_obj_ops;
                 return o;
         } else {
@@ -142,19 +142,13 @@ struct mdd_object *mdd_object_find(const struct lu_context *ctxt,
         struct mdd_object *m;
         ENTRY;
 
-        o = lu_object_find(ctxt, d->mdd_md_dev.md_lu_dev.ld_site, f);
+        o = lu_object_find(ctxt, mdd2lu_dev(d)->ld_site, f);
         if (IS_ERR(o))
                 m = (struct mdd_object *)o;
         else
                 m = lu2mdd_obj(lu_object_locate(o->lo_header,
-                                 d->mdd_md_dev.md_lu_dev.ld_type));
+                               mdd2lu_dev(d)->ld_type));
         RETURN(m);
-}
-
-static inline void mdd_object_put(const struct lu_context *ctxt,
-                                  struct mdd_object *o)
-{
-        lu_object_put(ctxt, &o->mod_obj.mo_lu);
 }
 
 static inline int mdd_is_immutable(struct mdd_object *obj)
@@ -1140,9 +1134,9 @@ static int mdd_dir_is_empty(const struct lu_context *ctx,
 
 /* return md_attr back,
  * if it is last unlink then return lov ea + llog cookie*/
-static inline int __mdd_object_kill(const struct lu_context *ctxt,
-                                    struct mdd_object *obj,
-                                    struct md_attr *ma)
+int __mdd_object_kill(const struct lu_context *ctxt,
+                      struct mdd_object *obj,
+                      struct md_attr *ma)
 {
         int rc = 0;
 
@@ -1165,7 +1159,7 @@ static int __mdd_finish_unlink(const struct lu_context *ctxt,
 
         rc = __mdd_iattr_get(ctxt, obj, ma);
         if (rc == 0 && ma->ma_attr.la_nlink == 0) {
-                if (atomic_read(&obj->mod_count) == 0) {
+                if (obj->mod_count == 0) {
                         rc = __mdd_object_kill(ctxt, obj, ma);
                 } else {
                         /* add new orphan */
@@ -2039,13 +2033,17 @@ static int mdd_open(const struct lu_context *ctxt, struct md_object *obj,
                     int flags)
 {
         int mode = accmode(md2mdd_obj(obj), flags);
+        
+        mdd_write_lock(ctxt, md2mdd_obj(obj));
 
         if (mode & MAY_WRITE) {
                 if (mdd_is_immutable(md2mdd_obj(obj)))
                         RETURN(-EACCES);
         }
+        
+        md2mdd_obj(obj)->mod_count ++;
 
-        atomic_inc(&md2mdd_obj(obj)->mod_count);
+        mdd_write_unlock(ctxt, md2mdd_obj(obj));
         return 0;
 }
 
@@ -2058,32 +2056,23 @@ static int mdd_close(const struct lu_context *ctxt, struct md_object *obj,
         ENTRY;
 
         mdd_obj = md2mdd_obj(obj);
-        mdd_read_lock(ctxt, mdd_obj);
-        rc = __mdd_iattr_get(ctxt, mdd_obj, ma);
-        if (rc)
-                GOTO(out_locked, rc);
+        mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
+        handle = mdd_trans_start(ctxt, mdo2mdd(obj));
+        if (IS_ERR(handle))
+                RETURN(-ENOMEM);
 
-        if (atomic_dec_and_test(&mdd_obj->mod_count)) {
+        mdd_write_lock(ctxt, mdd_obj);
+        rc = __mdd_iattr_get(ctxt, mdd_obj, ma);
+        if (rc == 0 && (-- mdd_obj->mod_count) == 0) {
                 if (ma->ma_attr.la_nlink == 0) {
                         rc = __mdd_object_kill(ctxt, mdd_obj, ma);
-                        if (rc)
-                                GOTO(out_locked, rc);
-                        mdd_read_unlock(ctxt, mdd_obj);
-                        /* let's remove obj from the orphan list */
-                        mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
-                        handle = mdd_trans_start(ctxt, mdo2mdd(obj));
-                        if (IS_ERR(handle))
-                                GOTO(out, rc = -ENOMEM);
-
-                        rc = __mdd_orphan_del(ctxt, mdd_obj, handle);
-
-                        mdd_trans_stop(ctxt, mdo2mdd(obj), rc, handle);
-                        GOTO(out, rc);
+                        if (rc == 0)
+                                /* let's remove obj from the orphan list */
+                                rc = __mdd_orphan_del(ctxt, mdd_obj, handle);
                 }
         }
-out_locked:
-        mdd_read_unlock(ctxt, mdd_obj);
-out:
+        mdd_write_unlock(ctxt, mdd_obj);
+        mdd_trans_stop(ctxt, mdo2mdd(obj), rc, handle);
         RETURN(rc);
 }
 

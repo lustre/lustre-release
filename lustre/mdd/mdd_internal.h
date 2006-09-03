@@ -55,7 +55,7 @@ enum mod_flags {
 struct mdd_object {
         struct md_object  mod_obj;
         /* open count */
-        atomic_t          mod_count;
+        __u32             mod_count;
         __u32             mod_valid;
         unsigned long     mod_flags;
 };
@@ -71,6 +71,7 @@ struct mdd_thread_info {
         struct txn_param  mti_param;
         struct lu_fid     mti_fid;
         struct lu_attr    mti_la;
+        struct md_attr    mti_ma;
         struct lu_attr    mti_la_for_fix;
         struct lov_mds_md mti_lmm;
         struct obd_info   mti_oi;
@@ -118,6 +119,16 @@ int __mdd_orphan_del(const struct lu_context *, struct mdd_object *,
                             struct thandle *);
 int orph_index_init(const struct lu_context *ctx, struct mdd_device *mdd);
 void orph_index_fini(const struct lu_context *ctx, struct mdd_device *mdd);
+int __mdd_object_kill(const struct lu_context *, struct mdd_object *,
+                      struct md_attr *);
+struct mdd_object *mdd_object_find(const struct lu_context *,
+                                   struct mdd_device *,
+                                   const struct lu_fid *);
+static inline void mdd_object_put(const struct lu_context *ctxt,
+                                  struct mdd_object *o)
+{
+        lu_object_put(ctxt, &o->mod_obj.mo_lu);
+}
 
 extern struct lu_device_operations mdd_lu_ops;
 static inline int lu_device_is_mdd(struct lu_device *d)
