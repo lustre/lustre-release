@@ -78,7 +78,7 @@ struct mdd_thread_info {
 };
 
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
-                 char *dev);
+                 struct lustre_cfg *cfg);
 int mdd_fini_obd(const struct lu_context *, struct mdd_device *);
 int mdd_xattr_set_txn(const struct lu_context *ctxt, struct mdd_object *obj,
                       const void *buf, int buf_len, const char *name, int fl,

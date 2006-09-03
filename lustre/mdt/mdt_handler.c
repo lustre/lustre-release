@@ -2911,6 +2911,7 @@ static struct lu_device *mdt_device_alloc(const struct lu_context *ctx,
                 if (result != 0) {
                         OBD_FREE_PTR(m);
                         l = ERR_PTR(result);
+                        return l;
                 }
                 m->mdt_md_dev.md_upcall.mu_upcall = mdt_upcall;
         } else

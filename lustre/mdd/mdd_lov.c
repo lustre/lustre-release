@@ -66,33 +66,59 @@ static int mdd_lov_update(struct obd_device *host,
 
 /*The obd is created for handling data stack for mdd*/
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
-                 char *dev)
+                 struct lustre_cfg *cfg)
 {
         struct lustre_cfg_bufs *bufs;
         struct lustre_cfg      *lcfg;
         struct obd_device      *obd;
-        int rc;
+        char                   *dev = lustre_cfg_string(cfg, 0);
+        char                   *index_string = lustre_cfg_string(cfg, 2);
+        char                   *name, *uuid, *p;
+        int rc, name_size, uuid_size, index;
         ENTRY;
 
-        OBD_ALLOC_PTR(bufs);
-        if (!bufs)
+        LASSERT(index_string);
+
+        index = simple_strtol(index_string, &p, 10);
+
+        name_size = strlen(MDD_OBD_NAME) + 5;
+        uuid_size = strlen(MDD_OBD_UUID) + 5;
+
+        OBD_ALLOC(name, name_size);
+        OBD_ALLOC(uuid, uuid_size);
+        if (!name || !uuid) {
+                if (name)
+                        OBD_FREE(name, name_size);
+                if (uuid)
+                        OBD_FREE(uuid, uuid_size);
                 RETURN(-ENOMEM);
-        lustre_cfg_bufs_reset(bufs, MDD_OBD_NAME);
+        }
+
+        OBD_ALLOC_PTR(bufs);
+        if (!bufs) {
+                GOTO(cleanup_mem, rc = -ENOMEM);
+        }
+
+        snprintf(name, strlen(MDD_OBD_NAME) + 5, "%s-%d",
+                                              MDD_OBD_NAME, index);
+        snprintf(uuid, strlen(MDD_OBD_UUID) + 5, "%s-%d",
+                                              MDD_OBD_UUID, index);
+        lustre_cfg_bufs_reset(bufs, name);
         lustre_cfg_bufs_set_string(bufs, 1, MDD_OBD_TYPE);
-        lustre_cfg_bufs_set_string(bufs, 2, MDD_OBD_UUID);
+        lustre_cfg_bufs_set_string(bufs, 2, uuid);
         lustre_cfg_bufs_set_string(bufs, 3, (char*)dev/*MDD_OBD_PROFILE*/);
         lustre_cfg_bufs_set_string(bufs, 4, (char*)dev);
 
         lcfg = lustre_cfg_new(LCFG_ATTACH, bufs);
         OBD_FREE_PTR(bufs);
         if (!lcfg)
-                RETURN(-ENOMEM);
+                GOTO(cleanup_mem, rc = -ENOMEM);
 
         rc = class_attach(lcfg);
         if (rc)
                 GOTO(lcfg_cleanup, rc);
 
-        obd = class_name2obd(MDD_OBD_NAME);
+        obd = class_name2obd(name);
         if (!obd) {
                 CERROR("can not find obd %s \n", MDD_OBD_NAME);
                 LBUG();
@@ -112,6 +138,9 @@ class_detach:
                 class_detach(obd, lcfg);
 lcfg_cleanup:
         lustre_cfg_free(lcfg);
+cleanup_mem:
+        OBD_FREE(name, name_size);
+        OBD_FREE(uuid, uuid_size);
         RETURN(rc);
 }
 
@@ -306,6 +335,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
 
         OBD_FAIL_RETURN((OBD_FAIL_MDS_ALLOC_OBDO), -ENOMEM);
 
+        LASSERT(lov_exp != NULL);
         oa = obdo_alloc();
         if (oa == NULL)
                 RETURN(-ENOMEM);

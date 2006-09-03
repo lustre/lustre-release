@@ -2130,7 +2130,7 @@ int mds_postrecov(struct obd_device *obd)
         }
 
         /* clean PENDING dir */
-        if (strcmp(obd->obd_name, MDD_OBD_NAME))
+        if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))
                 rc = mds_cleanup_pending(obd);
                 if (rc < 0)
                         GOTO(out, rc);
@@ -2175,7 +2175,7 @@ static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 /*XXX Use this for mdd mds cleanup, so comment out 
                  *this target_cleanup_recovery for this tmp MDD MDS
                  *Wangdi*/
-                if (strcmp(obd->obd_name, MDD_OBD_NAME))
+                if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))
                         target_cleanup_recovery(obd); 
                 mds_lov_early_clean(obd);
                 break;
@@ -2749,7 +2749,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         ENTRY;
 
         CDEBUG(D_INFO, "obd %s setup \n", obd->obd_name);
-        if (strcmp(obd->obd_name, MDD_OBD_NAME))
+        if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))
                 RETURN(0);
      
         if (lcfg->lcfg_bufcount < 5) {

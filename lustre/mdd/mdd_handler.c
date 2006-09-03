@@ -521,8 +521,8 @@ static int mdd_process_config(const struct lu_context *ctxt,
         struct mdd_device *m    = lu2mdd_dev(d);
         struct dt_device  *dt   = m->mdd_child;
         struct lu_device  *next = &dt->dd_lu_dev;
-        char              *dev = lustre_cfg_string(cfg, 0);
         int rc;
+        ENTRY;
 
         switch (cfg->lcfg_command) {
         case LCFG_SETUP:
@@ -534,7 +534,7 @@ static int mdd_process_config(const struct lu_context *ctxt,
                 rc = mdd_mount(ctxt, m);
                 if (rc)
                         GOTO(out, rc);
-                rc = mdd_init_obd(ctxt, m, dev);
+                rc = mdd_init_obd(ctxt, m, cfg);
                 if (rc) {
                         CERROR("lov init error %d \n", rc);
                         GOTO(out, rc);

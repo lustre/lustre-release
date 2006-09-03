@@ -1243,6 +1243,7 @@ static int mgs_write_log_mdc_to_mdt(struct obd_device *obd, struct fs_db *fsdb,
         rc = record_setup(obd, llh, mdcname, mti->mti_uuid, nodeuuid, 0, 0);
         rc = mgs_write_log_failnids(obd, mti, llh, mdcname);
         snprintf(index, sizeof(index), "%d", idx);
+
         rc = record_mdc_add(obd, llh, logname, mdcuuid, mti->mti_uuid,
                             index, "1");
         rc = record_marker(obd, llh, fsdb, CM_END, mti->mti_svname, "add mdc"); 
@@ -1423,7 +1424,7 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
                                     char *logname, char *lovname, int flags)
 {
         struct llog_handle *llh = NULL;
-        char *nodeuuid, *oscname, *oscuuid, *lovuuid;
+        char *nodeuuid, *svname, *oscname, *oscuuid, *lovuuid;
         char index[5];
         int i, rc;
 
@@ -1439,7 +1440,8 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
   
 
         name_create(&nodeuuid, libcfs_nid2str(mti->mti_nids[0]), "");
-        name_create(&oscname, mti->mti_svname, "-osc");
+        name_create(&svname, mti->mti_svname, lovname);
+        name_create(&oscname, svname, "-osc");
         name_create(&oscuuid, oscname, "_UUID");
         name_create(&lovuuid, lovname, "_UUID");
 
@@ -1477,6 +1479,7 @@ out:
         name_destroy(lovuuid);
         name_destroy(oscuuid);
         name_destroy(oscname);
+        name_destroy(svname);
         name_destroy(nodeuuid);
         RETURN(rc);
 }

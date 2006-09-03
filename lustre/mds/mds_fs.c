@@ -659,7 +659,8 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         /* the owner of object file should always be root */
         ucred.luc_cap = current->cap_effective | CAP_SYS_RESOURCE;
 
-        if (strcmp(exp->exp_obd->obd_name, MDD_OBD_NAME)) {
+        if (strncmp(exp->exp_obd->obd_name, MDD_OBD_NAME,
+                                   strlen(MDD_OBD_NAME))) {
                 RETURN(0);
         }
         
