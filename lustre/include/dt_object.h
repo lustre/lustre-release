@@ -301,7 +301,7 @@ struct dt_index_operations {
                  * precondition: dt_object_exists(dt);
                  */
                 struct dt_it *(*init)(const struct lu_context *ctxt,
-                                      struct dt_object *dt);
+                                      struct dt_object *dt, int writable);
                 void          (*fini)(const struct lu_context *ctxt,
                                       struct dt_it *di);
                 int            (*get)(const struct lu_context *ctxt,
@@ -309,6 +309,8 @@ struct dt_index_operations {
                                       const struct dt_key *key);
                 void           (*put)(const struct lu_context *ctxt,
                                       struct dt_it *di);
+                int            (*del)(const struct lu_context *ctxt,
+                                      struct dt_it *di, struct thandle *th);
                 int           (*next)(const struct lu_context *ctxt,
                                       struct dt_it *di);
                 struct dt_key *(*key)(const struct lu_context *ctxt,
@@ -414,7 +416,7 @@ struct dt_txn_callback {
                              struct txn_param *param, void *cookie);
         int (*dtc_txn_stop)(const struct lu_context *ctx,
                             struct thandle *txn, void *cookie);
-        int (*dtc_txn_commit)(const struct lu_context *ctx, 
+        int (*dtc_txn_commit)(const struct lu_context *ctx,
                               struct thandle *txn, void *cookie);
         void            *dtc_cookie;
         struct list_head dtc_linkage;

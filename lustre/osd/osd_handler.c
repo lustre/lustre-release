@@ -105,8 +105,8 @@ struct osd_device {
 
         /* Thread context for transaction commit callback.
          * Currently, OSD is based on ext3/JBD. Transaction commit in ext3/JBD
-         * is serialized, that is there is no more than one transaction commit 
-         * at a time (JBD journal_commit_transaction() is serialized). 
+         * is serialized, that is there is no more than one transaction commit
+         * at a time (JBD journal_commit_transaction() is serialized).
          * This means that it's enough to have _one_ lu_context.
          */
         struct lu_context         od_ctx_for_commit;
@@ -173,6 +173,8 @@ static int   osd_it_get        (const struct lu_context *ctx,
                                 struct dt_it *di, const struct dt_key *key);
 static void  osd_it_put        (const struct lu_context *ctx, struct dt_it *di);
 static int   osd_it_next       (const struct lu_context *ctx, struct dt_it *di);
+static int   osd_it_del        (const struct lu_context *ctx, struct dt_it *di,
+                                struct thandle *th);
 static int   osd_it_key_size   (const struct lu_context *ctx,
                                 const struct dt_it *di);
 static void  osd_conf_get      (const struct lu_context *ctx,
@@ -202,7 +204,7 @@ static struct inode       *osd_iget         (struct osd_thread_info *info,
                                              const struct osd_inode_id *id);
 static struct super_block *osd_sb           (const struct osd_device *dev);
 static struct dt_it       *osd_it_init      (const struct lu_context *ctx,
-                                             struct dt_object *dt);
+                                             struct dt_object *dt, int wable);
 static struct dt_key      *osd_it_key       (const struct lu_context *ctx,
                                              const struct dt_it *di);
 static struct dt_rec      *osd_it_rec       (const struct lu_context *ctx,
@@ -465,8 +467,8 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
                 CERROR("transaction @0x%p commit error: %d\n", th, error);
         } else {
                 /* This dd_ctx_for_commit is only for commit usage.
-                 * see "struct dt_device" 
-                 */ 
+                 * see "struct dt_device"
+                 */
                 dt_txn_hook_commit(&osd_dt_dev(dev)->od_ctx_for_commit, th);
         }
 
@@ -589,12 +591,12 @@ static void osd_ro(const struct lu_context *ctx,
         th = osd_trans_start(ctx, d, &param);
         if (!IS_ERR(th))
                 osd_trans_stop(ctx, th);
-        
+
         if (sync)
                 osd_sync(ctx, d);
-        
+
         lvfs_set_rdonly(lvfs_sbdev(osd_sb(osd_dt_dev(d))));
-        EXIT;        
+        EXIT;
 }
 
 
@@ -1111,7 +1113,7 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
         if (first) {
                 area += sizeof (struct lu_dirpage);
                 nob  -= sizeof (struct lu_dirpage);
-                
+
         }
 
         LASSERT(nob > sizeof *ent);
@@ -1197,7 +1199,7 @@ static int osd_readpage(const struct lu_context *ctxt,
          * iterating through directory and fill pages from @rdpg
          */
         iops = &dt->do_index_ops->dio_it;
-        it = iops->init(ctxt, dt);
+        it = iops->init(ctxt, dt, 0);
         if (it == NULL)
                 return -ENOMEM;
         /*
@@ -1217,7 +1219,7 @@ static int osd_readpage(const struct lu_context *ctxt,
                         rc = osd_dir_page_build(ctxt, !i, kmap(pg),
                                                 min_t(int, nob, CFS_PAGE_SIZE),
                                                 iops, it,
-                                                &hash_start, &hash_end, 
+                                                &hash_start, &hash_end,
                                                 rdpg->rp_hash_end, &last);
                         if (rc != 0 || i == rdpg->rp_npages - 1)
                                 last->lde_reclen = 0;
@@ -1465,21 +1467,22 @@ struct osd_it {
 };
 
 static struct dt_it *osd_it_init(const struct lu_context *ctx,
-                                 struct dt_object *dt)
+                                 struct dt_object *dt, int writable)
 {
         struct osd_it     *it;
         struct osd_object *obj = osd_dt_obj(dt);
         struct lu_object  *lo  = &dt->do_lu;
+        __u32              flags;
 
         LASSERT(lu_object_exists(lo));
         LASSERT(obj->oo_ipd != NULL);
 
+        flags = writable ? IAM_IT_MOVE|IAM_IT_WRITE : IAM_IT_MOVE;
         OBD_ALLOC_PTR(it);
         if (it != NULL) {
                 it->oi_obj = obj;
                 lu_object_get(lo);
-                iam_it_init(&it->oi_it,
-                            &obj->oo_container, IAM_IT_MOVE, obj->oo_ipd);
+                iam_it_init(&it->oi_it, &obj->oo_container, flags, obj->oo_ipd);
         }
         return (struct dt_it *)it;
 }
@@ -1511,6 +1514,18 @@ static int osd_it_next(const struct lu_context *ctx, struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
         return iam_it_next(&it->oi_it);
+}
+
+static int osd_it_del(const struct lu_context *ctx, struct dt_it *di,
+                      struct thandle *th)
+{
+        struct osd_it      *it = (struct osd_it *)di;
+        struct osd_thandle *oh;
+
+        oh = container_of0(th, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle != NULL);
+
+        return iam_it_rec_delete(oh->ot_handle, &it->oi_it);
 }
 
 static struct dt_key *osd_it_key(const struct lu_context *ctx,
@@ -1555,6 +1570,7 @@ static struct dt_index_operations osd_index_ops = {
                 .fini     = osd_it_fini,
                 .get      = osd_it_get,
                 .put      = osd_it_put,
+                .del      = osd_it_del,
                 .next     = osd_it_next,
                 .key      = osd_it_key,
                 .key_size = osd_it_key_size,
@@ -1640,12 +1656,13 @@ static int osd_index_compat_lookup(const struct lu_context *ctxt,
                                                        (struct lu_fid *)rec);
                         else
                                 result = -ENOENT;
+                        d = dentry;
                 } else {
                         /* What? Disconnected alias? Ppheeeww... */
                         CERROR("Aliasing where not expected\n");
                         result = -EIO;
-                        dput(d);
                 }
+                dput(d);
                 dput(dentry);
         } else
                 result = -ENOMEM;
@@ -2030,7 +2047,7 @@ static struct inode *osd_iget(struct osd_thread_info *info,
                 iput(inode);
                 inode = ERR_PTR(-ESTALE);
         }
-        
+
         return inode;
 
 }

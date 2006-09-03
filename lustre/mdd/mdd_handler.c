@@ -277,7 +277,7 @@ static int __mdd_lmm_get(const struct lu_context *ctxt,
         int rc;
 
         LASSERT(ma->ma_lmm != NULL && ma->ma_lmm_size > 0);
-        rc = mdd_get_md(ctxt, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size, 0, 
+        rc = mdd_get_md(ctxt, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size, 0,
                         MDS_LOV_MD_NAME);
         if (rc > 0) {
                 ma->ma_valid |= MA_LOV;
@@ -314,16 +314,16 @@ static int mdd_attr_get_internal(const struct lu_context *ctxt,
                 rc = __mdd_iattr_get(ctxt, mdd_obj, ma);
 
         if (rc == 0 && ma->ma_need & MA_LOV) {
-                if (S_ISREG(mdd_object_type(mdd_obj)) || 
+                if (S_ISREG(mdd_object_type(mdd_obj)) ||
                     S_ISDIR(mdd_object_type(mdd_obj)))
                         rc = __mdd_lmm_get(ctxt, mdd_obj, ma);
         }
-#ifdef HAVE_SPLIT_SUPPORT 
+#ifdef HAVE_SPLIT_SUPPORT
         if (rc == 0 && ma->ma_need & MA_LMV) {
                 if (S_ISDIR(mdd_object_type(mdd_obj)))
                         rc = __mdd_lmv_get(ctxt, mdd_obj, ma);
         }
-#endif        
+#endif
         CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n",
                         rc, ma->ma_valid);
         RETURN(rc);
@@ -841,7 +841,7 @@ static int mdd_attr_set(const struct lu_context *ctxt,
                 if (lmm == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
-                rc = mdd_get_md(ctxt, mdd_obj, lmm, &lmm_size, 1, 
+                rc = mdd_get_md(ctxt, mdd_obj, lmm, &lmm_size, 1,
                                 MDS_LOV_MD_NAME);
 
                 if (rc < 0)
@@ -1115,7 +1115,7 @@ static int mdd_dir_is_empty(const struct lu_context *ctx,
 
         obj = mdd_object_child(dir);
         iops = &obj->do_index_ops->dio_it;
-        it = iops->init(ctx, obj);
+        it = iops->init(ctx, obj, 0);
         if (it != NULL) {
                 result = iops->get(ctx, it, (const void *)"");
                 if (result > 0) {
@@ -2074,7 +2074,7 @@ static int mdd_close(const struct lu_context *ctxt, struct md_object *obj,
                         handle = mdd_trans_start(ctxt, mdo2mdd(obj));
                         if (IS_ERR(handle))
                                 GOTO(out, rc = -ENOMEM);
-                        
+
                         rc = __mdd_orphan_del(ctxt, mdd_obj, handle);
 
                         mdd_trans_stop(ctxt, mdo2mdd(obj), rc, handle);
