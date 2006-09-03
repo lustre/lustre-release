@@ -112,7 +112,7 @@ static int mdt_init_clients_data(const struct lu_context *ctx,
                                 unsigned long last_size)
 {
         struct mdt_server_data *msd = &mdt->mdt_msd;
-        struct mdt_client_data *mcd;
+        struct mdt_client_data *mcd = NULL;
         struct obd_device      *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
         loff_t off = 0;
         int cl_idx;
@@ -123,15 +123,17 @@ static int mdt_init_clients_data(const struct lu_context *ctx,
          * the header.  If we find clients with higher last_transno values
          * then those clients may need recovery done. */
 
-        OBD_ALLOC_PTR(mcd);
-        if (!mcd)
-                RETURN(rc = -ENOMEM);
-
         for (cl_idx = 0, off = le32_to_cpu(msd->msd_client_start);
              off < last_size; cl_idx++) {
                 __u64 last_transno;
                 struct obd_export *exp;
                 struct mdt_export_data *med;
+                
+                if (!mcd) {
+                        OBD_ALLOC_WAIT(mcd, sizeof(*mcd));
+                        if (!mcd)
+                                RETURN(-ENOMEM);
+                }
 
                 off = le32_to_cpu(msd->msd_client_start) +
                         cl_idx * le16_to_cpu(msd->msd_client_size);
@@ -168,7 +170,7 @@ static int mdt_init_clients_data(const struct lu_context *ctx,
                 med->med_mcd = mcd;
                 rc = mdt_client_add(ctx, mdt, med, cl_idx);
                 LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
-
+                mcd = NULL;
                 exp->exp_replay_needed = 1;
                 exp->exp_connecting = 0;
                 obd->obd_recoverable_clients++;
@@ -185,8 +187,8 @@ static int mdt_init_clients_data(const struct lu_context *ctx,
         }
 
 err_client:
-        OBD_FREE_PTR(mcd);
-
+        if (mcd)
+                OBD_FREE(mcd, sizeof(*mcd));
         RETURN(rc);
 }
 
