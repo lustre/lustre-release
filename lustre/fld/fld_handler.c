@@ -142,10 +142,9 @@ static int fld_server_handle(struct lu_server_fld *fld,
 
 }
 
-static int fld_req_handle0(const struct lu_context *ctx,
-                           struct lu_server_fld *fld,
-                           struct ptlrpc_request *req,
-                           struct fld_thread_info *info)
+static int fld_req_handle(struct lu_server_fld *fld,
+                          struct ptlrpc_request *req,
+                          struct fld_thread_info *info)
 {
         struct md_fld *in;
         struct md_fld *out;
@@ -166,9 +165,44 @@ static int fld_req_handle0(const struct lu_context *ctx,
                 if (out == NULL)
                         RETURN(-EPROTO);
                 *out = *in;
-                rc = fld_server_handle(fld, ctx, *opc, out);
+                rc = fld_server_handle(fld, req->rq_svc_thread->t_ctx,
+                                       *opc, out);
         }
 
+        RETURN(rc);
+}
+
+static int fld_handle0(struct ptlrpc_request *req,
+                       struct fld_thread_info *info)
+{
+        struct lu_site *site;
+        int rc = 0;
+        ENTRY;
+
+        OBD_FAIL_RETURN(OBD_FAIL_FLD_ALL_REPLY_NET | OBD_FAIL_ONCE, 0);
+
+        if (lustre_msg_get_opc(req->rq_reqmsg) == FLD_QUERY) {
+                if (req->rq_export != NULL) {
+                        site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
+                        LASSERT(site != NULL);
+                        /* 
+                         * No need to return error here and overwrite @rc, this
+                         * function should return 0 even if fld_req_handle0()
+                         * returns some error code.
+                         */
+                        fld_req_handle(site->ls_server_fld, req, info);
+                } else {
+                        CERROR("Unconnected request\n");
+                        req->rq_status = -ENOTCONN;
+                }
+        } else {
+                CERROR("Wrong FLD opcode: %d\n", 
+                       lustre_msg_get_opc(req->rq_reqmsg));
+                req->rq_status = -ENOTSUPP;
+                RETURN(ptlrpc_error(req));
+        }
+
+        target_send_reply(req, rc, OBD_FAIL_FLD_ALL_REPLY_NET);
         RETURN(rc);
 }
 
@@ -193,16 +227,12 @@ static void fld_thread_info_fini(struct fld_thread_info *info)
         req_capsule_fini(&info->fti_pill);
 }
 
-static int fld_req_handle(struct ptlrpc_request *req)
+static int fld_handle(struct ptlrpc_request *req)
 {
         const struct lu_context *ctx;
         struct fld_thread_info *info;
-        struct lu_site *site;
-        int rc = 0;
-        ENTRY;
-
-        OBD_FAIL_RETURN(OBD_FAIL_FLD_ALL_REPLY_NET | OBD_FAIL_ONCE, 0);
-
+        int rc;
+        
         ctx = req->rq_svc_thread->t_ctx;
         LASSERT(ctx != NULL);
         LASSERT(ctx->lc_thread == req->rq_svc_thread);
@@ -211,33 +241,9 @@ static int fld_req_handle(struct ptlrpc_request *req)
         LASSERT(info != NULL);
 
         fld_thread_info_init(req, info);
-
-        if (lustre_msg_get_opc(req->rq_reqmsg) == FLD_QUERY) {
-                if (req->rq_export != NULL) {
-                        site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
-                        LASSERT(site != NULL);
-                        /* 
-                         * no need to return error here and overwrite @rc, this
-                         * function should return 0 even if fld_req_handle0()
-                         * returns some error code.
-                         */
-                        fld_req_handle0(ctx, site->ls_server_fld, req, info);
-                } else {
-                        CERROR("Unconnected request\n");
-                        req->rq_status = -ENOTCONN;
-                }
-        } else {
-                CERROR("Wrong opcode: %d\n", 
-                       lustre_msg_get_opc(req->rq_reqmsg));
-                req->rq_status = -ENOTSUPP;
-                rc = ptlrpc_error(req);
-                GOTO(out_info, rc);
-        }
-
-        target_send_reply(req, rc, OBD_FAIL_FLD_ALL_REPLY_NET);
-        EXIT;
-out_info:
+        rc = fld_handle0(req, info);
         fld_thread_info_fini(info);
+
         return rc;
 }
 
@@ -356,7 +362,7 @@ int fld_server_init(struct lu_server_fld *fld,
                 GOTO(out, rc);
 
         fld->fld_service =
-                ptlrpc_init_svc_conf(&fld_conf, fld_req_handle,
+                ptlrpc_init_svc_conf(&fld_conf, fld_handle,
                                      LUSTRE_FLD_NAME,
                                      fld->fld_proc_entry, NULL);
         if (fld->fld_service != NULL)

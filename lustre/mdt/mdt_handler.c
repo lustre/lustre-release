@@ -145,29 +145,29 @@ void mdt_set_disposition(struct mdt_thread_info *info,
 static int mdt_getstatus(struct mdt_thread_info *info)
 {
         struct md_device *next  = info->mti_mdt->mdt_child;
-        int               result;
+        int               rc;
         struct mdt_body  *body;
 
         ENTRY;
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
-                result = -ENOMEM;
+                rc = -ENOMEM;
         else {
                 body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-                result = next->md_ops->mdo_root_get(info->mti_ctxt,
-                                                    next, &body->fid1);
-                if (result == 0)
+                rc = next->md_ops->mdo_root_get(info->mti_ctxt,
+                                                next, &body->fid1);
+                if (rc == 0)
                         body->valid |= OBD_MD_FLID;
         }
 
-        RETURN(result);
+        RETURN(rc);
 }
 
 static int mdt_statfs(struct mdt_thread_info *info)
 {
         struct md_device  *next  = info->mti_mdt->mdt_child;
         struct obd_statfs *osfs;
-        int                result;
+        int                rc;
 
         ENTRY;
 
@@ -177,16 +177,16 @@ static int mdt_statfs(struct mdt_thread_info *info)
         
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
-                result = -ENOMEM;
+                rc = -ENOMEM;
         } else {
                 osfs = req_capsule_server_get(&info->mti_pill,&RMF_OBD_STATFS);
                 /* XXX max_age optimisation is needed here. See mds_statfs */
-                result = next->md_ops->mdo_statfs(info->mti_ctxt,
-                                                  next, &info->mti_u.ksfs);
+                rc = next->md_ops->mdo_statfs(info->mti_ctxt,
+                                              next, &info->mti_u.ksfs);
                 statfs_pack(osfs, &info->mti_u.ksfs);
         }
 
-        RETURN(result);
+        RETURN(rc);
 }
 
 void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
@@ -334,7 +334,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
 static int mdt_getattr(struct mdt_thread_info *info)
 {
-        int result;
+        int rc;
         struct mdt_object *obj;
 
         obj = info->mti_object;
@@ -342,9 +342,9 @@ static int mdt_getattr(struct mdt_thread_info *info)
         LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
         ENTRY;
 
-        result = mdt_getattr_internal(info, obj);
+        rc = mdt_getattr_internal(info, obj);
         mdt_shrink_reply(info, REPLY_REC_OFF + 1);
-        RETURN(result);
+        RETURN(rc);
 }
 
 /*
@@ -363,7 +363,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         struct md_object  *next = mdt_object_child(info->mti_object);
         struct lu_fid     *child_fid = &info->mti_tmp_fid1;
         const char        *name;
-        int               result;
+        int               rc;
         struct mdt_lock_handle *lhp;
         ENTRY;
 
@@ -386,29 +386,29 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
                 mdt_lock_handle_init(lhc);
                 lhc->mlh_mode = LCK_CR;
-                result = mdt_object_lock(info, child, lhc, child_bits);
-                if (result == 0) {
+                rc = mdt_object_lock(info, child, lhc, child_bits);
+                if (rc == 0) {
                         /* finally, we can get attr for child. */
-                        result = mdt_getattr_internal(info, child);
-                        if (result != 0)
+                        rc = mdt_getattr_internal(info, child);
+                        if (rc != 0)
                                 mdt_object_unlock(info, child, lhc, 1);
                 }
-                GOTO(out, result);
+                GOTO(out, rc);
         }
 
         /*step 1: lock parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
         lhp->mlh_mode = LCK_CR;
-        result = mdt_object_lock(info, parent, lhp, MDS_INODELOCK_UPDATE);
-        if (result != 0)
-                RETURN(result);
+        rc = mdt_object_lock(info, parent, lhp, MDS_INODELOCK_UPDATE);
+        if (rc != 0)
+                RETURN(rc);
 
         /*step 2: lookup child's fid by name */
-        result = mdo_lookup(info->mti_ctxt, next, name, child_fid);
-        if (result != 0) {
-                if (result == -ENOENT)
+        rc = mdo_lookup(info->mti_ctxt, next, name, child_fid);
+        if (rc != 0) {
+                if (rc == -ENOENT)
                         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
-                GOTO(out_parent, result);
+                GOTO(out_parent, rc);
         } else
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
         /*
@@ -419,11 +419,11 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         lhc->mlh_mode = LCK_CR;
         child = mdt_object_find_lock(info, child_fid, lhc, child_bits);
         if (IS_ERR(child))
-                GOTO(out_parent, result = PTR_ERR(child));
+                GOTO(out_parent, rc = PTR_ERR(child));
 
         /* finally, we can get attr for child. */
-        result = mdt_getattr_internal(info, child);
-        if (result != 0)
+        rc = mdt_getattr_internal(info, child);
+        if (rc != 0)
                 mdt_object_unlock(info, child, lhc, 1);
         else {
                 /* This is pure debugging code. */
@@ -449,7 +449,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 out_parent:
         mdt_object_unlock(info, parent, lhp, 1);
 out:
-        return result;
+        return rc;
 }
 
 /* normal handler: should release the child lock */
@@ -484,16 +484,16 @@ static inline struct mdt_device *mdt_dev(struct lu_device *d)
 
 static int mdt_connect(struct mdt_thread_info *info)
 {
-        int result;
+        int rc;
         struct ptlrpc_request *req;
 
         req = mdt_info_req(info);
-        result = target_handle_connect(req, mdt_regular_handle);
-        if (result == 0) {
+        rc = target_handle_connect(req, mdt_regular_handle);
+        if (rc == 0) {
                 LASSERT(req->rq_export != NULL);
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
         }
-        return result;
+        return rc;
 }
 
 static int mdt_disconnect(struct mdt_thread_info *info)
@@ -904,10 +904,10 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
  */
 static int mdt_obd_ping(struct mdt_thread_info *info)
 {
-        int result;
+        int rc;
         ENTRY;
-        result = target_handle_ping(mdt_info_req(info));
-        RETURN(result);
+        rc = target_handle_ping(mdt_info_req(info));
+        RETURN(rc);
 }
 
 static int mdt_obd_log_cancel(struct mdt_thread_info *info)
@@ -933,7 +933,7 @@ static struct ldlm_callback_suite cbs = {
 
 static int mdt_enqueue(struct mdt_thread_info *info)
 {
-        int result;
+        int rc;
         struct ptlrpc_request *req;
 
         /*
@@ -944,20 +944,20 @@ static int mdt_enqueue(struct mdt_thread_info *info)
 
         req = mdt_info_req(info);
         info->mti_fail_id = OBD_FAIL_LDLM_REPLY;
-        result = ldlm_handle_enqueue0(info->mti_mdt->mdt_namespace,
+        rc = ldlm_handle_enqueue0(info->mti_mdt->mdt_namespace,
                                       req, info->mti_dlm_req, &cbs);
-        return result ? : req->rq_status;
+        return rc ? : req->rq_status;
 }
 
 static int mdt_convert(struct mdt_thread_info *info)
 {
-        int result;
+        int rc;
         struct ptlrpc_request *req;
 
         LASSERT(info->mti_dlm_req);
         req = mdt_info_req(info);
-        result = ldlm_handle_convert0(req, info->mti_dlm_req);
-        return result ? : req->rq_status;
+        rc = ldlm_handle_convert0(req, info->mti_dlm_req);
+        return rc ? : req->rq_status;
 }
 
 static int mdt_bl_callback(struct mdt_thread_info *info)
@@ -1093,12 +1093,12 @@ struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
 
         o = mdt_object_find(info->mti_ctxt, info->mti_mdt, f);
         if (!IS_ERR(o)) {
-                int result;
+                int rc;
 
-                result = mdt_object_lock(info, o, lh, ibits);
-                if (result != 0) {
+                rc = mdt_object_lock(info, o, lh, ibits);
+                if (rc != 0) {
                         mdt_object_put(info->mti_ctxt, o);
-                        o = ERR_PTR(result);
+                        o = ERR_PTR(rc);
                 }
         }
         return o;
@@ -1174,7 +1174,7 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
         struct mdt_object       *obj;
         const struct lu_context *ctx;
         struct req_capsule      *pill;
-        int                     result;
+        int                     rc;
 
         ctx = info->mti_ctxt;
         pill = &info->mti_pill;
@@ -1187,36 +1187,36 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
                                 if ((flags & HABEO_CORPUS) &&
                                     !lu_object_exists(&obj->mot_obj.mo_lu)) {
                                         mdt_object_put(ctx, obj);
-                                        result = -ENOENT;
+                                        rc = -ENOENT;
                                 } else {
                                         info->mti_object = obj;
-                                        result = 0;
+                                        rc = 0;
                                 }
                         } else
-                                result = PTR_ERR(obj);
+                                rc = PTR_ERR(obj);
                 } else {
                         CERROR("Invalid fid: "DFID"\n", PFID(&body->fid1));
-                        result = -EINVAL;
+                        rc = -EINVAL;
                 }
         } else
-                result = -EFAULT;
-        return result;
+                rc = -EFAULT;
+        return rc;
 }
 
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
 {
         struct req_capsule *pill;
-        int result;
+        int rc;
 
         ENTRY;
         pill = &info->mti_pill;
 
         if (req_capsule_has_field(pill, &RMF_MDT_BODY, RCL_CLIENT))
-                result = mdt_body_unpack(info, flags);
+                rc = mdt_body_unpack(info, flags);
         else
-                result = 0;
+                rc = 0;
 
-        if (result == 0 && (flags & HABEO_REFERO)) {
+        if (rc == 0 && (flags & HABEO_REFERO)) {
                 struct mdt_device       *mdt = info->mti_mdt;
                 /*pack reply*/
                 if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
@@ -1226,9 +1226,9 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
                         req_capsule_set_size(pill, &RMF_LOGCOOKIES, RCL_SERVER,
                                              mdt->mdt_max_cookiesize);
 
-                result = req_capsule_pack(pill);
+                rc = req_capsule_pack(pill);
         }
-        RETURN(result);
+        RETURN(rc);
 }
 
 struct lu_context_key mdt_txn_key;
@@ -1274,7 +1274,7 @@ static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
 static int mdt_req_handle(struct mdt_thread_info *info,
                           struct mdt_handler *h, struct ptlrpc_request *req)
 {
-        int   result;
+        int   rc;
         __u32 flags;
 
         ENTRY;
@@ -1288,20 +1288,20 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         if (h->mh_fail_id != 0)
                 MDT_FAIL_RETURN(h->mh_fail_id, 0);
 
-        result = 0;
+        rc = 0;
         flags = h->mh_flags;
         LASSERT(ergo(flags & (HABEO_CORPUS|HABEO_REFERO), h->mh_fmt != NULL));
 
         if (h->mh_fmt != NULL) {
                 req_capsule_set(&info->mti_pill, h->mh_fmt);
-                result = mdt_unpack_req_pack_rep(info, flags);
+                rc = mdt_unpack_req_pack_rep(info, flags);
         }
 
-        if (result == 0 && flags & MUTABOR &&
+        if (rc == 0 && flags & MUTABOR &&
             req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
-                result = -EROFS;
+                rc = -EROFS;
 
-        if (result == 0 && flags & HABEO_CLAVIS) {
+        if (rc == 0 && flags & HABEO_CLAVIS) {
                 struct ldlm_request *dlm_req;
 
                 LASSERT(h->mh_fmt != NULL);
@@ -1309,20 +1309,20 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 dlm_req = req_capsule_client_get(&info->mti_pill,&RMF_DLM_REQ);
                 if (dlm_req != NULL) {
                         if (info->mti_mdt->mdt_opts.mo_compat_resname)
-                                result = mdt_lock_resname_compat(info->mti_mdt,
+                                rc = mdt_lock_resname_compat(info->mti_mdt,
                                                                  dlm_req);
                         info->mti_dlm_req = dlm_req;
                 } else {
                         CERROR("Can't unpack dlm request\n");
-                        result = -EFAULT;
+                        rc = -EFAULT;
                 }
         }
 
-        if (result == 0)
+        if (rc == 0)
                 /*
                  * Process request.
                  */
-                result = h->mh_act(info);
+                rc = h->mh_act(info);
         /*
          * XXX result value is unconditionally shoved into ->rq_status
          * (original code sometimes placed error code into ->rq_status, and
@@ -1330,8 +1330,8 @@ static int mdt_req_handle(struct mdt_thread_info *info,
          * caller). ptlrpc_server_handle_request() doesn't check return value
          * anyway.
          */
-        req->rq_status = result;
-        result = 0;
+        req->rq_status = rc;
+        rc = 0;
         LASSERT(current->journal_info == NULL);
 
         if (flags & HABEO_CLAVIS && info->mti_mdt->mdt_opts.mo_compat_resname){
@@ -1339,7 +1339,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
                 dlmrep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
                 if (dlmrep != NULL)
-                        result = mdt_lock_reply_compat(info->mti_mdt, dlmrep);
+                        rc = mdt_lock_reply_compat(info->mti_mdt, dlmrep);
         }
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
@@ -1351,7 +1351,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 mdt_finish_reply(info, req->rq_status);
         }
 #endif
-        RETURN(result);
+        RETURN(rc);
 }
 
 
@@ -1467,7 +1467,7 @@ static int mdt_recovery(struct ptlrpc_request *req)
         RETURN(+1);
 }
 
-static int mdt_reply(struct ptlrpc_request *req, int result,
+static int mdt_reply(struct ptlrpc_request *req, int rc,
                      struct mdt_thread_info *info)
 {
         struct obd_device *obd;
@@ -1480,14 +1480,14 @@ static int mdt_reply(struct ptlrpc_request *req, int result,
                 obd = req->rq_export != NULL ? req->rq_export->exp_obd : NULL;
                 if (obd && obd->obd_recovering) {
                         DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        RETURN(target_queue_final_reply(req, result));
+                        RETURN(target_queue_final_reply(req, rc));
                 } else {
                         /* Lost a race with recovery; let the error path
                          * DTRT. */
-                        result = req->rq_status = -ENOTCONN;
+                        rc = req->rq_status = -ENOTCONN;
                 }
         }
-        target_send_reply(req, result, info->mti_fail_id);
+        target_send_reply(req, rc, info->mti_fail_id);
         RETURN(0);
 }
 
@@ -1500,7 +1500,7 @@ static int mdt_handle0(struct ptlrpc_request *req,
 {
         struct mdt_handler *h;
         struct lustre_msg  *msg;
-        int                 result;
+        int                 rc;
 
         ENTRY;
 
@@ -1509,27 +1509,27 @@ static int mdt_handle0(struct ptlrpc_request *req,
         LASSERT(current->journal_info == NULL);
 
         msg = req->rq_reqmsg;
-        result = mds_msg_check_version(msg);
-        if (result == 0) {
-                result = mdt_recovery(req);
-                switch (result) {
+        rc = mds_msg_check_version(msg);
+        if (rc == 0) {
+                rc = mdt_recovery(req);
+                switch (rc) {
                 case +1:
                         h = mdt_handler_find(lustre_msg_get_opc(msg), 
                                              supported);
                         if (h != NULL)
-                                result = mdt_req_handle(info, h, req);
+                                rc = mdt_req_handle(info, h, req);
                         else {
                                 req->rq_status = -ENOTSUPP;
-                                result = ptlrpc_error(req);
+                                rc = ptlrpc_error(req);
                                 break;
                         }
                         /* fall through */
                 case 0:
-                        result = mdt_reply(req, result, info);
+                        rc = mdt_reply(req, rc, info);
                 }
         } else
                 CERROR(LUSTRE_MDT0_NAME" drops mal-formed request\n");
-        RETURN(result);
+        RETURN(rc);
 }
 
 /*
@@ -1543,7 +1543,7 @@ static int mdt_handle_common(struct ptlrpc_request *req,
 {
         struct lu_context      *ctx;
         struct mdt_thread_info *info;
-        int                     result;
+        int                     rc;
         ENTRY;
 
         ctx = req->rq_svc_thread->t_ctx;
@@ -1554,10 +1554,10 @@ static int mdt_handle_common(struct ptlrpc_request *req,
 
         mdt_thread_info_init(req, info);
 
-        result = mdt_handle0(req, info, supported);
+        rc = mdt_handle0(req, info, supported);
 
         mdt_thread_info_fini(info);
-        RETURN(result);
+        RETURN(rc);
 }
 
 static int mdt_regular_handle(struct ptlrpc_request *req)
@@ -1781,42 +1781,42 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
 
 static int mdt_intent_code(long itcode)
 {
-        int result;
+        int rc;
 
         switch(itcode) {
         case IT_OPEN:
-                result = MDT_IT_OPEN;
+                rc = MDT_IT_OPEN;
                 break;
         case IT_OPEN|IT_CREAT:
-                result = MDT_IT_OCREAT;
+                rc = MDT_IT_OCREAT;
                 break;
         case IT_CREAT:
-                result = MDT_IT_CREATE;
+                rc = MDT_IT_CREATE;
                 break;
         case IT_READDIR:
-                result = MDT_IT_READDIR;
+                rc = MDT_IT_READDIR;
                 break;
         case IT_GETATTR:
-                result = MDT_IT_GETATTR;
+                rc = MDT_IT_GETATTR;
                 break;
         case IT_LOOKUP:
-                result = MDT_IT_LOOKUP;
+                rc = MDT_IT_LOOKUP;
                 break;
         case IT_UNLINK:
-                result = MDT_IT_UNLINK;
+                rc = MDT_IT_UNLINK;
                 break;
         case IT_TRUNC:
-                result = MDT_IT_TRUNC;
+                rc = MDT_IT_TRUNC;
                 break;
         case IT_GETXATTR:
-                result = MDT_IT_GETXATTR;
+                rc = MDT_IT_GETXATTR;
                 break;
         default:
                 CERROR("Unknown intent opcode: %ld\n", itcode);
-                result = -EINVAL;
+                rc = -EINVAL;
                 break;
         }
-        return result;
+        return rc;
 }
 
 static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
@@ -1965,7 +1965,7 @@ static int mdt_seq_init_cli(const struct lu_context *ctx,
                             struct lustre_cfg *cfg)
 {
         struct lu_site    *ls = m->mdt_md_dev.md_lu_dev.ld_site;
-        struct obd_device *mdc, *mdt;
+        struct obd_device *mdc;
         struct obd_uuid   *uuidp, *mdcuuidp;
         char              *uuid_str, *mdc_uuid_str;
         int               rc;
@@ -2904,13 +2904,13 @@ static struct lu_device *mdt_device_alloc(const struct lu_context *ctx,
 
         OBD_ALLOC_PTR(m);
         if (m != NULL) {
-                int result;
+                int rc;
 
                 l = &m->mdt_md_dev.md_lu_dev;
-                result = mdt_init0(ctx, m, t, cfg);
-                if (result != 0) {
+                rc = mdt_init0(ctx, m, t, cfg);
+                if (rc != 0) {
                         OBD_FREE_PTR(m);
-                        l = ERR_PTR(result);
+                        l = ERR_PTR(rc);
                         return l;
                 }
                 m->mdt_md_dev.md_upcall.mu_upcall = mdt_upcall;
@@ -3023,15 +3023,15 @@ LPROCFS_INIT_VARS(mdt, lprocfs_mdt_module_vars, lprocfs_mdt_obd_vars);
 
 static int __init mdt_mod_init(void)
 {
-        int result;
+        int rc;
         struct lprocfs_static_vars lvars;
 
         mdt_num_threads = MDT_NUM_THREADS;
         lprocfs_init_vars(mdt, &lvars);
-        result = class_register_type(&mdt_obd_device_ops, NULL,
-                                     lvars.module_vars, LUSTRE_MDT0_NAME,
-                                     &mdt_device_type);
-        return result;
+        rc = class_register_type(&mdt_obd_device_ops, NULL,
+                                 lvars.module_vars, LUSTRE_MDT0_NAME,
+                                 &mdt_device_type);
+        return rc;
 }
 
 static void __exit mdt_mod_exit(void)

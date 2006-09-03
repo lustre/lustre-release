@@ -245,9 +245,42 @@ static int seq_server_alloc_meta(struct lu_server_seq *seq,
         RETURN(rc);
 }
 
-static int seq_req_handle0(const struct lu_context *ctx,
-                           struct ptlrpc_request *req,
-                           struct seq_thread_info *info)
+static int seq_server_handle(struct lu_site *site,
+                             const struct lu_context *ctx,
+                             __u32 opc, struct lu_range *out)
+{
+        int rc;
+        ENTRY;
+        
+        switch (opc) {
+        case SEQ_ALLOC_META:
+                if (!site->ls_server_seq) {
+                        CERROR("sequence-server is not "
+                               "initialized\n");
+                        RETURN(-EINVAL);
+                }
+                rc = seq_server_alloc_meta(site->ls_server_seq,
+                                           out, ctx);
+                break;
+        case SEQ_ALLOC_SUPER:
+                if (!site->ls_control_seq) {
+                        CERROR("sequence-controller is not "
+                               "initialized\n");
+                        RETURN(-EINVAL);
+                }
+                rc = seq_server_alloc_super(site->ls_control_seq,
+                                            out, ctx);
+                break;
+        default:
+                rc = -EINVAL;
+                break;
+        }
+
+        RETURN(rc);
+}
+
+static int seq_req_handle(struct ptlrpc_request *req,
+                          struct seq_thread_info *info)
 {
         struct lu_site *site;
         struct lu_range *out;
@@ -265,34 +298,15 @@ static int seq_req_handle0(const struct lu_context *ctx,
         opc = req_capsule_client_get(&info->sti_pill,
                                      &RMF_SEQ_OPC);
         if (opc != NULL) {
+                const struct lu_context *ctx;
+                
                 out = req_capsule_server_get(&info->sti_pill,
                                              &RMF_SEQ_RANGE);
                 if (out == NULL)
                         RETURN(-EPROTO);
 
-                switch (*opc) {
-                case SEQ_ALLOC_META:
-                        if (!site->ls_server_seq) {
-                                CERROR("sequence-server is not "
-                                       "initialized\n");
-                                RETURN(-EINVAL);
-                        }
-                        rc = seq_server_alloc_meta(site->ls_server_seq,
-                                                   out, ctx);
-                        break;
-                case SEQ_ALLOC_SUPER:
-                        if (!site->ls_control_seq) {
-                                CERROR("sequence-controller is not "
-                                       "initialized\n");
-                                RETURN(-EINVAL);
-                        }
-                        rc = seq_server_alloc_super(site->ls_control_seq,
-                                                    out, ctx);
-                        break;
-                default:
-                        CERROR("wrong opc %#x\n", *opc);
-                        break;
-                }
+                ctx = req->rq_svc_thread->t_ctx;
+                rc = seq_server_handle(site, ctx, *opc, out);
         }
 
         RETURN(rc);
@@ -326,6 +340,37 @@ struct lu_context_key seq_thread_key = {
         .lct_fini = seq_thread_fini
 };
 
+static int seq_handle0(struct ptlrpc_request *req,
+                       struct seq_thread_info *info)
+{
+        int rc = 0;
+        ENTRY;
+
+        OBD_FAIL_RETURN(OBD_FAIL_SEQ_ALL_REPLY_NET | OBD_FAIL_ONCE, 0);
+
+        if (lustre_msg_get_opc(req->rq_reqmsg) == SEQ_QUERY) {
+                if (req->rq_export != NULL) {
+                        /* 
+                         * No need to return error here and overwrite @rc, this
+                         * function should return 0 even if seq_req_handle0()
+                         * returns some error code.
+                         */
+                        seq_req_handle(req, info);
+                } else {
+                        CERROR("Unconnected request\n");
+                        req->rq_status = -ENOTCONN;
+                }
+        } else {
+                CERROR("Wrong SEQ opcode: %d\n", 
+                       lustre_msg_get_opc(req->rq_reqmsg));
+                req->rq_status = -ENOTSUPP;
+                RETURN(ptlrpc_error(req));
+        }
+
+        target_send_reply(req, rc, OBD_FAIL_SEQ_ALL_REPLY_NET);
+        RETURN(rc);
+}
+
 static void seq_thread_info_init(struct ptlrpc_request *req,
                                  struct seq_thread_info *info)
 {
@@ -347,15 +392,12 @@ static void seq_thread_info_fini(struct seq_thread_info *info)
         req_capsule_fini(&info->sti_pill);
 }
 
-static int seq_req_handle(struct ptlrpc_request *req)
+static int seq_handle(struct ptlrpc_request *req)
 {
         const struct lu_context *ctx;
         struct seq_thread_info *info;
-        int rc = 0;
-        ENTRY;
-
-        OBD_FAIL_RETURN(OBD_FAIL_SEQ_ALL_REPLY_NET | OBD_FAIL_ONCE, 0);
-
+        int rc;
+        
         ctx = req->rq_svc_thread->t_ctx;
         LASSERT(ctx != NULL);
         LASSERT(ctx->lc_thread == req->rq_svc_thread);
@@ -364,31 +406,9 @@ static int seq_req_handle(struct ptlrpc_request *req)
         LASSERT(info != NULL);
 
         seq_thread_info_init(req, info);
-
-        if (lustre_msg_get_opc(req->rq_reqmsg) == SEQ_QUERY) {
-                if (req->rq_export != NULL) {
-                        /* 
-                         * no need to return error here and overwrite @rc, this
-                         * function should return 0 even if seq_req_handle0()
-                         * returns some error code.
-                         */
-                        seq_req_handle0(ctx, req, info);
-                } else {
-                        CERROR("Unconnected request\n");
-                        req->rq_status = -ENOTCONN;
-                }
-        } else {
-                CERROR("Wrong opcode: %d\n", 
-                       lustre_msg_get_opc(req->rq_reqmsg));
-                req->rq_status = -ENOTSUPP;
-                rc = ptlrpc_error(req);
-                GOTO(out_info, rc);
-        }
-
-        target_send_reply(req, rc, OBD_FAIL_SEQ_ALL_REPLY_NET);
-        EXIT;
-out_info:
+        rc = seq_handle0(req, info);
         seq_thread_info_fini(info);
+
         return rc;
 }
 
@@ -527,7 +547,7 @@ int seq_server_init(struct lu_server_seq *seq,
 		GOTO(out, rc);
 
         seq->lss_md_service = ptlrpc_init_svc_conf(&seq_conf,
-                                                   seq_req_handle,
+                                                   seq_handle,
                                                    LUSTRE_SEQ_NAME"_md",
                                                    seq->lss_proc_entry,
                                                    NULL);
@@ -555,7 +575,7 @@ int seq_server_init(struct lu_server_seq *seq,
         };
         if (is_srv) {
                 seq->lss_dt_service =  ptlrpc_init_svc_conf(&seq_conf,
-                                                            seq_req_handle,
+                                                            seq_handle,
                                                             LUSTRE_SEQ_NAME"_dt",
                                                             seq->lss_proc_entry,
                                                             NULL);
