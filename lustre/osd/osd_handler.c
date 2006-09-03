@@ -1656,13 +1656,12 @@ static int osd_index_compat_lookup(const struct lu_context *ctxt,
                                                        (struct lu_fid *)rec);
                         else
                                 result = -ENOENT;
-                        d = dentry;
-                } else {
+                 } else {
                         /* What? Disconnected alias? Ppheeeww... */
                         CERROR("Aliasing where not expected\n");
                         result = -EIO;
+                        dput(d);
                 }
-                dput(d);
                 dput(dentry);
         } else
                 result = -ENOMEM;
