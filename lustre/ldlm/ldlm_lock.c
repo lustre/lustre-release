@@ -1114,6 +1114,9 @@ void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
 {
         struct list_head *tmp;
         int i, rc;
+        
+        if (ns == NULL)
+                return;
 
         ENTRY;
         spin_lock(&ns->ns_hash_lock);

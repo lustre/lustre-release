@@ -2297,6 +2297,7 @@ static struct lu_device *mdt_layer_setup(const struct lu_context *ctx,
         struct lu_device_type *ldt;
         struct lu_device      *d;
         int rc;
+        ENTRY;
 
         /* find the type */
         type = class_get_type(typename);

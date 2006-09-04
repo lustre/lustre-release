@@ -1368,6 +1368,7 @@ static void server_put_super(struct super_block *sb)
 
         LCONSOLE_WARN("server umount %s complete\n", tmpname);
         OBD_FREE(tmpname, tmpname_sz);
+        class_obd_list();
         EXIT;
 }
 
