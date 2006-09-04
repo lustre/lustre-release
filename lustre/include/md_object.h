@@ -164,7 +164,7 @@ struct md_dir_operations {
                                const char *);
         int (*mdo_rename_tgt)(const struct lu_context *, struct md_object *,
                               struct md_object *, const struct lu_fid *,
-                              const char *);
+                              const char *, struct md_attr *);
 };
 
 struct md_device_operations {
@@ -410,14 +410,15 @@ static inline int mdo_name_remove(const struct lu_context *cx,
 
 static inline int mdo_rename_tgt(const struct lu_context *cx,
                                  struct md_object *p, struct md_object *t,
-                                 const struct lu_fid *lf, const char *name)
+                                 const struct lu_fid *lf, const char *name,
+                                 struct md_attr *ma)
 {
         if (t) {
                 LASSERT(t->mo_dir_ops->mdo_rename_tgt);
-                return t->mo_dir_ops->mdo_rename_tgt(cx, p, t, lf, name);
+                return t->mo_dir_ops->mdo_rename_tgt(cx, p, t, lf, name, ma);
         } else {
                 LASSERT(p->mo_dir_ops->mdo_rename_tgt);
-                return p->mo_dir_ops->mdo_rename_tgt(cx, p, t, lf, name);
+                return p->mo_dir_ops->mdo_rename_tgt(cx, p, t, lf, name, ma);
         }
 }
 

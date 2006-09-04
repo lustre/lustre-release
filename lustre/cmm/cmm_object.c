@@ -429,13 +429,14 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
 
 static int cml_rename_tgt(const struct lu_context *ctx,
                           struct md_object *mo_p, struct md_object *mo_t,
-                          const struct lu_fid *lf, const char *name)
+                          const struct lu_fid *lf, const char *name,
+                          struct md_attr *ma)
 {
         int rc;
         ENTRY;
 
         rc = mdo_rename_tgt(ctx, md_object_next(mo_p),
-                            md_object_next(mo_t), lf, name);
+                            md_object_next(mo_t), lf, name, ma);
         RETURN(rc);
 }
 /* used only in case of rename_tgt() when target is not exist */
@@ -728,7 +729,7 @@ static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
 
         LASSERT(mo_t == NULL);
         rc = mdo_rename_tgt(ctx, md_object_next(mo_pn),
-                            NULL/* mo_t */, lf, t_name);
+                            NULL/* mo_t */, lf, t_name, ma);
         /* only old name is removed localy */
         if (rc == 0)
                 rc = mdo_name_remove(ctx, md_object_next(mo_po),
@@ -741,16 +742,17 @@ static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
  * and unlink target with same name if it exists */
 static int cmr_rename_tgt(const struct lu_context *ctx,
                           struct md_object *mo_p, struct md_object *mo_t,
-                          const struct lu_fid *lf, const char *name)
+                          const struct lu_fid *lf, const char *name,
+                          struct md_attr *ma)
 {
         int rc;
         ENTRY;
         /* target object is remote one */
-        rc = mo_ref_del(ctx, md_object_next(mo_t), NULL);
+        rc = mo_ref_del(ctx, md_object_next(mo_t), ma);
         /* continue locally with name handling only */
         if (rc == 0)
                 rc = mdo_rename_tgt(ctx, md_object_next(mo_p),
-                                    NULL, lf, name);
+                                    NULL, lf, name, ma);
         RETURN(rc);
 }
 

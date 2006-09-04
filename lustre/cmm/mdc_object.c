@@ -206,6 +206,9 @@ static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo)
 
         memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
+        //mci->mci_opdata.mod_time = la->la_ctime;
+        //mci->mci_opdata.fsuid = la->la_uid;
+        //mci->mci_opdata.fsgid = la->la_gid;
 
         rc = md_link(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
 
@@ -227,7 +230,8 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
         mci->mci_opdata.create_mode = la->la_mode;
         mci->mci_opdata.mod_time = la->la_ctime;
-
+        mci->mci_opdata.fsuid = la->la_uid;
+        mci->mci_opdata.fsgid = la->la_gid;
         rc = md_unlink(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
         if (rc == 0) {
                 /* get attr from request */
@@ -262,9 +266,11 @@ static struct md_object_operations mdc_mo_ops = {
 /* md_dir_operations */
 static int mdc_rename_tgt(const struct lu_context *ctx,
                           struct md_object *mo_p, struct md_object *mo_t,
-                          const struct lu_fid *lf, const char *name)
+                          const struct lu_fid *lf, const char *name,
+                          struct md_attr *ma)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo_p));
+        struct lu_attr *la = &ma->ma_attr;
         struct mdc_thread_info *mci;
         int rc;
         ENTRY;
@@ -272,6 +278,9 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
         mci = mdc_info_init(ctx);
         mci->mci_opdata.fid1 = *lu_object_fid(&mo_p->mo_lu);
         mci->mci_opdata.fid2 = *lf;
+        mci->mci_opdata.mod_time = la->la_ctime;
+        mci->mci_opdata.fsuid = la->la_uid;
+        mci->mci_opdata.fsgid = la->la_gid;
 
         rc = md_rename(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
                        name, strlen(name), &mci->mci_req);

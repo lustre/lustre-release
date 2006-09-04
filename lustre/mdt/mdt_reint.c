@@ -366,6 +366,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
 {
         struct mdt_reint_record *rr = &info->mti_rr;
         struct ptlrpc_request   *req = mdt_info_req(info);
+        struct md_attr          *ma = &info->mti_attr;
         struct mdt_object       *mtgtdir;
         struct mdt_object       *mtgt = NULL;
         struct mdt_lock_handle  *lh_tgtdir;
@@ -407,10 +408,10 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         if (mtgt)
                 rc = mdo_rename_tgt(info->mti_ctxt, mdt_object_child(mtgtdir),
                                     mdt_object_child(mtgt),
-                                    rr->rr_fid2, rr->rr_tgt);
+                                    rr->rr_fid2, rr->rr_tgt, ma);
         else
                 rc = mdo_name_insert(info->mti_ctxt, mdt_object_child(mtgtdir),
-                                     rr->rr_tgt, rr->rr_fid2, 0 /* FIXME */);
+                                     rr->rr_tgt, rr->rr_fid2, 0 /* FIXME: isdir */);
         GOTO(out_unlock_tgt, rc);
 
 out_unlock_tgt:
