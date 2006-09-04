@@ -145,9 +145,10 @@ struct mdd_object *mdd_object_find(const struct lu_context *ctxt,
         o = lu_object_find(ctxt, mdd2lu_dev(d)->ld_site, f);
         if (IS_ERR(o))
                 m = (struct mdd_object *)o;
-        else
-                m = lu2mdd_obj(lu_object_locate(o->lo_header,
-                               mdd2lu_dev(d)->ld_type));
+        else {
+                o = lu_object_locate(o->lo_header, mdd2lu_dev(d)->ld_type);
+                m = o ? lu2mdd_obj(o) : NULL;
+        }
         RETURN(m);
 }
 
@@ -1317,7 +1318,10 @@ static int mdd_is_parent(const struct lu_context *ctxt,
                 if (parent)
                         mdd_object_put(ctxt, parent);
                 parent = mdd_object_find(ctxt, mdd, pfid);
-                if (IS_ERR(parent))
+                /* cross-ref parent, not supported yet */
+                if (parent == NULL)
+                        GOTO(out, rc = -EOPNOTSUPP);
+                else if (IS_ERR(parent))
                         GOTO(out, rc = PTR_ERR(parent));
                 p1 = parent;
         }
@@ -1383,24 +1387,21 @@ static int mdd_rename_sanity_check(const struct lu_context *ctxt,
 
         if (!tobj) {
                 rc = mdd_may_create(ctxt, tgt_pobj, NULL);
-                if (rc)
-                        GOTO(out, rc);
-                if (!mdd_is_parent(ctxt, mdd, tgt_pobj, sobj))
-                        GOTO(out, rc = -EINVAL);
-                GOTO(out, rc);
+        } else {
+                rc = mdd_may_delete(ctxt, tgt_pobj, tobj, src_is_dir);
+                if (rc == 0) {
+                        tgt_is_dir = S_ISDIR(mdd_object_type(tobj));
+                        if (tgt_is_dir && mdd_dir_is_empty(ctxt, tobj))
+                                rc = -ENOTEMPTY;
+                }
         }
-
-        /* source should not be ancestor of target */
-        if (!mdd_is_parent(ctxt, mdd, tobj, sobj))
-                GOTO(out, rc = -EINVAL);
-
-        rc = mdd_may_delete(ctxt, tgt_pobj, tobj, src_is_dir);
         if (rc)
                 GOTO(out, rc);
 
-        tgt_is_dir = S_ISDIR(mdd_object_type(tobj));
-        if (tgt_is_dir && mdd_dir_is_empty(ctxt, tobj))
-                GOTO(out, rc = -ENOTEMPTY);
+        /* source should not be ancestor of target dir */
+        if (src_is_dir && !mdd_is_parent(ctxt, mdd, tgt_pobj, sobj))
+                rc = -EINVAL;
+
 out:
         mdd_object_put(ctxt, sobj);
         RETURN(rc);
@@ -1418,10 +1419,16 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         struct mdd_object *mdd_tobj = NULL;
         struct lu_attr    *la_copy = &mdd_ctx_info(ctxt)->mti_la_for_fix;
         struct thandle *handle;
-        int is_dir = S_ISDIR(mdd_object_type(mdd_sobj));
+        int is_dir;
         int rc;
         ENTRY;
 
+        /* the source can be remote one, not supported yet */
+        if (mdd_sobj == NULL)
+                RETURN(-EOPNOTSUPP);
+
+        is_dir = S_ISDIR(mdd_object_type(mdd_sobj));
+        
         if (tobj)
                 mdd_tobj = md2mdd_obj(tobj);
 
@@ -1885,7 +1892,7 @@ static int mdd_name_remove(const struct lu_context *ctxt,
 
 static int mdd_rename_tgt(const struct lu_context *ctxt, struct md_object *pobj,
                           struct md_object *tobj, const struct lu_fid *lf,
-                          const char *name)
+                          const char *name, struct md_attr *ma)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_tpobj = md2mdd_obj(pobj);
