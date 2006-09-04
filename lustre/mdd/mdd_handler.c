@@ -225,11 +225,11 @@ static int mdd_may_delete(const struct lu_context *ctxt,
                           struct mdd_object *pobj, struct mdd_object *cobj,
                           int is_dir)
 {
-        struct mdd_device *mdd = mdo2mdd(&pobj->mod_obj);
+        struct mdd_device *mdd = mdo2mdd(&cobj->mod_obj);
         int rc = 0;
         ENTRY;
 
-        LASSERT(cobj && pobj);
+        LASSERT(cobj);
 
         if (!lu_object_exists(&cobj->mod_obj.mo_lu))
                 RETURN(-ENOENT);
@@ -247,7 +247,7 @@ static int mdd_may_delete(const struct lu_context *ctxt,
         } else if (S_ISDIR(mdd_object_type(cobj)))
                         RETURN(-EISDIR);
 
-        if (mdd_is_dead_obj(pobj))
+        if (pobj && mdd_is_dead_obj(pobj))
                 RETURN(-ENOENT);
 
         RETURN(rc);
@@ -1246,6 +1246,41 @@ cleanup:
         mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }
+/* partial unlink */
+static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
+                       struct md_attr *ma)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+        struct mdd_device *mdd = mdo2mdd(obj);
+        struct thandle *handle;
+        int rc;
+        ENTRY;
+
+        mdd_txn_param_build(ctxt, &MDD_TXN_XATTR_SET);
+        handle = mdd_trans_start(ctxt, mdd);
+        if (IS_ERR(handle))
+                RETURN(-ENOMEM);
+
+        mdd_write_lock(ctxt, mdd_obj);
+
+        rc = mdd_unlink_sanity_check(ctxt, NULL, mdd_obj, ma);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        __mdd_ref_del(ctxt, mdd_obj, handle);
+
+        if (S_ISDIR(lu_object_attr(&obj->mo_lu))) {
+                /* unlink dot */
+                __mdd_ref_del(ctxt, mdd_obj, handle);
+        }
+
+        rc = __mdd_finish_unlink(ctxt, mdd_obj, ma, handle);
+
+cleanup:
+        mdd_write_unlock(ctxt, mdd_obj);
+        mdd_trans_stop(ctxt, mdd, rc, handle);
+        RETURN(rc);
+}
 
 static int mdd_parent_fid(const struct lu_context *ctxt,
                           struct mdd_object *obj,
@@ -1964,46 +1999,6 @@ __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
         LASSERT(lu_object_exists(mdd2lu_obj(obj)));
 
         next->do_ops->do_ref_del(ctxt, next, handle);
-}
-
-static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
-                       struct md_attr *ma)
-{
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-        struct mdd_device *mdd = mdo2mdd(obj);
-        struct thandle *handle;
-        int isdir;
-        int rc;
-        ENTRY;
-
-        mdd_txn_param_build(ctxt, &MDD_TXN_XATTR_SET);
-        handle = mdd_trans_start(ctxt, mdd);
-        if (IS_ERR(handle))
-                RETURN(-ENOMEM);
-
-        mdd_write_lock(ctxt, mdd_obj);
-
-        isdir = S_ISDIR(lu_object_attr(&obj->mo_lu));
-        /* rmdir checks */
-        if (isdir && dt_try_as_dir(ctxt, mdd_object_child(mdd_obj))) {
-                rc = mdd_dir_is_empty(ctxt, mdd_obj);
-                if (rc != 0)
-                        GOTO(cleanup, rc);
-        }
-
-        __mdd_ref_del(ctxt, mdd_obj, handle);
-
-        if (isdir) {
-                /* unlink dot */
-                __mdd_ref_del(ctxt, mdd_obj, handle);
-        }
-
-        rc = __mdd_finish_unlink(ctxt, mdd_obj, ma, handle);
-
-cleanup:
-        mdd_write_unlock(ctxt, mdd_obj);
-        mdd_trans_stop(ctxt, mdd, rc, handle);
-        RETURN(rc);
 }
 
 /* do NOT or the MAY_*'s, you'll get the weakest */

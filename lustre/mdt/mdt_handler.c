@@ -2773,6 +2773,7 @@ static int mdt_destroy_export(struct obd_export *export)
         ENTRY;
 
         med = &export->exp_mdt_data;
+        LASSERT(med);
         target_destroy_export(export);
 
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
