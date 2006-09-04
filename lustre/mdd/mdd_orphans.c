@@ -118,6 +118,7 @@ static void orph_key_test_and_del(const struct lu_context *ctx,
         if (IS_ERR(mdo))
                 CERROR("Invalid orphan!\n");
         else {
+                mdd_write_lock(ctx, mdo);
                 if (mdo->mod_count == 0) {
                         /* non-opened orphan, let's delete it */
                         struct md_attr *ma = &mdd_ctx_info(ctx)->mti_ma;
@@ -126,6 +127,7 @@ static void orph_key_test_and_del(const struct lu_context *ctx,
                         //mdd_ost_objects_destroy(ctx, ma);
                         /* TODO: destroy index entry */
                 }
+                mdd_write_unlock(ctx, mdo);
                 mdd_object_put(ctx, mdo);
         }        
 }

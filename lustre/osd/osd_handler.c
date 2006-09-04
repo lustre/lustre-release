@@ -638,7 +638,9 @@ static void osd_object_write_lock(const struct lu_context *ctx,
         /*
          * Write lock assumes transaction.
          */
-        LASSERT(oti->oti_txns > 0);
+        /* open need it without transaction
+         * LASSERT(oti->oti_txns > 0);
+        */
         obj->oo_owner = ctx;
         oti->oti_w_locks++;
 }

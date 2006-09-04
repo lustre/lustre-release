@@ -1149,7 +1149,7 @@ int __mdd_object_kill(const struct lu_context *ctxt,
         }
         return rc;
 }
-
+/* caller should take a lock before calling */
 static int __mdd_finish_unlink(const struct lu_context *ctxt,
                                struct mdd_object *obj, struct md_attr *ma,
                                struct thandle *th)
@@ -2035,7 +2035,7 @@ static int mdd_open(const struct lu_context *ctxt, struct md_object *obj,
         int mode = accmode(md2mdd_obj(obj), flags);
         int rc = 0;
 
-        mdd_read_lock(ctxt, md2mdd_obj(obj));
+        mdd_write_lock(ctxt, md2mdd_obj(obj));
 
         if (mode & MAY_WRITE) {
                 if (mdd_is_immutable(md2mdd_obj(obj)))
@@ -2045,7 +2045,7 @@ static int mdd_open(const struct lu_context *ctxt, struct md_object *obj,
         if (rc == 0)
                 md2mdd_obj(obj)->mod_count ++;
 
-        mdd_read_unlock(ctxt, md2mdd_obj(obj));
+        mdd_write_unlock(ctxt, md2mdd_obj(obj));
         return rc;
 }
 
