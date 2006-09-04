@@ -1581,6 +1581,8 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
         CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n",
                mds, PFID(&op_data->fid1));
         
+        op_data->fsuid = current->fsuid;
+        op_data->fsgid = current->fsgid;
         rc = md_link(lmv->tgts[mds].ltd_exp, op_data, request);
 
         RETURN(rc);
@@ -1678,7 +1680,8 @@ request:
                        PFID(&op_data->fid1), oldlen, old, PFID(&op_data->fid2),
                        newlen, new);
         }
-
+        op_data->fsuid = current->fsuid;
+        op_data->fsgid = current->fsgid;
         rc = md_rename(lmv->tgts[mds].ltd_exp, op_data, old, oldlen,
                        new, newlen, request);
         RETURN(rc);
@@ -1877,7 +1880,8 @@ static int lmv_unlink_slaves(struct obd_export *exp,
                 memset(op_data2, 0, sizeof(*op_data2));
                 op_data2->fid1 = mea->mea_ids[i];
                 op_data2->create_mode = MDS_MODE_DONT_LOCK | S_IFDIR;
-
+                op_data2->fsuid = current->fsuid;
+                op_data2->fsgid = current->fsgid;
                 tgt_exp = lmv_get_export(lmv, &op_data2->fid1);
                 if (IS_ERR(tgt_exp))
                         GOTO(out_free_op_data2, rc = PTR_ERR(tgt_exp));
@@ -1943,7 +1947,8 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
         tgt_exp = lmv_get_export(lmv, &op_data->fid1);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
-        
+        op_data->fsuid = current->fsuid;
+        op_data->fsgid = current->fsgid;
         rc = md_unlink(tgt_exp, op_data, request);
         RETURN(rc);
 }

@@ -613,7 +613,8 @@ struct md_op_data {
         struct lmv_stripe_md *mea1;
         struct lmv_stripe_md *mea2;
         __u32                 suppgids[2];
-
+        __u32                 fsuid;
+        __u32                 fsgid;
         /* part of obdo fields for md stack */
         obd_valid             valid;
         obd_size              size;

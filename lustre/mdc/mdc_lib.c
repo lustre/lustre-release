@@ -228,8 +228,8 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         LASSERT (rec != NULL);
 
         rec->ul_opcode = REINT_UNLINK;
-        rec->ul_fsuid = current->fsuid;
-        rec->ul_fsgid = current->fsgid;
+        rec->ul_fsuid = op_data->fsuid;//current->fsuid;
+        rec->ul_fsgid = op_data->fsgid;//current->fsgid;
         rec->ul_cap = current->cap_effective;
         rec->ul_mode = op_data->create_mode;
         rec->ul_suppgid = op_data->suppgids[0];
@@ -251,8 +251,8 @@ void mdc_link_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
         rec->lk_opcode = REINT_LINK;
-        rec->lk_fsuid = current->fsuid;
-        rec->lk_fsgid = current->fsgid;
+        rec->lk_fsuid = op_data->fsuid;//current->fsuid;
+        rec->lk_fsgid = op_data->fsgid;//current->fsgid;
         rec->lk_cap = current->cap_effective;
         rec->lk_suppgid1 = op_data->suppgids[0];
         rec->lk_suppgid2 = op_data->suppgids[1];
@@ -275,8 +275,8 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
 
         /* XXX do something about time, uid, gid */
         rec->rn_opcode = REINT_RENAME;
-        rec->rn_fsuid = current->fsuid;
-        rec->rn_fsgid = current->fsgid;
+        rec->rn_fsuid = op_data->fsuid;//current->fsuid;
+        rec->rn_fsgid = op_data->fsgid;//current->fsgid;
         rec->rn_cap = current->cap_effective;
         rec->rn_suppgid1 = op_data->suppgids[0];
         rec->rn_suppgid2 = op_data->suppgids[1];
