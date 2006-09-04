@@ -178,14 +178,12 @@ lcfg_cleanup:
 }
 
 int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
-               void *md, int *md_size, int need_locked, const char *name)
+               void *md, int *md_size, const char *name)
 {
         struct dt_object *next;
         int rc = 0;
         ENTRY;
 
-        if (need_locked)
-                mdd_read_lock(ctxt, obj);
         next = mdd_object_child(obj);
         rc = next->do_ops->do_xattr_get(ctxt, next, md, *md_size, name);
         /*
@@ -202,10 +200,17 @@ int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
                 *md_size = rc;
         }
 
-        if (need_locked)
-                mdd_read_unlock(ctxt, obj);
-
         RETURN (rc);
+}
+
+int mdd_get_md_locked(const struct lu_context *ctxt, struct mdd_object *obj,
+                      void *md, int *md_size, const char *name)
+{
+        int rc = 0;
+        mdd_read_lock(ctxt, obj);
+        rc = mdd_get_md(ctxt, obj, md, md_size, name);
+        mdd_read_unlock(ctxt, obj);
+        return rc;
 }
 
 static int mdd_lov_set_stripe_md(const struct lu_context *ctxt,
@@ -284,7 +289,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
                         struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
                         int size = sizeof(lmm);
                         /*Get parent dir stripe and set*/
-                        rc = mdd_get_md(ctxt, pobj, &lmm, &size, 0, 
+                        rc = mdd_get_md(ctxt, pobj, &lmm, &size,
                                         MDS_LOV_MD_NAME);
                         if (rc > 0) {
                                 rc = mdd_xattr_set_txn(ctxt, child, lmm, size,
@@ -366,8 +371,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         if (__lmm == NULL)
                                 GOTO(out_oa, rc = -ENOMEM);
 
-                        rc = mdd_get_md(ctxt, parent, __lmm,
-                                        &returned_lmm_size, 1, MDS_LOV_MD_NAME);
+                        rc = mdd_get_md_locked(ctxt, parent, __lmm,
+                                        &returned_lmm_size, MDS_LOV_MD_NAME);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
                                                    lov_exp, 0, &lsm, __lmm);

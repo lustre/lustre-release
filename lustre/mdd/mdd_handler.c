@@ -271,7 +271,7 @@ static int __mdd_lmm_get(const struct lu_context *ctxt,
         int rc;
 
         LASSERT(ma->ma_lmm != NULL && ma->ma_lmm_size > 0);
-        rc = mdd_get_md(ctxt, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size, 0,
+        rc = mdd_get_md(ctxt, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size,
                         MDS_LOV_MD_NAME);
         if (rc > 0) {
                 ma->ma_valid |= MA_LOV;
@@ -287,7 +287,7 @@ static int __mdd_lmv_get(const struct lu_context *ctxt,
 {
         int rc;
 
-        rc = mdd_get_md(ctxt, mdd_obj, ma->ma_lmv, &ma->ma_lmv_size, 0,
+        rc = mdd_get_md(ctxt, mdd_obj, ma->ma_lmv, &ma->ma_lmv_size,
                         MDS_LMV_MD_NAME);
         if (rc > 0) {
                 ma->ma_valid |= MA_LMV;
@@ -835,7 +835,7 @@ static int mdd_attr_set(const struct lu_context *ctxt,
                 if (lmm == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
-                rc = mdd_get_md(ctxt, mdd_obj, lmm, &lmm_size, 1,
+                rc = mdd_get_md_locked(ctxt, mdd_obj, lmm, &lmm_size,
                                 MDS_LOV_MD_NAME);
 
                 if (rc < 0)
@@ -2033,18 +2033,20 @@ static int mdd_open(const struct lu_context *ctxt, struct md_object *obj,
                     int flags)
 {
         int mode = accmode(md2mdd_obj(obj), flags);
-        
-        mdd_write_lock(ctxt, md2mdd_obj(obj));
+        int rc = 0;
+
+        mdd_read_lock(ctxt, md2mdd_obj(obj));
 
         if (mode & MAY_WRITE) {
                 if (mdd_is_immutable(md2mdd_obj(obj)))
-                        RETURN(-EACCES);
+                        rc = -EACCES;
         }
         
-        md2mdd_obj(obj)->mod_count ++;
+        if (rc == 0)
+                md2mdd_obj(obj)->mod_count ++;
 
-        mdd_write_unlock(ctxt, md2mdd_obj(obj));
-        return 0;
+        mdd_read_unlock(ctxt, md2mdd_obj(obj));
+        return rc;
 }
 
 static int mdd_close(const struct lu_context *ctxt, struct md_object *obj,

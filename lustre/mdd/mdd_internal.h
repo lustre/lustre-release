@@ -93,7 +93,9 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    const struct md_create_spec *spec, struct lu_attr *la);
 
 int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
-               void *md, int *md_size, int need_locked, const char *name);
+               void *md, int *md_size, const char *name);
+int mdd_get_md_locked(const struct lu_context *ctxt, struct mdd_object *obj,
+                      void *md, int *md_size, const char *name);
 
 int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma);
