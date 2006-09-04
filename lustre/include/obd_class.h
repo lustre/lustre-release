@@ -1751,20 +1751,6 @@ static inline int md_readpage(struct obd_export *exp,
         RETURN(rc);
 }
 
-#ifdef HAVE_SPLIT_SUPPORT
-static inline int md_sendpage(struct obd_export *exp,
-                              const struct lu_fid *fid,
-                              const struct page *page)
-{
-        int rc;
-        ENTRY;
-        EXP_CHECK_MD_OP(exp, sendpage);
-        MD_COUNTER_INCREMENT(exp->exp_obd, sendpage);
-        rc = MDP(exp->exp_obd, sendpage)(exp, fid, page);
-        RETURN(rc);
-}
-#endif
-
 static inline int md_unlink(struct obd_export *exp, struct md_op_data *op_data,
                             struct ptlrpc_request **request)
 {

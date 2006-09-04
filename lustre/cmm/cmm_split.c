@@ -208,8 +208,8 @@ static int cmm_send_split_pages(const struct lu_context *ctx,
                 RETURN(PTR_ERR(obj));
 
         for (i = 0; i < rdpg->rp_npages; i++) {
-                rc = mo_sendpage(ctx, md_object_next(&obj->cmo_obj),
-                                  rdpg->rp_pages[i]);
+                rc = mdc_send_page(ctx, md_object_next(&obj->cmo_obj),
+                                   rdpg->rp_pages[i]);
                 if (rc)
                         GOTO(cleanup, rc);
         }

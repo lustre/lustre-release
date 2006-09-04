@@ -1126,10 +1126,7 @@ struct md_ops {
                       struct ptlrpc_request **);
         int (*m_readpage)(struct obd_export *, const struct lu_fid *,
                           __u64, struct page *, struct ptlrpc_request **);
-#ifdef HAVE_SPLIT_SUPPORT
-        int (*m_sendpage)(struct obd_export *, const struct lu_fid *,
-                          const struct page *);
-#endif
+
         int (*m_unlink)(struct obd_export *, struct md_op_data *,
                         struct ptlrpc_request **);
 

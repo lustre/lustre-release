@@ -762,6 +762,7 @@ out:
         ptlrpc_req_finished(req);
         RETURN(rc);
 }
+EXPORT_SYMBOL(mdc_sendpage);
 #endif
 
 int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
@@ -1410,9 +1411,6 @@ struct md_ops mdc_md_ops = {
         .m_getxattr         = mdc_getxattr,
         .m_sync             = mdc_sync,
         .m_readpage         = mdc_readpage,
-#ifdef HAVE_SPLIT_SUPPORT
-        .m_sendpage         = mdc_sendpage,
-#endif
         .m_unlink           = mdc_unlink,
         .m_cancel_unused    = mdc_cancel_unused,
         .m_init_ea_size     = mdc_init_ea_size,
