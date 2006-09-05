@@ -92,19 +92,24 @@ static int cmm_alloc_fid(const struct lu_context *ctx, struct cmm_device *cmm,
         int rc = 0, i = 0;
         
         LASSERT(count == cmm->cmm_tgt_count);
-        
         /* FIXME: this spin_lock maybe not proper, 
          * because fid_alloc may need RPC */
         spin_lock(&cmm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets,
                                  mc_linkage) {
+                if (cmm->cmm_local_num == mc->mc_num)
+                        continue;
+
                 rc = obd_fid_alloc(mc->mc_desc.cl_exp, &fid[i++], NULL);
-                if (rc) {
+                if (rc < 0) {
                         spin_unlock(&cmm->cmm_tgt_guard);
                         RETURN(rc);
                 }
         }
         spin_unlock(&cmm->cmm_tgt_guard);
+        LASSERT(i + 1 == count);
+        if (rc == 1)
+                rc = 0;
         RETURN(rc);
 }
 
@@ -145,6 +150,7 @@ static int cmm_creat_remote_obj(const struct lu_context *ctx,
                 RETURN(PTR_ERR(obj));
 
         OBD_ALLOC_PTR(spec);
+        spec->u.sp_pfid = fid; 
         rc = mo_object_create(ctx, md_object_next(&obj->cmo_obj), 
                               spec, ma);
         OBD_FREE_PTR(spec);
@@ -162,7 +168,7 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
         struct lu_fid *lf = cmm2_fid(md2cmm_obj(mo));
         ENTRY;
 
-        lmv_size = cmm_md_size(cmm->cmm_tgt_count + 1);
+        lmv_size = cmm_md_size(cmm->cmm_tgt_count);
 
         /* This lmv will be free after finish splitting. */
         OBD_ALLOC(lmv, lmv_size);
@@ -171,7 +177,7 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
 
         lmv->mea_master = -1;
         lmv->mea_magic = MEA_MAGIC_ALL_CHARS;
-        lmv->mea_count = cmm->cmm_tgt_count + 1;
+        lmv->mea_count = cmm->cmm_tgt_count;
 
         lmv->mea_ids[0] = *lf;
 
@@ -179,7 +185,7 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
         if (rc)
                 GOTO(cleanup, rc);
 
-        for (i = 0; i < cmm->cmm_tgt_count; i ++) {
+        for (i = 1; i < cmm->cmm_tgt_count; i ++) {
                 rc = cmm_creat_remote_obj(ctx, cmm, &lmv->mea_ids[i], ma);
                 if (rc)
                         GOTO(cleanup, rc);
@@ -307,13 +313,14 @@ static int cmm_scan_and_split(const struct lu_context *ctx,
         hash_segement = MAX_HASH_SIZE / cmm->cmm_tgt_count;
         for (i = 1; i < cmm->cmm_tgt_count; i++) {
                 struct lu_fid *lf = &ma->ma_lmv->mea_ids[i];
-
+                
                 rdpg->rp_hash = i * hash_segement;
                 rdpg->rp_hash_end = rdpg->rp_hash + hash_segement;
-                rc = cmm_split_entries(ctx, mo, rdpg, lf);
+                rc = cmm_remove_entries(ctx, mo, rdpg);
                 if (rc)
                         GOTO(cleanup, rc);
-                rc = cmm_remove_entries(ctx, mo, rdpg);
+
+                rc = cmm_split_entries(ctx, mo, rdpg, lf);
                 if (rc)
                         GOTO(cleanup, rc);
         }

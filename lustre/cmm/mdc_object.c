@@ -34,6 +34,7 @@
 #include <obd_support.h>
 #include <lustre_lib.h>
 #include <obd_class.h>
+#include <lustre_mdc.h>
 #include "mdc_internal.h"
 
 static struct md_object_operations mdc_mo_ops;
@@ -245,12 +246,26 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
 
 #ifdef HAVE_SPLIT_SUPPORT
 int mdc_send_page(const struct lu_context *ctx, struct md_object *mo,
-                  const struct page *page)
+                  struct page *page)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
+        struct lu_dirpage *dp;
+        struct lu_dirent  *ent;
         int rc;
         ENTRY;
 
+        kmap(page);
+        dp = page_address(page);
+        for (ent = lu_dirent_start(dp); ent != NULL;
+                          ent = lu_dirent_next(ent)) {
+                /* allocate new fid for each obj */
+                rc = obd_fid_alloc(mc->mc_desc.cl_exp, &ent->lde_fid, NULL);
+                if (rc) {
+                        kunmap(page);
+                        RETURN(rc);
+                }
+        }
+        kunmap(page);
         rc = mdc_sendpage(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
                           page);
         RETURN(rc);
