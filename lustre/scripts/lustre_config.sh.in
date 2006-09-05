@@ -895,7 +895,7 @@ check_lnet() {
     # Execute remote command to start lnet network
     verbose_output "Starting lnet network in ${HOST_NAME[i]}"
     COMMAND=$"modprobe lnet; ${LCTL} network up 2>&1"
-    RET_STR=`${REMOTE} ${HOST_NAME[i]} "${COMMAND}" 2>&1`
+    RET_STR=`${REMOTE} ${HOST_NAME[i]} "(${EXPORT_PATH} ${COMMAND})" 2>&1`
     if [ $? -ne 0 -o "${RET_STR}" = "${RET_STR#*LNET configured*}" ]
     then
         echo >&2 "`basename $0`: check_lnet() error: remote" \
@@ -982,7 +982,7 @@ mass_config() {
         COMMAND="mkdir -p ${MOUNT_POINT[i]}"
         verbose_output "Creating the mount point ${MOUNT_POINT[i]} on" \
                        "${HOST_NAME[i]}"
-        ${REMOTE} ${HOST_NAME[i]} "${COMMAND}" >&2 
+        ${REMOTE} ${HOST_NAME[i]} "(${EXPORT_PATH} ${COMMAND})" >&2 
         if [ $? -ne 0 ]; then
             echo >&2 "`basename $0`: mass_config() error:"\
                  "Failed to execute remote command to"\
@@ -1110,7 +1110,7 @@ modify_fstab() {
         COMMAND=". @scriptlibdir@/lc_common.sh; \
                 sed -i \"/^${device_name}\t/d\" \$(fcanon /etc/fstab); \
                 echo -e \"${mntent}\" >> \$(fcanon /etc/fstab)"
-        ${REMOTE} ${HOST_NAME[i]} "${COMMAND}" >&2
+        ${REMOTE} ${HOST_NAME[i]} "(${EXPORT_PATH} ${COMMAND})" >&2
         if [ $? -ne 0 ]; then
             echo >&2 "`basename $0`: modify_fstab() error:"\
             "Failed to modify /etc/fstab of host ${HOST_NAME[i]}"\

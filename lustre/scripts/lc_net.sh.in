@@ -141,7 +141,7 @@ remote_check() {
 	# Execute remote command to check whether ${HOST_NAMES[i]}
 	# can resolve its own name
 	cmd="ping -c1 ${HOST_NAMES[i]} 2>&1"
-	ret_str=`${REMOTE} ${HOST_NAMES[i]} "${cmd}" 2>&1`
+	ret_str=`${REMOTE} ${HOST_NAMES[i]} "(${EXPORT_PATH} ${cmd})" 2>&1`
 	if [ $? -ne 0 -a -n "${ret_str}" ]; then
 		echo >&2 "`basename $0`: remote_check() error:"\
 		"remote to ${HOST_NAMES[i]} error: ${ret_str}!"
