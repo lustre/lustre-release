@@ -166,6 +166,7 @@ foreach my $lov (@{$objs{"lov"}}) {
 }
 # XXX could find failover pairs of osts and mdts here and link them to
 # one another and then fill in their details in the csv generators below
+my $COUNT = 1;
 foreach my $mds (@{$objs{"mds"}}) {
     # find the net for this node
     my $net = find_obj("net", "node", $mds->{"node"}, @{$objs{"net"}});
@@ -185,7 +186,9 @@ foreach my $mds (@{$objs{"mds"}}) {
         $mkfs_options = " --param=\"$mkfs_options\"";
     }
 
-    printf "%s,%s,%s,$MOUNTPT/%s,mgs|mdt,,,,--device-size=%s --noformat%s,,noauto\n", 
+    if ($COUNT == 1) {
+        # mgs/mdt
+        printf "%s,%s,%s,$MOUNTPT/%s,mgs|mdt,,,,--device-size=%s --noformat%s,,noauto\n", 
         $mds->{"node"},
         lnet_options($net),
         $mds->{"dev"},
@@ -193,7 +196,18 @@ foreach my $mds (@{$objs{"mds"}}) {
         $mds->{"size"},
         $mkfs_options;
 
-    push(@mgses, $net->{"nid"});
+        push(@mgses, $net->{"nid"});
+    } else {
+        # mdt
+        printf "%s,%s,%s,$MOUNTPT/%s,mdt,,\"%s\",,--device-size=%s --noformat,,noauto\n",
+        $mds->{"node"},
+        lnet_options($net),
+        $mds->{"dev"},
+        $mds->{"mds"},
+        join(",", @mgses),
+        $mds->{"size"};
+    }
+    $COUNT++;
 }
 
 foreach my $ost (@{$objs{"ost"}}) {
