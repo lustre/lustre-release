@@ -1528,7 +1528,7 @@ static int mdt_handle0(struct ptlrpc_request *req,
                         rc = mdt_reply(req, rc, info);
                 }
         } else
-                CERROR(LUSTRE_MDT0_NAME" drops mal-formed request\n");
+                CERROR(LUSTRE_MDT_NAME" drops mal-formed request\n");
         RETURN(rc);
 }
 
@@ -2160,7 +2160,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                  */
                 .psc_num_threads   = min(max(mdt_num_threads, MDT_MIN_THREADS),
                                        MDT_MAX_THREADS),
-                .psc_ctx_tags      = LCT_MD_THREAD
+                .psc_ctx_tags      = LCT_MD_THREAD | LCT_DT_THREAD
         };
 
         m->mdt_ldlm_client = &m->mdt_md_dev.md_lu_dev.ld_obd->obd_ldlm_client;
@@ -2168,13 +2168,13 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                            "mdt_ldlm_client", m->mdt_ldlm_client);
 
         m->mdt_service =
-                ptlrpc_init_svc_conf(&conf, mdt_regular_handle, LUSTRE_MDT0_NAME,
+                ptlrpc_init_svc_conf(&conf, mdt_regular_handle, LUSTRE_MDT_NAME,
                                      m->mdt_md_dev.md_lu_dev.ld_proc_entry,
                                      NULL);
         if (m->mdt_service == NULL)
                 RETURN(-ENOMEM);
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_service, LUSTRE_MDT0_NAME);
+        rc = ptlrpc_start_threads(NULL, m->mdt_service, LUSTRE_MDT_NAME);
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
@@ -2192,11 +2192,11 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
                 .psc_num_threads   = min(max(mdt_num_threads, MDT_MIN_THREADS),
                                        MDT_MAX_THREADS),
-                .psc_ctx_tags      = LCT_MD_THREAD
+                .psc_ctx_tags      = LCT_MD_THREAD | LCT_DT_THREAD
         };
         m->mdt_readpage_service =
                 ptlrpc_init_svc_conf(&conf, mdt_readpage_handle,
-                                     LUSTRE_MDT0_NAME "_readpage",
+                                     LUSTRE_MDT_NAME "_readpage",
                                      m->mdt_md_dev.md_lu_dev.ld_proc_entry,
                                      NULL);
 
@@ -2220,12 +2220,12 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
                 .psc_num_threads   = min(max(mdt_num_threads, MDT_MIN_THREADS),
                                        MDT_MAX_THREADS),
-                .psc_ctx_tags      = LCT_MD_THREAD
+                .psc_ctx_tags      = LCT_MD_THREAD | LCT_DT_THREAD
         };
 
         m->mdt_setattr_service =
                 ptlrpc_init_svc_conf(&conf, mdt_regular_handle,
-                                     LUSTRE_MDT0_NAME "_setattr",
+                                     LUSTRE_MDT_NAME "_setattr",
                                      m->mdt_md_dev.md_lu_dev.ld_proc_entry,
                                      NULL);
 
@@ -2298,7 +2298,7 @@ static struct lu_device *mdt_layer_setup(const struct lu_context *ctx,
         struct lu_device      *d;
         int rc;
         ENTRY;
-
+        
         /* find the type */
         type = class_get_type(typename);
         if (!type) {
@@ -2337,6 +2337,7 @@ static struct lu_device *mdt_layer_setup(const struct lu_context *ctx,
         lu_device_get(d);
 
         RETURN(d);
+
 out_alloc:
         ldt->ldt_ops->ldto_device_free(ctx, d);
         type->typ_refcnt--;
@@ -2346,30 +2347,30 @@ out:
         return ERR_PTR(rc);
 }
 
-static int mdt_stack_init(const struct lu_context *ctx,
+static int mdt_stack_init(const struct lu_context *ctx, 
                           struct mdt_device *m, struct lustre_cfg *cfg)
 {
         struct lu_device  *d = &m->mdt_md_dev.md_lu_dev;
         struct lu_device  *tmp;
-        struct md_device *md;
+        struct md_device  *md;
         int rc;
         ENTRY;
 
         /* init the stack */
-        tmp = mdt_layer_setup(ctx, LUSTRE_OSD0_NAME, d, cfg);
+        tmp = mdt_layer_setup(ctx, LUSTRE_OSD_NAME, d, cfg);
         if (IS_ERR(tmp)) {
                 RETURN(PTR_ERR(tmp));
         }
         m->mdt_bottom = lu2dt_dev(tmp);
         d = tmp;
-        tmp = mdt_layer_setup(ctx, LUSTRE_MDD0_NAME, d, cfg);
+        tmp = mdt_layer_setup(ctx, LUSTRE_MDD_NAME, d, cfg);
         if (IS_ERR(tmp)) {
                 GOTO(out, rc = PTR_ERR(tmp));
         }
         d = tmp;
         md = lu2md_dev(d);
 
-        tmp = mdt_layer_setup(ctx, LUSTRE_CMM0_NAME, d, cfg);
+        tmp = mdt_layer_setup(ctx, LUSTRE_CMM_NAME, d, cfg);
         if (IS_ERR(tmp)) {
                 GOTO(out, rc = PTR_ERR(tmp));
         }
@@ -2431,7 +2432,7 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 }
 
 static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
-                     struct lu_device_type *t, struct lustre_cfg *cfg)
+                     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
         struct mdt_thread_info *info;
         struct obd_device      *obd;
@@ -2464,7 +2465,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         if (s == NULL)
                 RETURN(-ENOMEM);
 
-        md_device_init(&m->mdt_md_dev, t);
+        md_device_init(&m->mdt_md_dev, ldt);
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
         m->mdt_md_dev.md_lu_dev.ld_obd = obd;
 
@@ -2480,6 +2481,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
                 CERROR("can't init device stack, rc %d\n", rc);
                 GOTO(err_fini_site, rc);
         }
+
         /* set server index */
         LASSERT(num);
         s->ls_node_id = simple_strtol(num, NULL, 10);
@@ -2493,7 +2495,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
                 GOTO(err_fini_fld, rc);
 
         snprintf(info->mti_u.ns_name, sizeof info->mti_u.ns_name,
-                 LUSTRE_MDT0_NAME"-%p", m);
+                 LUSTRE_MDT_NAME"-%p", m);
         m->mdt_namespace = ldlm_namespace_new(info->mti_u.ns_name,
                                               LDLM_NAMESPACE_SERVER);
         if (m->mdt_namespace == NULL)
@@ -2623,7 +2625,7 @@ static void mdt_object_free(const struct lu_context *ctxt, struct lu_object *o)
 static int mdt_object_print(const struct lu_context *ctxt, void *cookie,
                             lu_printer_t p, const struct lu_object *o)
 {
-        return (*p)(ctxt, cookie, LUSTRE_MDT0_NAME"-object@%p", o);
+        return (*p)(ctxt, cookie, LUSTRE_MDT_NAME"-object@%p", o);
 }
 
 static struct lu_device_operations mdt_lu_ops = {
@@ -2783,7 +2785,7 @@ static int mdt_destroy_export(struct obd_export *export)
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);
 
-        rc = lu_context_init(&ctxt, LCT_MD_THREAD);
+        rc = lu_context_init(&ctxt, LCT_MD_THREAD | LCT_DT_THREAD);
         if (rc)
                 RETURN(rc);
 
@@ -2854,7 +2856,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         ENTRY;
         CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
-        rc = lu_context_init(&ctxt, LCT_MD_THREAD);
+        rc = lu_context_init(&ctxt, LCT_MD_THREAD | LCT_DT_THREAD);
         if (rc)
                 RETURN(rc);
         lu_context_enter(&ctxt);
@@ -3011,9 +3013,9 @@ static struct lu_device_type_operations mdt_device_type_ops = {
 
 static struct lu_device_type mdt_device_type = {
         .ldt_tags     = LU_DEVICE_MD,
-        .ldt_name     = LUSTRE_MDT0_NAME,
+        .ldt_name     = LUSTRE_MDT_NAME,
         .ldt_ops      = &mdt_device_type_ops,
-        .ldt_ctx_tags = LCT_MD_THREAD
+        .ldt_ctx_tags = LCT_MD_THREAD | LCT_DT_THREAD
 };
 
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
@@ -3031,17 +3033,19 @@ static int __init mdt_mod_init(void)
         int rc;
         struct lprocfs_static_vars lvars;
 
+        printk(KERN_INFO "Lustre: MetaData Target; info@clusterfs.com\n");
+        
         mdt_num_threads = MDT_NUM_THREADS;
         lprocfs_init_vars(mdt, &lvars);
         rc = class_register_type(&mdt_obd_device_ops, NULL,
-                                 lvars.module_vars, LUSTRE_MDT0_NAME,
+                                 lvars.module_vars, LUSTRE_MDT_NAME,
                                  &mdt_device_type);
         return rc;
 }
 
 static void __exit mdt_mod_exit(void)
 {
-        class_unregister_type(LUSTRE_MDT0_NAME);
+        class_unregister_type(LUSTRE_MDT_NAME);
 }
 
 
@@ -3164,7 +3168,7 @@ static struct mdt_opc_slice mdt_readpage_handlers[] = {
 };
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Meta-data Target ("LUSTRE_MDT0_NAME")");
+MODULE_DESCRIPTION("Lustre Meta-data Target ("LUSTRE_MDT_NAME")");
 MODULE_LICENSE("GPL");
 
 CFS_MODULE_PARM(mdt_num_threads, "ul", ulong, 0444,

@@ -81,7 +81,7 @@ static int mdc_object_init(const struct lu_context *ctx, struct lu_object *lo)
 static int mdc_object_print(const struct lu_context *ctx, void *cookie,
                             lu_printer_t p, const struct lu_object *lo)
 {
-	return (*p)(ctx, cookie, LUSTRE_MDC0_NAME"-object@%p", lo);
+	return (*p)(ctx, cookie, LUSTRE_CMM_MDC_NAME"-object@%p", lo);
 }
 
 static struct lu_object_operations mdc_obj_ops = {

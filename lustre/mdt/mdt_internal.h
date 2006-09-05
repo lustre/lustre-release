@@ -412,7 +412,7 @@ static inline void mdt_fail_write(const struct lu_context *ctx,
                                   struct dt_device *dd, int id)
 {
         if (OBD_FAIL_CHECK(id)) {
-                CERROR(LUSTRE_MDT0_NAME": obd_fail_loc=%x, fail write ops\n",
+                CERROR(LUSTRE_MDT_NAME": obd_fail_loc=%x, fail write ops\n",
                        id);
                 dd->dd_ops->dt_ro(ctx, dd, 0);
                 /* We set FAIL_ONCE because we never "un-fail" a device */
@@ -423,14 +423,14 @@ static inline void mdt_fail_write(const struct lu_context *ctx,
 #define MDT_FAIL_CHECK(id)                                              \
 ({                                                                      \
         if (OBD_FAIL_CHECK(id))                                         \
-                CERROR(LUSTRE_MDT0_NAME": " #id " test failed\n");      \
+                CERROR(LUSTRE_MDT_NAME": " #id " test failed\n");      \
         OBD_FAIL_CHECK(id);                                             \
 })
 
 #define MDT_FAIL_CHECK_ONCE(id)                                              \
 ({      int _ret_ = 0;                                                       \
         if (OBD_FAIL_CHECK(id)) {                                            \
-                CERROR(LUSTRE_MDT0_NAME": *** obd_fail_loc=%x ***\n", id);   \
+                CERROR(LUSTRE_MDT_NAME": *** obd_fail_loc=%x ***\n", id);   \
                 obd_fail_loc |= OBD_FAILED;                                  \
                 if ((id) & OBD_FAIL_ONCE)                                    \
                         obd_fail_loc |= OBD_FAIL_ONCE;                       \

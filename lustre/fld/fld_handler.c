@@ -81,6 +81,7 @@ struct lu_context_key fld_thread_key = {
 
 static int __init fld_mod_init(void)
 {
+        printk(KERN_INFO "Lustre: Fid Location Database; info@clusterfs.com\n");
         lu_context_key_register(&fld_thread_key);
         return 0;
 }

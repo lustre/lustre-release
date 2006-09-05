@@ -647,11 +647,10 @@ struct lu_placement_hint {
 #define LUSTRE_MDT_NAME  "mdt"
 
 /* new MDS layers. Prototype */
-#define LUSTRE_MDT0_NAME "mdt0"
-#define LUSTRE_CMM0_NAME "cmm0"
-#define LUSTRE_MDD0_NAME "mdd0"
-#define LUSTRE_OSD0_NAME "osd0"
-#define LUSTRE_MDC0_NAME "mdc0"
+#define LUSTRE_CMM_NAME  "cmm"
+#define LUSTRE_MDD_NAME  "mdd"
+#define LUSTRE_OSD_NAME  "osd"
+#define LUSTRE_CMM_MDC_NAME "cmm-mdc"
 
 #define LUSTRE_MDC_NAME  "mdc"
 #define LUSTRE_LOV_NAME  "lov"

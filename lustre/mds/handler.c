@@ -2719,8 +2719,9 @@ static __attribute__((unused)) int __init mds_init(void)
         class_register_type(&mds_obd_ops, NULL,
                             lvars.module_vars, LUSTRE_MDS_NAME, NULL);
         lprocfs_init_vars(mdt, &lvars);
-        class_register_type(&mdt_obd_ops, NULL,
-                            lvars.module_vars, LUSTRE_MDT_NAME, NULL);
+        mdt_obd_ops = mdt_obd_ops; //make compiler happy
+//        class_register_type(&mdt_obd_ops, NULL,
+//                            lvars.module_vars, LUSTRE_MDT_NAME, NULL);
 
         return 0;
 }
@@ -2732,7 +2733,7 @@ static __attribute__((unused)) void /*__exit*/ mds_exit(void)
                 PORTAL_SYMBOL_PUT(mds_quota_interface);
 
         class_unregister_type(LUSTRE_MDS_NAME);
-        class_unregister_type(LUSTRE_MDT_NAME);
+//        class_unregister_type(LUSTRE_MDT_NAME);
 }
 /*mds still need lov setup here*/
 static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)

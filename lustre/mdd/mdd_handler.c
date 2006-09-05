@@ -461,7 +461,7 @@ static void mdd_txn_param_build(const struct lu_context *ctx,
 static int mdd_object_print(const struct lu_context *ctxt, void *cookie,
                             lu_printer_t p, const struct lu_object *o)
 {
-        return (*p)(ctxt, cookie, LUSTRE_MDD0_NAME"-object@%p", o);
+        return (*p)(ctxt, cookie, LUSTRE_MDD_NAME"-object@%p", o);
 }
 
 static int mdd_mount(const struct lu_context *ctx, struct mdd_device *mdd)
@@ -2192,9 +2192,9 @@ static struct lu_device_type_operations mdd_device_type_ops = {
 
 static struct lu_device_type mdd_device_type = {
         .ldt_tags     = LU_DEVICE_MD,
-        .ldt_name     = LUSTRE_MDD0_NAME,
+        .ldt_name     = LUSTRE_MDD_NAME,
         .ldt_ops      = &mdd_device_type_ops,
-        .ldt_ctx_tags = LCT_MD_THREAD
+        .ldt_ctx_tags = LCT_MD_THREAD | LCT_DT_THREAD
 };
 
 static void *mdd_key_init(const struct lu_context *ctx,
@@ -2234,19 +2234,19 @@ LPROCFS_INIT_VARS(mdd, lprocfs_mdd_module_vars, lprocfs_mdd_obd_vars);
 static int __init mdd_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
-
+        printk(KERN_INFO "Lustre: MetaData Device; info@clusterfs.com\n");
         lprocfs_init_vars(mdd, &lvars);
         return class_register_type(&mdd_obd_device_ops, NULL, lvars.module_vars,
-                                   LUSTRE_MDD0_NAME, &mdd_device_type);
+                                   LUSTRE_MDD_NAME, &mdd_device_type);
 }
 
 static void __exit mdd_mod_exit(void)
 {
-        class_unregister_type(LUSTRE_MDD0_NAME);
+        class_unregister_type(LUSTRE_MDD_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Meta-data Device Prototype ("LUSTRE_MDD0_NAME")");
+MODULE_DESCRIPTION("Lustre Meta-data Device Prototype ("LUSTRE_MDD_NAME")");
 MODULE_LICENSE("GPL");
 
 cfs_module(mdd, "0.1.0", mdd_mod_init, mdd_mod_exit);

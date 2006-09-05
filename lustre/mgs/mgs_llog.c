@@ -1284,7 +1284,7 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
         
         /* FIXME this whole fn should be a single journal transaction */
         rc = record_marker(obd, llh, fsdb, CM_START, log, "add mdt");
-        rc = record_attach(obd, llh, log, LUSTRE_MDT0_NAME, uuid);
+        rc = record_attach(obd, llh, log, LUSTRE_MDT_NAME, uuid);
         rc = record_mount_opt(obd, llh, log, lovname, NULL);
         rc = record_setup(obd, llh, log, uuid, mdt_index, lovname, 0);
         rc = record_marker(obd, llh, fsdb, CM_END, log, "add mdt");

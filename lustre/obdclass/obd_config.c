@@ -151,6 +151,7 @@ int class_attach(struct lustre_cfg *lcfg)
            mountconf flag is set.
            1.6 should set this flag, and translate the other way here
            if not set. */
+#if 0
         if (lcfg->lcfg_flags & LCFG_FLG_MOUNTCONF){
                 char *tmp = NULL;
                 if (strcmp(typename, "mds") == 0)
@@ -165,7 +166,7 @@ int class_attach(struct lustre_cfg *lcfg)
                         typename = tmp;
                 }
         }
-
+#endif
         obd = class_newdev(typename, name);
         if (IS_ERR(obd)) {
                 /* Already exists or out of obds */

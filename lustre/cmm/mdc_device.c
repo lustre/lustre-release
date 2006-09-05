@@ -282,7 +282,7 @@ static struct lu_device_type_operations mdc_device_type_ops = {
 
 struct lu_device_type mdc_device_type = {
         .ldt_tags     = LU_DEVICE_MD,
-        .ldt_name     = LUSTRE_MDC0_NAME,
+        .ldt_name     = LUSTRE_CMM_MDC_NAME,
         .ldt_ops      = &mdc_device_type_ops,
         .ldt_ctx_tags = LCT_MD_THREAD|LCT_CL_THREAD
 };

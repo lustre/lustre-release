@@ -223,6 +223,7 @@ static int cmm_process_config(const struct lu_context *ctx,
         struct cmm_device *m = lu2cmm_dev(d);
         struct lu_device *next = md2lu_dev(m->cmm_child);
         int err;
+        ENTRY;
 
         switch(cfg->lcfg_command) {
         case LCFG_ADD_MDC:
@@ -362,9 +363,9 @@ static struct lu_device_type_operations cmm_device_type_ops = {
 
 static struct lu_device_type cmm_device_type = {
         .ldt_tags     = LU_DEVICE_MD,
-        .ldt_name     = LUSTRE_CMM0_NAME,
+        .ldt_name     = LUSTRE_CMM_NAME,
         .ldt_ops      = &cmm_device_type_ops,
-        .ldt_ctx_tags = LCT_MD_THREAD
+        .ldt_ctx_tags = LCT_MD_THREAD | LCT_DT_THREAD
 };
 
 struct lprocfs_vars lprocfs_cmm_obd_vars[] = {
@@ -385,16 +386,16 @@ static int __init cmm_mod_init(void)
 
         lprocfs_init_vars(cmm, &lvars);
         return class_register_type(&cmm_obd_device_ops, NULL, lvars.module_vars,
-                                   LUSTRE_CMM0_NAME, &cmm_device_type);
+                                   LUSTRE_CMM_NAME, &cmm_device_type);
 }
 
 static void __exit cmm_mod_exit(void)
 {
-        class_unregister_type(LUSTRE_CMM0_NAME);
+        class_unregister_type(LUSTRE_CMM_NAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Clustered Metadata Manager ("LUSTRE_CMM0_NAME")");
+MODULE_DESCRIPTION("Lustre Clustered Metadata Manager ("LUSTRE_CMM_NAME")");
 MODULE_LICENSE("GPL");
 
 cfs_module(cmm, "0.1.0", cmm_mod_init, cmm_mod_exit);

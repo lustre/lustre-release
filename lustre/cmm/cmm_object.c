@@ -193,7 +193,7 @@ static int cml_object_init(const struct lu_context *ctx, struct lu_object *lo)
 static int cml_object_print(const struct lu_context *ctx, void *cookie,
                             lu_printer_t p, const struct lu_object *lo)
 {
-	return (*p)(ctx, cookie, LUSTRE_CMM0_NAME"-local@%p", lo);
+	return (*p)(ctx, cookie, LUSTRE_CMM_NAME"-local@%p", lo);
 }
 
 static struct lu_object_operations cml_obj_ops = {
@@ -534,7 +534,7 @@ static int cmr_object_init(const struct lu_context *ctx, struct lu_object *lo)
 static int cmr_object_print(const struct lu_context *ctx, void *cookie,
                             lu_printer_t p, const struct lu_object *lo)
 {
-	return (*p)(ctx, cookie, LUSTRE_CMM0_NAME"-remote@%p", lo);
+	return (*p)(ctx, cookie, LUSTRE_CMM_NAME"-remote@%p", lo);
 }
 
 static struct lu_object_operations cmr_obj_ops = {
