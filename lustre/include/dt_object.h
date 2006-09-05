@@ -93,10 +93,8 @@ struct dt_device_operations {
         /*
          *  handling device state, mostly for tests
          */
-        void  (*dt_sync)(const struct lu_context *ctx,
-                            struct dt_device *dev);
-        void  (*dt_ro)(const struct lu_context *ctx,
-                          struct dt_device *dev, int sync);
+        int   (*dt_sync)(const struct lu_context *ctx, struct dt_device *dev);
+        void  (*dt_ro)(const struct lu_context *ctx, struct dt_device *dev);
 
 };
 

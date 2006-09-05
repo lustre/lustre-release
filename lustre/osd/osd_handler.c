@@ -566,38 +566,22 @@ static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
         EXIT;
 }
 
-static void osd_sync(const struct lu_context *ctx,
+static int osd_sync(const struct lu_context *ctx,
                         struct dt_device *d)
 {
-        struct osd_device *osd = osd_dt_dev(d);
-        ENTRY;
-
         CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_OSD_NAME);
-        ldiskfs_force_commit(osd_sb(osd));
-        EXIT;
+        return ldiskfs_force_commit(osd_sb(osd_dt_dev(d)));
 }
 
 enum {
         SYNC_DEVICE_CREDITS = 3
 };
 
-static void osd_ro(const struct lu_context *ctx, struct dt_device *d, int sync)
+static void osd_ro(const struct lu_context *ctx, struct dt_device *d)
 {
-        struct thandle         *th;
-        struct osd_thread_info *oti   = lu_context_key_get(ctx, &osd_key);
-        struct txn_param       *param = &oti->oti_txn;
         ENTRY;
 
         CERROR("*** setting device %s read-only ***\n", LUSTRE_OSD_NAME);
-
-        param->tp_credits = SYNC_DEVICE_CREDITS;
-
-        th = osd_trans_start(ctx, d, param);
-        if (!IS_ERR(th))
-                osd_trans_stop(ctx, th);
-
-        if (sync)
-                osd_sync(ctx, d);
 
         lvfs_set_rdonly(lvfs_sbdev(osd_sb(osd_dt_dev(d))));
         EXIT;

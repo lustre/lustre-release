@@ -2852,7 +2852,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct lu_context ctxt;
         struct mdt_device *mdt = mdt_dev(exp->exp_obd->obd_lu_dev);
         struct dt_device *dt = mdt->mdt_bottom;
-        int rc = 0;
+        int rc;
 
         ENTRY;
         CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
@@ -2860,18 +2860,12 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         if (rc)
                 RETURN(rc);
         lu_context_enter(&ctxt);
-        switch (cmd) {
-        case OBD_IOC_SYNC:
-                dt->dd_ops->dt_sync(&ctxt, dt);
-                break;
-        case OBD_IOC_SET_READONLY:
-                dt->dd_ops->dt_ro(&ctxt, dt, 1);
-                break;
-        default:
-                CDEBUG(D_INFO, "Trying old MDS iocontrol %x\n", cmd);
+        if (cmd == OBD_IOC_SYNC || cmd == OBD_IOC_SET_READONLY) {
+                if (cmd == OBD_IOC_SYNC)
+                        rc = dt->dd_ops->dt_sync(&ctxt, dt);
+                dt->dd_ops->dt_ro(&ctxt, dt);
+        } else
                 rc = -EOPNOTSUPP;
-                break;
-        }
         lu_context_exit(&ctxt);
         lu_context_fini(&ctxt);
         RETURN(rc);

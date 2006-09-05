@@ -71,7 +71,7 @@ struct mdt_client_data {
 
 static inline __u64 mcd_last_transno(struct mdt_client_data *mcd)
 {
-        return (le64_to_cpu(mcd->mcd_last_transno) > 
+        return (le64_to_cpu(mcd->mcd_last_transno) >
                 le64_to_cpu(mcd->mcd_last_close_transno) ?
                 le64_to_cpu(mcd->mcd_last_transno) :
                 le64_to_cpu(mcd->mcd_last_close_transno));
@@ -79,7 +79,7 @@ static inline __u64 mcd_last_transno(struct mdt_client_data *mcd)
 
 static inline __u64 mcd_last_xid(struct mdt_client_data *mcd)
 {
-        return (le64_to_cpu(mcd->mcd_last_xid) > 
+        return (le64_to_cpu(mcd->mcd_last_xid) >
                 le64_to_cpu(mcd->mcd_last_close_xid) ?
                 le64_to_cpu(mcd->mcd_last_xid) :
                 le64_to_cpu(mcd->mcd_last_close_xid));
@@ -271,12 +271,12 @@ struct mdt_thread_info {
 
         /* opdata for mdt_open(), has the same as ldlm_reply:lock_policy_res1.
          * mdt_update_last_rcvd() stores this value onto disk for recovery
-         * when mdt_trans_stop_cb() is called. 
+         * when mdt_trans_stop_cb() is called.
          */
         __u64                      mti_opdata;
 
-        /* temporary stuff used by thread to save stack consumption. 
-         * if something is in a union, make sure they do not conflict */ 
+        /* temporary stuff used by thread to save stack consumption.
+         * if something is in a union, make sure they do not conflict */
 
         struct lu_fid              mti_tmp_fid1;
         struct lu_fid              mti_tmp_fid2;
@@ -289,9 +289,9 @@ struct mdt_thread_info {
                 struct kstatfs     ksfs;          /* for mdt_statfs()        */
                 struct {
                         /* for mdt_readpage()      */
-                        struct lu_rdpg     mti_rdpg; 
+                        struct lu_rdpg     mti_rdpg;
                         /* for mdt_sendpage()      */
-                        struct l_wait_info mti_wait_info; 
+                        struct l_wait_info mti_wait_info;
                 } rdpg;
         } mti_u;
 };
@@ -414,7 +414,7 @@ static inline void mdt_fail_write(const struct lu_context *ctx,
         if (OBD_FAIL_CHECK(id)) {
                 CERROR(LUSTRE_MDT_NAME": obd_fail_loc=%x, fail write ops\n",
                        id);
-                dd->dd_ops->dt_ro(ctx, dd, 0);
+                dd->dd_ops->dt_ro(ctx, dd);
                 /* We set FAIL_ONCE because we never "un-fail" a device */
                 obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;
         }
