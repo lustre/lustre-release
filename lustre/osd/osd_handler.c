@@ -577,18 +577,22 @@ static void osd_sync(const struct lu_context *ctx,
         EXIT;
 }
 
-static void osd_ro(const struct lu_context *ctx,
-                      struct dt_device *d, int sync)
+enum {
+        SYNC_DEVICE_CREDITS = 3
+};
+
+static void osd_ro(const struct lu_context *ctx, struct dt_device *d, int sync)
 {
-        struct thandle *th;
-        struct txn_param param = {
-                .tp_credits = 3
-        };
+        struct thandle         *th;
+        struct osd_thread_info *oti   = lu_context_key_get(ctx, &osd_key);
+        struct txn_param       *param = &oti->oti_txn;
         ENTRY;
 
         CERROR("*** setting device %s read-only ***\n", LUSTRE_OSD0_NAME);
 
-        th = osd_trans_start(ctx, d, &param);
+        param->tp_credits = SYNC_DEVICE_CREDITS;
+
+        th = osd_trans_start(ctx, d, param);
         if (!IS_ERR(th))
                 osd_trans_stop(ctx, th);
 
@@ -635,12 +639,6 @@ static void osd_object_write_lock(const struct lu_context *ctx,
         LASSERT(obj->oo_owner != ctx);
         down_write(&obj->oo_sem);
         LASSERT(obj->oo_owner == NULL);
-        /*
-         * Write lock assumes transaction.
-         */
-        /* open need it without transaction
-         * LASSERT(oti->oti_txns > 0);
-        */
         obj->oo_owner = ctx;
         oti->oti_w_locks++;
 }
@@ -742,10 +740,6 @@ static int osd_inode_setattr(const struct lu_context *ctx,
                 inode->i_blksize = attr->la_blksize;
 
         if (bits & LA_FLAGS) {
-                /*
-                 * Horrible ext3 legacy. Flags are better to be handled in
-                 * mdd.
-                 */
                 struct ldiskfs_inode_info *li = LDISKFS_I(inode);
 
                 li->i_flags = (li->i_flags & ~LDISKFS_FL_USER_MODIFIABLE) |

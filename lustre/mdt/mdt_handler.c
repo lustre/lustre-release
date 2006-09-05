@@ -2422,6 +2422,7 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
         if (ls) {
                 lu_site_fini(ls);
                 OBD_FREE_PTR(ls);
+                d->ld_site = NULL;
         }
         LASSERT(atomic_read(&d->ld_ref) == 0);
         md_device_fini(&m->mdt_md_dev);
@@ -2447,11 +2448,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         LASSERT(obd);
 
         spin_lock_init(&m->mdt_transno_lock);
-#if 0
-        /* FIXME: We need to load them from disk. But now fake it */
-        m->mdt_last_transno = 1;
-        m->mdt_last_committed = 1;
-#endif
+
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
 
