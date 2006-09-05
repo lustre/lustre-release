@@ -2861,9 +2861,9 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(rc);
         lu_context_enter(&ctxt);
         if (cmd == OBD_IOC_SYNC || cmd == OBD_IOC_SET_READONLY) {
-                if (cmd == OBD_IOC_SYNC)
-                        rc = dt->dd_ops->dt_sync(&ctxt, dt);
-                dt->dd_ops->dt_ro(&ctxt, dt);
+                rc = dt->dd_ops->dt_sync(&ctxt, dt);
+                if (cmd == OBD_IOC_SET_READONLY)
+                        dt->dd_ops->dt_ro(&ctxt, dt);
         } else
                 rc = -EOPNOTSUPP;
         lu_context_exit(&ctxt);
