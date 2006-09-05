@@ -810,7 +810,7 @@ static inline const __u32 lu_object_attr(const struct lu_object *o)
 struct lu_rdpg {
         /* input params, should be filled out by mdt */
         __u32                   rp_hash;        /* hash */
-        __u32                   rp_hash_end;    /* hash end, means reading the 
+        __u32                   rp_hash_end;    /* hash end, means reading the
                                                    entry until this hash*/
         int                     rp_count;       /* count in bytes       */
         int                     rp_npages;      /* number of pages      */
@@ -946,6 +946,12 @@ void lu_context_enter(struct lu_context *ctx);
  * Called after exiting from @ctx
  */
 void lu_context_exit(struct lu_context *ctx);
+
+/*
+ * Allocate for context all missing keys that were registered after context
+ * creation.
+ */
+int lu_context_refill(const struct lu_context *ctx);
 
 /*
  * One-time initializers, called at obdclass module initialization, not

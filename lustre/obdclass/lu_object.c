@@ -765,35 +765,43 @@ static void keys_fini(struct lu_context *ctx)
         }
 }
 
-static int keys_init(struct lu_context *ctx)
+static int keys_fill(const struct lu_context *ctx)
 {
         int i;
+
+        for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
+                struct lu_context_key *key;
+
+                key = lu_keys[i];
+                if (ctx->lc_value[i] == NULL &&
+                    key != NULL && key->lct_tags & ctx->lc_tags) {
+                        void *value;
+
+                        LASSERT(key->lct_init != NULL);
+                        LASSERT(key->lct_index == i);
+
+                        value = key->lct_init(ctx, key);
+                        if (IS_ERR(value))
+                                return PTR_ERR(value);
+                        key->lct_used++;
+                        ctx->lc_value[i] = value;
+                }
+        }
+        return 0;
+}
+
+static int keys_init(struct lu_context *ctx)
+{
         int result;
 
         OBD_ALLOC(ctx->lc_value, ARRAY_SIZE(lu_keys) * sizeof ctx->lc_value[0]);
-        if (ctx->lc_value != NULL) {
-                for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
-                        struct lu_context_key *key;
-
-                        key = lu_keys[i];
-                        if (key != NULL && key->lct_tags & ctx->lc_tags) {
-                                void *value;
-
-                                LASSERT(key->lct_init != NULL);
-                                LASSERT(key->lct_index == i);
-
-                                value = key->lct_init(ctx, key);
-                                if (IS_ERR(value)) {
-                                        keys_fini(ctx);
-                                        return PTR_ERR(value);
-                                }
-                                key->lct_used++;
-                                ctx->lc_value[i] = value;
-                        }
-                }
-                result = 0;
-        } else
+        if (ctx->lc_value != NULL)
+                result = keys_fill(ctx);
+        else
                 result = -ENOMEM;
+
+        if (result != 0)
+                keys_fini(ctx);
         return result;
 }
 
@@ -848,6 +856,17 @@ void lu_context_exit(struct lu_context *ctx)
         }
 }
 EXPORT_SYMBOL(lu_context_exit);
+
+/*
+ * Allocate for context all missing keys that were registered after context
+ * creation.
+ */
+int lu_context_refill(const struct lu_context *ctx)
+{
+        LASSERT(ctx->lc_value != NULL);
+        return keys_fill(ctx);
+}
+EXPORT_SYMBOL(lu_context_refill);
 
 /*
  * Initialization of global lu_* data.
