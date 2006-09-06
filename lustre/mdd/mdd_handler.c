@@ -2194,7 +2194,7 @@ static struct lu_device_type mdd_device_type = {
         .ldt_tags     = LU_DEVICE_MD,
         .ldt_name     = LUSTRE_MDD_NAME,
         .ldt_ops      = &mdd_device_type_ops,
-        .ldt_ctx_tags = LCT_MD_THREAD | LCT_DT_THREAD
+        .ldt_ctx_tags = LCT_MD_THREAD
 };
 
 static void *mdd_key_init(const struct lu_context *ctx,

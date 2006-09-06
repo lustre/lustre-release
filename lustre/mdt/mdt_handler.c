@@ -2160,7 +2160,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                  */
                 .psc_num_threads   = min(max(mdt_num_threads, MDT_MIN_THREADS),
                                        MDT_MAX_THREADS),
-                .psc_ctx_tags      = LCT_MD_THREAD | LCT_DT_THREAD
+                .psc_ctx_tags      = LCT_MD_THREAD
         };
 
         m->mdt_ldlm_client = &m->mdt_md_dev.md_lu_dev.ld_obd->obd_ldlm_client;
@@ -2192,7 +2192,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
                 .psc_num_threads   = min(max(mdt_num_threads, MDT_MIN_THREADS),
                                        MDT_MAX_THREADS),
-                .psc_ctx_tags      = LCT_MD_THREAD | LCT_DT_THREAD
+                .psc_ctx_tags      = LCT_MD_THREAD
         };
         m->mdt_readpage_service =
                 ptlrpc_init_svc_conf(&conf, mdt_readpage_handle,
@@ -2220,7 +2220,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
                 .psc_num_threads   = min(max(mdt_num_threads, MDT_MIN_THREADS),
                                        MDT_MAX_THREADS),
-                .psc_ctx_tags      = LCT_MD_THREAD | LCT_DT_THREAD
+                .psc_ctx_tags      = LCT_MD_THREAD
         };
 
         m->mdt_setattr_service =
@@ -2785,7 +2785,7 @@ static int mdt_destroy_export(struct obd_export *export)
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);
 
-        rc = lu_context_init(&ctxt, LCT_MD_THREAD | LCT_DT_THREAD);
+        rc = lu_context_init(&ctxt, LCT_MD_THREAD);
         if (rc)
                 RETURN(rc);
 
@@ -2856,7 +2856,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         ENTRY;
         CDEBUG(D_IOCTL, "handling ioctl cmd %#x\n", cmd);
-        rc = lu_context_init(&ctxt, LCT_MD_THREAD | LCT_DT_THREAD);
+        rc = lu_context_init(&ctxt, LCT_MD_THREAD);
         if (rc)
                 RETURN(rc);
         lu_context_enter(&ctxt);
@@ -3009,7 +3009,7 @@ static struct lu_device_type mdt_device_type = {
         .ldt_tags     = LU_DEVICE_MD,
         .ldt_name     = LUSTRE_MDT_NAME,
         .ldt_ops      = &mdt_device_type_ops,
-        .ldt_ctx_tags = LCT_MD_THREAD | LCT_DT_THREAD
+        .ldt_ctx_tags = LCT_MD_THREAD
 };
 
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {

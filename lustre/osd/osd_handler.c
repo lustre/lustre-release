@@ -1764,7 +1764,7 @@ static void osd_type_fini(struct lu_device_type *t)
 }
 
 static struct lu_context_key osd_key = {
-        .lct_tags = LCT_DT_THREAD,
+        .lct_tags = LCT_DT_THREAD | LCT_MD_THREAD,
         .lct_init = osd_key_init,
         .lct_fini = osd_key_fini,
         .lct_exit = osd_key_exit
