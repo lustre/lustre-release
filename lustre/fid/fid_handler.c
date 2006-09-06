@@ -442,10 +442,6 @@ static void seq_server_proc_fini(struct lu_server_seq *seq)
 }
 #endif
 
-#define LUSTRE_MD_SEQ_NAME "seq-md"
-#define LUSTRE_CT_SEQ_NAME "seq-ct"
-#define LUSTRE_DT_SEQ_NAME "seq-dt"
-
 int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
                     const char *prefix,
