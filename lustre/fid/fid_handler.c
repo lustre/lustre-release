@@ -339,37 +339,6 @@ struct lu_context_key seq_thread_key = {
         .lct_fini = seq_thread_fini
 };
 
-static int seq_handle0(struct ptlrpc_request *req,
-                       struct seq_thread_info *info)
-{
-        int rc = 0;
-        ENTRY;
-
-        OBD_FAIL_RETURN(OBD_FAIL_SEQ_ALL_REPLY_NET | OBD_FAIL_ONCE, 0);
-
-        if (lustre_msg_get_opc(req->rq_reqmsg) == SEQ_QUERY) {
-                if (req->rq_export != NULL) {
-                        /* 
-                         * No need to return error here and overwrite @rc, this
-                         * function should return 0 even if seq_req_handle0()
-                         * returns some error code.
-                         */
-                        seq_req_handle(req, info);
-                } else {
-                        CERROR("Unconnected request\n");
-                        req->rq_status = -ENOTCONN;
-                }
-        } else {
-                CERROR("Wrong SEQ opcode: %d\n", 
-                       lustre_msg_get_opc(req->rq_reqmsg));
-                req->rq_status = -ENOTSUPP;
-                RETURN(ptlrpc_error(req));
-        }
-
-        target_send_reply(req, rc, OBD_FAIL_SEQ_ALL_REPLY_NET);
-        RETURN(rc);
-}
-
 static void seq_thread_info_init(struct ptlrpc_request *req,
                                  struct seq_thread_info *info)
 {
@@ -405,11 +374,20 @@ static int seq_handle(struct ptlrpc_request *req)
         LASSERT(info != NULL);
 
         seq_thread_info_init(req, info);
-        rc = seq_handle0(req, info);
+        rc = seq_req_handle(req, info);
         seq_thread_info_fini(info);
 
         return rc;
 }
+
+/*
+ * Entry point for handling FLD RPCs called from MDT.
+ */
+int seq_query(struct com_thread_info *info)
+{
+        return seq_handle(info->cti_pill.rc_req);
+}
+EXPORT_SYMBOL(seq_query);
 
 static void seq_server_proc_fini(struct lu_server_seq *seq);
 
@@ -425,14 +403,6 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
         if (IS_ERR(seq->lss_proc_dir)) {
                 rc = PTR_ERR(seq->lss_proc_dir);
                 RETURN(rc);
-        }
-
-        seq->lss_proc_entry = lprocfs_register("services",
-                                               seq->lss_proc_dir,
-                                               NULL, NULL);
-        if (IS_ERR(seq->lss_proc_entry)) {
-                rc = PTR_ERR(seq->lss_proc_entry);
-                GOTO(out_cleanup, rc);
         }
 
         rc = lprocfs_add_vars(seq->lss_proc_dir,
@@ -453,12 +423,6 @@ out_cleanup:
 static void seq_server_proc_fini(struct lu_server_seq *seq)
 {
         ENTRY;
-        if (seq->lss_proc_entry != NULL) {
-                if (!IS_ERR(seq->lss_proc_entry))
-                        lprocfs_remove(seq->lss_proc_entry);
-                seq->lss_proc_entry = NULL;
-        }
-
         if (seq->lss_proc_dir != NULL) {
                 if (!IS_ERR(seq->lss_proc_dir))
                         lprocfs_remove(seq->lss_proc_dir);
@@ -489,22 +453,6 @@ int seq_server_init(struct lu_server_seq *seq,
                     const struct lu_context *ctx)
 {
         int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
-        
-        static struct ptlrpc_service_conf seq_conf;
-        seq_conf = (typeof(seq_conf)) {
-                .psc_nbufs = MDS_NBUFS,
-                .psc_bufsize = MDS_BUFSIZE,
-                .psc_max_req_size = SEQ_MAXREQSIZE,
-                .psc_max_reply_size = SEQ_MAXREPSIZE,
-                .psc_req_portal = (is_srv ?
-                                   SEQ_METADATA_PORTAL :
-                                   SEQ_CONTROLLER_PORTAL),
-                .psc_rep_portal = MDC_REPLY_PORTAL,
-                .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT,
-                .psc_num_threads = SEQ_NUM_THREADS,
-                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
-        };
-
         ENTRY;
 
 	LASSERT(dev != NULL);
@@ -545,46 +493,6 @@ int seq_server_init(struct lu_server_seq *seq,
         if (rc)
 		GOTO(out, rc);
 
-        seq->lss_md_service = ptlrpc_init_svc_conf(&seq_conf,
-                                                   seq_handle,
-                                                   LUSTRE_SEQ_NAME"_md",
-                                                   seq->lss_proc_entry,
-                                                   NULL);
-	if (seq->lss_md_service != NULL)
-		rc = ptlrpc_start_threads(NULL, seq->lss_md_service,
-                                          is_srv ? LUSTRE_MD_SEQ_NAME :
-                                                   LUSTRE_CT_SEQ_NAME);
-	else
-                GOTO(out, rc = -ENOMEM);
-
-        /* 
-         * we want to have really cluster-wide sequences space. This is why we
-         * start only one sequence controller which manages space.
-         */
-        seq_conf = (typeof(seq_conf)) {
-                .psc_nbufs = MDS_NBUFS,
-                .psc_bufsize = MDS_BUFSIZE,
-                .psc_max_req_size = SEQ_MAXREQSIZE,
-                .psc_max_reply_size = SEQ_MAXREPSIZE,
-                .psc_req_portal = SEQ_DATA_PORTAL,
-                .psc_rep_portal = OSC_REPLY_PORTAL,
-                .psc_watchdog_timeout = SEQ_SERVICE_WATCHDOG_TIMEOUT,
-                .psc_num_threads = SEQ_NUM_THREADS,
-                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
-        };
-        if (is_srv) {
-                seq->lss_dt_service =  ptlrpc_init_svc_conf(&seq_conf,
-                                                            seq_handle,
-                                                            LUSTRE_SEQ_NAME"_dt",
-                                                            seq->lss_proc_entry,
-                                                            NULL);
-                if (seq->lss_dt_service != NULL)
-                        rc = ptlrpc_start_threads(NULL, seq->lss_dt_service,
-                                                  LUSTRE_DT_SEQ_NAME);
-                else
-                        GOTO(out, rc = -ENOMEM);
-        }
-        
 	EXIT;
 out:
 	if (rc) {
@@ -601,16 +509,6 @@ void seq_server_fini(struct lu_server_seq *seq,
                      const struct lu_context *ctx)
 {
         ENTRY;
-
-        if (seq->lss_md_service != NULL) {
-                ptlrpc_unregister_service(seq->lss_md_service);
-                seq->lss_md_service = NULL;
-        }
-
-        if (seq->lss_dt_service != NULL) {
-                ptlrpc_unregister_service(seq->lss_dt_service);
-                seq->lss_dt_service = NULL;
-        }
 
         seq_server_proc_fini(seq);
         seq_store_fini(seq, ctx);

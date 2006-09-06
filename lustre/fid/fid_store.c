@@ -151,9 +151,6 @@ int seq_store_init(struct lu_server_seq *seq,
         int rc;
         ENTRY;
 
-        LASSERT(seq->lss_md_service == NULL);
-        LASSERT(seq->lss_dt_service == NULL);
-
         name = seq->lss_type == LUSTRE_SEQ_SERVER ?
                 "seq_srv" : "seq_ctl";
         

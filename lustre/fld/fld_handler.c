@@ -48,7 +48,7 @@
 #include <lprocfs_status.h>
 
 #include <md_object.h>
-
+#include <lustre_req_layout.h>
 #include "fld_internal.h"
 
 #ifdef __KERNEL__
@@ -146,16 +146,18 @@ static int fld_server_handle(struct lu_server_fld *fld,
 
 }
 
-static int fld_req_handle(struct lu_server_fld *fld,
-                          struct ptlrpc_request *req,
+static int fld_req_handle(struct ptlrpc_request *req,
                           struct fld_thread_info *info)
 {
+        struct lu_site *site;
         struct md_fld *in;
         struct md_fld *out;
         int rc = -EPROTO;
         __u32 *opc;
         ENTRY;
 
+        site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
+        
         rc = req_capsule_pack(&info->fti_pill);
         if (rc)
                 RETURN(rc);
@@ -169,44 +171,11 @@ static int fld_req_handle(struct lu_server_fld *fld,
                 if (out == NULL)
                         RETURN(-EPROTO);
                 *out = *in;
-                rc = fld_server_handle(fld, req->rq_svc_thread->t_ctx,
+                rc = fld_server_handle(site->ls_server_fld,
+                                       req->rq_svc_thread->t_ctx,
                                        *opc, out);
         }
 
-        RETURN(rc);
-}
-
-static int fld_handle0(struct ptlrpc_request *req,
-                       struct fld_thread_info *info)
-{
-        struct lu_site *site;
-        int rc = 0;
-        ENTRY;
-
-        OBD_FAIL_RETURN(OBD_FAIL_FLD_ALL_REPLY_NET | OBD_FAIL_ONCE, 0);
-
-        if (lustre_msg_get_opc(req->rq_reqmsg) == FLD_QUERY) {
-                if (req->rq_export != NULL) {
-                        site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
-                        LASSERT(site != NULL);
-                        /* 
-                         * No need to return error here and overwrite @rc, this
-                         * function should return 0 even if fld_req_handle0()
-                         * returns some error code.
-                         */
-                        fld_req_handle(site->ls_server_fld, req, info);
-                } else {
-                        CERROR("Unconnected request\n");
-                        req->rq_status = -ENOTCONN;
-                }
-        } else {
-                CERROR("Wrong FLD opcode: %d\n", 
-                       lustre_msg_get_opc(req->rq_reqmsg));
-                req->rq_status = -ENOTSUPP;
-                RETURN(ptlrpc_error(req));
-        }
-
-        target_send_reply(req, rc, OBD_FAIL_FLD_ALL_REPLY_NET);
         RETURN(rc);
 }
 
@@ -245,11 +214,20 @@ static int fld_handle(struct ptlrpc_request *req)
         LASSERT(info != NULL);
 
         fld_thread_info_init(req, info);
-        rc = fld_handle0(req, info);
+        rc = fld_req_handle(req, info);
         fld_thread_info_fini(info);
 
         return rc;
 }
+
+/*
+ * Entry point for handling FLD RPCs called from MDT.
+ */
+int fld_query(struct com_thread_info *info)
+{
+        return fld_handle(info->cti_pill.rc_req);
+}
+EXPORT_SYMBOL(fld_query);
 
 /*
  * Returns true, if fid is local to this server node.
@@ -293,29 +271,12 @@ static int fld_server_proc_init(struct lu_server_fld *fld)
                 RETURN(rc);
         }
 
-        fld->lsf_proc_entry = lprocfs_register("services",
-                                               fld->lsf_proc_dir,
-                                               NULL, NULL);
-        if (IS_ERR(fld->lsf_proc_entry)) {
-                rc = PTR_ERR(fld->lsf_proc_entry);
-                GOTO(out_cleanup, rc);
-        }
         RETURN(rc);
-
-out_cleanup:
-        fld_server_proc_fini(fld);
-        return rc;
 }
 
 static void fld_server_proc_fini(struct lu_server_fld *fld)
 {
         ENTRY;
-        if (fld->lsf_proc_entry != NULL) {
-                if (!IS_ERR(fld->lsf_proc_entry))
-                        lprocfs_remove(fld->lsf_proc_entry);
-                fld->lsf_proc_entry = NULL;
-        }
-
         if (fld->lsf_proc_dir != NULL) {
                 if (!IS_ERR(fld->lsf_proc_dir))
                         lprocfs_remove(fld->lsf_proc_dir);
@@ -341,18 +302,6 @@ int fld_server_init(struct lu_server_fld *fld,
                     const char *uuid)
 {
         int rc;
-        static struct ptlrpc_service_conf fld_conf;
-        fld_conf = (typeof(fld_conf)) {
-                .psc_nbufs            = MDS_NBUFS,
-                .psc_bufsize          = MDS_BUFSIZE,
-                .psc_max_req_size     = FLD_MAXREQSIZE,
-                .psc_max_reply_size   = FLD_MAXREPSIZE,
-                .psc_req_portal       = FLD_REQUEST_PORTAL,
-                .psc_rep_portal       = MDC_REPLY_PORTAL,
-                .psc_watchdog_timeout = FLD_SERVICE_WATCHDOG_TIMEOUT,
-                .psc_num_threads      = FLD_NUM_THREADS,
-                .psc_ctx_tags         = LCT_DT_THREAD|LCT_MD_THREAD
-        };
         ENTRY;
 
         snprintf(fld->lsf_name, sizeof(fld->lsf_name),
@@ -365,16 +314,6 @@ int fld_server_init(struct lu_server_fld *fld,
         rc = fld_server_proc_init(fld);
         if (rc)
                 GOTO(out, rc);
-
-        fld->lsf_service =
-                ptlrpc_init_svc_conf(&fld_conf, fld_handle,
-                                     LUSTRE_FLD_NAME,
-                                     fld->lsf_proc_entry, NULL);
-        if (fld->lsf_service != NULL)
-                rc = ptlrpc_start_threads(NULL, fld->lsf_service,
-                                          LUSTRE_FLD_NAME);
-        else
-                rc = -ENOMEM;
 
         EXIT;
 out:
@@ -390,11 +329,6 @@ void fld_server_fini(struct lu_server_fld *fld,
                      const struct lu_context *ctx)
 {
         ENTRY;
-
-        if (fld->lsf_service != NULL) {
-                ptlrpc_unregister_service(fld->lsf_service);
-                fld->lsf_service = NULL;
-        }
 
         fld_server_proc_fini(fld);
         fld_index_fini(fld, ctx);

@@ -51,7 +51,6 @@ enum {
 extern struct lu_fld_hash fld_hash[];
 
 #ifdef __KERNEL__
-#define FLD_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 struct fld_thread_info {
         struct req_capsule fti_pill;
         int                fti_rep_buf_size[4];

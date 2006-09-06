@@ -27,6 +27,8 @@
  * struct lu_fid
  */
 #include <lustre/lustre_idl.h>
+#include <lustre_req_layout.h>
+#include <lustre_mdt.h>
 
 #include <libcfs/list.h>
 #include <libcfs/kp30.h>
@@ -113,17 +115,10 @@ struct lu_server_seq {
         struct dt_object       *lss_obj;
 
         /* seq related proc */
-        cfs_proc_dir_entry_t   *lss_proc_entry;
         cfs_proc_dir_entry_t   *lss_proc_dir;
 
         /* LUSTRE_SEQ_SERVER or LUSTRE_SEQ_CONTROLLER */
         enum lu_mgr_type       lss_type;
-
-        /* server side seq service for metadata stack */
-        struct ptlrpc_service  *lss_md_service;
-
-        /* server side seq service for data stack */
-        struct ptlrpc_service  *lss_dt_service;
 
         /* client interafce to request controller */
         struct lu_client_seq   *lss_cli;
@@ -141,8 +136,9 @@ struct lu_server_seq {
         __u64                   lss_meta_width;
 };
 
-#ifdef __KERNEL__
+int seq_query(struct com_thread_info *info);
 
+/* Server methods */
 int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
                     const char *prefix,
@@ -163,8 +159,8 @@ int seq_server_alloc_meta(struct lu_server_seq *seq,
 int seq_server_set_cli(struct lu_server_seq *seq,
                        struct lu_client_seq *cli,
                        const struct lu_context *ctx);
-#endif
 
+/* Client methods */
 int seq_client_init(struct lu_client_seq *seq,
                     struct obd_export *exp,
                     enum lu_cli_type type,

@@ -120,9 +120,13 @@ struct mdt_file_data {
 struct mdt_device {
         /* super-class */
         struct md_device           mdt_md_dev;
-        struct ptlrpc_service     *mdt_service;
+        struct ptlrpc_service     *mdt_regular_service;
         struct ptlrpc_service     *mdt_readpage_service;
         struct ptlrpc_service     *mdt_setattr_service;
+        struct ptlrpc_service     *mdt_mdsc_service;
+        struct ptlrpc_service     *mdt_mdss_service;
+        struct ptlrpc_service     *mdt_dtss_service;
+        struct ptlrpc_service     *mdt_fld_service;
         /* DLM name-space for meta-data locks maintained by this server */
         struct ldlm_namespace     *mdt_namespace;
         /* ptlrpc handle for MDS->client connections (for lock ASTs). */
@@ -218,6 +222,11 @@ enum {
  * reduce stack consumption.
  */
 struct mdt_thread_info {
+        /*
+         * for req-layout interface.
+         */
+        struct req_capsule         mti_pill;
+
         const struct lu_context   *mti_ctxt;
         struct mdt_device         *mti_mdt;
         /*
@@ -261,10 +270,7 @@ struct mdt_thread_info {
          * A couple of lock handles.
          */
         struct mdt_lock_handle     mti_lh[MDT_LH_NR];
-        /*
-         * for req-layout interface.
-         */
-        struct req_capsule         mti_pill;
+
         /* transaction number of current request */
         __u64                      mti_transno;
         __u32                      mti_trans_flags;

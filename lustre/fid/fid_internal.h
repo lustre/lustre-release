@@ -34,8 +34,6 @@
 
 #include <linux/types.h>
 
-#define SEQ_SERVICE_WATCHDOG_TIMEOUT (obd_timeout * 1000)
-
 #ifdef __KERNEL__
 struct seq_store_record {
         struct lu_range ssr_space;

@@ -1369,6 +1369,8 @@ int mds_msg_check_version(struct lustre_msg *msg)
         case MDS_QUOTACTL:
         case QUOTA_DQACQ:
         case QUOTA_DQREL:
+        case SEQ_QUERY:
+        case FLD_QUERY:
                 rc = lustre_msg_check_version(msg, LUSTRE_MDS_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",

@@ -172,12 +172,6 @@ int fld_index_init(struct lu_server_fld *fld,
         int rc;
         ENTRY;
 
-        /*
-         * lu_context_key has to be registered before threads are started,
-         * check this.
-         */
-        LASSERT(fld->lsf_service == NULL);
-
         dt_obj = dt_store_open(ctx, dt, fld_index_name, &fid);
         if (!IS_ERR(dt_obj)) {
                 fld->lsf_obj = dt_obj;

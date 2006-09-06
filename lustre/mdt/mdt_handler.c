@@ -54,6 +54,7 @@
 /* lu2dt_dev() */
 #include <dt_object.h>
 #include <lustre_mds.h>
+#include <lustre_mdt.h>
 #include "mdt_internal.h"
 #include <linux/lustre_acl.h>
 /*
@@ -118,6 +119,8 @@ struct mdt_opc_slice {
 
 static struct mdt_opc_slice mdt_regular_handlers[];
 static struct mdt_opc_slice mdt_readpage_handlers[];
+static struct mdt_opc_slice mdt_seq_handlers[];
+static struct mdt_opc_slice mdt_fld_handlers[];
 
 static struct mdt_device *mdt_dev(struct lu_device *d);
 static int mdt_regular_handle(struct ptlrpc_request *req);
@@ -1569,6 +1572,26 @@ static int mdt_readpage_handle(struct ptlrpc_request *req)
         return mdt_handle_common(req, mdt_readpage_handlers);
 }
 
+static int mdt_mdsc_handle(struct ptlrpc_request *req)
+{
+        return mdt_handle_common(req, mdt_seq_handlers);
+}
+
+static int mdt_mdss_handle(struct ptlrpc_request *req)
+{
+        return mdt_handle_common(req, mdt_seq_handlers);
+}
+
+static int mdt_dtss_handle(struct ptlrpc_request *req)
+{
+        return mdt_handle_common(req, mdt_seq_handlers);
+}
+
+static int mdt_fld_handle(struct ptlrpc_request *req)
+{
+        return mdt_handle_common(req, mdt_fld_handlers);
+}
+
 enum mdt_it_code {
         MDT_IT_OPEN,
         MDT_IT_OCREAT,
@@ -2203,9 +2226,9 @@ out_fld_fini:
 /* device init/fini methods */
 static void mdt_stop_ptlrpc_service(struct mdt_device *m)
 {
-        if (m->mdt_service != NULL) {
-                ptlrpc_unregister_service(m->mdt_service);
-                m->mdt_service = NULL;
+        if (m->mdt_regular_service != NULL) {
+                ptlrpc_unregister_service(m->mdt_regular_service);
+                m->mdt_regular_service = NULL;
         }
         if (m->mdt_readpage_service != NULL) {
                 ptlrpc_unregister_service(m->mdt_readpage_service);
@@ -2214,6 +2237,22 @@ static void mdt_stop_ptlrpc_service(struct mdt_device *m)
         if (m->mdt_setattr_service != NULL) {
                 ptlrpc_unregister_service(m->mdt_setattr_service);
                 m->mdt_setattr_service = NULL;
+        }
+        if (m->mdt_mdsc_service != NULL) {
+                ptlrpc_unregister_service(m->mdt_mdsc_service);
+                m->mdt_mdsc_service = NULL;
+        }
+        if (m->mdt_mdss_service != NULL) {
+                ptlrpc_unregister_service(m->mdt_mdss_service);
+                m->mdt_mdss_service = NULL;
+        }
+        if (m->mdt_dtss_service != NULL) {
+                ptlrpc_unregister_service(m->mdt_dtss_service);
+                m->mdt_dtss_service = NULL;
+        }
+        if (m->mdt_fld_service != NULL) {
+                ptlrpc_unregister_service(m->mdt_fld_service);
+                m->mdt_fld_service = NULL;
         }
 }
 
@@ -2244,14 +2283,14 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "mdt_ldlm_client", m->mdt_ldlm_client);
 
-        m->mdt_service =
+        m->mdt_regular_service =
                 ptlrpc_init_svc_conf(&conf, mdt_regular_handle, LUSTRE_MDT_NAME,
                                      m->mdt_md_dev.md_lu_dev.ld_proc_entry,
                                      NULL);
-        if (m->mdt_service == NULL)
+        if (m->mdt_regular_service == NULL)
                 RETURN(-ENOMEM);
 
-        rc = ptlrpc_start_threads(NULL, m->mdt_service, LUSTRE_MDT_NAME);
+        rc = ptlrpc_start_threads(NULL, m->mdt_regular_service, LUSTRE_MDT_NAME);
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
@@ -2312,6 +2351,123 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         }
 
         rc = ptlrpc_start_threads(NULL, m->mdt_setattr_service, "mdt_attr");
+        if (rc)
+                GOTO(err_mdt_svc, rc);
+
+        /*
+         * sequence controller service configuration
+         */
+        conf = (typeof(conf)) {
+                .psc_nbufs = MDS_NBUFS,
+                .psc_bufsize = MDS_BUFSIZE,
+                .psc_max_req_size = SEQ_MAXREQSIZE,
+                .psc_max_reply_size = SEQ_MAXREPSIZE,
+                .psc_req_portal = SEQ_CONTROLLER_PORTAL,
+                .psc_rep_portal = MDC_REPLY_PORTAL,
+                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_num_threads = SEQ_NUM_THREADS,
+                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
+        };
+
+        m->mdt_mdsc_service =
+                ptlrpc_init_svc_conf(&conf, mdt_mdsc_handle,
+                                     LUSTRE_MDT_NAME"_mdsc",
+                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
+                                     NULL);
+        if (!m->mdt_mdsc_service) {
+                CERROR("failed to start seq controller service\n");
+                GOTO(err_mdt_svc, rc = -ENOMEM);
+        }
+
+        rc = ptlrpc_start_threads(NULL, m->mdt_mdsc_service, "mdt_mdsc");
+        if (rc)
+                GOTO(err_mdt_svc, rc);
+
+        /*
+         * metadata sequence server service configuration
+         */
+        conf = (typeof(conf)) {
+                .psc_nbufs = MDS_NBUFS,
+                .psc_bufsize = MDS_BUFSIZE,
+                .psc_max_req_size = SEQ_MAXREQSIZE,
+                .psc_max_reply_size = SEQ_MAXREPSIZE,
+                .psc_req_portal = SEQ_METADATA_PORTAL,
+                .psc_rep_portal = MDC_REPLY_PORTAL,
+                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_num_threads = SEQ_NUM_THREADS,
+                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
+        };
+
+        m->mdt_mdss_service =
+                ptlrpc_init_svc_conf(&conf, mdt_mdss_handle,
+                                     LUSTRE_MDT_NAME"_mdss",
+                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
+                                     NULL);
+        if (!m->mdt_mdss_service) {
+                CERROR("failed to start metadata seq server service\n");
+                GOTO(err_mdt_svc, rc = -ENOMEM);
+        }
+
+        rc = ptlrpc_start_threads(NULL, m->mdt_mdss_service, "mdt_mdss");
+        if (rc)
+                GOTO(err_mdt_svc, rc);
+
+
+        /*
+         * Data sequence server service configuration. We want to have really
+         * cluster-wide sequences space. This is why we start only one sequence
+         * controller which manages space.
+         */
+        conf = (typeof(conf)) {
+                .psc_nbufs = MDS_NBUFS,
+                .psc_bufsize = MDS_BUFSIZE,
+                .psc_max_req_size = SEQ_MAXREQSIZE,
+                .psc_max_reply_size = SEQ_MAXREPSIZE,
+                .psc_req_portal = SEQ_DATA_PORTAL,
+                .psc_rep_portal = OSC_REPLY_PORTAL,
+                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_num_threads = SEQ_NUM_THREADS,
+                .psc_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
+        };
+
+        m->mdt_dtss_service =
+                ptlrpc_init_svc_conf(&conf, mdt_dtss_handle,
+                                     LUSTRE_MDT_NAME"_dtss",
+                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
+                                     NULL);
+        if (!m->mdt_dtss_service) {
+                CERROR("failed to start data seq server service\n");
+                GOTO(err_mdt_svc, rc = -ENOMEM);
+        }
+
+        rc = ptlrpc_start_threads(NULL, m->mdt_dtss_service, "mdt_dtss");
+        if (rc)
+                GOTO(err_mdt_svc, rc);
+
+        /* FLD service start */
+        conf = (typeof(conf)) {
+                .psc_nbufs            = MDS_NBUFS,
+                .psc_bufsize          = MDS_BUFSIZE,
+                .psc_max_req_size     = FLD_MAXREQSIZE,
+                .psc_max_reply_size   = FLD_MAXREPSIZE,
+                .psc_req_portal       = FLD_REQUEST_PORTAL,
+                .psc_rep_portal       = MDC_REPLY_PORTAL,
+                .psc_watchdog_timeout = MDT_SERVICE_WATCHDOG_TIMEOUT,
+                .psc_num_threads      = FLD_NUM_THREADS,
+                .psc_ctx_tags         = LCT_DT_THREAD|LCT_MD_THREAD
+        };
+
+        m->mdt_fld_service =
+                ptlrpc_init_svc_conf(&conf, mdt_fld_handle,
+                                     LUSTRE_MDT_NAME"_fld",
+                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
+                                     NULL);
+        if (!m->mdt_fld_service) {
+                CERROR("failed to start fld service\n");
+                GOTO(err_mdt_svc, rc = -ENOMEM);
+        }
+
+        rc = ptlrpc_start_threads(NULL, m->mdt_fld_service, "mdt_fld");
         if (rc)
                 GOTO(err_mdt_svc, rc);
 
@@ -3135,11 +3291,23 @@ static void __exit mdt_mod_exit(void)
 
 #define DEF_MDT_HNDL(flags, name, fn, fmt)                                  \
         DEF_HNDL(MDS, GETATTR, _NET, flags, name, fn, fmt)
+
+#define DEF_SEQ_HNDL(flags, name, fn, fmt)                      \
+        DEF_HNDL(SEQ, QUERY, _NET, flags, name, fn, fmt)
+
+#define DEF_FLD_HNDL(flags, name, fn, fmt)                      \
+        DEF_HNDL(FLD, QUERY, _NET, flags, name, fn, fmt)
 /*
  * Request with a format known in advance
  */
 #define DEF_MDT_HNDL_F(flags, name, fn)                                 \
         DEF_HNDL(MDS, GETATTR, _NET, flags, name, fn, &RQF_MDS_ ## name)
+
+#define DEF_SEQ_HNDL_F(flags, name, fn)                                 \
+        DEF_HNDL(SEQ, QUERY, _NET, flags, name, fn, &RQF_SEQ_ ## name)
+
+#define DEF_FLD_HNDL_F(flags, name, fn)                                 \
+        DEF_HNDL(FLD, QUERY, _NET, flags, name, fn, &RQF_SEQ_ ## name)
 /*
  * Request with a format we do not yet know
  */
@@ -3225,7 +3393,7 @@ static struct mdt_handler mdt_readpage_ops[] = {
 
         /*
          * XXX: this is ugly and should be fixed one day, see mdc_close() for
-         * detailed comment. --umka
+         * detailed comments. --umka
          */
         DEF_MDT_HNDL_F(HABEO_CORPUS,              CLOSE,    mdt_close),
 };
@@ -3235,6 +3403,36 @@ static struct mdt_opc_slice mdt_readpage_handlers[] = {
                 .mos_opc_start = MDS_GETATTR,
                 .mos_opc_end   = MDS_LAST_OPC,
                 .mos_hs        = mdt_readpage_ops
+        },
+        {
+                .mos_hs        = NULL
+        }
+};
+
+static struct mdt_handler mdt_seq_ops[] = {
+        DEF_SEQ_HNDL_F(0, QUERY, (int (*)(struct mdt_thread_info *))seq_query)
+};
+
+static struct mdt_opc_slice mdt_seq_handlers[] = {
+        {
+                .mos_opc_start = SEQ_QUERY,
+                .mos_opc_end   = SEQ_LAST_OPC,
+                .mos_hs        = mdt_seq_ops
+        },
+        {
+                .mos_hs        = NULL
+        }
+};
+
+static struct mdt_handler mdt_fld_ops[] = {
+        DEF_FLD_HNDL_F(0, QUERY, (int (*)(struct mdt_thread_info *))fld_query)
+};
+
+static struct mdt_opc_slice mdt_fld_handlers[] = {
+        {
+                .mos_opc_start = FLD_QUERY,
+                .mos_opc_end   = FLD_LAST_OPC,
+                .mos_hs        = mdt_fld_ops
         },
         {
                 .mos_hs        = NULL

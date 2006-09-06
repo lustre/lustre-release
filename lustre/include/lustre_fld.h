@@ -24,6 +24,7 @@
 #define __LINUX_FLD_H
 
 #include <lustre/lustre_idl.h>
+#include <lustre_mdt.h>
 #include <dt_object.h>
 
 #include <libcfs/list.h>
@@ -62,14 +63,8 @@ struct lu_fld_hash {
 };
 
 struct lu_server_fld {
-        /* service proc entry */
-        cfs_proc_dir_entry_t    *lsf_proc_entry;
-
         /* fld dir proc entry */
         cfs_proc_dir_entry_t    *lsf_proc_dir;
-
-        /* pointer to started server service */
-        struct ptlrpc_service   *lsf_service;
 
         /* /fld file object device */
         struct dt_object        *lsf_obj;
@@ -139,7 +134,9 @@ struct lu_client_fld {
         const struct lu_context       *lcf_ctx;
 };
 
-/* server methods */
+int fld_query(struct com_thread_info *info);
+
+/* Server methods */
 int fld_server_init(struct lu_server_fld *fld,
                     const struct lu_context *ctx,
                     struct dt_device *dt,
@@ -160,7 +157,7 @@ int fld_server_lookup(struct lu_server_fld *fld,
                       const struct lu_context *ctx,
                       seqno_t seq, mdsno_t *mds);
 
-/* client methods */
+/* Client methods */
 int fld_client_init(struct lu_client_fld *fld,
                     const char *prefix, int hash,
                     const struct lu_context *ctx);
@@ -182,7 +179,7 @@ int fld_client_add_target(struct lu_client_fld *fld,
 int fld_client_del_target(struct lu_client_fld *fld,
                           __u64 idx);
 
-/* cache methods */
+/* Cache methods */
 struct fld_cache_info *fld_cache_init(int hash_size,
                                       int cache_size,
                                       int cache_threshold);
