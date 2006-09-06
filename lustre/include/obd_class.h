@@ -399,17 +399,18 @@ static inline int obd_precleanup(struct obd_device *obd,
 #ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
-        if (ldt != NULL && d != NULL) {
-                struct lu_context ctx;
-
-                rc = lu_context_init(&ctx, ldt->ldt_ctx_tags);
-                if (rc == 0) {
-                        lu_context_enter(&ctx);
-                        ldt->ldt_ops->ldto_device_fini(&ctx, d);
-                        lu_context_exit(&ctx);
-                        lu_context_fini(&ctx);
-                        obd->obd_lu_dev = NULL;
-                        rc = 0;
+        if (ldt != NULL) {
+                LASSERT(d != NULL);
+                if (cleanup_stage == OBD_CLEANUP_EXPORTS) {
+                        struct lu_context ctx;
+                        
+                        rc = lu_context_init(&ctx, ldt->ldt_ctx_tags);
+                        if (rc == 0) {
+                                lu_context_enter(&ctx);
+                                ldt->ldt_ops->ldto_device_fini(&ctx, d);
+                                lu_context_exit(&ctx);
+                                lu_context_fini(&ctx);
+                        }
                 }
         } else
 #endif
@@ -433,8 +434,9 @@ static inline int obd_cleanup(struct obd_device *obd)
 #ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
-        if (ldt != NULL && d != NULL) {
+        if (ldt != NULL) {
                 struct lu_context ctx;
+                LASSERT(d != NULL);
 
                 rc = lu_context_init(&ctx, ldt->ldt_ctx_tags);
                 if (rc == 0) {
@@ -443,7 +445,6 @@ static inline int obd_cleanup(struct obd_device *obd)
                         lu_context_exit(&ctx);
                         lu_context_fini(&ctx);
                         obd->obd_lu_dev = NULL;
-                        rc = 0;
                 }
         } else
 #endif

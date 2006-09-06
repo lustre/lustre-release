@@ -2499,6 +2499,7 @@ static void mdt_stack_fini(const struct lu_context *ctx,
                 CERROR("Cannot alloc lcfg!\n");
                 return;
         }
+        LASSERT(top);
         top->ld_ops->ldo_process_config(ctx, top, lcfg);
 
         lu_site_purge(ctx, top->ld_site, ~0);
@@ -2506,15 +2507,15 @@ static void mdt_stack_fini(const struct lu_context *ctx,
                 struct obd_type *type;
                 struct lu_device_type *ldt = d->ld_type;
 
-                lu_device_put(d);
-
                 /* each fini() returns next device in stack of layers
                  * * so we can avoid the recursion */
                 n = ldt->ldt_ops->ldto_device_fini(ctx, d);
+                lu_device_put(d);
                 ldt->ldt_ops->ldto_device_free(ctx, d);
                 type = ldt->ldt_obd_type;
                 type->typ_refcnt--;
                 class_put_type(type);
+                
                 /* switch to the next device in the layer */
                 d = n;
         }
@@ -2635,7 +2636,7 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
         struct lu_site   *ls = d->ld_site;
 
         ENTRY;
-
+        target_cleanup_recovery(m->mdt_md_dev.md_lu_dev.ld_obd);
         mdt_fs_cleanup(ctx, m);
         ping_evictor_stop();
         mdt_stop_ptlrpc_service(m);
@@ -3014,13 +3015,12 @@ static int mdt_destroy_export(struct obd_export *export)
         ENTRY;
 
         med = &export->exp_mdt_data;
-        LASSERT(mdt);
 
         target_destroy_export(export);
 
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);
-
+        LASSERT(mdt != NULL);
         rc = lu_context_init(&ctxt, LCT_MD_THREAD);
         if (rc)
                 RETURN(rc);

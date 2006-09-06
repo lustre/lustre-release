@@ -334,7 +334,8 @@ void fld_client_fini(struct lu_client_fld *fld)
                                  &fld->lcf_targets, ft_chain) {
                 fld->lcf_count--;
                 list_del(&target->ft_chain);
-                class_export_put(target->ft_exp);
+                if (target->ft_exp != NULL)
+                        class_export_put(target->ft_exp);
                 OBD_FREE_PTR(target);
         }
         spin_unlock(&fld->lcf_lock);
