@@ -2468,6 +2468,8 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         md_device_init(&m->mdt_md_dev, ldt);
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
         m->mdt_md_dev.md_lu_dev.ld_obd = obd;
+        /* set this lu_device to obd, because error handling need it */
+        obd->obd_lu_dev = &m->mdt_md_dev.md_lu_dev;
 
         rc = lu_site_init(s, &m->mdt_md_dev.md_lu_dev);
         if (rc) {
@@ -2779,7 +2781,8 @@ static int mdt_destroy_export(struct obd_export *export)
         ENTRY;
 
         med = &export->exp_mdt_data;
-        LASSERT(med);
+        LASSERT(mdt);
+
         target_destroy_export(export);
 
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))

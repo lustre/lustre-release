@@ -163,8 +163,13 @@ static int mdt_init_clients_data(const struct lu_context *ctx,
                        mcd_last_xid(mcd));
 
                 exp = class_new_export(obd, (struct obd_uuid *)mcd->mcd_uuid);
-                if (IS_ERR(exp))
+                if (IS_ERR(exp)) {
+                        rc = 0;
+                        continue;
+                        /* FIXME: Do we really want to return error?
                         GOTO(err_client, rc = PTR_ERR(exp));
+                        */
+                }
 
                 med = &exp->exp_mdt_data;
                 med->med_mcd = mcd;
