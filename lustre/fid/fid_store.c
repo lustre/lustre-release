@@ -68,34 +68,14 @@ int seq_store_write(struct lu_server_seq *seq,
         info = lu_context_key_get(ctx, &seq_thread_key);
         LASSERT(info != NULL);
 
-        rc = dt_obj->do_body_ops->dbo_read(ctx, dt_obj,
-                                           (char *)&info->sti_record,
-                                           sizeof(info->sti_record), &pos);
-        if (rc < 0) {
-                CERROR("can't read seq data from store, rc %d\n", rc);
-                RETURN(rc);
-        }
-
-        if (rc > 0 && rc != sizeof(info->sti_record)) {
-                CWARN("read only %d bytes of %d, old data - zeroing out\n",
-                       rc, sizeof(info->sti_record));
-                memset(&info->sti_record, 0, sizeof(info->sti_record));
-        }
-
         /* stub here, will fix it later */
         info->sti_txn.tp_credits = SEQ_TXN_STORE_CREDITS;
 
         th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &info->sti_txn);
         if (!IS_ERR(th)) {
                 /* store ranges in le format */
-                if (seq->lss_type == LUSTRE_SEQ_SERVER) {
-                        range_to_le(&info->sti_record.srv_space, &seq->lss_space);
-                        range_to_le(&info->sti_record.srv_super, &seq->lss_super);
-                } else {
-                        range_to_le(&info->sti_record.ctl_space, &seq->lss_space);
-                        range_to_le(&info->sti_record.ctl_super, &seq->lss_super);
-
-                }
+                range_to_le(&info->sti_record.ssr_space, &seq->lss_space);
+                range_to_le(&info->sti_record.ssr_super, &seq->lss_super);
  
                 rc = dt_obj->do_body_ops->dbo_write(ctx, dt_obj,
                                                     (char *)&info->sti_record,
@@ -139,13 +119,9 @@ int seq_store_read(struct lu_server_seq *seq,
                                            sizeof(info->sti_record), &pos);
         
         if (rc == sizeof(info->sti_record)) {
-                if (seq->lss_type == LUSTRE_SEQ_SERVER) {
-                        seq->lss_space = info->sti_record.srv_space;
-                        seq->lss_super = info->sti_record.srv_super;
-                } else {
-                        seq->lss_space = info->sti_record.ctl_space;
-                        seq->lss_super = info->sti_record.ctl_super;
-                }
+                seq->lss_space = info->sti_record.ssr_space;
+                seq->lss_super = info->sti_record.ssr_super;
+
                 lustre_swab_lu_range(&seq->lss_space);
                 lustre_swab_lu_range(&seq->lss_super);
 
@@ -171,13 +147,17 @@ int seq_store_init(struct lu_server_seq *seq,
 {
         struct dt_object *dt_obj;
         struct lu_fid fid;
+        const char *name;
         int rc;
         ENTRY;
 
         LASSERT(seq->lss_md_service == NULL);
         LASSERT(seq->lss_dt_service == NULL);
 
-        dt_obj = dt_store_open(ctx, dt, "seq", &fid);
+        name = seq->lss_type == LUSTRE_SEQ_SERVER ?
+                "seq_srv" : "seq_ctl";
+        
+        dt_obj = dt_store_open(ctx, dt, name, &fid);
         if (!IS_ERR(dt_obj)) {
                 seq->lss_obj = dt_obj;
 		rc = 0;

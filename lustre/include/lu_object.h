@@ -500,7 +500,6 @@ struct lu_site {
          */
         int                   ls_hash_mask;
 
-
         /*
          * LRU list, updated on each access to object. Protected by
          * ->ls_guard.
@@ -548,8 +547,6 @@ struct lu_site {
          * Client Seq Manager
          */
         struct lu_client_seq *ls_client_seq;
-
-        /* Sequence controller node */
         struct obd_export    *ls_client_exp;
 
         /* statistical counters. Protected by nothing, races are accepted. */

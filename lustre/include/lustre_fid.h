@@ -61,6 +61,8 @@ enum lu_cli_type {
         LUSTRE_SEQ_DATA
 };
 
+struct lu_server_seq;
+
 /* client sequence manager interface */
 struct lu_client_seq {
         /* sequence-controller export. */
@@ -88,9 +90,12 @@ struct lu_client_seq {
         /* sequence width, that is how many objects may be allocated in one
          * sequence. Default value for it is LUSTRE_SEQ_MAX_WIDTH. */
         __u64                   lcs_width;
+
+        /* seq-server for direct talking */
+        struct lu_server_seq   *lcs_srv;
+        const struct lu_context      *lcs_ctx;
 };
 
-#ifdef __KERNEL__
 /* server sequence manager interface */
 struct lu_server_seq {
         /* available sequence space */
@@ -135,18 +140,25 @@ struct lu_server_seq {
         __u64                   lss_super_width;
         __u64                   lss_meta_width;
 };
-#endif
 
 #ifdef __KERNEL__
 
 int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
-                    const char *uuid,
+                    const char *prefix,
                     enum lu_mgr_type type,
                     const struct lu_context *ctx);
 
 void seq_server_fini(struct lu_server_seq *seq,
                      const struct lu_context *ctx);
+
+int seq_server_alloc_super(struct lu_server_seq *seq,
+                           struct lu_range *range,
+                           const struct lu_context *ctx);
+
+int seq_server_alloc_meta(struct lu_server_seq *seq,
+                          struct lu_range *range,
+                          const struct lu_context *ctx);
 
 int seq_server_set_cli(struct lu_server_seq *seq,
                        struct lu_client_seq *cli,
@@ -154,9 +166,11 @@ int seq_server_set_cli(struct lu_server_seq *seq,
 #endif
 
 int seq_client_init(struct lu_client_seq *seq,
-                    const char *uuid,
                     struct obd_export *exp,
-                    enum lu_cli_type type);
+                    enum lu_cli_type type,
+                    const char *prefix,
+                    struct lu_server_seq *srv,
+                    const struct lu_context *ctx);
 
 void seq_client_fini(struct lu_client_seq *seq);
 

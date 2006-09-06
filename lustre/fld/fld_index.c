@@ -101,14 +101,14 @@ int fld_index_create(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
                      seqno_t seq, mdsno_t mds)
 {
-        struct dt_object *dt_obj = fld->fld_obj;
+        struct dt_object *dt_obj = fld->lsf_obj;
         struct dt_device *dt_dev;
         struct txn_param txn;
         struct thandle *th;
         int rc;
         ENTRY;
 
-        dt_dev = lu2dt_dev(fld->fld_obj->do_lu.lo_dev);
+        dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
         
         /* stub here, will fix it later */
         txn.tp_credits = FLD_TXN_INDEX_INSERT_CREDITS;
@@ -128,14 +128,14 @@ int fld_index_delete(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
                      seqno_t seq)
 {
-        struct dt_object *dt_obj = fld->fld_obj;
+        struct dt_object *dt_obj = fld->lsf_obj;
         struct dt_device *dt_dev;
         struct txn_param txn;
         struct thandle *th;
         int rc;
         ENTRY;
 
-        dt_dev = lu2dt_dev(fld->fld_obj->do_lu.lo_dev);
+        dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
         txn.tp_credits = FLD_TXN_INDEX_DELETE_CREDITS;
         th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &txn);
         if (!IS_ERR(th)) {
@@ -151,7 +151,7 @@ int fld_index_lookup(struct lu_server_fld *fld,
                      const struct lu_context *ctx,
                      seqno_t seq, mdsno_t *mds)
 {
-        struct dt_object *dt_obj = fld->fld_obj;
+        struct dt_object *dt_obj = fld->lsf_obj;
         struct dt_rec    *rec = fld_rec(ctx, 0);
         int rc;
         ENTRY;
@@ -176,17 +176,18 @@ int fld_index_init(struct lu_server_fld *fld,
          * lu_context_key has to be registered before threads are started,
          * check this.
          */
-        LASSERT(fld->fld_service == NULL);
+        LASSERT(fld->lsf_service == NULL);
 
         dt_obj = dt_store_open(ctx, dt, fld_index_name, &fid);
         if (!IS_ERR(dt_obj)) {
-                fld->fld_obj = dt_obj;
+                fld->lsf_obj = dt_obj;
                 rc = dt_obj->do_ops->do_index_try(ctx, dt_obj,
                                                   &fld_index_features);
                 if (rc == 0)
                         LASSERT(dt_obj->do_index_ops != NULL);
                 else
-                        CERROR("\"%s\" is not an index!\n", fld_index_name);
+                        CERROR("\"%s\" is not an index!\n",
+                               fld_index_name);
         } else {
                 CERROR("cannot find \"%s\" obj %d\n",
                        fld_index_name, (int)PTR_ERR(dt_obj));
@@ -200,10 +201,10 @@ void fld_index_fini(struct lu_server_fld *fld,
                     const struct lu_context *ctx)
 {
         ENTRY;
-        if (fld->fld_obj != NULL) {
-                if (!IS_ERR(fld->fld_obj))
-                        lu_object_put(ctx, &fld->fld_obj->do_lu);
-                fld->fld_obj = NULL;
+        if (fld->lsf_obj != NULL) {
+                if (!IS_ERR(fld->lsf_obj))
+                        lu_object_put(ctx, &fld->lsf_obj->do_lu);
+                fld->lsf_obj = NULL;
         }
         EXIT;
 }

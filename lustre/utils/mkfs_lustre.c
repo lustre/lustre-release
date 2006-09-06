@@ -1246,7 +1246,13 @@ static int mkfs_mdt(struct mkfs_opts *mop)
                 goto out_rmdir;
         }
 
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "seq");
+        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "seq_ctl");
+        ret = touch_file(filepnm);
+        if (ret) {
+                goto out_umount;
+        }
+
+        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "seq_srv");
         ret = touch_file(filepnm);
         if (ret) {
                 goto out_umount;

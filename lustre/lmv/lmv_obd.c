@@ -299,6 +299,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         struct lustre_handle conn = {0, };
         struct obd_device *mdc_obd;
         struct obd_export *mdc_exp;
+        struct lu_fld_target target;
         int rc;
 #ifdef __KERNEL__
         struct proc_dir_entry *lmv_proc_dir;
@@ -337,7 +338,12 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         }
 
         mdc_exp = class_conn2export(&conn);
-        fld_client_add_target(&lmv->lmv_fld, mdc_exp);
+
+        target.ft_srv = NULL;
+        target.ft_exp = mdc_exp;
+        target.ft_idx = tgt->idx;
+        
+        fld_client_add_target(&lmv->lmv_fld, &target);
 
         mdc_data = &class_exp2cliimp(mdc_exp)->imp_connect_data;
 
@@ -860,7 +866,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
        }
 #endif
         rc = fld_client_init(&lmv->lmv_fld, obd->obd_name,
-                             LUSTRE_CLI_FLD_HASH_DHT);
+                             LUSTRE_CLI_FLD_HASH_DHT, NULL);
         if (rc) {
                 CERROR("can't init FLD, err %d\n",
                        rc);

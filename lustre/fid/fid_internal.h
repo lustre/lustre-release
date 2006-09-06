@@ -38,10 +38,8 @@
 
 #ifdef __KERNEL__
 struct seq_store_record {
-        struct lu_range srv_space;
-        struct lu_range srv_super;
-        struct lu_range ctl_space;
-        struct lu_range ctl_super;
+        struct lu_range ssr_space;
+        struct lu_range ssr_super;
 };
 
 struct seq_thread_info {

@@ -98,11 +98,12 @@ extern struct lu_device_type mdc_device_type;
 static int cmm_add_mdc(const struct lu_context *ctx,
                        struct cmm_device *cm, struct lustre_cfg *cfg)
 {
-        struct  lu_device_type *ldt = &mdc_device_type;
-        struct  lu_device *ld;
-        struct lu_site *ls;
-        struct  mdc_device *mc, *tmp;
+        struct lu_device_type *ldt = &mdc_device_type;
         char *p, *num = lustre_cfg_string(cfg, 2);
+        struct mdc_device *mc, *tmp;
+        struct lu_fld_target target;
+        struct lu_device *ld;
+        struct lu_site *ls;
         mdsno_t mdc_num;
         int rc;
         ENTRY;
@@ -153,7 +154,12 @@ static int cmm_add_mdc(const struct lu_context *ctx,
                 lu_device_get(cmm2lu_dev(cm));
 
                 ls = cm->cmm_md_dev.md_lu_dev.ld_site;
-                fld_client_add_target(ls->ls_client_fld, mc->mc_desc.cl_exp);
+
+                target.ft_srv = NULL;
+                target.ft_idx = mc->mc_num;
+                target.ft_exp = mc->mc_desc.cl_exp;
+        
+                fld_client_add_target(ls->ls_client_fld, &target);
         }
         RETURN(rc);
 }
@@ -162,15 +168,7 @@ static void cmm_device_shutdown(const struct lu_context *ctx,
                                 struct cmm_device *cm)
 {
         struct mdc_device *mc, *tmp;
-        struct lu_site *ls;
         ENTRY;
-
-        ls = cm->cmm_md_dev.md_lu_dev.ld_site;
-        if (ls->ls_client_fld != NULL) {
-                fld_client_fini(ls->ls_client_fld);
-                OBD_FREE_PTR(ls->ls_client_fld);
-                ls->ls_client_fld = NULL;
-        }
 
         /* finish all mdc devices */
         spin_lock(&cm->cmm_tgt_guard);
@@ -191,11 +189,9 @@ static int cmm_device_mount(const struct lu_context *ctx,
                             struct cmm_device *m, struct lustre_cfg *cfg)
 {
         const char *index = lustre_cfg_string(cfg, 2);
-        struct lu_site *ls;
-        char *p, *name_str;
-        int rc;
+        char *p;
         
-        LASSERT(index);
+        LASSERT(index != NULL);
 
         m->cmm_local_num = simple_strtol(index, &p, 10);
         if (*p) {
@@ -203,18 +199,7 @@ static int cmm_device_mount(const struct lu_context *ctx,
                 RETURN(-EINVAL);
         }
         
-        ls = m->cmm_md_dev.md_lu_dev.ld_site;
-        OBD_ALLOC_PTR(ls->ls_client_fld);
-        if (!ls->ls_client_fld)
-                RETURN(-ENOMEM);
-
-        name_str = lustre_cfg_string(cfg, 0);
-        rc = fld_client_init(ls->ls_client_fld, name_str,
-                             LUSTRE_CLI_FLD_HASH_DHT);
-        if (rc) {
-                CERROR("can't init FLD, err %d\n",  rc);        
-        }
-        RETURN(rc);
+        RETURN(0);
 }
 
 static int cmm_process_config(const struct lu_context *ctx,

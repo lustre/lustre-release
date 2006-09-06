@@ -53,27 +53,25 @@ fld_proc_read_targets(char *page, char **start, off_t off,
                       int count, int *eof, void *data)
 {
         struct lu_client_fld *fld = (struct lu_client_fld *)data;
-        struct fld_target *target;
+        struct lu_fld_target *target;
 	int total = 0, rc;
 	ENTRY;
 
         LASSERT(fld != NULL);
 
-        spin_lock(&fld->fld_lock);
+        spin_lock(&fld->lcf_lock);
         list_for_each_entry(target,
-                            &fld->fld_targets, fldt_chain)
+                            &fld->lcf_targets, ft_chain)
         {
-                struct client_obd *cli = &target->fldt_exp->exp_obd->u.cli;
-                
                 rc = snprintf(page, count, "%s\n",
-                              cli->cl_target_uuid.uuid);
+                              fld_target_name(target));
                 page += rc;
                 count -= rc;
                 total += rc;
                 if (count == 0)
                         break;
         }
-        spin_unlock(&fld->fld_lock);
+        spin_unlock(&fld->lcf_lock);
 	RETURN(total);
 }
 
@@ -87,10 +85,10 @@ fld_proc_read_hash(char *page, char **start, off_t off,
 
         LASSERT(fld != NULL);
 
-        spin_lock(&fld->fld_lock);
+        spin_lock(&fld->lcf_lock);
         rc = snprintf(page, count, "%s\n",
-                      fld->fld_hash->fh_name);
-        spin_unlock(&fld->fld_lock);
+                      fld->lcf_hash->fh_name);
+        spin_unlock(&fld->lcf_lock);
 
 	RETURN(rc);
 }
@@ -117,12 +115,12 @@ fld_proc_write_hash(struct file *file, const char *buffer,
         }
 
         if (hash != NULL) {
-                spin_lock(&fld->fld_lock);
-                fld->fld_hash = hash;
-                spin_unlock(&fld->fld_lock);
+                spin_lock(&fld->lcf_lock);
+                fld->lcf_hash = hash;
+                spin_unlock(&fld->lcf_lock);
 
-                CDEBUG(D_WARNING, "FLD(cli): changed hash to \"%s\"\n",
-                       hash->fh_name);
+                CDEBUG(D_WARNING, "%s: changed hash to \"%s\"\n",
+                       fld->lcf_name, hash->fh_name);
         }
 	
         RETURN(count);

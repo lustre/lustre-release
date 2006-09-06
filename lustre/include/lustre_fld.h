@@ -40,14 +40,20 @@ enum {
         LUSTRE_CLI_FLD_HASH_RRB
 };
 
-struct fld_target {
-        struct list_head   fldt_chain;
-        struct obd_export *fldt_exp;
-        __u64              fldt_idx;
+struct lu_server_fld;
+
+struct lu_fld_target {
+        struct list_head         ft_chain;
+        struct obd_export       *ft_exp;
+        struct lu_server_fld    *ft_srv;
+        __u64                    ft_idx;
 };
 
-typedef int (*fld_hash_func_t) (struct lu_client_fld *, __u64);
-typedef struct fld_target * (*fld_scan_func_t) (struct lu_client_fld *, __u64);
+typedef int
+(*fld_hash_func_t) (struct lu_client_fld *, __u64);
+
+typedef struct lu_fld_target *
+(*fld_scan_func_t) (struct lu_client_fld *, __u64);
 
 struct lu_fld_hash {
         const char              *fh_name;
@@ -57,19 +63,19 @@ struct lu_fld_hash {
 
 struct lu_server_fld {
         /* service proc entry */
-        cfs_proc_dir_entry_t    *fld_proc_entry;
+        cfs_proc_dir_entry_t    *lsf_proc_entry;
 
         /* fld dir proc entry */
-        cfs_proc_dir_entry_t    *fld_proc_dir;
+        cfs_proc_dir_entry_t    *lsf_proc_dir;
 
         /* pointer to started server service */
-        struct ptlrpc_service   *fld_service;
+        struct ptlrpc_service   *lsf_service;
 
         /* /fld file object device */
-        struct dt_object        *fld_obj;
+        struct dt_object        *lsf_obj;
 
         /* fld service name in form "fld-MDTXXX" */
-        char                     fld_name[80];
+        char                     lsf_name[80];
 };
 
 struct fld_cache_entry {
@@ -110,25 +116,27 @@ struct fld_cache_info {
 
 struct lu_client_fld {
         /* client side proc entry */
-        cfs_proc_dir_entry_t    *fld_proc_dir;
+        cfs_proc_dir_entry_t    *lcf_proc_dir;
 
         /* list of exports client FLD knows about */
-        struct list_head         fld_targets;
+        struct list_head         lcf_targets;
 
         /* current hash to be used to chose an export */
-        struct lu_fld_hash      *fld_hash;
+        struct lu_fld_hash      *lcf_hash;
 
         /* exports count */
-        int                      fld_count;
+        int                      lcf_count;
 
         /* lock protecting exports list and fld_hash */
-        spinlock_t               fld_lock;
+        spinlock_t               lcf_lock;
 
         /* client FLD cache */
-        struct fld_cache_info   *fld_cache;
+        struct fld_cache_info   *lcf_cache;
 
         /* client fld proc entry name */
-        char                     fld_name[80];
+        char                     lcf_name[80];
+
+        const struct lu_context       *lcf_ctx;
 };
 
 /* server methods */
@@ -140,10 +148,22 @@ int fld_server_init(struct lu_server_fld *fld,
 void fld_server_fini(struct lu_server_fld *fld,
                      const struct lu_context *ctx);
 
+int fld_server_create(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      seqno_t seq, mdsno_t mds);
+
+int fld_server_delete(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      seqno_t seq);
+
+int fld_server_lookup(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      seqno_t seq, mdsno_t *mds);
+
 /* client methods */
 int fld_client_init(struct lu_client_fld *fld,
-                    const char *uuid,
-                    int hash);
+                    const char *prefix, int hash,
+                    const struct lu_context *ctx);
 
 void fld_client_fini(struct lu_client_fld *fld);
 
@@ -157,10 +177,10 @@ int fld_client_delete(struct lu_client_fld *fld,
                       seqno_t seq);
 
 int fld_client_add_target(struct lu_client_fld *fld,
-                          struct obd_export *exp);
+                          struct lu_fld_target *tar);
 
 int fld_client_del_target(struct lu_client_fld *fld,
-                          struct obd_export *exp);
+                          __u64 idx);
 
 /* cache methods */
 struct fld_cache_info *fld_cache_init(int hash_size,

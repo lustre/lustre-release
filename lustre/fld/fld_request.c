@@ -55,21 +55,21 @@
 static int fld_rrb_hash(struct lu_client_fld *fld,
                         seqno_t seq)
 {
-        LASSERT(fld->fld_count > 0);
-        return do_div(seq, fld->fld_count);
+        LASSERT(fld->lcf_count > 0);
+        return do_div(seq, fld->lcf_count);
 }
 
-static struct fld_target *
+static struct lu_fld_target *
 fld_rrb_scan(struct lu_client_fld *fld, seqno_t seq)
 {
-        struct fld_target *target;
+        struct lu_fld_target *target;
         int hash;
         ENTRY;
 
         hash = fld_rrb_hash(fld, seq);
 
-        list_for_each_entry(target, &fld->fld_targets, fldt_chain) {
-                if (target->fldt_idx == hash)
+        list_for_each_entry(target, &fld->lcf_targets, ft_chain) {
+                if (target->ft_idx == hash)
                         RETURN(target);
         }
 
@@ -86,7 +86,7 @@ static int fld_dht_hash(struct lu_client_fld *fld,
         return fld_rrb_hash(fld, seq);
 }
 
-static struct fld_target *
+static struct lu_fld_target *
 fld_dht_scan(struct lu_client_fld *fld, seqno_t seq)
 {
         /* XXX: here should be DHT scan code */
@@ -109,18 +109,18 @@ struct lu_fld_hash fld_hash[3] = {
         }
 };
 
-static struct fld_target *
+static struct lu_fld_target *
 fld_client_get_target(struct lu_client_fld *fld,
                       seqno_t seq)
 {
-        struct fld_target *target;
+        struct lu_fld_target *target;
         ENTRY;
 
-        LASSERT(fld->fld_hash != NULL);
+        LASSERT(fld->lcf_hash != NULL);
 
-        spin_lock(&fld->fld_lock);
-        target = fld->fld_hash->fh_scan_func(fld, seq);
-        spin_unlock(&fld->fld_lock);
+        spin_lock(&fld->lcf_lock);
+        target = fld->lcf_hash->fh_scan_func(fld, seq);
+        spin_unlock(&fld->lcf_lock);
 
         RETURN(target);
 }
@@ -130,39 +130,45 @@ fld_client_get_target(struct lu_client_fld *fld,
  * of FLD module.
  */
 int fld_client_add_target(struct lu_client_fld *fld,
-                          struct obd_export *exp)
+                          struct lu_fld_target *tar)
 {
-        struct client_obd *cli = &exp->exp_obd->u.cli;
-        struct fld_target *target, *tmp;
+        const char *tar_name = fld_target_name(tar);
+        struct lu_fld_target *target, *tmp;
         ENTRY;
 
-        LASSERT(exp != NULL);
+        LASSERT(tar != NULL);
+        LASSERT(tar_name != NULL);
+        LASSERT(tar->ft_srv != NULL || tar->ft_exp != NULL);
 
-        CDEBUG(D_INFO|D_WARNING, "%s: adding export %s\n",
-	       fld->fld_name, cli->cl_target_uuid.uuid);
+        CDEBUG(D_INFO|D_WARNING, "%s: adding target %s\n",
+	       fld->lcf_name, tar_name);
 
         OBD_ALLOC_PTR(target);
         if (target == NULL)
                 RETURN(-ENOMEM);
 
-        spin_lock(&fld->fld_lock);
-        list_for_each_entry(tmp, &fld->fld_targets, fldt_chain) {
-                if (obd_uuid_equals(&tmp->fldt_exp->exp_client_uuid,
-                                    &exp->exp_client_uuid))
+        spin_lock(&fld->lcf_lock);
+        list_for_each_entry(tmp, &fld->lcf_targets, ft_chain) {
+                const char *tmp_name = fld_target_name(tmp);
+                
+                if (strlen(tar_name) == strlen(tmp_name) &&
+                    strcmp(tmp_name, tar_name) == 0)
                 {
-                        spin_unlock(&fld->fld_lock);
+                        spin_unlock(&fld->lcf_lock);
                         OBD_FREE_PTR(target);
                         RETURN(-EEXIST);
                 }
         }
 
-        target->fldt_exp = class_export_get(exp);
-        target->fldt_idx = fld->fld_count;
+        target->ft_exp = tar->ft_exp;
+        target->ft_srv = tar->ft_srv;
+        target->ft_idx = tar->ft_idx;
 
-        list_add_tail(&target->fldt_chain,
-                      &fld->fld_targets);
-        fld->fld_count++;
-        spin_unlock(&fld->fld_lock);
+        list_add_tail(&target->ft_chain,
+                      &fld->lcf_targets);
+        
+        fld->lcf_count++;
+        spin_unlock(&fld->lcf_lock);
 
         RETURN(0);
 }
@@ -170,26 +176,24 @@ EXPORT_SYMBOL(fld_client_add_target);
 
 /* remove export from FLD */
 int fld_client_del_target(struct lu_client_fld *fld,
-                          struct obd_export *exp)
+                          __u64 idx)
 {
-        struct fld_target *target, *tmp;
+        struct lu_fld_target *target, *tmp;
         ENTRY;
 
-        spin_lock(&fld->fld_lock);
+        spin_lock(&fld->lcf_lock);
         list_for_each_entry_safe(target, tmp,
-                                 &fld->fld_targets, fldt_chain) {
-                if (obd_uuid_equals(&target->fldt_exp->exp_client_uuid,
-                                    &exp->exp_client_uuid))
-                {
-                        fld->fld_count--;
-                        list_del(&target->fldt_chain);
-                        spin_unlock(&fld->fld_lock);
-                        class_export_put(target->fldt_exp);
+                                 &fld->lcf_targets, ft_chain) {
+                if (target->ft_idx == idx) {
+                        fld->lcf_count--;
+                        list_del(&target->ft_chain);
+                        spin_unlock(&fld->lcf_lock);
+                        class_export_put(target->ft_exp);
                         OBD_FREE_PTR(target);
                         RETURN(0);
                 }
         }
-        spin_unlock(&fld->fld_lock);
+        spin_unlock(&fld->lcf_lock);
         RETURN(-ENOENT);
 }
 EXPORT_SYMBOL(fld_client_del_target);
@@ -202,17 +206,17 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
         int rc;
         ENTRY;
 
-        fld->fld_proc_dir = lprocfs_register(fld->fld_name,
+        fld->lcf_proc_dir = lprocfs_register(fld->lcf_name,
                                              proc_lustre_root,
                                              NULL, NULL);
 
-        if (IS_ERR(fld->fld_proc_dir)) {
+        if (IS_ERR(fld->lcf_proc_dir)) {
                 CERROR("LProcFS failed in fld-init\n");
-                rc = PTR_ERR(fld->fld_proc_dir);
+                rc = PTR_ERR(fld->lcf_proc_dir);
                 RETURN(rc);
         }
 
-        rc = lprocfs_add_vars(fld->fld_proc_dir,
+        rc = lprocfs_add_vars(fld->lcf_proc_dir,
                               fld_client_proc_list, fld);
         if (rc) {
                 CERROR("can't init FLD "
@@ -230,10 +234,10 @@ out_cleanup:
 static void fld_client_proc_fini(struct lu_client_fld *fld)
 {
         ENTRY;
-        if (fld->fld_proc_dir) {
-                if (!IS_ERR(fld->fld_proc_dir))
-                        lprocfs_remove(fld->fld_proc_dir);
-                fld->fld_proc_dir = NULL;
+        if (fld->lcf_proc_dir) {
+                if (!IS_ERR(fld->lcf_proc_dir))
+                        lprocfs_remove(fld->lcf_proc_dir);
+                fld->lcf_proc_dir = NULL;
         }
         EXIT;
 }
@@ -261,7 +265,8 @@ static inline int hash_is_sane(int hash)
 #define FLD_CACHE_THRESHOLD 10
 
 int fld_client_init(struct lu_client_fld *fld,
-                    const char *uuid, int hash)
+                    const char *prefix, int hash,
+                    const struct lu_context *ctx)
 {
 #ifdef __KERNEL__
         int cache_size, cache_threshold;
@@ -272,17 +277,18 @@ int fld_client_init(struct lu_client_fld *fld,
         LASSERT(fld != NULL);
 
         if (!hash_is_sane(hash)) {
-                CERROR("wrong hash function %#x\n", hash);
+                CERROR("Wrong hash function %#x\n", hash);
                 RETURN(-EINVAL);
         }
 
-        INIT_LIST_HEAD(&fld->fld_targets);
-        spin_lock_init(&fld->fld_lock);
-        fld->fld_hash = &fld_hash[hash];
-        fld->fld_count = 0;
+        fld->lcf_count = 0;
+        fld->lcf_ctx = ctx;
+        spin_lock_init(&fld->lcf_lock);
+        fld->lcf_hash = &fld_hash[hash];
+        INIT_LIST_HEAD(&fld->lcf_targets);
 
-        snprintf(fld->fld_name, sizeof(fld->fld_name),
-                 "%s-cli-%s", LUSTRE_FLD_NAME, uuid);
+        snprintf(fld->lcf_name, sizeof(fld->lcf_name),
+                 "%s-cli-%s", LUSTRE_FLD_NAME, prefix);
 
 #ifdef __KERNEL__
         cache_size = FLD_CACHE_SIZE /
@@ -291,12 +297,12 @@ int fld_client_init(struct lu_client_fld *fld,
         cache_threshold = cache_size *
                 FLD_CACHE_THRESHOLD / 100;
 
-        fld->fld_cache = fld_cache_init(FLD_HTABLE_SIZE,
+        fld->lcf_cache = fld_cache_init(FLD_HTABLE_SIZE,
                                         cache_size,
                                         cache_threshold);
-        if (IS_ERR(fld->fld_cache)) {
-                rc = PTR_ERR(fld->fld_cache);
-                fld->fld_cache = NULL;
+        if (IS_ERR(fld->lcf_cache)) {
+                rc = PTR_ERR(fld->lcf_cache);
+                fld->lcf_cache = NULL;
                 GOTO(out, rc);
         }
 #endif
@@ -311,33 +317,33 @@ out:
         else
                 CDEBUG(D_INFO|D_WARNING,
                        "Client FLD, using \"%s\" hash\n",
-                       fld->fld_hash->fh_name);
+                       fld->lcf_hash->fh_name);
         return rc;
 }
 EXPORT_SYMBOL(fld_client_init);
 
 void fld_client_fini(struct lu_client_fld *fld)
 {
-        struct fld_target *target, *tmp;
+        struct lu_fld_target *target, *tmp;
         ENTRY;
 
         fld_client_proc_fini(fld);
 
-        spin_lock(&fld->fld_lock);
+        spin_lock(&fld->lcf_lock);
         list_for_each_entry_safe(target, tmp,
-                                 &fld->fld_targets, fldt_chain) {
-                fld->fld_count--;
-                list_del(&target->fldt_chain);
-                class_export_put(target->fldt_exp);
+                                 &fld->lcf_targets, ft_chain) {
+                fld->lcf_count--;
+                list_del(&target->ft_chain);
+                class_export_put(target->ft_exp);
                 OBD_FREE_PTR(target);
         }
-        spin_unlock(&fld->fld_lock);
+        spin_unlock(&fld->lcf_lock);
 
 #ifdef __KERNEL__
-        if (fld->fld_cache != NULL) {
-                if (!IS_ERR(fld->fld_cache))
-                        fld_cache_fini(fld->fld_cache);
-                fld->fld_cache = NULL;
+        if (fld->lcf_cache != NULL) {
+                if (!IS_ERR(fld->lcf_cache))
+                        fld_cache_fini(fld->lcf_cache);
+                fld->lcf_cache = NULL;
         }
 #endif
 
@@ -400,14 +406,26 @@ int fld_client_create(struct lu_client_fld *fld,
                       seqno_t seq, mdsno_t mds)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = mds };
-        struct fld_target *target;
+        struct lu_fld_target *target;
         int rc;
         ENTRY;
 
         target = fld_client_get_target(fld, seq);
         LASSERT(target != NULL);
 
-        rc = fld_client_rpc(target->fldt_exp, &md_fld, FLD_CREATE);
+#ifdef __KERNEL__
+        if (target->ft_srv != NULL) {
+                LASSERT(fld->lcf_ctx != NULL);
+                rc = fld_server_create(target->ft_srv,
+                                       fld->lcf_ctx,
+                                       seq, mds);
+        } else {
+#endif
+                rc = fld_client_rpc(target->ft_exp,
+                                    &md_fld, FLD_CREATE);
+#ifdef __KERNEL__
+        }
+#endif
 
         if (rc == 0) {
                 /*
@@ -416,7 +434,7 @@ int fld_client_create(struct lu_client_fld *fld,
                  * reason is that, we do not want to stop proceeding because of
                  * cache errors. --umka
                  */
-                fld_cache_insert(fld->fld_cache, seq, mds);
+                fld_cache_insert(fld->lcf_cache, seq, mds);
         }
         RETURN(rc);
 }
@@ -426,17 +444,28 @@ int fld_client_delete(struct lu_client_fld *fld,
                       seqno_t seq)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
-        struct fld_target *target;
+        struct lu_fld_target *target;
         int rc;
         ENTRY;
 
-        fld_cache_delete(fld->fld_cache, seq);
+        fld_cache_delete(fld->lcf_cache, seq);
 
         target = fld_client_get_target(fld, seq);
         LASSERT(target != NULL);
 
-        rc = fld_client_rpc(target->fldt_exp,
-                            &md_fld, FLD_DELETE);
+#ifdef __KERNEL__
+        if (target->ft_srv != NULL) {
+                LASSERT(fld->lcf_ctx != NULL);
+                rc = fld_server_delete(target->ft_srv,
+                                       fld->lcf_ctx,
+                                       seq);
+        } else {
+#endif
+                rc = fld_client_rpc(target->ft_exp,
+                                    &md_fld, FLD_DELETE);
+#ifdef __KERNEL__
+        }
+#endif
 
         RETURN(rc);
 }
@@ -446,12 +475,12 @@ int fld_client_lookup(struct lu_client_fld *fld,
                       seqno_t seq, mdsno_t *mds)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
-        struct fld_target *target;
+        struct lu_fld_target *target;
         int rc;
         ENTRY;
 
         /* lookup it in the cache */
-        rc = fld_cache_lookup(fld->fld_cache, seq, mds);
+        rc = fld_cache_lookup(fld->lcf_cache, seq, mds);
         if (rc == 0)
                 RETURN(0);
 
@@ -459,8 +488,19 @@ int fld_client_lookup(struct lu_client_fld *fld,
         target = fld_client_get_target(fld, seq);
         LASSERT(target != NULL);
 
-        rc = fld_client_rpc(target->fldt_exp,
-                            &md_fld, FLD_LOOKUP);
+#ifdef __KERNEL__
+        if (target->ft_srv != NULL) {
+                LASSERT(fld->lcf_ctx != NULL);
+                rc = fld_server_lookup(target->ft_srv,
+                                       fld->lcf_ctx,
+                                       seq, mds);
+        } else {
+#endif
+                rc = fld_client_rpc(target->ft_exp,
+                                    &md_fld, FLD_LOOKUP);
+#ifdef __KERNEL__
+        }
+#endif
         if (rc == 0) {
                 *mds = md_fld.mf_mds;
 
@@ -468,7 +508,7 @@ int fld_client_lookup(struct lu_client_fld *fld,
                  * Do not return error here as well. See previous comment in
                  * same situation in function fld_client_create(). --umka
                  */
-                fld_cache_insert(fld->fld_cache, seq, *mds);
+                fld_cache_insert(fld->lcf_cache, seq, *mds);
         }
         RETURN(rc);
 }

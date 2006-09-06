@@ -76,8 +76,8 @@ int seq_server_set_cli(struct lu_server_seq *seq,
 
         if (cli == NULL) {
                 CDEBUG(D_INFO|D_WARNING, "%s: detached "
-                       "sequence mgr client %s\n", seq->lss_name,
-                       cli->lcs_exp->exp_client_uuid.uuid);
+                       "sequence mgr client %s\n",
+                       seq->lss_name, cli->lcs_name);
                 seq->lss_cli = cli;
                 RETURN(0);
         }
@@ -90,7 +90,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
 
         CDEBUG(D_INFO|D_WARNING, "%s: attached "
                "sequence client %s\n", seq->lss_name,
-               cli->lcs_exp->exp_client_uuid.uuid);
+               cli->lcs_name);
 
         /* asking client for new range, assign that range to ->seq_super and
          * write seq state to backing store should be atomic. */
@@ -104,9 +104,10 @@ int seq_server_set_cli(struct lu_server_seq *seq,
         if (range_is_zero(&seq->lss_super)) {
                 rc = seq_client_alloc_super(cli);
                 if (rc) {
+                        up(&seq->lss_sem);
                         CERROR("can't allocate super-sequence, "
                                "rc %d\n", rc);
-                        GOTO(out_up, rc);
+                        RETURN(rc);
                 }
 
                 /* take super-seq from client seq mgr */
@@ -122,10 +123,8 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 }
         }
 
-        EXIT;
-out_up:
         up(&seq->lss_sem);
-        return rc;
+        RETURN(rc);
 }
 EXPORT_SYMBOL(seq_server_set_cli);
 
@@ -172,9 +171,9 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
         RETURN(rc);
 }
 
-static int seq_server_alloc_super(struct lu_server_seq *seq,
-                                  struct lu_range *range,
-                                  const struct lu_context *ctx)
+int seq_server_alloc_super(struct lu_server_seq *seq,
+                           struct lu_range *range,
+                           const struct lu_context *ctx)
 {
         int rc;
         ENTRY;
@@ -231,9 +230,9 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
         RETURN(rc);
 }
 
-static int seq_server_alloc_meta(struct lu_server_seq *seq,
-                                 struct lu_range *range,
-                                 const struct lu_context *ctx)
+int seq_server_alloc_meta(struct lu_server_seq *seq,
+                          struct lu_range *range,
+                          const struct lu_context *ctx)
 {
         int rc;
         ENTRY;
@@ -485,13 +484,13 @@ static void seq_server_proc_fini(struct lu_server_seq *seq)
 
 int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
-                    const char *uuid,
+                    const char *prefix,
                     enum lu_mgr_type type,
                     const struct lu_context *ctx)
 {
         int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
         
-        static  struct ptlrpc_service_conf seq_conf;
+        static struct ptlrpc_service_conf seq_conf;
         seq_conf = (typeof(seq_conf)) {
                 .psc_nbufs = MDS_NBUFS,
                 .psc_bufsize = MDS_BUFSIZE,
@@ -509,7 +508,7 @@ int seq_server_init(struct lu_server_seq *seq,
         ENTRY;
 
 	LASSERT(dev != NULL);
-        LASSERT(uuid != NULL);
+        LASSERT(prefix != NULL);
 
         seq->lss_cli = NULL;
         seq->lss_type = type;
@@ -520,7 +519,7 @@ int seq_server_init(struct lu_server_seq *seq,
 
         snprintf(seq->lss_name, sizeof(seq->lss_name), "%s-%s-%s",
                  LUSTRE_SEQ_NAME, (is_srv ? "srv" : "ctl"),
-                 uuid);
+                 prefix);
 
         seq->lss_space = LUSTRE_SEQ_SPACE_RANGE;
         seq->lss_super = LUSTRE_SEQ_ZERO_RANGE;

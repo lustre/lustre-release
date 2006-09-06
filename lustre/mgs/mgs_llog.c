@@ -1406,7 +1406,8 @@ out:
         // for_all_existing_mdt except current one
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
                 char *mdtname;
-                if (test_bit(i,  fsdb->fsdb_mdt_index_map)) {
+                if (i !=  mti->mti_stripe_index &&
+                    test_bit(i,  fsdb->fsdb_mdt_index_map)) {
                         sprintf(mdt_index,"-MDT%04x",i);
                         
                         name_create(&mdtname, mti->mti_fsname, mdt_index);

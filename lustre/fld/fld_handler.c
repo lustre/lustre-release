@@ -93,28 +93,31 @@ static void __exit fld_mod_exit(void)
 }
 
 /* insert index entry and update cache */
-static int fld_server_create(struct lu_server_fld *fld,
-                             const struct lu_context *ctx,
-                             seqno_t seq, mdsno_t mds)
+int fld_server_create(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      seqno_t seq, mdsno_t mds)
 {
         return fld_index_create(fld, ctx, seq, mds);
 }
+EXPORT_SYMBOL(fld_server_create);
 
 /* delete index entry */
-static int fld_server_delete(struct lu_server_fld *fld,
-                             const struct lu_context *ctx,
-                             seqno_t seq)
+int fld_server_delete(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      seqno_t seq)
 {
         return fld_index_delete(fld, ctx, seq);
 }
+EXPORT_SYMBOL(fld_server_delete);
 
 /* issue on-disk index lookup */
-static int fld_server_lookup(struct lu_server_fld *fld,
-                             const struct lu_context *ctx,
-                             seqno_t seq, mdsno_t *mds)
+int fld_server_lookup(struct lu_server_fld *fld,
+                      const struct lu_context *ctx,
+                      seqno_t seq, mdsno_t *mds)
 {
         return fld_index_lookup(fld, ctx, seq, mds);
 }
+EXPORT_SYMBOL(fld_server_lookup);
 
 static int fld_server_handle(struct lu_server_fld *fld,
                              const struct lu_context *ctx,
@@ -265,7 +268,7 @@ int fid_is_local(struct lu_site *site, const struct lu_fid *fid)
                 mdsno_t mds;
                 int rc;
 
-                rc = fld_cache_lookup(site->ls_client_fld->fld_cache,
+                rc = fld_cache_lookup(site->ls_client_fld->lcf_cache,
                                       fid_seq(fid), &mds);
                 if (rc == 0)
                         result = (mds == site->ls_node_id);
@@ -282,19 +285,19 @@ static int fld_server_proc_init(struct lu_server_fld *fld)
         int rc = 0;
         ENTRY;
 
-        fld->fld_proc_dir = lprocfs_register(fld->fld_name,
+        fld->lsf_proc_dir = lprocfs_register(fld->lsf_name,
                                              proc_lustre_root,
                                              fld_server_proc_list, fld);
-        if (IS_ERR(fld->fld_proc_dir)) {
-                rc = PTR_ERR(fld->fld_proc_dir);
+        if (IS_ERR(fld->lsf_proc_dir)) {
+                rc = PTR_ERR(fld->lsf_proc_dir);
                 RETURN(rc);
         }
 
-        fld->fld_proc_entry = lprocfs_register("services",
-                                               fld->fld_proc_dir,
+        fld->lsf_proc_entry = lprocfs_register("services",
+                                               fld->lsf_proc_dir,
                                                NULL, NULL);
-        if (IS_ERR(fld->fld_proc_entry)) {
-                rc = PTR_ERR(fld->fld_proc_entry);
+        if (IS_ERR(fld->lsf_proc_entry)) {
+                rc = PTR_ERR(fld->lsf_proc_entry);
                 GOTO(out_cleanup, rc);
         }
         RETURN(rc);
@@ -307,16 +310,16 @@ out_cleanup:
 static void fld_server_proc_fini(struct lu_server_fld *fld)
 {
         ENTRY;
-        if (fld->fld_proc_entry != NULL) {
-                if (!IS_ERR(fld->fld_proc_entry))
-                        lprocfs_remove(fld->fld_proc_entry);
-                fld->fld_proc_entry = NULL;
+        if (fld->lsf_proc_entry != NULL) {
+                if (!IS_ERR(fld->lsf_proc_entry))
+                        lprocfs_remove(fld->lsf_proc_entry);
+                fld->lsf_proc_entry = NULL;
         }
 
-        if (fld->fld_proc_dir != NULL) {
-                if (!IS_ERR(fld->fld_proc_dir))
-                        lprocfs_remove(fld->fld_proc_dir);
-                fld->fld_proc_dir = NULL;
+        if (fld->lsf_proc_dir != NULL) {
+                if (!IS_ERR(fld->lsf_proc_dir))
+                        lprocfs_remove(fld->lsf_proc_dir);
+                fld->lsf_proc_dir = NULL;
         }
         EXIT;
 }
@@ -338,7 +341,8 @@ int fld_server_init(struct lu_server_fld *fld,
                     const char *uuid)
 {
         int rc;
-        struct ptlrpc_service_conf fld_conf = {
+        static struct ptlrpc_service_conf fld_conf;
+        fld_conf = (typeof(fld_conf)) {
                 .psc_nbufs            = MDS_NBUFS,
                 .psc_bufsize          = MDS_BUFSIZE,
                 .psc_max_req_size     = FLD_MAXREQSIZE,
@@ -351,7 +355,7 @@ int fld_server_init(struct lu_server_fld *fld,
         };
         ENTRY;
 
-        snprintf(fld->fld_name, sizeof(fld->fld_name),
+        snprintf(fld->lsf_name, sizeof(fld->lsf_name),
                  "%s-srv-%s", LUSTRE_FLD_NAME, uuid);
 
         rc = fld_index_init(fld, ctx, dt);
@@ -362,12 +366,12 @@ int fld_server_init(struct lu_server_fld *fld,
         if (rc)
                 GOTO(out, rc);
 
-        fld->fld_service =
+        fld->lsf_service =
                 ptlrpc_init_svc_conf(&fld_conf, fld_handle,
                                      LUSTRE_FLD_NAME,
-                                     fld->fld_proc_entry, NULL);
-        if (fld->fld_service != NULL)
-                rc = ptlrpc_start_threads(NULL, fld->fld_service,
+                                     fld->lsf_proc_entry, NULL);
+        if (fld->lsf_service != NULL)
+                rc = ptlrpc_start_threads(NULL, fld->lsf_service,
                                           LUSTRE_FLD_NAME);
         else
                 rc = -ENOMEM;
@@ -387,13 +391,12 @@ void fld_server_fini(struct lu_server_fld *fld,
 {
         ENTRY;
 
-        if (fld->fld_service != NULL) {
-                ptlrpc_unregister_service(fld->fld_service);
-                fld->fld_service = NULL;
+        if (fld->lsf_service != NULL) {
+                ptlrpc_unregister_service(fld->lsf_service);
+                fld->lsf_service = NULL;
         }
 
         fld_server_proc_fini(fld);
-
         fld_index_fini(fld, ctx);
         
         EXIT;

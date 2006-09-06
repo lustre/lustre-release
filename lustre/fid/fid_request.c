@@ -122,8 +122,21 @@ out_req:
 /* request sequence-controller node to allocate new super-sequence. */
 static int __seq_client_alloc_super(struct lu_client_seq *seq)
 {
-        return seq_client_rpc(seq, &seq->lcs_range,
-                              SEQ_ALLOC_SUPER, "super");
+        int rc;
+        
+#ifdef __KERNEL__
+        if (seq->lcs_srv) {
+                rc = seq_server_alloc_super(seq->lcs_srv,
+                                            &seq->lcs_range,
+                                            seq->lcs_ctx);
+        } else {
+#endif
+                rc = seq_client_rpc(seq, &seq->lcs_range,
+                                    SEQ_ALLOC_SUPER, "super");
+#ifdef __KERNEL__
+        }
+#endif
+        return rc;
 }
 
 int seq_client_alloc_super(struct lu_client_seq *seq)
@@ -142,8 +155,21 @@ EXPORT_SYMBOL(seq_client_alloc_super);
 /* request sequence-controller node to allocate new meta-sequence. */
 static int __seq_client_alloc_meta(struct lu_client_seq *seq)
 {
-        return seq_client_rpc(seq, &seq->lcs_range,
-                              SEQ_ALLOC_META, "meta");
+        int rc;
+
+#ifdef __KERNEL__
+        if (seq->lcs_srv) {
+                rc = seq_server_alloc_meta(seq->lcs_srv,
+                                           &seq->lcs_range,
+                                           seq->lcs_ctx);
+        } else {
+#endif
+                rc = seq_client_rpc(seq, &seq->lcs_range,
+                                    SEQ_ALLOC_META, "meta");
+#ifdef __KERNEL__
+        }
+#endif
+        return rc;
 }
 
 int seq_client_alloc_meta(struct lu_client_seq *seq)
@@ -305,24 +331,37 @@ static void seq_client_proc_fini(struct lu_client_seq *seq)
 #endif
 
 int seq_client_init(struct lu_client_seq *seq,
-                    const char *uuid,
                     struct obd_export *exp,
-                    enum lu_cli_type type)
+                    enum lu_cli_type type,
+                    const char *prefix,
+                    struct lu_server_seq *srv,
+                    const struct lu_context *ctx)
 {
-        int rc = 0;
+        int rc;
         ENTRY;
 
-        LASSERT(exp != NULL);
+        LASSERT(seq != NULL);
+        LASSERT(prefix != NULL);
 
+        seq->lcs_ctx = ctx;
+        seq->lcs_exp = exp;
+        seq->lcs_srv = srv;
         seq->lcs_type = type;
         fid_zero(&seq->lcs_fid);
         range_zero(&seq->lcs_range);
         sema_init(&seq->lcs_sem, 1);
-        seq->lcs_exp = class_export_get(exp);
         seq->lcs_width = LUSTRE_SEQ_MAX_WIDTH;
 
+        if (exp == NULL) {
+                LASSERT(seq->lcs_ctx != NULL);
+                LASSERT(seq->lcs_srv != NULL);
+        } else {
+                LASSERT(seq->lcs_exp != NULL);
+                seq->lcs_exp = class_export_get(seq->lcs_exp);
+        }
+
         snprintf(seq->lcs_name, sizeof(seq->lcs_name),
-                 "%s-cli-%s", LUSTRE_SEQ_NAME, uuid);
+                 "%s-cli-%s", LUSTRE_SEQ_NAME, prefix);
 
         rc = seq_client_proc_init(seq);
         if (rc)
@@ -345,7 +384,10 @@ void seq_client_fini(struct lu_client_seq *seq)
                 seq->lcs_exp = NULL;
         }
 
-        CDEBUG(D_INFO|D_WARNING, "Client Sequence Manager\n");
+        seq->lcs_srv = NULL;
+
+        CDEBUG(D_INFO|D_WARNING,
+               "Client Sequence Manager\n");
 
         EXIT;
 }
