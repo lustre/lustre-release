@@ -141,8 +141,9 @@ int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
          * missing objects below this ID, they will be created.  If it finds
          * objects above this ID, they will be removed. */
         memset(&oa, 0, sizeof(oa));
-        oa.o_valid = OBD_MD_FLFLAGS;
         oa.o_flags = OBD_FL_DELORPHAN;
+        oa.o_gr = FILTER_GROUP_MDS0 + mds->mds_id;
+        oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
         if (ost_uuid != NULL) {
                 memcpy(&oa.o_inline, ost_uuid, sizeof(*ost_uuid));
                 oa.o_valid |= OBD_MD_FLINLINE;
@@ -328,6 +329,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX |
                                   OBD_CONNECT_REQPORTAL;
         data->ocd_version = LUSTRE_VERSION_CODE;
+        data->ocd_group = mds->mds_id +  FILTER_GROUP_MDS0;
         /* NB: lov_connect() needs to fill in .ocd_index for each OST */
         rc = obd_connect(NULL, &conn, mds->mds_osc_obd, &obd->obd_uuid, data);
         OBD_FREE(data, sizeof(*data));
@@ -577,15 +579,18 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 struct llog_ctxt *ctxt =
                         llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
                 int rc2;
+                __u32 group;
 
                 obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
                 push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
+
+                group = FILTER_GROUP_MDS0 + mds->mds_id;
                 rc2 = obd_set_info_async(mds->mds_osc_exp,
                                          strlen(KEY_MDS_CONN), KEY_MDS_CONN,
-                                         0, NULL, NULL);
+                                         sizeof(group), &group, NULL);
                 if (!rc)
                         rc = rc2;
                 RETURN(rc);
@@ -635,6 +640,7 @@ static int __mds_lov_synchronize(void *data)
         struct obd_uuid *uuid;
         __u32  idx = mlsi->mlsi_index;
         int rc = 0;
+        __u32 group;
         ENTRY;
 
         OBD_FREE(mlsi, sizeof(*mlsi));
@@ -647,9 +653,9 @@ static int __mds_lov_synchronize(void *data)
         rc = mds_lov_update_mds(obd, watched, idx);
         if (rc != 0)
                 GOTO(out, rc);
-        
+        group = FILTER_GROUP_MDS0 + mds->mds_id;
         rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
-                                KEY_MDS_CONN, 0, uuid, NULL);
+                                KEY_MDS_CONN, sizeof(group), &group/*uuid*/, NULL);
         if (rc != 0)
                 GOTO(out, rc);
 
