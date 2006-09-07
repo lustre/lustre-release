@@ -64,7 +64,7 @@ static int mdd_lov_update(struct obd_device *host,
         RETURN(rc);
 }
 
-/*The obd is created for handling data stack for mdd*/
+/* The obd is created for handling data stack for mdd */
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                  struct lustre_cfg *cfg)
 {
@@ -106,7 +106,7 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
         lustre_cfg_bufs_reset(bufs, name);
         lustre_cfg_bufs_set_string(bufs, 1, MDD_OBD_TYPE);
         lustre_cfg_bufs_set_string(bufs, 2, uuid);
-        lustre_cfg_bufs_set_string(bufs, 3, (char*)dev/*MDD_OBD_PROFILE*/);
+        lustre_cfg_bufs_set_string(bufs, 3, (char*)dev/* MDD_OBD_PROFILE */);
         lustre_cfg_bufs_set_string(bufs, 4, (char*)dev);
 
         lcfg = lustre_cfg_new(LCFG_ATTACH, bufs);
@@ -127,8 +127,10 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
         rc = class_setup(obd, lcfg);
         if (rc)
                 GOTO(class_detach, rc);
-        /*Add here for obd notify mechiasm,
-         *when adding a new ost, the mds will notify this mdd*/
+        /*
+         * Add here for obd notify mechiasm,
+         * when adding a new ost, the mds will notify this mdd 
+         */
         obd->obd_upcall.onu_owner = mdd;
         obd->obd_upcall.onu_upcall = mdd_lov_update;
 
@@ -196,7 +198,7 @@ int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
         } else if (rc < 0) {
                 CERROR("Error %d reading eadata \n", rc);
         } else if (rc > 0) {
-                /*FIXME convert lov EA necessary for this version?*/
+                /* FIXME convert lov EA but fixed after verification test */
                 *md_size = rc;
         }
 
@@ -288,7 +290,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
                 if (lmmp == NULL && lmm_size == 0) {
                         struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
                         int size = sizeof(lmm);
-                        /*Get parent dir stripe and set*/
+                        /* Get parent dir stripe and set */
                         rc = mdd_get_md(ctxt, pobj, &lmm, &size,
                                         MDS_LOV_MD_NAME);
                         if (rc > 0) {
@@ -300,7 +302,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
                         }
                 } else {
                        LASSERT(lmmp != NULL && lmm_size > 0);
-                        /*delete lmm*/
+                        /* delete lmm */
                        rc = mdd_lov_set_dir_md(ctxt, child, lmmp, lmm_size, handle);
                 }
         }
@@ -309,7 +311,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
         RETURN(rc);
 }
 
-/*FIXME: this is for create lsm object id, which should identify the
+/* FIXME: this is for create lsm object id, which should identify the
  * lsm object unique in the whole mds, as I see. But it seems, we
  * still not need it now. right? so just borrow the ll_fid_build_ino
  */
@@ -329,7 +331,6 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         struct obdo             *oa;
         struct lov_stripe_md    *lsm = NULL;
         const void              *eadata = spec->u.sp_ea.eadata;
-/*      int                      eadatasize  = spec->u.sp_ea.eadatalen;*/
         __u32                    create_flags = spec->sp_cr_flags;
         int                      rc = 0;
         ENTRY;
@@ -402,10 +403,11 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 lsm->lsm_object_id = oa->o_id;
                 lsm->lsm_object_gr = oa->o_gr;
         }
-        /*Sometimes, we may truncate some object(without lsm)
-         *then open (with write flags)it, so creating lsm above.
-         *The Nonzero(truncated) size should tell ost. since size
-         *attr is in charged by OST.
+        /*
+         * Sometimes, we may truncate some object(without lsm)
+         * then open (with write flags)it, so creating lsm above.
+         * The Nonzero(truncated) size should tell ost. since size
+         * attr is in charged by OST.
          */
         if (la->la_size && la->la_valid & LA_SIZE) {
                 struct obd_info          *oinfo = &mdd_ctx_info(ctxt)->mti_oi;
@@ -439,7 +441,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         GOTO(out_oa, rc);
                 }
         }
-        /*blksize should be changed after create data object*/
+        /* blksize should be changed after create data object */
         la->la_valid |= LA_BLKSIZE;
         la->la_blksize = oa->o_blksize;
 
