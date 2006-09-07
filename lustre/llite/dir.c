@@ -47,6 +47,7 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_lite.h>
 #include <lustre_dlm.h>
+#include <lustre_fid.h>
 #include "llite_internal.h"
 
 #define PageChecked(page)        test_bit(PG_checked, &(page)->flags)
@@ -479,7 +480,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 
                                 fid  = ent->lde_fid;
                                 name = ent->lde_name;
-                                fid_le_to_cpu(&fid);
+                                fid_le_to_cpu(&fid, &fid);
                                 ino  = ll_fid_build_ino(sbi, &fid);
 
                                 done = filldir(cookie, name, namelen,

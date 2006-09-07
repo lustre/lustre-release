@@ -261,20 +261,6 @@ static inline int lu_fid_eq(const struct lu_fid *f0,
 	return memcmp(f0, f1, sizeof *f0) == 0;
 }
 
-static inline void fid_cpu_to_le(struct lu_fid *fid)
-{
-        fid->f_seq = cpu_to_le64(fid_seq(fid));
-        fid->f_oid = cpu_to_le32(fid_oid(fid));
-        fid->f_ver = cpu_to_le32(fid_ver(fid));
-}
-
-static inline void fid_le_to_cpu(struct lu_fid *fid)
-{
-        fid->f_seq = le64_to_cpu(fid_seq(fid));
-        fid->f_oid = le32_to_cpu(fid_oid(fid));
-        fid->f_ver = le32_to_cpu(fid_ver(fid));
-}
-
 /*
  * Layout of readdir pages, as transmitted on wire.
  */

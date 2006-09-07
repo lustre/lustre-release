@@ -74,8 +74,8 @@ int seq_store_write(struct lu_server_seq *seq,
         th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &info->sti_txn);
         if (!IS_ERR(th)) {
                 /* store ranges in le format */
-                range_to_le(&info->sti_record.ssr_space, &seq->lss_space);
-                range_to_le(&info->sti_record.ssr_super, &seq->lss_super);
+                range_cpu_to_le(&info->sti_record.ssr_space, &seq->lss_space);
+                range_cpu_to_le(&info->sti_record.ssr_super, &seq->lss_super);
  
                 rc = dt_obj->do_body_ops->dbo_write(ctx, dt_obj,
                                                     (char *)&info->sti_record,
@@ -119,12 +119,8 @@ int seq_store_read(struct lu_server_seq *seq,
                                            sizeof(info->sti_record), &pos);
         
         if (rc == sizeof(info->sti_record)) {
-                seq->lss_space = info->sti_record.ssr_space;
-                seq->lss_super = info->sti_record.ssr_super;
-
-                lustre_swab_lu_range(&seq->lss_space);
-                lustre_swab_lu_range(&seq->lss_super);
-
+                range_le_to_cpu(&seq->lss_space, &info->sti_record.ssr_space);
+                range_le_to_cpu(&seq->lss_super, &info->sti_record.ssr_super);
                 CDEBUG(D_INFO, "read %s ranges: space - "DRANGE", super - "
                        DRANGE"\n", (seq->lss_type == LUSTRE_SEQ_SERVER ?
                                     "server" : "controller"),

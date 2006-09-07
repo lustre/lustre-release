@@ -45,6 +45,7 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <lustre_lite.h>
+#include <lustre_fid.h>
 #include "lmv_internal.h"
 
 /* not defined for liblustre building */
@@ -2181,7 +2182,7 @@ int lmv_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 
         for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
                 meap->mea_ids[i] = meap->mea_ids[i];
-                fid_cpu_to_le(&meap->mea_ids[i]);
+                fid_cpu_to_le(&meap->mea_ids[i], &meap->mea_ids[i]);
         }
 
         RETURN(mea_size);
@@ -2231,7 +2232,7 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
         for (i = 0; i < (*tmea)->mea_count; i++) {
                 (*tmea)->mea_ids[i] = mea->mea_ids[i];
-                fid_le_to_cpu(&(*tmea)->mea_ids[i]);
+                fid_le_to_cpu(&(*tmea)->mea_ids[i], &(*tmea)->mea_ids[i]);
         }
         RETURN(mea_size);
 }

@@ -1105,7 +1105,7 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
                 len  = iops->key_size(ctx, it);
 
                 *fid  = *(struct lu_fid *)iops->rec(ctx, it);
-                fid_cpu_to_le(fid);
+                fid_cpu_to_le(fid, fid);
 
                 recsize = (sizeof *ent + len + 3) & ~3;
                 hash = iops->store(ctx, it);

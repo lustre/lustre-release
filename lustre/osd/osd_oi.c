@@ -134,7 +134,7 @@ void osd_oi_write_unlock(struct osd_oi *oi)
 static const struct dt_key *oi_fid_key(struct osd_thread_info *info,
                                        const struct lu_fid *fid)
 {
-        fid_to_be(&info->oti_fid, fid);
+        fid_cpu_to_be(&info->oti_fid, fid);
         return (const struct dt_key *)&info->oti_fid;
 }
 

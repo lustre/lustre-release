@@ -182,11 +182,12 @@ int seq_client_alloc_fid(struct lu_client_seq *seq,
 
 /* Fids common stuff */
 int fid_is_local(struct lu_site *site, const struct lu_fid *fid);
-void fid_to_le(struct lu_fid *dst, const struct lu_fid *src);
-void fid_to_be(struct lu_fid *dst, const struct lu_fid *src);
+
+void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src);
+void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src);
 
 /* Range common stuff */
-void range_to_le(struct lu_range *dst, const struct lu_range *src);
-void range_to_be(struct lu_range *dst, const struct lu_range *src);
+void range_cpu_to_le(struct lu_range *dst, const struct lu_range *src);
+void range_le_to_cpu(struct lu_range *dst, const struct lu_range *src);
 
 #endif /* __LINUX_OBD_CLASS_H */
