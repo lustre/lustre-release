@@ -130,8 +130,9 @@
 /* FLD_MAXREPSIZE == lustre_msg + __u32 padding + ptlrpc_body + md_fld */
 #define FLD_MAXREPSIZE  (160)
 
-/* SEQ_MAXREQSIZE == lustre_msg + __u32 padding + opc + ptlrpc_body + __u32 padding */
-#define SEQ_MAXREQSIZE  (152)
+/* SEQ_MAXREQSIZE == lustre_msg + __u32 padding + ptlrpc_body + opc + lu_range +
+ * __u32 padding */
+#define SEQ_MAXREQSIZE  (168)
 
 /* SEQ_MAXREPSIZE == lustre_msg + __u32 padding + ptlrpc_body + lu_range */
 #define SEQ_MAXREPSIZE  (160)

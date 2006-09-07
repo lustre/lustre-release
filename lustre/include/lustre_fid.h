@@ -149,11 +149,13 @@ void seq_server_fini(struct lu_server_seq *seq,
                      const struct lu_context *ctx);
 
 int seq_server_alloc_super(struct lu_server_seq *seq,
-                           struct lu_range *range,
+                           struct lu_range *in,
+                           struct lu_range *out,
                            const struct lu_context *ctx);
 
 int seq_server_alloc_meta(struct lu_server_seq *seq,
-                          struct lu_range *range,
+                          struct lu_range *in,
+                          struct lu_range *out,
                           const struct lu_context *ctx);
 
 int seq_server_set_cli(struct lu_server_seq *seq,

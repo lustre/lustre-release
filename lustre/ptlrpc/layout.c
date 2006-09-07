@@ -80,7 +80,8 @@ static const struct req_msg_field *mds_statfs_server[] = {
 
 static const struct req_msg_field *seq_query_client[] = {
         &RMF_PTLRPC_BODY,
-        &RMF_SEQ_OPC
+        &RMF_SEQ_OPC,
+        &RMF_SEQ_RANGE
 };
 
 static const struct req_msg_field *seq_query_server[] = {

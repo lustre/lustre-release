@@ -374,13 +374,13 @@ static int fld_client_rpc(struct obd_export *exp,
         LASSERT(exp != NULL);
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp),
-                              LUSTRE_MDS_VERSION, FLD_QUERY,
-                              3, size, NULL);
+                              LUSTRE_MDS_VERSION,
+                              FLD_QUERY, 3, size,
+                              NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
         req_capsule_init(&pill, req, RCL_CLIENT, NULL);
-
         req_capsule_set(&pill, &RQF_FLD_QUERY);
 
         op = req_capsule_client_get(&pill, &RMF_FLD_OPC);

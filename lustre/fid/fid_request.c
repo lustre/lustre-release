@@ -51,29 +51,34 @@ static int seq_client_rpc(struct lu_client_seq *seq,
                           struct lu_range *range,
                           __u32 opc, const char *opcname)
 {
-        int rc, size[2] = { sizeof(struct ptlrpc_body),
-                            sizeof(__u32) };
+        int rc, size[3] = { sizeof(struct ptlrpc_body),
+                            sizeof(__u32),
+                            sizeof(struct lu_range) };
         struct obd_export *exp = seq->lcs_exp;
         struct ptlrpc_request *req;
+        struct lu_range *out, *in;
         struct req_capsule pill;
-        struct lu_range *ran;
         __u32 *op;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp),
 			      LUSTRE_MDS_VERSION,
-                              SEQ_QUERY, 2, size,
+                              SEQ_QUERY, 3, size,
                               NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
         req_capsule_init(&pill, req, RCL_CLIENT, NULL);
-
         req_capsule_set(&pill, &RQF_SEQ_QUERY);
 
+        /* init operation code */
         op = req_capsule_client_get(&pill, &RMF_SEQ_OPC);
         *op = opc;
 
+        /* zero out input range, this is not recovery yet. */
+        in = req_capsule_client_get(&pill, &RMF_SEQ_RANGE);
+        range_zero(in);
+        
         size[1] = sizeof(struct lu_range);
         ptlrpc_req_set_repsize(req, 2, size);
 
@@ -89,10 +94,8 @@ static int seq_client_rpc(struct lu_client_seq *seq,
         if (rc)
                 GOTO(out_req, rc);
 
-        ran = req_capsule_server_get(&pill, &RMF_SEQ_RANGE);
-        if (ran == NULL)
-                GOTO(out_req, rc = -EPROTO);
-        *range = *ran;
+        out = req_capsule_server_get(&pill, &RMF_SEQ_RANGE);
+        *range = *out;
 
         if (!range_is_sane(range)) {
                 CERROR("invalid seq range obtained from server: "
@@ -106,11 +109,12 @@ static int seq_client_rpc(struct lu_client_seq *seq,
                 GOTO(out_req, rc = -EINVAL);
         }
 
-        if (rc == 0) {
-                CDEBUG(D_INFO, "%s: allocated %s-sequence "
-                       DRANGE"]\n", seq->lcs_name, opcname,
-                       PRANGE(range));
-        }
+        /* Save server out to request for recovery case. */
+        *in = *out;
+                
+        CDEBUG(D_INFO, "%s: allocated %s-sequence "
+               DRANGE"]\n", seq->lcs_name, opcname,
+               PRANGE(range));
         
         EXIT;
 out_req:
@@ -126,7 +130,7 @@ static int __seq_client_alloc_super(struct lu_client_seq *seq)
         
 #ifdef __KERNEL__
         if (seq->lcs_srv) {
-                rc = seq_server_alloc_super(seq->lcs_srv,
+                rc = seq_server_alloc_super(seq->lcs_srv, NULL,
                                             &seq->lcs_range,
                                             seq->lcs_ctx);
         } else {
@@ -159,7 +163,7 @@ static int __seq_client_alloc_meta(struct lu_client_seq *seq)
 
 #ifdef __KERNEL__
         if (seq->lcs_srv) {
-                rc = seq_server_alloc_meta(seq->lcs_srv,
+                rc = seq_server_alloc_meta(seq->lcs_srv, NULL,
                                            &seq->lcs_range,
                                            seq->lcs_ctx);
         } else {
