@@ -566,16 +566,11 @@ static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
         EXIT;
 }
 
-static int osd_sync(const struct lu_context *ctx,
-                        struct dt_device *d)
+static int osd_sync(const struct lu_context *ctx, struct dt_device *d)
 {
         CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_OSD_NAME);
         return ldiskfs_force_commit(osd_sb(osd_dt_dev(d)));
 }
-
-enum {
-        SYNC_DEVICE_CREDITS = 3
-};
 
 static void osd_ro(const struct lu_context *ctx, struct dt_device *d)
 {
@@ -1870,6 +1865,7 @@ static struct lu_device *osd_device_fini(const struct lu_context *ctx,
         ENTRY;
 
         shrink_dcache_sb(osd_sb(osd_dev(d)));
+        osd_sync(ctx, lu2dt_dev(d));
 
         if (osd_dev(d)->od_mount)
                 server_put_mount(osd_dev(d)->od_mount->lmi_name,

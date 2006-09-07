@@ -2830,7 +2830,7 @@ static int mdt_object_init(const struct lu_context *ctxt, struct lu_object *o)
         int                rc = 0;
         ENTRY;
 
-        CDEBUG(D_INODE, "object init, fid = "DFID"\n",
+        CDEBUG(D_INFO, "object init, fid = "DFID"\n",
                PFID(lu_object_fid(o)));
 
         under = &d->mdt_child->md_lu_dev;
@@ -2849,7 +2849,7 @@ static void mdt_object_free(const struct lu_context *ctxt, struct lu_object *o)
         ENTRY;
 
         h = o->lo_header;
-        CDEBUG(D_INODE, "object free, fid = "DFID"\n",
+        CDEBUG(D_INFO, "object free, fid = "DFID"\n",
                PFID(lu_object_fid(o)));
 
         lu_object_fini(o);

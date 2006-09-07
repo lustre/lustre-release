@@ -574,7 +574,8 @@ EXPORT_SYMBOL(lu_device_init);
  */
 void lu_device_fini(struct lu_device *d)
 {
-        LASSERT(atomic_read(&d->ld_ref) == 0);
+        LASSERTF(atomic_read(&d->ld_ref) == 0,
+                 "Refcount is %u\n", atomic_read(&d->ld_ref));
 }
 EXPORT_SYMBOL(lu_device_fini);
 
