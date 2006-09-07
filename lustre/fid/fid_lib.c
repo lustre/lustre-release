@@ -66,6 +66,32 @@ void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
 }
 EXPORT_SYMBOL(fid_le_to_cpu);
 
+#ifdef __KERNEL__
+void fid_cpu_to_be(struct lu_fid *dst, const struct lu_fid *src)
+{
+        /* check that all fields are converted */
+        CLASSERT(sizeof *src ==
+                 sizeof fid_seq(src) +
+                 sizeof fid_oid(src) + sizeof fid_ver(src));
+        dst->f_seq = cpu_to_be64(fid_seq(src));
+        dst->f_oid = cpu_to_be32(fid_oid(src));
+        dst->f_ver = cpu_to_be32(fid_ver(src));
+}
+EXPORT_SYMBOL(fid_cpu_to_be);
+
+void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
+{
+        /* check that all fields are converted */
+        CLASSERT(sizeof *src ==
+                 sizeof fid_seq(src) +
+                 sizeof fid_oid(src) + sizeof fid_ver(src));
+        dst->f_seq = be64_to_cpu(fid_seq(src));
+        dst->f_oid = be32_to_cpu(fid_oid(src));
+        dst->f_ver = be32_to_cpu(fid_ver(src));
+}
+EXPORT_SYMBOL(fid_be_to_cpu);
+#endif
+
 void range_cpu_to_le(struct lu_range *dst, const struct lu_range *src)
 {
         /* check that all fields are converted */
@@ -87,3 +113,27 @@ void range_le_to_cpu(struct lu_range *dst, const struct lu_range *src)
         dst->lr_end = le64_to_cpu(src->lr_end);
 }
 EXPORT_SYMBOL(range_le_to_cpu);
+
+#ifdef __KERNEL__
+void range_cpu_to_be(struct lu_range *dst, const struct lu_range *src)
+{
+        /* check that all fields are converted */
+        CLASSERT(sizeof *src ==
+                 sizeof src->lr_start +
+                 sizeof src->lr_end);
+        dst->lr_start = cpu_to_be64(src->lr_start);
+        dst->lr_end = cpu_to_be64(src->lr_end);
+}
+EXPORT_SYMBOL(range_cpu_to_be);
+
+void range_be_to_cpu(struct lu_range *dst, const struct lu_range *src)
+{
+        /* check that all fields are converted */
+        CLASSERT(sizeof *src ==
+                 sizeof src->lr_start +
+                 sizeof src->lr_end);
+        dst->lr_start = be64_to_cpu(src->lr_start);
+        dst->lr_end = be64_to_cpu(src->lr_end);
+}
+EXPORT_SYMBOL(range_be_to_cpu);
+#endif
