@@ -1234,6 +1234,8 @@ int mds_filter_recovery_request(struct ptlrpc_request *req,
         case MDS_SYNC: /* used in unmounting */
         case OBD_PING:
         case MDS_REINT:
+        case SEQ_QUERY:
+        case FLD_QUERY:
         case LDLM_ENQUEUE:
                 *process = target_queue_recovery_request(req, obd);
                 RETURN(0);

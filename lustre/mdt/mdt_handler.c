@@ -1337,7 +1337,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         rc = 0;
         LASSERT(current->journal_info == NULL);
 
-        if (flags & HABEO_CLAVIS && info->mti_mdt->mdt_opts.mo_compat_resname){
+        if (flags & HABEO_CLAVIS && info->mti_mdt->mdt_opts.mo_compat_resname) {
                 struct ldlm_reply *dlmrep;
 
                 dlmrep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
