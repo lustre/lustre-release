@@ -994,7 +994,6 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                         }
                 }
         }
-#endif
         /* If we're an MDT, make sure the global MDS is running */
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MDT) {
                 /* make sure (what will be called) the MDS is started */
@@ -1011,6 +1010,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                         }
                 }
         }
+#endif
 
         /* If we're an OST, make sure the global OSS is running */
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_OST) {
