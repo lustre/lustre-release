@@ -638,7 +638,7 @@ int mdt_open(struct mdt_thread_info *info)
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 /* this is a replay request. */
-                result = mdt_open_by_fid(info,rr->rr_fid1, ldlm_rep, 
+                result = mdt_open_by_fid(info, rr->rr_fid2, ldlm_rep, 
                                          create_flags);
 
                 if (result != -ENOENT)
