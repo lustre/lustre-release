@@ -63,6 +63,7 @@ struct filter_export_data {
         struct list_head           fed_mod_list; /* files being modified */
         int                        fed_mod_count;/* items in fed_writing list */
         long                       fed_pending;  /* bytes just being written */
+        __u32                      fed_group;
 };
 
 struct obd_export {

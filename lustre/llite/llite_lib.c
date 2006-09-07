@@ -1380,11 +1380,13 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                 if (oa) {
                         oa->o_id = lsm->lsm_object_id;
-                        oa->o_valid = OBD_MD_FLID;
+                        oa->o_gr = lsm->lsm_object_gr;
+                        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
                         flags = OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                OBD_MD_FLFID | OBD_MD_FLGENER;
+                                OBD_MD_FLFID | OBD_MD_FLGENER | 
+                                OBD_MD_FLGROUP;
 
                         obdo_from_inode(oa, inode, flags);
 
@@ -1807,8 +1809,10 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 }
 
                 oinfo.oi_oa->o_id = lsm->lsm_object_id;
+                oinfo.oi_oa->o_gr = lsm->lsm_object_gr;
                 oinfo.oi_oa->o_flags = flags;
-                oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
+                oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS | 
+                                       OBD_MD_FLGROUP;
 
                 obdo_from_inode(oinfo.oi_oa, inode,
                                 OBD_MD_FLFID | OBD_MD_FLGENER);

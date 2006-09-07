@@ -36,8 +36,9 @@
 static int lprocfs_filter_rd_groups(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
+        struct obd_device *obd = (struct obd_device *)data;
         *eof = 1;
-        return snprintf(page, count, "%u\n", FILTER_GROUPS);
+        return snprintf(page, count, "%u\n", obd->u.filter.fo_group_count);
 }
 
 static int lprocfs_filter_rd_tot_dirty(char *page, char **start, off_t off,

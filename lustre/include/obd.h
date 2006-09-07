@@ -264,8 +264,16 @@ struct obd_device_target {
         struct lustre_quota_ctxt  obt_qctxt;
 };
 
+#define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
+
 #define FILTER_GROUP_LLOG 1
 #define FILTER_GROUP_ECHO 2
+#define FILTER_GROUP_MDS0 3
+
+struct filter_subdirs {
+       cfs_dentry_t *dentry[FILTER_SUBDIR_COUNT];
+};
+
 
 struct filter_ext {
         __u64                fe_start;
@@ -277,9 +285,15 @@ struct filter_obd {
         struct obd_device_target fo_obt;
         const char          *fo_fstype;
         struct vfsmount     *fo_vfsmnt;
+
+        int                  fo_group_count;
         cfs_dentry_t        *fo_dentry_O;
         cfs_dentry_t       **fo_dentry_O_groups;
-        cfs_dentry_t       **fo_dentry_O_sub;
+        struct filter_subdirs   *fo_dentry_O_sub;
+        struct semaphore     fo_init_lock;      /* group initialization lock */
+        int                  fo_committed_group;
+
+        
         spinlock_t           fo_objidlock;      /* protect fo_lastobjid */
         spinlock_t           fo_translock;      /* protect fsd_last_transno */
         struct file         *fo_rcvd_filp;
@@ -485,6 +499,7 @@ struct mds_obd {
         char                            *mds_profile;
         struct obd_export               *mds_osc_exp; /* XXX lov_exp */
         struct lov_desc                  mds_lov_desc;
+        __u32                            mds_id;
         obd_id                          *mds_lov_objids;
         int                              mds_lov_objids_size;
         __u32                            mds_lov_objids_in_file;

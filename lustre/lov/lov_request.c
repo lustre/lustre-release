@@ -326,6 +326,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
 
                 /* XXX LOV STACKING: submd should be from the subobj */
                 req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
+                req->rq_oi.oi_md->lsm_object_gr = oinfo->oi_md->lsm_object_gr;
                 req->rq_oi.oi_md->lsm_stripe_count = 0;
                 req->rq_oi.oi_md->lsm_oinfo->loi_kms_valid =
                         loi->loi_kms_valid;
@@ -437,6 +438,7 @@ int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
 
                 /* XXX LOV STACKING: submd should be from the subobj */
                 req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
+                req->rq_oi.oi_md->lsm_object_gr = lsm->lsm_object_gr;
                 req->rq_oi.oi_md->lsm_stripe_count = 0;
 
                 lov_set_add_req(req, set);
@@ -520,6 +522,7 @@ int lov_prep_cancel_set(struct obd_export *exp, struct obd_info *oinfo,
 
                 /* XXX LOV STACKING: submd should be from the subobj */
                 req->rq_oi.oi_md->lsm_object_id = loi->loi_id;
+                req->rq_oi.oi_md->lsm_object_gr = lsm->lsm_object_gr;
                 req->rq_oi.oi_md->lsm_stripe_count = 0;
 
                 lov_set_add_req(req, set);
@@ -595,6 +598,8 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
                 LBUG();
         }
         ret_oa->o_id = src_oa->o_id;
+        ret_oa->o_gr = src_oa->o_gr;
+        ret_oa->o_valid |= OBD_MD_FLGROUP;
         memcpy(src_oa, ret_oa, sizeof(*src_oa));
         obdo_free(ret_oa);
 
@@ -680,6 +685,7 @@ int lov_update_create_set(struct lov_request_set *set,
                 oti->oti_objid[req->rq_idx] = req->rq_oi.oi_oa->o_id;
 
         loi->loi_id = req->rq_oi.oi_oa->o_id;
+        loi->loi_gr = req->rq_oi.oi_oa->o_gr;
         loi->loi_ost_idx = req->rq_idx;
         CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64"/"LPX64" at idx %d\n",
                lsm->lsm_object_id, loi->loi_id, loi->loi_id, req->rq_idx);
@@ -1184,6 +1190,8 @@ int lov_prep_setattr_set(struct obd_export *exp, struct obd_info *oinfo,
                 memcpy(req->rq_oi.oi_oa, oinfo->oi_oa,
                        sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
+                LASSERT(!(req->rq_oi.oi_oa->o_valid & OBD_MD_FLGROUP) 
+                                || req->rq_oi.oi_oa->o_gr>0);
                 req->rq_oi.oi_oa->o_stripe_idx = i;
                 req->rq_oi.oi_cb_up = cb_setattr_update;
                 req->rq_rqset = set;
@@ -1289,6 +1297,9 @@ int lov_prep_punch_set(struct obd_export *exp, struct obd_info *oinfo,
                 memcpy(req->rq_oi.oi_oa, oinfo->oi_oa,
                        sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
+                req->rq_oi.oi_oa->o_gr = loi->loi_gr;
+                req->rq_oi.oi_oa->o_valid |= OBD_MD_FLGROUP;
+
                 req->rq_oi.oi_oa->o_stripe_idx = i;
                 req->rq_oi.oi_cb_up = cb_update_punch;
                 req->rq_rqset = set;

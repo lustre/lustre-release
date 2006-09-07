@@ -239,10 +239,16 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         ENTRY;
         LASSERT(oa);
         LASSERT(ea);
-
+        
+        LASSERT(oa->o_gr > 0);
+        LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+        /* 
+         * FIXME: Now we can only create the object without cache,
+         * since we have only 1 oscc, only support one cache, will
+         * fix it soon Wangdi
+         */
         if ((oa->o_valid & OBD_MD_FLGROUP) && (oa->o_gr != 0))
                 RETURN(osc_real_create(exp, oa, ea, oti));
-
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
             oa->o_flags == OBD_FL_RECREATE_OBJS) {
                 RETURN(osc_real_create(exp, oa, ea, oti));

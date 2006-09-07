@@ -174,7 +174,7 @@ void ll_truncate(struct inode *inode)
         oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
         oinfo.oi_oa = &oa;
         oa.o_id = lli->lli_smd->lsm_object_id;
-        oa.o_valid = OBD_MD_FLID;
+        oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
         obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
                         OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME |
@@ -220,7 +220,9 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
 
         oa.o_mode = inode->i_mode;
         oa.o_id = lsm->lsm_object_id;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
+        oa.o_gr = lsm->lsm_object_gr;
+        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | 
+                     OBD_MD_FLTYPE | OBD_MD_FLGROUP;
         obdo_from_inode(&oa, inode, OBD_MD_FLFID | OBD_MD_FLGENER);
 
         oinfo.oi_oa = &oa;
@@ -363,7 +365,8 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
         lsm = ll_i2info(inode)->lli_smd;
 
         oa->o_id = lsm->lsm_object_id;
-        oa->o_valid = OBD_MD_FLID;
+        oa->o_gr = lsm->lsm_object_gr;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
         if (cmd & OBD_BRW_WRITE) {
                 oa->o_valid |= OBD_MD_FLEPOCH;

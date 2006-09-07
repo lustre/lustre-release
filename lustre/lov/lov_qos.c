@@ -770,6 +770,8 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
 
         lsm = set->set_oi->oi_md;
         lsm->lsm_object_id = src_oa->o_id;
+        lsm->lsm_object_gr = src_oa->o_gr;
+
         if (!lsm->lsm_stripe_size)
                 lsm->lsm_stripe_size = lov->desc.ld_default_stripe_size;
         if (!lsm->lsm_pattern) {

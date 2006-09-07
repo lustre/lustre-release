@@ -89,7 +89,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
                 default:
                         break;
                 }
-
+                LASSERT(lsm->lsm_object_gr == loi->loi_gr);
                 rc += llog_add(cctxt, rec, NULL, logcookies + rc,
                                 numcookies - rc);
         }

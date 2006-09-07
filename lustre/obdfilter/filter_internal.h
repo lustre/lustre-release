@@ -17,7 +17,6 @@
 
 #define FILTER_INIT_OBJID 0
 
-#define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
 #define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
 
 #define FILTER_ROCOMPAT_SUPP (0)
@@ -35,7 +34,8 @@ struct filter_client_data {
         __u8  fcd_uuid[40];        /* client UUID */
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[LR_CLIENT_SIZE - 56];
+        __u32 fcd_group;           /* mds group */
+        __u8  fcd_padding[LR_CLIENT_SIZE - 60];
 };
 
 /* Limit the returned fields marked valid to those that we actually might set */

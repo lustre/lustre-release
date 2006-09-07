@@ -123,7 +123,7 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                 CERROR("can not find obd %s \n", MDD_OBD_NAME);
                 LBUG();
         }
-
+        obd->u.mds.mds_id = index;
         rc = class_setup(obd, lcfg);
         if (rc)
                 GOTO(class_detach, rc);
@@ -347,10 +347,11 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
 
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
+        oa->o_gr = FILTER_GROUP_MDS0 + mdd2lu_dev(mdd)->ld_site->ls_node_id;
         oa->o_mode = S_IFREG | 0600;
         oa->o_id = mdd_lov_create_id(lu_object_fid(mdd2lu_obj(child)));
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |
-                OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID;
+                OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGROUP;
         oa->o_size = 0;
 
         if (!(create_flags & MDS_OPEN_HAS_OBJS)) {
@@ -360,6 +361,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                                            0, &lsm, (void*)eadata);
                         if (rc)
                                 GOTO(out_oa, rc);
+                        lsm->lsm_object_id = oa->o_id;
+                        lsm->lsm_object_gr = oa->o_gr;
                 } else if (parent != NULL) {
                         /* get lov ea from parent and set to lov */
                         struct lov_mds_md *__lmm;
@@ -389,6 +392,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         }
                         GOTO(out_oa, rc);
                 }
+                LASSERT(lsm->lsm_object_gr >= FILTER_GROUP_MDS0);
         } else {
                 LASSERT(eadata != NULL);
                 rc = obd_iocontrol(OBD_IOC_LOV_SETEA, lov_exp, 0, &lsm,
@@ -396,6 +400,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 if (rc)
                         GOTO(out_oa, rc);
                 lsm->lsm_object_id = oa->o_id;
+                lsm->lsm_object_gr = oa->o_gr;
         }
         /*Sometimes, we may truncate some object(without lsm)
          *then open (with write flags)it, so creating lsm above.
@@ -408,6 +413,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 memset(oinfo, 0, sizeof(*oinfo));
 
                 oa->o_size = la->la_size;
+                /* when setting attr to ost, FLBKSZ is not needed */
+                oa->o_valid &= ~OBD_MD_FLBLKSZ; 
                 obdo_from_la(oa, la, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
 

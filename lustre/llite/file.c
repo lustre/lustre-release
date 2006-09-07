@@ -562,7 +562,7 @@ int ll_lsm_getattr(struct obd_export *exp, struct lov_stripe_md *lsm,
         oa->o_mode = S_IFREG;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
                 OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
-                OBD_MD_FLCTIME;
+                OBD_MD_FLCTIME | OBD_MD_FLGROUP;
 
         set = ptlrpc_prep_set();
         if (set == NULL) {
@@ -623,7 +623,7 @@ static int ll_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock)
 
 check:
         if (lsm->lsm_oinfo[stripe].loi_id != lock->l_resource->lr_name.name[0]||
-            lsm->lsm_oinfo[stripe].loi_gr != lock->l_resource->lr_name.name[1]){
+            lsm->lsm_oinfo[stripe].loi_gr != lock->l_resource->lr_name.name[2]){
                 LDLM_ERROR(lock, "resource doesn't match object "LPU64"/"LPU64,
                            lsm->lsm_oinfo[stripe].loi_id,
                            lsm->lsm_oinfo[stripe].loi_gr);
@@ -2114,9 +2114,10 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                         RETURN(rc ? rc : -ENOMEM);
 
                 oa->o_id = lsm->lsm_object_id;
-                oa->o_valid = OBD_MD_FLID;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
                 obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                           OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                                           OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                                           OBD_MD_FLGROUP);
 
                 err = obd_sync(ll_i2sbi(inode)->ll_dt_exp, oa, lsm,
                                0, OBD_OBJECT_EOF);

@@ -88,7 +88,9 @@ static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 
         if (lsm) {
                 LASSERT(lsm->lsm_object_id);
+                LASSERT(lsm->lsm_object_gr);
                 (*lmmp)->lmm_object_id = cpu_to_le64(lsm->lsm_object_id);
+                (*lmmp)->lmm_object_gr = cpu_to_le64(lsm->lsm_object_gr);
         }
 
         RETURN(lmm_size);
@@ -135,7 +137,9 @@ static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
         if (lmm != NULL) {
                 /* XXX zero *lsmp? */
                 (*lsmp)->lsm_object_id = le64_to_cpu (lmm->lmm_object_id);
+                (*lsmp)->lsm_object_gr = le64_to_cpu (lmm->lmm_object_gr);
                 LASSERT((*lsmp)->lsm_object_id);
+                LASSERT((*lsmp)->lsm_object_gr);
         }
 
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES;
@@ -250,6 +254,8 @@ static int osc_setattr(struct obd_export *exp, struct obd_info *oinfo,
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
+        LASSERT(!(oinfo->oi_oa->o_valid & OBD_MD_FLGROUP) || 
+                                        oinfo->oi_oa->o_gr > 0);
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
                               OST_SETATTR, 2, size, NULL);
         if (!req)
@@ -400,6 +406,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
          * This needs to be fixed in a big way.
          */
         lsm->lsm_object_id = oa->o_id;
+        lsm->lsm_object_gr = oa->o_gr;
         *ea = lsm;
 
         if (oti != NULL) {
@@ -2800,8 +2807,11 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
 static int osc_change_cbdata(struct obd_export *exp, struct lov_stripe_md *lsm,
                              ldlm_iterator_t replace, void *data)
 {
-        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
+        struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obd = class_exp2obd(exp);
+
+        res_id.name[0] = lsm->lsm_object_id;
+        res_id.name[2] = lsm->lsm_object_gr;
 
         ldlm_resource_iterate(obd->obd_namespace, &res_id, replace, data);
         return 0;
@@ -2882,13 +2892,16 @@ static int osc_enqueue_interpret(struct ptlrpc_request *req,
 static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                        struct obd_enqueue_info *einfo)
 {
-        struct ldlm_res_id res_id = { .name = {oinfo->oi_md->lsm_object_id} };
+        struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obd = exp->exp_obd;
         struct ldlm_reply *rep;
         struct ptlrpc_request *req = NULL;
         int intent = einfo->ei_flags & LDLM_FL_HAS_INTENT;
         int rc;
         ENTRY;
+
+        res_id.name[0] = oinfo->oi_md->lsm_object_id;
+        res_id.name[2] = oinfo->oi_md->lsm_object_gr;
 
         /* Filesystem lock extents are extended to page boundaries so that
          * dealing with the page cache is a little smoother.  */
@@ -3010,10 +3023,13 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                      __u32 type, ldlm_policy_data_t *policy, __u32 mode,
                      int *flags, void *data, struct lustre_handle *lockh)
 {
-        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
+        struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obd = exp->exp_obd;
         int rc;
         ENTRY;
+        
+        res_id.name[0] = lsm->lsm_object_id;
+        res_id.name[2] = lsm->lsm_object_gr;
 
         OBD_FAIL_RETURN(OBD_FAIL_OSC_MATCH, -EIO);
 
@@ -3065,20 +3081,32 @@ static int osc_cancel_unused(struct obd_export *exp,
                              struct lov_stripe_md *lsm,
                              int flags, void *opaque)
 {
-        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
         struct obd_device *obd = class_exp2obd(exp);
+        struct ldlm_res_id res_id = { .name = {0} }, *resp = NULL;
 
-        return ldlm_cli_cancel_unused(obd->obd_namespace, &res_id,
-                                      flags, opaque);
+        if (lsm != NULL) {
+                res_id.name[0] = lsm->lsm_object_id;
+                res_id.name[2] = lsm->lsm_object_gr;
+                resp = &res_id;
+        }
+
+        return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags, 
+                                      opaque);
 }
 
 static int osc_join_lru(struct obd_export *exp,
                         struct lov_stripe_md *lsm, int join)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
+        struct ldlm_res_id res_id = { .name = {0} }, *resp = NULL;
 
-        return ldlm_cli_join_lru(obd->obd_namespace, &res_id, join);
+        if (lsm != NULL) {
+                res_id.name[0] = lsm->lsm_object_id;
+                res_id.name[2] = lsm->lsm_object_gr;
+                resp = &res_id;
+        }
+
+        return ldlm_cli_join_lru(obd->obd_namespace, resp, join);
 }
 
 static int osc_statfs_interpret(struct ptlrpc_request *req,
@@ -3203,12 +3231,14 @@ static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
                         RETURN(-ENOMEM);
 
                 lumk->lmm_objects[0].l_object_id = lsm->lsm_object_id;
+                lumk->lmm_objects[0].l_object_gr = lsm->lsm_object_gr;
         } else {
                 lum_size = sizeof(lum);
                 lumk = &lum;
         }
 
         lumk->lmm_object_id = lsm->lsm_object_id;
+        lumk->lmm_object_gr = lsm->lsm_object_gr;
         lumk->lmm_stripe_count = 1;
 
         if (copy_to_user(lump, lumk, lum_size))

@@ -1972,12 +1972,15 @@ static int lov_change_cbdata(struct obd_export *exp,
 
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
-
+        
+        LASSERT(lsm->lsm_object_gr > 0);
+        
         lov = &exp->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct lov_stripe_md submd;
 
                 submd.lsm_object_id = loi->loi_id;
+                submd.lsm_object_gr = lsm->lsm_object_gr;
                 submd.lsm_stripe_count = 0;
                 rc = obd_change_cbdata(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
                                        &submd, it, data);
@@ -2002,6 +2005,7 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
 
+        LASSERT(lsm->lsm_object_gr > 0);
         LASSERT(lockh);
         lov = &exp->exp_obd->u.lov;
         rc = lov_prep_cancel_set(exp, &oinfo, lsm, mode, lockh, &set);
@@ -2058,6 +2062,7 @@ static int lov_cancel_unused(struct obd_export *exp,
 
         ASSERT_LSM_MAGIC(lsm);
 
+        LASSERT(lsm->lsm_object_gr > 0);
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct lov_stripe_md submd;
                 int err;
@@ -2067,6 +2072,7 @@ static int lov_cancel_unused(struct obd_export *exp,
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
 
                 submd.lsm_object_id = loi->loi_id;
+                submd.lsm_object_gr = lsm->lsm_object_gr;
                 submd.lsm_stripe_count = 0;
                 err = obd_cancel_unused(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
                                         &submd, flags, opaque);
@@ -2445,7 +2451,7 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
         }
 
         if (KEY_IS(KEY_MDS_CONN) || KEY_IS("unlinked")) {
-                if (vallen != 0)
+                if (vallen != 0 && KEY_IS("unlinked"))
                         GOTO(out, rc = -EINVAL);
         } else {
                 GOTO(out, rc = -EINVAL);

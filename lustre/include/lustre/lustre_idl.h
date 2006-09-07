@@ -487,6 +487,7 @@ struct obd_connect_data {
         __u32 ocd_version;              /* lustre release version number */
         __u32 ocd_grant;                /* initial cache grant amount (bytes) */
         __u32 ocd_index;                /* LOV index to connect to */
+        __u32 ocd_group;                /* MDS group on OST */
         __u32 ocd_brw_size;             /* Maximum BRW size in bytes */
         __u64 ocd_ibits_known;          /* inode bits this client understands */
         __u32 ocd_nllu;                 /* non-local-lustre-user */
