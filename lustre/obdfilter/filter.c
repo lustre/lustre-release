@@ -1328,7 +1328,7 @@ static void filter_post(struct obd_device *obd)
         if (rc)
                 CERROR("error writing server data: rc = %d\n", rc);
 
-        for (i = 0; i < filter->fo_group_count; i++) {
+        for (i = 1; i < filter->fo_group_count; i++) {
                 rc = filter_update_last_objid(obd, i, 
                                 (i == filter->fo_group_count - 1));
                 if (rc)
