@@ -2449,8 +2449,23 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
                 }
                 GOTO(out, rc);
         }
+        if (KEY_IS(KEY_MDS_CONN)) {
+                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_exp)
+                                continue;
+                        
+                        if (!val && !lov->lov_tgts[i]->ltd_active)
+                                continue;
 
-        if (KEY_IS(KEY_MDS_CONN) || KEY_IS("unlinked")) {
+                        err = obd_set_info_async(lov->lov_tgts[i]->ltd_exp,
+                                                 keylen, key, vallen, val, set);
+                        if (!rc)
+                                rc = err;
+                }
+                GOTO(out, rc);
+        }
+        
+        if (KEY_IS("unlinked")) {
                 if (vallen != 0 && KEY_IS("unlinked"))
                         GOTO(out, rc = -EINVAL);
         } else {

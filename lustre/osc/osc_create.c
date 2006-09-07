@@ -151,7 +151,9 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         spin_lock(&oscc->oscc_lock);
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
-        body->oa.o_valid |= OBD_MD_FLID;
+        body->oa.o_gr = oscc->oscc_oa.o_gr;
+        LASSERT(body->oa.o_gr > 0);
+        body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
         spin_unlock(&oscc->oscc_lock);
         CDEBUG(D_HA, "preallocating through id "LPU64" (last used "LPU64")\n",
                body->oa.o_id, oscc->oscc_next_id);
@@ -242,13 +244,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         
         LASSERT(oa->o_gr > 0);
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
-        /* 
-         * FIXME: Now we can only create the object without cache,
-         * since we have only 1 oscc, only support one cache, will
-         * fix it soon Wangdi
-         */
-        if ((oa->o_valid & OBD_MD_FLGROUP) && (oa->o_gr != 0))
-                RETURN(osc_real_create(exp, oa, ea, oti));
+
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
             oa->o_flags == OBD_FL_RECREATE_OBJS) {
                 RETURN(osc_real_create(exp, oa, ea, oti));

@@ -3477,8 +3477,13 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        if (KEY_IS("mds_conn"))
+        if (KEY_IS("mds_conn")) {
+                struct osc_creator *oscc = &obd->u.cli.cl_oscc;
+
+                oscc->oscc_oa.o_gr = (*(__u32 *)val);
+                LASSERT(oscc->oscc_oa.o_gr > 0);
                 req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
+        }
 
         ptlrpc_req_set_repsize(req, 1, NULL);
         ptlrpc_set_add_req(set, req);
