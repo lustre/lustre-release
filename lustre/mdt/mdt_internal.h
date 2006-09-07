@@ -185,10 +185,6 @@ struct mdt_lock_handle {
 };
 
 enum {
-        MDT_REP_BUF_NR_MAX = 8
-};
-
-enum {
         MDT_LH_PARENT,
         MDT_LH_CHILD,
         MDT_LH_OLD,
@@ -236,7 +232,7 @@ struct mdt_thread_info {
         /*
          * sizes of reply buffers.
          */
-        int                        mti_rep_buf_size[MDT_REP_BUF_NR_MAX];
+        int                        mti_rep_buf_size[REQ_MAX_FIELD_NR];
         /*
          * Body for "habeo corpus" operations.
          */

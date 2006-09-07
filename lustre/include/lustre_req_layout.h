@@ -49,6 +49,13 @@ struct req_capsule {
         int                     *rc_area;
 };
 
+enum {
+        /*
+         * Maximal number of fields (buffers) in a request message.
+         */
+        REQ_MAX_FIELD_NR = 8
+};
+
 #if !defined(__REQ_LAYOUT_USER__)
 
 /* struct ptlrpc_request, lustre_msg* */

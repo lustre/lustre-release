@@ -633,6 +633,7 @@ int req_layout_init(void)
                 rf = (struct req_format *)req_formats[i];
                 rf->rf_idx = i;
                 for (j = 0; j < RCL_NR; ++j) {
+                        LASSERT(rf->rf_fields[j].nr <= REQ_MAX_FIELD_NR);
                         for (k = 0; k < rf->rf_fields[j].nr; ++k) {
                                 struct req_msg_field *field;
 
@@ -655,6 +656,12 @@ void req_layout_fini(void)
 }
 EXPORT_SYMBOL(req_layout_fini);
 
+/*
+ * Initialize capsule.
+ *
+ * @area is an array of REQ_MAX_FIELD_NR elements, used to store sizes of
+ * variable-sized fields.
+ */
 void req_capsule_init(struct req_capsule *pill,
                       struct ptlrpc_request *req, enum req_location location,
                       int *area)

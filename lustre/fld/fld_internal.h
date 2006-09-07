@@ -53,7 +53,7 @@ extern struct lu_fld_hash fld_hash[];
 #ifdef __KERNEL__
 struct fld_thread_info {
         struct req_capsule fti_pill;
-        int                fti_rep_buf_size[4];
+        int                fti_rep_buf_size[REQ_MAX_FIELD_NR];
         __u64              fti_key;
         __u64              fti_rec;
 };

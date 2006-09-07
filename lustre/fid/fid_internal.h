@@ -44,7 +44,7 @@ struct seq_thread_info {
         struct txn_param        sti_txn;
         struct req_capsule      sti_pill;
         struct seq_store_record sti_record;
-        int                     sti_rep_buf_size[4];
+        int                     sti_rep_buf_size[REQ_MAX_FIELD_NR];
 };
 
 extern struct lu_context_key seq_thread_key;

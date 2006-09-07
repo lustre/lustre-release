@@ -294,7 +294,7 @@ static int cml_ref_del(const struct lu_context *ctx, struct md_object *mo,
         RETURN(rc);
 }
 
-static int cml_open(const struct lu_context *ctx, struct md_object *mo, 
+static int cml_open(const struct lu_context *ctx, struct md_object *mo,
                     int flags)
 {
         int rc;
@@ -605,7 +605,7 @@ static int cmr_ref_del(const struct lu_context *ctx, struct md_object *mo,
         RETURN(-EFAULT);
 }
 
-static int cmr_open(const struct lu_context *ctx, struct md_object *mo, 
+static int cmr_open(const struct lu_context *ctx, struct md_object *mo,
                     int flags)
 {
         RETURN(-EREMOTE);
