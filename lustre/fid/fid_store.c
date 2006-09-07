@@ -82,9 +82,10 @@ int seq_store_write(struct lu_server_seq *seq,
                                                     sizeof(info->sti_record),
                                                     &pos, th);
                 if (rc == sizeof(info->sti_record)) {
-                        CDEBUG(D_INFO, "store %s ranges: space - "DRANGE", super - "
-                               DRANGE"\n", (seq->lss_type == LUSTRE_SEQ_SERVER ?
-                                            "server" : "controller"),
+                        CDEBUG(D_INFO|D_WARNING, "store %s ranges: space - "
+                               DRANGE", super - "DRANGE"\n",
+                               (seq->lss_type == LUSTRE_SEQ_SERVER ?
+                                "server" : "controller"),
                                PRANGE(&seq->lss_space), PRANGE(&seq->lss_super));
 
                         rc = 0;
@@ -121,16 +122,16 @@ int seq_store_read(struct lu_server_seq *seq,
         if (rc == sizeof(info->sti_record)) {
                 range_le_to_cpu(&seq->lss_space, &info->sti_record.ssr_space);
                 range_le_to_cpu(&seq->lss_super, &info->sti_record.ssr_super);
-                CDEBUG(D_INFO, "read %s ranges: space - "DRANGE", super - "
-                       DRANGE"\n", (seq->lss_type == LUSTRE_SEQ_SERVER ?
-                                    "server" : "controller"),
+
+                CDEBUG(D_INFO|D_WARNING, "read %s ranges: space - "DRANGE", super "
+                       "- "DRANGE"\n", (seq->lss_type == LUSTRE_SEQ_SERVER ?
+                                        "server" : "controller"),
                        PRANGE(&seq->lss_space), PRANGE(&seq->lss_super));
                 rc = 0;
         } else if (rc == 0) {
                 rc = -ENODATA;
         } else if (rc >= 0) {
-                CERROR("read only %d bytes of %d\n",
-                       rc, sizeof(info->sti_record));
+                CERROR("read only %d bytes of %d\n", rc, sizeof(info->sti_record));
                 rc = -EIO;
         }
 	
