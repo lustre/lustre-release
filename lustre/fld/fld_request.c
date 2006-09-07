@@ -161,6 +161,8 @@ int fld_client_add_target(struct lu_client_fld *fld,
         }
 
         target->ft_exp = tar->ft_exp;
+        if (target->ft_exp != NULL)
+                class_export_get(target->ft_exp);
         target->ft_srv = tar->ft_srv;
         target->ft_idx = tar->ft_idx;
 
@@ -188,7 +190,10 @@ int fld_client_del_target(struct lu_client_fld *fld,
                         fld->lcf_count--;
                         list_del(&target->ft_chain);
                         spin_unlock(&fld->lcf_lock);
-                        class_export_put(target->ft_exp);
+                        
+                        if (target->ft_exp != NULL)
+                                class_export_put(target->ft_exp);
+
                         OBD_FREE_PTR(target);
                         RETURN(0);
                 }
