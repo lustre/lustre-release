@@ -1280,7 +1280,7 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
         /* add MDT itself */
         rc = record_start_log(obd, &llh, log);
         if (rc) 
-                RETURN(rc);
+                GOTO(out, rc);
         
         /* FIXME this whole fn should be a single journal transaction */
         rc = record_marker(obd, llh, fsdb, CM_START, log, "add mdt");
@@ -1289,9 +1289,9 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
         rc = record_setup(obd, llh, log, uuid, mdt_index, lovname, 0);
         rc = record_marker(obd, llh, fsdb, CM_END, log, "add mdt");
         rc = record_end_log(obd, &llh);
-        
+out:
         name_destroy(lovname);
-        OBD_FREE(uuid, sizeof(*uuid));
+        OBD_FREE(uuid, sizeof(struct obd_uuid));
         RETURN(rc);
 }
 
