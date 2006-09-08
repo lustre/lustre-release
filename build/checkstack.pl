@@ -36,6 +36,10 @@
 		#c0105234:       81 ec ac 05 00 00       sub    $0x5ac,%esp
 		$re = qr/^.*(sub    \$(0x$x),\%esp)$/o;
 		$todec = sub { return hex($_[0]); };
+	} elsif ($arch =~ 'x86_64') {
+		#    2f60:	48 81 ec e8 05 00 00 	sub    $0x5e8,%rsp
+		$re = qr/^.*(add    \$(0x$x),\%rsp)$/o;
+		$todec = sub { return hex($_[0]); };
 	} elsif ($arch =~ /^ia64$/) {
 		#e0000000044011fc:       01 0f fc 8c     adds r12=-384,r12
 		$re = qr/.*(adds.*r12=-($d),r12)/o;
