@@ -137,6 +137,7 @@ load_modules() {
 unload_modules() {
     lsmod | grep lnet > /dev/null && $LCTL dl && $LCTL dk $TMP/debug
     local MODULES=$($LCTL modules | awk '{ print $2 }')
+    rmmod ldiskfs/quotafmt_test obdclass/llog_test quota/quotactl_test quota/quotacheck_test 2>&1 || true
     rmmod $MODULES >/dev/null 2>&1 || true
      # do it again, in case we tried to unload ksocklnd too early
     MODULES=$($LCTL modules | awk '{ print $2 }')
