@@ -121,7 +121,8 @@ EXPORT_SYMBOL(fld_server_lookup);
 
 static int fld_server_handle(struct lu_server_fld *fld,
                              const struct lu_context *ctx,
-                             __u32 opc, struct md_fld *mf)
+                             __u32 opc, struct md_fld *mf,
+                             struct fld_thread_info *info)
 {
         int rc;
         ENTRY;
@@ -130,9 +131,17 @@ static int fld_server_handle(struct lu_server_fld *fld,
         case FLD_CREATE:
                 rc = fld_server_create(fld, ctx,
                                        mf->mf_seq, mf->mf_mds);
+
+                /* do not return -EEXIST error for resent case */
+                if ((info->fti_flags & FLD_MSG_RESENT) && rc == -EEXIST)
+                        rc = 0;
                 break;
         case FLD_DELETE:
                 rc = fld_server_delete(fld, ctx, mf->mf_seq);
+
+                /* do not return -ENOENT error for resent case */
+                if ((info->fti_flags & FLD_MSG_RESENT) && rc == -ENOENT)
+                        rc = 0;
                 break;
         case FLD_LOOKUP:
                 rc = fld_server_lookup(fld, ctx,
@@ -171,9 +180,16 @@ static int fld_req_handle(struct ptlrpc_request *req,
                 if (out == NULL)
                         RETURN(-EPROTO);
                 *out = *in;
+
+                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
+                        info->fti_flags |= FLD_MSG_REPLAY;
+
+                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT)
+                        info->fti_flags |= FLD_MSG_RESENT;
+                
                 rc = fld_server_handle(site->ls_server_fld,
                                        req->rq_svc_thread->t_ctx,
-                                       *opc, out);
+                                       *opc, out, info);
         }
 
         RETURN(rc);
@@ -184,6 +200,8 @@ static void fld_thread_info_init(struct ptlrpc_request *req,
 {
         int i;
 
+        info->fti_flags = 0;
+        
         /* mark rep buffer as req-layout stuff expects */
         for (i = 0; i < ARRAY_SIZE(info->fti_rep_buf_size); i++)
                 info->fti_rep_buf_size[i] = -1;
