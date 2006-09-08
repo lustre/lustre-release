@@ -423,8 +423,9 @@ int mdt_client_add(const struct lu_context *ctx,
         LASSERTF(med->med_lr_off > 0, "med_lr_off = %llu\n", med->med_lr_off);
 
         if (new_client) {
+                loff_t off = med->med_lr_off;
                 rc = mdt_write_last_rcvd(ctx, mdt, mcd,
-                                         &med->med_lr_off, NULL);
+                                         &off, NULL);
                 CDEBUG(D_INFO, "wrote client mcd at idx %u off %llu (len %u)\n",
                        cl_idx, med->med_lr_off, sizeof(*mcd));
         }
