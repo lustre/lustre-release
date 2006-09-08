@@ -191,9 +191,8 @@ static int mdt_init_clients_data(const struct lu_context *ctx,
                 spin_unlock(&mdt->mdt_transno_lock);
         }
 
-err_client:
         if (mcd)
-                OBD_FREE(mcd, sizeof(*mcd));
+                OBD_FREE_PTR(mcd);
         RETURN(rc);
 }
 

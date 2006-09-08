@@ -2869,6 +2869,9 @@ static int mds_cmd_cleanup(struct obd_device *obd)
                 mds->mds_objects_dir = NULL;
         }
 
+        if (mds->mds_lov_objids != NULL)
+                OBD_FREE(mds->mds_lov_objids, mds->mds_lov_objids_size);
+
         shrink_dcache_parent(mds->mds_fid_de);
         dput(mds->mds_fid_de);
         LL_DQUOT_OFF(obd->u.obt.obt_sb);

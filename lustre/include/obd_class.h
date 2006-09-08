@@ -411,7 +411,8 @@ static inline int obd_precleanup(struct obd_device *obd,
                                 lu_context_exit(&ctx);
                                 lu_context_fini(&ctx);
                         }
-                }
+                } else 
+                        rc = 0;
         } else
 #endif
         {

@@ -792,7 +792,7 @@ static int filter_cleanup_groups(struct obd_device *obd)
                         }
                 }
                 OBD_FREE(filter->fo_dentry_O_sub,
-                         filter->fo_subdir_count *
+                         filter->fo_group_count *
                          sizeof(*filter->fo_dentry_O_sub));
                 filter->fo_dentry_O_sub = NULL;
         }
@@ -867,6 +867,7 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
         char name[25];
         __u64 last_objid;
         loff_t off = 0;
+        int len = group + 1;
 
         snprintf(name, 24, "%d", group);
         name[24] = '\0';
@@ -929,7 +930,6 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
 
         /* 'group' is an index; we need an array of length 'group + 1' */
         if (group + 1 > old_count) {
-                int len = group + 1;
                 OBD_ALLOC(new_objids, len * sizeof(*new_objids));
                 OBD_ALLOC(new_subdirs, len * sizeof(*new_subdirs));
                 OBD_ALLOC(new_groups, len * sizeof(*new_groups));
@@ -939,16 +939,16 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
                     new_groups == NULL || new_files == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
-                memcpy(new_objids, filter->fo_last_objids,
-                       old_count * sizeof(*new_objids));
-                memcpy(new_subdirs, filter->fo_dentry_O_sub,
-                       old_count * sizeof(*new_subdirs));
-                memcpy(new_groups, filter->fo_dentry_O_groups,
-                       old_count * sizeof(*new_groups));
-                memcpy(new_files, filter->fo_last_objid_files,
-                       old_count * sizeof(*new_files));
-
                 if (old_count) {
+                        memcpy(new_objids, filter->fo_last_objids,
+                               old_count * sizeof(*new_objids));
+                        memcpy(new_subdirs, filter->fo_dentry_O_sub,
+                               old_count * sizeof(*new_subdirs));
+                        memcpy(new_groups, filter->fo_dentry_O_groups,
+                               old_count * sizeof(*new_groups));
+                        memcpy(new_files, filter->fo_last_objid_files,
+                               old_count * sizeof(*new_files));
+
                         OBD_FREE(filter->fo_last_objids,
                                  old_count * sizeof(*new_objids));
                         OBD_FREE(filter->fo_dentry_O_sub,
@@ -988,13 +988,13 @@ static int filter_read_group_internal(struct obd_device *obd, int group,
         switch (stage) {
         case 4:
                 if (new_objids != NULL)
-                        OBD_FREE(new_objids, group * sizeof(*new_objids));
+                        OBD_FREE(new_objids, len * sizeof(*new_objids));
                 if (new_subdirs != NULL)
-                        OBD_FREE(new_subdirs, group * sizeof(*new_subdirs));
+                        OBD_FREE(new_subdirs, len * sizeof(*new_subdirs));
                 if (new_groups != NULL)
-                        OBD_FREE(new_groups, group * sizeof(*new_groups));
+                        OBD_FREE(new_groups, len * sizeof(*new_groups));
                 if (new_files != NULL)
-                        OBD_FREE(new_files, group * sizeof(*new_files));
+                        OBD_FREE(new_files, len * sizeof(*new_files));
         case 3:
                 if (filter->fo_subdir_count) {
                         for (i = 0; i < filter->fo_subdir_count; i++) {
@@ -2316,7 +2316,7 @@ static int filter_connect(const struct lu_context *ctx,
         LASSERT(exp != NULL);
 
         fed = &exp->exp_filter_data;
-
+        
         rc = filter_connect_internal(exp, data);
         if (rc)
                 GOTO(cleanup, rc);

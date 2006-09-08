@@ -2501,6 +2501,7 @@ static void mdt_stack_fini(const struct lu_context *ctx,
         }
         LASSERT(top);
         top->ld_ops->ldo_process_config(ctx, top, lcfg);
+        lustre_cfg_free(lcfg);
 
         lu_site_purge(ctx, top->ld_site, ~0);
         while (d != NULL) {
