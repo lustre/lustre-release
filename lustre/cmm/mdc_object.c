@@ -245,8 +245,8 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
 }
 
 #ifdef HAVE_SPLIT_SUPPORT
-int mdc_send_page(const struct lu_context *ctx, struct md_object *mo,
-                  struct page *page, __u32 end)
+int mdc_send_page(struct cmm_device *cm, const struct lu_context *ctx,
+                  struct md_object *mo, struct page *page, __u32 end)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct lu_dirpage *dp;
@@ -257,7 +257,7 @@ int mdc_send_page(const struct lu_context *ctx, struct md_object *mo,
         kmap(page);
         dp = page_address(page);
         for (ent = lu_dirent_start(dp); ent != NULL;
-                          ent = lu_dirent_next(ent)) {
+             ent = lu_dirent_next(ent)) {
                 if (ent->lde_hash < end) {
                         offset = (int)((__u32)ent - (__u32)dp);
                         rc1 = -E2BIG;
@@ -266,7 +266,16 @@ int mdc_send_page(const struct lu_context *ctx, struct md_object *mo,
                         
                 /* allocate new fid for each obj */
                 rc = obd_fid_alloc(mc->mc_desc.cl_exp, &ent->lde_fid, NULL);
-                if (rc) {
+                if (rc > 0) {
+                        struct lu_site *ls;
+
+                        ls = cm->cmm_md_dev.md_lu_dev.ld_site;
+                        rc = fld_client_create(ls->ls_client_fld,
+                                               fid_seq(&ent->lde_fid),
+                                               mc->mc_num, ctx);
+                }
+                
+                if (rc < 0) {
                         kunmap(page);
                         RETURN(rc);
                 }

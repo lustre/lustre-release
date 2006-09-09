@@ -37,7 +37,8 @@
 #include "mdc_internal.h"
 
 static int cmm_fld_lookup(struct cmm_device *cm,
-                          const struct lu_fid *fid, mdsno_t *mds)
+                          const struct lu_fid *fid, mdsno_t *mds,
+                          const struct lu_context *ctx)
 {
         struct lu_site *ls;
         int rc = 0;
@@ -48,7 +49,7 @@ static int cmm_fld_lookup(struct cmm_device *cm,
         ls = cm->cmm_md_dev.md_lu_dev.ld_site;
 
         rc = fld_client_lookup(ls->ls_client_fld,
-                               fid_seq(fid), mds);
+                               fid_seq(fid), mds, ctx);
         if (rc) {
                 CERROR("can't find mds by seq "LPX64", rc %d\n",
                        fid_seq(fid), rc);
@@ -90,7 +91,7 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
         cd = lu2cmm_dev(ld);
         if (cd->cmm_flags & CMM_INITIALIZED) {
                 /* get object location */
-                rc = cmm_fld_lookup(lu2cmm_dev(ld), fid, &mdsnum);
+                rc = cmm_fld_lookup(lu2cmm_dev(ld), fid, &mdsnum, ctx);
                 if (rc)
                         RETURN(NULL);
         } else

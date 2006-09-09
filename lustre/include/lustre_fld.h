@@ -159,19 +159,21 @@ int fld_server_lookup(struct lu_server_fld *fld,
 
 /* Client methods */
 int fld_client_init(struct lu_client_fld *fld,
-                    const char *prefix, int hash,
-                    const struct lu_context *ctx);
+                    const char *prefix, int hash);
 
 void fld_client_fini(struct lu_client_fld *fld);
 
 int fld_client_lookup(struct lu_client_fld *fld,
-                      seqno_t seq, mdsno_t *mds);
+                      seqno_t seq, mdsno_t *mds,
+                      const struct lu_context *ctx);
 
 int fld_client_create(struct lu_client_fld *fld,
-                      seqno_t seq, mdsno_t mds);
+                      seqno_t seq, mdsno_t mds,
+                      const struct lu_context *ctx);
 
 int fld_client_delete(struct lu_client_fld *fld,
-                      seqno_t seq);
+                      seqno_t seq,
+                      const struct lu_context *ctx);
 
 int fld_client_add_target(struct lu_client_fld *fld,
                           struct lu_fld_target *tar);

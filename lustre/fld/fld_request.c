@@ -270,8 +270,7 @@ static inline int hash_is_sane(int hash)
 #define FLD_CACHE_THRESHOLD 10
 
 int fld_client_init(struct lu_client_fld *fld,
-                    const char *prefix, int hash,
-                    const struct lu_context *ctx)
+                    const char *prefix, int hash)
 {
 #ifdef __KERNEL__
         int cache_size, cache_threshold;
@@ -287,7 +286,6 @@ int fld_client_init(struct lu_client_fld *fld,
         }
 
         fld->lcf_count = 0;
-        fld->lcf_ctx = ctx;
         spin_lock_init(&fld->lcf_lock);
         fld->lcf_hash = &fld_hash[hash];
         INIT_LIST_HEAD(&fld->lcf_targets);
@@ -409,7 +407,8 @@ out_req:
 }
 
 int fld_client_create(struct lu_client_fld *fld,
-                      seqno_t seq, mdsno_t mds)
+                      seqno_t seq, mdsno_t mds,
+                      const struct lu_context *ctx)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = mds };
         struct lu_fld_target *target;
@@ -421,10 +420,9 @@ int fld_client_create(struct lu_client_fld *fld,
 
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
-                LASSERT(fld->lcf_ctx != NULL);
+                LASSERT(ctx != NULL);
                 rc = fld_server_create(target->ft_srv,
-                                       fld->lcf_ctx,
-                                       seq, mds);
+                                       ctx, seq, mds);
         } else {
 #endif
                 rc = fld_client_rpc(target->ft_exp,
@@ -446,8 +444,8 @@ int fld_client_create(struct lu_client_fld *fld,
 }
 EXPORT_SYMBOL(fld_client_create);
 
-int fld_client_delete(struct lu_client_fld *fld,
-                      seqno_t seq)
+int fld_client_delete(struct lu_client_fld *fld, seqno_t seq,
+                      const struct lu_context *ctx)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
         struct lu_fld_target *target;
@@ -461,10 +459,9 @@ int fld_client_delete(struct lu_client_fld *fld,
 
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
-                LASSERT(fld->lcf_ctx != NULL);
+                LASSERT(ctx != NULL);
                 rc = fld_server_delete(target->ft_srv,
-                                       fld->lcf_ctx,
-                                       seq);
+                                       ctx, seq);
         } else {
 #endif
                 rc = fld_client_rpc(target->ft_exp,
@@ -478,7 +475,8 @@ int fld_client_delete(struct lu_client_fld *fld,
 EXPORT_SYMBOL(fld_client_delete);
 
 int fld_client_lookup(struct lu_client_fld *fld,
-                      seqno_t seq, mdsno_t *mds)
+                      seqno_t seq, mdsno_t *mds,
+                      const struct lu_context *ctx)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
         struct lu_fld_target *target;
@@ -496,10 +494,9 @@ int fld_client_lookup(struct lu_client_fld *fld,
 
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
-                LASSERT(fld->lcf_ctx != NULL);
+                LASSERT(ctx != NULL);
                 rc = fld_server_lookup(target->ft_srv,
-                                       fld->lcf_ctx,
-                                       seq, mds);
+                                       ctx, seq, mds);
         } else {
 #endif
                 rc = fld_client_rpc(target->ft_exp,

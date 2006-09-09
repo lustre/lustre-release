@@ -2201,8 +2201,7 @@ static int mdt_fld_init(const struct lu_context *ctx,
                 GOTO(out_fld_fini, rc = -ENOMEM);
 
         rc = fld_client_init(ls->ls_client_fld, uuid,
-                             LUSTRE_CLI_FLD_HASH_DHT,
-                             ctx);
+                             LUSTRE_CLI_FLD_HASH_DHT);
         if (rc) {
                 CERROR("can't init FLD, err %d\n",  rc);        
                 OBD_FREE_PTR(ls->ls_client_fld);

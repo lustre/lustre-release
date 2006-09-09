@@ -53,7 +53,7 @@ int lmv_fld_lookup(struct lmv_obd *lmv,
         ENTRY;
 
         LASSERT(fid_is_sane(fid));
-        rc = fld_client_lookup(&lmv->lmv_fld, fid_seq(fid), mds);
+        rc = fld_client_lookup(&lmv->lmv_fld, fid_seq(fid), mds, NULL);
         if (rc) {
                 CERROR("error while looking for mds number. Seq "LPU64
                        ", rc %d\n", fid_seq(fid), rc);

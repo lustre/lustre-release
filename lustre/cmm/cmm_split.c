@@ -99,6 +99,14 @@ static int cmm_alloc_fid(const struct lu_context *ctx, struct cmm_device *cmm,
                 LASSERT(cmm->cmm_local_num != mc->mc_num);
                 
                 rc = obd_fid_alloc(mc->mc_desc.cl_exp, &fid[i++], NULL);
+                if (rc > 0) {
+                        struct lu_site *ls;
+
+                        ls = cmm->cmm_md_dev.md_lu_dev.ld_site;
+                        rc = fld_client_create(ls->ls_client_fld,
+                                               fid_seq(&fid[i]),
+                                               mc->mc_num, ctx);
+                }
                 if (rc < 0) {
                         spin_unlock(&cmm->cmm_tgt_guard);
                         RETURN(rc);
@@ -212,7 +220,7 @@ static int cmm_send_split_pages(const struct lu_context *ctx,
                 RETURN(PTR_ERR(obj));
 
         for (i = 0; i < rdpg->rp_npages; i++) {
-                rc = mdc_send_page(ctx, md_object_next(&obj->cmo_obj),
+                rc = mdc_send_page(cmm, ctx, md_object_next(&obj->cmo_obj),
                                    rdpg->rp_pages[i], hash_end);
                 if (rc)
                         break;

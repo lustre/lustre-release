@@ -778,7 +778,7 @@ static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
                 LASSERT(fid_is_sane(fid));
                 
                 rc = fld_client_create(&lmv->lmv_fld, fid_seq(fid),
-                                       mds);
+                                       mds, NULL);
                 if (rc) {
                         CERROR("can't create fld entry, rc %d\n", rc);
                         RETURN(rc);
@@ -867,7 +867,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
        }
 #endif
         rc = fld_client_init(&lmv->lmv_fld, obd->obd_name,
-                             LUSTRE_CLI_FLD_HASH_DHT, NULL);
+                             LUSTRE_CLI_FLD_HASH_DHT);
         if (rc) {
                 CERROR("can't init FLD, err %d\n",
                        rc);
