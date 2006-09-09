@@ -482,14 +482,45 @@ static int mdd_mount(const struct lu_context *ctx, struct mdd_device *mdd)
         RETURN(rc);
 }
 
+static int mdd_txn_start_cb(const struct lu_context *ctx,
+                            struct txn_param *param, void *cookie)
+{
+        return 0;
+}
+
+static int mdd_txn_stop_cb(const struct lu_context *ctx,
+                           struct thandle *txn, void *cookie)
+{
+        struct mdd_device *mdd = cookie;
+        struct obd_device *obd = mdd2obd_dev(mdd);
+        
+        return mds_lov_write_objids(obd);
+}
+
+static int mdd_txn_commit_cb(const struct lu_context *ctx,
+                             struct thandle *txn, void *cookie)
+{
+        return 0;
+}
+
 static int mdd_device_init(const struct lu_context *ctx,
                            struct lu_device *d, struct lu_device *next)
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
+        struct dt_device  *dt;
         int rc = 0;
         ENTRY;
 
         mdd->mdd_child = lu2dt_dev(next);
+
+        dt = mdd->mdd_child;
+        /* prepare transactions callbacks */
+        mdd->mdd_txn_cb.dtc_txn_start = mdd_txn_start_cb;
+        mdd->mdd_txn_cb.dtc_txn_stop = mdd_txn_stop_cb;
+        mdd->mdd_txn_cb.dtc_txn_commit = mdd_txn_commit_cb;
+        mdd->mdd_txn_cb.dtc_cookie = mdd;
+
+        dt_txn_callback_add(dt, &mdd->mdd_txn_cb);
 
         RETURN(rc);
 }
@@ -497,11 +528,14 @@ static int mdd_device_init(const struct lu_context *ctx,
 static struct lu_device *mdd_device_fini(const struct lu_context *ctx,
                                          struct lu_device *d)
 {
-	struct mdd_device *m = lu2mdd_dev(d);
-        struct lu_device *next = &m->mdd_child->dd_lu_dev;
+	struct mdd_device *mdd = lu2mdd_dev(d);
+        struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
 
+        dt_txn_callback_del(mdd->mdd_child, &mdd->mdd_txn_cb);
+        
         return next;
 }
+
 static void mdd_device_shutdown(const struct lu_context *ctxt,
                                 struct mdd_device *m)
 {

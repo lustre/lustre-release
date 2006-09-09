@@ -333,6 +333,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         const void              *eadata = spec->u.sp_ea.eadata;
         __u32                    create_flags = spec->sp_cr_flags;
         int                      rc = 0;
+        struct obd_trans_info   *oti = &mdd_ctx_info(ctxt)->mti_oti;
+        obd_id                  *ids = NULL; /* object IDs created */
         ENTRY;
 
         if (create_flags & MDS_OPEN_DELAY_CREATE ||
@@ -354,6 +356,13 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGROUP;
         oa->o_size = 0;
+
+        OBD_ALLOC(ids, obd->u.mds.mds_lov_desc.ld_tgt_count * sizeof(*ids));
+        if (ids == NULL)
+                RETURN(-ENOMEM);
+        
+        oti_init(oti, NULL);
+        oti->oti_objid = ids;
 
         if (!(create_flags & MDS_OPEN_HAS_OBJS)) {
                 if (create_flags & MDS_OPEN_HAS_EA) {
@@ -384,7 +393,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         if (rc)
                                 GOTO(out_oa, rc);
                 }
-                rc = obd_create(lov_exp, oa, &lsm, NULL);
+                rc = obd_create(lov_exp, oa, &lsm, oti);
                 if (rc) {
                         if (rc > 0) {
                                 CERROR("create errro for "DFID": %d \n",
@@ -444,6 +453,9 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         /* blksize should be changed after create data object */
         la->la_valid |= LA_BLKSIZE;
         la->la_blksize = oa->o_blksize;
+        
+        mds_lov_update_objids(obd, ids);
+        
 
         rc = obd_packmd(lov_exp, lmm, lsm);
         if (rc < 0) {
@@ -453,6 +465,9 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         *lmm_size = rc;
         rc = 0;
 out_oa:
+        if (ids)
+                OBD_FREE(ids, sizeof(*ids) * 
+                              obd->u.mds.mds_lov_desc.ld_tgt_count);
         obdo_free(oa);
         if (lsm)
                 obd_free_memmd(lov_exp, &lsm);

@@ -85,6 +85,8 @@ int mds_log_op_setattr(struct obd_device *obd, struct inode *inode,
                       struct lov_mds_md *lmm, int lmm_size,
                       struct llog_cookie *logcookies, int cookies_size);
 
+int mds_lov_write_objids(struct obd_device *obd);
+void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'
 #define IOC_REQUEST_MIN_NR                 30

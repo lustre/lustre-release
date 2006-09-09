@@ -57,6 +57,7 @@ void mds_lov_update_objids(struct obd_device *obd, obd_id *ids)
         unlock_kernel();
         EXIT;
 }
+EXPORT_SYMBOL(mds_lov_update_objids);
 
 static int mds_lov_read_objids(struct obd_device *obd)
 {
@@ -126,6 +127,7 @@ int mds_lov_write_objids(struct obd_device *obd)
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(mds_lov_write_objids);
 
 int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
 {

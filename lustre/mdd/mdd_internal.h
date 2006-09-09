@@ -40,6 +40,7 @@ struct mdd_device {
         struct lu_fid                    mdd_root_fid;
         struct dt_device_param           mdd_dt_conf;
         struct dt_object                *mdd_orphans;
+        struct dt_txn_callback           mdd_txn_cb;
 };
 
 enum mod_flags {
@@ -76,6 +77,7 @@ struct mdd_thread_info {
         struct lov_mds_md mti_lmm;
         struct obd_info   mti_oi;
         struct orph_key   mti_orph_key;
+        struct obd_trans_info   mti_oti;
 };
 
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
