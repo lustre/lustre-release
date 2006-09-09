@@ -37,6 +37,6 @@ void it_set_disposition(struct lookup_intent *it, int flag);
 int it_open_error(int phase, struct lookup_intent *it);
 #ifdef HAVE_SPLIT_SUPPORT
 int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
-                 const struct page *page);
+                 const struct page *page, int offset);
 #endif
 #endif

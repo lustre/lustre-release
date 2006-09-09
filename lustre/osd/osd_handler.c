@@ -1077,8 +1077,7 @@ static int osd_xattr_del(const struct lu_context *ctxt, struct dt_object *dt,
 static int osd_dir_page_build(const struct lu_context *ctx, int first,
                               void *area, int nob,
                               struct dt_it_ops  *iops, struct dt_it *it,
-                              __u32 *start, __u32 *end, __u32 hash_end,
-                              struct lu_dirent **last)
+                              __u32 *start, __u32 *end, struct lu_dirent **last)
 {
         int result;
         struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
@@ -1109,12 +1108,6 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
 
                 recsize = (sizeof *ent + len + 3) & ~3;
                 hash = iops->store(ctx, it);
-                if (hash > hash_end) {
-                        *end = hash_end;
-                        if (first && ent == area)
-                                *start = hash_end;
-                        break;
-                }
                 *end = hash;
                 CDEBUG(D_INODE, "%p %p %d "DFID": %#8.8x (%d)\"%*.*s\"\n",
                        area, ent, nob, PFID(fid), hash, len, len, len, name);
@@ -1194,8 +1187,7 @@ static int osd_readpage(const struct lu_context *ctxt,
                         rc = osd_dir_page_build(ctxt, !i, kmap(pg),
                                                 min_t(int, nob, CFS_PAGE_SIZE),
                                                 iops, it,
-                                                &hash_start, &hash_end,
-                                                rdpg->rp_hash_end, &last);
+                                                &hash_start, &hash_end, &last);
                         if (rc != 0 || i == rdpg->rp_npages - 1)
                                 last->lde_reclen = 0;
                         kunmap(pg);

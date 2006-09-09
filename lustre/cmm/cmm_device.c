@@ -51,8 +51,8 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
 }
 
-static int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
-                        struct lu_fid *fid)
+int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
+                 struct lu_fid *fid)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
         /* valid only on master MDS */

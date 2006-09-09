@@ -730,7 +730,7 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data)
 
 #ifdef HAVE_SPLIT_SUPPORT
 int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
-                 const struct page *page)
+                 const struct page *page, int offset)
 {
         struct obd_import *imp = class_exp2cliimp(exp);
         struct ptlrpc_request *req = NULL;
@@ -752,9 +752,9 @@ int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
         if (desc == NULL)
                 GOTO(out, rc = -ENOMEM);
         /* NB req now owns desc and will free it when it gets freed */
-        ptlrpc_prep_bulk_page(desc, (struct page*)page, 0, PAGE_CACHE_SIZE);
+        ptlrpc_prep_bulk_page(desc, (struct page*)page, 0, offset);
 
-        mdc_readdir_pack(req, REQ_REC_OFF, 0, PAGE_CACHE_SIZE, fid);
+        mdc_readdir_pack(req, REQ_REC_OFF, 0, offset, fid);
 
         ptlrpc_req_set_repsize(req, 2, size);
         rc = ptlrpc_queue_wait(req);

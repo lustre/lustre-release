@@ -118,10 +118,14 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *);
 
+int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
+                 struct lu_fid *fid);
+
 #ifdef HAVE_SPLIT_SUPPORT
 /* cmm_split.c */
 int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo);
 #endif
+
 #endif /* __KERNEL__ */
 #endif /* _CMM_INTERNAL_H */
 

@@ -596,7 +596,6 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
                 }
         }
         kunmap(page);
-
         RETURN(rc);
 }
 
@@ -704,7 +703,6 @@ static int mdt_readpage(struct mdt_thread_info *info)
          * reqbody->nlink contains number bytes to read.
          */
         rdpg->rp_hash = reqbody->size;
-        rdpg->rp_hash_end = ~0ul;
         if ((__u64)rdpg->rp_hash != reqbody->size) {
                 CERROR("Invalid hash: %#llx != %#llx\n",
                        (__u64)rdpg->rp_hash, reqbody->size);

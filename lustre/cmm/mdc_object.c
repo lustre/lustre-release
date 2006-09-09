@@ -246,18 +246,24 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
 
 #ifdef HAVE_SPLIT_SUPPORT
 int mdc_send_page(const struct lu_context *ctx, struct md_object *mo,
-                  struct page *page)
+                  struct page *page, __u32 end)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct lu_dirpage *dp;
         struct lu_dirent  *ent;
-        int rc;
+        int rc, offset = 0, rc1 = 0;
         ENTRY;
 
         kmap(page);
         dp = page_address(page);
         for (ent = lu_dirent_start(dp); ent != NULL;
                           ent = lu_dirent_next(ent)) {
+                if (ent->lde_hash < end) {
+                        offset = (int)((__u32)ent - (__u32)dp);
+                        rc1 = -E2BIG;
+                        goto send_page;
+                }
+                        
                 /* allocate new fid for each obj */
                 rc = obd_fid_alloc(mc->mc_desc.cl_exp, &ent->lde_fid, NULL);
                 if (rc) {
@@ -266,8 +272,17 @@ int mdc_send_page(const struct lu_context *ctx, struct md_object *mo,
                 }
         }
         kunmap(page);
-        rc = mdc_sendpage(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
-                          page);
+        offset = CFS_PAGE_SIZE;
+send_page:
+        if (offset > 0) {
+                rc = mdc_sendpage(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
+                                  page, offset);
+                CDEBUG(D_INFO, "send page %p  offset %d fid "DFID" rc %d \n",
+                                page, offset, PFID(lu_object_fid(&mo->mo_lu)),
+                                rc);
+        }
+        if (rc == 0)
+                rc = rc1;
         RETURN(rc);
 }
 #endif

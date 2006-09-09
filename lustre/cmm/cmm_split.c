@@ -39,47 +39,46 @@
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
-struct cmm_thread_info {
-        struct md_attr   cti_ma;
-};
-
-struct lu_context_key cmm_thread_key;
-struct cmm_thread_info *cmm_ctx_info(const struct lu_context *ctx)
-{
-        struct cmm_thread_info *info;
-
-        info = lu_context_key_get(ctx, &cmm_thread_key);
-        LASSERT(info != NULL);
-        return info;
-}
-
 #define CMM_NO_SPLIT_EXPECTED   0
 #define CMM_EXPECT_SPLIT        1
 #define CMM_NO_SPLITTABLE       2
 
-#define SPLIT_SIZE 64*1024
+#define SPLIT_SIZE 8*1024
+
+static inline struct lu_fid* cmm2_fid(struct cmm_object *obj)
+{
+       return &(obj->cmo_obj.mo_lu.lo_header->loh_fid);
+}
 
 static int cmm_expect_splitting(const struct lu_context *ctx,
                                 struct md_object *mo, struct md_attr *ma)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
+        struct lu_fid *fid = NULL;
+        int rc = CMM_EXPECT_SPLIT;
         ENTRY;
 
-        if (cmm->cmm_tgt_count == 1)
-                RETURN(CMM_NO_SPLIT_EXPECTED);
+        if (cmm->cmm_tgt_count == 0)
+                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
 
         if (ma->ma_attr.la_size < SPLIT_SIZE)
-                RETURN(CMM_NO_SPLIT_EXPECTED);
+                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
 
         if (ma->ma_lmv_size)
-                RETURN(CMM_NO_SPLIT_EXPECTED);
-                       
-        RETURN(CMM_EXPECT_SPLIT);
-}
+                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
+                   
+        OBD_ALLOC_PTR(fid);
+        rc = cmm_root_get(ctx, &cmm->cmm_md_dev, fid);
+        if (rc)
+                GOTO(cleanup, rc);
+        
+        if (lu_fid_eq(fid, cmm2_fid(md2cmm_obj(mo))))
+                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED); 
 
-static inline struct lu_fid* cmm2_fid(struct cmm_object *obj)
-{
-       return &(obj->cmo_obj.mo_lu.lo_header->loh_fid);
+cleanup:
+        if (fid)
+                OBD_FREE_PTR(fid);
+        RETURN(rc);
 }
 
 #define cmm_md_size(stripes)                            \
@@ -97,9 +96,8 @@ static int cmm_alloc_fid(const struct lu_context *ctx, struct cmm_device *cmm,
         spin_lock(&cmm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets,
                                  mc_linkage) {
-                if (cmm->cmm_local_num == mc->mc_num)
-                        continue;
-
+                LASSERT(cmm->cmm_local_num != mc->mc_num);
+                
                 rc = obd_fid_alloc(mc->mc_desc.cl_exp, &fid[i++], NULL);
                 if (rc < 0) {
                         spin_unlock(&cmm->cmm_tgt_guard);
@@ -107,7 +105,7 @@ static int cmm_alloc_fid(const struct lu_context *ctx, struct cmm_device *cmm,
                 }
         }
         spin_unlock(&cmm->cmm_tgt_guard);
-        LASSERT(i + 1 == count);
+        LASSERT(i == count);
         if (rc == 1)
                 rc = 0;
         RETURN(rc);
@@ -168,7 +166,7 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
         struct lu_fid *lf = cmm2_fid(md2cmm_obj(mo));
         ENTRY;
 
-        lmv_size = cmm_md_size(cmm->cmm_tgt_count);
+        lmv_size = cmm_md_size(cmm->cmm_tgt_count + 1);
 
         /* This lmv will be free after finish splitting. */
         OBD_ALLOC(lmv, lmv_size);
@@ -202,7 +200,7 @@ cleanup:
 
 static int cmm_send_split_pages(const struct lu_context *ctx, 
                                 struct md_object *mo, struct lu_rdpg *rdpg, 
-                                struct lu_fid *fid)
+                                struct lu_fid *fid, __u32 hash_end)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct cmm_object *obj;
@@ -215,49 +213,48 @@ static int cmm_send_split_pages(const struct lu_context *ctx,
 
         for (i = 0; i < rdpg->rp_npages; i++) {
                 rc = mdc_send_page(ctx, md_object_next(&obj->cmo_obj),
-                                   rdpg->rp_pages[i]);
+                                   rdpg->rp_pages[i], hash_end);
                 if (rc)
-                        GOTO(cleanup, rc);
+                        break;
         }
-cleanup:
         cmm_object_put(ctx, obj);
         RETURN(rc);
 }
 
 static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
-                             struct lu_rdpg *rdpg, struct lu_fid *lf)
+                             struct lu_rdpg *rdpg, struct lu_fid *lf, 
+                             __u32 end)
 {
-        struct lu_dirpage *dp;
-        __u32 hash_end;
         int rc, i;
         ENTRY;
 
-        /* init page with '0' */
-        for (i = 0; i < rdpg->rp_npages; i++) {
-                memset(kmap(rdpg->rp_pages[i]), 0, CFS_PAGE_SIZE);
-                kunmap(rdpg->rp_pages[i]);
-        }
-
         /* Read splitted page and send them to the slave master */
         do {
+                /* init page with '0' */
+                for (i = 0; i < rdpg->rp_npages; i++) {
+                        memset(kmap(rdpg->rp_pages[i]), 0, CFS_PAGE_SIZE);
+                        kunmap(rdpg->rp_pages[i]);
+                }
+
                 rc = mo_readpage(ctx, md_object_next(mo), rdpg);
+                
+                /* -E2BIG means it already reach the end of the dir */
+                if (rc == -E2BIG)                         
+                        RETURN(0);
                 if (rc)
                         RETURN(rc);
 
-                rc = cmm_send_split_pages(ctx, mo, rdpg, lf);
-                if (rc)
-                        RETURN(rc);
+                rc = cmm_send_split_pages(ctx, mo, rdpg, lf, end);
 
-                dp = kmap(rdpg->rp_pages[0]);
-                hash_end = dp->ldp_hash_end;
-                kunmap(rdpg->rp_pages[0]);
-                if (hash_end == ~0ul)
-                        break;
-        } while (hash_end < rdpg->rp_hash_end);
-        
+        } while (rc == 0);
+
+        /* it means already finish splitting this segment */
+        if (rc == -E2BIG)
+                rc = 0;
         RETURN(rc);
 }
 
+#if 0
 static int cmm_remove_entries(const struct lu_context *ctx, 
                               struct md_object *mo, struct lu_rdpg *rdpg)
 {
@@ -282,7 +279,7 @@ static int cmm_remove_entries(const struct lu_context *ctx,
         }
         RETURN(rc);
 }
-
+#endif
 #define MAX_HASH_SIZE 0x3fffffff
 #define SPLIT_PAGE_COUNT 1
 static int cmm_scan_and_split(const struct lu_context *ctx,
@@ -313,14 +310,12 @@ static int cmm_scan_and_split(const struct lu_context *ctx,
         hash_segement = MAX_HASH_SIZE / cmm->cmm_tgt_count;
         for (i = 1; i < cmm->cmm_tgt_count; i++) {
                 struct lu_fid *lf = &ma->ma_lmv->mea_ids[i];
+                __u32 hash_end;
                 
                 rdpg->rp_hash = i * hash_segement;
-                rdpg->rp_hash_end = rdpg->rp_hash + hash_segement;
-                rc = cmm_remove_entries(ctx, mo, rdpg);
-                if (rc)
-                        GOTO(cleanup, rc);
-
-                rc = cmm_split_entries(ctx, mo, rdpg, lf);
+                hash_end = rdpg->rp_hash + hash_segement;
+                
+                rc = cmm_split_entries(ctx, mo, rdpg, lf, hash_end);
                 if (rc)
                         GOTO(cleanup, rc);
         }
