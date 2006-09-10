@@ -3023,8 +3023,6 @@ static int mdt_destroy_export(struct obd_export *export)
         struct mdt_thread_info *info;
         struct lu_context       ctxt;
         struct md_attr         *ma;
-        int                     lmm_size;
-        int                     cookie_size;
         int rc = 0;
         ENTRY;
 
@@ -3049,10 +3047,10 @@ static int mdt_destroy_export(struct obd_export *export)
         memset(info, 0, sizeof *info);
 
         ma = &info->mti_attr;
-        lmm_size = mdt->mdt_max_mdsize;
-        cookie_size = mdt->mdt_max_cookiesize;
-        OBD_ALLOC(ma->ma_lmm, lmm_size);
-        OBD_ALLOC(ma->ma_cookie, cookie_size);
+        ma->ma_lmm_size = mdt->mdt_max_mdsize;
+        ma->ma_cookie_size = mdt->mdt_max_cookiesize;
+        OBD_ALLOC(ma->ma_lmm, ma->ma_lmm_size);
+        OBD_ALLOC(ma->ma_cookie, ma->ma_cookie_size);
 
         if (ma->ma_lmm == NULL || ma->ma_cookie == NULL)
                 GOTO(out, rc = -ENOMEM);
@@ -3082,9 +3080,9 @@ static int mdt_destroy_export(struct obd_export *export)
 
 out:
         if (ma->ma_lmm)
-                OBD_FREE(ma->ma_lmm, lmm_size);
+                OBD_FREE(ma->ma_lmm, ma->ma_lmm_size);
         if (ma->ma_cookie)
-                OBD_FREE(ma->ma_cookie, cookie_size);
+                OBD_FREE(ma->ma_cookie, ma->ma_cookie_size);
         lu_context_exit(&ctxt);
         lu_context_fini(&ctxt);
 
