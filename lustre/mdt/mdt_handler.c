@@ -2635,7 +2635,6 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 
         ENTRY;
         target_cleanup_recovery(m->mdt_md_dev.md_lu_dev.ld_obd);
-        mdt_fs_cleanup(ctx, m);
         ping_evictor_stop();
         mdt_stop_ptlrpc_service(m);
 
@@ -2649,6 +2648,7 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 
         mdt_fld_fini(ctx, m);
 
+        mdt_fs_cleanup(ctx, m);
         /* finish the stack */
         mdt_stack_fini(ctx, m, md2lu_dev(m->mdt_child));
 
@@ -3018,10 +3018,13 @@ static int mdt_init_export(struct obd_export *exp)
 static int mdt_destroy_export(struct obd_export *export)
 {
         struct mdt_export_data *med;
-        struct obd_device *obd = export->exp_obd;
-        struct mdt_device *mdt;
+        struct obd_device      *obd = export->exp_obd;
+        struct mdt_device      *mdt;
         struct mdt_thread_info *info;
-        struct lu_context ctxt;
+        struct lu_context       ctxt;
+        struct md_attr         *ma;
+        int                     lmm_size;
+        int                     cookie_size;
         int rc = 0;
         ENTRY;
 
@@ -3044,6 +3047,17 @@ static int mdt_destroy_export(struct obd_export *export)
         info = lu_context_key_get(&ctxt, &mdt_thread_key);
         LASSERT(info != NULL);
         memset(info, 0, sizeof *info);
+
+        ma = &info->mti_attr;
+        lmm_size = mdt->mdt_max_mdsize;
+        cookie_size = mdt->mdt_max_cookiesize;
+        OBD_ALLOC(ma->ma_lmm, lmm_size);
+        OBD_ALLOC(ma->ma_cookie, cookie_size);
+
+        if (ma->ma_lmm == NULL || ma->ma_cookie == NULL)
+                GOTO(out, rc = -ENOMEM);
+        ma->ma_need = MA_LOV | MA_COOKIE;
+
         /* Close any open files (which may also cause orphan unlinking). */
         spin_lock(&med->med_open_lock);
         while (!list_empty(&med->med_open_head)) {
@@ -3057,7 +3071,7 @@ static int mdt_destroy_export(struct obd_export *export)
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
-                mdt_mfd_close(&ctxt, mdt, mfd, &info->mti_attr);
+                mdt_mfd_close(&ctxt, mdt, mfd, ma);
                 /* TODO: if we close the unlinked file,
                  * we need to remove it's objects from OST */
                 mdt_object_put(&ctxt, o);
@@ -3066,6 +3080,11 @@ static int mdt_destroy_export(struct obd_export *export)
         spin_unlock(&med->med_open_lock);
         mdt_client_free(&ctxt, mdt, med);
 
+out:
+        if (ma->ma_lmm)
+                OBD_FREE(ma->ma_lmm, lmm_size);
+        if (ma->ma_cookie)
+                OBD_FREE(ma->ma_cookie, cookie_size);
         lu_context_exit(&ctxt);
         lu_context_fini(&ctxt);
 

@@ -45,9 +45,7 @@ static /*inline*/ ssize_t mdt_read_record(const struct lu_context *ctx,
 {
         int rc;
 
-        /* FIXME: this should be an ASSERT */
-        if (dt == NULL)
-                return -EFAULT;
+        LASSERTF(dt != NULL, "dt is NULL when we want to read record\n");
 
         rc = dt->do_body_ops->dbo_read(ctx, dt, buf, count, pos);
 
@@ -67,9 +65,7 @@ static /*inline*/ ssize_t mdt_write_record(const struct lu_context *ctx,
 {
         int rc;
 
-        /* FIXME: this should be an ASSERT */
-        if (dt == NULL)
-                return -EFAULT;
+        LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
 
         rc = dt->do_body_ops->dbo_write(ctx, dt, buf, count, pos, th);
         if (rc == count)
@@ -94,9 +90,19 @@ static int mdt_write_last_rcvd_header(const struct lu_context *ctx,
                                       struct mdt_server_data *msd,
                                       struct thandle *th)
 {
+        int rc;
         loff_t off = 0;
-        return mdt_write_record(ctx, mdt->mdt_last_rcvd, 
-                                msd, sizeof(*msd), &off, th);
+
+        rc = mdt_write_record(ctx, mdt->mdt_last_rcvd, 
+                              msd, sizeof(*msd), &off, th);
+        
+        CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
+                       "uuid = %s\n"
+                       "last_transno = "LPU64"\n",
+                        rc,
+                        msd->msd_uuid,
+                        msd->msd_last_transno);
+        return rc;
 }
 
 static int mdt_read_last_rcvd(const struct lu_context *ctx,
@@ -112,8 +118,29 @@ static int mdt_write_last_rcvd(const struct lu_context *ctx,
                                struct mdt_client_data *mcd,
                                loff_t *off, struct thandle *th)
 {
-        return mdt_write_record(ctx, mdt->mdt_last_rcvd, 
-                                mcd, sizeof(*mcd), off, th);
+        int rc;
+        rc = mdt_write_record(ctx, mdt->mdt_last_rcvd, 
+                              mcd, sizeof(*mcd), off, th);
+
+        CDEBUG(D_INFO, "write mcd rc = %d:\n"
+                       "uuid = %s\n"
+                       "last_transno = "LPU64"\n"
+                       "last_xid = "LPU64"\n"
+                       "last_result = %d\n"
+                       "last_data = %d\n"
+                       "last_close_transno = "LPU64"\n"
+                       "last_close_xid = "LPU64"\n"
+                       "last_close_result = %d\n",
+                        rc,
+                        mcd->mcd_uuid,
+                        mcd->mcd_last_transno,
+                        mcd->mcd_last_xid,
+                        mcd->mcd_last_result,
+                        mcd->mcd_last_data,
+                        mcd->mcd_last_close_transno,
+                        mcd->mcd_last_close_xid,
+                        mcd->mcd_last_close_result);
+        return rc;
 }
 
 static int mdt_init_clients_data(const struct lu_context *ctx,
@@ -706,7 +733,6 @@ void mdt_fs_cleanup(const struct lu_context *ctx, struct mdt_device *mdt)
         dt_txn_callback_del(mdt->mdt_bottom, &mdt->mdt_txn_cb);
 
         class_disconnect_exports(obd); /* cleans up client info too */
-
         if (mdt->mdt_last_rcvd)
                 lu_object_put(ctx, &mdt->mdt_last_rcvd->do_lu);
         mdt->mdt_last_rcvd = NULL;
