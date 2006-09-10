@@ -2,7 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  lustre/cmm/cmm_split.c
- *  Lustre splitting dir 
+ *  Lustre splitting dir
  *
  *  Copyright (c) 2006 Cluster File Systems, Inc.
  *   Author: Alex thomas <alex@clusterfs.com>
@@ -43,7 +43,9 @@
 #define CMM_EXPECT_SPLIT        1
 #define CMM_NO_SPLITTABLE       2
 
-#define SPLIT_SIZE 8*1024
+enum {
+        SPLIT_SIZE =  8*1024
+};
 
 static inline struct lu_fid* cmm2_fid(struct cmm_object *obj)
 {
@@ -66,14 +68,14 @@ static int cmm_expect_splitting(const struct lu_context *ctx,
 
         if (ma->ma_lmv_size)
                 GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
-                   
+
         OBD_ALLOC_PTR(fid);
         rc = cmm_root_get(ctx, &cmm->cmm_md_dev, fid);
         if (rc)
                 GOTO(cleanup, rc);
-        
+
         if (lu_fid_eq(fid, cmm2_fid(md2cmm_obj(mo))))
-                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED); 
+                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
 
 cleanup:
         if (fid)
@@ -89,15 +91,15 @@ static int cmm_alloc_fid(const struct lu_context *ctx, struct cmm_device *cmm,
 {
         struct  mdc_device *mc, *tmp;
         int rc = 0, i = 0;
-        
+
         LASSERT(count == cmm->cmm_tgt_count);
-        /* FIXME: this spin_lock maybe not proper, 
+        /* FIXME: this spin_lock maybe not proper,
          * because fid_alloc may need RPC */
         spin_lock(&cmm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets,
                                  mc_linkage) {
                 LASSERT(cmm->cmm_local_num != mc->mc_num);
-                
+
                 rc = obd_fid_alloc(mc->mc_desc.cl_exp, &fid[i++], NULL);
                 if (rc > 0) {
                         struct lu_site *ls;
@@ -142,7 +144,7 @@ static inline void cmm_object_put(const struct lu_context *ctxt,
         lu_object_put(ctxt, &o->cmo_obj.mo_lu);
 }
 
-static int cmm_creat_remote_obj(const struct lu_context *ctx, 
+static int cmm_creat_remote_obj(const struct lu_context *ctx,
                                 struct cmm_device *cmm,
                                 struct lu_fid *fid, struct md_attr *ma)
 {
@@ -156,8 +158,8 @@ static int cmm_creat_remote_obj(const struct lu_context *ctx,
                 RETURN(PTR_ERR(obj));
 
         OBD_ALLOC_PTR(spec);
-        spec->u.sp_pfid = fid; 
-        rc = mo_object_create(ctx, md_object_next(&obj->cmo_obj), 
+        spec->u.sp_pfid = fid;
+        rc = mo_object_create(ctx, md_object_next(&obj->cmo_obj),
                               spec, ma);
         OBD_FREE_PTR(spec);
 
@@ -206,8 +208,8 @@ cleanup:
         RETURN(rc);
 }
 
-static int cmm_send_split_pages(const struct lu_context *ctx, 
-                                struct md_object *mo, struct lu_rdpg *rdpg, 
+static int cmm_send_split_pages(const struct lu_context *ctx,
+                                struct md_object *mo, struct lu_rdpg *rdpg,
                                 struct lu_fid *fid, __u32 hash_end)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
@@ -230,7 +232,7 @@ static int cmm_send_split_pages(const struct lu_context *ctx,
 }
 
 static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
-                             struct lu_rdpg *rdpg, struct lu_fid *lf, 
+                             struct lu_rdpg *rdpg, struct lu_fid *lf,
                              __u32 end)
 {
         int rc, i;
@@ -245,9 +247,9 @@ static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
                 }
 
                 rc = mo_readpage(ctx, md_object_next(mo), rdpg);
-                
+
                 /* -E2BIG means it already reach the end of the dir */
-                if (rc == -E2BIG)                         
+                if (rc == -E2BIG)
                         RETURN(0);
                 if (rc)
                         RETURN(rc);
@@ -263,7 +265,7 @@ static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
 }
 
 #if 0
-static int cmm_remove_entries(const struct lu_context *ctx, 
+static int cmm_remove_entries(const struct lu_context *ctx,
                               struct md_object *mo, struct lu_rdpg *rdpg)
 {
         struct lu_dirpage *dp;
@@ -319,10 +321,10 @@ static int cmm_scan_and_split(const struct lu_context *ctx,
         for (i = 1; i < cmm->cmm_tgt_count; i++) {
                 struct lu_fid *lf = &ma->ma_lmv->mea_ids[i];
                 __u32 hash_end;
-                
+
                 rdpg->rp_hash = i * hash_segement;
                 hash_end = rdpg->rp_hash + hash_segement;
-                
+
                 rc = cmm_split_entries(ctx, mo, rdpg, lf, hash_end);
                 if (rc)
                         GOTO(cleanup, rc);
@@ -348,7 +350,7 @@ int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo)
         ENTRY;
 
         LASSERT(S_ISDIR(lu_object_attr(&mo->mo_lu)));
-       
+
         OBD_ALLOC_PTR(ma);
         if (ma == NULL)
                 RETURN(-ENOMEM);
@@ -374,7 +376,7 @@ int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo)
 cleanup:
         if (ma->ma_lmv_size && ma->ma_lmv)
                 OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);
-        
+
         OBD_FREE_PTR(ma);
 
         RETURN(rc);
