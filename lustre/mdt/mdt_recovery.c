@@ -80,8 +80,10 @@ static inline int mdt_read_last_rcvd(const struct lu_context *ctx,
 {
         int rc;
 
-        rc = mdt->mdt_last_rcvd->do_body_ops->dbo_read(ctx, mdt->mdt_last_rcvd,
-                                                       mcd, sizeof(*mcd), off);
+        rc = mdt->mdt_last_rcvd->do_body_ops->dbo_read(ctx,
+                                                       mdt->mdt_last_rcvd,
+                                                       mcd, sizeof(*mcd),
+                                                       off);
         if (rc == sizeof(*mcd))
                 rc = 0;
         else if (rc >= 0)
@@ -142,6 +144,7 @@ static int mdt_init_clients_data(const struct lu_context *ctx,
                 if (rc) {
                         CERROR("error reading MDS %s idx %d, off %llu: rc %d\n",
                                LAST_RCVD, cl_idx, off, rc);
+                        rc = 0;
                         break; /* read error shouldn't cause startup to fail */
                 }
 
@@ -228,7 +231,7 @@ static int mdt_init_server_data(const struct lu_context *ctx,
                 RETURN(rc);
 
         last_rcvd_size = la->la_size;
-
+        
         if (last_rcvd_size == 0) {
                 LCONSOLE_WARN("%s: new disk, initializing\n", obd->obd_name);
 
@@ -424,9 +427,9 @@ int mdt_client_add(const struct lu_context *ctx,
 
         if (new_client) {
                 loff_t off = med->med_lr_off;
-                rc = mdt_write_last_rcvd(ctx, mdt, mcd,
-                                         &off, NULL);
-                CDEBUG(D_INFO, "wrote client mcd at idx %u off %llu (len %u)\n",
+                rc = mdt_write_last_rcvd(ctx, mdt, mcd, &off, NULL);
+                CDEBUG(D_INFO, 
+                       "wrote client mcd at idx %u off %llu (len %u)\n",
                        cl_idx, med->med_lr_off, sizeof(*mcd));
         }
         RETURN(rc);
@@ -437,12 +440,17 @@ int mdt_client_free(const struct lu_context *ctx,
                     struct mdt_export_data *med)
 {
         struct mdt_client_data *mcd  = med->med_mcd;
-        int rc = 0;
+        struct obd_device      *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
         loff_t off;
+        int rc = 0;
         ENTRY;
 
         if (!mcd)
                 RETURN(0);
+
+        /* XXX if mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
+        if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
+                GOTO(free, 0);
 
         CDEBUG(D_INFO, "freeing client at idx %u, offset %lld\n",
                med->med_lr_idx, med->med_lr_off);
@@ -469,11 +477,11 @@ int mdt_client_free(const struct lu_context *ctx,
         memset(mcd, 0, sizeof *mcd);
         rc = mdt_write_last_rcvd(ctx, mdt, mcd, &off, NULL);
         mutex_up(&med->med_mcd_lock);
-
+        
         CDEBUG(rc == 0 ? D_INFO : D_ERROR,
-               "zeroing out client idx %u in %s rc %d\n",
-               med->med_lr_idx, LAST_RCVD, rc);
-
+                        "zeroing out client idx %u in %s rc %d\n",
+                        med->med_lr_idx, LAST_RCVD, rc);
+        
         if (!test_and_clear_bit(med->med_lr_idx, mdt->mdt_client_bitmap)) {
                 CERROR("MDS client %u: bit already clear in bitmap!!\n",
                        med->med_lr_idx);

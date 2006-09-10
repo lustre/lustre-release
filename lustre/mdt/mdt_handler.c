@@ -3019,7 +3019,7 @@ static int mdt_destroy_export(struct obd_export *export)
 {
         struct mdt_export_data *med;
         struct obd_device *obd = export->exp_obd;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        struct mdt_device *mdt;
         struct mdt_thread_info *info;
         struct lu_context ctxt;
         int rc = 0;
@@ -3032,7 +3032,9 @@ static int mdt_destroy_export(struct obd_export *export)
         if (obd_uuid_equals(&export->exp_client_uuid, &obd->obd_uuid))
                 RETURN(0);
 
+        mdt = mdt_dev(obd->obd_lu_dev);
         LASSERT(mdt != NULL);
+
         rc = lu_context_init(&ctxt, LCT_MD_THREAD);
         if (rc)
                 RETURN(rc);
