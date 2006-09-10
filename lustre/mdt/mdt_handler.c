@@ -2639,6 +2639,11 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
         ping_evictor_stop();
         mdt_stop_ptlrpc_service(m);
 
+        if (m->mdt_namespace != NULL) {
+                ldlm_namespace_free(m->mdt_namespace, 0);
+                m->mdt_namespace = NULL;
+        }
+
         mdt_seq_fini(ctx, m);
         mdt_seq_fini_cli(m);
 
@@ -2646,11 +2651,6 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 
         /* finish the stack */
         mdt_stack_fini(ctx, m, md2lu_dev(m->mdt_child));
-
-        if (m->mdt_namespace != NULL) {
-                ldlm_namespace_free(m->mdt_namespace, 0);
-                m->mdt_namespace = NULL;
-        }
 
         if (ls) {
                 lu_site_fini(ls);
@@ -3124,8 +3124,8 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 int mdt_postrecov(struct obd_device *obd)
 {
         struct lu_context ctxt;
-        struct lu_device *ld = obd->obd_lu_dev;
-        struct mdt_device *mdt = mdt_dev(ld);
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        struct lu_device *ld = md2lu_dev(mdt->mdt_child);
         int rc;
         ENTRY;
 
@@ -3133,9 +3133,7 @@ int mdt_postrecov(struct obd_device *obd)
         if (rc)
                 RETURN(rc);
         lu_context_enter(&ctxt);
-        if (ld && ld->ld_ops && ld->ld_ops->ldo_recovery_complete)
-                rc = ld->ld_ops->ldo_recovery_complete(&ctxt,
-                                               md2lu_dev(mdt->mdt_child));
+        rc = ld->ld_ops->ldo_recovery_complete(&ctxt, ld);
         lu_context_exit(&ctxt);
         lu_context_fini(&ctxt);
         RETURN(rc);
