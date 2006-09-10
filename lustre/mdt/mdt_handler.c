@@ -3119,14 +3119,35 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         RETURN(rc);
 }
 
+int mdt_postrecov(struct obd_device *obd)
+{
+        struct lu_context ctxt;
+        struct lu_device *ld = obd->obd_lu_dev;
+        struct mdt_device *mdt = mdt_dev(ld);
+        int rc;
+        ENTRY;
+
+        rc = lu_context_init(&ctxt, LCT_MD_THREAD);
+        if (rc)
+                RETURN(rc);
+        lu_context_enter(&ctxt);
+        rc = ld->ld_ops->ldo_recovery_complete(&ctxt,
+                                               md2lu_dev(mdt->mdt_child));
+        lu_context_exit(&ctxt);
+        lu_context_fini(&ctxt);
+        RETURN(rc);
+}
+
 static struct obd_ops mdt_obd_device_ops = {
         .o_owner          = THIS_MODULE,
         .o_connect        = mdt_obd_connect,
-        .o_reconnect        = mdt_obd_reconnect,
+        .o_reconnect      = mdt_obd_reconnect,
         .o_disconnect     = mdt_obd_disconnect,
         .o_init_export    = mdt_init_export,
         .o_destroy_export = mdt_destroy_export,
-        .o_iocontrol      = mdt_iocontrol
+        .o_iocontrol      = mdt_iocontrol,
+        .o_postrecov      = mdt_postrecov
+
 };
 
 static struct lu_device* mdt_device_fini(const struct lu_context *ctx,
