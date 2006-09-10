@@ -109,11 +109,7 @@ extern const struct req_format RQF_MDS_PIN;
 extern const struct req_format RQF_MDS_CONNECT;
 extern const struct req_format RQF_MDS_DISCONNECT;
 extern const struct req_format RQF_MDS_READPAGE;
-extern const struct req_format RQF_MDS_WRITEPAGE;
 extern const struct req_format RQF_MDS_DONE_WRITING;
-#ifdef HAVE_SPLIT_SUPPORT
-extern const struct req_format RQF_MDS_WRITEPAGE;
-#endif
 
 /*
  * This is format of direct (non-intent) MDS_GETATTR_NAME request.
