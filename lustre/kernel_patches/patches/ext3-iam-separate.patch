@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
 --- iam.orig/fs/ext3/Makefile	2006-05-31 20:24:32.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-09-05 19:45:19.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-09-10 22:13:22.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,7 +14,7 @@ Index: iam/fs/ext3/Makefile
 Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam.c	2006-08-24 20:43:39.000000000 +0400
++++ iam/fs/ext3/iam.c	2006-09-10 22:13:20.000000000 +0400
 @@ -0,0 +1,1325 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -377,7 +377,7 @@ Index: iam/fs/ext3/iam.c
 +        if (result && p->ip_leaf.il_bh != NULL)
 +                result = iam_leaf_check(&p->ip_leaf);
 +        if (result == 0) {
-+                BREAKPOINT;
++                BREAKPOINT();
 +                ext3_std_error(iam_path_obj(p)->i_sb, result);
 +        }
 +        return result;
@@ -483,7 +483,7 @@ Index: iam/fs/ext3/iam.c
 +		iam_ikeycpy(bag, k0, k1);
 +		iam_ikeycpy(bag, k1, iam_leaf_ikey(leaf, k1));
 +                if (!first && iam_ikeycmp(bag, k0, k1) > 0) {
-+                        BREAKPOINT;
++                        BREAKPOINT();
 +                        return 0;
 +                }
 +                first = 0;
@@ -2014,7 +2014,7 @@ Index: iam/fs/ext3/iam_htree.c
 Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lfix.c	2006-08-21 20:06:38.000000000 +0400
++++ iam/fs/ext3/iam_lfix.c	2006-09-10 22:13:20.000000000 +0400
 @@ -0,0 +1,670 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2200,7 +2200,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +                           ill->ill_magic, le16_to_cpu(IAM_LEAF_HEADER_MAGIC),
 +                           count, leaf_count_limit(l));
 +                result = -EIO;
-+                BREAKPOINT;
++                BREAKPOINT();
 +        }
 +        return result;
 +}
@@ -2536,7 +2536,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +
 +                root = (void *)frame->bh->b_data;
 +                if (le64_to_cpu(root->ilr_magic) != IAM_LFIX_ROOT_MAGIC) {
-+                        BREAKPOINT;
++                        BREAKPOINT();
 +                        return -EIO;
 +                }
 +                limit_correct = dx_root_limit(path);
@@ -2545,11 +2545,11 @@ Index: iam/fs/ext3/iam_lfix.c
 +        count = dx_get_count(entries);
 +        limit = dx_get_limit(entries);
 +        if (count > limit) {
-+                BREAKPOINT;
++                BREAKPOINT();
 +                return -EIO;
 +        }
 +        if (limit != limit_correct) {
-+                BREAKPOINT;
++                BREAKPOINT();
 +                return -EIO;
 +        }
 +        return 0;
@@ -2689,7 +2689,7 @@ Index: iam/fs/ext3/iam_lfix.c
 Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lvar.c	2006-09-05 19:44:16.000000000 +0400
++++ iam/fs/ext3/iam_lvar.c	2006-09-10 22:13:20.000000000 +0400
 @@ -0,0 +1,881 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2976,7 +2976,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +                           head->vlh_magic, le16_to_cpu(IAM_LVAR_LEAF_MAGIC),
 +                           used);
 +                result = -EIO;
-+                BREAKPOINT;
++                BREAKPOINT();
 +        }
 +        return result;
 +}
@@ -3334,7 +3334,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +
 +                root = (void *)frame->bh->b_data;
 +                if (le64_to_cpu(root->vr_magic) != IAM_LVAR_ROOT_MAGIC) {
-+                        BREAKPOINT;
++                        BREAKPOINT();
 +                        return -EIO;
 +                }
 +                limit_correct = dx_root_limit(path);
@@ -3343,11 +3343,11 @@ Index: iam/fs/ext3/iam_lvar.c
 +        count = dx_get_count(entries);
 +        limit = dx_get_limit(entries);
 +        if (count > limit) {
-+                BREAKPOINT;
++                BREAKPOINT();
 +                return -EIO;
 +        }
 +        if (limit != limit_correct) {
-+                BREAKPOINT;
++                BREAKPOINT();
 +                return -EIO;
 +        }
 +        return 0;
@@ -3575,7 +3575,7 @@ Index: iam/fs/ext3/iam_lvar.c
 Index: iam/fs/ext3/namei.c
 ===================================================================
 --- iam.orig/fs/ext3/namei.c	2006-05-31 20:24:32.000000000 +0400
-+++ iam/fs/ext3/namei.c	2006-08-24 01:37:34.000000000 +0400
++++ iam/fs/ext3/namei.c	2006-09-10 22:12:04.000000000 +0400
 @@ -24,81 +24,6 @@
   * 	Theodore Ts'o, 2002
   */
@@ -4173,7 +4173,7 @@ Index: iam/fs/ext3/namei.c
 -		    keycmp(c, p->ip_key_scratch[0], p->ip_key_scratch[1]) > 0)
 +		    iam_ikeycmp(c, iam_path_ikey(p, 0),
 +				iam_path_ikey(p, 1)) > 0) {
-+			BREAKPOINT;
++			BREAKPOINT();
  			return 0;
 -	}
 -	return 1;
@@ -4221,7 +4221,7 @@ Index: iam/fs/ext3/namei.c
 -			return ERR_BAD_DX_DIR;
 +		blk = dx_get_block(p, e);
 +		if (inode->i_size < (blk + 1) * inode->i_sb->s_blocksize) {
-+			BREAKPOINT;
++			BREAKPOINT();
 +			return 0;
  		}
 -
@@ -4451,8 +4451,7 @@ Index: iam/fs/ext3/namei.c
 -}
 -
 -static void iam_path_compat_fini(struct iam_path_compat *path)
-+int dx_lookup(struct iam_path *path)
- {
+-{
 -	iam_path_fini(&path->ipc_path);
 -	iam_container_fini(&path->ipc_container);
 -}
@@ -4720,6 +4719,8 @@ Index: iam/fs/ext3/namei.c
 -		.hinfo  = &hinfo
 -	};
 -	int err, i;
++int dx_lookup(struct iam_path *path)
++{
 +	u32 ptr;
 +	int err = 0;
 +	int i;
@@ -4850,7 +4851,7 @@ Index: iam/fs/ext3/namei.c
 +				if (iam_ikeycmp(c, iam_ikey_at(path, at),
 +					       path->ip_ikey_target) > 0) {
 +					if (at != iam_entry_shift(path, frame->at, 1)) {
-+						BREAKPOINT;
++						BREAKPOINT();
 +						printk(KERN_EMERG "%i\n",
 +						       iam_ikeycmp(c, iam_ikey_at(path, at),
 +							      path->ip_ikey_target));
@@ -5574,7 +5575,7 @@ Index: iam/fs/ext3/namei.c
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
 --- iam.orig/include/linux/lustre_iam.h	2006-05-31 20:24:32.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-09-05 19:45:19.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-09-10 22:13:22.000000000 +0400
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:

@@ -5021,7 +5021,7 @@ diff -puN /dev/null include/asm-i386/kgdb.h
 +#define INIT_KGDB_INTS kgdb_enable_ints()
 +
 +#ifndef BREAKPOINT
-+#define BREAKPOINT   asm("   int $3")
++#define BREAKPOINT()   asm("   int $3")
 +#endif
 +/*
 + * GDB debug stub (or any debug stub) can point the 'linux_debug_hook'
@@ -5053,7 +5053,7 @@ diff -puN /dev/null include/asm-i386/kgdb.h
 +#endif
 +#else				/* CONFIG_KGDB  && ! __ASSEMBLY__ ,stubs follow... */
 +#ifndef BREAKPOINT
-+#define BREAKPOINT
++#define BREAKPOINT()
 +#endif
 +#define kgdb_ts(data0,data1)
 +#define in_kgdb
