@@ -320,21 +320,60 @@ static obd_id mdd_lov_create_id(const struct lu_fid *fid)
         return ((fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid));
 }
 
+static int mdd_lov_objid_alloc(const struct lu_context *ctxt,
+                               struct mdd_device *mdd)
+{
+        struct mdd_thread_info *info = mdd_ctx_info(ctxt);
+        struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
+        
+        OBD_ALLOC(info->mti_oti.oti_objid,
+                  mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id));
+        return (info->mti_oti.oti_objid == NULL ? -ENOMEM : 0);
+}
+
+static void mdd_lov_objid_update(const struct lu_context *ctxt,
+                          struct mdd_device *mdd)
+{
+        struct mdd_thread_info *info = mdd_ctx_info(ctxt);
+        mds_lov_update_objids(mdd->mdd_obd_dev, info->mti_oti.oti_objid);
+}
+
+static void mdd_lov_objid_free(const struct lu_context *ctxt,
+                               struct mdd_device *mdd)
+{
+        struct mdd_thread_info *info = mdd_ctx_info(ctxt);
+        struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
+
+        OBD_FREE(info->mti_oti.oti_objid,
+                 mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id));
+        info->mti_oti.oti_objid = NULL;
+}
+
+void inline mdd_lov_create_finish(const struct lu_context *ctxt,
+                           struct mdd_device *mdd, int rc)
+{
+        struct mdd_thread_info *info = mdd_ctx_info(ctxt);
+
+        if (info->mti_oti.oti_objid != NULL) {
+                if (rc == 0)
+                        mdd_lov_objid_update(ctxt, mdd);
+                mdd_lov_objid_free(ctxt, mdd);
+        }
+}
 
 int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size,
                    const struct md_create_spec *spec, struct lu_attr *la)
 {
-        struct obd_device       *obd = mdd2obd_dev(mdd);
-        struct obd_export       *lov_exp = obd->u.mds.mds_osc_exp;
-        struct obdo             *oa;
-        struct lov_stripe_md    *lsm = NULL;
-        const void              *eadata = spec->u.sp_ea.eadata;
-        __u32                    create_flags = spec->sp_cr_flags;
-        int                      rc = 0;
-        struct obd_trans_info   *oti = &mdd_ctx_info(ctxt)->mti_oti;
-        obd_id                  *ids = NULL; /* object IDs created */
+        struct obd_device     *obd = mdd2obd_dev(mdd);
+        struct obd_export     *lov_exp = obd->u.mds.mds_osc_exp;
+        struct obdo           *oa;
+        struct lov_stripe_md  *lsm = NULL;
+        const void            *eadata = spec->u.sp_ea.eadata;
+        __u32                  create_flags = spec->sp_cr_flags;
+        int                    rc = 0;
+        struct obd_trans_info *oti = &mdd_ctx_info(ctxt)->mti_oti;
         ENTRY;
 
         if (create_flags & MDS_OPEN_DELAY_CREATE ||
@@ -356,13 +395,11 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGROUP;
         oa->o_size = 0;
-
-        OBD_ALLOC(ids, obd->u.mds.mds_lov_desc.ld_tgt_count * sizeof(*ids));
-        if (ids == NULL)
-                RETURN(-ENOMEM);
         
         oti_init(oti, NULL);
-        oti->oti_objid = ids;
+        rc = mdd_lov_objid_alloc(ctxt, mdd);
+        if (rc != 0)
+                GOTO(out_oa, rc);
 
         if (!(create_flags & MDS_OPEN_HAS_OBJS)) {
                 if (create_flags & MDS_OPEN_HAS_EA) {
@@ -419,7 +456,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
          * attr is in charged by OST.
          */
         if (la->la_size && la->la_valid & LA_SIZE) {
-                struct obd_info          *oinfo = &mdd_ctx_info(ctxt)->mti_oi;
+                struct obd_info *oinfo = &mdd_ctx_info(ctxt)->mti_oi;
 
                 memset(oinfo, 0, sizeof(*oinfo));
 
@@ -438,7 +475,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 oinfo->oi_oa = oa;
                 oinfo->oi_md = lsm;
 
-                rc = obd_setattr(lov_exp, oinfo, NULL);
+                rc = obd_setattr(lov_exp, oinfo, oti);
                 if (rc) {
                         CERROR("error setting attrs for "DFID": rc %d\n",
                                PFID(mdo2fid(child)), rc);
@@ -454,9 +491,6 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         la->la_valid |= LA_BLKSIZE;
         la->la_blksize = oa->o_blksize;
         
-        mds_lov_update_objids(obd, ids);
-        
-
         rc = obd_packmd(lov_exp, lmm, lsm);
         if (rc < 0) {
                 CERROR("cannot pack lsm, err = %d\n", rc);
@@ -465,12 +499,12 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         *lmm_size = rc;
         rc = 0;
 out_oa:
-        if (ids)
-                OBD_FREE(ids, sizeof(*ids) * 
-                              obd->u.mds.mds_lov_desc.ld_tgt_count);
+        oti_free_cookies(oti);
         obdo_free(oa);
         if (lsm)
                 obd_free_memmd(lov_exp, &lsm);
+        if (rc != 0) 
+                mdd_lov_objid_free(ctxt, mdd);
         RETURN(rc);
 }
 
