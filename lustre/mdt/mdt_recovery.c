@@ -36,77 +36,84 @@
 static int mdt_update_server_data(const struct lu_context *ctx,
                                   struct mdt_device *mdt);
 
+/* TODO: maybe this pair should be defined in dt_object.c */
+static /*inline*/ ssize_t mdt_read_record(const struct lu_context *ctx,
+                                      struct dt_object *dt,
+                                      void *buf,
+                                      size_t count,
+                                      loff_t *pos)
+{
+        int rc;
+
+        /* FIXME: this should be an ASSERT */
+        if (dt == NULL)
+                return -EFAULT;
+
+        rc = dt->do_body_ops->dbo_read(ctx, dt, buf, count, pos);
+
+        if (rc == count)
+                rc = 0;
+        else if (rc >= 0)
+                rc = -EFAULT;
+        return rc;
+}
+
+static /*inline*/ ssize_t mdt_write_record(const struct lu_context *ctx,
+                                       struct dt_object *dt,
+                                       const void *buf,
+                                       size_t count,
+                                       loff_t *pos,
+                                       struct thandle *th)
+{
+        int rc;
+
+        /* FIXME: this should be an ASSERT */
+        if (dt == NULL)
+                return -EFAULT;
+
+        rc = dt->do_body_ops->dbo_write(ctx, dt, buf, count, pos, th);
+        if (rc == count)
+                rc = 0;
+        else if (rc >= 0)
+                rc = -EFAULT;
+        return rc;
+}
+
 /* last_rcvd handling */
-static inline int mdt_read_last_rcvd_header (const struct lu_context *ctx,
-                                             struct mdt_device *mdt,
-                                             struct mdt_server_data *msd)
-{
-        loff_t off = 0;
-        int rc;
-
-        rc = mdt->mdt_last_rcvd->do_body_ops->dbo_read(ctx,
-                                                       mdt->mdt_last_rcvd,
-                                                       msd, sizeof(*msd),
-                                                       &off);
-        if (rc == sizeof(*msd))
-                rc = 0;
-        else if (rc >= 0)
-                rc = -EFAULT;
-        return rc;
-}
-
-static inline int mdt_write_last_rcvd_header(const struct lu_context *ctx,
-                                             struct mdt_device *mdt,
-                                             struct mdt_server_data *msd,
-                                             struct thandle *th)
-{
-        loff_t off = 0;
-        int rc;
-
-        rc = mdt->mdt_last_rcvd->do_body_ops->dbo_write(ctx,
-                                                        mdt->mdt_last_rcvd,
-                                                        msd, sizeof(*msd),
-                                                        &off, th);
-        if (rc == sizeof(*msd))
-                rc = 0;
-        else if (rc >= 0)
-                rc = -EFAULT;
-        return rc;
-}
-
-static inline int mdt_read_last_rcvd(const struct lu_context *ctx,
+static int mdt_read_last_rcvd_header(const struct lu_context *ctx,
                                      struct mdt_device *mdt,
-                                     struct mdt_client_data *mcd, loff_t *off)
+                                     struct mdt_server_data *msd)
 {
-        int rc;
-
-        rc = mdt->mdt_last_rcvd->do_body_ops->dbo_read(ctx,
-                                                       mdt->mdt_last_rcvd,
-                                                       mcd, sizeof(*mcd),
-                                                       off);
-        if (rc == sizeof(*mcd))
-                rc = 0;
-        else if (rc >= 0)
-                rc = -EFAULT;
-        return rc;
+        loff_t off = 0;
+        return mdt_read_record(ctx, mdt->mdt_last_rcvd, 
+                               msd, sizeof(*msd), &off);
 }
 
-static inline int mdt_write_last_rcvd(const struct lu_context *ctx,
+static int mdt_write_last_rcvd_header(const struct lu_context *ctx,
                                       struct mdt_device *mdt,
-                                      struct mdt_client_data *mcd,
-                                      loff_t *off, struct thandle *th)
+                                      struct mdt_server_data *msd,
+                                      struct thandle *th)
 {
-        int rc;
+        loff_t off = 0;
+        return mdt_write_record(ctx, mdt->mdt_last_rcvd, 
+                                msd, sizeof(*msd), &off, th);
+}
 
-        rc = mdt->mdt_last_rcvd->do_body_ops->dbo_write(ctx,
-                                                        mdt->mdt_last_rcvd,
-                                                        mcd, sizeof(*mcd),
-                                                        off, th);
-        if (rc == sizeof(*mcd))
-                rc = 0;
-        else if (rc >= 0)
-                rc = -EFAULT;
-        return rc;
+static int mdt_read_last_rcvd(const struct lu_context *ctx,
+                              struct mdt_device *mdt,
+                              struct mdt_client_data *mcd, loff_t *off)
+{
+        return mdt_read_record(ctx, mdt->mdt_last_rcvd, 
+                               mcd, sizeof(*mcd), off);
+}
+
+static int mdt_write_last_rcvd(const struct lu_context *ctx,
+                               struct mdt_device *mdt,
+                               struct mdt_client_data *mcd,
+                               loff_t *off, struct thandle *th)
+{
+        return mdt_write_record(ctx, mdt->mdt_last_rcvd, 
+                                mcd, sizeof(*mcd), off, th);
 }
 
 static int mdt_init_clients_data(const struct lu_context *ctx,
