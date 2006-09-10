@@ -190,7 +190,8 @@ static int fld_req_handle(struct ptlrpc_request *req,
                 rc = fld_server_handle(site->ls_server_fld,
                                        req->rq_svc_thread->t_ctx,
                                        *opc, out, info);
-        }
+        } else
+                rc = -EPROTO;
 
         RETURN(rc);
 }

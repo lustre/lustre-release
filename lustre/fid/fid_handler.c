@@ -350,13 +350,15 @@ static int seq_req_handle(struct ptlrpc_request *req,
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                         in = req_capsule_server_get(&info->sti_pill,
                                                     &RMF_SEQ_RANGE);
-
+                        /* umka, FIXME: "in" has not been filled with anything
                         LASSERT(!range_is_zero(in) && range_is_sane(in));
+                        */
                 }
         
                 ctx = req->rq_svc_thread->t_ctx;
                 rc = seq_server_handle(site, ctx, *opc, in, out);
-        }
+        } else
+                rc = -EPROTO;
 
         RETURN(rc);
 }

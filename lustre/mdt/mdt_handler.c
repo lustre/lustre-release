@@ -3133,7 +3133,8 @@ int mdt_postrecov(struct obd_device *obd)
         if (rc)
                 RETURN(rc);
         lu_context_enter(&ctxt);
-        rc = ld->ld_ops->ldo_recovery_complete(&ctxt,
+        if (ld && ld->ld_ops && ld->ld_ops->ldo_recovery_complete)
+                rc = ld->ld_ops->ldo_recovery_complete(&ctxt,
                                                md2lu_dev(mdt->mdt_child));
         lu_context_exit(&ctxt);
         lu_context_fini(&ctxt);
