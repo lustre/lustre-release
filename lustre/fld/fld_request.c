@@ -496,7 +496,7 @@ int fld_client_lookup(struct lu_client_fld *fld,
         if (target->ft_srv != NULL) {
                 LASSERT(ctx != NULL);
                 rc = fld_server_lookup(target->ft_srv,
-                                       ctx, seq, mds);
+                                       ctx, seq, &md_fld.mf_mds);
         } else {
 #endif
                 rc = fld_client_rpc(target->ft_exp,
