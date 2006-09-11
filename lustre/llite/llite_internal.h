@@ -486,6 +486,7 @@ void ll_read_inode2(struct inode *inode, void *opaque);
 void ll_delete_inode(struct inode *inode);
 int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
+int ll_flush_ctx(struct inode *inode);
 void ll_umount_begin(struct super_block *sb);
 int ll_remount_fs(struct super_block *sb, int *flags, char *data);
 int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,

@@ -67,6 +67,7 @@ static int lfs_quotaoff(int argc, char **argv);
 static int lfs_setquota(int argc, char **argv);
 static int lfs_quota(int argc, char **argv);
 #endif
+static int lfs_flushctx(int argc, char **argv);
 static int lfs_join(int argc, char **argv);
 
 /* all avaialable commands */
@@ -131,6 +132,8 @@ command_t cmdlist[] = {
         {"quota", lfs_quota, 0, "Display disk usage and limits.\n"
          "usage: quota [ -o obd_uuid ] [ -u | -g ] [name] <filesystem>"},
 #endif
+        {"flushctx", lfs_flushctx, 0, "Flush security context for current user.\n"
+         "usage: flushctx [-k] [mountpoint...]"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -1477,6 +1480,92 @@ static int lfs_quota(int argc, char **argv)
         return 0;
 }
 #endif /* HAVE_QUOTA_SUPPORT */
+
+static int flushctx_ioctl(char *mp)
+{
+        int fd, rc;
+
+        fd = open(mp, O_RDONLY);
+        if (fd == -1) {
+                fprintf(stderr, "flushctx: error open %s: %s\n",
+                        mp, strerror(errno));
+                return -1;
+        }
+
+        rc = ioctl(fd, LL_IOC_FLUSHCTX);
+        if (rc == -1)
+                fprintf(stderr, "flushctx: error ioctl %s: %s\n",
+                        mp, strerror(errno));
+
+        close(fd);
+        return rc;
+}
+
+static int lfs_flushctx(int argc, char **argv)
+{
+        int     kdestroy = 0, c;
+        FILE   *proc;
+        char    procline[PATH_MAX], *line;
+        int     rc = 0;
+
+        optind = 0;
+        while ((c = getopt(argc, argv, "k")) != -1) {
+                switch (c) {
+                case 'k':
+                        kdestroy = 1;
+                        break;
+                default:
+                        fprintf(stderr, "error: %s: option '-%c' "
+                                        "unrecognized\n", argv[0], c);
+                        return CMD_HELP;
+                }
+        }
+
+        if (kdestroy)
+                system("kdestroy > /dev/null");
+
+        if (optind >= argc) {
+                /* flush for all mounted lustre fs. */
+                proc = fopen("/proc/mounts", "r");
+                if (!proc) {
+                        fprintf(stderr, "error: %s: can't open /proc/mounts\n",
+                                argv[0]);
+                        return -1;
+                }
+
+                while ((line = fgets(procline, PATH_MAX, proc)) != NULL) {
+                        char dev[PATH_MAX];
+                        char mp[PATH_MAX];
+                        char fs[PATH_MAX];
+
+                        if (sscanf(line, "%s %s %s", dev, mp, fs) != 3) {
+                                fprintf(stderr, "%s: unexpected format in "
+                                                "/proc/mounts\n",
+                                        argv[0]);
+                                return -1;
+                        }
+
+                        if (strcmp(fs, "lustre") != 0)
+                                continue;
+                        /* we use '@' to determine it's a client. are there
+                         * any other better way?
+                         */
+                        if (strchr(dev, '@') == NULL)
+                                continue;
+
+                        if (flushctx_ioctl(mp))
+                                rc = -1;
+                }
+        } else {
+                /* flush fs as specified */
+                while (optind < argc) {
+                        if (flushctx_ioctl(argv[optind++]))
+                                rc = -1;
+                }
+        }
+
+        return rc;
+}
 
 int main(int argc, char **argv)
 {

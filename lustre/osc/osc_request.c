@@ -40,7 +40,7 @@
 # include <liblustre.h>
 #endif
 
-# include <lustre_dlm.h>
+#include <lustre_dlm.h>
 #include <libcfs/kp30.h>
 #include <lustre_net.h>
 #include <lustre/lustre_user.h>
@@ -844,7 +844,7 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
 
         OBD_FAIL_RETURN(OBD_FAIL_OSC_BRW_PREP_REQ, -ENOMEM);
         req = ptlrpc_prep_req_pool(imp, LUSTRE_OST_VERSION, opc, 4, size, NULL,
-                                   pool);
+                                   pool, NULL);
         if (req == NULL)
                 RETURN (-ENOMEM);
 
@@ -1032,6 +1032,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                                          requested_nob, page_count, pga);
                 }
 
+                sptlrpc_cli_unwrap_bulk_write(req, req->rq_bulk);
+
                 RETURN(check_write_rcs(req, requested_nob, niocount,
                                        page_count, pga));
         }
@@ -1084,6 +1086,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                         CERROR("Checksum %u requested from %s but not sent\n",
                                cksum_missed, libcfs_nid2str(peer->nid));
         }
+
+        sptlrpc_cli_unwrap_bulk_read(req, rc, page_count, pga);
 
         RETURN(0);
 }
@@ -2635,7 +2639,8 @@ static int sanosc_brw_write(struct obd_export *exp, struct obd_info *oinfo,
         size[REQ_REC_OFF + 2] = page_count * sizeof(*nioptr);
 
         req = ptlrpc_prep_req_pool(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                                OST_SAN_WRITE, 4, size, NULL, imp->imp_rq_pool);
+                                   OST_SAN_WRITE, 4, size, NULL,
+                                   imp->imp_rq_pool, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -3459,6 +3464,11 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
                 exp->exp_obd->u.cli.cl_checksum = (*(int *)val) ? 1 : 0;
+                RETURN(0);
+        }
+
+        if (KEY_IS(KEY_FLUSH_CTX)) {
+                sptlrpc_import_flush_my_ctx(imp);
                 RETURN(0);
         }
 

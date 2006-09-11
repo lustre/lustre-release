@@ -1090,6 +1090,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         RETURN (-EFAULT);
                 RETURN(0);
         }
+        case LL_IOC_FLUSHCTX:
+                RETURN(ll_flush_ctx(inode));
+
         default:
                 RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp,0,NULL,(void *)arg));
         }

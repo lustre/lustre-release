@@ -583,6 +583,8 @@ struct task_struct {
         int state;
         struct signal pending;
         char comm[32];
+        int uid;
+        int gid;
         int pid;
         int fsuid;
         int fsgid;
@@ -705,6 +707,7 @@ static inline void del_timer(struct timer_list *l)
 
 typedef struct { volatile int counter; } atomic_t;
 
+#define ATOMIC_INIT(i) { (i) }
 #define atomic_read(a) ((a)->counter)
 #define atomic_set(a,b) do {(a)->counter = b; } while (0)
 #define atomic_dec_and_test(a) ((--((a)->counter)) == 0)
@@ -720,6 +723,40 @@ typedef struct { volatile int counter; } atomic_t;
 #ifndef unlikely
 #define unlikely(exp) (exp)
 #endif
+
+#define might_sleep()
+#define might_sleep_if(c)
+#define smp_mb()
+
+static inline
+int test_and_set_bit(int nr, unsigned long *addr)
+{
+        int oldbit;
+
+        while (nr >= sizeof(long)) {
+                nr -= sizeof(long);
+                addr++;
+        }
+
+        oldbit = (*addr) & (1 << nr);
+        *addr |= (1 << nr);
+        return oldbit;
+}
+
+static inline
+int test_and_clear_bit(int nr, unsigned long *addr)
+{
+        int oldbit;
+
+        while (nr >= sizeof(long)) {
+                nr -= sizeof(long);
+                addr++;
+        }
+
+        oldbit = (*addr) & (1 << nr);
+        *addr &= ~(1 << nr);
+        return oldbit;
+}
 
 /* FIXME sys/capability will finally included linux/fs.h thus
  * cause numerous trouble on x86-64. as temporary solution for

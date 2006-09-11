@@ -757,6 +757,10 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
  *
  * Returns 1 if it finds an already-existing lock that is compatible; in this
  * case, lockh is filled in with a addref()ed lock
+ *
+ * we also check security context, if that failed we simply return 0 (to keep
+ * caller code unchanged), the context failure will be discovered by caller
+ * sometime later.
  */
 int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                     struct ldlm_res_id *res_id, ldlm_type_t type,
@@ -836,6 +840,18 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                                 res_id->name[2] : policy->l_extent.start,
                            (type == LDLM_PLAIN || type == LDLM_IBITS) ?
                                 res_id->name[3] : policy->l_extent.end);
+
+                /* check user's security context */
+                if (lock->l_conn_export &&
+                    sptlrpc_import_check_ctx(
+                                class_exp2cliimp(lock->l_conn_export))) {
+                        if (!(flags & LDLM_FL_TEST_LOCK))
+                                ldlm_lock_decref_internal(lock, mode);
+                        rc = 0;
+                }
+
+                if (flags & LDLM_FL_TEST_LOCK)
+                        LDLM_LOCK_PUT(lock);
         } else if (!(flags & LDLM_FL_TEST_LOCK)) {/*less verbose for test-only*/
                 LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
                                   LPU64"/"LPU64" ("LPU64" "LPU64")", ns,
@@ -847,8 +863,6 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
         }
         if (old_lock)
                 LDLM_LOCK_PUT(old_lock);
-        if (flags & LDLM_FL_TEST_LOCK && rc)
-                LDLM_LOCK_PUT(lock);
 
         return rc;
 }

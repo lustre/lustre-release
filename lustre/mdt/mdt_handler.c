@@ -1420,8 +1420,13 @@ static int mdt_recovery(struct ptlrpc_request *req)
 
         ENTRY;
 
-        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CONNECT)
+        switch (lustre_msg_get_opc(req->rq_reqmsg)) {
+        case MDS_CONNECT:
+        case SEC_CTX_INIT:
+        case SEC_CTX_INIT_CONT:
+        case SEC_CTX_FINI:
                 RETURN(+1);
+        }
 
         if (req->rq_export == NULL) {
                 CERROR("operation %d on unconnected MDS from %s\n",
@@ -3411,6 +3416,9 @@ static struct mdt_handler mdt_dlm_ops[] = {
 static struct mdt_handler mdt_llog_ops[] = {
 };
 
+static struct mdt_handler mdt_sec_ops[] = {
+};
+
 static struct mdt_opc_slice mdt_regular_handlers[] = {
         {
                 .mos_opc_start = MDS_GETATTR,
@@ -3431,6 +3439,11 @@ static struct mdt_opc_slice mdt_regular_handlers[] = {
                 .mos_opc_start = LLOG_ORIGIN_HANDLE_CREATE,
                 .mos_opc_end   = LLOG_LAST_OPC,
                 .mos_hs        = mdt_llog_ops
+        },
+        {
+                .mos_opc_start = SEC_CTX_INIT,
+                .mos_opc_end   = SEC_LAST_OPC,
+                .mos_hs        = mdt_sec_ops
         },
         {
                 .mos_hs        = NULL

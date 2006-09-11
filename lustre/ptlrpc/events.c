@@ -30,6 +30,7 @@
 #endif
 #include <obd_class.h>
 #include <lustre_net.h>
+#include <lustre_sec.h>
 #include "ptlrpc_internal.h"
 
 lnet_handle_eq_t   ptlrpc_eq_h;
@@ -49,6 +50,8 @@ void request_out_callback(lnet_event_t *ev)
 
         DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
                   "type %d, status %d", ev->type, ev->status);
+
+        sptlrpc_request_out_callback(req);
 
         if (ev->type == LNET_EVENT_UNLINK || ev->status != 0) {
 
@@ -81,9 +84,9 @@ void reply_in_callback(lnet_event_t *ev)
         LASSERT (ev->type == LNET_EVENT_PUT ||
                  ev->type == LNET_EVENT_UNLINK);
         LASSERT (ev->unlinked);
-        LASSERT (ev->md.start == req->rq_repmsg);
+        LASSERT (ev->md.start == req->rq_repbuf);
         LASSERT (ev->offset == 0);
-        LASSERT (ev->mlength <= req->rq_replen);
+        LASSERT (ev->mlength <= req->rq_repbuf_len);
 
         DEBUG_REQ((ev->status == 0) ? D_NET : D_ERROR, req,
                   "type %d, status %d", ev->type, ev->status);
@@ -135,6 +138,8 @@ void client_bulk_callback (lnet_event_t *ev)
                 desc->bd_success = 1;
                 desc->bd_nob_transferred = ev->mlength;
         }
+
+        ptlrpc_bulk_free_enc_pages(desc);
 
         /* NB don't unlock till after wakeup; desc can disappear under us
          * otherwise */
@@ -193,9 +198,9 @@ void request_in_callback(lnet_event_t *ev)
          * flags are reset and scalars are zero.  We only set the message
          * size to non-zero if this was a successful receive. */
         req->rq_xid = ev->match_bits;
-        req->rq_reqmsg = ev->md.start + ev->offset;
+        req->rq_reqbuf = ev->md.start + ev->offset;
         if (ev->type == LNET_EVENT_PUT && ev->status == 0)
-                req->rq_reqlen = ev->mlength;
+                req->rq_reqdata_len = ev->mlength;
         do_gettimeofday(&req->rq_arrival_time);
         req->rq_peer = ev->initiator;
         req->rq_self = ev->target.nid;

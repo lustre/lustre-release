@@ -279,7 +279,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         ENTRY;
 
         LASSERT (nbufs > 0);
-        LASSERT (bufsize >= max_req_size);
+        LASSERT (bufsize >= max_req_size + SPTLRPC_MAX_PAYLOAD);
         LASSERT (ctx_tags != 0);
 
         OBD_ALLOC(service, sizeof(*service));
@@ -294,7 +294,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         cfs_waitq_init(&service->srv_waitq);
 
         service->srv_nbuf_per_group = test_req_buffer_pressure ? 1 : nbufs;
-        service->srv_max_req_size = max_req_size;
+        service->srv_max_req_size = max_req_size + SPTLRPC_MAX_PAYLOAD;
         service->srv_buf_size = bufsize;
         service->srv_rep_portal = rep_portal;
         service->srv_req_portal = req_portal;
@@ -333,7 +333,8 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         /* Now allocate pool of reply buffers */
         /* Increase max reply size to next power of two */
         service->srv_max_reply_size = 1;
-        while (service->srv_max_reply_size < max_reply_size)
+        while (service->srv_max_reply_size <
+               max_reply_size + SPTLRPC_MAX_PAYLOAD)
                 service->srv_max_reply_size <<= 1;
 
         if (proc_entry != NULL)
@@ -358,6 +359,8 @@ static void __ptlrpc_server_free_request(struct ptlrpc_request *req)
                 ptlrpc_rs_decref(req->rq_reply_state);
                 req->rq_reply_state = NULL;
         }
+
+        sptlrpc_svc_ctx_decref(req);
 
         if (req != &rqbd->rqbd_req) {
                 /* NB request buffers use an embedded
@@ -560,6 +563,19 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                                     svc->srv_n_active_reqs);
         }
 
+        rc = sptlrpc_svc_unwrap_request(request);
+        switch (rc) {
+        case SECSVC_OK:
+                break;
+        case SECSVC_COMPLETE:
+                target_send_reply(request, 0, OBD_FAIL_MDS_ALL_REPLY_NET);
+                goto put_conn;
+        case SECSVC_DROP:
+                goto out;
+        default:
+                LBUG();
+        }
+
 #if SWAB_PARANOIA
         /* Clear request swab mask; this is a new request */
         request->rq_req_swab_mask = 0;
@@ -667,7 +683,9 @@ put_conn:
         if (timediff / 1000000 > (long)obd_timeout)
                 CERROR("request "LPU64" opc %u from %s processed in %lds "
                        "trans "LPU64" rc %d/%d\n",
-                       request->rq_xid, lustre_msg_get_opc(request->rq_reqmsg),
+                       request->rq_xid,
+                       request->rq_reqmsg ?
+                                lustre_msg_get_opc(request->rq_reqmsg) : 0,
                        libcfs_id2str(request->rq_peer),
                        cfs_timeval_sub(&work_end, &request->rq_arrival_time,
                                        NULL) / 1000000,
@@ -680,7 +698,9 @@ put_conn:
         else
                 CDEBUG(D_HA, "request "LPU64" opc %u from %s processed in "
                        "%ldus (%ldus total) trans "LPU64" rc %d/%d\n",
-                       request->rq_xid, lustre_msg_get_opc(request->rq_reqmsg),
+                       request->rq_xid,
+                       request->rq_reqmsg ?
+                                lustre_msg_get_opc(request->rq_reqmsg) : 0,
                        libcfs_id2str(request->rq_peer), timediff,
                        cfs_timeval_sub(&work_end, &request->rq_arrival_time,
                                        NULL),
@@ -689,7 +709,7 @@ put_conn:
                                 lustre_msg_get_status(request->rq_repmsg) :
                                 -999);
 
-        if (svc->srv_stats != NULL) {
+        if (svc->srv_stats != NULL && request->rq_reqmsg != NULL) {
                 int opc = opcode_offset(lustre_msg_get_opc(request->rq_reqmsg));
                 if (opc > 0) {
                         LASSERT(opc < LUSTRE_MAX_OPCODES);

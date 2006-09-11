@@ -45,7 +45,7 @@ void ptlrpc_fill_bulk_md (lnet_md_t *md, struct ptlrpc_bulk_desc *desc)
         LASSERT (!(md->options & (LNET_MD_IOVEC | LNET_MD_KIOV | LNET_MD_PHYS)));
 
         md->options |= LNET_MD_KIOV;
-        md->start = &desc->bd_iov[0];
+        md->start = desc->bd_enc_iov ? desc->bd_enc_iov : &desc->bd_iov[0];
         md->length = desc->bd_iov_count;
 }
 
@@ -71,6 +71,61 @@ void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc)
                        kiov->kiov_len);
                 cfs_kunmap(kiov->kiov_page);
         }
+}
+
+int ptlrpc_bulk_alloc_enc_pages(struct ptlrpc_bulk_desc *desc)
+{
+        int i, alloc_size;
+
+        LASSERT(desc->bd_enc_iov == NULL);
+
+        if (desc->bd_iov_count == 0)
+                return 0;
+
+        alloc_size = desc->bd_iov_count * sizeof(desc->bd_enc_iov[0]);
+
+        OBD_ALLOC(desc->bd_enc_iov, alloc_size);
+        if (desc->bd_enc_iov == NULL)
+                return -ENOMEM;
+
+        memcpy(desc->bd_enc_iov, desc->bd_iov, alloc_size);
+
+        for (i = 0; i < desc->bd_iov_count; i++) {
+                desc->bd_enc_iov[i].kiov_page =
+                        cfs_alloc_page(CFS_ALLOC_IO | CFS_ALLOC_HIGH);
+                if (desc->bd_enc_iov[i].kiov_page == NULL) {
+                        CERROR("Failed to alloc %d encryption pages\n",
+                               desc->bd_iov_count);
+                        break;
+                }
+        }
+
+        if (i == desc->bd_iov_count)
+                return 0;
+
+        /* error, cleanup */
+        for (i = i - 1; i >= 0; i--)
+                __free_page(desc->bd_enc_iov[i].kiov_page);
+        OBD_FREE(desc->bd_enc_iov, alloc_size);
+        desc->bd_enc_iov = NULL;
+        return -ENOMEM;
+}
+
+void ptlrpc_bulk_free_enc_pages(struct ptlrpc_bulk_desc *desc)
+{
+        int     i;
+
+        if (desc->bd_enc_iov == NULL)
+                return;
+
+        for (i = 0; i < desc->bd_iov_count; i++) {
+                LASSERT(desc->bd_enc_iov[i].kiov_page);
+                __free_page(desc->bd_enc_iov[i].kiov_page);
+        }
+
+        OBD_FREE(desc->bd_enc_iov,
+                 desc->bd_iov_count * sizeof(desc->bd_enc_iov[0]));
+        desc->bd_enc_iov = NULL;
 }
 
 #else /* !__KERNEL__ */
@@ -126,5 +181,13 @@ void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc)
 
                 memset(iov->iov_base, 0xab, iov->iov_len);
         }
+}
+
+int ptlrpc_bulk_alloc_enc_pages(struct ptlrpc_bulk_desc *desc)
+{
+        return 0;
+}
+void ptlrpc_bulk_free_enc_pages(struct ptlrpc_bulk_desc *desc)
+{
 }
 #endif /* !__KERNEL__ */

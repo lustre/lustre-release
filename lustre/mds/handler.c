@@ -1347,6 +1347,9 @@ int mds_msg_check_version(struct lustre_msg *msg)
         case MDS_CONNECT:
         case MDS_DISCONNECT:
         case OBD_PING:
+        case SEC_CTX_INIT:
+        case SEC_CTX_INIT_CONT:
+        case SEC_CTX_FINI:
                 rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",

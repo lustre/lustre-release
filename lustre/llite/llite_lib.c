@@ -1835,6 +1835,21 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         RETURN(0);
 }
 
+int ll_flush_ctx(struct inode *inode)
+{
+        struct ll_sb_info  *sbi = ll_i2sbi(inode);
+
+        CDEBUG(D_SEC, "flush context for user %d\n", current->uid);
+
+        obd_set_info_async(sbi->ll_md_exp,
+                           sizeof(KEY_FLUSH_CTX) - 1, KEY_FLUSH_CTX,
+                           0, NULL, NULL);
+        obd_set_info_async(sbi->ll_dt_exp,
+                           sizeof(KEY_FLUSH_CTX) - 1, KEY_FLUSH_CTX,
+                           0, NULL, NULL);
+        return 0;
+}
+
 /* umount -f client means force down, don't save state */
 void ll_umount_begin(struct super_block *sb)
 {

@@ -58,6 +58,7 @@ struct obd_statfs;
 #define LL_IOC_JOIN                     _IOW ('f', 163, long)
 #define IOC_OBD_STATFS                  _IOWR('f', 164, struct obd_statfs *)
 #define IOC_LOV_GETINFO                 _IOWR('f', 165, struct lov_user_mds_data *)
+#define LL_IOC_FLUSHCTX                 _IOW ('f', 166, long)
 
 #define LL_STATFS_MDC           1
 #define LL_STATFS_LOV           2

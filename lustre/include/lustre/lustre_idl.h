@@ -1784,4 +1784,13 @@ static inline int fid_res_name_eq(const struct lu_fid *f,
 }
 
 #define JOIN_FILE_ALIGN 4096
+
+/* security opcodes */
+typedef enum {
+        SEC_CTX_INIT            = 801,
+        SEC_CTX_INIT_CONT       = 802,
+        SEC_CTX_FINI            = 803,
+        SEC_LAST_OPC
+} sec_cmd_t;
+
 #endif

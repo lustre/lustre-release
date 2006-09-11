@@ -85,10 +85,18 @@ __init int ptlrpc_init(void)
         rc = ldlm_init();
         if (rc)
                 GOTO(cleanup, rc);
+        cleanup_phase = 5;
+
+        rc = sptlrpc_init();
+        if (rc)
+                GOTO(cleanup, rc);
+
         RETURN(0);
 
 cleanup:
         switch(cleanup_phase) {
+        case 5:
+                ldlm_exit();
         case 4:
                 ptlrpc_stop_pinger();
         case 3:
@@ -107,6 +115,7 @@ cleanup:
 #ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
+        sptlrpc_exit();
         ldlm_exit();
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
@@ -187,7 +196,7 @@ EXPORT_SYMBOL(lustre_msg_swabbed);
 EXPORT_SYMBOL(lustre_msg_check_version);
 EXPORT_SYMBOL(lustre_pack_request);
 EXPORT_SYMBOL(lustre_pack_reply);
-EXPORT_SYMBOL(lustre_shrink_reply);
+EXPORT_SYMBOL(lustre_shrink_msg);
 EXPORT_SYMBOL(lustre_free_reply_state);
 EXPORT_SYMBOL(lustre_msg_size);
 EXPORT_SYMBOL(lustre_unpack_msg);
@@ -276,6 +285,10 @@ EXPORT_SYMBOL(ptlrpc_deactivate_import);
 EXPORT_SYMBOL(ptlrpc_invalidate_import);
 EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_recover_import);
+
+/* pers.c */
+EXPORT_SYMBOL(ptlrpc_bulk_alloc_enc_pages);
+EXPORT_SYMBOL(ptlrpc_bulk_free_enc_pages);
 
 /* pinger.c */
 EXPORT_SYMBOL(ptlrpc_pinger_add_import);

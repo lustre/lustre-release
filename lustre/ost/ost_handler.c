@@ -628,6 +628,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         int comms_error = 0, niocount, npages, nob = 0, rc, i, do_checksum;
         ENTRY;
 
+        req->rq_bulk_read = 1;
+
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK))
                 GOTO(out, rc = -EIO);
 
@@ -740,8 +742,12 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc == 0) {
                 if (desc->bd_export->exp_failed)
                         rc = -ENOTCONN;
-                else
+                else {
+                        sptlrpc_svc_wrap_bulk(req, desc);
+
                         rc = ptlrpc_start_bulk_transfer(desc);
+                }
+
                 if (rc == 0) {
                         lwi = LWI_TIMEOUT_INTERVAL(obd_timeout * HZ / 4, HZ,
                                                    ost_bulk_timeout, desc);
@@ -838,6 +844,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         int objcount, niocount, npages, comms_error = 0;
         int rc, swab, i, j, do_checksum;
         ENTRY;
+
+        req->rq_bulk_write = 1;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
                 GOTO(out, rc = -EIO);
@@ -1009,6 +1017,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                                       libcfs_id2str(req->rq_peer), cksum);
                 }
         }
+
+        sptlrpc_svc_unwrap_bulk(req, desc);
 
         /* Must commit after prep above in all cases */
         rc = obd_commitrw(OBD_BRW_WRITE, req->rq_export, &repbody->oa,
@@ -1297,6 +1307,9 @@ int ost_msg_check_version(struct lustre_msg *msg)
         case OST_CONNECT:
         case OST_DISCONNECT:
         case OBD_PING:
+        case SEC_CTX_INIT:
+        case SEC_CTX_INIT_CONT:
+        case SEC_CTX_FINI:
                 rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",
@@ -1363,6 +1376,15 @@ static int ost_handle(struct ptlrpc_request *req)
         ENTRY;
 
         LASSERT(current->journal_info == NULL);
+
+        /* primordial rpcs don't affect server recovery */
+        switch (lustre_msg_get_opc(req->rq_reqmsg)) {
+        case SEC_CTX_INIT:
+        case SEC_CTX_INIT_CONT:
+        case SEC_CTX_FINI:
+                GOTO(out, rc = 0);
+        }
+
         /* XXX identical to MDS */
         if (lustre_msg_get_opc(req->rq_reqmsg) != OST_CONNECT) {
                 int abort_recovery, recovering;
@@ -1393,10 +1415,6 @@ static int ost_handle(struct ptlrpc_request *req)
         }
 
         oti_init(oti, req);
-        rc = ost_msg_check_version(req->rq_reqmsg);
-        if (rc)
-                RETURN(rc);
-
         rc = ost_msg_check_version(req->rq_reqmsg);
         if (rc)
                 RETURN(rc);

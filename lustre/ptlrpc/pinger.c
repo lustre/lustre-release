@@ -76,6 +76,50 @@ void ptlrpc_ping_import_soon(struct obd_import *imp)
 }
 
 #ifdef __KERNEL__
+static
+int check_import_reconnect(struct obd_import *imp)
+{
+        spin_lock(&imp->imp_lock);
+
+        /* next_reconnect == 0 mean never need reconnect.
+         */
+        if (imp->imp_next_reconnect == 0 ||
+            cfs_time_before(cfs_time_current_sec(), imp->imp_next_reconnect)) {
+                spin_unlock(&imp->imp_lock);
+                return 0;
+        }
+
+        if (imp->imp_state != LUSTRE_IMP_FULL ||
+            imp->imp_force_reconnect == 1) {
+                spin_unlock(&imp->imp_lock);
+                return 0;
+        }
+
+        imp->imp_force_reconnect = 1;
+
+        /* prevent concurrent reconnect. if this reconnect failed, import
+         * will be set to non-FULL; if success, next_reconnect value will
+         * will be updated by security module.
+         */
+        imp->imp_next_reconnect = 0;
+
+        spin_unlock(&imp->imp_lock);
+
+        CWARN("issue a force reconnect on imp %p(%s) to %s\n",
+              imp, ptlrpc_import_state_name(imp->imp_state),
+              imp->imp_obd->u.cli.cl_target_uuid.uuid);
+
+        /* usually the root context should be still valid, because import
+         * reconnect have a nice time advance, thus we have little chance
+         * that a newly created & refreshing context be wrongly flushed by us.
+         * but even that we are still fine.
+         */
+        sptlrpc_import_flush_root_ctx(imp);
+
+        ptlrpc_connect_import(imp, NULL);
+        return 1;
+}
+
 static int ptlrpc_pinger_main(void *arg)
 {
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
@@ -101,6 +145,15 @@ static int ptlrpc_pinger_main(void *arg)
                                 list_entry(iter, struct obd_import,
                                            imp_pinger_chain);
                         int force, level;
+
+                        if (check_import_reconnect(imp)) {
+                                /* if a forced reconnect was issued, we don't
+                                 * need additional ping at this time.
+                                 */
+                                if (imp->imp_pingable)
+                                        ptlrpc_update_next_ping(imp);
+                                continue;
+                        }
 
                         spin_lock(&imp->imp_lock);
                         level = imp->imp_state;

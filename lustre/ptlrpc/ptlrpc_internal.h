@@ -126,6 +126,10 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
                           int pageoffset, int len);
 void ptl_rpc_wipe_bulk_pages(struct ptlrpc_bulk_desc *desc);
 
+/* pack_generic.c */
+struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc);
+void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs);
+
 /* pinger.c */
 int ptlrpc_start_pinger(void);
 int ptlrpc_stop_pinger(void);
@@ -137,5 +141,17 @@ int ping_evictor_wake(struct obd_export *exp);
 #else
 #define ping_evictor_wake(exp)     1
 #endif
+
+/* sec_null.c */
+int sptlrpc_null_init(void);
+int sptlrpc_null_exit(void);
+
+/* sec_plain.c */
+int sptlrpc_plain_init(void);
+int sptlrpc_plain_exit(void);
+
+/* sec.c */
+int sptlrpc_init(void);
+int sptlrpc_exit(void);
 
 #endif /* PTLRPC_INTERNAL_H */

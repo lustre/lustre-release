@@ -2080,62 +2080,22 @@ int lmv_set_info_async(struct obd_export *exp, obd_count keylen,
         }
         lmv = &obd->u.lmv;
 
-        /* maybe this could be default */
-        if ((keylen == strlen("sec") && strcmp(key, "sec") == 0) ||
-            (keylen == strlen("sec_flags") && strcmp(key, "sec_flags") == 0) ||
-            (keylen == strlen("nllu") && strcmp(key, "nllu") == 0)) {
-                struct obd_export *exp;
-                int err, i;
+        if (KEY_IS(KEY_FLUSH_CTX)) {
+                int i, err = 0;
 
-                spin_lock(&lmv->lmv_lock);
-                for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count;
-                     i++, tgt++) {
-                        exp = tgt->ltd_exp;
-                        /* during setup time the connections to mdc might
-                         * haven't been established.
-                         */
-                        if (exp == NULL) {
-                                struct obd_device *tgt_obd;
+                for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                        tgt = &lmv->tgts[i];
 
-                                tgt_obd = class_find_client_obd(&tgt->uuid,
-                                                                LUSTRE_MDC_NAME,
-                                                                &obd->obd_uuid);
-                                if (!tgt_obd) {
-                                        CERROR("can't set info %s, "
-                                               "device %s not attached?\n",
-                                                (char *) key, tgt->uuid.uuid);
-                                        rc = -EINVAL;
-                                        continue;
-                                }
-                                exp = tgt_obd->obd_self_export;
-                        }
-
-                        err = obd_set_info_async(exp, keylen, key, vallen, val, set);
-                        if (!rc)
-                                rc = err;
-                }
-                spin_unlock(&lmv->lmv_lock);
-
-                RETURN(rc);
-        }
-        if (((keylen == strlen("flush_cred") &&
-             strcmp(key, "flush_cred") == 0)) ||
-             ((keylen == strlen("crypto_type") &&
-             strcmp(key, "crypto_type") == 0))) {
-                int i;
-
-                for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count;
-                     i++, tgt++) {
                         if (!tgt->ltd_exp)
                                 continue;
-                        rc = obd_set_info_async(tgt->ltd_exp,
-                                                keylen, key, vallen,
-                                                val, set);
-                        if (rc)
-                                RETURN(rc);
+
+                        err = obd_set_info_async(tgt->ltd_exp,
+                                                 keylen, key, vallen, val, set);
+                        if (err && rc == 0)
+                                rc = err;
                 }
 
-                RETURN(0);
+                RETURN(rc);
         }
 
         RETURN(-EINVAL);

@@ -2468,6 +2468,8 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
         if (KEY_IS("unlinked")) {
                 if (vallen != 0 && KEY_IS("unlinked"))
                         GOTO(out, rc = -EINVAL);
+        } else if (KEY_IS(KEY_FLUSH_CTX)) {
+                /* fall through */
         } else {
                 GOTO(out, rc = -EINVAL);
         }

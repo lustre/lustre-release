@@ -386,6 +386,9 @@ struct client_obd {
         int                      cl_max_mds_cookiesize;
         kdev_t                   cl_sandev;
 
+        /* security configuration */
+        struct sec_flavor_config cl_sec_conf;
+
         //struct llog_canceld_ctxt *cl_llcd; /* it's included by obd_llog_ctxt */
         void                    *cl_llcd_offset;
 
@@ -918,11 +921,12 @@ enum obd_cleanup_stage {
 };
 
 /* get/set_info keys */
-#define KEY_MDS_CONN "mds_conn"
-#define KEY_NEXT_ID  "next_id"
-#define KEY_LOVDESC  "lovdesc"
-#define KEY_INIT_RECOV "initial_recov"
-#define KEY_INIT_RECOV_BACKUP "init_recov_bk"
+#define KEY_MDS_CONN            "mds_conn"
+#define KEY_NEXT_ID             "next_id"
+#define KEY_LOVDESC             "lovdesc"
+#define KEY_INIT_RECOV          "initial_recov"
+#define KEY_INIT_RECOV_BACKUP   "init_recov_bk"
+#define KEY_FLUSH_CTX           "flush_ctx"
 
 struct lu_context;
 

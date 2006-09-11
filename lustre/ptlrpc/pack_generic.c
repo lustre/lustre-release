@@ -98,7 +98,7 @@ static inline int lustre_msg_size_v1(int count, int *lengths)
         return size;
 }
 
-static inline int lustre_msg_size_v2(int count, int *lengths)
+int lustre_msg_size_v2(int count, int *lengths)
 {
         int size;
         int i;
@@ -109,6 +109,7 @@ static inline int lustre_msg_size_v2(int count, int *lengths)
 
         return size;
 }
+EXPORT_SYMBOL(lustre_msg_size_v2);
 
 /* This returns the size of the buffer that is required to hold a lustre_msg
  * with the given sub-buffer lengths. */
@@ -135,8 +136,8 @@ int lustre_msg_size(__u32 magic, int count, int *lens)
         }
 }
 
-static void
-lustre_init_msg_v1(void *m, int count, int *lens, char **bufs)
+static
+void lustre_init_msg_v1(void *m, int count, int *lens, char **bufs)
 {
         struct lustre_msg_v1 *msg = (struct lustre_msg_v1 *)m;
         char *ptr;
@@ -160,8 +161,8 @@ lustre_init_msg_v1(void *m, int count, int *lens, char **bufs)
         }
 }
 
-static void
-lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, int *lens, char **bufs)
+void lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, int *lens,
+                        char **bufs)
 {
         char *ptr;
         int i;
@@ -182,32 +183,18 @@ lustre_init_msg_v2(struct lustre_msg_v2 *msg, int count, int *lens, char **bufs)
                 LOGL(tmp, lens[i], ptr);
         }
 }
+EXPORT_SYMBOL(lustre_init_msg_v2);
 
 static int lustre_pack_request_v1(struct ptlrpc_request *req,
                                   int count, int *lens, char **bufs)
 {
-        int reqlen;
+        int reqlen, rc;
 
         reqlen = lustre_msg_size_v1(count, lens);
 
-        /* See if we got it from prealloc pool */
-        if (req->rq_reqmsg) {
-                /* Cannot return error here, that would create
-                   infinite loop in ptlrpc_prep_req_pool */
-                /* In this case ptlrpc_prep_req_from_pool sets req->rq_reqlen
-                   to maximum size that would fit into this preallocated
-                   request */
-                LASSERTF(req->rq_reqlen >= reqlen, "req->rq_reqlen %d, "
-                                                   "reqlen %d\n",req->rq_reqlen,
-                                                    reqlen);
-                memset(req->rq_reqmsg, 0, reqlen);
-        } else {
-                OBD_ALLOC(req->rq_reqmsg, reqlen);
-                if (req->rq_reqmsg == NULL) {
-                        CERROR("alloc reqmsg (len %d) failed\n", reqlen);
-                        return -ENOMEM;
-                }
-        }
+        rc = sptlrpc_cli_alloc_reqbuf(req, reqlen);
+        if (rc)
+                return rc;
 
         req->rq_reqlen = reqlen;
 
@@ -218,28 +205,13 @@ static int lustre_pack_request_v1(struct ptlrpc_request *req,
 static int lustre_pack_request_v2(struct ptlrpc_request *req,
                                   int count, int *lens, char **bufs)
 {
-        int reqlen;
+        int reqlen, rc;
 
         reqlen = lustre_msg_size_v2(count, lens);
 
-        /* See if we got it from prealloc pool */
-        if (req->rq_reqmsg) {
-                /* Cannot return error here, that would create
-                   infinite loop in ptlrpc_prep_req_pool */
-                /* In this case ptlrpc_prep_req_from_pool sets req->rq_reqlen
-                   to maximum size that would fit into this preallocated
-                   request */
-                LASSERTF(req->rq_reqlen >= reqlen, "req->rq_reqlen %d, "
-                                                   "reqlen %d\n",req->rq_reqlen,
-                                                    reqlen);
-                memset(req->rq_reqmsg, 0, reqlen);
-        } else {
-                OBD_ALLOC(req->rq_reqmsg, reqlen);
-                if (req->rq_reqmsg == NULL) {
-                        CERROR("alloc reqmsg (len %d) failed\n", reqlen);
-                        return -ENOMEM;
-                }
-        }
+        rc = sptlrpc_cli_alloc_reqbuf(req, reqlen);
+        if (rc)
+                return rc;
 
         req->rq_reqlen = reqlen;
 
@@ -260,6 +232,13 @@ int lustre_pack_request(struct ptlrpc_request *req, __u32 magic, int count,
 
         LASSERT(count > 0);
         LASSERT(lens[MSG_PTLRPC_BODY_OFF] == sizeof(struct ptlrpc_body));
+
+        /* if we choose policy other than null, we have also choosed
+         * to use new message format.
+         */
+        if (magic == LUSTRE_MSG_MAGIC_V1 &&
+            req->rq_sec_flavor != SPTLRPC_FLVR_NULL)
+                magic = LUSTRE_MSG_MAGIC_V2;
 
         switch (magic) {
         case LUSTRE_MSG_MAGIC_V1:
@@ -295,8 +274,7 @@ do {                                            \
 # define PTLRPC_RS_DEBUG_LRU_DEL(rs) do {} while(0)
 #endif
 
-static struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc,
-                                                      int size)
+struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc)
 {
         struct ptlrpc_reply_state *rs = NULL;
 
@@ -321,40 +299,46 @@ static struct ptlrpc_reply_state *lustre_get_emerg_rs(struct ptlrpc_service *svc
         list_del(&rs->rs_list);
         spin_unlock(&svc->srv_lock);
         LASSERT(rs);
-        LASSERTF(svc->srv_max_reply_size > size, "Want %d, prealloc %d\n", size,
-                 svc->srv_max_reply_size);
-        memset(rs, 0, size);
+        memset(rs, 0, svc->srv_max_reply_size);
+        rs->rs_service = svc;
         rs->rs_prealloc = 1;
 out:
         return rs;
+}
+
+void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs)
+{
+        struct ptlrpc_service *svc = rs->rs_service;
+
+        LASSERT(svc);
+
+        spin_lock(&svc->srv_lock);
+        list_add(&rs->rs_list, &svc->srv_free_rs_list);
+        spin_unlock(&svc->srv_lock);
+        cfs_waitq_signal(&svc->srv_free_rs_waitq);
 }
 
 static int lustre_pack_reply_v1(struct ptlrpc_request *req, int count,
                                 int *lens, char **bufs)
 {
         struct ptlrpc_reply_state *rs;
-        int                        msg_len;
-        int                        size;
+        int                        msg_len, rc;
         ENTRY;
 
         LASSERT (req->rq_reply_state == NULL);
 
         msg_len = lustre_msg_size_v1(count, lens);
-        size = sizeof(struct ptlrpc_reply_state) + msg_len;
-        OBD_ALLOC(rs, size);
-        if (unlikely(rs == NULL)) {
-                rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_service, size);
-                if (!rs)
-                        RETURN (-ENOMEM);
-        }
+        rc = sptlrpc_svc_alloc_rs(req, msg_len);
+        if (rc)
+                RETURN(rc);
+
+        rs = req->rq_reply_state;
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
         rs->rs_cb_id.cbid_arg = rs;
         rs->rs_service = req->rq_rqbd->rqbd_service;
-        rs->rs_size = size;
         CFS_INIT_LIST_HEAD(&rs->rs_exp_list);
         CFS_INIT_LIST_HEAD(&rs->rs_obd_list);
-        rs->rs_msg = (struct lustre_msg *)(rs + 1);
 
         req->rq_replen = msg_len;
         req->rq_reply_state = rs;
@@ -366,32 +350,27 @@ static int lustre_pack_reply_v1(struct ptlrpc_request *req, int count,
         RETURN (0);
 }
 
-static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
-                                int *lens, char **bufs)
+int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
+                         int *lens, char **bufs)
 {
         struct ptlrpc_reply_state *rs;
-        int                        msg_len;
-        int                        size;
+        int                        msg_len, rc;
         ENTRY;
 
         LASSERT(req->rq_reply_state == NULL);
 
         msg_len = lustre_msg_size_v2(count, lens);
-        size = sizeof(struct ptlrpc_reply_state) + msg_len;
-        OBD_ALLOC(rs, size);
-        if (unlikely(rs == NULL)) {
-                rs = lustre_get_emerg_rs(req->rq_rqbd->rqbd_service, size);
-                if (!rs)
-                        RETURN (-ENOMEM);
-        }
+        rc = sptlrpc_svc_alloc_rs(req, msg_len);
+        if (rc)
+                RETURN(rc);
+
+        rs = req->rq_reply_state;
         atomic_set(&rs->rs_refcount, 1);        /* 1 ref for rq_reply_state */
         rs->rs_cb_id.cbid_fn = reply_out_callback;
         rs->rs_cb_id.cbid_arg = rs;
         rs->rs_service = req->rq_rqbd->rqbd_service;
-        rs->rs_size = size;
         CFS_INIT_LIST_HEAD(&rs->rs_exp_list);
         CFS_INIT_LIST_HEAD(&rs->rs_obd_list);
-        rs->rs_msg = (struct lustre_msg *)(rs + 1);
 
         req->rq_replen = msg_len;
         req->rq_reply_state = rs;
@@ -403,6 +382,7 @@ static int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
 
         RETURN(0);
 }
+EXPORT_SYMBOL(lustre_pack_reply_v2);
 
 int lustre_pack_reply(struct ptlrpc_request *req, int count, int *lens,
                       char **bufs)
@@ -505,21 +485,19 @@ void *lustre_msg_buf(struct lustre_msg *m, int n, int min_size)
         }
 }
 
-void lustre_shrink_reply_v1(struct ptlrpc_request *req, int segment,
-                            unsigned int newlen, int move_data)
+int lustre_shrink_msg_v1(struct lustre_msg_v1 *msg, int segment,
+                         unsigned int newlen, int move_data)
 {
-        struct lustre_msg_v1 *msg = (struct lustre_msg_v1 *)req->rq_repmsg;
-        char *tail = NULL, *newpos;
-        int tail_len = 0, n;
+        char   *tail = NULL, *newpos;
+        int     tail_len = 0, n;
 
-        LASSERT(req->rq_reply_state);
         LASSERT(msg);
         LASSERT(segment >= 0);
         LASSERT(msg->lm_bufcount > segment);
         LASSERT(msg->lm_buflens[segment] >= newlen);
 
         if (msg->lm_buflens[segment] == newlen)
-                return;
+                goto out;
 
         if (move_data && msg->lm_bufcount > segment + 1) {
                 tail = lustre_msg_buf_v1(msg, segment + 1, 0);
@@ -542,23 +520,22 @@ void lustre_shrink_reply_v1(struct ptlrpc_request *req, int segment,
                 msg->lm_buflens[msg->lm_bufcount - 1] = 0;
         }
 
-        req->rq_replen = lustre_msg_size_v1(msg->lm_bufcount, msg->lm_buflens);
+out:
+        return lustre_msg_size_v1(msg->lm_bufcount, msg->lm_buflens);
 }
 
-void lustre_shrink_reply_v2(struct ptlrpc_request *req, int segment,
-                            unsigned int newlen, int move_data)
+int lustre_shrink_msg_v2(struct lustre_msg_v2 *msg, int segment,
+                         unsigned int newlen, int move_data)
 {
-        struct lustre_msg_v2 *msg = req->rq_repmsg;
-        char *tail = NULL, *newpos;
-        int tail_len = 0, n;
+        char   *tail = NULL, *newpos;
+        int     tail_len = 0, n;
 
-        LASSERT(req->rq_reply_state);
         LASSERT(msg);
         LASSERT(msg->lm_bufcount > segment);
         LASSERT(msg->lm_buflens[segment] >= newlen);
 
         if (msg->lm_buflens[segment] == newlen)
-                return;
+                goto out;
 
         if (move_data && msg->lm_bufcount > segment + 1) {
                 tail = lustre_msg_buf_v2(msg, segment + 1, 0);
@@ -581,16 +558,19 @@ void lustre_shrink_reply_v2(struct ptlrpc_request *req, int segment,
                 msg->lm_buflens[msg->lm_bufcount - 1] = 0;
         }
 
-        req->rq_replen = lustre_msg_size_v2(msg->lm_bufcount, msg->lm_buflens);
+out:
+        return lustre_msg_size_v2(msg->lm_bufcount, msg->lm_buflens);
 }
 
 /*
- * shrink @segment to size @newlen. if @move_data is non-zero, we also move
- * data forward from @segment + 1.
+ * for @msg, shrink @segment to size @newlen. if @move_data is non-zero,
+ * we also move data forward from @segment + 1.
  * 
  * if @newlen == 0, we remove the segment completely, but we still keep the
  * totally bufcount the same to save possible data moving. this will leave a
  * unused segment with size 0 at the tail, but that's ok.
+ *
+ * return new msg size after shrinking.
  *
  * CAUTION:
  * + if any buffers higher than @segment has been filled in, must call shrink
@@ -598,19 +578,17 @@ void lustre_shrink_reply_v2(struct ptlrpc_request *req, int segment,
  * + caller should NOT keep pointers to msg buffers which higher than @segment
  *   after call shrink.
  */
-void lustre_shrink_reply(struct ptlrpc_request *req, int segment,
-                        unsigned int newlen, int move_data)
+int lustre_shrink_msg(struct lustre_msg *msg, int segment,
+                      unsigned int newlen, int move_data)
 {
-        switch (req->rq_repmsg->lm_magic) {
+        switch (msg->lm_magic) {
         case LUSTRE_MSG_MAGIC_V1:
-                lustre_shrink_reply_v1(req, segment - 1, newlen, move_data);
-                return;
+                return lustre_shrink_msg_v1((struct lustre_msg_v1 *) msg,
+                                            segment - 1, newlen, move_data);
         case LUSTRE_MSG_MAGIC_V2:
-                lustre_shrink_reply_v2(req, segment, newlen, move_data);
-                return;
+                return lustre_shrink_msg_v2(msg, segment, newlen, move_data);
         default:
-                LASSERTF(0, "incorrect message magic: %08x\n",
-                         req->rq_repmsg->lm_magic);
+                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
         }
 }
 
@@ -627,17 +605,7 @@ void lustre_free_reply_state(struct ptlrpc_reply_state *rs)
         LASSERT (list_empty(&rs->rs_exp_list));
         LASSERT (list_empty(&rs->rs_obd_list));
 
-        if (unlikely(rs->rs_prealloc)) {
-                struct ptlrpc_service *svc = rs->rs_service;
-
-                spin_lock(&svc->srv_lock);
-                list_add(&rs->rs_list,
-                         &svc->srv_free_rs_list);
-                spin_unlock(&svc->srv_lock);
-                cfs_waitq_signal(&svc->srv_free_rs_waitq);
-        } else {
-                OBD_FREE(rs, rs->rs_size);
-        }
+        sptlrpc_svc_free_rs(rs);
 }
 
 int lustre_unpack_msg_v1(void *msg, int len)

@@ -943,6 +943,11 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(rc);
         }
 
+        if (KEY_IS(KEY_FLUSH_CTX)) {
+                sptlrpc_import_flush_my_ctx(imp);
+                RETURN(0);
+        }
+
         RETURN(rc);
 }
 

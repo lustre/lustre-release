@@ -45,6 +45,7 @@
 #include <lustre_disk.h>
 #include <lustre_param.h>
 #include <lustre_ver.h>
+#include <lustre_sec.h>
 #include "mgs_internal.h"
 
 /********************** Class fns ********************/
@@ -617,6 +618,24 @@ static inline int record_setup(struct obd_device *obd, struct llog_handle *llh,
         return record_base(obd,llh,devname,0,LCFG_SETUP,s1,s2,s3,s4);
 }
 
+static inline int record_sec_flavor(struct obd_device *obd,
+                                    struct llog_handle *llh, char *devname,
+                                    struct sec_flavor_config *conf)
+{
+        struct lustre_cfg_bufs bufs;
+        struct lustre_cfg *lcfg;
+        int rc;
+
+        lustre_cfg_bufs_reset(&bufs, devname);
+        lustre_cfg_bufs_set(&bufs, 1, conf, sizeof(*conf));
+        lcfg = lustre_cfg_new(LCFG_SEC_FLAVOR, &bufs);
+
+        rc = record_lcfg(obd, llh, lcfg);
+
+        lustre_cfg_free(lcfg);
+        return rc;
+}
+
 static int record_lov_setup(struct obd_device *obd, struct llog_handle *llh,
                             char *devname, struct lov_desc *desc)
 {
@@ -854,14 +873,16 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
 }
 struct temp_comp
 {
-        struct mgs_target_info *comp_tmti;
-        struct mgs_target_info *comp_mti;
-        struct fs_db *comp_fsdb;
-        struct obd_device *comp_obd;
+        struct mgs_target_info   *comp_tmti;
+        struct mgs_target_info   *comp_mti;
+        struct fs_db             *comp_fsdb;
+        struct obd_device        *comp_obd;
+        struct sec_flavor_config  comp_sec;
 };
 
 static int mgs_write_log_mdc_to_mdt(struct obd_device *, struct fs_db *,
-                                    struct mgs_target_info *, char *);
+                                    struct mgs_target_info *,
+                                    struct sec_flavor_config *, char *);
 
 static int mgs_steal_llog_handler(struct llog_handle *llh,
                                   struct llog_rec_hdr *rec,
@@ -873,6 +894,7 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
         struct lustre_cfg *lcfg;
+        struct sec_flavor_config *sec_conf;
         int rc = 0;
         struct llog_handle *mdt_llh = NULL;
         static int got_an_osc_or_mdc = 0;
@@ -888,6 +910,7 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
         tmti = ((struct temp_comp*)data)->comp_tmti;
         fsdb = ((struct temp_comp*)data)->comp_fsdb;
         obd = ((struct temp_comp*)data)->comp_obd;
+        sec_conf = &((struct temp_comp*)data)->comp_sec;
 
         if (rec->lrh_type != OBD_CFG_REC) {
                 CERROR("unhandled lrh_type: %#x\n", rec->lrh_type);
@@ -966,17 +989,24 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
                 RETURN(rc);
         }
 
+        if (lcfg->lcfg_command == LCFG_SEC_FLAVOR) {
+                memcpy(sec_conf, lustre_cfg_buf(lcfg, 1), sizeof(*sec_conf));
+
+                RETURN(rc);
+        }
+
         if (lcfg->lcfg_command == LCFG_ADD_MDC) {
                 int index;
 
                 if (sscanf(lustre_cfg_buf(lcfg, 2), "%d", &index) != 1)
                         RETURN (-EINVAL);
-                
+
                 memcpy(tmti->mti_fsname, mti->mti_fsname,
                        strlen(mti->mti_fsname));
                 tmti->mti_stripe_index = index;
-                
-                mgs_write_log_mdc_to_mdt(obd, fsdb, tmti, mti->mti_svname);
+
+                mgs_write_log_mdc_to_mdt(obd, fsdb, tmti, sec_conf,
+                                         mti->mti_svname);
                 memset(tmti, 0, sizeof(*tmti));
                 RETURN(rc);
         }
@@ -1155,10 +1185,35 @@ static int mgs_write_log_failnids(struct obd_device *obd,
         return rc;
 }
 
+static
+void extract_sec_flavor(char *params, char *key, char **ptr)
+{
+        char *val = NULL, *tail;
+        int   len;
+
+        *ptr = NULL;
+
+        if (class_find_param(params, key, &val))
+                return;
+
+        tail = strchr(val, ' ');
+        if (tail == NULL)
+                len = strlen(val);
+        else
+                len = tail - val;
+
+        OBD_ALLOC(*ptr, len + 1);
+        if (*ptr == NULL)
+                return;
+
+        memcpy(*ptr, val, len);
+        (*ptr)[len] = '\0';
+}
 
 /***************************************BEGIN PROTO****************************/
 static int mgs_write_log_mdc_to_lmv(struct obd_device *obd, struct fs_db *fsdb,
                                     struct mgs_target_info *mti,
+                                    struct sec_flavor_config *sec_conf,
                                     char *logname, char *lmvname)
 {
         struct llog_handle *llh = NULL;
@@ -1193,6 +1248,7 @@ static int mgs_write_log_mdc_to_lmv(struct obd_device *obd, struct fs_db *fsdb,
 
         rc = record_attach(obd, llh, mdcname, LUSTRE_MDC_NAME, lmvuuid);
         rc = record_setup(obd, llh, mdcname, mti->mti_uuid, nodeuuid, 0, 0);
+        rc = record_sec_flavor(obd, llh, mdcname, sec_conf);
         rc = mgs_write_log_failnids(obd, mti, llh, mdcname);
         snprintf(index, sizeof(index), "%d", mti->mti_stripe_index);
         rc = record_mdc_add(obd, llh, lmvname, mdcuuid, mti->mti_uuid,
@@ -1210,7 +1266,9 @@ static int mgs_write_log_mdc_to_lmv(struct obd_device *obd, struct fs_db *fsdb,
 
 /* add new mdc to already existent MDS */
 static int mgs_write_log_mdc_to_mdt(struct obd_device *obd, struct fs_db *fsdb,
-                                    struct mgs_target_info *mti, char *logname)
+                                    struct mgs_target_info *mti,
+                                    struct sec_flavor_config *sec_conf,
+                                    char *logname)
 {
         struct llog_handle *llh = NULL;
         char *nodeuuid, *mdcname, *mdcuuid, *mdtuuid;
@@ -1241,6 +1299,7 @@ static int mgs_write_log_mdc_to_mdt(struct obd_device *obd, struct fs_db *fsdb,
         }
         rc = record_attach(obd, llh, mdcname, LUSTRE_MDC_NAME, mdcuuid);
         rc = record_setup(obd, llh, mdcname, mti->mti_uuid, nodeuuid, 0, 0);
+        rc = record_sec_flavor(obd, llh, mdcname, sec_conf);
         rc = mgs_write_log_failnids(obd, mti, llh, mdcname);
         snprintf(index, sizeof(index), "%d", idx);
 
@@ -1299,9 +1358,10 @@ out:
 static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                               struct mgs_target_info *mti)
 {
-        char *cliname;
+        char *cliname, *sec;
         struct llog_handle *llh = NULL;
         struct temp_comp comp = { 0 };
+        struct sec_flavor_config sec_conf_mdt, sec_conf_cli;
         char mdt_index[9];
         int rc, i = 0;
         ENTRY;
@@ -1329,6 +1389,19 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                 snprintf(mti->mti_uuid, sizeof(mti->mti_uuid),
                          "%s_UUID", mti->mti_svname);
         }
+
+        /* security flavor */
+        extract_sec_flavor(mti->mti_params, PARAM_SEC_RPC_MDT, &sec);
+        rc = sptlrpc_parse_flavor(LUSTRE_MDT, LUSTRE_MDT, sec, &sec_conf_mdt);
+        name_destroy(sec);
+        if (rc)
+                RETURN(rc);
+
+        extract_sec_flavor(mti->mti_params, PARAM_SEC_RPC_CLI, &sec);
+        rc = sptlrpc_parse_flavor(LUSTRE_CLI, LUSTRE_MDT, sec, &sec_conf_cli);
+        name_destroy(sec);
+        if (rc)
+                RETURN(rc);
 
         /* add mdt */
         rc = mgs_write_log_mdt0(obd, fsdb, mti);
@@ -1384,8 +1457,8 @@ static int mgs_write_log_mdt(struct obd_device *obd, struct fs_db *fsdb,
                 rc = mgs_steal_llog_for_mdt_from_client(obd, cliname, 
                                                         &comp);
 
-                rc = mgs_write_log_mdc_to_lmv(obd, fsdb, mti, cliname, 
-                                              fsdb->fsdb_clilmv);
+                rc = mgs_write_log_mdc_to_lmv(obd, fsdb, mti, &sec_conf_cli,
+                                              cliname, fsdb->fsdb_clilmv);
                 /* add mountopts */
                 rc = record_start_log(obd, &llh, cliname);
                 if (rc) 
@@ -1411,7 +1484,8 @@ out:
                         sprintf(mdt_index,"-MDT%04x",i);
                         
                         name_create(&mdtname, mti->mti_fsname, mdt_index);
-                        rc = mgs_write_log_mdc_to_mdt(obd, fsdb, mti, mdtname);
+                        rc = mgs_write_log_mdc_to_mdt(obd, fsdb, mti,
+                                                      &sec_conf_mdt, mdtname);
                         name_destroy(mdtname);
                 }
         }
@@ -1422,7 +1496,9 @@ out:
 /* Add the ost info to the client/mdt lov */
 static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
                                     struct mgs_target_info *mti,
-                                    char *logname, char *lovname, int flags)
+                                    char *logname, char *lovname,
+                                    struct sec_flavor_config *sec_conf,
+                                    int flags)
 {
         struct llog_handle *llh = NULL;
         char *nodeuuid, *svname, *oscname, *oscuuid, *lovuuid;
@@ -1470,6 +1546,7 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
         }
         rc = record_attach(obd, llh, oscname, LUSTRE_OSC_NAME, lovuuid);
         rc = record_setup(obd, llh, oscname, mti->mti_uuid, nodeuuid, 0, 0);
+        rc = record_sec_flavor(obd, llh, oscname, sec_conf);
         rc = mgs_write_log_failnids(obd, mti, llh, oscname);
         snprintf(index, sizeof(index), "%d", mti->mti_stripe_index);
         rc = record_lov_add(obd, llh, lovname, mti->mti_uuid, index, "1");
@@ -1489,9 +1566,10 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                              struct mgs_target_info *mti)
 {
         struct llog_handle *llh = NULL;
-        char *logname, *lovname;
+        char *logname, *lovname, *sec;
         char mdt_index[9];
         char *ptr = mti->mti_params;
+        struct sec_flavor_config sec_conf_mdt, sec_conf_cli;
         int rc, flags = 0, failout = 0, i;
         ENTRY;
         
@@ -1509,6 +1587,20 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                                " all logs.\n", mti->mti_svname);
                 RETURN(-EALREADY);
         }
+
+        /* security flavors */
+        extract_sec_flavor(mti->mti_params, PARAM_SEC_RPC_MDT, &sec);
+        rc = sptlrpc_parse_flavor(LUSTRE_MDT, LUSTRE_OST, sec, &sec_conf_mdt);
+        name_destroy(sec);
+        if (rc)
+                RETURN(rc);
+
+        extract_sec_flavor(mti->mti_params, PARAM_SEC_RPC_CLI, &sec);
+        rc = sptlrpc_parse_flavor(LUSTRE_CLI, LUSTRE_OST, sec, &sec_conf_cli);
+        name_destroy(sec);
+        if (rc)
+                RETURN(rc);
+
         /*
         attach obdfilter ost1 ost1_UUID
         setup /dev/loop2 ldiskfs f|n errors=remount-ro,user_xattr
@@ -1547,7 +1639,7 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                         name_create(&logname, mti->mti_fsname, mdt_index);
                         name_create(&lovname, logname, "-mdtlov");
                         mgs_write_log_osc_to_lov(obd, fsdb, mti, logname, 
-                                                 lovname, flags);
+                                                 lovname, &sec_conf_mdt, flags);
                         name_destroy(logname);
                         name_destroy(lovname);
                 }
@@ -1556,7 +1648,8 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
     
         /* Append ost info to the client log */
         name_create(&logname, mti->mti_fsname, "-client");
-        mgs_write_log_osc_to_lov(obd, fsdb, mti, logname, fsdb->fsdb_clilov, 0);
+        mgs_write_log_osc_to_lov(obd, fsdb, mti, logname, fsdb->fsdb_clilov,
+                                 &sec_conf_cli, 0);
         name_destroy(logname);
         
         RETURN(rc);
@@ -1662,6 +1755,11 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
 
                 /* Processed in mgs_write_log_ost */
                 if (class_match_param(ptr, PARAM_FAILMODE, NULL) == 0) 
+                        GOTO(end_while, rc);
+
+                /* Processed in mgs_write_log_mdt/mgs_write_log_ost */
+                if (class_match_param(ptr, PARAM_SEC_RPC_MDT, NULL) == 0 ||
+                    class_match_param(ptr, PARAM_SEC_RPC_CLI, NULL) == 0)
                         GOTO(end_while, rc);
 
                 if (class_match_param(ptr, PARAM_FAILNODE, NULL) == 0) {

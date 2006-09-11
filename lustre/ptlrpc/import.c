@@ -350,7 +350,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                 spin_unlock(&imp->imp_lock);
                 CERROR("can't connect to a closed import\n");
                 RETURN(-EINVAL);
-        } else if (imp->imp_state == LUSTRE_IMP_FULL) {
+        } else if (imp->imp_state == LUSTRE_IMP_FULL &&
+                   imp->imp_force_reconnect == 0) {
                 spin_unlock(&imp->imp_lock);
                 CERROR("already connected\n");
                 RETURN(0);
@@ -499,8 +500,13 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 spin_unlock(&imp->imp_lock);
                 RETURN(0);
         }
+        imp->imp_force_reconnect = 0;
         spin_unlock(&imp->imp_lock);
 
+        if (rc)
+                GOTO(out, rc);
+
+        rc = sptlrpc_cli_install_rvs_ctx(imp, request->rq_cli_ctx);
         if (rc)
                 GOTO(out, rc);
 
@@ -719,6 +725,11 @@ finish:
 
                 if (rc == -EPROTO) {
                         struct obd_connect_data *ocd;
+
+                        /* reply message might not be ready */
+                        if (request->rq_repmsg != NULL)
+                                RETURN(-EPROTO);
+
                         ocd = lustre_swab_repbuf(request, REPLY_REC_OFF,
                                                  sizeof *ocd,
                                                  lustre_swab_connect);

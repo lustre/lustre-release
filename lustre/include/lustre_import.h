@@ -64,6 +64,7 @@ struct obd_import {
         struct list_head          imp_delayed_list;
 
         struct obd_device        *imp_obd;
+        struct ptlrpc_sec        *imp_sec;
         cfs_waitq_t               imp_recovery_waitq;
 
         atomic_t                  imp_inflight;
@@ -78,6 +79,7 @@ struct obd_import {
         struct lustre_handle      imp_remote_handle;
         cfs_time_t                imp_next_ping;   /* jiffies */
         __u64                     imp_last_success_conn;   /* jiffies, 64-bit */
+        cfs_time_t                imp_next_reconnect;      /* seconds */
 
         /* all available obd_import_conn linked here */
         struct list_head          imp_conn_list;
@@ -98,7 +100,10 @@ struct obd_import {
                                   imp_pingable:1,         /* pingable */
                                   imp_resend_replay:1,    /* resend for replay */
                                   imp_recon_bk:1,         /* turn off reconnect if all failovers fail */
-                                  imp_last_recon:1;       /* internally used by above */
+                                  imp_last_recon:1,       /* internally used by above */
+                                  imp_force_reconnect:1;  /* need to reconnect 
+                                                           * even the status is
+                                                           * FULL */
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
         __u64                     imp_connect_flags_orig;

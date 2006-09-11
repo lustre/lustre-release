@@ -749,6 +749,7 @@ void class_import_put(struct obd_import *import)
         }
 
         LASSERT(list_empty(&import->imp_handle.h_link));
+        LASSERT(import->imp_sec == NULL);
         class_decref(import->imp_obd);
         OBD_FREE(import, sizeof(*import));
         EXIT;
