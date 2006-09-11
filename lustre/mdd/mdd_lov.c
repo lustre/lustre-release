@@ -290,20 +290,22 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
                 if (lmmp == NULL && lmm_size == 0) {
                         struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
                         int size = sizeof(lmm);
+
                         /* Get parent dir stripe and set */
-                        rc = mdd_get_md(ctxt, pobj, &lmm, &size,
-                                        MDS_LOV_MD_NAME);
+                        if (pobj != NULL)
+                                rc = mdd_get_md(ctxt, pobj, &lmm, &size,
+                                                MDS_LOV_MD_NAME);
                         if (rc > 0) {
                                 rc = mdd_xattr_set_txn(ctxt, child, lmm, size,
                                                MDS_LOV_MD_NAME, 0, handle);
                                 if (rc)
-                                        CERROR("error on copy stripe info: rc = %d\n",
-                                                rc);
+                                        CERROR("error on copy stripe info: rc "
+                                                "= %d\n", rc);
                         }
                 } else {
                        LASSERT(lmmp != NULL && lmm_size > 0);
-                        /* delete lmm */
-                       rc = mdd_lov_set_dir_md(ctxt, child, lmmp, lmm_size, handle);
+                       rc = mdd_lov_set_dir_md(ctxt, child, lmmp, 
+                                               lmm_size, handle);
                 }
         }
         CDEBUG(D_INFO, "Set lov md %p size %d for fid "DFID" rc %d\n",

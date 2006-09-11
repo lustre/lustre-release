@@ -82,7 +82,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
         struct md_create_spec *spec = &info->mti_spec;
 
         ma->ma_need = MA_INODE | MA_LOV;
-        return mdo_create_data(info->mti_ctxt, mdt_object_child(p),
+        return mdo_create_data(info->mti_ctxt, p ? mdt_object_child(p) : NULL,
                                mdt_object_child(o), spec, ma);
 }
 
@@ -180,21 +180,26 @@ static void mdt_open_transno(struct mdt_thread_info* info)
         struct mdt_device *mdt = info->mti_mdt;
         struct ptlrpc_request *req = mdt_info_req(info);
 
-        if (info->mti_transno != 0)
+        if (info->mti_transno != 0) {
+                /* This request has created something, so we have transno */
+                CDEBUG(D_INODE, "open | create: transno = %llu,"
+                                " last_committed = %llu\n",
+                                info->mti_transno,
+                                req->rq_export->exp_obd->obd_last_committed);
                 return;
-
-        CDEBUG(D_INODE, "open transno = %llu, last_committed = %llu\n",
-               info->mti_transno,
-               req->rq_export->exp_obd->obd_last_committed);
+        }
 
         spin_lock(&mdt->mdt_transno_lock);
         info->mti_transno = ++ mdt->mdt_last_transno;
+        spin_unlock(&mdt->mdt_transno_lock);
+
+        CDEBUG(D_INODE, "open only: transno = %llu, last_committed = %llu\n",
+                        info->mti_transno,
+                        req->rq_export->exp_obd->obd_last_committed);
+
         req->rq_transno = info->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, info->mti_transno);
-        
         target_committed_to_req(req);
-        
-        spin_unlock(&mdt->mdt_transno_lock);
         lustre_msg_set_last_xid(req->rq_repmsg, req->rq_xid);
 }
 
@@ -265,7 +270,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                        &RMF_MDT_MD,
                                                        RCL_SERVER);
-                /* TODO: handle REPLAY (p == NULL)*/
+                /* in replay case, p == NULL */
                 rc = mdt_create_data(info, p, o);
                 if (rc)
                         RETURN(rc);
@@ -319,9 +324,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 spin_unlock(&med->med_open_lock);
 
                 repbody->handle.cookie = mfd->mfd_handle.h_cookie;
-                
                 mdt_open_transno(info);
-
         } else
                 rc = -ENOMEM;
         RETURN(rc);
@@ -508,46 +511,36 @@ out:
 }
 
 static int mdt_open_by_fid(struct mdt_thread_info* info, 
-                           const struct lu_fid *fid,
-                           struct ldlm_reply *rep, 
-                           __u32 flags)
+                           struct ldlm_reply *rep)
 {
-        struct md_attr    *ma = &info->mti_attr;
-        struct mdt_object *o;
-        int                rc;
+        __u32                    flags = info->mti_spec.sp_cr_flags;
+        struct mdt_reint_record *rr = &info->mti_rr;
+        struct md_attr          *ma = &info->mti_attr;
+        struct mdt_object       *o;
+        int                     rc;
         ENTRY;
 
-        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid);
+        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, rr->rr_fid2);
         if (IS_ERR(o)) 
                 RETURN(rc = PTR_ERR(o));
 
         rc = lu_object_exists(&o->mot_obj.mo_lu);
 
         if (rc > 0) {
-                /* successfully found the child object */
-                if (flags & MDS_OPEN_EXCL && flags & MDS_OPEN_CREAT)
-                        rc = -EEXIST;
-                else {
-                        const struct lu_context *ctxt = info->mti_ctxt;
-                        struct mdt_device *mdt = info->mti_mdt;
+                const struct lu_context *ctxt = info->mti_ctxt;
 
-                        spin_lock(&mdt->mdt_transno_lock);
-                        info->mti_transno = ++ mdt->mdt_last_transno;
-                        spin_unlock(&mdt->mdt_transno_lock);
-                        
-                        mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
-                        mdt_set_disposition(info, rep, DISP_LOOKUP_POS);
-                        rc = mo_attr_get(ctxt, mdt_object_child(o), ma);
-                        if (rc == 0)
-                                rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
-                } 
+                mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
+                mdt_set_disposition(info, rep, DISP_LOOKUP_POS);
+                rc = mo_attr_get(ctxt, mdt_object_child(o), ma);
+                if (rc == 0)
+                        rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
                 rc = -ENOENT;
         } else  {
                 /* the child object was created on remote server */
                 struct mdt_body *repbody;
                 repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-                repbody->fid1 = *fid;
+                repbody->fid1 = *rr->rr_fid2;
                 repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
                 rc = 0;
         }
@@ -638,8 +631,7 @@ int mdt_open(struct mdt_thread_info *info)
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 /* this is a replay request. */
-                result = mdt_open_by_fid(info, rr->rr_fid2, ldlm_rep, 
-                                         create_flags);
+                result = mdt_open_by_fid(info, ldlm_rep);
 
                 if (result != -ENOENT)
                         RETURN(result);
