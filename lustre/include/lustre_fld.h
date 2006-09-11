@@ -138,9 +138,9 @@ int fld_query(struct com_thread_info *info);
 
 /* Server methods */
 int fld_server_init(struct lu_server_fld *fld,
-                    const struct lu_context *ctx,
                     struct dt_device *dt,
-                    const char *uuid);
+                    const char *uuid,
+                    const struct lu_context *ctx);
 
 void fld_server_fini(struct lu_server_fld *fld,
                      const struct lu_context *ctx);

@@ -315,10 +315,8 @@ static void fld_server_proc_fini(struct lu_server_fld *fld)
 }
 #endif
 
-int fld_server_init(struct lu_server_fld *fld,
-                    const struct lu_context *ctx,
-                    struct dt_device *dt,
-                    const char *uuid)
+int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
+                    const char *uuid, const struct lu_context *ctx)
 {
         int rc;
         ENTRY;

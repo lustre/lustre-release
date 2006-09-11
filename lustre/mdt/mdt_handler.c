@@ -2189,8 +2189,8 @@ static int mdt_fld_init(const struct lu_context *ctx,
         if (ls->ls_server_fld == NULL)
                 RETURN(rc = -ENOMEM);
 
-        rc = fld_server_init(ls->ls_server_fld, ctx,
-                             m->mdt_bottom, uuid);
+        rc = fld_server_init(ls->ls_server_fld,
+                             m->mdt_bottom, uuid, ctx);
         if (rc) {
                 OBD_FREE_PTR(ls->ls_server_fld);
                 ls->ls_server_fld = NULL;

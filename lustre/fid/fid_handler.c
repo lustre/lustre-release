@@ -348,11 +348,10 @@ static int seq_req_handle(struct ptlrpc_request *req,
                         RETURN(-EPROTO);
 
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                        in = req_capsule_server_get(&info->sti_pill,
-                                                    &RMF_SEQ_RANGE);
-                        /* umka, FIXME: "in" has not been filled with anything
+                        in = req_client_server_get(&info->sti_pill,
+                                                   &RMF_SEQ_RANGE);
+
                         LASSERT(!range_is_zero(in) && range_is_sane(in));
-                        */
                 }
         
                 ctx = req->rq_svc_thread->t_ctx;
