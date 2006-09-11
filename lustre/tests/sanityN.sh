@@ -41,6 +41,10 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
+if [ ! -z "$USING_KRB5" ]; then
+    $RUNAS krb5_login.sh || exit 1
+fi
+
 cleanup() {
 	echo -n "cln.."
 	grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 ${FORCE}

@@ -27,6 +27,7 @@ cp -u ../../lustre/quota/lquota.$EXT $MDIR
 cp -u ../../lustre/quota/quotacheck_test.$EXT $MDIR
 cp -u ../../lustre/quota/quotactl_test.$EXT $MDIR
 cp -u ../../lustre/ptlrpc/ptlrpc.$EXT $MDIR
+cp -u ../../lustre/ptlrpc/gss/ptlrpc_gss.$EXT $MDIR
 cp -u ../../lustre/fld/fld.$EXT $MDIR
 cp -u ../../lustre/lov/lov.$EXT $MDIR
 cp -u ../../lustre/mdc/mdc.$EXT $MDIR

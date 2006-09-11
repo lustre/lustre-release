@@ -79,6 +79,11 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
+if [ ! -z "$USING_KRB5" ]; then
+    $RUNAS krb5_login.sh || exit 1
+    $RUNAS -u $(($RUNAS_ID + 1)) krb5_login.sh || exit 1
+fi
+
 cleanup() {
 	echo -n "cln.."
 	cleanupall ${FORCE} $* || { echo "FAILed to clean up"; exit 20; }
@@ -2626,6 +2631,8 @@ run_test 68 "support swapping to Lustre ========================"
 test_69() {
 	[ -z "`lsmod|grep obdfilter`" ] &&
 		echo "skipping $TESTNAME (remote OST)" && return
+	[ ! -z "$USING_KRB5" ] &&
+		echo "skipping $TESTNAME (gss with bulk security will triger oops. re-enable this after b10091 get fixed)" && return
 
 	f="$DIR/$tfile"
 	touch $f
@@ -3028,6 +3035,7 @@ test_103 () {
     [ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
     [ -z "$(grep acl $LPROC/mdc/*-mdc-*/connect_flags)" ] && echo "skipping $TESTNAME (must have acl enabled)" && return
     [ -z "$(which setfacl 2>/dev/null)" ] && echo "skipping $TESTNAME (could not find setfacl)" && return
+    [ ! -z "$USING_KRB5" ] && echo "skipping $TESTNAME (could not run under gss)" && return
 
     SAVE_UMASK=`umask`
     umask 0022

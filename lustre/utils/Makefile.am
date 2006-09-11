@@ -1,5 +1,9 @@
 # Administration utilities Makefile
 
+if GSS
+SUBDIRS = gss
+endif
+
 AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
 AM_LDFLAGS := -L$(top_builddir)/lnet/utils

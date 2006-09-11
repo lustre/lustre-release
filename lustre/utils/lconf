@@ -1143,6 +1143,7 @@ class LDLM(Module):
         self.add_lustre_module('lvfs', 'lvfs')
         self.add_lustre_module('obdclass', 'obdclass')
         self.add_lustre_module('ptlrpc', 'ptlrpc')
+        self.add_lustre_module('ptlrpc/gss', 'ptlrpc_gss')
 
     def prepare(self):
         return

@@ -156,6 +156,7 @@ fi
 
 gen_config
 
+init_krb5_env
 
 test_0() {
         setup
@@ -857,5 +858,6 @@ run_test 23 "interrupt client during recovery mount delay"
 
 umount_client $MOUNT	
 cleanup_nocli
+cleanup_krb5_env
 
 equals_msg "Done"

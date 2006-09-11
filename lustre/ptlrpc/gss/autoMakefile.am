@@ -1,0 +1,15 @@
+# Copyright (C) 2006 Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+if LIBLUSTRE
+endif
+
+if MODULES
+modulefs_DATA = ptlrpc_gss$(KMODEXT)
+endif # MODULES
+
+DIST_SOURCES = $(ptlrpc_gss-objs:.o=.c) gss_api.h gss_asn1.h gss_err.h \
+               gss_internal.h
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

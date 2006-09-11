@@ -38,15 +38,22 @@ init_test_env() {
     [ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
 
-    export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests
+    export PATH=:$PATH:$LUSTRE/utils:$LUSTRE/utils/gss:$LUSTRE/tests
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
     export FSYTPE=${FSTYPE:-"ldiskfs"}
     export LPROC=/proc/fs/lustre
+    export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
+    export LSVCGSSD=${LSVCGSSD:-"$LUSTRE/utils/gss/lsvcgssd"}
+    export KRB5DIR=${KRB5DIR:-"/usr/kerberos"}
 
     if [ "$ACCEPTOR_PORT" ]; then
         export PORT_OPT="--port $ACCEPTOR_PORT"
+    fi
+
+    if [ "x$SEC" = "xkrb5i" -o "x$SEC" =  "xkrb5p" ]; then
+        export USING_KRB5="y"
     fi
 
     # Paths on remote nodes, if different 
@@ -78,7 +85,12 @@ load_module() {
         insmod ${LUSTRE}/${module}${EXT} $@
     else
         # must be testing a "make install" or "rpm" installation
-        modprobe $BASE $@
+        # note failed to load ptlrpc_gss is considered not fatal
+        if [ "$BASE" == "ptlrpc_gss" ]; then
+            modprobe $BASE $@ || echo "gss/krb5 is not supported"
+        else
+            modprobe $BASE $@
+        fi
     fi
 }
 
@@ -102,6 +114,7 @@ load_modules() {
     load_module lvfs/lvfs
     load_module obdclass/obdclass
     load_module ptlrpc/ptlrpc
+    load_module ptlrpc/gss/ptlrpc_gss
     load_module fid/fid
     load_module fld/fld
     load_module lmv/lmv
@@ -163,6 +176,76 @@ unload_modules() {
     fi
     echo "modules unloaded."
     return 0
+}
+
+check_gss_daemon_facet() {
+    facet=$1
+    dname=$2
+
+    num=`do_facet $facet ps -o cmd -C $dname | grep $dname | wc -l`
+    if [ $num -ne 1 ]; then
+        echo "$num instance of $dname on $facet"
+        return 1
+    fi
+    return 0
+}
+
+send_sigint() {
+    local facet=$1
+    shift
+    do_facet $facet "killall -2 $@ 2>/dev/null || true"
+}
+
+start_gss_daemons() {
+    # starting on MDT
+    do_facet mds "$LSVCGSSD -v"
+    do_facet mds "$LGSSD -v"
+    # starting on OSTs
+    for num in `seq $OSTCOUNT`; do
+        do_facet ost$num "$LSVCGSSD -v"
+    done
+    # starting on client
+    # FIXME: is "client" the right facet name?
+    do_facet client "$LGSSD -v"
+
+    # wait daemons entering "stable" status
+    sleep 5
+
+    #
+    # check daemons are running
+    #
+    check_gss_daemon_facet mds lsvcgssd
+    check_gss_daemon_facet mds lgssd
+    for num in `seq $OSTCOUNT`; do
+        check_gss_daemon_facet ost$num lsvcgssd
+    done
+    check_gss_daemon_facet client lgssd
+}
+
+stop_gss_daemons() {
+    send_sigint mds lsvcgssd lgssd
+    for num in `seq $OSTCOUNT`; do
+        send_sigint ost$num lsvcgssd
+    done
+    send_sigint client lgssd
+}
+
+init_krb5_env() {
+    if [ ! -z $SEC ]; then
+        MDS_MOUNT_OPTS=$MDS_MOUNT_OPTS,sec=$SEC
+        OST_MOUNT_OPTS=$OST_MOUNT_OPTS,sec=$SEC
+    fi
+
+    if [ ! -z $USING_KRB5 ]; then
+        start_gss_daemons
+    fi
+}
+
+cleanup_krb5_env() {
+    if [ ! -z $USING_KRB5 ]; then
+        stop_gss_daemons
+        # maybe cleanup credential cache?
+    fi
 }
 
 # Facet functions
@@ -549,6 +632,7 @@ stopall() {
 cleanupall() {
     stopall $*
     unload_modules
+    cleanup_krb5_env
 }
 
 formatall() {
@@ -577,6 +661,7 @@ mount_client() {
 
 setupall() {
     load_modules
+    init_krb5_env
     echo Setup mdt, osts
     start mds $MDSDEV $MDS_MOUNT_OPTS
     for num in `seq $OSTCOUNT`; do

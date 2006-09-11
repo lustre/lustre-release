@@ -17,6 +17,8 @@ ptlrpc_objs += sec.o sec_null.o sec_plain.o
 
 ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs)
 
+@GSS_TRUE@subdir-m += gss
+
 default: all
 
 ldlm_%.c: @LUSTRE@/ldlm/ldlm_%.c

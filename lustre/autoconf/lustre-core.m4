@@ -643,6 +643,24 @@ AC_ARG_ENABLE([client],
 AC_MSG_RESULT([$enable_client])])
 
 #
+# LC_CONFIG_GSS
+#
+# Build gss and related tools of Lustre
+#
+AC_DEFUN([LC_CONFIG_GSS],
+[AC_MSG_CHECKING([whether to enable gss/krb5 support])
+AC_ARG_ENABLE([gss], 
+	AC_HELP_STRING([--enable-gss],
+			[enable gss/krb5 support]),
+	[enable_gss='yes'],[enable_gss='no'])
+AC_MSG_RESULT([$enable_gss])
+if test x$enable_gss != xno; then
+	PKG_CHECK_MODULES([GSSAPI], [libgssapi >= 0.10])
+	AC_KERBEROS_V5
+fi
+])
+
+#
 # LC_CONFIG_LIBLUSTRE
 #
 # whether to build liblustre
@@ -770,6 +788,7 @@ AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
+AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
 AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
@@ -848,12 +867,15 @@ lustre/mgs/Makefile
 lustre/mgs/autoMakefile
 lustre/ptlrpc/Makefile
 lustre/ptlrpc/autoMakefile
+lustre/ptlrpc/gss/Makefile
+lustre/ptlrpc/gss/autoMakefile
 lustre/quota/Makefile
 lustre/quota/autoMakefile
 lustre/scripts/Makefile
 lustre/scripts/version_tag.pl
 lustre/tests/Makefile
 lustre/utils/Makefile
+lustre/utils/gss/Makefile
 ])
 case $lb_target_os in
         darwin)
