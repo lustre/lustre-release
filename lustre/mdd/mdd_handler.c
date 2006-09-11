@@ -1640,6 +1640,8 @@ out:
         /* finish mdd_lov_create() stuff */
         mdd_lov_create_finish(ctxt, mdd, rc);
         mdd_trans_stop(ctxt, mdd, rc, handle);
+        if (lmm)
+                OBD_FREE(lmm, lmm_size);
         RETURN(rc);
 }
 
