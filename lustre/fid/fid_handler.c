@@ -348,8 +348,8 @@ static int seq_req_handle(struct ptlrpc_request *req,
                         RETURN(-EPROTO);
 
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                        in = req_client_server_get(&info->sti_pill,
-                                                   &RMF_SEQ_RANGE);
+                        in = req_capsule_client_get(&info->sti_pill,
+                                                    &RMF_SEQ_RANGE);
 
                         LASSERT(!range_is_zero(in) && range_is_sane(in));
                 }
