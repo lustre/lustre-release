@@ -306,7 +306,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
                        rc = mdd_lov_set_dir_md(ctxt, child, lmmp, lmm_size, handle);
                 }
         }
-        CDEBUG(D_INFO, "Set lov md %p size %d for fid "DFID" rc%d\n",
+        CDEBUG(D_INFO, "Set lov md %p size %d for fid "DFID" rc %d\n",
                         lmmp, lmm_size, PFID(mdo2fid(child)), rc);
         RETURN(rc);
 }
@@ -349,7 +349,7 @@ static void mdd_lov_objid_free(const struct lu_context *ctxt,
         info->mti_oti.oti_objid = NULL;
 }
 
-void inline mdd_lov_create_finish(const struct lu_context *ctxt,
+void mdd_lov_create_finish(const struct lu_context *ctxt,
                            struct mdd_device *mdd, int rc)
 {
         struct mdd_thread_info *info = mdd_ctx_info(ctxt);

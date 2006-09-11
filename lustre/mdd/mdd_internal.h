@@ -28,6 +28,7 @@
 #define _MDD_INTERNAL_H
 
 #include <asm/semaphore.h>
+
 #include <md_object.h>
 #include <dt_object.h>
 
@@ -69,15 +70,15 @@ struct orph_key {
 };
 
 struct mdd_thread_info {
-        struct txn_param  mti_param;
-        struct lu_fid     mti_fid;
-        struct lu_attr    mti_la;
-        struct md_attr    mti_ma;
-        struct lu_attr    mti_la_for_fix;
-        struct lov_mds_md mti_lmm;
-        struct obd_info   mti_oi;
-        struct orph_key   mti_orph_key;
-        struct obd_trans_info   mti_oti;
+        struct txn_param      mti_param;
+        struct lu_fid         mti_fid;
+        struct lu_attr        mti_la;
+        struct md_attr        mti_ma;
+        struct lu_attr        mti_la_for_fix;
+        struct lov_mds_md     mti_lmm;
+        struct obd_info       mti_oi;
+        struct orph_key       mti_orph_key;
+        struct obd_trans_info mti_oti;
 };
 
 int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
@@ -93,7 +94,8 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size,
                    const struct md_create_spec *spec, struct lu_attr *la);
-
+void mdd_lov_create_finish(const struct lu_context *ctxt,
+                           struct mdd_device *mdd, int rc);
 int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
                void *md, int *md_size, const char *name);
 int mdd_get_md_locked(const struct lu_context *ctxt, struct mdd_object *obj,
