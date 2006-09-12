@@ -1438,12 +1438,16 @@ static int mdt_recovery(struct ptlrpc_request *req)
 
         /* sanity check: if the xid matches, the request must be marked as a
          * resent or replayed */
-        LASSERTF(ergo(req->rq_xid == req_exp_last_xid(req) ||
-                      req->rq_xid == req_exp_last_close_xid(req),
-                      lustre_msg_get_flags(req->rq_reqmsg) &
-                      (MSG_RESENT | MSG_REPLAY)),
-                 "rq_xid "LPU64" matches last_xid, "
-                 "expected RESENT flag\n", req->rq_xid);
+        if (req->rq_xid == req_exp_last_xid(req) ||
+            req->rq_xid == req_exp_last_close_xid(req)) {
+                if (!(lustre_msg_get_flags(req->rq_reqmsg) &
+                      (MSG_RESENT | MSG_REPLAY))) {
+                        CERROR("rq_xid "LPU64" matches last_xid, "
+                                "expected RESENT flag\n", req->rq_xid);
+                        req->rq_status = -ENOTCONN;
+                        RETURN(-ENOTCONN);
+                }
+        }
 
         /* else: note the opposite is not always true; a RESENT req after a
          * failover will usually not match the last_xid, since it was likely

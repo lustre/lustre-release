@@ -1609,8 +1609,8 @@ static int mdd_create_data(const struct lu_context *ctxt,
                            const struct md_create_spec *spec,
                            struct md_attr *ma)
 {
-        struct mdd_device *mdd = mdo2mdd(pobj);
-        struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
+        struct mdd_device *mdd = mdo2mdd(cobj);
+        struct mdd_object *mdd_pobj = md2mdd_obj(pobj);/* XXX maybe NULL */
         struct mdd_object *son = md2mdd_obj(cobj);
         struct lu_attr    *attr = &ma->ma_attr;
         struct lov_mds_md *lmm = NULL;
@@ -1627,16 +1627,14 @@ static int mdd_create_data(const struct lu_context *ctxt,
         mdd_txn_param_build(ctxt, &MDD_TXN_CREATE_DATA);
         handle = mdd_trans_start(ctxt, mdd);
         if (IS_ERR(handle))
-                rc = PTR_ERR(handle);
-        else {
-                /*XXX: setting the lov ea is not locked
-                 * but setting the attr is locked? */
-                rc = mdd_lov_set_md(ctxt, mdd_pobj, son, lmm, lmm_size,
-                                    handle, 0);
-                if (rc == 0)
-                        rc = mdd_attr_get_internal_locked(ctxt, son, ma);
-        }
-out:
+                RETURN(rc = PTR_ERR(handle));
+
+        /*XXX: setting the lov ea is not locked
+         * but setting the attr is locked? */
+        rc = mdd_lov_set_md(ctxt, mdd_pobj, son, lmm, lmm_size, handle, 0);
+        if (rc == 0)
+               rc = mdd_attr_get_internal_locked(ctxt, son, ma);
+
         /* finish mdd_lov_create() stuff */
         mdd_lov_create_finish(ctxt, mdd, rc);
         mdd_trans_stop(ctxt, mdd, rc, handle);
