@@ -75,6 +75,8 @@ endif # DARWIN
 
 endif # MODULES
 
+EXTRA_DIST = gss
+
 install-data-hook: $(install_data_hook)
 DIST_SOURCES = $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  ldlm_*.c l_lock.c
