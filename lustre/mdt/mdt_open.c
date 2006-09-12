@@ -181,8 +181,7 @@ static void mdt_open_transno(struct mdt_thread_info* info)
         struct ptlrpc_request *req = mdt_info_req(info);
 
         if (info->mti_transno != 0) {
-                /* This request has created something, so we have transno */
-                CDEBUG(D_INODE, "open | create: transno = %llu,"
+                CDEBUG(D_INODE, "(open | create) | replay: transno = %llu,"
                                 " last_committed = %llu\n",
                                 info->mti_transno,
                                 req->rq_export->exp_obd->obd_last_committed);
@@ -312,7 +311,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 /* keep a reference on this object for this open,
                 * and is released by mdt_mfd_close() */
                 mdt_object_get(info->mti_ctxt, o);
-                /* open hanling */
+                /* open handling */
 
                 mfd->mfd_mode = flags;
                 mfd->mfd_object = o;
@@ -675,7 +674,7 @@ int mdt_open(struct mdt_thread_info *info)
                 if (result == -ESTALE) {
                         /*ESTALE means the parent is a dead(unlinked) dir,
                          *so it should return -ENOENT to in accordance
-                         *with the original mds implemantaion.*/
+                         *with the original mds implementaion.*/
                         GOTO(out_parent, result = -ENOENT);
                 }
                 if (!(create_flags & MDS_OPEN_CREAT))

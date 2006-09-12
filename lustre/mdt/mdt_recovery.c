@@ -83,6 +83,7 @@ static struct thandle* mdt_trans_start(const struct lu_context *ctx,
 
         mti = lu_context_key_get(ctx, &mdt_thread_key);
         p = &mti->mti_txn_param;
+        p->tp_credits = MDT_TXN_WRITE_RECORD_CREDITS;
         return mdt->mdt_bottom->dd_ops->dt_trans_start(ctx, mdt->mdt_bottom, p);
 }
 
@@ -187,7 +188,6 @@ static int mdt_last_rcvd_header_write(const struct lu_context *ctx,
 
         mti = lu_context_key_get(ctx, &mdt_thread_key);
 
-        mti->mti_txn_param.tp_credits = MDT_TXN_WRITE_RECORD_CREDITS;
         th = mdt_trans_start(ctx, mdt);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
