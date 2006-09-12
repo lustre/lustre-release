@@ -96,6 +96,7 @@ static void mdt_trans_stop(const struct lu_context *ctx,
 static inline void msd_le_to_cpu(struct mdt_server_data *buf,
                                  struct mdt_server_data *msd)
 {
+        memcpy(msd->msd_uuid, buf->msd_uuid, sizeof (msd->msd_uuid));
         msd->msd_last_transno     = le64_to_cpu(buf->msd_last_transno);
         msd->msd_mount_count      = le64_to_cpu(buf->msd_mount_count);
         msd->msd_feature_compat   = le32_to_cpu(buf->msd_feature_compat);
@@ -109,6 +110,7 @@ static inline void msd_le_to_cpu(struct mdt_server_data *buf,
 static inline void msd_cpu_to_le(struct mdt_server_data *msd,
                                  struct mdt_server_data *buf)
 {
+        memcpy(buf->msd_uuid, msd->msd_uuid, sizeof (msd->msd_uuid));
         buf->msd_last_transno     = cpu_to_le64(msd->msd_last_transno);
         buf->msd_mount_count      = cpu_to_le64(msd->msd_mount_count);
         buf->msd_feature_compat   = cpu_to_le32(msd->msd_feature_compat);
@@ -122,6 +124,7 @@ static inline void msd_cpu_to_le(struct mdt_server_data *msd,
 static inline void mcd_le_to_cpu(struct mdt_client_data *buf,
                                  struct mdt_client_data *mcd)
 {
+        memcpy(mcd->mcd_uuid, buf->mcd_uuid, sizeof (mcd->mcd_uuid));
         mcd->mcd_last_transno       = le64_to_cpu(buf->mcd_last_transno);
         mcd->mcd_last_xid           = le64_to_cpu(buf->mcd_last_xid);
         mcd->mcd_last_result        = le32_to_cpu(buf->mcd_last_result);
@@ -134,6 +137,7 @@ static inline void mcd_le_to_cpu(struct mdt_client_data *buf,
 static inline void mcd_cpu_to_le(struct mdt_client_data *mcd,
                                  struct mdt_client_data *buf)
 {
+        memcpy(buf->mcd_uuid, mcd->mcd_uuid, sizeof (mcd->mcd_uuid));
         buf->mcd_last_transno       = cpu_to_le64(mcd->mcd_last_transno);
         buf->mcd_last_xid           = cpu_to_le64(mcd->mcd_last_xid);
         buf->mcd_last_result        = cpu_to_le32(mcd->mcd_last_result);
@@ -156,13 +160,19 @@ static int mdt_last_rcvd_header_read(const struct lu_context *ctx,
         /* temporary stuff for read */
         tmp = &mti->mti_msd;
         off = &mti->mti_off;
+        *off = 0;
         rc = mdt_record_read(ctx, mdt->mdt_last_rcvd, 
                              tmp, sizeof(*tmp), off);
-        if (rc == 0) {
-                memcpy(msd->msd_uuid, tmp->msd_uuid, sizeof (msd->msd_uuid));
+        if (rc == 0)
                 msd_le_to_cpu(tmp, msd);
-        }
-        return 0;
+
+        CDEBUG(D_INFO, "read last_rcvd header rc = %d:\n"
+                       "uuid = %s\n"
+                       "last_transno = "LPU64"\n",
+                        rc,
+                        msd->msd_uuid,
+                        msd->msd_last_transno);
+        return rc;
 }
 
 static int mdt_last_rcvd_header_write(const struct lu_context *ctx,
@@ -185,18 +195,21 @@ static int mdt_last_rcvd_header_write(const struct lu_context *ctx,
         /* temporary stuff for read */
         tmp = &mti->mti_msd;
         off = &mti->mti_off;
-
-        memcpy(tmp->msd_uuid, msd->msd_uuid, sizeof (msd->msd_uuid));
+        *off = 0;
+        
         msd_cpu_to_le(msd, tmp);
 
         rc = mdt_record_write(ctx, mdt->mdt_last_rcvd, 
                               tmp, sizeof(*tmp), off, th);
 
-        CDEBUG(D_INFO, "write last_rcvd header (rc = %d):\n"
-                       "uuid = %s\nlast_transno = "LPU64"\n",
-                        rc, msd->msd_uuid, msd->msd_last_transno);
-
         mdt_trans_stop(ctx, mdt, th);
+
+        CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
+                       "uuid = %s\n"
+                       "last_transno = "LPU64"\n",
+                        rc,
+                        msd->msd_uuid,
+                        msd->msd_last_transno);
         return rc;
 }
 
@@ -211,10 +224,29 @@ static int mdt_last_rcvd_read(const struct lu_context *ctx,
         mti = lu_context_key_get(ctx, &mdt_thread_key);
         tmp = &mti->mti_mcd;
         rc = mdt_record_read(ctx, mdt->mdt_last_rcvd, tmp, sizeof(*tmp), off);
-        if (rc == 0) {
-                memcpy(mcd->mcd_uuid, tmp->mcd_uuid, sizeof (mcd->mcd_uuid));
+        if (rc == 0)
                 mcd_le_to_cpu(tmp, mcd);
-        }
+
+        CDEBUG(D_INFO, "read mcd @%d rc = %d:\n"
+                       "uuid = %s\n"
+                       "last_transno = "LPU64"\n"
+                       "last_xid = "LPU64"\n"
+                       "last_result = %d\n"
+                       "last_data = %d\n"
+                       "last_close_transno = "LPU64"\n"
+                       "last_close_xid = "LPU64"\n"
+                       "last_close_result = %d\n",
+                        (int)*off - sizeof(*tmp),
+                        rc,
+                        mcd->mcd_uuid,
+                        mcd->mcd_last_transno,
+                        mcd->mcd_last_xid,
+                        mcd->mcd_last_result,
+                        mcd->mcd_last_data,
+                        mcd->mcd_last_close_transno,
+                        mcd->mcd_last_close_xid,
+                        mcd->mcd_last_close_result);
+
         return rc;
 }
 
@@ -231,13 +263,12 @@ static int mdt_last_rcvd_write(const struct lu_context *ctx,
         mti = lu_context_key_get(ctx, &mdt_thread_key);
         tmp = &mti->mti_mcd;
 
-        memcpy(mcd->mcd_uuid, tmp->mcd_uuid, sizeof (mcd->mcd_uuid));
         mcd_cpu_to_le(mcd, tmp);
 
         rc = mdt_record_write(ctx, mdt->mdt_last_rcvd,
                               tmp, sizeof(*tmp), off, th);
 
-        CDEBUG(D_INFO, "write mcd rc = %d:\n"
+        CDEBUG(D_INFO, "write mcd @%d rc = %d:\n"
                        "uuid = %s\n"
                        "last_transno = "LPU64"\n"
                        "last_xid = "LPU64"\n"
@@ -246,6 +277,7 @@ static int mdt_last_rcvd_write(const struct lu_context *ctx,
                        "last_close_transno = "LPU64"\n"
                        "last_close_xid = "LPU64"\n"
                        "last_close_result = %d\n",
+                        (int)*off - sizeof(*tmp),
                         rc,
                         mcd->mcd_uuid,
                         mcd->mcd_last_transno,
@@ -394,6 +426,7 @@ static int mdt_server_data_init(const struct lu_context *ctx,
                 msd->msd_feature_incompat = OBD_INCOMPAT_MDT |
                                                        OBD_INCOMPAT_COMMON_LR;
         } else {
+                LCONSOLE_WARN("%s: used disk, loading\n", obd->obd_name);
                 rc = mdt_last_rcvd_header_read(ctx, mdt, msd);
                 if (rc) {
                         CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
