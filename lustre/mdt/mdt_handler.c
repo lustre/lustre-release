@@ -2690,7 +2690,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         LASSERT(obd);
 
         spin_lock_init(&m->mdt_transno_lock);
-
+        
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
 
@@ -2700,7 +2700,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         m->mdt_opts.mo_acl = 0;
         m->mdt_opts.mo_compat_resname = 0;
         obd->obd_replayable = 1;
-
+        spin_lock_init(&m->mdt_client_bitmap_lock);
 
         OBD_ALLOC_PTR(s);
         if (s == NULL)
@@ -2951,7 +2951,7 @@ static int mdt_obd_connect(const struct lu_context *ctx,
                 if (mcd != NULL) {
                         memcpy(mcd->mcd_uuid, cluuid, sizeof mcd->mcd_uuid);
                         med->med_mcd = mcd;
-                        rc = mdt_client_add(ctx, mdt, med, -1);
+                        rc = mdt_client_new(ctx, mdt, med);
                         if (rc != 0)
                                 OBD_FREE_PTR(mcd);
                 } else
@@ -3085,7 +3085,7 @@ static int mdt_destroy_export(struct obd_export *export)
                 spin_lock(&med->med_open_lock);
         }
         spin_unlock(&med->med_open_lock);
-        mdt_client_free(&ctxt, mdt, med);
+        mdt_client_del(&ctxt, mdt, med);
 
 out:
         if (ma->ma_lmm)

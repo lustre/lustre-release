@@ -381,13 +381,16 @@ void mdt_reconstruct(struct mdt_thread_info *);
 int mdt_fs_setup(const struct lu_context *, struct mdt_device *);
 void mdt_fs_cleanup(const struct lu_context *, struct mdt_device *);
 
-int mdt_client_free(const struct lu_context *ctxt,
+int mdt_client_del(const struct lu_context *ctxt,
                     struct mdt_device *mdt,
                     struct mdt_export_data *med);
 int mdt_client_add(const struct lu_context *ctxt,
                    struct mdt_device *mdt,
                    struct mdt_export_data *med,
                    int cl_idx);
+int mdt_client_new(const struct lu_context *ctxt,
+                   struct mdt_device *mdt,
+                   struct mdt_export_data *med);
 
 int mdt_pin(struct mdt_thread_info* info);
 
