@@ -33,7 +33,7 @@
 #include <obd.h>
 #endif
 #include <lprocfs_status.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 
 static int mea_last_char_hash(int count, char *name, int namelen)
 {

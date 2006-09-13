@@ -40,7 +40,6 @@
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_dlm.h>
-#include <lustre_idl.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include "lmv_internal.h"

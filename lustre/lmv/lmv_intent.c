@@ -37,7 +37,6 @@
 #endif
 
 #include <lustre/lustre_idl.h>
-#include <lustre_idl.h>
 #include <obd_support.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>

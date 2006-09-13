@@ -39,7 +39,6 @@
 #include <linux/ext2_fs.h>
 
 #include <lustre/lustre_idl.h>
-#include <lustre_idl.h>
 #include <lustre_log.h>
 #include <obd_support.h>
 #include <lustre_lib.h>
