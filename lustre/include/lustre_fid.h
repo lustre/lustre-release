@@ -2,6 +2,7 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
+ *   Author: Yury Umanets <umka@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -39,6 +40,7 @@ struct lu_context;
 /* whole sequences space range and zero range definitions */
 extern const struct lu_range LUSTRE_SEQ_SPACE_RANGE;
 extern const struct lu_range LUSTRE_SEQ_ZERO_RANGE;
+extern const struct lu_fid LUSTRE_BFL_FID;
 
 enum {
         /* this is how may FIDs may be allocated in one sequence. 16384 for now */
@@ -194,4 +196,4 @@ void range_cpu_to_be(struct lu_range *dst, const struct lu_range *src);
 void range_le_to_cpu(struct lu_range *dst, const struct lu_range *src);
 void range_be_to_cpu(struct lu_range *dst, const struct lu_range *src);
 
-#endif /* __LINUX_OBD_CLASS_H */
+#endif /* __LINUX_FID_H */

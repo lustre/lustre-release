@@ -424,6 +424,54 @@ out:
         return rc;
 }
 
+static int mdt_rename_lock(struct mdt_thread_info *info,
+                           struct lustre_handle *lh)
+{
+        ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } }; 
+        struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
+        int flags = LDLM_FL_ATOMIC_CB;
+        struct ldlm_res_id res_id;
+        struct lu_site *ls;
+        int rc;
+        ENTRY;
+
+        ls = info->mti_mdt->mdt_md_dev.md_lu_dev.ld_site;
+        fid_build_res_name(&LUSTRE_BFL_FID, &res_id);
+        
+        if (ls->ls_control_exp == NULL) {
+                /* 
+                 * Current node is controller, that is mdt0 where we should take
+                 * BFL lock.
+                 */
+                rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, &policy,
+                                            LCK_EX, &flags, ldlm_blocking_ast,
+                                            ldlm_completion_ast, NULL, NULL, 0,
+                                            NULL, lh);
+        } else {
+                /*
+                 * This is the case mdt0 is remote node, issue DLM lock like
+                 * other clients.
+                 */
+                rc = ldlm_cli_enqueue(ls->ls_control_exp, NULL, res_id,
+                                      LDLM_IBITS, &policy, LCK_EX, &flags,
+                                      ldlm_blocking_ast, ldlm_completion_ast,
+                                      NULL, NULL, NULL, 0, NULL, lh, 0);
+        }
+
+        RETURN(rc);
+}
+
+static void mdt_rename_unlock(struct lustre_handle *lh)
+{
+        ENTRY;
+        ldlm_lock_decref(lh, LCK_EX);
+        EXIT;
+}
+
+static int mdt_rename_check(struct mdt_thread_info *info)
+{
+        return 0;
+}
 
 static int mdt_reint_rename(struct mdt_thread_info *info)
 {
@@ -441,6 +489,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         struct mdt_lock_handle  *lh_newp;
         struct lu_fid           *old_fid = &info->mti_tmp_fid1;
         struct lu_fid           *new_fid = &info->mti_tmp_fid2;
+        struct lustre_handle     rename_lh = { 0 };
         int                      rc;
 
         ENTRY;
@@ -455,6 +504,16 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                 RETURN(mdt_reint_rename_tgt(info));
         }
 
+        rc = mdt_rename_lock(info, &rename_lh);
+        if (rc) {
+                CERROR("can't lock FS for rename, rc %d\n", rc);
+                RETURN(rc);
+        }
+
+        rc = mdt_rename_check(info);
+        if (rc)
+                GOTO(out, rc);
+        
         lh_newp = &info->mti_lh[MDT_LH_NEW];
 
         /* step 1: lock the source dir */
@@ -554,6 +613,7 @@ out_unlock_target:
         mdt_object_unlock_put(info, mtgtdir, lh_tgtdirp, rc);
 out_unlock_source:
         mdt_object_unlock_put(info, msrcdir, lh_srcdirp, rc);
+        mdt_rename_unlock(&rename_lh);
 out:
         return rc;
 }

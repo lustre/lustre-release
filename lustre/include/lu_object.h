@@ -542,12 +542,12 @@ struct lu_site {
          * Controller Seq Manager
          */
         struct lu_server_seq *ls_control_seq;
+        struct obd_export    *ls_control_exp;
 
         /*
          * Client Seq Manager
          */
         struct lu_client_seq *ls_client_seq;
-        struct obd_export    *ls_client_exp;
 
         /* statistical counters. Protected by nothing, races are accepted. */
         struct {

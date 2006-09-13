@@ -128,9 +128,33 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
         return rc;
 }
 
+static int lmv_set_mdc_data(struct lmv_obd *lmv, struct obd_uuid *uuid,
+                            struct obd_connect_data *data)
+{
+        struct lmv_tgt_desc *tgt;
+        int i;
+        ENTRY;
+
+        LASSERT(data != NULL);
+        
+        spin_lock(&lmv->lmv_lock);
+        for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count; i++, tgt++) {
+                if (tgt->ltd_exp == NULL)
+                        continue;
+
+                if (obd_uuid_equals(uuid, &tgt->uuid)) {
+                        lmv->datas[tgt->idx] = *data;
+                        break;
+                }
+        }
+        spin_unlock(&lmv->lmv_lock);
+        RETURN(0);
+}
+
 static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
                       enum obd_notify_event ev, void *data)
 {
+        struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_uuid *uuid;
         int rc;
         ENTRY;
@@ -141,21 +165,47 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
                        watched->obd_name);
                 RETURN(-EINVAL);
         }
-        uuid = &watched->u.cli.cl_target_uuid;
 
-        /* Set MDC as active before notifying the observer, so the observer can
-         * use the MDC normally. */
-        rc = lmv_set_mdc_active(&obd->u.lmv, uuid,
-                                ev == OBD_NOTIFY_ACTIVE);
-        if (rc) {
-                CERROR("%sactivation of %s failed: %d\n",
-                       ev == OBD_NOTIFY_ACTIVE ? "" : "de",
-                       uuid->uuid, rc);
-                RETURN(rc);
+        uuid = &watched->u.cli.cl_target_uuid;
+        if (ev == OBD_NOTIFY_ACTIVE || ev == OBD_NOTIFY_INACTIVE) {
+                /*
+                 * Set MDC as active before notifying the observer, so the
+                 * observer can use the MDC normally.
+                 */
+                rc = lmv_set_mdc_active(lmv, uuid,
+                                        ev == OBD_NOTIFY_ACTIVE);
+                if (rc) {
+                        CERROR("%sactivation of %s failed: %d\n",
+                               ev == OBD_NOTIFY_ACTIVE ? "" : "de",
+                               uuid->uuid, rc);
+                        RETURN(rc);
+                }
         }
 
+        if (ev == OBD_NOTIFY_OCD) {
+                struct obd_connect_data *conn_data =
+                        &watched->u.cli.cl_import->imp_connect_data;
+                /*
+                 * Set connect data to desired target, update exp_connect_flags.
+                 */
+                rc = lmv_set_mdc_data(lmv, uuid, conn_data);
+                if (rc) {
+                        CERROR("can't set connect data to target %s, rc %d\n",
+                               uuid->uuid, rc);
+                        RETURN(rc);
+                }
+
+                /* 
+                 * XXX: make sure that ocd_connect_flags from all targets are
+                 * the same. Otherwise one of MDTs runs wrong version or
+                 * something like this.  --umka
+                 */
+                obd->obd_self_export->exp_connect_flags =
+                        conn_data->ocd_connect_flags;
+        }
+        
+        /* Pass the notification up the chain. */
         if (obd->obd_observer)
-                /* pass the notification up the chain. */
                 rc = obd_notify(obd->obd_observer, watched, ev, data);
 
         RETURN(rc);
@@ -1892,16 +1942,16 @@ static int lmv_readpage(struct obd_export *exp,
         if (obj && i < obj->lo_objcount - 1) {
                 struct lu_dirpage *dp;
                 __u32 end;
-               /* This dirobj has been splitted, so we 
-                * check whether reach the end of one hash_segment
-                * and  reset ldp->ldp_hash_end
-                */
+                /*
+                 * This dirobj has been split, so we check whether reach the end
+                 * of one hash_segment and reset ldp->ldp_hash_end.
+                 */
                 kmap(page);
                 dp = page_address(page); 
                 end = le32_to_cpu(dp->ldp_hash_end);
                 if (end == ~0ul) {
                         __u32 hash_segment_end = (i + 1) * 
-                                            MAX_HASH_SIZE/obj->lo_objcount;
+                                MAX_HASH_SIZE/obj->lo_objcount;
                         dp->ldp_hash_end = cpu_to_le32(hash_segment_end); 
                         CDEBUG(D_INFO,"reset hash end %x for split obj "DFID"",
                                le32_to_cpu(dp->ldp_hash_end), PFID(&rid)); 

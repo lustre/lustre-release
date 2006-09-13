@@ -6,6 +6,7 @@
  *
  *  Copyright (c) 2006 Cluster File Systems, Inc.
  *   Author: Nikita Danilov <nikita@clusterfs.com>
+ *           Yury Umanets <umka@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -41,6 +42,30 @@
 #include <obd.h>
 #include <lu_object.h>
 #include <lustre_fid.h>
+
+/*
+ * Sequence space, starts from 0x400 to have first 0x400 sequences used for
+ * special purposes. This means that if we have seq-with 10000 fids, we have
+ * ~10M fids reserved for special purposes (igifs, etc.).
+ */
+const struct lu_range LUSTRE_SEQ_SPACE_RANGE = {
+        (0x400),
+        ((__u64)~0ULL)
+};
+EXPORT_SYMBOL(LUSTRE_SEQ_SPACE_RANGE);
+
+/* Zero range, used for init and other purposes. */
+const struct lu_range LUSTRE_SEQ_ZERO_RANGE = {
+        0,
+        0
+};
+EXPORT_SYMBOL(LUSTRE_SEQ_ZERO_RANGE);
+
+/* Lustre Big Fs Lock fid. */
+const struct lu_fid LUSTRE_BFL_FID = { .f_seq = 0x0000000000000003, 
+                                       .f_oid = 0x0000000000000001,
+                                       .f_ver = 0x0000000000000000 };
+EXPORT_SYMBOL(LUSTRE_BFL_FID);
 
 void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src)
 {

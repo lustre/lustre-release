@@ -1169,6 +1169,7 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
                 break;
         }
         case IMP_EVENT_OCD:
+                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD, NULL);
                 break;
 
         default:

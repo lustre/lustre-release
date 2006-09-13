@@ -157,7 +157,7 @@ static int mdt_getstatus(struct mdt_thread_info *info)
                 rc = -ENOMEM;
         else {
                 body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-                rc = next->md_ops->mdo_root_get(info->mti_ctxt,
+                rc = next->md_ops->mdo_get_root(info->mti_ctxt,
                                                 next, &body->fid1);
                 if (rc == 0)
                         body->valid |= OBD_MD_FLID;
@@ -987,19 +987,6 @@ static int mdt_cp_callback(struct mdt_thread_info *info)
         CERROR("cp callbacks should not happen on MDS\n");
         LBUG();
         return -EOPNOTSUPP;
-}
-
-/*
- * Build (DLM) resource name from fid.
- */
-struct ldlm_res_id *fid_build_res_name(const struct lu_fid *f,
-                                       struct ldlm_res_id *name)
-{
-        memset(name, 0, sizeof *name);
-        name->name[0] = fid_seq(f);
-        name->name[1] = fid_oid(f);
-        name->name[2] = fid_ver(f);
-        return name;
 }
 
 /* issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
@@ -2113,7 +2100,7 @@ static int mdt_seq_init_cli(const struct lu_context *ctx,
                         CERROR("target %s connect error %d\n",
                                mdc->obd_name, rc);
                 } else {
-                        ls->ls_client_exp = class_conn2export(&conn);
+                        ls->ls_control_exp = class_conn2export(&conn);
 
                         OBD_ALLOC_PTR(ls->ls_client_seq);
 
@@ -2128,7 +2115,7 @@ static int mdt_seq_init_cli(const struct lu_context *ctx,
                                          mdc->obd_name);
 
                                 rc = seq_client_init(ls->ls_client_seq,
-                                                     ls->ls_client_exp,
+                                                     ls->ls_control_exp,
                                                      LUSTRE_SEQ_METADATA,
                                                      prefix, NULL, NULL);
                                 OBD_FREE(prefix, MAX_OBD_NAME + 5);
@@ -2162,13 +2149,13 @@ static void mdt_seq_fini_cli(struct mdt_device *m)
                 seq_server_set_cli(ls->ls_server_seq,
                                    NULL, NULL);
 
-        if (ls && ls->ls_client_exp) {
-                rc = obd_disconnect(ls->ls_client_exp);
+        if (ls && ls->ls_control_exp) {
+                rc = obd_disconnect(ls->ls_control_exp);
                 if (rc) {
                         CERROR("failure to disconnect "
                                "obd: %d\n", rc);
                 }
-                ls->ls_client_exp = NULL;
+                ls->ls_control_exp = NULL;
         }
         EXIT;
 }

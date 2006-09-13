@@ -25,8 +25,8 @@
  *   of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *   license text for more details.
  */
-#ifndef _FLD_INTERNAL_H
-#define _FLD_INTERNAL_H
+#ifndef __FLD_INTERNAL_H
+#define __FLD_INTERNAL_H
 
 #include <lustre/lustre_idl.h>
 #include <dt_object.h>
@@ -99,4 +99,4 @@ fld_target_name(struct lu_fld_target *tar)
         return tar->ft_exp->exp_client_uuid.uuid;
 }
 
-#endif
+#endif /* __FLD_INTERNAL_H */

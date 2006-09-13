@@ -171,13 +171,13 @@ struct md_dir_operations {
 
 struct md_device_operations {
         /* meta-data device related handlers. */
-        int (*mdo_root_get)(const struct lu_context *ctx,
+        int (*mdo_get_root)(const struct lu_context *ctx,
                             struct md_device *m, struct lu_fid *f);
-        int (*mdo_statfs)(const struct lu_context *ctx,
-                          struct md_device *m, struct kstatfs *sfs);
         int (*mdo_get_maxsize)(const struct lu_context *ctx,
                                struct md_device *m, int *md_size,
                                int *cookie_size);
+        int (*mdo_statfs)(const struct lu_context *ctx,
+                          struct md_device *m, struct kstatfs *sfs);
 };
 
 enum md_upcall_event {

@@ -299,7 +299,7 @@ static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
 #define MEA_MAGIC_LAST_CHAR      0xb2221ca1
 #define MEA_MAGIC_ALL_CHARS      0xb222a11c
 #define MEA_MAGIC_HASH_SEGMENT   0xb222a11b
-#define MAX_HASH_SIZE 0x3fffffff
+#define MAX_HASH_SIZE            0x3fffffff
 
 struct lmv_stripe_md {
         __u32         mea_magic;
@@ -457,7 +457,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 
 #define MDT_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
-                                OBD_CONNECT_IBITS | OBD_CONNECT_JOIN)
+                                OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
+                                OBD_CONNECT_ATTRFID)
 
 #define OBD_OCD_VERSION(major,minor,patch,fix) (((major)<<24) + ((minor)<<16) +\
                                                 ((patch)<<8) + (fix))

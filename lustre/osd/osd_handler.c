@@ -112,7 +112,7 @@ struct osd_device {
         struct lu_context         od_ctx_for_commit;
 };
 
-static int   osd_root_get      (const struct lu_context *ctxt,
+static int   osd_get_root      (const struct lu_context *ctxt,
                                 struct dt_device *dev, struct lu_fid *f);
 static int   osd_statfs        (const struct lu_context *ctxt,
                                 struct dt_device *dev, struct kstatfs *sfs);
@@ -177,7 +177,7 @@ static int   osd_it_del        (const struct lu_context *ctx, struct dt_it *di,
                                 struct thandle *th);
 static int   osd_it_key_size   (const struct lu_context *ctx,
                                 const struct dt_it *di);
-static void  osd_conf_get      (const struct lu_context *ctx,
+static void  osd_get_conf      (const struct lu_context *ctx,
                                 const struct dt_device *dev,
                                 struct dt_device_param *param);
 static int   osd_read_locked   (const struct lu_context *ctx,
@@ -293,7 +293,7 @@ static void osd_rw_fini(mm_segment_t *seg)
         set_fs(*seg);
 }
 
-static int osd_root_get(const struct lu_context *ctx,
+static int osd_get_root(const struct lu_context *ctx,
                         struct dt_device *dev, struct lu_fid *f)
 {
         struct inode *inode;
@@ -433,7 +433,7 @@ static int osd_statfs(const struct lu_context *ctx,
         RETURN (result);
 }
 
-static void osd_conf_get(const struct lu_context *ctx,
+static void osd_get_conf(const struct lu_context *ctx,
                          const struct dt_device *dev,
                          struct dt_device_param *param)
 {
@@ -584,11 +584,11 @@ static void osd_ro(const struct lu_context *ctx, struct dt_device *d)
 
 
 static struct dt_device_operations osd_dt_ops = {
-        .dt_root_get    = osd_root_get,
+        .dt_get_root    = osd_get_root,
         .dt_statfs      = osd_statfs,
         .dt_trans_start = osd_trans_start,
         .dt_trans_stop  = osd_trans_stop,
-        .dt_conf_get    = osd_conf_get,
+        .dt_get_conf    = osd_get_conf,
         .dt_sync        = osd_sync,
         .dt_ro          = osd_ro
 };

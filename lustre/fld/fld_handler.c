@@ -5,8 +5,8 @@
  *  FLD (Fids Location Database)
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
- *   Author: WangDi <wangdi@clusterfs.com>
- *           Yury Umanets <umka@clusterfs.com>
+ *   Author: Yury Umanets <umka@clusterfs.com>
+ *           WangDi <wangdi@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.

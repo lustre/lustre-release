@@ -51,14 +51,14 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
 }
 
-int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
+int cmm_get_root(const struct lu_context *ctx, struct md_device *md,
                  struct lu_fid *fid)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
         /* valid only on master MDS */
         if (cmm_dev->cmm_local_num == 0)
-                return cmm_child_ops(cmm_dev)->mdo_root_get(ctx,
-                                                    cmm_dev->cmm_child, fid);
+                return cmm_child_ops(cmm_dev)->mdo_get_root(ctx,
+                                     cmm_dev->cmm_child, fid);
         else
                 return -EINVAL;
 }
@@ -86,8 +86,8 @@ static int cmm_get_maxsize(const struct lu_context *ctxt, struct md_device *md,
 }
 
 static struct md_device_operations cmm_md_ops = {
-        .mdo_root_get       = cmm_root_get,
         .mdo_statfs         = cmm_statfs,
+        .mdo_get_root       = cmm_get_root,
         .mdo_get_maxsize    = cmm_get_maxsize,
 };
 

@@ -82,12 +82,12 @@ struct dt_device_operations {
         /*
          * Return fid of root index object.
          */
-        int   (*dt_root_get)(const struct lu_context *ctx,
+        int   (*dt_get_root)(const struct lu_context *ctx,
                              struct dt_device *dev, struct lu_fid *f);
         /*
          * Return device configuration data.
          */
-        void  (*dt_conf_get)(const struct lu_context *ctx,
+        void  (*dt_get_conf)(const struct lu_context *ctx,
                              const struct dt_device *dev,
                              struct dt_device_param *param);
         /*
