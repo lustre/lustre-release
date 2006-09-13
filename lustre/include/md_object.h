@@ -77,6 +77,8 @@ struct md_create_spec {
                 const struct lu_fid      *sp_pfid;
                 /* eadata for regular files */
                 struct md_spec_reg {
+                        /* lov objs exist already */
+                        int no_lov_create;
                         const void *eadata;
                         int  eadatalen;
                 } sp_ea;

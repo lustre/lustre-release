@@ -595,8 +595,15 @@ static int mdd_recovery_complete(const struct lu_context *ctxt,
                    obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
                    OBD_NOTIFY_SYNC, NULL);
 */
+        LASSERT(mdd);
+        LASSERT(mdd->mdd_obd_dev);
+
+        mdd->mdd_obd_dev->obd_recovering = 0;
+        //mdd->mdd_obd_dev->obd_type->typ_dt_ops->
+        mds_postrecov(mdd->mdd_obd_dev);
         /* TODO: orphans handling */
         rc = next->ld_ops->ldo_recovery_complete(ctxt, next);
+        
         RETURN(rc);
 }
 
@@ -1808,7 +1815,14 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
                 GOTO(cleanup, rc);
 
         inserted = 1;
-        rc = mdd_lov_set_md(ctxt, mdd_pobj, son, lmm, lmm_size, handle, 0);
+        /* replay creates has objects already */
+        if (spec->u.sp_ea.no_lov_create)
+                rc = mdd_lov_set_md(ctxt, mdd_pobj, son,
+                                    (struct lov_mds_md *)spec->u.sp_ea.eadata,
+                                    spec->u.sp_ea.eadatalen, handle, 0);
+        else
+                rc = mdd_lov_set_md(ctxt, mdd_pobj, son, lmm,
+                                    lmm_size, handle, 0);
         if (rc) {
                 CERROR("error on stripe info copy %d \n", rc);
                 GOTO(cleanup, rc);

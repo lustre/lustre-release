@@ -2157,6 +2157,7 @@ int mds_postrecov(struct obd_device *obd)
 out:
         RETURN(rc);
 }
+EXPORT_SYMBOL(mds_postrecov);
 
 /* We need to be able to stop an mds_lov_synchronize */
 static int mds_lov_early_clean(struct obd_device *obd)
@@ -2901,7 +2902,7 @@ static struct obd_ops mds_cmd_obd_ops = {
         .o_llog_init       = mds_llog_init,
         .o_llog_finish     = mds_llog_finish,
         .o_notify          = mds_notify,
-     //   .o_health_check    = mds_cmd_health_check,
+        //   .o_health_check    = mds_cmd_health_check,
 };
 
 static int __init mds_cmd_init(void)

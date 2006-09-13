@@ -366,11 +366,14 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 
         if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
                 struct md_create_spec *sp = &info->mti_spec;
+                struct ptlrpc_request *req = mdt_info_req(info);
                 sp->u.sp_ea.eadata = req_capsule_client_get(pill,
                                                             &RMF_EADATA);
                 sp->u.sp_ea.eadatalen = req_capsule_get_size(pill,
                                                              &RMF_EADATA,
                                                              RCL_CLIENT);
+                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
+                        sp->u.sp_ea.no_lov_create = 1;
         }
 
         RETURN(result);

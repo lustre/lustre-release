@@ -2686,6 +2686,8 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
         EXIT;
 }
 
+int mdt_postrecov(const struct lu_context *, struct mdt_device *);
+
 static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
                      struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
@@ -2768,6 +2770,8 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         rc = mdt_fs_setup(ctx, m);
         if (rc)
                 GOTO(err_stop_service, rc);
+        if(obd->obd_recovering == 0)
+                mdt_postrecov(ctx, m);
         RETURN(0);
 
 err_stop_service:
@@ -3161,22 +3165,28 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         RETURN(rc);
 }
 
-int mdt_postrecov(struct obd_device *obd)
+int mdt_postrecov(const struct lu_context *ctx, struct mdt_device *mdt)
 {
-        struct lu_context ctxt;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
         struct lu_device *ld = md2lu_dev(mdt->mdt_child);
         int rc;
         ENTRY;
+        rc = ld->ld_ops->ldo_recovery_complete(ctx, ld);
+        RETURN(rc);
+}
+
+int mdt_obd_postrecov(struct obd_device *obd)
+{
+        struct lu_context ctxt;
+        int rc;
 
         rc = lu_context_init(&ctxt, LCT_MD_THREAD);
         if (rc)
                 RETURN(rc);
         lu_context_enter(&ctxt);
-        rc = ld->ld_ops->ldo_recovery_complete(&ctxt, ld);
+        rc = mdt_postrecov(&ctxt, mdt_dev(obd->obd_lu_dev));
         lu_context_exit(&ctxt);
         lu_context_fini(&ctxt);
-        RETURN(rc);
+        return rc;
 }
 
 static struct obd_ops mdt_obd_device_ops = {
@@ -3187,7 +3197,7 @@ static struct obd_ops mdt_obd_device_ops = {
         .o_init_export    = mdt_init_export,
         .o_destroy_export = mdt_destroy_export,
         .o_iocontrol      = mdt_iocontrol,
-        .o_postrecov      = mdt_postrecov
+        .o_postrecov      = mdt_obd_postrecov
 
 };
 

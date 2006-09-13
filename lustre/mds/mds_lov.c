@@ -389,8 +389,10 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
          * set_nextid().  The class driver can help us here, because
          * it can use the obd_recovering flag to determine when the
          * the OBD is full available. */
+        /* MDD device will care about that
         if (!obd->obd_recovering)
                 rc = mds_postrecov(obd);
+         */
         RETURN(rc);
 
 err_reg:
@@ -874,4 +876,4 @@ void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
                         le64_to_cpu(lmm->lmm_objects[i].l_object_id);
         }
 }
-
+EXPORT_SYMBOL(mds_objids_from_lmm);

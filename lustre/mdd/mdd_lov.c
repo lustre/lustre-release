@@ -124,6 +124,7 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                 LBUG();
         }
         obd->u.mds.mds_id = index;
+        obd->obd_recovering = 1;
         rc = class_setup(obd, lcfg);
         if (rc)
                 GOTO(class_detach, rc);
@@ -133,7 +134,6 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
          */
         obd->obd_upcall.onu_owner = mdd;
         obd->obd_upcall.onu_upcall = mdd_lov_update;
-
         mdd->mdd_obd_dev = obd;
 class_detach:
         if (rc)
@@ -340,6 +340,15 @@ static void mdd_lov_objid_update(const struct lu_context *ctxt,
         mds_lov_update_objids(mdd->mdd_obd_dev, info->mti_oti.oti_objid);
 }
 
+static void mdd_lov_objid_from_lmm(const struct lu_context *ctx,
+                                   struct mdd_device *mdd, 
+                                   struct lov_mds_md *lmm)
+{
+        struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
+        struct mdd_thread_info *info = mdd_ctx_info(ctx);
+        mds_objids_from_lmm(info->mti_oti.oti_objid, lmm, &mds->mds_lov_desc);
+}
+
 static void mdd_lov_objid_free(const struct lu_context *ctxt,
                                struct mdd_device *mdd)
 {
@@ -382,12 +391,24 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         !(create_flags & FMODE_WRITE))
                 RETURN(0);
 
-        OBD_FAIL_RETURN((OBD_FAIL_MDS_ALLOC_OBDO), -ENOMEM);
+        oti_init(oti, NULL);
+        rc = mdd_lov_objid_alloc(ctxt, mdd);
+        if (rc != 0)
+                RETURN(rc);
+
+        /* replay case, should get lov from eadata */
+        if (spec->u.sp_ea.no_lov_create != 0) {
+                mdd_lov_objid_from_lmm(ctxt, mdd, (struct lov_mds_md *)eadata);
+                RETURN(0);
+        }
+        
+        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
+                        GOTO(out_ids, rc = -ENOMEM);
 
         LASSERT(lov_exp != NULL);
         oa = obdo_alloc();
         if (oa == NULL)
-                RETURN(-ENOMEM);
+                GOTO(out_ids, rc = -ENOMEM);
 
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
@@ -398,11 +419,6 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGROUP;
         oa->o_size = 0;
         
-        oti_init(oti, NULL);
-        rc = mdd_lov_objid_alloc(ctxt, mdd);
-        if (rc != 0)
-                GOTO(out_oa, rc);
-
         if (!(create_flags & MDS_OPEN_HAS_OBJS)) {
                 if (create_flags & MDS_OPEN_HAS_EA) {
                         LASSERT(eadata != NULL);
@@ -503,6 +519,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
 out_oa:
         oti_free_cookies(oti);
         obdo_free(oa);
+out_ids:
         if (lsm)
                 obd_free_memmd(lov_exp, &lsm);
         if (rc != 0) 

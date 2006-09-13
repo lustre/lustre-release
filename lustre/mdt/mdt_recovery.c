@@ -706,13 +706,10 @@ int mdt_client_del(const struct lu_context *ctx,
         CDEBUG(rc == 0 ? D_INFO : D_ERROR,
                         "zeroing out client idx %u in %s rc %d\n",
                         med->med_lr_idx, LAST_RCVD, rc);
-        
-        if (!test_and_clear_bit(med->med_lr_idx, mdt->mdt_client_bitmap)) {
-                CERROR("MDS client %u: bit already clear in bitmap!!\n",
-                       med->med_lr_idx);
-                LBUG();
-        }
-
+       
+        spin_lock(&mdt->mdt_client_bitmap_lock);
+        clear_bit(med->med_lr_idx, mdt->mdt_client_bitmap);
+        spin_unlock(&mdt->mdt_client_bitmap_lock);
         /* Make sure the server's last_transno is up to date. Do this
          * after the client is freed so we know all the client's
          * transactions have been committed. */
@@ -836,7 +833,6 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
                 if (mti->mti_transno > mdt->mdt_last_transno)
                         mdt->mdt_last_transno = mti->mti_transno;
         }
-        spin_unlock(&mdt->mdt_transno_lock);
 
         /* sometimes the reply message has not been successfully packed */
         LASSERT(req != NULL && req->rq_repmsg != NULL);
@@ -845,7 +841,6 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
         CDEBUG(D_INODE, "transno = %llu, last_committed = %llu\n",
                mti->mti_transno, req->rq_export->exp_obd->obd_last_committed);
 
-        spin_lock(&mdt->mdt_transno_lock);
         req->rq_transno = mti->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, mti->mti_transno);
         target_committed_to_req(req);
