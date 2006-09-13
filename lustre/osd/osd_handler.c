@@ -665,6 +665,7 @@ static int osd_attr_set(const struct lu_context *ctxt,
                         struct thandle *handle)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+        LASSERT(handle != NULL);
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
         LASSERT(osd_write_locked(ctxt, obj));
@@ -923,6 +924,7 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
         LASSERT(osd_invariant(obj));
         LASSERT(!dt_object_exists(dt));
         LASSERT(osd_write_locked(ctx, obj));
+        LASSERT(th != NULL);
 
         /*
          * XXX missing: permission checks.
@@ -970,6 +972,7 @@ static void osd_object_ref_add(const struct lu_context *ctxt,
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_write_locked(ctxt, obj));
+        LASSERT(th != NULL);
 
         if (inode->i_nlink < LDISKFS_LINK_MAX) {
                 inode->i_nlink ++;
@@ -989,6 +992,7 @@ static void osd_object_ref_del(const struct lu_context *ctxt,
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_write_locked(ctxt, obj));
+        LASSERT(th != NULL);
 
         if (inode->i_nlink > 0) {
                 inode->i_nlink --;
@@ -1029,6 +1033,7 @@ static int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->setxattr != NULL);
         LASSERT(osd_write_locked(ctxt, obj));
+        LASSERT(handle != NULL);
 
         dentry->d_inode = inode;
 
@@ -1069,6 +1074,7 @@ static int osd_xattr_del(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->removexattr != NULL);
         LASSERT(osd_write_locked(ctxt, obj));
+        LASSERT(handle != NULL);
 
         dentry->d_inode = inode;
         return inode->i_op->removexattr(dentry, name);
@@ -1265,6 +1271,8 @@ static ssize_t osd_write(const struct lu_context *ctxt, struct dt_object *dt,
         mm_segment_t  seg;
         ssize_t       result;
 
+        LASSERT(handle != NULL);
+
         file = osd_rw_init(ctxt, inode, &seg);
         result = file->f_op->write(file, buf, count, pos);
         osd_rw_fini(&seg);
@@ -1366,6 +1374,7 @@ static int osd_index_delete(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(dt_object_exists(dt));
         LASSERT(obj->oo_container.ic_object == obj->oo_inode);
         LASSERT(obj->oo_ipd != NULL);
+        LASSERT(handle != NULL);
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
@@ -1414,6 +1423,7 @@ static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
         LASSERT(dt_object_exists(dt));
         LASSERT(obj->oo_container.ic_object == obj->oo_inode);
         LASSERT(obj->oo_ipd != NULL);
+        LASSERT(th != NULL);
 
         oh = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
@@ -1489,6 +1499,7 @@ static int osd_it_del(const struct lu_context *ctx, struct dt_it *di,
         struct osd_it      *it = (struct osd_it *)di;
         struct osd_thandle *oh;
 
+        LASSERT(th != NULL);
         oh = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
 
@@ -1554,6 +1565,7 @@ static int osd_index_compat_delete(const struct lu_context *ctxt,
 {
         struct osd_object *obj = osd_dt_obj(dt);
 
+        LASSERT(handle != NULL);
         LASSERT(S_ISDIR(obj->oo_inode->i_mode));
         ENTRY;
         RETURN(-EOPNOTSUPP);
@@ -1702,6 +1714,7 @@ static int osd_index_compat_insert(const struct lu_context *ctx,
 
         LASSERT(S_ISDIR(obj->oo_inode->i_mode));
         LASSERT(osd_invariant(obj));
+        LASSERT(th != NULL);
 
         luch = lu_object_find(ctx, ludev->ld_site, fid);
         if (!IS_ERR(luch)) {
