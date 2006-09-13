@@ -173,13 +173,13 @@ foreach my $mds (@{$objs{"mds"}}) {
     my $lov = $mds->{"lov"};
     my $mkfs_options="";
     if (defined($lov->{"stripe_sz"})) {
-        $mkfs_options .= "lov.stripe.size=" . $lov->{"stripe_sz"} . ",";
+        $mkfs_options .= "lov.stripe.size=" . $lov->{"stripe_sz"} . " ";
     }
     if (defined($lov->{"stripe_cnt"})) {
-        $mkfs_options .= "lov.stripe.count=" . $lov->{"stripe_cnt"} . ",";
+        $mkfs_options .= "lov.stripe.count=" . $lov->{"stripe_cnt"} . " ";
     }
     if (defined($lov->{"stripe_pattern"})) {
-        $mkfs_options .= "lov.stripe.pattern=" . $lov->{"stripe_pattern"} . ",";
+        $mkfs_options .= "lov.stripe.pattern=" . $lov->{"stripe_pattern"} . " ";
     }
     chop($mkfs_options);
     if ($mkfs_options ne "") {
