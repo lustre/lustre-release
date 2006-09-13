@@ -509,7 +509,18 @@ int mdc_enqueue(struct obd_export *exp,
                     !it_open_error(DISP_OPEN_OPEN, it))
                         mdc_set_open_replay_data(NULL, NULL, req);
 
-                if ((body->valid & OBD_MD_FLEASIZE) != 0) {
+                if ((body->valid & OBD_MD_FLDIREA) != 0) {
+                        if (body->eadatasize) {
+                                eadata = lustre_swab_repbuf(req, 
+                                                DLM_REPLY_REC_OFF + 1,
+                                                body->eadatasize, NULL);
+                                if (eadata == NULL) {
+                                        CERROR ("Missing/short eadata\n");
+                                        RETURN (-EPROTO);
+                                }
+                        }
+                }
+                if ((body->valid & OBD_MD_FLEASIZE)) {
                         /* The eadata is opaque; just check that it is there.
                          * Eventually, obd_unpackmd() will check the contents */
                         eadata = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF + 1,

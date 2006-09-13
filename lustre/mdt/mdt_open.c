@@ -693,15 +693,19 @@ int mdt_open(struct mdt_thread_info *info)
 
         if (result == -ENOENT) {
                 /* not found and with MDS_OPEN_CREAT: let's create it */
-                mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
                 result = mdo_create(info->mti_ctxt,
                                     mdt_object_child(parent),
                                     rr->rr_name,
                                     mdt_object_child(child),
                                     &info->mti_spec,
                                     &info->mti_attr);
-                if (result != 0)
+                if (result == -ERESTART)
                         GOTO(out_child, result);
+                else {        
+                        mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
+                        if (result != 0)
+                                GOTO(out_child, result);
+                }
                 created = 1;
         } else {
                 /* we have to get attr & lov ea for this object*/

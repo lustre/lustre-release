@@ -35,6 +35,7 @@
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include <lustre_ver.h>
+#include "cmm_internal.h"
 #include "mdc_internal.h"
 
 static struct lu_device_operations mdc_lu_ops;

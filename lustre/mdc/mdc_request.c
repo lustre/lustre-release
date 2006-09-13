@@ -379,7 +379,9 @@ int mdc_unpack_acl(struct obd_export *exp, struct ptlrpc_request *req,
 #endif
 
 int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
-                      int offset, struct obd_export *dt_exp, struct lustre_md *md)
+                      int offset, struct obd_export *dt_exp, 
+                      struct obd_export *md_exp, 
+                      struct lustre_md *md)
 {
         int rc = 0;
         ENTRY;
@@ -420,9 +422,28 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
 
                 offset++;
         } else if (md->body->valid & OBD_MD_FLDIREA) {
-                /* TODO: umka, please handle this case */
+                int lmvsize;
+                struct lov_mds_md *lmv;
                 LASSERT(S_ISDIR(md->body->mode));
-                offset++;
+        
+                if (md->body->eadatasize == 0) {
+                        RETURN(0);
+                }
+                if (md->body->valid & OBD_MD_MEA) {
+                        lmvsize = md->body->eadatasize;
+                        lmv = lustre_msg_buf(req->rq_repmsg, offset, lmvsize);
+                        LASSERT (lmv != NULL);
+                        LASSERT_REPSWABBED(req, offset);
+
+                        rc = obd_unpackmd(md_exp, (void *)&md->mea, lmv, 
+                                          lmvsize);
+                        if (rc < 0)
+                                RETURN(rc);
+
+                        LASSERT (rc >= sizeof (*md->mea));
+                }
+                rc = 0;
+                offset ++; 
         }
 
         /* for ACL, it's possible that FLACL is set but aclsize is zero.  only

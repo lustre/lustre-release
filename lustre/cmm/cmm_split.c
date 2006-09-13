@@ -36,6 +36,7 @@
 #include <obd_class.h>
 #include <lustre_fid.h>
 #include <lustre_mds.h>
+#include <lustre_idl.h>
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
@@ -44,7 +45,7 @@
 #define CMM_NO_SPLITTABLE       2
 
 enum {
-        SPLIT_SIZE =  8*1024
+        SPLIT_SIZE =  12*1024
 };
 
 static inline struct lu_fid* cmm2_fid(struct cmm_object *obj)
@@ -74,6 +75,8 @@ static int cmm_expect_splitting(const struct lu_context *ctx,
         if (rc)
                 GOTO(cleanup, rc);
 
+        rc = CMM_EXPECT_SPLIT;
+
         if (lu_fid_eq(fid, cmm2_fid(md2cmm_obj(mo))))
                 GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
 
@@ -84,7 +87,7 @@ cleanup:
 }
 
 #define cmm_md_size(stripes)                            \
-       (sizeof(struct lmv_stripe_md) + stripes * sizeof(struct lu_fid))
+       (sizeof(struct lmv_stripe_md) + (stripes) * sizeof(struct lu_fid))
 
 static int cmm_alloc_fid(const struct lu_context *ctx, struct cmm_device *cmm,
                          struct lu_fid *fid, int count)
@@ -100,7 +103,7 @@ static int cmm_alloc_fid(const struct lu_context *ctx, struct cmm_device *cmm,
                                  mc_linkage) {
                 LASSERT(cmm->cmm_local_num != mc->mc_num);
 
-                rc = obd_fid_alloc(mc->mc_desc.cl_exp, &fid[i++], NULL);
+                rc = obd_fid_alloc(mc->mc_desc.cl_exp, &fid[i], NULL);
                 if (rc > 0) {
                         struct lu_site *ls;
 
@@ -113,6 +116,7 @@ static int cmm_alloc_fid(const struct lu_context *ctx, struct cmm_device *cmm,
                         spin_unlock(&cmm->cmm_tgt_guard);
                         RETURN(rc);
                 }
+                i++;
         }
         spin_unlock(&cmm->cmm_tgt_guard);
         LASSERT(i == count);
@@ -183,9 +187,9 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
         if (!lmv)
                 RETURN(-ENOMEM);
 
-        lmv->mea_master = -1;
-        lmv->mea_magic = MEA_MAGIC_ALL_CHARS;
-        lmv->mea_count = cmm->cmm_tgt_count;
+        lmv->mea_master = cmm->cmm_local_num;
+        lmv->mea_magic = MEA_MAGIC_HASH_SEGMENT;
+        lmv->mea_count = cmm->cmm_tgt_count + 1;
 
         lmv->mea_ids[0] = *lf;
 
@@ -193,14 +197,11 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
         if (rc)
                 GOTO(cleanup, rc);
 
-        for (i = 1; i < cmm->cmm_tgt_count; i ++) {
+        for (i = 1; i < cmm->cmm_tgt_count + 1; i ++) {
                 rc = cmm_creat_remote_obj(ctx, cmm, &lmv->mea_ids[i], ma);
                 if (rc)
                         GOTO(cleanup, rc);
         }
-
-        rc = mo_xattr_set(ctx, md_object_next(mo), lmv, lmv_size,
-                          MDS_LMV_MD_NAME, 0);
 
         ma->ma_lmv_size = lmv_size;
         ma->ma_lmv = lmv;
@@ -290,7 +291,6 @@ static int cmm_remove_entries(const struct lu_context *ctx,
         RETURN(rc);
 }
 #endif
-#define MAX_HASH_SIZE 0x3fffffff
 #define SPLIT_PAGE_COUNT 1
 static int cmm_scan_and_split(const struct lu_context *ctx,
                               struct md_object *mo, struct md_attr *ma)
@@ -317,8 +317,8 @@ static int cmm_scan_and_split(const struct lu_context *ctx,
                         GOTO(cleanup, rc = -ENOMEM);
         }
 
-        hash_segement = MAX_HASH_SIZE / cmm->cmm_tgt_count;
-        for (i = 1; i < cmm->cmm_tgt_count; i++) {
+        hash_segement = MAX_HASH_SIZE / (cmm->cmm_tgt_count + 1);
+        for (i = 1; i < cmm->cmm_tgt_count + 1; i++) {
                 struct lu_fid *lf = &ma->ma_lmv->mea_ids[i];
                 __u32 hash_end;
 
@@ -355,7 +355,7 @@ int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo)
         if (ma == NULL)
                 RETURN(-ENOMEM);
 
-        ma->ma_need = MA_INODE;
+        ma->ma_need = MA_INODE|MA_LMV;
         rc = mo_attr_get(ctx, mo, ma);
         if (rc)
                 GOTO(cleanup, ma);
@@ -372,7 +372,16 @@ int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo)
 
         /* step3: scan and split the object */
         rc = cmm_scan_and_split(ctx, mo, ma);
+        if (rc)
+                GOTO(cleanup, ma);
 
+        /* step4: set mea to the master object */
+        rc = mo_xattr_set(ctx, md_object_next(mo), ma->ma_lmv, ma->ma_lmv_size,
+                          MDS_LMV_MD_NAME, 0);
+
+        if (rc == -ERESTART) 
+                CWARN("Dir"DFID" has been split \n", 
+                                PFID(lu_object_fid(&mo->mo_lu)));
 cleanup:
         if (ma->ma_lmv_size && ma->ma_lmv)
                 OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);

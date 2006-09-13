@@ -454,7 +454,7 @@ static int llu_inode_revalidate(struct inode *inode)
                         RETURN(-abs(rc));
                 }
                 rc = md_get_lustre_md(sbi->ll_md_exp, req, REPLY_REC_OFF,
-                                      sbi->ll_dt_exp, &md);
+                                      sbi->ll_dt_exp, sbi->ll_md_exp, &md);
 
                 /* XXX Too paranoid? */
                 if (((md.body->valid ^ valid) & OBD_MD_FLEASIZE) &&
@@ -701,7 +701,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
 
                 rc = md_get_lustre_md(sbi->ll_md_exp, request, REPLY_REC_OFF,
-                                      sbi->ll_dt_exp, &md);
+                                      sbi->ll_dt_exp, sbi->ll_md_exp, &md);
                 if (rc) {
                         ptlrpc_req_finished(request);
                         RETURN(rc);
@@ -1730,7 +1730,7 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
         }
         
         rc = md_get_lustre_md(sbi->ll_md_exp, req,
-                              1, sbi->ll_dt_exp, &md);
+                              1, sbi->ll_dt_exp, sbi->ll_md_exp, &md);
         if (rc)
                 GOTO(out, rc);
         
@@ -2085,7 +2085,7 @@ llu_fsswop_mount(const char *source,
         }
 
         err = md_get_lustre_md(sbi->ll_md_exp, request, REPLY_REC_OFF,
-                               sbi->ll_dt_exp, &md);
+                               sbi->ll_dt_exp, sbi->ll_md_exp, &md);
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n",err);
                 GOTO(out_request, err);

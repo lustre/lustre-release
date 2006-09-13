@@ -33,6 +33,7 @@
 #include <obd.h>
 #endif
 #include <lprocfs_status.h>
+#include <lustre_idl.h>
 
 static int mea_last_char_hash(int count, char *name, int namelen)
 {
@@ -55,6 +56,19 @@ static int mea_all_chars_hash(int count, char *name, int namelen)
         return c;
 }
 
+/* This hash calculate method must be same as the lvar hash method */
+static int mea_hash_segment(int count, char *name, int namelen)
+{
+        __u32 result = 0;
+        __u32 hash_segment = MAX_HASH_SIZE / count;
+        
+        strncpy((void *)&result, name, min(namelen, (int)sizeof result));
+
+        result = (result << 1) & 0x7fffffff;
+
+        return result / hash_segment;
+}
+
 int raw_name2idx(int hashtype, int count, const char *name, int namelen)
 {
         unsigned int c = 0;
@@ -69,6 +83,9 @@ int raw_name2idx(int hashtype, int count, const char *name, int namelen)
                         break;
                 case MEA_MAGIC_ALL_CHARS:
                         c = mea_all_chars_hash(count, (char *) name, namelen);
+                        break;
+                case MEA_MAGIC_HASH_SEGMENT:
+                        c = mea_hash_segment(count, (char *) name, namelen);
                         break;
                 default:
                         CERROR("unknown hash type 0x%x\n", hashtype);

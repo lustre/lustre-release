@@ -29,6 +29,7 @@
 #include <linux/init.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
+#include <linux/mm.h>
 #include <asm/div64.h>
 #include <linux/seq_file.h>
 #include <linux/namei.h>
@@ -38,6 +39,7 @@
 #include <linux/ext2_fs.h>
 
 #include <lustre/lustre_idl.h>
+#include <lustre_idl.h>
 #include <lustre_log.h>
 #include <obd_support.h>
 #include <lustre_lib.h>
@@ -694,9 +696,37 @@ static int lmv_placement_policy(struct obd_device *obd,
 
 #endif
                 } else {
-                        /* default policy is to use parent MDS */
+                        struct lmv_obj *obj;
                         LASSERT(fid_is_sane(hint->ph_pfid));
-                        rc = lmv_fld_lookup(lmv, hint->ph_pfid, mds);
+                        
+                        obj = lmv_obj_grab(obd, hint->ph_pfid);
+                        if (obj) {
+                                /* If the dir got split, alloc fid according 
+                                 * to its hash
+                                 */
+                                struct lu_fid *rpid;
+
+                                *mds = raw_name2idx(obj->lo_hashtype, 
+                                                    obj->lo_objcount,
+                                                    hint->ph_cname->name, 
+                                                    hint->ph_cname->len);
+                                rpid = &obj->lo_inodes[*mds].li_fid;
+                                rc = lmv_fld_lookup(lmv, rpid, mds);
+                                if (rc) {
+                                        lmv_obj_put(obj);
+                                        GOTO(exit, rc);
+                                }
+                                CDEBUG(D_INODE, "the obj "DFID" has been"
+                                       "splitted,got MDS at "LPU64" by name %s\n", 
+                                       PFID(hint->ph_pfid), *mds, 
+                                       hint->ph_cname->name);
+
+                                rc = 0;
+                        } else {
+                                /* default policy is to use parent MDS */
+                                rc = lmv_fld_lookup(lmv, hint->ph_pfid, mds);
+                        }
+                        
                 }
         } else {
                 /* sequences among all tgts are not well balanced, allocate new
@@ -705,7 +735,7 @@ static int lmv_placement_policy(struct obd_device *obd,
                 *mds = 0;
                 rc = -EINVAL;
         }
-
+exit:
         if (rc) {
                 CERROR("cannot choose MDS, err = %d\n", rc);
         } else {
@@ -1180,7 +1210,7 @@ int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid)
                 GOTO(cleanup, rc);
         }
 
-        rc = md_get_lustre_md(tgt_exp, req, 0, NULL, &md);
+        rc = md_get_lustre_md(tgt_exp, req, 1, NULL, exp, &md);
         if (rc) {
                 CERROR("mdc_get_lustre_md() failed, error %d\n", rc);
                 GOTO(cleanup, rc);
@@ -1824,7 +1854,7 @@ static int lmv_readpage(struct obd_export *exp,
         struct obd_export *tgt_exp;
         struct lu_fid rid = *fid;
         struct lmv_obj *obj;
-        int i, rc;
+        int i = 0, rc;
         ENTRY;
 
         rc = lmv_check_connect(obd);
@@ -1847,22 +1877,47 @@ static int lmv_readpage(struct obd_export *exp,
                 rid = obj->lo_inodes[i].li_fid;
 
                 lmv_obj_unlock(obj);
-                lmv_obj_put(obj);
 
                 CDEBUG(D_OTHER, "forward to "DFID" with offset %lu\n",
                        PFID(&rid), (unsigned long)offset);
         }
-        
+
         tgt_exp = lmv_get_export(lmv, &rid);
         if (IS_ERR(tgt_exp))
-                RETURN(PTR_ERR(tgt_exp));
+                GOTO(cleanup, PTR_ERR(tgt_exp));
 
         rc = md_readpage(tgt_exp, &rid, offset, page, request);
-
+        if (rc) 
+                GOTO(cleanup, rc);
+#ifdef __KERNEL__
+        if (obj && i < obj->lo_objcount - 1) {
+                struct lu_dirpage *dp;
+                __u32 end;
+               /* This dirobj has been splitted, so we 
+                * check whether reach the end of one hash_segment
+                * and  reset ldp->ldp_hash_end
+                */
+                kmap(page);
+                dp = page_address(page); 
+                end = le32_to_cpu(dp->ldp_hash_end);
+                if (end == ~0ul) {
+                        __u32 hash_segment_end = (i + 1) * 
+                                            MAX_HASH_SIZE/obj->lo_objcount;
+                        dp->ldp_hash_end = cpu_to_le32(hash_segment_end); 
+                        CDEBUG(D_INFO,"reset hash end %x for split obj "DFID"",
+                               le32_to_cpu(dp->ldp_hash_end), PFID(&rid)); 
+                }
+                kunmap(page);
+                
+        }
+#endif
         /*
          * Here we could remove "." and ".." from all pages which at not from
          * master. But MDS has only "." and ".." for master dir.
          */
+cleanup:
+        if (obj)
+                lmv_obj_put(obj);
         RETURN(rc);
 }
 
@@ -2178,7 +2233,8 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                 RETURN(mea_size);
 
         if (mea->mea_magic == MEA_MAGIC_LAST_CHAR ||
-            mea->mea_magic == MEA_MAGIC_ALL_CHARS)
+            mea->mea_magic == MEA_MAGIC_ALL_CHARS ||
+            mea->mea_magic == MEA_MAGIC_HASH_SEGMENT)
         {
                 magic = le32_to_cpu(mea->mea_magic);
         } else {
@@ -2256,15 +2312,16 @@ int lmv_lock_match(struct obd_export *exp, int flags,
 }
 
 int lmv_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
-                      int offset, struct obd_export *dt_exp,
-                      struct lustre_md *md)
+                      int offset, struct obd_export *dt_exp, 
+                      struct obd_export *md_exp, struct lustre_md *md)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         int rc;
 
         ENTRY;
-        rc = md_get_lustre_md(lmv->tgts[0].ltd_exp, req, offset, dt_exp, md);
+        rc = md_get_lustre_md(lmv->tgts[0].ltd_exp, req, offset, dt_exp, md_exp,
+                              md);
         RETURN(rc);
 }
 

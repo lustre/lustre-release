@@ -35,6 +35,7 @@
 #include <lustre_lib.h>
 #include <obd_class.h>
 #include <lustre_mdc.h>
+#include "cmm_internal.h"
 #include "mdc_internal.h"
 
 static struct md_object_operations mdc_mo_ops;
@@ -256,14 +257,19 @@ int mdc_send_page(struct cmm_device *cm, const struct lu_context *ctx,
 
         kmap(page);
         dp = page_address(page);
+
+        ent = lu_dirent_start(dp);
+        if (ent->lde_hash > end)
+                RETURN(-E2BIG);
+
         for (ent = lu_dirent_start(dp); ent != NULL;
              ent = lu_dirent_next(ent)) {
-                if (ent->lde_hash < end) {
+                if (ent->lde_hash > end) {
                         offset = (int)((__u32)ent - (__u32)dp);
                         rc1 = -E2BIG;
                         goto send_page;
                 }
-                        
+
                 /* allocate new fid for each obj */
                 rc = obd_fid_alloc(mc->mc_desc.cl_exp, &ent->lde_fid, NULL);
                 if (rc > 0) {
@@ -274,7 +280,7 @@ int mdc_send_page(struct cmm_device *cm, const struct lu_context *ctx,
                                                fid_seq(&ent->lde_fid),
                                                mc->mc_num, ctx);
                 }
-                
+
                 if (rc < 0) {
                         kunmap(page);
                         RETURN(rc);

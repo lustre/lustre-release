@@ -291,6 +291,7 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_CLOSE,
         &RQF_MDS_PIN,
         &RQF_MDS_READPAGE,
+        &RQF_MDS_WRITEPAGE,
         &RQF_MDS_DONE_WRITING
 };
 
@@ -611,6 +612,11 @@ const struct req_format RQF_MDS_READPAGE =
         DEFINE_REQ_FMT0("MDS_READPAGE",
                         mdt_body_only, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_READPAGE);
+
+const struct req_format RQF_MDS_WRITEPAGE =
+        DEFINE_REQ_FMT0("MDS_WRITEPAGE",
+                        mdt_body_only, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_WRITEPAGE);
 
 #if !defined(__REQ_LAYOUT_USER__)
 

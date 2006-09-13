@@ -1362,6 +1362,7 @@ int mds_msg_check_version(struct lustre_msg *msg)
         case MDS_GETATTR_NAME:
         case MDS_STATFS:
         case MDS_READPAGE:
+        case MDS_WRITEPAGE:
         case MDS_REINT:
         case MDS_CLOSE:
         case MDS_DONE_WRITING:

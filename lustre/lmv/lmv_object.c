@@ -40,6 +40,7 @@
 #include <lustre_lib.h>
 #include <lustre_net.h>
 #include <lustre_dlm.h>
+#include <lustre_idl.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
 #include "lmv_internal.h"
@@ -64,7 +65,8 @@ lmv_obj_alloc(struct obd_device *obd,
         struct lmv_obd *lmv = &obd->u.lmv;
 
         LASSERT(mea->mea_magic == MEA_MAGIC_LAST_CHAR
-                || mea->mea_magic == MEA_MAGIC_ALL_CHARS);
+                || mea->mea_magic == MEA_MAGIC_ALL_CHARS 
+                || mea->mea_magic == MEA_MAGIC_HASH_SEGMENT);
 
         OBD_SLAB_ALLOC(obj, obj_cache, CFS_ALLOC_STD,
                        sizeof(*obj));
@@ -317,7 +319,7 @@ lmv_obj_create(struct obd_export *exp, const struct lu_fid *fid,
                         GOTO(cleanup, obj = ERR_PTR(rc));
                 }
 
-                rc = md_get_lustre_md(exp, req, 0, NULL, &md);
+                rc = md_get_lustre_md(exp, req, 0, NULL, exp, &md);
                 if (rc) {
                         CERROR("mdc_get_lustre_md() failed, error %d\n", rc);
                         GOTO(cleanup, obj = ERR_PTR(rc));

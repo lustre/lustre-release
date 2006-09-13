@@ -342,7 +342,8 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         }
 
         err = md_get_lustre_md(sbi->ll_md_exp, request, 
-                               REPLY_REC_OFF, sbi->ll_dt_exp, &md);
+                               REPLY_REC_OFF, sbi->ll_dt_exp, sbi->ll_md_exp, 
+                               &md);
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n", err);
                 ptlrpc_req_finished (request);
@@ -1279,7 +1280,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
 
                 rc = md_get_lustre_md(sbi->ll_md_exp, request, 
-                                      REPLY_REC_OFF, sbi->ll_dt_exp, &md);
+                                      REPLY_REC_OFF, sbi->ll_dt_exp, 
+                                      sbi->ll_md_exp, &md);
                 if (rc) {
                         ptlrpc_req_finished(request);
                         RETURN(rc);
@@ -1935,7 +1937,7 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
         prune_deathrow(sbi, 1);
 
         rc = md_get_lustre_md(sbi->ll_md_exp, req, offset,
-                              sbi->ll_dt_exp, &md);
+                              sbi->ll_dt_exp, sbi->ll_md_exp, &md);
         if (rc)
                 RETURN(rc);
 

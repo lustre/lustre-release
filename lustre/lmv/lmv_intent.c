@@ -37,6 +37,7 @@
 #endif
 
 #include <lustre/lustre_idl.h>
+#include <lustre_idl.h>
 #include <obd_support.h>
 #include <lustre_lib.h>
 #include <lustre_net.h>
@@ -178,10 +179,14 @@ repeat:
                 mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                    (char *)op_data->name, op_data->namelen);
 
+                rpid = obj->lo_inodes[mds].li_fid;
+                rc = lmv_fld_lookup(lmv, &rpid, &mds);
+                lmv_obj_put(obj);
+                if (rc) 
+                        GOTO(out_free_sop_data, rc);
+                
                 CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n",
                        mds, PFID(&rpid));
-                rpid = obj->lo_inodes[mds].li_fid;
-                lmv_obj_put(obj);
         }
 
         sop_data->fid1 = rpid;
@@ -878,7 +883,8 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 LASSERT(body);
 
 update:
-                obj->lo_inodes[i].li_size = body->size;
+                obj->lo_inodes[i].li_size = (MAX_HASH_SIZE/obj->lo_objcount) * 
+                                            (i + 1);
 
                 CDEBUG(D_OTHER, "fresh: %lu\n",
                        (unsigned long)obj->lo_inodes[i].li_size);

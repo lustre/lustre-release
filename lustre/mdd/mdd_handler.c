@@ -281,7 +281,6 @@ static int __mdd_lmm_get(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
-#ifdef HAVE_SPLIT_SUPPORT
 /* get lmv EA only*/
 static int __mdd_lmv_get(const struct lu_context *ctxt,
                          struct mdd_object *mdd_obj, struct md_attr *ma)
@@ -296,7 +295,6 @@ static int __mdd_lmv_get(const struct lu_context *ctxt,
         }
         RETURN(rc);
 }
-#endif
 
 static int mdd_attr_get_internal(const struct lu_context *ctxt,
                                  struct mdd_object *mdd_obj,
@@ -313,12 +311,10 @@ static int mdd_attr_get_internal(const struct lu_context *ctxt,
                     S_ISDIR(mdd_object_type(mdd_obj)))
                         rc = __mdd_lmm_get(ctxt, mdd_obj, ma);
         }
-#ifdef HAVE_SPLIT_SUPPORT
         if (rc == 0 && ma->ma_need & MA_LMV) {
                 if (S_ISDIR(mdd_object_type(mdd_obj)))
                         rc = __mdd_lmv_get(ctxt, mdd_obj, ma);
         }
-#endif
         CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n",
                         rc, ma->ma_valid);
         RETURN(rc);
@@ -586,7 +582,7 @@ static int mdd_recovery_complete(const struct lu_context *ctxt,
         struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
         int rc;
         ENTRY;
-/* TODO:
+        /* TODO:
         rc = mdd_lov_set_nextid(ctx, mdd);
         if (rc) {
                 CERROR("%s: mdd_lov_set_nextid failed %d\n",
@@ -730,6 +726,18 @@ static int __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_object *o,
         if (buf && buf_len > 0) {
                 rc = next->do_ops->do_xattr_set(ctxt, next, buf, buf_len, name,
                                                 0, handle);
+#ifdef HAVE_SPLIT_SUPPORT
+                if (rc == 0) {
+                        /* very ugly hack, if setting lmv, it means splitting 
+                         * sucess, we should return -ERESTART to notify the 
+                         * client, so transno for this splitting should be
+                         * zero according to the replay rules. so return -ERESTART
+                         * here let mdt trans stop callback know this. 
+                         */
+                        if (strncmp(name, MDS_LMV_MD_NAME, strlen(name)) == 0) 
+                                rc = -ERESTART;
+                }
+#endif
         }else if (buf == NULL && buf_len == 0) {
                 rc = next->do_ops->do_xattr_del(ctxt, next, name, handle);
         }

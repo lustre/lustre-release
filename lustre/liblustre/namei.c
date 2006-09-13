@@ -214,7 +214,8 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
                 RETURN(-ENOENT);
 
         rc = md_get_lustre_md(llu_i2sbi(inode)->ll_md_exp, req,
-                              offset, llu_i2sbi(inode)->ll_dt_exp, &md);
+                              offset, llu_i2sbi(inode)->ll_dt_exp, 
+                              llu_i2sbi(inode)->ll_md_exp, &md);
         if (rc)
                 RETURN(rc);
 
@@ -357,7 +358,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         ptlrpc_req_finished(request);
 
                 rc = md_get_lustre_md(sbi->ll_md_exp, request, offset,
-                                      sbi->ll_dt_exp, &md);
+                                      sbi->ll_dt_exp, sbi->ll_md_exp, &md);
                 if (rc)
                         RETURN(rc);
 

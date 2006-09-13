@@ -254,10 +254,18 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
 
-        ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD, RCL_SERVER);
-
-        ma->ma_need = MA_INODE | MA_LOV;
+        if(reqbody->valid & OBD_MD_MEA) {
+                /* Assumption: MDT_MD size is enough for lmv size FIXME */
+                ma->ma_lmv = req_capsule_server_get(pill, &RMF_MDT_MD);
+                ma->ma_lmv_size = req_capsule_get_size(pill, &RMF_MDT_MD, 
+                                                             RCL_SERVER);
+                ma->ma_need = MA_INODE | MA_LMV;
+        } else {
+                ma->ma_need = MA_INODE | MA_LOV ;
+                ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
+                ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD,
+                                                             RCL_SERVER);
+        }
         rc = mo_attr_get(ctxt, next, ma);
         if (rc == -EREMOTE) {
                 /* This object is located on remote node.*/
@@ -284,6 +292,12 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                                 repbody->valid |= OBD_MD_FLDIREA;
                         else
                                 repbody->valid |= OBD_MD_FLEASIZE;
+                }
+                if (ma->ma_valid & MA_LMV) {
+                        LASSERT(S_ISDIR(la->la_mode));
+                        repbody->eadatasize = ma->ma_lmv_size;
+                        repbody->valid |= OBD_MD_FLDIREA;
+                        repbody->valid |= OBD_MD_MEA;
                 }
         } else if (S_ISLNK(la->la_mode) &&
                           reqbody->valid & OBD_MD_LINKNAME) {
@@ -589,7 +603,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
                 rc = mdo_name_insert(info->mti_ctxt,
                                      md_object_next(&object->mot_obj),
                                      ent->lde_name, lf, 0);
-                /* FIXME: add cross_flags */
+                CDEBUG(D_INFO, "insert name %s rc %d \n", ent->lde_name, rc);
                 if (rc) {
                         kunmap(page);
                         RETURN(rc);
@@ -618,7 +632,7 @@ static int mdt_writepage(struct mdt_thread_info *info)
         ENTRY;
 
         desc = ptlrpc_prep_bulk_exp (req, 1, BULK_GET_SINK, MDS_BULK_PORTAL);
-        if (desc)
+        if (!desc)
                 RETURN(-ENOMEM);
 
         /* allocate the page for the desc */

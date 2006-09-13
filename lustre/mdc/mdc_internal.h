@@ -157,7 +157,9 @@ int mdc_open(struct obd_export *exp, obd_id ino, int type, int flags,
 struct obd_client_handle;
 
 int mdc_get_lustre_md(struct obd_export *md_exp, struct ptlrpc_request *req,
-                      int offset, struct obd_export *dt_exp, struct lustre_md *md);
+                      int offset, struct obd_export *dt_exp, 
+                      struct obd_export *lmv_exp,
+                      struct lustre_md *md);
 
 int mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md);
 
