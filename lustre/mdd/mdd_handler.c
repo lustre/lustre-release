@@ -554,7 +554,7 @@ static int mdd_process_config(const struct lu_context *ctxt,
                 rc = next->ld_ops->ldo_process_config(ctxt, next, cfg);
                 if (rc)
                         GOTO(out, rc);
-                dt->dd_ops->dt_get_conf(ctxt, dt, &m->mdd_dt_conf);
+                dt->dd_ops->dt_conf_get(ctxt, dt, &m->mdd_dt_conf);
 
                 rc = mdd_mount(ctxt, m);
                 if (rc)
@@ -1999,7 +1999,7 @@ cleanup:
         RETURN(rc);
 }
 
-static int mdd_get_root(const struct lu_context *ctx,
+static int mdd_root_get(const struct lu_context *ctx,
                         struct md_device *m, struct lu_fid *f)
 {
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
@@ -2022,7 +2022,7 @@ static int mdd_statfs(const struct lu_context *ctx,
         RETURN(rc);
 }
 
-static int mdd_get_maxsize(const struct lu_context *ctx,
+static int mdd_maxsize_get(const struct lu_context *ctx,
                            struct md_device *m, int *md_size,
                            int *cookie_size)
 {
@@ -2171,8 +2171,8 @@ static int mdd_readpage(const struct lu_context *ctxt, struct md_object *obj,
 
 struct md_device_operations mdd_ops = {
         .mdo_statfs         = mdd_statfs,
-        .mdo_get_root       = mdd_get_root,
-        .mdo_get_maxsize    = mdd_get_maxsize,
+        .mdo_root_get       = mdd_root_get,
+        .mdo_maxsize_get    = mdd_maxsize_get,
 };
 
 static struct md_dir_operations mdd_dir_ops = {

@@ -118,7 +118,7 @@ struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *);
 
-int cmm_get_root(const struct lu_context *ctx, struct md_device *md,
+int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
                  struct lu_fid *fid);
 
 #ifdef HAVE_SPLIT_SUPPORT

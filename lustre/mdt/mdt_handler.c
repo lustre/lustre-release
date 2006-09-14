@@ -157,7 +157,7 @@ static int mdt_getstatus(struct mdt_thread_info *info)
                 rc = -ENOMEM;
         else {
                 body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-                rc = next->md_ops->mdo_get_root(info->mti_ctxt,
+                rc = next->md_ops->mdo_root_get(info->mti_ctxt,
                                                 next, &body->fid1);
                 if (rc == 0)
                         body->valid |= OBD_MD_FLID;
@@ -3121,7 +3121,7 @@ static int mdt_upcall(const struct lu_context *ctx, struct md_device *md,
 
         switch (ev) {
                 case MD_LOV_SYNC:
-                        rc = next->md_ops->mdo_get_maxsize(ctx, next,
+                        rc = next->md_ops->mdo_maxsize_get(ctx, next,
                                         &m->mdt_max_mdsize,
                                         &m->mdt_max_cookiesize);
                         CDEBUG(D_INFO, "get max mdsize %d max cookiesize %d\n",

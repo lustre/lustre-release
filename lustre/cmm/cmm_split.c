@@ -71,7 +71,7 @@ static int cmm_expect_splitting(const struct lu_context *ctx,
                 GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
 
         OBD_ALLOC_PTR(fid);
-        rc = cmm_get_root(ctx, &cmm->cmm_md_dev, fid);
+        rc = cmm_root_get(ctx, &cmm->cmm_md_dev, fid);
         if (rc)
                 GOTO(cleanup, rc);
 

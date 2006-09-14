@@ -181,7 +181,7 @@ struct dt_object *dt_store_open(const struct lu_context *ctx,
         struct dt_object *root;
         struct dt_object *child;
 
-        result = dt->dd_ops->dt_get_root(ctx, dt, fid);
+        result = dt->dd_ops->dt_root_get(ctx, dt, fid);
         if (result == 0) {
                 root = dt_locate(ctx, dt, fid);
                 if (!IS_ERR(root)) {
