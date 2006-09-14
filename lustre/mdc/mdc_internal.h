@@ -33,7 +33,7 @@ void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
 void mdc_pack_rep_body(struct ptlrpc_request *);
 void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
 		      __u32 size, const struct lu_fid *fid);
-void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
+void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
                       int flags, struct md_op_data *data);
 void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
                       struct md_op_data *op_data,
@@ -56,7 +56,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
                      struct md_op_data *op_data,
                      const char *old, int oldlen, const char *new, int newlen);
 void mdc_close_pack(struct ptlrpc_request *req, int offset, struct md_op_data *op_data,
-		    int valid, struct obd_client_handle *och);
+		    __u64 valid, struct obd_client_handle *och);
 void mdc_exit_request(struct client_obd *cli);
 void mdc_enter_request(struct client_obd *cli);
 

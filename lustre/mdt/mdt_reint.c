@@ -238,7 +238,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
                   rr->rr_name);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
-                RETURN(-ENOENT);
+                GOTO(out, rc = -ENOENT);
 
         /* step 1: lock the parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
@@ -246,7 +246,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         mp = mdt_object_find_lock(info, rr->rr_fid1, lhp,
                                   MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
-                RETURN(PTR_ERR(mp));
+                GOTO(out, rc = PTR_ERR(mp));
 
         if (strlen(rr->rr_name) == 0) {
                 /* remote partial operation */
@@ -301,6 +301,7 @@ out_unlock_child:
         mdt_object_unlock_put(info, mc, lhc, rc);
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, lhp, rc);
+out:
         mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         return rc;
 }

@@ -223,8 +223,6 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         LASSERT(ma->ma_valid & MA_INODE);
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        repbody->eadatasize = 0;
-        repbody->aclsize = 0;
 
         isreg = S_ISREG(la->la_mode);
         isdir = S_ISDIR(la->la_mode);
@@ -286,9 +284,6 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 else
                         repbody->valid |= OBD_MD_FLEASIZE;
         }
-        /* FIXME: should determine the offset dynamicly,
-         * did not get ACL before shrink. */
-        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
 
 
         if (flags & FMODE_WRITE) {
@@ -362,7 +357,14 @@ void mdt_reconstruct_open(struct mdt_thread_info *info)
         LASSERT(pill->rc_fmt == &RQF_LDLM_INTENT_OPEN);
 
         mdt_req_from_mcd(req, med->med_mcd);
-        mdt_set_disposition(info, ldlm_rep, le32_to_cpu(mcd->mcd_last_data));
+        mdt_set_disposition(info, ldlm_rep, mcd->mcd_last_data);
+
+        ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
+        ma->ma_lmm_size = mdt->mdt_max_mdsize;
+        ma->ma_need = MA_INODE | MA_LOV;
+        repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
+        repbody->eadatasize = 0;
+        repbody->aclsize = 0;
 
         if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE) && req->rq_status) {
                 /* we did not create successfully, return error to client. */
@@ -396,13 +398,6 @@ void mdt_reconstruct_open(struct mdt_thread_info *info)
         child = mdt_object_find(ctxt, mdt, child_fid);
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
-
-        ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = mdt->mdt_max_mdsize;
-        ma->ma_need = MA_INODE | MA_LOV;
-        repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
-        repbody->eadatasize = 0;
-        repbody->aclsize = 0;
 
         result = mo_attr_get(ctxt, mdt_object_child(child), ma);
         if (result == -EREMOTE) {
@@ -453,7 +448,6 @@ void mdt_reconstruct_open(struct mdt_thread_info *info)
                 else
                         repbody->valid |= OBD_MD_FLEASIZE;
         }
-        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
 
         if (flags & FMODE_WRITE) {
                 /* FIXME: in recovery, need to pass old epoch here */
@@ -506,6 +500,7 @@ out_child:
 out_parent:
         mdt_object_put(ctxt, parent);
 out:
+        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
         req->rq_status = result;
 }
 
@@ -597,6 +592,7 @@ int mdt_open(struct mdt_thread_info *info)
         struct mdt_object      *child;
         struct mdt_lock_handle *lh;
         struct ldlm_reply      *ldlm_rep;
+        struct mdt_body        *repbody;
         struct lu_fid          *child_fid = &info->mti_tmp_fid1;
         struct md_attr         *ma = &info->mti_attr;
         struct lu_attr         *la = &ma->ma_attr;
@@ -609,6 +605,10 @@ int mdt_open(struct mdt_thread_info *info)
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PAUSE_OPEN | OBD_FAIL_ONCE,
                          (obd_timeout + 1) / 4);
 
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody->eadatasize = 0;
+        repbody->aclsize = 0;
+
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
         ma->ma_lmm_size = mdt->mdt_max_mdsize;
         ma->ma_need = MA_INODE | MA_LOV;
@@ -619,7 +619,7 @@ int mdt_open(struct mdt_thread_info *info)
         /* TODO: JOIN file */
         if (create_flags & MDS_OPEN_JOIN_FILE) {
                 CERROR("JOIN file will be supported soon\n");
-                RETURN(-EOPNOTSUPP);
+                GOTO(out, result = -EOPNOTSUPP);
         }
 
         CDEBUG(D_INODE, "I am going to create "DFID"/("DFID":%s) "
@@ -633,25 +633,26 @@ int mdt_open(struct mdt_thread_info *info)
                 result = mdt_open_by_fid(info, ldlm_rep);
 
                 if (result != -ENOENT)
-                        RETURN(result);
+                        GOTO(out, result);
 
                 /* We didn't find the correct object, so we
                  * need to re-create it via a regular replay. */
                 if (!(create_flags & MDS_OPEN_CREAT)) {
                         DEBUG_REQ(D_ERROR, req,"OPEN_CREAT not in open replay");
-                        RETURN(-EFAULT);
+                        GOTO(out, result = -EFAULT);
                 }
+                CERROR("RRRRPPPPPP failed, continue to regular open\n");
         }
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
-                RETURN(-ENOMEM);
+                GOTO(out, result = -ENOMEM);
 
         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
         if (rr->rr_name[0] == 0) {
                 /* this is cross-ref open */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 result = mdt_cross_open(info, rr->rr_fid1, ldlm_rep, create_flags);
-                RETURN(result);
+                GOTO(out, result);
         }
 
         lh = &info->mti_lh[MDT_LH_PARENT];
@@ -712,11 +713,6 @@ int mdt_open(struct mdt_thread_info *info)
                 result = mo_attr_get(info->mti_ctxt, 
                                      mdt_object_child(child), ma);
                 if (result == -EREMOTE) {
-                        struct mdt_body *repbody;
-
-                        repbody = req_capsule_server_get(&info->mti_pill,
-                                                         &RMF_MDT_BODY);
-
                         /* the object is on remote node
                          * return its FID for remote open */
                         repbody->fid1 = *mdt_object_fid(child);
@@ -744,6 +740,7 @@ out_child:
 out_parent:
         mdt_object_unlock_put(info, parent, lh, result);
 out:
+        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
         return result;
 }
 

@@ -293,7 +293,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         }
 }
 
-void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
+void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
                       int flags, struct md_op_data *op_data)
 {
         struct mdt_body *b;
@@ -317,7 +317,7 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, int valid,
 }
 
 void mdc_close_pack(struct ptlrpc_request *req, int offset,
-                    struct md_op_data *op_data, int valid,
+                    struct md_op_data *op_data, __u64  valid,
                     struct obd_client_handle *och)
 {
         struct mdt_body *body;

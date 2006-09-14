@@ -1646,7 +1646,16 @@ static int mdd_create_data(const struct lu_context *ctxt,
 
         /*XXX: setting the lov ea is not locked
          * but setting the attr is locked? */
-        rc = mdd_lov_set_md(ctxt, mdd_pobj, son, lmm, lmm_size, handle, 0);
+
+        /* replay creates has objects already */
+        if (spec->u.sp_ea.no_lov_create)
+                rc = mdd_lov_set_md(ctxt, mdd_pobj, son,
+                                    (struct lov_mds_md *)spec->u.sp_ea.eadata,
+                                    spec->u.sp_ea.eadatalen, handle, 0);
+        else
+                rc = mdd_lov_set_md(ctxt, mdd_pobj, son, lmm,
+                                    lmm_size, handle, 0);
+
         if (rc == 0)
                rc = mdd_attr_get_internal_locked(ctxt, son, ma);
 
