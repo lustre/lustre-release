@@ -580,6 +580,7 @@ static int mdd_recovery_complete(const struct lu_context *ctxt,
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
         struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
+        struct obd_device *obd = mdd2obd_dev(mdd);
         int rc;
         ENTRY;
         /* TODO:
@@ -596,11 +597,10 @@ static int mdd_recovery_complete(const struct lu_context *ctxt,
                    OBD_NOTIFY_SYNC, NULL);
 */
         LASSERT(mdd);
-        LASSERT(mdd->mdd_obd_dev);
+        LASSERT(obd);
 
-        mdd->mdd_obd_dev->obd_recovering = 0;
-        //mdd->mdd_obd_dev->obd_type->typ_dt_ops->
-        mds_postrecov(mdd->mdd_obd_dev);
+        obd->obd_recovering = 0;
+        obd->obd_type->typ_dt_ops->o_postrecov(obd);
         /* TODO: orphans handling */
         rc = next->ld_ops->ldo_recovery_complete(ctxt, next);
         
