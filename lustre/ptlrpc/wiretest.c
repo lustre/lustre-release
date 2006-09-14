@@ -375,10 +375,6 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obd_connect_data, ocd_brw_size));
         LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_brw_size) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_brw_size));
-        LASSERTF((int)offsetof(struct obd_connect_data, ocd_brw_size) == 20, " found %lld\n",
-                 (long long)(int)offsetof(struct obd_connect_data, ocd_brw_size));
-        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_brw_size) == 4, " found %lld\n",
-                 (long long)(int)sizeof(((struct obd_connect_data *)0)->ocd_brw_size));
         LASSERTF((int)offsetof(struct obd_connect_data, ocd_ibits_known) == 24, " found %lld\n",
                  (long long)(int)offsetof(struct obd_connect_data, ocd_ibits_known));
         LASSERTF((int)sizeof(((struct obd_connect_data *)0)->ocd_ibits_known) == 8, " found %lld\n",
@@ -425,7 +421,7 @@ void lustre_assert_wire_constants(void)
         CLASSERT(OBD_CONNECT_LCL_CLIENT == 0x10000ULL);
         CLASSERT(OBD_CONNECT_RMT_CLIENT == 0x20000ULL);
         CLASSERT(OBD_CONNECT_BRW_SIZE == 0x40000ULL);
-	CLASSERT(OBD_CONNECT_QUOTA64 == 0x80000ULL);
+        CLASSERT(OBD_CONNECT_QUOTA64 == 0x80000ULL);
 
         /* Checks for struct obdo */
         LASSERTF((int)sizeof(struct obdo) == 208, " found %lld\n",
@@ -1944,6 +1940,26 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct qunit_data *)0)->qd_count) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct qunit_data *)0)->qd_count));
 
+        /* Checks for struct qunit_data_old */
+        LASSERTF((int)sizeof(struct qunit_data_old) == 16, " found %lld\n",
+                 (long long)(int)sizeof(struct qunit_data_old));
+        LASSERTF((int)offsetof(struct qunit_data_old, qd_id) == 0, " found %lld\n",
+                 (long long)(int)offsetof(struct qunit_data_old, qd_id));
+        LASSERTF((int)sizeof(((struct qunit_data_old *)0)->qd_id) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct qunit_data_old *)0)->qd_id));
+        LASSERTF((int)offsetof(struct qunit_data_old, qd_type) == 4, " found %lld\n",
+                 (long long)(int)offsetof(struct qunit_data_old, qd_type));
+        LASSERTF((int)sizeof(((struct qunit_data_old *)0)->qd_type) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct qunit_data_old *)0)->qd_type));
+        LASSERTF((int)offsetof(struct qunit_data_old, qd_count) == 8, " found %lld\n",
+                 (long long)(int)offsetof(struct qunit_data_old, qd_count));
+        LASSERTF((int)sizeof(((struct qunit_data_old *)0)->qd_count) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct qunit_data_old *)0)->qd_count));
+        LASSERTF((int)offsetof(struct qunit_data_old, qd_isblk) == 12, " found %lld\n",
+                 (long long)(int)offsetof(struct qunit_data_old, qd_isblk));
+        LASSERTF((int)sizeof(((struct qunit_data_old *)0)->qd_isblk) == 4, " found %lld\n",
+                 (long long)(int)sizeof(((struct qunit_data_old *)0)->qd_isblk));
+
         /* Checks for struct mgs_target_info */
         LASSERTF((int)sizeof(struct mgs_target_info) == 2496, " found %lld\n",
                  (long long)(int)sizeof(struct mgs_target_info));
@@ -2035,6 +2051,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct lustre_disk_data, ldd_uuid));
         LASSERTF((int)sizeof(((struct lustre_disk_data *)0)->ldd_uuid) == 40, " found %lld\n",
                  (long long)(int)sizeof(((struct lustre_disk_data *)0)->ldd_uuid));
+        LASSERTF((int)offsetof(struct lustre_disk_data, ldd_userdata) == 200, " found %lld\n",
+                 (long long)(int)offsetof(struct lustre_disk_data, ldd_userdata));
+        LASSERTF((int)sizeof(((struct lustre_disk_data *)0)->ldd_userdata) == 824, " found %lld\n",
+                 (long long)(int)sizeof(((struct lustre_disk_data *)0)->ldd_userdata));
         LASSERTF((int)offsetof(struct lustre_disk_data, ldd_mount_opts) == 4096, " found %lld\n",
                  (long long)(int)offsetof(struct lustre_disk_data, ldd_mount_opts));
         LASSERTF((int)sizeof(((struct lustre_disk_data *)0)->ldd_mount_opts) == 4096, " found %lld\n",
