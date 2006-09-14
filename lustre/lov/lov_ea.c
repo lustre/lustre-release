@@ -70,7 +70,7 @@ static int lsm_lmm_verify_common(struct lov_mds_md *lmm, int lmm_bytes,
         }
 
         if (lmm->lmm_stripe_size == 0 ||
-            (__u64)le32_to_cpu(lmm->lmm_stripe_size) * stripe_count > ~0UL) {
+            (__u64)le32_to_cpu(lmm->lmm_stripe_size)*stripe_count > 0xffffffff){
                 CERROR("bad stripe size %u\n",
                        le32_to_cpu(lmm->lmm_stripe_size));
                 lov_dump_lmm_v1(D_WARNING, lmm);
@@ -93,7 +93,7 @@ lsm_stripe_by_index_plain(struct lov_stripe_md *lsm, int *stripeno,
                            obd_off *lov_off, unsigned long *swidth)
 {
         if (swidth)
-                *swidth = lsm->lsm_stripe_size * lsm->lsm_stripe_count;
+                *swidth = (ulong)lsm->lsm_stripe_size * lsm->lsm_stripe_count;
 }
 
 static void
@@ -101,12 +101,19 @@ lsm_stripe_by_offset_plain(struct lov_stripe_md *lsm, int *stripeno,
                            obd_off *lov_off, unsigned long *swidth)
 {
         if (swidth)
-                *swidth = lsm->lsm_stripe_size * lsm->lsm_stripe_count;
+                *swidth = (ulong)lsm->lsm_stripe_size * lsm->lsm_stripe_count;
 }
 
 static obd_off
 lsm_stripe_offset_by_index_plain(struct lov_stripe_md *lsm,
                                   int stripe_index)
+{
+        return 0;
+}
+
+static obd_off
+lsm_stripe_offset_by_offset_plain(struct lov_stripe_md *lsm,
+                                  obd_off lov_off)
 {
         return 0;
 }
@@ -193,8 +200,9 @@ struct lsm_operations lsm_plain_ops = {
         .lsm_stripe_by_index    = lsm_stripe_by_index_plain,
         .lsm_stripe_by_offset   = lsm_stripe_by_offset_plain,
         .lsm_revalidate         = lsm_revalidate_plain,
-        .lsm_stripe_offset_by_index = lsm_stripe_offset_by_index_plain,
-        .lsm_stripe_index_by_offset = lsm_stripe_index_by_offset_plain,
+        .lsm_stripe_offset_by_index  = lsm_stripe_offset_by_index_plain,
+        .lsm_stripe_offset_by_offset = lsm_stripe_offset_by_offset_plain,
+        .lsm_stripe_index_by_offset  = lsm_stripe_index_by_offset_plain,
         .lsm_lmm_verify         = lsm_lmm_verify_plain,
         .lsm_unpackmd           = lsm_unpackmd_plain,
 };
@@ -281,7 +289,7 @@ lsm_stripe_by_index_join(struct lov_stripe_md *lsm, int *stripeno,
         *stripeno -= le->le_loi_idx;
 
         if (swidth)
-                *swidth = lsm->lsm_stripe_size * le->le_stripe_count;
+                *swidth = (ulong)lsm->lsm_stripe_size * le->le_stripe_count;
 
         if (lov_off) {
                 struct lov_extent *lov_le = lovea_off2le(lsm, *lov_off);
@@ -314,7 +322,7 @@ lsm_stripe_by_offset_join(struct lov_stripe_md *lsm, int *stripeno,
                 *stripeno -= le->le_loi_idx;
 
         if (swidth)
-                *swidth = lsm->lsm_stripe_size * le->le_stripe_count;
+                *swidth = (ulong)lsm->lsm_stripe_size * le->le_stripe_count;
 }
 
 static obd_off
@@ -324,6 +332,17 @@ lsm_stripe_offset_by_index_join(struct lov_stripe_md *lsm,
         struct lov_extent *le;
 
         le = lovea_idx2le(lsm, stripe_index);
+
+        return le ? le->le_start : 0;
+}
+
+static obd_off
+lsm_stripe_offset_by_offset_join(struct lov_stripe_md *lsm,
+                                 obd_off lov_off)
+{
+        struct lov_extent *le;
+
+        le = lovea_off2le(lsm, lov_off);
 
         return le ? le->le_start : 0;
 }
@@ -541,8 +560,9 @@ struct lsm_operations lsm_join_ops = {
         .lsm_stripe_by_index  = lsm_stripe_by_index_join,
         .lsm_stripe_by_offset = lsm_stripe_by_offset_join,
         .lsm_revalidate       = lsm_revalidate_join,
-        .lsm_stripe_offset_by_index = lsm_stripe_offset_by_index_join,
-        .lsm_stripe_index_by_offset = lsm_stripe_index_by_offset_join,
+        .lsm_stripe_offset_by_index  = lsm_stripe_offset_by_index_join,
+        .lsm_stripe_offset_by_offset = lsm_stripe_offset_by_offset_join,
+        .lsm_stripe_index_by_offset  = lsm_stripe_index_by_offset_join,
         .lsm_lmm_verify         = lsm_lmm_verify_join,
         .lsm_unpackmd           = lsm_unpackmd_join,
 };

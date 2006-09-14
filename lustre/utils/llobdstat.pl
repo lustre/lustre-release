@@ -1,4 +1,7 @@
 #!/usr/bin/perl
+# llobdstat.pl is a utility that parses obdfilter statistics files 
+# found at proc/fs/lustre/<ostname>/stats.
+# It is mainly useful to watch the statistics change over time.
 
 my $pname = $0;
 
@@ -7,9 +10,11 @@ my $obdstats = "stats";
 
 sub usage()
 {
-    print STDERR "Usage: $pname <stats_file> [<interval>]\n";
-    print STDERR "example: $pname help (to get help message)\n";
-    print STDERR "example: $pname ost1 1 (monitor /proc/fs/lustre/obdfilter/ost1/stats\n";
+    print STDERR "Usage: $pname <ost_name> [<interval>]\n";
+    print STDERR "where  ost_name  : ost name under $defaultpath/obdfilter\n";
+    print STDERR "       interval  : sample interaval in seconds\n";
+    print STDERR "example: $pname lustre-OST0000 2\n";
+    print STDERR "Use CTRL + C to stop statistics printing\n";
     exit 1;
 }
 
@@ -46,12 +51,14 @@ print "$pname on $statspath\n";
 my %cur;
 my %last;
 my $mhz = 0;
-my ($read_bytes, $read, $write_bytes, $write, $getattr, $setattr, $open, $close,    $create, $destroy, $statfs, $punch, $snapshot_time) = 
-    ("read_bytes", "read", "write_bytes", "write", "getattr", "setattr", "open",    "close", "create", "destroy", "statfs", "punch", "snapshot_time"); 
 
-my @extinfo = ($setattr, $open, $close, $create, $destroy, $statfs, $punch);
-my %shortname = ($setattr => "sa", $open => "op", $close => "cl", 
-		$create => "cx", $destroy => "dx", $statfs => "st", $punch => "pu");
+#Removed some statstics like open, close that obdfilter don't contains.
+#To add statistics parameters one need to specify parameter names in below declarations in same sequence. 
+my ($read_bytes, $write_bytes, $create, $destroy, $statfs, $punch, $snapshot_time) = 
+    ("read_bytes", "write_bytes", "create", "destroy", "statfs", "punch", "snapshot_time"); 
+
+my @extinfo = ($create, $destroy, $statfs, $punch);
+my %shortname = ($create => "cx", $destroy => "dx", $statfs => "st", $punch => "pu");
 
 sub get_cpumhz()
 {
@@ -73,6 +80,8 @@ sub get_cpumhz()
 get_cpumhz();
 print "Processor counters run at $mhz MHz\n";
 
+# readstats subroutine reads statistics from obdfilter stats file.
+# This subroutine gets called after every interval specified by user.     
 sub readstat()
 {
 	my $prevcount;
@@ -101,35 +110,35 @@ sub readstat()
 		}
     	}
 }
-
+# process_stats subroutine processes stats information read from obdfilter stats file.
+# This subroutine gets called after every interval specified by user.     
 sub process_stats()
 {
 	my $delta;
 	my $data;
 	my $last_time = $last{$snapshot_time};
 	if (!defined($last_time)) {
-		printf "R %-g/%-g W %-g/%-g attr %-g/%-g open %-g/%-g create %-g/%-g stat %-g punch %-g\n",
-		$cur{$read_bytes}, $cur{$read}, 
-		$cur{$write_bytes}, $cur{$write}, 
-		$cur{$getattr}, $cur{$setattr}, 
-		$cur{$open}, $cur{$close}, 
+		printf "Read: %-g, Write: %-g, create/destroy: %-g/%-g, stat: %-g, punch: %-g\n",
+		$cur{$read_bytes}, $cur{$write_bytes},  
 		$cur{$create}, $cur{$destroy}, 
 		$cur{$statfs}, $cur{$punch}; 
+                if ($interval) {
+                        print "[NOTE: cx: create, dx: destroy, st: statfs, pu: punch ]\n\n";
+                        print "Timestamp   Read-delta  ReadRate  Write-delta  WriteRate\n";
+                        print "--------------------------------------------------------\n";
+                }
 	}
 	else {
 		my $timespan = $cur{$snapshot_time} - $last{$snapshot_time};
-	
-		my $rdelta = $cur{$read} - $last{$read};
-		my $rvdelta = int ($rdelta / $timespan);
-		my $rrate = ($cur{$read_bytes} - $last{$read_bytes}) /
-			   ($timespan * ( 1 << 20 ));
-		my $wdelta = $cur{$write} - $last{$write};
-		my $wvdelta = int ($wdelta / $timespan);
-		my $wrate = ($cur{$write_bytes} - $last{$write_bytes}) /
-			   ($timespan * ( 1 << 20 ));
-		printf "R %6lu (%5lu %6.2fMB)/s W %6lu (%5lu %6.2fMB)/s",
-			$rdelta, $rvdelta, $rrate,
-			$wdelta, $wvdelta, $wrate;
+		my $rdelta = $cur{$read_bytes} - $last{$read_bytes};
+		my $rrate = ($rdelta) / ($timespan * ( 1 << 20 ));
+		my $wdelta = $cur{$write_bytes} - $last{$write_bytes};
+		my $wrate = ($wdelta) / ($timespan * ( 1 << 20 ));
+		$rdelta = ($rdelta) / (1024 * 1024);
+		$wdelta = ($wdelta) / (1024 * 1024);
+		# This print repeats after every interval.
+		printf "%10lu  %6.2fMB  %6.2fMB/s   %6.2fMB  %6.2fMB/s",
+			$cur{$snapshot_time}, $rdelta, $rrate, $wdelta, $wrate;
 
 		$delta = $cur{$getattr} - $last{$getattr};
 		if ( $delta != 0 ) {
@@ -147,14 +156,15 @@ sub process_stats()
 		$| = 1;
 	}
 }
-
+#Open the obdfilter stat file with STATS
 open(STATS, $statspath) || die "Cannot open $statspath: $!\n";
 do {
-	readstat();
-	process_stats();
-    	if ($interval) { 
-		sleep($interval);
+	readstat();		# read the statistics from stat file.
+	process_stats();	
+    	if ($interval) { 	
+		sleep($interval); 
 		%last = %cur;
     	}
-} while ($interval);
+} while ($interval);	# Repeat the statistics printing after every "interval" specified in command line.
 close STATS;
+# llobdfilter.pl ends here.

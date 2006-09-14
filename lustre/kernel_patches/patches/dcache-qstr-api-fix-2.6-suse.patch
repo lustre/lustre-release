@@ -1,7 +1,7 @@
-Index: linux-2.6.5-7.201/include/linux/dcache.h
+Index: linux-2.6.5-7.276/include/linux/dcache.h
 ===================================================================
---- linux-2.6.5-7.201.orig/include/linux/dcache.h	2005-10-11 00:12:48.000000000 +0400
-+++ linux-2.6.5-7.201/include/linux/dcache.h	2005-12-20 23:16:31.000000000 +0300
+--- linux-2.6.5-7.276.orig/include/linux/dcache.h
++++ linux-2.6.5-7.276/include/linux/dcache.h
 @@ -38,7 +38,6 @@ struct qstr {
  	const unsigned char * name;
  	unsigned int len;
@@ -18,131 +18,15 @@ Index: linux-2.6.5-7.201/include/linux/dcache.h
  	struct dentry * d_parent;	/* parent directory */
  	struct qstr d_name;
  	struct hlist_node d_hash;	/* lookup hash list */	
-Index: linux-2.6.5-7.201/fs/dcache.c
+Index: linux-2.6.5-7.276/fs/dcache.c
 ===================================================================
---- linux-2.6.5-7.201.orig/fs/dcache.c	2005-10-11 00:12:45.000000000 +0400
-+++ linux-2.6.5-7.201/fs/dcache.c	2005-12-20 23:16:31.000000000 +0300
-@@ -41,6 +41,8 @@ EXPORT_SYMBOL(dcache_lock);
- 
- static kmem_cache_t *dentry_cache; 
- 
-+#define DNAME_INLINE_LEN (sizeof(struct dentry)-offsetof(struct dentry,d_iname))
-+
- /*
-  * This is the single most critical data structure when it comes
-  * to the dcache: the hashtable for lookups. Somebody should try
-@@ -67,7 +69,7 @@ static void d_callback(void *arg)
- 	struct dentry * dentry = (struct dentry *)arg;
- 
- 	if (dname_external(dentry)) {
--		kfree(dentry->d_qstr);
-+		kfree(dentry->d_name.name);
- 	}
- 	kmem_cache_free(dentry_cache, dentry); 
- }
-@@ -678,8 +680,6 @@ static int shrink_dcache_memory(int nr, 
- 	return dentry_stat.nr_unused;
- }
- 
--#define NAME_ALLOC_LEN(len)	((len+16) & ~15)
--
- /**
-  * d_alloc	-	allocate a dcache entry
-  * @parent: parent of entry to allocate
-@@ -694,26 +694,18 @@ struct dentry * d_alloc(struct dentry * 
- {
- 	char * str;
- 	struct dentry *dentry;
--	struct qstr * qstr;
- 
- 	dentry = kmem_cache_alloc(dentry_cache, GFP_KERNEL); 
- 	if (!dentry)
- 		return NULL;
- 
- 	if (name->len > DNAME_INLINE_LEN-1) {
--		qstr = kmalloc(sizeof(*qstr) + NAME_ALLOC_LEN(name->len), 
--				GFP_KERNEL);  
--		if (!qstr) {
-+		str = kmalloc(name->len + 1, GFP_KERNEL);
-+		if (!str) {
- 			kmem_cache_free(dentry_cache, dentry); 
- 			return NULL;
- 		}
--		qstr->name = qstr->name_str;
--		qstr->len = name->len;
--		qstr->hash = name->hash;
--		dentry->d_qstr = qstr;
--		str = qstr->name_str;
- 	} else  {
--		dentry->d_qstr = &dentry->d_name;
- 		str = dentry->d_iname;
- 	}	
- 
-@@ -1010,7 +1002,7 @@ struct dentry * __d_lookup(struct dentry
- 		if (dentry->d_parent != parent)
- 			continue;
- 
--		qstr = dentry->d_qstr;
-+		qstr = &dentry->d_name;
- 		smp_read_barrier_depends();
- 		if (parent->d_op && parent->d_op->d_compare) {
- 			if (parent->d_op->d_compare(parent, qstr, name))
-@@ -1163,26 +1155,38 @@ void d_rehash(struct dentry * entry)
-  */
- static inline void switch_names(struct dentry * dentry, struct dentry * target)
- {
--	const unsigned char *old_name, *new_name;
--	struct qstr *old_qstr, *new_qstr;
--
--	memcpy(dentry->d_iname, target->d_iname, DNAME_INLINE_LEN); 
--	old_qstr = target->d_qstr;
--	old_name = target->d_name.name;
--	new_qstr = dentry->d_qstr;
--	new_name = dentry->d_name.name;
--	if (old_name == target->d_iname) {
--		old_name = dentry->d_iname;
--		old_qstr = &dentry->d_name;
--	}
--	if (new_name == dentry->d_iname) {
--		new_name = target->d_iname;
--		new_qstr = &target->d_name;
--	}
--	target->d_name.name = new_name;
--	dentry->d_name.name = old_name;
--	target->d_qstr = new_qstr;
--	dentry->d_qstr = old_qstr;
-+	if (dname_external(target)) {
-+		if (dname_external(dentry)) {
-+			/*
-+			 * Both external: swap the pointers
-+			 */
-+			do_switch(target->d_name.name, dentry->d_name.name);
-+		} else {
-+			/*
-+			 * dentry:internal, target:external.  Steal target's
-+			 * storage and make target internal.
-+			 */
-+			dentry->d_name.name = target->d_name.name;
-+			target->d_name.name = target->d_iname;
-+		}
-+	} else {
-+		if (dname_external(dentry)) {
-+			/*
-+			 * dentry:external, target:internal.  Give dentry's
-+			 * storage to target and make dentry internal
-+			 */
-+			memcpy(dentry->d_iname, target->d_name.name,
-+					target->d_name.len + 1);
-+			target->d_name.name = dentry->d_name.name;
-+			dentry->d_name.name = dentry->d_iname;
-+		} else {
-+			/*
-+			 * Both are internal.  Just copy target to dentry
-+			 */
-+			memcpy(dentry->d_iname, target->d_name.name,
-+					target->d_name.len + 1);
-+		}
-+	}
- }
- 
- /*
+--- linux-2.6.5-7.276.orig/fs/dcache.c
++++ linux-2.6.5-7.276/fs/dcache.c
+@@ -775,7 +775,6 @@ struct dentry * d_alloc(struct dentry * 
+ 	dentry->d_parent = NULL;
+ 	dentry->d_move_count = 0;
+ 	dentry->d_sb = NULL;
+-	dentry->d_qstr = &dentry->d_name;
+ 	dentry->d_name.name = str;
+ 	dentry->d_name.len = name->len;
+ 	dentry->d_name.hash = name->hash;

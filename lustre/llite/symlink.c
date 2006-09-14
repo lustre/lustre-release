@@ -159,8 +159,9 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 
         rc = vfs_follow_link(nd, symname);
         ptlrpc_req_finished(request);
+        EXIT;
  out:
-        RETURN(rc);
+        return rc;
 }
 
 struct inode_operations ll_fast_symlink_inode_operations = {

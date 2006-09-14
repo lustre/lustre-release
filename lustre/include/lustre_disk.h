@@ -92,7 +92,8 @@ struct lustre_disk_data {
         char       ldd_svname[64];      /* this server's name (lustre-mdt0001)*/
         __u8       ldd_uuid[40];        /* server UUID (COMPAT_146) */
    
-/*200*/ __u8       ldd_padding[4096 - 200];
+/*200*/ char       ldd_userdata[1024 - 200]; /* arbitrary user string */
+/*1024*/__u8       ldd_padding[4096 - 1024];
 /*4096*/char       ldd_mount_opts[4096]; /* target fs mount opts */
 /*8192*/char       ldd_params[4096];     /* key=value pairs */
 };

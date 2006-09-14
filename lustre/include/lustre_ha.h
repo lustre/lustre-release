@@ -11,8 +11,6 @@ struct obd_device;
 struct ptlrpc_request;
 
 
-void ptlrpc_run_failed_import_upcall(struct obd_import *imp);
-void ptlrpc_run_recovery_over_upcall(struct obd_device *obd);
 int ptlrpc_replay(struct obd_import *imp);
 int ptlrpc_resend(struct obd_import *imp);
 void ptlrpc_free_committed(struct obd_import *imp);

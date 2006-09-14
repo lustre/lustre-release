@@ -854,8 +854,8 @@ def def_mount_options(fstype, target, blkdev):
                 # use internal journal
                 return mountfsoptions
         
-            # run blkid
-            blkid = "blkid -o device -t UUID='%s'" % (journal_UUID)
+            # run blkid, lookup highest-priority device with matching UUID
+            blkid = "blkid -o device -l -t UUID='%s'" % (journal_UUID)
             (ret, devname) = run(blkid)
             if ret or len(devname) == 0:
                 panic("cannot find external journal for ", blkdev)

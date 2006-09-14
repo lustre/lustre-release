@@ -571,6 +571,8 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
 
 #ifdef __KERNEL__
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#include <linux/iobuf.h>
+
 static int echo_client_ubrw(struct obd_device *obd, int rw,
                             struct obdo *oa, struct lov_stripe_md *lsm,
                             obd_off offset, obd_size count, char *buffer,

@@ -70,7 +70,7 @@ build_test_filter() {
         done
 	# turn on/off quota tests must be included
 	eval ONLY_0=true
-	eval ONLY_9=true
+	eval ONLY_99=true
 }
 
 _basetest() {
@@ -164,7 +164,7 @@ set_blk_tunesz() {
 		echo $(($1 * $BLK_SZ)) > $i
 	done
 	# set btune size on mds
-	for i in `ls /proc/fs/lustre/mds/mds*/quota_btune_sz`; do
+	for i in `ls /proc/fs/lustre/mds/lustre-MDT*/quota_btune_sz`; do
 		echo $(($1 * $BLK_SZ)) > $i
 	done
 }
@@ -173,7 +173,7 @@ set_blk_unitsz() {
 	for i in `ls /proc/fs/lustre/obdfilter/*/quota_bunit_sz`; do
 		echo $(($1 * $BLK_SZ)) > $i
 	done
-	for i in `ls /proc/fs/lustre/mds/mds*/quota_bunit_sz`; do
+	for i in `ls /proc/fs/lustre/mds/lustre-MDT*/quota_bunit_sz`; do
 		echo $(($1 * $BLK_SZ)) > $i
 	done
 }
@@ -184,7 +184,7 @@ set_file_tunesz() {
 		echo $1 > $i
 	done
 	# set iunit and itune size on mds
-	for i in `ls /proc/fs/lustre/mds/mds*/quota_itune_sz`; do
+	for i in `ls /proc/fs/lustre/mds/lustre-MDT*/quota_itune_sz`; do
 		echo $1 > $i
 	done
 
@@ -195,7 +195,7 @@ set_file_unitsz() {
 	for i in `ls /proc/fs/lustre/obdfilter/*/quota_iunit_sz`; do
 		echo $1 > $i
 	done;
-	for i in `ls /proc/fs/lustre/mds/mds*/quota_iunit_sz`; do
+	for i in `ls /proc/fs/lustre/mds/lustre-MDT*/quota_iunit_sz`; do
 		echo $1 > $i
 	done
 }
@@ -210,7 +210,7 @@ pre_test() {
 		# set block tunables
 		set_blk_tunesz $BTUNE_SZ
 		set_blk_unitsz $BUNIT_SZ
-		# set file tunaables
+		# set file tunables
 		set_file_tunesz $ITUNE_SZ
 		set_file_unitsz $IUNIT_SZ
 	fi
@@ -361,7 +361,6 @@ test_block_soft() {
 
 	echo "    Write before timer goes off"
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$BUNIT_SZ >/dev/null 2>&1 || error "write failure, but expect success"
-	sync; sleep 1; sync;
 	echo "    Done"
 	
 	echo "    Sleep $GRACE seconds ..."
@@ -369,6 +368,7 @@ test_block_soft() {
 
 	echo "    Write after timer goes off"
 	# maybe cache write, ignore.
+	sync; sleep 1; sync;
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=$BUNIT_SZ seek=$(($BUNIT_SZ * 2)) >/dev/null 2>&1 || echo " " > /dev/null
 	sync; sleep 1; sync;
 	$RUNAS dd if=/dev/zero of=$TESTFILE bs=$BLK_SZ count=1 seek=$(($BUNIT_SZ * 3)) >/dev/null 2>&1 && error "write success, but expect EDQUOT"
@@ -538,9 +538,9 @@ test_6() {
 
 	echo "  Exceed quota limit ..."
 	$RUNAS dd if=/dev/zero of=$FILEB bs=$BLK_SZ count=$(($LIMIT - $BUNIT_SZ * $OSTCOUNT)) >/dev/null 2>&1 || error "write fileb failure, but expect success"
-	sync; sleep 1; sync;
+	#sync; sleep 1; sync;
 	$RUNAS dd if=/dev/zero of=$FILEB bs=$BLK_SZ seek=$LIMIT count=$BUNIT_SZ >/dev/null 2>&1 && error "write fileb success, but expect EDQUOT"
-	sync; sleep 1; sync;
+	#sync; sleep 1; sync;
 	echo "  Write to OST0 return EDQUOT"
 	# this write maybe cache write, ignore it's failure
 	$RUNAS dd if=/dev/zero of=$FILEA bs=$BLK_SZ count=$(($BUNIT_SZ * 2)) >/dev/null 2>&1 || echo " " > /dev/null
@@ -589,7 +589,7 @@ test_7()
 	echo 0 > /proc/sys/lustre/fail_loc
 
 	echo "  Trigger recovery..."
-	OSC0_UUID="`$LCTL dl | awk '/.* *-osc-* / { print $1 }'`"
+	OSC0_UUID="`$LCTL dl | awk '$3 ~ /osc/ { print $1 }'`"
 	for i in $OSC0_UUID; do
 		$LCTL --device $i activate > /dev/null 2>&1 || error "activate osc failed!"
 	done
@@ -603,8 +603,8 @@ test_7()
 	[ $TOTAL_LIMIT -eq $LIMIT ] || error "total limits not recovery!"
 	echo "  total limits = $TOTAL_LIMIT"
 	
-	OST0_UUID=`$LCTL dl | awk '/.*OST_[^ ]+_UUID.* / { print $5 }'`
-	[ -z "$OST0_UUID" ] && OST0_UUID=`$LCTL dl | awk '/.*ost1_[^ ]*UUID.* / { print $5 }'`
+	OST0_UUID=`$LCTL dl | awk '$3 ~ /obdfilter/ { print $5 }'| head -n1`
+	[ -z "$OST0_UUID" ] && OST0_UUID=`$LCTL dl | awk '$3 ~ /obdfilter/ { print $5 }'|head -n1`
 	OST0_LIMIT="`$LFS quota -o $OST0_UUID -u $TSTUSR $MOUNT | awk '/^.*[[:digit:]+][[:space:]+]/ { print $3 }'`"
 	[ $OST0_LIMIT -eq $BUNIT_SZ ] || error "high limits not released!"
 	echo "  limits on $OST0_UUID = $OST0_LIMIT"
@@ -644,13 +644,143 @@ test_8() {
 }
 run_test 8 "Run dbench with quota enabled ==========="
 
+# run for fixing bug10707, it needs a big room. test for 64bit
+test_9() {
+        lustrefs_size=`df | grep $MOUNT | awk '{print $(NF - 2)}'`
+        size_file=$((1024 * 1024 * 9 / 2 * $OSTCOUNT))
+        echo "lustrefs_size:$lustrefs_size  size_file:$size_file"
+        if [ $lustrefs_size -lt $size_file ]; then
+            echo "WARN: too few capacity, skip this test."
+            return 0;
+        fi
+
+        # set the D_QUOTA flag
+        debug_flag=`cat /proc/sys/lnet/debug`
+        D_QUOTA_FLAG=67108864
+        set_flag=0
+        if [ $((debug_flag & D_QUOTA_FLAG)) -ne $D_QUOTA_FLAG ]; then
+            echo  $((debug_flag | D_QUOTA_FLAG)) > /proc/sys/lnet/debug
+            set_flag=1
+        fi
+
+        TESTFILE="$TSTDIR/quota_tst90"
+
+        echo "  Set block limit $LIMIT bytes to $TSTUSR.$TSTUSR"
+        BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
+        FILE_LIMIT=1000000
+
+        echo "  Set enough high limit for user: $TSTUSR"
+        $LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
+        echo "  Set enough high limit for group: $TSTUSR"
+        $LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
+
+        echo "  Set stripe"
+        [ $OSTCOUNT -ge 2 ] && $LFS setstripe $TESTFILE 65536 0 $OSTCOUNT
+        touch $TESTFILE
+        chown $TSTUSR.$TSTUSR $TESTFILE
+
+        echo "    Write the big file of $(($OSTCOUNT * 9 / 2 ))G ..."
+        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$size_file >/dev/null 2>&1 || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect success"
+	
+	echo "    delete the big file of $(($OSTCOUNT * 9 / 2))G..." 
+        $RUNAS rm -f $TESTFILE >/dev/null 2>&1
+
+        echo "    write the big file of 2G..."
+        $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$((1024 * 1024 * 2)) >/dev/null 2>&1 || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect seccess"
+
+        echo "    delete the big file of 2G..."
+        $RUNAS rm -f $TESTFILE >/dev/null 2>&1
+
+        RC=$?
+
+        # clear the flage
+        if [ $set_flag -eq 1 ]; then
+            echo  $debug_flag > /proc/sys/lnet/debug
+        fi
+
+        return $RC
+}
+run_test 9 "run for fixing bug10707(64bit) ==========="
+
+# run for fixing bug10707, it need a big room. test for 32bit
+test_10() {
+       lustrefs_size=`df | grep $MOUNT | awk '{print $(NF - 2)}'`
+       size_file=$((1024 * 1024 * 9 / 2 * $OSTCOUNT))
+       echo "lustrefs_size:$lustrefs_size  size_file:$size_file"
+       if [ $lustrefs_size -lt $size_file ]; then
+               echo "WARN: too few capacity, skip this test."
+               return 0;
+       fi
+
+       if [ ! -d /proc/fs/lustre/ost/ -o ! -d /proc/fs/lustre/mds ]; then
+           echo "WARN: mds or ost isn't on the local machine, skip this test."
+           return 0;
+       fi
+
+       sync; sleep 10; sync;
+
+       # set the D_QUOTA flag
+       debug_flag=`cat /proc/sys/lnet/debug`
+       D_QUOTA_FLAG=67108864
+       set_flag=0
+       if [ $((debug_flag & D_QUOTA_FLAG)) -ne $D_QUOTA_FLAG ]; then
+           echo  $((debug_flag | D_QUOTA_FLAG)) > /proc/sys/lnet/debug
+           set_flag=1
+       fi
+
+       # make qd_count 32 bit
+       sysctl -w lustre.fail_loc=2560
+
+       TESTFILE="$TSTDIR/quota_tst100"
+
+       echo "  Set block limit $LIMIT bytes to $TSTUSR.$TSTUSR"
+       BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
+       FILE_LIMIT=1000000
+
+       echo "  Set enough high limit for user: $TSTUSR"
+       $LFS setquota -u $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
+       echo "  Set enough high limit for group: $TSTUSR"
+       $LFS setquota -g $TSTUSR 0 $BLK_LIMIT 0 $FILE_LIMIT $MOUNT
+
+       echo "  Set stripe"
+       [ $OSTCOUNT -ge 2 ] && $LFS setstripe $TESTFILE 65536 0 $OSTCOUNT
+       touch $TESTFILE
+       chown $TSTUSR.$TSTUSR $TESTFILE
+
+       echo "    Write the big file of $(($OSTCOUNT * 9 / 2 ))G ..."
+       $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$size_file >/dev/null 2>&1 || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect success"
+
+       echo "    delete the big file of $(($OSTCOUNT * 9 / 2))G..." 
+       $RUNAS rm -f $TESTFILE >/dev/null 2>&1
+
+       echo "    write the big file of 2G..."
+       $RUNAS dd if=/dev/zero of=$TESTFILE  bs=$BLK_SZ count=$((1024 * 1024 * 2)) >/dev/null 2>&1 || error "(usr) write $((9 / 2 * $OSTCOUNT))G file failure, but expect success"
+
+       echo "    delete the big file of 2G..."
+       $RUNAS rm -f $TESTFILE >/dev/null 2>&1
+
+       RC=$?
+
+       # clear the flage
+       if [ $set_flag -eq 1 ]; then
+              echo  $debug_flag > /proc/sys/lnet/debug
+       fi
+
+       # make qd_count 64 bit
+       sysctl -w lustre.fail_loc=0
+
+       return $RC
+}
+run_test 10 "run for fixing bug10707(32bit) ==========="
+
+
 # turn off quota
-test_9()
+test_99()
 {
 	$LFS quotaoff $MOUNT
 	return 0
 }
-run_test 9 "Quota off ==============================="
+run_test 99 "Quota off ==============================="
 
 
 log "cleanup: ======================================================"

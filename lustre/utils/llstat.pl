@@ -1,37 +1,60 @@
 #!/usr/bin/perl
-
+# llstat.pl is a utility that takes stats files as input with optional clear-flag. 
+# The clear-flag is used to clear the stats file before printing stats information.
+# The lustre stats files generally located inside proc/fs/lustre/
+# llstat.pl first reads the required statistics information from specified stat file,
+# process the information and prints the output after every interval specified by user.
+ 
 my $pname = $0;
 
 my $defaultpath = "/proc/fs/lustre";
 my $obdstats = "stats";
 
+# Subroutine for printing usages information
 sub usage()
 {
-    print STDERR "Usage: $pname <stats_file> [<interval>]\n";
+    print STDERR "Usage: $pname [-c] <stats_file> [<interval>]\n";
+    print STDERR "       <stats_file> : lustre stats file, full /proc path or substring search\n";
+    print STDERR "       <interval>   : Time in seconds to repeat statistics print cycle\n";
+    print STDERR "       -c           : zero stats first\n";
+    print STDERR "eg: $pname ost 1  --  monitors /proc/fs/lustre/ost/OSS/ost/stats\n";
+    print STDERR "Use CTRL + C to stop statistics printing\n";
     exit 1;
 }
 
 
 my $statspath = "None";
 my $interval = 0;
-
-if (($#ARGV < 0) || ($#ARGV > 1)) {
+my $argpos = 0;
+# check for number of auguments
+if (($#ARGV < 0) || ($#ARGV > 2)) {
     usage();
-} else {
+} else {   # Process arguments
     if ( $ARGV[0] =~ /help$/ ) {
 	usage();
     }
-    if ( -f $ARGV[0] ) {
-	$statspath = $ARGV[0];
-    } elsif ( -f "$ARGV[0]/$obdstats" ) {
-	$statspath = "$ARGV[0]/$obdstats";
+    if ($#ARGV == 1) { 
+	if (($ARGV[0] eq "-c") || ($ARGV[0] eq "-C")) {
+	    $argpos = 1;
+	} else {
+	    $interval = $ARGV[1];
+	}
+    } 
+    if ( $#ARGV == 2 ) {
+	$interval = $ARGV[2];
+	$argpos = 1;
+    } 
+    if ( -f $ARGV[$argpos] ) {
+	$statspath = $ARGV[$argpos];
+    } elsif ( -f "$ARGV[$argpos]/$obdstats" ) {
+	$statspath = "$ARGV[$argpos]/$obdstats";
     } else {
-	my $st = `ls $defaultpath/*/$ARGV[0]/$obdstats 2> /dev/null`;
+	my $st = `ls $defaultpath/*/$ARGV[$argpos]/$obdstats 2> /dev/null`;
 	chop $st;
 	if ( -f "$st" ) {
 	    $statspath = $st;
 	} else {
-	    $st = `ls $defaultpath/*/*/$ARGV[0]/$obdstats 2> /dev/null`;
+	    $st = `ls $defaultpath/*/*/$ARGV[$argpos]/$obdstats 2> /dev/null`;
 	    chop $st;
 	    if ( -f "$st" ) {
 	        $statspath = $st;
@@ -39,11 +62,19 @@ if (($#ARGV < 0) || ($#ARGV > 1)) {
 	}
     }
     if ( $statspath =~ /^None$/ ) {
-	die "Cannot locate stat file for: $ARGV[0]\n";
+	die "Cannot locate stat file for: $ARGV[$argpos]\n";
     }
-    if ($#ARGV == 1) {
-	$interval = $ARGV[1];
-    } 
+    if ($#ARGV == 2) {
+	# Clears stats file before printing information in intervals
+	if ( ($ARGV[0] eq "-c") || ($ARGV[0] eq "-C" ) ) {
+	    open ( STATS, "> $statspath") || die "Cannot clear $statspath: $!\n";
+	    print STATS " ";
+	    close STATS;
+	    sleep($interval);	    
+	} else {
+	    usage();
+	}
+    }
 }
 
 print "$pname on $statspath\n";
@@ -53,6 +84,7 @@ my %sumhash;
 my $anysum = 0;
 my $anysumsquare = 0;
 my $mhz = 0;
+my $falg = 0;
 
 sub get_cpumhz()
 {
@@ -74,6 +106,8 @@ sub get_cpumhz()
 get_cpumhz();
 print "Processor counters run at $mhz MHz\n";
 
+# readstats subroutine reads and processes statistics from stats file.
+# This subroutine gets called after every interval specified by user.
 sub readstat()
 {
     seek STATS, 0, 0;
@@ -87,21 +121,13 @@ sub readstat()
 	    $diff = $cumulcount - $prevcount;
 	    if ($name eq "snapshot_time") {
 		$tdiff = $diff;
-		# printf "%-25s prev=$prevcount, cumul=$cumulcount diff=$diff, tdiff=$tdiff\n", $name;
-		printf "$statspath @ $cumulcount\n";
-		printf "%-25s %-10s %-10s %-10s", "Name", "Cur.Count", "Cur.Rate", "#Events";
-		if ($anysum) {
-		    printf "%-8s %10s %10s %12s %10s", "Unit", "last", "min", "avg", "max";
-		}
-		if ($anysumsquare) {
-		    printf "%10s", "stddev";
-		}
-                printf "\n";
+                printf "\n%-10.0f", $cumulcount;
 		$| = 1;
 	    }
 	    elsif ($cumulcount!=0) {
-		printf "%-25s %-10lu %-10lu %-10lu",
-		       $name, $diff, ($diff/$tdiff), $cumulcount;
+		
+		printf "   %s %lu %lu",
+		        $name,  ($diff/$tdiff), $cumulcount;
 		
 		if (defined($sum)) {
 		    my $sum_orig = $sum;
@@ -118,7 +144,7 @@ sub readstat()
 			$sum_diff = $sum_diff/$mhz;
 			$max = $max/$mhz;
 		    }
-		    printf "%-8s %10.2f %10lu %12.2f %10lu", $unit, ($sum_diff/$diff), $min,($sum/$cumulcount),$max;
+		    printf " %lu %.2f %lu", $min,($sum/$cumulcount),$max;
 		    if (defined($sumsquare)) {
 			my $s = $sumsquare - (($sum_orig*$sum_orig)/$cumulcount);
 			if ($s >= 0) {
@@ -127,17 +153,16 @@ sub readstat()
 			    if (($unit eq "[usecs]") && ($mhz != 1)) {
 				$stddev = $stddev/$mhz;
 			    }
-			    printf " %10.2f", $stddev;
+			    printf " %.2f ", $stddev;
 			}
 		    }
 		}
-		printf "\n";
 		$| = 1;
 	    }
 	}
 	else {
 	    if ($cumulcount!=0) {
-		printf "%-25s $cumulcount\n", $name	
+		printf "%-25s $cumulcount\n", $name	# print info when interval is not specified.
 	    }
 	    if (defined($sum)) {
 		$anysum = 1;
@@ -148,6 +173,18 @@ sub readstat()
 	}
 	%cumulhash->{$name} = $cumulcount;
 	%sumhash->{$name} = $sum;
+    }
+    if ( !$flag && $interval) {
+	printf "Timestamp [Name Rate Total";
+	if ($anysum) {
+	    printf " min avg max";
+	}
+	if ($anysumsquare) {
+	    printf " stddev";
+	}
+	printf " ]...";
+	printf "\n--------------------------------------------------------------------";
+	$flag = 1;
     }
 }
 

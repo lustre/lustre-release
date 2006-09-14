@@ -3,7 +3,7 @@
 
 set -e
 trap 'echo "test-framework exiting on error"' ERR
-#set -vx
+#set -x
 
 
 export REFORMAT=""
@@ -118,6 +118,7 @@ load_modules() {
     load_module fid/fid
     load_module fld/fld
     load_module lmv/lmv
+    load_module quota/lquota
     load_module mdc/mdc
     load_module osc/osc
     load_module lov/lov
@@ -147,6 +148,29 @@ load_modules() {
     [ -f $LUSTRE/utils/mount.lustre ] && cp $LUSTRE/utils/mount.lustre /sbin/. || true
 }
 
+wait_for_lnet() {
+    local UNLOADED=0
+    local WAIT=0
+    local MAX=60
+    MODULES=$($LCTL modules | awk '{ print $2 }')
+    while [ -n "$MODULES" ]; do
+	sleep 5
+	rmmod $MODULES >/dev/null 2>&1 || true
+	MODULES=$($LCTL modules | awk '{ print $2 }')
+        if [ -z "$MODULES" ]; then
+	    return 0
+        else
+            WAIT=$((WAIT + 5))
+            echo "waiting, $((MAX - WAIT)) secs left"
+        fi
+        if [ $WAIT -eq $MAX ]; then
+            echo "LNET modules $MODULES will not unload"
+	    lsmod
+            return 3
+        fi
+    done
+}
+
 unload_modules() {
     lsmod | grep lnet > /dev/null && $LCTL dl && $LCTL dk $TMP/debug
     local MODULES=$($LCTL modules | awk '{ print $2 }')
@@ -154,14 +178,20 @@ unload_modules() {
     rmmod $MODULES >/dev/null 2>&1 || true
      # do it again, in case we tried to unload ksocklnd too early
     MODULES=$($LCTL modules | awk '{ print $2 }')
-    [ -n "$MODULES" ] && rmmod $MODULES >/dev/null && sleep 2 || true
+    [ -n "$MODULES" ] && rmmod $MODULES >/dev/null || true
     MODULES=$($LCTL modules | awk '{ print $2 }')
     if [ -n "$MODULES" ]; then
-	echo "modules still loaded"
+	echo "Modules still loaded: "
 	echo $MODULES 
-	cat $LPROC/devices || true
-	lsmod
-	return 2
+	if [ -e $LPROC ]; then
+	    echo "Lustre still loaded"
+	    cat $LPROC/devices || true
+	    lsmod
+	    return 2
+	else
+	    echo "Lustre stopped, but LNET is still loaded"
+	    wait_for_lnet || return 3
+	fi
     fi
     HAVE_MODULES=false
 

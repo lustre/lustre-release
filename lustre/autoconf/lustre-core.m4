@@ -266,7 +266,7 @@ LB_LINUX_TRY_COMPILE([
 #
 AC_DEFUN([LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP],
 [AC_MSG_CHECKING([if kernel defines grab_cache_page_nowait_gfp()])
-HAVE_GCPN_GFP="`grep -c 'grab_cache_page_nowait_gfp' $LINUX/mm/filemap.c`"
+HAVE_GCPN_GFP="`grep -c 'grab_cache_page_nowait_gfp' $LINUX/include/linux/pagemap.h`"
 if test "$HAVE_GCPN_GFP" != 0 ; then
 	AC_DEFINE(HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP, 1,
 		[kernel has grab_cache_page_nowait_gfp()])

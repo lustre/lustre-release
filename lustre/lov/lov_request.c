@@ -687,7 +687,7 @@ int lov_update_create_set(struct lov_request_set *set,
         loi->loi_id = req->rq_oi.oi_oa->o_id;
         loi->loi_gr = req->rq_oi.oi_oa->o_gr;
         loi->loi_ost_idx = req->rq_idx;
-        CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64"/"LPX64" at idx %d\n",
+        CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64"/"LPU64" at idx %d\n",
                lsm->lsm_object_id, loi->loi_id, loi->loi_id, req->rq_idx);
         loi_init(loi);
 
@@ -1426,8 +1426,8 @@ int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,int success)
                         do_div(osfs->os_ffree, expected_stripes);
 
                 spin_lock(&obd->obd_osfs_lock);
-                memcpy(&obd->obd_osfs, osfs, sizeof(osfs));
-                obd->obd_osfs_age = cfs_time_current_64();
+                memcpy(&obd->obd_osfs, osfs, sizeof(*osfs));
+                obd->obd_osfs_age = get_jiffies_64();
                 spin_unlock(&obd->obd_osfs_lock);
                 RETURN(0);
         }
@@ -1458,8 +1458,8 @@ void lov_update_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                        struct obd_statfs *lov_sfs, int success)
 {
         spin_lock(&obd->obd_osfs_lock);
-        memcpy(&obd->obd_osfs, lov_sfs, sizeof(osfs));
-        obd->obd_osfs_age = cfs_time_current_64();
+        memcpy(&obd->obd_osfs, lov_sfs, sizeof(*lov_sfs));
+        obd->obd_osfs_age = get_jiffies_64();
         spin_unlock(&obd->obd_osfs_lock);
 
         if (success == 0) {

@@ -62,10 +62,10 @@ int obd_memmax;
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_fail_loc;
 unsigned int obd_dump_on_timeout;
+unsigned int obd_dump_on_eviction;
 unsigned int obd_timeout = 100; /* seconds */
 unsigned int ldlm_timeout = 20; /* seconds */
 unsigned int obd_health_check_timeout = 120; /* seconds */
-char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
 
 cfs_waitq_t obd_race_waitq;
 int obd_race_state;
@@ -383,10 +383,10 @@ EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
 EXPORT_SYMBOL(obd_race_state);
 EXPORT_SYMBOL(obd_dump_on_timeout);
+EXPORT_SYMBOL(obd_dump_on_eviction);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(ldlm_timeout);
 EXPORT_SYMBOL(obd_health_check_timeout);
-EXPORT_SYMBOL(obd_lustre_upcall);
 EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 
 EXPORT_SYMBOL(proc_lustre_root);
@@ -570,7 +570,9 @@ int init_obdclass(void)
         if (err)
                 return err;
         err = class_procfs_init();
-        lustre_register_fs();
+        if (err)
+                return err;
+        err = lustre_register_fs();
 #endif
 
         return err;

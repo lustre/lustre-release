@@ -310,10 +310,12 @@ static int import_select_connection(struct obd_import *imp)
         class_export_put(dlmexp);
 
         if (imp->imp_conn_current != imp_conn) {
-                LCONSOLE_INFO("Changing connection for %s to %s/%s\n",
-                              imp->imp_obd->obd_name, imp_conn->oic_uuid.uuid,
-                              libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
-        imp->imp_conn_current = imp_conn;
+                if (imp->imp_conn_current)
+                        LCONSOLE_INFO("Changing connection for %s to %s/%s\n",
+                                      imp->imp_obd->obd_name,
+                                      imp_conn->oic_uuid.uuid,
+                                      libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
+                imp->imp_conn_current = imp_conn;
         }
 
         CDEBUG(D_HA, "%s: import %p using connection %s/%s\n",
@@ -823,6 +825,11 @@ static int ptlrpc_invalidate_import_thread(void *data)
                imp->imp_connection->c_remote_uuid.uuid);
 
         ptlrpc_invalidate_import(imp);
+
+        if (obd_dump_on_eviction) {
+                CERROR("dump the log upon eviction\n");
+                libcfs_debug_dumplog();
+        }
 
         IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
         ptlrpc_import_recovery_state_machine(imp);

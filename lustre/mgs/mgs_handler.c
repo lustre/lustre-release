@@ -417,7 +417,6 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                 mti->mti_flags |= LDD_F_UPDATE;
         }
 
-
         if (mti->mti_flags & LDD_F_UPDATE) {
                 CDEBUG(D_MGS, "updating %s, index=%d\n", mti->mti_svname, 
                        mti->mti_stripe_index);

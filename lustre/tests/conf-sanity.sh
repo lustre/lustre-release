@@ -21,7 +21,7 @@ ALWAYS_EXCEPT=" $CONF_SANITY_EXCEPT $MOUNTCONFSKIP 23"
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
-PTLDEBUG=${PTLDEBUG:-1}
+PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 RLUSTRE=${RLUSTRE:-$LUSTRE}
 MOUNTLUSTRE=${MOUNTLUSTRE:-/sbin/mount.lustre}
@@ -82,7 +82,7 @@ stop_ost2() {
 
 mount_client() {
 	local MOUNTPATH=$1
-	echo "mount lustre on ${MOUNTPATH}....."
+	echo "mount $FSNAME on ${MOUNTPATH}....."
 	zconf_mount `hostname` $MOUNTPATH  || return 96
 }
 
@@ -855,6 +855,53 @@ test_23() {
 	stop_ost
 }
 run_test 23 "interrupt client during recovery mount delay"
+
+test_24a() {
+	local fs2mds_HOST=$mds_HOST
+        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME}2 --nomgs --mgsnode=$MGSNID --reformat ${MDSDEV}_2 || exit 10
+
+	local fs2ost_HOST=$ost_HOST
+	local fs2ostdev=$(ostdevname 1)_2
+	add fs2ost $OST_MKFS_OPTS --fsname=${FSNAME}2 --reformat $fs2ostdev || exit 10
+
+	setup
+	start fs2mds ${MDSDEV}_2 $MDS_MOUNT_OPTS
+	start fs2ost $fs2ostdev $OST_MOUNT_OPTS
+	mkdir -p $MOUNT2
+	mount -t lustre $MGSNID:/${FSNAME}2 $MOUNT2 || return 1
+	check_mount || return 2
+	sleep 5
+	cp /etc/passwd $MOUNT2/b || return 3
+	rm $MOUNT2/b || return 4
+        grep $MOUNT2' ' /proc/mounts > /dev/null || return 5
+	df
+	stop_mds
+	umount $MOUNT2
+	stop fs2mds -f
+	stop fs2ost -f
+	cleanup || return 6
+}
+run_test 24a "Multiple MDTs on a single node"
+
+test_24b() {
+	local fs2mds_HOST=$mds_HOST
+        add fs2mds $MDS_MKFS_OPTS --fsname=${FSNAME}2 --mgs --reformat ${MDSDEV}_2 || exit 10
+	setup
+	start fs2mds ${MDSDEV}_2 $MDS_MOUNT_OPTS && return 2
+	cleanup || return 6
+}
+run_test 24b "Multiple MGSs on a single node (should return err)"
+
+test_25() {
+	setup
+	check_mount || return 2
+	local MODULES=$($LCTL modules | awk '{ print $2 }')
+	rmmod $MODULES 2>/dev/null || true
+	cleanup || return 6
+}
+run_test 25 "Verify modules are referenced"
+
+
 
 umount_client $MOUNT	
 cleanup_nocli

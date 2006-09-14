@@ -662,7 +662,7 @@ Index: linux-2.6.16.21-0.8/include/linux/fs.h
  
  #define FMODE_READ 1
  #define FMODE_WRITE 2
-+#define FMODE_EXEC 4
++#define FMODE_EXEC 16
  
  /* Internal kernel extensions */
  #define FMODE_LSEEK	4

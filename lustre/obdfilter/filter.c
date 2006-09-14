@@ -1968,7 +1968,7 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "filter_ldlm_cb_client", &obd->obd_ldlm_client);
 
-        rc = llog_cat_initialize(obd, 1);
+        rc = llog_cat_initialize(obd, 1, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_post, rc);
@@ -2077,7 +2077,8 @@ static struct llog_operations filter_size_orig_logops = {
 };
 
 static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                            int count, struct llog_catid *catid)
+                            int count, struct llog_catid *catid,
+                            struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
         int rc;
@@ -2222,6 +2223,9 @@ static int filter_connect_internal(struct obd_export *exp,
 
         data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
         exp->exp_connect_flags = data->ocd_connect_flags;
+        if (exp->exp_imp_reverse)
+                exp->exp_imp_reverse->imp_connect_data.ocd_connect_flags 
+                        = data->ocd_connect_flags;
         data->ocd_version = LUSTRE_VERSION_CODE;
 
         if (exp->exp_connect_flags & OBD_CONNECT_GRANT) {
@@ -3712,36 +3716,6 @@ static struct obd_ops filter_obd_ops = {
         .o_process_config = filter_process_config,
 };
 
-static struct obd_ops filter_sanobd_ops = {
-        .o_owner          = THIS_MODULE,
-        .o_get_info       = filter_get_info,
-        .o_set_info_async = filter_set_info_async,
-        .o_setup          = filter_san_setup,
-        .o_precleanup     = filter_precleanup,
-        .o_cleanup        = filter_cleanup,
-        .o_connect        = filter_connect,
-        .o_reconnect      = filter_reconnect,
-        .o_disconnect     = filter_disconnect,
-        .o_ping           = filter_ping,
-        .o_init_export    = filter_init_export,
-        .o_destroy_export = filter_destroy_export,
-        .o_statfs         = filter_statfs,
-        .o_getattr        = filter_getattr,
-        .o_unpackmd       = filter_unpackmd,
-        .o_create         = filter_create,
-        .o_setattr        = filter_setattr,
-        .o_destroy        = filter_destroy,
-        .o_brw            = filter_brw,
-        .o_punch          = filter_truncate,
-        .o_sync           = filter_sync,
-        .o_preprw         = filter_preprw,
-        .o_commitrw       = filter_commitrw,
-        .o_san_preprw     = filter_san_preprw,
-        .o_llog_init      = filter_llog_init,
-        .o_llog_finish    = filter_llog_finish,
-        .o_iocontrol      = filter_iocontrol,
-};
-
 quota_interface_t *quota_interface;
 extern quota_interface_t filter_quota_interface;
 
@@ -3754,6 +3728,7 @@ static int __init obdfilter_init(void)
 
         lprocfs_init_vars(filter, &lvars);
 
+        request_module("lquota");
         OBD_ALLOC(obdfilter_created_scratchpad,
                   OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                   sizeof(*obdfilter_created_scratchpad));
@@ -3768,20 +3743,12 @@ static int __init obdfilter_init(void)
 
         quota_interface = PORTAL_SYMBOL_GET(filter_quota_interface);
         init_obd_quota_ops(quota_interface, &filter_obd_ops);
-        init_obd_quota_ops(quota_interface, &filter_sanobd_ops);
 
         rc = class_register_type(&filter_obd_ops, NULL, lvars.module_vars,
                                  LUSTRE_OST_NAME, NULL);
-        if (rc)
-                GOTO(out_fmd, rc);
-
-        rc = class_register_type(&filter_sanobd_ops, NULL, lvars.module_vars,
-                                 LUSTRE_OSTSAN_NAME, NULL);
         if (rc) {
                 int err;
 
-                class_unregister_type(LUSTRE_OST_NAME);
-out_fmd:
                 err = kmem_cache_destroy(ll_fmd_cachep);
                 LASSERTF(err == 0, "Cannot destroy ll_fmd_cachep: rc %d\n",err);
                 ll_fmd_cachep = NULL;
@@ -3808,7 +3775,6 @@ static void __exit obdfilter_exit(void)
                 ll_fmd_cachep = NULL;
         }
 
-        class_unregister_type(LUSTRE_OSTSAN_NAME);
         class_unregister_type(LUSTRE_OST_NAME);
         OBD_FREE(obdfilter_created_scratchpad,
                  OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *

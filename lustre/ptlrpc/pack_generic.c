@@ -828,7 +828,7 @@ static inline void lustre_msg_set_buflen_v1(void *msg, int n, int len)
         m->lm_buflens[n] = len;
 }
 
-static inline int
+static inline void
 lustre_msg_set_buflen_v2(struct lustre_msg_v2 *m, int n, int len)
 {
         if (n >= m->lm_bufcount)
@@ -2109,8 +2109,97 @@ int llog_log_swabbed(struct llog_log_hdr *hdr)
 void lustre_swab_qdata(struct qunit_data *d)
 {
         __swab32s (&d->qd_id);
+        __swab32s (&d->qd_flags);
+        __swab64s (&d->qd_count);
+}
+
+void lustre_swab_qdata_old(struct qunit_data_old *d)
+{
+        __swab32s (&d->qd_id);
         __swab32s (&d->qd_type);
         __swab32s (&d->qd_count);
         __swab32s (&d->qd_isblk);
 }
 
+#ifdef __KERNEL__
+struct qunit_data *lustre_quota_old_to_new(struct qunit_data_old *d)
+{
+        struct qunit_data_old tmp;
+        struct qunit_data *ret;
+        ENTRY;
+
+        if (!d)
+                return NULL;
+
+        tmp = *d;
+        ret = (struct qunit_data *)d;
+        ret->qd_id = tmp.qd_id;
+        ret->qd_flags = (tmp.qd_type ? QUOTA_IS_GRP : 0) | (tmp.qd_isblk ? QUOTA_IS_BLOCK : 0);
+        ret->qd_count = tmp.qd_count;
+        RETURN(ret);
+
+}
+EXPORT_SYMBOL(lustre_quota_old_to_new);
+
+struct qunit_data_old *lustre_quota_new_to_old(struct qunit_data *d)
+{
+        struct qunit_data tmp;
+        struct qunit_data_old *ret;
+        ENTRY;
+
+        if (!d)
+                return NULL;
+
+        LASSERT(d->qd_count <= MAX_QUOTA_COUNT32);
+        tmp = *d;
+        ret = (struct qunit_data_old *)d;
+        ret->qd_id = tmp.qd_id;
+        ret->qd_type = ((tmp.qd_flags & QUOTA_IS_GRP) ? GRPQUOTA : USRQUOTA);
+        ret->qd_count = (__u32)tmp.qd_count;
+        ret->qd_isblk = ((tmp.qd_flags & QUOTA_IS_BLOCK) ? 1 : 0);
+        RETURN(ret);
+}
+EXPORT_SYMBOL(lustre_quota_new_to_old);
+#endif /* __KERNEL__ */
+
+
+void cdebug_va(cfs_debug_limit_state_t *cdls, __u32 mask,
+               const char *file, const char *func, const int line,
+               const char *fmt, va_list args);
+void cdebug(cfs_debug_limit_state_t *cdls, __u32 mask,
+            const char *file, const char *func, const int line,
+            const char *fmt, ...);
+
+void debug_req(cfs_debug_limit_state_t *cdls,
+               __u32 level, struct ptlrpc_request *req,
+               const char *file, const char *func, const int line,
+               const char *fmt, ...)
+{
+        va_list args;
+        
+        va_start(args, fmt);
+        cdebug_va(cdls, level, file, func, line, fmt, args);
+        va_end(args);
+
+        cdebug(cdls, level, file, func, line,
+               " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d lens %d/%d ref %d fl "
+               REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
+               req, req->rq_xid, req->rq_transno,
+               req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
+               req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
+                  req->rq_export ?
+                  (char*)req->rq_export->exp_client_uuid.uuid : "<?>",
+               req->rq_import ?
+                  (char *)req->rq_import->imp_connection->c_remote_uuid.uuid :
+                  req->rq_export ?
+                  (char *)req->rq_export->exp_connection->c_remote_uuid.uuid : "<?>",
+               (req->rq_import && req->rq_import->imp_client) ?
+                  req->rq_import->imp_client->cli_request_portal : -1,
+               req->rq_reqlen, req->rq_replen, atomic_read(&req->rq_refcount),
+               DEBUG_REQ_FLAGS(req),
+               req->rq_reqmsg ? lustre_msg_get_flags(req->rq_reqmsg) : 0,
+               req->rq_repmsg ? lustre_msg_get_flags(req->rq_repmsg) : 0,
+               req->rq_status,
+               req->rq_repmsg ? lustre_msg_get_status(req->rq_repmsg) : 0);
+}
+EXPORT_SYMBOL(debug_req);

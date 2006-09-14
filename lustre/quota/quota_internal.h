@@ -44,6 +44,13 @@
                qinfo->qi_info[0].dqi_free_entry,                              \
                qinfo->qi_info[1].dqi_free_entry, ## arg);
 
+#define QDATA_DEBUG(qd, fmt, arg...)                                          \
+        CDEBUG(D_QUOTA, "id(%u) type(%lu) count(%llu) isblk(%lu):"            \
+               fmt, qd->qd_id, qd->qd_flags & QUOTA_IS_GRP, qd->qd_count,     \
+               (qd->qd_flags & QUOTA_IS_BLOCK) >> 1,       \
+               ## arg);
+
+
 /* quota_context.c */
 void qunit_cache_cleanup(void);
 int qunit_cache_init(void);

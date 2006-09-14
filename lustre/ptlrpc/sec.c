@@ -933,11 +933,9 @@ void sptlrpc_req_set_flavor(struct ptlrpc_request *req, int opcode)
         /* special security flags accoding to opcode */
         switch (opcode) {
         case OST_READ:
-        case OST_SAN_READ:
                 req->rq_bulk_read = 1;
                 break;
         case OST_WRITE:
-        case OST_SAN_WRITE:
                 req->rq_bulk_write = 1;
                 break;
         case SEC_CTX_INIT:
@@ -1473,9 +1471,9 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
         if (rc == SECSVC_OK) {
                 __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
 
-                if (opc == OST_WRITE || opc == OST_SAN_WRITE)
+                if (opc == OST_WRITE)
                         req->rq_bulk_write = 1;
-                else if (opc == OST_READ || opc == OST_SAN_READ)
+                else if (opc == OST_READ)
                         req->rq_bulk_read = 1;
         }
 

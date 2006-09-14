@@ -206,7 +206,7 @@ void request_in_callback(lnet_event_t *ev)
         req->rq_self = ev->target.nid;
         req->rq_rqbd = rqbd;
         req->rq_phase = RQ_PHASE_NEW;
-#if CRAY_XT3
+#ifdef CRAY_XT3
         req->rq_uid = ev->uid;
 #endif
 

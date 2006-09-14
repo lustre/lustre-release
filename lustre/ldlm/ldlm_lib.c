@@ -324,7 +324,6 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         /* cli->cl_max_mds_{easize,cookiesize} updated by mdc_init_ea_size() */
         cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
         cli->cl_max_mds_cookiesize = sizeof(struct llog_cookie);
-        cli->cl_sandev = to_kdev_t(0);
 
         if (LUSTRE_CFG_BUFLEN(lcfg, 3) > 0) {
                 if (!strcmp(lustre_cfg_string(lcfg, 3), "inactive")) {
@@ -1033,14 +1032,13 @@ void target_abort_recovery(void *data)
         target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
-        CERROR("%s: recovery period over; disconnecting unfinished clients.\n",
-               obd->obd_name);
+        LCONSOLE_WARN("%s: recovery period over; disconnecting unfinished "
+                      "clients.\n", obd->obd_name);
         class_disconnect_stale_exports(obd);
         abort_recovery_queue(obd);
 
         target_finish_recovery(obd);
-
-        ptlrpc_run_recovery_over_upcall(obd);
+        CDEBUG(D_HA, "%s: recovery complete\n", obd_uuid2str(&obd->obd_uuid));
         EXIT;
 }
 
@@ -1345,7 +1343,8 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                 spin_unlock_bh(&obd->obd_processing_task_lock);
 
                 target_finish_recovery(obd);
-                ptlrpc_run_recovery_over_upcall(obd);
+                CDEBUG(D_HA, "%s: recovery complete\n",
+                       obd_uuid2str(&obd->obd_uuid));
         } else {
                 CWARN("%s: %d recoverable clients remain\n",
                        obd->obd_name, obd->obd_recoverable_clients);
@@ -1510,7 +1509,9 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct obd_device *master_obd;
         struct lustre_quota_ctxt *qctxt;
-        struct qunit_data *qdata, *rep;
+        struct qunit_data *qdata;
+        void* rep;
+        struct qunit_data_old *qdata_old;
         int rc = 0;
         int repsize[2] = { sizeof(struct ptlrpc_body),
                            sizeof(struct qunit_data) };
@@ -1521,11 +1522,27 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
                 CERROR("packing reply failed!: rc = %d\n", rc);
                 RETURN(rc);
         }
-        rep = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*rep));
-        LASSERT(rep);
-        
-        qdata = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*qdata),
-                                   lustre_swab_qdata);
+        LASSERT(req->rq_export);
+
+        /* fixed for bug10707 */
+        if ((req->rq_export->exp_connect_flags & OBD_CONNECT_QUOTA64) &&
+            !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT)) {
+                CDEBUG(D_QUOTA, "qd_count is 64bit!\n");
+                rep = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, 
+                                     sizeof(struct qunit_data));
+                LASSERT(rep);
+                qdata = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*qdata), 
+                                           lustre_swab_qdata);
+        } else {
+                CDEBUG(D_QUOTA, "qd_count is 32bit!\n");
+                rep = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, 
+                                     sizeof(struct qunit_data_old));
+                LASSERT(rep);
+                qdata_old = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*qdata_old), 
+                                               lustre_swab_qdata_old);
+                qdata = lustre_quota_old_to_new(qdata_old);
+        }
+
         if (qdata == NULL) {
                 CERROR("Can't unpack qunit_data\n");
                 RETURN(-EPROTO);
@@ -1544,7 +1561,13 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
                        "dqacq failed! (rc:%d)\n", rc);
 
         /* the qd_count might be changed in lqc_handler */
-        memcpy(rep, qdata, sizeof(*rep));
+        if ((req->rq_export->exp_connect_flags & OBD_CONNECT_QUOTA64) &&
+            !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT)) {
+                memcpy(rep,qdata,sizeof(*qdata));
+        } else {
+                qdata_old = lustre_quota_new_to_old(qdata);
+                memcpy(rep,qdata_old,sizeof(*qdata_old));
+        }
         req->rq_status = rc;
         rc = ptlrpc_reply(req);
 

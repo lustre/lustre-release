@@ -114,10 +114,10 @@ trace() {
 TRACE=${TRACE:-""}
 
 check_kernel_version() {
-	VERSION_FILE=$LPROC/kernel_version
+	VERSION_FILE=$LPROC/version
 	WANT_VER=$1
 	[ ! -f $VERSION_FILE ] && echo "can't find kernel version" && return 1
-	GOT_VER=`cat $VERSION_FILE`
+	GOT_VER=$(awk '/kernel:/ {print $2}' $VERSION_FILE)
 	[ $GOT_VER -ge $WANT_VER ] && return 0
 	log "test needs at least kernel version $WANT_VER, running $GOT_VER"
 	return 1
@@ -1105,7 +1105,25 @@ test_27r() {
 
 	reset_enospc
 }
-run_test 27r "stripe file with some full OSTs (shouldn't LBUG) ==="
+run_test 27r "stripe file with some full OSTs (shouldn't LBUG) ="
+
+test_27s() {
+       mkdir -p $DIR/$tdir
+       $LSTRIPE $DIR/$tdir $((2048 * 1024 * 1024)) -1 2 && \
+               error "stripe width >= 2^32 succeeded" || true
+}
+run_test 27s "lsm_xfersize overflow (should error) (bug 10725)"
+
+test_27t() { # bug 10864
+        WDIR=`pwd`
+        WLFS=`which lfs`
+        cd $DIR
+        touch $tfile
+        $WLFS getstripe $tfile
+        cd $WDIR
+}
+run_test 27t "check that utils parse path correctly"
+
 
 test_28() {
 	mkdir $DIR/d28
@@ -2541,11 +2559,11 @@ run_test 65i "set non-default striping on root directory (bug 6367)="
 test_65j() { # bug6367
 	return
 	# if we aren't already remounting for each test, do so for this test
-	if [ "$CLEANUP" = ":" ]; then
+	if [ "$CLEANUP" = ":" -a "$I_MOUNTED" = "yes" ]; then
 		cleanup -f || error "failed to unmount"
-		setup || error "failed to remount"
+		setup
 	fi
-	$SETSTRIPE -d $MOUNT || true
+	$SETSTRIPE -d $MOUNT
 }
 run_test 65j "set default striping on root directory (bug 6367)="
 
@@ -2751,71 +2769,132 @@ test_74() { # bug 6149, 6184
 run_test 74 "ldlm_enqueue freed-export error path (shouldn't LBUG)"
 
 JOIN=${JOIN:-"lfs join"}
-test_75() {
+F75=$DIR/f75
+F128k=${F75}_128k
+FHEAD=${F75}_head
+FTAIL=${F75}_tail
+export T75_PREP=no
+test75_prep() {
+        [ $T75_PREP = "yes" ] && return
+        echo "using F75=$F75, F128k=$F128k, FHEAD=$FHEAD, FTAIL=$FTAIL"
+ 
+        dd if=/dev/urandom of=${F75}_128k bs=128k count=1 || error "dd failed"
+        log "finished dd"
+        chmod 777 ${F128k}
+        T75_PREP=yes
+}
+ 
+test_75a() {
 #	skipped temporarily: we do not have join file currently
 #	please remove this when ready - huanghua
 	return
-	F=$DIR/$tfile
-	F128k=${F}_128k
-	FHEAD=${F}_head
-	FTAIL=${F}_tail
-	echo "using F=$F, F128k=$F128k, FHEAD=$FHEAD, FTAIL=$FTAIL"
-	rm -f $F*
-
-	dd if=/dev/urandom of=${F}_128k bs=1024 count=128 || error "dd failed"
-	chmod 777 ${F128k}
-	cp -p ${F128k} ${FHEAD}
-	cp -p ${F128k} ${FTAIL}
-	cat ${F128k} ${F128k} > ${F}_sim_sim
-
-	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-	cmp ${FHEAD} ${F}_sim_sim || error "${FHEAD} ${F}_sim_sim differ"
-	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} still exist after join"
-
-	cp -p ${F128k} ${FTAIL}
-	cat ${F}_sim_sim >> ${F}_join_sim
-	cat ${F128k} >> ${F}_join_sim
-	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-	cmp ${FHEAD} ${F}_join_sim || \
-		error "${FHEAD} ${F}_join_sim are different"
-	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join"
-
-	cp -p ${F128k} ${FTAIL}
-	cat ${F128k} >> ${F}_sim_join
-	cat ${F}_join_sim >> ${F}_sim_join
-	$JOIN ${FTAIL} ${FHEAD} || error "join error"
-	cmp ${FTAIL} ${F}_sim_join || \
-		error "${FTAIL} ${F}_sim_join are different"
-	$CHECKSTAT -a ${FHEAD} || error "tail ${FHEAD} exist after join"
-
-	cp -p ${F128k} ${FHEAD}
-	cp -p ${F128k} ${FHEAD}_tmp
-	cat ${F}_sim_sim >> ${F}_join_join
-	cat ${F}_sim_join >> ${F}_join_join
-	$JOIN ${FHEAD} ${FHEAD}_tmp || error "join ${FHEAD} ${FHEAD}_tmp error"
-	$JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
-	cmp ${FHEAD} ${F}_join_join || error "${FHEAD} ${F}_join_join differ"
-	$CHECKSTAT -a ${FHEAD}_tmp || error "${FHEAD}_tmp exist after join"
-	$CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join (2)"
-
-	rm -rf ${FHEAD} || error "delete join file error"
-	cp -p ${F128k} ${F}_join_10_compare
-	cp -p ${F128k} ${F}_join_10
-	for ((i = 0; i < 10; i++)); do
-		cat ${F128k} >> ${F}_join_10_compare
-		cp -p ${F128k} ${FTAIL}
-		$JOIN ${F}_join_10 ${FTAIL} || \
-			error "join ${F}_join_10 ${FTAIL} error"
-		$CHECKSTAT -a ${FTAIL} || error "tail file exist after join"
-	done
-	cmp ${F}_join_10 ${F}_join_10_compare || \
-		error "files ${F}_join_10 ${F}_join_10_compare are different"
-	$LFS getstripe ${F}_join_10
-	$OPENUNLINK ${F}_join_10 ${F}_join_10 || error "files unlink open"
-
-	ls -l $F*
+        test75_prep
+ 
+        cp -p ${F128k} ${FHEAD}
+        log "finished cp to $FHEAD"
+        cp -p ${F128k} ${FTAIL}
+        log "finished cp to $FTAIL"
+        cat ${F128k} ${F128k} > ${F75}_sim_sim
+ 
+        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+        log "finished join $FHEAD to ${F75}_sim_sim"
+        cmp ${FHEAD} ${F75}_sim_sim || error "${FHEAD} ${F75}_sim_sim differ"
+        log "finished cmp $FHEAD to ${F75}_sim_sim"
+        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} still exist after join"
 }
-run_test 75 "TEST join file ===================================="
+run_test 75a "TEST join file ===================================="
+ 
+test_75b() {
+#	skipped temporarily: we do not have join file currently
+#	please remove this when ready - huanghua
+	return
+        test75_prep
+ 
+        cp -p ${F128k} ${FTAIL}
+        cat ${F75}_sim_sim >> ${F75}_join_sim
+        cat ${F128k} >> ${F75}_join_sim
+        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+        cmp ${FHEAD} ${F75}_join_sim || \
+                error "${FHEAD} ${F75}_join_sim are different"
+        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join"
+}
+run_test 75b "TEST join file 2 =================================="
+ 
+test_75c() {
+#	skipped temporarily: we do not have join file currently
+#	please remove this when ready - huanghua
+	return
+        test75_prep
+ 
+        cp -p ${F128k} ${FTAIL}
+        cat ${F128k} >> ${F75}_sim_join
+        cat ${F75}_join_sim >> ${F75}_sim_join
+        $JOIN ${FTAIL} ${FHEAD} || error "join error"
+        cmp ${FTAIL} ${F75}_sim_join || \
+                error "${FTAIL} ${F75}_sim_join are different"
+        $CHECKSTAT -a ${FHEAD} || error "tail ${FHEAD} exist after join"
+}
+run_test 75c "TEST join file 3 =================================="
+ 
+test_75d() {
+#	skipped temporarily: we do not have join file currently
+#	please remove this when ready - huanghua
+	return
+        test75_prep
+ 
+        cp -p ${F128k} ${FHEAD}
+        cp -p ${F128k} ${FHEAD}_tmp
+        cat ${F75}_sim_sim >> ${F75}_join_join
+        cat ${F75}_sim_join >> ${F75}_join_join
+        $JOIN ${FHEAD} ${FHEAD}_tmp || error "join ${FHEAD} ${FHEAD}_tmp error"
+        $JOIN ${FHEAD} ${FTAIL} || error "join ${FHEAD} ${FTAIL} error"
+        cmp ${FHEAD} ${F75}_join_join ||error "${FHEAD} ${F75}_join_join differ"        $CHECKSTAT -a ${FHEAD}_tmp || error "${FHEAD}_tmp exist after join"
+        $CHECKSTAT -a ${FTAIL} || error "tail ${FTAIL} exist after join (2)"
+}
+run_test 75d "TEST join file 4 =================================="
+ 
+test_75e() {
+#	skipped temporarily: we do not have join file currently
+#	please remove this when ready - huanghua
+	return
+        test75_prep
+ 
+        rm -rf ${FHEAD} || "delete join file error"
+}
+run_test 75e "TEST join file 5 (remove joined file) ============="
+ 
+test_75f() {
+#	skipped temporarily: we do not have join file currently
+#	please remove this when ready - huanghua
+	return
+        test75_prep
+ 
+        cp -p ${F128k} ${F75}_join_10_compare
+        cp -p ${F128k} ${F75}_join_10
+        for ((i = 0; i < 10; i++)); do
+                cat ${F128k} >> ${F75}_join_10_compare
+                cp -p ${F128k} ${FTAIL}
+                $JOIN ${F75}_join_10 ${FTAIL} || \
+                        error "join ${F75}_join_10 ${FTAIL} error"
+                $CHECKSTAT -a ${FTAIL} || error "tail file exist after join"
+        done
+        cmp ${F75}_join_10 ${F75}_join_10_compare || \
+                error "files ${F75}_join_10 ${F75}_join_10_compare differ"
+}
+run_test 75f "TEST join file 6 (join 10 files) =================="
+ 
+test_75g() {
+#	skipped temporarily: we do not have join file currently
+#	please remove this when ready - huanghua
+	return
+        [ ! -f ${F75}_join_10 ] && echo "${F75}_join_10 missing" && return
+        $LFS getstripe ${F75}_join_10
+ 
+        $OPENUNLINK ${F75}_join_10 ${F75}_join_10 || error "files unlink open"
+ 
+        ls -l $F75*
+}
+run_test 75g "TEST join file 7 (open unlink) ===================="
 
 num_inodes() {
 	awk '/lustre_inode_cache|^inode_cache/ {print $2; exit}' /proc/slabinfo
@@ -2988,6 +3067,8 @@ test_102() {
 
 	[ "$UID" != 0 ] && echo "skipping $TESTNAME (must run as root)" && return
 	[ -z "`grep xattr $LPROC/mdc/*-mdc-*/connect_flags`" ] && echo "skipping $TESTNAME (must have user_xattr)" && return
+	[ -z "$(which setfattr 2>/dev/null)" ] && echo "skipping $TESTNAME (could not find setfattr)" && return
+
 	echo "set/get xattr..."
         setfattr -n trusted.name1 -v value1 $testfile || error
         [ "`getfattr -n trusted.name1 $testfile 2> /dev/null | \
@@ -3018,8 +3099,9 @@ test_102() {
         getfattr -d -m user $testfile 2> /dev/null | \
         grep "user.author1" && error || true
 
-	echo "set lustre specific xattr (should be denied)..."
-	setfattr -n "trusted.lov" -v "invalid value" $testfile || true
+	# b10667: setting lustre special xattr be silently discarded
+	echo "set lustre special xattr ..."
+	setfattr -n "trusted.lov" -v "invalid value" $testfile || error
 
 	rm -f $testfile
 }

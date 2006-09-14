@@ -487,7 +487,7 @@ int lmv_add_target(struct obd_device *obd, struct obd_uuid *tgt_uuid)
                         RETURN(-EINVAL);
                 }
 
-                rc = obd_llog_init(obd, mdc_obd, 0, NULL);
+                rc = obd_llog_init(obd, mdc_obd, 0, NULL, tgt_uuid);
                 if (rc) {
                         lmv_init_unlock(lmv);
                         CERROR("lmv failed to setup llogging subsystems\n");
@@ -2065,7 +2065,7 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 static int lmv_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                         int count, struct llog_catid *logid)
+                         int count, struct llog_catid *logid, struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
         int rc;

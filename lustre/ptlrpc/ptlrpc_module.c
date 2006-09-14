@@ -243,6 +243,7 @@ EXPORT_SYMBOL(lustre_swab_ldlm_lock_desc);
 EXPORT_SYMBOL(lustre_swab_ldlm_request);
 EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_qdata);
+EXPORT_SYMBOL(lustre_swab_qdata_old);
 EXPORT_SYMBOL(lustre_msg_get_flags);
 EXPORT_SYMBOL(lustre_msg_add_flags);
 EXPORT_SYMBOL(lustre_msg_set_flags);
@@ -274,8 +275,6 @@ EXPORT_SYMBOL(lustre_swab_md_fld);
 EXPORT_SYMBOL(lustre_swab_generic_32s);
 
 /* recover.c */
-EXPORT_SYMBOL(ptlrpc_run_recovery_over_upcall);
-EXPORT_SYMBOL(ptlrpc_run_failed_import_upcall);
 EXPORT_SYMBOL(ptlrpc_disconnect_import);
 EXPORT_SYMBOL(ptlrpc_resend);
 EXPORT_SYMBOL(ptlrpc_wake_delayed);

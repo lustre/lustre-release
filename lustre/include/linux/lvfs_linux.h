@@ -1,13 +1,15 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
- */ 
+ */
 #ifndef __LVFS_LINUX_H__
 #define __LVFS_LINUX_H__
 
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/fs.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/namei.h>
+#endif
 #include <linux/sched.h>
 
 #include <lvfs.h>

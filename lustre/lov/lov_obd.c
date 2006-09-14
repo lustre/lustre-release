@@ -643,18 +643,18 @@ static void __lov_del_obd(struct obd_device *obd, __u32 index)
         }
 }
 
-static void lov_fix_desc(struct lov_desc *desc)
+void lov_fix_desc(struct lov_desc *desc)
 {
         if (desc->ld_default_stripe_size < PTLRPC_MAX_BRW_SIZE) {
-                CWARN("Increasing default_stripe_size "LPU64" to %u\n",
-                      desc->ld_default_stripe_size, PTLRPC_MAX_BRW_SIZE);
+                LCONSOLE_WARN("Increasing default stripe size to min %u\n",
+                              PTLRPC_MAX_BRW_SIZE);
                 desc->ld_default_stripe_size = PTLRPC_MAX_BRW_SIZE;
         } else if (desc->ld_default_stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
-                CWARN("default_stripe_size "LPU64" isn't a multiple of %u\n",
-                      desc->ld_default_stripe_size, LOV_MIN_STRIPE_SIZE);
                 desc->ld_default_stripe_size &= ~(LOV_MIN_STRIPE_SIZE - 1);
-                CWARN("changing to "LPU64"\n", desc->ld_default_stripe_size);
-       }
+                LCONSOLE_WARN("Changing default stripe size to "LPU64" (a "
+                              "multiple of %u)\n",
+                              desc->ld_default_stripe_size,LOV_MIN_STRIPE_SIZE);
+        }
 
         if (desc->ld_default_stripe_count == 0)
                 desc->ld_default_stripe_count = 1;
@@ -662,8 +662,7 @@ static void lov_fix_desc(struct lov_desc *desc)
         /* from lov_setstripe */
         if ((desc->ld_pattern != 0) &&
             (desc->ld_pattern != LOV_PATTERN_RAID0)) {
-                CDEBUG(D_IOCTL, "bad userland stripe pattern: %#x\n",
-                       desc->ld_pattern);
+                LCONSOLE_WARN("Unknown stripe pattern: %#x\n",desc->ld_pattern);
                 desc->ld_pattern = 0;
         }
 }
@@ -708,9 +707,9 @@ static int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
          * of 4GB or larger on 32-bit CPUs. */
         count = desc->ld_default_stripe_count;
         if ((count > 0 ? count : desc->ld_tgt_count) *
-            desc->ld_default_stripe_size > ~0UL) {
-                CERROR("LOV: stripe width "LPU64"x%u > %lu on 32-bit system\n",
-                       desc->ld_default_stripe_size, count, ~0UL);
+            desc->ld_default_stripe_size > 0xffffffff) {
+                CERROR("LOV: stripe width "LPU64"x%u > 4294967295 bytes\n",
+                       desc->ld_default_stripe_size, count);
                 RETURN(-EINVAL);
         }
 
@@ -836,53 +835,15 @@ static int lov_process_config(struct obd_device *obd, obd_count len, void *buf)
         }
         case LCFG_PARAM: {
                 struct lprocfs_static_vars lvars;
-                struct lov_obd *lov = &obd->u.lov;
-                struct lov_desc *desc = &(lov->desc);
-                int i;
+                struct lov_desc *desc = &(obd->u.lov.desc);
                 
                 if (!desc)
                         GOTO(out, rc = -EINVAL);
                 
                 lprocfs_init_vars(lov, &lvars);
                 
-                /* setparam 0:lov_mdsA 1:default_stripe_size=1048576 
-                   2:default_stripe_pattern=0 3:default_stripe_offset=0 */
-                for (i = 1; i < lcfg->lcfg_bufcount; i++) {
-                        char *key, *sval;
-                        long val;
-                        key = lustre_cfg_buf(lcfg, i);
-                        sval = strchr(key, '=');
-                        if (!sval || (*(sval + 1) == 0)) {
-                                CERROR("Can't parse param %s\n", key);
-                                rc = -EINVAL;
-                                /* continue parsing other params */
-                                continue;
-                        }
-                        val = simple_strtol(sval + 1, NULL, 0);
-                        rc = 0;
-                        /* LOV_STRIPE_* aren't settable in proc */
-                        if (class_match_param(key, 
-                                              PARAM_LOV_STRIPE_SIZE,0) == 0)
-                                desc->ld_default_stripe_size = val;
-                        else if (class_match_param(key, 
-                                              PARAM_LOV_STRIPE_COUNT, 0) == 0)
-                                desc->ld_default_stripe_count = val;
-                        else if (class_match_param(key, 
-                                              PARAM_LOV_STRIPE_OFFSET, 0) == 0)
-                                desc->ld_default_stripe_offset = val;
-                        else if (class_match_param(key, 
-                                              PARAM_LOV_STRIPE_PATTERN, 0) == 0)
-                                desc->ld_pattern = val;
-                        else 
-                                rc = class_process_proc_param(PARAM_LOV, 
-                                                              lvars.obd_vars,
-                                                              lcfg, obd);
-                        if (rc >= 0) {
-                                LCONSOLE_INFO("set %s to %ld\n", key, val);
-                                rc = 0;
-                        }
-                }
-                lov_fix_desc(desc);
+                rc = class_process_proc_param(PARAM_LOV, lvars.obd_vars,
+                                              lcfg, obd);
                 GOTO(out, rc);
         }
         default: {

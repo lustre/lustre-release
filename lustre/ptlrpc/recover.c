@@ -47,100 +47,12 @@
 
 static int ptlrpc_recover_import_no_retry(struct obd_import *, char *);
 
-void ptlrpc_run_recovery_over_upcall(struct obd_device *obd)
-{
-        char *argv[4];
-        char *envp[3];
-        int rc;
-        ENTRY;
-
-        argv[0] = obd_lustre_upcall;
-        argv[1] = "RECOVERY_OVER";
-        argv[2] = obd->obd_uuid.uuid;
-        argv[3] = NULL;
-        
-        envp[0] = "HOME=/";
-        envp[1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
-        envp[2] = NULL;
-
-        rc = USERMODEHELPER(argv[0], argv, envp);
-        if (rc < 0) {
-                CERROR("Error invoking recovery upcall %s %s %s: %d; check "
-                       "/proc/sys/lustre/upcall\n",
-                       argv[0], argv[1], argv[2], rc);
-
-        } else {
-                CWARN("Invoked upcall %s %s %s\n",
-                      argv[0], argv[1], argv[2]);
-        }
-}
-
-void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
-{
-#ifdef __KERNEL__
-        char *argv[7];
-        char *envp[3];
-        int rc;
-        ENTRY;
-
-        spin_lock(&imp->imp_lock);
-        if (imp->imp_state == LUSTRE_IMP_CLOSED) {
-                spin_unlock(&imp->imp_lock);
-                EXIT;
-                return;
-        }
-        spin_unlock(&imp->imp_lock);
-
-        argv[0] = obd_lustre_upcall;
-        argv[1] = "FAILED_IMPORT";
-        argv[2] = obd2cli_tgt(imp->imp_obd);
-        argv[3] = imp->imp_obd->obd_name;
-        argv[4] = imp->imp_connection->c_remote_uuid.uuid;
-        argv[5] = imp->imp_obd->obd_uuid.uuid;
-        argv[6] = NULL;
-
-        envp[0] = "HOME=/";
-        envp[1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
-        envp[2] = NULL;
-
-        rc = USERMODEHELPER(argv[0], argv, envp);
-        if (rc < 0) {
-                CERROR("Error invoking recovery upcall %s %s %s %s %s %s: %d; "
-                       "check /proc/sys/lustre/lustre_upcall\n",
-                       argv[0], argv[1], argv[2], argv[3], argv[4], argv[5],rc);
-        } else {
-                CWARN("Invoked upcall %s %s %s %s %s %s\n",
-                      argv[0], argv[1], argv[2], argv[3], argv[4], argv[5]);
-        }
-#else
-        if (imp->imp_state == LUSTRE_IMP_CLOSED) {
-                EXIT;
-                return;
-        }
-        ptlrpc_recover_import(imp, NULL);
-#endif
-}
-
-/* This might block waiting for the upcall to start, so it should
- * not be called from a thread that shouldn't block. (Like ptlrpcd) */
 void ptlrpc_initiate_recovery(struct obd_import *imp)
 {
         ENTRY;
 
-        LASSERT (obd_lustre_upcall != NULL);
-
-        if (strcmp(obd_lustre_upcall, "DEFAULT") == 0) {
-                CDEBUG(D_HA, "%s: starting recovery without upcall\n",
-                        obd2cli_tgt(imp->imp_obd));
-                ptlrpc_connect_import(imp, NULL);
-        } else if (strcmp(obd_lustre_upcall, "NONE") == 0) {
-                CDEBUG(D_HA, "%s: recovery disabled\n",
-                        obd2cli_tgt(imp->imp_obd));
-        } else {
-                CDEBUG(D_HA, "%s: calling upcall to start recovery\n",
-                        obd2cli_tgt(imp->imp_obd));
-                ptlrpc_run_failed_import_upcall(imp);
-        }
+        CDEBUG(D_HA, "%s: starting recovery\n", obd2cli_tgt(imp->imp_obd));
+        ptlrpc_connect_import(imp, NULL);
 
         EXIT;
 }

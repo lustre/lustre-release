@@ -501,6 +501,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         DEBUG_REQ(D_INODE, req, "setattr "LPU64"/%u %x", rec->ur_fid1->id,
                   rec->ur_fid1->generation, rec->ur_iattr.ia_valid);
+        OBD_COUNTER_INCREMENT(obd, setattr);
 
         MDS_CHECK_RESENT(req, reconstruct_reint_setattr(rec, offset, req));
 
@@ -810,6 +811,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = ll_vfs_create(dir, dchild, rec->ur_mode, NULL);
+                lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_MKNOD);
                 EXIT;
                 break;
         }
@@ -818,6 +820,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = vfs_mkdir(dir, dchild, rec->ur_mode);
+                lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_MKDIR);
                 EXIT;
                 break;
         }
@@ -829,6 +832,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         rc = -EINVAL;           /* -EPROTO? */
                 else
                         rc = ll_vfs_symlink(dir, dchild, rec->ur_tgt, S_IALLUGO);
+                lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_MKNOD);
                 EXIT;
                 break;
         }
@@ -841,6 +845,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = vfs_mknod(dir, dchild, rec->ur_mode, rdev);
+                lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_MKNOD);
                 EXIT;
                 break;
         }
@@ -1634,6 +1639,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = vfs_rmdir(dparent->d_inode, dchild);
+                lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_RMDIR);
                 break;
         case S_IFREG: {
                 struct lov_mds_md *lmm = lustre_msg_buf(req->rq_repmsg,
@@ -1644,6 +1650,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = vfs_unlink(dparent->d_inode, dchild);
+                lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_UNLINK);
                 break;
         }
         case S_IFLNK:
@@ -1656,6 +1663,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = vfs_unlink(dparent->d_inode, dchild);
+                lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_UNLINK);
                 break;
         default:
                 CERROR("bad file type %o unlinking %s\n", rec->ur_mode,
@@ -1769,6 +1777,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         DEBUG_REQ(D_INODE, req, "original "LPU64"/%u to "LPU64"/%u %s",
                   rec->ur_fid1->id, rec->ur_fid1->generation,
                   rec->ur_fid2->id, rec->ur_fid2->generation, rec->ur_name);
+        lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_LINK);
 
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
 
@@ -2112,7 +2121,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u %s to "LPU64"/%u %s",
                   rec->ur_fid1->id, rec->ur_fid1->generation, rec->ur_name,
                   rec->ur_fid2->id, rec->ur_fid2->generation, rec->ur_tgt);
-
+        lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_RENAME);
+        
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
 
         rc = mds_get_parents_children_locked(obd, mds, rec->ur_fid1, &de_srcdir,
@@ -2301,7 +2311,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         int rc;
         ENTRY;
 
-#if CRAY_XT3
+#ifdef CRAY_XT3
         if (req->rq_uid != LNET_UID_ANY) {
                 /* non-root local cluster client
                  * NB root's creds are believed... */
@@ -2326,7 +2336,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         /* checked by unpacker */
         LASSERT(rec->ur_opcode < REINT_MAX && reinters[rec->ur_opcode] != NULL);
 
-#if CRAY_XT3
+#ifdef CRAY_XT3
         if (rec->ur_uc.luc_uce)
                 rec->ur_uc.luc_fsgid = rec->ur_uc.luc_uce->ue_primary;
 #endif

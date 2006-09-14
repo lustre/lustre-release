@@ -1401,3 +1401,134 @@ void ldlm_lock_dump_handle(int level, struct lustre_handle *lockh)
 
         LDLM_LOCK_PUT(lock);
 }
+
+void cdebug_va(cfs_debug_limit_state_t *cdls, __u32 mask,
+               const char *file, const char *func, const int line,
+               const char *fmt, va_list args);
+void cdebug(cfs_debug_limit_state_t *cdls, __u32 mask,
+            const char *file, const char *func, const int line,
+            const char *fmt, ...);
+
+void
+ldlm_lock_debug(cfs_debug_limit_state_t *cdls,
+                __u32 level, struct ldlm_lock *lock,
+                const char *file, const char *func, const int line,
+                char *fmt, ...)
+{
+        va_list args;
+
+        va_start(args, fmt);
+        cdebug_va(cdls, level, file, func, line, fmt, args);
+        va_end(args);
+
+        if (lock->l_resource == NULL) {
+                cdebug(cdls, level, file, func, line,
+                       " ns: \?\? lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
+                       "res: \?\? rrc=\?\? type: \?\?\? flags: %x remote: "
+                       LPX64" expref: %d pid: %u\n", lock,
+                       lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
+                       lock->l_readers, lock->l_writers,
+                       ldlm_lockname[lock->l_granted_mode],
+                       ldlm_lockname[lock->l_req_mode],
+                       lock->l_flags, lock->l_remote_handle.cookie,
+                       lock->l_export ?
+                       atomic_read(&lock->l_export->exp_refcount) : -99,
+                       lock->l_pid);
+                return;
+        }
+
+        switch (lock->l_resource->lr_type) {
+        case LDLM_EXTENT:
+                cdebug(cdls, level, file, func, line,
+                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s " 
+                       "res: "LPU64"/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64
+                       "] (req "LPU64"->"LPU64") flags: %x remote: "LPX64
+                       " expref: %d pid: %u\n",
+                       lock->l_resource->lr_namespace->ns_name, lock,
+                       lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
+                       lock->l_readers, lock->l_writers,
+                       ldlm_lockname[lock->l_granted_mode],
+                       ldlm_lockname[lock->l_req_mode],
+                       lock->l_resource->lr_name.name[0],
+                       lock->l_resource->lr_name.name[1],
+                       atomic_read(&lock->l_resource->lr_refcount),
+                       ldlm_typename[lock->l_resource->lr_type],
+                       lock->l_policy_data.l_extent.start,
+                       lock->l_policy_data.l_extent.end,
+                       lock->l_req_extent.start, lock->l_req_extent.end,
+                       lock->l_flags, lock->l_remote_handle.cookie,
+                       lock->l_export ?
+                       atomic_read(&lock->l_export->exp_refcount) : -99,
+                       lock->l_pid);
+                break;
+
+        case LDLM_FLOCK:
+                cdebug(cdls, level, file, func, line,
+                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
+                       "res: "LPU64"/"LPU64" rrc: %d type: %s pid: %d "
+                       "["LPU64"->"LPU64"] flags: %x remote: "LPX64
+                       " expref: %d pid: %u\n",
+                       lock->l_resource->lr_namespace->ns_name, lock,
+                       lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
+                       lock->l_readers, lock->l_writers,
+                       ldlm_lockname[lock->l_granted_mode],
+                       ldlm_lockname[lock->l_req_mode],
+                       lock->l_resource->lr_name.name[0],
+                       lock->l_resource->lr_name.name[1],
+                       atomic_read(&lock->l_resource->lr_refcount),
+                       ldlm_typename[lock->l_resource->lr_type],
+                       lock->l_policy_data.l_flock.pid,
+                       lock->l_policy_data.l_flock.start,
+                       lock->l_policy_data.l_flock.end,
+                       lock->l_flags, lock->l_remote_handle.cookie,
+                       lock->l_export ?
+                       atomic_read(&lock->l_export->exp_refcount) : -99,
+                       lock->l_pid);
+                break;
+
+        case LDLM_IBITS:
+                cdebug(cdls, level, file, func, line,
+                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
+                       "res: "LPU64"/"LPU64" bits "LPX64" rrc: %d type: %s "
+                       "flags: %x remote: "LPX64" expref: %d "
+                       "pid %u\n",
+                       lock->l_resource->lr_namespace->ns_name,
+                       lock, lock->l_handle.h_cookie,
+                       atomic_read (&lock->l_refc),
+                       lock->l_readers, lock->l_writers,
+                       ldlm_lockname[lock->l_granted_mode],
+                       ldlm_lockname[lock->l_req_mode],
+                       lock->l_resource->lr_name.name[0],
+                       lock->l_resource->lr_name.name[1],
+                       lock->l_policy_data.l_inodebits.bits,
+                       atomic_read(&lock->l_resource->lr_refcount),
+                       ldlm_typename[lock->l_resource->lr_type],
+                       lock->l_flags, lock->l_remote_handle.cookie,
+                       lock->l_export ?
+                       atomic_read(&lock->l_export->exp_refcount) : -99,
+                       lock->l_pid);
+                break;
+
+        default:
+                cdebug(cdls, level, file, func, line,
+                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
+                       "res: "LPU64"/"LPU64" rrc: %d type: %s flags: %x "
+                       "remote: "LPX64" expref: %d pid: %u\n",
+                       lock->l_resource->lr_namespace->ns_name,
+                       lock, lock->l_handle.h_cookie,
+                       atomic_read (&lock->l_refc),
+                       lock->l_readers, lock->l_writers,
+                       ldlm_lockname[lock->l_granted_mode],
+                       ldlm_lockname[lock->l_req_mode],
+                       lock->l_resource->lr_name.name[0],
+                       lock->l_resource->lr_name.name[1],
+                       atomic_read(&lock->l_resource->lr_refcount),
+                       ldlm_typename[lock->l_resource->lr_type],
+                       lock->l_flags, lock->l_remote_handle.cookie,
+                       lock->l_export ?
+                       atomic_read(&lock->l_export->exp_refcount) : -99,
+                       lock->l_pid);
+                break;
+        }
+}
+EXPORT_SYMBOL(ldlm_lock_debug);

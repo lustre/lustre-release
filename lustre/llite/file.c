@@ -648,7 +648,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         ldlm_policy_data_t tmpex;
         unsigned long start, end, count, skip, i, j;
         struct page *page;
-        int rc, rc2, discard = lock->l_flags & LDLM_FL_DISCARD_DATA;
+        int rc, rc2, l_flags, discard = lock->l_flags & LDLM_FL_DISCARD_DATA;
         struct lustre_handle lockh;
         ENTRY;
 
@@ -709,7 +709,6 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
          * batching writeback under the lock explicitly. */
         for (i = start, j = start % count; i <= end;
              j++, i++, tmpex.l_extent.start += PAGE_CACHE_SIZE) {
-                int l_flags;
                 if (j == count) {
                         CDEBUG(D_PAGE, "skip index %lu to %lu\n", i, i + skip);
                         i += skip;
@@ -747,17 +746,13 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                         lock_page(page);
                 }
 
-                l_flags = LDLM_FL_BLOCK_GRANTED|LDLM_FL_CBPENDING |
-                          LDLM_FL_TEST_LOCK;
-
                 tmpex.l_extent.end = tmpex.l_extent.start + PAGE_CACHE_SIZE - 1;
-                /* check to see if another DLM lock covers this page */
+                l_flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
+                /* check to see if another DLM lock covers this page b=2765 */
                 rc2 = obd_match(ll_s2dtexp(inode->i_sb), lsm, LDLM_EXTENT,
                                 &tmpex, LCK_PR | LCK_PW, &l_flags, inode,
                                 &lockh);
-                /* rc2 < 0 means some error occured, e.g. export was down.
-                 * rc2 == 0 means nothing was matched */
-                if (rc2 <= 0 && page->mapping != NULL) {
+                if (rc2 == 0 && page->mapping != NULL) {
                         struct ll_async_page *llap = llap_cast_private(page);
                         // checking again to account for writeback's lock_page()
                         LL_CDEBUG_PAGE(D_PAGE, page, "truncating\n");
@@ -1290,6 +1285,7 @@ repeat:
         /* BUG: 5972 */
         file_accessed(file);
         retval = generic_file_read(file, buf, chunk, ppos);
+        ll_rw_stats_tally(ll_i2sbi(inode), current->pid, file, count, 0);
 
         ll_tree_unlock(&tree);
 
@@ -1398,6 +1394,7 @@ repeat:
         CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
                inode->i_ino, chunk, *ppos);
         retval = generic_file_write(file, buf, chunk, ppos);
+        ll_rw_stats_tally(ll_i2sbi(inode), current->pid, file, count, 1);
 
 out:
         ll_tree_unlock(&tree);

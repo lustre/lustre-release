@@ -1274,7 +1274,7 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
         lprocfs_init_vars(mdc, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
-        rc = obd_llog_init(obd, obd, 0, NULL);
+        rc = obd_llog_init(obd, obd, 0, NULL, NULL);
         if (rc) {
                 mdc_cleanup(obd);
                 CERROR("failed to setup llogging subsystems\n");
@@ -1350,7 +1350,8 @@ static int mdc_cleanup(struct obd_device *obd)
 
 
 static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                         int count, struct llog_catid *logid)
+                         int count, struct llog_catid *logid, 
+                         struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
         int rc;
@@ -1457,7 +1458,8 @@ int __init mdc_init(void)
         int rc;
         struct lprocfs_static_vars lvars;
         lprocfs_init_vars(mdc, &lvars);
-
+        
+        request_module("lquota");
         quota_interface = PORTAL_SYMBOL_GET(mdc_quota_interface);
         init_obd_quota_ops(quota_interface, &mdc_obd_ops);
 

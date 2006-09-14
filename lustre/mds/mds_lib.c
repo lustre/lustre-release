@@ -363,7 +363,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
 
         LASSERT(body != NULL); /* previously verified & swabbed by caller */
 
-#if CRAY_XT3
+#ifdef CRAY_XT3
         if (req->rq_uid != LNET_UID_ANY) {
                 /* Non-root local cluster client */
                 LASSERT (req->rq_uid != 0);
@@ -386,7 +386,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
                 return rc;
         }
 
-#if CRAY_XT3
+#ifdef CRAY_XT3
         if (ucred->luc_uce)
                 ucred->luc_fsgid = ucred->luc_uce->ue_primary;
 #endif

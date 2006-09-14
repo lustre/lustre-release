@@ -118,6 +118,7 @@ static int expired_lock_main(void *arg)
 {
         struct list_head *expired = &expired_lock_thread.elt_expired_locks;
         struct l_wait_info lwi = { 0 };
+        int do_dump;
 
         ENTRY;
         cfs_daemonize("ldlm_elt");
@@ -145,6 +146,8 @@ static int expired_lock_main(void *arg)
                         expired_lock_thread.elt_dump = 0;
                 }
 
+                do_dump = 0;
+
                 while (!list_empty(expired)) {
                         struct obd_export *export;
                         struct ldlm_lock *lock;
@@ -169,11 +172,17 @@ static int expired_lock_main(void *arg)
                         export = class_export_get(lock->l_export);
                         spin_unlock_bh(&waiting_locks_spinlock);
 
+                        do_dump++;
                         class_fail_export(export);
                         class_export_put(export);
                         spin_lock_bh(&waiting_locks_spinlock);
                 }
                 spin_unlock_bh(&waiting_locks_spinlock);
+
+                if (do_dump && obd_dump_on_eviction) {
+                        CERROR("dump the log upon eviction\n");
+                        libcfs_debug_dumplog();
+                }
 
                 if (expired_lock_thread.elt_state == ELT_TERMINATE)
                         break;

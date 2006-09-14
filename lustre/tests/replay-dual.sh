@@ -2,10 +2,10 @@
 
 set -e
 
-# bug number:  6088 10124
-ALWAYS_EXCEPT="8    15c   $REPLAY_DUAL_EXCEPT"
+# bug number:  6088 10124 10800
+ALWAYS_EXCEPT="8    15c   17    $REPLAY_DUAL_EXCEPT"
 
-PTLDEBUG=${PTLDEBUG:-1}
+PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 

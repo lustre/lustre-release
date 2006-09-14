@@ -412,9 +412,10 @@ static struct list_head qinfo_hash[NR_DQHASH];
 /* SLAB cache for client quota context */
 cfs_mem_cache_t *qinfo_cachep = NULL;
 
-static inline int const hashfn(struct client_obd *cli,
-                               unsigned long id,
-                               int type)
+static inline int hashfn(struct client_obd *cli, unsigned long id, int type)
+                         __attribute__((__const__));
+
+static inline int hashfn(struct client_obd *cli, unsigned long id, int type)
 {
         unsigned long tmp = ((unsigned long)cli>>6) ^ id;
         tmp = (tmp * (MAXQUOTAS - type)) % NR_DQHASH;

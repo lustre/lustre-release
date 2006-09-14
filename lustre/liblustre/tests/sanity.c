@@ -894,6 +894,7 @@ static int pages_io(int xfer, loff_t pos)
                 }
         }
 
+        unlink(path);
         t_touch(path);
 
         fd = t_open(path);
@@ -972,7 +973,8 @@ int t50(char *name)
         while (np <= _npages) {
                 printf("%3d per xfer(total %d)...\t", np, _npages);
                 fflush(stdout);
-                pages_io(np, offset);
+                if (pages_io(np, offset) != 0)
+                        return 1;
                 np += np;
         }
         LEAVE();

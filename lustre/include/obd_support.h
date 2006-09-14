@@ -30,12 +30,13 @@ extern atomic_t obd_memory;
 extern int obd_memmax;
 extern unsigned int obd_fail_loc;
 extern unsigned int obd_dump_on_timeout;
+extern unsigned int obd_dump_on_eviction;
 extern unsigned int obd_timeout;          /* seconds */
 #define PING_INTERVAL max(obd_timeout / 4, 1U)
 #define RECONNECT_INTERVAL max(obd_timeout / 10, 10U)
 extern unsigned int ldlm_timeout;
 extern unsigned int obd_health_check_timeout;
-extern char obd_lustre_upcall[128];
+extern unsigned int obd_sync_filter;
 extern cfs_waitq_t obd_race_waitq;
 extern int obd_race_state;
 
@@ -185,6 +186,8 @@ extern int obd_race_state;
 #define OBD_FAIL_SEC_CTX_INIT_CONT_NET   0x1210
 #define OBD_FAIL_SEC_CTX_FINI_NET        0x1220
 
+#define OBD_FAIL_QUOTA_QD_COUNT_32BIT    0xA00
+
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
 #define OBD_FAIL_MASK_LOC    (0x000000FF | OBD_FAIL_MASK_SYS)
@@ -233,16 +236,18 @@ do {                                                                         \
  * first thread that calls this with a matching fail_loc is put to
  * sleep. The next thread that calls with the same fail_loc wakes up
  * the first and continues. */
-#define OBD_RACE(id)                                                           \
-do {                                                                           \
-        if  (OBD_FAIL_CHECK_ONCE(id)) {                         \
-                CERROR("obd_race id %x sleeping\n", (id));      \
-                OBD_SLEEP_ON(&obd_race_waitq);        \
-                CERROR("obd_fail_race id %x awake\n", (id));    \
-        } else if ((obd_fail_loc & OBD_FAIL_MASK_LOC) ==        \
-                    ((id) & OBD_FAIL_MASK_LOC)) {               \
-                cfs_waitq_signal(&obd_race_waitq);              \
-        }                                                       \
+#define OBD_RACE(id)                                                         \
+do {                                                                         \
+        if  (OBD_FAIL_CHECK_ONCE(id)) {                                      \
+                obd_race_state = 0;                                          \
+                CERROR("obd_race id %x sleeping\n", (id));                   \
+                OBD_SLEEP_ON(obd_race_waitq, obd_race_state != 0);           \
+                CERROR("obd_fail_race id %x awake\n", (id));                 \
+        } else if ((obd_fail_loc & OBD_FAIL_MASK_LOC) ==                     \
+                    ((id) & OBD_FAIL_MASK_LOC)) {                            \
+                CERROR("obd_fail_race id %x waking\n", (id));                \
+                obd_race_state = 1;                                          \
+        }                                                                    \
 } while(0)
 #else
 /* sigh.  an expedient fix until OBD_RACE is fixed up */

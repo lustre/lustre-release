@@ -313,22 +313,18 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
 }
 EXPORT_SYMBOL(llog_obd_origin_add);
 
-int llog_cat_initialize(struct obd_device *obd, int count)
+int llog_cat_initialize(struct obd_device *obd, int count,
+                        struct obd_uuid *uuid)
 {
+        char name[32] = CATLIST;
         struct llog_catid *idarray;
         int size = sizeof(*idarray) * count;
-        char name[32] = CATLIST;
         int rc;
         ENTRY;
 
-        /* We don't want multiple mdt threads here at once */
-        mutex_down(&obd->obd_dev_sem);
-
         OBD_ALLOC(idarray, size);
-        if (!idarray) {
-                mutex_up(&obd->obd_dev_sem);
+        if (!idarray) 
                 RETURN(-ENOMEM);
-        }
 
         rc = llog_get_cat_list(obd, obd, name, count, idarray);
         if (rc) {
@@ -336,7 +332,7 @@ int llog_cat_initialize(struct obd_device *obd, int count)
                 GOTO(out, rc);
         }
 
-        rc = obd_llog_init(obd, obd, count, idarray);
+        rc = obd_llog_init(obd, obd, count, idarray, uuid);
         if (rc) {
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
@@ -350,20 +346,19 @@ int llog_cat_initialize(struct obd_device *obd, int count)
 
  out:
         OBD_FREE(idarray, size);
-        mutex_up(&obd->obd_dev_sem);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_initialize);
 
 int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                  int count, struct llog_catid *logid)
+                  int count, struct llog_catid *logid, struct obd_uuid *uuid)
 {
         int rc;
         ENTRY;
         OBD_CHECK_DT_OP(obd, llog_init, 0);
         OBD_COUNTER_INCREMENT(obd, llog_init);
 
-        rc = OBP(obd, llog_init)(obd, disk_obd, count, logid);
+        rc = OBP(obd, llog_init)(obd, disk_obd, count, logid, uuid);
         RETURN(rc);
 }
 EXPORT_SYMBOL(obd_llog_init);

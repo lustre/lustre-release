@@ -6,11 +6,11 @@
 # These are scripts that are generated from .in files
 genscripts = lustre_config.sh lc_modprobe.sh lc_net.sh lc_hb.sh lc_cluman.sh lustre_createcsv.sh lc_md.sh lc_lvm.sh
 
-sbin_SCRIPTS = $(genscripts) lc_servip.sh lustre_up14.sh
+sbin_SCRIPTS = $(genscripts) lc_servip.sh lustre_up14.sh lustre_rmmod.sh
 
 EXTRA_DIST = license-status maketags.sh version_tag.pl.in lc_common.sh \
 	     $(addsuffix .in,$(genscripts)) lc_mon.sh lc_servip.sh \
-	     lustre_up14.sh
+	     lustre_up14.sh lustre_rmmod.sh
 
 scriptlibdir = $(libdir)/@PACKAGE@
 scriptlib_DATA = lc_common.sh

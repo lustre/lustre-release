@@ -881,6 +881,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         int lock_flags = 0;
         ENTRY;
 
+        lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_OPEN);
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PAUSE_OPEN | OBD_FAIL_ONCE,
                          (obd_timeout + 1) / 4);
 
@@ -1202,6 +1203,9 @@ found_child:
                 else
                         ptlrpc_save_lock(req, &parent_lockh, parent_mode);
         }
+        /* trigger dqacq on the owner of child and parent */
+        lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_CREATE);
+
         /* If we have not taken the "open" lock, we may not return 0 here,
            because caller expects 0 to mean "lock is taken", and it needs
            nonzero return here for caller to return EDLM_LOCK_ABORTED to
@@ -1211,8 +1215,6 @@ found_child:
         if ((cleanup_phase != 3) && !rc)
                 rc = ENOLCK;
 
-        /* trigger dqacq on the owner of child and parent */
-        lquota_adjust(quota_interface, obd, qcids, qpids, rc, FSFILT_OP_CREATE);
         RETURN(rc);
 }
 
@@ -1436,6 +1438,7 @@ int mds_close(struct ptlrpc_request *req, int offset)
         CDEBUG(D_HA, "close req->rep_len %d mdsize %d cookiesize %d\n",
                req->rq_replen,
                obd->u.mds.mds_max_mdsize, obd->u.mds.mds_max_cookiesize);
+        lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_CLOSE);
 
         body = lustre_swab_reqbuf(req, offset, sizeof(*body),
                                   lustre_swab_mds_body);

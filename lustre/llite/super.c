@@ -88,11 +88,10 @@ static int __init init_lustre_lite(void)
 static void __exit exit_lustre_lite(void)
 {
         int rc;
-        int rc;
 
         lustre_register_client_fill_super(NULL);
         lustre_register_client_process_config(NULL);
-        
+
         ll_unregister_cache(&ll_cache_definition);
 
         rc = kmem_cache_destroy(ll_file_data_slab);

@@ -214,15 +214,17 @@ int server_put_mount(const char *name, struct vfsmount *mnt)
 
 static void ldd_print(struct lustre_disk_data *ldd)
 {
-        PRINT_CMD(PRINT_MASK, "  disk data:\n");
-        PRINT_CMD(PRINT_MASK, "config:  %d\n", ldd->ldd_config_ver);
-        PRINT_CMD(PRINT_MASK, "fs:      %s\n", ldd->ldd_fsname);
+        PRINT_CMD(PRINT_MASK, "  disk data:\n"); 
         PRINT_CMD(PRINT_MASK, "server:  %s\n", ldd->ldd_svname);
+        PRINT_CMD(PRINT_MASK, "uuid:    %s\n", (char *)ldd->ldd_uuid);
+        PRINT_CMD(PRINT_MASK, "fs:      %s\n", ldd->ldd_fsname);
         PRINT_CMD(PRINT_MASK, "index:   %04x\n", ldd->ldd_svindex);
+        PRINT_CMD(PRINT_MASK, "config:  %d\n", ldd->ldd_config_ver);
         PRINT_CMD(PRINT_MASK, "flags:   %#x\n", ldd->ldd_flags);
         PRINT_CMD(PRINT_MASK, "diskfs:  %s\n", MT_STR(ldd));
         PRINT_CMD(PRINT_MASK, "options: %s\n", ldd->ldd_mount_opts);
-        PRINT_CMD(PRINT_MASK, "params: %s\n", ldd->ldd_params);
+        PRINT_CMD(PRINT_MASK, "params:  %s\n", ldd->ldd_params);
+        PRINT_CMD(PRINT_MASK, "comment: %s\n", ldd->ldd_userdata);
 }
 
 static int ldd_parse(struct lvfs_run_ctxt *mount_ctxt,
@@ -508,6 +510,8 @@ static int server_stop_mgs(struct super_block *sb)
         RETURN(rc);
 }
 
+DECLARE_MUTEX(mgc_start_lock);
+
 /* Set up a mgcobd to process startup logs */
 static int lustre_start_mgc(struct super_block *sb)
 {
@@ -561,6 +565,8 @@ static int lustre_start_mgc(struct super_block *sb)
         if (!mgcname || !niduuid) 
                 GOTO(out_free, rc = -ENOMEM);
         sprintf(mgcname, "%s%s", LUSTRE_MGC_OBDNAME, libcfs_nid2str(nid));
+
+        mutex_down(&mgc_start_lock);
 
         obd = class_name2obd(mgcname);
         if (obd) {
@@ -702,6 +708,8 @@ out:
            to the same mgc.*/
         lsi->lsi_mgc = obd;
 out_free:
+        mutex_up(&mgc_start_lock);
+
         if (mgcname) 
                 OBD_FREE(mgcname, len);
         if (niduuid) 
@@ -714,7 +722,7 @@ static int lustre_stop_mgc(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *obd;
         char *niduuid, *ptr = 0;
-        int i, rc, len;
+        int i, rc = 0, len;
         ENTRY;
 
         if (!lsi)
@@ -724,12 +732,13 @@ static int lustre_stop_mgc(struct super_block *sb)
                 RETURN(-ENOENT);
 
         lsi->lsi_mgc = NULL;
+        mutex_down(&mgc_start_lock);
         if (!atomic_dec_and_test(&obd->u.cli.cl_mgc_refcount)) {
                 /* This is not fatal, every client that stops
                    will call in here. */
                 CDEBUG(D_MOUNT, "mgc still has %d references.\n",
                        atomic_read(&obd->u.cli.cl_mgc_refcount));
-                RETURN(-EBUSY);
+                GOTO(out, rc = -EBUSY); 
         }
 
         /* MGC must always stop */
@@ -753,7 +762,7 @@ static int lustre_stop_mgc(struct super_block *sb)
 
         rc = class_manual_cleanup(obd);
         if (rc) 
-                RETURN(rc);
+                GOTO(out, rc);
 
         /* Clean the nid uuids */
         if (!niduuid) 
@@ -769,7 +778,9 @@ static int lustre_stop_mgc(struct super_block *sb)
         OBD_FREE(niduuid, len);
         /* class_import_put will get rid of the additional connections */
         
-        RETURN(0);
+out:
+        mutex_up(&mgc_start_lock);
+        RETURN(rc);
 }
 
 /* Since there's only one mgc per node, we have to change it's fs to get
@@ -806,6 +817,8 @@ static int server_mgc_clear_fs(struct obd_device *mgc)
         RETURN(rc);
 }
 
+DECLARE_MUTEX(server_start_lock);
+
 /* Stop MDS/OSS if nobody is using them */
 static int server_stop_servers(int lddflags, int lsiflags)
 {
@@ -814,8 +827,9 @@ static int server_stop_servers(int lddflags, int lsiflags)
         int rc = 0;
         ENTRY;
 
-        /* Either an MDT or an OST or neither  */
+        mutex_down(&server_start_lock);
 
+        /* Either an MDT or an OST or neither  */
         /* if this was an MDT, and there are no more MDT's, clean up the MDS */
         if ((lddflags & LDD_F_SV_TYPE_MDT) && 
             (obd = class_name2obd(LUSTRE_MDS_OBDNAME))) {
@@ -836,6 +850,8 @@ static int server_stop_servers(int lddflags, int lsiflags)
                 if (!rc)
                         rc = err;
         }
+
+        mutex_up(&server_start_lock);
 
         RETURN(rc);
 }
@@ -1053,6 +1069,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         /* If we're an MDT, make sure the global MDS is running */
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MDT) {
                 /* make sure the MDS is started */
+                mutex_down(&server_start_lock);
                 obd = class_name2obd(LUSTRE_MDS_OBDNAME);
                 if (!obd) {
                         rc = lustre_start_simple(LUSTRE_MDS_OBDNAME, 
@@ -1061,10 +1078,12 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                                                  LUSTRE_MDS_OBDNAME"_uuid",
                                                  0, 0);
                         if (rc) {
+                                mutex_up(&server_start_lock);
                                 CERROR("failed to start MDS: %d\n", rc);
                                 RETURN(rc);
                         }
                 }
+                mutex_up(&server_start_lock);
         }
         /* If we're an MDT, make sure the global MDS is running */
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_MDT) {
@@ -1087,6 +1106,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         /* If we're an OST, make sure the global OSS is running */
         if (lsi->lsi_ldd->ldd_flags & LDD_F_SV_TYPE_OST) {
                 /* make sure OSS is started */
+                mutex_down(&server_start_lock);
                 obd = class_name2obd(LUSTRE_OSS_OBDNAME);
                 if (!obd) {
                         rc = lustre_start_simple(LUSTRE_OSS_OBDNAME, 
@@ -1094,10 +1114,12 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                                                  LUSTRE_OSS_OBDNAME"_uuid", 
                                                  0, 0);
                         if (rc) {
+                                mutex_up(&server_start_lock);
                                 CERROR("failed to start OSS: %d\n", rc);
                                 RETURN(rc);
                         }
                 }
+                mutex_up(&server_start_lock);
         }
 
         /* Set the mgc fs to our server disk.  This allows the MGC
@@ -1569,10 +1591,8 @@ static int server_fill_super(struct super_block *sb)
         /* start MGS before MGC */
         if (IS_MGS(lsi->lsi_ldd)) {
                 rc = server_start_mgs(sb);
-                if (rc) {
-                        CERROR("ignoring Failed MGS start!!\n");
-                        //GOTO(out_mnt, rc);
-                }
+                if (rc) 
+                        GOTO(out_mnt, rc);
         }
 
         rc = lustre_start_mgc(sb);
@@ -1712,11 +1732,16 @@ static int lmd_make_exclusion(struct lustre_mount_data *lmd, char *ptr)
 {
         char *s1 = ptr, *s2;
         __u32 index, *exclude_list;
-        int rc = 0;
+        int rc = 0, devmax;
         ENTRY;
+        
+        /* The shortest an ost name can be is 8 chars: -OST0000.
+           We don't actually know the fsname at this time, so in fact 
+           a user could specify any fsname. */
+        devmax = strlen(ptr) / 8 + 1;
 
         /* temp storage until we figure out how many we have */
-        OBD_ALLOC(exclude_list, sizeof(index) * MAX_OBD_DEVICES);
+        OBD_ALLOC(exclude_list, sizeof(index) * devmax);
         if (!exclude_list)
                 RETURN(-ENOMEM);
 
@@ -1735,8 +1760,7 @@ static int lmd_make_exclusion(struct lustre_mount_data *lmd, char *ptr)
                 s1 = s2;
                 /* now we are pointing at ':' (next exclude)
                    or ',' (end of excludes) */
-
-                if (lmd->lmd_exclude_count >= MAX_OBD_DEVICES)
+                if (lmd->lmd_exclude_count >= devmax)
                         break;
         }
         if (rc >= 0) /* non-err */
@@ -1754,7 +1778,7 @@ static int lmd_make_exclusion(struct lustre_mount_data *lmd, char *ptr)
                         lmd->lmd_exclude_count = 0;
                 }
         }
-        OBD_FREE(exclude_list, sizeof(index) * MAX_OBD_DEVICES);
+        OBD_FREE(exclude_list, sizeof(index) * devmax); 
         RETURN(rc);
 }
 

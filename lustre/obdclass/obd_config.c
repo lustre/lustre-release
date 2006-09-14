@@ -756,12 +756,8 @@ int class_process_config(struct lustre_cfg *lcfg)
                 GOTO(out, err = 0);
         }
         case LCFG_SET_UPCALL: {
-                CDEBUG(D_IOCTL, "setting lustre ucpall to: %s\n",
-                       lustre_cfg_string(lcfg, 1));
-                if (LUSTRE_CFG_BUFLEN(lcfg, 1) > sizeof obd_lustre_upcall)
-                        GOTO(out, err = -EINVAL);
-                strncpy(obd_lustre_upcall, lustre_cfg_string(lcfg, 1),
-                        sizeof (obd_lustre_upcall));
+                LCONSOLE_ERROR("recovery upcall is deprecated\n");
+                /* COMPAT_146 Don't fail on old configs */
                 GOTO(out, err = 0);
         }
         case LCFG_MARKER: {
@@ -774,7 +770,7 @@ int class_process_config(struct lustre_cfg *lcfg)
         case LCFG_PARAM: {
                 /* llite has no obd */
                 if ((class_match_param(lustre_cfg_string(lcfg, 1), 
-                                      PARAM_LLITE, 0) == 0) &&
+                                       PARAM_LLITE, 0) == 0) &&
                     client_process_config) {
                         err = (*client_process_config)(lcfg);
                         GOTO(out, err);
@@ -839,6 +835,7 @@ out:
 int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars, 
                              struct lustre_cfg *lcfg, void *data)
 {
+#ifdef __KERNEL__
         struct lprocfs_vars *var;
         char *key, *sval;
         int i, vallen;
@@ -875,9 +872,14 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                         if (class_match_param(key, (char *)var->name, 0) == 0) {
                                 matched++;
                                 rc = -EROFS;
-                                if (var->write_fptr) 
+                                if (var->write_fptr) {
+                                        mm_segment_t oldfs;
+                                        oldfs = get_fs();
+                                        set_fs(KERNEL_DS);
                                         rc = (var->write_fptr)(NULL, sval,
                                                                vallen, data);
+                                        set_fs(oldfs);
+                                }
                                 if (rc < 0) 
                                         CERROR("writing proc entry %s err %d\n", 
                                                var->name, rc);
@@ -898,6 +900,10 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
         if (rc > 0) 
                 rc = 0;
         RETURN(rc);
+#else
+        CDEBUG(D_CONFIG, "liblustre can't process params.\n");
+        return -ENOSYS;
+#endif
 }
 
 int class_config_dump_handler(struct llog_handle * handle,

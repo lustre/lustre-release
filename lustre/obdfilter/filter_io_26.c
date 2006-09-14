@@ -664,6 +664,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
         iattr_from_obdo(&iattr, oa, i);
         if (iattr.ia_valid & (ATTR_UID | ATTR_GID)) {
+                unsigned int save;
+
                 CDEBUG(D_INODE, "update UID/GID to %lu/%lu\n",
                        (unsigned long)oa->o_uid, (unsigned long)oa->o_gid);
 
@@ -680,10 +682,12 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
 
                 /* To avoid problems with quotas, UID and GID must be set
                  * in the inode before filter_direct_io() - see bug 10357. */
-                if (iattr.ia_valid & ATTR_UID)
-                        inode->i_uid = iattr.ia_uid;
-                if (iattr.ia_valid & ATTR_GID)
-                        inode->i_gid = iattr.ia_gid;
+                save = iattr.ia_valid;
+                iattr.ia_valid &= (ATTR_UID | ATTR_GID);
+                rc = fsfilt_setattr(obd, res->dentry, oti->oti_handle, &iattr, 0);
+                CDEBUG(D_QUOTA, "set uid(%u)/gid(%u) to ino(%lu). rc(%d)\n", 
+                                iattr.ia_uid, iattr.ia_gid, inode->i_ino, rc);
+                iattr.ia_valid = save & ~(ATTR_UID | ATTR_GID);
         }
 
         /* filter_direct_io drops i_mutex */
@@ -735,7 +739,7 @@ cleanup:
         err = lquota_adjust(quota_interface, obd, qcids, NULL, rc,
                             FSFILT_OP_CREATE);
         CDEBUG(err ? D_ERROR : D_QUOTA,
-               "error filter adjust qunit! (rc:%d)\n", err);
+               "filter adjust qunit! (rc:%d)\n", err);
 
         RETURN(rc);
 }

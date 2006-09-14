@@ -63,6 +63,7 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
+#include <lustre_ver.h>
 #ifdef __KERNEL__
 #include <linux/lustre_build_version.h>
 #include <linux/lustre_version.h>
@@ -218,18 +219,14 @@ int obd_proc_read_version(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
 {
         *eof = 1;
-        return snprintf(page, count, "%s\n", BUILD_VERSION);
-}
-
-int obd_proc_read_kernel_version(char *page, char **start, off_t off, int count,
-                                 int *eof, void *data)
-{
-        *eof = 1;
+        return snprintf(page, count, "lustre: %s\nkernel: %u\nbuild:  %s\n",
+                        LUSTRE_VERSION_STRING,
 #ifdef LUSTRE_KERNEL_VERSION
-        return snprintf(page, count, "%u\n", LUSTRE_KERNEL_VERSION);
+                        LUSTRE_KERNEL_VERSION,
 #else
-        return snprintf(page, count, "%u\n", "patchless");
+                        "patchless",
 #endif
+                        BUILD_VERSION);
 }
 
 int obd_proc_read_pinger(char *page, char **start, off_t off, int count,
@@ -312,7 +309,6 @@ struct proc_dir_entry *proc_lustre_root = NULL;
 
 struct lprocfs_vars lprocfs_base[] = {
         { "version", obd_proc_read_version, NULL, NULL },
-        { "kernel_version", obd_proc_read_kernel_version, NULL, NULL },
         { "pinger", obd_proc_read_pinger, NULL, NULL },
         { "health_check", obd_proc_read_health, NULL, NULL },
         { "health_check_timeout", obd_proc_rd_health_timeout,

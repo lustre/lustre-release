@@ -134,9 +134,10 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies);
 
-int llog_cat_initialize(struct obd_device *obd, int count);
+int llog_cat_initialize(struct obd_device *obd, int count, 
+                        struct obd_uuid *uuid);
 int obd_llog_init(struct obd_device *obd, struct obd_device *disk_obd,
-                  int count, struct llog_catid *logid);
+                  int count, struct llog_catid *logid, struct obd_uuid *uuid);
 
 int obd_llog_finish(struct obd_device *obd, int count);
 

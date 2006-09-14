@@ -169,11 +169,6 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
 int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
                                struct llog_rec_hdr *rec, void *data);
 
-/* filter_san.c */
-int filter_san_setup(struct obd_device *obd, struct lustre_cfg *cfg);
-int filter_san_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
-                      struct obd_ioobj *, int niocount, struct niobuf_remote *);
-
 #ifdef LPROCFS
 void filter_tally_write(struct filter_obd *filter, struct page **pages,
                         int nr_pages, unsigned long *blocks,

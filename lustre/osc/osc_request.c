@@ -2484,298 +2484,6 @@ out:
         RETURN(rc);
 }
 
-/* Note: caller will lock/unlock, and set uptodate on the pages */
-#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-static int sanosc_brw_read(struct obd_export *exp, struct obd_info *oinfo,
-                           obd_count page_count, struct brw_page *pga)
-{
-        struct ptlrpc_request *req = NULL;
-        struct ost_body *body;
-        struct niobuf_remote *nioptr;
-        struct obd_ioobj *iooptr;
-        struct obd_import *imp = class_exp2cliimp(exp);
-        int size[4] = { sizeof(struct ptlrpc_body), sizeof(*body)};
-        int swab, mapped = 0, rc;
-        ENTRY;
-
-        /* XXX does not handle 'new' brw protocol */
-
-        size[REQ_REC_OFF + 1] = sizeof(struct obd_ioobj);
-        size[REQ_REC_OFF + 2] = page_count * sizeof(*nioptr);
-
-        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_SAN_READ, 4, size, NULL);
-        if (!req)
-                RETURN(-ENOMEM);
-
-        /* FIXME bug 249 */
-        /* See bug 7198 */
-        if (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_REQPORTAL)
-                req->rq_request_portal = OST_IO_PORTAL;
-
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        iooptr = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,
-                                sizeof(*iooptr));
-        nioptr = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
-                                sizeof(*nioptr) * page_count);
-
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(body->oa));
-
-        obdo_to_ioobj(oinfo->oi_oa, iooptr);
-        iooptr->ioo_bufcnt = page_count;
-
-        for (mapped = 0; mapped < page_count; mapped++, nioptr++) {
-                LASSERT(PageLocked(pga[mapped].pg));
-                LASSERT(mapped == 0 || pga[mapped].off > pga[mapped - 1].off);
-
-                nioptr->offset = pga[mapped].off;
-                nioptr->len    = pga[mapped].count;
-                nioptr->flags  = pga[mapped].flag;
-        }
-
-        size[REPLY_REC_OFF + 1] = page_count * sizeof(*nioptr);
-        ptlrpc_req_set_repsize(req, 3, size);
-
-        rc = ptlrpc_queue_wait(req);
-        if (rc)
-                GOTO(out_req, rc);
-
-        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
-                                  lustre_swab_ost_body);
-        if (body == NULL) {
-                CERROR("Can't unpack body\n");
-                GOTO(out_req, rc = -EPROTO);
-        }
-
-        memcpy(oinfo->oi_oa, &body->oa, sizeof(*oinfo->oi_oa));
-
-        swab = lustre_msg_swabbed(req->rq_repmsg);
-        LASSERT_REPSWAB(req, REPLY_REC_OFF + 1);
-        nioptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
-                                size[REPLY_REC_OFF + 1]);
-        if (!nioptr) {
-                /* nioptr missing or short */
-                GOTO(out_req, rc = -EPROTO);
-        }
-
-        /* actual read */
-        for (mapped = 0; mapped < page_count; mapped++, nioptr++) {
-                struct page *page = pga[mapped].pg;
-                struct buffer_head *bh;
-                kdev_t dev;
-
-                if (swab)
-                        lustre_swab_niobuf_remote (nioptr);
-
-                /* got san device associated */
-                LASSERT(exp->exp_obd != NULL);
-                dev = exp->exp_obd->u.cli.cl_sandev;
-
-                /* hole */
-                if (!nioptr->offset) {
-                        CDEBUG(D_PAGE, "hole at ino %lu; index %ld\n",
-                                        page->mapping->host->i_ino,
-                                        page->index);
-                        memset(page_address(page), 0, CFS_PAGE_SIZE);
-                        continue;
-                }
-
-                if (!page->buffers) {
-                        create_empty_buffers(page, dev, CFS_PAGE_SIZE);
-                        bh = page->buffers;
-
-                        clear_bit(BH_New, &bh->b_state);
-                        set_bit(BH_Mapped, &bh->b_state);
-                        bh->b_blocknr = (unsigned long)nioptr->offset;
-
-                        clear_bit(BH_Uptodate, &bh->b_state);
-
-                        ll_rw_block(READ, 1, &bh);
-                } else {
-                        bh = page->buffers;
-
-                        /* if buffer already existed, it must be the
-                         * one we mapped before, check it */
-                        LASSERT(!test_bit(BH_New, &bh->b_state));
-                        LASSERT(test_bit(BH_Mapped, &bh->b_state));
-                        LASSERT(bh->b_blocknr == (unsigned long)nioptr->offset);
-
-                        /* wait it's io completion */
-                        if (test_bit(BH_Lock, &bh->b_state))
-                                wait_on_buffer(bh);
-
-                        if (!test_bit(BH_Uptodate, &bh->b_state))
-                                ll_rw_block(READ, 1, &bh);
-                }
-
-
-                /* must do syncronous write here */
-                wait_on_buffer(bh);
-                if (!buffer_uptodate(bh)) {
-                        /* I/O error */
-                        rc = -EIO;
-                        goto out_req;
-                }
-        }
-
-out_req:
-        ptlrpc_req_finished(req);
-        RETURN(rc);
-}
-
-static int sanosc_brw_write(struct obd_export *exp, struct obd_info *oinfo,
-                            obd_count page_count, struct brw_page *pga)
-{
-        struct ptlrpc_request *req = NULL;
-        struct ost_body *body;
-        struct niobuf_remote *nioptr;
-        struct obd_ioobj *iooptr;
-        struct obd_import *imp = class_exp2cliimp(exp);
-        int size[4] = { sizeof(struct ptlrpc_body), sizeof(*body) };
-        int swab, mapped = 0, rc;
-        ENTRY;
-
-        size[REQ_REC_OFF + 1] = sizeof(struct obd_ioobj);
-        size[REQ_REC_OFF + 2] = page_count * sizeof(*nioptr);
-
-        req = ptlrpc_prep_req_pool(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                                   OST_SAN_WRITE, 4, size, NULL,
-                                   imp->imp_rq_pool, NULL);
-        if (!req)
-                RETURN(-ENOMEM);
-
-        /* FIXME bug 249 */
-        /* See bug 7198 */
-        if (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_REQPORTAL)
-                req->rq_request_portal = OST_IO_PORTAL;
-
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        iooptr = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1,
-                                sizeof(*iooptr));
-        nioptr = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
-                                sizeof(*nioptr) * page_count);
-
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(body->oa));
-
-        obdo_to_ioobj(oinfo->oi_oa, iooptr);
-        iooptr->ioo_bufcnt = page_count;
-
-        /* pack request */
-        for (mapped = 0; mapped < page_count; mapped++, nioptr++) {
-                LASSERT(PageLocked(pga[mapped].pg));
-                LASSERT(mapped == 0 || pga[mapped].off > pga[mapped - 1].off);
-
-                nioptr->offset = pga[mapped].off;
-                nioptr->len    = pga[mapped].count;
-                nioptr->flags  = pga[mapped].flag;
-        }
-
-        size[REPLY_REC_OFF + 1] = page_count * sizeof(*nioptr);
-        ptlrpc_req_set_repsize(req, 3, size);
-
-        rc = ptlrpc_queue_wait(req);
-        if (rc)
-                GOTO(out_req, rc);
-
-        swab = lustre_msg_swabbed (req->rq_repmsg);
-        LASSERT_REPSWAB(req, REPLY_REC_OFF + 1);
-        nioptr = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
-                                size[REPLY_REC_OFF + 1]);
-        if (!nioptr) {
-                CERROR("absent/short niobuf array\n");
-                GOTO(out_req, rc = -EPROTO);
-        }
-
-        /* actual write */
-        for (mapped = 0; mapped < page_count; mapped++, nioptr++) {
-                struct page *page = pga[mapped].pg;
-                struct buffer_head *bh;
-                kdev_t dev;
-
-                if (swab)
-                        lustre_swab_niobuf_remote (nioptr);
-
-                /* got san device associated */
-                LASSERT(exp->exp_obd != NULL);
-                dev = exp->exp_obd->u.cli.cl_sandev;
-
-                if (!page->buffers) {
-                        create_empty_buffers(page, dev, CFS_PAGE_SIZE);
-                } else {
-                        /* checking */
-                        LASSERT(!test_bit(BH_New, &page->buffers->b_state));
-                        LASSERT(test_bit(BH_Mapped, &page->buffers->b_state));
-                        LASSERT(page->buffers->b_blocknr ==
-                                (unsigned long)nioptr->offset);
-                }
-                bh = page->buffers;
-
-                LASSERT(bh);
-
-                /* if buffer locked, wait it's io completion */
-                if (test_bit(BH_Lock, &bh->b_state))
-                        wait_on_buffer(bh);
-
-                clear_bit(BH_New, &bh->b_state);
-                set_bit(BH_Mapped, &bh->b_state);
-
-                /* override the block nr */
-                bh->b_blocknr = (unsigned long)nioptr->offset;
-
-                /* we are about to write it, so set it
-                 * uptodate/dirty
-                 * page lock should garentee no race condition here */
-                set_bit(BH_Uptodate, &bh->b_state);
-                set_bit(BH_Dirty, &bh->b_state);
-
-                ll_rw_block(WRITE, 1, &bh);
-
-                /* must do syncronous write here */
-                wait_on_buffer(bh);
-                if (!buffer_uptodate(bh) || test_bit(BH_Dirty, &bh->b_state)) {
-                        /* I/O error */
-                        rc = -EIO;
-                        goto out_req;
-                }
-        }
-
-out_req:
-        ptlrpc_req_finished(req);
-        RETURN(rc);
-}
-
-static int sanosc_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
-                      obd_count page_count, struct brw_page *pga,
-                      struct obd_trans_info *oti)
-{
-        struct obd_import *imp = class_exp2cliimp(exp);
-        struct client_obd *cli = &imp->imp_obd->u.cli;
-        ENTRY;
-
-        while (page_count) {
-                obd_count pages_per_brw;
-                int rc;
-
-                if (page_count > cli->cl_max_pages_per_rpc)
-                        pages_per_brw = cli->cl_max_pages_per_rpc;
-                else
-                        pages_per_brw = page_count;
-
-                if (cmd & OBD_BRW_WRITE)
-                        rc = sanosc_brw_write(exp, oinfo, pages_per_brw, pga);
-                else
-                        rc = sanosc_brw_read(exp, oinfo, pages_per_brw, pga);
-
-                if (rc != 0)
-                        RETURN(rc);
-
-                page_count -= pages_per_brw;
-                pga += pages_per_brw;
-        }
-        RETURN(0);
-}
-#endif
-
 static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
                                     int flags)
 {
@@ -2930,12 +2638,13 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                          * lov_enqueue() */
                 }
 
+                /* We already have a lock, and it's referenced */
+                oinfo->oi_cb_up(oinfo, ELDLM_OK);
+                
                 /* For async requests, decref the lock. */
                 if (einfo->ei_rqset)
                         ldlm_lock_decref(oinfo->oi_lockh, einfo->ei_mode);
 
-                /* We already have a lock, and it's referenced */
-                oinfo->oi_cb_up(oinfo, ELDLM_OK);
                 RETURN(ELDLM_OK);
         }
 
@@ -2965,8 +2674,8 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                         osc_set_data_with_check(oinfo->oi_lockh,
                                                 einfo->ei_cbdata,
                                                 einfo->ei_flags);
-                        ldlm_lock_decref(oinfo->oi_lockh, LCK_PW);
                         oinfo->oi_cb_up(oinfo, ELDLM_OK);
+                        ldlm_lock_decref(oinfo->oi_lockh, LCK_PW);
                         RETURN(ELDLM_OK);
                 }
         }
@@ -3509,16 +3218,21 @@ static struct llog_operations osc_size_repl_logops = {
 
 static struct llog_operations osc_mds_ost_orig_logops;
 static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                        int count, struct llog_catid *catid)
+                         int count, struct llog_catid *catid, 
+                         struct obd_uuid *uuid)
 {
         int rc;
         ENTRY;
 
-        osc_mds_ost_orig_logops = llog_lvfs_ops;
-        osc_mds_ost_orig_logops.lop_setup = llog_obd_origin_setup;
-        osc_mds_ost_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
-        osc_mds_ost_orig_logops.lop_add = llog_obd_origin_add;
-        osc_mds_ost_orig_logops.lop_connect = llog_origin_connect;
+        spin_lock(&obd->obd_dev_lock);
+        if (osc_mds_ost_orig_logops.lop_setup != llog_obd_origin_setup) {
+                osc_mds_ost_orig_logops = llog_lvfs_ops;
+                osc_mds_ost_orig_logops.lop_setup = llog_obd_origin_setup;
+                osc_mds_ost_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
+                osc_mds_ost_orig_logops.lop_add = llog_obd_origin_add;
+                osc_mds_ost_orig_logops.lop_connect = llog_origin_connect;
+        }
+        spin_unlock(&obd->obd_dev_lock);
 
         rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, count,
                         &catid->lci_logid, &osc_mds_ost_orig_logops);
@@ -3821,59 +3535,17 @@ struct obd_ops osc_obd_ops = {
         .o_process_config       = osc_process_config,
 };
 
-#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-struct obd_ops sanosc_obd_ops = {
-        .o_owner                = THIS_MODULE,
-        .o_setup                = client_sanobd_setup,
-        .o_precleanup           = osc_precleanup,
-        .o_cleanup              = osc_cleanup,
-        .o_add_conn             = client_import_add_conn,
-        .o_del_conn             = client_import_del_conn,
-        .o_connect              = client_connect_import,
-        .o_reconnect            = osc_reconnect,
-        .o_disconnect           = client_disconnect_export,
-        .o_statfs               = osc_statfs,
-        .o_statfs_async         = osc_statfs_async,
-        .o_packmd               = osc_packmd,
-        .o_unpackmd             = osc_unpackmd,
-        .o_create               = osc_real_create,
-        .o_destroy              = osc_destroy,
-        .o_getattr              = osc_getattr,
-        .o_getattr_async        = osc_getattr_async,
-        .o_setattr              = osc_setattr,
-        .o_setattr_async        = osc_setattr_async,
-        .o_brw                  = sanosc_brw,
-        .o_punch                = osc_punch,
-        .o_sync                 = osc_sync,
-        .o_enqueue              = osc_enqueue,
-        .o_match                = osc_match,
-        .o_change_cbdata        = osc_change_cbdata,
-        .o_cancel               = osc_cancel,
-        .o_cancel_unused        = osc_cancel_unused,
-        .o_join_lru             = osc_join_lru,
-        .o_iocontrol            = osc_iocontrol,
-        .o_import_event         = osc_import_event,
-        .o_llog_init            = osc_llog_init,
-        .o_llog_finish          = osc_llog_finish,
-};
-#endif
-
 extern quota_interface_t osc_quota_interface;
 
 int __init osc_init(void)
 {
         struct lprocfs_static_vars lvars;
-#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        struct lprocfs_static_vars sanlvars;
-#endif
         int rc;
         ENTRY;
 
         lprocfs_init_vars(osc, &lvars);
-#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        lprocfs_init_vars(osc, &sanlvars);
-#endif
 
+        request_module("lquota");
         quota_interface = PORTAL_SYMBOL_GET(osc_quota_interface);
         lquota_init(quota_interface);
         init_obd_quota_ops(quota_interface, &osc_obd_ops);
@@ -3886,17 +3558,6 @@ int __init osc_init(void)
                 RETURN(rc);
         }
 
-#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        rc = class_register_type(&sanosc_obd_ops, NULL, sanlvars.module_vars,
-                                 LUSTRE_SANOSC_NAME, NULL);
-        if (rc) {
-                class_unregister_type(LUSTRE_OSC_NAME);
-                if (quota_interface)
-                        PORTAL_SYMBOL_PUT(osc_quota_interface);
-                RETURN(rc);
-        }
-#endif
-
         RETURN(rc);
 }
 
@@ -3907,9 +3568,6 @@ static void /*__exit*/ osc_exit(void)
         if (quota_interface)
                 PORTAL_SYMBOL_PUT(osc_quota_interface);
 
-#if defined(__KERNEL__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        class_unregister_type(LUSTRE_SANOSC_NAME);
-#endif
         class_unregister_type(LUSTRE_OSC_NAME);
 }
 

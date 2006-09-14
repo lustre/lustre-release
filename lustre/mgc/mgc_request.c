@@ -390,7 +390,7 @@ static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
                 GOTO(err_decref, rc);
 
-        rc = obd_llog_init(obd, obd, 0, NULL);
+        rc = obd_llog_init(obd, obd, 0, NULL, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_cleanup, rc);
@@ -788,7 +788,8 @@ static int mgc_import_event(struct obd_device *obd,
 }
 
 static int mgc_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                         int count, struct llog_catid *logid)
+                         int count, struct llog_catid *logid,
+                         struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
         int rc;

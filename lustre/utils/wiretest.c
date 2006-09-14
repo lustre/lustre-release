@@ -28,5 +28,3 @@ int main()
 void lustre_assert_wire_constants(void)
 {
 }
-
-

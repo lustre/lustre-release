@@ -215,13 +215,14 @@ int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 int lov_fini_statfs_set(struct lov_request_set *set);
 
 /* lov_obd.c */
+void lov_fix_desc(struct lov_desc *desc);
 int lov_get_stripecnt(struct lov_obd *lov, int stripe_count);
 void lov_getref(struct obd_device *obd);
 void lov_putref(struct obd_device *obd);
 
 /* lov_log.c */
 int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_catid *logid);
+                  int count, struct llog_catid *logid, struct obd_uuid *uuid);
 int lov_llog_finish(struct obd_device *obd, int count);
 
 /* lov_pack.c */

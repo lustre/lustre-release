@@ -192,7 +192,6 @@ int ll_drop_dentry(struct dentry *dentry)
         if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
 #else
         if (!d_unhashed(dentry)) {
-                struct inode *inode = dentry->d_inode;
 #endif
                 CDEBUG(D_DENTRY, "unhashing dentry %.*s (%p) parent %p "
                        "inode %p refc %d\n", dentry->d_name.len,
@@ -203,19 +202,19 @@ int ll_drop_dentry(struct dentry *dentry)
                  * sys_getcwd() could return -ENOENT -bzzz */
 #ifdef LUSTRE_KERNEL_VERSION
                 dentry->d_flags |= DCACHE_LUSTRE_INVALID;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                __d_drop(dentry);
+                if (dentry->d_inode) {
+                        /* Put positive dentries to orphan list */
+                        list_add(&dentry->d_hash,
+                                 &ll_i2sbi(dentry->d_inode)->ll_orphan_dentry_list);
+                }
+#endif
 #else
-                if (!inode || !S_ISDIR(inode->i_mode))
+                if (!dentry->d_inode || !S_ISDIR(dentry->d_inode->i_mode))
                         __d_drop(dentry);
 #endif
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                __d_drop(dentry);
-                if (inode) {
-                        /* Put positive dentries to orphan list */
-                        hlist_add_head(&dentry->d_hash,
-                                       &ll_i2sbi(inode)->ll_orphan_dentry_list);
-                }
-#endif
         }
         unlock_dentry(dentry);
         return 0;

@@ -13,8 +13,8 @@ LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 sbin_scripts = llstat.pl llobdstat.pl lrun 
 
 if UTILS
-noinst_PROGRAMS = mount_lustre mkfs_lustre tunefs_lustre \
-	llog_reader lr_reader wirecheck wiretest lload obdio obdbarrier
+noinst_PROGRAMS = llog_reader lr_reader wirecheck wiretest lload obdio obdbarrier
+
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
@@ -96,12 +96,3 @@ newwiretest: wirehdr.c wirecheck
 	cp ../ptlrpc/wirehdr.c ../ptlrpc/wiretest.c
 	./wirecheck >> ../ptlrpc/wiretest.c
 
-# Apparently I can't use .'s in automake names
-mount.lustre$(EXEEXT): mount_lustre
-	cp $< $@
-
-mkfs.lustre$(EXEEXT): mkfs_lustre
-	cp $< $@
-
-tunefs.lustre$(EXEEXT): tunefs_lustre
-	cp $< $@

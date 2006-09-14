@@ -69,7 +69,7 @@ static void err_msg(char *fmt, ...)
         fprintf(stderr, ": %s (%d)\n", strerror(tmp_errno), tmp_errno);
 }
 
-int llapi_file_create(const char *name, long stripe_size, int stripe_offset,
+int llapi_file_create(const char *name, unsigned long stripe_size, int stripe_offset,
                       int stripe_count, int stripe_pattern)
 {
         struct lov_user_md lum = { 0 };
@@ -103,7 +103,7 @@ int llapi_file_create(const char *name, long stripe_size, int stripe_offset,
                         "multiple of %d bytes", stripe_size, page_size);
                 goto out;
         }
-        if (stripe_offset < -1 || stripe_offset > 2048) {
+        if (stripe_offset < -1 || stripe_offset > MAX_OBD_DEVICES) {
                 errno = rc = -EINVAL;
                 err_msg("error: bad stripe offset %d", stripe_offset);
                 goto out;
@@ -113,10 +113,10 @@ int llapi_file_create(const char *name, long stripe_size, int stripe_offset,
                 err_msg("error: bad stripe count %d", stripe_count);
                 goto out;
         }
-        if (stripe_count > 0 && (__u64)stripe_size * stripe_count > ~0UL) {
+        if (stripe_count > 0 && (__u64)stripe_size * stripe_count > 0xffffffff){
                 errno = rc = -EINVAL;
-                err_msg("error: stripe_size %ld * stripe_count %d "
-                        "exceeds %lu bytes", ~0UL);
+                err_msg("error: stripe_size %lu * stripe_count %u "
+                        "exceeds 4GB", stripe_size, stripe_count);
                 goto out;
         }
 
@@ -432,7 +432,8 @@ void llapi_lov_dump_user_lmm(struct find_param *param,
 
 int llapi_file_get_stripe(const char *path, struct lov_user_md *lum)
 {
-        char *dname, *fname;
+        const char *fname;
+        char *dname;
         int fd, rc = 0;
 
         fname = strrchr(path, '/');
@@ -724,7 +725,8 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir, void *data)
                 ret = ioctl(dirfd(dir), LL_IOC_MDC_GETINFO,
                             (void *)param->lmd);
         } else if (!decision && parent) {
-                char *fname = strrchr(path, '/') + 1;
+                char *fname = strrchr(path, '/');
+                fname = (fname == NULL ? path : fname + 1);
 
                 /* retrieve needed file info */
                 strncpy((char *)param->lmd, fname, param->lumlen);
@@ -889,7 +891,8 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data)
                 ret = ioctl(dirfd(d), LL_IOC_LOV_GETSTRIPE,
                             (void *)&param->lmd->lmd_lmm);
         } else if (parent) {
-                char *fname = strrchr(path, '/') + 1;
+                char *fname = strrchr(path, '/');
+                fname = (fname == NULL ? path : fname + 1);
 
                 strncpy((char *)&param->lmd->lmd_lmm, fname, param->lumlen);
                 ret = ioctl(dirfd(parent), IOC_MDC_GETFILESTRIPE,
@@ -1193,7 +1196,8 @@ static int cb_quotachown(char *path, DIR *parent, DIR *d, void *data)
                 rc = ioctl(dirfd(d), LL_IOC_MDC_GETINFO,
                            (void *)param->lmd);
         } else if (parent) {
-                char *fname = strrchr(path, '/') + 1;
+                char *fname = strrchr(path, '/');
+                fname = (fname == NULL ? path : fname + 1);
 
                 strncpy((char *)param->lmd, fname, param->lumlen);
                 rc = ioctl(dirfd(parent), IOC_MDC_GETFILEINFO,

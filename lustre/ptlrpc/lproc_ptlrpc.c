@@ -51,8 +51,8 @@ struct ll_rpc_opcode {
         { OST_OPEN,         "ost_open" },
         { OST_CLOSE,        "ost_close" },
         { OST_STATFS,       "ost_statfs" },
-        { OST_SAN_READ,     "ost_san_read" },
-        { OST_SAN_WRITE,    "ost_san_write" },
+        { 14,                NULL },
+        { 15,                NULL },
         { OST_SYNC,         "ost_sync" },
         { OST_SET_INFO,     "ost_set_info" },
         { OST_QUOTACHECK,   "ost_quotacheck" },
@@ -96,7 +96,7 @@ const char* ll_opcode2str(__u32 opcode)
          *        is missing from the table above.
          * or  2) The opcode space was renumbered or rearranged,
          *        and the opcode_offset() function in
-         *        ptlrpc_internals.h needs to be modified.
+         *        ptlrpc_internal.h needs to be modified.
          */
         __u32 offset = opcode_offset(opcode);
         LASSERT(offset < LUSTRE_MAX_OPCODES);

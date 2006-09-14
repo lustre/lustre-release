@@ -261,7 +261,7 @@ static int mds_connect_internal(struct obd_export *exp,
 {
         struct obd_device *obd = exp->exp_obd;
         if (data != NULL) {
-                data->ocd_connect_flags &= MDS_CONNECT_SUPPORTED;
+                data->ocd_connect_flags &= MDT_CONNECT_SUPPORTED;
                 data->ocd_ibits_known &= MDS_INODELOCK_FULL;
 
                 /* If no known bits (which should not happen, probably,
@@ -982,6 +982,8 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
         int rc = 0;
         ENTRY;
 
+        OBD_COUNTER_INCREMENT(obd, getattr);
+
         body = lustre_swab_reqbuf(req, offset, sizeof(*body),
                                   lustre_swab_mds_body);
         if (body == NULL)
@@ -1043,6 +1045,7 @@ static int mds_statfs(struct ptlrpc_request *req)
         /* This will trigger a watchdog timeout */
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
                          (MDS_SERVICE_WATCHDOG_TIMEOUT / 1000) + 1);
+        OBD_COUNTER_INCREMENT(obd, statfs);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
@@ -1981,7 +1984,31 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 GOTO(err_qctxt, rc);
 
         lprocfs_init_vars(mds, &lvars);
-        lprocfs_obd_setup(obd, lvars.obd_vars);
+        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
+            lprocfs_alloc_obd_stats(obd, LPROC_MDS_LAST) == 0) {
+                /* Init private stats here */
+                lprocfs_counter_init(obd->obd_stats, LPROC_MDS_OPEN,
+                                     /*LPROCFS_CNTR_AVGMINMAX*/0,
+                                     "open", "reqs");
+                lprocfs_counter_init(obd->obd_stats, LPROC_MDS_CLOSE,
+                                     0, "close", "reqs");
+                lprocfs_counter_init(obd->obd_stats, LPROC_MDS_MKNOD,
+                                     0, "mknod", "reqs");
+                lprocfs_counter_init(obd->obd_stats, LPROC_MDS_LINK,
+                                     0, "link", "reqs");
+                lprocfs_counter_init(obd->obd_stats, LPROC_MDS_UNLINK,
+                                     0, "unlink", "reqs");
+                lprocfs_counter_init(obd->obd_stats, LPROC_MDS_MKDIR,
+                                     0, "mkdir", "reqs");
+                lprocfs_counter_init(obd->obd_stats, LPROC_MDS_RMDIR,
+                                     0, "rmdir", "reqs");
+                lprocfs_counter_init(obd->obd_stats, LPROC_MDS_RENAME,
+                                     0, "rename", "reqs");
+                lprocfs_counter_init(obd->obd_stats, LPROC_MDS_GETXATTR,
+                                     0, "getxattr", "reqs");
+                lprocfs_counter_init(obd->obd_stats, LPROC_MDS_SETXATTR,
+                                     0, "setxattr", "reqs");
+        }
 
         uuid_ptr = fsfilt_uuid(obd, obd->u.obt.obt_sb);
         if (uuid_ptr != NULL) {
@@ -2217,6 +2244,7 @@ static int mds_cleanup(struct obd_device *obd)
                    we just need to drop our ref */
                 class_export_put(mds->mds_osc_exp);
 
+        lprocfs_free_obd_stats(obd);
         lprocfs_obd_cleanup(obd);
 
         lquota_cleanup(quota_interface, obd);
@@ -2390,6 +2418,8 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         switch ((long)it->opc) {
         case IT_OPEN:
         case IT_CREAT|IT_OPEN:
+                lprocfs_counter_incr(req->rq_export->exp_obd->obd_stats,
+                                     LPROC_MDS_OPEN);
                 fixup_handle_for_resent_req(req, DLM_LOCKREQ_OFF, lock, NULL,
                                             &lockh);
                 /* XXX swab here to assert that an mds_open reint
@@ -2416,6 +2446,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                         getattr_part = MDS_INODELOCK_LOOKUP;
         case IT_GETATTR:
                         getattr_part |= MDS_INODELOCK_LOOKUP;
+                        OBD_COUNTER_INCREMENT(req->rq_export->exp_obd, getattr);
         case IT_READDIR:
                 fixup_handle_for_resent_req(req, DLM_LOCKREQ_OFF, lock,
                                             &new_lock, &lockh);
@@ -2714,6 +2745,7 @@ static __attribute__((unused)) int __init mds_init(void)
         int rc;
         struct lprocfs_static_vars lvars;
 
+        request_module("lquota");
         quota_interface = PORTAL_SYMBOL_GET(mds_quota_interface);
         rc = lquota_init(quota_interface);
         if (rc) {

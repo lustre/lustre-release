@@ -1074,95 +1074,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         RETURN(rc);
 }
 
-static int ost_san_brw(struct ptlrpc_request *req, int cmd)
-{
-        struct niobuf_remote *remote_nb, *res_nb, *pp_rnb = NULL;
-        struct obd_ioobj *ioo;
-        struct ost_body *body, *repbody;
-        int rc, i, objcount, niocount, npages, swab;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
-        ENTRY;
-
-        /* XXX not set to use latest protocol */
-
-        swab = lustre_msg_swabbed(req->rq_reqmsg);
-        body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
-                                  lustre_swab_ost_body);
-        if (body == NULL) {
-                CERROR("Missing/short ost_body\n");
-                GOTO(out, rc = -EFAULT);
-        }
-
-        ioo = lustre_swab_reqbuf(req, REQ_REC_OFF + 1, sizeof(*ioo),
-                                 lustre_swab_obd_ioobj);
-        if (ioo == NULL) {
-                CERROR("Missing/short ioobj\n");
-                GOTO(out, rc = -EFAULT);
-        }
-        objcount = lustre_msg_buflen(req->rq_reqmsg, REQ_REC_OFF + 1) /
-                   sizeof(*ioo);
-        niocount = ioo[0].ioo_bufcnt;
-        for (i = 1; i < objcount; i++) {
-                if (swab)
-                        lustre_swab_obd_ioobj (&ioo[i]);
-                niocount += ioo[i].ioo_bufcnt;
-        }
-
-        remote_nb = lustre_swab_reqbuf(req, REQ_REC_OFF + 2,
-                                       niocount * sizeof(*remote_nb),
-                                       lustre_swab_niobuf_remote);
-        if (remote_nb == NULL) {
-                CERROR("Missing/short niobuf\n");
-                GOTO(out, rc = -EFAULT);
-        }
-        if (swab) {                             /* swab the remaining niobufs */
-                for (i = 1; i < niocount; i++)
-                        lustre_swab_niobuf_remote (&remote_nb[i]);
-        }
-
-        /*
-         * Per-thread array of struct niobuf_remote's was allocated by
-         * ost_thread_init().
-         */
-        pp_rnb = ost_tls(req)->remote;
-
-        /* CAVEAT EMPTOR this sets ioo->ioo_bufcnt to # pages */
-        npages = get_per_page_niobufs(ioo, objcount,remote_nb,niocount,&pp_rnb);
-        if (npages < 0)
-                GOTO (out, rc = npages);
-
-        size[REPLY_REC_OFF + 1] = npages * sizeof(*pp_rnb);
-        rc = lustre_pack_reply(req, 3, size, NULL);
-        if (rc)
-                GOTO(out, rc);
-
-        req->rq_status = obd_san_preprw(cmd, req->rq_export, &body->oa,
-                                        objcount, ioo, npages, pp_rnb);
-
-        if (req->rq_status)
-                GOTO(out, rc = 0);
-
-        repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
-                                 sizeof(*repbody));
-        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-
-        res_nb = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
-                                size[REPLY_REC_OFF + 1]);
-        memcpy(res_nb, remote_nb, size[REPLY_REC_OFF + 1]);
-        rc = 0;
-out:
-        target_committed_to_req(req);
-        if (rc) {
-                req->rq_status = rc;
-                ptlrpc_error(req);
-        } else {
-                ptlrpc_reply(req);
-        }
-
-        return rc;
-}
-
-
 static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
 {
         char *key, *val = NULL;
@@ -1323,8 +1234,6 @@ int ost_msg_check_version(struct lustre_msg *msg)
         case OST_SETATTR:
         case OST_WRITE:
         case OST_READ:
-        case OST_SAN_READ:
-        case OST_SAN_WRITE:
         case OST_PUNCH:
         case OST_STATFS:
         case OST_SYNC:
@@ -1476,18 +1385,6 @@ static int ost_handle(struct ptlrpc_request *req)
                 rc = ost_brw_read(req, oti);
                 LASSERT(current->journal_info == NULL);
                 /* ost_brw_read sends its own replies */
-                RETURN(rc);
-        case OST_SAN_READ:
-                CDEBUG(D_INODE, "san read\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
-                rc = ost_san_brw(req, OBD_BRW_READ);
-                /* ost_san_brw sends its own replies */
-                RETURN(rc);
-        case OST_SAN_WRITE:
-                CDEBUG(D_INODE, "san write\n");
-                OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
-                rc = ost_san_brw(req, OBD_BRW_WRITE);
-                /* ost_san_brw sends its own replies */
                 RETURN(rc);
         case OST_PUNCH:
                 CDEBUG(D_INODE, "punch\n");

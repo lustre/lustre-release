@@ -48,11 +48,6 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 #define PARAM_MDC                  "mdc."
 #define PARAM_LLITE                "llite."
 #define PARAM_LOV                  "lov."
-/* LOV_STRIPE_* aren't settable in proc. But match the proc names. */
-#define PARAM_LOV_STRIPE_SIZE      PARAM_LOV"stripesize="
-#define PARAM_LOV_STRIPE_COUNT     PARAM_LOV"stripecount="
-#define PARAM_LOV_STRIPE_OFFSET    PARAM_LOV"stripeoffset="
-#define PARAM_LOV_STRIPE_PATTERN   PARAM_LOV"stripetype="
 #define PARAM_SEC                  "security."
 #define PARAM_SEC_RPC              PARAM_SEC"rpc."
 #define PARAM_SEC_RPC_MDT          PARAM_SEC_RPC"mdt="

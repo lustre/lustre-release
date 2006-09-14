@@ -27,15 +27,7 @@
 #endif
 
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
-#if !defined(LUSTRE_KERNEL_VERSION) || (LUSTRE_KERNEL_VERSION < 46)
 #define LUSTRE_FPRIVATE(file) ((file)->private_data)
-#else
-#if (LUSTRE_KERNEL_VERSION < 46)
-#define LUSTRE_FPRIVATE(file) ((file)->private_data)
-#else
-#define LUSTRE_FPRIVATE(file) ((file)->fs_private)
-#endif
-#endif
 
 #ifdef LUSTRE_KERNEL_VERSION
 static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
@@ -165,6 +157,34 @@ struct ll_ra_info {
         unsigned long             ra_stats[_NR_RA_STAT];
 };
 
+/* LL_HIST_MAX=32 causes an overflow */
+#define LL_HIST_MAX 28
+#define LL_HIST_START 12 /* buckets start at 2^12 = 4k */
+#define LL_PROCESS_HIST_MAX 10
+struct per_process_info {
+        pid_t pid;
+        struct obd_histogram pp_r_hist;
+        struct obd_histogram pp_w_hist;
+};
+
+/* pp_extents[LL_PROCESS_HIST_MAX] will hold the combined process info */
+struct ll_rw_extents_info {
+        struct per_process_info pp_extents[LL_PROCESS_HIST_MAX + 1];
+};
+
+#define LL_OFFSET_HIST_MAX 100
+struct ll_rw_process_info {
+        pid_t                     rw_pid;
+        int                       rw_op;
+        loff_t                    rw_range_start;
+        loff_t                    rw_range_end;
+        loff_t                    rw_last_file_pos;
+        loff_t                    rw_offset;
+        size_t                    rw_smallest_extent;
+        size_t                    rw_largest_extent;
+        struct file               *rw_last_file;
+};
+
 /* flags for sbi->ll_flags */
 #define LL_SBI_NOLCK            0x01 /* DLM locking disabled (directio-only) */
 #define LL_SBI_CHECKSUM         0x02 /* checksum each page as it's written */
@@ -188,7 +208,7 @@ struct ll_sb_info {
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
         struct lustre_client_ocd  ll_lco;
 
-        struct hlist_head         ll_orphan_dentry_list; /*please don't ask -p*/
+        struct list_head          ll_orphan_dentry_list; /*please don't ask -p*/
         struct ll_close_queue    *ll_lcq;
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
@@ -207,6 +227,12 @@ struct ll_sb_info {
         /* =0 - hold lock over whole read/write
          * >0 - max. chunk to be read/written w/o lock re-acquiring */
         unsigned long             ll_max_rw_chunk;
+        struct ll_rw_extents_info ll_rw_extents_info;
+        int                       ll_extent_process_count;
+        struct ll_rw_process_info ll_rw_process_info[LL_PROCESS_HIST_MAX];
+        unsigned int              ll_offset_process_count;
+        struct ll_rw_process_info ll_rw_offset_info[LL_OFFSET_HIST_MAX];
+        unsigned int              ll_rw_offset_entry_count;
 };
 
 #define LL_DEFAULT_MAX_RW_CHUNK         (32 * 1024 * 1024)
@@ -442,6 +468,8 @@ int ll_release_openhandle(struct dentry *, struct lookup_intent *);
 int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct file *file);
 int ll_md_real_close(struct inode *inode, int flags);
+extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid, struct file
+                               *file, size_t count, int rw);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);

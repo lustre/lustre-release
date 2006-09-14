@@ -2,10 +2,10 @@
 
 set -e
 
-#         bug  5494 7288
-ALWAYS_EXCEPT="24   27 $RECOVERY_SMALL_EXCEPT"
+#         bug  5494 7288 5493
+ALWAYS_EXCEPT="24   27   52 $RECOVERY_SMALL_EXCEPT"
 
-PTLDEBUG=${PTLDEBUG:-1}
+PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
@@ -61,14 +61,14 @@ test_3() {
 run_test 3 "stat: drop req, drop rep"
 
 test_4() {
-    do_facet client "cp /etc/passwd $MOUNT/passwd" || return 1
-    drop_request "cat $MOUNT/passwd > /dev/null"   || return 2
-    drop_reply "cat $MOUNT/passwd > /dev/null"     || return 3
+    do_facet client "cp /etc/inittab $MOUNT/inittab" || return 1
+    drop_request "cat $MOUNT/inittab > /dev/null"   || return 2
+    drop_reply "cat $MOUNT/inittab > /dev/null"     || return 3
 }
 run_test 4 "open: drop req, drop rep"
 
 test_5() {
-    drop_request "mv $MOUNT/passwd $MOUNT/renamed" || return 1
+    drop_request "mv $MOUNT/inittab $MOUNT/renamed" || return 1
     drop_reint_reply "mv $MOUNT/renamed $MOUNT/renamed-again" || return 2
     do_facet client "checkstat -v $MOUNT/renamed-again"  || return 3
 }

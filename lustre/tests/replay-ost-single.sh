@@ -2,7 +2,7 @@
 
 set -e
 
-PTLDEBUG=${PTLDEBUG:-1}
+PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
@@ -10,6 +10,10 @@ init_test_env $@
 
 ostfailover_HOST=${ostfailover_HOST:-$ost_HOST}
 #failover= must be defined in OST_MKFS_OPTIONS if ostfailover_HOST != ost_HOST
+
+# Tests that fail on uml
+CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
+[ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 6"
 
 # Skip these tests
 # BUG NUMBER: 

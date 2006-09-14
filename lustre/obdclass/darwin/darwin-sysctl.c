@@ -26,7 +26,6 @@ extern unsigned int obd_fail_loc;
 extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_timeout;
 extern unsigned int ldlm_timeout;
-extern char obd_lustre_upcall[128];
 extern unsigned int obd_sync_filter;
 extern atomic_t obd_memory;
 
@@ -50,9 +49,6 @@ SYSCTL_PROC(_lustre,		OID_AUTO,       lustre_kernel_version,
 SYSCTL_INT(_lustre,		OID_AUTO,	dump_on_timeout, 
 	   CTLTYPE_INT | CTLFLAG_RW,		&obd_dump_on_timeout,
 	   0,		"lustre_dump_on_timeout");
-SYSCTL_STRING(_lustre,		OID_AUTO,	upcall, 
-	   CTLTYPE_STRING | CTLFLAG_RW,		obd_lustre_upcall,
-	   128,		"lustre_upcall");
 SYSCTL_INT(_lustre,		OID_AUTO,	memused, 
 	   CTLTYPE_INT | CTLFLAG_RW,		(int *)&obd_memory.counter,
 	   0,		"lustre_memory_used");

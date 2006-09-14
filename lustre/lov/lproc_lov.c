@@ -31,6 +31,7 @@
 #include <lprocfs_status.h>
 #include <obd_class.h>
 #include <linux/seq_file.h>
+#include "lov_internal.h"
 
 #ifdef LPROCFS
 static int lov_rd_stripesize(char *page, char **start, off_t off, int count,
@@ -45,6 +46,25 @@ static int lov_rd_stripesize(char *page, char **start, off_t off, int count,
         return snprintf(page, count, LPU64"\n", desc->ld_default_stripe_size);
 }
 
+static int lov_wr_stripesize(struct file *file, const char *buffer,
+                               unsigned long count, void *data)
+{
+        struct obd_device *dev = (struct obd_device *)data;
+        struct lov_desc *desc;
+        __u64 val;
+        int rc;
+        
+        LASSERT(dev != NULL);
+        desc = &dev->u.lov.desc;
+        rc = lprocfs_write_u64_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        desc->ld_default_stripe_size = val;
+        lov_fix_desc(desc);
+        return count;
+}
+
 static int lov_rd_stripeoffset(char *page, char **start, off_t off, int count,
                                int *eof, void *data)
 {
@@ -55,6 +75,25 @@ static int lov_rd_stripeoffset(char *page, char **start, off_t off, int count,
         desc = &dev->u.lov.desc;
         *eof = 1;
         return snprintf(page, count, LPU64"\n", desc->ld_default_stripe_offset);
+}
+
+static int lov_wr_stripeoffset(struct file *file, const char *buffer,
+                               unsigned long count, void *data)
+{
+        struct obd_device *dev = (struct obd_device *)data;
+        struct lov_desc *desc;
+        __u64 val;
+        int rc;
+        
+        LASSERT(dev != NULL);
+        desc = &dev->u.lov.desc;
+        rc = lprocfs_write_u64_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        desc->ld_default_stripe_offset = val;
+        lov_fix_desc(desc);
+        return count;
 }
 
 static int lov_rd_stripetype(char *page, char **start, off_t off, int count,
@@ -69,6 +108,24 @@ static int lov_rd_stripetype(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%u\n", desc->ld_pattern);
 }
 
+static int lov_wr_stripetype(struct file *file, const char *buffer,
+                             unsigned long count, void *data)
+{
+        struct obd_device *dev = (struct obd_device *)data;
+        struct lov_desc *desc;
+        int val, rc;
+        
+        LASSERT(dev != NULL);
+        desc = &dev->u.lov.desc;
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        desc->ld_pattern = val;
+        lov_fix_desc(desc);
+        return count;
+}
+
 static int lov_rd_stripecount(char *page, char **start, off_t off, int count,
                               int *eof, void *data)
 {
@@ -79,6 +136,24 @@ static int lov_rd_stripecount(char *page, char **start, off_t off, int count,
         desc = &dev->u.lov.desc;
         *eof = 1;
         return snprintf(page, count, "%u\n", desc->ld_default_stripe_count);
+}
+
+static int lov_wr_stripecount(struct file *file, const char *buffer,
+                              unsigned long count, void *data)
+{
+        struct obd_device *dev = (struct obd_device *)data;
+        struct lov_desc *desc;
+        int val, rc;
+        
+        LASSERT(dev != NULL);
+        desc = &dev->u.lov.desc;
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        desc->ld_default_stripe_count = val;
+        lov_fix_desc(desc);
+        return count;
 }
 
 static int lov_rd_numobd(char *page, char **start, off_t off, int count,
@@ -238,24 +313,22 @@ static int lov_target_seq_open(struct inode *inode, struct file *file)
 
 struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,        0, 0 },
-        /* If you change the stripe* names, 
-           make sure lustre_param.h is updated */
-        { "stripesize",   lov_rd_stripesize,      0, 0 },
-        { "stripeoffset", lov_rd_stripeoffset,    0, 0 },
-        { "stripecount",  lov_rd_stripecount,     0, 0 },
-        { "stripetype",   lov_rd_stripetype,      0, 0 },
+        { "stripesize",   lov_rd_stripesize,      lov_wr_stripesize, 0 },
+        { "stripeoffset", lov_rd_stripeoffset,    lov_wr_stripeoffset, 0 },
+        { "stripecount",  lov_rd_stripecount,     lov_wr_stripecount, 0 },
+        { "stripetype",   lov_rd_stripetype,      lov_wr_stripetype, 0 },
         { "numobd",       lov_rd_numobd,          0, 0 },
         { "activeobd",    lov_rd_activeobd,       0, 0 },
         { "filestotal",   lprocfs_rd_filestotal,  0, 0 },
         { "filesfree",    lprocfs_rd_filesfree,   0, 0 },
-        /*{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },*/
+        /*{ "filegroups", lprocfs_rd_filegroups,  0, 0 },*/
         { "blocksize",    lprocfs_rd_blksize,     0, 0 },
         { "kbytestotal",  lprocfs_rd_kbytestotal, 0, 0 },
         { "kbytesfree",   lprocfs_rd_kbytesfree,  0, 0 },
         { "kbytesavail",  lprocfs_rd_kbytesavail, 0, 0 },
         { "desc_uuid",    lov_rd_desc_uuid,       0, 0 },
-        { "qos_prio_free", lov_rd_qos_priofree, lov_wr_qos_priofree, 0 },
-        { "qos_maxage",   lov_rd_qos_maxage, lov_wr_qos_maxage, 0 },
+        { "qos_prio_free",lov_rd_qos_priofree,    lov_wr_qos_priofree, 0 },
+        { "qos_maxage",   lov_rd_qos_maxage,      lov_wr_qos_maxage, 0 },
         { 0 }
 };
 

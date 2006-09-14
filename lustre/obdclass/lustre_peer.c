@@ -40,6 +40,7 @@ struct uuid_nid_data {
         struct list_head un_list;
         lnet_nid_t       un_nid;
         char            *un_uuid;
+        int              un_count;  /* nid/uuid pair refcount */
 };
 
 /* FIXME: This should probably become more elegant than a global linked list */
@@ -85,8 +86,10 @@ int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index)
    LNET will choose the best one. */
 int class_add_uuid(const char *uuid, __u64 nid)
 {
-        struct uuid_nid_data *data;
+        struct list_head *tmp, *n;
+        struct uuid_nid_data *data, *entry;
         int nob = strnlen (uuid, PAGE_SIZE) + 1;
+        int found = 0;
 
         LASSERT(nid != 0);  /* valid newconfig NID is never zero */
 
@@ -103,16 +106,34 @@ int class_add_uuid(const char *uuid, __u64 nid)
                 return -ENOMEM;
         }
 
-        CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nid2str(nid));
         memcpy(data->un_uuid, uuid, nob);
         data->un_nid = nid;
+        data->un_count = 1;
 
         spin_lock (&g_uuid_lock);
 
-        list_add(&data->un_list, &g_uuid_list);
+        list_for_each_safe(tmp, n, &g_uuid_list) {
+                entry = list_entry(tmp, struct uuid_nid_data, un_list);
+                if (entry->un_nid == nid && 
+                    (strcmp(entry->un_uuid, uuid) == 0)) {
+                        found++;
+                        entry->un_count++;
+                        break;
+                }
+        }
+        if (!found) 
+                list_add(&data->un_list, &g_uuid_list);
 
         spin_unlock (&g_uuid_lock);
 
+        if (found) {
+                CDEBUG(D_INFO, "found uuid %s %s cnt=%d\n", uuid, 
+                       libcfs_nid2str(nid), entry->un_count);
+                OBD_FREE(data->un_uuid, nob);
+                OBD_FREE(data, sizeof(*data));
+        } else {
+                CDEBUG(D_INFO, "add uuid %s %s\n", uuid, libcfs_nid2str(nid));
+        }
         return 0;
 }
 
@@ -131,11 +152,16 @@ int class_del_uuid(const char *uuid)
         list_for_each_safe(tmp, n, &g_uuid_list) {
                 data = list_entry(tmp, struct uuid_nid_data, un_list);
 
-                if (uuid == NULL || strcmp(data->un_uuid, uuid) == 0) {
+                if (uuid == NULL) {
                         list_del (&data->un_list);
                         list_add (&data->un_list, &deathrow);
-                        if (uuid)
-                                break;
+                } else if (strcmp(data->un_uuid, uuid) == 0) {
+                        --data->un_count;
+                        if (data->un_count <= 0) {
+                                list_del (&data->un_list);
+                                list_add (&data->un_list, &deathrow);
+                        }
+                        break;
                 }
         }
 
@@ -151,7 +177,8 @@ int class_del_uuid(const char *uuid)
                 data = list_entry(deathrow.next, struct uuid_nid_data, un_list);
 
                 list_del (&data->un_list);
-                CDEBUG(D_INFO, "del uuid %s\n", data->un_uuid);
+                CDEBUG(D_INFO, "del uuid %s %s\n", data->un_uuid,
+                       libcfs_nid2str(data->un_nid));
 
                 OBD_FREE(data->un_uuid, strlen(data->un_uuid) + 1);
                 OBD_FREE(data, sizeof(*data));

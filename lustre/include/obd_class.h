@@ -42,7 +42,6 @@
 #endif
 
 /* OBD Device Declarations */
-#define MAX_OBD_DEVICES 2048
 extern struct obd_device *obd_devs[MAX_OBD_DEVICES];
 extern spinlock_t obd_dev_lock;
 
@@ -1386,22 +1385,6 @@ static inline int obd_join_lru(struct obd_export *exp,
 
         rc = OBP(exp->exp_obd, join_lru)(exp, ea, join);
         RETURN(rc);
-}
-
-static inline int obd_san_preprw(int cmd, struct obd_export *exp,
-                                 struct obdo *oa,
-                                 int objcount, struct obd_ioobj *obj,
-                                 int niocount, struct niobuf_remote *remote)
-{
-        int rc;
-
-        EXP_CHECK_DT_OP(exp, preprw);
-        OBD_COUNTER_INCREMENT(exp->exp_obd, preprw);
-
-        rc = OBP(exp->exp_obd, san_preprw)(cmd, exp, oa, objcount, obj,
-                                           niocount, remote);
-        class_export_put(exp);
-        return(rc);
 }
 
 static inline int obd_pin(struct obd_export *exp, const struct lu_fid *fid,

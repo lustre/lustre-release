@@ -81,7 +81,8 @@ int main(int argc, char **argv)
 
                 rc = write(fd, wbuf, len);
                 if (rc != len) {
-                        printf("Write error %s (rc = %d)\n",strerror(errno),rc);
+                        printf("Write error %s (rc = %d, len = %ld)\n",
+                               strerror(errno), rc, len);
                         return 1;
                 }
         }

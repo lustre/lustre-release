@@ -174,6 +174,8 @@ int mds_getxattr(struct ptlrpc_request *req)
         int rc = 0;
         ENTRY;
 
+        lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_GETXATTR);
+
         body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
                                   lustre_swab_mds_body);
         if (body == NULL)
@@ -333,6 +335,8 @@ int mds_setxattr(struct ptlrpc_request *req)
         struct lvfs_ucred uc = { NULL, };
         int rc;
         ENTRY;
+
+        lprocfs_counter_incr(obd->obd_stats, LPROC_MDS_SETXATTR);
 
         body = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*body),
                                   lustre_swab_mds_body);

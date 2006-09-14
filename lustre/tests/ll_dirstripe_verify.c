@@ -203,7 +203,8 @@ int main(int argc, char **argv)
         }
 
         fname = strrchr(argv[2], '/');
-        fname++;
+        fname = (fname == NULL ? argv[2] : fname + 1);
+
         strncpy((char *)lum_file1, fname, lum_size);
         rc = ioctl(dirfd(dir), IOC_MDC_GETFILESTRIPE, lum_file1);
         if (rc) {
@@ -221,7 +222,7 @@ int main(int argc, char **argv)
                 }
 
                 fname = strrchr(argv[3], '/');
-                fname++;
+                fname = (fname == NULL ? argv[3] : fname + 1);
                 strncpy((char *)lum_file2, fname, lum_size);
                 rc = ioctl(dirfd(dir), IOC_MDC_GETFILESTRIPE, lum_file2);
                 if (rc) {

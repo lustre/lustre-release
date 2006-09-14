@@ -177,7 +177,7 @@ int mds_cleanup_pending(struct obd_device *obd);
 
 /* mds/mds_log.c */
 int mds_llog_init(struct obd_device *obd, struct obd_device *tgt, int count,
-                  struct llog_catid *logid);
+                  struct llog_catid *logid, struct obd_uuid *uuid);
 int mds_llog_finish(struct obd_device *obd, int count);
 
 /* mds/mds_lov.c */
@@ -255,5 +255,20 @@ static inline int mds_fid2str(char *str, __u64 id, __u32 generation)
 {
         return sprintf(str, "%llx:%08x", (unsigned long long)id, generation);
 }
+
+/* mds/lproc_mds.c */
+enum {
+        LPROC_MDS_OPEN = 0,
+        LPROC_MDS_CLOSE,
+        LPROC_MDS_MKNOD,
+        LPROC_MDS_LINK,
+        LPROC_MDS_UNLINK,
+        LPROC_MDS_MKDIR,
+        LPROC_MDS_RMDIR,
+        LPROC_MDS_RENAME,
+        LPROC_MDS_GETXATTR,
+        LPROC_MDS_SETXATTR,
+        LPROC_MDS_LAST,
+};
 
 #endif /* _MDS_INTERNAL_H */

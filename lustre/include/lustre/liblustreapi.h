@@ -11,7 +11,7 @@
 typedef void (*llapi_cb_t)(char *obd_type_name, char *obd_name, char *obd_uuid, void *args);
 
 /* liblustreapi.c */
-extern int llapi_file_create(const char *name, long stripe_size,
+extern int llapi_file_create(const char *name, unsigned long stripe_size,
                              int stripe_offset, int stripe_count,
                              int stripe_pattern);
 extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);

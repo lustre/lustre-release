@@ -54,6 +54,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 {
         struct ll_sb_info *sbi = NULL;
         class_uuid_t uuid;
+        int i;
         ENTRY;
 
         OBD_ALLOC(sbi, sizeof(*sbi));
@@ -63,7 +64,6 @@ static struct ll_sb_info *ll_init_sbi(void)
         spin_lock_init(&sbi->ll_lock);
         spin_lock_init(&sbi->ll_lco.lco_lock);
         INIT_LIST_HEAD(&sbi->ll_pglist);
-        sbi->ll_pglist_gen = 0;
         if (num_physpages >> (20 - PAGE_SHIFT) < 512)
                 sbi->ll_async_page_max = num_physpages / 2;
         else
@@ -74,7 +74,7 @@ static struct ll_sb_info *ll_init_sbi(void)
                                            SBI_DEFAULT_READAHEAD_WHOLE_MAX;
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
-        INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
+        INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
 
         class_generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
@@ -86,6 +86,11 @@ static struct ll_sb_info *ll_init_sbi(void)
 
         INIT_LIST_HEAD(&sbi->ll_deathrow);
         spin_lock_init(&sbi->ll_deathrow_lock);
+        for (i = 0; i < LL_PROCESS_HIST_MAX; i++) { 
+                spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_r_hist.oh_lock);
+                spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].pp_w_hist.oh_lock);
+        }
+
         RETURN(sbi);
 }
 
@@ -143,7 +148,8 @@ static int ll_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
         RETURN(rc);
 }
 
-int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
+static int client_common_fill_super(struct super_block *sb, 
+                                    char *md, char *dt)
 {
         struct inode *root = 0;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -151,16 +157,16 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         struct lu_fid rootfid;
         struct obd_statfs osfs;
         struct ptlrpc_request *request = NULL;
-        struct lustre_handle osc_conn = {0, };
+        struct lustre_handle dt_conn = {0, };
         struct lustre_handle md_conn = {0, };
         struct obd_connect_data *data = NULL;
-        struct lustre_md md;
+        struct lustre_md lmd;
         int err;
         ENTRY;
 
-        obd = class_name2obd(mdc);
+        obd = class_name2obd(md);
         if (!obd) {
-                CERROR("MDC %s: not setup or attached\n", mdc);
+                CERROR("MD %s: not setup or attached\n", md);
                 RETURN(-EINVAL);
         }
 
@@ -170,7 +176,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         if (proc_lustre_fs_root) {
                 err = lprocfs_register_mountpoint(proc_lustre_fs_root, sb,
-                                                  osc, mdc);
+                                                  dt, md);
                 if (err < 0)
                         CERROR("could not register mount in /proc/lustre");
         }
@@ -197,19 +203,20 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         err = obd_connect(NULL, &md_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
-                CERROR("An MDT (mdc %s) is performing recovery, of which this"
-                       " client is not a part.  Please wait for recovery to "
-                       "complete, abort, or time out.\n", mdc);
+                LCONSOLE_ERROR("An MDT (md %s) is performing recovery, of "
+                               "which this client is not a part.  Please wait "
+                               "for recovery to complete, abort, or "
+                               "time out.\n", md);
                 GOTO(out, err);
         } else if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", mdc, err);
+                CERROR("cannot connect to %s: rc = %d\n", md, err);
                 GOTO(out, err);
         }
         sbi->ll_md_exp = class_conn2export(&md_conn);
 
         err = obd_statfs(obd, &osfs, cfs_time_current_64() - HZ);
         if (err)
-                GOTO(out_mdc, err);
+                GOTO(out_md, err);
 
         LASSERT(osfs.os_bsize);
         sb->s_blocksize = osfs.os_bsize;
@@ -243,6 +250,8 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
          * on all clients. */
         /* s_dev is also used in lt_compare() to compare two fs, but that is
          * only a node-local comparison. */
+        
+        /* XXX: this will not work with LMV */
         sb->s_dev = get_uuid2int(sbi2mdc(sbi)->cl_target_uuid.uuid,
                                  strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
 #endif
@@ -251,12 +260,12 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         err = ll_fid_md_init(sbi);
         if (err) {
                 CERROR("can't init FIDs framework, rc %d\n", err);
-                GOTO(out_mdc, err);
+                GOTO(out_md, err);
         }
 
-        obd = class_name2obd(osc);
+        obd = class_name2obd(dt);
         if (!obd) {
-                CERROR("OSC %s: not setup or attached\n", osc);
+                CERROR("DT %s: not setup or attached\n", dt);
                 GOTO(out_md_fid, err = -ENODEV);
         }
 
@@ -271,19 +280,18 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         obd->obd_upcall.onu_upcall = ll_ocd_update;
         data->ocd_brw_size = PTLRPC_MAX_BRW_PAGES << PAGE_SHIFT;
 
-
-        err = obd_connect(NULL, &osc_conn, obd, &sbi->ll_sb_uuid, data);
+        err = obd_connect(NULL, &dt_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
-                CERROR("An OST (osc %s) is performing recovery, of which this"
-                       " client is not a part.  Please wait for recovery to "
-                       "complete, abort, or time out.\n", osc);
+                LCONSOLE_ERROR("An OST (dt %s) is performing recovery, of which this"
+                               " client is not a part.  Please wait for recovery to "
+                               "complete, abort, or time out.\n", dt);
                 GOTO(out, err);
         } else if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", osc, err);
-                GOTO(out_mdc, err);
+                CERROR("cannot connect to %s: rc = %d\n", dt, err);
+                GOTO(out_md, err);
         }
 
-        sbi->ll_dt_exp = class_conn2export(&osc_conn);
+        sbi->ll_dt_exp = class_conn2export(&dt_conn);
 
         spin_lock(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
@@ -297,7 +305,7 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 LCONSOLE_ERROR("There are no OST's in this filesystem. "
                                "There must be at least one active OST for "
                                "a client to start.\n");
-                GOTO(out_osc, err);
+                GOTO(out_dt, err);
         }
 
         if (!ll_async_page_slab) {
@@ -307,14 +315,14 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                                                        ll_async_page_slab_size,
                                                        0, 0, NULL, NULL);
                 if (!ll_async_page_slab)
-                        GOTO(out_osc, -ENOMEM);
+                        GOTO(out_dt, -ENOMEM);
         }
 
         /* init FIDs framework */
         err = ll_fid_dt_init(sbi);
         if (err) {
                 CERROR("can't init FIDs framework, rc %d\n", err);
-                GOTO(out_osc, err);
+                GOTO(out_dt, err);
         }
 
         err = md_getstatus(sbi->ll_md_exp, &rootfid);
@@ -338,24 +346,24 @@ int client_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                          0, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
-                GOTO(out_osc, err);
+                GOTO(out_dt, err);
         }
 
         err = md_get_lustre_md(sbi->ll_md_exp, request, 
                                REPLY_REC_OFF, sbi->ll_dt_exp, sbi->ll_md_exp, 
-                               &md);
+                               &lmd);
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n", err);
                 ptlrpc_req_finished (request);
-                GOTO(out_osc, err);
+                GOTO(out_dt, err);
         }
 
         LASSERT(fid_is_sane(&sbi->ll_root_fid));
-        root = ll_iget(sb, ll_fid_build_ino(sbi, &sbi->ll_root_fid), &md);
+        root = ll_iget(sb, ll_fid_build_ino(sbi, &sbi->ll_root_fid), &lmd);
         ptlrpc_req_finished(request);
 
         if (root == NULL || is_bad_inode(root)) {
-                md_free_lustre_md(sbi->ll_dt_exp, &md);
+                md_free_lustre_md(sbi->ll_dt_exp, &lmd);
                 CERROR("lustre_lite: bad iget4 for root\n");
                 GOTO(out_root, err = -EBADF);
         }
@@ -386,12 +394,12 @@ out_root:
                 iput(root);
 out_dt_fid:
         obd_fid_fini(sbi->ll_dt_exp);
-out_osc:
+out_dt:
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
 out_md_fid:
         obd_fid_fini(sbi->ll_md_exp);
-out_mdc:
+out_md:
         obd_disconnect(sbi->ll_md_exp);
         sbi->ll_md_exp = NULL;
 out:
@@ -461,12 +469,12 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 void lustre_throw_orphan_dentries(struct super_block *sb)
 {
-        struct hlist_node *tmp, *next;
+        struct dentry *dentry, *next;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
 
         /* Do this to get rid of orphaned dentries. That is not really trw. */
-        hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
-                struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
+        list_for_each_entry_safe(dentry, next, &sbi->ll_orphan_dentry_list,
+                                 d_hash) {
                 CWARN("found orphan dentry %.*s (%p->%p) at unmount, dumping "
                       "before and after shrink_dcache_parent\n",
                       dentry->d_name.len, dentry->d_name.name, dentry, next);
@@ -901,10 +909,14 @@ int ll_fill_super(struct super_block *sb)
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
 
+        cfs_module_get();
+
         /* client additional sb info */
         lsi->lsi_llsbi = sbi = ll_init_sbi();
-        if (!sbi)
+        if (!sbi) {
+                cfs_module_put();
                 RETURN(-ENOMEM);
+        }
 
         err = ll_options(lsi->lsi_lmd->lmd_opts, &sbi->ll_flags);
         if (err) 
@@ -1042,6 +1054,9 @@ void ll_put_super(struct super_block *sb)
         lustre_common_put_super(sb);
 
         LCONSOLE_WARN("client %s umount complete\n", ll_instance);
+        
+        cfs_module_put();
+
         EXIT;
 } /* client_put_super */
 
@@ -1082,15 +1097,11 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
                         inode = igrab(lock->l_ast_data);
                 } else {
                         inode = lock->l_ast_data;
-                        if (inode->i_state & I_FREEING)
-                                __LDLM_DEBUG(D_INFO, lock,
-                                     "l_ast_data %p is bogus: magic %08x",
-                                     lock->l_ast_data, lli->lli_inode_magic);
-                        else
-                                __LDLM_DEBUG(D_WARNING, lock,
-                                     "l_ast_data %p is bogus: magic %08x",
-                                     lock->l_ast_data, lli->lli_inode_magic);
-
+                        ldlm_lock_debug(NULL, inode->i_state & I_FREEING ?
+                                                D_INFO : D_WARNING,
+                                        lock, __FILE__, __func__, __LINE__,
+                                        "l_ast_data %p is bogus: magic %08x",
+                                        lock->l_ast_data, lli->lli_inode_magic);
                         inode = NULL;
                 }
         }

@@ -85,7 +85,7 @@ static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
         }
 }
 
-#define OBD_SLEEP_ON(wq)        interruptible_sleep_on(wq)
+#define OBD_SLEEP_ON(wq, state)  wait_event_interruptible(wq, state)
 
 
 #else /* !__KERNEL__ */

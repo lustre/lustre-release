@@ -120,6 +120,10 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         if (rc)
                 RETURN(rc);
 
+        /* b10667: ignore lustre special xattr for now */
+        if (xattr_type == XATTR_TRUSTED_T && strcmp(name, "trusted.lov") == 0)
+                RETURN(0);
+
         rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode), valid,
                          name, value, size, 0, flags, &req);
         if (rc) {

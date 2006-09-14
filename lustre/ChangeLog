@@ -5,24 +5,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	 special upgrade step is needed. Please read the
 	 user documentation before upgrading any part of a live system.
        * WIRE PROTOCOL CHANGE from previous 1.6 beta versions.  This
-         version will not interoperate with older 1.6 betas.  
+         version will not interoperate with 1.6 betas before beta5 (1.5.95).  
        * WARNING: Lustre configuration and startup changes are required with
 	 this release.  See https://mail.clusterfs.com/wikis/lustre/MountConf
 	 for details.
        * bug fixes
 
-
-Severity   : enhancement
-Bugzilla   : 4226
-Description: Permanently set tunables
-Details    : All writable /proc/fs/lustre tunables can now be permanently
-             set on a per-server basis, at mkfs time or on a live
-	     system.
-	
-Severity   : enhancement
-Bugzilla   : 10547
-Description: Lustre message v2
-Details    : Add lustre message format v2.
 
 Severity   : enhancement
 Bugzilla   : 8007
@@ -58,6 +46,18 @@ Details    : stripe assignments are now made based on ost space available,
 	     to optimize storage space and networking resources. 
 	
 Severity   : enhancement
+Bugzilla   : 4226
+Description: Permanently set tunables
+Details    : All writable /proc/fs/lustre tunables can now be permanently
+             set on a per-server basis, at mkfs time or on a live
+	     system.
+	
+Severity   : enhancement
+Bugzilla   : 10547
+Description: Lustre message v2
+Details    : Add lustre message format v2.
+
+Severity   : enhancement
 Bugzilla   : 9866
 Description: client OST exclusion list
 Details    : Clients can be started with a list of OSTs that should be
@@ -77,20 +77,42 @@ Details    : Further unserialise some read-only MDS RPCs - learn about intents.
              MDS RPCs in flight for a single client and add /proc controls
              to adjust this limit.
 
+Severity   : enhancement
+Bugzilla   : 22484
+Description: client read/write statistics
+Details    : Add client read/write call usage stats for performance
+	     analysis of user processes. 
+	     /proc/fs/lustre/llite/*/offset_stats shows non-sequential
+	     file access. extents_stats shows chunk size distribution.
+	     extents_stats_per_process show chunk size distribution per
+	     user process. 
+
+Severity   : enhancement
+Bugzilla   : 22486
+Description: mds statistics
+Details    : Add detailed mds operations statistics in  
+	     /proc/fs/lustre/mds/*/stats.
+
+Severity   : minor
+Bugzilla   : 10667
+Description: Failure of copying files with lustre special EAs.
+Details    : Client side always return success for setxattr call for lustre
+             special xattr (currently only "trusted.lov").
 	
 ------------------------------------------------------------------------------
 
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+08-20-2006  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.7
        * Support for kernels:
-	2.6.9-34.EL (RHEL 4)
-	2.6.5-7.252 (SLES 9)
+	2.6.9-42.EL (RHEL 4)
+	2.6.5-7.276 (SLES 9)
+	2.4.21-40.EL (RHEL 3)
 	2.6.12.6 vanilla (kernel.org)
        * bug fixes
 
 Severity   : major
 Frequency  : rare
-Bugzilla   : 5719, 9635, 9792, 9684, 
+Bugzilla   : 5719, 9635, 9792, 9684
 Description: OST (or MDS) trips assertions in (re)connection under heavy load
 Details    : If a server is under heavy load and cannot reply to new
 	     connection requests before the client resends the (re)connect,
@@ -236,11 +258,11 @@ Details    : Running the "racer" program may cause one MDS thread to rename
 
 Severity   : major
 Frequency  : only very large systems with liblustre clients
-Bugzilla   : 7304 
+Bugzilla   : 7304
 Description: slow eviction of liblustre clients with the "evict_by_nid" RPC
-Details    : Use asynchronous set_info RPCs to send the "evict_by_nid" to 
+Details    : Use asynchronous set_info RPCs to send the "evict_by_nid" to
 	     all OSTs in parallel.  This allows the eviction of stale liblustre
-	     clients to proceed much faster than if they were done in series, 
+	     clients to proceed much faster than if they were done in series,
 	     and also offers similar improvements for other set_info RPCs.
 
 Severity   : minor
@@ -267,7 +289,7 @@ Details    : Do not serialize getattr (non-intent version) and statfs.
 
 Severity   : minor
 Frequency  : occasional, when OST network is overloaded/intermittent
-Bugzilla   : 10416 
+Bugzilla   : 10416
 Description: client evicted by OST after bulk IO timeout
 Details    : If a client sends a bulk IO request (read or write) the OST
 	     may evict the client if it is unresposive to its data GET/PUT
@@ -279,7 +301,7 @@ Details    : If a client sends a bulk IO request (read or write) the OST
 
 Severity   : minor
 Frequency  : Always when mmapping file with no objects
-Bugzilla   : 10438 
+Bugzilla   : 10438
 Description: client crashes when mmapping file with no objects
 Details    : Check that we actually have objects in a file before doing any
 	     operations on objects in ll_vm_open, ll_vm_close and
@@ -338,8 +360,8 @@ Details    : Many of the /proc/ tunables can only be tuned at a megabyte
 Severity   : enhancement
 Bugzilla   : 9292
 Description: Getattr by fid
-Details    : Getting a file attributes by its fid, obtaining UPDATE|LOOKUP 
-	     locks, avoids extra getattr rpc requests to MDS, allows '/' to 
+Details    : Getting a file attributes by its fid, obtaining UPDATE|LOOKUP
+	     locks, avoids extra getattr rpc requests to MDS, allows '/' to
 	     have locks and avoids getattr rpc requests for it on every stat.
 
 Severity   : major
@@ -457,16 +479,6 @@ Details    : If replay happened on an open request reply before we were able
              assertion in ll_local_open. Now we set the handler right after
              recognising of open request
 
-Severity   : minor
-Frequency  : very rare
-Bugzilla   : 10669
-Description: Deadlock: extent lock cancellation callback vs import invalidation
-Details    : If extent lock cancellation callback takes long enough time, and it
-	     happens that import gets invalidated in process, there is a
-	     deadlock on page_lock in extent lock cancellation vs ns_lock in
-	     import invalidation processes. The fix is to not try to match
-	     locks from inactive OSTs.
-
 Severity   : trivial
 Frequency  : very rare
 Bugzilla   : 10584
@@ -481,6 +493,14 @@ Bugzilla   : 2259
 Description: clear OBD RPC statistics by writing to them
 Details    : It is now possible to clear the OBD RPC statistics by writing
 	     to the "stats" file.
+
+Severity   : minor
+Frequency  : rare
+Bugzilla   : 10641
+Description: Client mtime is not the same on different clients after utimes
+Details    : In some cases, the client was using the utimes() syscall on
+	     a file cached on another node.  The clients now validate the
+	     ctime from the MDS + OSTs to determine which one is right.
 
 Severity   : minor
 Frequency  : always
@@ -506,6 +526,42 @@ Details    : Under some heavy load conditions it is possible that a
 	     failed mount can wait for the full obd_timeout interval,
 	     possibly several minutes, before reporting an error.
 	     Instead return an error as soon as the status is known.
+Severity   : major
+Frequency  : quota enabled and large files being deleted
+Bugzilla   : 10707
+Description: releasing more than 4GB of quota at once hangs OST
+Details    : If a user deletes more than 4GB of files on a single OST it
+	     will cause the OST to spin in an infinite loop.  Release
+	     quota in < 4GB chunks, or use a 64-bit value for 1.4.7.1+.
+
+Severity   : trivial
+Frequency  : rare
+Bugzilla   : 10845
+Description: statfs data retrieved from /proc may be stale or zero
+Details    : When reading per-device statfs data from /proc, in the
+	     {kbytes,files}_{total,free,avail} files, it may appear
+	     as zero or be out of date.
+
+Severity   : trivial
+Frequency  : systems with MD RAID1 external journal devices
+Bugzilla   : 10832
+Description: lconf's call to blkid is confused by RAID1 journal devices
+Details    : Use the "blkid -l" flag to locate the MD RAID device instead
+	     of returning all block devices that match the journal UUID.
+
+Severity   : normal
+Frequency  : always, for aggregate stripe size over 4GB
+Bugzilla   : 10725
+Description: assertion fails when trying to use 4GB stripe size
+Details    : Use "setstripe" to set stripe size over 4GB will fail the kernel,
+             complaining "ASSERTION(lsm->lsm_xfersize != 0)"
+
+Severity   : normal
+Frequency  : always on ppc64
+Bugzilla   : 10634
+Description: the first write on an ext3 filesystem with mballoc got stuck
+Details    : ext3_mb_generate_buddy() uses find_next_bit() which does not
+             perform endianness conversion.
 
 ------------------------------------------------------------------------------
 

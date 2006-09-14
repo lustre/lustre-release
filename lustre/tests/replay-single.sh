@@ -14,8 +14,8 @@ init_test_env $@
 
 
 # Skip these tests
-# bug number: 2766
-ALWAYS_EXCEPT="0b   $REPLAY_SINGLE_EXCEPT"
+# bug number: 2766 4176
+ALWAYS_EXCEPT="0b  39   $REPLAY_SINGLE_EXCEPT"
 
 build_test_filter
 
@@ -441,6 +441,26 @@ test_20() {
     return 0
 }
 run_test 20 "|X| open(O_CREAT), unlink, replay, close (test mds_cleanup_orphans)"
+
+test_20b() {
+    BEFORESPACE=`df -P $DIR | tail -1 | awk '{ print $4 }'`
+    dd if=/dev/zero of=$DIR/$tfile bs=4k count=10000 &
+    pid=$!
+    usleep 60                           # give dd a chance to start
+    lfs getstripe $DIR/$tfile || return 1
+    rm -f $DIR/$tfile   || return 2     # make it an orphan
+    mds_evict_client
+    df -P $DIR || df -P $DIR || true    # reconnect
+
+    fail mds                            # start orphan recovery
+    df -P $DIR || df -P $DIR || true    # reconnect
+    sleep 2
+    AFTERSPACE=`df -P $DIR | tail -1 | awk '{ print $4 }'`
+    [ $AFTERSPACE -lt $((BEFORESPACE - 20)) ] && \
+        error "after $AFTERSPACE < before $BEFORESPACE" && return 5
+    return 0
+}
+run_test 20b "write, unlink, eviction, replay, (test mds_cleanup_orphans)"
 
 test_21() {
     replay_barrier mds
@@ -881,11 +901,10 @@ test_44() {
     mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
-	echo iteration $i
-        #define OBD_FAIL_TGT_CONN_RACE     0x701
-        do_facet mds "sysctl -w lustre.fail_loc=0x80000701"
-        $LCTL --device $mdcdev recover
-        df $MOUNT
+	#define OBD_FAIL_TGT_CONN_RACE     0x701
+	do_facet mds "sysctl -w lustre.fail_loc=0x80000701"
+	$LCTL --device $mdcdev recover
+	df $MOUNT
     done
     do_facet mds "sysctl -w lustre.fail_loc=0"
     return 0
@@ -896,11 +915,10 @@ test_44b() {
     mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
-	echo iteration $i
-        #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
-        do_facet mds "sysctl -w lustre.fail_loc=0x80000704"
-        $LCTL --device $mdcdev recover
-        df $MOUNT
+	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
+	do_facet mds "sysctl -w lustre.fail_loc=0x80000704"
+	$LCTL --device $mdcdev recover
+	df $MOUNT
     done
     do_facet mds "sysctl -w lustre.fail_loc=0"
     return 0

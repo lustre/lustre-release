@@ -178,7 +178,7 @@ static struct llog_operations mds_size_repl_logops = {
 };
 
 int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_catid *logid)
+                  int count, struct llog_catid *logid, struct obd_uuid *uuid)
 {
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
         int rc;
@@ -194,9 +194,9 @@ int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,
         if (rc)
                 RETURN(rc);
 
-        rc = obd_llog_init(lov_obd, tgt, count, logid);
+        rc = obd_llog_init(lov_obd, tgt, count, logid, uuid);
         if (rc)
-                CERROR("error lov_llog_init\n");
+                CERROR("lov_llog_init err %d\n", rc);
 
         RETURN(rc);
 }

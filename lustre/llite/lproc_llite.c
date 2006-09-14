@@ -35,6 +35,9 @@ struct proc_dir_entry *proc_lustre_fs_root;
 /* /proc/lustre/llite mount point registration */
 struct file_operations llite_dump_pgcache_fops;
 struct file_operations ll_ra_stats_fops;
+struct file_operations ll_rw_extents_stats_fops;
+struct file_operations ll_rw_extents_stats_pp_fops;
+struct file_operations ll_rw_offset_stats_fops;
 
 static int ll_rd_blksize(char *page, char **start, off_t off, int count,
                          int *eof, void *data)
@@ -483,10 +486,29 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         entry->proc_fops = &llite_dump_pgcache_fops;
         entry->data = sbi;
 
-        entry = create_proc_entry("read_ahead_stats", 0444, sbi->ll_proc_root);
+        entry = create_proc_entry("read_ahead_stats", 0644, sbi->ll_proc_root);
         if (entry == NULL)
                 GOTO(out, err = -ENOMEM);
         entry->proc_fops = &ll_ra_stats_fops;
+        entry->data = sbi;
+
+        entry = create_proc_entry("extents_stats", 0644, sbi->ll_proc_root);
+        if (entry == NULL)
+                 GOTO(out, err = -ENOMEM);
+        entry->proc_fops = &ll_rw_extents_stats_fops;
+        entry->data = sbi;
+
+        entry = create_proc_entry("extents_stats_per_process", 0644,
+                                  sbi->ll_proc_root);
+        if (entry == NULL)
+                 GOTO(out, err = -ENOMEM);
+        entry->proc_fops = &ll_rw_extents_stats_pp_fops;
+        entry->data = sbi;
+
+        entry = create_proc_entry("offset_stats", 0644, sbi->ll_proc_root);
+        if (entry == NULL)
+                GOTO(out, err = -ENOMEM);
+        entry->proc_fops = &ll_rw_offset_stats_fops;
         entry->data = sbi;
 
         svc_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES);
@@ -687,13 +709,13 @@ static void *llite_dump_pgcache_seq_next(struct seq_file *seq, void *v,
         return dummy_llap;
 }
 
-static void llite_dump_pgcache_seq_stop(struct seq_file *seq, void *v)
+static void null_stop(struct seq_file *seq, void *v)
 {
 }
 
 struct seq_operations llite_dump_pgcache_seq_sops = {
         .start = llite_dump_pgcache_seq_start,
-        .stop = llite_dump_pgcache_seq_stop,
+        .stop = null_stop,
         .next = llite_dump_pgcache_seq_next,
         .show = llite_dump_pgcache_seq_show,
 };
@@ -801,24 +823,22 @@ static int ll_ra_stats_seq_show(struct seq_file *seq, void *v)
         return 0;
 }
 
-static void *ll_ra_stats_seq_start(struct seq_file *p, loff_t *pos)
+static void *ll_stats_seq_start(struct seq_file *p, loff_t *pos)
 {
         if (*pos == 0)
                 return (void *)1;
         return NULL;
 }
-static void *ll_ra_stats_seq_next(struct seq_file *p, void *v, loff_t *pos)
+static void *ll_stats_seq_next(struct seq_file *p, void *v, loff_t *pos)
 {
         ++*pos;
         return NULL;
 }
-static void ll_ra_stats_seq_stop(struct seq_file *p, void *v)
-{
-}
+
 struct seq_operations ll_ra_stats_seq_sops = {
-        .start = ll_ra_stats_seq_start,
-        .stop = ll_ra_stats_seq_stop,
-        .next = ll_ra_stats_seq_next,
+        .start = ll_stats_seq_start,
+        .stop = null_stop,
+        .next = ll_stats_seq_next,
         .show = ll_ra_stats_seq_show,
 };
 
@@ -855,6 +875,394 @@ struct file_operations ll_ra_stats_fops = {
         .open    = ll_ra_stats_seq_open,
         .read    = seq_read,
         .write   = ll_ra_stats_seq_write,
+        .llseek  = seq_lseek,
+        .release = seq_release,
+};
+
+#define pct(a,b) (b ? a * 100 / b : 0)
+
+static void ll_display_extents_info(struct ll_rw_extents_info *io_extents,
+                                   struct seq_file *seq, int which)
+{
+        unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
+        unsigned long start, end, r, w;
+        char *unitp = "KMGTPEZY";
+        int i, units = 10;
+        struct per_process_info *pp_info = &io_extents->pp_extents[which];
+
+        read_cum = 0;
+        write_cum = 0;
+        start = 0;
+
+        for(i = 0; i < LL_HIST_MAX; i++) {
+                read_tot += pp_info->pp_r_hist.oh_buckets[i];
+                write_tot += pp_info->pp_w_hist.oh_buckets[i];
+        }
+
+        for(i = 0; i < LL_HIST_MAX; i++) {
+                r = pp_info->pp_r_hist.oh_buckets[i];
+                w = pp_info->pp_w_hist.oh_buckets[i];
+                read_cum += r;
+                write_cum += w;
+                end = 1 << (i + LL_HIST_START - units);
+                seq_printf(seq, "%4lu%c - %4lu%c%c: %14lu %4lu %4lu  | "
+                           "%14lu %4lu %4lu\n", start, *unitp, end, *unitp,
+                           (i == LL_HIST_MAX - 1) ? '+' : ' ',
+                           r, pct(r, read_tot), pct(read_cum, read_tot),
+                           w, pct(w, write_tot), pct(write_cum, write_tot));
+                start = end;
+                if (start == 1<<10) {
+                        start = 1;
+                        units += 10;
+                        unitp++;
+                }
+                if (read_cum == read_tot && write_cum == write_tot)
+                        break;
+        }
+}
+
+static int ll_rw_extents_stats_pp_seq_show(struct seq_file *seq, void *v)
+{
+        struct timeval now;
+        struct ll_sb_info *sbi = seq->private;
+        struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
+        int k;
+
+        do_gettimeofday(&now);
+
+        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+                   now.tv_sec, now.tv_usec);
+        seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
+        seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n", 
+                   "extents", "calls", "%", "cum%",
+                   "calls", "%", "cum%");
+        
+        spin_lock(&sbi->ll_lock);
+        for(k = 0; k < LL_PROCESS_HIST_MAX; k++) {
+                if(io_extents->pp_extents[k].pid != 0) {
+                        seq_printf(seq, "\nPID: %d\n",
+                                   io_extents->pp_extents[k].pid);
+                        ll_display_extents_info(io_extents, seq, k);
+                }
+        }
+        spin_unlock(&sbi->ll_lock);
+        
+        return 0;
+}
+
+struct seq_operations ll_rw_extents_stats_pp_seq_sops = {
+        .start = ll_stats_seq_start,
+        .stop  = null_stop,
+        .next  = ll_stats_seq_next,
+        .show  = ll_rw_extents_stats_pp_seq_show,
+};
+
+static int ll_rw_extents_stats_pp_seq_open(struct inode *inode,
+                                           struct file *file)
+{
+        struct proc_dir_entry *dp = PDE(inode);
+        struct seq_file *seq;
+        int rc;
+
+        rc = seq_open(file, &ll_rw_extents_stats_pp_seq_sops);
+        if(rc)
+                return rc;
+        seq = file->private_data;
+        seq->private = dp->data;
+        return 0;
+}
+
+static ssize_t ll_rw_extents_stats_pp_seq_write(struct file *file,
+                                                const char *buf, size_t len,
+                                                loff_t *off)
+{
+        struct seq_file *seq = file->private_data;
+        struct ll_sb_info *sbi = seq->private;
+        struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
+        int i;
+
+        spin_lock(&sbi->ll_lock);
+        for(i = 0; i < LL_PROCESS_HIST_MAX; i++) {
+                io_extents->pp_extents[i].pid = 0;
+                lprocfs_oh_clear(&io_extents->pp_extents[i].pp_r_hist);
+                lprocfs_oh_clear(&io_extents->pp_extents[i].pp_w_hist);
+        }
+        spin_unlock(&sbi->ll_lock);
+        return len;
+}
+
+struct file_operations ll_rw_extents_stats_pp_fops = {
+        .owner   = THIS_MODULE,
+        .open    = ll_rw_extents_stats_pp_seq_open,
+        .read    = seq_read,
+        .write   = ll_rw_extents_stats_pp_seq_write,
+        .llseek  = seq_lseek,
+        .release = seq_release,
+};
+
+static int ll_rw_extents_stats_seq_show(struct seq_file *seq, void *v)
+{
+        struct timeval now;
+        struct ll_sb_info *sbi = seq->private;
+        struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
+
+        do_gettimeofday(&now);
+
+        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+                   now.tv_sec, now.tv_usec);
+
+        seq_printf(seq, "%15s %19s       | %20s\n", " ", "read", "write");
+        seq_printf(seq, "%13s   %14s %4s %4s  | %14s %4s %4s\n", 
+                   "extents", "calls", "%", "cum%",
+                   "calls", "%", "cum%");
+
+        spin_lock(&sbi->ll_lock);
+        ll_display_extents_info(io_extents, seq, LL_PROCESS_HIST_MAX);
+        spin_unlock(&sbi->ll_lock);
+
+        return 0;
+}
+
+struct seq_operations ll_rw_extents_stats_seq_sops = {
+        .start = ll_stats_seq_start,
+        .stop  = null_stop,
+        .next  = ll_stats_seq_next,
+        .show  = ll_rw_extents_stats_seq_show,
+};
+
+static int ll_rw_extents_stats_seq_open(struct inode *inode, struct file *file)
+{
+        struct proc_dir_entry *dp = PDE(inode);
+        struct seq_file *seq;
+        int rc;
+
+        rc = seq_open(file, &ll_rw_extents_stats_seq_sops);
+        if(rc)
+                return rc;
+        seq = file->private_data;
+        seq->private = dp->data;
+        return 0;
+}
+
+static ssize_t ll_rw_extents_stats_seq_write(struct file *file, const char *buf,
+                                        size_t len, loff_t *off)
+{
+        struct seq_file *seq = file->private_data;
+        struct ll_sb_info *sbi = seq->private;
+        struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
+
+        lprocfs_oh_clear(&io_extents->pp_extents[LL_PROCESS_HIST_MAX].pp_r_hist);
+        lprocfs_oh_clear(&io_extents->pp_extents[LL_PROCESS_HIST_MAX].pp_w_hist);
+
+        return len;
+}
+
+struct file_operations ll_rw_extents_stats_fops = {
+        .owner   = THIS_MODULE,
+        .open    = ll_rw_extents_stats_seq_open,
+        .read    = seq_read,
+        .write   = ll_rw_extents_stats_seq_write,
+        .llseek  = seq_lseek,
+        .release = seq_release,
+};
+
+void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid, struct file
+                               *file, size_t count, int rw)
+{
+        int i, cur = -1;
+        struct ll_rw_process_info *process;
+        struct ll_rw_process_info *offset;
+        int *off_count = &sbi->ll_rw_offset_entry_count;
+        int *process_count = &sbi->ll_offset_process_count;
+        struct ll_rw_extents_info *io_extents = &sbi->ll_rw_extents_info;
+
+        process = sbi->ll_rw_process_info;
+        offset = sbi->ll_rw_offset_info;
+
+        spin_lock(&sbi->ll_lock);
+        /* Extent statistics */
+        for(i = 0; i < LL_PROCESS_HIST_MAX; i++) {
+                if(io_extents->pp_extents[i].pid == pid) {
+                        cur = i;
+                        break;
+                }
+        }
+
+        if (cur == -1) {
+                /* new process */
+                sbi->ll_extent_process_count = 
+                        (sbi->ll_extent_process_count + 1) % LL_PROCESS_HIST_MAX;
+                cur = sbi->ll_extent_process_count;
+                io_extents->pp_extents[cur].pid = pid;
+                lprocfs_oh_clear(&io_extents->pp_extents[cur].pp_r_hist);
+                lprocfs_oh_clear(&io_extents->pp_extents[cur].pp_w_hist);
+        }
+
+        for(i = 0; (count >= (1 << LL_HIST_START << i)) && 
+             (i < (LL_HIST_MAX - 1)); i++);
+        if (rw == 0) {
+                io_extents->pp_extents[cur].pp_r_hist.oh_buckets[i]++;
+                io_extents->pp_extents[LL_PROCESS_HIST_MAX].pp_r_hist.oh_buckets[i]++;
+        } else {
+                io_extents->pp_extents[cur].pp_w_hist.oh_buckets[i]++;
+                io_extents->pp_extents[LL_PROCESS_HIST_MAX].pp_w_hist.oh_buckets[i]++;
+        }
+
+        /* Offset statistics */
+        for (i = 0; i < LL_PROCESS_HIST_MAX; i++) {
+                if (process[i].rw_pid == pid) {
+                        if (process[i].rw_last_file != file) {
+                                process[i].rw_range_start = file->f_pos;
+                                process[i].rw_last_file_pos =
+                                                        file->f_pos + count;
+                                process[i].rw_smallest_extent = count;
+                                process[i].rw_largest_extent = count;
+                                process[i].rw_offset = 0;
+                                process[i].rw_last_file = file;
+                                spin_unlock(&sbi->ll_lock);
+                                return;
+                        }
+                        if (process[i].rw_last_file_pos != file->f_pos) {
+                                *off_count =
+                                    (*off_count + 1) % LL_OFFSET_HIST_MAX;
+                                offset[*off_count].rw_op = process[i].rw_op;
+                                offset[*off_count].rw_pid = pid;
+                                offset[*off_count].rw_range_start =
+                                        process[i].rw_range_start;
+                                offset[*off_count].rw_range_end =
+                                        process[i].rw_last_file_pos;
+                                offset[*off_count].rw_smallest_extent =
+                                        process[i].rw_smallest_extent;
+                                offset[*off_count].rw_largest_extent =
+                                        process[i].rw_largest_extent;
+                                offset[*off_count].rw_offset =
+                                        process[i].rw_offset;
+                                process[i].rw_op = rw;
+                                process[i].rw_range_start = file->f_pos;
+                                process[i].rw_smallest_extent = count;
+                                process[i].rw_largest_extent = count;
+                                process[i].rw_offset = file->f_pos -
+                                        process[i].rw_last_file_pos;
+                        }
+                        if(process[i].rw_smallest_extent > count)
+                                process[i].rw_smallest_extent = count;
+                        if(process[i].rw_largest_extent < count)
+                                process[i].rw_largest_extent = count;
+                        process[i].rw_last_file_pos = file->f_pos + count;
+                        spin_unlock(&sbi->ll_lock);
+                        return;
+                }
+        }
+        *process_count = (*process_count + 1) % LL_PROCESS_HIST_MAX;
+        process[*process_count].rw_pid = pid;
+        process[*process_count].rw_op = rw;
+        process[*process_count].rw_range_start = file->f_pos;
+        process[*process_count].rw_last_file_pos = file->f_pos + count;
+        process[*process_count].rw_smallest_extent = count;
+        process[*process_count].rw_largest_extent = count;
+        process[*process_count].rw_offset = 0;
+        process[*process_count].rw_last_file = file;
+        spin_unlock(&sbi->ll_lock);
+}
+
+char lpszt[] = LPSZ;
+
+static int ll_rw_offset_stats_seq_show(struct seq_file *seq, void *v)
+{
+        struct timeval now;
+        struct ll_sb_info *sbi = seq->private;
+        struct ll_rw_process_info *offset = sbi->ll_rw_offset_info;
+        struct ll_rw_process_info *process = sbi->ll_rw_process_info;
+        char format[50];
+        int i;
+
+        do_gettimeofday(&now);
+
+        spin_lock(&sbi->ll_lock);
+
+        seq_printf(seq, "snapshot_time:         %lu.%lu (secs.usecs)\n",
+                   now.tv_sec, now.tv_usec);
+        seq_printf(seq, "%3s %10s %14s %14s %17s %17s %14s\n",
+                   "R/W", "PID", "RANGE START", "RANGE END",
+                   "SMALLEST EXTENT", "LARGEST EXTENT", "OFFSET");
+        sprintf(format, "%s%s%s%s%s\n", 
+                "%3c %10d %14Lu %14Lu %17", lpszt+1, " %17", lpszt+1, " %14Ld");
+        /* We stored the discontiguous offsets here; print them first */
+        for(i = 0; i < LL_OFFSET_HIST_MAX; i++) {
+                if (offset[i].rw_pid != 0)
+                        /* Is there a way to snip the '%' off of LPSZ? */
+                        seq_printf(seq, format,
+                                   offset[i].rw_op ? 'W' : 'R',
+                                   offset[i].rw_pid,
+                                   offset[i].rw_range_start,
+                                   offset[i].rw_range_end,
+                                   offset[i].rw_smallest_extent,
+                                   offset[i].rw_largest_extent,
+                                   offset[i].rw_offset);
+        }
+        /* Then print the current offsets for each process */
+        for(i = 0; i < LL_PROCESS_HIST_MAX; i++) {
+                if (process[i].rw_pid != 0)
+                        seq_printf(seq, format,
+                                   process[i].rw_op ? 'W' : 'R',
+                                   process[i].rw_pid,
+                                   process[i].rw_range_start,
+                                   process[i].rw_last_file_pos,
+                                   process[i].rw_smallest_extent,
+                                   process[i].rw_largest_extent,
+                                   process[i].rw_offset);
+        }
+        spin_unlock(&sbi->ll_lock);
+
+        return 0;
+}
+
+struct seq_operations ll_rw_offset_stats_seq_sops = {
+        .start = ll_stats_seq_start,
+        .stop = null_stop,
+        .next = ll_stats_seq_next,
+        .show = ll_rw_offset_stats_seq_show,
+};
+
+static int ll_rw_offset_stats_seq_open(struct inode *inode, struct file *file)
+{
+        struct proc_dir_entry *dp = PDE(inode);
+        struct seq_file *seq;
+        int rc;
+
+        rc = seq_open(file, &ll_rw_offset_stats_seq_sops);
+        if (rc)
+                return rc;
+        seq = file->private_data;
+        seq->private = dp->data;
+        return 0;
+}
+
+static ssize_t ll_rw_offset_stats_seq_write(struct file *file, const char *buf,
+                                       size_t len, loff_t *off)
+{
+        struct seq_file *seq = file->private_data;
+        struct ll_sb_info *sbi = seq->private;
+        struct ll_rw_process_info *process_info = sbi->ll_rw_process_info;
+        struct ll_rw_process_info *offset_info = sbi->ll_rw_offset_info;
+
+        spin_lock(&sbi->ll_lock);
+        sbi->ll_offset_process_count = 0;
+        sbi->ll_rw_offset_entry_count = 0;
+        memset(process_info, 0, sizeof(struct ll_rw_process_info) *
+               LL_PROCESS_HIST_MAX);
+        memset(offset_info, 0, sizeof(struct ll_rw_process_info) *
+               LL_OFFSET_HIST_MAX);
+        spin_unlock(&sbi->ll_lock);
+
+        return len;
+}
+
+struct file_operations ll_rw_offset_stats_fops = {
+        .owner   = THIS_MODULE,
+        .open    = ll_rw_offset_stats_seq_open,
+        .read    = seq_read,
+        .write   = ll_rw_offset_stats_seq_write,
         .llseek  = seq_lseek,
         .release = seq_release,
 };

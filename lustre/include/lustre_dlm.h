@@ -370,119 +370,20 @@ extern char *ldlm_lockname[];
 extern char *ldlm_typename[];
 extern char *ldlm_it2str(int it);
 
-#define __LDLM_DEBUG(level, lock, format, a...)                               \
-do {                                                                          \
-        if (lock->l_resource == NULL) {                                       \
-                CDEBUG(level, "### " format                                   \
-                       " ns: \?\? lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "\
-                       "res: \?\? rrc=\?\? type: \?\?\? flags: %x remote: "   \
-                       LPX64" expref: %d pid: %u\n" , ## a, lock,             \
-                       lock->l_handle.h_cookie, atomic_read(&lock->l_refc),   \
-                       lock->l_readers, lock->l_writers,                      \
-                       ldlm_lockname[lock->l_granted_mode],                   \
-                       ldlm_lockname[lock->l_req_mode],                       \
-                       lock->l_flags, lock->l_remote_handle.cookie,           \
-                       lock->l_export ?                                       \
-                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
-                       lock->l_pid);                                          \
-                break;                                                        \
-        }                                                                     \
-        if (lock->l_resource->lr_type == LDLM_EXTENT) {                       \
-                CDEBUG(level, "### " format                                   \
-                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
-                       "res: "LPU64"/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64\
-                       "] (req "LPU64"->"LPU64") flags: %x remote: "LPX64     \
-                       " expref: %d pid: %u\n" , ## a,                        \
-                       lock->l_resource->lr_namespace->ns_name, lock,         \
-                       lock->l_handle.h_cookie, atomic_read(&lock->l_refc),   \
-                       lock->l_readers, lock->l_writers,                      \
-                       ldlm_lockname[lock->l_granted_mode],                   \
-                       ldlm_lockname[lock->l_req_mode],                       \
-                       lock->l_resource->lr_name.name[0],                     \
-                       lock->l_resource->lr_name.name[1],                     \
-                       atomic_read(&lock->l_resource->lr_refcount),           \
-                       ldlm_typename[lock->l_resource->lr_type],              \
-                       lock->l_policy_data.l_extent.start,                    \
-                       lock->l_policy_data.l_extent.end,                      \
-                       lock->l_req_extent.start, lock->l_req_extent.end,      \
-                       lock->l_flags, lock->l_remote_handle.cookie,           \
-                       lock->l_export ?                                       \
-                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
-                       lock->l_pid);                                          \
-                break;                                                        \
-        }                                                                     \
-        if (lock->l_resource->lr_type == LDLM_FLOCK) {                        \
-                CDEBUG(level, "### " format                                   \
-                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
-                       "res: "LPU64"/"LPU64" rrc: %d type: %s pid: %d "       \
-                       "["LPU64"->"LPU64"] flags: %x remote: "LPX64           \
-                       " expref: %d pid: %u\n" , ## a,                        \
-                       lock->l_resource->lr_namespace->ns_name, lock,         \
-                       lock->l_handle.h_cookie, atomic_read(&lock->l_refc),   \
-                       lock->l_readers, lock->l_writers,                      \
-                       ldlm_lockname[lock->l_granted_mode],                   \
-                       ldlm_lockname[lock->l_req_mode],                       \
-                       lock->l_resource->lr_name.name[0],                     \
-                       lock->l_resource->lr_name.name[1],                     \
-                       atomic_read(&lock->l_resource->lr_refcount),           \
-                       ldlm_typename[lock->l_resource->lr_type],              \
-                       lock->l_policy_data.l_flock.pid,                       \
-                       lock->l_policy_data.l_flock.start,                     \
-                       lock->l_policy_data.l_flock.end,                       \
-                       lock->l_flags, lock->l_remote_handle.cookie,           \
-                       lock->l_export ?                                       \
-                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
-                       lock->l_pid);                                          \
-                break;                                                        \
-        }                                                                     \
-        if (lock->l_resource->lr_type == LDLM_IBITS) {                        \
-                CDEBUG(level, "### " format                                   \
-                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
-                       "res: "LPU64"/"LPU64" bits "LPX64" rrc: %d type: %s "  \
-                       "flags: %x remote: "LPX64" expref: %d "                \
-                       "pid %u\n" , ## a,                                     \
-                       lock->l_resource->lr_namespace->ns_name,               \
-                       lock, lock->l_handle.h_cookie,                         \
-                       atomic_read (&lock->l_refc),                           \
-                       lock->l_readers, lock->l_writers,                      \
-                       ldlm_lockname[lock->l_granted_mode],                   \
-                       ldlm_lockname[lock->l_req_mode],                       \
-                       lock->l_resource->lr_name.name[0],                     \
-                       lock->l_resource->lr_name.name[1],                     \
-                       lock->l_policy_data.l_inodebits.bits,                  \
-                       atomic_read(&lock->l_resource->lr_refcount),           \
-                       ldlm_typename[lock->l_resource->lr_type],              \
-                       lock->l_flags, lock->l_remote_handle.cookie,           \
-                       lock->l_export ?                                       \
-                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
-                       lock->l_pid);                                          \
-                break;                                                        \
-        }                                                                     \
-        {                                                                     \
-                CDEBUG(level, "### " format                                   \
-                       " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
-                       "res: "LPU64"/"LPU64" rrc: %d type: %s flags: %x "     \
-                       "remote: "LPX64" expref: %d pid: %u\n" , ## a,         \
-                       lock->l_resource->lr_namespace->ns_name,               \
-                       lock, lock->l_handle.h_cookie,                         \
-                       atomic_read (&lock->l_refc),                           \
-                       lock->l_readers, lock->l_writers,                      \
-                       ldlm_lockname[lock->l_granted_mode],                   \
-                       ldlm_lockname[lock->l_req_mode],                       \
-                       lock->l_resource->lr_name.name[0],                     \
-                       lock->l_resource->lr_name.name[1],                     \
-                       atomic_read(&lock->l_resource->lr_refcount),           \
-                       ldlm_typename[lock->l_resource->lr_type],              \
-                       lock->l_flags, lock->l_remote_handle.cookie,           \
-                       lock->l_export ?                                       \
-                       atomic_read(&lock->l_export->exp_refcount) : -99,      \
-                       lock->l_pid);                                          \
-        }                                                                     \
-} while (0)
+void ldlm_lock_debug(cfs_debug_limit_state_t *cdls,
+                     __u32 level, struct ldlm_lock *lock,
+                     const char *file, const char *func, const int line,
+                     char *fmt, ...);
 
-#define LDLM_DEBUG(lock, format, a...) __LDLM_DEBUG(D_DLMTRACE, lock, \
-                                                    format, ## a)
-#define LDLM_ERROR(lock, format, a...) __LDLM_DEBUG(D_ERROR, lock, format, ## a)
+#define LDLM_DEBUG(lock, fmt, a...) ldlm_lock_debug(NULL, D_DLMTRACE, lock, \
+                   __FILE__, __func__, __LINE__, "### " fmt, ## a)
+
+#define LDLM_ERROR(lock, fmt, a...)                                      \
+do {                                                                     \
+        static cfs_debug_limit_state_t cdls;                             \
+        ldlm_lock_debug(&cdls, D_ERROR, lock,                             \
+                        __FILE__, __func__, __LINE__, "### " fmt, ## a); \
+} while (0)
 
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \
         CDEBUG(D_DLMTRACE, "### " format "\n" , ## a)

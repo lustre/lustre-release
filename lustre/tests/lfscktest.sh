@@ -49,6 +49,16 @@ if [ "$WAS_MOUNTED" ]; then
 	MAX_ERR=4		# max expected error from e2fsck
 fi
 
+get_mnt_devs() {
+	DEVS=`cat /proc/fs/lustre/$1/*/mntdev`
+	for DEV in $DEVS; do
+		case $DEV in
+		*loop*) losetup $DEV | sed -e "s/.*(//" -e "s/).*//" ;;
+		*) echo $DEV ;;
+		esac
+	done
+}
+
 if [ "$LFSCK_SETUP" != "no" ]; then
 	#Create test directory 
 	rm -rf $DIR
@@ -112,7 +122,9 @@ if [ "$LFSCK_SETUP" != "no" ]; then
 	done
 	MDS_REMOVE=`echo $MDS_REMOVE | sed "s#$MOUNT/##g"`
 
-	OSTDEVS=`cat /proc/fs/lustre/obdfilter/*/mntdev`
+	MDTDEVS=`get_mnt_devs mds`
+	OSTDEVS=`get_mnt_devs obdfilter`
+	OSTCOUNT=`echo $OSTDEVS | wc -w`
 	sh llmountcleanup.sh || exit 40
 
 	# Remove objects associated with files
@@ -153,8 +165,9 @@ if [ "$LFSCK_SETUP" != "no" ]; then
 
 	do_umount
 else
-	OSTDEVS=`cat /proc/fs/lustre/obdfilter/*/mntdev`
-	OSTCOUNT=`$LFIND $MOUNT | grep -c "^[0-9]*: "`
+	MDTDEVS=`get_mnt_devs mds`
+	OSTDEVS=`get_mnt_devs obdfilter`
+	OSTCOUNT=`echo $OSTDEVS | wc -w`
 fi # LFSCK_SETUP
 
 # Run e2fsck to get mds and ost info

@@ -1035,6 +1035,9 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         DEBUG_REQ(D_ERROR, req, "timeout (sent at %lu, %lus ago)",
                   (long)req->rq_sent, CURRENT_SECONDS - req->rq_sent);
 
+        if (imp != NULL)
+                LNetCtl(IOC_LIBCFS_DEBUG_PEER, &imp->imp_connection->c_peer);
+
         spin_lock(&req->rq_lock);
         req->rq_timedout = 1;
         req->rq_wait_ctx = 0;

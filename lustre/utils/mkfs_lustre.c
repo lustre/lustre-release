@@ -87,12 +87,13 @@ void usage(FILE *out)
                 "\t\t--failnode=<nid>[,<...>] : NID(s) of a failover partner\n"
                 "\t\t--param <key>=<value> : set a permanent parameter\n"
                 "\t\t\te.g. --param sys.timeout=40\n"
-                "\t\t\t     --param lov.stripe.size=4194304\n"
+                "\t\t\t     --param lov.stripesize=2M\n"
                 "\t\t--index=#N : target index (i.e. ost index within the lov)\n"
                 /* FIXME implement 1.6.x
                 "\t\t--configdev=<altdevice|file>: store configuration info\n"
                 "\t\t\tfor this device on an alternate device\n"
                 */
+                "\t\t--comment=<user comment>: arbitrary user string (%d bytes)\n"
                 "\t\t--mountfsoptions=<opts> : permanent mount options\n"
 #ifndef TUNEFS
                 "\t\t--backfstype=<fstype> : backing fs type (ext3, ldiskfs)\n"
@@ -108,7 +109,8 @@ void usage(FILE *out)
                 "\t\t--noformat: just report what we would do; "
                 "don't write to disk\n"
                 "\t\t--verbose\n"
-                "\t\t--quiet\n");
+                "\t\t--quiet\n",
+                sizeof(((struct lustre_disk_data *)0)->ldd_userdata));
         return;
 }
 
@@ -577,7 +579,8 @@ void print_ldd(char *str, struct lustre_disk_data *ldd)
                 printf("Index:      unassigned\n");
         else
                 printf("Index:      %d\n", ldd->ldd_svindex);
-        printf("UUID:       %s\n", (char *)ldd->ldd_uuid);
+        if (ldd->ldd_uuid[0])
+                printf("UUID:       %s\n", (char *)ldd->ldd_uuid);
         printf("Lustre FS:  %s\n", ldd->ldd_fsname);
         printf("Mount type: %s\n", MT_STR(ldd));
         printf("Flags:      %#x\n", ldd->ldd_flags);
@@ -592,6 +595,8 @@ void print_ldd(char *str, struct lustre_disk_data *ldd)
                ldd->ldd_flags & LDD_F_UPGRADE14  ? "upgrade1.4 ":"");
         printf("Persistent mount opts: %s\n", ldd->ldd_mount_opts);
         printf("Parameters:%s\n", ldd->ldd_params);
+        if (ldd->ldd_userdata[0])
+                printf("Comment: %s\n", ldd->ldd_userdata);
         printf("\n");
 }
 
@@ -653,8 +658,8 @@ int write_local_files(struct mkfs_opts *mop)
         sprintf(filepnm, "%s/%s", mntpt, MOUNT_DATA_FILE);
         filep = fopen(filepnm, "w");
         if (!filep) {
-                fprintf(stderr, "%s: Unable to create %s file\n",
-                        progname, filepnm);
+                fprintf(stderr, "%s: Unable to create %s file: %s\n",
+                        progname, filepnm, strerror(errno));
                 goto out_umnt;
         }
         fwrite(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
@@ -957,6 +962,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
         static struct option long_opt[] = {
                 {"backfstype", 1, 0, 'b'},
                 {"stripe-count-hint", 1, 0, 'c'},
+                {"comment", 1, 0, 'u'},
                 {"configdev", 1, 0, 'C'},
                 {"device-size", 1, 0, 'd'},
                 {"erase-params", 0, 0, 'e'},
@@ -982,7 +988,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"writeconf", 0, 0, 'w'},
                 {0, 0, 0, 0}
         };
-        char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:Pqrvw";
+        char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:Pqru:vw";
         char opt;
         int rc, longidx;
 
@@ -1121,6 +1127,12 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                         break;
                 case 'r':
                         mop->mo_flags |= MO_FORCEFORMAT;
+                        break;
+                case 'u':
+                        strncpy(mop->mo_ldd.ldd_userdata, optarg,
+                                sizeof(mop->mo_ldd.ldd_userdata));
+                        mop->mo_ldd.ldd_userdata[
+                                sizeof(mop->mo_ldd.ldd_userdata) - 1] = 0;
                         break;
                 case 'v':
                         verbose++;
@@ -1362,9 +1374,6 @@ int main(int argc, char *argv[])
         char always_mountopts[512] = "";
         char default_mountopts[512] = "";
         int ret = 0;
-
-        //printf("pad %d\n", offsetof(struct lustre_disk_data, ldd_padding));
-        assert(offsetof(struct lustre_disk_data, ldd_padding) == 200);
 
         if ((progname = strrchr(argv[0], '/')) != NULL)
                 progname++;

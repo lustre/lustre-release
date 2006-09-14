@@ -104,13 +104,8 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
-        int i, rc = 0;
+        int i, rc = 0, err = 0;
         ENTRY;
-
-        /* We might have added an osc and not told the mds yet */
-        if (count != lov->desc.ld_tgt_count)
-                CERROR("Origin connect mds cnt %d != lov cnt %d\n", count,
-                       lov->desc.ld_tgt_count);
 
         lov_getref(obd);
         for (i = 0; i < count; i++) {
@@ -119,20 +114,21 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                 
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                         continue;
-                child = lov->lov_tgts[i]->ltd_exp->exp_obd;
-                cctxt = llog_get_context(child, ctxt->loc_idx);
                 if (uuid && !obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
                         continue;
-
+                CDEBUG(D_CONFIG, "connect %d/%d\n", i, count);
+                child = lov->lov_tgts[i]->ltd_exp->exp_obd;
+                cctxt = llog_get_context(child, ctxt->loc_idx);
                 rc = llog_connect(cctxt, 1, logid, gen, uuid);
                 if (rc) {
                         CERROR("error osc_llog_connect tgt %d (%d)\n", i, rc);
-                        break;
+                        if (!err) 
+                                err = rc;
                 }
         }
         lov_putref(obd);
 
-        RETURN(rc);
+        RETURN(err);
 }
 
 /* the replicators commit callback */
@@ -181,7 +177,7 @@ static struct llog_operations lov_size_repl_logops = {
 };
 
 int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_catid *logid)
+                  int count, struct llog_catid *logid, struct obd_uuid *uuid)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct obd_device *child;
@@ -198,23 +194,17 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
         if (rc)
                 RETURN(rc);
 
-        CDEBUG(D_CONFIG, "llog init with %d/%d targets\n",
-               count, lov->desc.ld_tgt_count);
-        /* count may not match ld_tgt_count during dynamic ost add */
-
         lov_getref(obd);
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+        /* count may not match lov->desc.ld_tgt_count during dynamic ost add */
+        for (i = 0; i < count; i++) {
                 if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)
                         continue;
+                if (uuid && !obd_uuid_equals(uuid, &lov->lov_tgts[i]->ltd_uuid))
+                        continue;
+                CDEBUG(D_CONFIG, "init %d/%d\n", i, count);
                 LASSERT(lov->lov_tgts[i]->ltd_exp);
                 child = lov->lov_tgts[i]->ltd_exp->exp_obd;
-                if (lov->lov_tgts[i]->ltd_exp->exp_imp_reverse) {
-                        CERROR("NZR: idx %d import state %s\n", i,
-                               ptlrpc_import_state_name(lov->lov_tgts[i]->ltd_exp->exp_imp_reverse->imp_state));                
-                } else {
-                        CERROR("NZR: idx %d no import\n", i);
-                }
-                rc = obd_llog_init(child, tgt, 1, logid + i);
+                rc = obd_llog_init(child, tgt, 1, logid + i, uuid);
                 if (rc) {
                         CERROR("error osc_llog_init idx %d osc '%s' tgt '%s' "
                                "(rc=%d)\n", i, child->obd_name, tgt->obd_name,

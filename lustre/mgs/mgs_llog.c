@@ -1626,11 +1626,19 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
         /* We also have to update the other logs where this osc is part of 
            the lov */
 
-        /* Append ost info to mdt log */
         if (mti->mti_flags & LDD_F_UPGRADE14) 
                 /* If we're upgrading, the old mdt log already has our
                    entry. Let's do a fake one for fun. */
                 flags = CM_SKIP | CM_UPGRADE146;
+        
+        if ((mti->mti_flags & LDD_F_UPDATE) != LDD_F_UPDATE) {
+                /* If the update flag isn't set, don't update client/mdt
+                   logs. */
+                flags |= CM_SKIP;
+                LCONSOLE_WARN("Client log for %s was not updated; writeconf "
+                              "the MDT first to regenerate it.\n",
+                              mti->mti_svname);
+        }
 
         // for_all_existing_mdt
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
@@ -1951,10 +1959,15 @@ int mgs_write_log_target(struct obd_device *obd,
                                       mti->mti_stripe_index, mti->mti_svname);
                         /* FIXME mark old log sections as invalid, 
                            inc config ver #, add new log sections.
-                           Make sure to update client and mds logs too
+                           Make sure to update client and mdt logs too
                            if needed */
-                        /* in the mean time, assume all logs were lost
-                           (writeconf), and recreate this one */
+                        /* In the meantime, if we found the index in the 
+                           client log, we can't add it again. So recreate
+                           the target log, but do _not_ update the client/mdt
+                           logs. For "full" writeconf, the client log won't
+                           have an entry for this target, so we won't get
+                           here. */
+                        mti->mti_flags &= ~LDD_F_UPDATE;
                 }
         }
 
@@ -2089,12 +2102,12 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
                 RETURN(rc);
         }
                                                                                 
-        /* Delete the fs db */
         down(&mgs->mgs_sem);
+        
+        /* Delete the fs db */
         fsdb = mgs_find_fsdb(obd, fsname);
         if (fsdb) 
                 mgs_free_fsdb(fsdb);
-        up(&mgs->mgs_sem);
 
         list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
                 list_del(&dirent->lld_list);
@@ -2105,6 +2118,8 @@ int mgs_erase_logs(struct obd_device *obd, char *fsname)
                 OBD_FREE(dirent, sizeof(*dirent));
         }
         
+        up(&mgs->mgs_sem);
+
         RETURN(rc);
 }
 

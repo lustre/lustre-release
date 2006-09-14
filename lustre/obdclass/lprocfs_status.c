@@ -384,6 +384,12 @@ static const char *obd_connect_names[] = {
         "join_file",
         "getattr_by_fid",
         "no_oh_for_devices",
+        "local_1.8_client",
+        "remote_1.8_client",
+        "max_byte_per_rpc",
+        "64bit_qdata",
+        "fid_capability",
+        "oss_capability",
         NULL
 };
 
@@ -640,7 +646,7 @@ int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
         struct proc_dir_entry *entry;
         LASSERT(root != NULL);
 
-        entry = create_proc_entry(name, 0444, root);
+        entry = create_proc_entry(name, 0644, root);
         if (entry == NULL)
                 return -ENOMEM;
         entry->proc_fops = &lprocfs_stats_seq_fops;
@@ -745,7 +751,6 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cancel);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cancel_unused);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, join_lru);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, san_preprw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, init_export);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy_export);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, extent_calc);
@@ -976,6 +981,7 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
                               __u64 *val, int mult)
 {
         char kernbuf[22], *end, *pbuf;
+        __u64 whole, frac = 0, frac_d = 1, units;
 
         if (count > (sizeof(kernbuf) - 1) )
                 return -EINVAL;
@@ -985,32 +991,42 @@ int lprocfs_write_frac_u64_helper(const char *buffer, unsigned long count,
 
         kernbuf[count] = '\0';
         pbuf = kernbuf;
-        if (*pbuf == '-') {
-                mult = -mult;
-                pbuf++;
-        }
+        if (*pbuf == '-') 
+                return -ERANGE;
 
-        *val = simple_strtoull(pbuf, &end, 10) * mult;
+        whole = simple_strtoull(pbuf, &end, 10);
         if (pbuf == end)
                 return -EINVAL;
 
         if (end != NULL && *end == '.') {
-                int temp_val;
-                int i, pow = 1;
-
+                int i;
                 pbuf = end + 1;
-                if (strlen(pbuf) > 10)
-                        pbuf[10] = '\0';
-
-                temp_val = (int)simple_strtoull(pbuf, &end, 10) * mult;
-
-                if (pbuf < end) {
-                        for (i = 0; i < (end - pbuf); i++)
-                                pow *= 10;
-
-                        *val += (__u64)(temp_val / pow);
-                }
+                frac = simple_strtoull(pbuf, &end, 10);
+                /* count decimal places */
+                for (i = 0; i < (end - pbuf); i++)
+                        frac_d *= 10;
         }
+
+        units = 1;
+        switch(*end) {
+        case 'p': case 'P':
+                units <<= 10;
+        case 't': case 'T':
+                units <<= 10;
+        case 'g': case 'G':
+                units <<= 10;
+        case 'm': case 'M':
+                units <<= 10;
+        case 'k': case 'K':
+                units <<= 10;
+        }
+        /* Specified units override the multiplier */
+        if (units) 
+                mult = units;
+
+        frac = frac * mult;
+        do_div(frac, frac_d);
+        *val = whole * mult + frac;
         return 0;
 }
 

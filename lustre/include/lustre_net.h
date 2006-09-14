@@ -398,7 +398,7 @@ struct ptlrpc_request {
         struct timeval       rq_arrival_time;       /* request arrival time */
         struct ptlrpc_reply_state *rq_reply_state;  /* separated reply state */
         struct ptlrpc_request_buffer_desc *rq_rqbd; /* incoming request buffer*/
-#if CRAY_XT3
+#ifdef CRAY_XT3
         __u32                rq_uid;            /* peer uid, used in MDS only */
 #endif
 
@@ -463,34 +463,21 @@ ptlrpc_rqphase2str(const struct ptlrpc_request *req)
 
 #define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s"
 
-#define __DEBUG_REQ(CDEB_TYPE, level, req, fmt, args...)                       \
-CDEB_TYPE(level, "@@@ " fmt                                                    \
-       " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d lens %d/%d ref %d fl "         \
-       REQ_FLAGS_FMT"/%x/%x rc %d/%d\n" , ## args, req, req->rq_xid,           \
-       req->rq_transno,                                                        \
-       req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : -1,               \
-       req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :                 \
-          req->rq_export ? (char*)req->rq_export->exp_client_uuid.uuid : "<?>",\
-       req->rq_import ?                                                        \
-          (char *)req->rq_import->imp_connection->c_remote_uuid.uuid :         \
-          req->rq_export ?                                                     \
-          (char *)req->rq_export->exp_connection->c_remote_uuid.uuid :  "<?>", \
-       (req->rq_import && req->rq_import->imp_client) ?                        \
-           req->rq_import->imp_client->cli_request_portal : -1,                \
-       req->rq_reqlen, req->rq_replen,                                         \
-       atomic_read(&req->rq_refcount),                                         \
-       DEBUG_REQ_FLAGS(req),                                                   \
-       req->rq_reqmsg ? lustre_msg_get_flags(req->rq_reqmsg) : 0,              \
-       req->rq_repmsg ? lustre_msg_get_flags(req->rq_repmsg) : 0,              \
-       req->rq_status, req->rq_repmsg ? lustre_msg_get_status(req->rq_repmsg) : 0)
+void debug_req(cfs_debug_limit_state_t *cdls,
+               __u32 level, struct ptlrpc_request *req,
+               const char *file, const char *func, const int line,
+               const char *fmt, ...);
 
 /* for most callers (level is a constant) this is resolved at compile time */
 #define DEBUG_REQ(level, req, fmt, args...)                                    \
 do {                                                                           \
-        if ((level) & (D_ERROR | D_WARNING))                                   \
-            __DEBUG_REQ(CDEBUG_LIMIT, level, req, fmt, ## args);               \
-        else                                                                   \
-            __DEBUG_REQ(CDEBUG, level, req, fmt, ## args);                     \
+        if ((level) & (D_ERROR | D_WARNING)) {                                 \
+                static cfs_debug_limit_state_t cdls;                           \
+                debug_req(&cdls, level, req, __FILE__, __func__, __LINE__,     \
+                          "@@@ "fmt"\n", ## args);                             \
+        } else                                                                 \
+                debug_req(NULL, level, req, __FILE__, __func__, __LINE__,      \
+                          "@@@ "fmt"\n", ## args);                             \
 } while (0)
 
 struct ptlrpc_bulk_page {

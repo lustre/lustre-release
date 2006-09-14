@@ -119,6 +119,7 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, obd_off lov_off,
 {
         unsigned long ssize  = lsm->lsm_stripe_size;
         unsigned long swidth, stripe_off, this_stripe;
+        uint64_t l_off, s_off;
         int magic = lsm->lsm_magic;
         int ret = 0;
 
@@ -128,6 +129,23 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, obd_off lov_off,
         }
 
         LASSERT(lsm_op_find(magic) != NULL);
+        /*It will check whether the lov_off and stripeno 
+         *are in the same extent. 
+         *1) lov_off extent < stripeno extent, ret = -1, obd_off = 0
+         *2) lov_off extent > stripeno extent, ret = 1, 
+         *   obd_off = lov_off extent offset*/
+        l_off = lsm_op_find(magic)->lsm_stripe_offset_by_index(lsm, stripeno);
+        s_off = lsm_op_find(magic)->lsm_stripe_offset_by_offset(lsm, lov_off);
+        if (s_off < l_off) {
+                ret = -1;
+                *obd_off = 0;
+                return ret;
+        } else if (s_off > l_off) {
+                ret = 1;
+                *obd_off = s_off;
+                return ret;
+        }
+        /*If they are in the same extent, original logic*/
         lsm_op_find(magic)->lsm_stripe_by_index(lsm, &stripeno, &lov_off,
                                                 &swidth);
        

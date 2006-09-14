@@ -34,6 +34,8 @@
 #include <lustre_quota.h>
 #include <lustre_fld.h>
 
+#define MAX_OBD_DEVICES 8192
+
 /* this is really local to the OSC */
 struct loi_oap_pages {
         struct list_head        lop_pending;
@@ -384,7 +386,6 @@ struct client_obd {
         int                      cl_default_mds_easize;
         int                      cl_max_mds_easize;
         int                      cl_max_mds_cookiesize;
-        kdev_t                   cl_sandev;
 
         /* security configuration */
         struct sec_flavor_config cl_sec_conf;
@@ -656,36 +657,28 @@ struct lu_placement_hint {
         int           ph_opc;
 };
 
-#define LUSTRE_FLD_NAME  "fld"
-#define LUSTRE_SEQ_NAME  "seq"
+#define LUSTRE_FLD_NAME         "fld"
+#define LUSTRE_SEQ_NAME         "seq"
 
-/* device types (not names--FIXME) */
-/* FIXME all the references to these defines need to be updated */
-#define LUSTRE_MDS_NAME  "mds"
-#define LUSTRE_MDT_NAME  "mdt"
+#define LUSTRE_CMM_NAME         "cmm"
+#define LUSTRE_MDD_NAME         "mdd"
+#define LUSTRE_OSD_NAME         "osd"
+#define LUSTRE_LMV_NAME         "lmv"
+#define LUSTRE_CMM_MDC_NAME     "cmm-mdc"
 
-/* new MDS layers. Prototype */
-#define LUSTRE_CMM_NAME  "cmm"
-#define LUSTRE_MDD_NAME  "mdd"
-#define LUSTRE_OSD_NAME  "osd"
-#define LUSTRE_CMM_MDC_NAME "cmm-mdc"
+/* obd device type names */
+ /* FIXME all the references to LUSTRE_MDS_NAME should be swapped with LUSTRE_MDT_NAME */
+#define LUSTRE_MDS_NAME         "mds"
+#define LUSTRE_MDT_NAME         "mdt"
+#define LUSTRE_MDC_NAME         "mdc"
+#define LUSTRE_OSS_NAME         "ost"       /* FIXME change name to oss */
+#define LUSTRE_OST_NAME         "obdfilter" /* FIXME change name to ost */
+#define LUSTRE_OSC_NAME         "osc"
+#define LUSTRE_LOV_NAME         "lov"
+#define LUSTRE_MGS_NAME         "mgs"
+#define LUSTRE_MGC_NAME         "mgc"
 
-#define LUSTRE_MDC_NAME  "mdc"
-#define LUSTRE_LOV_NAME  "lov"
-#define LUSTRE_LMV_NAME  "lmv"
-
-/* FIXME just the names need to be changed */
-#define LUSTRE_OSS_NAME "ost"       /* FIXME oss */
-#define LUSTRE_OST_NAME "obdfilter" /* FIXME ost */
-#define LUSTRE_OSTSAN_NAME "sanobdfilter"
-
-#define LUSTRE_OSC_NAME "osc"
-#define LUSTRE_FILTER_NAME "filter"
-#define LUSTRE_SANOSC_NAME "sanosc"
-#define LUSTRE_SANOST_NAME "sanost"
-#define LUSTRE_MGS_NAME "mgs"
-#define LUSTRE_MGC_NAME "mgc"
-
+#define LUSTRE_CACHEOBD_NAME    "cobd"
 #define LUSTRE_ECHO_NAME        "obdecho"
 #define LUSTRE_ECHO_CLIENT_NAME "echo_client"
 
@@ -1071,10 +1064,6 @@ struct obd_ops {
                                int flags, void *opaque);
         int (*o_join_lru)(struct obd_export *, struct lov_stripe_md *,
                          int join);
-        int (*o_san_preprw)(int cmd, struct obd_export *exp,
-                            struct obdo *oa, int objcount,
-                            struct obd_ioobj *obj, int niocount,
-                            struct niobuf_remote *remote);
         int (*o_init_export)(struct obd_export *exp);
         int (*o_destroy_export)(struct obd_export *exp);
         int (*o_extent_calc)(struct obd_export *, struct lov_stripe_md *,
@@ -1082,7 +1071,8 @@ struct obd_ops {
 
         /* llog related obd_methods */
         int (*o_llog_init)(struct obd_device *obd, struct obd_device *disk_obd,
-                           int count, struct llog_catid *logid);
+                           int count, struct llog_catid *logid, 
+                           struct obd_uuid *uuid);
         int (*o_llog_finish)(struct obd_device *obd, int count);
 
         /* metadata-only methods */
@@ -1194,6 +1184,7 @@ struct lsm_operations {
         void (*lsm_stripe_by_offset)(struct lov_stripe_md *, int *, obd_off *,
                                      unsigned long *);
         obd_off (*lsm_stripe_offset_by_index)(struct lov_stripe_md *, int);
+        obd_off (*lsm_stripe_offset_by_offset)(struct lov_stripe_md *, obd_off);
         int (*lsm_stripe_index_by_offset)(struct lov_stripe_md *, obd_off);
         int (*lsm_revalidate) (struct lov_stripe_md *, struct obd_device *obd);
         int (*lsm_lmm_verify) (struct lov_mds_md *lmm, int lmm_bytes,

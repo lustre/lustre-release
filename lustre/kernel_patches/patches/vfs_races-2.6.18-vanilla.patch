@@ -1,7 +1,7 @@
 Index: linux-2.6/fs/dcache.c
 ===================================================================
---- linux-2.6.orig/fs/dcache.c	2006-07-15 16:08:36.000000000 +0800
-+++ linux-2.6/fs/dcache.c	2006-07-15 16:10:41.000000000 +0800
+--- linux-2.6.orig/fs/dcache.c	2006-08-31 11:59:09.000000000 +0800
++++ linux-2.6/fs/dcache.c	2006-09-06 14:01:37.000000000 +0800
 @@ -226,6 +226,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -48,14 +48,13 @@ Index: linux-2.6/fs/dcache.c
  	x = y; y = __tmp; } while (0)
 Index: linux-2.6/include/linux/dcache.h
 ===================================================================
---- linux-2.6.orig/include/linux/dcache.h	2006-07-15 16:10:33.000000000 +0800
-+++ linux-2.6/include/linux/dcache.h	2006-07-15 16:10:41.000000000 +0800
-@@ -176,6 +176,8 @@ d_iput:		no		no		no       yes
+--- linux-2.6.orig/include/linux/dcache.h	2006-08-31 12:00:23.000000000 +0800
++++ linux-2.6/include/linux/dcache.h	2006-09-06 14:02:36.000000000 +0800
+@@ -176,6 +176,7 @@ d_iput:		no		no		no       yes
  
  #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
  #define DCACHE_UNHASHED		0x0010	
-+#define DCACHE_LUSTRE_INVALID     0x0020  /* Lustre invalidated */
-+
++#define DCACHE_LUSTRE_INVALID	0x0040  /* Lustre invalidated */
  
  #define DCACHE_INOTIFY_PARENT_WATCHED	0x0020 /* Parent inode is watched */
  

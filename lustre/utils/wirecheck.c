@@ -165,6 +165,7 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_LCL_CLIENT);
         CHECK_CDEFINE(OBD_CONNECT_RMT_CLIENT);
         CHECK_CDEFINE(OBD_CONNECT_BRW_SIZE);
+        CHECK_CDEFINE(OBD_CONNECT_QUOTA64);
 }
 
 static void
@@ -919,9 +920,19 @@ check_qunit_data(void)
         BLANK_LINE();
         CHECK_STRUCT(qunit_data);
         CHECK_MEMBER(qunit_data, qd_id);
-        CHECK_MEMBER(qunit_data, qd_type);
+        CHECK_MEMBER(qunit_data, qd_flags);
         CHECK_MEMBER(qunit_data, qd_count);
-        CHECK_MEMBER(qunit_data, qd_isblk);
+}
+
+static void
+check_qunit_data_old(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(qunit_data_old);
+        CHECK_MEMBER(qunit_data_old, qd_id);
+        CHECK_MEMBER(qunit_data_old, qd_type);
+        CHECK_MEMBER(qunit_data_old, qd_count);
+        CHECK_MEMBER(qunit_data_old, qd_isblk);
 }
 
 static void
@@ -957,6 +968,7 @@ check_lustre_disk_data(void)
         CHECK_MEMBER(lustre_disk_data, ldd_fsname);
         CHECK_MEMBER(lustre_disk_data, ldd_svname);
         CHECK_MEMBER(lustre_disk_data, ldd_uuid);
+        CHECK_MEMBER(lustre_disk_data, ldd_userdata);
         CHECK_MEMBER(lustre_disk_data, ldd_mount_opts);
         CHECK_MEMBER(lustre_disk_data, ldd_params);
 }
@@ -1062,8 +1074,6 @@ main(int argc, char **argv)
         CHECK_VALUE(OST_OPEN);
         CHECK_VALUE(OST_CLOSE);
         CHECK_VALUE(OST_STATFS);
-        CHECK_VALUE(OST_SAN_READ);
-        CHECK_VALUE(OST_SAN_WRITE);
         CHECK_VALUE(OST_SYNC);
         CHECK_VALUE(OST_QUOTACHECK);
         CHECK_VALUE(OST_QUOTACTL);
@@ -1206,6 +1216,7 @@ main(int argc, char **argv)
         check_llog_array_rec();
         check_mds_extent_desc();
         check_qunit_data();
+        check_qunit_data_old();
         check_mgs_target_info();
         check_lustre_disk_data();
 

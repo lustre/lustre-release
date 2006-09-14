@@ -1433,8 +1433,10 @@ struct chk_dqblk{
         __u32                   dqb_valid;       /* flag for above fields */
 };
 
-static inline unsigned int const
-chkquot_hash(qid_t id, int type)
+static inline unsigned int chkquot_hash(qid_t id, int type)
+                                        __attribute__((__const__));
+
+static inline unsigned int chkquot_hash(qid_t id, int type)
 {
         return (id * (MAXQUOTAS - type)) % NR_DQHASH;
 }

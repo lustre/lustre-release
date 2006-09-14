@@ -120,7 +120,7 @@ build_test_filter() {
         for O in $ONLY; do
             eval ONLY_${O}=true
         done
-        for E in $EXCEPT $ALWAYS_EXCEPT $SANITY_EXCEPT; do
+        for E in $EXCEPT $ALWAYS_EXCEPT $SANITYN_EXCEPT; do
             eval EXCEPT_${E}=true
         done
 }

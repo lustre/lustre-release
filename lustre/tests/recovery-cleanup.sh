@@ -129,11 +129,11 @@ try_to_cleanup
 drop_request "statone /mnt/lustre/2" & wait_for_timeout
 try_to_cleanup
 
-do_client "cp /etc/resolv.conf /mnt/lustre/resolv.conf"
-drop_request "cat /mnt/lustre/resolv.conf > /dev/null" & wait_for_timeout
+do_client "cp /etc/inittab /mnt/lustre/inittab"
+drop_request "cat /mnt/lustre/inittab > /dev/null" & wait_for_timeout
 try_to_cleanup
 
-drop_request "mv /mnt/lustre/resolv.conf /mnt/lustre/renamed" & wait_for_timeout
+drop_request "mv /mnt/lustre/inittab /mnt/lustre/renamed" & wait_for_timeout
 try_to_cleanup
 
 drop_request "mlink /mnt/lustre/renamed-again /mnt/lustre/link1" & wait_for_timeout
