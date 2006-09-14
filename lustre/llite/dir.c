@@ -334,9 +334,11 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
                          * entries with smaller hash values. Stale page should
                          * be invalidated, and new one fetched.
                          */
-                        CWARN("Stale readpage page: %#lx != %#lx\n",
+                        CWARN("Stale readpage page %p: %#lx != %#lx\n", page,
                               (unsigned long)hash, (unsigned long)start);
-                        truncate_complete_page(mapping, page);
+                        lock_page(page); 
+                        ll_truncate_complete_page(page);
+                        unlock_page(page); 
                         page_cache_release(page);
                 } else
                         GOTO(hash_collision, page);
