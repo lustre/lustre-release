@@ -989,6 +989,14 @@ static int mdt_cp_callback(struct mdt_thread_info *info)
         return -EOPNOTSUPP;
 }
 
+/*
+ * sec context handlers
+ */
+static int mdt_sec_ctx_handle(struct mdt_thread_info *info)
+{
+        return 0;
+}
+
 /* issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
 int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
              struct lustre_handle *lh, ldlm_mode_t mode,
@@ -3431,7 +3439,13 @@ static struct mdt_handler mdt_dlm_ops[] = {
 static struct mdt_handler mdt_llog_ops[] = {
 };
 
-static struct mdt_handler mdt_sec_ops[] = {
+#define DEF_SEC_CTX_HNDL(name, fn)                      \
+        DEF_HNDL(SEC_CTX, INIT, _NET, 0, name, fn, NULL)
+
+static struct mdt_handler mdt_sec_ctx_ops[] = {
+        DEF_SEC_CTX_HNDL(INIT,          mdt_sec_ctx_handle),
+        DEF_SEC_CTX_HNDL(INIT_CONT,     mdt_sec_ctx_handle),
+        DEF_SEC_CTX_HNDL(FINI,          mdt_sec_ctx_handle)
 };
 
 static struct mdt_opc_slice mdt_regular_handlers[] = {
@@ -3458,7 +3472,7 @@ static struct mdt_opc_slice mdt_regular_handlers[] = {
         {
                 .mos_opc_start = SEC_CTX_INIT,
                 .mos_opc_end   = SEC_LAST_OPC,
-                .mos_hs        = mdt_sec_ops
+                .mos_hs        = mdt_sec_ctx_ops
         },
         {
                 .mos_hs        = NULL

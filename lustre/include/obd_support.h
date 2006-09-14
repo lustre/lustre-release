@@ -181,6 +181,10 @@ extern int obd_race_state;
 #define OBD_FAIL_FLD                     0x1100
 #define OBD_FAIL_FLD_QUERY_NET           0x1101
 
+#define OBD_FAIL_SEC_CTX_INIT_NET        0x1200
+#define OBD_FAIL_SEC_CTX_INIT_CONT_NET   0x1210
+#define OBD_FAIL_SEC_CTX_FINI_NET        0x1220
+
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
 #define OBD_FAIL_MASK_LOC    (0x000000FF | OBD_FAIL_MASK_SYS)
