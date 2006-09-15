@@ -136,6 +136,44 @@ out:
         return rc;
 }
 
+int lmv_alloc_fid_for_split(struct obd_device *obd, struct lu_fid *pid,
+                            struct md_op_data *op, struct lu_fid *fid)
+{
+        struct lmv_obj *obj;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct lu_fid *rpid;
+        mdsno_t mds;
+        int rc;
+        ENTRY;
+
+        obj = lmv_obj_grab(obd, pid);
+        if (!obj)
+               RETURN(0);
+        mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
+                           (char *)op->name, op->namelen);
+        rpid = &obj->lo_inodes[mds].li_fid;
+        rc = lmv_fld_lookup(lmv, rpid, &mds);
+        if (rc)
+                GOTO(cleanup, rc);
+        
+        rc = obd_fid_alloc(lmv->tgts[mds].ltd_exp, fid, NULL);
+        if (rc < 0)
+                GOTO(cleanup, rc);
+        if (rc > 0) {
+                LASSERT(fid_is_sane(fid));
+                rc = fld_client_create(&lmv->lmv_fld,
+                                       fid_seq(fid), mds, NULL);
+                if (rc) {
+                        CERROR("can't create fld rc%d\n", rc);
+                        GOTO(cleanup, rc);
+                }
+        }
+        CDEBUG(D_INFO, "Allocate new fid"DFID"for split obj\n",PFID(fid));
+cleanup:
+        lmv_obj_put(obj);
+        RETURN(rc);
+}
+
 /*
  * IT_OPEN is intended to open (and create, possible) an object. Parent (pid)
  * may be split dir.
@@ -169,6 +207,7 @@ repeat:
         rc = lmv_fld_lookup(lmv, &rpid, &mds);
         if (rc)
                 GOTO(out_free_sop_data, rc);
+        
         obj = lmv_obj_grab(obd, &rpid);
         if (obj) {
                 /*
@@ -193,6 +232,7 @@ repeat:
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, sop_data,
                             lmm, lmmsize, it, flags, reqp,
                             cb_blocking, extra_lock_flags);
+        
         if (rc == -ERESTART) {
                 /*
                  * Directory got split. Time to update local object and repeat
@@ -202,6 +242,12 @@ repeat:
                 rc = lmv_handle_split(exp, &rpid);
                 if (rc == 0) {
                         ptlrpc_req_finished(*reqp);
+                       /* We shoudld reallocate the FID for the object */
+                        rc = lmv_alloc_fid_for_split(obd, &rpid, op_data,
+                                                     &sop_data->fid2);
+                        if (rc)
+                                GOTO(out_free_sop_data, rc);
+                        /* client switches to new sequence, setup fld */
                         goto repeat;
                 }
         }

@@ -1276,11 +1276,10 @@ int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid)
 
         obd_free_memmd(exp, (struct lov_stripe_md **)&md.mea);
 
-        EXIT;
 cleanup:
         if (req)
                 ptlrpc_req_finished(req);
-        return rc;
+        RETURN(rc);
 }
 
 int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
@@ -1334,6 +1333,10 @@ repeat:
                 rc = lmv_handle_split(exp, &op_data->fid1);
                 if (rc == 0) {
                         ptlrpc_req_finished(*request);
+                        rc = lmv_alloc_fid_for_split(obd, &op_data->fid1,
+                                                op_data, &op_data->fid2);
+                        if (rc)
+                                RETURN(rc);
                         goto repeat;
                 }
         }
@@ -1915,14 +1918,15 @@ static int lmv_readpage(struct obd_export *exp,
 
         obj = lmv_obj_grab(obd, fid);
         if (obj) {
+                __u64 index = offset;
+                __u32 seg = MAX_HASH_SIZE;
                 lmv_obj_lock(obj);
-
-                /* find dirobj containing page with requested offset. */
-                for (i = 0; i < obj->lo_objcount; i++) {
-                        if (offset < obj->lo_inodes[i].li_size)
-                                break;
-                        offset -= obj->lo_inodes[i].li_size;
-                }
+                
+                LASSERT(obj->lo_objcount > 0);
+                do_div(seg, obj->lo_objcount);
+                do_div(index, seg);
+                offset -= index * seg;  
+                i = (int)index;
                 rid = obj->lo_inodes[i].li_fid;
 
                 lmv_obj_unlock(obj);
@@ -1941,7 +1945,7 @@ static int lmv_readpage(struct obd_export *exp,
 #ifdef __KERNEL__
         if (obj && i < obj->lo_objcount - 1) {
                 struct lu_dirpage *dp;
-                __u32 end;
+                __u32 end, max_hash = MAX_HASH_SIZE;
                 /*
                  * This dirobj has been split, so we check whether reach the end
                  * of one hash_segment and reset ldp->ldp_hash_end.
@@ -1950,14 +1954,18 @@ static int lmv_readpage(struct obd_export *exp,
                 dp = page_address(page); 
                 end = le32_to_cpu(dp->ldp_hash_end);
                 if (end == ~0ul) {
-                        __u32 hash_segment_end = (i + 1) * 
-                                MAX_HASH_SIZE/obj->lo_objcount;
-                        dp->ldp_hash_end = cpu_to_le32(hash_segment_end); 
-                        CDEBUG(D_INFO,"reset hash end %x for split obj "DFID"",
-                               le32_to_cpu(dp->ldp_hash_end), PFID(&rid)); 
+                        __u32 seg_end;
+                        
+                        do_div(max_hash, obj->lo_objcount);
+                        seg_end = max_hash * (i + 1);
+                        
+                        dp->ldp_hash_end = cpu_to_le32(seg_end); 
+                        CDEBUG(D_INFO,"reset hash end %x for split obj "DFID" "
+                                       "obj count %d \n",
+                               le32_to_cpu(dp->ldp_hash_end), PFID(&rid),
+                               obj->lo_objcount); 
                 }
                 kunmap(page);
-                
         }
 #endif
         /*

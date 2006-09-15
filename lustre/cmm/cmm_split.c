@@ -69,7 +69,6 @@ static int cmm_expect_splitting(const struct lu_context *ctx,
 
         if (ma->ma_lmv_size)
                 GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
-
         OBD_ALLOC_PTR(fid);
         rc = cmm_root_get(ctx, &cmm->cmm_md_dev, fid);
         if (rc)
@@ -150,7 +149,9 @@ static inline void cmm_object_put(const struct lu_context *ctxt,
 
 static int cmm_creat_remote_obj(const struct lu_context *ctx,
                                 struct cmm_device *cmm,
-                                struct lu_fid *fid, struct md_attr *ma)
+                                struct lu_fid *fid, struct md_attr *ma,
+                                const struct lmv_stripe_md *lmv,
+                                int lmv_size)
 {
         struct cmm_object *obj;
         struct md_create_spec *spec;
@@ -162,7 +163,11 @@ static int cmm_creat_remote_obj(const struct lu_context *ctx,
                 RETURN(PTR_ERR(obj));
 
         OBD_ALLOC_PTR(spec);
-        spec->u.sp_pfid = fid;
+
+        spec->u.sp_ea.fid = fid;
+        spec->u.sp_ea.eadata = lmv;
+        spec->u.sp_ea.eadatalen = lmv_size;
+        spec->sp_cr_flags |= MDS_CREATE_SLAVE_OBJ;
         rc = mo_object_create(ctx, md_object_next(&obj->cmo_obj),
                               spec, ma);
         OBD_FREE_PTR(spec);
@@ -175,7 +180,7 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
                                     struct md_object *mo, struct md_attr *ma)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
-        struct lmv_stripe_md *lmv = NULL;
+        struct lmv_stripe_md *lmv = NULL, *slave_lmv = NULL;
         int lmv_size, i, rc;
         struct lu_fid *lf = cmm2_fid(md2cmm_obj(mo));
         ENTRY;
@@ -197,8 +202,16 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
         if (rc)
                 GOTO(cleanup, rc);
 
+        OBD_ALLOC_PTR(slave_lmv);
+        if (!slave_lmv)
+                GOTO(cleanup, rc = -ENOMEM);
+
+        slave_lmv->mea_master = cmm->cmm_local_num;
+        slave_lmv->mea_magic = MEA_MAGIC_HASH_SEGMENT;
+        slave_lmv->mea_count = 0;
         for (i = 1; i < cmm->cmm_tgt_count + 1; i ++) {
-                rc = cmm_creat_remote_obj(ctx, cmm, &lmv->mea_ids[i], ma);
+                rc = cmm_creat_remote_obj(ctx, cmm, &lmv->mea_ids[i], ma, 
+                                          slave_lmv, sizeof(slave_lmv));
                 if (rc)
                         GOTO(cleanup, rc);
         }
@@ -206,6 +219,8 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
         ma->ma_lmv_size = lmv_size;
         ma->ma_lmv = lmv;
 cleanup:
+        if (slave_lmv)
+                OBD_FREE_PTR(slave_lmv);
         RETURN(rc);
 }
 
@@ -241,6 +256,8 @@ static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
 
         /* Read splitted page and send them to the slave master */
         do {
+                struct lu_dirpage *ldp;
+
                 /* init page with '0' */
                 for (i = 0; i < rdpg->rp_npages; i++) {
                         memset(kmap(rdpg->rp_pages[i]), 0, CFS_PAGE_SIZE);
@@ -256,7 +273,15 @@ static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
                         RETURN(rc);
 
                 rc = cmm_send_split_pages(ctx, mo, rdpg, lf, end);
-
+                if (rc) 
+                        RETURN(rc);
+                
+                kmap(rdpg->rp_pages[0]);
+                ldp = page_address(rdpg->rp_pages[0]);
+                if (ldp->ldp_hash_end == ~0ul)
+                        rc = -E2BIG;
+                rdpg->rp_hash = ldp->ldp_hash_end;
+                kunmap(rdpg->rp_pages[0]); 
         } while (rc == 0);
 
         /* it means already finish splitting this segment */
@@ -324,7 +349,6 @@ static int cmm_scan_and_split(const struct lu_context *ctx,
 
                 rdpg->rp_hash = i * hash_segement;
                 hash_end = rdpg->rp_hash + hash_segement;
-
                 rc = cmm_split_entries(ctx, mo, rdpg, lf, hash_end);
                 if (rc)
                         GOTO(cleanup, rc);

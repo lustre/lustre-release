@@ -599,11 +599,10 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
                           ent = lu_dirent_next(ent)) {
                 struct lu_fid *lf = &ent->lde_fid;
 
-                /* FIXME: check isdir */
+                /* FIXME: multi-trans for this name insert */
                 rc = mdo_name_insert(info->mti_ctxt,
                                      md_object_next(&object->mot_obj),
                                      ent->lde_name, lf, 0);
-                CDEBUG(D_INFO, "insert name %s rc %d \n", ent->lde_name, rc);
                 if (rc) {
                         kunmap(page);
                         RETURN(rc);

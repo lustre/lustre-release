@@ -118,6 +118,8 @@ extern const struct req_format RQF_MDS_DONE_WRITING;
 extern const struct req_format RQF_MDS_GETATTR_NAME;
 extern const struct req_format RQF_MDS_REINT;
 extern const struct req_format RQF_MDS_REINT_CREATE;
+extern const struct req_format RQF_MDS_REINT_CREATE_SLAVE;
+extern const struct req_format RQF_MDS_REINT_CREATE_SYM;
 extern const struct req_format RQF_MDS_REINT_OPEN;
 extern const struct req_format RQF_MDS_REINT_UNLINK;
 extern const struct req_format RQF_MDS_REINT_LINK;

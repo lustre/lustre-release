@@ -733,18 +733,6 @@ static int __mdd_xattr_set(const struct lu_context *ctxt, struct mdd_object *o,
         if (buf && buf_len > 0) {
                 rc = next->do_ops->do_xattr_set(ctxt, next, buf, buf_len, name,
                                                 0, handle);
-#ifdef HAVE_SPLIT_SUPPORT
-                if (rc == 0) {
-                        /* very ugly hack, if setting lmv, it means splitting 
-                         * sucess, we should return -ERESTART to notify the 
-                         * client, so transno for this splitting should be
-                         * zero according to the replay rules. so return -ERESTART
-                         * here let mdt trans stop callback know this. 
-                         */
-                        if (strncmp(name, MDS_LMV_MD_NAME, strlen(name)) == 0) 
-                                rc = -ERESTART;
-                }
-#endif
         }else if (buf == NULL && buf_len == 0) {
                 rc = next->do_ops->do_xattr_del(ctxt, next, name, handle);
         }
@@ -971,7 +959,18 @@ static int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
 
         rc = mdd_xattr_set_txn(ctxt, md2mdd_obj(obj), buf, buf_len, name,
                                fl, handle);
-
+#ifdef HAVE_SPLIT_SUPPORT
+        if (rc == 0) {
+                /* very ugly hack, if setting lmv, it means splitting 
+                 * sucess, we should return -ERESTART to notify the 
+                 * client, so transno for this splitting should be
+                 * zero according to the replay rules. so return -ERESTART
+                 * here let mdt trans stop callback know this. 
+                 */
+                 if (strncmp(name, MDS_LMV_MD_NAME, strlen(name)) == 0) 
+                        rc = -ERESTART;
+        }
+#endif
         mdd_trans_stop(ctxt, mdd, rc, handle);
 
         RETURN(rc);
@@ -1890,6 +1889,7 @@ static int mdd_object_create(const struct lu_context *ctxt,
         struct mdd_device *mdd = mdo2mdd(obj);
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct thandle *handle;
+        const struct lu_fid *pfid = spec->u.sp_pfid;
         int rc;
         ENTRY;
 
@@ -1900,14 +1900,22 @@ static int mdd_object_create(const struct lu_context *ctxt,
 
         mdd_write_lock(ctxt, mdd_obj);
         rc = __mdd_object_create(ctxt, mdd_obj, ma, handle);
+        if (rc == 0 && spec->sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
+                /* if creating the slave object, set slave EA here */
+                rc = __mdd_xattr_set(ctxt, mdd_obj, spec->u.sp_ea.eadata,
+                                     spec->u.sp_ea.eadatalen, MDS_LMV_MD_NAME,
+                                     0, handle);
+                pfid = spec->u.sp_ea.fid;
+                CWARN("set slave ea "DFID" eadatalen %d rc %d \n",
+                       PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
+        }
+
         if (rc == 0)
-                rc = __mdd_object_initialize(ctxt, spec->u.sp_pfid, mdd_obj,
-                                     ma, handle);
+                rc = __mdd_object_initialize(ctxt, pfid, mdd_obj, ma, handle);
         mdd_write_unlock(ctxt, mdd_obj);
 
         if (rc == 0)
                 rc = mdd_attr_get_internal_locked(ctxt, mdd_obj, ma);
-
         mdd_trans_stop(ctxt, mdd, rc, handle);
         RETURN(rc);
 }

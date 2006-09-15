@@ -95,7 +95,8 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
         rec->cr_rdev = rdev;
         rec->cr_time = op_data->mod_time;
         rec->cr_suppgid = op_data->suppgids[0];
-
+        rec->cr_flags = op_data->flags;
+        
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
         LOGL0(op_data->name, op_data->namelen, tmp);
 

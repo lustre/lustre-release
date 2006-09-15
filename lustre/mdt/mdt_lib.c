@@ -233,10 +233,26 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (S_ISDIR(attr->la_mode)) {
+                        struct md_create_spec *sp = &info->mti_spec;
                         /* pass parent fid for cross-ref cases */
-                        info->mti_spec.u.sp_pfid = rr->rr_fid1;
+                        sp->u.sp_pfid = rr->rr_fid1;
+                        if (info->mti_spec.sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
+                                /* create salve object req, need 
+                                 * unpack split ea here 
+                                 */
+                               req_capsule_extend(pill, 
+                                                  &RQF_MDS_REINT_CREATE_SLAVE);
+                               LASSERT(req_capsule_field_present(pill, 
+                                                      &RMF_EADATA, RCL_CLIENT));
+                               sp->u.sp_ea.eadata = req_capsule_client_get(pill,
+                                                            &RMF_EADATA);
+                               sp->u.sp_ea.eadatalen =req_capsule_get_size(pill,
+                                                       &RMF_EADATA, RCL_CLIENT);
+                               sp->u.sp_ea.fid = rr->rr_fid1;
+                        }
                 } else if (S_ISLNK(attr->la_mode)) {
                         const char *tgt = NULL;
+                        req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_SYM);
                         if (req_capsule_field_present(pill, &RMF_SYMTGT, 
                                                       RCL_CLIENT)) {
                                 tgt = req_capsule_client_get(pill,

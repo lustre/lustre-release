@@ -115,7 +115,20 @@ static const struct req_msg_field *mds_reint_create_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_REC_CREATE,
         &RMF_NAME,
+};
+
+static const struct req_msg_field *mds_reint_create_sym_client[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_REC_CREATE,
+        &RMF_NAME,
         &RMF_SYMTGT
+};
+
+static const struct req_msg_field *mds_reint_create_slave_client[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_REC_CREATE,
+        &RMF_NAME,
+        &RMF_EADATA
 };
 
 static const struct req_msg_field *mds_reint_open_client[] = {
@@ -272,6 +285,8 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_GETATTR_NAME,
         &RQF_MDS_REINT,
         &RQF_MDS_REINT_CREATE,
+        &RQF_MDS_REINT_CREATE_SYM,
+        &RQF_MDS_REINT_CREATE_SLAVE,
         &RQF_MDS_REINT_OPEN,
         &RQF_MDS_REINT_UNLINK,
         &RQF_MDS_REINT_LINK,
@@ -528,6 +543,16 @@ const struct req_format RQF_MDS_REINT_CREATE =
         DEFINE_REQ_FMT0("MDS_REINT_CREATE",
                         mds_reint_create_client, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_REINT_CREATE);
+
+const struct req_format RQF_MDS_REINT_CREATE_SLAVE =
+        DEFINE_REQ_FMT0("MDS_REINT_CREATE_SLAVE",
+                        mds_reint_create_slave_client, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_REINT_CREATE_SLAVE);
+
+const struct req_format RQF_MDS_REINT_CREATE_SYM =
+        DEFINE_REQ_FMT0("MDS_REINT_CREATE_SYM",
+                        mds_reint_create_sym_client, mdt_body_only);
+EXPORT_SYMBOL(RQF_MDS_REINT_CREATE_SYM);
 
 const struct req_format RQF_MDS_REINT_OPEN =
         DEFINE_REQ_FMT0("MDS_REINT_OPEN",

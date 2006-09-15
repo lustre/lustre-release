@@ -299,7 +299,7 @@ static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
 #define MEA_MAGIC_LAST_CHAR      0xb2221ca1
 #define MEA_MAGIC_ALL_CHARS      0xb222a11c
 #define MEA_MAGIC_HASH_SEGMENT   0xb222a11b
-#define MAX_HASH_SIZE            0x3fffffff
+#define MAX_HASH_SIZE            0x7fffffff
 
 struct lmv_stripe_md {
         __u32         mea_magic;
@@ -1084,6 +1084,9 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
 #define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
 #define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file*/
+#define MDS_CREATE_SLAVE_OBJ  02000000000 /* indicate create slave object
+                                           * actually, this is for create, not
+                                           * conflict with other open flags */
 #define MDS_OPEN_LOCK         04000000000 /* This open requires open lock */
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */

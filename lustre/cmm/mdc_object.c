@@ -167,10 +167,11 @@ static int mdc_object_create(const struct lu_context *ctx,
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct lu_attr *la = &ma->ma_attr;
         struct mdc_thread_info *mci;
-        const char *symname;
+        const void *symname;
         int rc, symlen;
         ENTRY;
 
+        LASSERT(spec->u.sp_pfid != NULL);
         mci = mdc_info_init(ctx);
         mci->mci_opdata.fid2 = *lu_object_fid(&mo->mo_lu);
         /* parent fid is needed to create dotdot on the remote node */
@@ -178,8 +179,15 @@ static int mdc_object_create(const struct lu_context *ctx,
         mci->mci_opdata.mod_time = la->la_mtime;
 
         /* get data from spec */
-        symname = spec->u.sp_symname;
-        symlen = symname ? strlen(symname) + 1 : 0;
+        if (spec->sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
+                symname = spec->u.sp_ea.eadata;
+                symlen = spec->u.sp_ea.eadatalen;
+                mci->mci_opdata.fid1 = *(spec->u.sp_ea.fid);
+                mci->mci_opdata.flags |= MDS_CREATE_SLAVE_OBJ;
+        } else {
+                symname = spec->u.sp_symname;
+                symlen = symname ? strlen(symname) + 1 : 0;
+        }
         
         rc = md_create(mc->mc_desc.cl_exp, &mci->mci_opdata,
                        symname, symlen,
