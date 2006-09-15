@@ -626,8 +626,8 @@ int mdt_open(struct mdt_thread_info *info)
                 GOTO(out, result = -EOPNOTSUPP);
         }
 
-        CDEBUG(D_INODE, "I am going to create "DFID"/("DFID":%s) "
-                        "cr_flag=%o mode=%06o replay=%d\n",
+        CDEBUG(D_INODE, "I am going to open "DFID"/("DFID":%s) "
+                        "cr_flag=0%o mode=%06o replay=%d\n",
                         PFID(rr->rr_fid1), PFID(rr->rr_fid2),
                         rr->rr_name, create_flags, la->la_mode,
                         lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY);
@@ -720,9 +720,18 @@ int mdt_open(struct mdt_thread_info *info)
                 if (result == -EREMOTE) {
                         /* the object is on remote node
                          * return its FID for remote open */
+                        struct mdt_lock_handle *lhc;
+                        int rc;
+                        lhc = &info->mti_lh[MDT_LH_NEW];
+                        mdt_lock_handle_init(lhc);
+                        lhc->mlh_mode = LCK_CR;
+                        rc = mdt_object_lock(info, child, lhc,
+                                             MDS_INODELOCK_LOOKUP);
                         repbody->fid1 = *mdt_object_fid(child);
                         repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
-                        GOTO(out_child, result = 0);
+                        if (rc != 0)
+                                result = rc;
+                        GOTO(out_child, result);
                 }
         }
         /* Try to open it now. */

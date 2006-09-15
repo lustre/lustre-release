@@ -1690,13 +1690,60 @@ static struct mdt_it_flavor {
         }
 };
 
+int mdt_intent_lock_replace(struct mdt_thread_info *info, 
+                           struct ldlm_lock **lockp,
+                           struct mdt_lock_handle *lh, int flags)
+{
+        struct ptlrpc_request  *req = mdt_info_req(info);
+        struct ldlm_lock       *old_lock = *lockp;
+        struct ldlm_lock       *new_lock = NULL;
+
+        new_lock = ldlm_handle2lock(&lh->mlh_lh);
+
+        if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
+                RETURN(0);
+
+        LASSERTF(new_lock != NULL, "lockh "LPX64"\n", lh->mlh_lh.cookie);
+
+        *lockp = new_lock;
+
+        /* FIXME:This only happens when MDT can handle RESENT */
+        if (new_lock->l_export == req->rq_export) {
+                /* Already gave this to the client, which means that we
+                 * reconstructed a reply. */
+                LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
+                        MSG_RESENT);
+                RETURN(ELDLM_LOCK_REPLACED);
+        }
+
+        /* Fixup the lock to be given to the client */
+        lock_res_and_lock(new_lock);
+        new_lock->l_readers = 0;
+        new_lock->l_writers = 0;
+
+        new_lock->l_export = class_export_get(req->rq_export);
+        list_add(&new_lock->l_export_chain,
+                 &new_lock->l_export->exp_ldlm_data.led_held_locks);
+
+        new_lock->l_blocking_ast = old_lock->l_blocking_ast;
+        new_lock->l_completion_ast = old_lock->l_completion_ast;
+
+        new_lock->l_remote_handle = old_lock->l_remote_handle;
+
+        new_lock->l_flags &= ~LDLM_FL_LOCAL;
+
+        unlock_res_and_lock(new_lock);
+        LDLM_LOCK_PUT(new_lock);
+        lh->mlh_lh.cookie = 0;
+
+        RETURN(ELDLM_LOCK_REPLACED);
+}
+
 static int mdt_intent_getattr(enum mdt_it_code opcode,
                               struct mdt_thread_info *info,
                               struct ldlm_lock **lockp,
                               int flags)
 {
-        struct ldlm_lock       *old_lock = *lockp;
-        struct ldlm_lock       *new_lock = NULL;
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct ldlm_reply      *ldlm_rep;
         struct mdt_lock_handle  tmp_lock;
@@ -1731,49 +1778,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                 RETURN(ELDLM_LOCK_ABORTED);
         }
 
-        new_lock = ldlm_handle2lock(&lhc->mlh_lh);
-        if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
-                RETURN(0);
-
-        LASSERTF(new_lock != NULL, "op %d lockh "LPX64"\n",
-                 opcode, lhc->mlh_lh.cookie);
-
-        *lockp = new_lock;
-
-        /* FIXME:This only happens when MDT can handle RESENT */
-        if (new_lock->l_export == req->rq_export) {
-                /* Already gave this to the client, which means that we
-                 * reconstructed a reply. */
-                LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
-                        MSG_RESENT);
-                RETURN(ELDLM_LOCK_REPLACED);
-        }
-
-        /* TODO:
-         * These are copied from mds/hander.c, and should be factored into
-         * ldlm module in order to share these code, and be easy for merge.
-         */
-
-        /* Fixup the lock to be given to the client */
-        lock_res_and_lock(new_lock);
-        new_lock->l_readers = 0;
-        new_lock->l_writers = 0;
-
-        new_lock->l_export = class_export_get(req->rq_export);
-        list_add(&new_lock->l_export_chain,
-                 &new_lock->l_export->exp_ldlm_data.led_held_locks);
-
-        new_lock->l_blocking_ast = old_lock->l_blocking_ast;
-        new_lock->l_completion_ast = old_lock->l_completion_ast;
-
-        new_lock->l_remote_handle = old_lock->l_remote_handle;
-
-        new_lock->l_flags &= ~LDLM_FL_LOCAL;
-
-        unlock_res_and_lock(new_lock);
-        LDLM_LOCK_PUT(new_lock);
-
-        RETURN(ELDLM_LOCK_REPLACED);
+        return mdt_intent_lock_replace(info, lockp, lhc, flags);
 }
 
 static int mdt_intent_reint(enum mdt_it_code opcode,
@@ -1807,12 +1812,19 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         if (rep == NULL)
                 RETURN(-EFAULT);
+
+        rep->lock_policy_res2 = rc;
+        mdt_set_disposition(info, rep, DISP_IT_EXECD);
+
+        /* cross-ref case, the lock should be returned to the client */
+        if (rc == -EREMOTE) {
+               struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_NEW];
+               LASSERT(lhc->mlh_lh.cookie != 0);
+               rep->lock_policy_res2 = 0;
+               return mdt_intent_lock_replace(info, lockp, lhc, flags);
+        }
         rep->lock_policy_res2 = rc;
 
-        mdt_set_disposition(info, rep, DISP_IT_EXECD);
-#if 0
-        mdt_finish_reply(info, rc);
-#endif
         RETURN(ELDLM_LOCK_ABORTED);
 }
 
