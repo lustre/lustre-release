@@ -1798,6 +1798,8 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                 }
 
                 if (class_match_param(ptr, PARAM_LOV, NULL) == 0) {
+                        char mdt_index[16];
+                        char *mdtlovname;
                         /* Change lov default stripe params */
                         CDEBUG(D_MGS, "lov param %s\n", ptr);
                         if (!(mti->mti_flags & LDD_F_SV_TYPE_MDT)) {
@@ -1811,13 +1813,27 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         /* Modify mdtlov */
                         if (mgs_log_is_empty(obd, mti->mti_svname))
                                 GOTO(end_while, rc = -ENODEV);
-                        lustre_cfg_bufs_reset(&bufs, fsdb->fsdb_mdtlov);
+
+                        /* FIXME: The stripesize and stripecount is for 
+                         *        specific mdt lov?
+                         * Shall we update all the mdt lov?
+                         * Shall we update the client lov?
+                         * for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
+                         *        if (test_bit(i,  fsdb->fsdb_mdt_index_map)) {
+                         */
+                        sprintf(mdt_index,"-MDT%04x", mti->mti_stripe_index);
+                        name_create(&logname, mti->mti_fsname, mdt_index);
+                        name_create(&mdtlovname, logname, "-mdtlov");
+                        CDEBUG(D_MGS, "modify param for %s\n", mdtlovname);
+                        lustre_cfg_bufs_reset(&bufs, mdtlovname);
                         lustre_cfg_bufs_set_string(&bufs, 1, ptr);
                         lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
-                        rc = mgs_write_log_direct(obd, fsdb, mti->mti_svname, 
-                                                  fsdb->fsdb_mdtlov, lcfg);
+                        rc = mgs_write_log_direct(obd, fsdb, logname,
+                                                  mdtlovname, lcfg);
                         lustre_cfg_free(lcfg);
-                        if (rc) 
+                        name_destroy(logname);
+                        name_destroy(mdtlovname);
+                        if (rc)
                                 GOTO(end_while, rc);
 
                         /* Modify clilov */
