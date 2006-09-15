@@ -36,6 +36,8 @@
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
+extern struct lu_context_key cmm_thread_key;
+
 static int cmm_fld_lookup(struct cmm_device *cm,
                           const struct lu_fid *fid, mdsno_t *mds,
                           const struct lu_context *ctx)
@@ -415,7 +417,7 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
 
         if (mo_t && lu_object_exists(&mo_t->mo_lu) < 0) {
                 /* mo_t is remote object and there is RPC to unlink it */
-                rc = mo_ref_del(ctx, md_object_next(mo_t), NULL);
+                rc = mo_ref_del(ctx, md_object_next(mo_t), ma);
                 if (rc)
                         RETURN(rc);
                 mo_t = NULL;
@@ -665,12 +667,27 @@ static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
                       const struct md_create_spec *spec,
                       struct md_attr *ma)
 {
+        struct cmm_thread_info *cmi;
+        struct md_attr *tmp_ma;
         int rc;
 
         ENTRY;
-
-        //XXX: make sure that MDT checks name isn't exist
-
+        /* check the SGID attr */
+        cmi = lu_context_key_get(ctx, &cmm_thread_key);
+        LASSERT(cmi);
+        tmp_ma = &cmi->cmi_ma;
+        tmp_ma->ma_need = MA_INODE;
+        rc = mo_attr_get(ctx, md_object_next(mo_p), tmp_ma);
+        if (rc)
+                RETURN(rc);
+        
+        if (tmp_ma->ma_attr.la_mode & S_ISGID) {
+                ma->ma_attr.la_gid = tmp_ma->ma_attr.la_gid;
+                if (S_ISDIR(ma->ma_attr.la_mode)) {
+                        ma->ma_attr.la_mode |= S_ISGID;
+                        ma->ma_attr.la_valid |= LA_MODE;
+                }
+        }
         /* remote object creation and local name insert */
         rc = mo_object_create(ctx, md_object_next(mo_c), spec, ma);
         if (rc == 0) {

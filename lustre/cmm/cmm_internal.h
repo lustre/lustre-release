@@ -91,6 +91,10 @@ struct cmr_object {
         mdsno_t           cmo_num;
 };
 
+struct cmm_thread_info {
+        struct md_attr  cmi_ma;
+};
+
 static inline struct cmm_device *cmm_obj2dev(struct cmm_object *c)
 {
         return (md2cmm_dev(md_obj2dev(&c->cmo_obj)));

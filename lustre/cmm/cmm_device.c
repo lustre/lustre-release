@@ -302,14 +302,40 @@ static void cmm_device_free(const struct lu_context *ctx, struct lu_device *d)
         OBD_FREE_PTR(m);
 }
 
+/* context key constructor/destructor */
+static void *cmm_thread_init(const struct lu_context *ctx,
+                             struct lu_context_key *key)
+{
+        struct cmm_thread_info *info;
+
+        CLASSERT(CFS_PAGE_SIZE >= sizeof *info);
+        OBD_ALLOC_PTR(info);
+        if (info == NULL)
+                info = ERR_PTR(-ENOMEM);
+        return info;
+}
+
+static void cmm_thread_fini(const struct lu_context *ctx,
+                            struct lu_context_key *key, void *data)
+{
+        struct cmm_thread_info *info = data;
+        OBD_FREE_PTR(info);
+}
+
+struct lu_context_key cmm_thread_key = {
+        .lct_tags = LCT_MD_THREAD,
+        .lct_init = cmm_thread_init,
+        .lct_fini = cmm_thread_fini
+};
+
 static int cmm_type_init(struct lu_device_type *t)
 {
-        return 0;
+        return lu_context_key_register(&cmm_thread_key);
 }
 
 static void cmm_type_fini(struct lu_device_type *t)
 {
-        return;
+        lu_context_key_degister(&cmm_thread_key);
 }
 
 static int cmm_device_init(const struct lu_context *ctx,
