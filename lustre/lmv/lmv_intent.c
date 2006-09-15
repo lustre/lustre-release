@@ -90,8 +90,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         /* we got LOOKUP lock, but we really need attrs */
         pmode = it->d.lustre.it_lock_mode;
         if (pmode) {
-                memcpy(&plock, &it->d.lustre.it_lock_handle,
-                       sizeof(plock));
+                memcpy(&plock, &it->d.lustre.it_lock_handle, sizeof(plock));
                 it->d.lustre.it_lock_mode = 0;
                 it->d.lustre.it_data = 0;
         }

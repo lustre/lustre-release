@@ -156,7 +156,7 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_uuid *uuid;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         if (strcmp(watched->obd_type->typ_name, LUSTRE_MDC_NAME)) {
