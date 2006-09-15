@@ -75,15 +75,19 @@ static void mdt_mfd_free(struct mdt_file_data *mfd)
 static int mdt_create_data(struct mdt_thread_info *info,
                            struct mdt_object *p, struct mdt_object *o)
 {
-        struct md_attr   *ma = &info->mti_attr;
-        /* XXX: md_create_spec using should be made clear
-         * struct mdt_reint_record *mrr = &info->mti_rr;
-         */
         struct md_create_spec *spec = &info->mti_spec;
+        struct md_attr        *ma = &info->mti_attr;
+        int rc;
+        ENTRY;
+
+        if (spec->sp_cr_flags & MDS_OPEN_DELAY_CREATE ||
+                        !(spec->sp_cr_flags & FMODE_WRITE))
+                RETURN(0);
 
         ma->ma_need = MA_INODE | MA_LOV;
-        return mdo_create_data(info->mti_ctxt, p ? mdt_object_child(p) : NULL,
-                               mdt_object_child(o), spec, ma);
+        rc = mdo_create_data(info->mti_ctxt, p ? mdt_object_child(p) : NULL,
+                             mdt_object_child(o), spec, ma);
+        RETURN(rc);
 }
 
 
@@ -623,7 +627,7 @@ int mdt_open(struct mdt_thread_info *info)
         }
 
         CDEBUG(D_INODE, "I am going to create "DFID"/("DFID":%s) "
-                        "cr_flag=%x mode=%06o replay=%d\n",
+                        "cr_flag=%o mode=%06o replay=%d\n",
                         PFID(rr->rr_fid1), PFID(rr->rr_fid2),
                         rr->rr_name, create_flags, la->la_mode,
                         lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY);
@@ -641,7 +645,8 @@ int mdt_open(struct mdt_thread_info *info)
                         DEBUG_REQ(D_ERROR, req,"OPEN_CREAT not in open replay");
                         GOTO(out, result = -EFAULT);
                 }
-                CERROR("RRRRPPPPPP failed, continue to regular open\n");
+                CDEBUG(D_INFO, "open replay failed to find object, "
+                               "continue as regular open\n");
         }
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))

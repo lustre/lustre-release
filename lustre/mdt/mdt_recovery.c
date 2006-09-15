@@ -1004,6 +1004,11 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti)
 */
         mdt_object_put(mti->mti_ctxt, obj);
 }
+static void mdt_reconstruct_unlink(struct mdt_thread_info *mti)
+{
+        mdt_reconstruct_generic(mti);
+        mdt_shrink_reply(mti, REPLY_REC_OFF + 1);
+}
 
 typedef void (*mdt_reconstructor)(struct mdt_thread_info *mti);
 
@@ -1011,7 +1016,7 @@ static mdt_reconstructor reconstructors[REINT_MAX] = {
         [REINT_SETATTR]  = mdt_reconstruct_setattr,
         [REINT_CREATE] = mdt_reconstruct_create,
         [REINT_LINK] = mdt_reconstruct_generic,
-        [REINT_UNLINK] = mdt_reconstruct_generic,
+        [REINT_UNLINK] = mdt_reconstruct_unlink,
         [REINT_RENAME] = mdt_reconstruct_generic,
         [REINT_OPEN] = mdt_reconstruct_open
 };

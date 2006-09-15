@@ -1633,6 +1633,9 @@ static int mdd_create_data(const struct lu_context *ctxt,
         int                rc;
         ENTRY;
 
+        if (spec->sp_cr_flags & MDS_OPEN_DELAY_CREATE ||
+                        !(spec->sp_cr_flags & FMODE_WRITE))
+                RETURN(0);
         rc = mdd_lov_create(ctxt, mdd, mdd_pobj, son, &lmm, &lmm_size, spec,
                             attr);
         if (rc)
@@ -1647,11 +1650,12 @@ static int mdd_create_data(const struct lu_context *ctxt,
          * but setting the attr is locked? */
 
         /* replay creates has objects already */
-        if (spec->u.sp_ea.no_lov_create)
+        if (spec->u.sp_ea.no_lov_create) {
+                CDEBUG(D_INFO, "we already have lov ea\n");
                 rc = mdd_lov_set_md(ctxt, mdd_pobj, son,
                                     (struct lov_mds_md *)spec->u.sp_ea.eadata,
                                     spec->u.sp_ea.eadatalen, handle, 0);
-        else
+        } else
                 rc = mdd_lov_set_md(ctxt, mdd_pobj, son, lmm,
                                     lmm_size, handle, 0);
 
@@ -1824,11 +1828,12 @@ static int mdd_create(const struct lu_context *ctxt, struct md_object *pobj,
 
         inserted = 1;
         /* replay creates has objects already */
-        if (spec->u.sp_ea.no_lov_create)
+        if (spec->u.sp_ea.no_lov_create) {
+                CDEBUG(D_INFO, "we already have lov ea\n");
                 rc = mdd_lov_set_md(ctxt, mdd_pobj, son,
                                     (struct lov_mds_md *)spec->u.sp_ea.eadata,
                                     spec->u.sp_ea.eadatalen, handle, 0);
-        else
+        } else
                 rc = mdd_lov_set_md(ctxt, mdd_pobj, son, lmm,
                                     lmm_size, handle, 0);
         if (rc) {

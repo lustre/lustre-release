@@ -42,9 +42,9 @@
 
 
 /* copied from lov/lov_ea.c, just for debugging, will be removed later */
-void mdt_dump_lmm(int level, struct lov_mds_md *lmm)
+void mdt_dump_lmm(int level, const struct lov_mds_md *lmm)
 {
-        struct lov_ost_data_v1 *lod;
+        const struct lov_ost_data_v1 *lod;
         int i;
         __s16 stripe_count =
                 le16_to_cpu(((struct lov_user_md*)lmm)->lmm_stripe_count);

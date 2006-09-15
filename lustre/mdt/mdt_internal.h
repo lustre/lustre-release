@@ -411,7 +411,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
                            const struct md_attr *);
 void mdt_reconstruct_open(struct mdt_thread_info *);
 
-void mdt_dump_lmm(int level, struct lov_mds_md *lmm);
+void mdt_dump_lmm(int level, const struct lov_mds_md *lmm);
 
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/
