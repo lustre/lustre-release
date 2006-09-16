@@ -159,6 +159,34 @@ static void mdc_req2attr_update(const struct lu_context *ctx,
         mdc_body2attr(body, ma);
 }
 
+static int mdc_attr_get(const struct lu_context *ctx, struct md_object *mo,
+                        struct md_attr *ma)
+{
+        struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
+        struct mdc_thread_info *mci;
+        int rc;
+        ENTRY;
+
+        mci = lu_context_key_get(ctx, &mdc_thread_key);
+        LASSERT(mci);
+
+        memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
+
+        rc = md_getattr(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
+                        OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID,
+                        0, &mci->mci_req);
+
+        if (rc == 0) {
+                /* get attr from request */
+                mdc_req2attr_update(ctx, ma);
+        }
+
+        ptlrpc_req_finished(mci->mci_req);
+
+        RETURN(rc);
+}
+
+
 static int mdc_object_create(const struct lu_context *ctx,
                              struct md_object *mo, 
                              const struct md_create_spec *spec,
@@ -311,6 +339,7 @@ send_page:
 #endif
 
 static struct md_object_operations mdc_mo_ops = {
+        .moo_attr_get       = mdc_attr_get,
         .moo_object_create  = mdc_object_create,
         .moo_ref_add        = mdc_ref_add,
         .moo_ref_del        = mdc_ref_del,

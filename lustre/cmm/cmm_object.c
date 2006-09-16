@@ -407,13 +407,46 @@ static int cml_unlink(const struct lu_context *ctx, struct md_object *mo_p,
 }
 
 /* rename is split to local/remote by location of new parent dir */
+struct md_object *md_object_find(const struct lu_context *ctx,
+                                  struct md_device *md,
+                                  const struct lu_fid *f)
+{
+        struct lu_object *o;
+        struct md_object *m;
+        ENTRY;
+
+        o = lu_object_find(ctx, md2lu_dev(md)->ld_site, f);
+        if (IS_ERR(o))
+                m = (struct md_object *)o;
+        else {
+                o = lu_object_locate(o->lo_header, md2lu_dev(md)->ld_type);
+                m = o ? lu2md(o) : NULL;
+        }
+        RETURN(m);
+}
+
 static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
                        struct md_object *mo_pn, const struct lu_fid *lf,
                        const char *s_name, struct md_object *mo_t,
                        const char *t_name, struct md_attr *ma)
 {
+        struct cmm_thread_info *cmi;
+        struct md_object *mo_s = md_object_find(ctx, md_obj2dev(mo_po), lf);
+        struct md_attr *tmp_ma;
         int rc;
         ENTRY;
+
+        cmi = lu_context_key_get(ctx, &cmm_thread_key);
+        LASSERT(cmi);
+        tmp_ma = &cmi->cmi_ma;
+        tmp_ma->ma_need = MA_INODE;
+        
+        /* get type from src, can be remote req */
+        rc = mo_attr_get(ctx, md_object_next(mo_s), tmp_ma);
+        if (rc != 0)
+                RETURN(rc);
+
+        ma->ma_attr.la_mode = tmp_ma->ma_attr.la_mode;
 
         if (mo_t && lu_object_exists(&mo_t->mo_lu) < 0) {
                 /* mo_t is remote object and there is RPC to unlink it */

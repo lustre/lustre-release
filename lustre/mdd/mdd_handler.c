@@ -1352,13 +1352,13 @@ static int mdd_parent_fid(const struct lu_context *ctxt,
 }
 
 /*
- * return 0: if p2 is the parent of p1
+ * return 0: if lf is the fid of the ancestor of p1
  * otherwise: other_value
  */
 static int mdd_is_parent(const struct lu_context *ctxt,
                          struct mdd_device *mdd,
                          struct mdd_object *p1,
-                         struct mdd_object *p2)
+                         const struct lu_fid *lf)
 {
         struct lu_fid * pfid;
         struct mdd_object *parent = NULL;
@@ -1372,7 +1372,7 @@ static int mdd_is_parent(const struct lu_context *ctxt,
                 rc = mdd_parent_fid(ctxt, p1, pfid);
                 if (rc)
                         GOTO(out, rc);
-                if (lu_fid_eq(pfid, mdo2fid(p2)))
+                if (lu_fid_eq(pfid, lf))
                         GOTO(out, rc = 0);
                 if (lu_fid_eq(pfid, &mdd->mdd_root_fid))
                         GOTO(out, rc = 1);
@@ -1412,7 +1412,7 @@ static int mdd_rename_lock(const struct lu_context *ctxt,
                 RETURN(0);
         }
 
-        if (!mdd_is_parent(ctxt, mdd, src_pobj, tgt_pobj)) {
+        if (!mdd_is_parent(ctxt, mdd, src_pobj, mdo2fid(tgt_pobj))) {
                 mdd_lock2(ctxt, tgt_pobj, src_pobj);
                 RETURN(0);
         }
@@ -1434,17 +1434,16 @@ static void mdd_rename_unlock(const struct lu_context *ctxt,
 static int mdd_rename_sanity_check(const struct lu_context *ctxt,
                                    struct mdd_object *src_pobj,
                                    struct mdd_object *tgt_pobj,
-                                   struct mdd_object *sobj,
+                                   const struct lu_fid *sfid,
+                                   int src_is_dir,
                                    struct mdd_object *tobj)
 {
         struct mdd_device *mdd =mdo2mdd(&src_pobj->mod_obj);
-        int rc = 0, src_is_dir, tgt_is_dir;
+        int rc = 0, tgt_is_dir;
         ENTRY;
 
-        src_is_dir = S_ISDIR(mdd_object_type(sobj));
-        rc = mdd_may_delete(ctxt, src_pobj, sobj, src_is_dir);
-        if (rc)
-                GOTO(out, rc);
+        if (mdd_is_dead_obj(src_pobj))
+                RETURN(-ENOENT);
 
         if (!tobj) {
                 rc = mdd_may_create(ctxt, tgt_pobj, NULL);
@@ -1457,17 +1456,15 @@ static int mdd_rename_sanity_check(const struct lu_context *ctxt,
                 }
         }
         if (rc)
-                GOTO(out, rc);
+                RETURN(rc);
 
         /* source should not be ancestor of target dir */
-        if (src_is_dir && !mdd_is_parent(ctxt, mdd, tgt_pobj, sobj))
+        if (src_is_dir && !mdd_is_parent(ctxt, mdd, tgt_pobj, sfid))
                 rc = -EINVAL;
 
-out:
-        mdd_object_put(ctxt, sobj);
         RETURN(rc);
 }
-
+/* src object can be remote that is why we use only fid and type of object */
 static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
                       struct md_object *tgt_pobj, const struct lu_fid *lf,
                       const char *sname, struct md_object *tobj,
@@ -1484,18 +1481,15 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         int rc;
         ENTRY;
 
-        /* the source can be remote one, not supported yet */
-        if (mdd_sobj == NULL)
-                RETURN(-EOPNOTSUPP);
-
-        is_dir = S_ISDIR(mdd_object_type(mdd_sobj));
+        LASSERT(ma->ma_attr.la_mode & S_IFMT);
+        is_dir = S_ISDIR(ma->ma_attr.la_mode);
         
         if (tobj)
                 mdd_tobj = md2mdd_obj(tobj);
 
         /*XXX: shouldn't this check be done under lock below? */
         rc = mdd_rename_sanity_check(ctxt, mdd_spobj, mdd_tpobj,
-                                     mdd_sobj, mdd_tobj);
+                                     lf, is_dir, mdd_tobj);
         if (rc)
                 RETURN(rc);
 
@@ -1529,10 +1523,12 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
 
         *la_copy = ma->ma_attr;
         la_copy->la_valid = LA_CTIME;
-        rc = mdd_attr_set_internal_locked(ctxt, mdd_sobj, la_copy, handle);
-        if (rc)
-                GOTO(cleanup, rc);
-
+        if (mdd_sobj) {
+                /*XXX: how to update ctime for remote sobj? */
+                rc = mdd_attr_set_internal_locked(ctxt, mdd_sobj, la_copy, handle);
+                if (rc)
+                        GOTO(cleanup, rc);
+        }
         if (tobj && lu_object_exists(&tobj->mo_lu)) {
                 mdd_write_lock(ctxt, mdd_tobj);
                 __mdd_ref_del(ctxt, mdd_tobj, handle);

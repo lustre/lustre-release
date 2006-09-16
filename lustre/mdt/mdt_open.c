@@ -661,8 +661,6 @@ int mdt_cross_open(struct mdt_thread_info* info, const struct lu_fid *fid,
         int                rc;
         ENTRY;
 
-        LASSERTF(!(flags & MDS_OPEN_CREAT), "Cross-ref open+create!\n");
-
         o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid);
         if (IS_ERR(o)) 
                 RETURN(rc = PTR_ERR(o));
