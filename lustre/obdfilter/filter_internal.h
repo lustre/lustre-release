@@ -160,7 +160,7 @@ struct ost_filterdata {
 };
 int filter_log_sz_change(struct llog_handle *cathandle,
                          struct ll_fid *mds_fid,
-                         __u32 io_epoch,
+                         __u32 ioepoch,
                          struct llog_cookie *logcookie,
                          struct inode *inode);
 //int filter_get_catalog(struct obd_device *);

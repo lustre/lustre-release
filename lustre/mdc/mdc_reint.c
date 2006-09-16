@@ -67,19 +67,22 @@ static int mdc_reint(struct ptlrpc_request *request,
  * magic open-path setattr that should take the setattr semaphore and
  * go to the setattr portal. */
 int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
-                struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
+                void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mdt_rec_setattr *rec;
         struct mdc_rpc_lock *rpc_lock;
         struct obd_device *obd = exp->exp_obd;
-        int size[4] = { sizeof(struct ptlrpc_body),
-                        sizeof(*rec), ealen, ea2len };
-        int bufcount = 2, rc;
+        int size[5] = { sizeof(struct ptlrpc_body),
+                        sizeof(*rec), 0, ealen, ea2len };
+        int bufcount = 3, rc;
         ENTRY;
 
-        LASSERT(iattr != NULL);
+        LASSERT(op_data != NULL);
+
+        if (op_data->flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN))
+                size[2] = sizeof(struct mdt_epoch);
 
         if (ealen > 0) {
                 bufcount++;
@@ -92,17 +95,18 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        if (iattr->ia_valid & ATTR_FROM_OPEN) {
+        if (op_data->attr.ia_valid & ATTR_FROM_OPEN) {
                 req->rq_request_portal = MDS_SETATTR_PORTAL; //XXX FIXME bug 249
                 rpc_lock = obd->u.cli.cl_setattr_lock;
         } else {
                 rpc_lock = obd->u.cli.cl_rpc_lock;
         }
 
-        if (iattr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
+        if (op_data->attr.ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu\n",
-                       LTIME_S(iattr->ia_mtime), LTIME_S(iattr->ia_ctime));
-        mdc_setattr_pack(req, REQ_REC_OFF, op_data, iattr, ea, ealen, ea2, ea2len);
+                       LTIME_S(op_data->attr.ia_mtime),
+                       LTIME_S(op_data->attr.ia_ctime));
+        mdc_setattr_pack(req, REQ_REC_OFF, op_data, ea, ealen, ea2, ea2len);
 
         size[REPLY_REC_OFF] = sizeof(struct mdt_body);
         ptlrpc_req_set_repsize(req, 2, size);

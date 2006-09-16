@@ -136,10 +136,9 @@ struct mdt_device {
                 signed int         mo_compat_resname:1;
         } mdt_opts;
 
-        /* lock to pretect epoch and write count
-         */
-        spinlock_t                 mdt_epoch_lock;
-        __u64                      mdt_io_epoch;
+        /* lock to pretect epoch and write count */
+        spinlock_t                 mdt_ioepoch_lock;
+        __u64                      mdt_ioepoch;
 
         /* Transaction related stuff here */
         spinlock_t                 mdt_transno_lock;
@@ -170,7 +169,9 @@ struct mdt_device {
 struct mdt_object {
         struct lu_object_header mot_header;
         struct md_object        mot_obj;
-        __u64                   mot_io_epoch;
+        __u64                   mot_ioepoch;
+        __u64                   mot_flags;
+        int                     mot_epochcount;
         int                     mot_writecount;
 };
 
@@ -292,6 +293,9 @@ struct mdt_thread_info {
                 } rdpg;
         } mti_u;
 
+        /* IO epoch related stuff. */
+        struct mdt_epoch           *mti_epoch;
+
         /* server and client data buffers */
         struct mdt_server_data     mti_msd;
         struct mdt_client_data     mti_mcd;
@@ -365,8 +369,11 @@ void mdt_object_unlock_put(struct mdt_thread_info *,
                            struct mdt_lock_handle *,
                            int decref);
 
+int mdt_close_unpack(struct mdt_thread_info *info);
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 int mdt_reint_rec(struct mdt_thread_info *);
+void mdt_pack_size2body(struct mdt_body *b, const struct lu_attr *attr,
+                        struct mdt_object *o);
 void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
                         const struct lu_fid *fid);
 
@@ -400,11 +407,18 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
 
 int mdt_open(struct mdt_thread_info *info);
 
-void mdt_mfd_close(const struct lu_context *ctxt, struct mdt_device *mdt,
-                   struct mdt_file_data *mfd, struct md_attr *ma);
-
+struct mdt_file_data *mdt_handle2mfd(const struct lustre_handle *handle);
+int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o,
+                   __u64 epoch);
+void mdt_sizeonmds_enable(struct mdt_thread_info *info, struct mdt_object *mo);
+int mdt_sizeonmds_enabled(struct mdt_object *mo);
+int mdt_write_get(struct mdt_device *mdt, struct mdt_object *o);
+struct mdt_file_data *mdt_mfd_new(void);
+int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd);
+void mdt_mfd_free(struct mdt_file_data *mfd);
 int mdt_close(struct mdt_thread_info *info);
-
+int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, 
+                 int flags);
 int mdt_done_writing(struct mdt_thread_info *info);
 void mdt_shrink_reply(struct mdt_thread_info *info, int offset);
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,

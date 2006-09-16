@@ -297,34 +297,33 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
 /*
  * really does the getattr on the inode and updates its fields
  */
-int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
+int llu_inode_getattr(struct inode *inode, struct obdo *obdo)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
-        struct obd_export *exp = llu_i2obdexp(inode);
         struct ptlrpc_request_set *set;
+        struct lov_stripe_md *lsm = lli->lli_smd;
         struct obd_info oinfo = { { { 0 } } };
-        struct obdo oa = { 0 };
-        obd_flag refresh_valid;
         int rc;
         ENTRY;
 
         LASSERT(lsm);
-        LASSERT(lli);
 
         oinfo.oi_md = lsm;
-        oinfo.oi_oa = &oa;
-        oa.o_id = lsm->lsm_object_id;
-        oa.o_mode = S_IFREG;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
-                OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
-                OBD_MD_FLCTIME;
+        oinfo.oi_oa = obdo;
+        oinfo.oi_oa->o_id = lsm->lsm_object_id;
+        oinfo.oi_oa->o_gr = lsm->lsm_object_gr;
+        oinfo.oi_oa->o_mode = S_IFREG;
+        oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
+                               OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                               OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
+                               OBD_MD_FLCTIME;
 
         set = ptlrpc_prep_set();
         if (set == NULL) {
                 CERROR ("ENOMEM allocing request set\n");
                 rc = -ENOMEM;
         } else {
-                rc = obd_getattr_async(exp, &oinfo, set);
+                rc = obd_getattr_async(llu_i2obdexp(inode), &oinfo, set);
                 if (rc == 0)
                         rc = ptlrpc_set_wait(set);
                 ptlrpc_set_destroy(set);
@@ -332,11 +331,16 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
         if (rc)
                 RETURN(rc);
 
-        refresh_valid = OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
-                        OBD_MD_FLCTIME | OBD_MD_FLSIZE;
+        oinfo.oi_oa->o_valid = OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ |
+                               OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                               OBD_MD_FLSIZE;
 
-        obdo_refresh_inode(inode, &oa, refresh_valid);
-
+        obdo_refresh_inode(inode, oinfo.oi_oa, oinfo.oi_oa->o_valid);
+        CDEBUG(D_INODE, "objid "LPX64" size %Lu, blocks %Lu, "
+               "blksize %Lu\n", lli->lli_smd->lsm_object_id,
+               (long long unsigned)llu_i2stat(inode)->st_size,
+               (long long unsigned)llu_i2stat(inode)->st_blocks,
+               (long long unsigned)llu_i2stat(inode)->st_blksize);
         RETURN(0);
 }
 
@@ -474,10 +478,8 @@ static int llu_inode_revalidate(struct inode *inode)
                 llu_update_inode(inode, md.body, md.lsm);
                 if (md.lsm != NULL && llu_i2info(inode)->lli_smd != md.lsm)
                         obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
-
                 if (md.body->valid & OBD_MD_FLSIZE)
-                        set_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
-                                &llu_i2info(inode)->lli_flags);
+                        llu_i2info(inode)->lli_flags |= LLIF_MDS_SIZE_LOCK;
                 ptlrpc_req_finished(req);
         }
 
@@ -547,7 +549,7 @@ void llu_clear_inode(struct inode *inode)
                (long long)llu_i2stat(inode)->st_ino, lli->lli_st_generation,
                inode);
 
-        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(lli->lli_flags));
+        lli->lli_flags &= ~LLIF_MDS_SIZE_LOCK;
         md_change_cbdata(sbi->ll_md_exp, ll_inode2fid(inode),
                          null_if_equal, inode);
 
@@ -614,6 +616,74 @@ static int inode_setattr(struct inode * inode, struct iattr * attr)
         return error;
 }
 
+int llu_md_setattr(struct inode *inode, struct md_op_data *op_data)
+{
+        struct lustre_md md;
+        struct llu_sb_info *sbi = llu_i2sbi(inode);
+        struct ptlrpc_request *request = NULL;
+        int rc;
+        ENTRY;
+        
+        llu_prepare_md_op_data(op_data, inode, NULL, NULL, 0, 0);
+        rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0, &request);
+        OBD_FREE_PTR(op_data);
+
+        if (rc) {
+                ptlrpc_req_finished(request);
+                if (rc != -EPERM && rc != -EACCES)
+                        CERROR("md_setattr fails: rc = %d\n", rc);
+                RETURN(rc);
+        }
+
+        rc = md_get_lustre_md(sbi->ll_md_exp, request, REPLY_REC_OFF,
+                              sbi->ll_dt_exp, sbi->ll_md_exp, &md);
+        if (rc) {
+                ptlrpc_req_finished(request);
+                RETURN(rc);
+        }
+
+        /* We call inode_setattr to adjust timestamps.
+         * If there is at least some data in file, we cleared ATTR_SIZE
+         * above to avoid invoking vmtruncate, otherwise it is important
+         * to call vmtruncate in inode_setattr to update inode->i_size
+         * (bug 6196) */
+        inode_setattr(inode, &op_data->attr);
+        llu_update_inode(inode, md.body, md.lsm);
+        ptlrpc_req_finished(request);
+
+        RETURN(rc);
+}
+
+/* Close IO epoch and send Size-on-MDS attribute update. */
+static int llu_setattr_done_writing(struct inode *inode,
+                                    struct md_op_data *op_data)
+{
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct intnl_stat *st = llu_i2stat(inode);
+        int rc = 0;
+        ENTRY;
+        
+        LASSERT(op_data != NULL);
+        if (!S_ISREG(st->st_mode))
+                RETURN(0);
+
+        /* XXX: pass och here for the recovery purpose. */
+        CDEBUG(D_INODE, "Epoch "LPU64" closed on "DFID" for truncate\n",
+               op_data->ioepoch, PFID(&lli->lli_fid));
+
+        op_data->flags = MF_EPOCH_CLOSE | MF_SOM_CHANGE;
+        rc = md_done_writing(llu_i2sbi(inode)->ll_md_exp, op_data, NULL);
+        if (rc == EAGAIN) {
+                /* MDS has instructed us to obtain Size-on-MDS attribute
+                 * from OSTs and send setattr to back to MDS. */
+                rc = llu_sizeonmds_update(inode, &op_data->handle);
+        } else if (rc) {
+                CERROR("inode %llu mdc truncate failed: rc = %d\n",
+                       st->st_ino, rc);
+        }
+        RETURN(rc);
+}
+
 /* If this inode has objects allocated to it (lsm != NULL), then the OST
  * object(s) determine the file size and mtime.  Otherwise, the MDS will
  * keep these values until such a time that objects are allocated for it.
@@ -632,9 +702,8 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         struct lov_stripe_md *lsm = llu_i2info(inode)->lli_smd;
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct intnl_stat *st = llu_i2stat(inode);
-        struct ptlrpc_request *request = NULL;
         int ia_valid = attr->ia_valid;
-        struct md_op_data op_data;
+        struct md_op_data op_data = { { 0 } };
         int rc = 0;
         ENTRY;
 
@@ -679,46 +748,30 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
                        LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
                        LTIME_S(CURRENT_TIME));
+
+        /* NB: ATTR_SIZE will only be set after this point if the size
+         * resides on the MDS, ie, this file has no objects. */
         if (lsm)
                 attr->ia_valid &= ~ATTR_SIZE;
 
         /* If only OST attributes being set on objects, don't do MDS RPC.
          * In that case, we need to check permissions and update the local
          * inode ourselves so we can call obdo_from_inode() always. */
-        if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
-                struct lustre_md md;
-    
-                llu_prepare_md_op_data(&op_data, inode, NULL, NULL, 0, 0);
+        if (ia_valid & (lsm ? ~(ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
+                memcpy(&op_data.attr, attr, sizeof(*attr));
 
-                rc = md_setattr(sbi->ll_md_exp, &op_data,
-                                attr, NULL, 0, NULL, 0, &request);
-
-                if (rc) {
-                        ptlrpc_req_finished(request);
-                        if (rc != -EPERM && rc != -EACCES)
-                                CERROR("md_setattr fails: rc = %d\n", rc);
+                /* Open epoch for truncate. */
+                if (ia_valid & ATTR_SIZE)
+                        op_data.flags = MF_EPOCH_OPEN;
+                rc = llu_md_setattr(inode, &op_data);
+                if (rc)
                         RETURN(rc);
-                }
-
-                rc = md_get_lustre_md(sbi->ll_md_exp, request, REPLY_REC_OFF,
-                                      sbi->ll_dt_exp, sbi->ll_md_exp, &md);
-                if (rc) {
-                        ptlrpc_req_finished(request);
-                        RETURN(rc);
-                }
-
-                /* We call inode_setattr to adjust timestamps.
-                 * If there is at least some data in file, we cleared ATTR_SIZE
-                 * above to avoid invoking vmtruncate, otherwise it is important
-                 * to call vmtruncate in inode_setattr to update inode->i_size
-                 * (bug 6196) */
-                inode_setattr(inode, attr);
-                llu_update_inode(inode, md.body, md.lsm);
-                ptlrpc_req_finished(request);
 
                 if (!lsm || !S_ISREG(st->st_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
-                        RETURN(0);
+                        if (op_data.ioepoch)
+                                rc = llu_setattr_done_writing(inode, &op_data);
+                        RETURN(rc);
                 }
         } else {
                 /* The OST doesn't check permissions, but the alternative is
@@ -739,6 +792,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         }
                 }
 
+                
                 /* Won't invoke llu_vmtruncate(), as we already cleared
                  * ATTR_SIZE */
                 inode_setattr(inode, attr);
@@ -792,6 +846,9 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         if (!rc)
                                 rc = err;
                 }
+                
+                if (op_data.ioepoch)
+                        rc = llu_setattr_done_writing(inode, &op_data);
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 struct obd_info oinfo = { { { 0 } } };
                 struct obdo oa;
@@ -1641,7 +1698,6 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
         struct llu_sb_info *sbi = llu_i2sbi(ino); 
         struct ptlrpc_request *request = NULL;
         struct md_op_data op_data;
-        struct iattr attr = { 0 };
         struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
         int rc = 0;
 
@@ -1661,8 +1717,8 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
                 lustre_swab_lov_user_md(&lum);
 
         /* swabbing is done in lov_setstripe() on server side */
-        rc = md_setattr(sbi->ll_md_exp, &op_data,
-                        &attr, &lum, sizeof(lum), NULL, 0, &request);
+        rc = md_setattr(sbi->ll_md_exp, &op_data, &lum,
+                        sizeof(lum), NULL, 0, &request);
         if (rc) {
                 ptlrpc_req_finished(request);
                 if (rc != -EPERM && rc != -EACCES)

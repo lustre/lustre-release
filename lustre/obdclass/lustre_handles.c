@@ -105,6 +105,20 @@ void class_handle_unhash(struct portals_handle *h)
         spin_unlock(&handle_lock);
 }
 
+void class_handle_hash_back(struct portals_handle *h)
+{
+        struct list_head *bucket;
+        ENTRY;
+
+        spin_lock(&handle_lock);
+        bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
+        list_add(&h->h_link, bucket);
+        handle_count++;
+        spin_unlock(&handle_lock);
+
+        EXIT;
+}
+
 void *class_handle2object(__u64 cookie)
 {
         struct list_head *bucket, *tmp;

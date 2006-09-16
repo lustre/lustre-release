@@ -310,6 +310,33 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         return rc;
 }
 
+int llu_sizeonmds_update(struct inode *inode, struct lustre_handle *fh)
+{
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct md_op_data op_data;
+        struct obdo oa;
+        int rc;
+        ENTRY;
+        
+        LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
+        
+        rc = llu_inode_getattr(inode, &oa);
+        if (rc) {
+                CERROR("inode_getattr failed (%d): unable to send a "
+                       "Size-on-MDS attribute update for inode %llu/%lu\n",
+                       rc, (long long)llu_i2stat(inode)->st_ino,
+                       lli->lli_st_generation);
+                RETURN(rc);
+        }
+        
+        md_from_obdo(&op_data, &oa, oa.o_valid);
+        memcpy(&op_data.handle, fh, sizeof(*fh));
+        op_data.flags |= MF_SOM_CHANGE;
+
+        rc = llu_md_setattr(inode, &op_data);
+        RETURN(rc);
+}
+
 int llu_md_close(struct obd_export *md_exp, struct inode *inode)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
@@ -329,33 +356,45 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
                                        &fd->fd_cwlockh);
         }
 
-        memset(&op_data, 0, sizeof(op_data));
-        op_data.fid1 = lli->lli_fid;
-        op_data.valid = OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                        OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                        OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                        OBD_MD_FLCTIME;
+        op_data.attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
+                                ATTR_MTIME_SET | ATTR_CTIME_SET;
+        
+        if (!S_ISREG(llu_i2stat(inode)->st_mode)) {
+                op_data.attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
+        } else {
+                /* Inode cannot be dirty. Close the epoch. */
+                op_data.flags |= MF_EPOCH_CLOSE;
+                /* XXX: Send CHANGE flag only if Size-on-MDS inode attributes
+                 * are really changed.  */
+                op_data.flags |= MF_SOM_CHANGE;
 
-        op_data.atime = LTIME_S(st->st_atime);
-        op_data.mtime = LTIME_S(st->st_mtime);
-        op_data.ctime = LTIME_S(st->st_ctime);
-        op_data.size = st->st_size;
-        op_data.blocks = st->st_blocks;
-        op_data.flags = lli->lli_st_flags;
-
-        if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
-                op_data.valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-
-        if (0 /* ll_is_inode_dirty(inode) */) {
-                op_data.flags = MDS_BFLAG_UNCOMMITTED_WRITES;
-                op_data.valid |= OBD_MD_FLFLAGS;
+                /* Pack Size-on-MDS attrinodes if valid. */
+                if ((lli->lli_flags & LLIF_MDS_SIZE_LOCK) ||
+                    !llu_local_size(inode))
+                        op_data.attr.ia_valid |= 
+                                OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
         }
+        
+        op_data.fid1 = lli->lli_fid;
+        op_data.attr.ia_atime = st->st_atime;
+        op_data.attr.ia_mtime = st->st_mtime;
+        op_data.attr.ia_ctime = st->st_ctime;
+        op_data.attr.ia_size = st->st_size;
+        op_data.attr_blocks = st->st_blocks;
+        op_data.attr.ia_attr_flags = lli->lli_st_flags;
+        op_data.ioepoch = lli->lli_ioepoch;
+        memcpy(&op_data.handle, &och->och_fh, sizeof(op_data.handle));
+
         rc = md_close(md_exp, &op_data, och, &req);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
-                //ll_queue_done_writing(inode);
-                rc = 0;
+                rc = llu_sizeonmds_update(inode, &och->och_fh);
+                if (rc) {
+                        CERROR("inode %llu mdc Size-on-MDS update failed: "
+                               "rc = %d\n", (long long)st->st_ino, rc);
+                        rc = 0;
+                }
         } else if (rc) {
                 CERROR("inode %llu close failed: rc %d\n",
                        (long long)st->st_ino, rc);

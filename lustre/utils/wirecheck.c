@@ -807,7 +807,7 @@ check_llog_size_change_rec(void)
         CHECK_STRUCT(llog_size_change_rec);
         CHECK_MEMBER(llog_size_change_rec, lsc_hdr);
         CHECK_MEMBER(llog_size_change_rec, lsc_fid);
-        CHECK_MEMBER(llog_size_change_rec, lsc_io_epoch);
+        CHECK_MEMBER(llog_size_change_rec, lsc_ioepoch);
         CHECK_MEMBER(llog_size_change_rec, padding);
         CHECK_MEMBER(llog_size_change_rec, lsc_tail);
 }

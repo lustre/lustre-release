@@ -638,8 +638,9 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
               struct obd_client_handle *och, struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
-        int reqsize[2] = { sizeof(struct ptlrpc_body),
-                           sizeof(struct mdt_body) };
+        int reqsize[3] = { sizeof(struct ptlrpc_body),
+                           sizeof(struct mdt_epoch),
+                           sizeof(struct mdt_rec_setattr)};
         int rc, repsize[4] = { sizeof(struct ptlrpc_body),
                                sizeof(struct mdt_body),
                                obd->u.cli.cl_max_mds_easize,
@@ -649,7 +650,7 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_CLOSE, 2, reqsize, NULL);
+                              MDS_CLOSE, 3, reqsize, NULL);
         if (req == NULL)
                 GOTO(out, rc = -ENOMEM);
 
@@ -679,8 +680,7 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
         }
 
-        mdc_close_pack(req, REQ_REC_OFF, op_data, op_data->valid, och);
-
+        mdc_close_pack(req, REQ_REC_OFF, op_data);
         ptlrpc_req_set_repsize(req, 4, repsize);
         req->rq_commit_cb = mdc_commit_close;
         LASSERT(req->rq_cb_data == NULL);
@@ -723,27 +723,27 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
         return rc;
 }
 
-int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data)
+int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
+                     struct obd_client_handle *och)
 {
         struct ptlrpc_request *req;
-        struct mdt_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc, size[3] = { sizeof(struct ptlrpc_body),
+                            sizeof(struct mdt_epoch),
+                            sizeof(struct mdt_rec_setattr)};
+        int repsize[2] = { sizeof(struct ptlrpc_body),
+                           sizeof(struct mdt_body)};
+     
         ENTRY;
-
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_DONE_WRITING, 2, size, NULL);
+                              MDS_DONE_WRITING, 3, size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        body->fid1 = op_data->fid1;
-        body->size = op_data->size;
-        body->blocks = op_data->blocks;
-        body->flags = op_data->flags;
-        body->valid = op_data->valid;
-
-        ptlrpc_req_set_repsize(req, 2, size);
-
+        /* XXX: add DONE_WRITING request to och -- when Size-on-MDS 
+         * recovery will be ready. */
+        mdc_close_pack(req, REQ_REC_OFF, op_data);
+        
+        ptlrpc_req_set_repsize(req, 2, repsize);
         rc = ptlrpc_queue_wait(req);
         ptlrpc_req_finished(req);
         RETURN(rc);

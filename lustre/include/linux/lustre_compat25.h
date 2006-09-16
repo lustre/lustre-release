@@ -34,12 +34,12 @@
 #include <linux/lustre_patchless_compat.h>
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
-struct ll_iattr_struct {
+struct ll_iattr {
         struct iattr    iattr;
         unsigned int    ia_attr_flags;
 };
 #else
-#define ll_iattr_struct iattr
+#define ll_iattr iattr
 #endif
 
 #ifndef HAVE_SET_FS_PWD
@@ -64,6 +64,8 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #else
 #define ll_set_fs_pwd set_fs_pwd
 #endif
+
+#define ATTR_BLOCKS     0x4000
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
 #define UNLOCK_INODE_MUTEX(inode) do {mutex_unlock(&(inode)->i_mutex); } while(0)

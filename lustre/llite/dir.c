@@ -605,7 +605,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
                 struct ptlrpc_request *request = NULL;
                 struct md_op_data *op_data;
-                struct iattr attr = { 0 };
                 int rc = 0;
 
                 OBD_ALLOC_PTR(op_data);
@@ -634,8 +633,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         lustre_swab_lov_user_md(&lum);
 
                 /* swabbing is done in lov_setstripe() on server side */
-                rc = md_setattr(sbi->ll_md_exp, op_data,
-                                &attr, &lum, sizeof(lum), NULL, 0, &request);
+                rc = md_setattr(sbi->ll_md_exp, op_data, &lum,
+                                sizeof(lum), NULL, 0, &request);
                 if (rc) {
                         if (rc != -EPERM && rc != -EACCES)
                                 CERROR("md_setattr fails: rc = %d\n", rc);

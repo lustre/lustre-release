@@ -178,45 +178,62 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         }
 }
 
-void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
-                      struct md_op_data *op_data, struct iattr *iattr,
-                      void *ea, int ealen, void *ea2, int ea2len)
+static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
+                                 struct md_op_data *op_data)
 {
-        struct mdt_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, offset,
-                                                     sizeof (*rec));
         rec->sa_opcode = REINT_SETATTR;
         rec->sa_fsuid = current->fsuid;
         rec->sa_fsgid = current->fsgid;
         rec->sa_cap = current->cap_effective;
-        rec->sa_fid = op_data->fid1;
         rec->sa_suppgid = -1;
 
-        if (iattr) {
-                rec->sa_valid = iattr->ia_valid;
-                rec->sa_mode = iattr->ia_mode;
-                rec->sa_uid = iattr->ia_uid;
-                rec->sa_gid = iattr->ia_gid;
-                rec->sa_size = iattr->ia_size;
-                rec->sa_atime = LTIME_S(iattr->ia_atime);
-                rec->sa_mtime = LTIME_S(iattr->ia_mtime);
-                rec->sa_ctime = LTIME_S(iattr->ia_ctime);
-                rec->sa_attr_flags =
-                               ((struct ll_iattr_struct *)iattr)->ia_attr_flags;
-                if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
-                        rec->sa_suppgid = iattr->ia_gid;
-                else
-                        rec->sa_suppgid = op_data->suppgids[0];
-        }
+        rec->sa_fid = op_data->fid1;
+        rec->sa_valid = op_data->attr.ia_valid;
+        rec->sa_mode = op_data->attr.ia_mode;
+        rec->sa_uid = op_data->attr.ia_uid;
+        rec->sa_gid = op_data->attr.ia_gid;
+        rec->sa_size = op_data->attr.ia_size;
+        rec->sa_blocks = op_data->attr_blocks;
+        rec->sa_atime = LTIME_S(op_data->attr.ia_atime);
+        rec->sa_mtime = LTIME_S(op_data->attr.ia_mtime);
+        rec->sa_ctime = LTIME_S(op_data->attr.ia_ctime);
+        rec->sa_attr_flags = ((struct ll_iattr *)&op_data->attr)->ia_attr_flags;
+        if ((op_data->attr.ia_valid & ATTR_GID) &&
+            in_group_p(op_data->attr.ia_gid))
+                rec->sa_suppgid = op_data->attr.ia_gid;
+        else
+                rec->sa_suppgid = op_data->suppgids[0];
+}
+
+static void mdc_epoch_pack(struct mdt_epoch *epoch, struct md_op_data *op_data)
+{
+        memcpy(&epoch->handle, &op_data->handle, sizeof(epoch->handle));
+        epoch->ioepoch = op_data->ioepoch;
+        epoch->flags = op_data->flags;
+}
+
+void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
+                      struct md_op_data *op_data, void *ea,
+                      int ealen, void *ea2, int ea2len)
+{
+        struct mdt_rec_setattr *rec;
+        struct mdt_epoch *epoch;
+        
+        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));        
+        epoch = lustre_msg_buf(req->rq_reqmsg, offset + 1, sizeof(*epoch));
+        mdc_setattr_pack_rec(rec, op_data);
+        if (epoch)
+                mdc_epoch_pack(epoch, op_data);
 
         if (ealen == 0)
                 return;
 
-        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 1, ealen), ea, ealen);
+        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 2, ealen), ea, ealen);
 
         if (ea2len == 0)
                 return;
 
-        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 2, ea2len), ea2, ea2len);
+        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 3, ea2len), ea2, ea2len);
 }
 
 void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
@@ -318,39 +335,16 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
 }
 
 void mdc_close_pack(struct ptlrpc_request *req, int offset,
-                    struct md_op_data *op_data, __u64  valid,
-                    struct obd_client_handle *och)
+                    struct md_op_data *op_data)
 {
-        struct mdt_body *body;
+        struct mdt_epoch *epoch;
+        struct mdt_rec_setattr *rec;
 
-        body = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*body));
+        epoch = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*epoch));
+        rec = lustre_msg_buf(req->rq_reqmsg, offset + 1, sizeof(*rec));
 
-        body->fid1 = op_data->fid1;
-        memcpy(&body->handle, &och->och_fh, sizeof(body->handle));
-        if (op_data->valid & OBD_MD_FLATIME) {
-                body->atime = op_data->atime;
-                body->valid |= OBD_MD_FLATIME;
-        }
-        if (op_data->valid & OBD_MD_FLMTIME) {
-                body->mtime = op_data->mtime;
-                body->valid |= OBD_MD_FLMTIME;
-        }
-        if (op_data->valid & OBD_MD_FLCTIME) {
-                body->ctime = op_data->ctime;
-                body->valid |= OBD_MD_FLCTIME;
-        }
-        if (op_data->valid & OBD_MD_FLSIZE) {
-                body->size = op_data->size;
-                body->valid |= OBD_MD_FLSIZE;
-        }
-        if (op_data->valid & OBD_MD_FLBLOCKS) {
-                body->blocks = op_data->blocks;
-                body->valid |= OBD_MD_FLBLOCKS;
-        }
-        if (op_data->valid & OBD_MD_FLFLAGS) {
-                body->flags = op_data->flags;
-                body->valid |= OBD_MD_FLFLAGS;
-        }
+        mdc_setattr_pack_rec(rec, op_data);
+        mdc_epoch_pack(epoch, op_data);
 }
 
 struct mdc_cache_waiter {       

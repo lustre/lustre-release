@@ -73,6 +73,12 @@ static const struct req_msg_field *mdt_body_only[] = {
         &RMF_MDT_BODY
 };
 
+static const struct req_msg_field *mdt_close_msg[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_MDT_EPOCH,
+        &RMF_REC_SETATTR
+};
+
 static const struct req_msg_field *mds_statfs_server[] = {
         &RMF_PTLRPC_BODY,
         &RMF_OBD_STATFS
@@ -174,6 +180,7 @@ static const struct req_msg_field *mds_last_unlink_server[] = {
 static const struct req_msg_field *mds_reint_setattr_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_REC_SETATTR,
+        &RMF_MDT_EPOCH,
         &RMF_EADATA,
         &RMF_LOGCOOKIES
 };
@@ -361,6 +368,11 @@ const struct req_msg_field RMF_MDT_BODY =
         DEFINE_MSGF("mdt_body", 0,
                     sizeof(struct mdt_body), lustre_swab_mdt_body);
 EXPORT_SYMBOL(RMF_MDT_BODY);
+
+const struct req_msg_field RMF_MDT_EPOCH =
+        DEFINE_MSGF("mdt_epoch", 0,
+                    sizeof(struct mdt_epoch), lustre_swab_mdt_epoch);
+EXPORT_SYMBOL(RMF_MDT_EPOCH);
 
 const struct req_msg_field RMF_PTLRPC_BODY =
         DEFINE_MSGF("ptlrpc_body", 0,
@@ -620,7 +632,7 @@ EXPORT_SYMBOL(RQF_LDLM_INTENT_UNLINK);
 
 const struct req_format RQF_MDS_CLOSE =
         DEFINE_REQ_FMT0("MDS_CLOSE",
-                        mdt_body_only, mds_last_unlink_server);
+                        mdt_close_msg, mds_last_unlink_server);
 EXPORT_SYMBOL(RQF_MDS_CLOSE);
 
 const struct req_format RQF_MDS_PIN =
@@ -630,7 +642,7 @@ EXPORT_SYMBOL(RQF_MDS_PIN);
 
 const struct req_format RQF_MDS_DONE_WRITING =
         DEFINE_REQ_FMT0("MDS_DONE_WRITING",
-                        mdt_body_only, mdt_body_only);
+                        mdt_close_msg, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_DONE_WRITING);
 
 const struct req_format RQF_MDS_READPAGE =

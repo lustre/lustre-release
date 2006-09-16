@@ -56,8 +56,18 @@ extern struct file_operations ll_pgcache_seq_fops;
 
 #define LLI_INODE_MAGIC                 0x111d0de5
 #define LLI_INODE_DEAD                  0xdeadd00d
-#define LLI_F_HAVE_OST_SIZE_LOCK        0
-#define LLI_F_HAVE_MDS_SIZE_LOCK        1
+
+enum lli_flags {
+        /* MDS has an authority for the Size-on-MDS attributes. */
+        LLIF_MDS_SIZE_LOCK      = (1 << 0),
+        /* Epoch close is postponed. */
+        LLIF_EPOCH_PENDING      = (1 << 1),
+        /* DONE WRITING is allowed. */
+        LLIF_DONE_WRITING       = (1 << 2),
+        /* Sizeon-on-MDS attributes are changed. An attribute update needs to
+         * be sent to MDS. */
+        LLIF_SOM_DIRTY          = (1 << 3),
+};
 
 struct ll_inode_info {
         int                     lli_inode_magic;
@@ -67,16 +77,19 @@ struct ll_inode_info {
         struct semaphore        lli_write_sem;
         char                   *lli_symlink_name;
         __u64                   lli_maxbytes;
-        __u64                   lli_io_epoch;
+        __u64                   lli_ioepoch;
         unsigned long           lli_flags;
 
-        /* this lock protects s_d_w and p_w_ll and mmap_cnt */
+        /* this lock protects posix_acl, pending_write_llaps, mmap_cnt */
         spinlock_t              lli_lock;
         struct list_head        lli_pending_write_llaps;
-        int                     lli_send_done_writing;
+        struct list_head        lli_close_list;
+        /* handle is to be sent to MDS later on done_writing and setattr.
+         * Open handle data are needed for the recovery to reconstruct 
+         * the inode state on the MDS. XXX: recovery is not ready yet. */
+        struct obd_client_handle *lli_pending_och;
+        
         atomic_t                lli_mmap_cnt;
-
-        struct list_head        lli_close_item;
 
         /* for writepage() only to communicate to fsync */
         int                     lli_async_rc;
@@ -435,6 +448,7 @@ int ll_writepage(struct page *page);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
 int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction);
+struct ll_async_page *llap_from_page(struct page *page, unsigned origin);
 extern struct cache_definition ll_cache_definition;
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
@@ -458,6 +472,7 @@ int ll_extent_unlock(struct ll_file_data *, struct inode *,
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
+int ll_local_size(struct inode *inode);
 int ll_glimpse_ioctl(struct ll_sb_info *sbi, 
                      struct lov_stripe_md *lsm, lstat_t *st);
 int ll_glimpse_size(struct inode *inode, int ast_flags);
@@ -468,6 +483,12 @@ int ll_release_openhandle(struct dentry *, struct lookup_intent *);
 int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct file *file);
 int ll_md_real_close(struct inode *inode, int flags);
+void ll_epoch_close(struct inode *inode, struct md_op_data *op_data);
+int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh);
+int ll_inode_getattr(struct inode *inode, struct obdo *obdo);
+int ll_md_setattr(struct inode *inode, struct md_op_data *op_data);
+void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
+                          struct lustre_handle *fh);
 extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid, struct file
                                *file, size_t count, int rw);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
@@ -549,17 +570,16 @@ extern struct inode_operations ll_fast_symlink_inode_operations;
 /* llite/llite_close.c */
 struct ll_close_queue {
         spinlock_t              lcq_lock;
-        struct list_head        lcq_list;
+        struct list_head        lcq_head;
         wait_queue_head_t       lcq_waitq;
         struct completion       lcq_comp;
 };
 
 void llap_write_pending(struct inode *inode, struct ll_async_page *llap);
-void llap_write_complete(struct inode *inode, struct ll_async_page *llap);
-void ll_open_complete(struct inode *inode);
-int ll_is_inode_dirty(struct inode *inode);
-void ll_try_done_writing(struct inode *inode);
+int llap_write_complete(struct inode *inode, struct ll_async_page *llap);
+int ll_inode_dirty(struct inode *inode);
 void ll_queue_done_writing(struct inode *inode);
+void ll_init_done_writing(struct inode *inode);
 void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 

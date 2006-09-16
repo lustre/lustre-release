@@ -805,15 +805,15 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
         /* transno in two contexts - for commit_cb and for thread */
         txi = lu_context_key_get(&txn->th_ctx, &mdt_txn_key);
         mti = lu_context_key_get(ctx, &mdt_thread_key);
+        req = mdt_info_req(mti);
 
         /* FIXME: don't handle requests from SEQ/FLD,
          * should be fixed
          */
-        if (mti->mti_mdt == NULL) {
+        if (mti->mti_mdt == NULL || req == NULL) {
                 txi->txi_transno = 0;
                 return 0;
         }
-        req = mdt_info_req(mti);
         LASSERT(req != NULL);
         /*TODO: checks for recovery cases, see mds_finish_transno */
         spin_lock(&mdt->mdt_transno_lock);
@@ -969,8 +969,7 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti)
                 req->rq_status = rc;
                 body->valid |= OBD_MD_MDS;
         }
-        mdt_pack_attr2body(body, &mti->mti_attr.ma_attr,
-                           mti->mti_rr.rr_fid2);
+        mdt_pack_attr2body(body, &mti->mti_attr.ma_attr, mdt_object_fid(child));
         mdt_object_put(mti->mti_ctxt, child);
 }
 
@@ -990,8 +989,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti)
         obj = mdt_object_find(mti->mti_ctxt, mdt, mti->mti_rr.rr_fid1);
         LASSERT(!IS_ERR(obj));
         mo_attr_get(mti->mti_ctxt, mdt_object_child(obj), &mti->mti_attr);
-        mdt_pack_attr2body(body, &mti->mti_attr.ma_attr,
-                           mti->mti_rr.rr_fid1);
+        mdt_pack_attr2body(body, &mti->mti_attr.ma_attr, mdt_object_fid(obj));
 
         /* Don't return OST-specific attributes if we didn't just set them */
 /*

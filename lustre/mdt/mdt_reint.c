@@ -73,7 +73,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 if (rc == 0) {
                         /* return fid & attr to client. */
                         if (ma->ma_valid & MA_INODE)
-                                mdt_pack_attr2body(repbody, &ma->ma_attr,
+                                mdt_pack_attr2body(repbody, &ma->ma_attr, 
                                                    mdt_object_fid(child));
                 }
                 mdt_object_put(info->mti_ctxt, child);
@@ -115,78 +115,164 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         RETURN(rc);
 }
 
-
 /* In the raw-setattr case, we lock the child inode.
  * In the write-back case or if being called from open,
  *               the client holds a lock already.
  * We use the ATTR_FROM_OPEN (translated into MRF_SETATTR_LOCKED by
  * mdt_setattr_unpack()) flag to tell these cases apart. */
-static int mdt_reint_setattr(struct mdt_thread_info *info)
+int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
 {
-        struct lu_attr          *attr = &info->mti_attr.ma_attr;
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct ptlrpc_request   *req = mdt_info_req(info);
-        struct mdt_object       *mo;
+        struct md_attr          *ma = &info->mti_attr;
         struct md_object        *next;
         struct mdt_lock_handle  *lh;
+        int som_update = 0;
+        int rc;
+        ENTRY;
+
+        if (info->mti_epoch)
+                som_update = (info->mti_epoch->flags & MF_SOM_CHANGE);
+
+        /* Try to avoid object_lock if another epoch has been started
+         * already. */
+        if (som_update && (info->mti_epoch->ioepoch != mo->mot_ioepoch))
+                RETURN(0);
+        
+        lh = &info->mti_lh[MDT_LH_PARENT];
+        lh->mlh_mode = LCK_EX;
+
+        if (!(flags & MRF_SETATTR_LOCKED)) {
+                __u64 lockpart = MDS_INODELOCK_UPDATE;
+                if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID))
+                        lockpart |= MDS_INODELOCK_LOOKUP;
+
+                rc = mdt_object_lock(info, mo, lh, lockpart);
+                if (rc != 0)
+                        GOTO(out, rc);
+        }
+
+        /* Setattrs are syncronized through dlm lock taken above. If another
+         * epoch started, its attributes may be already flushed on disk,
+         * skip setattr. */
+        next = mdt_object_child(mo);
+        if (som_update && (info->mti_epoch->ioepoch != mo->mot_ioepoch))
+                        GOTO(out, rc = 0);
+                
+        next = mdt_object_child(mo);
+        if (lu_object_assert_not_exists(&mo->mot_obj.mo_lu))
+                GOTO(out, rc = -ENOENT);
+
+        /* all attrs are packed into mti_attr in unpack_setattr */
+        mdt_fail_write(info->mti_ctxt, info->mti_mdt->mdt_bottom,
+                       OBD_FAIL_MDS_REINT_SETATTR_WRITE);
+
+        /* all attrs are packed into mti_attr in unpack_setattr */
+        rc = mo_attr_set(info->mti_ctxt, next, ma);
+        if (rc != 0)
+                GOTO(out, rc);
+
+        /* Re-enable SIZEONMDS. */
+        if (som_update) {
+                CDEBUG(D_INODE, "Closing epoch "LPU64" on "DFID". Count %d\n",
+                       mo->mot_ioepoch, PFID(mdt_object_fid(mo)),
+                       mo->mot_epochcount);
+ 
+                mdt_sizeonmds_enable(info, mo);
+        }
+        
+        EXIT;
+out:
+        mdt_object_unlock(info, mo, lh, rc);
+        return(rc);
+}
+
+static int mdt_reint_setattr(struct mdt_thread_info *info)
+{
+        struct md_attr          *ma = &info->mti_attr;
+        struct mdt_reint_record *rr = &info->mti_rr;
+        struct ptlrpc_request   *req = mdt_info_req(info);
+        struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
+        struct mdt_file_data    *mfd;
+        struct mdt_object       *mo;
+        struct md_object        *next;
         struct mdt_body         *repbody;
         int                      rc;
 
         ENTRY;
 
         DEBUG_REQ(D_INODE, req, "setattr "DFID" %x", PFID(rr->rr_fid1),
-                  (unsigned int)attr->la_valid);
+                  (unsigned int)ma->ma_attr.la_valid);
 
-        lh = &info->mti_lh[MDT_LH_PARENT];
-        lh->mlh_mode = LCK_EX;
-
-        if (rr->rr_flags & MRF_SETATTR_LOCKED) {
-                mo = mdt_object_find(info->mti_ctxt, info->mti_mdt,
-                                     rr->rr_fid1);
-        } else {
-                __u64 lockpart = MDS_INODELOCK_UPDATE;
-                if (attr->la_valid & (LA_MODE|LA_UID|LA_GID))
-                        lockpart |= MDS_INODELOCK_LOOKUP;
-
-                mo = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart);
-        }
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        mo = mdt_object_find(info->mti_ctxt, info->mti_mdt, rr->rr_fid1);
         if (IS_ERR(mo))
                 RETURN(rc = PTR_ERR(mo));
 
+        if (info->mti_epoch && (info->mti_epoch->flags & MF_EPOCH_OPEN)) {
+                /* Truncate case. */
+                rc = mdt_write_get(info->mti_mdt, mo);
+                if (rc)
+                        GOTO(out, rc);
+
+                mfd = mdt_mfd_new();
+                if (mfd == NULL)
+                        GOTO(out, rc = -ENOMEM);
+                
+                /* FIXME: in recovery, need to pass old epoch here */
+                mdt_epoch_open(info, mo, 0);
+                repbody->ioepoch = mo->mot_ioepoch;
+
+                mdt_object_get(info->mti_ctxt, mo);
+                mfd->mfd_mode = FMODE_EPOCHLCK;
+                mfd->mfd_object = mo;
+                mfd->mfd_xid = req->rq_xid;
+
+                spin_lock(&med->med_open_lock);
+                list_add(&mfd->mfd_list, &med->med_open_head);
+                spin_unlock(&med->med_open_lock);
+                repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+        }
+
+        rc = mdt_attr_set(info, mo, rr->rr_flags);
+        if (rc)
+                GOTO(out, rc);
+
+        if (info->mti_epoch && (info->mti_epoch->flags & MF_SOM_CHANGE)) {
+                LASSERT(info->mti_epoch);
+
+                /* Size-on-MDS Update. Find and free mfd. */
+                spin_lock(&med->med_open_lock);
+                mfd = mdt_handle2mfd(&(info->mti_epoch->handle));
+                if (mfd == NULL) {
+                        spin_unlock(&med->med_open_lock);
+                        CDEBUG(D_INODE, "no handle for file close: "
+                               "fid = "DFID": cookie = "LPX64"\n", 
+                               PFID(info->mti_rr.rr_fid1),
+                               info->mti_epoch->handle.cookie);
+                        GOTO(out, rc = -ESTALE);
+                }
+
+                LASSERT(mfd->mfd_mode == FMODE_SOM);
+                LASSERT(ma->ma_attr.la_valid & LA_SIZE);
+                LASSERT(!(info->mti_epoch->flags & MF_EPOCH_CLOSE));
+
+                class_handle_unhash(&mfd->mfd_handle);
+                list_del_init(&mfd->mfd_list);
+                spin_unlock(&med->med_open_lock);
+                mdt_mfd_close(info, mfd);
+        }
+
+        ma->ma_need = MA_INODE;
         next = mdt_object_child(mo);
-        if (lu_object_assert_not_exists(&mo->mot_obj.mo_lu))
-                GOTO(out_unlock, rc = -ENOENT);
-
-        /* all attrs are packed into mti_attr in unpack_setattr */
-        mdt_fail_write(info->mti_ctxt, info->mti_mdt->mdt_bottom,
-                       OBD_FAIL_MDS_REINT_SETATTR_WRITE);
-
-        rc = mo_attr_set(info->mti_ctxt, next, &info->mti_attr);
+        rc = mo_attr_get(info->mti_ctxt, next, ma);
         if (rc != 0)
-                GOTO(out_unlock, rc);
+                GOTO(out, rc);
 
-        info->mti_attr.ma_need = MA_INODE;
-        rc = mo_attr_get(info->mti_ctxt, next, &info->mti_attr);
-        if (rc != 0)
-                GOTO(out_unlock, rc);
-
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        mdt_pack_attr2body(repbody, attr, mdt_object_fid(mo));
-
-        /* don't return OST-specific attributes if we didn't just set them.
-        if (valid & ATTR_SIZE)
-                repbody->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
-        if (valid & (ATTR_MTIME | ATTR_MTIME_SET))
-                repbody->valid |= OBD_MD_FLMTIME;
-        if (valid & (ATTR_ATIME | ATTR_ATIME_SET))
-                repbody->valid |= OBD_MD_FLATIME;
-        */
-        GOTO(out_unlock, rc);
-out_unlock:
-        mdt_object_unlock_put(info, mo, lh, rc);
+        mdt_pack_attr2body(repbody, &ma->ma_attr, mdt_object_fid(mo));
+        EXIT;
+out:
+        mdt_object_put(info->mti_ctxt, mo);
         return rc;
 }
-
 
 static int mdt_reint_create(struct mdt_thread_info *info)
 {

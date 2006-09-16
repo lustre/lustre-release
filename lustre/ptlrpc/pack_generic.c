@@ -1644,7 +1644,7 @@ void lustre_swab_mdt_body (struct mdt_body *b)
         __swab64s (&b->atime);
         __swab64s (&b->ctime);
         __swab64s (&b->blocks);
-        __swab64s (&b->io_epoch);
+        __swab64s (&b->ioepoch);
         __swab32s (&b->fsuid);
         __swab32s (&b->fsgid);
         __swab32s (&b->capability);
@@ -1659,6 +1659,13 @@ void lustre_swab_mdt_body (struct mdt_body *b)
         __swab32s (&b->aclsize);
         __swab32s (&b->max_mdsize);
         __swab32s (&b->max_cookiesize);
+}
+
+void lustre_swab_mdt_epoch (struct mdt_body *b)
+{
+        /* handle is opaque */
+         __swab64s (&b->ioepoch);
+         __swab32s (&b->flags);
 }
 
 void lustre_swab_mgs_target_info(struct mgs_target_info *mti)
@@ -1737,6 +1744,7 @@ void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa)
         lustre_swab_lu_fid (&sa->sa_fid);
         __swab64s (&sa->sa_valid);
         __swab64s (&sa->sa_size);
+        __swab64s (&sa->sa_blocks);
         __swab64s (&sa->sa_mtime);
         __swab64s (&sa->sa_atime);
         __swab64s (&sa->sa_ctime);

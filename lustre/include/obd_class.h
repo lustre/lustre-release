@@ -182,7 +182,12 @@ int class_manual_cleanup(struct obd_device *obd);
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
 int obdo_cmp_md(struct obdo *dst, struct obdo *src, obd_flag compare);
 void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj);
-
+void obdo_from_iattr(struct obdo *oa, struct iattr *attr,
+                     unsigned int ia_valid);
+void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid);
+void md_from_obdo(struct md_op_data *op_data, struct obdo *oa, obd_flag valid);
+void obdo_from_md(struct obdo *oa, struct md_op_data *op_data,
+                  unsigned int valid);
 
 #define OBT(dev)        (dev)->obd_type
 #define OBP(dev, op)    (dev)->obd_type->typ_dt_ops->o_ ## op
@@ -1608,13 +1613,14 @@ static inline int md_create(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 static inline int md_done_writing(struct obd_export *exp,
-                                  struct md_op_data *op_data)
+                                  struct md_op_data *op_data,
+                                  struct obd_client_handle *och)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, done_writing);
         MD_COUNTER_INCREMENT(exp->exp_obd, done_writing);
-        rc = MDP(exp->exp_obd, done_writing)(exp, op_data);
+        rc = MDP(exp->exp_obd, done_writing)(exp, op_data, och);
         RETURN(rc);
 }
 
@@ -1699,14 +1705,14 @@ static inline int md_rename(struct obd_export *exp,
 }
 
 static inline int md_setattr(struct obd_export *exp, struct md_op_data *op_data,
-                             struct iattr *iattr, void *ea, int ealen,
-                             void *ea2, int ea2len, struct ptlrpc_request **request)
+                             void *ea, int ealen, void *ea2, int ea2len,
+                             struct ptlrpc_request **request)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, setattr);
         MD_COUNTER_INCREMENT(exp->exp_obd, setattr);
-        rc = MDP(exp->exp_obd, setattr)(exp, op_data, iattr, ea, ealen,
+        rc = MDP(exp->exp_obd, setattr)(exp, op_data, ea, ealen,
                                         ea2, ea2len, request);
         RETURN(rc);
 }

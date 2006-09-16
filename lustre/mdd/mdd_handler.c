@@ -843,6 +843,19 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
                 la->la_mode =
                         (mode & S_IALLUGO) | (tmp_la->la_mode & ~S_IALLUGO);
         }
+
+        /* For the "Size-on-MDS" setattr update, merge coming attributes with 
+         * the set in the inode. */
+        if (la->la_valid & LA_SIZE) {
+                if ((la->la_valid & LA_ATIME) &&
+                    (la->la_atime < tmp_la->la_atime))
+                        la->la_valid &= ~LA_ATIME;
+                
+                if ((la->la_valid & LA_CTIME) && 
+                    (la->la_ctime < tmp_la->la_ctime))
+                        la->la_valid &= ~(LA_MTIME | LA_CTIME);
+        }
+        
         RETURN(rc);
 }
 

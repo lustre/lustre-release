@@ -595,6 +595,7 @@ extern void lustre_swab_obdo (struct obdo *o);
 struct md_op_data {
         struct lu_fid         fid1;
         struct lu_fid         fid2;
+        struct lustre_handle  handle;
         __u64                 mod_time;
         const char           *name;
         int                   namelen;
@@ -604,14 +605,19 @@ struct md_op_data {
         __u32                 suppgids[2];
         __u32                 fsuid;
         __u32                 fsgid;
-        /* part of obdo fields for md stack */
-        obd_valid             valid;
-        obd_size              size;
-        obd_blocks            blocks;
-        obd_flag              flags;
-        obd_time              mtime;
-        obd_time              atime;
-        obd_time              ctime;
+
+        /* iattr fields and blocks. */
+        struct iattr          attr;
+#ifdef __KERNEL__
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
+        unsigned int          attr_flags;
+#endif
+#endif
+        loff_t                attr_blocks;
+        
+        /* Size-on-MDS epoch and flags. */
+        __u64                 ioepoch;
+        __u32                 flags;
 };
 
 #define MDS_MODE_DONT_LOCK (1 << 30)
@@ -677,6 +683,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLGROUP     (0x01000000ULL) /* group */
 #define OBD_MD_FLFID       (0x02000000ULL) /* ->ost write inline fid */
 #define OBD_MD_FLEPOCH     (0x04000000ULL) /* ->ost write easize is epoch */
+                                           /* ->mds if epoch opens or closes */
 #define OBD_MD_FLGRANT     (0x08000000ULL) /* ost preallocation space grant */
 #define OBD_MD_FLDIREA     (0x10000000ULL) /* dir's extended attribute data */
 #define OBD_MD_FLUSRQUOTA  (0x20000000ULL) /* over quota flags sent from ost */
@@ -887,7 +894,15 @@ struct mds_status_req {
 
 extern void lustre_swab_mds_status_req (struct mds_status_req *r);
 
-#define MDS_BFLAG_UNCOMMITTED_WRITES   0x1
+/* mdt_thread_info.mti_flags. */
+enum mdt_ioepoch_flags {
+        /* The flag indicates Size-on-MDS attributes are changed. */
+        MF_SOM_CHANGE   = (1 << 0),
+        /* Flags indicates an epoch opens or closes. */
+        MF_EPOCH_OPEN   = (1 << 1),
+        MF_EPOCH_CLOSE  = (1 << 2),
+};
+
 #define MDS_BFLAG_EXT_FLAGS     0x80000000 /* == EXT3_RESERVED_FL */
 
 /* these should be identical to their EXT3_*_FL counterparts, and are
@@ -941,7 +956,7 @@ struct mdt_body {
         __u64          atime;
         __u64          ctime;
         __u64          blocks; /* XID, in the case of MDS_READPAGE */
-        __u64          io_epoch;
+        __u64          ioepoch;
         __u32          fsuid;
         __u32          fsgid;
         __u32          capability;
@@ -990,6 +1005,14 @@ struct mds_body {
 
 extern void lustre_swab_mds_body (struct mds_body *b);
 extern void lustre_swab_mdt_body (struct mdt_body *b);
+
+struct mdt_epoch {
+        struct lustre_handle handle;
+        __u64  ioepoch;
+        __u32  flags;
+};
+
+extern void lustre_swab_mdt_epoch (struct mdt_body *b);
 
 struct lustre_md {
         struct mdt_body         *body;
@@ -1053,6 +1076,7 @@ struct mdt_rec_setattr {
         struct lu_fid   sa_fid;
         __u64           sa_valid;
         __u64           sa_size;
+        __u64           sa_blocks;
         __u64           sa_mtime;
         __u64           sa_atime;
         __u64           sa_ctime;
@@ -1073,6 +1097,12 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define FMODE_READ               00000001
 #define FMODE_WRITE              00000002
 #endif
+
+#define FMODE_EPOCH              01000000
+#define FMODE_EPOCHLCK           02000000
+#define FMODE_SOM                04000000
+#define FMODE_CLOSED             0
+
 #define MDS_FMODE_EXEC           00000004
 #define MDS_OPEN_CREAT           00000100
 #define MDS_OPEN_EXCL            00000200
@@ -1640,7 +1670,7 @@ struct llog_setattr_rec {
 struct llog_size_change_rec {
         struct llog_rec_hdr     lsc_hdr;
         struct ll_fid           lsc_fid;
-        __u32                   lsc_io_epoch;
+        __u32                   lsc_ioepoch;
         __u32                   padding;
         struct llog_rec_tail    lsc_tail;
 } __attribute__((packed));

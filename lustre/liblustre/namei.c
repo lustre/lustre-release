@@ -153,6 +153,7 @@ int llu_md_blocking_ast(struct ldlm_lock *lock,
                 struct llu_inode_info *lli;
                 struct intnl_stat *st;
                 __u64 bits = lock->l_policy_data.l_inodebits.bits;
+                struct lu_fid *fid;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
@@ -162,15 +163,16 @@ int llu_md_blocking_ast(struct ldlm_lock *lock,
                 st = llu_i2stat(inode);
 
                 if (bits & MDS_INODELOCK_UPDATE)
-                        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
+                        lli->lli_flags &= ~LLIF_MDS_SIZE_LOCK;
 
-                if (lock->l_resource->lr_name.name[0] != fid_seq(&lli->lli_fid) ||
-                    lock->l_resource->lr_name.name[1] != fid_oid(&lli->lli_fid) ||
-                    lock->l_resource->lr_name.name[2] != fid_ver(&lli->lli_fid)) {
-                        LDLM_ERROR(lock, "data mismatch with ino %llu/%llu/%llu",
-                                  (long long)fid_seq(&lli->lli_fid), 
-                                  (long long)fid_oid(&lli->lli_fid),
-                                  (long long)fid_ver(&lli->lli_fid));
+                fid = &lli->lli_fid;
+                if (lock->l_resource->lr_name.name[0] != fid_seq(fid) ||
+                    lock->l_resource->lr_name.name[1] != fid_oid(fid) ||
+                    lock->l_resource->lr_name.name[2] != fid_ver(fid)) {
+                        LDLM_ERROR(lock,"data mismatch with ino %llu/%llu/%llu",
+                                  (long long)fid_seq(fid), 
+                                  (long long)fid_oid(fid),
+                                  (long long)fid_ver(fid));
                 }
                 if (S_ISDIR(st->st_mode) &&
                     (bits & MDS_INODELOCK_UPDATE)) {

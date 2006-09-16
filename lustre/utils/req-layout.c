@@ -30,15 +30,16 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <liblustre.h>
 #include <lustre/lustre_idl.h>
 
 #define __REQ_LAYOUT_USER__ (1)
 
-#define ARRAY_SIZE(a) ((sizeof (a))/(sizeof (a)[0]))
 #define lustre_swab_generic_32s NULL
 #define lustre_swab_lu_range NULL
 #define lustre_swab_md_fld NULL
 #define lustre_swab_mdt_body NULL
+#define lustre_swab_mdt_epoch NULL
 #define lustre_swab_ptlrpc_body NULL
 #define lustre_swab_obd_statfs NULL
 #define lustre_swab_connect NULL
@@ -51,8 +52,6 @@
 #define lustre_swab_mdt_rec_rename NULL
 #define lustre_swab_mdt_rec_create NULL
 #define lustre_swab_mdt_rec_setattr NULL
-
-#define EXPORT_SYMBOL(name)
 
 /*
  * Yes, include .c file.

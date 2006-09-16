@@ -192,6 +192,17 @@ static int mdt_statfs(struct mdt_thread_info *info)
         RETURN(rc);
 }
 
+void mdt_pack_size2body(struct mdt_body *b, const struct lu_attr *attr,
+                        struct mdt_object *o)
+{
+        /* Check if Size-on-MDS is enabled. */
+        if (S_ISREG(attr->la_mode) && mdt_sizeonmds_enabled(o)) {
+                b->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
+                b->size = attr->la_size;
+                b->blocks = attr->la_blocks;
+        }
+}
+
 void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
                         const struct lu_fid *fid)
 {
@@ -203,7 +214,7 @@ void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
 
         if (!S_ISREG(attr->la_mode))
                 b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLRDEV;
-
+        
         b->atime      = attr->la_atime;
         b->mtime      = attr->la_mtime;
         b->ctime      = attr->la_ctime;
@@ -272,7 +283,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 repbody->fid1 = *mdt_object_fid(o);
                 repbody->valid = OBD_MD_FLID | OBD_MD_MDS;
                 RETURN(0);
-        } else if (rc){
+        } else if (rc) {
                 CERROR("getattr error for "DFID": %d\n",
                         PFID(mdt_object_fid(o)), rc);
                 RETURN(rc);
@@ -443,11 +454,13 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         if (rc != 0)
                 mdt_object_unlock(info, child, lhc, 1);
         else {
-                /* This is pure debugging code. */
-                struct ldlm_lock *lock;
-                struct ldlm_res_id *res_id;
-                lock = ldlm_handle2lock(&lhc->mlh_lh);
+                struct ldlm_lock *lock = ldlm_handle2lock(&lhc->mlh_lh);
                 if (lock) {
+                        struct ldlm_res_id *res_id;
+                        struct mdt_body *repbody;
+                        struct lu_attr *ma;
+                        
+                        /* Debugging code. */
                         res_id = &lock->l_resource->lr_name;
                         LDLM_DEBUG(lock, "we will return this lock client\n");
                         LASSERTF(fid_res_name_eq(mdt_object_fid(child),
@@ -457,8 +470,19 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                                 (unsigned long)res_id->name[1],
                                 (unsigned long)res_id->name[2],
                                 PFID(mdt_object_fid(child)));
+                        
+                        /* Pack Size-on-MDS inode attributes to the body if
+                         * update lock is given. */
+                        repbody = req_capsule_server_get(&info->mti_pill, 
+                                                         &RMF_MDT_BODY);
+                        ma = &info->mti_attr.ma_attr;
+                        if (lock->l_policy_data.l_inodebits.bits &
+                            MDS_INODELOCK_UPDATE)
+                                mdt_pack_size2body(repbody, ma, child);
                         LDLM_LOCK_PUT(lock);
                 }
+                
+
         }
         mdt_object_put(info->mti_ctxt, child);
 
@@ -882,19 +906,18 @@ static int mdt_sync(struct mdt_thread_info *info)
                 if (rc == 0) {
                         rc = mdt_object_sync(info);
                         if (rc == 0) {
-                                struct md_object    *next;
+                                struct md_object *next;
                                 const struct lu_fid *fid;
-                                struct lu_attr      *la;
-
+                                struct lu_attr *la = &info->mti_attr.ma_attr;
+                                
                                 next = mdt_object_child(info->mti_object);
-                                fid = mdt_object_fid(info->mti_object);
                                 info->mti_attr.ma_need = MA_INODE;
                                 rc = mo_attr_get(info->mti_ctxt, next,
                                                  &info->mti_attr);
-                                la = &info->mti_attr.ma_attr;
                                 if (rc == 0) {
                                         body = req_capsule_server_get(pill,
                                                                 &RMF_MDT_BODY);
+                                        fid = mdt_object_fid(info->mti_object);
                                         mdt_pack_attr2body(body, la, fid);
                                 }
                         }
@@ -2716,7 +2739,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
 
-        spin_lock_init(&m->mdt_epoch_lock);
+        spin_lock_init(&m->mdt_ioepoch_lock);
         /* Temporary. should parse mount option. */
         m->mdt_opts.mo_user_xattr = 0;
         m->mdt_opts.mo_acl = 0;
@@ -3078,6 +3101,8 @@ static int mdt_destroy_export(struct obd_export *export)
         info = lu_context_key_get(&ctxt, &mdt_thread_key);
         LASSERT(info != NULL);
         memset(info, 0, sizeof *info);
+        info->mti_ctxt = &ctxt;
+        info->mti_mdt = mdt;
 
         ma = &info->mti_attr;
         ma->ma_lmm_size = mdt->mdt_max_mdsize;
@@ -3095,20 +3120,21 @@ static int mdt_destroy_export(struct obd_export *export)
                 struct list_head *tmp = med->med_open_head.next;
                 struct mdt_file_data *mfd =
                         list_entry(tmp, struct mdt_file_data, mfd_list);
-                struct mdt_object *o = mfd->mfd_object;
+                struct md_attr *ma = &info->mti_attr;
 
                 /* Remove mfd handle so it can't be found again.
                  * We are consuming the mfd_list reference here. */
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
-                mdt_mfd_close(&ctxt, mdt, mfd, ma);
+                mdt_mfd_close(info, mfd);
                 /* TODO: if we close the unlinked file,
                  * we need to remove it's objects from OST */
-                mdt_object_put(&ctxt, o);
+                memset(&ma->ma_attr, 0, sizeof(ma->ma_attr));
                 spin_lock(&med->med_open_lock);
         }
         spin_unlock(&med->med_open_lock);
+        info->mti_mdt = NULL;
         mdt_client_del(&ctxt, mdt, med);
 
 out:
@@ -3418,7 +3444,7 @@ DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
 DEF_MDT_HNDL_F(0                        |MUTABOR,
                                           REINT,        mdt_reint),
 DEF_MDT_HNDL_F(HABEO_CORPUS             , CLOSE,        mdt_close),
-DEF_MDT_HNDL_0(0,                         DONE_WRITING, mdt_done_writing),
+DEF_MDT_HNDL_F(HABEO_CORPUS             , DONE_WRITING, mdt_done_writing),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),
 DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),
 DEF_MDT_HNDL_0(0,                         QUOTACHECK,   mdt_quotacheck_handle),
@@ -3501,6 +3527,7 @@ static struct mdt_handler mdt_readpage_ops[] = {
          * detailed comments. --umka
          */
         DEF_MDT_HNDL_F(HABEO_CORPUS,              CLOSE,    mdt_close),
+        DEF_MDT_HNDL_F(HABEO_CORPUS,              DONE_WRITING,    mdt_done_writing),
 };
 
 static struct mdt_opc_slice mdt_readpage_handlers[] = {

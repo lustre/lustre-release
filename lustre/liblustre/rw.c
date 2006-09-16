@@ -218,6 +218,49 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         return rc;
 }
 
+static void llu_merge_lvb(struct inode *inode)
+{
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct llu_sb_info *sbi = llu_i2sbi(inode);
+        struct intnl_stat *st = llu_i2stat(inode);
+        struct ost_lvb lvb;
+        ENTRY;
+
+        inode_init_lvb(inode, &lvb);
+        obd_merge_lvb(sbi->ll_dt_exp, lli->lli_smd, &lvb, 0);
+        st->st_size = lvb.lvb_size;
+        st->st_blocks = lvb.lvb_blocks;
+        st->st_mtime = lvb.lvb_mtime;
+        st->st_atime = lvb.lvb_atime;
+        st->st_ctime = lvb.lvb_ctime;
+        EXIT;
+}
+
+int llu_local_size(struct inode *inode)
+{
+        ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct llu_sb_info *sbi = llu_i2sbi(inode);
+        struct lustre_handle lockh = { 0 };
+        int flags = 0;
+        int rc;
+        ENTRY;
+
+        if (lli->lli_smd->lsm_stripe_count == 0)
+                RETURN(0);
+        
+        rc = obd_match(sbi->ll_dt_exp, lli->lli_smd, LDLM_EXTENT,
+                       &policy, LCK_PR | LCK_PW, &flags, inode, &lockh);
+        if (rc < 0)
+                RETURN(rc);
+        else if (rc == 0)
+                RETURN(-ENODATA);
+        
+        llu_merge_lvb(inode);
+        obd_cancel(sbi->ll_dt_exp, lli->lli_smd, LCK_PR, &lockh);
+        RETURN(0);
+}
+
 /* NB: lov_merge_size will prefer locally cached writes if they extend the
  * file (because it prefers KMS over RSS when larger) */
 int llu_glimpse_size(struct inode *inode)
@@ -228,9 +271,12 @@ int llu_glimpse_size(struct inode *inode)
         struct lustre_handle lockh = { 0 };
         struct obd_enqueue_info einfo = { 0 };
         struct obd_info oinfo = { { { 0 } } };
-        struct ost_lvb lvb;
         int rc;
         ENTRY;
+
+        /* If size is cached on the mds, skip glimpse. */
+        if (lli->lli_flags & LLIF_MDS_SIZE_LOCK)
+                RETURN(0);
 
         CDEBUG(D_DLMTRACE, "Glimpsing inode %llu\n", (long long)st->st_ino);
 
@@ -258,14 +304,7 @@ int llu_glimpse_size(struct inode *inode)
                 RETURN(rc > 0 ? -EIO : rc);
         }
 
-        inode_init_lvb(inode, &lvb);
-        obd_merge_lvb(sbi->ll_dt_exp, lli->lli_smd, &lvb, 0);
-        st->st_size = lvb.lvb_size;
-        st->st_blocks = lvb.lvb_blocks;
-        st->st_mtime = lvb.lvb_mtime;
-        st->st_atime = lvb.lvb_atime;
-        st->st_ctime = lvb.lvb_ctime;
-
+        llu_merge_lvb(inode);
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %llu\n",
                (long long)st->st_size, (long long)st->st_blocks);
 

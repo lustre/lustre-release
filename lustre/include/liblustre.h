@@ -468,6 +468,7 @@ static inline cfs_page_t* __grab_cache_page(unsigned long index)
 #define ATTR_RAW        0x0800  /* file system, not vfs will massage attrs */
 #define ATTR_FROM_OPEN  0x1000  /* called from open path, ie O_TRUNC */
 #define ATTR_CTIME_SET  0x2000
+#define ATTR_BLOCKS     0x4000
 
 struct iattr {
         unsigned int    ia_valid;
@@ -480,7 +481,8 @@ struct iattr {
         time_t          ia_ctime;
         unsigned int    ia_attr_flags;
 };
-#define ll_iattr_struct iattr
+
+#define ll_iattr iattr
 
 #define IT_OPEN     0x0001
 #define IT_CREAT    0x0002

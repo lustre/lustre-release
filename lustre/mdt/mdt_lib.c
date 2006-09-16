@@ -137,6 +137,8 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
                 out |= LA_GID;
         if (in & ATTR_SIZE)
                 out |= LA_SIZE;
+        if (in & ATTR_BLOCKS)
+                out |= LA_BLOCKS;
 
         if (in & ATTR_FROM_OPEN)
                 rr->rr_flags |= MRF_SETATTR_LOCKED;
@@ -154,7 +156,7 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
                 out |= LA_FLAGS;
 
         /*XXX need ATTR_RAW?*/
-        in &= ~(ATTR_MODE|ATTR_UID|ATTR_GID|ATTR_SIZE|
+        in &= ~(ATTR_MODE|ATTR_UID|ATTR_GID|ATTR_SIZE|ATTR_BLOCKS|
                 ATTR_ATIME|ATTR_MTIME|ATTR_CTIME|ATTR_FROM_OPEN|
                 ATTR_ATIME_SET|ATTR_CTIME_SET|ATTR_MTIME_SET|
                 ATTR_ATTR_FLAG|ATTR_RAW);
@@ -163,17 +165,17 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
         return out;
 }
 /* unpacking */
-static int mdt_setattr_unpack(struct mdt_thread_info *info)
+
+static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 {
-        struct mdt_rec_setattr  *rec;
         struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *la = &ma->ma_attr;
-        struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule      *pill = &info->mti_pill;
+        struct mdt_reint_record *rr = &info->mti_rr;
+        struct mdt_rec_setattr  *rec;
         ENTRY;
-
+         
         rec = req_capsule_client_get(pill, &RMF_REC_SETATTR);
-
         if (rec == NULL)
                 RETURN(-EFAULT);
 
@@ -184,10 +186,36 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
         la->la_uid   = rec->sa_uid;
         la->la_gid   = rec->sa_gid;
         la->la_size  = rec->sa_size;
+        la->la_blocks = rec->sa_blocks;
         la->la_ctime = rec->sa_ctime;
         la->la_atime = rec->sa_atime;
         la->la_mtime = rec->sa_mtime;
         ma->ma_valid = MA_INODE;
+        RETURN(0);
+}
+
+static int mdt_epoch_unpack(struct mdt_thread_info *info)
+{
+        struct req_capsule *pill = &info->mti_pill;
+        ENTRY;
+
+        info->mti_epoch = req_capsule_client_get(pill, &RMF_MDT_EPOCH);
+        RETURN(info->mti_epoch == NULL ? -EFAULT : 0);
+}
+
+static int mdt_setattr_unpack(struct mdt_thread_info *info)
+{
+        struct md_attr          *ma = &info->mti_attr;
+        struct req_capsule      *pill = &info->mti_pill;
+        int rc;
+        ENTRY;
+
+        rc = mdt_setattr_unpack_rec(info);
+        if (rc)
+                RETURN(rc);
+
+        /* Epoch may be absent, skip errors. */
+        mdt_epoch_unpack(info);
 
         if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
                 ma->ma_lmm = req_capsule_client_get(pill, &RMF_EADATA);
@@ -205,6 +233,18 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
         }
 
         RETURN(0);
+}
+
+int mdt_close_unpack(struct mdt_thread_info *info)
+{
+        int rc;
+        ENTRY;
+
+        rc = mdt_epoch_unpack(info);
+        if (rc)
+                RETURN(rc);
+        
+        RETURN(mdt_setattr_unpack_rec(info));
 }
 
 static int mdt_create_unpack(struct mdt_thread_info *info)

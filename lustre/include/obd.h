@@ -1108,7 +1108,8 @@ struct md_ops {
         int (*m_create)(struct obd_export *, struct md_op_data *,
                         const void *, int, int, __u32, __u32, __u32,
                         __u64, struct ptlrpc_request **);
-        int (*m_done_writing)(struct obd_export *, struct md_op_data *);
+        int (*m_done_writing)(struct obd_export *, struct md_op_data  *,
+                              struct obd_client_handle *);
         int (*m_enqueue)(struct obd_export *, int, struct lookup_intent *,
                          int, struct md_op_data *, struct lustre_handle *,
                          void *, int, ldlm_completion_callback,
@@ -1127,9 +1128,8 @@ struct md_ops {
         int (*m_rename)(struct obd_export *, struct md_op_data *,
                         const char *, int, const char *, int,
                         struct ptlrpc_request **);
-        int (*m_setattr)(struct obd_export *, struct md_op_data *,
-                         struct iattr *, void *, int , void *, int,
-                         struct ptlrpc_request **);
+        int (*m_setattr)(struct obd_export *, struct md_op_data *, void *,
+                         int , void *, int, struct ptlrpc_request **);
         int (*m_sync)(struct obd_export *, const struct lu_fid *,
                       struct ptlrpc_request **);
         int (*m_readpage)(struct obd_export *, const struct lu_fid *,

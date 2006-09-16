@@ -155,16 +155,18 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         case LDLM_CB_CANCELING: {
                 struct inode *inode = ll_inode_from_lock(lock);
                 __u64 bits = lock->l_policy_data.l_inodebits.bits;
+                struct lu_fid *fid;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
                         break;
 
-                if (lock->l_resource->lr_name.name[0] != fid_seq(ll_inode2fid(inode)) ||
-                    lock->l_resource->lr_name.name[1] != fid_oid(ll_inode2fid(inode)) ||
-                    lock->l_resource->lr_name.name[2] != fid_ver(ll_inode2fid(inode))) {
-                        LDLM_ERROR(lock, "data mismatch with object "DFID" (%p)",
-                                   PFID(ll_inode2fid(inode)), inode);
+                fid = ll_inode2fid(inode);
+                if (lock->l_resource->lr_name.name[0] != fid_seq(fid) ||
+                    lock->l_resource->lr_name.name[1] != fid_oid(fid) ||
+                    lock->l_resource->lr_name.name[2] != fid_ver(fid)) {
+                        LDLM_ERROR(lock, "data mismatch with object "
+                                   DFID" (%p)", PFID(fid), inode);
                 }
 
                 if (bits & MDS_INODELOCK_OPEN) {
@@ -190,8 +192,7 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 }
 
                 if (bits & MDS_INODELOCK_UPDATE)
-                        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
-                                  &(ll_i2info(inode)->lli_flags));
+                        ll_i2info(inode)->lli_flags &= ~LLIF_MDS_SIZE_LOCK;
 
                 if (S_ISDIR(inode->i_mode) &&
                      (bits & MDS_INODELOCK_UPDATE)) {
@@ -294,12 +295,7 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
         }
 }
 
-/*
- * this function prepares md_op_data hint for passing ot down to MD stack.
- *
- * Note: it zeroes @op_data out before doing anything else, so all additional
- * initializations of @op_data should be done after it.
- */
+/* this function prepares md_op_data hint for passing ot down to MD stack. */
 void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
                             struct inode *i2, const char *name, int namelen,
                             int mode)
@@ -307,7 +303,6 @@ void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
         LASSERT(i1 != NULL);
         LASSERT(op_data != NULL);
 
-        memset(op_data, 0, sizeof(*op_data));
         ll_i2gids(op_data->suppgids, i1, i2);
         op_data->fid1 = ll_i2info(i1)->lli_fid;
 

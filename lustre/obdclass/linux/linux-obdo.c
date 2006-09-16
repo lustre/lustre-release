@@ -44,89 +44,6 @@
 #include <linux/fs.h>
 #include <linux/pagemap.h> /* for PAGE_CACHE_SIZE */
 
-void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned int ia_valid)
-{
-        if (ia_valid & ATTR_ATIME) {
-                oa->o_atime = LTIME_S(attr->ia_atime);
-                oa->o_valid |= OBD_MD_FLATIME;
-        }
-        if (ia_valid & ATTR_MTIME) {
-                oa->o_mtime = LTIME_S(attr->ia_mtime);
-                oa->o_valid |= OBD_MD_FLMTIME;
-        }
-        if (ia_valid & ATTR_CTIME) {
-                oa->o_ctime = LTIME_S(attr->ia_ctime);
-                oa->o_valid |= OBD_MD_FLCTIME;
-        }
-        if (ia_valid & ATTR_SIZE) {
-                oa->o_size = attr->ia_size;
-                oa->o_valid |= OBD_MD_FLSIZE;
-        }
-        if (ia_valid & ATTR_MODE) {
-                oa->o_mode = attr->ia_mode;
-                oa->o_valid |= OBD_MD_FLTYPE | OBD_MD_FLMODE;
-                if (!in_group_p(oa->o_gid) && !capable(CAP_FSETID))
-                        oa->o_mode &= ~S_ISGID;
-        }
-        if (ia_valid & ATTR_UID) {
-                oa->o_uid = attr->ia_uid;
-                oa->o_valid |= OBD_MD_FLUID;
-        }
-        if (ia_valid & ATTR_GID) {
-                oa->o_gid = attr->ia_gid;
-                oa->o_valid |= OBD_MD_FLGID;
-        }
-}
-EXPORT_SYMBOL(obdo_from_iattr);
-
-void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid)
-{
-        valid &= oa->o_valid;
-
-        if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid "LPX64", new time "LPU64"/"LPU64"\n",
-                       oa->o_valid, oa->o_mtime, oa->o_ctime);
-
-        attr->ia_valid = 0;
-        if (valid & OBD_MD_FLATIME) {
-                LTIME_S(attr->ia_atime) = oa->o_atime;
-                attr->ia_valid |= ATTR_ATIME;
-        }
-        if (valid & OBD_MD_FLMTIME) {
-                LTIME_S(attr->ia_mtime) = oa->o_mtime;
-                attr->ia_valid |= ATTR_MTIME;
-        }
-        if (valid & OBD_MD_FLCTIME) {
-                LTIME_S(attr->ia_ctime) = oa->o_ctime;
-                attr->ia_valid |= ATTR_CTIME;
-        }
-        if (valid & OBD_MD_FLSIZE) {
-                attr->ia_size = oa->o_size;
-                attr->ia_valid |= ATTR_SIZE;
-        }
-#if 0   /* you shouldn't be able to change a file's type with setattr */
-        if (valid & OBD_MD_FLTYPE) {
-                attr->ia_mode = (attr->ia_mode & ~S_IFMT)|(oa->o_mode & S_IFMT);
-                attr->ia_valid |= ATTR_MODE;
-        }
-#endif
-        if (valid & OBD_MD_FLMODE) {
-                attr->ia_mode = (attr->ia_mode & S_IFMT)|(oa->o_mode & ~S_IFMT);
-                attr->ia_valid |= ATTR_MODE;
-                if (!in_group_p(oa->o_gid) && !capable(CAP_FSETID))
-                        attr->ia_mode &= ~S_ISGID;
-        }
-        if (valid & OBD_MD_FLUID) {
-                attr->ia_uid = oa->o_uid;
-                attr->ia_valid |= ATTR_UID;
-        }
-        if (valid & OBD_MD_FLGID) {
-                attr->ia_gid = oa->o_gid;
-                attr->ia_valid |= ATTR_GID;
-        }
-}
-EXPORT_SYMBOL(iattr_from_obdo);
-
 /* WARNING: the file systems must take care not to tinker with
    attributes they don't manage (such as blocks). */
 void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
@@ -316,4 +233,3 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 }
 EXPORT_SYMBOL(obdo_to_inode);
 #endif
-

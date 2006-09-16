@@ -42,7 +42,7 @@
 
 int filter_log_sz_change(struct llog_handle *cathandle,
                          struct ll_fid *mds_fid,
-                         __u32 io_epoch,
+                         __u32 ioepoch,
                          struct llog_cookie *logcookie,
                          struct inode *inode)
 {
@@ -54,23 +54,23 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         LOCK_INODE_MUTEX(inode);
         ofd = inode->i_filterdata;
 
-        if (ofd && ofd->ofd_epoch >= io_epoch) {
-                if (ofd->ofd_epoch > io_epoch)
+        if (ofd && ofd->ofd_epoch >= ioepoch) {
+                if (ofd->ofd_epoch > ioepoch)
                         CERROR("client sent old epoch %d for obj ino %ld\n",
-                               io_epoch, inode->i_ino);
+                               ioepoch, inode->i_ino);
                 UNLOCK_INODE_MUTEX(inode);
                 RETURN(0);
         }
 
-        if (ofd && ofd->ofd_epoch < io_epoch) {
-                ofd->ofd_epoch = io_epoch;
+        if (ofd && ofd->ofd_epoch < ioepoch) {
+                ofd->ofd_epoch = ioepoch;
         } else if (!ofd) {
                 OBD_ALLOC(ofd, sizeof(*ofd));
                 if (!ofd)
                         GOTO(out, rc = -ENOMEM);
                 igrab(inode);
                 inode->i_filterdata = ofd;
-                ofd->ofd_epoch = io_epoch;
+                ofd->ofd_epoch = ioepoch;
         }
         /* the decision to write a record is now made, unlock */
         UNLOCK_INODE_MUTEX(inode);
@@ -81,7 +81,7 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         lsc->lsc_hdr.lrh_len = lsc->lsc_tail.lrt_len = sizeof(*lsc);
         lsc->lsc_hdr.lrh_type =  OST_SZ_REC;
         lsc->lsc_fid = *mds_fid;
-        lsc->lsc_io_epoch = io_epoch;
+        lsc->lsc_ioepoch = ioepoch;
 
         rc = llog_cat_add_rec(cathandle, &lsc->lsc_hdr, logcookie, NULL);
         OBD_FREE(lsc, sizeof(*lsc));

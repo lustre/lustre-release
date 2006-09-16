@@ -710,6 +710,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
         INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
+        INIT_LIST_HEAD(&lli->lli_close_list);
         lli->lli_inode_magic = LLI_INODE_MAGIC;
         sema_init(&lli->lli_och_sem, 1);
         lli->lli_mds_read_och = lli->lli_mds_write_och = NULL;
@@ -1130,7 +1131,7 @@ void ll_clear_inode(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
-        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));
+        ll_i2info(inode)->lli_flags &= ~LLIF_MDS_SIZE_LOCK;
         md_change_cbdata(sbi->ll_md_exp, ll_inode2fid(inode),
                          null_if_equal, inode);
 
@@ -1180,6 +1181,84 @@ void ll_clear_inode(struct inode *inode)
         EXIT;
 }
 
+int ll_md_setattr(struct inode *inode, struct md_op_data *op_data)
+{
+        struct lustre_md md;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ptlrpc_request *request = NULL;
+        int rc;
+        ENTRY;
+        
+        ll_prepare_md_op_data(op_data, inode, NULL, NULL, 0, 0);
+        rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0, &request);
+        if (rc) {
+                ptlrpc_req_finished(request);
+                if (rc == -ENOENT) {
+                        inode->i_nlink = 0;
+                        /* Unlinked special device node? Or just a race?
+                         * Pretend we done everything. */
+                        if (!S_ISREG(inode->i_mode) &&
+                            !S_ISDIR(inode->i_mode))
+                                rc = inode_setattr(inode, &op_data->attr);
+                } else if (rc != -EPERM && rc != -EACCES) {
+                        CERROR("md_setattr fails: rc = %d\n", rc);
+                }
+                RETURN(rc);
+        }
+
+        rc = md_get_lustre_md(sbi->ll_md_exp, request, REPLY_REC_OFF,
+                              sbi->ll_dt_exp, sbi->ll_md_exp, &md);
+        if (rc) {
+                ptlrpc_req_finished(request);
+                RETURN(rc);
+        }
+
+        /* We call inode_setattr to adjust timestamps.
+         * If there is at least some data in file, we cleared ATTR_SIZE
+         * above to avoid invoking vmtruncate, otherwise it is important
+         * to call vmtruncate in inode_setattr to update inode->i_size
+         * (bug 6196) */
+        rc = inode_setattr(inode, &op_data->attr);
+
+        /* Extract epoch data if obtained. */
+        memcpy(&op_data->handle, &md.body->handle, sizeof(op_data->handle));
+        op_data->ioepoch = md.body->ioepoch;
+        
+        ll_update_inode(inode, &md);
+        ptlrpc_req_finished(request);
+
+        RETURN(rc);
+}
+
+/* Close IO epoch and send Size-on-MDS attribute update. */
+static int ll_setattr_done_writing(struct inode *inode,
+                                   struct md_op_data *op_data)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        int rc = 0;
+        ENTRY;
+        
+        LASSERT(op_data != NULL);
+        if (!S_ISREG(inode->i_mode))
+                RETURN(0);
+
+        /* XXX: pass och here for the recovery purpose. */
+        CDEBUG(D_INODE, "Epoch "LPU64" closed on "DFID" for truncate\n",
+               op_data->ioepoch, PFID(&lli->lli_fid));
+
+        op_data->flags = MF_EPOCH_CLOSE | MF_SOM_CHANGE;
+        rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, NULL);
+        if (rc == EAGAIN) {
+                /* MDS has instructed us to obtain Size-on-MDS attribute
+                 * from OSTs and send setattr to back to MDS. */
+                rc = ll_sizeonmds_update(inode, &op_data->handle);
+        } else if (rc) {
+                CERROR("inode %lu mdc truncate failed: rc = %d\n",
+                       inode->i_ino, rc);
+        }
+        RETURN(rc);
+}
+
 /* If this inode has objects allocated to it (lsm != NULL), then the OST
  * object(s) determine the file size and mtime.  Otherwise, the MDS will
  * keep these values until such a time that objects are allocated for it.
@@ -1198,15 +1277,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ptlrpc_request *request = NULL;
+        struct md_op_data *op_data = NULL;
         int ia_valid = attr->ia_valid;
-        struct md_op_data *op_data;
         int rc = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu valid %x\n", inode->i_ino,
                attr->ia_valid);
-        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETATTR);
+        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_SETATTR);
 
         if (ia_valid & ATTR_SIZE) {
                 if (attr->ia_size > ll_file_maxbytes(inode)) {
@@ -1261,56 +1339,26 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         /* If only OST attributes being set on objects, don't do MDS RPC.
          * In that case, we need to check permissions and update the local
          * inode ourselves so we can call obdo_from_inode() always. */
-        if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
-                struct lustre_md md;
-
+        if (ia_valid & (lsm ? ~(ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
                 OBD_ALLOC_PTR(op_data);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
-                
-                ll_prepare_md_op_data(op_data, inode, NULL, NULL, 0, 0);
 
-                rc = md_setattr(sbi->ll_md_exp, op_data,
-                                attr, NULL, 0, NULL, 0, &request);
-                OBD_FREE_PTR(op_data);
+                memcpy(&op_data->attr, attr, sizeof(*attr));
 
-                if (rc) {
-                        ptlrpc_req_finished(request);
-                        if (rc == -ENOENT) {
-                                inode->i_nlink = 0;
-                                /* Unlinked special device node? Or just a race?
-                                 * Pretend we done everything. */
-                                if (!S_ISREG(inode->i_mode) &&
-                                    !S_ISDIR(inode->i_mode) &&
-                                    !S_ISDIR(inode->i_mode))
-                                        rc = inode_setattr(inode, attr);
-                        } else if (rc != -EPERM && rc != -EACCES) {
-                                CERROR("mdcsetattr fails: rc = %d\n", rc);
-                        }
-                        RETURN(rc);
-                }
+                /* Open epoch for truncate. */
+                if (ia_valid & ATTR_SIZE)
+                        op_data->flags = MF_EPOCH_OPEN;
+                rc = ll_md_setattr(inode, op_data);
+                if (rc)
+                        GOTO(out, rc);
 
-                rc = md_get_lustre_md(sbi->ll_md_exp, request, 
-                                      REPLY_REC_OFF, sbi->ll_dt_exp, 
-                                      sbi->ll_md_exp, &md);
-                if (rc) {
-                        ptlrpc_req_finished(request);
-                        RETURN(rc);
-                }
-
-                /* We call inode_setattr to adjust timestamps.
-                 * If there is at least some data in file, we cleared ATTR_SIZE
-                 * above to avoid invoking vmtruncate, otherwise it is important
-                 * to call vmtruncate in inode_setattr to update inode->i_size
-                 * (bug 6196) */
-                rc = inode_setattr(inode, attr);
-
-                ll_update_inode(inode, &md);
-                ptlrpc_req_finished(request);
+                CDEBUG(D_INODE, "Epoch "LPU64" opened on "DFID" for truncate\n",
+                       op_data->ioepoch, PFID(&lli->lli_fid));
 
                 if (!lsm || !S_ISREG(inode->i_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
-                        RETURN(rc);
+                        GOTO(out, rc = 0);
                 }
         } else {
                 /* The OST doesn't check permissions, but the alternative is
@@ -1364,7 +1412,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 DOWN_WRITE_I_ALLOC_SEM(inode);
 #endif
                 if (rc != 0)
-                        RETURN(rc);
+                        GOTO(out, rc);
 
                 /* Only ll_inode_size_lock is taken at this level.
                  * lov_stripe_lock() is grabbed by ll_truncate() only over
@@ -1406,6 +1454,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         oinfo.oi_oa = oa;
                         oinfo.oi_md = lsm;
 
+                        /* XXX: this looks unnecessary now. */
                         rc = obd_setattr_rqset(sbi->ll_dt_exp, &oinfo, NULL);
                         if (rc)
                                 CERROR("obd_setattr_async fails: rc=%d\n", rc);
@@ -1414,7 +1463,13 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         rc = -ENOMEM;
                 }
         }
-        RETURN(rc);
+        EXIT;
+out:
+        if (op_data && op_data->ioepoch) {
+                rc = ll_setattr_done_writing(inode, op_data);
+                OBD_FREE_PTR(op_data);
+        }
+        return rc;
 }
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
@@ -1655,13 +1710,14 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 #else
                 inode->i_rdev = old_decode_dev(body->rdev);
 #endif
-        if (body->valid & OBD_MD_FLSIZE)
+        if (body->valid & OBD_MD_FLSIZE) {
                 inode->i_size = body->size;
-        if (body->valid & OBD_MD_FLBLOCKS)
-                inode->i_blocks = body->blocks;
 
-        if (body->valid & OBD_MD_FLSIZE)
-                set_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
+                if (body->valid & OBD_MD_FLBLOCKS)
+                        inode->i_blocks = body->blocks;
+
+                lli->lli_flags |= LLIF_MDS_SIZE_LOCK;
+        }
 
         if (body->valid & OBD_MD_FLID) {
                 /* FID shouldn't be changed! */
@@ -1791,7 +1847,6 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         }
         case EXT3_IOC_SETFLAGS: {
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-                struct ll_iattr_struct attr = { 0 };
                 struct obd_info oinfo = { { { 0 } } };
                 struct md_op_data *op_data;
 
@@ -1808,12 +1863,11 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                         RETURN(-ENOMEM);
                 
                 ll_prepare_md_op_data(op_data, inode, NULL, NULL, 0, 0);
-
-                attr.ia_attr_flags = flags;
-                ((struct iattr *)&attr)->ia_valid |= ATTR_ATTR_FLAG;
-
+                
+                ((struct ll_iattr *)&op_data->attr)->ia_attr_flags = flags;
+                op_data->attr.ia_valid |= ATTR_ATTR_FLAG;
                 rc = md_setattr(sbi->ll_md_exp, op_data,
-                                (struct iattr *)&attr, NULL, 0, NULL, 0, &req);
+                                NULL, 0, NULL, 0, &req);
                 OBD_FREE_PTR(op_data);
                 ptlrpc_req_finished(req);
                 if (rc || lsm == NULL) {

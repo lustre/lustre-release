@@ -75,6 +75,18 @@ static int ll_releasepage(struct page *page, gfp_t gfp_mask)
         return 1;
 }
 
+static int ll_set_page_dirty(struct page *page)
+{
+        struct ll_async_page *llap;
+        
+        llap = llap_from_page(page, LLAP_ORIGIN_UNKNOWN);
+        if (IS_ERR(llap))
+                RETURN(PTR_ERR(llap));
+        
+        llap_write_pending(page->mapping->host, llap);
+        return(__set_page_dirty_nobuffers(page));
+}
+
 #define MAX_DIRECTIO_SIZE 2*1024*1024*1024UL
 
 static inline int ll_get_user_pages(int rw, unsigned long user_addr,
@@ -151,12 +163,14 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct file *file,
 
         ll_inode_fill_obdo(inode, rw, &oa);
 
-        if (rw == WRITE)
+        if (rw == WRITE) {
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_WRITE, size);
-        else
+                llap_write_pending(inode, NULL);
+        } else {
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_READ, size);
+        }
         rc = obd_brw_rqset(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
                            ll_i2dtexp(inode), &oa, lsm, page_count, pga, NULL);
         if (rc == 0) {
@@ -231,7 +245,7 @@ struct address_space_operations ll_aops = {
         .direct_IO      = ll_direct_IO_26,
         .writepage      = ll_writepage_26,
         .writepages     = generic_writepages,
-        .set_page_dirty = __set_page_dirty_nobuffers,
+        .set_page_dirty = ll_set_page_dirty,
         .sync_page      = NULL,
         .prepare_write  = ll_prepare_write,
         .commit_write   = ll_commit_write,

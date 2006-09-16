@@ -1448,9 +1448,6 @@ int mds_close(struct ptlrpc_request *req, int offset)
                 RETURN(-EFAULT);
         }
 
-        if (body->flags & MDS_BFLAG_UNCOMMITTED_WRITES)
-                /* do some stuff */ ;
-
         spin_lock(&med->med_open_lock);
         mfd = mds_handle2mfd(&body->handle);
         if (mfd == NULL) {

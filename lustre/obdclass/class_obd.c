@@ -417,6 +417,7 @@ EXPORT_SYMBOL(lustre_uuid_to_peer);
 
 EXPORT_SYMBOL(class_handle_hash);
 EXPORT_SYMBOL(class_handle_unhash);
+EXPORT_SYMBOL(class_handle_hash_back);
 EXPORT_SYMBOL(class_handle2object);
 
 /* obd_config.c */

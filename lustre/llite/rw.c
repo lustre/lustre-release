@@ -370,7 +370,7 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
         if (cmd & OBD_BRW_WRITE) {
                 oa->o_valid |= OBD_MD_FLEPOCH;
-                oa->o_easize = ll_i2info(inode)->lli_io_epoch;
+                oa->o_easize = ll_i2info(inode)->lli_ioepoch;
 
                 valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                         OBD_MD_FLUID | OBD_MD_FLGID |
@@ -536,7 +536,7 @@ int llap_shrink_cache(struct ll_sb_info *sbi, int shrink_fraction)
         return count;
 }
 
-static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
+struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
 {
         struct ll_async_page *llap;
         struct obd_export *exp;
@@ -603,11 +603,11 @@ static struct ll_async_page *llap_from_page(struct page *page, unsigned origin)
         /* also zeroing the PRIVBITS low order bitflags */
         __set_page_ll_data(page, llap);
         llap->llap_page = page;
-
         spin_lock(&sbi->ll_lock);
         sbi->ll_pglist_gen++;
         sbi->ll_async_page_count++;
         list_add_tail(&llap->llap_pglist_item, &sbi->ll_pglist);
+        INIT_LIST_HEAD(&llap->llap_pending_write);
         spin_unlock(&sbi->ll_lock);
 
  out:
@@ -654,7 +654,6 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
                                 0, 0, 0, async_flags);
         if (rc == 0) {
                 LL_CDEBUG_PAGE(D_PAGE, llap->llap_page, "write queued\n");
-                //llap_write_pending(inode, llap);
                 GOTO(out, 0);
         }
 
@@ -872,9 +871,9 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 
         unlock_page(page);
 
-        if (0 && cmd & OBD_BRW_WRITE) {
-                llap_write_complete(page->mapping->host, llap);
-                ll_try_done_writing(page->mapping->host);
+        if (cmd & OBD_BRW_WRITE) {
+                if (llap_write_complete(page->mapping->host, llap))
+                        ll_queue_done_writing(page->mapping->host);
         }
 
         if (PageWriteback(page)) {
@@ -924,7 +923,9 @@ void ll_removepage(struct page *page)
                 return;
         }
 
-        //llap_write_complete(inode, llap);
+        if (llap_write_complete(inode, llap))
+                ll_queue_done_writing(inode);
+
         rc = obd_teardown_async_page(exp, ll_i2info(inode)->lli_smd, NULL,
                                      llap->llap_cookie);
         if (rc != 0)
