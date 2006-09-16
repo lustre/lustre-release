@@ -1927,7 +1927,6 @@ static int lmv_readpage(struct obd_export *exp,
                 LASSERT(obj->lo_objcount > 0);
                 do_div(seg, obj->lo_objcount);
                 do_div(index, seg);
-                offset -= index * seg;  
                 i = (int)index;
                 rid = obj->lo_inodes[i].li_fid;
 

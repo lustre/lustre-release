@@ -142,7 +142,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         struct inode *inode = page->mapping->host;
         struct ptlrpc_request *request;
         struct mdt_body *body;
-        __u32 hash;
+        __u64 hash;
         int rc;
         ENTRY;
 
@@ -236,6 +236,9 @@ static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
                         LASSERT(*start <= hash);
                         if (hash > *end || (*end != *start && hash == *end)) {
                                 kunmap(page);
+                                lock_page(page); 
+                                ll_truncate_complete_page(page);
+                                unlock_page(page); 
                                 page_cache_release(page);
                                 page = NULL;
                         }
