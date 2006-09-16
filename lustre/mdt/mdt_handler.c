@@ -1767,7 +1767,6 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                               struct ldlm_lock **lockp,
                               int flags)
 {
-        struct ptlrpc_request  *req = mdt_info_req(info);
         struct ldlm_reply      *ldlm_rep;
         struct mdt_lock_handle  tmp_lock;
         struct mdt_lock_handle *lhc = &tmp_lock;
