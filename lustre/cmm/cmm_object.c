@@ -444,7 +444,7 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
         /* get type from src, can be remote req */
         rc = mo_attr_get(ctx, md_object_next(mo_s), tmp_ma);
         if (rc != 0)
-                RETURN(rc);
+                GOTO(out, rc);
 
         ma->ma_attr.la_mode = tmp_ma->ma_attr.la_mode;
 
@@ -452,15 +452,17 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
                 /* mo_t is remote object and there is RPC to unlink it */
                 rc = mo_ref_del(ctx, md_object_next(mo_t), ma);
                 if (rc)
-                        RETURN(rc);
+                        GOTO(out, rc);
                 mo_t = NULL;
         }
         /* local rename, mo_t can be NULL */
         rc = mdo_rename(ctx, md_object_next(mo_po),
                         md_object_next(mo_pn), lf, s_name,
                         md_object_next(mo_t), t_name, ma);
-
-        RETURN(rc);
+        EXIT;
+out:
+        lu_object_put(ctx, &mo_s->mo_lu);
+        return rc;
 }
 
 static int cml_rename_tgt(const struct lu_context *ctx,

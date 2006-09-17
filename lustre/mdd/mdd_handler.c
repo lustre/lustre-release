@@ -1561,6 +1561,7 @@ cleanup:
         mdd_rename_unlock(ctxt, mdd_spobj, mdd_tpobj);
 cleanup_unlocked:
         mdd_trans_stop(ctxt, mdd, rc, handle);
+        mdd_object_put(ctxt, mdd_sobj);
         RETURN(rc);
 }
 
