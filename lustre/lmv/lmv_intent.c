@@ -119,8 +119,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
          */
         if (rc == 0) {
                 lmv_drop_intent_lock(it);
-                memcpy(&it->d.lustre.it_lock_handle, &plock,
-                       sizeof(plock));
+                memcpy(&it->d.lustre.it_lock_handle, &plock, sizeof(plock));
                 it->d.lustre.it_lock_mode = pmode;
         }
 
@@ -249,7 +248,12 @@ repeat:
                         /* client switches to new sequence, setup fld */
                         goto repeat;
                 }
+        } else if (rc == -ESTALE && it->d.lustre.it_lock_mode) {
+                /* cross-ref open can have lookup lock on child */
+                ldlm_lock_decref(&it->d.lustre.it_lock_handle,
+                                 it->d.lustre.it_lock_mode);
         }
+
         if (rc != 0)
                 GOTO(out_free_sop_data, rc);
 
