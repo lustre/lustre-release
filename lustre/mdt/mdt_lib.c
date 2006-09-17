@@ -199,7 +199,13 @@ static int mdt_epoch_unpack(struct mdt_thread_info *info)
         struct req_capsule *pill = &info->mti_pill;
         ENTRY;
 
-        info->mti_epoch = req_capsule_client_get(pill, &RMF_MDT_EPOCH);
+        if (req_capsule_get_size(pill, &RMF_MDT_EPOCH, RCL_CLIENT)) 
+                info->mti_epoch = req_capsule_client_get(pill, &RMF_MDT_EPOCH);
+        else 
+                /* it is set to NULL already. 
+                info->mti_epoch = NULL;
+                */
+                ;
         RETURN(info->mti_epoch == NULL ? -EFAULT : 0);
 }
 
@@ -214,7 +220,7 @@ static int mdt_setattr_unpack(struct mdt_thread_info *info)
         if (rc)
                 RETURN(rc);
 
-        /* Epoch may be absent, skip errors. */
+        /* Epoch may be absent */
         mdt_epoch_unpack(info);
 
         if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {

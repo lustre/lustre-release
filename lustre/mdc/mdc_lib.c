@@ -220,10 +220,13 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
         struct mdt_epoch *epoch;
         
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));        
-        epoch = lustre_msg_buf(req->rq_reqmsg, offset + 1, sizeof(*epoch));
         mdc_setattr_pack_rec(rec, op_data);
-        if (epoch)
+
+        if (op_data->flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN)) {
+                epoch = lustre_msg_buf(req->rq_reqmsg, offset + 1,
+                                        sizeof(*epoch));
                 mdc_epoch_pack(epoch, op_data);
+        }
 
         if (ealen == 0)
                 return;
