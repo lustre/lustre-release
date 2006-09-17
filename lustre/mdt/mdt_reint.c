@@ -479,26 +479,28 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         /*step 2: find & lock the target object if exists*/
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(mtgtdir),
                         rr->rr_tgt, tgt_fid);
-        if (rc != 0 && rc != -ENOENT)
+        if (rc != 0 && rc != -ENOENT) {
                 GOTO(out_unlock_tgtdir, rc);
-
-        if (rc == 0) {
+        } else if (rc == 0) {
                 lh_tgt->mlh_mode = LCK_EX;
 
                 mtgt = mdt_object_find_lock(info, tgt_fid, lh_tgt,
                                             MDS_INODELOCK_LOOKUP);
                 if (IS_ERR(mtgt))
                         GOTO(out_unlock_tgtdir, rc = PTR_ERR(mtgt));
-        }
 
-        /* step 3: rename_tgt or name_insert */
-        if (mtgt)
                 rc = mdo_rename_tgt(info->mti_ctxt, mdt_object_child(mtgtdir),
                                     mdt_object_child(mtgt),
                                     rr->rr_fid2, rr->rr_tgt, ma);
-        else
+        } else /* -ENOENT */ {
                 rc = mdo_name_insert(info->mti_ctxt, mdt_object_child(mtgtdir),
                                      rr->rr_tgt, rr->rr_fid2, 0 /* FIXME: isdir */);
+        }
+
+        /* handle last link of tgt object */
+        if (mtgt)
+                mdt_handle_last_unlink(info, mtgt, ma);
+
         GOTO(out_unlock_tgt, rc);
 
 out_unlock_tgt:
@@ -508,6 +510,7 @@ out_unlock_tgt:
 out_unlock_tgtdir:
         mdt_object_unlock_put(info, mtgtdir, lh_tgtdir, rc);
 out:
+        mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         return rc;
 }
 
@@ -644,9 +647,6 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         /* new target object may not exist now */
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(mtgtdir),
                         rr->rr_tgt, new_fid);
-        if (rc != 0 && rc != -ENOENT)
-                GOTO(out_unlock_old, rc);
-
         if (rc == 0) {
                 /* the new_fid should have been filled at this moment*/
                 if (lu_fid_eq(old_fid, new_fid))
@@ -661,7 +661,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                                             MDS_INODELOCK_FULL);
                 if (IS_ERR(mnew))
                         GOTO(out_unlock_old, rc = PTR_ERR(mnew));
-        }
+        } else if (rc != -EREMOTE && rc != -ENOENT)
+                GOTO(out_unlock_old, rc);
 
         /* step 5: dome some checking ...*/
         /* step 6: rename it */
@@ -702,6 +703,7 @@ out_unlock_source:
         mdt_object_unlock_put(info, msrcdir, lh_srcdirp, rc);
         mdt_rename_unlock(&rename_lh);
 out:
+        mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         return rc;
 }
 
