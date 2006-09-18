@@ -510,7 +510,6 @@ out_unlock_tgt:
 out_unlock_tgtdir:
         mdt_object_unlock_put(info, mtgtdir, lh_tgtdir, rc);
 out:
-        mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         return rc;
 }
 
