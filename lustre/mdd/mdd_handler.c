@@ -1499,7 +1499,11 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
 
         LASSERT(ma->ma_attr.la_mode & S_IFMT);
         is_dir = S_ISDIR(ma->ma_attr.la_mode);
-        
+       
+        if (ma->ma_attr.la_valid & LA_FLAGS &&
+            ma->ma_attr.la_flags & (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL))
+                RETURN(-EPERM);
+
         if (tobj)
                 mdd_tobj = md2mdd_obj(tobj);
 

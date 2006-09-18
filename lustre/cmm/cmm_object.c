@@ -444,9 +444,11 @@ static int __cmm_mode_get(const struct lu_context *ctx, struct md_device *md,
         
         /* get type from src, can be remote req */
         rc = mo_attr_get(ctx, md_object_next(mo_s), tmp_ma);
-        if (rc == 0 && ma != NULL)
+        if (rc == 0) {
                 ma->ma_attr.la_mode = tmp_ma->ma_attr.la_mode;
-
+                ma->ma_attr.la_flags = tmp_ma->ma_attr.la_flags;
+                ma->ma_attr.la_valid |= LA_MODE | LA_FLAGS;
+        }
         lu_object_put(ctx, &mo_s->mo_lu);
         return rc;
 }
@@ -462,6 +464,7 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
         rc = __cmm_mode_get(ctx, md_obj2dev(mo_po), lf, ma);
         if (rc != 0)
                 RETURN(rc);
+
         if (mo_t && lu_object_exists(&mo_t->mo_lu) < 0) {
                 /* mo_t is remote object and there is RPC to unlink it */
                 rc = mo_ref_del(ctx, md_object_next(mo_t), ma);
@@ -510,11 +513,11 @@ static int cmm_is_subdir(const struct lu_context *ctx, struct md_object *mo,
         int rc;
         ENTRY;
 
-        rc = __cmm_mode_get(ctx, md_obj2dev(mo), fid, NULL);
+        cmi = lu_context_key_get(ctx, &cmm_thread_key);
+        rc = __cmm_mode_get(ctx, md_obj2dev(mo), fid, &cmi->cmi_ma);
         if (rc)
                 RETURN(rc);
 
-        cmi = lu_context_key_get(ctx, &cmm_thread_key);
         if (!S_ISDIR(cmi->cmi_ma.ma_attr.la_mode))
                 RETURN(0);
         
