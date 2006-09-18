@@ -591,7 +591,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         rc = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
         if (rc == 1) {
         /* if (rr->rr_name[0] == 0) {*/
-                RETURN(mdt_reint_rename_tgt(info));
+                rc = mdt_reint_rename_tgt(info);
+                GOTO(out, rc);
         }
 
         rc = mdt_rename_lock(info, &rename_lh);

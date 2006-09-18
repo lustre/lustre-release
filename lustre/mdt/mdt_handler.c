@@ -3174,9 +3174,10 @@ static int mdt_upcall(const struct lu_context *ctx, struct md_device *md,
 static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
-        struct lu_context ctxt;
-        struct mdt_device *mdt = mdt_dev(exp->exp_obd->obd_lu_dev);
-        struct dt_device *dt = mdt->mdt_bottom;
+        struct lu_context  ctxt;
+        struct obd_device *obd= exp->exp_obd;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        struct dt_device  *dt = mdt->mdt_bottom;
         int rc;
 
         ENTRY;
@@ -3185,12 +3186,28 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         if (rc)
                 RETURN(rc);
         lu_context_enter(&ctxt);
-        if (cmd == OBD_IOC_SYNC || cmd == OBD_IOC_SET_READONLY) {
+
+        switch (cmd) {
+        case OBD_IOC_SYNC:
                 rc = dt->dd_ops->dt_sync(&ctxt, dt);
-                if (cmd == OBD_IOC_SET_READONLY)
-                        dt->dd_ops->dt_ro(&ctxt, dt);
-        } else
+                break;
+
+        case OBD_IOC_SET_READONLY: 
+                rc = dt->dd_ops->dt_sync(&ctxt, dt);
+                dt->dd_ops->dt_ro(&ctxt, dt);
+                break;
+
+        case OBD_IOC_ABORT_RECOVERY:
+                CERROR("aborting recovery for device %s\n", obd->obd_name);
+                target_abort_recovery(obd);
+                break;
+
+        default:
+                CERROR("not supported cmd = %d for device %s\n",
+                       cmd, obd->obd_name);
                 rc = -EOPNOTSUPP;
+        }
+
         lu_context_exit(&ctxt);
         lu_context_fini(&ctxt);
         RETURN(rc);
