@@ -762,7 +762,7 @@ int test_and_clear_bit(int nr, unsigned long *addr)
 
 /* FIXME sys/capability will finally included linux/fs.h thus
  * cause numerous trouble on x86-64. as temporary solution for
- * build broken at cary, we copy definition we need from capability.h
+ * build broken at Cray, we copy definition we need from capability.h
  * FIXME
  */
 struct _cap_struct;
