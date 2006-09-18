@@ -506,7 +506,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
 
         body = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF, sizeof(*body),
                                   lustre_swab_mdt_body);
-        LASSERT (body != NULL);
+        LASSERT(body != NULL);
 
         if (mod == NULL) {
                 DEBUG_REQ(D_ERROR, req,
@@ -528,15 +528,16 @@ static void mdc_replay_open(struct ptlrpc_request *req)
 
         close_req = mod->mod_close_req;
         if (close_req != NULL) {
-                struct mdt_body *close_body;
+                struct mdt_epoch *epoch;
                 LASSERT(lustre_msg_get_opc(close_req->rq_reqmsg) == MDS_CLOSE);
-                close_body = lustre_msg_buf(close_req->rq_reqmsg, REQ_REC_OFF,
-                                            sizeof(*close_body));
+                epoch = lustre_msg_buf(close_req->rq_reqmsg, REQ_REC_OFF,
+                                       sizeof(*epoch));
+                LASSERT(epoch);
                 if (och != NULL)
-                        LASSERT(!memcmp(&old, &close_body->handle, sizeof old));
+                        LASSERT(!memcmp(&old, &epoch->handle, sizeof old));
                 DEBUG_REQ(D_HA, close_req, "updating close body with new fh");
-                memcpy(&close_body->handle, &body->handle,
-                       sizeof(close_body->handle));
+                memcpy(&epoch->handle, &body->handle,
+                       sizeof(epoch->handle));
         }
 
         EXIT;
