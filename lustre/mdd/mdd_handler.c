@@ -1338,10 +1338,11 @@ static int mdd_ref_del(const struct lu_context *ctxt, struct md_object *obj,
 
         rc = __mdd_finish_unlink(ctxt, mdd_obj, ma, handle);
 
+        EXIT;
 cleanup:
         mdd_write_unlock(ctxt, mdd_obj);
         mdd_trans_stop(ctxt, mdd, rc, handle);
-        RETURN(rc);
+        return rc;
 }
 
 static int mdd_parent_fid(const struct lu_context *ctxt,
@@ -1352,44 +1353,58 @@ static int mdd_parent_fid(const struct lu_context *ctxt,
 }
 
 /*
- * return 0: if lf is the fid of the ancestor of p1
- * otherwise: other_value
+ * return 1: if lf is the fid of the ancestor of p1;
+ * return 0: if not;
+ *
+ * return -EREMOTE: if remote object is found, in this
+ * case fid of remote object is saved to @pf;
+ *
+ * otherwise: values < 0, errors.
  */
 static int mdd_is_parent(const struct lu_context *ctxt,
                          struct mdd_device *mdd,
                          struct mdd_object *p1,
-                         const struct lu_fid *lf)
+                         const struct lu_fid *lf,
+                         struct lu_fid *pf)
 {
-        struct lu_fid * pfid;
         struct mdd_object *parent = NULL;
+        struct lu_fid *pfid;
         int rc;
         ENTRY;
 
+        LASSERT(!lu_fid_eq(mdo2fid(p1), lf));
         pfid = &mdd_ctx_info(ctxt)->mti_fid;
+
+        /* Do not lookup ".." in root, they do not exist there. */
         if (lu_fid_eq(mdo2fid(p1), &mdd->mdd_root_fid))
-                RETURN(1);
+                RETURN(0);
+        
         for(;;) {
                 rc = mdd_parent_fid(ctxt, p1, pfid);
                 if (rc)
                         GOTO(out, rc);
-                if (lu_fid_eq(pfid, lf))
-                        GOTO(out, rc = 0);
                 if (lu_fid_eq(pfid, &mdd->mdd_root_fid))
+                        GOTO(out, rc = 0);
+                if (lu_fid_eq(pfid, lf))
                         GOTO(out, rc = 1);
                 if (parent)
                         mdd_object_put(ctxt, parent);
                 parent = mdd_object_find(ctxt, mdd, pfid);
+                
                 /* cross-ref parent, not supported yet */
-                if (parent == NULL)
-                        GOTO(out, rc = -EOPNOTSUPP);
-                else if (IS_ERR(parent))
+                if (parent == NULL) {
+                        if (pf != NULL)
+                                *pf = *pfid;
+                        GOTO(out, rc = -EREMOTE);
+                } else if (IS_ERR(parent))
                         GOTO(out, rc = PTR_ERR(parent));
                 p1 = parent;
         }
+        EXIT;
 out:
         if (parent && !IS_ERR(parent))
                 mdd_object_put(ctxt, parent);
-        RETURN(rc);
+        return rc;
 }
 
 static int mdd_rename_lock(const struct lu_context *ctxt,
@@ -1397,13 +1412,15 @@ static int mdd_rename_lock(const struct lu_context *ctxt,
                            struct mdd_object *src_pobj,
                            struct mdd_object *tgt_pobj)
 {
+        int rc;
         ENTRY;
 
         if (src_pobj == tgt_pobj) {
                 mdd_write_lock(ctxt, src_pobj);
                 RETURN(0);
         }
-        /*compared the parent child relationship of src_p&tgt_p*/
+        
+        /* compared the parent child relationship of src_p&tgt_p */
         if (lu_fid_eq(&mdd->mdd_root_fid, mdo2fid(src_pobj))){
                 mdd_lock2(ctxt, src_pobj, tgt_pobj);
                 RETURN(0);
@@ -1412,7 +1429,11 @@ static int mdd_rename_lock(const struct lu_context *ctxt,
                 RETURN(0);
         }
 
-        if (!mdd_is_parent(ctxt, mdd, src_pobj, mdo2fid(tgt_pobj))) {
+        rc = mdd_is_parent(ctxt, mdd, src_pobj, mdo2fid(tgt_pobj), NULL);
+        if (rc < 0)
+                RETURN(rc);
+
+        if (rc == 1) {
                 mdd_lock2(ctxt, tgt_pobj, src_pobj);
                 RETURN(0);
         }
@@ -1438,7 +1459,6 @@ static int mdd_rename_sanity_check(const struct lu_context *ctxt,
                                    int src_is_dir,
                                    struct mdd_object *tobj)
 {
-        struct mdd_device *mdd =mdo2mdd(&src_pobj->mod_obj);
         int rc = 0, tgt_is_dir;
         ENTRY;
 
@@ -1457,10 +1477,6 @@ static int mdd_rename_sanity_check(const struct lu_context *ctxt,
         }
         if (rc)
                 RETURN(rc);
-
-        /* source should not be ancestor of target dir */
-        if (src_is_dir && !mdd_is_parent(ctxt, mdd, tgt_pobj, sfid))
-                rc = -EINVAL;
 
         RETURN(rc);
 }
@@ -1584,6 +1600,32 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
         else
                 rc = -ENOTDIR;
         mdd_read_unlock(ctxt, mdd_obj);
+        RETURN(rc);
+}
+
+/*
+ * returns 1: if fid is subdir of @mo;
+ * returns 0: if fid is not a subdir of @mo;
+ *
+ * returns EREMOTE if remote object is found, fid of remote object is saved to
+ * @fid;
+ *
+ * returns < 0: if error
+ */
+static int mdd_is_subdir(const struct lu_context *ctx, struct md_object *mo,
+                         const struct lu_fid *fid, struct lu_fid *sfid)
+{
+        struct mdd_device *mdd = mdo2mdd(mo);
+        int rc;
+        ENTRY;
+        
+        if (!S_ISDIR(mdd_object_type(md2mdd_obj(mo))))
+                RETURN(0);
+        
+        rc = mdd_is_parent(ctx, mdd, md2mdd_obj(mo), fid, sfid);
+        if (rc == -EREMOTE)
+                rc = EREMOTE;
+        
         RETURN(rc);
 }
 
@@ -2200,6 +2242,7 @@ struct md_device_operations mdd_ops = {
 };
 
 static struct md_dir_operations mdd_dir_ops = {
+        .mdo_is_subdir     = mdd_is_subdir,
         .mdo_lookup        = mdd_lookup,
         .mdo_create        = mdd_create,
         .mdo_rename        = mdd_rename,

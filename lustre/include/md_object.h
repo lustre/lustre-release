@@ -92,10 +92,10 @@ struct md_create_spec {
  * Operations implemented for each md object (both directory and leaf).
  */
 struct md_object_operations {
-        int (*moo_attr_get)(const struct lu_context *ctxt, struct md_object *dt,
+        int (*moo_attr_get)(const struct lu_context *ctxt, struct md_object *obj,
                             struct md_attr *attr);
 
-        int (*moo_attr_set)(const struct lu_context *ctxt, struct md_object *dt,
+        int (*moo_attr_set)(const struct lu_context *ctxt, struct md_object *obj,
                             const struct md_attr *attr);
 
         int (*moo_xattr_get)(const struct lu_context *ctxt,
@@ -136,6 +136,9 @@ struct md_object_operations {
  * Operations implemented for each directory object.
  */
 struct md_dir_operations {
+        int (*mdo_is_subdir) (const struct lu_context *, struct md_object *,
+                              const struct lu_fid *, struct lu_fid *);
+        
         int (*mdo_lookup)(const struct lu_context *, struct md_object *,
                           const char *, struct lu_fid *);
 
@@ -377,6 +380,13 @@ static inline int mdo_rename(const struct lu_context *cx,
 {
         LASSERT(tp->mo_dir_ops->mdo_rename);
         return tp->mo_dir_ops->mdo_rename(cx, sp, tp, lf, sname, t, tname, ma);
+}
+
+static inline int mdo_is_subdir(const struct lu_context *cx, struct md_object *mo,
+                                const struct lu_fid *fid, struct lu_fid *sfid)
+{
+        LASSERT(mo->mo_dir_ops->mdo_is_subdir);
+        return mo->mo_dir_ops->mdo_is_subdir(cx, mo, fid, sfid);
 }
 
 static inline int mdo_link(const struct lu_context *cx, struct md_object *p,

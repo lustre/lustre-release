@@ -53,6 +53,20 @@ void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
         b->nlink = size;                        /* !! */
 }
 
+void mdc_is_subdir_pack(struct ptlrpc_request *req, int offset,
+                        const struct lu_fid *pfid,
+                        const struct lu_fid *cfid, int flags)
+{
+        struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+
+        if (pfid)
+                b->fid1 = *pfid;
+        if (cfid)
+                b->fid2 = *cfid;
+        b->valid = OBD_MD_FLID;
+        b->flags = flags;
+}
+
 static void mdc_pack_body(struct mdt_body *b)
 {
         LASSERT (b != NULL);
@@ -75,6 +89,7 @@ void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
         b->flags = flags;
         mdc_pack_body(b);
 }
+
 /* packing of MDS records */
 void mdc_create_pack(struct ptlrpc_request *req, int offset,
                      struct md_op_data *op_data, const void *data, int datalen,

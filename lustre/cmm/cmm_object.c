@@ -444,7 +444,7 @@ static int __cmm_mode_get(const struct lu_context *ctx, struct md_device *md,
         
         /* get type from src, can be remote req */
         rc = mo_attr_get(ctx, md_object_next(mo_s), tmp_ma);
-        if (rc == 0)
+        if (rc == 0 && ma != NULL)
                 ma->ma_attr.la_mode = tmp_ma->ma_attr.la_mode;
 
         lu_object_put(ctx, &mo_s->mo_lu);
@@ -456,7 +456,6 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
                        const char *s_name, struct md_object *mo_t,
                        const char *t_name, struct md_attr *ma)
 {
-        struct cmm_thread_info *cmi;
         int rc;
         ENTRY;
 
@@ -467,16 +466,15 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
                 /* mo_t is remote object and there is RPC to unlink it */
                 rc = mo_ref_del(ctx, md_object_next(mo_t), ma);
                 if (rc)
-                        GOTO(out, rc);
+                        RETURN(rc);
                 mo_t = NULL;
         }
+        
         /* local rename, mo_t can be NULL */
         rc = mdo_rename(ctx, md_object_next(mo_po),
                         md_object_next(mo_pn), lf, s_name,
                         md_object_next(mo_t), t_name, ma);
-        EXIT;
-out:
-        return rc;
+        RETURN(rc);
 }
 
 static int cml_rename_tgt(const struct lu_context *ctx,
@@ -504,7 +502,28 @@ static int cml_name_insert(const struct lu_context *ctx,
         RETURN(rc);
 }
 
+/* Common method for remote and local use. */
+static int cmm_is_subdir(const struct lu_context *ctx, struct md_object *mo,
+                         const struct lu_fid *fid, struct lu_fid *sfid)
+{
+        struct cmm_thread_info *cmi;
+        int rc;
+        ENTRY;
+
+        rc = __cmm_mode_get(ctx, md_obj2dev(mo), fid, NULL);
+        if (rc)
+                RETURN(rc);
+
+        cmi = lu_context_key_get(ctx, &cmm_thread_key);
+        if (!S_ISDIR(cmi->cmi_ma.ma_attr.la_mode))
+                RETURN(0);
+        
+        rc = mdo_is_subdir(ctx, md_object_next(mo), fid, sfid);
+        RETURN(rc);
+}
+
 static struct md_dir_operations cml_dir_ops = {
+        .mdo_is_subdir   = cmm_is_subdir,
         .mdo_lookup      = cml_lookup,
         .mdo_create      = cml_create,
         .mdo_link        = cml_link,
@@ -695,8 +714,10 @@ static struct md_object_operations cmr_mo_ops = {
 static int cmr_lookup(const struct lu_context *ctx, struct md_object *mo_p,
                       const char *name, struct lu_fid *lf)
 {
-        /*this can happens while rename()
-         * If new parent is remote dir, lookup will happens here */
+        /*
+         * This can happens while rename() If new parent is remote dir, lookup
+         * will happen here.
+         */
 
         RETURN(-EREMOTE);
 }
@@ -783,9 +804,9 @@ static int cmr_unlink(const struct lu_context *ctx, struct md_object *mo_p,
 }
 
 static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
-                       struct md_object *mo_pn, const struct lu_fid *lf,
-                       const char *s_name, struct md_object *mo_t,
-                       const char *t_name, struct md_attr *ma)
+                      struct md_object *mo_pn, const struct lu_fid *lf,
+                      const char *s_name, struct md_object *mo_t,
+                      const char *t_name, struct md_attr *ma)
 {
         int rc;
         ENTRY;
@@ -828,6 +849,7 @@ static int cmr_rename_tgt(const struct lu_context *ctx,
 }
 
 static struct md_dir_operations cmr_dir_ops = {
+        .mdo_is_subdir   = cmm_is_subdir,
         .mdo_lookup      = cmr_lookup,
         .mdo_create      = cmr_create,
         .mdo_link        = cmr_link,

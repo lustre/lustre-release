@@ -1646,7 +1646,7 @@ static inline int md_enqueue(struct obd_export *exp, int lock_type,
 
 static inline int md_getattr_name(struct obd_export *exp,
                                   const struct lu_fid *fid,
-                                  const char *filename, int namelen,
+                                  const char *name, int namelen,
                                   obd_valid valid, int ea_size,
                                   struct ptlrpc_request **request)
 {
@@ -1654,7 +1654,7 @@ static inline int md_getattr_name(struct obd_export *exp,
         ENTRY;
         EXP_CHECK_MD_OP(exp, getattr_name);
         MD_COUNTER_INCREMENT(exp->exp_obd, getattr_name);
-        rc = MDP(exp->exp_obd, getattr_name)(exp, fid, filename, namelen,
+        rc = MDP(exp->exp_obd, getattr_name)(exp, fid, name, namelen,
                                              valid, ea_size, request);
         RETURN(rc);
 }
@@ -1701,6 +1701,19 @@ static inline int md_rename(struct obd_export *exp,
         MD_COUNTER_INCREMENT(exp->exp_obd, rename);
         rc = MDP(exp->exp_obd, rename)(exp, op_data, old, oldlen, new,
                                        newlen, request);
+        RETURN(rc);
+}
+
+static inline int md_is_subdir(struct obd_export *exp,
+                               const struct lu_fid *pfid,
+                               const struct lu_fid *cfid,
+                               struct ptlrpc_request **request)
+{
+        int rc;
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, is_subdir);
+        MD_COUNTER_INCREMENT(exp->exp_obd, is_subdir);
+        rc = MDP(exp->exp_obd, is_subdir)(exp, pfid, cfid, request);
         RETURN(rc);
 }
 

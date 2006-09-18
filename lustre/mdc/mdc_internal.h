@@ -31,6 +31,9 @@ void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
                        __u64 valid, const struct lu_fid *fid,
                        int ea_size, int flags);
 void mdc_pack_rep_body(struct ptlrpc_request *);
+void mdc_is_subdir_pack(struct ptlrpc_request *req, int offset,
+                        const struct lu_fid *pfid,
+                        const struct lu_fid *cfid, int flags);
 void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
 		      __u32 size, const struct lu_fid *fid);
 void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
@@ -189,6 +192,9 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
                const char *old, int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request);
+
+int mdc_is_subdir(struct obd_export *exp, const struct lu_fid *pfid,
+                  const struct lu_fid *cfid, struct ptlrpc_request **request);
 
 int mdc_sync(struct obd_export *exp, const struct lu_fid *fid,
              struct ptlrpc_request **);

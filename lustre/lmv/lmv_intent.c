@@ -250,7 +250,7 @@ repeat:
                 }
         } else if (rc == -ESTALE && it->d.lustre.it_lock_mode) {
                 /* cross-ref open can have lookup lock on child */
-                ldlm_lock_decref(&it->d.lustre.it_lock_handle,
+                ldlm_lock_decref((struct lustre_handle *)&it->d.lustre.it_lock_handle,
                                  it->d.lustre.it_lock_mode);
         }
 

@@ -234,6 +234,39 @@ int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(rc);
 }
 
+int mdc_is_subdir(struct obd_export *exp, const struct lu_fid *pfid,
+                  const struct lu_fid *cfid, struct ptlrpc_request **request)
+{
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(struct mdt_body) };
+        struct ptlrpc_request *req;
+        struct mdt_body *body;
+        int rc;
+        ENTRY;
+
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
+                              MDS_IS_SUBDIR, 2, size, NULL);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
+
+        mdc_is_subdir_pack(req, REQ_REC_OFF, pfid, cfid, 0);
+
+        ptlrpc_req_set_repsize(req, 2, size);
+        rc = ptlrpc_queue_wait(req);
+        if (rc != 0)
+                GOTO(out, rc);
+
+        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
+                                  lustre_swab_mdt_body);
+        if (body == NULL) {
+                CERROR ("Can't unpack mdt_body\n");
+                GOTO(out, rc = -EPROTO);
+        }
+        EXIT;
+ out:
+        *request = req;
+        return rc;
+}
+
 static
 int mdc_xattr_common(struct obd_export *exp, const struct lu_fid *fid,
                      int opcode, obd_valid valid, const char *xattr_name,
@@ -1435,6 +1468,7 @@ struct md_ops mdc_md_ops = {
         .m_getattr_name     = mdc_getattr_name,
         .m_intent_lock      = mdc_intent_lock,
         .m_link             = mdc_link,
+        .m_is_subdir        = mdc_is_subdir,
         .m_rename           = mdc_rename,
         .m_setattr          = mdc_setattr,
         .m_setxattr         = mdc_setxattr,

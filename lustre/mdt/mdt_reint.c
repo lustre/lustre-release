@@ -557,9 +557,37 @@ static void mdt_rename_unlock(struct lustre_handle *lh)
         EXIT;
 }
 
-static int mdt_rename_check(struct mdt_thread_info *info)
+/* 
+ * This is is_subdir() variant, it is CMD is cmm forwards it to correct
+ * target. Source should not be ancestor of target dir. May be other rename
+ * checks can be moved here later.
+ */
+static int mdt_rename_check(struct mdt_thread_info *info, struct lu_fid *fid)
 {
-        return 0;
+        struct mdt_reint_record *rr = &info->mti_rr;
+        struct lu_fid dst_fid = *rr->rr_fid2;
+        struct mdt_object *dst;
+        int rc = 0;
+        ENTRY;
+
+        do {
+                dst = mdt_object_find(info->mti_ctxt, info->mti_mdt, &dst_fid);
+                if (!IS_ERR(dst)) {
+                        rc = mdo_is_subdir(info->mti_ctxt, mdt_object_child(dst),
+                                           fid, &dst_fid);
+                        mdt_object_put(info->mti_ctxt, dst);
+                        if (rc < 0) {
+                                CERROR("Error while doing mdo_is_subdir(), rc %d\n",
+                                       rc);
+                        } else if (rc == 1) {
+                                rc = -EINVAL;
+                        }
+                } else {
+                        rc = PTR_ERR(dst);
+                }
+        } while (rc == EREMOTE);
+        
+        RETURN(rc);
 }
 
 static int mdt_reint_rename(struct mdt_thread_info *info)
@@ -600,10 +628,6 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                 RETURN(rc);
         }
 
-        rc = mdt_rename_check(info);
-        if (rc)
-                GOTO(out, rc);
-        
         lh_newp = &info->mti_lh[MDT_LH_NEW];
 
         /* step 1: lock the source dir */
@@ -683,10 +707,15 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
         mdt_fail_write(info->mti_ctxt, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_RENAME_WRITE);
 
+        /* Check if @dst is subdir of @src. */
+        rc = mdt_rename_check(info, old_fid);
+        if (rc)
+                GOTO(out_unlock_new, rc);
+
         rc = mdo_rename(info->mti_ctxt, mdt_object_child(msrcdir),
-                        mdt_object_child(mtgtdir), old_fid,
-                        rr->rr_name, mnew ? mdt_object_child(mnew): NULL,
-                        rr->rr_tgt, ma);
+                        mdt_object_child(mtgtdir), old_fid, rr->rr_name,
+                        (mnew ? mdt_object_child(mnew) : NULL), rr->rr_tgt, ma);
+        
         /* handle last link of tgt object */
         if (mnew)
                 mdt_handle_last_unlink(info, mnew, ma);
@@ -701,8 +730,8 @@ out_unlock_target:
         mdt_object_unlock_put(info, mtgtdir, lh_tgtdirp, rc);
 out_unlock_source:
         mdt_object_unlock_put(info, msrcdir, lh_srcdirp, rc);
-        mdt_rename_unlock(&rename_lh);
 out:
+        mdt_rename_unlock(&rename_lh);
         mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         return rc;
 }

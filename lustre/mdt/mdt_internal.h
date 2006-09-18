@@ -301,7 +301,6 @@ struct mdt_thread_info {
         struct mdt_client_data     mti_mcd;
         loff_t                     mti_off;
         struct txn_param           mti_txn_param;
-
 };
 /*
  * Info allocated per-transaction.

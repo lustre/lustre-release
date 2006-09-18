@@ -290,9 +290,9 @@ int mdc_send_page(struct cmm_device *cm, const struct lu_context *ctx,
         ENTRY;
 
         rc = mdc_sendpage(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
-                                  page, offset);
+                          page, offset);
         CDEBUG(D_INFO, "send page %p  offset %d fid "DFID" rc %d \n",
-                        page, offset, PFID(lu_object_fid(&mo->mo_lu)), rc);
+               page, offset, PFID(lu_object_fid(&mo->mo_lu)), rc);
         RETURN(rc);
 }
 #endif
@@ -335,7 +335,43 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
         RETURN(rc);
 }
 
+static int mdc_is_subdir(const struct lu_context *ctx, struct md_object *mo,
+                         const struct lu_fid *fid, struct lu_fid *sfid)
+{
+        struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
+        struct mdc_thread_info *mci;
+        struct mdt_body *body;
+        int rc;
+        ENTRY;
+
+        mci = mdc_info_init(ctx);
+        
+        rc = md_is_subdir(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
+                          fid, &mci->mci_req);
+
+        if (rc)
+                GOTO(out, rc);
+
+        body = lustre_msg_buf(mci->mci_req->rq_repmsg, REPLY_REC_OFF,
+                              sizeof(*body));
+        
+        LASSERT(body->valid & (OBD_MD_FLMODE | OBD_MD_FLID) &&
+                (body->mode == 0 || body->mode == 1 || body->mode == EREMOTE));
+
+        rc = body->mode;
+        if (rc == EREMOTE) {
+                CDEBUG(D_INFO, "Remote mdo_is_subdir(), new src "
+                       DFID"\n", PFID(&body->fid1));
+                *sfid = body->fid1;
+        }
+        EXIT;
+out:
+        ptlrpc_req_finished(mci->mci_req);
+        return rc;
+}
+
 static struct md_dir_operations mdc_dir_ops = {
-        .mdo_rename_tgt  = mdc_rename_tgt,
+        .mdo_is_subdir   = mdc_is_subdir,
+        .mdo_rename_tgt  = mdc_rename_tgt
 };
 

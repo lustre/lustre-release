@@ -265,7 +265,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
 
-        if(reqbody->valid & OBD_MD_MEA) {
+        if (reqbody->valid & OBD_MD_MEA) {
                 /* Assumption: MDT_MD size is enough for lmv size FIXME */
                 ma->ma_lmv = req_capsule_server_get(pill, &RMF_MDT_MD);
                 ma->ma_lmv_size = req_capsule_get_size(pill, &RMF_MDT_MD, 
@@ -373,6 +373,43 @@ static int mdt_getattr(struct mdt_thread_info *info)
         rc = mdt_getattr_internal(info, obj);
         mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         RETURN(rc);
+}
+
+static int mdt_is_subdir(struct mdt_thread_info *info)
+{
+        struct mdt_object   *obj = info->mti_object;
+        struct req_capsule  *pill = &info->mti_pill;
+        struct mdt_body     *repbody;
+        int                  rc;
+
+        obj = info->mti_object;
+        LASSERT(obj != NULL);
+        LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
+        ENTRY;
+
+        repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
+
+        /*
+         * We save last checked parent fid to @repbody->fid1 for remote
+         * directory case.
+         */
+        rc = mdo_is_subdir(info->mti_ctxt, mdt_object_child(obj),
+                           &info->mti_tmp_fid2, &repbody->fid1);
+        if (rc < 0)
+                RETURN(rc);
+        
+        /* 
+         * Save error code to ->mode. Later it it is used for detecting the case
+         * of remote subdir.
+         */
+        repbody->mode = rc;
+        repbody->valid = OBD_MD_FLMODE;
+        
+        if (rc == EREMOTE)
+                repbody->valid |= OBD_MD_FLID;
+
+        
+        RETURN(0);
 }
 
 /*
@@ -3463,6 +3500,7 @@ DEF_MDT_HNDL_F(HABEO_CORPUS             , CLOSE,        mdt_close),
 DEF_MDT_HNDL_F(HABEO_CORPUS             , DONE_WRITING, mdt_done_writing),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),
 DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),
+DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, IS_SUBDIR,    mdt_is_subdir),
 DEF_MDT_HNDL_0(0,                         QUOTACHECK,   mdt_quotacheck_handle),
 DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_quotactl_handle)
 };
