@@ -334,6 +334,19 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         if (IS_ERR(mp))
                 GOTO(out, rc = PTR_ERR(mp));
 
+        ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
+        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                                               &RMF_MDT_MD, RCL_SERVER);
+
+        ma->ma_cookie = req_capsule_server_get(&info->mti_pill,
+                                               &RMF_LOGCOOKIES);
+        ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
+                                                  &RMF_LOGCOOKIES,
+                                                  RCL_SERVER);
+
+        if (!ma->ma_lmm || !ma->ma_cookie)
+                GOTO(out_unlock_parent, rc = -EINVAL);
+
         if (strlen(rr->rr_name) == 0) {
                 /* remote partial operation */
                 rc = mo_ref_del(info->mti_ctxt, mdt_object_child(mp), ma);
@@ -353,24 +366,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         if (IS_ERR(mc))
                 GOTO(out_unlock_parent, rc = PTR_ERR(mc));
 
-        /*step 3:  do some checking ...*/
-
-        /* step 4: delete it */
-
         mdt_fail_write(info->mti_ctxt, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_UNLINK_WRITE);
-
-        ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
-                                               &RMF_MDT_MD, RCL_SERVER);
-
-        ma->ma_cookie = req_capsule_server_get(&info->mti_pill,
-                                                &RMF_LOGCOOKIES);
-        ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
-                                               &RMF_LOGCOOKIES, RCL_SERVER);
-
-        if (!ma->ma_lmm || !ma->ma_cookie)
-                GOTO(out_unlock_parent, rc = -EINVAL);
 
         /*Now we can only make sure we need MA_INODE, in mdd layer,
          *will check whether need MA_LOV and MA_COOKIE*/
@@ -494,7 +491,8 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
                                     rr->rr_fid2, rr->rr_tgt, ma);
         } else /* -ENOENT */ {
                 rc = mdo_name_insert(info->mti_ctxt, mdt_object_child(mtgtdir),
-                                     rr->rr_tgt, rr->rr_fid2, 0 /* FIXME: isdir */);
+                                     rr->rr_tgt, rr->rr_fid2,
+                                     S_ISDIR(ma->ma_attr.la_mode));
         }
 
         /* handle last link of tgt object */
