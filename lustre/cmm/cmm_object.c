@@ -425,17 +425,18 @@ struct md_object *md_object_find(const struct lu_context *ctx,
         RETURN(m);
 }
 
-static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
-                       struct md_object *mo_pn, const struct lu_fid *lf,
-                       const char *s_name, struct md_object *mo_t,
-                       const char *t_name, struct md_attr *ma)
+static int __cmm_mode_get(const struct lu_context *ctx, struct md_device *md,
+                          const struct lu_fid *lf, struct md_attr *ma)
 {
         struct cmm_thread_info *cmi;
-        struct md_object *mo_s = md_object_find(ctx, md_obj2dev(mo_po), lf);
+        struct md_object *mo_s = md_object_find(ctx, md, lf);
         struct md_attr *tmp_ma;
         int rc;
         ENTRY;
 
+        if (IS_ERR(mo_s))
+                RETURN(PTR_ERR(mo_s));
+        
         cmi = lu_context_key_get(ctx, &cmm_thread_key);
         LASSERT(cmi);
         tmp_ma = &cmi->cmi_ma;
@@ -443,11 +444,25 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
         
         /* get type from src, can be remote req */
         rc = mo_attr_get(ctx, md_object_next(mo_s), tmp_ma);
+        if (rc == 0)
+                ma->ma_attr.la_mode = tmp_ma->ma_attr.la_mode;
+
+        lu_object_put(ctx, &mo_s->mo_lu);
+        return rc;
+}
+
+static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
+                       struct md_object *mo_pn, const struct lu_fid *lf,
+                       const char *s_name, struct md_object *mo_t,
+                       const char *t_name, struct md_attr *ma)
+{
+        struct cmm_thread_info *cmi;
+        int rc;
+        ENTRY;
+
+        rc = __cmm_mode_get(ctx, md_obj2dev(mo_po), lf, ma);
         if (rc != 0)
-                GOTO(out, rc);
-
-        ma->ma_attr.la_mode = tmp_ma->ma_attr.la_mode;
-
+                RETURN(rc);
         if (mo_t && lu_object_exists(&mo_t->mo_lu) < 0) {
                 /* mo_t is remote object and there is RPC to unlink it */
                 rc = mo_ref_del(ctx, md_object_next(mo_t), ma);
@@ -461,7 +476,6 @@ static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
                         md_object_next(mo_t), t_name, ma);
         EXIT;
 out:
-        lu_object_put(ctx, &mo_s->mo_lu);
         return rc;
 }
 
@@ -775,12 +789,16 @@ static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
 {
         int rc;
         ENTRY;
+        
+        /* get real type of src */
+        rc = __cmm_mode_get(ctx, md_obj2dev(mo_po), lf, ma);
+        if (rc != 0)
+                RETURN(rc);
 
+        LASSERT(mo_t == NULL);
         /* the mo_pn is remote directory, so we cannot even know if there is
          * mo_t or not. Therefore mo_t is NULL here but remote server should do
          * lookup and process this further */
-
-        LASSERT(mo_t == NULL);
         rc = mdo_rename_tgt(ctx, md_object_next(mo_pn),
                             NULL/* mo_t */, lf, t_name, ma);
         /* only old name is removed localy */
