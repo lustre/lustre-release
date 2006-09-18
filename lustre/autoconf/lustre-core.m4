@@ -654,10 +654,10 @@ AC_ARG_ENABLE([gss],
 			[enable gss/krb5 support]),
 	[enable_gss='yes'],[enable_gss='no'])
 AC_MSG_RESULT([$enable_gss])
-if test x$enable_gss != xno; then
-	PKG_CHECK_MODULES([GSSAPI], [libgssapi >= 0.10])
-	AC_KERBEROS_V5
-fi
+#if test x$enable_gss != xno; then
+#	PKG_CHECK_MODULES([GSSAPI], [libgssapi >= 0.10])
+#	AC_KERBEROS_V5
+#fi
 ])
 
 #
