@@ -34,7 +34,7 @@
 #define MOUNT_CONFIGS_DIR "CONFIGS"
 /* Persistent mount data are stored on the disk in this file. */
 #define MOUNT_DATA_FILE    MOUNT_CONFIGS_DIR"/mountdata"
-#define LAST_RCVD         "last_rcvd"
+#define LAST_RCVD         "last_received"
 #define LOV_OBJID         "lov_objid"
 #define HEALTH_CHECK      "health_check"
 

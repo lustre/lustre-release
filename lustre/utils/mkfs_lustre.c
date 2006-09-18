@@ -1270,7 +1270,7 @@ static int mkfs_mdt(struct mkfs_opts *mop)
                 goto out_umount;
         }
 
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "last_rcvd");
+        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "last_received");
         ret = touch_file(filepnm);
         if (ret) {
                 goto out_umount;
@@ -1481,6 +1481,8 @@ int main(int argc, char *argv[])
                 if (IS_MDT(ldd) || IS_MGS(ldd))
                         strcat(always_mountopts,
                                ",iopen_nopriv,user_xattr");
+                if (IS_MDT(ldd))
+                        strcat(always_mountopts, ",data=journal");
                 if ((get_os_version() == 24) && IS_OST(ldd))
                         strcat(always_mountopts, ",asyncdel");
                 /* NB: Files created while extents are enabled cannot be read
