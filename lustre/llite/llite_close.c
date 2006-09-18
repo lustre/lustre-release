@@ -60,36 +60,40 @@ int llap_write_complete(struct inode *inode, struct ll_async_page *llap)
         RETURN(rc);
 }
 
-/* DONE_WRITING should be queued only if:
- * - CLOSE has been called already and that CLOSE has not closed epoch;
- * - inode has no no dirty page; */
+/* Queue DONE_WRITING if 
+ * - done writing is allowed;
+ * - inode has no no dirty pages; */
 void ll_queue_done_writing(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct ll_close_queue *lcq = ll_i2sbi(inode)->ll_lcq;
-
-        spin_lock(&lli->lli_lock);
         
-        /* Close happened. If it has not closed epoch, let DONE_WRITING to
-         * happen. */
-        if ((lli->lli_flags & LLIF_EPOCH_PENDING))
-                lli->lli_flags |= LLIF_DONE_WRITING;
-
+        spin_lock(&lli->lli_lock);
         if ((lli->lli_flags & LLIF_DONE_WRITING) &&
             list_empty(&lli->lli_pending_write_llaps)) {
+                struct ll_close_queue *lcq = ll_i2sbi(inode)->ll_lcq;
+
                 /* DONE_WRITING is allowed and inode has no dirty page. */
                 spin_lock(&lcq->lcq_lock);
-                
                 LASSERT(list_empty(&lli->lli_close_list));
                 CDEBUG(D_INODE, "adding inode %lu/%u to close list\n",
                        inode->i_ino, inode->i_generation);
                 
-                igrab(inode);
                 list_add_tail(&lli->lli_close_list, &lcq->lcq_head);
                 wake_up(&lcq->lcq_waitq);
                 spin_unlock(&lcq->lcq_lock);
         }
         spin_unlock(&lli->lli_lock);
+}
+
+/* CLOSE has already occured but has not closed epoch;
+ * Let let DONE_WRITING to happen. */
+void ll_init_done_writing(struct inode *inode) {
+        struct ll_inode_info *lli = ll_i2info(inode);
+        spin_lock(&lli->lli_lock);
+        if ((lli->lli_flags & LLIF_EPOCH_PENDING))
+                lli->lli_flags |= LLIF_DONE_WRITING;
+        spin_unlock(&lli->lli_lock);
+        ll_queue_done_writing(inode);
 }
 
 /* Close epoch and send Size-on-MDS attribute update if possible. 

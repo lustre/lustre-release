@@ -66,6 +66,7 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
                              struct obd_client_handle *och)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
+        int new_pending = 0;
         ENTRY;
         
         op_data->attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
@@ -84,11 +85,16 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
                  * yet, DONE_WRITE is to be sent later. */
                 lli->lli_flags |= LLIF_EPOCH_PENDING;
                 lli->lli_pending_och = och;
+                new_pending = 1;
         } else {
                 ll_epoch_close(inode, op_data);
         }
         spin_unlock(&lli->lli_lock);
 
+        if (new_pending) {
+                inode = igrab(inode);
+                LASSERT(inode);
+        }
 out:
         ll_pack_inode2opdata(inode, op_data, &och->och_fh);
         EXIT;
@@ -126,7 +132,7 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
 
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         ll_prepare_close(inode, op_data, och);
         epoch_close = (op_data->flags & MF_EPOCH_CLOSE);
@@ -145,9 +151,11 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         } else if (rc) {
                 CERROR("inode %lu mdc close failed: rc = %d\n",
                        inode->i_ino, rc);
-        } else if (!epoch_close) {
-                ll_queue_done_writing(inode);
         }
+        
+        if (!epoch_close)
+                ll_init_done_writing(inode);
+
         OBD_FREE_PTR(op_data);
 
         if (rc == 0) {

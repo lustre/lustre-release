@@ -1465,8 +1465,9 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         }
         EXIT;
 out:
-        if (op_data && op_data->ioepoch) {
-                rc = ll_setattr_done_writing(inode, op_data);
+        if (op_data) {
+                if (op_data->ioepoch)
+                        rc = ll_setattr_done_writing(inode, op_data);
                 OBD_FREE_PTR(op_data);
         }
         return rc;
