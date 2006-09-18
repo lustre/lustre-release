@@ -385,7 +385,10 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
                 rr->rr_fid2 = &rec->rn_fid2;
                 attr->la_ctime = rec->rn_time;
                 attr->la_mtime = rec->rn_time;
-                attr->la_valid = LA_UID | LA_GID | LA_CTIME | LA_MTIME;
+                /* rename_tgt contains the mode already */
+                attr->la_mode = rec->rn_mode;
+                attr->la_valid = LA_UID | LA_GID | LA_CTIME |
+                                 LA_MTIME | LA_MODE;
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 rr->rr_tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
                 if (rr->rr_name == NULL || rr->rr_tgt == NULL)

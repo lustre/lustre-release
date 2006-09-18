@@ -319,6 +319,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_fid1 = op_data->fid1;
         rec->rn_fid2 = op_data->fid2;
         rec->rn_time = op_data->mod_time;
+        rec->rn_mode = op_data->create_mode;
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, oldlen + 1);
         LOGL0(old, oldlen, tmp);

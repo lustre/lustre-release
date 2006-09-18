@@ -144,19 +144,62 @@ static void mdc_body2attr(struct mdt_body *body, struct md_attr *ma)
         ma->ma_valid = MA_INODE;
 }
 
-static void mdc_req2attr_update(const struct lu_context *ctx,
+static int mdc_req2attr_update(const struct lu_context *ctx,
                                 struct md_attr *ma)
 {
         struct mdc_thread_info *mci;
         struct ptlrpc_request *req;
         struct mdt_body *body;
+        struct lov_mds_md *lov;
+        struct llog_cookie *cookie;
         
+        ENTRY;
         mci = mdc_info_get(ctx);
         req = mci->mci_req;
         LASSERT(req);
         body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
         LASSERT(body);
         mdc_body2attr(body, ma);
+
+        if (!(body->valid & OBD_MD_FLEASIZE))
+                RETURN(0);
+
+        if (body->eadatasize == 0) {
+                CERROR("OBD_MD_FLEASIZE is set but eadatasize is zero\n");
+                RETURN(-EPROTO);
+        }
+        
+        lov = lustre_swab_repbuf(req, REPLY_REC_OFF + 1,
+                                 body->eadatasize, NULL);
+        if (lov == NULL) {
+                CERROR("Can't unpack MDS EA data\n");
+                RETURN(-EPROTO);
+        }
+
+        LASSERT(ma->ma_lmm != NULL);
+        LASSERT(ma->ma_lmm_size == body->eadatasize);
+        memcpy(ma->ma_lmm, lov, ma->ma_lmm_size);
+        ma->ma_valid |= MA_LOV;
+        if (!(body->valid & OBD_MD_FLCOOKIE))
+                RETURN(0);
+        
+        if (body->aclsize == 0) {
+                CERROR("OBD_MD_FLCOOKIE is set but cookie size is zero\n");
+                RETURN(-EPROTO);
+        }
+
+        cookie = lustre_msg_buf(req->rq_repmsg,
+                                REPLY_REC_OFF + 2, body->aclsize);
+        if (cookie == NULL) {
+                CERROR("Can't unpack unlink cookie data\n");
+                RETURN(-EPROTO);
+        }
+
+        LASSERT(ma->ma_cookie != NULL);
+        LASSERT(ma->ma_cookie_size == body->aclsize);
+        memcpy(ma->ma_cookie, cookie, ma->ma_cookie_size);
+        ma->ma_valid |= MA_COOKIE;
+        RETURN(0);
 }
 
 static int mdc_attr_get(const struct lu_context *ctx, struct md_object *mo,
@@ -173,12 +216,13 @@ static int mdc_attr_get(const struct lu_context *ctx, struct md_object *mo,
         memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
 
         rc = md_getattr(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
-                        OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID,
+                        OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID |
+                        OBD_MD_FLFLAGS,
                         0, &mci->mci_req);
 
         if (rc == 0) {
                 /* get attr from request */
-                mdc_req2attr_update(ctx, ma);
+                rc = mdc_req2attr_update(ctx, ma);
         }
 
         ptlrpc_req_finished(mci->mci_req);
@@ -224,7 +268,7 @@ static int mdc_object_create(const struct lu_context *ctx,
 
         if (rc == 0) {
                 /* get attr from request */
-                mdc_req2attr_update(ctx, ma);
+                rc = mdc_req2attr_update(ctx, ma);
         }
 
         ptlrpc_req_finished(mci->mci_req);
@@ -273,7 +317,7 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
         rc = md_unlink(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
         if (rc == 0) {
                 /* get attr from request */
-                mdc_req2attr_update(ctx, ma);
+                rc = mdc_req2attr_update(ctx, ma);
         }
 
         ptlrpc_req_finished(mci->mci_req);
@@ -319,6 +363,7 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
         mci = mdc_info_init(ctx);
         mci->mci_opdata.fid1 = *lu_object_fid(&mo_p->mo_lu);
         mci->mci_opdata.fid2 = *lf;
+        mci->mci_opdata.create_mode = la->la_mode;
         mci->mci_opdata.mod_time = la->la_ctime;
         mci->mci_opdata.fsuid = la->la_uid;
         mci->mci_opdata.fsgid = la->la_gid;

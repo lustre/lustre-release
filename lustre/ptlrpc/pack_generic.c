@@ -1902,7 +1902,7 @@ void lustre_swab_mdt_rec_rename (struct mdt_rec_rename *rn)
         lustre_swab_lu_fid (&rn->rn_fid1);
         lustre_swab_lu_fid (&rn->rn_fid2);
         __swab64s (&rn->rn_time);
-        CLASSERT(offsetof(typeof(*rn), rn_padding_1) != 0);
+        __swab32s (&rn->rn_mode);
         CLASSERT(offsetof(typeof(*rn), rn_padding_2) != 0);
         CLASSERT(offsetof(typeof(*rn), rn_padding_3) != 0);
         CLASSERT(offsetof(typeof(*rn), rn_padding_4) != 0);

@@ -1278,10 +1278,10 @@ struct mdt_rec_rename {
         struct lu_fid   rn_fid1;
         struct lu_fid   rn_fid2;
         __u64           rn_time;
-        __u32           rn_padding_1; /* also fix lustre_swab_mds_rec_rename */
-        __u32           rn_padding_2; /* also fix lustre_swab_mds_rec_rename */
-        __u32           rn_padding_3; /* also fix lustre_swab_mds_rec_rename */
-        __u32           rn_padding_4; /* also fix lustre_swab_mds_rec_rename */
+        __u32           rn_mode;      /* cross-ref rename has mode */
+        __u32           rn_padding_2; /* also fix lustre_swab_mdt_rec_rename */
+        __u32           rn_padding_3; /* also fix lustre_swab_mdt_rec_rename */
+        __u32           rn_padding_4; /* also fix lustre_swab_mdt_rec_rename */
 };
 
 extern void lustre_swab_mdt_rec_rename (struct mdt_rec_rename *rn);
