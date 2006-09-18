@@ -882,17 +882,17 @@ struct ptlrpc_request *target_save_req(struct ptlrpc_request *src)
         struct ptlrpc_request *req;
         struct lustre_msg *reqmsg;
 
-        OBD_ALLOC(req, sizeof(*req));
+        OBD_ALLOC_PTR(req);
         if (!req)
                 return NULL;
 
         OBD_ALLOC(reqmsg, src->rq_reqlen);
         if (!reqmsg) {
-                OBD_FREE(req, sizeof(*req));
+                OBD_FREE_PTR(req);
                 return NULL;
         }
 
-        memcpy(req, src, sizeof(*req));
+        *req = *src;
         memcpy(reqmsg, src->rq_reqmsg, src->rq_reqlen);
         req->rq_reqmsg = reqmsg;
 
@@ -922,7 +922,7 @@ void target_release_saved_req(struct ptlrpc_request *req)
         class_export_put(req->rq_export);
 
         OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
-        OBD_FREE(req, sizeof(*req));
+        OBD_FREE_PTR(req);
 }
 
 static void target_finish_recovery(struct obd_device *obd)

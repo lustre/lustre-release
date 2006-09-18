@@ -156,7 +156,7 @@ void gss_release_msg(struct gss_upcall_msg *gmsg)
 
         LASSERT(list_empty(&gmsg->gum_list));
         LASSERT(list_empty(&gmsg->gum_base.list));
-        OBD_FREE(gmsg, sizeof(*gmsg));
+        OBD_FREE_PTR(gmsg);
         EXIT;
 }
 
@@ -503,7 +503,7 @@ int gss_ctx_refresh_pipefs(struct ptlrpc_cli_ctx *ctx)
 
         gsec = container_of(ctx->cc_sec, struct gss_sec, gs_base);
 
-        OBD_ALLOC(gmsg, sizeof(*gmsg));
+        OBD_ALLOC_PTR(gmsg);
         if (!gmsg)
                 RETURN(-ENOMEM);
 
@@ -557,7 +557,7 @@ int gss_ctx_refresh_pipefs(struct ptlrpc_cli_ctx *ctx)
 
         RETURN(0);
 err_free:
-        OBD_FREE(gmsg, sizeof(*gmsg));
+        OBD_FREE_PTR(gmsg);
         RETURN(rc);
 }
 

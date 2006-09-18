@@ -153,7 +153,7 @@ __u32 lgss_import_sec_context(rawobj_t *input_token,
                               struct gss_api_mech *mech,
                               struct gss_ctx **ctx_id)
 {
-        OBD_ALLOC(*ctx_id, sizeof(**ctx_id));
+        OBD_ALLOC_PTR(*ctx_id);
         if (*ctx_id == NULL)
                 return GSS_S_FAILURE;
 
@@ -173,7 +173,7 @@ __u32 lgss_copy_reverse_context(struct gss_ctx *ctx_id,
 
         LASSERT(mech);
 
-        OBD_ALLOC(*ctx_id_new, sizeof(**ctx_id_new));
+        OBD_ALLOC_PTR(*ctx_id_new);
         if (*ctx_id_new == NULL)
                 return GSS_S_FAILURE;
 
@@ -186,7 +186,7 @@ __u32 lgss_copy_reverse_context(struct gss_ctx *ctx_id,
         major = mech->gm_ops->gss_copy_reverse_context(ctx_id, *ctx_id_new);
         if (major != GSS_S_COMPLETE) {
                 lgss_mech_put(mech);
-                OBD_FREE(*ctx_id_new, sizeof(**ctx_id_new));
+                OBD_FREE_PTR(*ctx_id_new);
                 *ctx_id_new = NULL;
         }
         return major;
@@ -326,7 +326,7 @@ __u32 lgss_delete_sec_context(struct gss_ctx **context_handle)
         if (mech)
                 lgss_mech_put(mech);
 
-        OBD_FREE(*context_handle, sizeof(**context_handle));
+        OBD_FREE_PTR(*context_handle);
         *context_handle=NULL;
         return GSS_S_COMPLETE;
 }

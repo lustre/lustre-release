@@ -79,7 +79,7 @@ enum sptlrpc_service_type {
  * flavor compose/extract
  */
 
-typedef __u32 ptlrpc_flavor_t;
+typedef __u32 ptlrpc_sec_flavor_t;
 
 /*
  *  8b (reserved) | 8b (flags) | 6b (policy) | 6b (subpolicy) | 4b (svc)

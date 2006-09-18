@@ -403,7 +403,7 @@ __u32 gss_import_sec_context_kerberos(rawobj_t *inbuf,
                 return GSS_S_FAILURE;
         }
 
-        OBD_ALLOC(kctx, sizeof(*kctx));
+        OBD_ALLOC_PTR(kctx);
         if (!kctx)
                 return GSS_S_FAILURE;
 
@@ -419,7 +419,7 @@ __u32 gss_import_sec_context_kerberos(rawobj_t *inbuf,
 
         if (rc) {
                 delete_context_kerberos(kctx);
-                OBD_FREE(kctx, sizeof(*kctx));
+                OBD_FREE_PTR(kctx);
 
                 return GSS_S_FAILURE;
         }
@@ -435,7 +435,7 @@ __u32 gss_copy_reverse_context_kerberos(struct gss_ctx *gctx,
         struct krb5_ctx *kctx = gctx->internal_ctx_id;
         struct krb5_ctx *knew;
 
-        OBD_ALLOC(knew, sizeof(*knew));
+        OBD_ALLOC_PTR(knew);
         if (!knew)
                 return GSS_S_FAILURE;
 
@@ -465,7 +465,7 @@ __u32 gss_copy_reverse_context_kerberos(struct gss_ctx *gctx,
 
 out_err:
         delete_context_kerberos(knew);
-        OBD_FREE(knew, sizeof(*knew));
+        OBD_FREE_PTR(knew);
         return GSS_S_FAILURE;
 }
 
@@ -485,7 +485,7 @@ void gss_delete_sec_context_kerberos(void *internal_ctx)
         struct krb5_ctx *kctx = internal_ctx;
 
         delete_context_kerberos(kctx);
-        OBD_FREE(kctx, sizeof(*kctx));
+        OBD_FREE_PTR(kctx);
 }
 
 static

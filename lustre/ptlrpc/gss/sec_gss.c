@@ -960,7 +960,7 @@ struct ptlrpc_cli_ctx * gss_sec_create_ctx(struct ptlrpc_sec *sec,
         struct ptlrpc_cli_ctx *ctx;
         ENTRY;
 
-        OBD_ALLOC(gctx, sizeof(*gctx));
+        OBD_ALLOC_PTR(gctx);
         if (!gctx)
                 RETURN(NULL);
 
@@ -1001,7 +1001,7 @@ void gss_sec_destroy_ctx(struct ptlrpc_sec *sec, struct ptlrpc_cli_ctx *ctx)
               ctx->cc_sec->ps_policy->sp_name, ctx->cc_sec,
               ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
 
-        OBD_FREE(gctx, sizeof(*gctx));
+        OBD_FREE_PTR(gctx);
         EXIT;
 }
 
@@ -1424,7 +1424,7 @@ void gss_svc_reqctx_free(struct gss_svc_reqctx *grctx)
                 gss_svc_upcall_put_ctx(grctx->src_ctx);
 
         sptlrpc_policy_put(grctx->src_base.sc_policy);
-        OBD_FREE(grctx, sizeof(*grctx));
+        OBD_FREE_PTR(grctx);
 }
 
 static inline
@@ -1860,7 +1860,7 @@ int gss_svc_accept(struct ptlrpc_request *req)
         }
 
         /* alloc grctx data */
-        OBD_ALLOC(grctx, sizeof(*grctx));
+        OBD_ALLOC_PTR(grctx);
         if (!grctx) {
                 CERROR("fail to alloc svc reqctx\n");
                 RETURN(SECSVC_DROP);

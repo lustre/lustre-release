@@ -103,7 +103,7 @@ int sptlrpc_unregister_policy(struct ptlrpc_sec_policy *policy)
 EXPORT_SYMBOL(sptlrpc_unregister_policy);
 
 static
-struct ptlrpc_sec_policy * sptlrpc_flavor2policy(ptlrpc_flavor_t flavor)
+struct ptlrpc_sec_policy * sptlrpc_flavor2policy(ptlrpc_sec_flavor_t flavor)
 {
         static int load_module = 0;
         struct ptlrpc_sec_policy *policy;
@@ -130,7 +130,7 @@ again:
         return policy;
 }
 
-ptlrpc_flavor_t sptlrpc_name2flavor(const char *name)
+ptlrpc_sec_flavor_t sptlrpc_name2flavor(const char *name)
 {
         if (!strcmp(name, "null"))
                 return SPTLRPC_FLVR_NULL;
@@ -147,7 +147,7 @@ ptlrpc_flavor_t sptlrpc_name2flavor(const char *name)
 }
 EXPORT_SYMBOL(sptlrpc_name2flavor);
 
-char *sptlrpc_flavor2name(ptlrpc_flavor_t flavor)
+char *sptlrpc_flavor2name(ptlrpc_sec_flavor_t flavor)
 {
         switch (flavor) {
         case SPTLRPC_FLVR_NULL:
@@ -1016,7 +1016,7 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
                 RETURN(0);
         }
 
-        OBD_ALLOC(req, sizeof(*req));
+        OBD_ALLOC_PTR(req);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -1030,7 +1030,7 @@ int sptlrpc_import_check_ctx(struct obd_import *imp)
         rc = sptlrpc_req_refresh_ctx(req, 0);
         LASSERT(list_empty(&req->rq_ctx_chain));
         sptlrpc_ctx_put(req->rq_cli_ctx, 1);
-        OBD_FREE(req, sizeof(*req));
+        OBD_FREE_PTR(req);
 
         RETURN(rc);
 }
@@ -1111,7 +1111,7 @@ int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
                 }
         } else {
                 /* v2 message... */
-                ptlrpc_flavor_t tmpf = req->rq_repbuf->lm_secflvr;
+                ptlrpc_sec_flavor_t tmpf = req->rq_repbuf->lm_secflvr;
 
                 if (req->rq_repbuf->lm_magic == LUSTRE_MSG_MAGIC_V2_SWABBED)
                         __swab32s(&tmpf);

@@ -353,7 +353,7 @@ struct ptlrpc_request {
         struct ptlrpc_cli_ctx   *rq_cli_ctx;     /* client's half ctx */
         struct ptlrpc_svc_ctx   *rq_svc_ctx;     /* server's half ctx */
         struct list_head         rq_ctx_chain;   /* link to waited ctx */
-        ptlrpc_flavor_t          rq_sec_flavor;  /* client & server */
+        ptlrpc_sec_flavor_t      rq_sec_flavor;  /* client & server */
                                  /* client security flags */
         unsigned int             rq_ctx_init:1,      /* context initiation */
                                  rq_ctx_fini:1,      /* context destroy */
