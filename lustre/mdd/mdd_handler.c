@@ -1511,12 +1511,12 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         if (is_dir)
                 __mdd_ref_del(ctxt, mdd_spobj, handle);
 
-        if (tobj) {
-                rc = __mdd_index_delete(ctxt, mdd_tpobj, tname, handle);
-                if (rc)
-                        GOTO(cleanup, rc);
-        }
-
+        rc = __mdd_index_delete(ctxt, mdd_tpobj, tname, handle);
+        /* tobj can be remote one,
+         * so we do index_delete unconditionally and -ENOENT is allowed */
+        if (rc != 0 && rc != -ENOENT)
+                GOTO(cleanup, rc);
+        
         rc = __mdd_index_insert(ctxt, mdd_tpobj, lf, tname, is_dir, handle);
         if (rc)
                 GOTO(cleanup, rc);

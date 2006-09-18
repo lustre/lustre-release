@@ -325,6 +325,10 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
 
         rc = md_rename(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
                        name, strlen(name), &mci->mci_req);
+        if (rc == 0) {
+                /* get attr from request */
+                mdc_req2attr_update(ctx, ma);
+        }
 
         ptlrpc_req_finished(mci->mci_req);
 
