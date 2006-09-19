@@ -1437,13 +1437,9 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
 
-#if 0
-        if (h->mh_opc != MDS_DISCONNECT &&
-            h->mh_opc != MDS_READPAGE &&
-            h->mh_opc != LDLM_ENQUEUE) {
-                mdt_finish_reply(info, req->rq_status);
+        if (rc == 0 && h->mh_opc != MDS_DISCONNECT) {
+                target_committed_to_req(req);
         }
-#endif
         RETURN(rc);
 }
 
