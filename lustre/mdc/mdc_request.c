@@ -1316,7 +1316,7 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
         lprocfs_init_vars(mdc, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
-        rc = obd_llog_init(obd, obd, 0, NULL, NULL);
+        rc = obd_llog_init(obd, NULL, obd, 0, NULL, NULL);
         if (rc) {
                 mdc_cleanup(obd);
                 CERROR("failed to setup llogging subsystems\n");
@@ -1391,7 +1391,8 @@ static int mdc_cleanup(struct obd_device *obd)
 }
 
 
-static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
+static int mdc_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
+                         struct obd_device *tgt,
                          int count, struct llog_catid *logid, 
                          struct obd_uuid *uuid)
 {
@@ -1399,14 +1400,14 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, llogs, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 ctxt->loc_imp = obd->u.cli.cl_import;
         }
 
-        rc = llog_setup(obd, LLOG_LOVEA_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, llogs, LLOG_LOVEA_REPL_CTXT, tgt, 0, NULL,
                        &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);

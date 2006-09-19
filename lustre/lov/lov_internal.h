@@ -221,8 +221,9 @@ void lov_getref(struct obd_device *obd);
 void lov_putref(struct obd_device *obd);
 
 /* lov_log.c */
-int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_catid *logid, struct obd_uuid *uuid);
+int lov_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
+                  struct obd_device *tgt, int count, struct llog_catid *logid, 
+                  struct obd_uuid *uuid);
 int lov_llog_finish(struct obd_device *obd, int count);
 
 /* lov_pack.c */

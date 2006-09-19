@@ -1957,6 +1957,9 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         filter->fo_fmd_max_num = FILTER_FMD_MAX_NUM_DEFAULT;
         filter->fo_fmd_max_age = FILTER_FMD_MAX_AGE_DEFAULT;
 
+        INIT_LIST_HEAD(&filter->fo_llog_list);
+        spin_lock_init(&filter->fo_llog_list_lock);
+
         sprintf(ns_name, "filter-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (obd->obd_namespace == NULL)
@@ -1968,7 +1971,7 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "filter_ldlm_cb_client", &obd->obd_ldlm_client);
 
-        rc = llog_cat_initialize(obd, 1, NULL);
+        rc = llog_cat_initialize(obd, NULL, 1, NULL);
         if (rc) {
                 CERROR("failed to setup llogging subsystems\n");
                 GOTO(err_post, rc);
@@ -2076,8 +2079,10 @@ static struct llog_operations filter_size_orig_logops = {
         lop_add: llog_obd_origin_add
 };
 
-static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                            int count, struct llog_catid *catid,
+
+static int filter_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
+                            struct obd_device *tgt, int count, 
+                            struct llog_catid *catid,
                             struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
@@ -2089,17 +2094,40 @@ static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
         filter_mds_ost_repl_logops.lop_connect = llog_repl_connect;
         filter_mds_ost_repl_logops.lop_sync = llog_obd_repl_sync;
 
-        rc = llog_setup(obd, LLOG_MDS_OST_REPL_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, llogs, LLOG_MDS_OST_REPL_CTXT, tgt, 0, NULL,
                         &filter_mds_ost_repl_logops);
         if (rc)
                 RETURN(rc);
 
         /* FIXME - assign unlink_cb for filter's recovery */
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
+        if (!llogs)
+                ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
+        else
+                ctxt = filter_llog_get_context(llogs, LLOG_MDS_OST_REPL_CTXT);
         ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
 
-        rc = llog_setup(obd, LLOG_SIZE_ORIG_CTXT, tgt, 0, NULL,
+        rc = llog_setup(obd, llogs, LLOG_SIZE_ORIG_CTXT, tgt, 0, NULL,
                         &filter_size_orig_logops);
+        RETURN(rc);
+}
+
+
+static int filter_group_llog_finish(struct obd_llogs *llogs)
+{
+        struct llog_ctxt *ctxt;
+        int rc = 0, rc2 = 0;
+        ENTRY;
+       
+        ctxt = filter_llog_get_context(llogs, LLOG_MDS_OST_REPL_CTXT);
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
+
+        ctxt = filter_llog_get_context(llogs, LLOG_SIZE_ORIG_CTXT);
+        if (ctxt)
+                rc2 = llog_cleanup(ctxt);
+        if (!rc)
+                rc = rc2;
+
         RETURN(rc);
 }
 
@@ -2108,7 +2136,7 @@ static int filter_llog_finish(struct obd_device *obd, int count)
         struct llog_ctxt *ctxt;
         int rc = 0, rc2 = 0;
         ENTRY;
-
+       
         ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
         if (ctxt)
                 rc = llog_cleanup(ctxt);
@@ -2118,6 +2146,131 @@ static int filter_llog_finish(struct obd_device *obd, int count)
                 rc2 = llog_cleanup(ctxt);
         if (!rc)
                 rc = rc2;
+
+        RETURN(rc);
+}
+
+struct obd_llogs *filter_grab_llog_for_group(struct obd_device *obd, int group,
+                                             struct obd_export *export)
+{
+        struct filter_group_llog *fglog, *nlog;
+        struct filter_obd *filter;
+        struct llog_ctxt *ctxt;
+        struct list_head *cur;
+        int rc;
+
+        filter = &obd->u.filter;
+
+        spin_lock(&filter->fo_llog_list_lock);
+        list_for_each(cur, &filter->fo_llog_list) {
+                fglog = list_entry(cur, struct filter_group_llog, list);
+                if (fglog->group == group) {
+                        if (!(fglog->exp == NULL || fglog->exp == export || export == NULL))
+                                CWARN("%s: export for group %d changes: 0x%p -> 0x%p\n",
+                                      obd->obd_name, group, fglog->exp, export);
+                        spin_unlock(&filter->fo_llog_list_lock);
+                        goto init;
+                }
+        }
+        spin_unlock(&filter->fo_llog_list_lock);
+
+        if (export == NULL)
+                RETURN(NULL);
+
+        OBD_ALLOC(fglog, sizeof(*fglog));
+        if (fglog == NULL)
+                RETURN(NULL);
+        fglog->group = group;
+
+        OBD_ALLOC(fglog->llogs, sizeof(struct obd_llogs));
+        if (fglog->llogs == NULL) {
+                OBD_FREE(fglog, sizeof(*fglog));
+                RETURN(NULL);
+        }
+
+        spin_lock(&filter->fo_llog_list_lock);
+        list_for_each(cur, &filter->fo_llog_list) {
+                nlog = list_entry(cur, struct filter_group_llog, list);
+                LASSERT(nlog->group != group);
+        }
+        list_add(&fglog->list, &filter->fo_llog_list);
+        spin_unlock(&filter->fo_llog_list_lock);
+
+        rc = llog_cat_initialize(obd, fglog->llogs, 1, NULL);
+        if (rc) {
+                OBD_FREE(fglog->llogs, sizeof(*(fglog->llogs)));
+                OBD_FREE(fglog, sizeof(*fglog));
+                RETURN(NULL);
+        }
+
+init:
+        if (export) {
+                fglog->exp = export;
+                ctxt = filter_llog_get_context(fglog->llogs, 
+                                               LLOG_MDS_OST_REPL_CTXT);
+                LASSERT(ctxt != NULL);
+
+                llog_receptor_accept(ctxt, export->exp_imp_reverse);
+        }
+        CDEBUG(D_OTHER, "%s: new llog 0x%p for group %u\n",
+               obd->obd_name, fglog->llogs, group);
+
+        RETURN(fglog->llogs);
+}
+
+static int filter_llog_connect(struct obd_export *exp,
+                               struct llogd_conn_body *body)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct llog_ctxt *ctxt;
+        struct obd_llogs *llog;
+        int rc;
+        ENTRY;
+
+        CDEBUG(D_OTHER, "handle connect for %s: %u/%u/%u\n", obd->obd_name,
+                (unsigned) body->lgdc_logid.lgl_ogr,
+                (unsigned) body->lgdc_logid.lgl_oid,
+                (unsigned) body->lgdc_logid.lgl_ogen);
+
+        llog = filter_grab_llog_for_group(obd, body->lgdc_logid.lgl_ogr, exp);
+        LASSERT(llog != NULL);
+        ctxt = filter_llog_get_context(llog, body->lgdc_ctxt_idx);
+        rc = llog_connect(ctxt, 1, &body->lgdc_logid,
+                          &body->lgdc_gen, NULL);
+        if (rc != 0)
+                CERROR("failed to connect\n");
+
+        RETURN(rc);
+}
+
+static int filter_llog_preclean (struct obd_device *obd)
+{
+        struct filter_group_llog *log;
+        struct filter_obd *filter;
+        int rc = 0;
+        ENTRY;
+
+        filter = &obd->u.filter;
+        spin_lock(&filter->fo_llog_list_lock);
+        while (!list_empty(&filter->fo_llog_list)) {
+                log = list_entry(filter->fo_llog_list.next, 
+                                 struct filter_group_llog, list);
+                list_del(&log->list);
+                spin_unlock(&filter->fo_llog_list_lock);
+
+                rc = filter_group_llog_finish(log->llogs);
+                if (rc)
+                        CERROR("failed to cleanup llogging subsystem for %u\n",
+                                log->group);
+                OBD_FREE(log->llogs, sizeof(*(log->llogs)));
+                OBD_FREE(log, sizeof(*log));
+                spin_lock(&filter->fo_llog_list_lock);
+        }
+        spin_unlock(&filter->fo_llog_list_lock);
+        
+        rc = obd_llog_finish(obd, 0);
+        if (rc)
+                CERROR("failed to cleanup llogging subsystem\n");
 
         RETURN(rc);
 }
@@ -2134,8 +2287,8 @@ static int filter_precleanup(struct obd_device *obd,
         case OBD_CLEANUP_EXPORTS:
                 target_cleanup_recovery(obd);
                 break;
-        case OBD_CLEANUP_SELF_EXP:
-                rc = filter_llog_finish(obd, 0);
+        case OBD_CLEANUP_SELF_EXP: 
+                rc = filter_llog_preclean(obd);
                 break;
         case OBD_CLEANUP_OBD:
                 break;
@@ -2513,12 +2666,60 @@ static int filter_destroy_export(struct obd_export *exp)
         RETURN(0);
 }
 
+static void filter_sync_llogs(struct obd_device *obd, struct obd_export *dexp)
+{
+        struct filter_group_llog *fglog, *nlog;
+        struct filter_obd *filter;
+        int worked = 0, group;
+        struct llog_ctxt *ctxt;
+        ENTRY;
+
+        filter = &obd->u.filter;
+
+        /* we can't sync log holding spinlock. also, we do not want to get
+         * into livelock. so we do following: loop over MDS's exports in
+         * group order and skip already synced llogs -bzzz */
+        do {
+                /* look for group with min. number, but > worked */
+                fglog = NULL;
+                group = 1 << 30;
+                spin_lock(&filter->fo_llog_list_lock);
+                list_for_each_entry(nlog, &filter->fo_llog_list, list) {
+                       
+                        if (nlog->group <= worked) {
+                                /* this group is already synced */
+                                continue;
+                        }
+        
+                        if (group < nlog->group) {
+                                /* we have group with smaller number to sync */
+                                continue;
+                        }
+
+                        /* store current minimal group */
+                        fglog = nlog;
+                        group = nlog->group;
+                }
+                spin_unlock(&filter->fo_llog_list_lock);
+
+                if (fglog == NULL)
+                        break;
+
+                worked = fglog->group;
+                if (fglog->exp && (dexp == fglog->exp || dexp == NULL)) {
+                        ctxt = filter_llog_get_context(fglog->llogs,
+                                                LLOG_MDS_OST_REPL_CTXT);
+                        LASSERT(ctxt != NULL);
+                        llog_sync(ctxt, fglog->exp);
+                }
+        } while (fglog != NULL);
+}
+
 /* also incredibly similar to mds_disconnect */
 static int filter_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct llog_ctxt *ctxt;
-        int rc, err;
+        int rc;
         ENTRY;
 
         LASSERT(exp);
@@ -2536,11 +2737,7 @@ static int filter_disconnect(struct obd_export *exp)
         fsfilt_sync(obd, obd->u.obt.obt_sb);
 
         /* flush any remaining cancel messages out to the target */
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
-        err = llog_sync(ctxt, exp);
-        if (err)
-                CERROR("error flushing logs to MDS: rc %d\n", err);
-
+        filter_sync_llogs(obd, exp);
         class_export_put(exp);
         RETURN(rc);
 }
@@ -3710,6 +3907,7 @@ static struct obd_ops filter_obd_ops = {
         .o_preprw         = filter_preprw,
         .o_commitrw       = filter_commitrw,
         .o_llog_init      = filter_llog_init,
+        .o_llog_connect   = filter_llog_connect,
         .o_llog_finish    = filter_llog_finish,
         .o_iocontrol      = filter_iocontrol,
         .o_health_check   = filter_health_check,

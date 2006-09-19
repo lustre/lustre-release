@@ -115,6 +115,17 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
 struct dentry *filter_create_object(struct obd_device *obd, struct obdo *oa);
 
+struct obd_llogs *filter_grab_llog_for_group(struct obd_device *obd, int group,
+                                             struct obd_export *export);
+
+static inline struct llog_ctxt *filter_llog_get_context(struct obd_llogs *llogs,
+                                                        int index)
+{                
+        if (index < 0 || index >= LLOG_MAX_CTXTS)
+                return NULL;
+        return llogs->llog_ctxt[index];
+}
+
 /* filter_lvb.c */
 extern struct ldlm_valblock_ops filter_lvbo;
 

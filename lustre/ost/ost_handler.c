@@ -1180,6 +1180,19 @@ static int ost_handle_quotacheck(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+static int ost_llog_handle_connect(struct obd_export *exp,
+                                                   struct ptlrpc_request *req)
+{
+        struct llogd_conn_body *body;
+        int rc;
+        ENTRY;
+
+        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
+        rc = obd_llog_connect(exp, body);
+        RETURN(rc);
+}
+
+
 static int ost_filter_recovery_request(struct ptlrpc_request *req,
                                        struct obd_device *obd, int *process)
 {
@@ -1428,9 +1441,9 @@ static int ost_handle(struct ptlrpc_request *req)
         /* FIXME - just reply status */
         case LLOG_ORIGIN_CONNECT:
                 DEBUG_REQ(D_INODE, req, "log connect\n");
-                rc = llog_handle_connect(req);
+                rc = ost_llog_handle_connect(req->rq_export, req);
                 req->rq_status = rc;
-                rc = lustre_pack_reply(req, 1, NULL, NULL);
+                rc = lustre_pack_reply(req, 0, NULL, NULL);
                 if (rc)
                         RETURN(rc);
                 RETURN(ptlrpc_reply(req));

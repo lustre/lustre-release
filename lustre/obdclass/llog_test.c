@@ -597,14 +597,15 @@ static int llog_run_tests(struct obd_device *obd)
 }
 
 
-static int llog_test_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                               int count, struct llog_catid *logid,
-                               struct obd_uuid *uuid)
+static int llog_test_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
+                               struct obd_device *tgt, int count, 
+                               struct llog_catid *logid, struct obd_uuid *uuid)
 {
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_TEST_ORIG_CTXT, tgt, 0, NULL, &llog_lvfs_ops);
+        rc = llog_setup(obd, llogs, LLOG_TEST_ORIG_CTXT, tgt, 0, NULL, 
+                        &llog_lvfs_ops);
         RETURN(rc);
 }
 
@@ -652,7 +653,7 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-EINVAL);
         }
 
-        rc = obd_llog_init(obd, tgt, 0, NULL, NULL);
+        rc = obd_llog_init(obd, NULL, tgt, 0, NULL, NULL);
         if (rc)
                 RETURN(rc);
 

@@ -135,6 +135,7 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
         obd->obd_upcall.onu_owner = mdd;
         obd->obd_upcall.onu_upcall = mdd_lov_update;
         mdd->mdd_obd_dev = obd;
+        obd->u.mds.mds_num = mdd2lu_dev(mdd)->ld_site->ls_node_id;
 class_detach:
         if (rc)
                 class_detach(obd, lcfg);

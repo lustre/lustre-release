@@ -299,7 +299,7 @@ static int mds_lov_update_mds(struct obd_device *obd,
            after recovery.  However, it should now be safe to call anytime. */
         CDEBUG(D_CONFIG, "reset llogs idx=%d\n", idx);
         mutex_down(&obd->obd_dev_sem);
-        llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, uuid);
+        llog_cat_initialize(obd, NULL, mds->mds_lov_desc.ld_tgt_count, uuid);
         mutex_up(&obd->obd_dev_sem);
 
         RETURN(rc);
@@ -362,7 +362,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 GOTO(err_reg, rc);
 
         /* tgt_count may be 0! */
-        rc = llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, NULL);
+        rc = llog_cat_initialize(obd, NULL, mds->mds_lov_desc.ld_tgt_count, NULL);
         if (rc) {
                 CERROR("failed to initialize catalog %d\n", rc);
                 GOTO(err_reg, rc);
@@ -591,7 +591,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
-                llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count, NULL);
+                llog_cat_initialize(obd, NULL, mds->mds_lov_desc.ld_tgt_count, NULL);
                 group = FILTER_GROUP_MDS0 + mds->mds_id;
                 rc2 = obd_set_info_async(mds->mds_osc_exp,
                                          strlen(KEY_MDS_CONN), KEY_MDS_CONN,

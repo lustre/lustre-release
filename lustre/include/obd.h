@@ -266,6 +266,25 @@ struct obd_device_target {
         struct lustre_quota_ctxt  obt_qctxt;
 };
 
+/* llog contexts */
+enum llog_ctxt_id {
+        LLOG_CONFIG_ORIG_CTXT  =  0,
+        LLOG_CONFIG_REPL_CTXT  =  1,
+        LLOG_MDS_OST_ORIG_CTXT =  2,
+        LLOG_MDS_OST_REPL_CTXT =  3,
+        LLOG_SIZE_ORIG_CTXT    =  4,
+        LLOG_SIZE_REPL_CTXT    =  5,
+        LLOG_MD_ORIG_CTXT      =  6,
+        LLOG_MD_REPL_CTXT      =  7,
+        LLOG_RD1_ORIG_CTXT     =  8,
+        LLOG_RD1_REPL_CTXT     =  9,
+        LLOG_TEST_ORIG_CTXT    = 10,
+        LLOG_TEST_REPL_CTXT    = 11,
+        LLOG_LOVEA_ORIG_CTXT   = 12,
+        LLOG_LOVEA_REPL_CTXT   = 13,
+        LLOG_MAX_CTXTS
+};
+
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
 
 #define FILTER_GROUP_LLOG 1
@@ -280,6 +299,17 @@ struct filter_subdirs {
 struct filter_ext {
         __u64                fe_start;
         __u64                fe_end;
+};
+
+struct obd_llogs {
+        struct llog_ctxt        *llog_ctxt[LLOG_MAX_CTXTS];
+};
+
+struct filter_group_llog {
+        struct list_head list;
+        int group;
+        struct obd_llogs *llogs;
+        struct obd_export *exp;
 };
 
 struct filter_obd {
@@ -357,6 +387,9 @@ struct filter_obd {
         struct obd_histogram     fo_w_disk_iosize;
         struct obd_histogram     fo_r_dio_frags;
         struct obd_histogram     fo_w_dio_frags;
+
+        struct list_head         fo_llog_list;
+        spinlock_t               fo_llog_list_lock;
 
         struct lustre_quota_ctxt fo_quota_ctxt;
         spinlock_t               fo_quotacheck_lock;
@@ -520,6 +553,10 @@ struct mds_obd {
         unsigned long                    mds_lov_objids_valid:1,
                                          mds_fl_user_xattr:1,
                                          mds_fl_acl:1;
+
+        /* For CMD add mds_num */
+        int                              mds_num;
+
 };
 
 struct echo_obd {
@@ -756,25 +793,6 @@ static inline void oti_free_cookies(struct obd_trans_info *oti)
         oti->oti_numcookies = 0;
 }
 
-/* llog contexts */
-enum llog_ctxt_id {
-        LLOG_CONFIG_ORIG_CTXT  =  0,
-        LLOG_CONFIG_REPL_CTXT  =  1,
-        LLOG_MDS_OST_ORIG_CTXT =  2,
-        LLOG_MDS_OST_REPL_CTXT =  3,
-        LLOG_SIZE_ORIG_CTXT    =  4,
-        LLOG_SIZE_REPL_CTXT    =  5,
-        LLOG_MD_ORIG_CTXT      =  6,
-        LLOG_MD_REPL_CTXT      =  7,
-        LLOG_RD1_ORIG_CTXT     =  8,
-        LLOG_RD1_REPL_CTXT     =  9,
-        LLOG_TEST_ORIG_CTXT    = 10,
-        LLOG_TEST_REPL_CTXT    = 11,
-        LLOG_LOVEA_ORIG_CTXT   = 12,
-        LLOG_LOVEA_REPL_CTXT   = 13,
-        LLOG_MAX_CTXTS
-};
-
 /*
  * Events signalled through obd_notify() upcall-chain.
  */
@@ -791,6 +809,7 @@ enum obd_notify_event {
 };
 
 #include <lu_object.h>
+
 /*
  * Data structure used to pass obd_notify()-event to non-obd listeners (llite
  * and liblustre being main examples).
@@ -1070,11 +1089,12 @@ struct obd_ops {
                              int cmd, obd_off *);
 
         /* llog related obd_methods */
-        int (*o_llog_init)(struct obd_device *obd, struct obd_device *disk_obd,
-                           int count, struct llog_catid *logid, 
-                           struct obd_uuid *uuid);
+        int (*o_llog_init)(struct obd_device *obd, struct obd_llogs *llog, 
+                           struct obd_device *disk_obd, int count, 
+                           struct llog_catid *logid, struct obd_uuid *uuid);
         int (*o_llog_finish)(struct obd_device *obd, int count);
-
+        int (*o_llog_connect)(struct obd_export *, struct llogd_conn_body *);
+        
         /* metadata-only methods */
         int (*o_pin)(struct obd_export *, const struct lu_fid *fid,
                      struct obd_client_handle *, int flag);

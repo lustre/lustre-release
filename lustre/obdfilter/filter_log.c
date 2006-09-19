@@ -100,19 +100,28 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                               void *cb_data, int error)
 {
         struct llog_cookie *cookie = cb_data;
-        int rc;
-
+        struct obd_llogs *llogs;
+        struct llog_ctxt *ctxt;
+        
+        /* we have to find context for right group */
         if (error != 0) {
                 CDEBUG(D_INODE, "not cancelling llog cookie on error %d\n",
                        error);
                 return;
         }
+        llogs = filter_grab_llog_for_group(obd, cookie->lgc_lgl.lgl_ogr, NULL);
 
-        rc = llog_cancel(llog_get_context(obd, cookie->lgc_subsys + 1),
-                         NULL, 1, cookie, 0);
-        if (rc)
-                CERROR("error cancelling log cookies: rc = %d\n", rc);
-        OBD_FREE(cookie, sizeof(*cookie));
+        if (llogs) {
+                ctxt = filter_llog_get_context(llogs, cookie->lgc_subsys + 1);
+                if (ctxt) {
+                        llog_cancel(ctxt, NULL, 1, cookie, 0);
+                } else
+                        CERROR("no valid context for group "LPU64"\n",
+                                cookie->lgc_lgl.lgl_ogr);
+        } else {
+                CDEBUG(D_HA, "unknown group "LPU64"!\n", cookie->lgc_lgl.lgl_ogr);
+        }
+        OBD_FREE(cb_data, sizeof(struct llog_cookie));
 }
 
 /* Callback for processing the unlink log record received from MDS by 

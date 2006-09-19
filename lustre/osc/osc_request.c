@@ -3217,9 +3217,9 @@ static struct llog_operations osc_size_repl_logops = {
 };
 
 static struct llog_operations osc_mds_ost_orig_logops;
-static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                         int count, struct llog_catid *catid, 
-                         struct obd_uuid *uuid)
+static int osc_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
+                         struct obd_device *tgt, int count, 
+                         struct llog_catid *catid, struct obd_uuid *uuid)
 {
         int rc;
         ENTRY;
@@ -3234,14 +3234,14 @@ static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
         }
         spin_unlock(&obd->obd_dev_lock);
 
-        rc = llog_setup(obd, LLOG_MDS_OST_ORIG_CTXT, tgt, count,
+        rc = llog_setup(obd, llogs, LLOG_MDS_OST_ORIG_CTXT, tgt, count,
                         &catid->lci_logid, &osc_mds_ost_orig_logops);
         if (rc) {
                 CERROR("failed LLOG_MDS_OST_ORIG_CTXT\n");
                 GOTO (out, rc);
         }
 
-        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, count, NULL,
+        rc = llog_setup(obd, llogs, LLOG_SIZE_REPL_CTXT, tgt, count, NULL,
                         &osc_size_repl_logops);
         if (rc) 
                 CERROR("failed LLOG_SIZE_REPL_CTXT\n");

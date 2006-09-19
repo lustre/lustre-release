@@ -163,7 +163,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc < 0)
                 GOTO(err_fs, rc);
 
-        rc = llog_setup(obd, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
+        rc = llog_setup(obd, NULL, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
                         &llog_lvfs_ops);
         if (rc)
                 GOTO(err_fs, rc);
