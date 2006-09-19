@@ -84,7 +84,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
         /* get new range from controller only if super-sequence is not yet
          * initialized from backing store or something else. */
         if (range_is_zero(&seq->lss_super)) {
-                rc = seq_client_alloc_super(cli);
+                rc = seq_client_alloc_super(cli, ctx);
                 if (rc) {
                         up(&seq->lss_sem);
                         CERROR("can't allocate super-sequence, "
@@ -225,7 +225,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                                 RETURN(-EOPNOTSUPP);
                         }
 
-                        rc = seq_client_alloc_super(seq->lss_cli);
+                        rc = seq_client_alloc_super(seq->lss_cli, ctx);
                         if (rc) {
                                 CERROR("can't allocate new super-sequence, "
                                        "rc %d\n", rc);
@@ -337,6 +337,8 @@ static int seq_req_handle(struct ptlrpc_request *req,
                 }
         
                 ctx = req->rq_svc_thread->t_ctx;
+                LASSERT(ctx != NULL);
+                LASSERT(ctx->lc_thread == req->rq_svc_thread);
                 rc = seq_server_handle(site, ctx, *opc, in, out);
         } else
                 rc = -EPROTO;

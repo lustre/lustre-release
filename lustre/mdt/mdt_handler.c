@@ -2099,7 +2099,7 @@ static int mdt_seq_init(const struct lu_context *ctx,
                  */
                 rc = seq_client_init(ls->ls_client_seq, NULL,
                                      LUSTRE_SEQ_METADATA, prefix,
-                                     ls->ls_control_seq, ctx);
+                                     ls->ls_control_seq);
                 OBD_FREE(prefix, MAX_OBD_NAME + 5);
 
                 if (rc)
@@ -2214,7 +2214,7 @@ static int mdt_seq_init_cli(const struct lu_context *ctx,
                                 rc = seq_client_init(ls->ls_client_seq,
                                                      ls->ls_control_exp,
                                                      LUSTRE_SEQ_METADATA,
-                                                     prefix, NULL, NULL);
+                                                     prefix, NULL);
                                 OBD_FREE(prefix, MAX_OBD_NAME + 5);
                         } else
                                 rc = -ENOMEM;

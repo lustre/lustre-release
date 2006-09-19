@@ -97,7 +97,6 @@ struct lu_client_seq {
 
         /* seq-server for direct talking */
         struct lu_server_seq   *lcs_srv;
-        const struct lu_context      *lcs_ctx;
 };
 
 /* server sequence manager interface */
@@ -169,16 +168,19 @@ int seq_client_init(struct lu_client_seq *seq,
                     struct obd_export *exp,
                     enum lu_cli_type type,
                     const char *prefix,
-                    struct lu_server_seq *srv,
-                    const struct lu_context *ctx);
+                    struct lu_server_seq *srv);
 
 void seq_client_fini(struct lu_client_seq *seq);
 
-int seq_client_alloc_super(struct lu_client_seq *seq);
-int seq_client_alloc_meta(struct lu_client_seq *seq);
+int seq_client_alloc_super(struct lu_client_seq *seq,
+                           const struct lu_context *ctx);
+
+int seq_client_alloc_meta(struct lu_client_seq *seq,
+                          const struct lu_context *ctx);
 
 int seq_client_alloc_seq(struct lu_client_seq *seq,
                          seqno_t *seqnr);
+
 int seq_client_alloc_fid(struct lu_client_seq *seq,
                          struct lu_fid *fid);
 

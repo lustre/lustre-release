@@ -1242,13 +1242,13 @@ static int mdc_fid_init(struct obd_export *exp)
         /* init client side sequence-manager */
         rc = seq_client_init(cli->cl_seq, exp, 
                              LUSTRE_SEQ_METADATA,
-                             prefix, NULL, NULL);
+                             prefix, NULL);
         OBD_FREE(prefix, MAX_OBD_NAME + 5);
         if (rc)
                 GOTO(out_free_seq, rc);
 
         /* pre-allocate meta-sequence */
-        rc = seq_client_alloc_meta(cli->cl_seq);
+        rc = seq_client_alloc_meta(cli->cl_seq, NULL);
         if (rc) {
                 CERROR("can't allocate new mata-sequence, "
                        "rc %d\n", rc);

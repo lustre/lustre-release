@@ -124,15 +124,17 @@ out_req:
 }
 
 /* request sequence-controller node to allocate new super-sequence. */
-static int __seq_client_alloc_super(struct lu_client_seq *seq)
+static int __seq_client_alloc_super(struct lu_client_seq *seq,
+                                    const struct lu_context *ctx)
 {
         int rc;
         
 #ifdef __KERNEL__
         if (seq->lcs_srv) {
+                LASSERT(ctx != NULL);
                 rc = seq_server_alloc_super(seq->lcs_srv, NULL,
                                             &seq->lcs_range,
-                                            seq->lcs_ctx);
+                                            ctx);
         } else {
 #endif
                 rc = seq_client_rpc(seq, &seq->lcs_range,
@@ -143,13 +145,14 @@ static int __seq_client_alloc_super(struct lu_client_seq *seq)
         return rc;
 }
 
-int seq_client_alloc_super(struct lu_client_seq *seq)
+int seq_client_alloc_super(struct lu_client_seq *seq,
+                           const struct lu_context *ctx)
 {
         int rc;
         ENTRY;
 
         down(&seq->lcs_sem);
-        rc = __seq_client_alloc_super(seq);
+        rc = __seq_client_alloc_super(seq, ctx);
         up(&seq->lcs_sem);
 
         RETURN(rc);
@@ -157,15 +160,17 @@ int seq_client_alloc_super(struct lu_client_seq *seq)
 EXPORT_SYMBOL(seq_client_alloc_super);
 
 /* request sequence-controller node to allocate new meta-sequence. */
-static int __seq_client_alloc_meta(struct lu_client_seq *seq)
+static int __seq_client_alloc_meta(struct lu_client_seq *seq,
+                                   const struct lu_context *ctx)
 {
         int rc;
 
 #ifdef __KERNEL__
         if (seq->lcs_srv) {
+                LASSERT(ctx != NULL);
                 rc = seq_server_alloc_meta(seq->lcs_srv, NULL,
                                            &seq->lcs_range,
-                                           seq->lcs_ctx);
+                                           ctx);
         } else {
 #endif
                 rc = seq_client_rpc(seq, &seq->lcs_range,
@@ -176,13 +181,14 @@ static int __seq_client_alloc_meta(struct lu_client_seq *seq)
         return rc;
 }
 
-int seq_client_alloc_meta(struct lu_client_seq *seq)
+int seq_client_alloc_meta(struct lu_client_seq *seq,
+                          const struct lu_context *ctx)
 {
         int rc;
         ENTRY;
 
         down(&seq->lcs_sem);
-        rc = __seq_client_alloc_meta(seq);
+        rc = __seq_client_alloc_meta(seq, ctx);
         up(&seq->lcs_sem);
 
         RETURN(rc);
@@ -200,7 +206,7 @@ static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
         /* if we still have free sequences in meta-sequence we allocate new seq
          * from given range, if not - allocate new meta-sequence. */
         if (range_space(&seq->lcs_range) == 0) {
-                rc = __seq_client_alloc_meta(seq);
+                rc = __seq_client_alloc_meta(seq, NULL);
                 if (rc) {
                         CERROR("can't allocate new meta-sequence, "
                                "rc %d\n", rc);
@@ -338,8 +344,7 @@ int seq_client_init(struct lu_client_seq *seq,
                     struct obd_export *exp,
                     enum lu_cli_type type,
                     const char *prefix,
-                    struct lu_server_seq *srv,
-                    const struct lu_context *ctx)
+                    struct lu_server_seq *srv)
 {
         int rc;
         ENTRY;
@@ -347,7 +352,6 @@ int seq_client_init(struct lu_client_seq *seq,
         LASSERT(seq != NULL);
         LASSERT(prefix != NULL);
 
-        seq->lcs_ctx = ctx;
         seq->lcs_exp = exp;
         seq->lcs_srv = srv;
         seq->lcs_type = type;
@@ -357,7 +361,6 @@ int seq_client_init(struct lu_client_seq *seq,
         seq->lcs_width = LUSTRE_SEQ_MAX_WIDTH;
 
         if (exp == NULL) {
-                LASSERT(seq->lcs_ctx != NULL);
                 LASSERT(seq->lcs_srv != NULL);
         } else {
                 LASSERT(seq->lcs_exp != NULL);
