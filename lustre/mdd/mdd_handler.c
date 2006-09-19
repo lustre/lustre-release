@@ -162,13 +162,13 @@ static inline int mdd_is_append(struct mdd_object *obj)
         return obj->mod_flags & APPEND_OBJ;
 }
 
-static void mdd_set_dead_obj(struct mdd_object *obj)
+static inline void mdd_set_dead_obj(struct mdd_object *obj)
 {
         if (obj)
                 obj->mod_flags |= DEAD_OBJ;
 }
 
-static int mdd_is_dead_obj(struct mdd_object *obj)
+static inline int mdd_is_dead_obj(struct mdd_object *obj)
 {
         return obj && obj->mod_flags & DEAD_OBJ;
 }
@@ -270,6 +270,7 @@ static int __mdd_lmm_get(const struct lu_context *ctxt,
                          struct mdd_object *mdd_obj, struct md_attr *ma)
 {
         int rc;
+        ENTRY;
 
         LASSERT(ma->ma_lmm != NULL && ma->ma_lmm_size > 0);
         rc = mdd_get_md(ctxt, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size,
@@ -1201,15 +1202,16 @@ int __mdd_object_kill(const struct lu_context *ctxt,
                       struct md_attr *ma)
 {
         int rc = 0;
+        ENTRY;
 
         mdd_set_dead_obj(obj);
-        if (S_ISREG(mdd_object_type(obj))) {
+        if (S_ISREG(mdd_object_type(obj)) && ma->ma_need&MA_LOV) {
                 rc = __mdd_lmm_get(ctxt, obj, ma);
-                if (ma->ma_valid & MA_LOV)
+                if (ma->ma_valid&MA_LOV && ma->ma_need&MA_COOKIE)
                         rc = mdd_unlink_log(ctxt, mdo2mdd(&obj->mod_obj),
                                             obj, ma);
         }
-        return rc;
+        RETURN(rc);
 }
 /* caller should take a lock before calling */
 static int __mdd_finish_unlink(const struct lu_context *ctxt,

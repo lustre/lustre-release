@@ -265,7 +265,7 @@ struct mdt_thread_info {
 
         /* transaction number of current request */
         __u64                      mti_transno;
-        __u32                      mti_trans_flags;
+        __u32                      mti_has_trans:1; /* has txn already? */
 
         /* opdata for mdt_open(), has the same as ldlm_reply:lock_policy_res1.
          * mdt_update_last_rcvd() stores this value onto disk for recovery

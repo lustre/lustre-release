@@ -1322,8 +1322,8 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
         RETURN(rc);
 }
 
+#if 0
 struct lu_context_key mdt_txn_key;
-
 static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
 {
         struct mdt_device     *mdt = info->mti_mdt;
@@ -1356,6 +1356,8 @@ static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
         lustre_msg_set_last_xid(req->rq_repmsg, req_exp_last_xid(req));
         //lustre_msg_set_last_xid(req->rq_repmsg, req->rq_xid);
 }
+#endif
+
 
 /*
  * Invoke handler for this request opc. Also do necessary preprocessing
@@ -1895,7 +1897,6 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                 RETURN(-EFAULT);
 
         rep->lock_policy_res2 = rc;
-        mdt_set_disposition(info, rep, DISP_IT_EXECD);
 
         /* cross-ref case, the lock should be returned to the client */
         if (rc == -EREMOTE) {

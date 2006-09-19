@@ -814,7 +814,13 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
                 txi->txi_transno = 0;
                 return 0;
         }
-        LASSERT(req != NULL);
+
+        if (mti->mti_has_trans) {
+                CERROR("More than one transaction "LPU64"\n", mti->mti_transno);
+                return 0;
+        }
+
+        mti->mti_has_trans = 1;
         /*TODO: checks for recovery cases, see mds_finish_transno */
         spin_lock(&mdt->mdt_transno_lock);
         if (txn->th_result != 0) {
@@ -827,9 +833,6 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
                 mti->mti_transno = ++ mdt->mdt_last_transno;
         } else {
                 /* should be replay */
-                if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY))
-                        CERROR("Double transaction ("LPU64") per thread!\n",
-                               mti->mti_transno);                
                 if (mti->mti_transno > mdt->mdt_last_transno)
                         mdt->mdt_last_transno = mti->mti_transno;
         }
@@ -929,10 +932,18 @@ void mdt_req_from_mcd(struct ptlrpc_request *req,
 {
         DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
                   mcd->mcd_last_transno, mcd->mcd_last_result);
-        req->rq_transno = mcd->mcd_last_transno;
-        req->rq_status = mcd->mcd_last_result;
-        lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
-        lustre_msg_set_status(req->rq_repmsg, req->rq_status);
+
+        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
+                req->rq_transno = mcd->mcd_last_close_transno;
+                req->rq_status = mcd->mcd_last_close_result;
+                lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
+                lustre_msg_set_status(req->rq_repmsg, req->rq_status);
+        } else {
+                req->rq_transno = mcd->mcd_last_transno;
+                req->rq_status = mcd->mcd_last_result;
+                lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
+                lustre_msg_set_status(req->rq_repmsg, req->rq_status);
+        }
         //mds_steal_ack_locks(req);
 }
 

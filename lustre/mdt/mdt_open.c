@@ -338,7 +338,6 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
          */
         if (islnk || (!isreg && !isdir &&
             (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))) {
-                //info->mti_trans_flags |= MDT_NONEED_TRANSNO;
                 lustre_msg_set_transno(req->rq_repmsg, 0);
                 RETURN(0);
         }
@@ -440,178 +439,40 @@ extern void mdt_req_from_mcd(struct ptlrpc_request *req,
  */
 void mdt_reconstruct_open(struct mdt_thread_info *info)
 {
-        struct lu_fid          *child_fid = &info->mti_tmp_fid1;
-        __u32                   flags  = info->mti_spec.sp_cr_flags;
         struct req_capsule      *pill  = &info->mti_pill;
         struct ptlrpc_request   *req   = mdt_info_req(info);
         struct mdt_export_data  *med   = &req->rq_export->exp_mdt_data;
         struct mdt_client_data  *mcd   = med->med_mcd;
-        struct md_attr          *ma    = &info->mti_attr;
-        struct lu_attr          *la    = &ma->ma_attr;
-        struct mdt_device       *mdt   = info->mti_mdt;
-        struct mdt_reint_record *rr    = &info->mti_rr;
-        const struct lu_context *ctxt  = info->mti_ctxt;
-        struct mdt_object       *parent;
-        struct mdt_object       *child;
-        struct ldlm_reply       *ldlm_rep = NULL;
-        struct mdt_body         *repbody;
-        struct mdt_file_data    *mfd;
-        struct list_head        *h;
+        struct ldlm_reply       *ldlm_rep;
         int                      result;
-        int                      isreg, isdir, islnk;
         ENTRY;
 
         LASSERT(pill->rc_fmt == &RQF_LDLM_INTENT_OPEN);
+        ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
 
         mdt_req_from_mcd(req, med->med_mcd);
         mdt_set_disposition(info, ldlm_rep, mcd->mcd_last_data);
 
-        ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = mdt->mdt_max_mdsize;
-        ma->ma_need = MA_INODE | MA_LOV;
-        repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
-        repbody->eadatasize = 0;
-        repbody->aclsize = 0;
+        CERROR("This is re-CCCCCCCCCCConstruct open: disp="LPX64", result=%d\n",
+                ldlm_rep->lock_policy_res1,
+                req->rq_status);
 
         if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE) && req->rq_status) {
                 /* we did not create successfully, return error to client. */
-                EXIT;
-                return;
+                mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
+                GOTO(out, 0);
         }
-
-        mdt_set_disposition(info, ldlm_rep, DISP_IT_EXECD);
-        mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
-        parent = mdt_object_find(ctxt, mdt, rr->rr_fid1);
-        if (IS_ERR(parent)) {
-                /* FIXME: should this be assert? */
-                CERROR("Cannot find parent "DFID" while reconstruct open\n",
-                        PFID(rr->rr_fid1));
-                GOTO(out, result = PTR_ERR(parent));
-        }
-
-        result = mdo_lookup(ctxt, mdt_object_child(parent),
-                            rr->rr_name, child_fid);
-        if (result == 0)
-                mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
-        else {
-                if (result == -ENOENT || result == -ESTALE) {
-                        mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
-                        result = -ENOENT;
-                }
-                GOTO(out_parent, result);
-        }
-        
-        LASSERT(lu_fid_eq(rr->rr_fid2, child_fid));
-        child = mdt_object_find(ctxt, mdt, child_fid);
-        if (IS_ERR(child))
-                GOTO(out_parent, result = PTR_ERR(child));
-
-        result = mo_attr_get(ctxt, mdt_object_child(child), ma);
-        if (result == -EREMOTE) {
-                /* the object is on remote node
-                 * return its FID for remote open */
-                repbody->fid1 = *mdt_object_fid(child);
-                repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
-                GOTO(out_child, result = 0);
-        } else if(result != 0)
-                GOTO(out_child, result);
-
-        LASSERT(ma->ma_valid & MA_INODE);
-        isreg = S_ISREG(la->la_mode);
-        isdir = S_ISDIR(la->la_mode);
-        islnk = S_ISLNK(la->la_mode);
-        mdt_pack_attr2body(repbody, la, mdt_object_fid(child));
-
-        /* if we are following a symlink, don't open; and
-         * do not return open handle for special nodes as client required
-         */
-        if (islnk || (!isreg && !isdir &&
-            (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))) {
-                info->mti_trans_flags |= MDT_NONEED_TRANSNO;
-                GOTO(out_child, 0);
-        }
-
-        mdt_set_disposition(info, ldlm_rep, DISP_OPEN_OPEN);
-        if (!mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE) &&
-             (flags & MDS_OPEN_EXCL) && (flags & MDS_OPEN_CREAT))
-                GOTO(out_child, result = -EEXIST);
-
-        if (isdir) {
-                if (flags & (MDS_OPEN_CREAT | FMODE_WRITE))
-                        /* we are trying to create or
-                         * write an existing dir. */
-                        GOTO(out_child, result = -EISDIR);
-        } else if (flags & MDS_OPEN_DIRECTORY)
-                GOTO(out_child, result = -ENOTDIR);
-
-        /* at this point, regular file should have lov */
-        LASSERT(ergo(isreg, ma->ma_valid & MA_LOV));
-
-        if (ma->ma_valid & MA_LOV) {
-                LASSERT(ma->ma_lmm_size);
-                repbody->eadatasize = ma->ma_lmm_size;
-                if (isdir)
-                        repbody->valid |= OBD_MD_FLDIREA;
-                else
-                        repbody->valid |= OBD_MD_FLEASIZE;
-        }
-
-        if (flags & FMODE_WRITE) {
-                /* FIXME: in recovery, need to pass old epoch here */
-                result = mdt_write_get(info->mti_mdt, child);
-                if (result == 0) {
-                        /* FIXME: in recovery, need to pass old epoch here */
-                        mdt_epoch_open(info, child, 0);
-                        repbody->ioepoch = child->mot_ioepoch;
-                }
-        } else if (flags & MDS_FMODE_EXEC)
-                result = mdt_write_deny(mdt, child);
-        if (result)
-                GOTO(out_child, result);
-
-        result = mo_open(ctxt, mdt_object_child(child), flags);
-        if (result)
-                GOTO(out_child, result);
-
-        mfd = NULL;
-        spin_lock(&med->med_open_lock);
-        list_for_each(h, &med->med_open_head) {
-                mfd = list_entry(h, struct mdt_file_data, mfd_list);
-                if (mfd->mfd_xid == req->rq_xid) {
-                        break;
-                }
-                mfd = NULL;
-        }
-        spin_unlock(&med->med_open_lock);
-
-        if (mfd != NULL) {
-                repbody->handle.cookie = mfd->mfd_handle.h_cookie;
-                GOTO(out_child, 0);
-        }
-
-        mfd = mdt_mfd_new();
-        if (mfd != NULL) {
-                mdt_object_get(ctxt, child);
-
-                mfd->mfd_mode = flags;
-                mfd->mfd_object = child;
-                mfd->mfd_xid = req->rq_xid;
-
-                med = &req->rq_export->exp_mdt_data;
-                spin_lock(&med->med_open_lock);
-                list_add(&mfd->mfd_list, &med->med_open_head);
-                spin_unlock(&med->med_open_lock);
-                repbody->handle.cookie = mfd->mfd_handle.h_cookie;
-        } else
-                result = -ENOMEM;
-        EXIT;
-out_child:
-        mdt_object_put(ctxt, child);
-out_parent:
-        mdt_object_put(ctxt, parent);
-out:
-        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
+ 
+        lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
+        lustre_msg_set_transno(req->rq_repmsg, 0);
+        lustre_msg_set_status(req->rq_repmsg, 0);
+        ldlm_rep->lock_policy_res1 = 0;
+        ldlm_rep->lock_policy_res2 = 0;
+        result = mdt_open(info);
         req->rq_status = result;
+        EXIT;
+out: 
+        lustre_msg_set_status(req->rq_repmsg, req->rq_status);
 }
 
 static int mdt_open_by_fid(struct mdt_thread_info* info, 
@@ -633,6 +494,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         if (rc > 0) {
                 const struct lu_context *ctxt = info->mti_ctxt;
 
+                mdt_set_disposition(info, rep, DISP_IT_EXECD);
                 mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
                 mdt_set_disposition(info, rep, DISP_LOOKUP_POS);
                 rc = mo_attr_get(ctxt, mdt_object_child(o), ma);
@@ -718,7 +580,9 @@ int mdt_open(struct mdt_thread_info *info)
         repbody->aclsize = 0;
 
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = mdt->mdt_max_mdsize;
+        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                                               &RMF_MDT_MD,
+                                               RCL_SERVER);
         ma->ma_need = MA_INODE | MA_LOV;
 
         LASSERT(info->mti_pill.rc_fmt == &RQF_LDLM_INTENT_OPEN);
@@ -756,6 +620,7 @@ int mdt_open(struct mdt_thread_info *info)
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
                 GOTO(out, result = -ENOMEM);
 
+        mdt_set_disposition(info, ldlm_rep, DISP_IT_EXECD);
         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
         if (rr->rr_name[0] == 0) {
                 /* this is cross-ref open */
@@ -803,6 +668,7 @@ int mdt_open(struct mdt_thread_info *info)
 
         if (result == -ENOENT) {
                 /* not found and with MDS_OPEN_CREAT: let's create it */
+                mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
                 result = mdo_create(info->mti_ctxt,
                                     mdt_object_child(parent),
                                     rr->rr_name,
@@ -812,7 +678,6 @@ int mdt_open(struct mdt_thread_info *info)
                 if (result == -ERESTART)
                         GOTO(out_child, result);
                 else {        
-                        mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
                         if (result != 0)
                                 GOTO(out_child, result);
                 }
@@ -957,6 +822,17 @@ int mdt_close(struct mdt_thread_info *info)
         if (rc == 0) {
                 repbody = req_capsule_server_get(&info->mti_pill, 
                                                  &RMF_MDT_BODY);
+                ma->ma_lmm = req_capsule_server_get(&info->mti_pill, 
+                                                    &RMF_MDT_MD);
+                ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
+                                                       &RMF_MDT_MD,
+                                                       RCL_SERVER);
+                ma->ma_cookie = req_capsule_server_get(&info->mti_pill,
+                                                       &RMF_LOGCOOKIES);
+                ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
+                                                          &RMF_LOGCOOKIES,
+                                                          RCL_SERVER);
+                ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
                 repbody->eadatasize = 0;
                 repbody->aclsize = 0;
         }
@@ -976,24 +852,6 @@ int mdt_close(struct mdt_thread_info *info)
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
 
-                if (repbody != NULL) {
-                        ma->ma_lmm = 
-                                req_capsule_server_get(&info->mti_pill,
-                                                       &RMF_MDT_MD);
-                        ma->ma_lmm_size = 
-                                req_capsule_get_size(&info->mti_pill,
-                                                     &RMF_MDT_MD,
-                                                     RCL_SERVER);
-                        ma->ma_cookie = 
-                                req_capsule_server_get(&info->mti_pill,
-                                                       &RMF_LOGCOOKIES);
-                        ma->ma_cookie_size = 
-                                req_capsule_get_size(&info->mti_pill,
-                                                     &RMF_LOGCOOKIES,
-                                                     RCL_SERVER);
-                        ma->ma_need = MA_INODE;
-                }
-                
                 /* Do not lose object before last unlink. */
                 o = mfd->mfd_object;
                 mdt_object_get(info->mti_ctxt, o);
