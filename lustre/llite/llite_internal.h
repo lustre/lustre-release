@@ -573,6 +573,7 @@ struct ll_close_queue {
         struct list_head        lcq_head;
         wait_queue_head_t       lcq_waitq;
         struct completion       lcq_comp;
+        atomic_t                lcq_stop;
 };
 
 void llap_write_pending(struct inode *inode, struct ll_async_page *llap);

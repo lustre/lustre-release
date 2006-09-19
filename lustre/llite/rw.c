@@ -658,7 +658,9 @@ static int queue_or_sync_write(struct obd_export *exp, struct inode *inode,
         }
 
         llap->llap_write_queued = 0;
-
+        /* Do not pass llap here as it is sync write. */
+        llap_write_pending(inode, NULL);
+        
         rc = oig_init(&oig);
         if (rc)
                 GOTO(out, rc);

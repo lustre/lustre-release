@@ -155,7 +155,7 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
          * skip setattr. */
         next = mdt_object_child(mo);
         if (som_update && (info->mti_epoch->ioepoch != mo->mot_ioepoch))
-                        GOTO(out, rc = 0);
+                GOTO(out, rc = 0);
                 
         next = mdt_object_child(mo);
         if (lu_object_assert_not_exists(&mo->mot_obj.mo_lu))

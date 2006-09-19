@@ -217,13 +217,12 @@ static struct ll_inode_info *ll_close_next_lli(struct ll_close_queue *lcq)
 
         spin_lock(&lcq->lcq_lock);
 
-        if (lcq->lcq_head.next == NULL)
-                lli = ERR_PTR(-1);
-        else if (!list_empty(&lcq->lcq_head)) {
+        if (!list_empty(&lcq->lcq_head)) {
                 lli = list_entry(lcq->lcq_head.next, struct ll_inode_info,
                                  lli_close_list);
                 list_del_init(&lli->lli_close_list);
-        }
+        } else if (atomic_read(&lcq->lcq_stop))
+                lli = ERR_PTR(-1);
 
         spin_unlock(&lcq->lcq_lock);
         return lli;
@@ -290,7 +289,7 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret)
 void ll_close_thread_shutdown(struct ll_close_queue *lcq)
 {
         init_completion(&lcq->lcq_comp);
-        lcq->lcq_head.next = NULL;
+        atomic_inc(&lcq->lcq_stop);
         wake_up(&lcq->lcq_waitq);
         wait_for_completion(&lcq->lcq_comp);
         OBD_FREE(lcq, sizeof(*lcq));
