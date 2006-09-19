@@ -154,10 +154,11 @@ static int orph_index_iterate(const struct lu_context *ctx,
                                 orph_key_test_and_del(ctx, mdd, key);
                                 result = iops->next(ctx, it);
                         }
-                        iops->put(ctx, it);
-                } else if (result == 0)
+                } else if (result == 0) 
                         /* Index contains no zero key? */
                         result = -EIO;
+                
+                iops->put(ctx, it);
                 iops->fini(ctx, it);
         } else
                 result = -ENOMEM;
