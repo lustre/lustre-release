@@ -126,17 +126,17 @@
 #define MDS_MAXREPSIZE  max(9 * 1024, 280 + LOV_MAX_STRIPE_COUNT * 56)
 
 /* FLD_MAXREQSIZE == lustre_msg + __u32 padding + ptlrpc_body + opc + md_fld */
-#define FLD_MAXREQSIZE  (168)
+#define FLD_MAXREQSIZE  (160)
 
-/* FLD_MAXREPSIZE == lustre_msg + __u32 padding + ptlrpc_body + md_fld */
-#define FLD_MAXREPSIZE  (160)
+/* FLD_MAXREPSIZE == lustre_msg + ptlrpc_body + md_fld */
+#define FLD_MAXREPSIZE  (152)
 
 /* SEQ_MAXREQSIZE == lustre_msg + __u32 padding + ptlrpc_body + opc + lu_range +
  * __u32 padding */
-#define SEQ_MAXREQSIZE  (168)
+#define SEQ_MAXREQSIZE  (160)
 
-/* SEQ_MAXREPSIZE == lustre_msg + __u32 padding + ptlrpc_body + lu_range */
-#define SEQ_MAXREPSIZE  (160)
+/* SEQ_MAXREPSIZE == lustre_msg + ptlrpc_body + lu_range */
+#define SEQ_MAXREPSIZE  (152)
 
 /* FIXME fix all constants here.  Andreas suggests dyamically adding threads. */
 #define MGS_MAX_THREADS 8UL

@@ -104,6 +104,16 @@ int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid)
                               LUSTRE_IMP_FULL, 0);
 }
 
+/*
+ * This function now is known to always saying that it will receive 4 buffers
+ * from server. Even for cases when acl_size and md_size is zero, RPC header
+ * willcontain 4 fields and RPC itself will contain zero size fields. This is
+ * because mdt_getattr*() _always_ returns 4 fields, but if acl is not needed
+ * and thus zero, it shirinks it, making zero size. The same story about
+ * md_size. And this is course of problem when client waits for smaller number
+ * of fields. This issue will be fixed later when client gets awar of RPC
+ * layouts.  --umka
+ */
 static
 int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                        unsigned int acl_size, struct ptlrpc_request *req)
@@ -114,20 +124,19 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         int bufcount = 2, rc;
         ENTRY;
         
-        /* request message already built */
+        /* Request message already built. */
         if (ea_size != 0) {
-                size[bufcount++] = ea_size;
+                size[bufcount] = ea_size;
                 CDEBUG(D_INODE, "reserved %u bytes for MD/symlink in packet\n",
                        ea_size);
-        } else {
-                /* FIXME: reserve some memory even if we do not need it */
-                size[bufcount++] = 16;
         }
+        bufcount++;
         
         if (acl_size) {
-                size[bufcount++] = acl_size;
+                size[bufcount] = acl_size;
                 CDEBUG(D_INODE, "reserved %u bytes for ACL\n", acl_size);
         }
+        bufcount++;
 
         ptlrpc_req_set_repsize(req, bufcount, size);
 
@@ -176,8 +185,9 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
         int acl_size = 0, rc;
         ENTRY;
 
-        /* XXX do we need to make another request here?  We just did a getattr
-         *     to do the lookup in the first place.
+        /*
+         * XXX do we need to make another request here?  We just did a getattr
+         * to do the lookup in the first place.
          */
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_GETATTR, 2, size, NULL);
@@ -188,14 +198,8 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
                           MDS_BFLAG_EXT_FLAGS/*request "new" flags(bug 9486)*/);
 
         /* currently only root inode will call us with FLACL */
-
-        /* FIXME:XXX:reserve enough space regardless the flag temporarily.
-         * server will do lustre_shrink_reply();
-         * 
-         *if (valid & OBD_MD_FLACL)
-         */
-        acl_size = LUSTRE_POSIX_ACL_MAX_SIZE;
-
+        if (valid & OBD_MD_FLACL)
+                acl_size = LUSTRE_POSIX_ACL_MAX_SIZE;
          
         rc = mdc_getattr_common(exp, ea_size, acl_size, req);
         if (rc != 0) {

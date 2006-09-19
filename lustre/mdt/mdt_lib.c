@@ -78,10 +78,10 @@ void mdt_shrink_reply(struct mdt_thread_info *info, int offset)
         acl_size = body->aclsize;
 
         CDEBUG(D_INFO, "Shrink to md_size %d cookie_size %d \n",
-                       md_size, acl_size);
+               md_size, acl_size);
 
         lustre_shrink_reply(req, offset, md_size, 1);
-        lustre_shrink_reply(req, md_size ? offset + 1: offset, acl_size, 0);
+        lustre_shrink_reply(req, md_size ? offset + 1 : offset, acl_size, 0);
 }
 
 
