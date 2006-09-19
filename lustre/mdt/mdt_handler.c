@@ -659,16 +659,25 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
         for (ent = lu_dirent_start(dp); ent != NULL;
                           ent = lu_dirent_next(ent)) {
                 struct lu_fid *lf = &ent->lde_fid;
-
+                
                 /* FIXME: multi-trans for this name insert */
-                rc = mdo_name_insert(info->mti_ctxt,
-                                     md_object_next(&object->mot_obj),
-                                     ent->lde_name, lf, 0);
-                if (rc) {
-                        kunmap(page);
-                        RETURN(rc);
+                if (strncmp(ent->lde_name, ".", ent->lde_namelen) && 
+                    strncmp(ent->lde_name, "..", ent->lde_namelen)) {
+                        char *name;
+                        /* FIXME: Here we allocate name for each name,
+                         * maybe stupid, but can not find better way.
+                         * will find better way */
+                        OBD_ALLOC(name, ent->lde_namelen + 1);
+                        memcpy(name, ent->lde_name, ent->lde_namelen);
+                        rc = mdo_name_insert(info->mti_ctxt,
+                                             md_object_next(&object->mot_obj),
+                                             name, lf, 0);
+                        OBD_FREE(name, ent->lde_namelen + 1);
+                        if (rc)
+                                GOTO(out, rc);
                 }
         }
+out:
         kunmap(page);
         RETURN(rc);
 }
@@ -676,20 +685,26 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
 static int mdt_bulk_timeout(void *data)
 {
         ENTRY;
-        /* We don't fail the connection here, because having the export
-         * killed makes the (vital) call to commitrw very sad.
-         */
+        
+        CERROR("mdt bulk transfer timeout \n");
+        
         RETURN(1);
 }
 
 static int mdt_writepage(struct mdt_thread_info *info)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
+        struct mdt_body         *reqbody;
         struct l_wait_info      *lwi;
         struct ptlrpc_bulk_desc *desc;
         struct page             *page;
         int                rc;
         ENTRY;
+
+        
+        reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
+        if (reqbody == NULL)
+                RETURN(-EFAULT);
 
         desc = ptlrpc_prep_bulk_exp (req, 1, BULK_GET_SINK, MDS_BULK_PORTAL);
         if (!desc)
@@ -700,7 +715,11 @@ static int mdt_writepage(struct mdt_thread_info *info)
         if (!page)
                 GOTO(desc_cleanup, rc = -ENOMEM);
 
-        ptlrpc_prep_bulk_page(desc, page, 0, CFS_PAGE_SIZE);
+        CDEBUG(D_INFO, "Received page offset %d size %d \n", 
+                        (int)reqbody->size, (int)reqbody->nlink);
+
+        ptlrpc_prep_bulk_page(desc, page, (int)reqbody->size, 
+                              (int)reqbody->nlink);
 
         /* FIXME: following parts are copied from ost_brw_write */
 
@@ -796,8 +815,11 @@ static int mdt_readpage(struct mdt_thread_info *info)
 
         /* call lower layers to fill allocated pages with directory data */
         rc = mo_readpage(info->mti_ctxt, mdt_object_child(object), rdpg);
-        if (rc)
+        if (rc) {
+                if (rc == -ERANGE)
+                        rc = -EIO;
                 GOTO(free_rdpg, rc);
+        }
 
         /* send pages to client */
         rc = mdt_sendpage(info, rdpg);
@@ -1985,7 +2007,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                 req_capsule_extend(pill, &RQF_LDLM_INTENT);
                 it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
                 if (it != NULL) {
-                        LDLM_DEBUG(lock, "intent policy opc: %s",
+                        LDLM_DEBUG(lock, "intent policy opc: %s\n",
                                    ldlm_it2str(it->opc));
 
                         rc = mdt_intent_opc(it->opc, info, lockp, flags);

@@ -70,7 +70,8 @@ static int cmm_expect_splitting(const struct lu_context *ctx,
         if (ma->ma_lmv_size)
                 GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
         OBD_ALLOC_PTR(fid);
-        rc = cmm_root_get(ctx, &cmm->cmm_md_dev, fid);
+        rc = cmm_child_ops(cmm)->mdo_root_get(ctx, cmm->cmm_child, 
+                                              fid);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -257,16 +258,18 @@ static int cmm_remove_entries(const struct lu_context *ctx,
         for (ent = lu_dirent_start(dp); ent != NULL;
                           ent = lu_dirent_next(ent)) {
                 if (ent->lde_hash < hash_end) {
-                        char *name;
-                        /* FIXME: Here we allocate name for each name,
-                         * maybe stupid, but can not find better way.
-                         * will find better way */
-                        OBD_ALLOC(name, ent->lde_namelen + 1);
-                        memcpy(name, ent->lde_name, ent->lde_namelen);
-                        rc = mdo_name_remove(ctx, md_object_next(mo), name);
-                        CDEBUG(D_INFO, "remove name %s hash %lu \n",
-                                        name, ent->lde_hash); 
-                        OBD_FREE(name, ent->lde_namelen + 1);
+                        if (strncmp(ent->lde_name, ".", ent->lde_namelen) &&
+                            strncmp(ent->lde_name, "..", ent->lde_namelen)) {
+                                char *name;
+                                /* FIXME: Here we allocate name for each name,
+                                 * maybe stupid, but can not find better way.
+                                 * will find better way */
+                                OBD_ALLOC(name, ent->lde_namelen + 1);
+                                memcpy(name, ent->lde_name, ent->lde_namelen);
+                                rc = mdo_name_remove(ctx, md_object_next(mo),
+                                                     name);
+                                OBD_FREE(name, ent->lde_namelen + 1);
+                        }
                         if (rc) {
                                 /* FIXME: Do not know why it return -ENOENT
                                  * in some case 
@@ -309,7 +312,7 @@ static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
                 rc = mo_readpage(ctx, md_object_next(mo), rdpg);
                 /* -E2BIG means it already reach the end of the dir */
                 if (rc) { 
-                        if (rc == -E2BIG)
+                        if (rc == -E2BIG || rc == -ERANGE)
                                 rc = 0;
                         RETURN(rc);
                 }
