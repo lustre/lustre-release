@@ -119,7 +119,11 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                 size[bufcount++] = ea_size;
                 CDEBUG(D_INODE, "reserved %u bytes for MD/symlink in packet\n",
                        ea_size);
+        } else {
+                /* FIXME: reserve some memory even if we do not need it */
+                size[bufcount++] = 16;
         }
+        
         if (acl_size) {
                 size[bufcount++] = acl_size;
                 CDEBUG(D_INODE, "reserved %u bytes for ACL\n", acl_size);
