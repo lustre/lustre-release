@@ -1179,7 +1179,6 @@ static int mdd_dir_is_empty(const struct lu_context *ctx,
                         int i;
                         for (result = 0, i = 0; result == 0 && i < 3; ++i)
                                 result = iops->next(ctx, it);
-                        iops->put(ctx, it);
                         if (result == 0)
                                 result = -ENOTEMPTY;
                         else if (result == +1)
@@ -1189,6 +1188,8 @@ static int mdd_dir_is_empty(const struct lu_context *ctx,
                          * Huh? Index contains no zero key?
                          */
                         result = -EIO;
+                
+                iops->put(ctx, it);
                 iops->fini(ctx, it);
         } else
                 result = -ENOMEM;
