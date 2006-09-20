@@ -112,7 +112,7 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         llogs = filter_grab_llog_for_group(obd, cookie->lgc_lgl.lgl_ogr, NULL);
 
         if (llogs) {
-                ctxt = filter_llog_get_context(llogs, cookie->lgc_subsys + 1);
+                ctxt = llog_get_context_from_llogs(llogs, cookie->lgc_subsys + 1);
                 if (ctxt) {
                         llog_cancel(ctxt, NULL, 1, cookie, 0);
                 } else

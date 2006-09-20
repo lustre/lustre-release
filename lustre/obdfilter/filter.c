@@ -2103,7 +2103,9 @@ static int filter_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
         if (!llogs)
                 ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
         else
-                ctxt = filter_llog_get_context(llogs, LLOG_MDS_OST_REPL_CTXT);
+                ctxt = llog_get_context_from_llogs(llogs, LLOG_MDS_OST_REPL_CTXT);
+        
+        LASSERT(ctxt != NULL);
         ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
 
         rc = llog_setup(obd, llogs, LLOG_SIZE_ORIG_CTXT, tgt, 0, NULL,
@@ -2118,11 +2120,11 @@ static int filter_group_llog_finish(struct obd_llogs *llogs)
         int rc = 0, rc2 = 0;
         ENTRY;
        
-        ctxt = filter_llog_get_context(llogs, LLOG_MDS_OST_REPL_CTXT);
+        ctxt = llog_get_context_from_llogs(llogs, LLOG_MDS_OST_REPL_CTXT);
         if (ctxt)
                 rc = llog_cleanup(ctxt);
 
-        ctxt = filter_llog_get_context(llogs, LLOG_SIZE_ORIG_CTXT);
+        ctxt = llog_get_context_from_llogs(llogs, LLOG_SIZE_ORIG_CTXT);
         if (ctxt)
                 rc2 = llog_cleanup(ctxt);
         if (!rc)
@@ -2206,7 +2208,7 @@ struct obd_llogs *filter_grab_llog_for_group(struct obd_device *obd, int group,
 init:
         if (export) {
                 fglog->exp = export;
-                ctxt = filter_llog_get_context(fglog->llogs, 
+                ctxt = llog_get_context_from_llogs(fglog->llogs, 
                                                LLOG_MDS_OST_REPL_CTXT);
                 LASSERT(ctxt != NULL);
 
@@ -2234,7 +2236,7 @@ static int filter_llog_connect(struct obd_export *exp,
 
         llog = filter_grab_llog_for_group(obd, body->lgdc_logid.lgl_ogr, exp);
         LASSERT(llog != NULL);
-        ctxt = filter_llog_get_context(llog, body->lgdc_ctxt_idx);
+        ctxt = llog_get_context_from_llogs(llog, body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &body->lgdc_logid,
                           &body->lgdc_gen, NULL);
         if (rc != 0)
@@ -2707,7 +2709,7 @@ static void filter_sync_llogs(struct obd_device *obd, struct obd_export *dexp)
 
                 worked = fglog->group;
                 if (fglog->exp && (dexp == fglog->exp || dexp == NULL)) {
-                        ctxt = filter_llog_get_context(fglog->llogs,
+                        ctxt = llog_get_context_from_llogs(fglog->llogs,
                                                 LLOG_MDS_OST_REPL_CTXT);
                         LASSERT(ctxt != NULL);
                         llog_sync(ctxt, fglog->exp);

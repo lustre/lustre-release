@@ -72,7 +72,11 @@ int llog_setup(struct obd_device *obd,  struct obd_llogs *llogs, int index,
         if (index < 0 || index >= LLOG_MAX_CTXTS)
                 RETURN(-EFAULT);
 
-        if (obd->obd_llog_ctxt[index]) {
+        /* in some recovery cases, obd_llog_ctxt might already be set, 
+         * but llogs might still be zero, for example in obd_filter recovery,
+         * Currenn  */
+        if (obd->obd_llog_ctxt[index] &&
+            (!llogs || (llogs && llogs->llog_ctxt[index]))) {
                 /* mds_lov_update_mds might call here multiple times. So if the
                    llog is already set up then don't to do it again. */
                 CDEBUG(D_CONFIG, "obd %s ctxt %d already set up\n", 
@@ -91,7 +95,9 @@ int llog_setup(struct obd_device *obd,  struct obd_llogs *llogs, int index,
         if (llogs)
                 llogs->llog_ctxt[index] = ctxt;
 
-        obd->obd_llog_ctxt[index] = ctxt;
+        if (!obd->obd_llog_ctxt[index])
+                obd->obd_llog_ctxt[index] = ctxt;
+
         ctxt->loc_obd = obd;
         ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
         ctxt->loc_idx = index;
@@ -99,7 +105,7 @@ int llog_setup(struct obd_device *obd,  struct obd_llogs *llogs, int index,
         sema_init(&ctxt->loc_sem, 1);
 
         if (op->lop_setup)
-                rc = op->lop_setup(obd, index, disk_obd, count, logid);
+                rc = op->lop_setup(obd, llogs, index, disk_obd, count, logid);
 
         if (rc) {
                 obd->obd_llog_ctxt[index] = NULL;
@@ -213,8 +219,8 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
 
 /* lop_setup method for filter/osc */
 // XXX how to set exports
-int llog_obd_origin_setup(struct obd_device *obd, int index,
-                          struct obd_device *disk_obd, int count,
+int llog_obd_origin_setup(struct obd_device *obd, struct obd_llogs *llogs,
+                          int index, struct obd_device *disk_obd, int count,
                           struct llog_logid *logid)
 {
         struct llog_ctxt *ctxt;
@@ -228,7 +234,11 @@ int llog_obd_origin_setup(struct obd_device *obd, int index,
 
         LASSERT(count == 1);
 
-        ctxt = llog_get_context(obd, index);
+        if (!llogs)
+                ctxt = llog_get_context(obd, index);
+        else
+                ctxt = llog_get_context_from_llogs(llogs, index);
+        
         LASSERT(ctxt);
         llog_gen_init(ctxt);
 

@@ -127,8 +127,8 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
 int llog_cancel(struct llog_ctxt *, struct lov_stripe_md *lsm,
                 int count, struct llog_cookie *cookies, int flags);
 
-int llog_obd_origin_setup(struct obd_device *obd, int index,
-                          struct obd_device *disk_obd, int count,
+int llog_obd_origin_setup(struct obd_device *obd, struct obd_llogs *llogs, 
+                          int index, struct obd_device *disk_obd, int count,
                           struct llog_logid *logid);
 int llog_obd_origin_cleanup(struct llog_ctxt *ctxt);
 int llog_obd_origin_add(struct llog_ctxt *ctxt,
@@ -180,8 +180,8 @@ struct llog_operations {
         int (*lop_close)(struct llog_handle *handle);
         int (*lop_read_header)(struct llog_handle *handle);
 
-        int (*lop_setup)(struct obd_device *obd, int ctxt_idx,
-                         struct obd_device *disk_obd, int count,
+        int (*lop_setup)(struct obd_device *obd, struct obd_llogs *llogs, 
+                         int ctxt_idx, struct obd_device *disk_obd, int count,
                          struct llog_logid *logid);
         int (*lop_sync)(struct llog_ctxt *ctxt, struct obd_export *exp);
         int (*lop_cleanup)(struct llog_ctxt *ctxt);
@@ -274,6 +274,14 @@ static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,
                 return NULL;
 
         return obd->obd_llog_ctxt[index];
+}
+
+static inline struct llog_ctxt *
+llog_get_context_from_llogs(struct obd_llogs *llogs, int index)
+{                
+        if (index < 0 || index >= LLOG_MAX_CTXTS)
+                return NULL;
+        return llogs->llog_ctxt[index];
 }
 
 static inline int llog_write_rec(struct llog_handle *handle,
