@@ -137,7 +137,7 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         ll_prepare_close(inode, op_data, och);
         epoch_close = (op_data->flags & MF_EPOCH_CLOSE);
         rc = md_close(md_exp, op_data, och, &req);
-        if (rc == EAGAIN) {
+        if (rc == -EAGAIN) {
                 /* This close must have closed the epoch. */
                 LASSERT(epoch_close);
                 /* MDS has instructed us to obtain Size-on-MDS attribute from 

@@ -123,7 +123,6 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
 int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
 {
         struct md_attr          *ma = &info->mti_attr;
-        struct md_object        *next;
         struct mdt_lock_handle  *lh;
         int som_update = 0;
         int rc;
@@ -153,11 +152,9 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
         /* Setattrs are syncronized through dlm lock taken above. If another
          * epoch started, its attributes may be already flushed on disk,
          * skip setattr. */
-        next = mdt_object_child(mo);
         if (som_update && (info->mti_epoch->ioepoch != mo->mot_ioepoch))
                 GOTO(out, rc = 0);
                 
-        next = mdt_object_child(mo);
         if (lu_object_assert_not_exists(&mo->mot_obj.mo_lu))
                 GOTO(out, rc = -ENOENT);
 
@@ -166,7 +163,7 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
                        OBD_FAIL_MDS_REINT_SETATTR_WRITE);
 
         /* all attrs are packed into mti_attr in unpack_setattr */
-        rc = mo_attr_set(info->mti_ctxt, next, ma);
+        rc = mo_attr_set(info->mti_ctxt, mdt_object_child(mo), ma);
         if (rc != 0)
                 GOTO(out, rc);
 

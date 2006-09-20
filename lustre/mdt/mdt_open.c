@@ -178,7 +178,7 @@ static int mdt_sizeonmds_update(struct mdt_thread_info *info,
 /* Epoch closes.
  * Returns 1 if epoch does not close.
  * Returns 0 if epoch closes.
- * Returns EAGAIN if epoch closes but an Size-on-MDS Update is still needed
+ * Returns -EAGAIN if epoch closes but an Size-on-MDS Update is still needed
  * from the client. */
 static int mdt_epoch_close(struct mdt_thread_info *info, struct mdt_object *o)
 {
@@ -213,11 +213,11 @@ static int mdt_epoch_close(struct mdt_thread_info *info, struct mdt_object *o)
                                 /* Some previous writer changed the attribute.
                                  * Do not beleive to the current Size-on-MDS
                                  * update, re-ask client. */
-                                rc = EAGAIN;
+                                rc = -EAGAIN;
                         } else if (!(la->la_valid & LA_SIZE) && achange) {
                                 /* Attributes were changed by the last writer 
                                  * only but no Size-on-MDS update is received.*/
-                                rc = EAGAIN;
+                                rc = -EAGAIN;
                         }
                 }
                 
@@ -762,17 +762,17 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
                 
         if (!MFD_CLOSED(mode))
                 rc = mo_close(info->mti_ctxt, next, ma);
-        else if (ret == EAGAIN)
+        else if (ret == -EAGAIN)
                 rc = mo_attr_get(info->mti_ctxt, next, ma);
 
         /* If the object is unlinked, do not try to re-enable SIZEONMDS */
-        if ((ret == EAGAIN) && (ma->ma_valid & MA_INODE) &&
+        if ((ret == -EAGAIN) && (ma->ma_valid & MA_INODE) &&
             (ma->ma_attr.la_nlink == 0))
         {
                 ret = 0;
         }
 
-        if ((ret == EAGAIN) || (ret == 1)) {
+        if ((ret == -EAGAIN) || (ret == 1)) {
                 struct mdt_export_data *med;
                 /* The epoch has not closed or Size-on-MDS update is needed.
                  * Put mfd back into the list. */

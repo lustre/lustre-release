@@ -386,7 +386,7 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
         memcpy(&op_data.handle, &och->och_fh, sizeof(op_data.handle));
 
         rc = md_close(md_exp, &op_data, och, &req);
-        if (rc == EAGAIN) {
+        if (rc == -EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
                 rc = llu_sizeonmds_update(inode, &och->och_fh);

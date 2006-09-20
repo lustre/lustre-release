@@ -673,7 +673,7 @@ static int llu_setattr_done_writing(struct inode *inode,
 
         op_data->flags = MF_EPOCH_CLOSE | MF_SOM_CHANGE;
         rc = md_done_writing(llu_i2sbi(inode)->ll_md_exp, op_data, NULL);
-        if (rc == EAGAIN) {
+        if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute
                  * from OSTs and send setattr to back to MDS. */
                 rc = llu_sizeonmds_update(inode, &op_data->handle);

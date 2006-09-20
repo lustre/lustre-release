@@ -199,7 +199,7 @@ static void ll_done_writing(struct inode *inode)
 
         rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, och);
         OBD_FREE_PTR(op_data);
-        if (rc == EAGAIN) {
+        if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute from 
                  * OSTs and send setattr to back to MDS. */
                 rc = ll_sizeonmds_update(inode, &och->och_fh);

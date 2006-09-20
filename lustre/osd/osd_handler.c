@@ -702,7 +702,7 @@ static int osd_inode_setattr(const struct lu_context *ctx,
         if (bits & LA_MTIME)
                 inode->i_mtime  = *osd_inode_time(ctx, inode, attr->la_mtime);
         if (bits & LA_SIZE)
-                inode->i_size   = attr->la_size;
+                LDISKFS_I(inode)->i_disksize = inode->i_size = attr->la_size;
         if (bits & LA_BLOCKS)
                 inode->i_blocks = attr->la_blocks;
         if (bits & LA_MODE)
