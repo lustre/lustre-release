@@ -3209,6 +3209,8 @@ static int mdt_obd_reconnect(struct obd_export *exp, struct obd_device *obd,
 
 static int mdt_obd_disconnect(struct obd_export *exp)
 {
+        struct mdt_device      *mdt;
+        mdt = mdt_dev(exp->exp_obd->obd_lu_dev);
         int rc;
         ENTRY;
 
@@ -3217,7 +3219,8 @@ static int mdt_obd_disconnect(struct obd_export *exp)
 
         /* Disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp);
-        //ldlm_cancel_locks_for_export(exp);
+        if (mdt->mdt_namespace != NULL || exp->exp_obd->obd_namespace != NULL)
+                ldlm_cancel_locks_for_export(exp);
 
         /* complete all outstanding replies */
         spin_lock(&exp->exp_lock);
