@@ -493,11 +493,10 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         }
 
         /* handle last link of tgt object */
-        if (mtgt)
+        if (rc == 0 && mtgt)
                 mdt_handle_last_unlink(info, mtgt, ma);
 
-        GOTO(out_unlock_tgt, rc);
-
+        EXIT;
 out_unlock_tgt:
         if (mtgt) {
                 mdt_object_unlock_put(info, mtgt, lh_tgt, rc);
@@ -712,7 +711,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info)
                         (mnew ? mdt_object_child(mnew) : NULL), rr->rr_tgt, ma);
         
         /* handle last link of tgt object */
-        if (mnew)
+        if (rc == 0 && mnew)
                 mdt_handle_last_unlink(info, mnew, ma);
 
 out_unlock_new:

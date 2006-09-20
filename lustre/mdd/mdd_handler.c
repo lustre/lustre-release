@@ -1492,7 +1492,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         struct mdd_device *mdd = mdo2mdd(src_pobj);
         struct mdd_object *mdd_spobj = md2mdd_obj(src_pobj);
         struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
-        struct mdd_object *mdd_sobj = mdd_object_find(ctxt, mdd, lf);
+        struct mdd_object *mdd_sobj = NULL;
         struct mdd_object *mdd_tobj = NULL;
         struct lu_attr    *la_copy = &mdd_ctx_info(ctxt)->mti_la_for_fix;
         struct thandle *handle;
@@ -1544,6 +1544,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
+        mdd_sobj = mdd_object_find(ctxt, mdd, lf);
         *la_copy = ma->ma_attr;
         la_copy->la_valid = LA_CTIME;
         if (mdd_sobj) {
