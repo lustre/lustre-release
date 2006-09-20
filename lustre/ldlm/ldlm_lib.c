@@ -1471,7 +1471,14 @@ int target_handle_ping(struct ptlrpc_request *req)
 
 void target_committed_to_req(struct ptlrpc_request *req)
 {
-        struct obd_device *obd = req->rq_export->exp_obd;
+        struct obd_device *obd;
+        
+        if (req == NULL || req->rq_export == NULL)
+                return; 
+
+        obd = req->rq_export->exp_obd;
+        if (obd == NULL)
+                return;
 
         if (!obd->obd_no_transno && req->rq_repmsg != NULL)
                 lustre_msg_set_last_committed(req->rq_repmsg,
