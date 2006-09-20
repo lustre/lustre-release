@@ -893,6 +893,9 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
         int                      rc;
         ENTRY;
 
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_NET))
+                RETURN(0);
+        
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK))
                 RETURN(-EFAULT);
 
@@ -900,7 +903,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
         if (rc != 0)
                 RETURN(rc);
 
-        /*pack reply*/
+        /* pack reply */
         if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
                 req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
                                      mdt->mdt_max_mdsize);

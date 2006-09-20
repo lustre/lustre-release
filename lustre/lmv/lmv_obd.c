@@ -1908,14 +1908,12 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
         struct obd_export *tgt_exp;
         struct lu_fid rid = *fid;
         __u32 seg_end, max_hash = MAX_HASH_SIZE;
-        int rc;
+        int rc = 0;
         
         /*
-         * We have reached the end of this hash segment,
-         * and the start offset of next segment need to 
-         * be gotten out from the next segment, set it to
-         * the end of this segment. 
-         * */
+         * We have reached the end of this hash segment, and the start offset of
+         * next segment need to be gotten out from the next segment, set it to
+         * the end of this segment. */
 
         do_div(max_hash, obj->lo_objcount);
         seg_end = max_hash * index;
@@ -1944,7 +1942,7 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
                         rc = 0;
         } 
         kmap(page);
-        next_dp = page_address(page); 
+        next_dp = cfs_page_address(page); 
         LASSERT(le32_to_cpu(next_dp->ldp_hash_start) >= seg_end); 
         dp->ldp_hash_end = next_dp->ldp_hash_start;
         kunmap(page);
@@ -2004,12 +2002,12 @@ static int lmv_readpage(struct obd_export *exp,
         rc = md_readpage(tgt_exp, &rid, offset, page, request);
         if (rc) 
                 GOTO(cleanup, rc);
-#ifdef __KERNEL__
+
         if (obj && i < obj->lo_objcount - 1) {
                 struct lu_dirpage *dp;
                 __u32 end;
                 kmap(page);
-                dp = page_address(page); 
+                dp = cfs_page_address(page); 
                 end = le32_to_cpu(dp->ldp_hash_end);
                 if (end == ~0ul)
                         rc = lmv_reset_hash_seg_end(lmv, obj, fid,
@@ -2018,7 +2016,7 @@ static int lmv_readpage(struct obd_export *exp,
         } else 
                 if (rc == -ERANGE)
                         rc = -EIO;
-#endif
+
         /*
          * Here we could remove "." and ".." from all pages which at not from
          * master. But MDS has only "." and ".." for master dir.
