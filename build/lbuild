@@ -604,7 +604,7 @@ stage()
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
 
-options=$(getopt -o d:D:h -l disable-datestamp,external-patches:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,stage:,tag:,target:,target-archs:,with-linux: -- "$@")
+options=$(getopt -o d:D:h -l disable-datestamp,external-patches:,extraversion:,kerneldir:,linux:,lustre:,nodownload,nosrc,publish,release,src,stage:,tag:,target:,target-archs:,with-linux: -- "$@")
 
 if [ $? != 0 ] ; then
     usage 1
