@@ -135,7 +135,8 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                 GOTO(out, rc = -ENOMEM);
 
         ll_prepare_close(inode, op_data, och);
-        epoch_close = (op_data->flags & MF_EPOCH_CLOSE);
+        epoch_close = (op_data->flags & MF_EPOCH_CLOSE) || 
+                      !S_ISREG(inode->i_mode);
         rc = md_close(md_exp, op_data, och, &req);
         if (rc == -EAGAIN) {
                 /* This close must have closed the epoch. */
