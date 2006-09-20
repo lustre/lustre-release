@@ -861,7 +861,7 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
         ptlrpc_req_set_repsize(req, 2, size);
         rc = ptlrpc_queue_wait(req);
 
-        if (rc == 0) {
+        if (rc == 0 || rc == -ERANGE) {
                 body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
                                           lustre_swab_mdt_body);
                 if (body == NULL) {

@@ -186,7 +186,8 @@ struct md_device_operations {
 
 enum md_upcall_event {
         /*sync the md layer*/
-        MD_LOV_SYNC
+        MD_LOV_SYNC = (1 << 0),
+        MD_NO_TRANS = (1 << 1), /* Just for split, no need trans, for replay */
 };
 
 struct md_upcall {

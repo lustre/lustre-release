@@ -1093,7 +1093,6 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
         if (first) {
                 area += sizeof (struct lu_dirpage);
                 nob  -= sizeof (struct lu_dirpage);
-
         }
 
         LASSERT(nob > sizeof *ent);
@@ -1149,9 +1148,7 @@ static int osd_readpage(const struct lu_context *ctxt,
         struct dt_it      *it;
         struct osd_object *obj = osd_dt_obj(dt);
         struct dt_it_ops  *iops;
-        int i;
-        int rc;
-        int nob;
+        int i, rc, rc1 = 0, nob;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
@@ -1180,7 +1177,14 @@ static int osd_readpage(const struct lu_context *ctxt,
          * XXX position iterator at rdpg->rp_hash
          */
         rc = iops->load(ctxt, it, rdpg->rp_hash);
-        if (rc > 0) {
+       
+        /* When spliting, it need read entries from some offset by computing 
+         * not by some entries offset like readdir, so it might return 0 here.
+         */
+        if (rc == 0)
+                rc1 = -ERANGE;
+        
+        if (rc >= 0) {
                 struct page      *pg; /* no, Richard, it _is_ initialized */
                 struct lu_dirent *last;
                 __u32             hash_start;
@@ -1214,12 +1218,11 @@ static int osd_readpage(const struct lu_context *ctxt,
                         dp->ldp_hash_end   = hash_end;
                         kunmap(rdpg->rp_pages[0]);
                 }
-        } else if (rc == 0)
-                rc = -EIO;
+        } 
         iops->put(ctxt, it);
         iops->fini(ctxt, it);
-
-        return rc;
+        
+        return rc ? rc : rc1;
 }
 
 static struct dt_object_operations osd_obj_ops = {

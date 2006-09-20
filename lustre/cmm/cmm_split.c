@@ -199,7 +199,8 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
 
         lmv->mea_ids[0] = *lf;
 
-        rc = cmm_alloc_fid(ctx, cmm, &lmv->mea_ids[1], cmm->cmm_tgt_count);
+        rc = cmm_alloc_fid(ctx, cmm, &lmv->mea_ids[1], 
+                           cmm->cmm_tgt_count);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -211,7 +212,7 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
         slave_lmv->mea_magic = MEA_MAGIC_HASH_SEGMENT;
         slave_lmv->mea_count = 0;
         for (i = 1; i < cmm->cmm_tgt_count + 1; i ++) {
-                rc = cmm_creat_remote_obj(ctx, cmm, &lmv->mea_ids[i], ma, 
+                rc = cmm_creat_remote_obj(ctx, cmm, &lmv->mea_ids[i], ma,
                                           slave_lmv, sizeof(slave_lmv));
                 if (rc)
                         GOTO(cleanup, rc);
@@ -311,10 +312,12 @@ static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
 
                 rc = mo_readpage(ctx, md_object_next(mo), rdpg);
                 /* -E2BIG means it already reach the end of the dir */
-                if (rc) { 
-                        if (rc == -E2BIG || rc == -ERANGE)
-                                rc = 0;
-                        RETURN(rc);
+                if (rc) {
+                        if (rc != -ERANGE) {
+                                if (rc == -E2BIG)
+                                        rc = 0;
+                                RETURN(rc);
+                        }
                 }
                 
                 /* Remove the old entries */
@@ -325,7 +328,7 @@ static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
                 /* Send page to slave object */ 
                 if (len > 0) {
                         rc = cmm_send_split_pages(ctx, mo, rdpg, lf, len);
-                        if (rc) 
+                        if (rc)
                                 RETURN(rc);
                 }
                 
@@ -393,6 +396,7 @@ free_rdpg:
 
 int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo)
 {
+        struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct md_attr *ma;
         int rc = 0;
         ENTRY;
@@ -411,6 +415,13 @@ int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo)
         /* step1: checking whether the dir need to be splitted */
         rc = cmm_expect_splitting(ctx, mo, ma);
         if (rc != CMM_EXPECT_SPLIT)
+                GOTO(cleanup, rc = 0);
+
+        /* Disable trans for splitting, since there will be
+         * so many trans in this one ops, confilct with current 
+         * recovery design */
+        rc = cmm_upcall(ctx, &cmm->cmm_md_dev, MD_NO_TRANS);
+        if (rc)
                 GOTO(cleanup, rc = 0);
 
         /* step2: create slave objects */

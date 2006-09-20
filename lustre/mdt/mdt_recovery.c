@@ -801,7 +801,7 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
         struct mdt_txn_info *txi;
         struct mdt_thread_info *mti;
         struct ptlrpc_request *req;
-        
+                
         /* transno in two contexts - for commit_cb and for thread */
         txi = lu_context_key_get(&txn->th_ctx, &mdt_txn_key);
         mti = lu_context_key_get(ctx, &mdt_thread_key);
@@ -810,7 +810,7 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
         /* FIXME: don't handle requests from SEQ/FLD,
          * should be fixed
          */
-        if (mti->mti_mdt == NULL || req == NULL) {
+        if (mti->mti_mdt == NULL || req == NULL || mti->mti_no_need_trans) {
                 txi->txi_transno = 0;
                 return 0;
         }

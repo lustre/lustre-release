@@ -135,6 +135,15 @@ int mdt_get_disposition(struct ldlm_reply *rep, int flag)
         return (rep->lock_policy_res1 & flag);
 }
 
+void mdt_clear_disposition(struct mdt_thread_info *info,
+                                struct ldlm_reply *rep, int flag)
+{
+        if (info)
+                info->mti_opdata &= ~flag;
+        if (rep)
+                rep->lock_policy_res1 &= ~flag;
+}
+
 void mdt_set_disposition(struct mdt_thread_info *info,
                                 struct ldlm_reply *rep, int flag)
 {
@@ -688,6 +697,10 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
         struct lu_dirent *ent;
         int rc = 0;
 
+
+        /* Disable trans for this name insert, since it will 
+         * include many trans for this */
+        info->mti_no_need_trans = 1;
         kmap(page);
         dp = page_address(page);
         for (ent = lu_dirent_start(dp); ent != NULL;
@@ -812,7 +825,7 @@ static int mdt_readpage(struct mdt_thread_info *info)
         struct lu_rdpg    *rdpg = &info->mti_u.rdpg.mti_rdpg;
         struct mdt_body   *reqbody;
         struct mdt_body   *repbody;
-        int                rc;
+        int                rc, rc1 = 0;
         int                i;
         ENTRY;
 
@@ -851,8 +864,9 @@ static int mdt_readpage(struct mdt_thread_info *info)
         rc = mo_readpage(info->mti_ctxt, mdt_object_child(object), rdpg);
         if (rc) {
                 if (rc == -ERANGE)
-                        rc = -EIO;
-                GOTO(free_rdpg, rc);
+                        rc1 = rc;
+                else 
+                        GOTO(free_rdpg, rc);
         }
 
         /* send pages to client */
@@ -860,6 +874,7 @@ static int mdt_readpage(struct mdt_thread_info *info)
 
         EXIT;
 free_rdpg:
+        
         for (i = 0; i < rdpg->rp_npages; i++)
                 if (rdpg->rp_pages[i] != NULL)
                         __free_pages(rdpg->rp_pages[i], 0);
@@ -867,7 +882,7 @@ free_rdpg:
 
         MDT_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, 0);
 
-        return rc;
+        return rc ? rc : rc1;
 }
 
 static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
@@ -3348,6 +3363,7 @@ static int mdt_upcall(const struct lu_context *ctx, struct md_device *md,
 {
         struct mdt_device *m = mdt_dev(&md->md_lu_dev);
         struct md_device  *next  = m->mdt_child;
+        struct mdt_thread_info *mti;
         int rc = 0;
         ENTRY;
 
@@ -3358,6 +3374,11 @@ static int mdt_upcall(const struct lu_context *ctx, struct md_device *md,
                                         &m->mdt_max_cookiesize);
                         CDEBUG(D_INFO, "get max mdsize %d max cookiesize %d\n",
                                      m->mdt_max_mdsize, m->mdt_max_cookiesize);
+                        break;
+                case MD_NO_TRANS:
+                        mti = lu_context_key_get(ctx, &mdt_thread_key);
+                        mti->mti_no_need_trans = 1;
+                        CDEBUG(D_INFO, "disable mdt trans for this thread\n");
                         break;
                 default:
                         CERROR("invalid event\n");

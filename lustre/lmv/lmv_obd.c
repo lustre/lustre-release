@@ -1898,6 +1898,67 @@ int lmv_blocking_ast(struct ldlm_lock *lock,
         RETURN(0);
 }
 
+static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj, 
+                                   const struct lu_fid *fid, int index,
+                                   struct lu_dirpage *dp)
+{
+        struct ptlrpc_request *tmp_req = NULL;
+        struct page *page = NULL;
+        struct lu_dirpage *next_dp;
+        struct obd_export *tgt_exp;
+        struct lu_fid rid = *fid;
+        __u32 seg_end, max_hash = MAX_HASH_SIZE;
+        int rc;
+        
+        /*
+         * We have reached the end of this hash segment,
+         * and the start offset of next segment need to 
+         * be gotten out from the next segment, set it to
+         * the end of this segment. 
+         * */
+
+        do_div(max_hash, obj->lo_objcount);
+        seg_end = max_hash * index;
+        
+        /* Get start offset from next segment */
+        rid = obj->lo_inodes[index].li_fid;
+        tgt_exp = lmv_get_export(lmv, &rid);
+        if (IS_ERR(tgt_exp))
+                GOTO(cleanup, PTR_ERR(tgt_exp));
+
+        /* Alloc a page to get next segment hash,
+         * FIXME: should we try to page from cache first */
+        page = alloc_pages(GFP_KERNEL, 0);
+        if (!page)
+                GOTO(cleanup, rc = -ENOMEM);
+    
+        rc = md_readpage(tgt_exp, &rid, seg_end, page, &tmp_req);
+        if (rc) {
+                /* E2BIG means it already reached the end of the dir, 
+                 * no need reset the hash segment end */
+                if (rc == -E2BIG) 
+                       GOTO(cleanup, rc = 0); 
+                if (rc != -ERANGE)
+                       GOTO(cleanup, rc);
+                if (rc == -ERANGE)
+                        rc = 0;
+        } 
+        kmap(page);
+        next_dp = page_address(page); 
+        LASSERT(le32_to_cpu(next_dp->ldp_hash_start) >= seg_end); 
+        dp->ldp_hash_end = next_dp->ldp_hash_start;
+        kunmap(page);
+        CDEBUG(D_WARNING,"reset h_end %x for split obj"DFID"o_count %d index %d\n",
+               le32_to_cpu(dp->ldp_hash_end), PFID(&rid), obj->lo_objcount,
+               index); 
+cleanup:
+        if (tmp_req)
+                ptlrpc_req_finished(tmp_req);
+        if (page)
+                __free_pages(page, 0);
+        RETURN(rc);
+}
+
 static int lmv_readpage(struct obd_export *exp,
                         const struct lu_fid *fid,
                         __u64 offset, struct page *page,
@@ -1946,28 +2007,17 @@ static int lmv_readpage(struct obd_export *exp,
 #ifdef __KERNEL__
         if (obj && i < obj->lo_objcount - 1) {
                 struct lu_dirpage *dp;
-                __u32 end, max_hash = MAX_HASH_SIZE;
-                /*
-                 * This dirobj has been split, so we check whether reach the end
-                 * of one hash_segment and reset ldp->ldp_hash_end.
-                 */
+                __u32 end;
                 kmap(page);
                 dp = page_address(page); 
                 end = le32_to_cpu(dp->ldp_hash_end);
-                if (end == ~0ul) {
-                        __u32 seg_end;
-                        
-                        do_div(max_hash, obj->lo_objcount);
-                        seg_end = max_hash * (i + 1);
-                        
-                        dp->ldp_hash_end = cpu_to_le32(seg_end); 
-                        CDEBUG(D_INFO,"reset hash end %x for split obj "DFID" "
-                                       "obj count %d \n",
-                               le32_to_cpu(dp->ldp_hash_end), PFID(&rid),
-                               obj->lo_objcount); 
-                }
+                if (end == ~0ul)
+                        rc = lmv_reset_hash_seg_end(lmv, obj, fid,
+                                                    i + 1, dp);
                 kunmap(page);
-        }
+        } else 
+                if (rc == -ERANGE)
+                        rc = -EIO;
 #endif
         /*
          * Here we could remove "." and ".." from all pages which at not from

@@ -675,8 +675,10 @@ int mdt_open(struct mdt_thread_info *info)
                                     mdt_object_child(child),
                                     &info->mti_spec,
                                     &info->mti_attr);
-                if (result == -ERESTART)
+                if (result == -ERESTART) {
+                        mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);        
                         GOTO(out_child, result);
+                }
                 else {        
                         if (result != 0)
                                 GOTO(out_child, result);

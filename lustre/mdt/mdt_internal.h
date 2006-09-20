@@ -265,7 +265,8 @@ struct mdt_thread_info {
 
         /* transaction number of current request */
         __u64                      mti_transno;
-        __u32                      mti_has_trans:1; /* has txn already? */
+        __u32                      mti_has_trans:1, /* has txn already? */
+                                   mti_no_need_trans:1;
 
         /* opdata for mdt_open(), has the same as ldlm_reply:lock_policy_res1.
          * mdt_update_last_rcvd() stores this value onto disk for recovery
@@ -344,6 +345,8 @@ static inline const struct lu_fid *mdt_object_fid(struct mdt_object *o)
 
 int mdt_get_disposition(struct ldlm_reply *rep, int flag);
 void mdt_set_disposition(struct mdt_thread_info *info,
+                        struct ldlm_reply *rep, int flag);
+void mdt_clear_disposition(struct mdt_thread_info *info,
                         struct ldlm_reply *rep, int flag);
 
 int mdt_object_lock(struct mdt_thread_info *,

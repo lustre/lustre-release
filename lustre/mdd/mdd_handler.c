@@ -975,13 +975,13 @@ static int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
                                fl, handle);
 #ifdef HAVE_SPLIT_SUPPORT
         if (rc == 0) {
-                /* very ugly hack, if setting lmv, it means splitting 
-                 * sucess, we should return -ERESTART to notify the 
+                /* very ugly hack, if setting lmv, it means splitting
+                 * sucess, we should return -ERESTART to notify the
                  * client, so transno for this splitting should be
                  * zero according to the replay rules. so return -ERESTART
                  * here let mdt trans stop callback know this. 
                  */
-                 if (strncmp(name, MDS_LMV_MD_NAME, strlen(name)) == 0) 
+                 if (strncmp(name, MDS_LMV_MD_NAME, strlen(name)) == 0)
                         rc = -ERESTART;
         }
 #endif

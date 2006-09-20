@@ -253,8 +253,8 @@ static struct lu_device_operations cmm_lu_ops = {
 };
 
 /* --- lu_device_type operations --- */
-static int cmm_upcall(const struct lu_context *ctxt, struct md_device *md,
-                      enum md_upcall_event ev)
+int cmm_upcall(const struct lu_context *ctxt, struct md_device *md,
+               enum md_upcall_event ev)
 {
         struct md_device *upcall_dev;
         int rc;
