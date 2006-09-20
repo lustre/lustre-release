@@ -238,7 +238,7 @@ test_18a() {
 
     do_facet client cp /etc/termcap $f
     sync
-    local osc2dev=`grep ${ost2_svc}-osc- $LPROC/devices | awk '{print $1}'`
+    local osc2dev=`grep ${ost2_svc}.*-osc- $LPROC/devices | awk '{print $1}'`
     $LCTL --device $osc2dev deactivate || return 3
     # my understanding is that there should be nothing in the page
     # cache after the client reconnects?     
@@ -601,7 +601,7 @@ run_test 26 "evict dead exports"
 
 test_26b() {      # bug 10140 - evict dead exports by pinger
 	zconf_mount `hostname` $MOUNT2
-	MDS_FILE=$LPROC/mds/${mds_svc}/num_exports
+	MDS_FILE=$LPROC/mdt/${mds_svc}/num_exports
         MDS_NEXP1="`do_facet mds cat $MDS_FILE | cut -d' ' -f2`"
 	OST_FILE=$LPROC/obdfilter/${ost1_svc}/num_exports
         OST_NEXP1="`do_facet ost1 cat $OST_FILE | cut -d' ' -f2`"

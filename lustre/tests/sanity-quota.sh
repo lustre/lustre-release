@@ -151,7 +151,7 @@ STRIPECOUNT=`cat $LPROC/lov/$LOVNAME/stripecount`
 STRIPESIZE=`cat $LPROC/lov/$LOVNAME/stripesize`
 ORIGFREE=`cat $LPROC/lov/$LOVNAME/kbytesavail`
 MAXFREE=${MAXFREE:-$((200000 * $OSTCOUNT))}
-MDS=$(\ls $LPROC/mds 2> /dev/null | grep -v num_refs | tail -n 1)
+MDS=$(\ls $LPROC/mdt 2> /dev/null | grep -v num_refs | tail -n 1)
 TSTDIR="$MOUNT/quota_dir"
 
 build_test_filter

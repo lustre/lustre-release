@@ -2,7 +2,7 @@
 PATH=`dirname $0`:`dirname $0`/../utils:$PATH
 TMP=${TMP:-/tmp}
 
-MDS=`ls /proc/fs/lustre/mds | grep -v num_refs | head -n 1`
+MDS=`ls /proc/fs/lustre/mdt | grep -v num_refs | head -n 1`
 [ -z "$MDS" ] && echo "no MDS available, skipping quotafile test" && exit 0
 
 insmod ../ldiskfs/quotafmt_test.ko || exit 1

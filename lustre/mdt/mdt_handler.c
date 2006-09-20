@@ -2861,8 +2861,9 @@ out:
 
 static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 {
-        struct lu_device *d = &m->mdt_md_dev.md_lu_dev;
-        struct lu_site   *ls = d->ld_site;
+        struct obd_device *obd = m->mdt_md_dev.md_lu_dev.ld_obd;
+        struct lu_device  *d = &m->mdt_md_dev.md_lu_dev;
+        struct lu_site    *ls = d->ld_site;
 
         ENTRY;
         target_cleanup_recovery(m->mdt_md_dev.md_lu_dev.ld_obd);
@@ -2876,10 +2877,13 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 
         mdt_seq_fini(ctx, m);
         mdt_seq_fini_cli(m);
-
         mdt_fld_fini(ctx, m);
 
         mdt_fs_cleanup(ctx, m);
+
+        /* finish lprocfs */
+        lprocfs_obd_cleanup(obd);
+
         /* finish the stack */
         mdt_stack_fini(ctx, m, md2lu_dev(m->mdt_child));
 
@@ -2899,12 +2903,13 @@ int mdt_postrecov(const struct lu_context *, struct mdt_device *);
 static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
                      struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
-        struct mdt_thread_info *info;
-        struct obd_device      *obd;
-        const char             *dev = lustre_cfg_string(cfg, 0);
-        const char             *num = lustre_cfg_string(cfg, 2);
-        struct lu_site         *s;
-        int                     rc;
+        struct lprocfs_static_vars lvars;
+        struct mdt_thread_info    *info;
+        struct obd_device         *obd;
+        const char                *dev = lustre_cfg_string(cfg, 0);
+        const char                *num = lustre_cfg_string(cfg, 2);
+        struct lu_site            *s;
+        int                        rc;
         ENTRY;
 
         info = lu_context_key_get(ctx, &mdt_thread_key);
@@ -2942,11 +2947,18 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
                 GOTO(err_free_site, rc);
         }
 
+        lprocfs_init_vars(mdt, &lvars);
+        rc = lprocfs_obd_setup(obd, lvars.obd_vars);
+        if (rc) {
+                CERROR("can't init lprocfs, rc %d\n", rc);
+                GOTO(err_fini_site, rc);
+        }
+        
         /* init the stack */
         rc = mdt_stack_init(ctx, m, cfg);
         if (rc) {
                 CERROR("can't init device stack, rc %d\n", rc);
-                GOTO(err_fini_site, rc);
+                GOTO(err_fini_lprocfs, rc);
         }
 
         /* set server index */
@@ -2993,6 +3005,8 @@ err_fini_fld:
         mdt_fld_fini(ctx, m);
 err_fini_stack:
         mdt_stack_fini(ctx, m, md2lu_dev(m->mdt_child));
+err_fini_lprocfs:
+        lprocfs_obd_cleanup(obd);
 err_fini_site:
         lu_site_fini(s);
 err_free_site:
@@ -3564,10 +3578,14 @@ static struct lu_device_type mdt_device_type = {
 };
 
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
+        { "uuid",            lprocfs_rd_uuid,                0, 0 },
+        { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
+        { "num_exports",     lprocfs_rd_num_exports,         0, 0 },
         { 0 }
 };
 
 static struct lprocfs_vars lprocfs_mdt_module_vars[] = {
+        { "num_refs",        lprocfs_rd_numrefs,             0, 0 },
         { 0 }
 };
 
@@ -3575,8 +3593,8 @@ LPROCFS_INIT_VARS(mdt, lprocfs_mdt_module_vars, lprocfs_mdt_obd_vars);
 
 static int __init mdt_mod_init(void)
 {
-        int rc;
         struct lprocfs_static_vars lvars;
+        int rc;
 
         printk(KERN_INFO "Lustre: MetaData Target; info@clusterfs.com\n");
         
