@@ -893,8 +893,8 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
         int                      rc;
         ENTRY;
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_NET))
-                RETURN(0);
+/*        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_NET))
+                RETURN(0);*/
         
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK))
                 RETURN(-EFAULT);
