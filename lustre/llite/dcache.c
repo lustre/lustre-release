@@ -462,6 +462,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                            if it would be, we'll reopen the open request to
                            MDS later during file open path */
                         up(&lli->lli_och_sem);
+                        OBD_FREE_PTR(op_data);
                         RETURN(1);
                 } else {
                         up(&lli->lli_och_sem);
@@ -599,8 +600,10 @@ do_lookup:
                                                            DLM_REPLY_REC_OFF,
                                                            sizeof(*mdt_body));
                 /* see if we got same inode, if not - return error */
-                if(lu_fid_eq(&op_data->fid2, &mdt_body->fid1))
+                if(lu_fid_eq(&op_data->fid2, &mdt_body->fid1)) {
+                        OBD_FREE_PTR(op_data);
                         goto revalidate_finish;
+                }
                 ll_intent_release(it);
         }
         OBD_FREE_PTR(op_data);
