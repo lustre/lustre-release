@@ -206,9 +206,8 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_completes);
         /* enqueue/match success, just return */
-        if (set->set_completes == set->set_success)
+        if (set->set_completes && set->set_completes == set->set_success)
                 RETURN(0);
 
         /* cancel enqueued/matched locks */
@@ -232,29 +231,32 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
                                req->rq_oi.oi_md->lsm_object_id,
                                req->rq_idx, rc);
         }
-        lov_llh_put(set->set_lockh);
+        if (set->set_lockh)
+                lov_llh_put(set->set_lockh);
         RETURN(rc);
 }
 
-int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode)
+int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc)
 {
-        int rc = 0;
+        int ret = 0;
         ENTRY;
 
         if (set == NULL)
                 RETURN(0);
         LASSERT(set->set_exp);
         /* Do enqueue_done only for sync requests and if any request
-           succeeded. */
-        if (!set->set_ei->ei_rqset && set->set_completes)
-                rc = enqueue_done(set, mode);
-        else
+         * succeeded. */
+        if (!set->set_ei->ei_rqset) {
+                if (rc)
+                        set->set_completes = 0;
+                ret = enqueue_done(set, mode);
+        } else if (set->set_lockh)
                 lov_llh_put(set->set_lockh);
 
         if (atomic_dec_and_test(&set->set_refcount))
                 lov_finish_set(set);
 
-        RETURN(rc);
+        RETURN(rc ? rc : ret);
 }
 
 int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
@@ -340,7 +342,7 @@ int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
         *reqset = set;
         RETURN(0);
 out_set:
-        lov_fini_enqueue_set(set, einfo->ei_mode);
+        lov_fini_enqueue_set(set, einfo->ei_mode, rc);
         RETURN(rc);
 }
 
@@ -352,6 +354,8 @@ int lov_update_match_set(struct lov_request_set *set, struct lov_request *req,
 
         if (rc == 1)
                 ret = 0;
+        else if (rc == 0)
+                ret = 1;
         lov_update_set(set, req, ret);
         RETURN(rc);
 }
@@ -364,14 +368,10 @@ int lov_fini_match_set(struct lov_request_set *set, __u32 mode, int flags)
         if (set == NULL)
                 RETURN(0);
         LASSERT(set->set_exp);
-        if (set->set_completes) {
-                if (set->set_count == set->set_success &&
-                    flags & LDLM_FL_TEST_LOCK)
-                        lov_llh_put(set->set_lockh);
-                rc = enqueue_done(set, mode);
-        } else {
+        rc = enqueue_done(set, mode);
+        if ((set->set_count == set->set_success) &&
+            (flags & LDLM_FL_TEST_LOCK))
                 lov_llh_put(set->set_lockh);
-        }
 
         if (atomic_dec_and_test(&set->set_refcount))
                 lov_finish_set(set);

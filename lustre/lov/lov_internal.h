@@ -192,7 +192,7 @@ int lov_fini_sync_set(struct lov_request_set *set);
 int lov_prep_enqueue_set(struct obd_export *exp, struct obd_info *oinfo,
                          struct obd_enqueue_info *einfo,
                          struct lov_request_set **reqset);
-int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode);
+int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode, int rc);
 int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
                        struct lov_stripe_md *lsm,
                        ldlm_policy_data_t *policy, __u32 mode,

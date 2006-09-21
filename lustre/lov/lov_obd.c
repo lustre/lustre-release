@@ -1821,13 +1821,9 @@ static int lov_enqueue_interpret(struct ptlrpc_request_set *rqset,
                                  void *data, int rc)
 {
         struct lov_request_set *lovset = (struct lov_request_set *)data;
-        int err;
         ENTRY;
-
-        if (rc)
-                lovset->set_completes = 0;
-        err = lov_fini_enqueue_set(lovset, lovset->set_ei->ei_mode);
-        RETURN(rc ? rc : err);
+        rc = lov_fini_enqueue_set(lovset, lovset->set_ei->ei_mode, rc);
+        RETURN(rc);
 }
 
 static int lov_enqueue(struct obd_export *exp, struct obd_info *oinfo,
@@ -1871,9 +1867,7 @@ static int lov_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(rc);
         }
 out:
-        if (rc)
-                set->set_completes = 0;
-        lov_fini_enqueue_set(set, einfo->ei_mode);
+        rc = lov_fini_enqueue_set(set, einfo->ei_mode, rc);
         RETURN(rc);
 }
 
