@@ -574,6 +574,10 @@ EXPORT_SYMBOL(lu_device_init);
  */
 void lu_device_fini(struct lu_device *d)
 {
+        if (d->ld_obd != NULL)
+                /* finish lprocfs */
+                lprocfs_obd_cleanup(d->ld_obd);
+
         LASSERTF(atomic_read(&d->ld_ref) == 0,
                  "Refcount is %u\n", atomic_read(&d->ld_ref));
 }

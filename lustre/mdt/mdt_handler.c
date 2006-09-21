@@ -2923,7 +2923,6 @@ out:
 
 static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 {
-        struct obd_device *obd = m->mdt_md_dev.md_lu_dev.ld_obd;
         struct lu_device  *d = &m->mdt_md_dev.md_lu_dev;
         struct lu_site    *ls = d->ld_site;
 
@@ -2942,9 +2941,6 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
         mdt_fld_fini(ctx, m);
 
         mdt_fs_cleanup(ctx, m);
-
-        /* finish lprocfs */
-        lprocfs_obd_cleanup(obd);
 
         /* finish the stack */
         mdt_stack_fini(ctx, m, md2lu_dev(m->mdt_child));
@@ -3020,7 +3016,7 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         rc = mdt_stack_init(ctx, m, cfg);
         if (rc) {
                 CERROR("can't init device stack, rc %d\n", rc);
-                GOTO(err_fini_lprocfs, rc);
+                GOTO(err_fini_site, rc);
         }
 
         /* set server index */
@@ -3067,8 +3063,6 @@ err_fini_fld:
         mdt_fld_fini(ctx, m);
 err_fini_stack:
         mdt_stack_fini(ctx, m, md2lu_dev(m->mdt_child));
-err_fini_lprocfs:
-        lprocfs_obd_cleanup(obd);
 err_fini_site:
         lu_site_fini(s);
 err_free_site:
