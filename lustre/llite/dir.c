@@ -308,6 +308,10 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
                         CERROR("lock enqueue: rc: %d\n", rc);
                         return ERR_PTR(rc);
                 }
+        } else {
+                /* for cross-ref object, l_ast_data of the lock may not be set,
+                 * we reset it here */
+                md_set_lock_data(ll_i2sbi(dir)->ll_md_exp, (__u64*)&lockh, dir);
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 

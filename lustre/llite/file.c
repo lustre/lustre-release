@@ -2433,7 +2433,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 
                 ll_lookup_finish_locks(&oit, dentry);
         } else if (!ll_have_md_lock(dentry->d_inode,
-                                    MDS_INODELOCK_UPDATE|MDS_INODELOCK_LOOKUP)) {
+                                    MDS_INODELOCK_UPDATE)) {
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 obd_valid valid = OBD_MD_FLGETATTR;
                 int ealen = 0;
