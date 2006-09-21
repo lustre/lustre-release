@@ -68,8 +68,8 @@ void mdt_shrink_reply(struct mdt_thread_info *info, int offset)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
         struct mdt_body *body;
-        int acl_size = 0;
-        int md_size = 0;
+        int acl_size;
+        int md_size;
 
         body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(body != NULL);
@@ -174,7 +174,7 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
         struct mdt_reint_record *rr = &info->mti_rr;
         struct mdt_rec_setattr  *rec;
         ENTRY;
-         
+
         rec = req_capsule_client_get(pill, &RMF_REC_SETATTR);
         if (rec == NULL)
                 RETURN(-EFAULT);
@@ -199,10 +199,10 @@ static int mdt_epoch_unpack(struct mdt_thread_info *info)
         struct req_capsule *pill = &info->mti_pill;
         ENTRY;
 
-        if (req_capsule_get_size(pill, &RMF_MDT_EPOCH, RCL_CLIENT)) 
+        if (req_capsule_get_size(pill, &RMF_MDT_EPOCH, RCL_CLIENT))
                 info->mti_epoch = req_capsule_client_get(pill, &RMF_MDT_EPOCH);
-        else 
-                /* it is set to NULL already. 
+        else
+                /* it is set to NULL already.
                 info->mti_epoch = NULL;
                 */
                 ;
@@ -249,7 +249,7 @@ int mdt_close_unpack(struct mdt_thread_info *info)
         rc = mdt_epoch_unpack(info);
         if (rc)
                 RETURN(rc);
-        
+
         RETURN(mdt_setattr_unpack_rec(info));
 }
 
@@ -276,19 +276,19 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 attr->la_valid = LA_MODE | LA_RDEV | LA_UID | LA_GID |
                                  LA_CTIME | LA_MTIME | LA_ATIME;
                 info->mti_spec.sp_cr_flags = rec->cr_flags;
-                
+
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (S_ISDIR(attr->la_mode)) {
                         struct md_create_spec *sp = &info->mti_spec;
                         /* pass parent fid for cross-ref cases */
                         sp->u.sp_pfid = rr->rr_fid1;
                         if (info->mti_spec.sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
-                                /* create salve object req, need 
-                                 * unpack split ea here 
+                                /* create salve object req, need
+                                 * unpack split ea here
                                  */
-                               req_capsule_extend(pill, 
+                               req_capsule_extend(pill,
                                                   &RQF_MDS_REINT_CREATE_SLAVE);
-                               LASSERT(req_capsule_field_present(pill, 
+                               LASSERT(req_capsule_field_present(pill,
                                                       &RMF_EADATA, RCL_CLIENT));
                                sp->u.sp_ea.eadata = req_capsule_client_get(pill,
                                                             &RMF_EADATA);
@@ -299,7 +299,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 } else if (S_ISLNK(attr->la_mode)) {
                         const char *tgt = NULL;
                         req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_SYM);
-                        if (req_capsule_field_present(pill, &RMF_SYMTGT, 
+                        if (req_capsule_field_present(pill, &RMF_SYMTGT,
                                                       RCL_CLIENT)) {
                                 tgt = req_capsule_client_get(pill,
                                                              &RMF_SYMTGT);
@@ -307,7 +307,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                         }
                         if (tgt == NULL)
                                 result = -EFAULT;
-                } 
+                }
         } else
                 result = -EFAULT;
         RETURN(result);
@@ -358,7 +358,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
                 attr->la_mtime = rec->ul_time;
                 attr->la_mode  = rec->ul_mode;
 
-                attr->la_valid = LA_UID   | LA_GID  | LA_CTIME | 
+                attr->la_valid = LA_UID   | LA_GID  | LA_CTIME |
                                  LA_MTIME | LA_MODE;
                 rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (rr->rr_name == NULL)

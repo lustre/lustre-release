@@ -211,7 +211,7 @@ static int mdt_epoch_close(struct mdt_thread_info *info, struct mdt_object *o)
                         /* Epoch ends. Is an Size-on-MDS update needed? */
                         if (o->mot_flags & MF_SOM_CHANGE) {
                                 /* Some previous writer changed the attribute.
-                                 * Do not beleive to the current Size-on-MDS
+                                 * Do not believe to the current Size-on-MDS
                                  * update, re-ask client. */
                                 rc = -EAGAIN;
                         } else if (!(la->la_valid & LA_SIZE) && achange) {

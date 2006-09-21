@@ -147,7 +147,7 @@ struct mdd_object *mdd_object_find(const struct lu_context *ctxt,
                 m = (struct mdd_object *)o;
         else {
                 o = lu_object_locate(o->lo_header, mdd2lu_dev(d)->ld_type);
-                m = o ? lu2mdd_obj(o) : NULL;
+                m = lu2mdd_obj(o);
         }
         RETURN(m);
 }
@@ -490,7 +490,7 @@ static int mdd_txn_stop_cb(const struct lu_context *ctx,
 {
         struct mdd_device *mdd = cookie;
         struct obd_device *obd = mdd2obd_dev(mdd);
-        
+
         return mds_lov_write_objids(obd);
 }
 
@@ -529,7 +529,7 @@ static struct lu_device *mdd_device_fini(const struct lu_context *ctx,
         struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
 
         dt_txn_callback_del(mdd->mdd_child, &mdd->mdd_txn_cb);
-        
+
         return next;
 }
 
@@ -604,7 +604,7 @@ static int mdd_recovery_complete(const struct lu_context *ctxt,
         obd->obd_type->typ_dt_ops->o_postrecov(obd);
         /* TODO: orphans handling */
         rc = next->ld_ops->ldo_recovery_complete(ctxt, next);
-        
+
         RETURN(rc);
 }
 
@@ -845,18 +845,18 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
                         (mode & S_IALLUGO) | (tmp_la->la_mode & ~S_IALLUGO);
         }
 
-        /* For the "Size-on-MDS" setattr update, merge coming attributes with 
+        /* For the "Size-on-MDS" setattr update, merge coming attributes with
          * the set in the inode. */
         if (la->la_valid & LA_SIZE) {
                 if ((la->la_valid & LA_ATIME) &&
                     (la->la_atime < tmp_la->la_atime))
                         la->la_valid &= ~LA_ATIME;
-                
-                if ((la->la_valid & LA_CTIME) && 
+
+                if ((la->la_valid & LA_CTIME) &&
                     (la->la_ctime < tmp_la->la_ctime))
                         la->la_valid &= ~(LA_MTIME | LA_CTIME);
         }
-        
+
         RETURN(rc);
 }
 
@@ -979,7 +979,7 @@ static int mdd_xattr_set(const struct lu_context *ctxt, struct md_object *obj,
                  * sucess, we should return -ERESTART to notify the
                  * client, so transno for this splitting should be
                  * zero according to the replay rules. so return -ERESTART
-                 * here let mdt trans stop callback know this. 
+                 * here let mdt trans stop callback know this.
                  */
                  if (strncmp(name, MDS_LMV_MD_NAME, strlen(name)) == 0)
                         rc = -ERESTART;
@@ -1381,7 +1381,7 @@ static int mdd_is_parent(const struct lu_context *ctxt,
         /* Do not lookup ".." in root, they do not exist there. */
         if (lu_fid_eq(mdo2fid(p1), &mdd->mdd_root_fid))
                 RETURN(0);
-        
+
         for(;;) {
                 rc = mdd_parent_fid(ctxt, p1, pfid);
                 if (rc)
@@ -1393,7 +1393,7 @@ static int mdd_is_parent(const struct lu_context *ctxt,
                 if (parent)
                         mdd_object_put(ctxt, parent);
                 parent = mdd_object_find(ctxt, mdd, pfid);
-                
+
                 /* cross-ref parent, not supported yet */
                 if (parent == NULL) {
                         if (pf != NULL)
@@ -1422,7 +1422,7 @@ static int mdd_rename_lock(const struct lu_context *ctxt,
                 mdd_write_lock(ctxt, src_pobj);
                 RETURN(0);
         }
-        
+
         /* compared the parent child relationship of src_p&tgt_p */
         if (lu_fid_eq(&mdd->mdd_root_fid, mdo2fid(src_pobj))){
                 mdd_lock2(ctxt, src_pobj, tgt_pobj);
@@ -1502,7 +1502,6 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
 
         LASSERT(ma->ma_attr.la_mode & S_IFMT);
         is_dir = S_ISDIR(ma->ma_attr.la_mode);
-       
         if (ma->ma_attr.la_valid & LA_FLAGS &&
             ma->ma_attr.la_flags & (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL))
                 RETURN(-EPERM);
@@ -1539,7 +1538,7 @@ static int mdd_rename(const struct lu_context *ctxt, struct md_object *src_pobj,
          * so we do index_delete unconditionally and -ENOENT is allowed */
         if (rc != 0 && rc != -ENOENT)
                 GOTO(cleanup, rc);
-        
+
         rc = __mdd_index_insert(ctxt, mdd_tpobj, lf, tname, is_dir, handle);
         if (rc)
                 GOTO(cleanup, rc);
@@ -1626,14 +1625,14 @@ static int mdd_is_subdir(const struct lu_context *ctx, struct md_object *mo,
         struct mdd_device *mdd = mdo2mdd(mo);
         int rc;
         ENTRY;
-        
+
         if (!S_ISDIR(mdd_object_type(md2mdd_obj(mo))))
                 RETURN(0);
-        
+
         rc = mdd_is_parent(ctx, mdd, md2mdd_obj(mo), fid, sfid);
         if (rc == -EREMOTE)
                 rc = EREMOTE;
-        
+
         RETURN(rc);
 }
 
@@ -2186,7 +2185,7 @@ static int mdd_open(const struct lu_context *ctxt, struct md_object *obj,
                 if (mdd_is_immutable(md2mdd_obj(obj)))
                         rc = -EACCES;
         }
-        
+
         if (rc == 0)
                 md2mdd_obj(obj)->mod_count ++;
 
