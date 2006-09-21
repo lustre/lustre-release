@@ -153,6 +153,11 @@ void mdt_set_disposition(struct mdt_thread_info *info,
                 rep->lock_policy_res1 |= flag;
 }
 
+static int mdt_is_remote_object(struct mdt_object *o)
+{
+       return (o->mot_header.loh_attr & LOHA_REMOTE); 
+}        
+
 
 static int mdt_getstatus(struct mdt_thread_info *info)
 {
@@ -478,6 +483,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 } else {
                         mdt_lock_handle_init(lhc);
                         lhc->mlh_mode = LCK_CR;
+                        if (mdt_is_remote_object(child))
+                                child_bits &= ~MDS_INODELOCK_LOOKUP;
                         rc = mdt_object_lock(info, child, lhc, child_bits);
                 }
                 if (rc == 0) {
@@ -1241,6 +1248,16 @@ struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
         o = mdt_object_find(info->mti_ctxt, info->mti_mdt, f);
         if (!IS_ERR(o)) {
                 int rc;
+
+                if (mdt_is_remote_object(o)) { 
+                        /* FIXME: For remote object we can only give 
+                         * LOOKUP_lock, maybe we should not put it 
+                         * here, but only we know it is remote, after 
+                         * we got the object currently, maybe we need
+                         * a way to know remote by fid on MDS. */
+                        ibits &= ~MDS_INODELOCK_UPDATE;
+                        ibits |= MDS_INODELOCK_LOOKUP;
+                }
 
                 rc = mdt_object_lock(info, o, lh, ibits);
                 if (rc != 0) {

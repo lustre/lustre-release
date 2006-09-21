@@ -47,9 +47,10 @@
 
 static inline void lmv_drop_intent_lock(struct lookup_intent *it)
 {
-        if (it->d.lustre.it_lock_mode != 0)
-                ldlm_lock_decref((void *)&it->d.lustre.it_lock_handle,
+        if (it->d.lustre.it_lock_mode != 0) {
+                ldlm_lock_decref_and_cancel((void *)&it->d.lustre.it_lock_handle,
                                  it->d.lustre.it_lock_mode);
+        }
 }
 
 int lmv_intent_remote(struct obd_export *exp, void *lmm,
