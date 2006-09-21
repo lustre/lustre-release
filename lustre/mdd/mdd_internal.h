@@ -155,7 +155,7 @@ static inline struct lu_device *mdd2lu_dev(struct mdd_device *d)
 
 static inline struct mdd_object *lu2mdd_obj(struct lu_object *o)
 {
-	LASSERT(lu_device_is_mdd(o->lo_dev));
+	LASSERT(ergo(o != NULL, lu_device_is_mdd(o->lo_dev)));
 	return container_of0(o, struct mdd_object, mod_obj.mo_lu);
 }
 
