@@ -1439,6 +1439,10 @@ static int mdt_req_handle(struct mdt_thread_info *info,
          * correct actions like it is done in target_send_reply_msg().
          */
         if (h->mh_fail_id != 0) {
+                /* 
+                 * Set to info->mti_fail_id to handler fail_id, it will be used
+                 * later, and better than use default fail_id.
+                 */
                 info->mti_fail_id = h->mh_fail_id;
                 if (OBD_FAIL_CHECK(h->mh_fail_id))
                         RETURN(0);
@@ -1480,11 +1484,10 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                  */
                 rc = h->mh_act(info);
         /*
-         * XXX result value is unconditionally shoved into ->rq_status
-         * (original code sometimes placed error code into ->rq_status, and
-         * sometimes returned it to the
-         * caller). ptlrpc_server_handle_request() doesn't check return value
-         * anyway.
+         * XXX result value is unconditionally shoved into ->rq_status (original
+         * code sometimes placed error code into ->rq_status, and sometimes
+         * returned it to the caller). ptlrpc_server_handle_request() doesn't
+         * check return value anyway.
          */
         req->rq_status = rc;
         rc = 0;

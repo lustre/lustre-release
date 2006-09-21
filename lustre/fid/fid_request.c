@@ -98,13 +98,13 @@ static int seq_client_rpc(struct lu_client_seq *seq,
         *range = *out;
 
         if (!range_is_sane(range)) {
-                CERROR("invalid seq range obtained from server: "
+                CERROR("Invalid seq range obtained from server: "
                        DRANGE"\n", PRANGE(range));
                 GOTO(out_req, rc = -EINVAL);
         }
 
         if (range_is_exhausted(range)) {
-                CERROR("seq range obtained from server is exhausted: "
+                CERROR("Seq range obtained from server is exhausted: "
                        DRANGE"]\n", PRANGE(range));
                 GOTO(out_req, rc = -EINVAL);
         }
@@ -208,7 +208,7 @@ static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
         if (range_space(&seq->lcs_range) == 0) {
                 rc = __seq_client_alloc_meta(seq, NULL);
                 if (rc) {
-                        CERROR("can't allocate new meta-sequence, "
+                        CERROR("Can't allocate new meta-sequence, "
                                "rc %d\n", rc);
                         RETURN(rc);
                 }
@@ -254,7 +254,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                  * or sequence is exhausted and should be switched. */
                 rc = __seq_client_alloc_seq(seq, &seqnr);
                 if (rc) {
-                        CERROR("can't allocate new sequence, "
+                        CERROR("Can't allocate new sequence, "
                                "rc %d\n", rc);
                         GOTO(out, rc);
                 }
@@ -306,7 +306,7 @@ static int seq_client_proc_init(struct lu_client_seq *seq)
         rc = lprocfs_add_vars(seq->lcs_proc_dir,
                               seq_client_proc_list, seq);
         if (rc) {
-                CERROR("can't init sequence manager "
+                CERROR("Can't init sequence manager "
                        "proc, rc %d\n", rc);
                 GOTO(out_cleanup, rc);
         }

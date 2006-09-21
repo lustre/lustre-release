@@ -123,7 +123,7 @@ int seq_store_read(struct lu_server_seq *seq,
                 range_le_to_cpu(&seq->lss_space, &info->sti_record.ssr_space);
                 range_le_to_cpu(&seq->lss_super, &info->sti_record.ssr_super);
 
-                CDEBUG(D_INFO|D_WARNING, "read %s ranges: space - "DRANGE", super "
+                CDEBUG(D_INFO|D_WARNING, "Read %s ranges: space - "DRANGE", super "
                        "- "DRANGE"\n", (seq->lss_type == LUSTRE_SEQ_SERVER ?
                                         "server" : "controller"),
                        PRANGE(&seq->lss_space), PRANGE(&seq->lss_super));
@@ -131,7 +131,8 @@ int seq_store_read(struct lu_server_seq *seq,
         } else if (rc == 0) {
                 rc = -ENODATA;
         } else if (rc >= 0) {
-                CERROR("read only %d bytes of %d\n", rc, sizeof(info->sti_record));
+                CERROR("Read only %d bytes of %d\n", rc, 
+                       sizeof(info->sti_record));
                 rc = -EIO;
         }
 	
@@ -156,7 +157,7 @@ int seq_store_init(struct lu_server_seq *seq,
                 seq->lss_obj = dt_obj;
 		rc = 0;
         } else {
-                CERROR("cannot find \"seq\" obj %d\n",
+                CERROR("Can't find \"seq\" obj %d\n",
 		       (int)PTR_ERR(dt_obj));
                 rc = PTR_ERR(dt_obj);
         }

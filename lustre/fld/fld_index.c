@@ -180,10 +180,10 @@ int fld_index_init(struct lu_server_fld *fld,
                 if (rc == 0)
                         LASSERT(dt_obj->do_index_ops != NULL);
                 else
-                        CERROR("\"%s\" is not an index!\n",
+                        CERROR("File \"%s\" is not an index!\n",
                                fld_index_name);
         } else {
-                CERROR("cannot find \"%s\" obj %d\n",
+                CERROR("Can't find \"%s\" obj %d\n",
                        fld_index_name, (int)PTR_ERR(dt_obj));
                 rc = PTR_ERR(dt_obj);
         }

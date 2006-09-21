@@ -224,8 +224,7 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
         rc = lprocfs_add_vars(fld->lcf_proc_dir,
                               fld_client_proc_list, fld);
         if (rc) {
-                CERROR("can't init FLD "
-                       "proc, rc %d\n", rc);
+                CERROR("Can't init FLD proc, rc %d\n", rc);
                 GOTO(out_cleanup, rc);
         }
 
@@ -439,6 +438,8 @@ int fld_client_create(struct lu_client_fld *fld,
                  * cache errors. --umka
                  */
                 fld_cache_insert(fld->lcf_cache, seq, mds);
+        } else {
+                CERROR("Can't create FLD entry, rc %d\n", rc);
         }
         RETURN(rc);
 }

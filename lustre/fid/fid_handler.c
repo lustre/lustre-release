@@ -87,7 +87,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 rc = seq_client_alloc_super(cli, ctx);
                 if (rc) {
                         up(&seq->lss_sem);
-                        CERROR("can't allocate super-sequence, "
+                        CERROR("Can't allocate super-sequence, "
                                "rc %d\n", rc);
                         RETURN(rc);
                 }
@@ -100,7 +100,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 /* save init seq to backing store. */
                 rc = seq_store_write(seq, ctx);
                 if (rc) {
-                        CERROR("can't write sequence state, "
+                        CERROR("Can't write sequence state, "
                                "rc = %d\n", rc);
                 }
         }
@@ -132,13 +132,13 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
                 *out = *in;
         } else {
                 if (range_space(space) < seq->lss_super_width) {
-                        CWARN("sequences space is going to exhaust soon. "
+                        CWARN("Sequences space is going to exhaust soon. "
                               "Can allocate only "LPU64" sequences\n",
                               range_space(space));
                         *out = *space;
                         space->lr_start = space->lr_end;
                 } else if (range_is_exhausted(space)) {
-                        CERROR("sequences space is exhausted\n");
+                        CERROR("Sequences space is exhausted\n");
                         RETURN(-ENOSPC);
                 } else {
                         range_alloc(out, space, seq->lss_super_width);
@@ -147,7 +147,7 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
 
         rc = seq_store_write(seq, ctx);
         if (rc) {
-                CERROR("can't save state, rc = %d\n",
+                CERROR("Can't save state, rc = %d\n",
                        rc);
                 RETURN(rc);
         }
@@ -221,13 +221,13 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                  */
                 if (range_is_exhausted(super)) {
                         if (!seq->lss_cli) {
-                                CERROR("no seq-controller client is setup\n");
+                                CERROR("No seq-controller client is setup\n");
                                 RETURN(-EOPNOTSUPP);
                         }
 
                         rc = seq_client_alloc_super(seq->lss_cli, ctx);
                         if (rc) {
-                                CERROR("can't allocate new super-sequence, "
+                                CERROR("Can't allocate new super-sequence, "
                                        "rc %d\n", rc);
                                 RETURN(rc);
                         }
@@ -241,7 +241,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 
         rc = seq_store_write(seq, ctx);
         if (rc) {
-                CERROR("can't save state, rc = %d\n",
+                CERROR("Can't save state, rc = %d\n",
 		       rc);
         }
 
@@ -279,7 +279,7 @@ static int seq_server_handle(struct lu_site *site,
         switch (opc) {
         case SEQ_ALLOC_META:
                 if (!site->ls_server_seq) {
-                        CERROR("sequence-server is not "
+                        CERROR("Sequence-server is not "
                                "initialized\n");
                         RETURN(-EINVAL);
                 }
@@ -288,7 +288,7 @@ static int seq_server_handle(struct lu_site *site,
                 break;
         case SEQ_ALLOC_SUPER:
                 if (!site->ls_control_seq) {
-                        CERROR("sequence-controller is not "
+                        CERROR("Sequence-controller is not "
                                "initialized\n");
                         RETURN(-EINVAL);
                 }
@@ -443,7 +443,7 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
         rc = lprocfs_add_vars(seq->lss_proc_dir,
                               seq_server_proc_list, seq);
         if (rc) {
-                CERROR("can't init sequence manager "
+                CERROR("Can't init sequence manager "
                        "proc, rc %d\n", rc);
                 GOTO(out_cleanup, rc);
         }
