@@ -3200,6 +3200,7 @@ static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
                 struct osc_creator *oscc = &obd->u.cli.cl_oscc;
 
                 oscc->oscc_oa.o_gr = (*(__u32 *)val);
+                oscc->oscc_oa.o_valid |= OBD_MD_FLGROUP;
                 LASSERT(oscc->oscc_oa.o_gr > 0);
                 req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
         }

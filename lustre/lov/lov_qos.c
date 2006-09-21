@@ -727,6 +727,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
         ENTRY;
 
         LASSERT(src_oa->o_valid & OBD_MD_FLID);
+        LASSERT(src_oa->o_valid & OBD_MD_FLGROUP);
  
         if (set->set_oi->oi_md == NULL) {
                 int stripe_cnt = lov_get_stripecnt(lov, 0);

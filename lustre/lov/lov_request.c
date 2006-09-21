@@ -599,7 +599,7 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
         }
         ret_oa->o_id = src_oa->o_id;
         ret_oa->o_gr = src_oa->o_gr;
-        ret_oa->o_valid |= OBD_MD_FLGROUP;
+        ret_oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
         memcpy(src_oa, ret_oa, sizeof(*src_oa));
         obdo_free(ret_oa);
 

@@ -1658,9 +1658,10 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
                 GOTO(out, rc = -ENOMEM);
 
         oa->o_id = ucreatp.lrc_id;
+        oa->o_gr = ucreatp.lrc_group;
         oa->o_nlink = ucreatp.lrc_ost_idx;
         oa->o_flags |= OBD_FL_RECREATE_OBJS;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
         obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                         OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 

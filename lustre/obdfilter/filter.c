@@ -3197,7 +3197,7 @@ static int filter_handle_precreate(struct obd_export *exp, struct obdo *oa,
                 oa->o_id = filter_last_id(&obd->u.filter, group);
                 rc = filter_precreate(obd, oa, group, &diff);
                 oa->o_id = filter_last_id(&obd->u.filter, group);
-                oa->o_valid = OBD_MD_FLID;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
                 GOTO(out, rc);
         }
         /* else diff == 0 */

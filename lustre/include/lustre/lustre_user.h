@@ -123,6 +123,7 @@ struct lov_user_mds_data_v1 {
 
 struct ll_recreate_obj {
         __u64 lrc_id;
+        __u64 lrc_group;
         __u32 lrc_ost_idx;
 };
 
