@@ -1154,52 +1154,6 @@ static int mdt_sec_ctx_handle(struct mdt_thread_info *info)
         return 0;
 }
 
-/* issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
-int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
-             struct lustre_handle *lh, ldlm_mode_t mode,
-             ldlm_policy_data_t *policy,
-             struct ldlm_res_id *res_id)
-{
-        int flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
-        int rc;
-
-        LASSERT(ns != NULL);
-        LASSERT(lh != NULL);
-        LASSERT(f != NULL);
-
-        rc = ldlm_cli_enqueue_local(ns, *fid_build_res_name(f, res_id),
-                                    LDLM_IBITS, policy, mode, &flags,
-                                    ldlm_blocking_ast, ldlm_completion_ast,
-                                    NULL, NULL, 0, NULL, lh);
-        return rc == ELDLM_OK ? 0 : -EIO;
-}
-
-/*
- * Just call ldlm_lock_decref() if decref, else we only call ptlrpc_save_lock()
- * to save this lock in req.  when transaction committed, req will be released,
- * and lock will, too.
- */
-void fid_unlock(struct ptlrpc_request *req, const struct lu_fid *f,
-                struct lustre_handle *lh, ldlm_mode_t mode, int decref)
-{
-        {
-                /* FIXME: this is debug stuff, remove it later. */
-                struct ldlm_lock *lock = ldlm_handle2lock(lh);
-                if (!lock) {
-                        CERROR("Invalid lock handle "LPX64"\n",
-                               lh->cookie);
-                        LBUG();
-                }
-                LASSERT(fid_res_name_eq(f, &lock->l_resource->lr_name));
-                LDLM_LOCK_PUT(lock);
-        }
-        
-        if (decref)
-                ldlm_lock_decref(lh, mode);
-        else
-                ptlrpc_save_lock(req, lh, mode);
-}
-
 static struct mdt_object *mdt_obj(struct lu_object *o)
 {
         LASSERT(lu_device_is_mdt(o->lo_dev));
@@ -1241,16 +1195,26 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         RETURN(rc);
 }
 
+/*
+ * Just call ldlm_lock_decref() if decref, else we only call ptlrpc_save_lock()
+ * to save this lock in req.  when transaction committed, req will be released,
+ * and lock will, too.
+ */
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
                        struct mdt_lock_handle *lh, int decref)
 {
-        struct ptlrpc_request *req = mdt_info_req(info);
+        struct ptlrpc_request *req    = mdt_info_req(info);
+        struct lustre_handle  *handle = &lh->mlh_lh;
+        ldlm_mode_t            mode   = lh->mlh_mode;
         ENTRY;
 
-        if (lustre_handle_is_used(&lh->mlh_lh)) {
-                fid_unlock(req, mdt_object_fid(o),
-                           &lh->mlh_lh, lh->mlh_mode, decref);
-                lh->mlh_lh.cookie = 0;
+        if (lustre_handle_is_used(handle)) {
+        
+                if (decref)
+                        fid_unlock(mdt_object_fid(o), handle, mode);
+                else
+                        ptlrpc_save_lock(req, handle, mode);
+                handle->cookie = 0;
         }
         EXIT;
 }

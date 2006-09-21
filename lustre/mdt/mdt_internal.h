@@ -469,19 +469,5 @@ do {                                                                         \
         }                                                                    \
 } while(0)
 
-/*
- * Build (DLM) resource name from fid.
- */
-static inline struct ldlm_res_id *
-fid_build_res_name(const struct lu_fid *f,
-                   struct ldlm_res_id *name)
-{
-        memset(name, 0, sizeof *name);
-        name->name[0] = fid_seq(f);
-        name->name[1] = fid_oid(f);
-        name->name[2] = fid_ver(f);
-        return name;
-}
-
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

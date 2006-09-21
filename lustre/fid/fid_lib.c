@@ -162,3 +162,43 @@ void range_be_to_cpu(struct lu_range *dst, const struct lu_range *src)
 }
 EXPORT_SYMBOL(range_be_to_cpu);
 #endif
+
+/* issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
+int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
+             struct lustre_handle *lh, ldlm_mode_t mode,
+             ldlm_policy_data_t *policy,
+             struct ldlm_res_id *res_id)
+{
+        int flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
+        int rc;
+
+        LASSERT(ns != NULL);
+        LASSERT(lh != NULL);
+        LASSERT(f != NULL);
+
+        rc = ldlm_cli_enqueue_local(ns, *fid_build_res_name(f, res_id),
+                                    LDLM_IBITS, policy, mode, &flags,
+                                    ldlm_blocking_ast, ldlm_completion_ast,
+                                    NULL, NULL, 0, NULL, lh);
+        return rc == ELDLM_OK ? 0 : -EIO;
+}
+EXPORT_SYMBOL(fid_lock);
+
+void fid_unlock(const struct lu_fid *f,
+                struct lustre_handle *lh, ldlm_mode_t mode)
+{
+        {
+                /* FIXME: this is debug stuff, remove it later. */
+                struct ldlm_lock *lock = ldlm_handle2lock(lh);
+                if (!lock) {
+                        CERROR("Invalid lock handle "LPX64"\n",
+                               lh->cookie);
+                        LBUG();
+                }
+                LASSERT(fid_res_name_eq(f, &lock->l_resource->lr_name));
+                LDLM_LOCK_PUT(lock);
+        }
+        ldlm_lock_decref(lh, mode);
+}
+EXPORT_SYMBOL(fid_unlock);
+
