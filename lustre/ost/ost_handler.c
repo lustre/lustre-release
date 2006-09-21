@@ -1443,7 +1443,7 @@ static int ost_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "log connect\n");
                 rc = ost_llog_handle_connect(req->rq_export, req);
                 req->rq_status = rc;
-                rc = lustre_pack_reply(req, 0, NULL, NULL);
+                rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc)
                         RETURN(rc);
                 RETURN(ptlrpc_reply(req));
