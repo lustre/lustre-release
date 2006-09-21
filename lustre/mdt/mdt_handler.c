@@ -466,7 +466,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 child = parent;
                 CDEBUG(D_INODE, "partial getattr_name child_fid = "DFID
-                       ", ldlm_rep=%p\n", PFID(mdt_object_fid(child)), ldlm_rep);
+                                ", ldlm_rep=%p\n",
+                                PFID(mdt_object_fid(child)), ldlm_rep);
 
                 if (is_resent) {
                         /* Do not take lock for resent case. */
@@ -483,8 +484,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 } else {
                         mdt_lock_handle_init(lhc);
                         lhc->mlh_mode = LCK_CR;
-                        if (mdt_is_remote_object(child))
-                                child_bits &= ~MDS_INODELOCK_LOOKUP;
+                        /* object's name is on another MDS,
+                         * no lookup lock is needed here but update is */
+                        child_bits &= ~MDS_INODELOCK_LOOKUP;
+                        //child_bits |= MDS_INODELOCK_UPDATE;
                         rc = mdt_object_lock(info, child, lhc, child_bits);
                 }
                 if (rc == 0) {
@@ -515,6 +518,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
          *step 3: find the child object by fid & lock it.
          *        regardless if it is local or remote.
          */
+        child = mdt_object_find(info->mti_ctxt, info->mti_mdt, child_fid);
+        if (IS_ERR(child))
+                GOTO(out_parent, rc = PTR_ERR(child));
         if (is_resent) {
                 /* Do not take lock for resent case. */
                 lock = ldlm_handle2lock(&lhc->mlh_lh);
@@ -523,18 +529,19 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                                lhc->mlh_lh.cookie);
                         LBUG();
                 }
-                LASSERT(fid_res_name_eq(mdt_object_fid(child),
+                LASSERT(fid_res_name_eq(child_fid,
                                         &lock->l_resource->lr_name));
                 LDLM_LOCK_PUT(lock);
-                child = mdt_object_find(info->mti_ctxt, info->mti_mdt,
-                                        child_fid);
         } else {
                 mdt_lock_handle_init(lhc);
                 lhc->mlh_mode = LCK_CR;
-                child = mdt_object_find_lock(info, child_fid, lhc, child_bits);
+                if (lu_object_exists(&child->mot_obj.mo_lu) < 0) {
+                        /* we should take LOOKUP lock for cross-ref object */
+                        child_bits &= ~MDS_INODELOCK_UPDATE;
+                        child_bits |= MDS_INODELOCK_LOOKUP;
+                }
+                mdt_object_lock(info, child, lhc, child_bits);
         }
-        if (IS_ERR(child))
-                GOTO(out_parent, rc = PTR_ERR(child));
 
         /* finally, we can get attr for child. */
         rc = mdt_getattr_internal(info, child);
@@ -572,7 +579,6 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         }
         mdt_object_put(info->mti_ctxt, child);
-
         EXIT;
 out_parent:
         mdt_object_unlock(info, parent, lhp, 1);
@@ -925,16 +931,6 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
          * and will get oops.
          */
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK)) {
-                struct ldlm_reply       *rep;
-
-                /* 
-                 * Put DISP_LOOKUP_EXECD into response just for case MDC gets
-                 * crazy. It checks this sometimes and gets an assert.
-                 */
-                rep = req_capsule_server_get(pill, &RMF_DLM_REP);
-                if (rep == NULL)
-                        RETURN(-EFAULT);
-                mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
                 RETURN(-EFAULT);
         }
         
@@ -1187,7 +1183,12 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
 
         LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
         LASSERT(lh->mlh_mode != LCK_MINMODE);
-
+#if 0
+        if (lu_object_exists(&o->mot_obj.mo_lu) < 0) {
+                LASSERT(!(ibits & MDS_INODELOCK_UPDATE));
+                LASSERT(ibits & MDS_INODELOCK_LOOKUP);
+        }
+#endif
         policy->l_inodebits.bits = ibits;
 
         rc = fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode,
@@ -1229,16 +1230,6 @@ struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
         o = mdt_object_find(info->mti_ctxt, info->mti_mdt, f);
         if (!IS_ERR(o)) {
                 int rc;
-
-                if (mdt_is_remote_object(o)) { 
-                        /* FIXME: For remote object we can only give 
-                         * LOOKUP_lock, maybe we should not put it 
-                         * here, but only we know it is remote, after 
-                         * we got the object currently, maybe we need
-                         * a way to know remote by fid on MDS. */
-                        ibits &= ~MDS_INODELOCK_UPDATE;
-                        ibits |= MDS_INODELOCK_LOOKUP;
-                }
 
                 rc = mdt_object_lock(info, o, lh, ibits);
                 if (rc != 0) {
@@ -2038,12 +2029,14 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                 RETURN(-EPROTO);
         }
 
-        mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
         rc = mdt_reint_internal(info, opc);
 
         rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         if (rep == NULL)
                 RETURN(-EFAULT);
+        /* mdc expect this in any case */
+        if (rc != 0)
+                mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
 
         rep->lock_policy_res2 = rc;
 
