@@ -1469,7 +1469,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         DEBUG_REQ(D_INODE, req, "%s", h->mh_name);
 
         /*
-         * Not not use *_FAIL_CHECK_ONCE() macros, because they will stop
+         * Do not use *_FAIL_CHECK_ONCE() macros, because they will stop
          * correct handling of failed req later in ldlm due to doing
          * obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED without actually
          * correct actions like it is done in target_send_reply_msg().
