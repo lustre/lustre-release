@@ -136,7 +136,7 @@ int mdt_get_disposition(struct ldlm_reply *rep, int flag)
 }
 
 void mdt_clear_disposition(struct mdt_thread_info *info,
-                                struct ldlm_reply *rep, int flag)
+                           struct ldlm_reply *rep, int flag)
 {
         if (info)
                 info->mti_opdata &= ~flag;
@@ -145,7 +145,7 @@ void mdt_clear_disposition(struct mdt_thread_info *info,
 }
 
 void mdt_set_disposition(struct mdt_thread_info *info,
-                                struct ldlm_reply *rep, int flag)
+                         struct ldlm_reply *rep, int flag)
 {
         if (info)
                 info->mti_opdata |= flag;
@@ -900,15 +900,11 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
         int                      rc;
         ENTRY;
 
-/*        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_NET))
-                RETURN(0);*/
-        
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK))
-                RETURN(-EFAULT);
-
         rc = mdt_reint_unpack(info, op);
-        if (rc != 0)
+        if (rc != 0) {
+                CERROR("Can't unpack reint, rc %d\n", rc);
                 RETURN(rc);
+        }
 
         /* pack reply */
         if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
@@ -918,9 +914,30 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
                 req_capsule_set_size(pill, &RMF_LOGCOOKIES, RCL_SERVER,
                                      mdt->mdt_max_cookiesize);
         rc = req_capsule_pack(pill);
-        if (rc != 0)
+        if (rc != 0) {
+                CERROR("Can't pack response, rc %d\n", rc);
                 RETURN(rc);
+        }
 
+        /*
+         * Check this after packing response, because after we fail here without
+         * allocating response, caller anyway may want to get ldlm_reply from it
+         * and will get oops.
+         */
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK)) {
+                struct ldlm_reply       *rep;
+
+                /* 
+                 * Put DISP_LOOKUP_EXECD into response just for case MDC gets
+                 * crazy. It checks this sometimes and gets an assert.
+                 */
+                rep = req_capsule_server_get(pill, &RMF_DLM_REP);
+                if (rep == NULL)
+                        RETURN(-EFAULT);
+                mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
+                RETURN(-EFAULT);
+        }
+        
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
                 struct mdt_client_data *mcd;
 
@@ -930,7 +947,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
                         RETURN(lustre_msg_get_status(req->rq_repmsg));
                 }
                 DEBUG_REQ(D_HA, req, "no reply for RESENT (xid "LPD64")",
-                                     mcd->mcd_last_xid);
+                          mcd->mcd_last_xid);
         }
         rc = mdt_reint_rec(info);
 
@@ -1451,8 +1468,17 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         DEBUG_REQ(D_INODE, req, "%s", h->mh_name);
 
-        if (h->mh_fail_id != 0)
-                MDT_FAIL_RETURN(h->mh_fail_id, 0);
+        /*
+         * Not not use *_FAIL_CHECK_ONCE() macros, because they will stop
+         * correct handling of failed req later in ldlm due to doing
+         * obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED without actually
+         * correct actions like it is done in target_send_reply_msg().
+         */
+        if (h->mh_fail_id != 0) {
+                info->mti_fail_id = h->mh_fail_id;
+                if (OBD_FAIL_CHECK(h->mh_fail_id))
+                        RETURN(0);
+        }
 
         rc = 0;
         flags = h->mh_flags;
@@ -1472,11 +1498,11 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
                 LASSERT(h->mh_fmt != NULL);
 
-                dlm_req = req_capsule_client_get(&info->mti_pill,&RMF_DLM_REQ);
+                dlm_req = req_capsule_client_get(&info->mti_pill, &RMF_DLM_REQ);
                 if (dlm_req != NULL) {
                         if (info->mti_mdt->mdt_opts.mo_compat_resname)
                                 rc = mdt_lock_resname_compat(info->mti_mdt,
-                                                                 dlm_req);
+                                                             dlm_req);
                         info->mti_dlm_req = dlm_req;
                 } else {
                         CERROR("Can't unpack dlm request\n");
@@ -2045,6 +2071,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                 RETURN(-EPROTO);
         }
 
+        mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
         rc = mdt_reint_internal(info, opc);
 
         rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
@@ -3681,7 +3708,7 @@ static void __exit mdt_mod_exit(void)
         DEF_HNDL(SEQ, QUERY, _NET, flags, name, fn, &RQF_SEQ_ ## name)
 
 #define DEF_FLD_HNDL_F(flags, name, fn)                                 \
-        DEF_HNDL(FLD, QUERY, _NET, flags, name, fn, &RQF_SEQ_ ## name)
+        DEF_HNDL(FLD, QUERY, _NET, flags, name, fn, &RQF_FLD_ ## name)
 /*
  * Request with a format we do not yet know
  */
