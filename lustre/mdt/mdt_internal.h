@@ -355,6 +355,11 @@ int mdt_object_lock(struct mdt_thread_info *,
                     struct mdt_lock_handle *,
                     __u64);
 
+int mdt_object_cr_lock(struct mdt_thread_info *,
+                       struct mdt_object *,
+                       struct mdt_lock_handle *,
+                       __u64);
+
 void mdt_object_unlock(struct mdt_thread_info *,
                        struct mdt_object *,
                        struct mdt_lock_handle *,
