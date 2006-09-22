@@ -24,9 +24,11 @@ obdclass-all-objs += class_obd.o
 obdclass-all-objs += debug.o genops.o uuid.o llog_ioctl.o
 obdclass-all-objs += lprocfs_status.o lustre_handles.o lustre_peer.o
 obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o prng.o mea.o
-obdclass-all-objs += lu_object.o dt_object.o
+obdclass-all-objs += lu_object.o dt_object.o hash.o
 
 obdclass-objs := $(obdclass-linux-objs) $(obdclass-all-objs)
+
+EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LUSTRE@ -I@LUSTRE@/ldiskfs
 
 ifeq ($(PATCHLEVEL),6)
 llog_test-objs := llog-test.o

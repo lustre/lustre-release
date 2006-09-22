@@ -34,7 +34,7 @@ obdclass_SOURCES := \
         lustre_handles.c lustre_peer.c obd_config.c     	\
         obdo.c debug.c llog_ioctl.c uuid.c prng.c               \
         llog_swab.c llog_obd.c llog.c llog_cat.c llog_lvfs.c    \
-        mea.c lu_object.c dt_object.c
+        mea.c lu_object.c dt_object.c hash.c
 
 obdclass_CFLAGS := $(EXTRA_KCFLAGS)
 obdclass_LDFLAGS := $(EXTRA_KLDFLAGS)

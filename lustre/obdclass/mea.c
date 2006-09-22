@@ -35,6 +35,11 @@
 #include <lprocfs_status.h>
 #include <lustre/lustre_idl.h>
 
+#ifdef __KERNEL__
+#include <linux/jbd.h>
+/* LDISKFS_SB() */
+#include <linux/ldiskfs_fs.h>
+#endif
 static int mea_last_char_hash(int count, char *name, int namelen)
 {
         unsigned int c;
@@ -56,19 +61,32 @@ static int mea_all_chars_hash(int count, char *name, int namelen)
         return c;
 }
 
+#ifdef __KERNEL__
 /* This hash calculate method must be same as the lvar hash method */
 static int mea_hash_segment(int count, char *name, int namelen)
 {
-        __u32 result = 0;
-        __u32 hash_segment = MAX_HASH_SIZE / count;
+        struct ldiskfs_dx_hash_info hinfo;
+        int result;
+        __u64 hash;
+        __u32 hash_segment = MAX_HASH_SIZE;
         
-        strncpy((void *)&result, name, min(namelen, (int)sizeof result));
-
-        result = (result << 1) & 0x7fffffff;
-
-        return result / hash_segment;
+        hinfo.hash_version = LDISKFS_DX_HASH_TEA;
+        hinfo.seed = 0;
+        result = ldiskfsfs_dirhash(name, namelen, &hinfo);
+        LASSERT(result == 0);
+        hash = (hinfo.hash << 1) & 0x7fffffff;
+        do_div(hash_segment, count);
+        do_div(hash, hash_segment);
+        LASSERT(hash <= count);
+        return hash; 
 }
-
+#else
+static int mea_hash_segment(int count, char *name, int namelen)
+{
+#warning "fix for liblustre"
+        return 0;
+}
+#endif
 int raw_name2idx(int hashtype, int count, const char *name, int namelen)
 {
         unsigned int c = 0;
