@@ -870,7 +870,7 @@ static int mdd_attr_set(const struct lu_context *ctxt,
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
         struct lov_mds_md *lmm = NULL;
-        int  rc = 0, lmm_size = 0, max_size;
+        int  rc = 0, lmm_size = 0, max_size = 0;
         struct lu_attr *la_copy = &mdd_ctx_info(ctxt)->mti_la_for_fix;
         ENTRY;
 

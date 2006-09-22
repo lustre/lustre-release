@@ -1946,7 +1946,7 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
         LASSERT(le32_to_cpu(next_dp->ldp_hash_start) >= seg_end); 
         dp->ldp_hash_end = next_dp->ldp_hash_start;
         kunmap(page);
-        CDEBUG(D_WARNING,"reset h_end %x for split obj"DFID"o_count %d index %d\n",
+        CDEBUG(D_INFO,"reset h_end %x for split obj"DFID"o_count %d index %d\n",
                le32_to_cpu(dp->ldp_hash_end), PFID(&rid), obj->lo_objcount,
                index); 
 cleanup:

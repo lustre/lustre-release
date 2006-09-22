@@ -36,7 +36,7 @@
 #include <obd_class.h>
 #include <lustre_fid.h>
 #include <lustre_mds.h>
-#include <lustre_idl.h>
+#include <lustre/lustre_idl.h>
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
@@ -45,7 +45,7 @@
 #define CMM_NO_SPLITTABLE       2
 
 enum {
-        SPLIT_SIZE =  12*1024
+        SPLIT_SIZE =  64*1024
 };
 
 static inline struct lu_fid* cmm2_fid(struct cmm_object *obj)
@@ -251,7 +251,7 @@ static int cmm_remove_entries(const struct lu_context *ctx,
 {
         struct lu_dirpage *dp;
         struct lu_dirent  *ent;
-        int rc = 0, i;
+        int rc = 0;
         ENTRY;
 
         kmap(rdpg->rp_pages[0]);
@@ -288,7 +288,7 @@ static int cmm_remove_entries(const struct lu_context *ctx,
         }
         *len = CFS_PAGE_SIZE;
 unmap:
-        kunmap(rdpg->rp_pages[i]);
+        kunmap(rdpg->rp_pages[0]);
         RETURN(rc);
 }
 
