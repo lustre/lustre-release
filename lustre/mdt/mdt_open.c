@@ -714,10 +714,12 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                         LASSERT(lhc != NULL);
                         
                         if (lustre_handle_is_used(&lhc->mlh_lh)) {
+                                struct ldlm_lock *lock;
+                                
                                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
                                         MSG_RESENT);
                                 
-                                struct ldlm_lock *lock = ldlm_handle2lock(&lhc->mlh_lh);
+                                lock = ldlm_handle2lock(&lhc->mlh_lh);
                                 if (!lock) {
                                         CERROR("Invalid lock handle "LPX64"\n",
                                                lhc->mlh_lh.cookie);

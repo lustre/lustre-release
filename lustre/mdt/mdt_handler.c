@@ -939,7 +939,8 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 struct mdt_client_data *mcd;
 
                 mcd = req->rq_export->exp_mdt_data.med_mcd;
-                if (mcd->mcd_last_xid == req->rq_xid) {
+                if (mcd->mcd_last_xid == req->rq_xid ||
+                    mcd->mcd_last_close_xid == req->rq_xid) {
                         mdt_reconstruct(info, lhc);
                         RETURN(lustre_msg_get_status(req->rq_repmsg));
                 }
