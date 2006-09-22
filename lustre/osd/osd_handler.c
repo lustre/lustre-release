@@ -184,6 +184,8 @@ static int   osd_read_locked   (const struct lu_context *ctx,
                                 struct osd_object *o);
 static int   osd_write_locked  (const struct lu_context *ctx,
                                 struct osd_object *o);
+static void  osd_trans_stop    (const struct lu_context *ctx,
+                                struct thandle *th);
 
 static struct osd_object  *osd_obj          (const struct lu_object *o);
 static struct osd_device  *osd_dev          (const struct lu_device *d);
@@ -212,6 +214,9 @@ static struct dt_rec      *osd_it_rec       (const struct lu_context *ctx,
 static struct timespec    *osd_inode_time   (const struct lu_context *ctx,
                                              struct inode *inode,
                                              __u64 seconds);
+static struct thandle     *osd_trans_start  (const struct lu_context *ctx,
+                                             struct dt_device *d,
+                                             struct txn_param *p);
 static journal_t          *osd_journal      (const struct osd_device *dev);
 
 static struct lu_device_type_operations osd_device_type_ops;
@@ -376,22 +381,73 @@ static void osd_index_fini(struct osd_object *o)
         }
 }
 
-static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
-{
-        struct osd_object *obj = osd_obj(l);
-
-        LASSERT(osd_invariant(obj));
-
-        osd_index_fini(obj);
-        if (obj->oo_inode != NULL) {
-                iput(obj->oo_inode);
-                obj->oo_inode = NULL;
-        }
-}
-
 static int osd_inode_unlinked(const struct inode *inode)
 {
         return inode->i_nlink == !!S_ISDIR(inode->i_mode);
+}
+
+enum {
+        OSD_TXN_OI_DELETE_CREDITS = 20
+};
+
+static int osd_inode_remove(const struct lu_context *ctx,
+                            struct osd_object *obj)
+{
+        struct osd_device      *osd = osd_obj2dev(obj);
+        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct txn_param       *prm = &oti->oti_txn;
+        struct thandle         *th;
+        int result;
+
+        prm->tp_credits = OSD_TXN_OI_DELETE_CREDITS;
+        th = osd_trans_start(ctx, &osd->od_dt_dev, prm);
+        if (!IS_ERR(th)) {
+                osd_oi_write_lock(&osd->od_oi);
+                result = osd_oi_delete(oti, &osd->od_oi,
+                                       lu_object_fid(&obj->oo_dt.do_lu), th);
+                iput(obj->oo_inode);
+                osd_oi_write_unlock(&osd->od_oi);
+                osd_trans_stop(ctx, th);
+        } else
+                result = PTR_ERR(th);
+        return result;
+}
+
+/*
+ * Called just before object is freed. Releases all resources except for
+ * object itself (that is released by osd_object_free()).
+ */
+static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
+{
+        struct osd_object *obj   = osd_obj(l);
+        struct inode      *inode = obj->oo_inode;
+
+        LASSERT(osd_invariant(obj));
+
+        /*
+         * If object is unlinked remove fid->ino mapping from object index.
+         *
+         * File body will be deleted by iput().
+         *
+         * NOTE: currently objects are created in ->od_obj_area directory
+         * ("*OBJ-TEMP*"), but name in that directory is _not_ counted in
+         * inode ->i_nlink.
+         */
+
+        osd_index_fini(obj);
+        if (inode != NULL) {
+                int result;
+
+                if (osd_inode_unlinked(inode)) {
+                        result = osd_inode_remove(ctx, obj);
+                        if (result != 0)
+                                LU_OBJECT_DEBUG(D_ERROR, ctx, l,
+                                                "Failed to cleanup: %d\n",
+                                                result);
+                } else
+                        iput(inode);
+                obj->oo_inode = NULL;
+        }
 }
 
 static void osd_object_release(const struct lu_context *ctxt,
