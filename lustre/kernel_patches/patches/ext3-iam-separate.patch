@@ -1,7 +1,7 @@
 Index: linux-stage/fs/ext3/Makefile
 ===================================================================
---- linux-stage.orig/fs/ext3/Makefile	2006-09-22 14:24:17.000000000 +0800
-+++ linux-stage/fs/ext3/Makefile	2006-09-22 15:09:18.000000000 +0800
+--- linux-stage.orig/fs/ext3/Makefile	2006-09-22 15:40:02.000000000 +0800
++++ linux-stage/fs/ext3/Makefile	2006-09-22 15:40:05.000000000 +0800
 @@ -6,7 +6,7 @@
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,7 +14,7 @@ Index: linux-stage/fs/ext3/Makefile
 Index: linux-stage/fs/ext3/iam.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/iam.c	2006-05-31 09:15:07.000000000 +0800
-+++ linux-stage/fs/ext3/iam.c	2006-09-22 15:09:18.000000000 +0800
++++ linux-stage/fs/ext3/iam.c	2006-09-22 15:40:05.000000000 +0800
 @@ -0,0 +1,1325 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -1344,7 +1344,7 @@ Index: linux-stage/fs/ext3/iam.c
 Index: linux-stage/fs/ext3/iam_htree.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/iam_htree.c	2006-05-31 09:15:07.000000000 +0800
-+++ linux-stage/fs/ext3/iam_htree.c	2006-09-22 15:09:18.000000000 +0800
++++ linux-stage/fs/ext3/iam_htree.c	2006-09-22 15:40:05.000000000 +0800
 @@ -0,0 +1,665 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2014,7 +2014,7 @@ Index: linux-stage/fs/ext3/iam_htree.c
 Index: linux-stage/fs/ext3/iam_lfix.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/iam_lfix.c	2006-05-31 09:15:07.000000000 +0800
-+++ linux-stage/fs/ext3/iam_lfix.c	2006-09-22 15:09:18.000000000 +0800
++++ linux-stage/fs/ext3/iam_lfix.c	2006-09-22 15:40:05.000000000 +0800
 @@ -0,0 +1,670 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2689,8 +2689,8 @@ Index: linux-stage/fs/ext3/iam_lfix.c
 Index: linux-stage/fs/ext3/iam_lvar.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/iam_lvar.c	2006-05-31 09:15:07.000000000 +0800
-+++ linux-stage/fs/ext3/iam_lvar.c	2006-09-22 15:17:54.000000000 +0800
-@@ -0,0 +1,903 @@
++++ linux-stage/fs/ext3/iam_lvar.c	2006-09-22 22:53:31.000000000 +0800
+@@ -0,0 +1,896 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2865,6 +2865,8 @@ Index: linux-stage/fs/ext3/iam_lvar.c
 +        struct super_block *sb = bag->ic_object->i_sb;
 +        int result;
 +
++        if (namelen == 0)
++                return 0;
 +        hinfo.hash_version = LDISKFS_SB(sb)->s_def_hash_version ;
 +        hinfo.seed = 0;
 +        result = ldiskfsfs_dirhash(name, namelen, &hinfo);
@@ -3025,10 +3027,6 @@ Index: linux-stage/fs/ext3/iam_lvar.c
 +
 +        name = kchar(k);
 +        namelen = strlen(name);
-+        if (namelen == 0)
-+                hash = 0;
-+        else
-+                hash = get_hash(iam_leaf_container(leaf), name, namelen);
 +        hash = get_hash(iam_leaf_container(leaf), name, namelen);
 +        found = NULL;
 +        found_equal = 0;
@@ -3100,15 +3098,10 @@ Index: linux-stage/fs/ext3/iam_lvar.c
 +{
 +        lvar_hash_t hash;
 +        const char *name;
-+        int namelen;
 +        
 +        name = kchar(k);
 +       
-+        namelen = strlen(name);
-+        if (namelen == 0)
-+                hash = 0;
-+        else
-+                hash = get_hash(iam_leaf_container(l), name, strlen(name));
++        hash = get_hash(iam_leaf_container(l), name, strlen(name));
 +        return e_cmp(l, n_cur(l), hash);
 +}
 +
@@ -3596,8 +3589,8 @@ Index: linux-stage/fs/ext3/iam_lvar.c
 +
 Index: linux-stage/fs/ext3/namei.c
 ===================================================================
---- linux-stage.orig/fs/ext3/namei.c	2006-09-22 14:24:34.000000000 +0800
-+++ linux-stage/fs/ext3/namei.c	2006-09-22 15:09:18.000000000 +0800
+--- linux-stage.orig/fs/ext3/namei.c	2006-09-22 15:40:04.000000000 +0800
++++ linux-stage/fs/ext3/namei.c	2006-09-22 15:40:05.000000000 +0800
 @@ -24,81 +24,6 @@
   * 	Theodore Ts'o, 2002
   */
@@ -5596,8 +5589,8 @@ Index: linux-stage/fs/ext3/namei.c
  
 Index: linux-stage/include/linux/lustre_iam.h
 ===================================================================
---- linux-stage.orig/include/linux/lustre_iam.h	2006-09-22 14:24:34.000000000 +0800
-+++ linux-stage/include/linux/lustre_iam.h	2006-09-22 15:09:18.000000000 +0800
+--- linux-stage.orig/include/linux/lustre_iam.h	2006-09-22 15:40:04.000000000 +0800
++++ linux-stage/include/linux/lustre_iam.h	2006-09-22 15:40:05.000000000 +0800
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
