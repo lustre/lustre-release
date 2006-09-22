@@ -362,9 +362,12 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                  GOTO(out_unlock_parent, rc);
 
         /* we will lock the child regardless it is local or remote. No harm. */
-        mc = mdt_object_find_lock(info, child_fid, child_lh, MDS_INODELOCK_FULL);
+        mc = mdt_object_find(info->mti_ctxt, info->mti_mdt, child_fid);
         if (IS_ERR(mc))
                 GOTO(out_unlock_parent, rc = PTR_ERR(mc));
+        rc = mdt_object_cr_lock(info, mc, lhc, MDS_INODELOCK_FULL);
+        if (rc != 0)
+                GOTO(out_put_child, rc);
 
         mdt_fail_write(info->mti_ctxt, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_UNLINK_WRITE);
@@ -383,7 +386,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         GOTO(out_unlock_child, rc);
 out_unlock_child:
-        mdt_object_unlock_put(info, mc, child_lh, rc);
+        mdt_object_unlock(info, mc, lhc, rc);
+out_put_child:
+        mdt_object_put(info->mti_ctxt, mc);
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, parent_lh, rc);
 out:

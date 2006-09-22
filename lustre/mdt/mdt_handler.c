@@ -489,7 +489,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                          * needed here but update is.
                          */
                         child_bits &= ~MDS_INODELOCK_LOOKUP;
-                        //child_bits |= MDS_INODELOCK_UPDATE;
+                        child_bits |= MDS_INODELOCK_UPDATE;
                         rc = mdt_object_lock(info, child, lhc, child_bits);
                 }
                 if (rc == 0) {
@@ -537,12 +537,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         } else {
                 mdt_lock_handle_init(lhc);
                 lhc->mlh_mode = LCK_CR;
-                if (lu_object_exists(&child->mot_obj.mo_lu) < 0) {
-                        /* we should take LOOKUP lock for cross-ref object */
-                        child_bits &= ~MDS_INODELOCK_UPDATE;
-                        child_bits |= MDS_INODELOCK_LOOKUP;
-                }
-                mdt_object_lock(info, child, lhc, child_bits);
+                rc = mdt_object_cr_lock(info, child, lhc, child_bits);
+                if (rc != 0)
+                        GOTO(out_child, rc);
         }
 
         /* finally, we can get attr for child. */
@@ -580,8 +577,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 
 
         }
-        mdt_object_put(info->mti_ctxt, child);
         EXIT;
+out_child:
+        mdt_object_put(info->mti_ctxt, child);
 out_parent:
         mdt_object_unlock(info, parent, lhp, 1);
 out:
@@ -1190,17 +1188,27 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
 
         LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
         LASSERT(lh->mlh_mode != LCK_MINMODE);
-#if 0
         if (lu_object_exists(&o->mot_obj.mo_lu) < 0) {
                 LASSERT(!(ibits & MDS_INODELOCK_UPDATE));
                 LASSERT(ibits & MDS_INODELOCK_LOOKUP);
         }
-#endif
         policy->l_inodebits.bits = ibits;
 
         rc = fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode,
                       policy, res_id);
         RETURN(rc);
+}
+
+/* lock with cross-ref fixes */
+int mdt_object_cr_lock(struct mdt_thread_info *info, struct mdt_object *o,
+                       struct mdt_lock_handle *lh, __u64 ibits)
+{
+        if (lu_object_exists(&o->mot_obj.mo_lu) < 0) {
+                /* cross-ref object fix */
+                ibits &= ~MDS_INODELOCK_UPDATE;
+                ibits |= MDS_INODELOCK_LOOKUP;
+        }
+        return mdt_object_lock(info, o, lh, ibits);
 }
 
 /*
