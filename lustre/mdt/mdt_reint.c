@@ -354,8 +354,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         }
 
         /* step 2: find & lock the child */
-        child_lh = &info->mti_lh[MDT_LH_CHILD];
-        child_lh->mlh_mode = LCK_EX;
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(mp),
                         rr->rr_name, child_fid);
         if (rc != 0)
@@ -365,7 +363,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         mc = mdt_object_find(info->mti_ctxt, info->mti_mdt, child_fid);
         if (IS_ERR(mc))
                 GOTO(out_unlock_parent, rc = PTR_ERR(mc));
-        rc = mdt_object_cr_lock(info, mc, lhc, MDS_INODELOCK_FULL);
+        child_lh = &info->mti_lh[MDT_LH_CHILD];
+        child_lh->mlh_mode = LCK_EX;
+        rc = mdt_object_cr_lock(info, mc, child_lh, MDS_INODELOCK_FULL);
         if (rc != 0)
                 GOTO(out_put_child, rc);
 
@@ -386,7 +386,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         GOTO(out_unlock_child, rc);
 out_unlock_child:
-        mdt_object_unlock(info, mc, lhc, rc);
+        mdt_object_unlock(info, mc, child_lh, rc);
 out_put_child:
         mdt_object_put(info->mti_ctxt, mc);
 out_unlock_parent:
