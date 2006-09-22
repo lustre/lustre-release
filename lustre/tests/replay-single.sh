@@ -45,7 +45,6 @@ fi
 
 mkdir -p $DIR
 
-
 test_0() {
     replay_barrier mds
     fail mds
@@ -61,6 +60,53 @@ test_0b() {
 }
 run_test 0b "ensure object created after recover exists. (3284)"
 
+seq_set_width()
+{
+    local fn=`ls /proc/fs/lustre/seq-cli-srv*/seq_width` 
+    echo $1 > $fn
+}
+
+seq_get_width()
+{
+    local fn=`ls /proc/fs/lustre/seq-cli-srv*/seq_width` 
+    cat $fn
+}
+
+test_0c() {
+    replay_barrier mds
+
+    local seq_width
+    
+    # make seq manager switch to next sequence each 
+    # time as new fid is needed.
+    seq_width=`seq_get_width`
+    seq_set_width 1
+    
+    # make sure that fld has created atleast one new 
+    # entry on server
+    touch $DIR/$tfile || return 1
+    seq_set_width $seq_width
+    
+    # fail mds and start recovery, replay RPCs, etc.
+    fail mds
+    
+    # wait for recovery finish
+    sleep 20
+    df $MOUNT
+    
+    # flush fld cache and dentry cache to make it lookup 
+    # created entry instead of revalidating existent one
+    umount $MOUNT
+    zconf_mount `hostname` $MOUNT
+    
+    # issue lookup which should call fld lookup which 
+    # should fail if client did not replay fld create 
+    # correctly and server has no fld entry
+    touch $DIR/$tfile || return 2
+    rm $DIR/$tfile || return 2
+}
+run_test 0c "fld create"
+
 test_1() {
     replay_barrier mds
     mcreate $DIR/$tfile
@@ -69,50 +115,6 @@ test_1() {
     rm $DIR/$tfile
 }
 run_test 1 "simple create"
-
-test_1a() {
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
-
-    rm -fr $DIR/$tfile
-    local old_last_id=`cat $LPROC/obdfilter/*/last_id`
-    touch -o $DIR/$tfile 1
-    sync
-    local new_last_id=`cat $LPROC/obdfilter/*/last_id`
-    
-    test "$old_last_id" = "$new_last_id" || {
-	echo "OST object create is caused by MDS"
-	return 1
-    }
-    
-    old_last_id=`cat $LPROC/obdfilter/*/last_id`
-    echo "data" > $DIR/$tfile
-    sync
-    new_last_id=`cat $LPROC/obdfilter/*/last_id`
-    test "$old_last_id" = "$new_last_id "&& {
-	echo "CROW does not work on write"
-	return 1
-    }
-    
-    rm -fr $DIR/$tfile
-
-#define OBD_FAIL_OST_CROW_EIO | OBD_FAIL_ONCE
-    do_facet ost1 "sysctl -w lustre.fail_loc=0x80000801"
-
-    rm -fr $DIR/1a1
-    old_last_id=`cat $LPROC/obdfilter/*/last_id`
-    echo "data" > $DIR/1a1
-    sync
-    new_last_id=`cat $LPROC/obdfilter/*/last_id`
-    test "$old_last_id" = "$new_last_id" || {
-	echo "CROW does work with fail_loc=0x80000801"
-	return 1
-    }
-    
-    rm -fr $DIR/1a1
-    
-    do_facet ost1 "sysctl -w lustre.fail_loc=0"
-}
-#CROW run_test 1a "CROW object create (check OST last_id)"
 
 test_2a() {
     replay_barrier mds

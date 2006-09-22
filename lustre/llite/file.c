@@ -377,8 +377,8 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         RETURN(rc);
 }
 
-static void ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
-                        struct lookup_intent *it, struct obd_client_handle *och)
+static int ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
+                       struct lookup_intent *it, struct obd_client_handle *och)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
         struct mdt_body *body;
@@ -394,7 +394,7 @@ static void ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
         och->och_fid = &lli->lli_fid;
         lli->lli_ioepoch = body->ioepoch;
 
-        md_set_open_replay_data(md_exp, och, req);
+        return md_set_open_replay_data(md_exp, och, req);
 }
 
 int ll_local_open(struct file *file, struct lookup_intent *it,
@@ -411,8 +411,11 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
         if (och) {
                 struct ptlrpc_request *req = it->d.lustre.it_data;
                 struct mdt_body *body;
+                int rc;
 
-                ll_och_fill(ll_i2sbi(inode)->ll_md_exp, lli, it, och);
+                rc = ll_och_fill(ll_i2sbi(inode)->ll_md_exp, lli, it, och);
+                if (rc)
+                        RETURN(rc);
                 
                 body = lustre_msg_buf(req->rq_repmsg,
                                       DLM_REPLY_REC_OFF, sizeof(*body));
@@ -529,8 +532,11 @@ int ll_file_open(struct inode *inode, struct file *file)
                 (*och_usecount)++;
 
                 rc = ll_local_open(file, it, fd, NULL);
-
-                LASSERTF(rc == 0, "rc = %d\n", rc);
+                if (rc) {
+                        up(&lli->lli_och_sem);
+                        ll_file_data_put(fd);
+                        RETURN(rc);
+                }
         } else {
                 LASSERT(*och_usecount == 0);
                 OBD_ALLOC(*och_p, sizeof (struct obd_client_handle));
@@ -570,7 +576,11 @@ int ll_file_open(struct inode *inode, struct file *file)
 
                 lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
                 rc = ll_local_open(file, it, fd, *och_p);
-                LASSERTF(rc == 0, "rc = %d\n", rc);
+                if (rc) {
+                        up(&lli->lli_och_sem);
+                        ll_file_data_put(fd);
+                        GOTO(out_och_free, rc);
+                }
         }
         up(&lli->lli_och_sem);
 

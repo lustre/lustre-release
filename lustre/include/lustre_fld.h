@@ -188,6 +188,8 @@ struct fld_cache_info *fld_cache_init(int hash_size,
 
 void fld_cache_fini(struct fld_cache_info *cache);
 
+void fld_cache_flush(struct fld_cache_info *cache);
+
 int fld_cache_insert(struct fld_cache_info *cache,
                      seqno_t seq, mdsno_t mds);
 

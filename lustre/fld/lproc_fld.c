@@ -126,11 +126,29 @@ fld_proc_write_hash(struct file *file, const char *buffer,
         RETURN(count);
 }
 
+static int
+fld_proc_write_cache_flush(struct file *file, const char *buffer,
+                           unsigned long count, void *data)
+{
+        struct lu_client_fld *fld = (struct lu_client_fld *)data;
+	ENTRY;
+
+        LASSERT(fld != NULL);
+
+        fld_cache_flush(fld->lcf_cache);
+        
+        CDEBUG(D_WARNING, "%s: lookup cache is flushed\n",
+               fld->lcf_name);
+	
+        RETURN(count);
+}
+
 struct lprocfs_vars fld_server_proc_list[] = {
 	{ NULL }};
 
 struct lprocfs_vars fld_client_proc_list[] = {
-	{ "targets", fld_proc_read_targets, NULL, NULL },
-	{ "hash",    fld_proc_read_hash, fld_proc_write_hash, NULL },
+	{ "targets",     fld_proc_read_targets, NULL, NULL },
+	{ "hash",        fld_proc_read_hash, fld_proc_write_hash, NULL },
+	{ "cache_flush", NULL, fld_proc_write_cache_flush, NULL },
 	{ NULL }};
 #endif

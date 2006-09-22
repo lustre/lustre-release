@@ -354,13 +354,13 @@ seq_proc_write_seq_width(struct file *file, const char *buffer,
         if (rc)
                 RETURN(rc);
 
-        if (val <= LUSTRE_SEQ_MAX_WIDTH) {
+        if (val <= LUSTRE_SEQ_MAX_WIDTH && val > 0) {
                 seq->lcs_width = val;
                 
                 if (rc == 0) {
                         CDEBUG(D_WARNING, "%s: sequence width "
-                               "has changed to "LPU64"\n", seq->lcs_name,
-                               seq->lcs_width);
+                               "has changed to "LPU64"\n",
+                               seq->lcs_name, seq->lcs_width);
                 }
         }
 	
@@ -427,9 +427,9 @@ struct lprocfs_vars seq_server_proc_list[] = {
 	{ NULL }};
 
 struct lprocfs_vars seq_client_proc_list[] = {
-	{ "range",      seq_proc_read_range, seq_proc_write_range, NULL },
-	{ "server",     seq_proc_read_server, NULL, NULL },
-	{ "next_fid" ,  seq_proc_read_next_fid, NULL, NULL },
-	{ "seq_width",  seq_proc_read_seq_width, seq_proc_write_seq_width, NULL },
+	{ "range",       seq_proc_read_range, seq_proc_write_range, NULL },
+	{ "server",      seq_proc_read_server, NULL, NULL },
+	{ "next_fid" ,   seq_proc_read_next_fid, NULL, NULL },
+	{ "seq_width",   seq_proc_read_seq_width, seq_proc_write_seq_width, NULL },
 	{ NULL }};
 #endif

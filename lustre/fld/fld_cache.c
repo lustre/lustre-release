@@ -58,6 +58,30 @@ static inline __u32 fld_cache_hash(seqno_t seq)
         return (__u32)seq;
 }
 
+void fld_cache_flush(struct fld_cache_info *cache)
+{
+        struct fld_cache_entry *flde;
+        struct hlist_head *bucket;
+        struct hlist_node *scan;
+        struct hlist_node *next;
+        int i;
+        ENTRY;
+
+	/* Free all cache entries. */
+	spin_lock(&cache->fci_lock);
+	for (i = 0; i < cache->fci_hash_size; i++) {
+		bucket = cache->fci_hash_table + i;
+		hlist_for_each_entry_safe(flde, scan, next, bucket, fce_list) {
+			hlist_del_init(&flde->fce_list);
+                        list_del_init(&flde->fce_lru);
+                        cache->fci_cache_count--;
+			OBD_FREE_PTR(flde);
+		}
+	}
+        spin_unlock(&cache->fci_lock);
+        EXIT;
+}
+
 struct fld_cache_info *fld_cache_init(int hash_size, int cache_size,
                                       int cache_threshold)
 {
@@ -104,29 +128,11 @@ EXPORT_SYMBOL(fld_cache_init);
 
 void fld_cache_fini(struct fld_cache_info *cache)
 {
-        struct fld_cache_entry *flde;
-        struct hlist_head *bucket;
-        struct hlist_node *scan;
-        struct hlist_node *next;
-	int i;
         ENTRY;
 
         LASSERT(cache != NULL);
+        fld_cache_flush(cache);
 
-	/* free all cache entries */
-	spin_lock(&cache->fci_lock);
-	for (i = 0; i < cache->fci_hash_size; i++) {
-		bucket = cache->fci_hash_table + i;
-		hlist_for_each_entry_safe(flde, scan, next, bucket, fce_list) {
-			hlist_del_init(&flde->fce_list);
-                        list_del_init(&flde->fce_lru);
-                        cache->fci_cache_count--;
-			OBD_FREE_PTR(flde);
-		}
-	}
-        spin_unlock(&cache->fci_lock);
-
-	/* free cache hash table and cache itself */
 	OBD_FREE(cache->fci_hash_table, cache->fci_hash_size *
 		 sizeof(*cache->fci_hash_table));
 	OBD_FREE_PTR(cache);
@@ -143,8 +149,8 @@ fld_cache_bucket(struct fld_cache_info *cache, seqno_t seq)
 }
 
 /*
- * check if cache needs to be shrinked. If so - do it. Tries to keep all
- * collision lists wel balanced. That is, checks all of them and removes one
+ * Check if cache needs to be shrinked. If so - do it. Tries to keep all
+ * collision lists well balanced. That is, checks all of them and removes one
  * entry in list and so on.
  */
 static int fld_cache_shrink(struct fld_cache_info *cache)
@@ -277,7 +283,7 @@ int fld_cache_lookup(struct fld_cache_info *cache,
                 if (flde->fce_seq == seq) {
                         *mds = flde->fce_mds;
 
-                        /* move found entry to the head of lru list */
+                        /* Move found entry to the head of lru list. */
                         list_del(&flde->fce_lru);
                         list_add(&flde->fce_lru, &cache->fci_lru);
                         

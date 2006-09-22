@@ -1951,12 +1951,10 @@ static void mdt_fixup_resent(struct req_capsule *pill,
          * If the xid matches, then we know this is a resent request, and allow
          * it. (It's probably an OPEN, for which we don't send a lock.
          */
-        if (req->rq_xid ==
-            le64_to_cpu(exp->exp_mdt_data.med_mcd->mcd_last_xid))
+        if (req->rq_xid == req_exp_last_xid(req))
                 return;
 
-        if (req->rq_xid ==
-            le64_to_cpu(exp->exp_mdt_data.med_mcd->mcd_last_close_xid))
+        if (req->rq_xid == req_exp_last_close_xid(req))
                 return;
 
         /*

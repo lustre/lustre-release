@@ -706,6 +706,7 @@ static int lmv_fids_balanced(struct obd_device *obd)
         RETURN(1);
 }
 
+#if 0
 static int lmv_all_chars_policy(int count, struct qstr *name)
 {
         unsigned int c = 0;
@@ -716,6 +717,7 @@ static int lmv_all_chars_policy(int count, struct qstr *name)
         c = c % count;
         return c;
 }
+#endif
 
 static int lmv_placement_policy(struct obd_device *obd,
                                 struct lu_placement_hint *hint,
@@ -741,6 +743,8 @@ static int lmv_placement_policy(struct obd_device *obd,
                         /* stress policy for tests - to use non-parent MDS */
                         LASSERT(fid_is_sane(hint->ph_pfid));
                         rc = lmv_fld_lookup(lmv, hint->ph_pfid, mds);
+                        if (rc)
+                                RETURN(rc);
                         *mds = (int)(*mds + 1) % lmv->desc.ld_tgt_count;
 
 #endif
@@ -2448,11 +2452,12 @@ int lmv_set_open_replay_data(struct obd_export *exp,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_export *tgt_exp;
-
         ENTRY;
-
+        
         tgt_exp = lmv_get_export(lmv, och->och_fid);
-
+        if (IS_ERR(tgt_exp))
+                RETURN(PTR_ERR(tgt_exp));
+        
         RETURN(md_set_open_replay_data(tgt_exp, och, open_req));
 }
 
@@ -2462,10 +2467,11 @@ int lmv_clear_open_replay_data(struct obd_export *exp,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_export *tgt_exp;
-
         ENTRY;
 
         tgt_exp = lmv_get_export(lmv, och->och_fid);
+        if (IS_ERR(tgt_exp))
+                RETURN(PTR_ERR(tgt_exp));
 
         RETURN(md_clear_open_replay_data(tgt_exp, och));
 }

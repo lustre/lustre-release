@@ -55,16 +55,16 @@ int lmv_fld_lookup(struct lmv_obd *lmv,
         LASSERT(fid_is_sane(fid));
         rc = fld_client_lookup(&lmv->lmv_fld, fid_seq(fid), mds, NULL);
         if (rc) {
-                CERROR("error while looking for mds number. Seq "LPU64
-                       ", rc %d\n", fid_seq(fid), rc);
+                CERROR("Error while looking for mds number. Seq "LPU64
+                       ", err = %d\n", fid_seq(fid), rc);
                 RETURN(rc);
         }
         
-        CDEBUG(D_INFO, "got mds "LPU64" for sequence: "LPU64"\n",
+        CDEBUG(D_INFO, "Got mds "LPU64" for sequence: "LPU64"\n",
                *mds, fid_seq(fid));
 
         if (*mds >= lmv->desc.ld_tgt_count) {
-                CERROR("got invalid mds: "LPU64" (max: %d)\n",
+                CERROR("Got invalid mds: "LPU64" (max: %d)\n",
                        *mds, lmv->desc.ld_tgt_count);
                 rc = -EINVAL;
         }
