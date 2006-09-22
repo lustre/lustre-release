@@ -181,10 +181,11 @@ struct mdt_lock_handle {
 };
 
 enum {
-        MDT_LH_PARENT,
-        MDT_LH_CHILD,
-        MDT_LH_OLD,
-        MDT_LH_NEW,
+        MDT_LH_PARENT, /* parent lockh */
+        MDT_LH_CHILD,  /* child lockh */
+        MDT_LH_OLD,    /* old lockh for rename */
+        MDT_LH_NEW,    /* new lockh for rename */
+        MDT_LH_RMT,    /* used for return lh to caller */
         MDT_LH_NR
 };
 
@@ -268,14 +269,14 @@ struct mdt_thread_info {
         __u32                      mti_has_trans:1, /* has txn already? */
                                    mti_no_need_trans:1;
 
-        /* opdata for mdt_open(), has the same as ldlm_reply:lock_policy_res1.
-         * mdt_update_last_rcvd() stores this value onto disk for recovery
-         * when mdt_trans_stop_cb() is called.
+        /* opdata for mdt_reint_open(), has the same as
+         * ldlm_reply:lock_policy_res1.  mdt_update_last_rcvd() stores this
+         * value onto disk for recovery when mdt_trans_stop_cb() is called.
          */
         __u64                      mti_opdata;
 
-        /* temporary stuff used by thread to save stack consumption.
-         * if something is in a union, make sure they do not conflict */
+        /* temporary stuff used by thread to save stack consumption.  if
+         * something is in a union, make sure they do not conflict */
 
         struct lu_fid              mti_tmp_fid1;
         struct lu_fid              mti_tmp_fid2;
@@ -373,7 +374,7 @@ void mdt_object_unlock_put(struct mdt_thread_info *,
 
 int mdt_close_unpack(struct mdt_thread_info *info);
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
-int mdt_reint_rec(struct mdt_thread_info *);
+int mdt_reint_rec(struct mdt_thread_info *, struct mdt_lock_handle *);
 void mdt_pack_size2body(struct mdt_body *b, const struct lu_attr *attr,
                         struct mdt_object *o);
 void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
@@ -385,7 +386,7 @@ int mdt_setxattr(struct mdt_thread_info *info);
 void mdt_lock_handle_init(struct mdt_lock_handle *lh);
 void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
 
-void mdt_reconstruct(struct mdt_thread_info *);
+void mdt_reconstruct(struct mdt_thread_info *, struct mdt_lock_handle *);
 
 int mdt_fs_setup(const struct lu_context *, struct mdt_device *);
 void mdt_fs_cleanup(const struct lu_context *, struct mdt_device *);
@@ -407,7 +408,8 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
                        struct mdt_object *o,
                        struct mdt_lock_handle *child_lockh);
 
-int mdt_open(struct mdt_thread_info *info);
+int mdt_reint_open(struct mdt_thread_info *info,
+                   struct mdt_lock_handle *lhc);
 
 struct mdt_file_data *mdt_handle2mfd(const struct lustre_handle *handle);
 int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o,
@@ -425,7 +427,7 @@ int mdt_done_writing(struct mdt_thread_info *info);
 void mdt_shrink_reply(struct mdt_thread_info *info, int offset);
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
                            const struct md_attr *);
-void mdt_reconstruct_open(struct mdt_thread_info *);
+void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
 
 void mdt_dump_lmm(int level, const struct lov_mds_md *lmm);
 

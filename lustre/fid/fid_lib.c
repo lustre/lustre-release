@@ -188,7 +188,7 @@ void fid_unlock(const struct lu_fid *f,
                 struct lustre_handle *lh, ldlm_mode_t mode)
 {
         {
-                /* FIXME: this is debug stuff, remove it later. */
+                /* XXX: this is debug stuff, remove it later. */
                 struct ldlm_lock *lock = ldlm_handle2lock(lh);
                 if (!lock) {
                         CERROR("Invalid lock handle "LPX64"\n",

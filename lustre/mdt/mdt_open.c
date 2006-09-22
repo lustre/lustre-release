@@ -434,10 +434,11 @@ extern void mdt_req_from_mcd(struct ptlrpc_request *req,
                              struct mdt_client_data *mcd);
 
 
-/* TODO: much of the code here can be shared with mdt_open() 
+/* TODO: much of the code here can be shared with mdt_reint_open() 
  *       and mdt_mfd_open(). This will be done later. :-)
  */
-void mdt_reconstruct_open(struct mdt_thread_info *info)
+void mdt_reconstruct_open(struct mdt_thread_info *info,
+                          struct mdt_lock_handle *lhc)
 {
         struct req_capsule      *pill  = &info->mti_pill;
         struct ptlrpc_request   *req   = mdt_info_req(info);
@@ -453,22 +454,26 @@ void mdt_reconstruct_open(struct mdt_thread_info *info)
         mdt_req_from_mcd(req, med->med_mcd);
         mdt_set_disposition(info, ldlm_rep, mcd->mcd_last_data);
 
-        CERROR("This is re-CCCCCCCCCCConstruct open: disp="LPX64", result=%d\n",
-                ldlm_rep->lock_policy_res1,
-                req->rq_status);
+        CERROR("This is reconstruct open: disp="LPX64", result=%d\n",
+                ldlm_rep->lock_policy_res1, req->rq_status);
 
         if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE) && req->rq_status) {
-                /* we did not create successfully, return error to client. */
+                /* We did not create successfully, return error to client. */
                 mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
                 GOTO(out, 0);
         }
- 
-        lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
+
+        /*
+         * XXX: is this correct to set here transno and status to zero? This is
+         * especially suspicious after calling mdt_req_from_mcd() above, which
+         * set these fields already.
+         */
         lustre_msg_set_transno(req->rq_repmsg, 0);
         lustre_msg_set_status(req->rq_repmsg, 0);
+        
         ldlm_rep->lock_policy_res1 = 0;
         ldlm_rep->lock_policy_res2 = 0;
-        result = mdt_open(info);
+        result = mdt_reint_open(info, lhc);
         req->rq_status = result;
         EXIT;
 out: 
@@ -514,9 +519,16 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         RETURN(rc);
 }
 
-/* cross-ref request. Currently it can only be a pure open (w/o create) */
-int mdt_cross_open(struct mdt_thread_info* info, const struct lu_fid *fid,
-                       struct ldlm_reply *rep, __u32 flags)
+int mdt_pin(struct mdt_thread_info* info)
+{
+        ENTRY;
+        RETURN(-EOPNOTSUPP);
+}
+
+/* Cross-ref request. Currently it can only be a pure open (w/o create) */
+static int mdt_cross_open(struct mdt_thread_info* info,
+                          const struct lu_fid *fid,
+                          struct ldlm_reply *rep, __u32 flags)
 {
         struct md_attr    *ma = &info->mti_attr;
         struct mdt_object *o;
@@ -533,14 +545,14 @@ int mdt_cross_open(struct mdt_thread_info* info, const struct lu_fid *fid,
                 if (rc == 0)
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
-                /* FIXME: something wrong here
-                 * lookup was positive but there
-                 * is no object! */
+                /*
+                 * FIXME: something wrong here lookup was positive but there is
+                 * no object!
+                 */
                 CERROR("Cross-ref object doesn't exists!\n");
                 rc = -EFAULT;
         } else  {
-                /* FIXME: something wrong here
-                 * the object is on another MDS! */
+                /* FIXME: something wrong here the object is on another MDS! */
                 CERROR("The object isn't on this server! FLD error?\n");
                 rc = -EFAULT;
         }
@@ -548,13 +560,7 @@ int mdt_cross_open(struct mdt_thread_info* info, const struct lu_fid *fid,
         RETURN(rc);
 }
 
-int mdt_pin(struct mdt_thread_info* info)
-{
-        ENTRY;
-        RETURN(-EOPNOTSUPP);
-}
-
-int mdt_open(struct mdt_thread_info *info)
+int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 {
         struct mdt_device      *mdt = info->mti_mdt;
         struct ptlrpc_request  *req = mdt_info_req(info);
@@ -601,14 +607,16 @@ int mdt_open(struct mdt_thread_info *info)
                         lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY);
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                /* this is a replay request. */
+                /* This is a replay request. */
                 result = mdt_open_by_fid(info, ldlm_rep);
 
                 if (result != -ENOENT)
                         GOTO(out, result);
 
-                /* We didn't find the correct object, so we
-                 * need to re-create it via a regular replay. */
+                /*
+                 * We didn't find the correct object, so we need to re-create it
+                 * via a regular replay.
+                 */
                 if (!(create_flags & MDS_OPEN_CREAT)) {
                         DEBUG_REQ(D_ERROR, req,"OPEN_CREAT not in open replay");
                         GOTO(out, result = -EFAULT);
@@ -647,9 +655,11 @@ int mdt_open(struct mdt_thread_info *info)
         if (result == -ENOENT || result == -ESTALE) {
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
                 if (result == -ESTALE) {
-                        /*ESTALE means the parent is a dead(unlinked) dir,
-                         *so it should return -ENOENT to in accordance
-                         *with the original mds implementaion.*/
+                        /*
+                         * ESTALE means the parent is a dead(unlinked) dir, so
+                         * it should return -ENOENT to in accordance with the
+                         * original mds implementaion.
+                         */
                         GOTO(out_parent, result = -ENOENT);
                 }
                 if (!(create_flags & MDS_OPEN_CREAT))
@@ -657,9 +667,11 @@ int mdt_open(struct mdt_thread_info *info)
                 *child_fid = *info->mti_rr.rr_fid2;
                 /* new object will be created. see the following */
         } else {
+                /*
+                 * Check for O_EXCL is moved to the mdt_mfd_open, we need to
+                 * return FID back in that case.
+                 */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
-                /* check for O_EXCL is moved to the mdt_mfd_open, we need to
-                 * return FID back in that case */
         }
 
         child = mdt_object_find(info->mti_ctxt, mdt, child_fid);
@@ -667,7 +679,7 @@ int mdt_open(struct mdt_thread_info *info)
                 GOTO(out_parent, result = PTR_ERR(child));
 
         if (result == -ENOENT) {
-                /* not found and with MDS_OPEN_CREAT: let's create it */
+                /* Not found and with MDS_OPEN_CREAT: let's create it. */
                 mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
                 result = mdo_create(info->mti_ctxt,
                                     mdt_object_child(parent),
@@ -685,19 +697,43 @@ int mdt_open(struct mdt_thread_info *info)
                 }
                 created = 1;
         } else {
-                /* we have to get attr & lov ea for this object*/
+                /* We have to get attr & lov ea for this object */
                 result = mo_attr_get(info->mti_ctxt, 
                                      mdt_object_child(child), ma);
+                /*
+                 * The object is on remote node, return its FID for remote open.
+                 */
                 if (result == -EREMOTE) {
-                        /* the object is on remote node
-                         * return its FID for remote open */
-                        struct mdt_lock_handle *lhc;
                         int rc;
-                        lhc = &info->mti_lh[MDT_LH_NEW];
-                        mdt_lock_handle_init(lhc);
-                        lhc->mlh_mode = LCK_CR;
-                        rc = mdt_object_lock(info, child, lhc,
-                                             MDS_INODELOCK_LOOKUP);
+                        
+                        /* 
+                         * Check if this lock already was sent to client and
+                         * this is resent case. For resent case do not take lock
+                         * again, use what is already granted.
+                         */
+                        LASSERT(lhc != NULL);
+                        
+                        if (lustre_handle_is_used(&lhc->mlh_lh)) {
+                                LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
+                                        MSG_RESENT);
+                                
+                                struct ldlm_lock *lock = ldlm_handle2lock(&lhc->mlh_lh);
+                                if (!lock) {
+                                        CERROR("Invalid lock handle "LPX64"\n",
+                                               lhc->mlh_lh.cookie);
+                                        LBUG();
+                                }
+                                LASSERT(fid_res_name_eq(mdt_object_fid(child),
+                                                        &lock->l_resource->lr_name));
+                                LDLM_LOCK_PUT(lock);
+                                rc = 0;
+                        } else {
+                                mdt_lock_handle_init(lhc);
+                                lhc->mlh_mode = LCK_CR;
+                                
+                                rc = mdt_object_lock(info, child, lhc,
+                                                     MDS_INODELOCK_LOOKUP);
+                        }
                         repbody->fid1 = *mdt_object_fid(child);
                         repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
                         if (rc != 0)
@@ -705,6 +741,7 @@ int mdt_open(struct mdt_thread_info *info)
                         GOTO(out_child, result);
                 }
         }
+        
         /* Try to open it now. */
         result = mdt_mfd_open(info, parent, child, create_flags, 
                               created, ldlm_rep);

@@ -466,8 +466,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 child = parent;
                 CDEBUG(D_INODE, "partial getattr_name child_fid = "DFID
-                                ", ldlm_rep=%p\n",
-                                PFID(mdt_object_fid(child)), ldlm_rep);
+                       ", ldlm_rep=%p\n", PFID(mdt_object_fid(child)), ldlm_rep);
 
                 if (is_resent) {
                         /* Do not take lock for resent case. */
@@ -484,14 +483,17 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 } else {
                         mdt_lock_handle_init(lhc);
                         lhc->mlh_mode = LCK_CR;
-                        /* object's name is on another MDS,
-                         * no lookup lock is needed here but update is */
+                        
+                        /*
+                         * Object's name is on another MDS, no lookup lock is
+                         * needed here but update is.
+                         */
                         child_bits &= ~MDS_INODELOCK_LOOKUP;
                         //child_bits |= MDS_INODELOCK_UPDATE;
                         rc = mdt_object_lock(info, child, lhc, child_bits);
                 }
                 if (rc == 0) {
-                        /* finally, we can get attr for child. */
+                        /* Finally, we can get attr for child. */
                         rc = mdt_getattr_internal(info, child);
                         if (rc != 0)
                                 mdt_object_unlock(info, child, lhc, 1);
@@ -898,7 +900,9 @@ free_rdpg:
         return rc ? rc : rc1;
 }
 
-static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
+static int mdt_reint_internal(struct mdt_thread_info *info,
+                              struct mdt_lock_handle *lhc,
+                              __u32 op)
 {
         struct req_capsule      *pill = &info->mti_pill;
         struct mdt_device       *mdt = info->mti_mdt;
@@ -930,22 +934,21 @@ static int mdt_reint_internal(struct mdt_thread_info *info, __u32 op)
          * allocating response, caller anyway may want to get ldlm_reply from it
          * and will get oops.
          */
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK)) {
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK))
                 RETURN(-EFAULT);
-        }
         
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
                 struct mdt_client_data *mcd;
 
                 mcd = req->rq_export->exp_mdt_data.med_mcd;
                 if (mcd->mcd_last_xid == req->rq_xid) {
-                        mdt_reconstruct(info);
+                        mdt_reconstruct(info, lhc);
                         RETURN(lustre_msg_get_status(req->rq_repmsg));
                 }
                 DEBUG_REQ(D_HA, req, "no reply for RESENT (xid "LPD64")",
                           mcd->mcd_last_xid);
         }
-        rc = mdt_reint_rec(info);
+        rc = mdt_reint_rec(info, lhc);
 
         RETURN(rc);
 }
@@ -987,7 +990,11 @@ static int mdt_reint(struct mdt_thread_info *info)
 
         opc = mdt_reint_opcode(info, reint_fmts);
         if (opc >= 0) {
-                rc = mdt_reint_internal(info, opc);
+                /* 
+                 * No lock possible here from client to pass it to reint code
+                 * path.
+                 */
+                rc = mdt_reint_internal(info, NULL, opc);
         } else
                 rc = opc;
 
@@ -1210,7 +1217,6 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
         ENTRY;
 
         if (lustre_handle_is_used(handle)) {
-        
                 if (decref)
                         fid_unlock(mdt_object_fid(o), handle, mode);
                 else
@@ -1961,8 +1967,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                               struct ldlm_lock **lockp,
                               int flags)
 {
-        struct mdt_lock_handle  tmp_lock = { {0}, };
-        struct mdt_lock_handle *lhc = &tmp_lock;
+        struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_RMT];
         struct ldlm_lock       *new_lock = NULL;
         __u64                   child_bits;
         struct ldlm_reply      *ldlm_rep;
@@ -2008,9 +2013,10 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                             struct ldlm_lock **lockp,
                             int flags)
 {
-        long opc;
-        int rc;
-        struct ldlm_reply *rep;
+        struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_RMT];
+        struct ldlm_reply      *rep;
+        long                    opc;
+        int                     rc;
 
         static const struct req_format *intent_fmts[REINT_MAX] = {
                 [REINT_CREATE]  = &RQF_LDLM_INTENT_CREATE,
@@ -2029,12 +2035,16 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                 RETURN(-EPROTO);
         }
 
-        rc = mdt_reint_internal(info, opc);
+        /* Get lock from request for possible resent case. */
+        mdt_fixup_resent(&info->mti_pill, *lockp, NULL, lhc);
+        
+        rc = mdt_reint_internal(info, lhc, opc);
 
         rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         if (rep == NULL)
                 RETURN(-EFAULT);
-        /* mdc expect this in any case */
+        
+        /* MDC expects this in any case */
         if (rc != 0)
                 mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
 
@@ -2042,10 +2052,9 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
 
         /* cross-ref case, the lock should be returned to the client */
         if (rc == -EREMOTE) {
-               struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_NEW];
-               LASSERT(lhc->mlh_lh.cookie != 0);
-               rep->lock_policy_res2 = 0;
-               return mdt_intent_lock_replace(info, lockp, NULL, lhc, flags);
+                LASSERT(lustre_handle_is_used(&lhc->mlh_lh));
+                rep->lock_policy_res2 = 0;
+                return mdt_intent_lock_replace(info, lockp, NULL, lhc, flags);
         }
         rep->lock_policy_res2 = rc;
 

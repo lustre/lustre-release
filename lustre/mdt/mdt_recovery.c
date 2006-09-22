@@ -947,7 +947,8 @@ void mdt_req_from_mcd(struct ptlrpc_request *req,
         //mds_steal_ack_locks(req);
 }
 
-static void mdt_reconstruct_generic(struct mdt_thread_info *mti)
+static void mdt_reconstruct_generic(struct mdt_thread_info *mti,
+                                    struct mdt_lock_handle *lhc)
 {
         struct ptlrpc_request *req = mdt_info_req(mti);
         struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
@@ -955,7 +956,8 @@ static void mdt_reconstruct_generic(struct mdt_thread_info *mti)
         return mdt_req_from_mcd(req, med->med_mcd);
 }
 
-static void mdt_reconstruct_create(struct mdt_thread_info *mti)
+static void mdt_reconstruct_create(struct mdt_thread_info *mti,
+                                   struct mdt_lock_handle *lhc)
 {
         struct ptlrpc_request  *req = mdt_info_req(mti);
         struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
@@ -984,7 +986,8 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti)
         mdt_object_put(mti->mti_ctxt, child);
 }
 
-static void mdt_reconstruct_setattr(struct mdt_thread_info *mti)
+static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
+                                    struct mdt_lock_handle *lhc)
 {
         struct ptlrpc_request  *req = mdt_info_req(mti);
         struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
@@ -1014,13 +1017,15 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti)
         mdt_object_put(mti->mti_ctxt, obj);
 }
 
-static void mdt_reconstruct_with_shrink(struct mdt_thread_info *mti)
+static void mdt_reconstruct_with_shrink(struct mdt_thread_info *mti,
+                                        struct mdt_lock_handle *lhc)
 {
-        mdt_reconstruct_generic(mti);
+        mdt_reconstruct_generic(mti, lhc);
         mdt_shrink_reply(mti, REPLY_REC_OFF + 1);
 }
 
-typedef void (*mdt_reconstructor)(struct mdt_thread_info *mti);
+typedef void (*mdt_reconstructor)(struct mdt_thread_info *mti,
+                                  struct mdt_lock_handle *lhc);
 
 static mdt_reconstructor reconstructors[REINT_MAX] = {
         [REINT_SETATTR]  = mdt_reconstruct_setattr,
@@ -1031,10 +1036,11 @@ static mdt_reconstructor reconstructors[REINT_MAX] = {
         [REINT_OPEN]     = mdt_reconstruct_open
 };
 
-void mdt_reconstruct(struct mdt_thread_info *mti)
+void mdt_reconstruct(struct mdt_thread_info *mti,
+                     struct mdt_lock_handle *lhc)
 {
         ENTRY;
-        reconstructors[mti->mti_rr.rr_opcode](mti);
+        reconstructors[mti->mti_rr.rr_opcode](mti, lhc);
         EXIT;
 }
 

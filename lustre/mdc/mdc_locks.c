@@ -628,7 +628,8 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 /* As not all attributes are kept under update lock, e.g. 
                    owner/group/acls are under lookup lock, we need both 
                    ibits for GETATTR. */
-                /* For CMD, UPDATA lock and LOOKUP lock can not be got 
+                
+                /* For CMD, UPDATE lock and LOOKUP lock can not be got 
                  * at the same for cross-object, so we can not match 
                  * the 2 lock at the same time FIXME: but how to handle
                  * the above situation */

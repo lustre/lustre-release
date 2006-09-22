@@ -182,7 +182,8 @@ out:
         return(rc);
 }
 
-static int mdt_reint_setattr(struct mdt_thread_info *info)
+static int mdt_reint_setattr(struct mdt_thread_info *info,
+                             struct mdt_lock_handle *lhc)
 {
         struct md_attr          *ma = &info->mti_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
@@ -271,7 +272,8 @@ out:
         return rc;
 }
 
-static int mdt_reint_create(struct mdt_thread_info *info)
+static int mdt_reint_create(struct mdt_thread_info *info,
+                            struct mdt_lock_handle *lhc)
 {
         int rc;
         ENTRY;
@@ -304,7 +306,8 @@ static int mdt_reint_create(struct mdt_thread_info *info)
 }
 
 
-static int mdt_reint_unlink(struct mdt_thread_info *info)
+static int mdt_reint_unlink(struct mdt_thread_info *info,
+                            struct mdt_lock_handle *lhc)
 {
         struct mdt_reint_record *rr = &info->mti_rr;
         struct ptlrpc_request   *req = mdt_info_req(info);
@@ -312,8 +315,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
         struct lu_fid           *child_fid = &info->mti_tmp_fid1;
         struct mdt_object       *mp;
         struct mdt_object       *mc;
-        struct mdt_lock_handle  *lhp;
-        struct mdt_lock_handle  *lhc;
+        struct mdt_lock_handle  *parent_lh;
+        struct mdt_lock_handle  *child_lh;
         int                      rc;
         ENTRY;
 
@@ -324,9 +327,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
                 GOTO(out, rc = -ENOENT);
 
         /* step 1: lock the parent */
-        lhp = &info->mti_lh[MDT_LH_PARENT];
-        lhp->mlh_mode = LCK_EX;
-        mp = mdt_object_find_lock(info, rr->rr_fid1, lhp,
+        parent_lh = &info->mti_lh[MDT_LH_PARENT];
+        parent_lh->mlh_mode = LCK_EX;
+        mp = mdt_object_find_lock(info, rr->rr_fid1, parent_lh,
                                   MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
                 GOTO(out, rc = PTR_ERR(mp));
@@ -350,24 +353,26 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
                 GOTO(out_unlock_parent, rc);
         }
 
-        /*step 2: find & lock the child */
-        lhc = &info->mti_lh[MDT_LH_CHILD];
-        lhc->mlh_mode = LCK_EX;
+        /* step 2: find & lock the child */
+        child_lh = &info->mti_lh[MDT_LH_CHILD];
+        child_lh->mlh_mode = LCK_EX;
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(mp),
                         rr->rr_name, child_fid);
         if (rc != 0)
                  GOTO(out_unlock_parent, rc);
 
         /* we will lock the child regardless it is local or remote. No harm. */
-        mc = mdt_object_find_lock(info, child_fid, lhc, MDS_INODELOCK_FULL);
+        mc = mdt_object_find_lock(info, child_fid, child_lh, MDS_INODELOCK_FULL);
         if (IS_ERR(mc))
                 GOTO(out_unlock_parent, rc = PTR_ERR(mc));
 
         mdt_fail_write(info->mti_ctxt, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_UNLINK_WRITE);
 
-        /*Now we can only make sure we need MA_INODE, in mdd layer,
-         *will check whether need MA_LOV and MA_COOKIE*/
+        /*
+         * Now we can only make sure we need MA_INODE, in mdd layer, will check
+         * whether need MA_LOV and MA_COOKIE.
+         */
         ma->ma_need = MA_INODE;
         rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mp),
                         mdt_object_child(mc), rr->rr_name, ma);
@@ -378,15 +383,16 @@ static int mdt_reint_unlink(struct mdt_thread_info *info)
 
         GOTO(out_unlock_child, rc);
 out_unlock_child:
-        mdt_object_unlock_put(info, mc, lhc, rc);
+        mdt_object_unlock_put(info, mc, child_lh, rc);
 out_unlock_parent:
-        mdt_object_unlock_put(info, mp, lhp, rc);
+        mdt_object_unlock_put(info, mp, parent_lh, rc);
 out:
         mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         return rc;
 }
 
-static int mdt_reint_link(struct mdt_thread_info *info)
+static int mdt_reint_link(struct mdt_thread_info *info,
+                          struct mdt_lock_handle *lhc)
 {
         struct mdt_reint_record *rr = &info->mti_rr;
         struct ptlrpc_request   *req = mdt_info_req(info);
@@ -584,7 +590,8 @@ static int mdt_rename_check(struct mdt_thread_info *info, struct lu_fid *fid)
         RETURN(rc);
 }
 
-static int mdt_reint_rename(struct mdt_thread_info *info)
+static int mdt_reint_rename(struct mdt_thread_info *info,
+                            struct mdt_lock_handle *lhc)
 {
         struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule      *pill = &info->mti_pill;
@@ -730,8 +737,8 @@ out:
         return rc;
 }
 
-
-typedef int (*mdt_reinter)(struct mdt_thread_info *info);
+typedef int (*mdt_reinter)(struct mdt_thread_info *info,
+                           struct mdt_lock_handle *lhc);
 
 static mdt_reinter reinters[REINT_MAX] = {
         [REINT_SETATTR]  = mdt_reint_setattr,
@@ -739,15 +746,16 @@ static mdt_reinter reinters[REINT_MAX] = {
         [REINT_LINK] = mdt_reint_link,
         [REINT_UNLINK] = mdt_reint_unlink,
         [REINT_RENAME] = mdt_reint_rename,
-        [REINT_OPEN] = mdt_open
+        [REINT_OPEN] = mdt_reint_open
 };
 
-int mdt_reint_rec(struct mdt_thread_info *info)
+int mdt_reint_rec(struct mdt_thread_info *info,
+                  struct mdt_lock_handle *lhc)
 {
         int rc;
         ENTRY;
 
-        rc = reinters[info->mti_rr.rr_opcode](info);
+        rc = reinters[info->mti_rr.rr_opcode](info, lhc);
 
         RETURN(rc);
 }
