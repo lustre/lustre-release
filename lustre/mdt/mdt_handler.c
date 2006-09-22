@@ -124,6 +124,7 @@ static struct mdt_opc_slice mdt_fld_handlers[];
 
 static struct mdt_device *mdt_dev(struct lu_device *d);
 static int mdt_regular_handle(struct ptlrpc_request *req);
+static int mdt_recovery_handle(struct ptlrpc_request *req);
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
 
 static struct lu_object_operations mdt_obj_ops;
@@ -622,7 +623,7 @@ static int mdt_connect(struct mdt_thread_info *info)
         struct ptlrpc_request *req;
 
         req = mdt_info_req(info);
-        rc = target_handle_connect(req, mdt_regular_handle);
+        rc = target_handle_connect(req, mdt_recovery_handle);
         if (rc == 0) {
                 LASSERT(req->rq_export != NULL);
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
@@ -1726,6 +1727,30 @@ static int mdt_handle_common(struct ptlrpc_request *req,
         rc = mdt_handle0(req, info, supported);
 
         mdt_thread_info_fini(info);
+        RETURN(rc);
+}
+
+/*
+ * This is called from recovery code as handler of _all_ RPC types, FLD and SEQ
+ * as well.
+ */
+static int mdt_recovery_handle(struct ptlrpc_request *req)
+{
+        int rc;
+        ENTRY;
+        
+        switch (lustre_msg_get_opc(req->rq_reqmsg)) {
+        case FLD_QUERY:
+                rc = mdt_handle_common(req, mdt_fld_handlers);
+                break;
+        case SEQ_QUERY:
+                rc = mdt_handle_common(req, mdt_seq_handlers);
+                break;
+        default:
+                rc = mdt_handle_common(req, mdt_regular_handlers);
+                break;
+        }
+        
         RETURN(rc);
 }
 
