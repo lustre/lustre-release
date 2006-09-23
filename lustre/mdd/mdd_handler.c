@@ -138,7 +138,7 @@ struct mdd_object *mdd_object_find(const struct lu_context *ctxt,
                                    struct mdd_device *d,
                                    const struct lu_fid *f)
 {
-        struct lu_object *o;
+        struct lu_object *o, *lo;
         struct mdd_object *m;
         ENTRY;
 
@@ -146,8 +146,11 @@ struct mdd_object *mdd_object_find(const struct lu_context *ctxt,
         if (IS_ERR(o))
                 m = (struct mdd_object *)o;
         else {
-                o = lu_object_locate(o->lo_header, mdd2lu_dev(d)->ld_type);
-                m = lu2mdd_obj(o);
+                lo = lu_object_locate(o->lo_header, mdd2lu_dev(d)->ld_type);
+                /* remote object can't be located and should be put then */
+                if (lo == NULL)
+                        lu_object_put(ctxt, o);
+                m = lu2mdd_obj(lo);
         }
         RETURN(m);
 }
@@ -1394,7 +1397,7 @@ static int mdd_is_parent(const struct lu_context *ctxt,
                         mdd_object_put(ctxt, parent);
                 parent = mdd_object_find(ctxt, mdd, pfid);
 
-                /* cross-ref parent, not supported yet */
+                /* cross-ref parent */
                 if (parent == NULL) {
                         if (pf != NULL)
                                 *pf = *pfid;
@@ -1611,8 +1614,8 @@ static int mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
 }
 
 /*
- * returns 1: if fid is subdir of @mo;
- * returns 0: if fid is not a subdir of @mo;
+ * returns 1: if fid is ancestor of @mo;
+ * returns 0: if fid is not a ancestor of @mo;
  *
  * returns EREMOTE if remote object is found, fid of remote object is saved to
  * @fid;
