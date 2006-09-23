@@ -1187,7 +1187,7 @@ static int ost_llog_handle_connect(struct obd_export *exp,
         int rc;
         ENTRY;
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
+        body = lustre_msg_buf(req->rq_reqmsg, 1, sizeof(*body));
         rc = obd_llog_connect(exp, body);
         RETURN(rc);
 }
