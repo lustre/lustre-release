@@ -408,8 +408,9 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
          * We save last checked parent fid to @repbody->fid1 for remote
          * directory case.
          */
+        LASSERT(fid_is_sane(&info->mti_body->fid2));
         rc = mdo_is_subdir(info->mti_ctxt, mdt_object_child(obj),
-                           &info->mti_tmp_fid2, &repbody->fid1);
+                           &info->mti_body->fid2, &repbody->fid1);
         if (rc < 0)
                 RETURN(rc);
         
