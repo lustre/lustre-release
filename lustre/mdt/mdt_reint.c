@@ -651,10 +651,18 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 mdt_object_get(info->mti_ctxt, msrcdir);
                 mtgtdir = msrcdir;
         } else {
-                mtgtdir = mdt_object_find_lock(info, rr->rr_fid2, lh_tgtdirp,
-                                               MDS_INODELOCK_UPDATE);
+                mtgtdir = mdt_object_find(info->mti_ctxt,
+                                          info->mti_mdt, rr->rr_fid2);
                 if (IS_ERR(mtgtdir))
                         GOTO(out_unlock_source, rc = PTR_ERR(mtgtdir));
+                
+                rc = mdt_object_cr_lock(info, mtgtdir, lh_tgtdirp,
+                                        MDS_INODELOCK_UPDATE);
+                if (rc != 0) {
+                        mdt_object_put(info, mtgtdir);
+                        GOTO(out_unlock_source, rc);
+                }
+
         }
 
         /*step 3: find & lock the old object*/
@@ -687,10 +695,16 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                         GOTO(out_unlock_old, rc = -EINVAL);
 
                 lh_newp->mlh_mode = LCK_EX;
-                mnew = mdt_object_find_lock(info, new_fid, lh_newp,
-                                            MDS_INODELOCK_FULL);
+                mnew = mdt_object_find(info->mti_ctxt, info->mti_mdt, new_fid);
                 if (IS_ERR(mnew))
                         GOTO(out_unlock_old, rc = PTR_ERR(mnew));
+
+                rc = mdt_object_cr_lock(info, mnew, lh_newp,
+                                        MDS_INODELOCK_FULL);
+                if (rc != 0) {
+                        mdt_object_put(info, mnew);
+                        GOTO(out_unlock_old, rc);
+                }
         } else if (rc != -EREMOTE && rc != -ENOENT)
                 GOTO(out_unlock_old, rc);
 
