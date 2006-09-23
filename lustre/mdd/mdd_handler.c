@@ -1401,7 +1401,7 @@ static int mdd_is_parent(const struct lu_context *ctxt,
                 if (parent == NULL) {
                         if (pf != NULL)
                                 *pf = *pfid;
-                        GOTO(out, rc = -EREMOTE);
+                        GOTO(out, rc = EREMOTE);
                 } else if (IS_ERR(parent))
                         GOTO(out, rc = PTR_ERR(parent));
                 p1 = parent;
@@ -1633,8 +1633,6 @@ static int mdd_is_subdir(const struct lu_context *ctx, struct md_object *mo,
                 RETURN(0);
 
         rc = mdd_is_parent(ctx, mdd, md2mdd_obj(mo), fid, sfid);
-        if (rc == -EREMOTE)
-                rc = EREMOTE;
 
         RETURN(rc);
 }
