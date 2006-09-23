@@ -515,6 +515,7 @@ out_unlock_tgt:
 out_unlock_tgtdir:
         mdt_object_unlock_put(info, mtgtdir, lh_tgtdir, rc);
 out:
+        mdt_shrink_reply(info, REPLY_REC_OFF + 1);
         return rc;
 }
 
@@ -625,7 +626,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         if (rc == 1) {
         /* if (rr->rr_name[0] == 0) {*/
                 rc = mdt_reint_rename_tgt(info);
-                GOTO(out, rc);
+                RETURN(rc);
         }
 
         rc = mdt_rename_lock(info, &rename_lh);
