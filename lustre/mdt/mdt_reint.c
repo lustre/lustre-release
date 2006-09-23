@@ -660,7 +660,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 rc = mdt_object_cr_lock(info, mtgtdir, lh_tgtdirp,
                                         MDS_INODELOCK_UPDATE);
                 if (rc != 0) {
-                        mdt_object_put(info, mtgtdir);
+                        mdt_object_put(info->mti_ctxt, mtgtdir);
                         GOTO(out_unlock_source, rc);
                 }
 
@@ -703,7 +703,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 rc = mdt_object_cr_lock(info, mnew, lh_newp,
                                         MDS_INODELOCK_FULL);
                 if (rc != 0) {
-                        mdt_object_put(info, mnew);
+                        mdt_object_put(info->mti_ctxt, mnew);
                         GOTO(out_unlock_old, rc);
                 }
         } else if (rc != -EREMOTE && rc != -ENOENT)
