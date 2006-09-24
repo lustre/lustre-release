@@ -62,13 +62,13 @@ run_test 0b "ensure object created after recover exists. (3284)"
 
 seq_set_width()
 {
-    local fn=`ls /proc/fs/lustre/seq-cli-srv*/seq_width` 
+    local fn=`ls /proc/fs/lustre/seq/cli-srv*/seq_width` 
     echo $1 > $fn
 }
 
 seq_get_width()
 {
-    local fn=`ls /proc/fs/lustre/seq-cli-srv*/seq_width` 
+    local fn=`ls /proc/fs/lustre/seq/cli-srv*/seq_width` 
     cat $fn
 }
 

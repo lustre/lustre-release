@@ -433,7 +433,7 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
         ENTRY;
 
         seq->lss_proc_dir = lprocfs_register(seq->lss_name,
-                                             proc_lustre_root,
+                                             seq_type_proc_dir,
                                              NULL, NULL);
         if (IS_ERR(seq->lss_proc_dir)) {
                 rc = PTR_ERR(seq->lss_proc_dir);
@@ -496,9 +496,8 @@ int seq_server_init(struct lu_server_seq *seq,
         seq->lss_super_width = LUSTRE_SEQ_SUPER_WIDTH;
         seq->lss_meta_width = LUSTRE_SEQ_META_WIDTH;
 
-        snprintf(seq->lss_name, sizeof(seq->lss_name), "%s-%s-%s",
-                 LUSTRE_SEQ_NAME, (is_srv ? "srv" : "ctl"),
-                 prefix);
+        snprintf(seq->lss_name, sizeof(seq->lss_name), "%s-%s",
+                 (is_srv ? "srv" : "ctl"), prefix);
 
         seq->lss_space = LUSTRE_SEQ_SPACE_RANGE;
         seq->lss_super = LUSTRE_SEQ_ZERO_RANGE;
@@ -548,30 +547,30 @@ void seq_server_fini(struct lu_server_seq *seq,
 }
 EXPORT_SYMBOL(seq_server_fini);
 
-static int fid_init(void)
-{
-	ENTRY;
-	RETURN(0);
-}
-
-static int fid_fini(void)
-{
-	ENTRY;
-	RETURN(0);
-}
+cfs_proc_dir_entry_t *seq_type_proc_dir = NULL;
 
 static int __init fid_mod_init(void)
 {
-        /* init caches if any */
-        fid_init();
+        printk(KERN_INFO "Lustre: Sequence Manager; "
+               "info@clusterfs.com\n");
+        
+        seq_type_proc_dir = lprocfs_register(LUSTRE_SEQ_NAME,
+                                             proc_lustre_root,
+                                             NULL, NULL);
+        if (IS_ERR(seq_type_proc_dir))
+                return PTR_ERR(seq_type_proc_dir);
+        
+        lu_context_key_register(&seq_thread_key);
         return 0;
 }
 
 static void __exit fid_mod_exit(void)
 {
-        /* free caches if any */
-        fid_fini();
-        return;
+        lu_context_key_degister(&seq_thread_key);
+        if (seq_type_proc_dir != NULL && !IS_ERR(seq_type_proc_dir)) {
+                lprocfs_remove(seq_type_proc_dir);
+                seq_type_proc_dir = NULL;
+        }
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

@@ -99,4 +99,6 @@ fld_target_name(struct lu_fld_target *tar)
         return tar->ft_exp->exp_client_uuid.uuid;
 }
 
+extern cfs_proc_dir_entry_t *fld_type_proc_dir;
+
 #endif /* __FLD_INTERNAL_H */

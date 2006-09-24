@@ -212,7 +212,7 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
         ENTRY;
 
         fld->lcf_proc_dir = lprocfs_register(fld->lcf_name,
-                                             proc_lustre_root,
+                                             fld_type_proc_dir,
                                              NULL, NULL);
 
         if (IS_ERR(fld->lcf_proc_dir)) {
@@ -290,7 +290,7 @@ int fld_client_init(struct lu_client_fld *fld,
         INIT_LIST_HEAD(&fld->lcf_targets);
 
         snprintf(fld->lcf_name, sizeof(fld->lcf_name),
-                 "%s-cli-%s", LUSTRE_FLD_NAME, prefix);
+                 "cli-%s", prefix);
 
 #ifdef __KERNEL__
         cache_size = FLD_CACHE_SIZE /

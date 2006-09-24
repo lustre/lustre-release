@@ -294,7 +294,7 @@ static int seq_client_proc_init(struct lu_client_seq *seq)
         ENTRY;
 
         seq->lcs_proc_dir = lprocfs_register(seq->lcs_name,
-                                             proc_lustre_root,
+                                             seq_type_proc_dir,
                                              NULL, NULL);
 
         if (IS_ERR(seq->lcs_proc_dir)) {
@@ -368,7 +368,7 @@ int seq_client_init(struct lu_client_seq *seq,
         }
 
         snprintf(seq->lcs_name, sizeof(seq->lcs_name),
-                 "%s-cli-%s", LUSTRE_SEQ_NAME, prefix);
+                 "cli-%s", prefix);
 
         rc = seq_client_proc_init(seq);
         if (rc)

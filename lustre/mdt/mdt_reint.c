@@ -36,7 +36,6 @@
 
 #include "mdt_internal.h"
 
-
 static int mdt_md_create(struct mdt_thread_info *info)
 {
         struct mdt_device      *mdt = info->mti_mdt;

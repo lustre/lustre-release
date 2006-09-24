@@ -79,9 +79,19 @@ struct lu_context_key fld_thread_key = {
         .lct_fini = fld_key_fini
 };
 
+cfs_proc_dir_entry_t *fld_type_proc_dir = NULL;
+
 static int __init fld_mod_init(void)
 {
-        printk(KERN_INFO "Lustre: Fid Location Database; info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre: Fid Location Database; "
+               "info@clusterfs.com\n");
+        
+        fld_type_proc_dir = lprocfs_register(LUSTRE_FLD_NAME,
+                                             proc_lustre_root,
+                                             NULL, NULL);
+        if (IS_ERR(fld_type_proc_dir))
+                return PTR_ERR(fld_type_proc_dir);
+        
         lu_context_key_register(&fld_thread_key);
         return 0;
 }
@@ -89,7 +99,10 @@ static int __init fld_mod_init(void)
 static void __exit fld_mod_exit(void)
 {
         lu_context_key_degister(&fld_thread_key);
-        return;
+        if (fld_type_proc_dir != NULL && !IS_ERR(fld_type_proc_dir)) {
+                lprocfs_remove(fld_type_proc_dir);
+                fld_type_proc_dir = NULL;
+        }
 }
 
 /* insert index entry and update cache */
@@ -283,7 +296,7 @@ static int fld_server_proc_init(struct lu_server_fld *fld)
         ENTRY;
 
         fld->lsf_proc_dir = lprocfs_register(fld->lsf_name,
-                                             proc_lustre_root,
+                                             fld_type_proc_dir,
                                              fld_server_proc_list, fld);
         if (IS_ERR(fld->lsf_proc_dir)) {
                 rc = PTR_ERR(fld->lsf_proc_dir);
@@ -316,13 +329,13 @@ static void fld_server_proc_fini(struct lu_server_fld *fld)
 #endif
 
 int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
-                    const char *uuid, const struct lu_context *ctx)
+                    const char *prefix, const struct lu_context *ctx)
 {
         int rc;
         ENTRY;
 
         snprintf(fld->lsf_name, sizeof(fld->lsf_name),
-                 "%s-srv-%s", LUSTRE_FLD_NAME, uuid);
+                 "srv-%s", prefix);
 
         rc = fld_index_init(fld, ctx, dt);
         if (rc)

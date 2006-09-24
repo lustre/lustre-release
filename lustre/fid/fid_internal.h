@@ -70,4 +70,6 @@ extern struct lprocfs_vars seq_client_proc_list[];
 
 #endif
 
+extern cfs_proc_dir_entry_t *seq_type_proc_dir;
+
 #endif /* __FID_INTERNAL_H */

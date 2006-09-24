@@ -1109,8 +1109,8 @@ static struct ldlm_callback_suite cbs = {
 
 static int mdt_enqueue(struct mdt_thread_info *info)
 {
-        int rc;
         struct ptlrpc_request *req;
+        int rc;
 
         /*
          * info->mti_dlm_req already contains swapped and (if necessary)
@@ -1118,10 +1118,15 @@ static int mdt_enqueue(struct mdt_thread_info *info)
          */
         LASSERT(info->mti_dlm_req != NULL);
 
+        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_LDLM_ENQUEUE)) {
+                info->mti_fail_id = OBD_FAIL_LDLM_ENQUEUE;
+                return 0;
+        }
+
         req = mdt_info_req(info);
-        info->mti_fail_id = OBD_FAIL_LDLM_REPLY;
         rc = ldlm_handle_enqueue0(info->mti_mdt->mdt_namespace,
-                                      req, info->mti_dlm_req, &cbs);
+                                  req, info->mti_dlm_req, &cbs);
+        info->mti_fail_id = OBD_FAIL_LDLM_REPLY;
         return rc ? : req->rq_status;
 }
 
@@ -1451,9 +1456,10 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                  * Set to info->mti_fail_id to handler fail_id, it will be used
                  * later, and better than use default fail_id.
                  */
-                info->mti_fail_id = h->mh_fail_id;
-                if (OBD_FAIL_CHECK(h->mh_fail_id))
+                if (OBD_FAIL_CHECK(h->mh_fail_id)) {
+                        info->mti_fail_id = h->mh_fail_id;
                         RETURN(0);
+                }
         }
 
         rc = 0;
@@ -1510,10 +1516,9 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         }
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
-
-        if (rc == 0 && h->mh_opc != MDS_DISCONNECT) {
+        if (rc == 0 && h->mh_opc != MDS_DISCONNECT)
                 target_committed_to_req(req);
-        }
+        
         RETURN(rc);
 }
 
