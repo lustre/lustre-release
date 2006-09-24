@@ -140,7 +140,7 @@ int fld_client_add_target(struct lu_client_fld *fld,
         LASSERT(tar_name != NULL);
         LASSERT(tar->ft_srv != NULL || tar->ft_exp != NULL);
 
-        CDEBUG(D_INFO|D_WARNING, "%s: adding target %s\n",
+        CDEBUG(D_INFO|D_WARNING, "%s: Adding target %s\n",
 	       fld->lcf_name, tar_name);
 
         OBD_ALLOC_PTR(target);
@@ -216,7 +216,8 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
                                              NULL, NULL);
 
         if (IS_ERR(fld->lcf_proc_dir)) {
-                CERROR("LProcFS failed in fld-init\n");
+                CERROR("%s: LProcFS failed in fld-init\n", 
+                       fld->lcf_name);
                 rc = PTR_ERR(fld->lcf_proc_dir);
                 RETURN(rc);
         }
@@ -224,7 +225,8 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
         rc = lprocfs_add_vars(fld->lcf_proc_dir,
                               fld_client_proc_list, fld);
         if (rc) {
-                CERROR("Can't init FLD proc, rc %d\n", rc);
+                CERROR("%s: Can't init FLD proc, rc %d\n", 
+                       fld->lcf_name, rc);
                 GOTO(out_cleanup, rc);
         }
 
@@ -279,8 +281,12 @@ int fld_client_init(struct lu_client_fld *fld,
 
         LASSERT(fld != NULL);
 
+        snprintf(fld->lcf_name, sizeof(fld->lcf_name),
+                 "cli-%s", prefix);
+
         if (!hash_is_sane(hash)) {
-                CERROR("Wrong hash function %#x\n", hash);
+                CERROR("%s: Wrong hash function %#x\n", 
+                       fld->lcf_name, hash);
                 RETURN(-EINVAL);
         }
 
@@ -288,9 +294,6 @@ int fld_client_init(struct lu_client_fld *fld,
         spin_lock_init(&fld->lcf_lock);
         fld->lcf_hash = &fld_hash[hash];
         INIT_LIST_HEAD(&fld->lcf_targets);
-
-        snprintf(fld->lcf_name, sizeof(fld->lcf_name),
-                 "cli-%s", prefix);
 
 #ifdef __KERNEL__
         cache_size = FLD_CACHE_SIZE /
@@ -318,8 +321,8 @@ out:
                 fld_client_fini(fld);
         else
                 CDEBUG(D_INFO|D_WARNING,
-                       "Client FLD, using \"%s\" hash\n",
-                       fld->lcf_hash->fh_name);
+                       "%s: Using \"%s\" hash\n",
+                       fld->lcf_name, fld->lcf_hash->fh_name);
         return rc;
 }
 EXPORT_SYMBOL(fld_client_init);
@@ -350,7 +353,6 @@ void fld_client_fini(struct lu_client_fld *fld)
         }
 #endif
 
-        CDEBUG(D_INFO|D_WARNING, "Client FLD finalized\n");
         EXIT;
 }
 EXPORT_SYMBOL(fld_client_fini);
@@ -439,7 +441,8 @@ int fld_client_create(struct lu_client_fld *fld,
                  */
                 fld_cache_insert(fld->lcf_cache, seq, mds);
         } else {
-                CERROR("Can't create FLD entry, rc %d\n", rc);
+                CERROR("%s: Can't create FLD entry, rc %d\n", 
+                       fld->lcf_name, rc);
         }
         RETURN(rc);
 }

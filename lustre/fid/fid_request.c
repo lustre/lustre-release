@@ -98,23 +98,22 @@ static int seq_client_rpc(struct lu_client_seq *seq,
         *range = *out;
 
         if (!range_is_sane(range)) {
-                CERROR("Invalid seq range obtained from server: "
-                       DRANGE"\n", PRANGE(range));
+                CERROR("%s: Invalid range received from server: "
+                       DRANGE"\n", seq->lcs_name, PRANGE(range));
                 GOTO(out_req, rc = -EINVAL);
         }
 
         if (range_is_exhausted(range)) {
-                CERROR("Seq range obtained from server is exhausted: "
-                       DRANGE"]\n", PRANGE(range));
+                CERROR("%s: Range received from server is exhausted: "
+                       DRANGE"]\n", seq->lcs_name, PRANGE(range));
                 GOTO(out_req, rc = -EINVAL);
         }
 
         /* Save server out to request for recovery case. */
         *in = *out;
                 
-        CDEBUG(D_INFO, "%s: allocated %s-sequence "
-               DRANGE"]\n", seq->lcs_name, opcname,
-               PRANGE(range));
+        CDEBUG(D_INFO, "%s: Allocated %s-sequence "DRANGE"]\n", 
+               seq->lcs_name, opcname, PRANGE(range));
         
         EXIT;
 out_req:
@@ -208,8 +207,8 @@ static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
         if (range_space(&seq->lcs_range) == 0) {
                 rc = __seq_client_alloc_meta(seq, NULL);
                 if (rc) {
-                        CERROR("Can't allocate new meta-sequence, "
-                               "rc %d\n", rc);
+                        CERROR("%s: Can't allocate new meta-sequence, "
+                               "rc %d\n", seq->lcs_name, rc);
                         RETURN(rc);
                 }
         }
@@ -218,7 +217,7 @@ static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
         *seqnr = seq->lcs_range.lr_start;
         seq->lcs_range.lr_start++;
 
-        CDEBUG(D_INFO, "%s: allocated sequence ["LPX64"]\n",
+        CDEBUG(D_INFO, "%s: Allocated sequence ["LPX64"]\n",
                seq->lcs_name, *seqnr);
         RETURN(rc);
 }
@@ -254,8 +253,8 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                  * or sequence is exhausted and should be switched. */
                 rc = __seq_client_alloc_seq(seq, &seqnr);
                 if (rc) {
-                        CERROR("Can't allocate new sequence, "
-                               "rc %d\n", rc);
+                        CERROR("%s: Can't allocate new sequence, "
+                               "rc %d\n", seq->lcs_name, rc);
                         GOTO(out, rc);
                 }
 
@@ -275,7 +274,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
         *fid = seq->lcs_fid;
         LASSERT(fid_is_sane(fid));
 
-        CDEBUG(D_INFO, "%s: allocated FID "DFID"\n",
+        CDEBUG(D_INFO, "%s: Allocated FID "DFID"\n",
                seq->lcs_name, PFID(fid));
 
         EXIT;
@@ -298,7 +297,8 @@ static int seq_client_proc_init(struct lu_client_seq *seq)
                                              NULL, NULL);
 
         if (IS_ERR(seq->lcs_proc_dir)) {
-                CERROR("LProcFS failed in seq-init\n");
+                CERROR("%s: LProcFS failed in seq-init\n", 
+                       seq->lcs_name);
                 rc = PTR_ERR(seq->lcs_proc_dir);
                 RETURN(rc);
         }
@@ -306,8 +306,8 @@ static int seq_client_proc_init(struct lu_client_seq *seq)
         rc = lprocfs_add_vars(seq->lcs_proc_dir,
                               seq_client_proc_list, seq);
         if (rc) {
-                CERROR("Can't init sequence manager "
-                       "proc, rc %d\n", rc);
+                CERROR("%s: Can't init sequence manager "
+                       "proc, rc %d\n", seq->lcs_name, rc);
                 GOTO(out_cleanup, rc);
         }
 
@@ -373,9 +373,6 @@ int seq_client_init(struct lu_client_seq *seq,
         rc = seq_client_proc_init(seq);
         if (rc)
                 seq_client_fini(seq);
-        else
-                CDEBUG(D_INFO|D_WARNING,
-                       "Client Sequence Manager\n");
         RETURN(rc);
 }
 EXPORT_SYMBOL(seq_client_init);
@@ -392,10 +389,6 @@ void seq_client_fini(struct lu_client_seq *seq)
         }
 
         seq->lcs_srv = NULL;
-
-        CDEBUG(D_INFO|D_WARNING,
-               "Client Sequence Manager\n");
-
         EXIT;
 }
 EXPORT_SYMBOL(seq_client_fini);

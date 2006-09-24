@@ -82,12 +82,9 @@ int seq_store_write(struct lu_server_seq *seq,
                                                     sizeof(info->sti_record),
                                                     &pos, th);
                 if (rc == sizeof(info->sti_record)) {
-                        CDEBUG(D_INFO|D_WARNING, "store %s ranges: space - "
-                               DRANGE", super - "DRANGE"\n",
-                               (seq->lss_type == LUSTRE_SEQ_SERVER ?
-                                "server" : "controller"),
+                        CDEBUG(D_INFO|D_WARNING, "%s: Store ranges: Space - "
+                               DRANGE", Super - "DRANGE"\n", seq->lss_name,
                                PRANGE(&seq->lss_space), PRANGE(&seq->lss_super));
-
                         rc = 0;
                 } else if (rc >= 0) {
                         rc = -EIO;
@@ -123,16 +120,15 @@ int seq_store_read(struct lu_server_seq *seq,
                 range_le_to_cpu(&seq->lss_space, &info->sti_record.ssr_space);
                 range_le_to_cpu(&seq->lss_super, &info->sti_record.ssr_super);
 
-                CDEBUG(D_INFO|D_WARNING, "Read %s ranges: space - "DRANGE", super "
-                       "- "DRANGE"\n", (seq->lss_type == LUSTRE_SEQ_SERVER ?
-                                        "server" : "controller"),
+                CDEBUG(D_INFO|D_WARNING, "%s: Read ranges: Space - "
+                       DRANGE", Super - "DRANGE"\n", seq->lss_name, 
                        PRANGE(&seq->lss_space), PRANGE(&seq->lss_super));
                 rc = 0;
         } else if (rc == 0) {
                 rc = -ENODATA;
         } else if (rc >= 0) {
-                CERROR("Read only %d bytes of %d\n", rc, 
-                       sizeof(info->sti_record));
+                CERROR("%s: Read only %d bytes of %d\n", seq->lss_name, 
+                       rc, sizeof(info->sti_record));
                 rc = -EIO;
         }
 	
@@ -150,15 +146,15 @@ int seq_store_init(struct lu_server_seq *seq,
         ENTRY;
 
         name = seq->lss_type == LUSTRE_SEQ_SERVER ?
-                "seq_srv" : "seq_ctl";
+                LUSTRE_SEQ_SRV_NAME : LUSTRE_SEQ_CTL_NAME;
         
         dt_obj = dt_store_open(ctx, dt, name, &fid);
         if (!IS_ERR(dt_obj)) {
                 seq->lss_obj = dt_obj;
 		rc = 0;
         } else {
-                CERROR("Can't find \"seq\" obj %d\n",
-		       (int)PTR_ERR(dt_obj));
+                CERROR("%s: Can't find \"%s\" obj %d\n",
+		       seq->lss_name, name, (int)PTR_ERR(dt_obj));
                 rc = PTR_ERR(dt_obj);
         }
 

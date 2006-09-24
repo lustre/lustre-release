@@ -182,7 +182,7 @@ static inline int range_is_exhausted(struct lu_range *r)
         return range_space(r) == 0;
 }
 
-#define DRANGE "["LPU64"-"LPU64"]"
+#define DRANGE "["LPX64"-"LPX64"]"
 
 #define PRANGE(range)      \
         (range)->lr_start, \

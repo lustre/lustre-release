@@ -217,7 +217,8 @@ fid_build_res_name(const struct lu_fid *f,
         return name;
 }
 
-
+#define LUSTRE_SEQ_SRV_NAME "seq_srv"
+#define LUSTRE_SEQ_CTL_NAME "seq_ctl"
 
 /* Range common stuff */
 void range_cpu_to_le(struct lu_range *dst, const struct lu_range *src);

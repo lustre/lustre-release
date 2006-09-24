@@ -63,15 +63,9 @@ seq_proc_write_common(struct file *file, const char *buffer,
 
 	LASSERT(range != NULL);
 
-        rc = sscanf(buffer, DRANGE"\n",
-		    &tmp.lr_start, &tmp.lr_end);
-
-	/* did not match 2 values */
-	if (rc != 2 || !range_is_sane(&tmp) || range_is_zero(&tmp)) {
-		CERROR("Can't parse input string or input is not correct\n");
+        rc = sscanf(buffer, "[%Lx - %Lx]\n", &tmp.lr_start, &tmp.lr_end);
+	if (rc != 2 || !range_is_sane(&tmp) || range_is_zero(&tmp))
 		RETURN(-EINVAL);
-	}
-
 	*range = tmp;
         RETURN(0);
 }
@@ -107,7 +101,7 @@ seq_proc_write_space(struct file *file, const char *buffer,
 	rc = seq_proc_write_common(file, buffer, count,
                                    data, &seq->lss_space);
 	if (rc == 0) {
-		CDEBUG(D_WARNING, "%s: sequences space has "
+		CDEBUG(D_WARNING, "%s: Sequences space has "
                        "changed to "DRANGE"\n", seq->lss_name,
                        PRANGE(&seq->lss_space));
 	}
@@ -150,9 +144,8 @@ seq_proc_write_super(struct file *file, const char *buffer,
                                    data, &seq->lss_super);
 
 	if (rc == 0) {
-		CDEBUG(D_WARNING, "%s: super-sequence has "
-                       "changed to "DRANGE"\n", seq->lss_name,
-                       PRANGE(&seq->lss_super));
+		CDEBUG(D_WARNING, "%s: Super has changed to "
+                       DRANGE"\n", seq->lss_name, PRANGE(&seq->lss_super));
 	}
 	
 	up(&seq->lss_sem);
@@ -220,9 +213,8 @@ seq_proc_write_super_width(struct file *file, const char *buffer,
         seq->lss_super_width = val;
         
 	if (rc == 0) {
-		CDEBUG(D_WARNING, "%s: super-sequence width "
-                       "has changed to "LPU64"\n", seq->lss_name,
-                       seq->lss_super_width);
+		CDEBUG(D_WARNING, "%s: Super width has changed to "
+                       LPU64"\n", seq->lss_name, seq->lss_super_width);
 	}
 	
 	up(&seq->lss_sem);
@@ -267,9 +259,8 @@ seq_proc_write_meta_width(struct file *file, const char *buffer,
                 seq->lss_meta_width = val;
                 
                 if (rc == 0) {
-                        CDEBUG(D_WARNING, "%s: meta-sequence width "
-                               "has changed to "LPU64"\n", seq->lss_name, 
-                               seq->lss_meta_width);
+                        CDEBUG(D_WARNING, "%s: Meta width has changed to "
+                               LPU64"\n", seq->lss_name, seq->lss_meta_width);
                 }
         }
 	
@@ -310,9 +301,8 @@ seq_proc_write_range(struct file *file, const char *buffer,
                                    data, &seq->lcs_range);
 
 	if (rc == 0) {
-		CDEBUG(D_WARNING, "%s: range has changed to "
-		       DRANGE"\n", seq->lcs_name, 
-                       PRANGE(&seq->lcs_range));
+		CDEBUG(D_WARNING, "%s: Range has changed to "
+		       DRANGE"\n", seq->lcs_name, PRANGE(&seq->lcs_range));
 	}
 	
 	up(&seq->lcs_sem);
@@ -358,7 +348,7 @@ seq_proc_write_seq_width(struct file *file, const char *buffer,
                 seq->lcs_width = val;
                 
                 if (rc == 0) {
-                        CDEBUG(D_WARNING, "%s: sequence width "
+                        CDEBUG(D_WARNING, "%s: Sequence width "
                                "has changed to "LPU64"\n",
                                seq->lcs_name, seq->lcs_width);
                 }

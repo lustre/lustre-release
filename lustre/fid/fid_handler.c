@@ -57,20 +57,20 @@ int seq_server_set_cli(struct lu_server_seq *seq,
         ENTRY;
 
         if (cli == NULL) {
-                CDEBUG(D_INFO|D_WARNING, "%s: detached "
-                       "sequence mgr client %s\n",
-                       seq->lss_name, cli->lcs_name);
+                CDEBUG(D_INFO|D_WARNING, "%s: Detached "
+                       "sequence client %s\n", seq->lss_name, 
+                       cli->lcs_name);
                 seq->lss_cli = cli;
                 RETURN(0);
         }
 
         if (seq->lss_cli) {
-                CERROR("%s: sequence-controller is already "
+                CERROR("%s: Sequence-controller is already "
                        "assigned\n", seq->lss_name);
                 RETURN(-EINVAL);
         }
 
-        CDEBUG(D_INFO|D_WARNING, "%s: attached "
+        CDEBUG(D_INFO|D_WARNING, "%s: Attached "
                "sequence client %s\n", seq->lss_name,
                cli->lcs_name);
 
@@ -87,8 +87,8 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 rc = seq_client_alloc_super(cli, ctx);
                 if (rc) {
                         up(&seq->lss_sem);
-                        CERROR("Can't allocate super-sequence, "
-                               "rc %d\n", rc);
+                        CERROR("%s: Can't allocate super-sequence, "
+                               "rc %d\n", seq->lss_name, rc);
                         RETURN(rc);
                 }
 
@@ -100,8 +100,8 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 /* save init seq to backing store. */
                 rc = seq_store_write(seq, ctx);
                 if (rc) {
-                        CERROR("Can't write sequence state, "
-                               "rc = %d\n", rc);
+                        CERROR("%s: Can't write sequence state, "
+                               "rc = %d\n", seq->lss_name, rc);
                 }
         }
 
@@ -124,7 +124,7 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
         LASSERT(range_is_sane(space));
 
         if (in != NULL) {
-                CDEBUG(D_INFO, "%s: recovery - use input range "
+                CDEBUG(D_INFO, "%s: Recovery - use input range "
                        DRANGE"\n", seq->lss_name, PRANGE(in));
 
                 if (in->lr_start > space->lr_start)
@@ -132,13 +132,14 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
                 *out = *in;
         } else {
                 if (range_space(space) < seq->lss_super_width) {
-                        CWARN("Sequences space is going to exhaust soon. "
-                              "Can allocate only "LPU64" sequences\n",
+                        CWARN("%s: Sequences space to be exhausted soon. "
+                              "Only "LPU64" sequences left\n", seq->lss_name, 
                               range_space(space));
                         *out = *space;
                         space->lr_start = space->lr_end;
                 } else if (range_is_exhausted(space)) {
-                        CERROR("Sequences space is exhausted\n");
+                        CERROR("%s: Sequences space is exhausted\n", 
+                               seq->lss_name);
                         RETURN(-ENOSPC);
                 } else {
                         range_alloc(out, space, seq->lss_super_width);
@@ -147,12 +148,11 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
 
         rc = seq_store_write(seq, ctx);
         if (rc) {
-                CERROR("Can't save state, rc = %d\n",
-                       rc);
+                CERROR("%s: Can't save state, rc %d\n", seq->lss_name, rc);
                 RETURN(rc);
         }
 
-        CDEBUG(D_INFO, "%s: allocated super-sequence "
+        CDEBUG(D_INFO, "%s: Allocated super-sequence "
                DRANGE"\n", seq->lss_name, PRANGE(out));
 
         RETURN(rc);
@@ -189,7 +189,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
          * it is allocated from new super.
          */
         if (in != NULL) {
-                CDEBUG(D_INFO, "%s: recovery - use input range "
+                CDEBUG(D_INFO, "%s: Recovery - use input range "
                        DRANGE"\n", seq->lss_name, PRANGE(in));
 
                 if (range_is_exhausted(super)) {
@@ -221,14 +221,15 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                  */
                 if (range_is_exhausted(super)) {
                         if (!seq->lss_cli) {
-                                CERROR("No seq-controller client is setup\n");
+                                CERROR("%s: No sequence controller client "
+                                       "is setup\n", seq->lss_name);
                                 RETURN(-EOPNOTSUPP);
                         }
 
                         rc = seq_client_alloc_super(seq->lss_cli, ctx);
                         if (rc) {
-                                CERROR("Can't allocate new super-sequence, "
-                                       "rc %d\n", rc);
+                                CERROR("%s: Can't allocate super-sequence, "
+                                       "rc %d\n", seq->lss_name, rc);
                                 RETURN(rc);
                         }
 
@@ -241,12 +242,12 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 
         rc = seq_store_write(seq, ctx);
         if (rc) {
-                CERROR("Can't save state, rc = %d\n",
-		       rc);
+                CERROR("%s: Can't save state, rc = %d\n",
+		       seq->lss_name, rc);
         }
 
         if (rc == 0) {
-                CDEBUG(D_INFO, "%s: allocated meta-sequence "
+                CDEBUG(D_INFO, "%s: Allocated meta-sequence "
                        DRANGE"\n", seq->lss_name, PRANGE(out));
         }
 
@@ -279,7 +280,7 @@ static int seq_server_handle(struct lu_site *site,
         switch (opc) {
         case SEQ_ALLOC_META:
                 if (!site->ls_server_seq) {
-                        CERROR("Sequence-server is not "
+                        CERROR("Sequence server is not "
                                "initialized\n");
                         RETURN(-EINVAL);
                 }
@@ -443,8 +444,8 @@ static int seq_server_proc_init(struct lu_server_seq *seq)
         rc = lprocfs_add_vars(seq->lss_proc_dir,
                               seq_server_proc_list, seq);
         if (rc) {
-                CERROR("Can't init sequence manager "
-                       "proc, rc %d\n", rc);
+                CERROR("%s: Can't init sequence manager "
+                       "proc, rc %d\n", seq->lss_name, rc);
                 GOTO(out_cleanup, rc);
         }
 
@@ -496,8 +497,8 @@ int seq_server_init(struct lu_server_seq *seq,
         seq->lss_super_width = LUSTRE_SEQ_SUPER_WIDTH;
         seq->lss_meta_width = LUSTRE_SEQ_META_WIDTH;
 
-        snprintf(seq->lss_name, sizeof(seq->lss_name), "%s-%s",
-                 (is_srv ? "srv" : "ctl"), prefix);
+        snprintf(seq->lss_name, sizeof(seq->lss_name), 
+                 "%s-%s", (is_srv ? "srv" : "ctl"), prefix);
 
         seq->lss_space = LUSTRE_SEQ_SPACE_RANGE;
         seq->lss_super = LUSTRE_SEQ_ZERO_RANGE;
@@ -509,13 +510,13 @@ int seq_server_init(struct lu_server_seq *seq,
         /* request backing store for saved sequence info */
         rc = seq_store_read(seq, ctx);
         if (rc == -ENODATA) {
-                CDEBUG(D_INFO|D_WARNING, "%s: no data on "
-                       "storage was found, %s\n", seq->lss_name,
+                CDEBUG(D_INFO|D_WARNING, "%s: No data found "
+                       "on storage, %s\n", seq->lss_name,
                        is_srv ? "wait for controller attach" :
                        "this is first controller run");
         } else if (rc) {
-		CERROR("can't read sequence state, rc = %d\n",
-		       rc);
+		CERROR("%s: Can't read sequence state, rc %d\n",
+		       seq->lss_name, rc);
 		GOTO(out, rc);
 	}
 
@@ -525,12 +526,8 @@ int seq_server_init(struct lu_server_seq *seq,
 
 	EXIT;
 out:
-	if (rc) {
+	if (rc)
 		seq_server_fini(seq, ctx);
-        } else {
-                CDEBUG(D_INFO|D_WARNING, "%s Sequence Manager\n",
-                       (is_srv ? "Server" : "Controller"));
-        }
 	return rc;
 }
 EXPORT_SYMBOL(seq_server_init);

@@ -349,8 +349,6 @@ int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
 out:
         if (rc)
                 fld_server_fini(fld, ctx);
-        else
-                CDEBUG(D_INFO|D_WARNING, "Server FLD\n");
         return rc;
 }
 EXPORT_SYMBOL(fld_server_init);

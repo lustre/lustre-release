@@ -118,8 +118,7 @@ struct fld_cache_info *fld_cache_init(int hash_size, int cache_size,
         for (i = 0; i < hash_size; i++)
                 INIT_HLIST_HEAD(&cache->fci_hash_table[i]);
 
-        CDEBUG(D_INFO|D_WARNING, "FLD cache - htable: %d, "
-               "size: %d, threshold: %d\n", hash_size,
+        CDEBUG(D_INFO|D_WARNING, "FLD cache: Size: %d, Threshold: %d\n", 
                cache_size, cache_threshold);
 
         RETURN(cache);

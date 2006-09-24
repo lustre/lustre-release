@@ -119,7 +119,7 @@ fld_proc_write_hash(struct file *file, const char *buffer,
                 fld->lcf_hash = hash;
                 spin_unlock(&fld->lcf_lock);
 
-                CDEBUG(D_WARNING, "%s: changed hash to \"%s\"\n",
+                CDEBUG(D_WARNING, "%s: Changed hash to \"%s\"\n",
                        fld->lcf_name, hash->fh_name);
         }
 	
@@ -137,7 +137,7 @@ fld_proc_write_cache_flush(struct file *file, const char *buffer,
 
         fld_cache_flush(fld->lcf_cache);
         
-        CDEBUG(D_WARNING, "%s: lookup cache is flushed\n",
+        CDEBUG(D_WARNING, "%s: Lookup cache is flushed\n",
                fld->lcf_name);
 	
         RETURN(count);
