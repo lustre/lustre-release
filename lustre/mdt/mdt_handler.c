@@ -910,12 +910,6 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
         int                      rc;
         ENTRY;
 
-        rc = mdt_reint_unpack(info, op);
-        if (rc != 0) {
-                CERROR("Can't unpack reint, rc %d\n", rc);
-                RETURN(rc);
-        }
-
         /* pack reply */
         if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
                 req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
@@ -937,6 +931,12 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK))
                 RETURN(-EFAULT);
         
+        rc = mdt_reint_unpack(info, op);
+        if (rc != 0) {
+                CERROR("Can't unpack reint, rc %d\n", rc);
+                RETURN(rc);
+        }
+
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
                 struct mdt_client_data *mcd;
 
@@ -1118,7 +1118,7 @@ static int mdt_enqueue(struct mdt_thread_info *info)
          */
         LASSERT(info->mti_dlm_req != NULL);
 
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_LDLM_ENQUEUE)) {
+        if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE)) {
                 info->mti_fail_id = OBD_FAIL_LDLM_ENQUEUE;
                 return 0;
         }

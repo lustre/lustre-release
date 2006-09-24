@@ -545,21 +545,23 @@ static void mdc_replay_open(struct ptlrpc_request *req)
         struct mdt_body *body;
         ENTRY;
 
-        body = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF, sizeof(*body),
-                                  lustre_swab_mdt_body);
-        LASSERT(body != NULL);
-
         if (mod == NULL) {
                 DEBUG_REQ(D_ERROR, req,
-                          "can't properly replay without open data");
+                          "Can't properly replay without open data.");
                 EXIT;
                 return;
         }
 
+        body = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF, sizeof(*body),
+                                  lustre_swab_mdt_body);
+
         och = mod->mod_och;
         if (och != NULL) {
                 struct lustre_handle *file_fh;
+
                 LASSERT(och->och_magic == OBD_CLIENT_HANDLE_MAGIC);
+                LASSERT(body != NULL);
+
                 file_fh = &och->och_fh;
                 CDEBUG(D_HA, "updating handle from "LPX64" to "LPX64"\n",
                        file_fh->cookie, body->handle.cookie);
@@ -570,7 +572,10 @@ static void mdc_replay_open(struct ptlrpc_request *req)
         close_req = mod->mod_close_req;
         if (close_req != NULL) {
                 struct mdt_epoch *epoch;
+
                 LASSERT(lustre_msg_get_opc(close_req->rq_reqmsg) == MDS_CLOSE);
+                LASSERT(body != NULL);
+
                 epoch = lustre_msg_buf(close_req->rq_reqmsg, REQ_REC_OFF,
                                        sizeof(*epoch));
                 LASSERT(epoch);
