@@ -812,7 +812,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
         struct lvfs_run_ctxt saved;
         struct mds_body *body;
         struct dentry *dparent = NULL, *dchild = NULL;
-        struct lvfs_ucred uc = {NULL,};
+        struct lvfs_ucred uc = {0,};
         struct lustre_handle parent_lockh;
         int namesize;
         int rc = 0, cleanup_phase = 0, resent_req = 0;
@@ -978,7 +978,7 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
         struct lvfs_run_ctxt saved;
         struct dentry *de;
         struct mds_body *body;
-        struct lvfs_ucred uc = { NULL, };
+        struct lvfs_ucred uc = {0,};
         int rc = 0;
         ENTRY;
 
@@ -1131,7 +1131,7 @@ static int mds_readpage(struct ptlrpc_request *req, int offset)
         struct mds_body *body, *repbody;
         struct lvfs_run_ctxt saved;
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
-        struct lvfs_ucred uc = {NULL,};
+        struct lvfs_ucred uc = {0,};
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
@@ -1970,12 +1970,14 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         if (rc)
                 GOTO(err_fs, rc);
 
+#if 0
         mds->mds_group_hash = upcall_cache_init(obd->obd_name);
         if (IS_ERR(mds->mds_group_hash)) {
                 rc = PTR_ERR(mds->mds_group_hash);
                 mds->mds_group_hash = NULL;
                 GOTO(err_qctxt, rc);
         }
+#endif
 
         /* Don't wait for mds_postrecov trying to clear orphans */
         obd->obd_async_recov = 1;
@@ -2051,8 +2053,10 @@ err_qctxt:
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
         mds_fs_cleanup(obd);
+#if 0
         upcall_cache_cleanup(mds->mds_group_hash);
         mds->mds_group_hash = NULL;
+#endif
 err_ns:
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
@@ -2255,8 +2259,10 @@ static int mds_cleanup(struct obd_device *obd)
                 OBD_FREE(mds->mds_lov_objids, mds->mds_lov_objids_size);
         mds_fs_cleanup(obd);
 
+#if 0
         upcall_cache_cleanup(mds->mds_group_hash);
         mds->mds_group_hash = NULL;
+#endif
 
         must_put = server_put_mount(obd->obd_name, mds->mds_vfsmnt);
         /* must_put is for old method (l_p_m returns non-0 on err) */

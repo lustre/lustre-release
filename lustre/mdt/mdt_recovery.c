@@ -880,7 +880,8 @@ static int mdt_txn_commit_cb(const struct lu_context *ctx,
         return 0;
 }
 
-int mdt_fs_setup(const struct lu_context *ctx, struct mdt_device *mdt)
+int mdt_fs_setup(const struct lu_context *ctx, struct mdt_device *mdt,
+                 struct obd_device *obd)
 {
         struct lu_fid last_fid;
         struct dt_object *last;
@@ -908,6 +909,11 @@ int mdt_fs_setup(const struct lu_context *ctx, struct mdt_device *mdt)
                 rc = PTR_ERR(last);
                 CERROR("cannot open %s: rc = %d\n", LAST_RCVD, rc);
         }
+
+        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+        obd->obd_lvfs_ctxt.pwdmnt = current->fs->pwdmnt;
+        obd->obd_lvfs_ctxt.pwd = current->fs->pwd;
+        obd->obd_lvfs_ctxt.fs = get_ds();
 
         RETURN (rc);
 }
@@ -976,13 +982,14 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
 
         body = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
         rc = mo_attr_get(mti->mti_ctxt, mdt_object_child(child),
-                         &mti->mti_attr);
+                         &mti->mti_attr, &mti->mti_uc);
         if (rc == -EREMOTE) {
                 /* object was created on remote server */
                 req->rq_status = rc;
                 body->valid |= OBD_MD_MDS;
         }
         mdt_pack_attr2body(body, &mti->mti_attr.ma_attr, mdt_object_fid(child));
+        mdt_body_reverse_idmap(mti, body);
         mdt_object_put(mti->mti_ctxt, child);
 }
 
@@ -1002,8 +1009,10 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
         body = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
         obj = mdt_object_find(mti->mti_ctxt, mdt, mti->mti_rr.rr_fid1);
         LASSERT(!IS_ERR(obj));
-        mo_attr_get(mti->mti_ctxt, mdt_object_child(obj), &mti->mti_attr);
+        mo_attr_get(mti->mti_ctxt, mdt_object_child(obj),
+                    &mti->mti_attr, &mti->mti_uc);
         mdt_pack_attr2body(body, &mti->mti_attr.ma_attr, mdt_object_fid(obj));
+        mdt_body_reverse_idmap(mti, body);
 
         /* Don't return OST-specific attributes if we didn't just set them */
 /*

@@ -449,7 +449,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define MDT_CONNECT_SUPPORTED  (OBD_CONNECT_RDONLY | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
-                                OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID)
+                                OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID | \
+                                OBD_CONNECT_LCL_CLIENT | OBD_CONNECT_RMT_CLIENT)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
@@ -605,6 +606,7 @@ struct md_op_data {
         __u32                 suppgids[2];
         __u32                 fsuid;
         __u32                 fsgid;
+        __u32                 cap;
 
         /* iattr fields and blocks. */
         struct iattr          attr;
@@ -657,6 +659,9 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define XATTR_NAME_ACL_ACCESS   "system.posix_acl_access"
 #define XATTR_NAME_LOV          "trusted.lov"
 
+/* remote ACL */
+#define XATTR_NAME_LUSTRE_ACL   "system.lustre_acl"
+
 #define OBD_MD_FLID        (0x00000001ULL) /* object ID */
 #define OBD_MD_FLATIME     (0x00000002ULL) /* access time */
 #define OBD_MD_FLMTIME     (0x00000004ULL) /* data modification time */
@@ -698,6 +703,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLXATTRLS   (0x0000002000000000ULL) /* xattr list */
 #define OBD_MD_FLXATTRRM   (0x0000004000000000ULL) /* xattr remove */
 #define OBD_MD_FLACL       (0x0000008000000000ULL) /* ACL */
+#define OBD_MD_FLRMTPERM   (0x0000010000000000ULL) /* remote permission */
 
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
                           OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
@@ -1022,6 +1028,7 @@ struct lustre_md {
 #ifdef CONFIG_FS_POSIX_ACL
         struct posix_acl        *posix_acl;
 #endif
+        struct mdt_remote_perm   *remote_perm;
 };
 
 #define Q_QUOTACHECK    0x800100
@@ -1045,6 +1052,33 @@ struct obd_quotactl {
 };
 
 extern void lustre_swab_obd_quotactl(struct obd_quotactl *q);
+
+/* inode access permission for remote user, the inode info are omitted,
+ * for client knows them. */
+struct mds_remote_perm {
+        __u32           rp_uid;
+        __u32           rp_gid;
+        __u32           rp_fsuid;
+        __u32           rp_fsgid;
+        __u32           rp_access_perm; /* MAY_READ/WRITE/EXEC */
+};
+
+/* setxid permissions for mds_setxid_perm.mp_perm */
+#define LUSTRE_SETUID_PERM 0x01
+#define LUSTRE_SETGID_PERM 0x02
+#define LUSTRE_SETGRP_PERM 0x04
+
+extern void lustre_swab_mds_remote_perm(struct mds_remote_perm *p);
+
+struct mdt_remote_perm {
+        __u32           rp_uid;
+        __u32           rp_gid;
+        __u32           rp_fsuid;
+        __u32           rp_fsgid;
+        __u32           rp_access_perm; /* MAY_READ/WRITE/EXEC */
+};
+
+extern void lustre_swab_mdt_remote_perm(struct mdt_remote_perm *p);
 
 struct mds_rec_setattr {
         __u32           sa_opcode;
@@ -1103,6 +1137,8 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define FMODE_EPOCHLCK           02000000
 #define FMODE_SOM                04000000
 #define FMODE_CLOSED             0
+
+#define MDS_OPEN_CREATED         00000010
 
 #define MDS_FMODE_EXEC           00000004
 #define MDS_OPEN_CREAT           00000100

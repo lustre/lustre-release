@@ -66,10 +66,8 @@ int obd_memmax;
 #endif
 
 static void push_group_info(struct lvfs_run_ctxt *save,
-                            struct upcall_cache_entry *uce)
+                            struct group_info *ginfo)
 {
-        struct group_info *ginfo = uce ? uce->ue_group_info : NULL;
-
         if (!ginfo) {
                 save->ngroups = current_ngroups;
                 current_ngroups = 0;
@@ -97,10 +95,8 @@ static void push_group_info(struct lvfs_run_ctxt *save,
 }
 
 static void pop_group_info(struct lvfs_run_ctxt *save,
-                           struct upcall_cache_entry *uce)
+                           struct group_info *ginfo)
 {
-        struct group_info *ginfo = uce ? uce->ue_group_info : NULL;
-
         if (!ginfo) {
                 current_ngroups = save->ngroups;
         } else {
@@ -142,6 +138,7 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
         save->luc.luc_umask = current->fs->umask;
+        save->ngroups = current->group_info->ngroups;
 
         LASSERT(save->pwd);
         LASSERT(save->pwdmnt);
@@ -149,14 +146,22 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         LASSERT(new_ctx->pwdmnt);
 
         if (uc) {
+                save->luc.luc_uid = current->uid;
+                save->luc.luc_gid = current->gid;
                 save->luc.luc_fsuid = current->fsuid;
                 save->luc.luc_fsgid = current->fsgid;
                 save->luc.luc_cap = current->cap_effective;
 
+                current->uid = uc->luc_uid;
+                current->gid = uc->luc_gid;
                 current->fsuid = uc->luc_fsuid;
                 current->fsgid = uc->luc_fsgid;
                 current->cap_effective = uc->luc_cap;
-                push_group_info(save, uc->luc_uce);
+
+                push_group_info(save,
+                                uc->luc_ginfo ?:
+                                uc->luc_identity ? uc->luc_identity->mi_ginfo :
+                                                   NULL);
         }
         current->fs->umask = 0; /* umask already applied on client */
         set_fs(new_ctx->fs);
@@ -206,10 +211,15 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
         mntput(saved->pwdmnt);
         current->fs->umask = saved->luc.luc_umask;
         if (uc) {
+                current->uid = saved->luc.luc_uid;
+                current->gid = saved->luc.luc_gid;
                 current->fsuid = saved->luc.luc_fsuid;
                 current->fsgid = saved->luc.luc_fsgid;
                 current->cap_effective = saved->luc.luc_cap;
-                pop_group_info(saved, uc->luc_uce);
+                pop_group_info(saved,
+                               uc->luc_ginfo ?:
+                               uc->luc_identity ? uc->luc_identity->mi_ginfo :
+                                                  NULL);
         }
 
         /*

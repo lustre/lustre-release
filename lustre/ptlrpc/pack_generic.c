@@ -1713,6 +1713,24 @@ void lustre_swab_obd_quotactl (struct obd_quotactl *q)
         lustre_swab_obd_dqblk (&q->qc_dqblk);
 }
 
+void lustre_swab_mds_remote_perm (struct mds_remote_perm *p)
+{
+        __swab32s (&p->rp_uid);
+        __swab32s (&p->rp_gid);
+        __swab32s (&p->rp_fsuid);
+        __swab32s (&p->rp_fsgid);
+        __swab32s (&p->rp_access_perm);
+};
+
+void lustre_swab_mdt_remote_perm (struct mdt_remote_perm *p)
+{
+        __swab32s (&p->rp_uid);
+        __swab32s (&p->rp_gid);
+        __swab32s (&p->rp_fsuid);
+        __swab32s (&p->rp_fsgid);
+        __swab32s (&p->rp_access_perm);
+};
+
 void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa)
 {
         __swab32s (&sa->sa_opcode);

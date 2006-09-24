@@ -415,8 +415,9 @@ static inline int obd_precleanup(struct obd_device *obd,
                                 lu_context_exit(&ctx);
                                 lu_context_fini(&ctx);
                         }
-                } else 
+                } else {
                         rc = 0;
+                }
         } else
 #endif
         {
@@ -1894,6 +1895,16 @@ static inline int md_init_ea_size(struct obd_export *exp,
         RETURN(MDP(exp->exp_obd, init_ea_size)(exp, easize,
                                                def_asize,
                                                cookiesize));
+}
+
+static inline int md_get_remote_perm(struct obd_export *exp,
+                                     const struct lu_fid *fid,
+                                     struct ptlrpc_request **request)
+{
+        ENTRY;
+        EXP_CHECK_MD_OP(exp, get_remote_perm);
+        MD_COUNTER_INCREMENT(exp->exp_obd, get_remote_perm);
+        RETURN(MDP(exp->exp_obd, get_remote_perm)(exp, fid, request));
 }
 
 /* OBD Metadata Support */

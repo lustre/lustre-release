@@ -67,13 +67,14 @@ static int mdt_md_create(struct mdt_thread_info *info)
                                OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
                 rc = mdo_create(info->mti_ctxt, next, rr->rr_name,
-                                mdt_object_child(child), &info->mti_spec,
-                                ma);
+                                mdt_object_child(child),
+                                &info->mti_spec, ma, &info->mti_uc);
                 if (rc == 0) {
                         /* return fid & attr to client. */
                         if (ma->ma_valid & MA_INODE)
-                                mdt_pack_attr2body(repbody, &ma->ma_attr, 
+                                mdt_pack_attr2body(repbody, &ma->ma_attr,
                                                    mdt_object_fid(child));
+                                mdt_body_reverse_idmap(info, repbody);
                 }
                 mdt_object_put(info->mti_ctxt, child);
         } else
@@ -99,13 +100,14 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
                 struct md_object *next = mdt_object_child(o);
 
                 ma->ma_need = MA_INODE;
-                rc = mo_object_create(info->mti_ctxt, next,
-                                      &info->mti_spec, ma);
+                rc = mo_object_create(info->mti_ctxt, next, &info->mti_spec,
+                                      ma, &info->mti_uc);
                 if (rc == 0) {
                         /* return fid & attr to client. */
                         if (ma->ma_valid & MA_INODE)
                                 mdt_pack_attr2body(repbody, &ma->ma_attr,
                                                    mdt_object_fid(o));
+                                mdt_body_reverse_idmap(info, repbody);
                 }
                 mdt_object_put(info->mti_ctxt, o);
         } else
@@ -162,7 +164,8 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
                        OBD_FAIL_MDS_REINT_SETATTR_WRITE);
 
         /* all attrs are packed into mti_attr in unpack_setattr */
-        rc = mo_attr_set(info->mti_ctxt, mdt_object_child(mo), ma);
+        rc = mo_attr_set(info->mti_ctxt, mdt_object_child(mo), ma,
+                         &info->mti_uc);
         if (rc != 0)
                 GOTO(out, rc);
 
@@ -260,11 +263,12 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
         ma->ma_need = MA_INODE;
         next = mdt_object_child(mo);
-        rc = mo_attr_get(info->mti_ctxt, next, ma);
+        rc = mo_attr_get(info->mti_ctxt, next, ma, &info->mti_uc);
         if (rc != 0)
                 GOTO(out, rc);
 
         mdt_pack_attr2body(repbody, &ma->ma_attr, mdt_object_fid(mo));
+        mdt_body_reverse_idmap(info, repbody);
         EXIT;
 out:
         mdt_object_put(info->mti_ctxt, mo);
@@ -348,13 +352,14 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         if (strlen(rr->rr_name) == 0) {
                 /* remote partial operation */
-                rc = mo_ref_del(info->mti_ctxt, mdt_object_child(mp), ma);
+                rc = mo_ref_del(info->mti_ctxt, mdt_object_child(mp), ma,
+                                &info->mti_uc);
                 GOTO(out_unlock_parent, rc);
         }
 
         /* step 2: find & lock the child */
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(mp),
-                        rr->rr_name, child_fid);
+                        rr->rr_name, child_fid, &info->mti_uc);
         if (rc != 0)
                  GOTO(out_unlock_parent, rc);
 
@@ -377,7 +382,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
          */
         ma->ma_need = MA_INODE;
         rc = mdo_unlink(info->mti_ctxt, mdt_object_child(mp),
-                        mdt_object_child(mc), rr->rr_name, ma);
+                        mdt_object_child(mc), rr->rr_name, ma, &info->mti_uc);
         if (rc)
                 GOTO(out_unlock_child, rc);
 
@@ -425,7 +430,8 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
         if (strlen(rr->rr_name) == 0) {
                 /* remote partial operation */
-                rc = mo_ref_add(info->mti_ctxt, mdt_object_child(ms));
+                rc = mo_ref_add(info->mti_ctxt, mdt_object_child(ms),
+                                &info->mti_uc);
                 GOTO(out_unlock_source, rc);
         }
         /*step 2: find & lock the target parent dir*/
@@ -442,7 +448,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                        OBD_FAIL_MDS_REINT_LINK_WRITE);
 
         rc = mdo_link(info->mti_ctxt, mdt_object_child(mp),
-                      mdt_object_child(ms), rr->rr_name, ma);
+                      mdt_object_child(ms), rr->rr_name, ma, &info->mti_uc);
         GOTO(out_unlock_target, rc);
 
 out_unlock_target:
@@ -482,7 +488,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
 
         /*step 2: find & lock the target object if exists*/
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(mtgtdir),
-                        rr->rr_tgt, tgt_fid);
+                        rr->rr_tgt, tgt_fid, &info->mti_uc);
         if (rc != 0 && rc != -ENOENT) {
                 GOTO(out_unlock_tgtdir, rc);
         } else if (rc == 0) {
@@ -494,12 +500,13 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
                         GOTO(out_unlock_tgtdir, rc = PTR_ERR(mtgt));
 
                 rc = mdo_rename_tgt(info->mti_ctxt, mdt_object_child(mtgtdir),
-                                    mdt_object_child(mtgt),
-                                    rr->rr_fid2, rr->rr_tgt, ma);
+                                    mdt_object_child(mtgt), rr->rr_fid2,
+                                    rr->rr_tgt, ma, &info->mti_uc);
         } else /* -ENOENT */ {
                 rc = mdo_name_insert(info->mti_ctxt, mdt_object_child(mtgtdir),
                                      rr->rr_tgt, rr->rr_fid2,
-                                     S_ISDIR(ma->ma_attr.la_mode));
+                                     S_ISDIR(ma->ma_attr.la_mode),
+                                     &info->mti_uc);
         }
 
         /* handle last link of tgt object */
@@ -578,8 +585,9 @@ static int mdt_rename_check(struct mdt_thread_info *info, struct lu_fid *fid)
         do {
                 dst = mdt_object_find(info->mti_ctxt, info->mti_mdt, &dst_fid);
                 if (!IS_ERR(dst)) {
-                        rc = mdo_is_subdir(info->mti_ctxt, mdt_object_child(dst),
-                                           fid, &dst_fid);
+                        rc = mdo_is_subdir(info->mti_ctxt,
+                                           mdt_object_child(dst),
+                                           fid, &dst_fid, NULL);
                         mdt_object_put(info->mti_ctxt, dst);
                         if (rc < 0) {
                                 CERROR("Error while doing mdo_is_subdir(), rc %d\n",
@@ -667,7 +675,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         /*step 3: find & lock the old object*/
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(msrcdir),
-                        rr->rr_name, old_fid);
+                        rr->rr_name, old_fid, &info->mti_uc);
         if (rc != 0)
                 GOTO(out_unlock_target, rc);
 
@@ -684,7 +692,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         /*step 4: find & lock the new object*/
         /* new target object may not exist now */
         rc = mdo_lookup(info->mti_ctxt, mdt_object_child(mtgtdir),
-                        rr->rr_tgt, new_fid);
+                        rr->rr_tgt, new_fid, &info->mti_uc);
         if (rc == 0) {
                 /* the new_fid should have been filled at this moment*/
                 if (lu_fid_eq(old_fid, new_fid))
@@ -734,7 +742,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         rc = mdo_rename(info->mti_ctxt, mdt_object_child(msrcdir),
                         mdt_object_child(mtgtdir), old_fid, rr->rr_name,
-                        (mnew ? mdt_object_child(mnew) : NULL), rr->rr_tgt, ma);
+                        (mnew ? mdt_object_child(mnew) : NULL),
+                        rr->rr_tgt, ma, &info->mti_uc);
         
         /* handle last link of tgt object */
         if (rc == 0 && mnew)

@@ -170,7 +170,7 @@ int mds_getxattr(struct ptlrpc_request *req)
         struct lvfs_run_ctxt saved;
         struct dentry *de;
         struct mds_body *body;
-        struct lvfs_ucred uc = { NULL, };
+        struct lvfs_ucred uc = {0,};
         int rc = 0;
         ENTRY;
 
@@ -332,7 +332,7 @@ int mds_setxattr(struct ptlrpc_request *req)
         struct obd_device *obd = req->rq_export->exp_obd;
         struct lvfs_run_ctxt saved;
         struct mds_body *body;
-        struct lvfs_ucred uc = { NULL, };
+        struct lvfs_ucred uc = {0,};
         int rc;
         ENTRY;
 

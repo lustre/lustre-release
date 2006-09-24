@@ -315,6 +315,9 @@ void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
         op_data->namelen = namelen;
         op_data->create_mode = mode;
         op_data->mod_time = CURRENT_SECONDS;
+        op_data->fsuid = current->fsuid;
+        op_data->fsgid = current->fsgid;
+        op_data->cap = current->cap_effective;
 }
 
 static void ll_d_add(struct dentry *de, struct inode *inode)

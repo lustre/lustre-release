@@ -71,6 +71,31 @@ static int __init init_lustre_lite(void)
         if (ll_file_data_slab == NULL)
                 return -ENOMEM;
 
+        LASSERT(ll_remote_perm_cachep == NULL);
+        ll_remote_perm_cachep = kmem_cache_create("ll_remote_perm",
+                                                  sizeof(struct ll_remote_perm),
+                                                  0, SLAB_HWCACHE_ALIGN, NULL,
+                                                  NULL);
+        if (!ll_remote_perm_cachep) {
+                kmem_cache_destroy(ll_file_data_slab);
+                ll_file_data_slab = NULL;
+                return -ENOMEM;
+        }
+
+        LASSERT(ll_rmtperm_hash_cachep == NULL);
+        ll_rmtperm_hash_cachep = kmem_cache_create("ll_rmtperm_hash",
+                                                  REMOTE_PERM_HASHSIZE *
+                                                  sizeof(struct list_head),
+                                                  0, SLAB_HWCACHE_ALIGN, NULL,
+                                                  NULL);
+        if (!ll_rmtperm_hash_cachep) {
+                kmem_cache_destroy(ll_remote_perm_cachep);
+                kmem_cache_destroy(ll_file_data_slab);
+                ll_remote_perm_cachep = NULL;
+                ll_file_data_slab = NULL;
+                return -ENOMEM;
+        }
+
         if (proc_lustre_root)
                 proc_lustre_fs_root = proc_mkdir("llite", proc_lustre_root);
 
@@ -93,6 +118,14 @@ static void __exit exit_lustre_lite(void)
         lustre_register_client_process_config(NULL);
 
         ll_unregister_cache(&ll_cache_definition);
+
+        rc = kmem_cache_destroy(ll_rmtperm_hash_cachep);
+        LASSERTF(rc == 0, "couldn't destroy ll_rmtperm_hash_cachep\n");
+        ll_rmtperm_hash_cachep = NULL;
+
+        rc = kmem_cache_destroy(ll_remote_perm_cachep);
+        LASSERTF(rc == 0, "couldn't destroy ll_remote_perm_cachep\n");
+        ll_remote_perm_cachep = NULL;
 
         rc = kmem_cache_destroy(ll_file_data_slab);
         LASSERTF(rc == 0, "couldn't destroy ll_file_data slab\n");

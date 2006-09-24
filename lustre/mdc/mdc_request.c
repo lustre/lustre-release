@@ -284,7 +284,7 @@ int mdc_xattr_common(struct obd_export *exp, const struct lu_fid *fid,
         struct ptlrpc_request *req;
         int size[4] = { sizeof(struct ptlrpc_body), sizeof(struct mdt_body) };
         // int size[3] = {sizeof(struct mdt_body)}, bufcnt = 1;
-        int rc, xattr_namelen = 0, bufcnt = 2, offset;
+        int rc, xattr_namelen = 0, bufcnt = 2, offset, remote_acl = 0;
         void *tmp;
         ENTRY;
 
@@ -310,6 +310,8 @@ int mdc_xattr_common(struct obd_export *exp, const struct lu_fid *fid,
         if (xattr_name) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset++, xattr_namelen);
                 memcpy(tmp, xattr_name, xattr_namelen);
+                if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))
+                        remote_acl = 1;
         }
         if (input_size) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset++, input_size);
@@ -329,12 +331,15 @@ int mdc_xattr_common(struct obd_export *exp, const struct lu_fid *fid,
         ptlrpc_req_set_repsize(req, bufcnt, size);
 
         /* make rpc */
-        if (opcode == MDS_SETXATTR)
+        /* NB: set remote acl doesn't need hold rpc lock, because it just
+         * send command to MDS, and when it's executed on mountpoint on MDS,
+         * another mdc_xattr_common() will be invoked there. */
+        if (opcode == MDS_SETXATTR && !remote_acl)
                 mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
 
         rc = ptlrpc_queue_wait(req);
 
-        if (opcode == MDS_SETXATTR)
+        if (opcode == MDS_SETXATTR && !remote_acl)
                 mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
 
         if (rc != 0)
@@ -494,6 +499,14 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                 rc = mdc_unpack_acl(dt_exp, req, md, offset);
                 if (rc)
                         GOTO(err_out, rc);
+                offset++;
+        }
+
+        /* remote permission */
+        if (md->body->valid & OBD_MD_FLRMTPERM) {
+                md->remote_perm = lustre_msg_buf(req->rq_repmsg, offset,
+                                                sizeof(struct mdt_remote_perm));
+                LASSERT(md->remote_perm);
                 offset++;
         }
 out:
@@ -1447,6 +1460,47 @@ static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)
         return(rc);
 }
 
+/* get remote permission for current user on fid */
+int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
+                        struct ptlrpc_request **request)
+{
+        struct ptlrpc_request *req;
+        struct mdt_body *body;
+        struct mdt_remote_perm *perm;
+        int size[3] = { sizeof(struct ptlrpc_body),
+                        sizeof(*body),
+                        sizeof(*perm) };
+        int rc;
+        ENTRY;
+
+        *request = NULL;
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
+                              MDS_GETATTR, 2, size, NULL);
+        if (!req)
+                RETURN(-ENOMEM);
+
+        mdc_pack_req_body(req, REQ_REC_OFF, OBD_MD_FLRMTPERM, fid, 0, 0);
+
+        ptlrpc_req_set_repsize(req, 3, size);
+        rc = ptlrpc_queue_wait(req);
+        if (rc) {
+                ptlrpc_req_finished(req);
+                RETURN(rc);
+        }
+
+        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
+                                  lustre_swab_mdt_body);
+        LASSERT(body);
+        LASSERT(body->valid & OBD_MD_FLRMTPERM);
+
+        perm = lustre_swab_repbuf(req, REPLY_REC_OFF + 1, sizeof(*perm),
+                                  lustre_swab_mdt_remote_perm);
+        LASSERT(perm);
+
+        *request = req;
+        RETURN(0);
+}
+
 struct obd_ops mdc_obd_ops = {
         .o_owner            = THIS_MODULE,
         .o_setup            = mdc_setup,
@@ -1497,7 +1551,8 @@ struct md_ops mdc_md_ops = {
         .m_get_lustre_md    = mdc_get_lustre_md,
         .m_free_lustre_md   = mdc_free_lustre_md,
         .m_set_open_replay_data = mdc_set_open_replay_data,
-        .m_clear_open_replay_data = mdc_clear_open_replay_data
+        .m_clear_open_replay_data = mdc_clear_open_replay_data,
+        .m_get_remote_perm  = mdc_get_remote_perm
 };
 
 extern quota_interface_t mdc_quota_interface;

@@ -101,6 +101,12 @@ static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck,
         EXIT;
 }
 
+static inline int client_is_remote(struct obd_export *exp)
+{
+        return class_exp2cliimp(exp)->imp_connect_data.ocd_connect_flags &
+               OBD_CONNECT_RMT_CLIENT ? 1 : 0;
+}
+
 /* Quota stuff */
 extern quota_interface_t *quota_interface;
 

@@ -41,13 +41,14 @@ struct group_info { /* unused */ };
 /* simple.c */
 
 struct lvfs_ucred {
-        struct upcall_cache_entry *luc_uce;
-        __u32 luc_fsuid;
-        __u32 luc_fsgid;
-        __u32 luc_cap;
-        __u32 luc_suppgid1;
-        __u32 luc_suppgid2;
-        __u32 luc_umask;
+        __u32                   luc_uid;
+        __u32                   luc_gid;
+        __u32                   luc_fsuid;
+        __u32                   luc_fsgid;
+        __u32                   luc_cap;
+        __u32                   luc_umask;
+	struct group_info      *luc_ginfo;
+	struct mdt_identity    *luc_identity;
 };
 
 struct lvfs_callback_ops {

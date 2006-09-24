@@ -61,4 +61,6 @@ extern int llapi_quotacheck(char *mnt, int check_type);
 extern int llapi_poll_quotacheck(char *mnt, struct if_quotacheck *qchk);
 extern int llapi_quotactl(char *mnt, struct if_quotactl *qctl);
 extern int llapi_target_iterate(int type_num, char **obd_type, void *args, llapi_cb_t cb);
+extern int llapi_getfacl(char *fname, char *cmd);
+extern int llapi_setfacl(char *fname, char *cmd);
 #endif

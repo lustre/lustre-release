@@ -384,8 +384,8 @@ static const char *obd_connect_names[] = {
         "join_file",
         "getattr_by_fid",
         "no_oh_for_devices",
-        "local_1.8_client",
-        "remote_1.8_client",
+        "local_client",
+        "remote_client",
         "max_byte_per_rpc",
         "64bit_qdata",
         "fid_capability",
@@ -846,6 +846,7 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
         LPROCFS_MD_OP_INIT(num_private_stats, stats, set_open_replay_data);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, clear_open_replay_data);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, set_lock_data);
+        LPROCFS_MD_OP_INIT(num_private_stats, stats, get_remote_perm);
 
         for (i = num_private_stats; i < num_stats; i++) {
                 if (stats->ls_percpu[0]->lp_cntr[i].lc_name == NULL) {

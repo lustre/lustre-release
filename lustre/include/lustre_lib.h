@@ -449,7 +449,11 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_SET_READONLY           _IOW ('f', 141, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_ABORT_RECOVERY         _IOR ('f', 142, OBD_IOC_DATA_TYPE)
 
+#define OBD_IOC_ROOT_SQUASH            _IOWR('f', 143, OBD_IOC_DATA_TYPE)
+
 #define OBD_GET_VERSION                _IOWR ('f', 144, OBD_IOC_DATA_TYPE)
+
+#define OBD_IOC_GSS_SUPPORT            _IOWR('f', 145, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, OBD_IOC_DATA_TYPE)
 

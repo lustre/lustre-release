@@ -31,6 +31,8 @@
 
 #include <md_object.h>
 #include <dt_object.h>
+#include <linux/sched.h>
+#include <linux/capability.h>
 
 struct dt_device;
 

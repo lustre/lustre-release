@@ -1677,6 +1677,7 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
         
         op_data->fsuid = current->fsuid;
         op_data->fsgid = current->fsgid;
+        op_data->cap   = current->cap_effective;
         rc = md_link(lmv->tgts[mds].ltd_exp, op_data, request);
 
         RETURN(rc);
@@ -1776,6 +1777,7 @@ request:
         }
         op_data->fsuid = current->fsuid;
         op_data->fsgid = current->fsgid;
+        op_data->cap   = current->cap_effective;
         rc = md_rename(lmv->tgts[mds].ltd_exp, op_data, old, oldlen,
                        new, newlen, request);
         RETURN(rc);
@@ -2121,6 +2123,7 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                 RETURN(PTR_ERR(tgt_exp));
         op_data->fsuid = current->fsuid;
         op_data->fsgid = current->fsgid;
+        op_data->cap   = current->cap_effective;
         rc = md_unlink(tgt_exp, op_data, request);
         RETURN(rc);
 }
@@ -2452,8 +2455,9 @@ int lmv_set_open_replay_data(struct obd_export *exp,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_export *tgt_exp;
+
         ENTRY;
-        
+
         tgt_exp = lmv_get_export(lmv, och->och_fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
@@ -2470,10 +2474,31 @@ int lmv_clear_open_replay_data(struct obd_export *exp,
         ENTRY;
 
         tgt_exp = lmv_get_export(lmv, och->och_fid);
+
+        RETURN(md_clear_open_replay_data(tgt_exp, och));
+}
+
+static int lmv_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
+                               struct ptlrpc_request **request)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct obd_export *tgt_exp;
+        int rc;
+
+        ENTRY;
+
+        rc = lmv_check_connect(obd);
+        if (rc)
+                RETURN(rc);
+
+        tgt_exp = lmv_get_export(lmv, fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        RETURN(md_clear_open_replay_data(tgt_exp, och));
+        rc = md_get_remote_perm(tgt_exp, fid, request);
+
+        RETURN(rc);
 }
 
 struct obd_ops lmv_obd_ops = {
@@ -2524,7 +2549,8 @@ struct md_ops lmv_md_ops = {
         .m_get_lustre_md        = lmv_get_lustre_md,
         .m_free_lustre_md       = lmv_free_lustre_md,
         .m_set_open_replay_data = lmv_set_open_replay_data,
-        .m_clear_open_replay_data = lmv_clear_open_replay_data
+        .m_clear_open_replay_data = lmv_clear_open_replay_data,
+        .m_get_remote_perm      = lmv_get_remote_perm
 };
 
 int __init lmv_init(void)

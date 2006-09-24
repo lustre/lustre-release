@@ -209,122 +209,136 @@ static struct lu_object_operations cml_obj_ops = {
 static int cml_object_create(const struct lu_context *ctx,
                              struct md_object *mo,
                              const struct md_create_spec *spec,
-                             struct md_attr *attr)
+                             struct md_attr *attr,
+                             struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_object_create(ctx, md_object_next(mo), spec, attr);
+        rc = mo_object_create(ctx, md_object_next(mo), spec, attr, uc);
+        RETURN(rc);
+}
+
+static int cml_permission(const struct lu_context *ctx,
+                        struct md_object *mo, int mask, struct md_ucred *uc)
+{
+        int rc;
+        ENTRY;
+        rc = mo_permission(ctx, md_object_next(mo), mask, uc);
         RETURN(rc);
 }
 
 static int cml_attr_get(const struct lu_context *ctx, struct md_object *mo,
-                        struct md_attr *attr)
+                        struct md_attr *attr, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_attr_get(ctx, md_object_next(mo), attr);
+        rc = mo_attr_get(ctx, md_object_next(mo), attr, uc);
         RETURN(rc);
 }
 
 static int cml_attr_set(const struct lu_context *ctx, struct md_object *mo,
-                        const struct md_attr *attr)
+                        const struct md_attr *attr, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_attr_set(ctx, md_object_next(mo), attr);
+        rc = mo_attr_set(ctx, md_object_next(mo), attr, uc);
         RETURN(rc);
 }
 
 static int cml_xattr_get(const struct lu_context *ctx, struct md_object *mo,
-                         void *buf, int buflen, const char *name)
+                         void *buf, int buflen, const char *name,
+                         struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_get(ctx, md_object_next(mo), buf, buflen, name);
+        rc = mo_xattr_get(ctx, md_object_next(mo), buf, buflen, name, uc);
         RETURN(rc);
 }
 
 static int cml_readlink(const struct lu_context *ctx, struct md_object *mo,
-                        void *buf, int buflen)
+                        void *buf, int buflen, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_readlink(ctx, md_object_next(mo), buf, buflen);
+        rc = mo_readlink(ctx, md_object_next(mo), buf, buflen, uc);
         RETURN(rc);
 }
 
 static int cml_xattr_list(const struct lu_context *ctx, struct md_object *mo,
-                          void *buf, int buflen)
+                          void *buf, int buflen, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_list(ctx, md_object_next(mo), buf, buflen);
+        rc = mo_xattr_list(ctx, md_object_next(mo), buf, buflen, uc);
         RETURN(rc);
 }
 
 static int cml_xattr_set(const struct lu_context *ctx, struct md_object *mo,
-                         const void *buf, int buflen, const char *name, int fl)
+                         const void *buf, int buflen,
+                         const char *name, int fl, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_set(ctx, md_object_next(mo), buf, buflen, name, fl);
+        rc = mo_xattr_set(ctx, md_object_next(mo), buf, buflen, name, fl, uc);
         RETURN(rc);
 }
 
 static int cml_xattr_del(const struct lu_context *ctx, struct md_object *mo,
-                         const char *name)
+                         const char *name, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_del(ctx, md_object_next(mo), name);
+        rc = mo_xattr_del(ctx, md_object_next(mo), name, uc);
         RETURN(rc);
 }
 
-static int cml_ref_add(const struct lu_context *ctx, struct md_object *mo)
+static int cml_ref_add(const struct lu_context *ctx, struct md_object *mo,
+                       struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_ref_add(ctx, md_object_next(mo));
+        rc = mo_ref_add(ctx, md_object_next(mo), uc);
         RETURN(rc);
 }
 
 static int cml_ref_del(const struct lu_context *ctx, struct md_object *mo,
-                       struct md_attr *ma)
+                       struct md_attr *ma, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_ref_del(ctx, md_object_next(mo), ma);
+        rc = mo_ref_del(ctx, md_object_next(mo), ma, uc);
         RETURN(rc);
 }
 
 static int cml_open(const struct lu_context *ctx, struct md_object *mo,
-                    int flags)
+                    int flags, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_open(ctx, md_object_next(mo), flags);
+        rc = mo_open(ctx, md_object_next(mo), flags, uc);
         RETURN(rc);
 }
 
 static int cml_close(const struct lu_context *ctx, struct md_object *mo,
-                     struct md_attr *ma)
+                     struct md_attr *ma, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_close(ctx, md_object_next(mo), ma);
+        rc = mo_close(ctx, md_object_next(mo), ma, uc);
         RETURN(rc);
 }
 
 static int cml_readpage(const struct lu_context *ctxt, struct md_object *mo,
-                        const struct lu_rdpg *rdpg)
+                        const struct lu_rdpg *rdpg, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_readpage(ctxt, md_object_next(mo), rdpg);
+        rc = mo_readpage(ctxt, md_object_next(mo), rdpg, uc);
         RETURN(rc);
 }
 
 static struct md_object_operations cml_mo_ops = {
+        .moo_permission    = cml_permission,
         .moo_attr_get      = cml_attr_get,
         .moo_attr_set      = cml_attr_set,
         .moo_xattr_get     = cml_xattr_get,
@@ -342,67 +356,67 @@ static struct md_object_operations cml_mo_ops = {
 
 /* md_dir operations */
 static int cml_lookup(const struct lu_context *ctx, struct md_object *mo_p,
-                      const char *name, struct lu_fid *lf)
+                      const char *name, struct lu_fid *lf, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mdo_lookup(ctx, md_object_next(mo_p), name, lf);
+        rc = mdo_lookup(ctx, md_object_next(mo_p), name, lf, uc);
         RETURN(rc);
 
 }
 
-static int cml_create(const struct lu_context *ctx, struct md_object *mo_p,
-                      const char *child_name, struct md_object *mo_c,
-                      const struct md_create_spec *spec,
-                      struct md_attr *ma)
+static int cml_create(const struct lu_context *ctx,
+                      struct md_object *mo_p, const char *child_name,
+                      struct md_object *mo_c, const struct md_create_spec *spec,
+                      struct md_attr *ma, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
 
 #ifdef HAVE_SPLIT_SUPPORT
-        rc = cml_try_to_split(ctx, mo_p);
+        rc = cml_try_to_split(ctx, mo_p, uc);
         if (rc)
                 RETURN(rc);
 #endif
 
         rc = mdo_create(ctx, md_object_next(mo_p), child_name,
-                        md_object_next(mo_c), spec, ma);
+                        md_object_next(mo_c), spec, ma, uc);
 
 
         RETURN(rc);
 }
 
-static int cml_create_data(const struct lu_context *ctx,
-                           struct md_object *p, struct md_object *o,
+static int cml_create_data(const struct lu_context *ctx, struct md_object *p,
+                           struct md_object *o,
                            const struct md_create_spec *spec,
-                           struct md_attr *ma)
+                           struct md_attr *ma, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
         rc = mdo_create_data(ctx, md_object_next(p), md_object_next(o),
-                             spec, ma);
+                             spec, ma, uc);
         RETURN(rc);
 }
 
 static int cml_link(const struct lu_context *ctx, struct md_object *mo_p,
                     struct md_object *mo_s, const char *name,
-                    struct md_attr *ma)
+                    struct md_attr *ma, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
         rc = mdo_link(ctx, md_object_next(mo_p), md_object_next(mo_s),
-                      name, ma);
+                      name, ma, uc);
         RETURN(rc);
 }
 
 static int cml_unlink(const struct lu_context *ctx, struct md_object *mo_p,
                       struct md_object *mo_c, const char *name,
-                      struct md_attr *ma)
+                      struct md_attr *ma, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
         rc = mdo_unlink(ctx, md_object_next(mo_p), md_object_next(mo_c),
-                        name, ma);
+                        name, ma, uc);
         RETURN(rc);
 }
 
@@ -426,7 +440,8 @@ struct md_object *md_object_find(const struct lu_context *ctx,
 }
 
 static int __cmm_mode_get(const struct lu_context *ctx, struct md_device *md,
-                          const struct lu_fid *lf, struct md_attr *ma)
+                          const struct lu_fid *lf, struct md_attr *ma,
+                          struct md_ucred *uc)
 {
         struct cmm_thread_info *cmi;
         struct md_object *mo_s = md_object_find(ctx, md, lf);
@@ -443,7 +458,7 @@ static int __cmm_mode_get(const struct lu_context *ctx, struct md_device *md,
         tmp_ma->ma_need = MA_INODE;
         
         /* get type from src, can be remote req */
-        rc = mo_attr_get(ctx, md_object_next(mo_s), tmp_ma);
+        rc = mo_attr_get(ctx, md_object_next(mo_s), tmp_ma, uc);
         if (rc == 0) {
                 ma->ma_attr.la_mode = tmp_ma->ma_attr.la_mode;
                 ma->ma_attr.la_flags = tmp_ma->ma_attr.la_flags;
@@ -454,74 +469,76 @@ static int __cmm_mode_get(const struct lu_context *ctx, struct md_device *md,
 }
 
 static int cml_rename(const struct lu_context *ctx, struct md_object *mo_po,
-                       struct md_object *mo_pn, const struct lu_fid *lf,
-                       const char *s_name, struct md_object *mo_t,
-                       const char *t_name, struct md_attr *ma)
+                      struct md_object *mo_pn, const struct lu_fid *lf,
+                      const char *s_name, struct md_object *mo_t,
+                      const char *t_name, struct md_attr *ma,
+                      struct md_ucred *uc)
 {
         int rc;
         ENTRY;
 
-        rc = __cmm_mode_get(ctx, md_obj2dev(mo_po), lf, ma);
+        rc = __cmm_mode_get(ctx, md_obj2dev(mo_po), lf, ma, uc);
         if (rc != 0)
                 RETURN(rc);
 
         if (mo_t && lu_object_exists(&mo_t->mo_lu) < 0) {
                 /* mo_t is remote object and there is RPC to unlink it */
-                rc = mo_ref_del(ctx, md_object_next(mo_t), ma);
+                rc = mo_ref_del(ctx, md_object_next(mo_t), ma, uc);
                 if (rc)
                         RETURN(rc);
                 mo_t = NULL;
         }
-        
+
         /* local rename, mo_t can be NULL */
         rc = mdo_rename(ctx, md_object_next(mo_po),
                         md_object_next(mo_pn), lf, s_name,
-                        md_object_next(mo_t), t_name, ma);
+                        md_object_next(mo_t), t_name, ma, uc);
         RETURN(rc);
 }
 
-static int cml_rename_tgt(const struct lu_context *ctx,
-                          struct md_object *mo_p, struct md_object *mo_t,
-                          const struct lu_fid *lf, const char *name,
-                          struct md_attr *ma)
+static int cml_rename_tgt(const struct lu_context *ctx, struct md_object *mo_p,
+                          struct md_object *mo_t, const struct lu_fid *lf,
+                          const char *name, struct md_attr *ma,
+                          struct md_ucred *uc)
 {
         int rc;
         ENTRY;
 
         rc = mdo_rename_tgt(ctx, md_object_next(mo_p),
-                            md_object_next(mo_t), lf, name, ma);
+                            md_object_next(mo_t), lf, name, ma, uc);
         RETURN(rc);
 }
 /* used only in case of rename_tgt() when target is not exist */
-static int cml_name_insert(const struct lu_context *ctx,
-                           struct md_object *p, const char *name,
-                           const struct lu_fid *lf, int isdir)
+static int cml_name_insert(const struct lu_context *ctx, struct md_object *p,
+                           const char *name, const struct lu_fid *lf, int isdir,
+                           struct md_ucred *uc)
 {
         int rc;
         ENTRY;
 
-        rc = mdo_name_insert(ctx, md_object_next(p), name, lf, isdir);
+        rc = mdo_name_insert(ctx, md_object_next(p), name, lf, isdir, uc);
 
         RETURN(rc);
 }
 
 /* Common method for remote and local use. */
 static int cmm_is_subdir(const struct lu_context *ctx, struct md_object *mo,
-                         const struct lu_fid *fid, struct lu_fid *sfid)
+                         const struct lu_fid *fid, struct lu_fid *sfid,
+                         struct md_ucred *uc)
 {
         struct cmm_thread_info *cmi;
         int rc;
         ENTRY;
 
         cmi = lu_context_key_get(ctx, &cmm_thread_key);
-        rc = __cmm_mode_get(ctx, md_obj2dev(mo), fid, &cmi->cmi_ma);
+        rc = __cmm_mode_get(ctx, md_obj2dev(mo), fid, &cmi->cmi_ma, uc);
         if (rc)
                 RETURN(rc);
 
         if (!S_ISDIR(cmi->cmi_ma.ma_attr.la_mode))
                 RETURN(0);
         
-        rc = mdo_is_subdir(ctx, md_object_next(mo), fid, sfid);
+        rc = mdo_is_subdir(ctx, md_object_next(mo), fid, sfid, uc);
         RETURN(rc);
 }
 
@@ -621,83 +638,94 @@ static struct lu_object_operations cmr_obj_ops = {
 static int cmr_object_create(const struct lu_context *ctx,
                              struct md_object *mo,
                              const struct md_create_spec *spec,
-                             struct md_attr *ma)
+                             struct md_attr *ma,
+                             struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
+static int cmr_permission(const struct lu_context *ctx, struct md_object *mo,
+                          int mask, struct md_ucred *uc)
+{
+        RETURN(-EREMOTE);
+}
+
 static int cmr_attr_get(const struct lu_context *ctx, struct md_object *mo,
-                        struct md_attr *attr)
+                        struct md_attr *attr, struct md_ucred *uc)
 {
         RETURN(-EREMOTE);
 }
 
 static int cmr_attr_set(const struct lu_context *ctx, struct md_object *mo,
-                        const struct md_attr *attr)
+                        const struct md_attr *attr, struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
 static int cmr_xattr_get(const struct lu_context *ctx, struct md_object *mo,
-                         void *buf, int buflen, const char *name)
+                         void *buf, int buflen, const char *name,
+                         struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
 static int cmr_readlink(const struct lu_context *ctx, struct md_object *mo,
-                        void *buf, int buflen)
+                        void *buf, int buflen, struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
 static int cmr_xattr_list(const struct lu_context *ctx, struct md_object *mo,
-                          void *buf, int buflen)
+                          void *buf, int buflen, struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
 static int cmr_xattr_set(const struct lu_context *ctx, struct md_object *mo,
-                         const void *buf, int buflen, const char *name, int fl)
+                         const void *buf, int buflen, const char *name, int fl,
+                         struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
 static int cmr_xattr_del(const struct lu_context *ctx, struct md_object *mo,
-                         const char *name)
+                         const char *name, struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
-static int cmr_ref_add(const struct lu_context *ctx, struct md_object *mo)
+static int cmr_ref_add(const struct lu_context *ctx, struct md_object *mo,
+                       struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
 static int cmr_ref_del(const struct lu_context *ctx, struct md_object *mo,
-                       struct md_attr *ma)
+                       struct md_attr *ma, struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
 static int cmr_open(const struct lu_context *ctx, struct md_object *mo,
-                    int flags)
+                    int flags, struct md_ucred *uc)
 {
         RETURN(-EREMOTE);
 }
 
 static int cmr_close(const struct lu_context *ctx, struct md_object *mo,
-                     struct md_attr *ma)
+                     struct md_attr *ma, struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
 static int cmr_readpage(const struct lu_context *ctxt, struct md_object *mo,
-                        const struct lu_rdpg *rdpg)
+                        const struct lu_rdpg *rdpg, struct md_ucred *uc)
 {
         RETURN(-EREMOTE);
 }
 
 static struct md_object_operations cmr_mo_ops = {
+        .moo_permission    = cmr_permission,
         .moo_attr_get      = cmr_attr_get,
         .moo_attr_set      = cmr_attr_set,
         .moo_xattr_get     = cmr_xattr_get,
@@ -715,7 +743,7 @@ static struct md_object_operations cmr_mo_ops = {
 
 /* remote part of md_dir operations */
 static int cmr_lookup(const struct lu_context *ctx, struct md_object *mo_p,
-                      const char *name, struct lu_fid *lf)
+                      const char *name, struct lu_fid *lf, struct md_ucred *uc)
 {
         /*
          * This can happens while rename() If new parent is remote dir, lookup
@@ -738,7 +766,7 @@ static int cmr_lookup(const struct lu_context *ctx, struct md_object *mo_p,
 static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
                       const char *child_name, struct md_object *mo_c,
                       const struct md_create_spec *spec,
-                      struct md_attr *ma)
+                      struct md_attr *ma, struct md_ucred *uc)
 {
         struct cmm_thread_info *cmi;
         struct md_attr *tmp_ma;
@@ -750,7 +778,7 @@ static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
         LASSERT(cmi);
         tmp_ma = &cmi->cmi_ma;
         tmp_ma->ma_need = MA_INODE;
-        rc = mo_attr_get(ctx, md_object_next(mo_p), tmp_ma);
+        rc = mo_attr_get(ctx, md_object_next(mo_p), tmp_ma, uc);
         if (rc)
                 RETURN(rc);
         
@@ -762,11 +790,11 @@ static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
                 }
         }
         /* remote object creation and local name insert */
-        rc = mo_object_create(ctx, md_object_next(mo_c), spec, ma);
+        rc = mo_object_create(ctx, md_object_next(mo_c), spec, ma, uc);
         if (rc == 0) {
                 rc = mdo_name_insert(ctx, md_object_next(mo_p),
                                      child_name, lu_object_fid(&mo_c->mo_lu),
-                                     S_ISDIR(ma->ma_attr.la_mode));
+                                     S_ISDIR(ma->ma_attr.la_mode), uc);
         }
 
         RETURN(rc);
@@ -774,17 +802,17 @@ static int cmr_create(const struct lu_context *ctx, struct md_object *mo_p,
 
 static int cmr_link(const struct lu_context *ctx, struct md_object *mo_p,
                     struct md_object *mo_s, const char *name,
-                    struct md_attr *ma)
+                    struct md_attr *ma, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
 
         //XXX: make sure that MDT checks name isn't exist
 
-        rc = mo_ref_add(ctx, md_object_next(mo_s));
+        rc = mo_ref_add(ctx, md_object_next(mo_s), uc);
         if (rc == 0) {
                 rc = mdo_name_insert(ctx, md_object_next(mo_p),
-                                     name, lu_object_fid(&mo_s->mo_lu), 0);
+                                     name, lu_object_fid(&mo_s->mo_lu), 0, uc);
         }
 
         RETURN(rc);
@@ -792,30 +820,30 @@ static int cmr_link(const struct lu_context *ctx, struct md_object *mo_p,
 
 static int cmr_unlink(const struct lu_context *ctx, struct md_object *mo_p,
                       struct md_object *mo_c, const char *name,
-                      struct md_attr *ma)
+                      struct md_attr *ma, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
 
-        rc = mo_ref_del(ctx, md_object_next(mo_c), ma);
+        rc = mo_ref_del(ctx, md_object_next(mo_c), ma, uc);
         if (rc == 0) {
-                rc = mdo_name_remove(ctx, md_object_next(mo_p),
-                                     name);
+                rc = mdo_name_remove(ctx, md_object_next(mo_p), name, uc);
         }
 
         RETURN(rc);
 }
 
-static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
-                      struct md_object *mo_pn, const struct lu_fid *lf,
-                      const char *s_name, struct md_object *mo_t,
-                      const char *t_name, struct md_attr *ma)
+static int cmr_rename(const struct lu_context *ctx,
+                      struct md_object *mo_po, struct md_object *mo_pn,
+                      const struct lu_fid *lf, const char *s_name,
+                      struct md_object *mo_t, const char *t_name,
+                      struct md_attr *ma, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
         
         /* get real type of src */
-        rc = __cmm_mode_get(ctx, md_obj2dev(mo_po), lf, ma);
+        rc = __cmm_mode_get(ctx, md_obj2dev(mo_po), lf, ma, uc);
         if (rc != 0)
                 RETURN(rc);
 
@@ -824,11 +852,11 @@ static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
          * mo_t or not. Therefore mo_t is NULL here but remote server should do
          * lookup and process this further */
         rc = mdo_rename_tgt(ctx, md_object_next(mo_pn),
-                            NULL/* mo_t */, lf, t_name, ma);
+                            NULL/* mo_t */, lf, t_name, ma, uc);
         /* only old name is removed localy */
         if (rc == 0)
                 rc = mdo_name_remove(ctx, md_object_next(mo_po),
-                                     s_name);
+                                     s_name, uc);
 
         RETURN(rc);
 }
@@ -838,16 +866,16 @@ static int cmr_rename(const struct lu_context *ctx, struct md_object *mo_po,
 static int cmr_rename_tgt(const struct lu_context *ctx,
                           struct md_object *mo_p, struct md_object *mo_t,
                           const struct lu_fid *lf, const char *name,
-                          struct md_attr *ma)
+                          struct md_attr *ma, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
         /* target object is remote one */
-        rc = mo_ref_del(ctx, md_object_next(mo_t), ma);
+        rc = mo_ref_del(ctx, md_object_next(mo_t), ma, uc);
         /* continue locally with name handling only */
         if (rc == 0)
                 rc = mdo_rename_tgt(ctx, md_object_next(mo_p),
-                                    NULL, lf, name, ma);
+                                    NULL, lf, name, ma, uc);
         RETURN(rc);
 }
 
@@ -860,5 +888,3 @@ static struct md_dir_operations cmr_dir_ops = {
         .mdo_rename      = cmr_rename,
         .mdo_rename_tgt  = cmr_rename_tgt,
 };
-
-

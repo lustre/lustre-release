@@ -127,7 +127,8 @@ int cmm_upcall(const struct lu_context *ctxt, struct md_device *md,
                enum md_upcall_event ev);
 #ifdef HAVE_SPLIT_SUPPORT
 /* cmm_split.c */
-int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo);
+int cml_try_to_split(const struct lu_context *ctx,
+                     struct md_object *mo, struct md_ucred *uc);
 #endif
 
 #endif /* __KERNEL__ */

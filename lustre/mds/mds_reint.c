@@ -2306,7 +2306,9 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *lockh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
+#if 0
         struct mds_obd *mds = &obd->u.mds;
+#endif
         struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
@@ -2321,6 +2323,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         }
 #endif
 
+#if 0
         /* get group info of this user */
         rec->ur_uc.luc_uce = upcall_cache_get_entry(mds->mds_group_hash,
                                                     rec->ur_uc.luc_fsuid,
@@ -2340,11 +2343,14 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         if (rec->ur_uc.luc_uce)
                 rec->ur_uc.luc_fsgid = rec->ur_uc.luc_uce->ue_primary;
 #endif
+#endif
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
         rc = reinters[rec->ur_opcode] (rec, offset, req, lockh);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
 
+#if 0
         upcall_cache_put_entry(mds->mds_group_hash, rec->ur_uc.luc_uce);
+#endif
         RETURN(rc);
 }

@@ -2139,6 +2139,22 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         */
         case LL_IOC_FLUSHCTX:
                 RETURN(ll_flush_ctx(inode));
+        case LL_IOC_GETFACL: {
+                struct rmtacl_ioctl_data ioc;
+
+                if (copy_from_user(&ioc, (void *)arg, sizeof(ioc)))
+                        RETURN(-EFAULT);
+
+                RETURN(ll_ioctl_getfacl(inode, &ioc));
+        }
+        case LL_IOC_SETFACL: {
+                struct rmtacl_ioctl_data ioc;
+
+                if (copy_from_user(&ioc, (void *)arg, sizeof(ioc)))
+                        RETURN(-EFAULT);
+
+                RETURN(ll_ioctl_setfacl(inode, &ioc));
+        }
         default:
                 RETURN(obd_iocontrol(cmd, ll_i2dtexp(inode), 0, NULL,
                                      (void *)arg));
@@ -2550,6 +2566,8 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), mask %o\n",
                inode->i_ino, inode->i_generation, inode, mask);
+        if (ll_i2sbi(inode)->ll_flags & LL_SBI_RMT_CLIENT)
+                return lustre_check_remote_perm(inode, mask);
         return generic_permission(inode, mask, lustre_check_acl);
 }
 #else
@@ -2564,6 +2582,9 @@ int ll_inode_permission(struct inode *inode, int mask)
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), mask %o\n",
                inode->i_ino, inode->i_generation, inode, mask);
+
+        if (ll_i2sbi(inode)->ll_flags & LL_SBI_RMT_CLIENT)
+                return lustre_check_remote_perm(inode, mask);
 
         if ((mask & MAY_WRITE) && IS_RDONLY(inode) &&
             (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode)))

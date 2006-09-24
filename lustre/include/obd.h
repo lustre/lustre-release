@@ -507,6 +507,15 @@ struct mgs_obd {
         struct semaphore                 mgs_sem;
 };
 
+/* hah, upper limit 64 should be enough */
+#define N_NOSQUASH_NIDS 64
+struct rootsquash_info {
+        uid_t           rsi_uid;
+        gid_t           rsi_gid;
+        int             rsi_n_nosquash_nids;
+        lnet_nid_t      rsi_nosquash_nids[N_NOSQUASH_NIDS];
+};
+
 struct mds_obd {
         /* NB this field MUST be first */
         struct obd_device_target         mds_obt;
@@ -545,7 +554,7 @@ struct mds_obd {
         struct file                     *mds_lov_objid_filp;
         struct file                     *mds_health_check_filp;
         unsigned long                   *mds_client_bitmap;
-        struct upcall_cache             *mds_group_hash;
+//        struct upcall_cache             *mds_group_hash;
 
         struct lustre_quota_info         mds_quota_info;
         struct semaphore                 mds_qonoff_sem;
@@ -557,6 +566,11 @@ struct mds_obd {
         /* For CMD add mds_num */
         int                              mds_num;
 
+        struct upcall_cache             *mds_identity_cache;
+        struct upcall_cache             *mds_rmtacl_cache;
+
+        /* root squash */
+        struct rootsquash_info          *mds_rootsquash_info;
 };
 
 struct echo_obd {
@@ -1189,6 +1203,9 @@ struct md_ops {
 
         int (*m_cancel_unused)(struct obd_export *, const struct lu_fid *,
                                int flags, void *opaque);
+
+        int (*m_get_remote_perm)(struct obd_export *, const struct lu_fid *,
+                                 struct ptlrpc_request **);
 
         /*
          * NOTE: If adding ops, add another LPROCFS_MD_OP_INIT() line to

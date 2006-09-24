@@ -432,6 +432,7 @@ int ldlm_handle_convert(struct ptlrpc_request *req);
 int ldlm_handle_cancel(struct ptlrpc_request *req);
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock);
+void ldlm_revoke_export_locks(struct obd_export *exp);
 int ldlm_get_ref(void);
 void ldlm_put_ref(int force);
 

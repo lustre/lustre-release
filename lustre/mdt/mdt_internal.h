@@ -53,6 +53,8 @@
 #include <lustre_req_layout.h>
 /* LR_CLIENT_SIZE, etc. */
 #include <lustre_disk.h>
+#include <lustre_sec.h>
+#include <lvfs.h>
 
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -159,6 +161,13 @@ struct mdt_device {
         struct mdt_server_data     mdt_msd;
         spinlock_t                 mdt_client_bitmap_lock;
         unsigned long              mdt_client_bitmap[(LR_MAX_CLIENTS >> 3) / sizeof(long)];
+
+        struct upcall_cache        *mdt_identity_cache;
+        struct upcall_cache        *mdt_rmtacl_cache;
+
+        /* root squash */
+        struct rootsquash_info     *mdt_rootsquash_info;
+        int                        no_gss_support;
 };
 
 /*XXX copied from mds_internal.h */
@@ -242,6 +251,10 @@ struct mdt_thread_info {
          * Host object. This is released at the end of mdt_handler().
          */
         struct mdt_object         *mti_object;
+        /*
+         * User credential.
+         */
+        struct md_ucred            mti_uc;
         /*
          * Object attributes.
          */
@@ -393,7 +406,8 @@ void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
 
 void mdt_reconstruct(struct mdt_thread_info *, struct mdt_lock_handle *);
 
-int mdt_fs_setup(const struct lu_context *, struct mdt_device *);
+int mdt_fs_setup(const struct lu_context *, struct mdt_device *,
+                 struct obd_device *);
 void mdt_fs_cleanup(const struct lu_context *, struct mdt_device *);
 
 int mdt_client_del(const struct lu_context *ctxt,
@@ -436,6 +450,57 @@ void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
 
 void mdt_dump_lmm(int level, const struct lov_mds_md *lmm);
 
+int mdt_init_ucred(struct mdt_thread_info *, struct mdt_body *);
+
+int mdt_init_ucred_reint(struct mdt_thread_info *);
+
+void mdt_exit_ucred(struct mdt_thread_info *);
+
+int groups_from_list(struct group_info *, gid_t *);
+
+void groups_sort(struct group_info *);
+
+/* mdt_idmap.c */
+int mdt_init_idmap(struct mdt_thread_info *);
+
+void mdt_cleanup_idmap(struct mdt_export_data *);
+
+int mdt_handle_idmap(struct mdt_thread_info *);
+
+int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *,
+                              struct ptlrpc_user_desc *);
+
+void mdt_body_reverse_idmap(struct mdt_thread_info *,
+                            struct mdt_body *);
+
+int mdt_remote_perm_reverse_idmap(struct ptlrpc_request *,
+                                  struct mdt_remote_perm *);
+
+int mdt_fix_attr_ucred(struct mdt_thread_info *, __u32);
+
+/* mdt/mdt_identity.c */
+#define MDT_IDENTITY_UPCALL_PATH        "/usr/sbin/l_getidentity"
+
+extern struct upcall_cache_ops mdt_identity_upcall_cache_ops;
+
+struct mdt_identity *mdt_identity_get(struct upcall_cache *, __u32);
+
+void mdt_identity_put(struct upcall_cache *, struct mdt_identity *);
+
+void mdt_flush_identity(struct upcall_cache *, __u32);
+
+__u32 mdt_identity_get_setxid_perm(struct mdt_identity *, __u32, lnet_nid_t);
+
+int mdt_pack_remote_perm(struct mdt_thread_info *, struct mdt_object *, void *);
+
+/* mdt/mdt_rmtacl.c */
+#define MDT_RMTACL_UPCALL_PATH          "/usr/sbin/l_facl"
+
+extern struct upcall_cache_ops mdt_rmtacl_upcall_cache_ops;
+
+int mdt_rmtacl_upcall(struct mdt_thread_info *, unsigned long,
+                      char *, char *, int);
+
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/
 static inline void mdt_fail_write(const struct lu_context *ctx,
@@ -448,6 +513,11 @@ static inline void mdt_fail_write(const struct lu_context *ctx,
                 /* We set FAIL_ONCE because we never "un-fail" a device */
                 obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;
         }
+}
+
+static inline struct mdt_export_data *mdt_req2med(struct ptlrpc_request *req)
+{
+        return &req->rq_export->exp_mdt_data;
 }
 
 #define MDT_FAIL_CHECK(id)                                              \

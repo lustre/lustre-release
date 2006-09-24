@@ -1100,7 +1100,22 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         }
         case LL_IOC_FLUSHCTX:
                 RETURN(ll_flush_ctx(inode));
+        case LL_IOC_GETFACL: {
+                struct rmtacl_ioctl_data ioc;
 
+                if (copy_from_user(&ioc, (void *)arg, sizeof(ioc)))
+                        RETURN(-EFAULT);
+
+                RETURN(ll_ioctl_getfacl(inode, &ioc));
+        }
+        case LL_IOC_SETFACL: {
+                struct rmtacl_ioctl_data ioc;
+
+                if (copy_from_user(&ioc, (void *)arg, sizeof(ioc)))
+                        RETURN(-EFAULT);
+
+                RETURN(ll_ioctl_setfacl(inode, &ioc));
+        }
         default:
                 RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp,0,NULL,(void *)arg));
         }

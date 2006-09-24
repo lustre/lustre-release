@@ -18,7 +18,7 @@ noinst_PROGRAMS = llog_reader lr_reader wirecheck wiretest lload obdio obdbarrie
 # mount only finds helpers in /sbin
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
-	l_getgroups llverfs llverdev
+	l_getidentity l_facl llverfs llverdev
 bin_PROGRAMS = lfs req_layout
 sbin_SCRIPTS = $(sbin_scripts)
 endif # UTILS
@@ -86,6 +86,14 @@ tunefs_lustre_SOURCES = $(mkfs_lustre_SOURCES)
 tunefs_lustre_CPPFLAGS = -DTUNEFS $(AM_CPPFLAGS)
 tunefs_lustre_LDADD := $(mkfs_lustre_LDADD)
 tunefs_lustre_DEPENDENCIES := $(mkfs_lustre_DEPENDENCIES)
+
+l_getidentity_SOURCES = l_getidentity.c
+l_getidentity_LDADD := $(LIBPTLCTL)
+l_getidentity_DEPENDENCIES := $(LIBPTLCTL)
+
+l_facl_SOURCES = l_facl.c
+l_facl_LDADD := liblustreapi.a
+l_facl_DEPENDENCIES := liblustreapi.a
 
 EXTRA_DIST = $(sbin_scripts)
 

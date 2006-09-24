@@ -203,7 +203,7 @@ static int mdc_req2attr_update(const struct lu_context *ctx,
 }
 
 static int mdc_attr_get(const struct lu_context *ctx, struct md_object *mo,
-                        struct md_attr *ma)
+                        struct md_attr *ma, struct md_ucred *uc)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct mdc_thread_info *mci;
@@ -232,15 +232,19 @@ static int mdc_attr_get(const struct lu_context *ctx, struct md_object *mo,
 
 
 static int mdc_object_create(const struct lu_context *ctx,
-                             struct md_object *mo, 
+                             struct md_object *mo,
                              const struct md_create_spec *spec,
-                             struct md_attr *ma)
+                             struct md_attr *ma,
+                             struct md_ucred *uc)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct lu_attr *la = &ma->ma_attr;
         struct mdc_thread_info *mci;
         const void *symname;
         int rc, symlen;
+        uid_t uid;
+        gid_t gid;
+        __u32 cap;
         ENTRY;
 
         LASSERT(spec->u.sp_pfid != NULL);
@@ -249,6 +253,16 @@ static int mdc_object_create(const struct lu_context *ctx,
         /* parent fid is needed to create dotdot on the remote node */
         mci->mci_opdata.fid1 = *(spec->u.sp_pfid);
         mci->mci_opdata.mod_time = la->la_mtime;
+        if (uc &&
+            ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))) {
+                uid = uc->mu_fsuid;
+                gid = uc->mu_fsgid;
+                cap = uc->mu_cap;
+        } else {
+                uid = la->la_uid;
+                gid = la->la_gid;
+                cap = 0;
+        }
 
         /* get data from spec */
         if (spec->sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
@@ -263,7 +277,7 @@ static int mdc_object_create(const struct lu_context *ctx,
         
         rc = md_create(mc->mc_desc.cl_exp, &mci->mci_opdata,
                        symname, symlen,
-                       la->la_mode, la->la_uid, la->la_gid, 0, la->la_rdev,
+                       la->la_mode, uid, gid, cap, la->la_rdev,
                        &mci->mci_req);
 
         if (rc == 0) {
@@ -276,7 +290,8 @@ static int mdc_object_create(const struct lu_context *ctx,
         RETURN(rc);
 }
 
-static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo)
+static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo,
+                       struct md_ucred *uc)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct mdc_thread_info *mci;
@@ -291,6 +306,18 @@ static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo)
         //mci->mci_opdata.mod_time = la->la_ctime;
         //mci->mci_opdata.fsuid = la->la_uid;
         //mci->mci_opdata.fsgid = la->la_gid;
+        mci->mci_opdata.mod_time = CURRENT_SECONDS;
+        if (uc &&
+            ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))) {
+                mci->mci_opdata.fsuid = uc->mu_fsuid;
+                mci->mci_opdata.fsgid = uc->mu_fsgid;
+                mci->mci_opdata.cap = uc->mu_cap;
+        } else {
+                mci->mci_opdata.fsuid = current->fsuid;
+                mci->mci_opdata.fsgid = current->fsgid;
+                mci->mci_opdata.cap = current->cap_effective;
+        }
+
 
         rc = md_link(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
 
@@ -300,7 +327,7 @@ static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo)
 }
 
 static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
-                       struct md_attr *ma)
+                       struct md_attr *ma, struct md_ucred *uc)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct lu_attr *la = &ma->ma_attr;
@@ -312,8 +339,17 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
         mci->mci_opdata.create_mode = la->la_mode;
         mci->mci_opdata.mod_time = la->la_ctime;
-        mci->mci_opdata.fsuid = la->la_uid;
-        mci->mci_opdata.fsgid = la->la_gid;
+        if (uc &&
+            ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))) {
+                mci->mci_opdata.fsuid = uc->mu_fsuid;
+                mci->mci_opdata.fsgid = uc->mu_fsgid;
+                mci->mci_opdata.cap = uc->mu_cap;
+        } else {
+                mci->mci_opdata.fsuid = la->la_uid;
+                mci->mci_opdata.fsgid = la->la_gid;
+                mci->mci_opdata.cap = current->cap_effective;
+        }
+
         rc = md_unlink(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
         if (rc == 0) {
                 /* get attr from request */
@@ -327,7 +363,8 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
 
 #ifdef HAVE_SPLIT_SUPPORT
 int mdc_send_page(struct cmm_device *cm, const struct lu_context *ctx,
-                  struct md_object *mo, struct page *page, __u32 offset)
+                  struct md_object *mo, struct page *page, __u32 offset,
+                  struct md_ucred *uc)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         int rc;
@@ -349,10 +386,10 @@ static struct md_object_operations mdc_mo_ops = {
 };
 
 /* md_dir_operations */
-static int mdc_rename_tgt(const struct lu_context *ctx,
-                          struct md_object *mo_p, struct md_object *mo_t,
-                          const struct lu_fid *lf, const char *name,
-                          struct md_attr *ma)
+static int mdc_rename_tgt(const struct lu_context *ctx, struct md_object *mo_p,
+                          struct md_object *mo_t, const struct lu_fid *lf,
+                          const char *name, struct md_attr *ma,
+                          struct md_ucred *uc)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo_p));
         struct lu_attr *la = &ma->ma_attr;
@@ -365,8 +402,16 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
         mci->mci_opdata.fid2 = *lf;
         mci->mci_opdata.create_mode = la->la_mode;
         mci->mci_opdata.mod_time = la->la_ctime;
-        mci->mci_opdata.fsuid = la->la_uid;
-        mci->mci_opdata.fsgid = la->la_gid;
+        if (uc &&
+            ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))) {
+                mci->mci_opdata.fsuid = uc->mu_fsuid;
+                mci->mci_opdata.fsgid = uc->mu_fsgid;
+                mci->mci_opdata.cap = uc->mu_cap;
+        } else {
+                mci->mci_opdata.fsuid = la->la_uid;
+                mci->mci_opdata.fsgid = la->la_gid;
+                mci->mci_opdata.cap = current->cap_effective;
+        }
 
         rc = md_rename(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,
                        name, strlen(name), &mci->mci_req);
@@ -381,7 +426,8 @@ static int mdc_rename_tgt(const struct lu_context *ctx,
 }
 
 static int mdc_is_subdir(const struct lu_context *ctx, struct md_object *mo,
-                         const struct lu_fid *fid, struct lu_fid *sfid)
+                         const struct lu_fid *fid, struct lu_fid *sfid,
+                         struct md_ucred *uc)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct mdc_thread_info *mci;
@@ -419,4 +465,3 @@ static struct md_dir_operations mdc_dir_ops = {
         .mdo_is_subdir   = mdc_is_subdir,
         .mdo_rename_tgt  = mdc_rename_tgt
 };
-

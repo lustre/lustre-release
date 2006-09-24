@@ -1207,6 +1207,9 @@ struct lustre_sb_info *lustre_init_lsi(struct super_block *sb)
 
         /* Default umount style */
         lsi->lsi_flags = LSI_UMOUNT_FAILOVER;
+
+        lsi->lsi_lmd->lmd_nllu = NOBODY_UID;
+        lsi->lsi_lmd->lmd_nllg = NOBODY_GID;
         RETURN(lsi);
 }
 
@@ -1891,6 +1894,12 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         rc = lmd_make_exclusion(lmd, s1 + 7);
                         if (rc)
                                 goto invalid;
+                        clear++;
+                } else if (strncmp(s1, "nllu=", 5) == 0) {
+                        lmd->lmd_nllu = simple_strtoul(s1 + 5, NULL, 10);
+                        clear++;
+                } else if (strncmp(s1, "nllg=", 5) == 0) {
+                        lmd->lmd_nllg = simple_strtoul(s1 + 5, NULL, 10);
                         clear++;
                 } else if (strncmp(s1, "sec", 3) == 0) {
                         rc = lmd_parse_sec_opts(lmd, s1);

@@ -256,4 +256,9 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
         RETURN(0);
 }
 
+/* default value for nllu/nllg for llite */
+#define NOBODY_UID      99
+#define NOBODY_GID      99
+#define INVALID_UID     (-1)
+
 #endif // _LUSTRE_CFG_H

@@ -104,8 +104,10 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         r->ur_uc.luc_fsuid = rec->sa_fsuid;
         r->ur_uc.luc_fsgid = rec->sa_fsgid;
         r->ur_uc.luc_cap = rec->sa_cap;
+#if 0
         r->ur_uc.luc_suppgid1 = rec->sa_suppgid;
         r->ur_uc.luc_suppgid2 = -1;
+#endif
         r->ur_fid1 = &rec->sa_fid;
         attr->ia_valid = rec->sa_valid;
         attr->ia_mode = rec->sa_mode;
@@ -150,8 +152,10 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         r->ur_uc.luc_fsuid = rec->cr_fsuid;
         r->ur_uc.luc_fsgid = rec->cr_fsgid;
         r->ur_uc.luc_cap = rec->cr_cap;
+#if 0
         r->ur_uc.luc_suppgid1 = rec->cr_suppgid;
         r->ur_uc.luc_suppgid2 = -1;
+#endif
         r->ur_fid1 = &rec->cr_fid;
         r->ur_fid2 = &rec->cr_replayfid;
         r->ur_mode = rec->cr_mode;
@@ -196,8 +200,10 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         r->ur_uc.luc_fsuid = rec->lk_fsuid;
         r->ur_uc.luc_fsgid = rec->lk_fsgid;
         r->ur_uc.luc_cap = rec->lk_cap;
+#if 0
         r->ur_uc.luc_suppgid1 = rec->lk_suppgid1;
         r->ur_uc.luc_suppgid2 = rec->lk_suppgid2;
+#endif
         r->ur_fid1 = &rec->lk_fid1;
         r->ur_fid2 = &rec->lk_fid2;
         r->ur_time = rec->lk_time;
@@ -224,8 +230,10 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         r->ur_uc.luc_fsuid = rec->ul_fsuid;
         r->ur_uc.luc_fsgid = rec->ul_fsgid;
         r->ur_uc.luc_cap = rec->ul_cap;
+#if 0
         r->ur_uc.luc_suppgid1 = rec->ul_suppgid;
         r->ur_uc.luc_suppgid2 = -1;
+#endif
         r->ur_mode = rec->ul_mode;
         r->ur_fid1 = &rec->ul_fid1;
         r->ur_fid2 = &rec->ul_fid2;
@@ -253,8 +261,10 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         r->ur_uc.luc_fsuid = rec->rn_fsuid;
         r->ur_uc.luc_fsgid = rec->rn_fsgid;
         r->ur_uc.luc_cap = rec->rn_cap;
+#if 0
         r->ur_uc.luc_suppgid1 = rec->rn_suppgid1;
         r->ur_uc.luc_suppgid2 = rec->rn_suppgid2;
+#endif
         r->ur_fid1 = &rec->rn_fid1;
         r->ur_fid2 = &rec->rn_fid2;
         r->ur_time = rec->rn_time;
@@ -287,8 +297,10 @@ static int mds_open_unpack(struct ptlrpc_request *req, int offset,
         r->ur_uc.luc_fsuid = rec->cr_fsuid;
         r->ur_uc.luc_fsgid = rec->cr_fsgid;
         r->ur_uc.luc_cap = rec->cr_cap;
+#if 0
         r->ur_uc.luc_suppgid1 = rec->cr_suppgid;
         r->ur_uc.luc_suppgid2 = -1;
+#endif
         r->ur_fid1 = &rec->cr_fid;
         r->ur_fid2 = &rec->cr_replayfid;
         r->ur_mode = rec->cr_mode;
@@ -358,8 +370,10 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
 {
         struct mds_body *body = lustre_msg_buf(req->rq_reqmsg, offset,
                                                sizeof(*body));
+#if 0
         struct mds_obd *mds = mds_req2mds(req);
         int rc;
+#endif
 
         LASSERT(body != NULL); /* previously verified & swabbed by caller */
 
@@ -376,6 +390,7 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
                 ucred->luc_cap = body->capability;
         }
 
+#if 0
         ucred->luc_uce = upcall_cache_get_entry(mds->mds_group_hash,
                                                 ucred->luc_fsuid,
                                                 ucred->luc_fsgid, 1,
@@ -390,11 +405,14 @@ int mds_init_ucred(struct lvfs_ucred *ucred, struct ptlrpc_request *req,
         if (ucred->luc_uce)
                 ucred->luc_fsgid = ucred->luc_uce->ue_primary;
 #endif
+#endif
 
         return 0;
 }
 
 void mds_exit_ucred(struct lvfs_ucred *ucred, struct mds_obd *mds)
 {
+#if 0
         upcall_cache_put_entry(mds->mds_group_hash, ucred->luc_uce);
+#endif
 }

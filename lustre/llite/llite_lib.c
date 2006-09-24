@@ -149,7 +149,8 @@ static int ll_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
 }
 
 static int client_common_fill_super(struct super_block *sb, 
-                                    char *md, char *dt)
+                                    char *md, char *dt,
+                                    uid_t nllu, gid_t nllg)
 {
         struct inode *root = 0;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -200,6 +201,13 @@ static int client_common_fill_super(struct super_block *sb,
 
         /* real client */
         data->ocd_connect_flags |= OBD_CONNECT_REAL;
+        if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
+                data->ocd_connect_flags |= OBD_CONNECT_RMT_CLIENT;
+                data->ocd_nllu = nllu;
+                data->ocd_nllg = nllg;
+        } else {
+                data->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
+        }
 
         err = obd_connect(NULL, &md_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
@@ -238,11 +246,22 @@ static int client_common_fill_super(struct super_block *sb,
                 sb->s_flags |= MS_POSIXACL;
 #endif
                 sbi->ll_flags |= LL_SBI_ACL;
-        } else
+        } else {
                 sbi->ll_flags &= ~LL_SBI_ACL;
+        }
 
         if (data->ocd_connect_flags & OBD_CONNECT_JOIN)
                 sbi->ll_flags |= LL_SBI_JOIN;
+
+        if ((sbi->ll_flags & LL_SBI_RMT_CLIENT) &&
+            !(data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT)) {
+                /* sometimes local client claims to be remote, but mds
+                 * will disagree when client gss not applied. */
+                LCONSOLE_INFO("client claims to be remote, but server "
+                              "rejected, forced to be local\n");
+                sbi->ll_flags &= ~OBD_CONNECT_RMT_CLIENT;
+                sbi->ll_flags |= OBD_CONNECT_LCL_CLIENT;
+        }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
         /* We set sb->s_dev equal on all lustre clients in order to support
@@ -687,6 +706,11 @@ static int ll_options(char *options, int *flags)
                 if (tmp) {
                         goto next;
                 }
+                tmp = ll_set_opt("remote_client", s1, LL_SBI_RMT_CLIENT);
+                if (tmp) {
+                        *flags |= tmp;
+                        goto next;
+                }
 
                 LCONSOLE_ERROR("Unknown option '%s', won't mount.\n", s1);
                 RETURN(-EINVAL);
@@ -718,6 +742,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_open_fd_read_count = lli->lli_open_fd_write_count = 0;
         lli->lli_open_fd_exec_count = 0;
         INIT_LIST_HEAD(&lli->lli_dead_list);
+        sema_init(&lli->lli_rmtperm_sem, 1);
 }
 
 /* COMPAT_146 */
@@ -991,7 +1016,9 @@ int ll_fill_super(struct super_block *sb)
         sprintf(md, "%s-%s", lprof->lp_md, ll_instance);
 
         /* connections, registrations, sb setup */
-        err = client_common_fill_super(sb, md, dt);
+        err = client_common_fill_super(sb, md, dt,
+                                       lsi->lsi_lmd->lmd_nllu,
+                                       lsi->lsi_lmd->lmd_nllg);
 
 out_free:
         if (md)
@@ -1167,10 +1194,17 @@ void ll_clear_inode(struct inode *inode)
 #ifdef CONFIG_FS_POSIX_ACL
         if (lli->lli_posix_acl) {
                 LASSERT(atomic_read(&lli->lli_posix_acl->a_refcount) == 1);
+//                LASSERT(lli->lli_remote_perms == NULL);
                 posix_acl_release(lli->lli_posix_acl);
                 lli->lli_posix_acl = NULL;
         }
 #endif
+        if (lli->lli_remote_perms) {
+                LASSERT(sbi->ll_flags & LL_SBI_RMT_CLIENT);
+                LASSERT(lli->lli_posix_acl == NULL);
+                free_rmtperm_hash(lli->lli_remote_perms);
+                lli->lli_remote_perms = NULL;
+        }
 
         lli->lli_inode_magic = LLI_INODE_DEAD;
 
@@ -1670,6 +1704,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 spin_unlock(&lli->lli_lock);
         }
 #endif
+        if (body->valid & OBD_MD_FLRMTPERM)
+                ll_update_remote_perm(inode, md->remote_perm);
 
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(inode->i_atime))
@@ -2149,3 +2185,82 @@ int ll_process_config(struct lustre_cfg *lcfg)
         return(rc);
 }
 
+int ll_ioctl_getfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)
+{
+        struct ptlrpc_request *req = NULL;
+        struct mds_body *body;
+        char *cmd, *buf;
+        int rc, buflen;
+        ENTRY;
+
+        LASSERT(ioc->cmd && ioc->cmd_len && ioc->res && ioc->res_len);
+
+        OBD_ALLOC(cmd, ioc->cmd_len);
+        if (!cmd)
+                RETURN(-ENOMEM);
+        if (copy_from_user(cmd, ioc->cmd, ioc->cmd_len))
+                GOTO(out, rc = -EFAULT);
+
+        rc = md_getxattr(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode),
+                          OBD_MD_FLXATTR, XATTR_NAME_LUSTRE_ACL, cmd,
+                          ioc->cmd_len, ioc->res_len, 0, &req);
+        if (rc < 0) {
+                CERROR("mdc_getxattr %s [%s] failed: %d\n",
+                       XATTR_NAME_LUSTRE_ACL, cmd, rc);
+                GOTO(out, rc);
+        }
+
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
+        LASSERT(body);
+
+        buflen = lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF);
+        LASSERT(buflen <= ioc->res_len);
+        buf = lustre_msg_string(req->rq_repmsg, REPLY_REC_OFF + 1, ioc->res_len);
+        LASSERT(buf);
+        if (copy_to_user(ioc->res, buf, buflen))
+                GOTO(out, rc = -EFAULT);
+        EXIT;
+out:
+        if (req)
+                ptlrpc_req_finished(req);
+        OBD_FREE(cmd, ioc->cmd_len);
+        return rc;
+}
+
+int ll_ioctl_setfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)
+{
+        struct ptlrpc_request *req = NULL;
+        char *cmd, *buf;
+        int buflen, rc;
+        ENTRY;
+
+        LASSERT(ioc->cmd && ioc->cmd_len && ioc->res && ioc->res_len);
+
+        OBD_ALLOC(cmd, ioc->cmd_len);
+        if (!cmd)
+                RETURN(-ENOMEM);
+        if (copy_from_user(cmd, ioc->cmd, ioc->cmd_len))
+                GOTO(out, rc = -EFAULT);
+
+        rc = md_setxattr(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode),
+                          OBD_MD_FLXATTR, XATTR_NAME_LUSTRE_ACL, cmd,
+                          ioc->cmd_len, ioc->res_len, 0, &req);
+        if (rc) {
+                CERROR("mdc_setxattr %s [%s] failed: %d\n",
+                       XATTR_NAME_LUSTRE_ACL, cmd, rc);
+                GOTO(out, rc);
+        }
+
+        buflen = lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF);
+        LASSERT(buflen <= ioc->res_len);
+        buf = lustre_msg_string(req->rq_repmsg, REPLY_REC_OFF, ioc->res_len);
+        LASSERT(buf);
+        if (copy_to_user(ioc->res, buf, buflen))
+                GOTO(out, rc = -EFAULT);
+        EXIT;
+out:
+        if (req)
+                ptlrpc_req_finished(req);
+        OBD_FREE(cmd, ioc->cmd_len);
+        return rc;
+}

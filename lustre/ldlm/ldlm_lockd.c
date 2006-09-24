@@ -1500,6 +1500,61 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+void ldlm_revoke_export_locks(struct obd_export *exp)
+{
+        struct list_head *locklist = &exp->exp_ldlm_data.led_held_locks;
+        struct list_head  rpc_list;
+        struct ldlm_lock *lock, *next;
+        struct ldlm_lock_desc desc;
+
+        ENTRY;
+        INIT_LIST_HEAD(&rpc_list);
+
+        spin_lock(&exp->exp_ldlm_data.led_lock);
+        list_for_each_entry_safe(lock, next, locklist, l_export_chain) {
+                lock_res_and_lock(lock);
+                if (lock->l_req_mode != lock->l_granted_mode) {
+                        unlock_res_and_lock(lock);
+                        continue;
+                }
+
+                LASSERT(lock->l_resource);
+                if (lock->l_resource->lr_type != LDLM_IBITS &&
+                    lock->l_resource->lr_type != LDLM_PLAIN) {
+                        unlock_res_and_lock(lock);
+                        continue;
+                }
+
+                if (lock->l_flags & LDLM_FL_AST_SENT) {
+                        unlock_res_and_lock(lock);
+                        continue;
+                }
+
+                LASSERT(lock->l_blocking_ast);
+                LASSERT(!lock->l_blocking_lock);
+
+                lock->l_flags |= LDLM_FL_AST_SENT;
+                unlock_res_and_lock(lock);
+
+                list_move(&lock->l_export_chain, &rpc_list);
+        }
+        spin_unlock(&exp->exp_ldlm_data.led_lock);
+
+        while (!list_empty(&rpc_list)) {
+                lock = list_entry(rpc_list.next, struct ldlm_lock,
+                                  l_export_chain);
+                list_del_init(&lock->l_export_chain);
+
+                /* the desc just pretend to exclusive */
+                ldlm_lock2desc(lock, &desc);
+                desc.l_req_mode = LCK_EX;
+                desc.l_granted_mode = 0;
+
+                lock->l_blocking_ast(lock, &desc, NULL, LDLM_CB_BLOCKING);
+        }
+        EXIT;
+}
+
 #ifdef __KERNEL__
 static struct ldlm_bl_work_item *ldlm_bl_get_work(struct ldlm_bl_pool *blp)
 {
@@ -1853,6 +1908,7 @@ EXPORT_SYMBOL(ldlm_del_waiting_lock);
 EXPORT_SYMBOL(ldlm_get_ref);
 EXPORT_SYMBOL(ldlm_put_ref);
 EXPORT_SYMBOL(ldlm_refresh_waiting_lock);
+EXPORT_SYMBOL(ldlm_revoke_export_locks);
 
 /* ldlm_resource.c */
 EXPORT_SYMBOL(ldlm_namespace_new);

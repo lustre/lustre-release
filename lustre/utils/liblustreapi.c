@@ -56,7 +56,6 @@
 #include <lustre_lib.h>
 #include <lustre/liblustreapi.h>
 #include <obd_lov.h>
-#include <lustre/liblustreapi.h>
 
 static void err_msg(char *fmt, ...)
 {
@@ -1252,4 +1251,60 @@ int llapi_quotachown(char *path, int flag)
 out:
         find_param_fini(&param);
         return ret;
+}
+
+int llapi_getfacl(char *fname, char *cmd)
+{
+        struct rmtacl_ioctl_data data;
+        char out[RMTACL_SIZE_MAX] = "";
+        int fd, rc;
+
+        data.cmd = cmd;
+        data.cmd_len = strlen(cmd) + 1;
+        data.res = out;
+        data.res_len = sizeof(out);
+
+        fd = open(fname, 0);
+        if (fd == -1) {
+                err_msg("open %s failed", fname);
+                return -1;
+        }
+
+        rc = ioctl(fd, LL_IOC_GETFACL, &data);
+        close(fd);
+        if (rc) {
+                err_msg("getfacl %s failed", fname);
+        } else {
+                printf("%s", out);
+        }
+
+        return rc;
+}
+
+int llapi_setfacl(char *fname, char *cmd)
+{
+        struct rmtacl_ioctl_data data;
+        char out[RMTACL_SIZE_MAX] = "";
+        int fd, rc;
+
+        data.cmd = cmd;
+        data.cmd_len = strlen(cmd) + 1;
+        data.res = out;
+        data.res_len = sizeof(out);
+
+        fd = open(fname, 0);
+        if (fd == -1) {
+                err_msg("open %s failed", fname);
+                return -1;
+        }
+
+        rc = ioctl(fd, LL_IOC_SETFACL, &data);
+        close(fd);
+        if (rc) {
+                err_msg("setfacl %s failed", fname);
+        } else {
+                printf("%s", out);
+        }
+
+        return rc;
 }

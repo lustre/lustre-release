@@ -68,13 +68,16 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                             sizeof(user_string) - 1) == 0)
                         return -EOPNOTSUPP;
 
-                rc = mo_xattr_get(info->mti_ctxt,
-                                  mdt_object_child(info->mti_object),
-                                  NULL, 0, xattr_name);
+                if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))
+                        rc = RMTACL_SIZE_MAX;
+                else
+                        rc = mo_xattr_get(info->mti_ctxt,
+                                          mdt_object_child(info->mti_object),
+                                          NULL, 0, xattr_name, &info->mti_uc);
         } else if ((valid & OBD_MD_FLXATTRLS) == OBD_MD_FLXATTRLS) {
                 rc = mo_xattr_list(info->mti_ctxt,
                                    mdt_object_child(info->mti_object),
-                                   NULL, 0);
+                                   NULL, 0, &info->mti_uc);
         } else {
                 CERROR("valid bits: "LPX64"\n", info->mti_body->valid);
                 return -EINVAL;
@@ -96,9 +99,33 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         return rc = !rc1? rc1 : rc;
 }
 
+static int do_remote_getfacl(struct mdt_thread_info *info,
+                             struct lu_fid *fid, int offset,
+                             void *buf, int buflen)
+{
+        struct ptlrpc_request *req = mdt_info_req(info);
+        char *cmd;
+        int rc;
+        ENTRY;
+
+        if (!buf || (buflen != RMTACL_SIZE_MAX))
+                RETURN(-EINVAL);
+
+        cmd = lustre_msg_string(req->rq_reqmsg, offset, 0);
+        if (!cmd) {
+                CERROR("missing getfacl command!\n");
+                RETURN(-EFAULT);
+        }
+
+        rc = mdt_rmtacl_upcall(info, fid_oid(fid), cmd, buf, buflen);
+        lustre_shrink_reply(req, REPLY_REC_OFF + 1, strlen(buf) + 1, 0);
+        RETURN(rc ?: strlen(buf) + 1);
+}
 
 int mdt_getxattr(struct mdt_thread_info *info)
 {
+        struct mdt_body *body = (struct mdt_body *)info->mti_body;
+        struct  mdt_body *reqbody;
         int     rc;
         struct  md_object *next;
         char   *buf;
@@ -113,11 +140,19 @@ int mdt_getxattr(struct mdt_thread_info *info)
         CDEBUG(D_INODE, "getxattr "DFID"\n",
                         PFID(&info->mti_body->fid1));
 
+        reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
+        if (reqbody == NULL)
+                RETURN(-EFAULT);
+
+        rc = mdt_init_ucred(info, reqbody);
+        if (rc)
+                RETURN(rc);
+
         next = mdt_object_child(info->mti_object);
 
         rc = mdt_getxattr_pack_reply(info);
         if (rc < 0)
-                RETURN(rc);
+                GOTO(out, rc);
 
         rep_body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         /*No EA, just go back*/
@@ -132,8 +167,13 @@ int mdt_getxattr(struct mdt_thread_info *info)
                                                           &RMF_NAME);
                 CDEBUG(D_INODE, "getxattr %s\n", xattr_name);
 
-                rc = mo_xattr_get(info->mti_ctxt, next,
-                                  buf, buflen, xattr_name);
+                if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL)) {
+                        rc = do_remote_getfacl(info, &body->fid1,
+                                               REQ_REC_OFF + 2, buf, buflen);
+                } else {
+                        rc = mo_xattr_get(info->mti_ctxt, next, buf, buflen,
+                                          xattr_name, &info->mti_uc);
+                }
 
                 if (rc < 0 && rc != -ENODATA && rc != -EOPNOTSUPP &&
                     rc != -ERANGE)
@@ -141,7 +181,8 @@ int mdt_getxattr(struct mdt_thread_info *info)
         } else if (info->mti_body->valid & OBD_MD_FLXATTRLS) {
                 CDEBUG(D_INODE, "listxattr\n");
 
-                rc = mo_xattr_list(info->mti_ctxt, next, buf, buflen);
+                rc = mo_xattr_list(info->mti_ctxt, next, buf, buflen,
+                                   &info->mti_uc);
                 if (rc < 0)
                         CDEBUG(D_OTHER, "listxattr failed: %d\n", rc);
         } else
@@ -152,20 +193,48 @@ no_xattr:
                 rep_body->eadatasize = rc;
                 rc = 0;
         }
-
+out:
+        mdt_exit_ucred(info);
         RETURN(rc);
 }
 
+static int do_remote_setfacl(struct mdt_thread_info *info, struct lu_fid *fid,
+                             int offset)
+{
+        struct  ptlrpc_request *req = mdt_info_req(info);
+        char *cmd, *buf;
+        int rc, buflen;
+        ENTRY;
+
+        cmd = lustre_msg_string(req->rq_reqmsg, offset, 0);
+        if (!cmd) {
+                CERROR("missing setfacl command!\n");
+                RETURN(-EFAULT);
+        }
+
+        buflen = lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF);
+        buf = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, buflen);
+        if (!buf || (buflen != RMTACL_SIZE_MAX))
+                RETURN(-EINVAL);
+
+        rc = mdt_rmtacl_upcall(info, fid_oid(fid), cmd, buf, buflen);
+        if (rc)
+                CERROR("remote acl upcall failed: %d\n", rc);
+
+        lustre_shrink_reply(req, REPLY_REC_OFF, strlen(buf) + 1, 0);
+        RETURN(rc);
+}
 
 int mdt_setxattr(struct mdt_thread_info *info)
 {
-        struct ptlrpc_request  *req = mdt_info_req(info);
+        struct ptlrpc_request *req = mdt_info_req(info);
+        struct mdt_body *reqbody;
         const char              user_string[] = "user.";
         const char              trust_string[] = "trusted.";
         struct mdt_lock_handle *lh;
         struct req_capsule       *pill = &info->mti_pill;
         struct mdt_object        *obj  = info->mti_object;
-        const struct mdt_body    *body = info->mti_body;
+        struct mdt_body *body = (struct mdt_body *)info->mti_body;
         const struct lu_context  *ctx  = info->mti_ctxt;
         struct md_object       *child  = mdt_object_child(obj);
         __u64                   valid  = body->valid;
@@ -180,6 +249,14 @@ int mdt_setxattr(struct mdt_thread_info *info)
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(-ENOMEM);
 
+        reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
+        if (reqbody == NULL)
+                RETURN(-EFAULT);
+
+        rc = mdt_init_ucred(info, reqbody);
+        if (rc)
+                RETURN(rc);
+
         /* various sanity check for xattr name */
         xattr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (!xattr_name)
@@ -187,6 +264,12 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
         CDEBUG(D_INODE, "%s xattr %s\n",
                   body->valid & OBD_MD_FLXATTR ? "set" : "remove", xattr_name);
+
+        if (((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) &&
+            (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))) {
+                rc = do_remote_setfacl(info, &body->fid1, REQ_REC_OFF + 2);
+                GOTO(out, rc);
+        }
 
         if (strncmp(xattr_name, trust_string, sizeof(trust_string) - 1) == 0) {
                 if (strcmp(xattr_name + 8, XATTR_NAME_LOV) == 0)
@@ -225,14 +308,15 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
                         if (body->flags & XATTR_CREATE)
                                 flags |= LU_XATTR_CREATE;
+
                         mdt_fail_write(ctx, info->mti_mdt->mdt_bottom,
                                        OBD_FAIL_MDS_SETXATTR_WRITE);
 
-                        rc = mo_xattr_set(ctx, child, xattr,
-                                          xattr_len, xattr_name, flags);
+                        rc = mo_xattr_set(ctx, child, xattr, xattr_len,
+                                          xattr_name, flags, &info->mti_uc);
                 }
         } else if ((valid & OBD_MD_FLXATTRRM) == OBD_MD_FLXATTRRM) {
-                rc = mo_xattr_del(ctx, child, xattr_name);
+                rc = mo_xattr_del(ctx, child, xattr_name, &info->mti_uc);
         } else {
                 CERROR("valid bits: "LPX64"\n", body->valid);
                 rc = -EINVAL;
@@ -241,5 +325,6 @@ int mdt_setxattr(struct mdt_thread_info *info)
 out_unlock:
         mdt_object_unlock(info, obj, lh, rc);
 out:
+        mdt_exit_ucred(info);
         return rc;
 }

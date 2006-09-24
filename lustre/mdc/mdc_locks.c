@@ -366,7 +366,10 @@ int mdc_enqueue(struct obd_export *exp,
                               it->it_create_mode, 0, it->it_flags, 
                               lmm, lmmsize);
 
-                repsize[repbufcnt++] = LUSTRE_POSIX_ACL_MAX_SIZE;
+                /* for remote client, fetch remote perm for current user */
+                repsize[repbufcnt++] = client_is_remote(exp) ?
+                                                sizeof(struct mdt_remote_perm) :
+                                                LUSTRE_POSIX_ACL_MAX_SIZE;
         } else if (it->it_op & IT_UNLINK) {
                 size[DLM_INTENT_REC_OFF] = sizeof(struct mdt_rec_unlink);
                 size[DLM_INTENT_REC_OFF + 1] = op_data->namelen + 1;
@@ -387,8 +390,9 @@ int mdc_enqueue(struct obd_export *exp,
                 repsize[repbufcnt++] = obddev->u.cli.cl_max_mds_cookiesize;
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
                 obd_valid valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE |
-                                  OBD_MD_FLACL | OBD_MD_FLMODEASIZE |
-                                  OBD_MD_FLDIREA;
+                                  OBD_MD_FLMODEASIZE | OBD_MD_FLDIREA;
+                valid |= client_is_remote(exp) ? OBD_MD_FLRMTPERM :
+                                                 OBD_MD_FLACL;
                 size[DLM_INTENT_REC_OFF] = sizeof(struct mdt_body);
                 size[DLM_INTENT_REC_OFF + 1] = op_data->namelen + 1;
 
@@ -409,7 +413,9 @@ int mdc_enqueue(struct obd_export *exp,
                 mdc_getattr_pack(req, DLM_INTENT_REC_OFF, valid,
                                  it->it_flags, op_data);
 
-                repsize[repbufcnt++] = LUSTRE_POSIX_ACL_MAX_SIZE;
+                repsize[repbufcnt++] = client_is_remote(exp) ?
+                                                sizeof(struct mdt_remote_perm) :
+                                                LUSTRE_POSIX_ACL_MAX_SIZE;
         } else if (it->it_op == IT_READDIR) {
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
@@ -493,8 +499,9 @@ int mdc_enqueue(struct obd_export *exp,
         LASSERT(repbufcnt == 5 || repbufcnt == 2);
         if (repbufcnt == 5) {
                 struct mdt_body *body;
+                int offset = DLM_REPLY_REC_OFF;
 
-                body = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF, sizeof(*body),
+                body = lustre_swab_repbuf(req, offset++, sizeof(*body),
                                          lustre_swab_mdt_body);
                 if (body == NULL) {
                         CERROR ("Can't swab mdt_body\n");
@@ -511,8 +518,7 @@ int mdc_enqueue(struct obd_export *exp,
 
                 if ((body->valid & OBD_MD_FLDIREA) != 0) {
                         if (body->eadatasize) {
-                                eadata = lustre_swab_repbuf(req, 
-                                                DLM_REPLY_REC_OFF + 1,
+                                eadata = lustre_swab_repbuf(req, offset++,
                                                 body->eadatasize, NULL);
                                 if (eadata == NULL) {
                                         CERROR ("Missing/short eadata\n");
@@ -523,7 +529,7 @@ int mdc_enqueue(struct obd_export *exp,
                 if ((body->valid & OBD_MD_FLEASIZE)) {
                         /* The eadata is opaque; just check that it is there.
                          * Eventually, obd_unpackmd() will check the contents */
-                        eadata = lustre_swab_repbuf(req, DLM_REPLY_REC_OFF + 1,
+                        eadata = lustre_swab_repbuf(req, offset++,
                                                     body->eadatasize, NULL);
                         if (eadata == NULL) {
                                 CERROR ("Missing/short eadata\n");
@@ -550,16 +556,27 @@ int mdc_enqueue(struct obd_export *exp,
                          * large enough request buffer above we need to
                          * reallocate it here to hold the actual LOV EA. */
                         if (it->it_op & IT_OPEN) {
-                                int offset = DLM_INTENT_REC_OFF + 2;
-
-                                if (lustre_msg_buflen(req->rq_reqmsg, offset) <
+                                if (lustre_msg_buflen(req->rq_reqmsg,
+                                                      DLM_INTENT_REC_OFF + 2) <
                                     body->eadatasize)
                                         mdc_realloc_openmsg(req, body, size);
 
-                                lmm = lustre_msg_buf(req->rq_reqmsg, offset,
+                                lmm = lustre_msg_buf(req->rq_reqmsg,
+                                                     DLM_INTENT_REC_OFF + 2,
                                                      body->eadatasize);
                                 if (lmm)
                                         memcpy(lmm, eadata, body->eadatasize);
+                        }
+                }
+                if (body->valid & OBD_MD_FLRMTPERM) {
+                        struct mdt_remote_perm *perm;
+
+                        LASSERT(client_is_remote(exp));
+                        perm = lustre_swab_repbuf(req, offset++, sizeof(*perm),
+                                                  lustre_swab_mdt_remote_perm);
+                        if (perm == NULL) {
+                                CERROR("missing remote permission!\n");
+                                RETURN(-EPROTO);
                         }
                 }
         }
@@ -628,10 +645,10 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 /* As not all attributes are kept under update lock, e.g. 
                    owner/group/acls are under lookup lock, we need both 
                    ibits for GETATTR. */
-                
+
                 /* For CMD, UPDATE lock and LOOKUP lock can not be got 
                  * at the same for cross-object, so we can not match 
-                 * the 2 lock at the same time FIXME: but how to handle
+                 * the 2 lock at the same time FIXME: but how to handle 
                  * the above situation */
                 policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
                         MDS_INODELOCK_UPDATE : MDS_INODELOCK_LOOKUP;

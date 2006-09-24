@@ -57,6 +57,21 @@ extern struct file_operations ll_pgcache_seq_fops;
 #define LLI_INODE_MAGIC                 0x111d0de5
 #define LLI_INODE_DEAD                  0xdeadd00d
 
+/* remote client permission cache */
+#define REMOTE_PERM_HASHSIZE 16
+
+/* llite setxid/access permission for user on remote client */
+struct ll_remote_perm {
+        struct hlist_node       lrp_list;
+        uid_t                   lrp_uid;
+        gid_t                   lrp_gid;
+        uid_t                   lrp_fsuid;
+        gid_t                   lrp_fsgid;
+        int                     lrp_access_perm; /* MAY_READ/WRITE/EXEC, this
+                                                    is access permission with
+                                                    lrp_fsuid/lrp_fsgid. */
+};
+
 enum lli_flags {
         /* MDS has an authority for the Size-on-MDS attributes. */
         LLIF_MDS_SIZE_LOCK      = (1 << 0),
@@ -95,6 +110,10 @@ struct ll_inode_info {
         int                     lli_async_rc;
 
         struct posix_acl       *lli_posix_acl;
+
+        /* remote permission hash */
+        struct hlist_head      *lli_remote_perms;
+        struct semaphore        lli_rmtperm_sem;
 
         struct list_head        lli_dead_list;
 
@@ -205,6 +224,7 @@ struct ll_rw_process_info {
 #define LL_SBI_USER_XATTR       0x08 /* support user xattr */
 #define LL_SBI_ACL              0x10 /* support ACL */
 #define LL_SBI_JOIN             0x20 /* support JOIN */
+#define LL_SBI_RMT_CLIENT       0x40 /* remote client */
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -547,6 +567,8 @@ struct ll_async_page *llite_pglist_next_llap(struct ll_sb_info *sbi,
 int ll_obd_statfs(struct inode *inode, void *arg);
 int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 int ll_process_config(struct lustre_cfg *lcfg);
+int ll_ioctl_getfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc);
+int ll_ioctl_setfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc);
 
 /* llite/llite_nfs.c */
 extern struct export_operations lustre_export_operations;
@@ -684,6 +706,15 @@ ssize_t ll_getxattr(struct dentry *dentry, const char *name,
                     void *buffer, size_t size);
 ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size);
 int ll_removexattr(struct dentry *dentry, const char *name);
+
+/* llite/remote_perm.c */
+extern kmem_cache_t *ll_remote_perm_cachep;
+extern kmem_cache_t *ll_rmtperm_hash_cachep;
+
+struct hlist_head *alloc_rmtperm_hash(void);
+void free_rmtperm_hash(struct hlist_head *hash);
+int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm);
+int lustre_check_remote_perm(struct inode *inode, int mask);
 
 /* llite/llite_fid.c*/
 int ll_fid_md_init(struct ll_sb_info *sbi);

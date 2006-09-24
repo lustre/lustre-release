@@ -82,6 +82,7 @@ static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
         return count;
 }
 
+#if 0
 static int lprocfs_wr_group_info(struct file *file, const char *buffer,
                                  unsigned long count, void *data)
 {
@@ -235,6 +236,7 @@ static int lprocfs_wr_group_flush(struct file *file, const char *buffer,
         upcall_cache_flush_idle(obd->u.mds.mds_group_hash);
         return count;
 }
+#endif
 
 #ifdef HAVE_QUOTA_SUPPORT        
 static int lprocfs_mds_rd_bunit(char *page, char **start, off_t off, int count, 
@@ -406,6 +408,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "quota_iunit_sz",  lprocfs_mds_rd_iunit, lprocfs_mds_wr_iunit, 0 },
         { "quota_itune_sz",  lprocfs_mds_rd_itune, lprocfs_mds_wr_itune, 0 },
 #endif
+#if 0
         { "group_expire_interval", lprocfs_rd_group_expire,
                              lprocfs_wr_group_expire, 0},
         { "group_acquire_expire", lprocfs_rd_group_acquire_expire,
@@ -414,6 +417,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
                              lprocfs_wr_group_upcall, 0},
         { "group_flush",     0, lprocfs_wr_group_flush, 0},
         { "group_info",      0, lprocfs_wr_group_info, 0 },
+#endif
         { "atime_diff",      lprocfs_rd_atime_diff, lprocfs_wr_atime_diff, 0 },
         { 0 }
 };

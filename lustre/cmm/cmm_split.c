@@ -54,7 +54,9 @@ static inline struct lu_fid* cmm2_fid(struct cmm_object *obj)
 }
 
 static int cmm_expect_splitting(const struct lu_context *ctx,
-                                struct md_object *mo, struct md_attr *ma)
+                                struct md_object *mo,
+                                struct md_attr *ma,
+                                struct md_ucred *uc)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct lu_fid *fid = NULL;
@@ -70,8 +72,7 @@ static int cmm_expect_splitting(const struct lu_context *ctx,
         if (ma->ma_lmv_size)
                 GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
         OBD_ALLOC_PTR(fid);
-        rc = cmm_child_ops(cmm)->mdo_root_get(ctx, cmm->cmm_child, 
-                                              fid);
+        rc = cmm_child_ops(cmm)->mdo_root_get(ctx, cmm->cmm_child, fid, uc);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -152,7 +153,7 @@ static int cmm_creat_remote_obj(const struct lu_context *ctx,
                                 struct cmm_device *cmm,
                                 struct lu_fid *fid, struct md_attr *ma,
                                 const struct lmv_stripe_md *lmv,
-                                int lmv_size)
+                                int lmv_size, struct md_ucred *uc)
 {
         struct cmm_object *obj;
         struct md_create_spec *spec;
@@ -170,7 +171,7 @@ static int cmm_creat_remote_obj(const struct lu_context *ctx,
         spec->u.sp_ea.eadatalen = lmv_size;
         spec->sp_cr_flags |= MDS_CREATE_SLAVE_OBJ;
         rc = mo_object_create(ctx, md_object_next(&obj->cmo_obj),
-                              spec, ma);
+                              spec, ma, uc);
         OBD_FREE_PTR(spec);
 
         cmm_object_put(ctx, obj);
@@ -178,7 +179,8 @@ static int cmm_creat_remote_obj(const struct lu_context *ctx,
 }
 
 static int cmm_create_slave_objects(const struct lu_context *ctx,
-                                    struct md_object *mo, struct md_attr *ma)
+                                    struct md_object *mo, struct md_attr *ma,
+                                    struct md_ucred *uc)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct lmv_stripe_md *lmv = NULL, *slave_lmv = NULL;
@@ -213,7 +215,7 @@ static int cmm_create_slave_objects(const struct lu_context *ctx,
         slave_lmv->mea_count = 0;
         for (i = 1; i < cmm->cmm_tgt_count + 1; i ++) {
                 rc = cmm_creat_remote_obj(ctx, cmm, &lmv->mea_ids[i], ma,
-                                          slave_lmv, sizeof(slave_lmv));
+                                          slave_lmv, sizeof(slave_lmv), uc);
                 if (rc)
                         GOTO(cleanup, rc);
         }
@@ -228,7 +230,8 @@ cleanup:
 
 static int cmm_send_split_pages(const struct lu_context *ctx,
                                 struct md_object *mo, struct lu_rdpg *rdpg,
-                                struct lu_fid *fid, int len)
+                                struct lu_fid *fid, int len,
+                                struct md_ucred *uc)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct cmm_object *obj;
@@ -240,14 +243,14 @@ static int cmm_send_split_pages(const struct lu_context *ctx,
                 RETURN(PTR_ERR(obj));
 
         rc = mdc_send_page(cmm, ctx, md_object_next(&obj->cmo_obj),
-                           rdpg->rp_pages[0], len);
+                           rdpg->rp_pages[0], len, uc);
         cmm_object_put(ctx, obj);
         RETURN(rc);
 }
 
 static int cmm_remove_entries(const struct lu_context *ctx,
                               struct md_object *mo, struct lu_rdpg *rdpg,
-                              __u32 hash_end, __u32 *len)
+                              __u32 hash_end, __u32 *len, struct md_ucred *uc)
 {
         struct lu_dirpage *dp;
         struct lu_dirent  *ent;
@@ -268,7 +271,7 @@ static int cmm_remove_entries(const struct lu_context *ctx,
                                 OBD_ALLOC(name, ent->lde_namelen + 1);
                                 memcpy(name, ent->lde_name, ent->lde_namelen);
                                 rc = mdo_name_remove(ctx, md_object_next(mo),
-                                                     name);
+                                                     name, uc);
                                 OBD_FREE(name, ent->lde_namelen + 1);
                         }
                         if (rc) {
@@ -292,9 +295,9 @@ unmap:
         RETURN(rc);
 }
 
-static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
-                             struct lu_rdpg *rdpg, struct lu_fid *lf,
-                             __u32 end)
+static int cmm_split_entries(const struct lu_context *ctx,
+                             struct md_object *mo, struct lu_rdpg *rdpg,
+                             struct lu_fid *lf, __u32 end, struct md_ucred *uc)
 {
         int rc, done = 0;
         ENTRY;
@@ -310,7 +313,7 @@ static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
                 memset(kmap(rdpg->rp_pages[0]), 0, CFS_PAGE_SIZE);
                 kunmap(rdpg->rp_pages[0]);
 
-                rc = mo_readpage(ctx, md_object_next(mo), rdpg);
+                rc = mo_readpage(ctx, md_object_next(mo), rdpg, uc);
                 /* -E2BIG means it already reach the end of the dir */
                 if (rc) {
                         if (rc != -ERANGE) {
@@ -321,13 +324,13 @@ static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
                 }
                 
                 /* Remove the old entries */
-                rc = cmm_remove_entries(ctx, mo, rdpg, end, &len);
+                rc = cmm_remove_entries(ctx, mo, rdpg, end, &len, uc);
                 if (rc)
                         RETURN(rc);
 
                 /* Send page to slave object */ 
                 if (len > 0) {
-                        rc = cmm_send_split_pages(ctx, mo, rdpg, lf, len);
+                        rc = cmm_send_split_pages(ctx, mo, rdpg, lf, len, uc);
                         if (rc)
                                 RETURN(rc);
                 }
@@ -345,7 +348,8 @@ static int cmm_split_entries(const struct lu_context *ctx, struct md_object *mo,
 }
 #define SPLIT_PAGE_COUNT 1
 static int cmm_scan_and_split(const struct lu_context *ctx,
-                              struct md_object *mo, struct md_attr *ma)
+                              struct md_object *mo, struct md_attr *ma,
+                              struct md_ucred *uc)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         __u32 hash_segement;
@@ -376,7 +380,7 @@ static int cmm_scan_and_split(const struct lu_context *ctx,
 
                 rdpg->rp_hash = i * hash_segement;
                 hash_end = rdpg->rp_hash + hash_segement;
-                rc = cmm_split_entries(ctx, mo, rdpg, lf, hash_end);
+                rc = cmm_split_entries(ctx, mo, rdpg, lf, hash_end, uc);
                 if (rc)
                         GOTO(cleanup, rc);
         }
@@ -394,7 +398,8 @@ free_rdpg:
         RETURN(rc);
 }
 
-int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo)
+int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo,
+                     struct md_ucred *uc)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct md_attr *ma;
@@ -408,12 +413,12 @@ int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo)
                 RETURN(-ENOMEM);
 
         ma->ma_need = MA_INODE|MA_LMV;
-        rc = mo_attr_get(ctx, mo, ma);
+        rc = mo_attr_get(ctx, mo, ma, uc);
         if (rc)
                 GOTO(cleanup, ma);
 
         /* step1: checking whether the dir need to be splitted */
-        rc = cmm_expect_splitting(ctx, mo, ma);
+        rc = cmm_expect_splitting(ctx, mo, ma, uc);
         if (rc != CMM_EXPECT_SPLIT)
                 GOTO(cleanup, rc = 0);
 
@@ -425,18 +430,18 @@ int cml_try_to_split(const struct lu_context *ctx, struct md_object *mo)
                 GOTO(cleanup, rc = 0);
 
         /* step2: create slave objects */
-        rc = cmm_create_slave_objects(ctx, mo, ma);
+        rc = cmm_create_slave_objects(ctx, mo, ma, uc);
         if (rc)
                 GOTO(cleanup, ma);
 
         /* step3: scan and split the object */
-        rc = cmm_scan_and_split(ctx, mo, ma);
+        rc = cmm_scan_and_split(ctx, mo, ma, uc);
         if (rc)
                 GOTO(cleanup, ma);
 
         /* step4: set mea to the master object */
-        rc = mo_xattr_set(ctx, md_object_next(mo), ma->ma_lmv, ma->ma_lmv_size,
-                          MDS_LMV_MD_NAME, 0);
+        rc = mo_xattr_set(ctx, md_object_next(mo), ma->ma_lmv,
+                          ma->ma_lmv_size, MDS_LMV_MD_NAME, 0, uc);
 
         if (rc == -ERESTART) 
                 CWARN("Dir"DFID" has been split \n", 

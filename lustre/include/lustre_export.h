@@ -11,6 +11,8 @@
 /* Data stored per client in the last_rcvd file.  In le32 order. */
 struct mds_client_data;
 struct mdt_client_data;
+struct mds_idmap_table;
+struct mdt_idmap_table;
 
 struct mds_export_data {
         struct list_head        med_open_head;
@@ -19,6 +21,10 @@ struct mds_export_data {
         __u64                   med_ibits_known;
         loff_t                  med_lr_off;
         int                     med_lr_idx;
+        unsigned int            med_rmtclient:1; /* remote client? */
+        __u32                   med_nllu;
+        __u32                   med_nllg;
+        struct mds_idmap_table *med_idmap;
 };
 
 struct mdt_export_data {
@@ -29,7 +35,12 @@ struct mdt_export_data {
         __u64                   med_ibits_known;
         loff_t                  med_lr_off;
         int                     med_lr_idx;
+        unsigned int            med_rmtclient:1; /* remote client? */
+        __u32                   med_nllu;
+        __u32                   med_nllg;
+        struct mdt_idmap_table *med_idmap;
 };
+
 struct osc_creator {
         spinlock_t              oscc_lock;
         struct list_head        oscc_list;
