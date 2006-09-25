@@ -125,10 +125,8 @@ static int mdd_in_group_p(struct md_ucred *uc, gid_t grp)
 
                 if (uc->mu_ginfo)
                         group_info = uc->mu_ginfo;
-#if 0
                 else if (uc->mu_identity)
                         group_info = uc->mu_identity->mi_ginfo;
-#endif
 
                 if (!group_info)
                         return 0;
@@ -954,10 +952,10 @@ int mdd_fix_attr(const struct lu_context *ctxt, struct mdd_object *obj,
         }
 
         /* Check for setting the obj time. */
-        if (la->la_valid & (LA_MTIME | LA_ATIME | LA_CTIME)) {
+        if ((la->la_valid & (LA_MTIME | LA_ATIME | LA_CTIME)) &&
+            !(la->la_valid & ~(LA_MTIME | LA_ATIME | LA_CTIME))) {
                 if ((uc->mu_fsuid != tmp_la->la_uid) &&
-                    !mdd_capable(uc, CAP_FOWNER) &&
-                    !(la->la_valid & (LA_SIZE | LA_BLOCKS)))
+                    !mdd_capable(uc, CAP_FOWNER)) 
                         RETURN(-EPERM);
         }
 

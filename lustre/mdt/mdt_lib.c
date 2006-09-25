@@ -96,7 +96,7 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
         struct mdt_device *mdt = info->mti_mdt;
 
         if (uc->mu_valid != UCRED_INIT) {
-                if (uc->mu_ginfo && (uc->mu_valid != UCRED_OLD)) {
+                if (uc->mu_ginfo) {
                         groups_free(uc->mu_ginfo);
                         uc->mu_ginfo = NULL;
                 }
@@ -296,7 +296,7 @@ check_squash:
          */
         if (req->rq_auth_usr_mdt ||
             (pud->pud_ngroups && !med->med_rmtclient && !root_squashed &&
-             (setxid_perm & LUSTRE_SETGRP_PERM))) {
+            (setxid_perm & LUSTRE_SETGRP_PERM))) {
                 struct group_info *ginfo;
 
                 /* setgroups for local client */
@@ -316,14 +316,14 @@ check_squash:
         ucred->mu_valid = UCRED_NEW;
 
 out:
-        if (rc)
+        if (rc && identity)
                 mdt_identity_put(mdt->mdt_identity_cache, identity);
 
         RETURN(rc);
 }
 
 static int old_init_ucred(struct mdt_thread_info *info,
-                                 struct mdt_body *body)
+                          struct mdt_body *body)
 {
         struct md_ucred     *uc = &info->mti_uc;
         struct mdt_device   *mdt = info->mti_mdt;
@@ -354,10 +354,7 @@ static int old_init_ucred(struct mdt_thread_info *info,
         uc->mu_fsuid = body->fsuid;
         uc->mu_fsgid = body->fsgid;
         uc->mu_cap = body->capability;
-        if (identity)
-                uc->mu_ginfo = identity->mi_ginfo;
-        else
-                uc->mu_ginfo = NULL;
+        uc->mu_ginfo = NULL;
         uc->mu_identity = identity;
 
         RETURN(0);
@@ -402,10 +399,7 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
         uc->mu_valid = UCRED_OLD;
         uc->mu_o_uid = uc->mu_o_fsuid = uc->mu_uid = uc->mu_fsuid;
         uc->mu_o_gid = uc->mu_o_fsgid = uc->mu_gid = uc->mu_fsgid;
-        if (identity)
-                uc->mu_ginfo = identity->mi_ginfo;
-        else
-                uc->mu_ginfo = NULL;
+        uc->mu_ginfo = NULL;
         uc->mu_identity = identity;
 
         RETURN(0);
