@@ -260,7 +260,8 @@ static const struct req_msg_field *ldlm_intent_unlink_client[] = {
 static const struct req_msg_field *mds_getxattr_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
-        &RMF_NAME
+        &RMF_NAME,
+        &RMF_EADATA
 };
 
 static const struct req_msg_field *mds_getxattr_server[] = {
@@ -273,6 +274,11 @@ static const struct req_msg_field *mds_setxattr_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
         &RMF_NAME,
+        &RMF_EADATA
+};
+
+static const struct req_msg_field *mds_setxattr_server[] = {
+        &RMF_PTLRPC_BODY,
         &RMF_EADATA
 };
 
@@ -540,7 +546,8 @@ const struct req_format RQF_MDS_GETXATTR =
 EXPORT_SYMBOL(RQF_MDS_GETXATTR);
 
 const struct req_format RQF_MDS_SETXATTR =
-        DEFINE_REQ_FMT0("MDS_SETXATTR", mds_setxattr_client, empty);
+        DEFINE_REQ_FMT0("MDS_SETXATTR",
+                        mds_setxattr_client, mds_setxattr_server);
 EXPORT_SYMBOL(RQF_MDS_SETXATTR);
 
 const struct req_format RQF_MDS_GETATTR_NAME =

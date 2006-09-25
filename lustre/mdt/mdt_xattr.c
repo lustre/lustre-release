@@ -100,8 +100,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 }
 
 static int do_remote_getfacl(struct mdt_thread_info *info,
-                             struct lu_fid *fid, int offset,
-                             void *buf, int buflen)
+                             struct lu_fid *fid, void *buf, int buflen)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
         char *cmd;
@@ -111,26 +110,28 @@ static int do_remote_getfacl(struct mdt_thread_info *info,
         if (!buf || (buflen != RMTACL_SIZE_MAX))
                 RETURN(-EINVAL);
 
-        cmd = lustre_msg_string(req->rq_reqmsg, offset, 0);
+        cmd = req_capsule_client_get(&info->mti_pill, &RMF_EADATA);
         if (!cmd) {
                 CERROR("missing getfacl command!\n");
                 RETURN(-EFAULT);
         }
 
         rc = mdt_rmtacl_upcall(info, fid_oid(fid), cmd, buf, buflen);
+        if (rc)
+                CERROR("remote acl upcall failed: %d\n", rc);
+
         lustre_shrink_reply(req, REPLY_REC_OFF + 1, strlen(buf) + 1, 0);
         RETURN(rc ?: strlen(buf) + 1);
 }
 
 int mdt_getxattr(struct mdt_thread_info *info)
 {
-        struct mdt_body *body = (struct mdt_body *)info->mti_body;
-        struct  mdt_body *reqbody;
-        int     rc;
-        struct  md_object *next;
-        char   *buf;
-        int     buflen;
-        struct  mdt_body *rep_body;
+        struct  mdt_body       *reqbody;
+        struct  mdt_body       *repbody;
+        struct  md_object      *next;
+        char                   *buf;
+        int                     buflen;
+        int                     rc, rc1;
 
         ENTRY;
 
@@ -140,21 +141,21 @@ int mdt_getxattr(struct mdt_thread_info *info)
         CDEBUG(D_INODE, "getxattr "DFID"\n",
                         PFID(&info->mti_body->fid1));
 
-        reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
-        if (reqbody == NULL)
-                RETURN(-EFAULT);
-
-        rc = mdt_init_ucred(info, reqbody);
-        if (rc)
-                RETURN(rc);
-
         next = mdt_object_child(info->mti_object);
 
         rc = mdt_getxattr_pack_reply(info);
         if (rc < 0)
-                GOTO(out, rc);
+                RETURN(rc);
 
-        rep_body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
+        if (reqbody == NULL)
+                RETURN(-EFAULT);
+
+        rc1 = mdt_init_ucred(info, reqbody);
+        if (rc1)
+                RETURN(rc1);
+
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         /*No EA, just go back*/
         if (rc == 0)
                 GOTO(no_xattr, rc);
@@ -168,8 +169,11 @@ int mdt_getxattr(struct mdt_thread_info *info)
                 CDEBUG(D_INODE, "getxattr %s\n", xattr_name);
 
                 if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL)) {
+                        struct mdt_body *body =
+                                        (struct mdt_body *)info->mti_body;
+
                         rc = do_remote_getfacl(info, &body->fid1,
-                                               REQ_REC_OFF + 2, buf, buflen);
+                                               buf, buflen);
                 } else {
                         rc = mo_xattr_get(info->mti_ctxt, next, buf, buflen,
                                           xattr_name, &info->mti_uc);
@@ -190,34 +194,55 @@ int mdt_getxattr(struct mdt_thread_info *info)
 
         if (rc >= 0) {
 no_xattr:
-                rep_body->eadatasize = rc;
+                repbody->eadatasize = rc;
                 rc = 0;
         }
-out:
         mdt_exit_ucred(info);
         RETURN(rc);
 }
 
-static int do_remote_setfacl(struct mdt_thread_info *info, struct lu_fid *fid,
-                             int offset)
+/* return EADATA length to the caller. negative value means error */
+static int mdt_setxattr_pack_reply(struct mdt_thread_info * info)
+{
+        struct req_capsule     *pill = &info->mti_pill ;
+        __u64                   valid = info->mti_body->valid;
+        int                     rc = 0, rc1;
+
+        if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) { 
+                char *xattr_name;
+
+                xattr_name = req_capsule_client_get(pill, &RMF_NAME);
+                if (!xattr_name)
+                        return -EFAULT;
+
+                if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))
+                        rc = RMTACL_SIZE_MAX;
+        }
+
+        req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER, rc);
+
+        rc1 = req_capsule_pack(pill);
+
+        return rc = !rc1? rc1 : rc;
+}
+
+static int do_remote_setfacl(struct mdt_thread_info *info, struct lu_fid *fid)
 {
         struct  ptlrpc_request *req = mdt_info_req(info);
         char *cmd, *buf;
-        int rc, buflen;
+        int rc;
         ENTRY;
 
-        cmd = lustre_msg_string(req->rq_reqmsg, offset, 0);
+        cmd = req_capsule_client_get(&info->mti_pill, &RMF_EADATA);
         if (!cmd) {
                 CERROR("missing setfacl command!\n");
                 RETURN(-EFAULT);
         }
 
-        buflen = lustre_msg_buflen(req->rq_repmsg, REPLY_REC_OFF);
-        buf = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, buflen);
-        if (!buf || (buflen != RMTACL_SIZE_MAX))
-                RETURN(-EINVAL);
+        buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
+        LASSERT(buf);
 
-        rc = mdt_rmtacl_upcall(info, fid_oid(fid), cmd, buf, buflen);
+        rc = mdt_rmtacl_upcall(info, fid_oid(fid), cmd, buf, RMTACL_SIZE_MAX);
         if (rc)
                 CERROR("remote acl upcall failed: %d\n", rc);
 
@@ -227,27 +252,31 @@ static int do_remote_setfacl(struct mdt_thread_info *info, struct lu_fid *fid,
 
 int mdt_setxattr(struct mdt_thread_info *info)
 {
-        struct ptlrpc_request *req = mdt_info_req(info);
-        struct mdt_body *reqbody;
-        const char              user_string[] = "user.";
-        const char              trust_string[] = "trusted.";
-        struct mdt_lock_handle *lh;
-        struct req_capsule       *pill = &info->mti_pill;
-        struct mdt_object        *obj  = info->mti_object;
-        struct mdt_body *body = (struct mdt_body *)info->mti_body;
-        const struct lu_context  *ctx  = info->mti_ctxt;
-        struct md_object       *child  = mdt_object_child(obj);
-        __u64                   valid  = body->valid;
-        char                   *xattr_name;
-        int                     xattr_len;
-        __u64                   lockpart;
-        int                     rc;
+        struct ptlrpc_request   *req = mdt_info_req(info);
+        struct mdt_body         *reqbody;
+        const char               user_string[] = "user.";
+        const char               trust_string[] = "trusted.";
+        struct mdt_lock_handle  *lh;
+        struct req_capsule      *pill = &info->mti_pill;
+        struct mdt_object       *obj  = info->mti_object;
+        struct mdt_body         *body = (struct mdt_body *)info->mti_body;
+        const struct lu_context *ctx  = info->mti_ctxt;
+        struct md_object        *child  = mdt_object_child(obj);
+        __u64                    valid  = body->valid;
+        char                    *xattr_name;
+        int                      xattr_len;
+        __u64                    lockpart;
+        int                      rc;
         ENTRY;
 
         CDEBUG(D_INODE, "setxattr "DFID"\n", PFID(&body->fid1));
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(-ENOMEM);
+
+        rc = mdt_setxattr_pack_reply(info);
+        if (rc < 0)
+                RETURN(rc);
 
         reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
@@ -267,7 +296,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
         if (((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) &&
             (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))) {
-                rc = do_remote_setfacl(info, &body->fid1, REQ_REC_OFF + 2);
+                rc = do_remote_setfacl(info, &body->fid1);
                 GOTO(out, rc);
         }
 
