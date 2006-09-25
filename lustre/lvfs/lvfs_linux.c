@@ -586,6 +586,7 @@ void lvfs_memdbg_show(void)
         struct hlist_node *node = NULL;
         struct hlist_head *head;
         struct obd_mem_track *mt;
+        int header = 0;
 #endif
         int leaked;
 	
@@ -596,23 +597,27 @@ void lvfs_memdbg_show(void)
         leaked = atomic_read(&obd_memory);
 
         if (leaked > 0) {
-                CWARN("memory leaks detected (max %d, leaked %d)\n",
+                CWARN("Memory leaks detected (max %d, leaked %d)\n",
                       obd_memmax, leaked);
-
-#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
-                spin_lock(&obd_memlist_lock);
-                for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
-                        hlist_for_each(node, head) {
-                                mt = hlist_entry(node, struct obd_mem_track, mt_hash);
-                                CWARN("  [%s] ptr: 0x%p, size: %d, src at \"%s\"\n",
-                                      ((mt->mt_flags & OBD_MT_WRONG_SIZE) ?
-                                       "wrong ck size" : "leaked memory"),
-                                      mt->mt_ptr, mt->mt_size, mt->mt_loc);
-                        }
-                }
-                spin_unlock(&obd_memlist_lock);
-#endif
         }
+        
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
+        spin_lock(&obd_memlist_lock);
+        for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
+                hlist_for_each(node, head) {
+                        if (header == 0) {
+                                CWARN("Abnormal memory activities:\n");
+                                header = 1;
+                        }
+                        mt = hlist_entry(node, struct obd_mem_track, mt_hash);
+                        CWARN("  [%s] ptr: 0x%p, size: %d, src at \"%s\"\n",
+                              ((mt->mt_flags & OBD_MT_WRONG_SIZE) ?
+                               "wrong ck size" : "leaked memory"),
+                              mt->mt_ptr, mt->mt_size, mt->mt_loc);
+                }
+        }
+        spin_unlock(&obd_memlist_lock);
+#endif
 }
 EXPORT_SYMBOL(lvfs_memdbg_show);
 

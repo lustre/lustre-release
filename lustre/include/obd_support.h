@@ -263,8 +263,9 @@ extern atomic_t libcfs_kmemory;
 
 #if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
 
-#define OBD_MT_WRONG_SIZE (1 << 0)
-#define OBD_MT_LOC_LEN    128
+#define OBD_MT_WRONG_SIZE    (1 << 0)
+#define OBD_MT_ALREADY_FREED (1 << 1)
+#define OBD_MT_LOC_LEN       128
 
 struct obd_mem_track {
         struct hlist_node mt_hash;
@@ -338,10 +339,16 @@ __put_mem_track(void *ptr, int size,
                 return 0;
         } else {
                 if (mt->mt_size != size) {
-                        mt->mt_flags |= OBD_MT_WRONG_SIZE;
-                        CWARN("Freeing memory chunk (at 0x%p) of different size "
-                              "than allocated (%d != %d) at %s:%d, allocated at %s\n",
-                              ptr, mt->mt_size, size, file, line, mt->mt_loc);
+                        if (!(mt->mt_flags & OBD_MT_ALREADY_FREED)) {
+                                mt->mt_flags |= (OBD_MT_WRONG_SIZE |
+                                                 OBD_MT_ALREADY_FREED);
+                                
+                                CWARN("Freeing memory chunk (at 0x%p) of "
+                                      "different size than allocated "
+                                      "(%d != %d) at %s:%d, allocated at %s\n",
+                                      ptr, mt->mt_size, size, file, line,
+                                      mt->mt_loc);
+                        }
                 } else {
                         __free_mem_track(mt);
                 }
@@ -505,7 +512,7 @@ do {                                                                          \
         LASSERT(ptr);                                                         \
         CDEBUG(D_MALLOC, "slab-freed '" #ptr "': %d at %p (tot %d).\n",       \
                (int)(size), ptr, atomic_read(&obd_memory));                   \
-        get_mem_track((ptr), (size), __FILE__, __LINE__);                     \
+        put_mem_track((ptr), (size), __FILE__, __LINE__);                     \
         atomic_sub(size, &obd_memory);                                        \
         POISON(ptr, 0x5a, size);                                              \
         cfs_mem_cache_free(slab, ptr);                                        \
