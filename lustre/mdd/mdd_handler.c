@@ -1450,11 +1450,11 @@ int __mdd_object_kill(const struct lu_context *ctxt,
         ENTRY;
 
         mdd_set_dead_obj(obj);
-        if (S_ISREG(mdd_object_type(obj)) && ma->ma_need&MA_LOV) {
+        if (S_ISREG(mdd_object_type(obj))) {
+                /* Return LOV & COOKIES unconditionally here. We clean evth up.
+                 * Caller must be ready for that. */
                 rc = __mdd_lmm_get(ctxt, obj, ma);
-                if ((ma->ma_valid & MA_LOV) && (ma->ma_need & MA_COOKIE))
-                        rc = mdd_unlink_log(ctxt, mdo2mdd(&obj->mod_obj),
-                                            obj, ma);
+                rc = mdd_unlink_log(ctxt, mdo2mdd(&obj->mod_obj), obj, ma);
         }
         RETURN(rc);
 }
