@@ -3480,8 +3480,10 @@ static int mdt_obd_connect(const struct lu_context *ctx,
                         memcpy(mcd->mcd_uuid, cluuid, sizeof mcd->mcd_uuid);
                         med->med_mcd = mcd;
                         rc = mdt_client_new(ctx, mdt, med);
-                        if (rc != 0)
+                        if (rc != 0) {
                                 OBD_FREE_PTR(mcd);
+                                med->med_mcd = NULL;
+                        }
                 } else
                         rc = -ENOMEM;
         }
