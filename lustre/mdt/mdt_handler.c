@@ -3034,7 +3034,7 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
 
         if (m->mdt_namespace != NULL) {
                 ldlm_namespace_free(m->mdt_namespace, 0);
-                m->mdt_namespace = NULL;
+                d->ld_obd->obd_namespace = m->mdt_namespace = NULL;
         }
 
         mdt_seq_fini(ctx, m);
@@ -3140,7 +3140,8 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
                 GOTO(err_fini_seq, rc = -ENOMEM);
 
         ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
-
+        /* set obd_namespace for compatibility with old code */
+        obd->obd_namespace = m->mdt_namespace;
         rc = mdt_start_ptlrpc_service(m);
         if (rc)
                 GOTO(err_free_ns, rc);
@@ -3151,8 +3152,8 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
                 GOTO(err_stop_service, rc);
 
         m->mdt_identity_cache = upcall_cache_init(obd->obd_name,
-                                                MDT_IDENTITY_UPCALL_PATH,
-                                                &mdt_identity_upcall_cache_ops);
+                                                  MDT_IDENTITY_UPCALL_PATH,
+                                                  &mdt_identity_upcall_cache_ops);
         if (IS_ERR(m->mdt_identity_cache)) {
                 rc = PTR_ERR(m->mdt_identity_cache);
                 m->mdt_identity_cache = NULL;
@@ -3185,7 +3186,7 @@ err_stop_service:
         mdt_stop_ptlrpc_service(m);
 err_free_ns:
         ldlm_namespace_free(m->mdt_namespace, 0);
-        m->mdt_namespace = NULL;
+        obd->obd_namespace = m->mdt_namespace = NULL;
 err_fini_seq:
         mdt_seq_fini(ctx, m);
 err_fini_fld:
