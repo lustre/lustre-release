@@ -807,16 +807,13 @@ static int mdt_txn_stop_cb(const struct lu_context *ctx,
         mti = lu_context_key_get(ctx, &mdt_thread_key);
         req = mdt_info_req(mti);
 
-        /* FIXME: don't handle requests from SEQ/FLD,
-         * should be fixed
-         */
         if (mti->mti_mdt == NULL || req == NULL || mti->mti_no_need_trans) {
                 txi->txi_transno = 0;
                 return 0;
         }
 
         if (mti->mti_has_trans) {
-                CERROR("More than one transaction "LPU64"\n", mti->mti_transno);
+                CWARN("More than one transaction "LPU64"\n", mti->mti_transno);
                 return 0;
         }
 
