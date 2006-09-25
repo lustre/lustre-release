@@ -110,6 +110,7 @@ load_modules() {
     # note that insmod will ignore anything in modprobe.conf
     load_module ../lnet/lnet/lnet $LNETOPTS
     LNETLND=${LNETLND:-"socklnd/ksocklnd"}
+    echo -1 > /proc/sys/lnet/debug
     load_module ../lnet/klnds/$LNETLND
     load_module lvfs/lvfs
     load_module obdclass/obdclass
@@ -484,7 +485,7 @@ mds_evict_client() {
 }
 
 ost_evict_client() {
-    UUID=`cat /proc/fs/lustre/osc/${ost1_svc}*-osc-*/uuid`
+    UUID=`cat /proc/fs/lustre/osc/${ost1_svc}-osc-*/uuid`
     do_facet ost1 "echo $UUID > /proc/fs/lustre/obdfilter/${ost1_svc}/evict_client"
 }
 
