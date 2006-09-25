@@ -721,8 +721,8 @@ test_24k() {
 	mkdir $DIR/R11a $DIR/R11a/d
 	touch $DIR/R11a/f
 	mv $DIR/R11a/f $DIR/R11a/d
-	$CHECKSTAT -a $DIR/R11a/f || error
-	$CHECKSTAT -t file $DIR/R11a/d/f || error
+        $CHECKSTAT -a $DIR/R11a/f || error
+        $CHECKSTAT -t file $DIR/R11a/d/f || error
 }
 run_test 24k "touch .../R11a/f; mv .../R11a/f .../R11a/d ======="
 
@@ -1009,16 +1009,17 @@ exhaust_precreations() {
 	OST=$(grep ${OSTIDX}": " $LPROC/lov/${LOVNAME}/target_obd | \
 	    awk '{print $2}' | sed -e 's/_UUID$//')
 	# on the mdt's osc
-	last_id=$(cat $LPROC/osc/${OST}-osc/prealloc_last_id)
-	next_id=$(cat $LPROC/osc/${OST}-osc/prealloc_next_id)
-
-	mkdir -p $DIR/d27/${OST}
+        OSC=$(ls $LPROC/osc | grep "mdtlov-osc000${OSTIDX}")
+	last_id=$(cat $LPROC/osc/${OSC}/prealloc_last_id)
+	next_id=$(cat $LPROC/osc/${OSC}/prealloc_next_id)
+        
+        mkdir -p $DIR/d27/${OST}
 	$SETSTRIPE $DIR/d27/${OST} 0 $OSTIDX 1
 #define OBD_FAIL_OST_ENOSPC              0x215
 	sysctl -w lustre.fail_loc=0x215
 	echo "Creating to objid $last_id on ost $OST..."
 	createmany -o $DIR/d27/${OST}/f $next_id $((last_id - next_id + 2))
-	grep '[0-9]' $LPROC/osc/${OST}-osc/prealloc*
+	grep '[0-9]' $LPROC/osc/${OSC}/prealloc*
 	reset_enospc $2
 }
 

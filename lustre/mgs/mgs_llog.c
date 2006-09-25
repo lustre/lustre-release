@@ -1501,12 +1501,12 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
                                     int flags)
 {
         struct llog_handle *llh = NULL;
-        char *nodeuuid, *svname, *oscname, *oscuuid, *lovuuid;
-        char index[5];
+        char *nodeuuid, *oscname, *oscuuid, *lovuuid;
+        char index[9];
         int i, rc;
 
         ENTRY;
-        CDEBUG(D_MGS, "adding osc for %s to log %s\n",
+        CERROR("adding osc for %s to log %s\n",
                mti->mti_svname, logname);
         
         if (mgs_log_is_empty(obd, logname)) {
@@ -1515,10 +1515,9 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
                 rc = mgs_write_log_lov(obd, fsdb, mti, logname, lovname);
         }
   
-
+        sprintf(index,"-osc%04x", mti->mti_stripe_index);
         name_create(&nodeuuid, libcfs_nid2str(mti->mti_nids[0]), "");
-        name_create(&svname, mti->mti_svname, lovname);
-        name_create(&oscname, svname, "-osc");
+        name_create(&oscname, lovname, index);
         name_create(&oscuuid, oscname, "_UUID");
         name_create(&lovuuid, lovname, "_UUID");
 
@@ -1557,7 +1556,6 @@ out:
         name_destroy(lovuuid);
         name_destroy(oscuuid);
         name_destroy(oscname);
-        name_destroy(svname);
         name_destroy(nodeuuid);
         RETURN(rc);
 }
@@ -1800,6 +1798,7 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                 if (class_match_param(ptr, PARAM_LOV, NULL) == 0) {
                         char mdt_index[16];
                         char *mdtlovname;
+
                         /* Change lov default stripe params */
                         CDEBUG(D_MGS, "lov param %s\n", ptr);
                         if (!(mti->mti_flags & LDD_F_SV_TYPE_MDT)) {
@@ -1813,7 +1812,6 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         /* Modify mdtlov */
                         if (mgs_log_is_empty(obd, mti->mti_svname))
                                 GOTO(end_while, rc = -ENODEV);
-
                         /* FIXME: The stripesize and stripecount is for 
                          *        specific mdt lov?
                          * Shall we update all the mdt lov?
