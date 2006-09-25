@@ -259,8 +259,7 @@ static int client_common_fill_super(struct super_block *sb,
                  * will disagree when client gss not applied. */
                 LCONSOLE_INFO("client claims to be remote, but server "
                               "rejected, forced to be local\n");
-                sbi->ll_flags &= ~OBD_CONNECT_RMT_CLIENT;
-                sbi->ll_flags |= OBD_CONNECT_LCL_CLIENT;
+                sbi->ll_flags &= ~LL_SBI_RMT_CLIENT;
         }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
