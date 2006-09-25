@@ -146,14 +146,14 @@ static int fld_server_handle(struct lu_server_fld *fld,
                                        mf->mf_seq, mf->mf_mds);
 
                 /* do not return -EEXIST error for resent case */
-                if ((info->fti_flags & FLD_MSG_RESENT) && rc == -EEXIST)
+                if ((info->fti_flags & MSG_RESENT) && rc == -EEXIST)
                         rc = 0;
                 break;
         case FLD_DELETE:
                 rc = fld_server_delete(fld, ctx, mf->mf_seq);
 
                 /* do not return -ENOENT error for resent case */
-                if ((info->fti_flags & FLD_MSG_RESENT) && rc == -ENOENT)
+                if ((info->fti_flags & MSG_RESENT) && rc == -ENOENT)
                         rc = 0;
                 break;
         case FLD_LOOKUP:
@@ -194,12 +194,6 @@ static int fld_req_handle(struct ptlrpc_request *req,
                         RETURN(-EPROTO);
                 *out = *in;
 
-                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
-                        info->fti_flags |= FLD_MSG_REPLAY;
-
-                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT)
-                        info->fti_flags |= FLD_MSG_RESENT;
-                
                 rc = fld_server_handle(site->ls_server_fld,
                                        req->rq_svc_thread->t_ctx,
                                        *opc, out, info);
@@ -214,7 +208,7 @@ static void fld_thread_info_init(struct ptlrpc_request *req,
 {
         int i;
 
-        info->fti_flags = 0;
+        info->fti_flags = lustre_msg_get_flags(req->rq_reqmsg);
         
         /* mark rep buffer as req-layout stuff expects */
         for (i = 0; i < ARRAY_SIZE(info->fti_rep_buf_size); i++)

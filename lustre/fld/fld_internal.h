@@ -50,11 +50,6 @@ enum {
 
 extern struct lu_fld_hash fld_hash[];
 
-enum {
-        FLD_MSG_RESENT = 1 << 0,
-        FLD_MSG_REPLAY = 1 << 1
-};
-
 #ifdef __KERNEL__
 struct fld_thread_info {
         struct req_capsule fti_pill;

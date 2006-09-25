@@ -1705,9 +1705,8 @@ static int mdt_recovery(struct mdt_thread_info *info)
                 int should_process;
 
                 rc = mds_filter_recovery_request(req, obd, &should_process);
-                if (rc != 0 || !should_process) {
+                if (rc != 0 || !should_process)
                         RETURN(rc);
-                }
         }
         RETURN(+1);
 }
@@ -1757,19 +1756,15 @@ static int mdt_handle0(struct ptlrpc_request *req,
         rc = mds_msg_check_version(msg);
         if (rc == 0) {
                 rc = mdt_recovery(info);
-                switch (rc) {
-                case +1:
+                if (rc == +1) {
                         h = mdt_handler_find(lustre_msg_get_opc(msg),
                                              supported);
-                        if (h != NULL)
+                        if (h != NULL) {
                                 rc = mdt_req_handle(info, h, req);
-                        else {
+                        } else {
                                 req->rq_status = -ENOTSUPP;
                                 rc = ptlrpc_error(req);
-                                break;
                         }
-                        /* fall through */
-                case 0:
                         rc = mdt_reply(req, rc, info);
                 }
         } else
