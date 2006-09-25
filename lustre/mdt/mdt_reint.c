@@ -263,7 +263,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
         ma->ma_need = MA_INODE;
         next = mdt_object_child(mo);
-        rc = mo_attr_get(info->mti_ctxt, next, ma, &info->mti_uc);
+        rc = mo_attr_get(info->mti_ctxt, next, ma, NULL);
         if (rc != 0)
                 GOTO(out, rc);
 

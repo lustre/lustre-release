@@ -293,7 +293,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD,
                                                              RCL_SERVER);
         }
-        rc = mo_attr_get(ctxt, next, ma, &info->mti_uc);
+        rc = mo_attr_get(ctxt, next, ma, NULL);
         if (rc == -EREMOTE) {
                 /* This object is located on remote node.*/
                 repbody->fid1 = *mdt_object_fid(o);
@@ -330,8 +330,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 }
         } else if (S_ISLNK(la->la_mode) &&
                           reqbody->valid & OBD_MD_LINKNAME) {
-                rc = mo_readlink(ctxt, next, ma->ma_lmm, ma->ma_lmm_size,
-                                 &info->mti_uc);
+                rc = mo_readlink(ctxt, next, ma->ma_lmm, ma->ma_lmm_size, NULL);
                 if (rc <= 0) {
                         CERROR("readlink failed: %d\n", rc);
                         rc = -EFAULT;
@@ -374,7 +373,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 length = req_capsule_get_size(pill, &RMF_ACL, RCL_SERVER);
                 if (length > 0) {
                         rc = mo_xattr_get(ctxt, next, buffer, length,
-                                          XATTR_NAME_ACL_ACCESS, &info->mti_uc);
+                                          XATTR_NAME_ACL_ACCESS, NULL);
                         if (rc < 0) {
                                 if (rc == -ENODATA || rc == -EOPNOTSUPP)
                                         rc = 0;
@@ -395,24 +394,14 @@ static int mdt_getattr(struct mdt_thread_info *info)
 {
         int rc;
         struct mdt_object *obj;
-        struct mdt_body *reqbody;
 
         obj = info->mti_object;
         LASSERT(obj != NULL);
         LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
         ENTRY;
 
-        reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
-        if (reqbody == NULL)
-                RETURN(-EFAULT);
-
-        rc = mdt_init_ucred(info, reqbody);
-        if (rc)
-                RETURN(rc);
-
         rc = mdt_getattr_internal(info, obj);
         mdt_shrink_reply(info, REPLY_REC_OFF + 1);
-        mdt_exit_ucred(info);
         RETURN(rc);
 }
 
@@ -771,7 +760,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
                         memcpy(name, ent->lde_name, ent->lde_namelen);
                         rc = mdo_name_insert(info->mti_ctxt,
                                              md_object_next(&object->mot_obj),
-                                             name, lf, 0, &info->mti_uc);
+                                             name, lf, 0, NULL);
                         OBD_FREE(name, ent->lde_namelen + 1);
                         if (rc)
                                 GOTO(out, rc);
@@ -984,7 +973,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
         }
 
         rc = mdt_init_ucred_reint(info);
-        if (rc != 0)
+        if (rc)
                 RETURN(rc);
 
         rc = mdt_fix_attr_ucred(info, op);
@@ -1089,12 +1078,8 @@ static int mdt_sync(struct mdt_thread_info *info)
         if (body == NULL)
                 RETURN(-EINVAL);
 
-        rc = mdt_init_ucred(info, body);
-        if (rc)
-                RETURN(rc);
-
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SYNC_PACK))
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         if (fid_seq(&body->fid1) == 0) {
                 /* sync the whole device */
@@ -1114,8 +1099,7 @@ static int mdt_sync(struct mdt_thread_info *info)
                                 next = mdt_object_child(info->mti_object);
                                 info->mti_attr.ma_need = MA_INODE;
                                 rc = mo_attr_get(info->mti_ctxt, next,
-                                                 &info->mti_attr,
-                                                 &info->mti_uc);
+                                                 &info->mti_attr, NULL);
                                 if (rc == 0) {
                                         body = req_capsule_server_get(pill,
                                                                 &RMF_MDT_BODY);
@@ -1126,10 +1110,7 @@ static int mdt_sync(struct mdt_thread_info *info)
                         }
                 }
         }
-        EXIT;
-out:
-        mdt_exit_ucred(info);
-        return rc;
+        RETURN(rc);
 }
 
 static int mdt_quotacheck_handle(struct mdt_thread_info *info)

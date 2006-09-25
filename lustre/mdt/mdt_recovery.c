@@ -979,7 +979,7 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
 
         body = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
         rc = mo_attr_get(mti->mti_ctxt, mdt_object_child(child),
-                         &mti->mti_attr, &mti->mti_uc);
+                         &mti->mti_attr, NULL);
         if (rc == -EREMOTE) {
                 /* object was created on remote server */
                 req->rq_status = rc;
@@ -1007,7 +1007,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
         obj = mdt_object_find(mti->mti_ctxt, mdt, mti->mti_rr.rr_fid1);
         LASSERT(!IS_ERR(obj));
         mo_attr_get(mti->mti_ctxt, mdt_object_child(obj),
-                    &mti->mti_attr, &mti->mti_uc);
+                    &mti->mti_attr, NULL);
         mdt_pack_attr2body(body, &mti->mti_attr.ma_attr, mdt_object_fid(obj));
         mdt_body_reverse_idmap(mti, body);
 

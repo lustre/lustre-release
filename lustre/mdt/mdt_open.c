@@ -524,7 +524,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
                 mdt_set_disposition(info, rep, DISP_IT_EXECD);
                 mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
                 mdt_set_disposition(info, rep, DISP_LOOKUP_POS);
-                rc = mo_attr_get(ctxt, mdt_object_child(o), ma, &info->mti_uc);
+                rc = mo_attr_get(ctxt, mdt_object_child(o), ma, NULL);
                 if (rc == 0)
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
@@ -563,8 +563,7 @@ static int mdt_cross_open(struct mdt_thread_info* info,
 
         rc = lu_object_exists(&o->mot_obj.mo_lu);
         if (rc > 0) {
-                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma,
-                                 &info->mti_uc);
+                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma, NULL);
                 if (rc == 0)
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
@@ -723,7 +722,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         } else {
                 /* We have to get attr & lov ea for this object */
                 result = mo_attr_get(info->mti_ctxt, mdt_object_child(child),
-                                     ma, &info->mti_uc);
+                                     ma, NULL);
                 /*
                  * The object is on remote node, return its FID for remote open.
                  */
@@ -830,9 +829,9 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
         ma->ma_need |= MA_INODE;
                 
         if (!MFD_CLOSED(mode))
-                rc = mo_close(info->mti_ctxt, next, ma, &info->mti_uc);
+                rc = mo_close(info->mti_ctxt, next, ma, NULL);
         else if (ret == -EAGAIN)
-                rc = mo_attr_get(info->mti_ctxt, next, ma, &info->mti_uc);
+                rc = mo_attr_get(info->mti_ctxt, next, ma, NULL);
 
         /* If the object is unlinked, do not try to re-enable SIZEONMDS */
         if ((ret == -EAGAIN) && (ma->ma_valid & MA_INODE) &&
