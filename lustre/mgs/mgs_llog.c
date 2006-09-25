@@ -1496,13 +1496,13 @@ out:
 /* Add the ost info to the client/mdt lov */
 static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
                                     struct mgs_target_info *mti,
-                                    char *logname, char *lovname,
+                                    char *logname, char *suffix, char *lovname,
                                     struct sec_flavor_config *sec_conf,
                                     int flags)
 {
         struct llog_handle *llh = NULL;
-        char *nodeuuid, *oscname, *oscuuid, *lovuuid;
-        char index[9];
+        char *nodeuuid, *oscname, *oscuuid, *lovuuid, *svname;
+        char index[5];
         int i, rc;
 
         ENTRY;
@@ -1515,9 +1515,9 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
                 rc = mgs_write_log_lov(obd, fsdb, mti, logname, lovname);
         }
   
-        sprintf(index,"-osc%04x", mti->mti_stripe_index);
         name_create(&nodeuuid, libcfs_nid2str(mti->mti_nids[0]), "");
-        name_create(&oscname, lovname, index);
+        name_create(&svname, mti->mti_svname, "-osc");
+        name_create(&oscname, svname, suffix);
         name_create(&oscuuid, oscname, "_UUID");
         name_create(&lovuuid, lovname, "_UUID");
 
@@ -1556,6 +1556,7 @@ out:
         name_destroy(lovuuid);
         name_destroy(oscuuid);
         name_destroy(oscname);
+        name_destroy(svname);
         name_destroy(nodeuuid);
         RETURN(rc);
 }
@@ -1644,8 +1645,9 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
                         sprintf(mdt_index,"-MDT%04x",i);
                         name_create(&logname, mti->mti_fsname, mdt_index);
                         name_create(&lovname, logname, "-mdtlov");
-                        mgs_write_log_osc_to_lov(obd, fsdb, mti, logname, 
-                                                 lovname, &sec_conf_mdt, flags);
+                        mgs_write_log_osc_to_lov(obd, fsdb, mti, logname,
+                                                 mdt_index, lovname,
+                                                 &sec_conf_mdt, flags);
                         name_destroy(logname);
                         name_destroy(lovname);
                 }
@@ -1654,8 +1656,8 @@ static int mgs_write_log_ost(struct obd_device *obd, struct fs_db *fsdb,
     
         /* Append ost info to the client log */
         name_create(&logname, mti->mti_fsname, "-client");
-        mgs_write_log_osc_to_lov(obd, fsdb, mti, logname, fsdb->fsdb_clilov,
-                                 &sec_conf_cli, 0);
+        mgs_write_log_osc_to_lov(obd, fsdb, mti, logname, "",
+                                 fsdb->fsdb_clilov, &sec_conf_cli, 0);
         name_destroy(logname);
         
         RETURN(rc);
