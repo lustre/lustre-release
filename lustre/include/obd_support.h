@@ -261,6 +261,109 @@ do {                                                                         \
 
 extern atomic_t libcfs_kmemory;
 
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
+
+#define OBD_MT_WRONG_SIZE (1 << 0)
+#define OBD_MT_LOC_LEN    128
+
+struct obd_mem_track {
+        struct hlist_node mt_hash;
+        char              mt_loc[OBD_MT_LOC_LEN];
+        int               mt_flags;
+        void             *mt_ptr;
+        int               mt_size;
+};
+
+void lvfs_memdbg_show(void);
+void lvfs_memdbg_insert(struct obd_mem_track *mt);
+void lvfs_memdbg_remove(struct obd_mem_track *mt);
+struct obd_mem_track *lvfs_memdbg_find(void *ptr);
+
+int lvfs_memdbg_check_insert(struct obd_mem_track *mt);
+struct obd_mem_track *lvfs_memdbg_check_remove(void *ptr);
+
+static inline struct obd_mem_track *
+__new_mem_track(void *ptr, int size,
+                char *file, int line)
+{
+        struct obd_mem_track *mt;
+
+        mt = kmalloc(sizeof(*mt), GFP_KERNEL);
+        if (!mt)
+                return NULL;
+
+        snprintf(mt->mt_loc, sizeof(mt->mt_loc) - 1,
+                 "%s:%d", file, line);
+
+        mt->mt_size = size;
+        mt->mt_ptr = ptr;
+        mt->mt_flags = 0;
+        return mt;
+}
+
+static inline void
+__free_mem_track(struct obd_mem_track *mt)
+{
+        kfree(mt);
+}
+
+static inline int
+__get_mem_track(void *ptr, int size,
+                char *file, int line)
+{
+        struct obd_mem_track *mt;
+
+        mt = __new_mem_track(ptr, size, file, line);
+        if (!mt) {
+                CWARN("Can't allocate new memory track\n");
+                return 0;
+        }
+        
+        if (!lvfs_memdbg_check_insert(mt))
+                __free_mem_track(mt);
+        
+        return 1;
+}
+
+static inline int
+__put_mem_track(void *ptr, int size,
+                char *file, int line)
+{
+        struct obd_mem_track *mt;
+
+        if (!(mt = lvfs_memdbg_check_remove(ptr))) {
+                CWARN("Ptr 0x%p is not allocated. Attempt to free "
+                      "not allocated memory at %s:%d\n", ptr,
+                      file, line);
+                return 0;
+        } else {
+                if (mt->mt_size != size) {
+                        mt->mt_flags |= OBD_MT_WRONG_SIZE;
+                        CWARN("Freeing memory chunk (at 0x%p) of different size "
+                              "than allocated (%d != %d) at %s:%d, allocated at %s\n",
+                              ptr, mt->mt_size, size, file, line, mt->mt_loc);
+                } else {
+                        __free_mem_track(mt);
+                }
+                return 1;
+        }
+}
+
+#define get_mem_track(ptr, size, file, line)                                         \
+        __get_mem_track((ptr), (size), (file), (line))
+
+#define put_mem_track(ptr, size, file, line)                                         \
+        __put_mem_track((ptr), (size), (file), (line))
+
+#else /* !CONFIG_DEBUG_MEMORY */
+
+#define get_mem_track(ptr, size, file, line)                                         \
+        do {} while (0)
+
+#define put_mem_track(ptr, size, file, line)                                         \
+        do {} while (0)
+#endif /* !CONFIG_DEBUG_MEMORY */
+
 #if defined(LUSTRE_UTILS) /* this version is for utils only */
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
 do {                                                                          \
@@ -288,6 +391,7 @@ do {                                                                          \
                 atomic_add(size, &obd_memory);                                \
                 if (atomic_read(&obd_memory) > obd_memmax)                    \
                         obd_memmax = atomic_read(&obd_memory);                \
+                get_mem_track((ptr), (size), __FILE__, __LINE__);             \
                 CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d)\n", \
                        (int)(size), ptr, atomic_read(&obd_memory));           \
         }                                                                     \
@@ -319,6 +423,7 @@ do {                                                                          \
                 atomic_add(size, &obd_memory);                                \
                 if (atomic_read(&obd_memory) > obd_memmax)                    \
                         obd_memmax = atomic_read(&obd_memory);                \
+                get_mem_track((ptr), (size), __FILE__, __LINE__);             \
                 CDEBUG(D_MALLOC, "vmalloced '" #ptr "': %d at %p (tot %d)\n", \
                        (int)(size), ptr, atomic_read(&obd_memory));           \
         }                                                                     \
@@ -342,6 +447,7 @@ do {                                                                          \
 #define OBD_FREE(ptr, size)                                                   \
 do {                                                                          \
         LASSERT(ptr);                                                         \
+        put_mem_track((ptr), (size), __FILE__, __LINE__);                     \
         atomic_sub(size, &obd_memory);                                        \
         CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",           \
                (int)(size), ptr, atomic_read(&obd_memory));                   \
@@ -359,6 +465,7 @@ do {                                                                          \
 # define OBD_VFREE(ptr, size)                                                 \
 do {                                                                          \
         LASSERT(ptr);                                                         \
+        put_mem_track((ptr), (size), __FILE__, __LINE__);                     \
         atomic_sub(size, &obd_memory);                                        \
         CDEBUG(D_MALLOC, "vfreed '" #ptr "': %d at %p (tot %d).\n",           \
                (int)(size), ptr, atomic_read(&obd_memory));                   \
@@ -385,6 +492,7 @@ do {                                                                          \
                 atomic_add(size, &obd_memory);                                \
                 if (atomic_read(&obd_memory) > obd_memmax)                    \
                         obd_memmax = atomic_read(&obd_memory);                \
+                get_mem_track((ptr), (size), __FILE__, __LINE__);             \
                 CDEBUG(D_MALLOC, "slab-alloced '"#ptr"': %d at %p (tot %d)\n",\
                        (int)(size), ptr, atomic_read(&obd_memory));           \
         }                                                                     \
@@ -397,6 +505,7 @@ do {                                                                          \
         LASSERT(ptr);                                                         \
         CDEBUG(D_MALLOC, "slab-freed '" #ptr "': %d at %p (tot %d).\n",       \
                (int)(size), ptr, atomic_read(&obd_memory));                   \
+        get_mem_track((ptr), (size), __FILE__, __LINE__);                     \
         atomic_sub(size, &obd_memory);                                        \
         POISON(ptr, 0x5a, size);                                              \
         cfs_mem_cache_free(slab, ptr);                                        \

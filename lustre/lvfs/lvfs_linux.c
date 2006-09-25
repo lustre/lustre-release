@@ -435,6 +435,187 @@ EXPORT_SYMBOL(l_readdir);
 EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_memmax);
 
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
+static spinlock_t obd_memlist_lock = SPIN_LOCK_UNLOCKED;
+static struct hlist_head *obd_memtable;
+static unsigned long obd_memtable_size;
+
+static int lvfs_memdbg_init(int size)
+{
+        struct hlist_head *head;
+        int i;
+
+        LASSERT(size > sizeof(sizeof(struct hlist_head)));
+        obd_memtable_size = size / sizeof(struct hlist_head);
+
+        CWARN("Allocating %lu memdbg entries.\n",
+              (unsigned long)obd_memtable_size);
+
+        obd_memtable = kmalloc(size, GFP_KERNEL);
+        if (!obd_memtable)
+                return -ENOMEM;
+
+        i = obd_memtable_size;
+        head = obd_memtable;
+        do {
+                INIT_HLIST_HEAD(head);
+                head++;
+                i--;
+        } while(i);
+
+        return 0;
+}
+
+static int lvfs_memdbg_cleanup(void)
+{
+        struct hlist_node *node = NULL, *tmp = NULL;
+        struct hlist_head *head;
+        struct obd_mem_track *mt;
+        int i;
+
+        spin_lock(&obd_memlist_lock);
+        for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
+                hlist_for_each_safe(node, tmp, head) {
+                        mt = hlist_entry(node, struct obd_mem_track, mt_hash);
+                        hlist_del_init(&mt->mt_hash);
+                        kfree(mt);
+                }
+        }
+        spin_unlock(&obd_memlist_lock);
+        kfree(obd_memtable);
+        return 0;
+}
+
+static inline unsigned long const hashfn(void *ptr)
+{
+        return (unsigned long)ptr &
+                (obd_memtable_size - 1);
+}
+
+static void __lvfs_memdbg_insert(struct obd_mem_track *mt)
+{
+        struct hlist_head *head = obd_memtable +
+                hashfn(mt->mt_ptr);
+        hlist_add_head(&mt->mt_hash, head);
+}
+
+void lvfs_memdbg_insert(struct obd_mem_track *mt)
+{
+        spin_lock(&obd_memlist_lock);
+        __lvfs_memdbg_insert(mt);
+        spin_unlock(&obd_memlist_lock);
+}
+EXPORT_SYMBOL(lvfs_memdbg_insert);
+
+static void __lvfs_memdbg_remove(struct obd_mem_track *mt)
+{
+        hlist_del_init(&mt->mt_hash);
+}
+
+void lvfs_memdbg_remove(struct obd_mem_track *mt)
+{
+        spin_lock(&obd_memlist_lock);
+        __lvfs_memdbg_remove(mt);
+        spin_unlock(&obd_memlist_lock);
+}
+EXPORT_SYMBOL(lvfs_memdbg_remove);
+
+static struct obd_mem_track *__lvfs_memdbg_find(void *ptr)
+{
+        struct hlist_node *node = NULL;
+        struct obd_mem_track *mt = NULL;
+        struct hlist_head *head;
+
+        head = obd_memtable + hashfn(ptr);
+
+        hlist_for_each(node, head) {
+                mt = hlist_entry(node, struct obd_mem_track, mt_hash);
+                if ((unsigned long)mt->mt_ptr == (unsigned long)ptr)
+                        break;
+                mt = NULL;
+        }
+        return mt;
+}
+
+struct obd_mem_track *lvfs_memdbg_find(void *ptr)
+{
+        struct obd_mem_track *mt;
+
+        spin_lock(&obd_memlist_lock);
+        mt = __lvfs_memdbg_find(ptr);
+        spin_unlock(&obd_memlist_lock);
+        
+        return mt;
+}
+EXPORT_SYMBOL(lvfs_memdbg_find);
+
+int lvfs_memdbg_check_insert(struct obd_mem_track *mt)
+{
+        spin_lock(&obd_memlist_lock);
+        if (!__lvfs_memdbg_find(mt->mt_ptr)) {
+                __lvfs_memdbg_insert(mt);
+                spin_unlock(&obd_memlist_lock);
+                return 1;
+        }
+        spin_unlock(&obd_memlist_lock);
+        return 0;
+}
+EXPORT_SYMBOL(lvfs_memdbg_check_insert);
+
+struct obd_mem_track *
+lvfs_memdbg_check_remove(void *ptr)
+{
+        struct obd_mem_track *mt;
+
+        spin_lock(&obd_memlist_lock);
+        mt = __lvfs_memdbg_find(ptr);
+        if (mt) {
+                __lvfs_memdbg_remove(mt);
+                spin_unlock(&obd_memlist_lock);
+                return mt;
+        }
+        spin_unlock(&obd_memlist_lock);
+        return NULL;
+}
+EXPORT_SYMBOL(lvfs_memdbg_check_remove);
+#endif
+
+void lvfs_memdbg_show(void)
+{
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
+        struct hlist_node *node = NULL;
+        struct hlist_head *head;
+        struct obd_mem_track *mt;
+#endif
+        int leaked;
+	
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
+	int i;
+#endif
+
+        leaked = atomic_read(&obd_memory);
+
+        if (leaked > 0) {
+                CWARN("memory leaks detected (max %d, leaked %d)\n",
+                      obd_memmax, leaked);
+
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
+                spin_lock(&obd_memlist_lock);
+                for (i = 0, head = obd_memtable; i < obd_memtable_size; i++, head++) {
+                        hlist_for_each(node, head) {
+                                mt = hlist_entry(node, struct obd_mem_track, mt_hash);
+                                CWARN("  [%s] ptr: 0x%p, size: %d, src at \"%s\"\n",
+                                      ((mt->mt_flags & OBD_MT_WRONG_SIZE) ?
+                                       "wrong ck size" : "leaked memory"),
+                                      mt->mt_ptr, mt->mt_size, mt->mt_loc);
+                        }
+                }
+                spin_unlock(&obd_memlist_lock);
+#endif
+        }
+}
+EXPORT_SYMBOL(lvfs_memdbg_show);
+
 #ifdef LUSTRE_KERNEL_VERSION
 #ifdef HAVE_OLD_DEV_SET_RDONLY
 void dev_set_rdonly(lvfs_sbdev_type dev, int no_write);
@@ -506,20 +687,23 @@ EXPORT_SYMBOL(lvfs_check_io_health);
 
 static int __init lvfs_linux_init(void)
 {
+        ENTRY;
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
+        lvfs_memdbg_init(PAGE_SIZE);
+#endif
         RETURN(0);
 }
 
 static void __exit lvfs_linux_exit(void)
 {
-        int leaked;
         ENTRY;
 
-        leaked = atomic_read(&obd_memory);
-        CDEBUG(leaked ? D_ERROR : D_INFO,
-               "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
-
+        lvfs_memdbg_show();
+        
+#if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
+        lvfs_memdbg_cleanup();
+#endif
         EXIT;
-        return;
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

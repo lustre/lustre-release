@@ -93,7 +93,7 @@ test_0c() {
     fail mds
     
     # wait for recovery finish
-    sleep 20
+    sleep 10
     df $MOUNT
     
     # flush fld cache and dentry cache to make it lookup 
