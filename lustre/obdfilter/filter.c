@@ -2079,7 +2079,6 @@ static struct llog_operations filter_size_orig_logops = {
         lop_add: llog_obd_origin_add
 };
 
-
 static int filter_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
                             struct obd_device *tgt, int count, 
                             struct llog_catid *catid,
@@ -2104,7 +2103,7 @@ static int filter_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
                 ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
         else
                 ctxt = llog_get_context_from_llogs(llogs, LLOG_MDS_OST_REPL_CTXT);
-        
+
         LASSERT(ctxt != NULL);
         ctxt->llog_proc_cb = filter_recov_log_mds_ost_cb;
 
@@ -2113,6 +2112,20 @@ static int filter_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
         RETURN(rc);
 }
 
+static int filter_group_llog_cleanup(struct llog_ctxt *ctxt)
+{
+        int rc = 0;
+        ENTRY;
+        
+        if (CTXTP(ctxt, cleanup))
+                rc = CTXTP(ctxt, cleanup)(ctxt);
+        
+        if (ctxt->loc_exp)
+                class_export_put(ctxt->loc_exp);
+        OBD_FREE(ctxt, sizeof(*ctxt));
+
+        RETURN(rc);
+}
 
 static int filter_group_llog_finish(struct obd_llogs *llogs)
 {
@@ -2122,11 +2135,11 @@ static int filter_group_llog_finish(struct obd_llogs *llogs)
        
         ctxt = llog_get_context_from_llogs(llogs, LLOG_MDS_OST_REPL_CTXT);
         if (ctxt)
-                rc = llog_cleanup(ctxt);
+                rc = filter_group_llog_cleanup(ctxt);
 
         ctxt = llog_get_context_from_llogs(llogs, LLOG_SIZE_ORIG_CTXT);
         if (ctxt)
-                rc2 = llog_cleanup(ctxt);
+                rc2 = filter_group_llog_cleanup(ctxt);
         if (!rc)
                 rc = rc2;
 
@@ -2237,10 +2250,13 @@ static int filter_llog_connect(struct obd_export *exp,
         llog = filter_grab_llog_for_group(obd, body->lgdc_logid.lgl_ogr, exp);
         LASSERT(llog != NULL);
         ctxt = llog_get_context_from_llogs(llog, body->lgdc_ctxt_idx);
+        LASSERTF(ctxt != NULL, "ctxt is not null, ctxt idx %d \n",
+                 body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &body->lgdc_logid,
                           &body->lgdc_gen, NULL);
         if (rc != 0)
-                CERROR("failed to connect\n");
+                CERROR("failed to connect rc %d idx %d\n", rc, 
+                                body->lgdc_ctxt_idx);
 
         RETURN(rc);
 }
