@@ -1710,7 +1710,7 @@ test_42a() {
 	stop_writeback
 	sync; sleep 1; sync # just to be safe
 	BEFOREWRITES=`count_ost_writes`
-	grep "[0-9]" $LPROC/osc/*-osc-*/cur_grant_bytes
+	grep "[0-9]" $LPROC/osc/*-osc0*/cur_grant_bytes
 	dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
 	AFTERWRITES=`count_ost_writes`
 	[ $BEFOREWRITES -eq $AFTERWRITES ] || \
@@ -2472,7 +2472,7 @@ run_test 63b "async write errors should be returned to fsync ==="
 
 test_64a () {
 	df $DIR
-	grep "[0-9]" $LPROC/osc/*-osc-*/cur*
+	grep "[0-9]" $LPROC/osc/*-osc0*/cur*
 }
 run_test 64a "verify filter grant calculations (in kernel) ====="
 
@@ -3157,7 +3157,7 @@ test_104() {
 	lfs df $DIR/$tfile || error "lfs df $DIR/$tfile failed"
 	lfs df -ih $DIR/$tfile || error "lfs df -ih $DIR/$tfile failed"
 	
-	OSC=`awk '/-osc-/ {print $4}' $LPROC/devices | head -n 1`
+	OSC=`awk '/-osc0/ {print $4}' $LPROC/devices | head -n 1`
 	lctl --device %$OSC deactivate
 	lfs df || error "lfs df with deactivated OSC failed"
 	lctl --device %$OSC recover
