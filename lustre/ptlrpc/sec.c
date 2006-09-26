@@ -119,6 +119,7 @@ again:
                 policy = NULL;
         spin_unlock(&policy_lock);
 
+#ifdef CONFIG_KMOD
         /* if failure, try to load gss module, once */
         if (policy == NULL && load_module == 0 &&
             number == SPTLRPC_POLICY_GSS) {
@@ -126,6 +127,7 @@ again:
                 if (request_module("ptlrpc_gss") == 0)
                         goto again;
         }
+#endif
 
         return policy;
 }
@@ -2274,7 +2276,7 @@ static __u32 __flavors[] = {
 #define __nflavors      (sizeof(__flavors)/sizeof(__u32))
 
 /*
- * flavor string format: rpc[-bulk[:cksum/enc]]
+ * flavor string format: rpc[-bulk{n|i|p}[:cksum/enc]]
  * for examples:
  *  null
  *  plain-bulki

@@ -52,9 +52,12 @@ init_test_env() {
         export PORT_OPT="--port $ACCEPTOR_PORT"
     fi
 
-    if [ "x$SEC" = "xkrb5i" -o "x$SEC" =  "xkrb5p" ]; then
-        export USING_KRB5="y"
-    fi
+    case "x$SEC" in
+        xkrb5*)
+            echo "Using GSS/krb5 ptlrpc security flavor"
+            export USING_KRB5="y"
+            ;;
+    esac
 
     # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}

@@ -208,7 +208,8 @@ static void waiting_locks_callback(unsigned long unused)
                         break;
 
                 LDLM_ERROR(lock, "lock callback timer expired: evicting client "
-                           "%s@%s nid %s ",lock->l_export->exp_client_uuid.uuid,
+                           "%s@%s nid %s\n",
+                           lock->l_export->exp_client_uuid.uuid,
                            lock->l_export->exp_connection->c_remote_uuid.uuid,
                            libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid));
 
