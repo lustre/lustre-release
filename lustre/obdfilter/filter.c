@@ -3766,8 +3766,9 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
                                  struct ptlrpc_request_set *set)
 {
         struct obd_device *obd;
+        struct obd_llogs *llog;
         struct llog_ctxt *ctxt;
-        int rc = 0;
+        int rc = 0, group;
         ENTRY;
 
         obd = exp->exp_obd;
@@ -3785,7 +3786,15 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         obd->u.filter.fo_mdc_conn.cookie = exp->exp_handle.h_cookie;
 
         /* setup llog imports */
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
+        LASSERT(val != NULL);
+        group = (int)(*(__u32 *)val);
+        LASSERT(group >= FILTER_GROUP_MDS0); 
+        
+        llog = filter_grab_llog_for_group(obd, group, exp);
+        LASSERT(llog != NULL);
+        ctxt = llog_get_context_from_llogs(llog, LLOG_MDS_OST_REPL_CTXT);
+        LASSERTF(ctxt != NULL, "ctxt is not null\n"),
+
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
 
         lquota_setinfo(quota_interface, exp, obd);
