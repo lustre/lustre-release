@@ -2166,7 +2166,7 @@ test_52b() {
 run_test 52b "immutable flag test (should return errors) ======="
 
 test_53() {
-        for i in `ls -d $LPROC/osc/*-osc 2> /dev/null` ; do
+        for i in `ls -d $LPROC/osc/*-osc-MDT0000 2> /dev/null` ; do
                 ostname=`basename $i | cut -d - -f 1-2`
                 ost_last=`cat $LPROC/obdfilter/$ostname/last_id`
                 mds_last=`cat $i/prealloc_last_id`
