@@ -266,7 +266,7 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         rec->ul_opcode = REINT_UNLINK;
         rec->ul_fsuid = op_data->fsuid;//current->fsuid;
         rec->ul_fsgid = op_data->fsgid;//current->fsgid;
-        rec->ul_cap = current->cap_effective;
+        rec->ul_cap = op_data->cap;//current->cap_effective;
         rec->ul_mode = op_data->create_mode;
         rec->ul_suppgid = op_data->suppgids[0];
         rec->ul_fid1 = op_data->fid1;
@@ -289,7 +289,7 @@ void mdc_link_pack(struct ptlrpc_request *req, int offset,
         rec->lk_opcode = REINT_LINK;
         rec->lk_fsuid = op_data->fsuid;//current->fsuid;
         rec->lk_fsgid = op_data->fsgid;//current->fsgid;
-        rec->lk_cap = current->cap_effective;
+        rec->lk_cap = op_data->cap;//current->cap_effective;
         rec->lk_suppgid1 = op_data->suppgids[0];
         rec->lk_suppgid2 = op_data->suppgids[1];
         rec->lk_fid1 = op_data->fid1;
@@ -313,7 +313,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_opcode = REINT_RENAME;
         rec->rn_fsuid = op_data->fsuid;//current->fsuid;
         rec->rn_fsgid = op_data->fsgid;//current->fsgid;
-        rec->rn_cap = current->cap_effective;
+        rec->rn_cap = op_data->cap;//current->cap_effective;
         rec->rn_suppgid1 = op_data->suppgids[0];
         rec->rn_suppgid2 = op_data->suppgids[1];
         rec->rn_fid1 = op_data->fid1;
