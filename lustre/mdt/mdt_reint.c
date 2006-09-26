@@ -346,6 +346,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         ma->ma_cookie_size = req_capsule_get_size(&info->mti_pill,
                                                   &RMF_LOGCOOKIES,
                                                   RCL_SERVER);
+        ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
 
         if (!ma->ma_lmm || !ma->ma_cookie)
                 GOTO(out_unlock_parent, rc = -EINVAL);
@@ -514,7 +515,6 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
                 mdt_handle_last_unlink(info, mtgt, ma);
 
         EXIT;
-out_unlock_tgt:
         if (mtgt) {
                 mdt_object_unlock_put(info, mtgt, lh_tgt, rc);
         }
