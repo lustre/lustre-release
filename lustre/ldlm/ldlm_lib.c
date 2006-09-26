@@ -1216,15 +1216,15 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 
         spin_lock_bh(&obd->obd_processing_task_lock);
 
-        /* If we're processing the queue, we want don't want to queue this
-         * message.
+        /*
+         * If we're processing the queue, we don't want to queue this message.
          *
          * Also, if this request has a transno less than the one we're waiting
          * for, we should process it now.  It could (and currently always will)
          * be an open request for a descriptor that was opened some time ago.
          *
-         * Also, a resent, replayed request that has already been
-         * handled will pass through here and be processed immediately.
+         * Also, a resent, replayed request that has already been handled will
+         * pass through here and be processed immediately.
          */
         if (obd->obd_processing_task == cfs_curproc_pid() ||
             transno < obd->obd_next_recovery_transno) {

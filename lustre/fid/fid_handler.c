@@ -124,12 +124,16 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
         LASSERT(range_is_sane(space));
 
         if (in != NULL) {
-                CDEBUG(D_INFO, "%s: Recovery - use input range "
-                       DRANGE"\n", seq->lss_name, PRANGE(in));
+                CDEBUG(D_INFO|D_WARNING, "%s: Recovery started. Use input "
+                       "(last allocated) range "DRANGE"\n", seq->lss_name,
+                       PRANGE(in));
 
                 if (in->lr_start > space->lr_start)
                         space->lr_start = in->lr_start;
                 *out = *in;
+
+                CDEBUG(D_INFO|D_WARNING, "%s: Recovery finished. Recovered "
+                       "space: "DRANGE"\n", seq->lss_name, PRANGE(space));
         } else {
                 if (range_space(space) < seq->lss_super_width) {
                         CWARN("%s: Sequences space to be exhausted soon. "
@@ -189,8 +193,9 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
          * it is allocated from new super.
          */
         if (in != NULL) {
-                CDEBUG(D_INFO, "%s: Recovery - use input range "
-                       DRANGE"\n", seq->lss_name, PRANGE(in));
+                CDEBUG(D_INFO|D_WARNING, "%s: Recovery started. Use input "
+                       "(last allocated) range "DRANGE"\n", seq->lss_name,
+                       PRANGE(in));
 
                 if (range_is_exhausted(super)) {
                         LASSERT(in->lr_start > super->lr_start);
@@ -214,6 +219,9 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                 }
 
                 *out = *in;
+
+                CDEBUG(D_INFO|D_WARNING, "%s: Recovery finished. Recovered "
+                       "super: "DRANGE"\n", seq->lss_name, PRANGE(super));
         } else {
                 /*
                  * XXX: avoid cascading RPCs using kind of async preallocation

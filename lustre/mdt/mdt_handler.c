@@ -2996,10 +2996,6 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
         upcall_cache_cleanup(m->mdt_identity_cache);
         m->mdt_identity_cache = NULL;
 
-        if (m->mdt_rootsquash_info)
-                OBD_FREE_PTR(m->mdt_rootsquash_info);
-
-        mdt_fs_cleanup(ctx, m);
         ping_evictor_stop();
         mdt_stop_ptlrpc_service(m);
 
@@ -3011,6 +3007,11 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
         mdt_seq_fini(ctx, m);
         mdt_seq_fini_cli(m);
         mdt_fld_fini(ctx, m);
+
+        if (m->mdt_rootsquash_info) {
+                OBD_FREE_PTR(m->mdt_rootsquash_info);
+                m->mdt_rootsquash_info = NULL;
+        }
 
         mdt_fs_cleanup(ctx, m);
 
