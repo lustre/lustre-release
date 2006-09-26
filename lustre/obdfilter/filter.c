@@ -2206,7 +2206,14 @@ struct obd_llogs *filter_grab_llog_for_group(struct obd_device *obd, int group,
         spin_lock(&filter->fo_llog_list_lock);
         list_for_each(cur, &filter->fo_llog_list) {
                 nlog = list_entry(cur, struct filter_group_llog, list);
-                LASSERT(nlog->group != group);
+                if (nlog->group == group) {
+                        CWARN("Interesting! someone already init group %d\n",
+                               group);
+                        spin_unlock(&filter->fo_llog_list_lock);
+                        OBD_FREE(fglog->llogs, sizeof(*(fglog->llogs)));
+                        OBD_FREE(fglog, sizeof(*fglog));
+                        RETURN(nlog->llogs);
+                }
         }
         list_add(&fglog->list, &filter->fo_llog_list);
         spin_unlock(&filter->fo_llog_list_lock);
