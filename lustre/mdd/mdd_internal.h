@@ -121,10 +121,11 @@ void mdd_read_unlock(const struct lu_context *ctxt, struct mdd_object *obj);
 void mdd_write_lock(const struct lu_context *ctxt, struct mdd_object *obj);
 void mdd_write_unlock(const struct lu_context *ctxt, struct mdd_object *obj);
 
+int __mdd_orphan_cleanup(const struct lu_context *ctx, struct mdd_device *d);
 int __mdd_orphan_add(const struct lu_context *, struct mdd_object *,
-                            struct thandle *);
+                     struct thandle *);
 int __mdd_orphan_del(const struct lu_context *, struct mdd_object *,
-                            struct thandle *);
+                     struct thandle *);
 int orph_index_init(const struct lu_context *ctx, struct mdd_device *mdd);
 void orph_index_fini(const struct lu_context *ctx, struct mdd_device *mdd);
 int __mdd_object_kill(const struct lu_context *, struct mdd_object *,

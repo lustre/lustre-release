@@ -89,7 +89,7 @@ static int orph_index_delete(const struct lu_context *ctx,
         struct orph_key *key = orph_key_fill(ctx, mdo2fid(obj), op);
         int rc;
         ENTRY;
-
+        LASSERT(dor);
         rc = dor->do_index_ops->dio_delete(ctx, dor,
                                            (struct dt_key *)key, th);
         RETURN(rc);
@@ -122,6 +122,7 @@ static void orph_key_test_and_del(const struct lu_context *ctx,
                 if (mdo->mod_count == 0) {
                         /* non-opened orphan, let's delete it */
                         struct md_attr *ma = &mdd_ctx_info(ctx)->mti_ma;
+                        CWARN("Found orphan!\n");
                         __mdd_object_kill(ctx, mdo, ma);
                         /* TODO: now handle OST objects */
                         //mdd_ost_objects_destroy(ctx, ma);
@@ -194,26 +195,81 @@ void orph_index_fini(const struct lu_context *ctx, struct mdd_device *mdd)
 {
         ENTRY;
         if (mdd->mdd_orphans != NULL) {
-                if (!IS_ERR(mdd->mdd_orphans))
-                        lu_object_put(ctx, &mdd->mdd_orphans->do_lu);
+                lu_object_put(ctx, &mdd->mdd_orphans->do_lu);
                 mdd->mdd_orphans = NULL;
         }
         EXIT;
 }
 
+int __mdd_orphan_cleanup(const struct lu_context *ctx, struct mdd_device *d)
+{
+        return orph_index_iterate(ctx, d);
+}
+
 int __mdd_orphan_add(const struct lu_context *ctx,
-                            struct mdd_object *obj,
-                            struct thandle *th)
+                     struct mdd_object *obj, struct thandle *th)
 {
         loff_t offset = 0;
         return orph_index_insert(ctx, obj, ORPH_OP_UNLINK, &offset, th);
 }
 
 int __mdd_orphan_del(const struct lu_context *ctx,
-                            struct mdd_object *obj,
-                            struct thandle *th)
+                     struct mdd_object *obj, struct thandle *th)
 {
         return orph_index_delete(ctx, obj, ORPH_OP_UNLINK, th);
 }
 
+/*
+ * used when destroying orphanes and from mds_reint_unlink() when MDS wants to
+ * destroy objects on OSS.
+ */
+/*
+int mdd_objects_destroy(struct mds_obd *mds, struct inode *inode,
+                  struct lov_mds_md *lmm, int lmm_size,
+                  struct llog_cookie *logcookies,
+                  int log_unlink, int async)
+{
+        struct lov_stripe_md *lsm = NULL;
+        struct obd_trans_info oti = { 0 };
+        struct obdo *oa;
+        int rc;
+        ENTRY;
 
+        if (lmm_size == 0)
+                RETURN(0);
+
+        rc = obd_unpackmd(mds->mds_dt_exp, &lsm, lmm, lmm_size);
+        if (rc < 0) {
+                CERROR("Error unpack md %p\n", lmm);
+                RETURN(rc);
+        } else {
+                LASSERT(rc >= sizeof(*lsm));
+                rc = 0;
+        }
+
+        oa = obdo_alloc();
+        if (oa == NULL)
+                GOTO(out_free_memmd, rc = -ENOMEM);
+        oa->o_id = lsm->lsm_object_id;
+        oa->o_gr = FILTER_GROUP_MDS0 + mds->mds_num;
+        oa->o_mode = inode->i_mode & S_IFMT;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
+
+        if (log_unlink && logcookies) {
+                oa->o_valid |= OBD_MD_FLCOOKIE;
+                oti.oti_logcookies = logcookies;
+        }
+
+        CDEBUG(D_INODE, "destroy OSS object %d/%d\n",
+               (int)oa->o_id, (int)oa->o_gr);
+
+        if (async)
+                oti.oti_flags |= OBD_MODE_ASYNC;
+        
+        rc = obd_destroy(mds->mds_dt_exp, oa, lsm, &oti);
+        obdo_free(oa);
+out_free_memmd:
+        obd_free_memmd(mds->mds_dt_exp, &lsm);
+        RETURN(rc);
+}
+*/

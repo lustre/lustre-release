@@ -409,6 +409,7 @@ enum lu_object_header_flags {
          * once set.
          */
         LU_OBJECT_HEARD_BANSHEE = 0,
+        LU_OBJECT_ORPHAN        = 1,
 };
 
 enum lu_object_header_attr {

@@ -76,6 +76,66 @@ static const char *mdd_root_dir_name = "root";
 static const char dot[] = ".";
 static const char dotdot[] = "..";
 
+enum mdd_txn_op {
+        MDD_TXN_OBJECT_DESTROY_OP,
+        MDD_TXN_OBJECT_CREATE_OP,
+        MDD_TXN_ATTR_SET_OP,
+        MDD_TXN_XATTR_SET_OP,
+        MDD_TXN_INDEX_INSERT_OP,
+        MDD_TXN_INDEX_DELETE_OP,
+        MDD_TXN_LINK_OP,
+        MDD_TXN_UNLINK_OP,
+        MDD_TXN_RENAME_OP,
+        MDD_TXN_CREATE_DATA_OP,
+        MDD_TXN_MKDIR_OP
+};
+
+struct mdd_txn_op_descr {
+        enum mdd_txn_op mod_op;
+        unsigned int    mod_credits;
+};
+
+enum {
+        MDD_TXN_OBJECT_DESTROY_CREDITS = 20,
+        MDD_TXN_OBJECT_CREATE_CREDITS  = 20,
+        MDD_TXN_ATTR_SET_CREDITS       = 20,
+        MDD_TXN_XATTR_SET_CREDITS      = 20,
+        MDD_TXN_INDEX_INSERT_CREDITS   = 20,
+        MDD_TXN_INDEX_DELETE_CREDITS   = 20,
+        MDD_TXN_LINK_CREDITS           = 20,
+        MDD_TXN_UNLINK_CREDITS         = 20,
+        MDD_TXN_RENAME_CREDITS         = 20,
+        MDD_TXN_CREATE_DATA_CREDITS    = 20,
+        MDD_TXN_MKDIR_CREDITS          = 20
+};
+
+#define DEFINE_MDD_TXN_OP_DESC(opname)          \
+static const struct mdd_txn_op_descr opname = { \
+        .mod_op      = opname ## _OP,           \
+        .mod_credits = opname ## _CREDITS,      \
+}
+
+/*
+ * number of blocks to reserve for particular operations. Should be function
+ * of ... something. Stub for now.
+ */
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_OBJECT_DESTROY);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_OBJECT_CREATE);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_ATTR_SET);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_XATTR_SET);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_INDEX_INSERT);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_INDEX_DELETE);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_LINK);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_UNLINK);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_RENAME);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_CREATE_DATA);
+DEFINE_MDD_TXN_OP_DESC(MDD_TXN_MKDIR);
+
+static void mdd_txn_param_build(const struct lu_context *ctx,
+                                const struct mdd_txn_op_descr *opd)
+{
+        mdd_ctx_info(ctx)->mti_param.tp_credits = opd->mod_credits;
+}
 
 #define mdd_get_group_info(group_info) do {             \
         atomic_inc(&(group_info)->usage);               \
@@ -210,6 +270,47 @@ static void mdd_object_free(const struct lu_context *ctxt, struct lu_object *o)
         lu_object_fini(o);
         OBD_FREE_PTR(mdd);
 }
+
+static int mdd_object_print(const struct lu_context *ctxt, void *cookie,
+                            lu_printer_t p, const struct lu_object *o)
+{
+        return (*p)(ctxt, cookie, LUSTRE_MDD_NAME"-object@%p", o);
+}
+
+/* orphan handling is here */
+static void mdd_object_delete(const struct lu_context *ctxt,
+                               struct lu_object *o)
+{
+        struct mdd_object *mdd_obj = lu2mdd_obj(o);
+        struct thandle *handle = NULL;
+        ENTRY;
+
+        if (lu2mdd_dev(o->lo_dev)->mdd_orphans == NULL)
+                return;
+
+        if (test_bit(LU_OBJECT_ORPHAN, &o->lo_header->loh_flags)) {
+                mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
+                handle = mdd_trans_start(ctxt, lu2mdd_dev(o->lo_dev));
+                if (IS_ERR(handle))
+                        CERROR("Cannot get thandle\n");
+                else {
+                        mdd_write_lock(ctxt, mdd_obj);
+                        /* let's remove obj from the orphan list */
+                        __mdd_orphan_del(ctxt, mdd_obj, handle);
+                        mdd_write_unlock(ctxt, mdd_obj);
+                        mdd_trans_stop(ctxt, lu2mdd_dev(o->lo_dev),
+                                       0, handle);
+                }
+        }
+}
+
+static struct lu_object_operations mdd_lu_obj_ops = {
+	.loo_object_init    = mdd_object_init,
+	.loo_object_start   = mdd_object_start,
+	.loo_object_free    = mdd_object_free,
+	.loo_object_print   = mdd_object_print,
+        .loo_object_delete  = mdd_object_delete
+};
 
 struct mdd_object *mdd_object_find(const struct lu_context *ctxt,
                                    struct mdd_device *d,
@@ -548,91 +649,6 @@ static int mdd_xattr_list(const struct lu_context *ctxt, struct md_object *obj,
         RETURN(rc);
 }
 
-enum mdd_txn_op {
-        MDD_TXN_OBJECT_DESTROY_OP,
-        MDD_TXN_OBJECT_CREATE_OP,
-        MDD_TXN_ATTR_SET_OP,
-        MDD_TXN_XATTR_SET_OP,
-        MDD_TXN_INDEX_INSERT_OP,
-        MDD_TXN_INDEX_DELETE_OP,
-        MDD_TXN_LINK_OP,
-        MDD_TXN_UNLINK_OP,
-        MDD_TXN_RENAME_OP,
-        MDD_TXN_CREATE_DATA_OP,
-        MDD_TXN_MKDIR_OP
-};
-
-struct mdd_txn_op_descr {
-        enum mdd_txn_op mod_op;
-        unsigned int    mod_credits;
-};
-
-enum {
-        MDD_TXN_OBJECT_DESTROY_CREDITS = 20,
-        MDD_TXN_OBJECT_CREATE_CREDITS  = 20,
-        MDD_TXN_ATTR_SET_CREDITS       = 20,
-        MDD_TXN_XATTR_SET_CREDITS      = 20,
-        MDD_TXN_INDEX_INSERT_CREDITS   = 20,
-        MDD_TXN_INDEX_DELETE_CREDITS   = 20,
-        MDD_TXN_LINK_CREDITS           = 20,
-        MDD_TXN_UNLINK_CREDITS         = 20,
-        MDD_TXN_RENAME_CREDITS         = 20,
-        MDD_TXN_CREATE_DATA_CREDITS    = 20,
-        MDD_TXN_MKDIR_CREDITS          = 20
-};
-
-#define DEFINE_MDD_TXN_OP_DESC(opname)          \
-static const struct mdd_txn_op_descr opname = { \
-        .mod_op      = opname ## _OP,           \
-        .mod_credits = opname ## _CREDITS,      \
-}
-
-/*
- * number of blocks to reserve for particular operations. Should be function
- * of ... something. Stub for now.
- */
-DEFINE_MDD_TXN_OP_DESC(MDD_TXN_OBJECT_DESTROY);
-DEFINE_MDD_TXN_OP_DESC(MDD_TXN_OBJECT_CREATE);
-DEFINE_MDD_TXN_OP_DESC(MDD_TXN_ATTR_SET);
-DEFINE_MDD_TXN_OP_DESC(MDD_TXN_XATTR_SET);
-DEFINE_MDD_TXN_OP_DESC(MDD_TXN_INDEX_INSERT);
-DEFINE_MDD_TXN_OP_DESC(MDD_TXN_INDEX_DELETE);
-DEFINE_MDD_TXN_OP_DESC(MDD_TXN_LINK);
-DEFINE_MDD_TXN_OP_DESC(MDD_TXN_UNLINK);
-DEFINE_MDD_TXN_OP_DESC(MDD_TXN_RENAME);
-DEFINE_MDD_TXN_OP_DESC(MDD_TXN_CREATE_DATA);
-DEFINE_MDD_TXN_OP_DESC(MDD_TXN_MKDIR);
-
-static void mdd_txn_param_build(const struct lu_context *ctx,
-                                const struct mdd_txn_op_descr *opd)
-{
-        mdd_ctx_info(ctx)->mti_param.tp_credits = opd->mod_credits;
-}
-
-static int mdd_object_print(const struct lu_context *ctxt, void *cookie,
-                            lu_printer_t p, const struct lu_object *o)
-{
-        return (*p)(ctxt, cookie, LUSTRE_MDD_NAME"-object@%p", o);
-}
-
-static int mdd_mount(const struct lu_context *ctx, struct mdd_device *mdd)
-{
-        int rc;
-        struct dt_object *root;
-        ENTRY;
-
-        root = dt_store_open(ctx, mdd->mdd_child, mdd_root_dir_name,
-                             &mdd->mdd_root_fid);
-        if (!IS_ERR(root)) {
-                LASSERT(root != NULL);
-                lu_object_put(ctx, &root->do_lu);
-                rc = orph_index_init(ctx, mdd);
-        } else
-                rc = PTR_ERR(root);
-
-        RETURN(rc);
-}
-
 static int mdd_txn_start_cb(const struct lu_context *ctx,
                             struct txn_param *param, void *cookie)
 {
@@ -671,8 +687,6 @@ static int mdd_device_init(const struct lu_context *ctx,
         mdd->mdd_txn_cb.dtc_txn_commit = mdd_txn_commit_cb;
         mdd->mdd_txn_cb.dtc_cookie = mdd;
 
-        dt_txn_callback_add(dt, &mdd->mdd_txn_cb);
-
         RETURN(rc);
 }
 
@@ -681,15 +695,33 @@ static struct lu_device *mdd_device_fini(const struct lu_context *ctx,
 {
 	struct mdd_device *mdd = lu2mdd_dev(d);
         struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
-
-        dt_txn_callback_del(mdd->mdd_child, &mdd->mdd_txn_cb);
-
+ 
         return next;
+}
+
+static int mdd_mount(const struct lu_context *ctx, struct mdd_device *mdd)
+{
+        int rc;
+        struct dt_object *root;
+        ENTRY;
+
+        dt_txn_callback_add(mdd->mdd_child, &mdd->mdd_txn_cb);
+        root = dt_store_open(ctx, mdd->mdd_child, mdd_root_dir_name,
+                             &mdd->mdd_root_fid);
+        if (!IS_ERR(root)) {
+                LASSERT(root != NULL);
+                lu_object_put(ctx, &root->do_lu);
+                rc = orph_index_init(ctx, mdd);
+        } else
+                rc = PTR_ERR(root);
+
+        RETURN(rc);
 }
 
 static void mdd_device_shutdown(const struct lu_context *ctxt,
                                 struct mdd_device *m)
 {
+        dt_txn_callback_del(m->mdd_child, &m->mdd_txn_cb);
         if (m->mdd_obd_dev)
                 mdd_fini_obd(ctxt, m);
         orph_index_fini(ctxt, m);
@@ -750,13 +782,14 @@ static int mdd_recovery_complete(const struct lu_context *ctxt,
         obd_notify(obd->u.mds.mds_osc_obd, NULL,
                    obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
                    OBD_NOTIFY_SYNC, NULL);
-*/
+        */
         LASSERT(mdd);
         LASSERT(obd);
 
         obd->obd_recovering = 0;
         obd->obd_type->typ_dt_ops->o_postrecov(obd);
         /* TODO: orphans handling */
+        __mdd_orphan_cleanup(ctxt, mdd);
         rc = next->ld_ops->ldo_recovery_complete(ctxt, next);
 
         RETURN(rc);
@@ -766,13 +799,6 @@ struct lu_device_operations mdd_lu_ops = {
 	.ldo_object_alloc      = mdd_object_alloc,
         .ldo_process_config    = mdd_process_config,
         .ldo_recovery_complete = mdd_recovery_complete
-};
-
-static struct lu_object_operations mdd_lu_obj_ops = {
-	.loo_object_init    = mdd_object_init,
-	.loo_object_start   = mdd_object_start,
-	.loo_object_free    = mdd_object_free,
-	.loo_object_print   = mdd_object_print
 };
 
 void mdd_write_lock(const struct lu_context *ctxt, struct mdd_object *obj)
@@ -1454,7 +1480,9 @@ int __mdd_object_kill(const struct lu_context *ctxt,
                 /* Return LOV & COOKIES unconditionally here. We clean evth up.
                  * Caller must be ready for that. */
                 rc = __mdd_lmm_get(ctxt, obj, ma);
-                rc = mdd_unlink_log(ctxt, mdo2mdd(&obj->mod_obj), obj, ma);
+                if ((ma->ma_valid & MA_LOV))
+                        rc = mdd_unlink_log(ctxt, mdo2mdd(&obj->mod_obj),
+                                            obj, ma);
         }
         RETURN(rc);
 }
@@ -1469,12 +1497,14 @@ static int __mdd_finish_unlink(const struct lu_context *ctxt,
 
         rc = __mdd_iattr_get(ctxt, obj, ma);
         if (rc == 0 && ma->ma_attr.la_nlink == 0) {
-                if (obj->mod_count == 0) {
+                /* add new orphan and the object
+                 * will be deleted during the object_put() */
+                if (__mdd_orphan_add(ctxt, obj, th) == 0)
+                        set_bit(LU_OBJECT_ORPHAN,
+                                &mdd2lu_obj(obj)->lo_header->loh_flags);
+                
+                if (obj->mod_count == 0)
                         rc = __mdd_object_kill(ctxt, obj, ma);
-                } else {
-                        /* add new orphan */
-                        rc = __mdd_orphan_add(ctxt, obj, th);
-                }
         }
         RETURN(rc);
 }
@@ -2692,13 +2722,13 @@ static int mdd_open(const struct lu_context *ctxt, struct md_object *obj,
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         int rc = 0;
 
-        mdd_write_lock(ctxt, md2mdd_obj(obj));
+        mdd_write_lock(ctxt, mdd_obj);
 
         rc = mdd_open_sanity_check(ctxt, mdd_obj, flags, uc);
         if (rc == 0)
-                md2mdd_obj(obj)->mod_count ++;
+                mdd_obj->mod_count ++;
 
-        mdd_write_unlock(ctxt, md2mdd_obj(obj));
+        mdd_write_unlock(ctxt, mdd_obj);
         return rc;
 }
 
@@ -2709,28 +2739,19 @@ static int mdd_close(const struct lu_context *ctxt, struct md_object *obj,
                      struct md_attr *ma, struct md_ucred *uc)
 {
         int rc;
-        struct mdd_object *mdd_obj;
-        struct thandle *handle = NULL;
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
         ENTRY;
 
-        mdd_obj = md2mdd_obj(obj);
-        mdd_txn_param_build(ctxt, &MDD_TXN_MKDIR);
-        handle = mdd_trans_start(ctxt, mdo2mdd(obj));
-        if (IS_ERR(handle))
-                RETURN(-ENOMEM);
-
         mdd_write_lock(ctxt, mdd_obj);
+        /* release open count */
+        mdd_obj->mod_count --;
+
         rc = __mdd_iattr_get(ctxt, mdd_obj, ma);
-        if (rc == 0 && (-- mdd_obj->mod_count) == 0) {
-                if (ma->ma_attr.la_nlink == 0) {
+        if (rc == 0 && mdd_obj->mod_count == 0) {
+                if (ma->ma_attr.la_nlink == 0)
                         rc = __mdd_object_kill(ctxt, mdd_obj, ma);
-                        if (rc == 0)
-                                /* let's remove obj from the orphan list */
-                                rc = __mdd_orphan_del(ctxt, mdd_obj, handle);
-                }
         }
         mdd_write_unlock(ctxt, mdd_obj);
-        mdd_trans_stop(ctxt, mdo2mdd(obj), rc, handle);
         RETURN(rc);
 }
 
