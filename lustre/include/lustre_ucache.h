@@ -4,13 +4,13 @@
 
 #ifndef _UPCALL_CACHE_H
 #define _UPCALL_CACHE_H
-
+/*
 #ifdef __KERNEL__
 #include <linux/sched.h>
 #else
 struct group_info {};
 #endif
-
+*/
 #define UC_CACHE_NEW            0x01
 #define UC_CACHE_ACQUIRING      0x02
 #define UC_CACHE_INVALID        0x04
