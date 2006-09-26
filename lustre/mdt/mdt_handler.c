@@ -1539,17 +1539,24 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                  * Process request.
                  */
                 rc = h->mh_act(info);
-        /*
-         * XXX result value is unconditionally shoved into ->rq_status (original
-         * code sometimes placed error code into ->rq_status, and sometimes
-         * returned it to the caller). ptlrpc_server_handle_request() doesn't
-         * check return value anyway.
-         */
+        
         req->rq_status = rc;
-        rc = 0;
+        
+        /*
+         * It is not correct to zero @rc out here unconditionally. First of all,
+         * for error cases, we do not need target_committed_to_req(req). Second
+         * reason is that, @rc is passed to target_send_reply() and used for
+         * figuring out what should be done about reply in capricular case. We
+         * only zero it out for ELDLM_* codes which > 0 because they do not
+         * support invariant of marking req as difficult only in case of error.
+         */
+        if (rc > 0)
+                rc = 0;
+        
         LASSERT(current->journal_info == NULL);
 
-        if (flags & HABEO_CLAVIS && info->mti_mdt->mdt_opts.mo_compat_resname) {
+        if (rc == 0 && (flags & HABEO_CLAVIS)
+            && info->mti_mdt->mdt_opts.mo_compat_resname) {
                 struct ldlm_reply *dlmrep;
 
                 dlmrep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
@@ -1701,8 +1708,9 @@ static int mdt_reply(struct ptlrpc_request *req, int rc,
                         DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
                         RETURN(target_queue_final_reply(req, rc));
                 } else {
-                        /* Lost a race with recovery; let the error path
-                         * DTRT. */
+                        /*
+                         * Lost a race with recovery; let the error path DTRT.
+                         */
                         rc = req->rq_status = -ENOTCONN;
                 }
         }

@@ -73,8 +73,10 @@ fld_rrb_scan(struct lu_client_fld *fld, seqno_t seq)
                         RETURN(target);
         }
 
-        /* if target is not found, there is logical error anyway, so here is
-         * LBUG() to catch this situation. */
+        /*
+         * If target is not found, there is logical error anyway, so here is
+         * LBUG() to catch this situation.
+         */
         LBUG();
         RETURN(NULL);
 }

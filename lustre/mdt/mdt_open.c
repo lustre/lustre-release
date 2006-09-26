@@ -703,8 +703,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                         DEBUG_REQ(D_ERROR, req,"OPEN_CREAT not in open replay");
                         GOTO(out, result = -EFAULT);
                 }
-                CDEBUG(D_INFO, "open replay failed to find object, "
-                               "continue as regular open\n");
+                CDEBUG(D_INFO, "Open replay failed to find object, "
+                       "continue as regular open\n");
         }
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
