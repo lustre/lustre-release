@@ -1316,7 +1316,13 @@ static ssize_t osd_read(const struct lu_context *ctxt, struct dt_object *dt,
          * We'd like to use vfs_read() here, but it messes with
          * dnotify_parent() and locks.
          */
-        result = file->f_op->read(file, buf, count, pos);
+        if (file->f_op->read)
+                result = file->f_op->read(file, buf, count, pos);
+        else {
+                /* TODO: how to serve symlink readlink()? */
+                CERROR("read not implemented currently\n");
+                result = -ENOSYS;
+        }
         osd_rw_fini(&seg);
         return result;
 }
@@ -1333,7 +1339,12 @@ static ssize_t osd_write(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(handle != NULL);
 
         file = osd_rw_init(ctxt, inode, &seg);
-        result = file->f_op->write(file, buf, count, pos);
+        if (file->f_op->write)
+                result = file->f_op->write(file, buf, count, pos);
+        else {
+                CERROR("write not implemented currently\n");
+                result = -ENOSYS;
+        }
         osd_rw_fini(&seg);
         return result;
 }
