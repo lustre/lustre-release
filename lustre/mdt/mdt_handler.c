@@ -155,12 +155,6 @@ void mdt_set_disposition(struct mdt_thread_info *info,
                 rep->lock_policy_res1 |= flag;
 }
 
-static int mdt_is_remote_object(struct mdt_object *o)
-{
-       return (o->mot_header.loh_attr & LOHA_REMOTE); 
-}        
-
-
 static int mdt_getstatus(struct mdt_thread_info *info)
 {
         struct md_device *next  = info->mti_mdt->mdt_child;
@@ -1745,6 +1739,7 @@ static int mdt_handle0(struct ptlrpc_request *req,
                         } else {
                                 req->rq_status = -ENOTSUPP;
                                 rc = ptlrpc_error(req);
+                                RETURN(rc);
                         }
                         rc = mdt_reply(req, rc, info);
                 }
