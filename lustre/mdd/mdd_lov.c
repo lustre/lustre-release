@@ -533,7 +533,9 @@ int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
 
-        if ((ma->ma_cookie_size > 0) && ma->ma_valid&MA_LOV && 
+        LASSERT(ma->ma_valid & MA_LOV);
+
+        if ((ma->ma_cookie_size > 0) &&
             (mds_log_op_unlink(obd, ma->ma_lmm, ma->ma_lmm_size,
                               ma->ma_cookie, ma->ma_cookie_size) > 0)) {
                 ma->ma_valid |= MA_COOKIE;
