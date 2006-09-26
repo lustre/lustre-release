@@ -433,7 +433,7 @@ static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
          * ("*OBJ-TEMP*"), but name in that directory is _not_ counted in
          * inode ->i_nlink.
          */
-
+        
         osd_index_fini(obj);
         if (inode != NULL) {
                 int result;
@@ -781,7 +781,7 @@ static int osd_inode_setattr(const struct lu_context *ctx,
                 li->i_flags = (li->i_flags & ~LDISKFS_FL_USER_MODIFIABLE) |
                         (attr->la_flags & LDISKFS_FL_USER_MODIFIABLE);
         }
-	mark_inode_dirty(inode);
+        mark_inode_dirty(inode);
         return rc;
 }
 
@@ -2003,12 +2003,16 @@ static int osd_process_config(const struct lu_context *ctx,
 
         RETURN(err);
 }
+extern void ldiskfs_orphan_cleanup (struct super_block * sb,
+				    struct ldiskfs_super_block * es);
 
 static int osd_recovery_complete(const struct lu_context *ctxt,
                                  struct lu_device *d)
 {
+        struct osd_device *o = osd_dev(d);
         ENTRY;
         /* TODO: orphans handling */
+        ldiskfs_orphan_cleanup(osd_sb(o), LDISKFS_SB(osd_sb(o))->s_es);
         RETURN(0);
 }
 
