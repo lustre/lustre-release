@@ -462,7 +462,8 @@ struct lu_object *lu_object_find(const struct lu_context *ctxt,
                                             CAPA_OPC_INDEX_LOOKUP);
                         if (rc)
                                 return ERR_PTR(rc);
-                        o->lo_header->loh_capa = *capa;
+                        if (capa)
+                                o->lo_header->loh_capa = *capa;
                 }
                 return o;
         }

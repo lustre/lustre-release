@@ -282,7 +282,7 @@ __lmv_obj_create(struct obd_device *obd, const struct lu_fid *fid,
  * obtained from correct MDT and used for constructing the object. */
 struct lmv_obj *
 lmv_obj_create(struct obd_export *exp, const struct lu_fid *fid,
-               struct obd_capa *oc, struct lmv_stripe_md *mea)
+               struct lmv_stripe_md *mea)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -312,7 +312,7 @@ lmv_obj_create(struct obd_export *exp, const struct lu_fid *fid,
                 if (IS_ERR(tgt_exp))
                         GOTO(cleanup, obj = (void *)tgt_exp);
 
-                rc = md_getattr(tgt_exp, fid, oc, valid, mealen, &req);
+                rc = md_getattr(tgt_exp, fid, NULL, valid, mealen, &req);
                 if (rc) {
                         CERROR("md_getattr() failed, error %d\n", rc);
                         GOTO(cleanup, obj = ERR_PTR(rc));

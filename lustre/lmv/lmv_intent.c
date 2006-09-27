@@ -185,7 +185,6 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lu_fid rpid = op_data->fid1;
-        struct obd_capa *oc = op_data->mod_capa1;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mdt_body *body = NULL;
         struct md_op_data *sop_data;
@@ -218,7 +217,6 @@ repeat:
                                    (char *)op_data->name, op_data->namelen);
 
                 rpid = obj->lo_inodes[mds].li_fid;
-                oc   = obj->lo_inodes[mds].li_capa;
                 rc = lmv_fld_lookup(lmv, &rpid, &mds);
                 lmv_obj_put(obj);
                 if (rc)
@@ -229,7 +227,6 @@ repeat:
         }
 
         sop_data->fid1 = rpid;
-        sop_data->mod_capa1 = oc;
 
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, sop_data,
                             lmm, lmmsize, it, flags, reqp,
@@ -241,7 +238,7 @@ repeat:
                  * the request with proper MDS.
                  */
                 LASSERT(lu_fid_eq(&op_data->fid1, &rpid));
-                rc = lmv_handle_split(exp, &rpid, oc);
+                rc = lmv_handle_split(exp, &rpid);
                 if (rc == 0) {
                         ptlrpc_req_finished(*reqp);
                        /* We shoudld reallocate the FID for the object */
@@ -307,7 +304,7 @@ repeat:
 
                 /* FIXME: capability for remote! */
                 /* wow! this is split dir, we'd like to handle it */
-                obj = lmv_obj_create(exp, &body->fid1, NULL, mea);
+                obj = lmv_obj_create(exp, &body->fid1, mea);
                 if (IS_ERR(obj))
                         GOTO(out_free_sop_data, rc = (int)PTR_ERR(obj));
         }
@@ -342,7 +339,6 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
         struct lmv_obj *obj = NULL, *obj2 = NULL;
         struct obd_device *obd = exp->exp_obd;
         struct lu_fid rpid = op_data->fid1;
-        struct obd_capa *oc = op_data->mod_capa1;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mdt_body *body = NULL;
         struct md_op_data *sop_data;
@@ -403,7 +399,6 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
                                            op_data->namelen);
 
                         rpid = obj->lo_inodes[mds].li_fid;
-                        oc   = obj->lo_inodes[mds].li_capa;
                         rc = lmv_fld_lookup(lmv, &rpid, &mds);
                         if (rc) {
                                 lmv_obj_put(obj);
@@ -417,7 +412,6 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
         }
 
         sop_data->fid1 = rpid;
-        sop_data->mod_capa1 = oc;
 
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, sop_data, lmm,
                             lmmsize, it, flags, reqp, cb_blocking,
@@ -479,7 +473,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
 
                 /* FIXME remote capability! */
                 /* wow! this is split dir, we'd like to handle it. */
-                obj2 = lmv_obj_create(exp, &body->fid1, NULL, mea);
+                obj2 = lmv_obj_create(exp, &body->fid1, mea);
                 if (IS_ERR(obj2))
                         GOTO(out_free_sop_data, rc = (int)PTR_ERR(obj2));
         }
@@ -552,7 +546,6 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
         for (i = 0; i < obj->lo_objcount; i++) {
                 struct lu_fid fid = obj->lo_inodes[i].li_fid;
-                struct obd_capa *oc= obj->lo_inodes[i].li_capa;
                 struct ptlrpc_request *req = NULL;
                 struct obd_export *tgt_exp;
                 struct lookup_intent it;
@@ -570,8 +563,6 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 memset(op_data, 0, sizeof(*op_data));
                 op_data->fid1 = fid;
                 op_data->fid2 = fid;
-                op_data->mod_capa1 = oc;
-                op_data->mod_capa2 = oc;
 
                 tgt_exp = lmv_get_export(lmv, &fid);
                 if (IS_ERR(tgt_exp))
@@ -633,7 +624,6 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lu_fid rpid = op_data->fid1;
-        struct obd_capa *oc = op_data->mod_capa1;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mdt_body *body = NULL;
         struct md_op_data *sop_data;
@@ -669,7 +659,6 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
                                            (char *)op_data->name,
                                            op_data->namelen);
                         rpid = obj->lo_inodes[mds].li_fid;
-                        oc = obj->lo_inodes[mds].li_capa;
                         lmv_obj_put(obj);
                 }
                 rc = lmv_fld_lookup(lmv, &rpid, &mds);
@@ -699,7 +688,6 @@ repeat:
                                                    (char *)op_data->name,
                                                    op_data->namelen);
                                 rpid = obj->lo_inodes[mds].li_fid;
-                                oc = obj->lo_inodes[mds].li_capa;
                                 rc = lmv_fld_lookup(lmv, &rpid, &mds);
                                 if (rc) {
                                         lmv_obj_put(obj);
@@ -712,7 +700,6 @@ repeat:
         }
 
         sop_data->fid1 = rpid;
-        sop_data->mod_capa1 = oc;
 
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, sop_data, lmm, lmmsize,
                             it, flags, reqp, cb_blocking, extra_lock_flags);
@@ -747,7 +734,7 @@ repeat:
                 CWARN("we haven't knew about directory splitting!\n");
                 LASSERT(obj == NULL);
 
-                obj = lmv_obj_create(exp, &rpid, oc, NULL);
+                obj = lmv_obj_create(exp, &rpid, NULL);
                 if (IS_ERR(obj))
                         RETURN((int)PTR_ERR(obj));
                 lmv_obj_put(obj);
@@ -779,7 +766,7 @@ repeat:
                 obj = lmv_obj_grab(obd, &body->fid1);
                 if (!obj) {
                         /* FIXME: remote capability */
-                        obj = lmv_obj_create(exp, &body->fid1, NULL, mea);
+                        obj = lmv_obj_create(exp, &body->fid1, mea);
                         if (IS_ERR(obj))
                                 GOTO(out_free_sop_data, rc = (int)PTR_ERR(obj));
                 }
@@ -867,7 +854,6 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
         for (i = 0; i < obj->lo_objcount; i++) {
                 struct lu_fid fid = obj->lo_inodes[i].li_fid;
-                struct obd_capa *oc = obj->lo_inodes[i].li_capa;
                 struct lustre_handle *lockh = NULL;
                 struct ptlrpc_request *req = NULL;
                 ldlm_blocking_callback cb;
@@ -907,8 +893,6 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
                 op_data->fid1 = fid;
                 op_data->fid2 = fid;
-                op_data->mod_capa1 = oc;
-                op_data->mod_capa2 = oc;
 
                 /* is obj valid? */
                 tgt_exp = lmv_get_export(lmv, &fid);

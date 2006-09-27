@@ -44,7 +44,6 @@ struct qstr {
 
 struct lmv_inode {
         struct lu_fid      li_fid;        /* id of dirobj */
-        struct obd_capa   *li_capa;       /* fid capability */
         unsigned long      li_size;       /* slave size value */
         int                li_flags;
 };
@@ -98,7 +97,6 @@ struct lmv_obj *lmv_obj_alloc(struct obd_device *obd,
 
 struct lmv_obj *lmv_obj_create(struct obd_export *exp,
 			       const struct lu_fid *fid,
-                               struct obd_capa *oc,
 			       struct lmv_stripe_md *mea);
 
 int lmv_obj_delete(struct obd_export *exp,
@@ -135,8 +133,7 @@ int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
 			  ldlm_blocking_callback cb_blocking,
                           int extra_lock_flags);
 
-int lmv_handle_split(struct obd_export *, const struct lu_fid *,
-                     struct obd_capa *oc);
+int lmv_handle_split(struct obd_export *, const struct lu_fid *);
 int lmv_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 		     void *, int);
 int lmv_fld_lookup(struct lmv_obd *lmv, const struct lu_fid *fid,
