@@ -1588,6 +1588,11 @@ static int mdd_unlink(const struct lu_context *ctxt,
                 GOTO(cleanup, rc);
 
         rc = __mdd_finish_unlink(ctxt, mdd_cobj, ma, handle);
+        
+        if (rc == 0)
+                obd_set_info_async(mdd2obd_dev(mdd)->u.mds.mds_osc_exp,
+                                   strlen("unlinked"), "unlinked", 0,
+                                   NULL, NULL);
 
 cleanup:
         mdd_unlock2(ctxt, mdd_pobj, mdd_cobj);
