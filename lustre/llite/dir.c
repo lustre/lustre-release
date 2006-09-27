@@ -142,6 +142,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         struct inode *inode = page->mapping->host;
         struct ptlrpc_request *request;
         struct mdt_body *body;
+        struct obd_capa *oc;
         __u64 hash;
         int rc;
         ENTRY;
@@ -150,8 +151,10 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) off %lu\n",
                inode->i_ino, inode->i_generation, inode, (unsigned long)hash);
 
+        oc = ll_i2mdscapa(inode);
         rc = md_readpage(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode),
-                         hash, page, &request);
+                         oc, hash, page, &request);
+        capa_put(oc);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF,
                                       sizeof(*body));
@@ -579,6 +582,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 int namelen, rc, len = 0;
                 char *buf = NULL;
                 char *filename;
+                struct obd_capa *oc;
 
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
@@ -593,9 +597,11 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         GOTO(out, rc = -EINVAL);
                 }
 
-                rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode),
+                oc = ll_i2mdscapa(inode);
+                rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode), oc,
                                      filename, namelen, OBD_MD_FLID, 0,
                                      &request);
+                capa_put(oc);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "md_getattr_name: %d\n", rc);
                         GOTO(out, rc);
@@ -618,9 +624,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
 
-                ll_prepare_md_op_data(op_data, inode,
-                                      NULL, NULL, 0, 0);
-
                 LASSERT(sizeof(lum) == sizeof(*lump));
                 LASSERT(sizeof(lum.lmm_objects[0]) ==
                         sizeof(lump->lmm_objects[0]));
@@ -640,8 +643,10 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         lustre_swab_lov_user_md(&lum);
 
                 /* swabbing is done in lov_setstripe() on server side */
+                ll_prepare_md_op_data(op_data, inode, NULL, NULL, 0, 0);
                 rc = md_setattr(sbi->ll_md_exp, op_data, &lum,
                                 sizeof(lum), NULL, 0, &request);
+                ll_finish_md_op_data(op_data);
                 if (rc) {
                         if (rc != -EPERM && rc != -EACCES)
                                 CERROR("md_setattr fails: rc = %d\n", rc);
@@ -661,6 +666,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct lov_mds_md *lmm = NULL;
                 struct mdt_body *body;
                 char *filename = NULL;
+                struct obd_capa *oc;
                 int rc, lmmsize;
 
                 rc = ll_get_max_mdsize(sbi, &lmmsize);
@@ -673,19 +679,24 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         if (IS_ERR(filename))
                                 RETURN(PTR_ERR(filename));
 
-                        rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode),
+                        oc = ll_i2mdscapa(inode);
+                        rc = md_getattr_name(sbi->ll_md_exp,
+                                             ll_inode2fid(inode), oc,
                                              filename, strlen(filename) + 1,
                                              OBD_MD_FLEASIZE | OBD_MD_FLDIREA,
                                              lmmsize, &request);
+                        capa_put(oc);
                         if (rc < 0) {
                                 CDEBUG(D_INFO, "md_getattr_name failed "
                                        "on %s: rc %d\n", filename, rc);
                                 GOTO(out_name, rc);
                         }
                 } else {
-                        rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
+                        oc = ll_i2mdscapa(inode);
+                        rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
                                         OBD_MD_FLEASIZE | OBD_MD_FLDIREA,
                                         lmmsize, &request);
+                        capa_put(oc);
                         if (rc < 0) {
                                 CDEBUG(D_INFO, "md_getattr failed on inode "
                                        "%lu/%u: rc %d\n", inode->i_ino,

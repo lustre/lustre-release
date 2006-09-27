@@ -318,6 +318,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
 {
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
+        struct mdt_device      *mdt = info->mti_mdt;
         struct md_attr         *ma  = &info->mti_attr;
         struct lu_attr         *la  = &ma->ma_attr;
         struct mdt_file_data   *mfd;
@@ -345,6 +346,33 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                         repbody->valid |= OBD_MD_FLRMTPERM;
                         repbody->aclsize = sizeof(struct mdt_remote_perm);
                 }
+        }
+
+        spin_lock(&capa_lock);
+        info->mti_capa_key = *red_capa_key(mdt);
+        spin_unlock(&capa_lock);
+
+        if (mdt->mdt_opts.mo_mds_capa) {
+                struct lustre_capa *capa;
+
+                capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
+                LASSERT(capa);
+                capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
+                rc = mo_capa_get(info->mti_ctxt, mdt_object_child(o), capa);
+                if (rc)
+                        RETURN(rc);
+                repbody->valid |= OBD_MD_FLMDSCAPA;
+        }
+        if (mdt->mdt_opts.mo_oss_capa) {
+                struct lustre_capa *capa;
+
+                capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA2);
+                LASSERT(capa);
+                capa->lc_opc = CAPA_OPC_OSS_DEFAULT;
+                rc = mo_capa_get(info->mti_ctxt, mdt_object_child(o), capa);
+                if (rc)
+                        RETURN(rc);
+                repbody->valid |= OBD_MD_FLOSSCAPA;
         }
 
         /* if we are following a symlink, don't open; and
@@ -507,7 +535,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE) && 
             req->rq_status != 0) {
                 /* We did not create successfully, return error to client. */
-                mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
+                mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 1, 1);
                 GOTO(out, rc = req->rq_status);
         }
 
@@ -516,10 +544,10 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                  * We failed after creation, but we do not know in which step 
                  * we failed. So try to check the child object.
                  */
-                parent = mdt_object_find(ctxt, mdt, rr->rr_fid1);
+                parent = mdt_object_find(ctxt, mdt, rr->rr_fid1, rr->rr_capa1);
                 LASSERT(!IS_ERR(parent));
 
-                child = mdt_object_find(ctxt, mdt, rr->rr_fid2);
+                child = mdt_object_find(ctxt, mdt, rr->rr_fid2, rr->rr_capa2);
                 LASSERT(!IS_ERR(child));
 
                 rc = lu_object_exists(&child->mot_obj.mo_lu);
@@ -543,7 +571,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                 }
                 mdt_object_put(ctxt, parent);
                 mdt_object_put(ctxt, child);
-                mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
+                mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 1, 1);
                 GOTO(out, rc);
         } else {
 regular_open:
@@ -567,12 +595,12 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         int                     rc;
         ENTRY;
 
-        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, rr->rr_fid2);
+        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, rr->rr_fid2,
+                            rr->rr_capa2);
         if (IS_ERR(o)) 
                 RETURN(rc = PTR_ERR(o));
 
         rc = lu_object_exists(&o->mot_obj.mo_lu);
-
         if (rc > 0) {
                 const struct lu_context *ctxt = info->mti_ctxt;
 
@@ -612,7 +640,7 @@ static int mdt_cross_open(struct mdt_thread_info* info,
         int                rc;
         ENTRY;
 
-        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid);
+        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid, BYPASS_CAPA);
         if (IS_ERR(o)) 
                 RETURN(rc = PTR_ERR(o));
 
@@ -710,7 +738,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         if (rr->rr_name[0] == 0) {
                 /* this is cross-ref open */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
-                result = mdt_cross_open(info, rr->rr_fid1, ldlm_rep, create_flags);
+                result = mdt_cross_open(info, rr->rr_fid1, ldlm_rep,
+                                        create_flags);
                 GOTO(out, result);
         }
 
@@ -720,7 +749,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         else
                 lh->mlh_mode = LCK_EX;
         parent = mdt_object_find_lock(info, rr->rr_fid1, lh,
-                                      MDS_INODELOCK_UPDATE);
+                                      MDS_INODELOCK_UPDATE, rr->rr_capa1);
         if (IS_ERR(parent))
                 GOTO(out, result = PTR_ERR(parent));
 
@@ -751,7 +780,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
         }
 
-        child = mdt_object_find(info->mti_ctxt, mdt, child_fid);
+        child = mdt_object_find(info->mti_ctxt, mdt, child_fid, BYPASS_CAPA);
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
 
@@ -846,7 +875,7 @@ out_child:
 out_parent:
         mdt_object_unlock_put(info, parent, lh, result);
 out:
-        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
+        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 1, 1);
         if (result)
                 lustre_msg_set_transno(req->rq_repmsg, 0);
         return result;
@@ -986,7 +1015,7 @@ int mdt_close(struct mdt_thread_info *info)
                 mdt_object_put(info->mti_ctxt, o);
         }
         if (repbody != NULL)
-                mdt_shrink_reply(info, REPLY_REC_OFF + 1);
+                mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
                 RETURN(-ENOMEM);

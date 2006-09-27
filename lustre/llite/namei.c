@@ -295,31 +295,6 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
         }
 }
 
-/* this function prepares md_op_data hint for passing ot down to MD stack. */
-void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
-                            struct inode *i2, const char *name, int namelen,
-                            int mode)
-{
-        LASSERT(i1 != NULL);
-        LASSERT(op_data != NULL);
-
-        ll_i2gids(op_data->suppgids, i1, i2);
-        op_data->fid1 = ll_i2info(i1)->lli_fid;
-
-        /* @i2 may be NULL. In this case caller itself has to initialize ->fid2
-         * if needed. */
-        if (i2)
-                op_data->fid2 = ll_i2info(i2)->lli_fid;
-
-        op_data->name = name;
-        op_data->namelen = namelen;
-        op_data->create_mode = mode;
-        op_data->mod_time = CURRENT_SECONDS;
-        op_data->fsuid = current->fsuid;
-        op_data->fsgid = current->fsgid;
-        op_data->cap = current->cap_effective;
-}
-
 static void ll_d_add(struct dentry *de, struct inode *inode)
 {
         CDEBUG(D_DENTRY, "adding inode %p to dentry %p\n", inode, de);
@@ -1071,6 +1046,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
         struct obdo *oa;
+        struct obd_capa *oc;
         int rc;
         ENTRY;
 
@@ -1129,7 +1105,10 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 }
         }
 
-        rc = obd_destroy(ll_i2dtexp(dir), oa, lsm, &oti, ll_i2mdexp(dir));
+        /* FIXME: parent mds capability is the only one can find! */
+        oc = ll_i2mdscapa(dir);
+        rc = obd_destroy(ll_i2dtexp(dir), oa, lsm, &oti, ll_i2mdexp(dir), oc);
+        capa_put(oc);
         obdo_free(oa);
         if (rc)
                 CERROR("obd destroy objid "LPX64" error %d\n",

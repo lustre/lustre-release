@@ -1,5 +1,5 @@
 MODULES := mdt
-mdt-objs := mdt_handler.o mdt_lib.o mdt_reint.o mdt_xattr.o mdt_recovery.o mdt_open.o
-mdt-objs += mdt_idmap.o mdt_identity.o mdt_rmtacl.o
+mdt-objs := mdt_handler.o mdt_lib.o mdt_reint.o mdt_xattr.o mdt_recovery.o
+mdt-objs += mdt_open.o mdt_idmap.o mdt_identity.o mdt_rmtacl.o mdt_capa.o
 
 @INCLUDE_RULES@

@@ -244,10 +244,10 @@ static inline int fid_is_sane(const struct lu_fid *fid)
 
 #define DFID "[%16.16"LPF64"x/%8.8x:%8.8x]"
 
-#define PFID(fid)       \
-        fid_seq((fid)), \
-        fid_oid((fid)), \
-        fid_ver((fid))
+#define PFID(fid)     \
+        fid_seq(fid), \
+        fid_oid(fid), \
+        fid_ver(fid)
 
 extern void lustre_swab_lu_fid(struct lu_fid *fid);
 extern void lustre_swab_lu_range(struct lu_range *range);
@@ -301,6 +301,7 @@ static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
 #define MEA_MAGIC_HASH_SEGMENT   0xb222a11b
 #define MAX_HASH_SIZE            0x7fffffff
 
+/* TODO: lmv_stripe_md should contain mds capabilities for all slave fids */
 struct lmv_stripe_md {
         __u32         mea_magic;
         __u32         mea_count;
@@ -359,7 +360,7 @@ struct lustre_msg_v2 {
         __u32 lm_buflens[0];
 };
 
-/* without security, ptlrpc_body is put in the first buffer. */
+/* without gss, ptlrpc_body is put at the first buffer. */
 struct ptlrpc_body {
         struct lustre_handle pb_handle;
         __u32 pb_type;
@@ -441,7 +442,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_RMT_CLIENT  0x40000ULL /* Remote 1.8 client */
 #define OBD_CONNECT_BRW_SIZE    0x80000ULL /* Max bytes per rpc */
 #define OBD_CONNECT_QUOTA64     0x100000ULL /* 64bit qunit_data.qd_count b=10707*/
-#define OBD_CONNECT_FID_CAPA    0x200000ULL /* fid capability */
+#define OBD_CONNECT_MDS_CAPA    0x200000ULL /* MDS capability */
 #define OBD_CONNECT_OSS_CAPA    0x400000ULL /* OSS capability */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
@@ -620,6 +621,9 @@ struct md_op_data {
         /* Size-on-MDS epoch and flags. */
         __u64                 ioepoch;
         __u32                 flags;
+
+        struct obd_capa      *mod_capa1;
+        struct obd_capa      *mod_capa2;
 };
 
 #define MDS_MODE_DONT_LOCK (1 << 30)
@@ -704,6 +708,8 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLXATTRRM   (0x0000004000000000ULL) /* xattr remove */
 #define OBD_MD_FLACL       (0x0000008000000000ULL) /* ACL */
 #define OBD_MD_FLRMTPERM   (0x0000010000000000ULL) /* remote permission */
+#define OBD_MD_FLMDSCAPA   (0x0000020000000000ULL) /* MDS capability */
+#define OBD_MD_FLOSSCAPA   (0x0000040000000000ULL) /* OSS capability */
 
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
                           OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
@@ -833,6 +839,7 @@ typedef enum {
         MDS_SETXATTR     = 50,
         MDS_WRITEPAGE    = 51,
         MDS_IS_SUBDIR    = 52,
+        MDS_RENEW_CAPA   = 53,
         MDS_LAST_OPC
 } mds_cmd_t;
 
@@ -1028,7 +1035,9 @@ struct lustre_md {
 #ifdef CONFIG_FS_POSIX_ACL
         struct posix_acl        *posix_acl;
 #endif
-        struct mdt_remote_perm   *remote_perm;
+        struct mdt_remote_perm  *remote_perm;
+        struct obd_capa         *mds_capa;
+        struct obd_capa         *oss_capa;
 };
 
 #define Q_QUOTACHECK    0x800100
@@ -1118,7 +1127,7 @@ struct mdt_rec_setattr {
         __u32           sa_uid;
         __u32           sa_gid;
         __u32           sa_attr_flags;
-        __u32           sa_padding; /* also fix lustre_swab_mdt_rec_setattr */
+        __u32           sa_padding; /* also fix lustre_swab_mds_rec_setattr */
 };
 
 extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
@@ -1877,5 +1886,86 @@ typedef enum {
         SEC_CTX_FINI            = 803,
         SEC_LAST_OPC
 } sec_cmd_t;
+
+/*
+ * capa related definitions
+ */
+#define CAPA_HMAC_MAX_LEN       64
+#define CAPA_HMAC_KEY_MAX_LEN   56
+
+/* NB take care when changing the sequence of elements this struct,
+ * because the offset info is used in find_capa() */
+struct lustre_capa {
+        struct lu_fid   lc_fid;       /* fid */
+        __u64           lc_opc;       /* operations allowed */
+        __u32           lc_flags;     /* HMAC algorithm & flags */
+        __u32           lc_keyid;     /* key used for the capability */
+        __u64           lc_expiry;    /* expiry time (sec) */
+        __u8            lc_hmac[CAPA_HMAC_MAX_LEN];   /* HMAC */
+} __attribute__((packed));
+
+extern void lustre_swab_lustre_capa(struct lustre_capa *c);
+
+/* lustre_capa.lc_opc */
+enum {
+        /* MDS only fid capability */
+        CAPA_OPC_BODY_WRITE   = 1,     /* write fid data */
+        CAPA_OPC_BODY_READ    = 1<<1,  /* read fid data */
+        CAPA_OPC_INDEX_LOOKUP = 1<<2,  /* lookup fid */
+        CAPA_OPC_INDEX_INSERT = 1<<3,  /* insert fid */
+        CAPA_OPC_INDEX_DELETE = 1<<4,  /* delete fid */
+        /* OSS only fid capability */
+        CAPA_OPC_OSS_WRITE    = 1<<5,  /* write oss object data */
+        CAPA_OPC_OSS_READ     = 1<<6,  /* read oss object data */
+        CAPA_OPC_OSS_TRUNC    = 1<<7,  /* truncate oss object */
+        /* MDS & OSS both might have */
+        CAPA_OPC_META_WRITE   = 1<<8,  /* write fid meta data */
+        CAPA_OPC_META_READ    = 1<<9,  /* read fid meta data */
+
+};
+
+#define CAPA_OPC_MDS_ONLY                                                      \
+        (CAPA_OPC_BODY_WRITE | CAPA_OPC_BODY_READ |                            \
+         CAPA_OPC_INDEX_LOOKUP | CAPA_OPC_INDEX_INSERT | CAPA_OPC_INDEX_DELETE)
+#define CAPA_OPC_OSS_ONLY                                                      \
+        (CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ | CAPA_OPC_OSS_TRUNC)
+#define CAPA_OPC_MDS_DEFAULT ~CAPA_OPC_OSS_ONLY
+#define CAPA_OPC_OSS_DEFAULT ~(CAPA_OPC_MDS_ONLY | CAPA_OPC_OSS_ONLY)
+
+static inline int capa_for_mds(struct lustre_capa *c)
+{
+        return (c->lc_opc & CAPA_OPC_MDS_ONLY) != 0;
+}
+
+static inline int capa_for_oss(struct lustre_capa *c)
+{
+        return (c->lc_opc & CAPA_OPC_OSS_ONLY) != 0;
+}
+
+/* lustre_capa.lc_flags */
+enum {
+        CAPA_FL_SHORT_EXPIRY = 1, /* short capa expiry */
+        CAPA_FL_ROOT         = 2, /* root fid capa, will always renew */
+};
+
+/* lustre_capa.lc_hmac_alg */
+enum {
+        CAPA_HMAC_ALG_SHA1 = 1, /* sha1 algorithm */
+        CAPA_HMAC_ALG_MAX,
+};
+
+#define CAPA_FL_MASK            0x00ffffff
+#define CAPA_HMAC_ALG_MASK      0xff000000
+
+struct lustre_capa_key {
+        __u64   lk_mdsid;     /* mds# */
+        __u32   lk_keyid;     /* key# */
+        __u32   lk_padding;
+        __u8    lk_key[CAPA_HMAC_KEY_MAX_LEN];    /* key */
+} __attribute__((packed));
+
+extern void lustre_swab_lustre_capa_key(struct lustre_capa_key *k);
+
+typedef int (* renew_capa_cb_t)(struct obd_capa *, struct lustre_capa *);
 
 #endif

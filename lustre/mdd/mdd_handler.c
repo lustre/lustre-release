@@ -40,6 +40,7 @@
 
 #include <linux/ldiskfs_fs.h>
 #include <lustre_mds.h>
+#include <lustre/lustre_idl.h>
 
 #include "mdd_internal.h"
 
@@ -325,7 +326,7 @@ struct mdd_object *mdd_object_find(const struct lu_context *ctxt,
         struct mdd_object *m;
         ENTRY;
 
-        o = lu_object_find(ctxt, mdd2lu_dev(d)->ld_site, f);
+        o = lu_object_find(ctxt, mdd2lu_dev(d)->ld_site, f, BYPASS_CAPA);
         if (IS_ERR(o))
                 m = (struct mdd_object *)o;
         else {
@@ -666,6 +667,7 @@ static int mdd_txn_stop_cb(const struct lu_context *ctx,
         struct mdd_device *mdd = cookie;
         struct obd_device *obd = mdd2obd_dev(mdd);
 
+        LASSERT(obd);
         return mds_lov_write_objids(obd);
 }
 
@@ -748,14 +750,14 @@ static int mdd_process_config(const struct lu_context *ctxt,
                         GOTO(out, rc);
                 dt->dd_ops->dt_conf_get(ctxt, dt, &m->mdd_dt_conf);
 
-                rc = mdd_mount(ctxt, m);
-                if (rc)
-                        GOTO(out, rc);
                 rc = mdd_init_obd(ctxt, m, cfg);
                 if (rc) {
                         CERROR("lov init error %d \n", rc);
                         GOTO(out, rc);
                 }
+                rc = mdd_mount(ctxt, m);
+                if (rc)
+                        GOTO(out, rc);
                 break;
         case LCFG_CLEANUP:
                 mdd_device_shutdown(ctxt, m);
@@ -1893,7 +1895,7 @@ static int mdd_lookup_intent(const struct lu_context *ctxt,
 {
         struct mdd_object   *mdd_obj = md2mdd_obj(pobj);
         struct dt_object    *dir = mdd_object_child(mdd_obj);
-        struct dt_rec       *rec    = (struct dt_rec *)fid;
+        struct dt_rec       *rec = (struct dt_rec *)fid;
         const struct dt_key *key = (const struct dt_key *)name;
         int rc;
         ENTRY;
@@ -2590,10 +2592,35 @@ static int mdd_maxsize_get(const struct lu_context *ctx, struct md_device *m,
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         ENTRY;
 
-        *md_size =  mdd_lov_mdsize(ctx, mdd);
+        *md_size = mdd_lov_mdsize(ctx, mdd);
         *cookie_size = mdd_lov_cookiesize(ctx, mdd);
 
         RETURN(0);
+}
+
+static int mdd_init_capa_keys(struct md_device *m,
+                              struct lustre_capa_key *keys)
+{
+	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct mds_obd    *mds = &mdd2obd_dev(mdd)->u.mds;
+        ENTRY;
+
+        mds->mds_capa_keys = keys;
+        RETURN(0);
+}
+
+static int mdd_update_capa_key(const struct lu_context *ctx,
+                               struct md_device *m,
+                               struct lustre_capa_key *key)
+{
+	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
+        struct obd_export *lov_exp = mdd2obd_dev(mdd)->u.mds.mds_osc_exp;
+        int rc;
+        ENTRY;
+
+        rc = obd_set_info_async(lov_exp, strlen(KEY_CAPA_KEY), KEY_CAPA_KEY,
+                                sizeof(*key), key, NULL);
+        RETURN(rc);
 }
 
 static void __mdd_ref_add(const struct lu_context *ctxt, struct mdd_object *obj,
@@ -3060,10 +3087,51 @@ static int mdd_permission(const struct lu_context *ctxt, struct md_object *obj,
         RETURN(rc);
 }
 
+static int mdd_capa_get(const struct lu_context *ctxt, struct md_object *obj,
+                        struct lustre_capa *capa)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(obj);
+        struct mdd_device *mdd = mdo2mdd(obj);
+        struct lu_site *ls = mdd->mdd_md_dev.md_lu_dev.ld_site;
+        struct lustre_capa_key *key = &ls->ls_capa_keys[1];
+        struct obd_capa *ocapa;
+        int rc;
+        ENTRY;
+
+        LASSERT(lu_object_exists(mdd2lu_obj(mdd_obj)));
+
+        capa->lc_fid = *mdo2fid(mdd_obj);
+        if (ls->ls_capa_timeout < CAPA_TIMEOUT)
+                capa->lc_flags |= CAPA_FL_SHORT_EXPIRY;
+        if (lu_fid_eq(&capa->lc_fid, &mdd->mdd_root_fid))
+                capa->lc_flags |= CAPA_FL_ROOT;
+        capa->lc_flags = ls->ls_capa_alg << 23;
+
+        /* TODO: get right permission here after remote uid landing */
+        ocapa = capa_lookup(capa);
+        if (ocapa) {
+                LASSERT(!capa_is_expired(ocapa));
+                capa_cpy(capa, ocapa);
+                capa_put(ocapa);
+                RETURN(0);
+        }
+
+        capa->lc_keyid = key->lk_keyid;
+        capa->lc_expiry = CURRENT_SECONDS + ls->ls_capa_timeout;
+        rc = capa_hmac(capa->lc_hmac, capa, key->lk_key);
+        if (rc)
+                RETURN(rc);
+
+        capa_add(capa);
+        RETURN(0);
+}
+
 struct md_device_operations mdd_ops = {
         .mdo_statfs         = mdd_statfs,
         .mdo_root_get       = mdd_root_get,
         .mdo_maxsize_get    = mdd_maxsize_get,
+        .mdo_init_capa_keys = mdd_init_capa_keys,
+        .mdo_update_capa_key= mdd_update_capa_key,
 };
 
 static struct md_dir_operations mdd_dir_ops = {
@@ -3093,7 +3161,8 @@ static struct md_object_operations mdd_obj_ops = {
         .moo_open          = mdd_open,
         .moo_close         = mdd_close,
         .moo_readpage      = mdd_readpage,
-        .moo_readlink      = mdd_readlink
+        .moo_readlink      = mdd_readlink,
+        .moo_capa_get      = mdd_capa_get
 };
 
 static struct obd_ops mdd_obd_device_ops = {

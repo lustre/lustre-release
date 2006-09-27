@@ -107,7 +107,7 @@ int filter_common_setup(struct obd_device *, struct lustre_cfg *lcfg,
                         void *option);
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md *md, struct obd_trans_info *,
-                   struct obd_export *);
+                   struct obd_export *, void *capa);
 int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                             struct obdo *oa, struct obd_trans_info *oti);
 int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
@@ -125,7 +125,8 @@ extern struct ldlm_valblock_ops filter_lvbo;
 /* filter_io.c */
 int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
                   struct obd_ioobj *, int niocount, struct niobuf_remote *,
-                  struct niobuf_local *, struct obd_trans_info *);
+                  struct niobuf_local *, struct obd_trans_info *,
+                  struct lustre_capa *);
 int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, int niocount, struct niobuf_local *,
                     struct obd_trans_info *, int rc);
@@ -191,4 +192,14 @@ static inline int lproc_filter_attach_seqstat(struct obd_device *dev) {}
 /* Quota stuff */
 extern quota_interface_t *quota_interface;
 
+/* Capability */
+static inline __u64 obdo_mdsno(struct obdo *oa)
+{
+        return oa->o_gr - FILTER_GROUP_MDS0;
+}
+
+int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
+int filter_verify_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
+                       struct lustre_capa *capa, __u64 opc);
+void filter_free_capa_keys(struct filter_obd *filter);
 #endif /* _FILTER_INTERNAL_H */

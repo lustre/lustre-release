@@ -37,7 +37,7 @@
 #define LAST_RCVD         "last_received"
 #define LOV_OBJID         "lov_objid"
 #define HEALTH_CHECK      "health_check"
-
+#define CAPA_KEYS         "capa_keys"
 
 /****************** persistent mount data *********************/
 

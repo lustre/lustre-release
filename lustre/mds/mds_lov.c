@@ -631,6 +631,28 @@ struct mds_lov_sync_info {
         __u32              mlsi_index;   /* index of target */
 };
 
+static int mds_propagate_capa_keys(struct mds_obd *mds)
+{
+        struct lustre_capa_key *key;
+        int i, rc = 0;
+        ENTRY;
+
+        for (i = 0; i < 2; i++) {
+                key = &mds->mds_capa_keys[i];
+                DEBUG_CAPA_KEY(D_SEC, key, "propagate");
+
+                rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_CAPA_KEY),
+                                        KEY_CAPA_KEY, sizeof(*key), key, NULL);
+                if (rc) {
+                        DEBUG_CAPA_KEY(D_ERROR, key,
+                                       "propagate failed (rc = %d) for", rc);
+                        RETURN(rc);
+                }
+        }
+
+        RETURN(0);
+}
+
 /* We only sync one osc at a time, so that we don't have to hold
    any kind of lock on the whole mds_lov_desc, which may change
    (grow) as a result of mds_lov_add_ost.  This also avoids any
@@ -663,6 +685,11 @@ static int __mds_lov_synchronize(void *data)
         rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
                                 KEY_MDS_CONN, sizeof(mgi), &mgi, NULL);
         if (rc != 0)
+                GOTO(out, rc);
+
+        /* propagate capability keys */
+        rc = mds_propagate_capa_keys(mds);
+        if (rc)
                 GOTO(out, rc);
 
         rc = llog_connect(llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT),

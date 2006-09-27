@@ -1,0 +1,184 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Copyright (C) 2005 Cluster File Systems, Inc.
+ *
+ * Author: Lai Siyao <lsy@clusterfs.com>
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ */
+
+#define DEBUG_SUBSYSTEM S_FILTER
+
+#include <linux/fs.h>
+#include <linux/version.h>
+#include <asm/uaccess.h>
+#include <linux/file.h>
+#include <linux/kmod.h>
+
+#include <lustre_fsfilt.h>
+#include <lustre_capa.h>
+
+#include "filter_internal.h"
+
+static inline __u32 filter_ck_keyid(struct filter_capa_key *key)
+{
+        return key->k_key.lk_keyid;
+}
+
+int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key)
+{
+        struct filter_obd *filter = &obd->u.filter;
+        struct filter_capa_key *k, *rkey = NULL, *bkey = NULL;
+
+        spin_lock(&capa_lock);
+        list_for_each_entry(k, &filter->fo_capa_keys, k_list) {
+                if (k->k_key.lk_mdsid != key->lk_mdsid)
+                        continue;
+
+                if (rkey)
+                        bkey = k;
+                else
+                        rkey = k;
+        }
+        spin_unlock(&capa_lock);
+
+        if (rkey && bkey && filter_ck_keyid(rkey) < filter_ck_keyid(bkey)) {
+                k = rkey;
+                rkey = bkey;
+                bkey = k;
+        }
+
+        if (bkey) {
+                k = bkey;
+        } else {
+                OBD_ALLOC_PTR(k);
+                if (!k)
+                        RETURN(-ENOMEM);
+                INIT_LIST_HEAD(&k->k_list);
+        }
+
+        spin_lock(&capa_lock);
+        k->k_key = *key;
+        if (list_empty(&k->k_list))
+                list_add(&k->k_list, &filter->fo_capa_keys);
+        spin_unlock(&capa_lock);
+
+        DEBUG_CAPA_KEY(D_SEC, key, "new");
+        RETURN(0);
+}
+
+int filter_verify_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
+                       struct lustre_capa *capa, __u64 opc)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct filter_obd *filter = &obd->u.filter;
+        struct filter_capa_key *k;
+        struct lustre_capa_key key;
+        struct obd_capa *c;
+        __u8 *hmac;
+        int keys_ready = 0, key_found = 0, rc = 0;
+        ENTRY;
+
+        /* capability is disabled */
+        if (!filter->fo_fl_oss_capa)
+                RETURN(0);
+
+        if (capa == NULL) {
+                CERROR("no capa has been passed\n");
+                RETURN(-EACCES);
+        }
+
+#warning "enable fid check in filter_verify_capa when fid ready"
+
+        if (!capa_opc_supported(capa, opc)) {
+                DEBUG_CAPA(D_ERROR, capa, "opc "LPX64" not supported by", opc);
+                RETURN(-EACCES);
+        }
+
+        c = capa_lookup(capa);
+        if (c) {
+                spin_lock(&c->c_lock);
+                if (memcmp(&c->c_capa, capa, sizeof(*capa))) {
+                        DEBUG_CAPA(D_ERROR, capa, "HMAC mismatch");
+                        rc = -EACCES;
+                } else if (capa_is_expired(c)) {
+                        DEBUG_CAPA(D_ERROR, capa, "expired");
+                        rc = -ESTALE;
+                }
+                spin_unlock(&c->c_lock);
+
+                capa_put(c);
+                RETURN(rc);
+        }
+
+        spin_lock(&capa_lock);
+        list_for_each_entry(k, &filter->fo_capa_keys, k_list)
+                if (k->k_key.lk_mdsid == mdsid) {
+                        keys_ready = 1;
+                        if (k->k_key.lk_keyid == capa_keyid(capa)) {
+                                key = k->k_key;
+                                key_found = 1;
+                                break;
+                        }
+                }
+        spin_unlock(&capa_lock);
+
+        if (!keys_ready) {
+                CDEBUG(D_SEC, "MDS hasn't propagated capability keys yet, "
+                       "ignore check!\n");
+                RETURN(0);
+        }
+
+       if (!key_found) {
+                DEBUG_CAPA(D_ERROR, capa, "no matched capability key for");
+                RETURN(-ESTALE);
+        }
+
+        OBD_ALLOC(hmac, CAPA_HMAC_MAX_LEN);
+        if (hmac == NULL)
+                RETURN(-ENOMEM);
+
+        rc = capa_hmac(hmac, capa, key.lk_key);
+        if (rc) {
+                DEBUG_CAPA(D_ERROR, capa, "HMAC failed: rc %d", rc);
+                OBD_FREE(hmac, CAPA_HMAC_MAX_LEN);
+                RETURN(rc);
+        }
+
+        rc = memcmp(hmac, capa->lc_hmac, CAPA_HMAC_MAX_LEN);
+        OBD_FREE(hmac, CAPA_HMAC_MAX_LEN);
+        if (rc) {
+                DEBUG_CAPA(D_ERROR, capa, "HMAC mismatch");
+                RETURN(-EACCES);
+        }
+
+        /* store in capa hash */
+        capa_add(capa);
+        RETURN(0);
+}
+
+void filter_free_capa_keys(struct filter_obd *filter)
+{
+        struct filter_capa_key *key, *n;
+
+        spin_lock(&capa_lock);
+        list_for_each_entry_safe(key, n, &filter->fo_capa_keys, k_list) {
+                list_del_init(&key->k_list);
+                OBD_FREE(key, sizeof(*key));
+        }
+        spin_unlock(&capa_lock);
+}

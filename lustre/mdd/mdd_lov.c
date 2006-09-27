@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/mds/mds_lov.c
+ *  lustre/mdd/mdd_lov.c
  *  Lustre Metadata Server (mds) handling of striped file data
  *
  *  Copyright (C) 2001-2006 Cluster File Systems, Inc.

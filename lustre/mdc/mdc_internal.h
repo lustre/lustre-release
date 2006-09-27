@@ -29,13 +29,16 @@
 
 void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
                        __u64 valid, const struct lu_fid *fid,
-                       int ea_size, int flags);
+                       struct obd_capa *oc, int ea_size, int flags);
+void mdc_pack_capa(struct ptlrpc_request *req, int offset, struct obd_capa *oc);
 void mdc_pack_rep_body(struct ptlrpc_request *);
 void mdc_is_subdir_pack(struct ptlrpc_request *req, int offset,
-                        const struct lu_fid *pfid,
-                        const struct lu_fid *cfid, int flags);
+                        const struct lu_fid *pfid, const struct lu_fid *cfid,
+                        struct obd_capa *pc, struct obd_capa *cc,
+                        int flags);
 void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
-		      __u32 size, const struct lu_fid *fid);
+		      __u32 size, const struct lu_fid *fid,
+                      struct obd_capa *oc);
 void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
                       int flags, struct md_op_data *data);
 void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
@@ -139,25 +142,6 @@ int mdc_enqueue(struct obd_export *exp,
 int mdc_init_ea_size(struct obd_export *exp, int easize, int def_easzie,
                      int cookiesize);
 
-int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid);
-int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
-                obd_valid valid, int ea_size,
-                struct ptlrpc_request **request);
-int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
-                     const char *filename, int namelen, obd_valid valid,
-                     int ea_size, struct ptlrpc_request **request);
-int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
-                void *ea, int ealen, void *ea2, int ea2len,
-                struct ptlrpc_request **request);
-int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,
-                 obd_valid valid, const char *xattr_name,
-                 const char *input, int input_size,
-                 int output_size, int flags,
-                 struct ptlrpc_request **request);
-int mdc_getxattr(struct obd_export *exp, const struct lu_fid *fid,
-                 obd_valid valid, const char *xattr_name,
-                 const char *input, int input_size,
-                 int output_size, int flags, struct ptlrpc_request **request);
 int mdc_open(struct obd_export *exp, obd_id ino, int type, int flags,
              struct lov_mds_md *lmm, int lmm_size, struct lustre_handle *fh,
              struct ptlrpc_request **);
@@ -178,42 +162,23 @@ int mdc_set_open_replay_data(struct obd_export *exp,
 int mdc_clear_open_replay_data(struct obd_export *exp,
                                struct obd_client_handle *och);
 
-int mdc_close(struct obd_export *, struct md_op_data *,
-              struct obd_client_handle *och, struct ptlrpc_request **);
-
-int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
-                 __u64 offset,  struct page *, struct ptlrpc_request **);
-
 int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
-               const void *data, int datalen, int mode, __u32 uid,
-               __u32 gid, __u32 cap_effective, __u64 rdev,
-               struct ptlrpc_request **request);
-
-int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
-               struct ptlrpc_request **request);
-
+               const void *data, int datalen, int mode, __u32 uid, __u32 gid,
+               __u32 cap_effective, __u64 rdev, struct ptlrpc_request **request);
 int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
-             struct ptlrpc_request **);
-
+             struct ptlrpc_request **request);
 int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
                const char *old, int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request);
-
-int mdc_is_subdir(struct obd_export *exp, const struct lu_fid *pfid,
-                  const struct lu_fid *cfid, struct ptlrpc_request **request);
-
-int mdc_sync(struct obd_export *exp, const struct lu_fid *fid,
-             struct ptlrpc_request **);
-
+int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
+                void *ea, int ealen, void *ea2, int ea2len,
+                struct ptlrpc_request **request);
+int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
+               struct ptlrpc_request **request);
+int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
+                      int flags, void *opaque);
 int mdc_lock_match(struct obd_export *exp, int flags,
                    const struct lu_fid *fid, ldlm_type_t type,
                    ldlm_policy_data_t *policy, ldlm_mode_t mode,
                    struct lustre_handle *lockh);
-
-int mdc_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
-                      int flags, void *opaque);
-
-int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
-                     struct obd_client_handle *och);
-
 #endif

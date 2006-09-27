@@ -133,9 +133,11 @@ struct mdt_device {
          * Options bit-fields.
          */
         struct {
-                signed int         mo_user_xattr :1;
-                signed int         mo_acl        :1;
-                signed int         mo_compat_resname:1;
+                signed int         mo_user_xattr :1,
+                                   mo_acl        :1,
+                                   mo_compat_resname:1,
+                                   mo_mds_capa   :1,
+                                   mo_oss_capa   :1;
         } mdt_opts;
 
         /* lock to pretect epoch and write count */
@@ -168,6 +170,16 @@ struct mdt_device {
         /* root squash */
         struct rootsquash_info     *mdt_rootsquash_info;
         int                        no_gss_support;
+
+        /* capability */
+        __u32                      mdt_capa_alg;
+        unsigned long              mdt_capa_timeout;
+        unsigned long              mdt_ck_timeout;
+        struct dt_object          *mdt_ck_obj;
+        unsigned long              mdt_ck_expiry;
+        struct timer_list          mdt_ck_timer;
+        struct ptlrpc_thread       mdt_ck_thread;
+        struct lustre_capa_key     mdt_capa_keys[2];
 };
 
 /*XXX copied from mds_internal.h */
@@ -209,6 +221,8 @@ struct mdt_reint_record {
         int                  rr_logcookielen;
         const struct llog_cookie  *rr_logcookies;
         __u32                rr_flags;
+        struct lustre_capa  *rr_capa1;
+        struct lustre_capa  *rr_capa2;
 };
 
 enum mdt_reint_flag {
@@ -316,6 +330,7 @@ struct mdt_thread_info {
         struct mdt_client_data     mti_mcd;
         loff_t                     mti_off;
         struct txn_param           mti_txn_param;
+        struct lustre_capa_key     mti_capa_key;
 };
 /*
  * Info allocated per-transaction.
@@ -380,11 +395,13 @@ void mdt_object_unlock(struct mdt_thread_info *,
 
 struct mdt_object *mdt_object_find(const struct lu_context *,
                                    struct mdt_device *,
-                                   const struct lu_fid *);
+                                   const struct lu_fid *,
+                                   struct lustre_capa *);
 struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *,
                                         const struct lu_fid *,
                                         struct mdt_lock_handle *,
-                                        __u64);
+                                        __u64 ibits,
+                                        struct lustre_capa *);
 void mdt_object_unlock_put(struct mdt_thread_info *,
                            struct mdt_object *,
                            struct mdt_lock_handle *,
@@ -443,10 +460,21 @@ int mdt_close(struct mdt_thread_info *info);
 int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, 
                  int flags);
 int mdt_done_writing(struct mdt_thread_info *info);
-void mdt_shrink_reply(struct mdt_thread_info *info, int offset);
+void mdt_shrink_reply(struct mdt_thread_info *info, int offset,
+                      int mdscapa, int osscapa);
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
                            const struct md_attr *);
 void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
+struct thandle* mdt_trans_start(const struct lu_context *ctx,
+                                struct mdt_device *mdt, int credits);
+void mdt_trans_stop(const struct lu_context *ctx,
+                    struct mdt_device *mdt, struct thandle *th);
+int mdt_record_write(const struct lu_context *ctx,
+                     struct dt_object *dt, const void *buf,
+                     size_t count, loff_t *pos, struct thandle *th);
+int mdt_record_read(const struct lu_context *ctx,
+                    struct dt_object *dt, void *buf,
+                    size_t count, loff_t *pos);
 
 void mdt_dump_lmm(int level, const struct lov_mds_md *lmm);
 
@@ -545,6 +573,19 @@ do {                                                                         \
                 RETURN(ret);                                                 \
         }                                                                    \
 } while(0)
+
+/*
+ * fid Capability
+ */
+int mdt_ck_thread_start(struct mdt_device *mdt);
+void mdt_ck_thread_stop(struct mdt_device *mdt);
+void mdt_ck_timer_callback(unsigned long castmeharder);
+int mdt_capa_keys_init(const struct lu_context *ctx, struct mdt_device *mdt);
+
+static inline struct lustre_capa_key *red_capa_key(struct mdt_device *mdt)
+{
+        return &mdt->mdt_capa_keys[1];
+}
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

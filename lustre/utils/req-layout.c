@@ -52,6 +52,8 @@
 #define lustre_swab_mdt_rec_rename NULL
 #define lustre_swab_mdt_rec_create NULL
 #define lustre_swab_mdt_rec_setattr NULL
+#define lustre_swab_lustre_capa NULL
+#define lustre_swab_lustre_capa_key NULL
 
 /*
  * Yes, include .c file.

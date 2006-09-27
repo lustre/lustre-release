@@ -147,6 +147,31 @@ static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
         RETURN(lsm_size);
 }
 
+static inline void osc_pack_capa(struct ptlrpc_request *req, int offset,
+                                 struct ost_body *body, void *capa)
+{
+        struct obd_capa *oc = (struct obd_capa *)capa;
+        struct lustre_capa *c;
+
+        if (!capa)
+                return;
+
+        c = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*c));
+        capa_cpy(c, oc);
+        body->oa.o_valid |= OBD_MD_FLOSSCAPA;
+        DEBUG_CAPA(D_SEC, c, "pack");
+}
+
+static inline void osc_pack_req_body(struct ptlrpc_request *req, int offset,
+                                     struct obd_info *oinfo)
+{
+        struct ost_body *body;
+
+        body = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*body));
+        body->oa = *oinfo->oi_oa;
+        osc_pack_capa(req, offset + 1, body, oinfo->oi_capa);
+}
+
 static int osc_getattr_interpret(struct ptlrpc_request *req,
                                  struct osc_async_args *aa, int rc)
 {
@@ -180,17 +205,17 @@ static int osc_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         struct osc_async_args *aa;
         ENTRY;
 
+        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(*oinfo->oi_capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_GETATTR, 2, size,NULL);
+                              OST_GETATTR, 3, size,NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
+        osc_pack_req_body(req, REQ_REC_OFF, oinfo);
 
         ptlrpc_req_set_repsize(req, 2, size);
         req->rq_interpret_reply = osc_getattr_interpret;
@@ -207,16 +232,16 @@ static int osc_getattr(struct obd_export *exp, struct obd_info *oinfo)
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
+        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(*oinfo->oi_capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_GETATTR, 2, size, NULL);
+                              OST_GETATTR, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
+        osc_pack_req_body(req, REQ_REC_OFF, oinfo);
 
         ptlrpc_req_set_repsize(req, 2, size);
 
@@ -251,18 +276,18 @@ static int osc_setattr(struct obd_export *exp, struct obd_info *oinfo,
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         LASSERT(!(oinfo->oi_oa->o_valid & OBD_MD_FLGROUP) || 
                                         oinfo->oi_oa->o_gr > 0);
+        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(*oinfo->oi_capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_SETATTR, 2, size, NULL);
+                              OST_SETATTR, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
+        osc_pack_req_body(req, REQ_REC_OFF, oinfo);
 
         ptlrpc_req_set_repsize(req, 2, size);
 
@@ -311,24 +336,25 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         struct osc_async_args *aa;
         ENTRY;
 
+        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(*oinfo->oi_capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_SETATTR, 2, size, NULL);
+                              OST_SETATTR, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-
+        osc_pack_req_body(req, REQ_REC_OFF, oinfo);
         if (oinfo->oi_oa->o_valid & OBD_MD_FLCOOKIE) {
                 LASSERT(oti);
+                body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF,
+                                      sizeof(*body));
                 memcpy(obdo_logcookie(oinfo->oi_oa), oti->oti_logcookies,
                        sizeof(*oti->oti_logcookies));
         }
 
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
         ptlrpc_req_set_repsize(req, 2, size);
         /* do mds to ost setattr asynchronouly */
         if (!rqset) {
@@ -353,7 +379,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
         struct ptlrpc_request *req;
         struct ost_body *body;
         struct lov_stripe_md *lsm;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         LASSERT(oa);
@@ -366,13 +392,14 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                         RETURN(rc);
         }
 
+        /* FIXME: how to find one OSS WRITE capability? */
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_CREATE, 2, size, NULL);
+                              OST_CREATE, 3, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oa, sizeof(body->oa));
+        body->oa = *oa;
 
         ptlrpc_req_set_repsize(req, 2, size);
         if (oa->o_valid & OBD_MD_FLINLINE) {
@@ -460,7 +487,8 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
         struct ptlrpc_request *req;
         struct osc_async_args *aa;
         struct ost_body *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        struct lustre_capa *capa = oinfo->oi_capa;
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         if (!oinfo->oi_oa) {
@@ -468,8 +496,9 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(-EINVAL);
         }
 
+        size[REQ_REC_OFF + 1] = capa ? sizeof(*capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_PUNCH, 2, size, NULL);
+                              OST_PUNCH, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -478,13 +507,21 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
             OBD_CONNECT_REQPORTAL)
                 req->rq_request_portal = OST_IO_PORTAL;
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oinfo->oi_oa, sizeof(*oinfo->oi_oa));
-
+        osc_pack_req_body(req, REQ_REC_OFF, oinfo);
         /* overload the size and blocks fields in the oa with start/end */
+        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
         body->oa.o_size = oinfo->oi_policy.l_extent.start;
         body->oa.o_blocks = oinfo->oi_policy.l_extent.end;
         body->oa.o_valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
+
+        if (capa) {
+                struct lustre_capa *c;
+
+                c = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1, sizeof(*c));
+                /* setattr_raw is protected by i_sem, no need to lock here */
+                *c = *capa;
+                body->oa.o_valid |= OBD_MD_FLOSSCAPA;
+        }
 
         ptlrpc_req_set_repsize(req, 2, size);
 
@@ -498,11 +535,12 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
 }
 
 static int osc_sync(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *md, obd_size start, obd_size end)
+                    struct lov_stripe_md *md, obd_size start, obd_size end,
+                    void *capa)
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         if (!oa) {
@@ -510,18 +548,22 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
+        if (capa)
+                size[REQ_REC_OFF + 1] = sizeof(struct lustre_capa);
+
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_SYNC, 2, size, NULL);
+                              OST_SYNC, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        memcpy(&body->oa, oa, sizeof(*oa));
-
         /* overload the size and blocks fields in the oa with start/end */
+        body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
+        body->oa = *oa;
         body->oa.o_size = start;
         body->oa.o_blocks = end;
         body->oa.o_valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
+
+        osc_pack_capa(req, REQ_REC_OFF + 1, body, capa);
 
         ptlrpc_req_set_repsize(req, 2, size);
 
@@ -556,11 +598,11 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
  * cookies to the MDS after committing destroy transactions. */
 static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                       struct obd_export *md_export)
+                       struct obd_export *md_export, void *capa)
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         if (!oa) {
@@ -568,8 +610,10 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
+        if (capa)
+                size[REQ_REC_OFF + 1] = sizeof(struct lustre_capa);
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_DESTROY, 2, size, NULL);
+                              OST_DESTROY, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -579,13 +623,13 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 req->rq_request_portal = OST_IO_PORTAL;
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-
-        if (oti != NULL && oa->o_valid & OBD_MD_FLCOOKIE) {
+        body->oa = *oa;
+        if (oti != NULL && oa->o_valid & OBD_MD_FLCOOKIE)
                 memcpy(obdo_logcookie(oa), oti->oti_logcookies,
                        sizeof(*oti->oti_logcookies));
-        }
 
-        memcpy(&body->oa, oa, sizeof(*oa));
+        osc_pack_capa(req, REQ_REC_OFF + 1, body, capa);
+
         ptlrpc_req_set_repsize(req, 2, size);
 
         ptlrpcd_add_req(req);
@@ -818,7 +862,8 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
 static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                                 struct lov_stripe_md *lsm, obd_count page_count,
                                 struct brw_page **pga, int *requested_nobp,
-                                int *niocountp, struct ptlrpc_request **reqp)
+                                int *niocountp, struct ptlrpc_request **reqp,
+                                struct obd_capa *ocapa)
 {
         struct ptlrpc_request   *req;
         struct ptlrpc_bulk_desc *desc;
@@ -826,9 +871,10 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         struct ost_body         *body;
         struct obd_ioobj        *ioobj;
         struct niobuf_remote    *niobuf;
-        int size[4] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int size[5] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int niocount, i, requested_nob, opc, rc;
         struct ptlrpc_request_pool *pool;
+        struct lustre_capa      *capa;
 
         ENTRY;
         opc = ((cmd & OBD_BRW_WRITE) != 0) ? OST_WRITE : OST_READ;
@@ -841,9 +887,11 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
 
         size[REQ_REC_OFF + 1] = sizeof(*ioobj);
         size[REQ_REC_OFF + 2] = niocount * sizeof(*niobuf);
+        if (ocapa)
+                size[REQ_REC_OFF + 3] = sizeof(*capa);
 
         OBD_FAIL_RETURN(OBD_FAIL_OSC_BRW_PREP_REQ, -ENOMEM);
-        req = ptlrpc_prep_req_pool(imp, LUSTRE_OST_VERSION, opc, 4, size, NULL,
+        req = ptlrpc_prep_req_pool(imp, LUSTRE_OST_VERSION, opc, 5, size, NULL,
                                    pool, NULL);
         if (req == NULL)
                 RETURN (-ENOMEM);
@@ -867,10 +915,16 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
         niobuf = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2,
                                 niocount * sizeof(*niobuf));
 
-        memcpy(&body->oa, oa, sizeof(*oa));
+        body->oa = *oa;
 
         obdo_to_ioobj(oa, ioobj);
         ioobj->ioo_bufcnt = niocount;
+        if (ocapa) {
+                capa = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 3,
+                                      sizeof(*capa));
+                capa_cpy(capa, ocapa);
+                body->oa.o_valid |= OBD_MD_FLOSSCAPA;
+        }
 
         LASSERT (page_count > 0);
         for (requested_nob = i = 0; i < page_count; i++, niobuf++) {
@@ -1094,7 +1148,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
 
 static int osc_brw_internal(int cmd, struct obd_export *exp,struct obdo *oa,
                             struct lov_stripe_md *lsm,
-                            obd_count page_count, struct brw_page **pga)
+                            obd_count page_count, struct brw_page **pga,
+                            struct obd_capa *ocapa)
 {
         int                    requested_nob;
         int                    niocount;
@@ -1105,7 +1160,7 @@ static int osc_brw_internal(int cmd, struct obd_export *exp,struct obdo *oa,
 restart_bulk:
         rc = osc_brw_prep_request(cmd, class_exp2cliimp(exp), oa, lsm,
                                   page_count, pga, &requested_nob, &niocount,
-                                  &req);
+                                  &req, ocapa);
         if (rc != 0)
                 return (rc);
 
@@ -1142,7 +1197,8 @@ static int brw_interpret(struct ptlrpc_request *req,
 
 static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
                           struct lov_stripe_md *lsm, obd_count page_count,
-                          struct brw_page **pga, struct ptlrpc_request_set *set)
+                          struct brw_page **pga, struct ptlrpc_request_set *set,
+                          struct obd_capa *ocapa)
 {
         struct ptlrpc_request     *req;
         int                        requested_nob;
@@ -1164,7 +1220,7 @@ static int async_internal(int cmd, struct obd_export *exp, struct obdo *oa,
 
         rc = osc_brw_prep_request(cmd, class_exp2cliimp(exp), oa, lsm,
                                   page_count, pga, &requested_nob, &nio_count,
-                                  &req);
+                                  &req, ocapa);
 
         if (rc == 0) {
                 LASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
@@ -1308,7 +1364,7 @@ static int osc_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
                 }
 
                 rc = osc_brw_internal(cmd, exp, oinfo->oi_oa, oinfo->oi_md,
-                                      pages_per_brw, ppga);
+                                      pages_per_brw, ppga, oinfo->oi_capa);
 
                 if (rc != 0)
                         break;
@@ -1374,7 +1430,7 @@ static int osc_brw_async(int cmd, struct obd_export *exp,
                         copy = ppga;
 
                 rc = async_internal(cmd, exp, oinfo->oi_oa, oinfo->oi_md,
-                                    pages_per_brw, copy, set);
+                                    pages_per_brw, copy, set, oinfo->oi_capa);
 
                 if (rc != 0)
                         break;
@@ -1675,6 +1731,7 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         struct obd_async_page_ops *ops = NULL;
         void *caller_data = NULL;
         struct list_head *pos;
+        struct obd_capa *ocapa;
         int i, rc;
 
         ENTRY;
@@ -1710,10 +1767,12 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         /* always get the data for the obdo for the rpc */
         LASSERT(ops != NULL);
         ops->ap_fill_obdo(caller_data, cmd, oa);
+        ocapa = ops->ap_lookup_capa(caller_data, cmd);
 
         sort_brw_pages(pga, page_count);
         rc = osc_brw_prep_request(cmd, cli->cl_import, oa, NULL, page_count,
-                                  pga, &requested_nob, &nio_count, &req);
+                                  pga, &requested_nob, &nio_count, &req, ocapa);
+        capa_put(ocapa);
         if (rc != 0) {
                 CERROR("prep_req failed: %d\n", rc);
                 GOTO(out, req = ERR_PTR(rc));
@@ -2682,12 +2741,12 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
 
  no_match:
         if (intent) {
-                int size[3] = {
+                int size[2] = {
                         [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                         [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request) };
 
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, 2, size, NULL);
+                                      LDLM_ENQUEUE, 3, size, NULL);
                 if (req == NULL)
                         RETURN(-ENOMEM);
 

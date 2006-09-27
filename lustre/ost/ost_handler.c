@@ -80,6 +80,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                        struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
+        struct lustre_capa *capa;
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
@@ -97,7 +98,9 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        req->rq_status = obd_destroy(exp, &body->oa, NULL, oti, NULL);
+        if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
+                capa = lustre_unpack_capa(req->rq_repmsg, REQ_REC_OFF + 1);
+        req->rq_status = obd_destroy(exp, &body->oa, NULL, oti, NULL, capa);
         RETURN(0);
 }
 
@@ -119,9 +122,12 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
-        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
+        repbody->oa = body->oa;
 
         oinfo.oi_oa = &repbody->oa;
+        if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
+                oinfo.oi_capa = lustre_unpack_capa(req->rq_repmsg,
+                                                   REQ_REC_OFF + 1);
         req->rq_status = obd_getattr(exp, &oinfo);
         RETURN(0);
 }
@@ -278,6 +284,9 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                          */
                         oinfo.oi_oa->o_valid &= ~OBD_MD_FLFLAGS;
 
+                if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
+                        oinfo.oi_capa = lustre_unpack_capa(req->rq_repmsg,
+                                                           REQ_REC_OFF + 1);
                 req->rq_status = obd_punch(exp, &oinfo, oti, NULL);
                 ost_punch_lock_put(exp, oinfo.oi_oa, &lh);
         }
@@ -287,6 +296,7 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
 static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
 {
         struct ost_body *body, *repbody;
+        struct lustre_capa *capa = NULL;
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*repbody) };
         ENTRY;
 
@@ -294,6 +304,9 @@ static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
                                   lustre_swab_ost_body);
         if (body == NULL)
                 RETURN(-EFAULT);
+
+        if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
+                capa = lustre_unpack_capa(req->rq_reqmsg, REQ_REC_OFF + 1);
 
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
@@ -303,7 +316,7 @@ static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         req->rq_status = obd_sync(exp, &repbody->oa, NULL, repbody->oa.o_size,
-                                  repbody->oa.o_blocks);
+                                  repbody->oa.o_blocks, capa);
         RETURN(0);
 }
 
@@ -326,9 +339,12 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
 
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
-        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
+        repbody->oa = body->oa;
 
         oinfo.oi_oa = &repbody->oa;
+        if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
+                oinfo.oi_capa = lustre_unpack_capa(req->rq_repmsg,
+                                                   REQ_REC_OFF + 1);
         req->rq_status = obd_setattr(exp, &oinfo, oti);
         RETURN(0);
 }
@@ -622,6 +638,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct niobuf_local *local_nb;
         struct obd_ioobj *ioo;
         struct ost_body *body, *repbody;
+        struct lustre_capa *capa = NULL;
         struct l_wait_info lwi;
         struct lustre_handle lockh = { 0 };
         int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
@@ -669,6 +686,9 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         lustre_swab_niobuf_remote (&remote_nb[i]);
         }
 
+        if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
+                capa = lustre_unpack_capa(req->rq_reqmsg, REQ_REC_OFF + 3);
+
         rc = lustre_pack_reply(req, 2, size, NULL);
         if (rc)
                 GOTO(out, rc);
@@ -700,7 +720,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out_bulk, rc);
 
         rc = obd_preprw(OBD_BRW_READ, req->rq_export, &body->oa, 1,
-                        ioo, npages, pp_rnb, local_nb, oti);
+                        ioo, npages, pp_rnb, local_nb, oti, capa);
         if (rc != 0)
                 GOTO(out_lock, rc);
 
@@ -839,6 +859,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         struct ost_body         *body, *repbody;
         struct l_wait_info       lwi;
         struct lustre_handle     lockh = {0};
+        struct lustre_capa      *capa = NULL;
         __u32                   *rcs;
         int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int objcount, niocount, npages, comms_error = 0;
@@ -905,6 +926,9 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         lustre_swab_niobuf_remote (&remote_nb[i]);
         }
 
+        if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
+                capa = lustre_unpack_capa(req->rq_reqmsg, REQ_REC_OFF + 3);
+
         size[REPLY_REC_OFF + 1] = niocount * sizeof(*rcs);
         rc = lustre_pack_reply(req, 3, size, NULL);
         if (rc != 0)
@@ -944,7 +968,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         do_checksum = (body->oa.o_valid & OBD_MD_FLCKSUM);
 
         rc = obd_preprw(OBD_BRW_WRITE, req->rq_export, &body->oa, objcount,
-                        ioo, npages, pp_rnb, local_nb, oti);
+                        ioo, npages, pp_rnb, local_nb, oti, capa);
         if (rc != 0)
                 GOTO(out_lock, rc);
 

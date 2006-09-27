@@ -102,7 +102,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
         offset = page->index << PAGE_SHIFT;
-        rc = md_readpage(sbi->ll_md_exp, &lli->lli_fid,
+        rc = md_readpage(sbi->ll_md_exp, &lli->lli_fid, NULL,
                          offset, page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF,

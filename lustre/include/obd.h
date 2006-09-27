@@ -33,6 +33,7 @@
 #include <lustre_export.h>
 #include <lustre_quota.h>
 #include <lustre_fld.h>
+#include <lustre_capa.h>
 
 #define MAX_OBD_DEVICES 8192
 
@@ -168,7 +169,10 @@ struct obd_info {
          * level. E.g. it is used for update lsm->lsm_oinfo at every recieved
          * request in osc level for enqueue requests. It is also possible to
          * update some caller data from LOV layer if needed. */
-        obd_enqueue_update_f     oi_cb_up;
+        obd_enqueue_update_f    oi_cb_up;
+        /* oss capability, its type is obd_capa in client to avoid copy.
+         * in contrary its type is lustre_capa in OSS. */
+        void                   *oi_capa;
 };
 
 /* compare all relevant fields. */
@@ -223,6 +227,7 @@ struct obd_async_page_ops {
         void (*ap_update_obdo)(void *data, int cmd, struct obdo *oa,
                                obd_valid valid);
         int  (*ap_completion)(void *data, int cmd, struct obdo *oa, int rc);
+        struct obd_capa *(*ap_lookup_capa)(void *data, int cmd);
 };
 
 /* the `oig' is passed down from a caller of obd rw methods.  the callee
@@ -397,6 +402,10 @@ struct filter_obd {
 
         int                      fo_fmd_max_num; /* per exp filter_mod_data */
         int                      fo_fmd_max_age; /* jiffies to fmd expiry */
+
+        /* capability related */
+        unsigned int             fo_fl_oss_capa;
+        struct list_head         fo_capa_keys;
 };
 
 #define OSC_MAX_RIF_DEFAULT       8
@@ -563,6 +572,7 @@ struct mds_obd {
                                          mds_fl_user_xattr:1,
                                          mds_fl_acl:1;
 
+
         /* For CMD add mds_num */
         int                              mds_num;
 
@@ -571,6 +581,9 @@ struct mds_obd {
 
         /* root squash */
         struct rootsquash_info          *mds_rootsquash_info;
+
+        /* for capability keys update */
+        struct lustre_capa_key          *mds_capa_keys;
 };
 
 struct echo_obd {
@@ -953,6 +966,7 @@ enum obd_cleanup_stage {
 #define KEY_INIT_RECOV          "initial_recov"
 #define KEY_INIT_RECOV_BACKUP   "init_recov_bk"
 #define KEY_FLUSH_CTX           "flush_ctx"
+#define KEY_CAPA_KEY            "capa_key"
 
 struct lu_context;
 
@@ -1014,7 +1028,7 @@ struct obd_ops {
                         struct lov_stripe_md **ea, struct obd_trans_info *oti);
         int (*o_destroy)(struct obd_export *exp, struct obdo *oa,
                          struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                         struct obd_export *md_exp);
+                         struct obd_export *md_exp, void *capa);
         int (*o_setattr)(struct obd_export *exp, struct obd_info *oinfo,
                          struct obd_trans_info *oti);
         int (*o_setattr_async)(struct obd_export *exp, struct obd_info *oinfo,
@@ -1066,7 +1080,8 @@ struct obd_ops {
                        struct obd_trans_info *oti,
                        struct ptlrpc_request_set *rqset);
         int (*o_sync)(struct obd_export *exp, struct obdo *oa,
-                      struct lov_stripe_md *ea, obd_size start, obd_size end);
+                      struct lov_stripe_md *ea, obd_size start, obd_size end,
+                      void *capa);
         int (*o_migrate)(struct lustre_handle *conn, struct lov_stripe_md *dst,
                          struct lov_stripe_md *src, obd_size start,
                          obd_size end, struct obd_trans_info *oti);
@@ -1079,7 +1094,8 @@ struct obd_ops {
         int (*o_preprw)(int cmd, struct obd_export *exp, struct obdo *oa,
                         int objcount, struct obd_ioobj *obj,
                         int niocount, struct niobuf_remote *remote,
-                        struct niobuf_local *local, struct obd_trans_info *oti);
+                        struct niobuf_local *local, struct obd_trans_info *oti,
+                        struct lustre_capa *capa);
         int (*o_commitrw)(int cmd, struct obd_export *exp, struct obdo *oa,
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf_local *local,
@@ -1111,7 +1127,7 @@ struct obd_ops {
         
         /* metadata-only methods */
         int (*o_pin)(struct obd_export *, const struct lu_fid *fid,
-                     struct obd_client_handle *, int flag);
+                     struct obd_capa *, struct obd_client_handle *, int flag);
         int (*o_unpin)(struct obd_export *, struct obd_client_handle *, int);
 
         int (*o_import_event)(struct obd_device *, struct obd_import *,
@@ -1134,7 +1150,8 @@ struct obd_ops {
 };
 
 struct md_ops {
-        int (*m_getstatus)(struct obd_export *, struct lu_fid *);
+        int (*m_getstatus)(struct obd_export *, struct lu_fid *,
+                           struct obd_capa **);
         int (*m_change_cbdata)(struct obd_export *, const struct lu_fid *,
                                ldlm_iterator_t, void *);
         int (*m_close)(struct obd_export *, struct md_op_data *,
@@ -1149,9 +1166,10 @@ struct md_ops {
                          void *, int, ldlm_completion_callback,
                          ldlm_blocking_callback, void *, int);
         int (*m_getattr)(struct obd_export *, const struct lu_fid *,
-                         obd_valid, int, struct ptlrpc_request **);
+                         struct obd_capa *, obd_valid, int,
+                         struct ptlrpc_request **);
         int (*m_getattr_name)(struct obd_export *, const struct lu_fid *,
-                              const char *, int, obd_valid,
+                              struct obd_capa *, const char *, int, obd_valid,
                               int, struct ptlrpc_request **);
         int (*m_intent_lock)(struct obd_export *, struct md_op_data *,
                              void *, int, struct lookup_intent *, int,
@@ -1163,24 +1181,29 @@ struct md_ops {
                         const char *, int, const char *, int,
                         struct ptlrpc_request **);
         int (*m_is_subdir)(struct obd_export *, const struct lu_fid *,
-                           const struct lu_fid *, struct ptlrpc_request **);
+                           const struct lu_fid *,
+                           struct obd_capa *, struct obd_capa *,
+                           struct ptlrpc_request **);
         int (*m_setattr)(struct obd_export *, struct md_op_data *, void *,
                          int , void *, int, struct ptlrpc_request **);
         int (*m_sync)(struct obd_export *, const struct lu_fid *,
-                      struct ptlrpc_request **);
+                      struct obd_capa *, struct ptlrpc_request **);
         int (*m_readpage)(struct obd_export *, const struct lu_fid *,
-                          __u64, struct page *, struct ptlrpc_request **);
+                          struct obd_capa *, __u64, struct page *,
+                          struct ptlrpc_request **);
 
         int (*m_unlink)(struct obd_export *, struct md_op_data *,
                         struct ptlrpc_request **);
 
         int (*m_setxattr)(struct obd_export *, const struct lu_fid *,
-                          obd_valid, const char *, const char *,
-                          int, int, int, struct ptlrpc_request **);
+                          struct obd_capa *, obd_valid, const char *,
+                          const char *, int, int, int,
+                          struct ptlrpc_request **);
 
         int (*m_getxattr)(struct obd_export *, const struct lu_fid *,
-                          obd_valid, const char *, const char *,
-                          int, int, int, struct ptlrpc_request **);
+                          struct obd_capa *, obd_valid, const char *,
+                          const char *, int, int, int,
+                          struct ptlrpc_request **);
 
         int (*m_init_ea_size)(struct obd_export *, int, int, int);
 
@@ -1203,9 +1226,11 @@ struct md_ops {
 
         int (*m_cancel_unused)(struct obd_export *, const struct lu_fid *,
                                int flags, void *opaque);
+        int (*m_renew_capa)(struct obd_export *, struct obd_capa *oc,
+                            renew_capa_cb_t cb);
 
         int (*m_get_remote_perm)(struct obd_export *, const struct lu_fid *,
-                                 struct ptlrpc_request **);
+                                 struct obd_capa *, struct ptlrpc_request **);
 
         /*
          * NOTE: If adding ops, add another LPROCFS_MD_OP_INIT() line to
@@ -1278,6 +1303,16 @@ static inline void init_obd_quota_ops(quota_interface_t *interface,
         LASSERT(obd_ops);
         obd_ops->o_quotacheck = QUOTA_OP(interface, check);
         obd_ops->o_quotactl = QUOTA_OP(interface, ctl);
+}
+
+static inline __u64 oinfo_mdsno(struct obd_info *oinfo)
+{
+        return oinfo->oi_oa->o_gr - FILTER_GROUP_MDS0;
+}
+
+static inline struct lustre_capa *oinfo_capa(struct obd_info *oinfo)
+{
+        return oinfo->oi_capa;
 }
 
 #endif /* __OBD_H */

@@ -65,7 +65,7 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct obd_info oinfo = { { { 0 } } };
         struct brw_page pg;
-        int rc;
+        int opc, rc;
         ENTRY;
 
         pg.pg = page;
@@ -96,7 +96,12 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
                                     LPROC_LL_BRW_READ, pg.count);
         oinfo.oi_oa = oa;
         oinfo.oi_md = lsm;
+        /* NB partial write, so we might not have CAPA_OPC_OSS_READ capa */
+        opc = cmd & OBD_BRW_WRITE ? CAPA_OPC_OSS_WRITE :
+                                    CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ;
+        oinfo.oi_capa = ll_lookup_oss_capa(inode, opc);
         rc = obd_brw(cmd, ll_i2dtexp(inode), &oinfo, 1, &pg, NULL);
+        capa_put(oinfo.oi_capa);
         if (rc == 0)
                 obdo_to_inode(inode, oa, OBD_MD_FLBLOCKS);
         else if (rc != -EIO)
@@ -182,7 +187,9 @@ void ll_truncate(struct inode *inode)
 
         ll_inode_size_unlock(inode, 0);
 
+        oinfo.oi_capa = ll_lookup_oss_capa(inode, CAPA_OPC_OSS_TRUNC);
         rc = obd_punch_rqset(ll_i2dtexp(inode), &oinfo, NULL);
+        ll_truncate_free_capa(oinfo.oi_capa);
         if (rc)
                 CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
         else
@@ -403,12 +410,22 @@ static void ll_ap_update_obdo(void *data, int cmd, struct obdo *oa,
         EXIT;
 }
 
+static struct obd_capa *ll_ap_lookup_capa(void *data, int cmd)
+{
+        struct ll_async_page *llap = LLAP_FROM_COOKIE(data);
+        int opc = cmd & OBD_BRW_WRITE ? CAPA_OPC_OSS_WRITE :
+                                        CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ;
+
+        return ll_lookup_oss_capa(llap->llap_page->mapping->host, opc);
+}
+
 static struct obd_async_page_ops ll_async_page_ops = {
         .ap_make_ready =        ll_ap_make_ready,
         .ap_refresh_count =     ll_ap_refresh_count,
         .ap_fill_obdo =         ll_ap_fill_obdo,
         .ap_update_obdo =       ll_ap_update_obdo,
         .ap_completion =        ll_ap_completion,
+        .ap_lookup_capa =       ll_ap_lookup_capa,
 };
 
 struct ll_async_page *llap_cast_private(struct page *page)

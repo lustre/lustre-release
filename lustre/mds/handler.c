@@ -1006,7 +1006,8 @@ static int mds_getattr(struct ptlrpc_request *req, int offset)
                 GOTO(out_pop, rc);
         }
 
-        req->rq_status = mds_getattr_internal(obd, de, req, body,REPLY_REC_OFF);
+        req->rq_status = mds_getattr_internal(obd, de, req, body,
+                                              REPLY_REC_OFF);
 
         l_dput(de);
         GOTO(out_pop, rc);
@@ -2614,7 +2615,6 @@ static int mdt_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_thread3, rc);
 
         ping_evictor_start();
-
         RETURN(0);
 
 err_thread3:

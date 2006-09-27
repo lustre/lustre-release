@@ -141,8 +141,9 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct file *file,
 {
         struct brw_page *pga;
         struct obdo oa;
-        int i, rc = 0;
+        int opc, i, rc = 0;
         size_t length;
+        struct obd_capa *ocapa;
         ENTRY;
 
         OBD_ALLOC(pga, sizeof(*pga) * page_count);
@@ -166,13 +167,18 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct file *file,
         if (rw == WRITE) {
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_WRITE, size);
+                opc = CAPA_OPC_OSS_WRITE;
                 llap_write_pending(inode, NULL);
         } else {
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_READ, size);
+                opc = CAPA_OPC_OSS_READ | CAPA_OPC_OSS_WRITE;
         }
+        ocapa = ll_lookup_oss_capa(inode, opc);
         rc = obd_brw_rqset(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2dtexp(inode), &oa, lsm, page_count, pga, NULL);
+                           ll_i2dtexp(inode), &oa, lsm, page_count, pga, NULL,
+                           ocapa);
+        capa_put(ocapa);
         if (rc == 0) {
                 rc = size;
                 if (rw == WRITE) {

@@ -337,6 +337,15 @@ static int cml_readpage(const struct lu_context *ctxt, struct md_object *mo,
         RETURN(rc);
 }
 
+static int cml_capa_get(const struct lu_context *ctxt, struct md_object *mo,
+                        struct lustre_capa *capa)
+{
+        int rc;
+        ENTRY;
+        rc = mo_capa_get(ctxt, md_object_next(mo), capa);
+        RETURN(rc);
+}
+
 static struct md_object_operations cml_mo_ops = {
         .moo_permission    = cml_permission,
         .moo_attr_get      = cml_attr_get,
@@ -351,7 +360,8 @@ static struct md_object_operations cml_mo_ops = {
         .moo_open          = cml_open,
         .moo_close         = cml_close,
         .moo_readpage      = cml_readpage,
-        .moo_readlink      = cml_readlink
+        .moo_readlink      = cml_readlink,
+        .moo_capa_get      = cml_capa_get
 };
 
 /* md_dir operations */
@@ -422,14 +432,14 @@ static int cml_unlink(const struct lu_context *ctx, struct md_object *mo_p,
 
 /* rename is split to local/remote by location of new parent dir */
 struct md_object *md_object_find(const struct lu_context *ctx,
-                                  struct md_device *md,
-                                  const struct lu_fid *f)
+                                 struct md_device *md,
+                                 const struct lu_fid *f)
 {
         struct lu_object *o;
         struct md_object *m;
         ENTRY;
 
-        o = lu_object_find(ctx, md2lu_dev(md)->ld_site, f);
+        o = lu_object_find(ctx, md2lu_dev(md)->ld_site, f, BYPASS_CAPA);
         if (IS_ERR(o))
                 m = (struct md_object *)o;
         else {
@@ -724,6 +734,12 @@ static int cmr_readpage(const struct lu_context *ctxt, struct md_object *mo,
         RETURN(-EREMOTE);
 }
 
+static int cmr_capa_get(const struct lu_context *ctxt, struct md_object *mo,
+                        struct lustre_capa *capa)
+{
+        RETURN(-EFAULT);
+}
+
 static struct md_object_operations cmr_mo_ops = {
         .moo_permission    = cmr_permission,
         .moo_attr_get      = cmr_attr_get,
@@ -738,7 +754,8 @@ static struct md_object_operations cmr_mo_ops = {
         .moo_open          = cmr_open,
         .moo_close         = cmr_close,
         .moo_readpage      = cmr_readpage,
-        .moo_readlink      = cmr_readlink
+        .moo_readlink      = cmr_readlink,
+        .moo_capa_get      = cmr_capa_get
 };
 
 /* remote part of md_dir operations */

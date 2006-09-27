@@ -2229,3 +2229,19 @@ void debug_req(cfs_debug_limit_state_t *cdls,
                req->rq_repmsg ? lustre_msg_get_status(req->rq_repmsg) : 0);
 }
 EXPORT_SYMBOL(debug_req);
+
+void lustre_swab_lustre_capa(struct lustre_capa *c)
+{
+        lustre_swab_lu_fid(&c->lc_fid);
+        __swab64s (&c->lc_opc);
+        __swab32s (&c->lc_flags);
+        __swab32s (&c->lc_keyid);
+        __swab64s (&c->lc_expiry);
+}
+
+void lustre_swab_lustre_capa_key (struct lustre_capa_key *k)
+{
+        __swab64s (&k->lk_mdsid);
+        __swab32s (&k->lk_keyid);
+        __swab32s (&k->lk_padding);
+}

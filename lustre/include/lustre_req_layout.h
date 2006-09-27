@@ -112,6 +112,7 @@ extern const struct req_format RQF_MDS_READPAGE;
 extern const struct req_format RQF_MDS_WRITEPAGE;
 extern const struct req_format RQF_MDS_IS_SUBDIR;
 extern const struct req_format RQF_MDS_DONE_WRITING;
+extern const struct req_format RQF_MDS_RENEW_CAPA;
 
 /*
  * This is format of direct (non-intent) MDS_GETATTR_NAME request.
@@ -159,6 +160,8 @@ extern const struct req_msg_field RMF_EADATA;
 extern const struct req_msg_field RMF_ACL;
 extern const struct req_msg_field RMF_LOGCOOKIES;
 extern const struct req_msg_field RMF_REINT_OPC;
+extern const struct req_msg_field RMF_CAPA1;
+extern const struct req_msg_field RMF_CAPA2;
 
 /* seq-mgr fields */
 extern const struct req_msg_field RMF_SEQ_OPC;

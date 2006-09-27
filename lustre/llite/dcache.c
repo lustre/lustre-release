@@ -616,6 +616,7 @@ do_lookup:
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_dentry_data *ldd = ll_d2d(de);
         struct obd_client_handle *handle;
+        struct obd_capa *oc;
         int rc = 0;
         ENTRY;
         LASSERT(ldd);
@@ -639,9 +640,9 @@ do_lookup:
         unlock_kernel();
 
         handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
-        rc = obd_pin(sbi->ll_md_exp, &ll_i2info(inode)->lli_fid,
-                     handle, flag);
-
+        oc = ll_i2mdscapa(inode);
+        rc = obd_pin(sbi->ll_md_exp, ll_inode2fid(inode), oc, handle, flag);
+        capa_put(oc);
         if (rc) {
                 lock_kernel();
                 memset(handle, 0, sizeof(*handle));

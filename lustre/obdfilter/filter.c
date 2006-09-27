@@ -1263,6 +1263,8 @@ static void filter_post(struct obd_device *obd)
         filter_cleanup_groups(obd);
         filter_free_server_data(filter);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+        filter_free_capa_keys(filter);
 }
 
 static void filter_set_last_id(struct filter_obd *filter,
@@ -1926,6 +1928,9 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
                               label ?: "", label ? "/" : "", str,
                               obd->obd_replayable ? "enabled" : "disabled");
         }
+
+        filter->fo_fl_oss_capa = 0;
+        INIT_LIST_HEAD(&filter->fo_capa_keys);
 
         RETURN(0);
 
@@ -2716,6 +2721,11 @@ static int filter_getattr(struct obd_export *exp, struct obd_info *oinfo)
         int rc = 0;
         ENTRY;
 
+        rc = filter_verify_capa(exp, NULL, oinfo_mdsno(oinfo),
+                                oinfo_capa(oinfo), CAPA_OPC_META_READ);
+        if (rc)
+                RETURN(rc);
+
         obd = class_exp2obd(exp);
         if (obd == NULL) {
                 CDEBUG(D_IOCTL, "invalid client export %p\n", exp);
@@ -2919,6 +2929,11 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
         int rc;
         ENTRY;
 
+        rc = filter_verify_capa(exp, NULL, oinfo_mdsno(oinfo),
+                                oinfo_capa(oinfo), CAPA_OPC_META_WRITE);
+        if (rc)
+                RETURN(rc);
+
         dentry = __filter_oa2dentry(exp->exp_obd, oinfo->oi_oa,
                                     __FUNCTION__, 1);
         if (IS_ERR(dentry))
@@ -3047,7 +3062,7 @@ static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
                exp->exp_obd->obd_name, oa->o_id + 1, last);
         for (id = last; id > oa->o_id; id--) {
                 doa.o_id = id;
-                rc = filter_destroy(exp, &doa, NULL, NULL, NULL);
+                rc = filter_destroy(exp, &doa, NULL, NULL, NULL, NULL);
                 if (rc && rc != -ENOENT) /* this is pretty fatal... */
                         CEMERG("error destroying precreate objid "LPU64": %d\n",
                                id, rc);
@@ -3419,7 +3434,7 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
 
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md *md, struct obd_trans_info *oti,
-                   struct obd_export *md_exp)
+                   struct obd_export *md_exp, void *capa)
 {
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         struct obd_device *obd;
@@ -3433,6 +3448,15 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         ENTRY;
 
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+
+#if 0   /* some places don't support capability yet */
+        rc = filter_verify_capa(exp, NULL, obdo_mdsno(oa),
+                                (struct lustre_capa *)capa,
+                                CAPA_OPC_INDEX_LOOKUP);
+        if (rc)
+                RETURN(rc);
+#endif
+
 #if 0
         if (!(oa->o_valid & OBD_MD_FLGROUP))
                 oa->o_gr = 0;
@@ -3580,13 +3604,19 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
                ", o_size = "LPD64"\n", oinfo->oi_oa->o_id,
                oinfo->oi_oa->o_valid, oinfo->oi_policy.l_extent.start);
 
+        rc = filter_verify_capa(exp, NULL, oinfo_mdsno(oinfo),
+                                oinfo_capa(oinfo), CAPA_OPC_OSS_TRUNC);
+        if (rc)
+                RETURN(rc);
+
         oinfo->oi_oa->o_size = oinfo->oi_policy.l_extent.start;
         rc = filter_setattr(exp, oinfo, oti);
         RETURN(rc);
 }
 
 static int filter_sync(struct obd_export *exp, struct obdo *oa,
-                       struct lov_stripe_md *lsm, obd_off start, obd_off end)
+                       struct lov_stripe_md *lsm, obd_off start, obd_off end,
+                       void *capa)
 {
         struct lvfs_run_ctxt saved;
         struct filter_obd *filter;
@@ -3594,6 +3624,11 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         struct llog_ctxt *ctxt;
         int rc, rc2;
         ENTRY;
+
+        rc = filter_verify_capa(exp, NULL, obdo_mdsno(oa),
+                                (struct lustre_capa *)capa, CAPA_OPC_OSS_WRITE);
+        if (rc)
+                RETURN(rc);
 
         filter = &exp->exp_obd->u.filter;
 
@@ -3689,6 +3724,13 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         if (obd == NULL) {
                 CDEBUG(D_IOCTL, "invalid export %p\n", exp);
                 RETURN(-EINVAL);
+        }
+
+        if (KEY_IS(KEY_CAPA_KEY)) {
+                rc = filter_update_capa_key(obd, (struct lustre_capa_key *)val);
+                if (rc)
+                        CERROR("filter update capability key failed: %d\n", rc);
+                RETURN(rc);
         }
 
         if (keylen < strlen(KEY_MDS_CONN) ||

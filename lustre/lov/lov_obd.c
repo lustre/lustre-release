@@ -1031,7 +1031,7 @@ do {                                                                            
 
 static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *lsm, struct obd_trans_info *oti,
-                       struct obd_export *md_exp)
+                       struct obd_export *md_exp, void *capa)
 {
         struct lov_request_set *set;
         struct obd_info oinfo;
@@ -1064,7 +1064,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                         oti->oti_logcookies = set->set_cookies + req->rq_stripe;
 
                 err = obd_destroy(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                  req->rq_oi.oi_oa, NULL, oti, NULL);
+                                  req->rq_oi.oi_oa, NULL, oti, NULL, capa);
                 err = lov_update_common_set(set, req, err);
                 if (err) {
                         CERROR("error: destroying objid "LPX64" subobj "
@@ -1400,7 +1400,8 @@ static int lov_punch(struct obd_export *exp, struct obd_info *oinfo,
 }
 
 static int lov_sync(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *lsm, obd_off start, obd_off end)
+                    struct lov_stripe_md *lsm, obd_off start, obd_off end,
+                    void *capa)
 {
         struct lov_request_set *set;
         struct obd_info oinfo;
@@ -1426,7 +1427,7 @@ static int lov_sync(struct obd_export *exp, struct obdo *oa,
                 rc = obd_sync(lov->lov_tgts[req->rq_idx]->ltd_exp, 
                               req->rq_oi.oi_oa, NULL, 
                               req->rq_oi.oi_policy.l_extent.start,
-                              req->rq_oi.oi_policy.l_extent.end);
+                              req->rq_oi.oi_policy.l_extent.end, capa);
                 err = lov_update_common_set(set, req, rc);
                 if (err) {
                         CERROR("error: fsync objid "LPX64" subobj "LPX64
@@ -1626,12 +1627,20 @@ static int lov_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         return rc;
 }
 
+static struct obd_capa *lov_ap_lookup_capa(void *data, int cmd)
+{
+        struct lov_async_page *lap = LAP_FROM_COOKIE(data);
+
+        return lap->lap_caller_ops->ap_lookup_capa(lap->lap_caller_data, cmd);
+}
+
 static struct obd_async_page_ops lov_async_page_ops = {
         .ap_make_ready =        lov_ap_make_ready,
         .ap_refresh_count =     lov_ap_refresh_count,
         .ap_fill_obdo =         lov_ap_fill_obdo,
         .ap_update_obdo =       lov_ap_update_obdo,
         .ap_completion =        lov_ap_completion,
+        .ap_lookup_capa =       lov_ap_lookup_capa,
 };
 
 int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
@@ -2391,7 +2400,7 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
                 GOTO(out, rc);
         }
 
-        if (KEY_IS("evict_by_nid")) {
+        if (KEY_IS("evict_by_nid") || KEY_IS(KEY_CAPA_KEY)) {
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         /* OST was disconnected or is inactive */
                         if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active)

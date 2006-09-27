@@ -735,7 +735,7 @@ out_pop:
 
 int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                    struct obd_export *md_exp)
+                    struct obd_export *md_exp, void *unused)
 {
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;

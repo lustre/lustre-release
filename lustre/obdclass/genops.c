@@ -518,6 +518,11 @@ void obd_cleanup_caches(void)
                 LASSERTF(rc == 0, "Cannot destory ll_import_cache\n");
                 import_cachep = NULL;
         }
+        if (capa_cachep) {
+                rc = cfs_mem_cache_destroy(capa_cachep);
+                LASSERTF(rc == 0, "Cannot destory capa_cache\n");
+                capa_cachep = NULL;
+        }
         EXIT;
 }
 
@@ -542,6 +547,12 @@ int obd_init_caches(void)
                                           sizeof(struct obd_import),
                                           0, 0);
         if (!import_cachep)
+                GOTO(out, -ENOMEM);
+
+        LASSERT(capa_cachep == NULL);
+        capa_cachep = cfs_mem_cache_create("capa_cache",
+                                           sizeof(struct obd_capa), 0, 0);
+        if (!capa_cachep)
                 GOTO(out, -ENOMEM);
 
         RETURN(0);

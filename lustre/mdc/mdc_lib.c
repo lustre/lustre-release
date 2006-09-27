@@ -38,35 +38,6 @@
 #endif
 #endif
 
-void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
-                      __u32 size, const struct lu_fid *fid)
-{
-        struct mdt_body *b;
-
-        b = lustre_msg_buf(req->rq_reqmsg, pos, sizeof(*b));
-        b->fsuid = current->fsuid;
-        b->fsgid = current->fsgid;
-        b->capability = current->cap_effective;
-        b->fid1 = *fid;
-        b->size = offset;                       /* !! */
-        b->suppgid = -1;
-        b->nlink = size;                        /* !! */
-}
-
-void mdc_is_subdir_pack(struct ptlrpc_request *req, int offset,
-                        const struct lu_fid *pfid,
-                        const struct lu_fid *cfid, int flags)
-{
-        struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
-
-        if (pfid)
-                b->fid1 = *pfid;
-        if (cfid)
-                b->fid2 = *cfid;
-        b->valid = OBD_MD_FLID;
-        b->flags = flags;
-}
-
 static void mdc_pack_body(struct mdt_body *b)
 {
         LASSERT (b != NULL);
@@ -76,18 +47,70 @@ static void mdc_pack_body(struct mdt_body *b)
         b->capability = current->cap_effective;
 }
 
-void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
-                       __u64 valid, const struct lu_fid *fid,
-                       int ea_size, int flags)
+void mdc_pack_capa(struct ptlrpc_request *req, int offset, struct obd_capa *oc)
+{
+        struct lustre_capa *c;
+
+        if (!oc) {
+                LASSERT(lustre_msg_buflen(req->rq_reqmsg, offset) == 0);
+                return;
+        }
+
+        c = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*c));
+        LASSERT(c);
+        capa_cpy(c, oc);
+        DEBUG_CAPA(D_SEC, c, "pack");
+}
+
+void mdc_is_subdir_pack(struct ptlrpc_request *req, int offset,
+                        const struct lu_fid *pfid,
+                        const struct lu_fid *cfid,
+                        struct obd_capa *pc,
+                        struct obd_capa *cc, int flags)
 {
         struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
 
-        if (fid)
-                b->fid1 = *fid;
+        if (pfid) {
+                b->fid1 = *pfid;
+                mdc_pack_capa(req, offset + 1, pc);
+        }
+        if (cfid) {
+                b->fid2 = *cfid;
+                mdc_pack_capa(req, offset + 2, cc);
+        }
+        b->valid = OBD_MD_FLID;
+        b->flags = flags;
+}
+
+void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
+                       __u64 valid, const struct lu_fid *fid,
+                       struct obd_capa *oc, int ea_size, int flags)
+{
+        struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+
         b->valid = valid;
         b->eadatasize = ea_size;
         b->flags = flags;
         mdc_pack_body(b);
+        if (fid) {
+                b->fid1 = *fid;
+                mdc_pack_capa(req, offset + 1, oc);
+        }
+}
+
+void mdc_readdir_pack(struct ptlrpc_request *req, int offset, __u64 pgoff,
+                      __u32 size, const struct lu_fid *fid,
+                      struct obd_capa *oc)
+{
+        struct mdt_body *b;
+
+        b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
+        b->fid1 = *fid;
+        b->size = pgoff;                       /* !! */
+        b->suppgid = -1;
+        b->nlink = size;                        /* !! */
+        mdc_pack_body(b);
+        mdc_pack_capa(req, offset + 1, oc);
 }
 
 /* packing of MDS records */
@@ -111,12 +134,14 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
         rec->cr_time = op_data->mod_time;
         rec->cr_suppgid = op_data->suppgids[0];
         rec->cr_flags = op_data->flags;
-        
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
+
+        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->namelen + 1);
         LOGL0(op_data->name, op_data->namelen, tmp);
 
         if (data) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, datalen);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, datalen);
                 memcpy (tmp, data, datalen);
         }
 }
@@ -176,8 +201,12 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_time = op_data->mod_time;
         rec->cr_suppgid = op_data->suppgids[0];
 
+        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+        /* the next buffer is child capa, which is used for replay,
+         * will be packed from the data in reply message. */
+
         if (op_data->name) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3,
                                      op_data->namelen + 1);
                 LOGL0(op_data->name, op_data->namelen, tmp);
         }
@@ -188,7 +217,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
                 /*XXX a hack for liblustre to set EA (LL_IOC_LOV_SETSTRIPE) */
                 rec->cr_fid2 = op_data->fid2;
 #endif
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, lmmlen);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 4, lmmlen);
                 memcpy (tmp, lmm, lmmlen);
         }
 }
@@ -237,8 +266,10 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));        
         mdc_setattr_pack_rec(rec, op_data);
 
+        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+
         if (op_data->flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN)) {
-                epoch = lustre_msg_buf(req->rq_reqmsg, offset + 1,
+                epoch = lustre_msg_buf(req->rq_reqmsg, offset + 2,
                                         sizeof(*epoch));
                 mdc_epoch_pack(epoch, op_data);
         }
@@ -246,12 +277,12 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
         if (ealen == 0)
                 return;
 
-        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 2, ealen), ea, ealen);
+        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 3, ealen), ea, ealen);
 
         if (ea2len == 0)
                 return;
 
-        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 3, ea2len), ea2, ea2len);
+        memcpy(lustre_msg_buf(req->rq_reqmsg, offset + 4, ea2len), ea2, ea2len);
 }
 
 void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
@@ -273,7 +304,9 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         rec->ul_fid2 = op_data->fid2;
         rec->ul_time = op_data->mod_time;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
+        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->namelen + 1);
         LASSERT (tmp != NULL);
         LOGL0(op_data->name, op_data->namelen, tmp);
 }
@@ -296,7 +329,10 @@ void mdc_link_pack(struct ptlrpc_request *req, int offset,
         rec->lk_fid2 = op_data->fid2;
         rec->lk_time = op_data->mod_time;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
+        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+        mdc_pack_capa(req, offset + 2, op_data->mod_capa2);
+
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, op_data->namelen + 1);
         LOGL0(op_data->name, op_data->namelen, tmp);
 }
 
@@ -321,11 +357,14 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_time = op_data->mod_time;
         rec->rn_mode = op_data->create_mode;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, oldlen + 1);
+        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+        mdc_pack_capa(req, offset + 2, op_data->mod_capa2);
+
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, oldlen + 1);
         LOGL0(old, oldlen, tmp);
 
         if (new) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, newlen + 1);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 4, newlen + 1);
                 LOGL0(new, newlen, tmp);
         }
 }
@@ -345,9 +384,12 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
 
         b->fid1 = op_data->fid1;
         b->fid2 = op_data->fid2;
+
+        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+
         if (op_data->name) {
                 char *tmp;
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1,
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2,
                                      op_data->namelen + 1);
                 LOGL0(op_data->name, op_data->namelen, tmp);
         }
@@ -363,6 +405,7 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset + 1, sizeof(*rec));
 
         mdc_setattr_pack_rec(rec, op_data);
+        mdc_pack_capa(req, offset + 2, op_data->mod_capa1);
         mdc_epoch_pack(epoch, op_data);
 }
 

@@ -240,7 +240,7 @@ static int echo_create_object(struct obd_device *obd, int on_target,
                         oa->o_id, on_target ? " (undoing create)" : "");
 
                 if (on_target)
-                        obd_destroy(ec->ec_exp, oa, lsm, oti, NULL);
+                        obd_destroy(ec->ec_exp, oa, lsm, oti, NULL, NULL);
 
                 rc = -EEXIST;
                 goto failed;
@@ -945,7 +945,8 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                 ioo.ioo_bufcnt = npages;
                 oti->oti_transno = 0;
 
-                ret = obd_preprw(rw, exp, oa, 1, &ioo, npages, rnb, lnb, oti);
+                ret = obd_preprw(rw, exp, oa, 1, &ioo, npages, rnb, lnb, oti,
+                                 NULL);
                 if (ret != 0)
                         GOTO(out, ret);
 
@@ -1233,7 +1234,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                         oa->o_gr = FILTER_GROUP_ECHO;
                         oa->o_valid |= OBD_MD_FLGROUP;
                         rc = obd_destroy(ec->ec_exp, oa, eco->eco_lsm,
-                                         &dummy_oti, NULL);
+                                         &dummy_oti, NULL, NULL);
                         if (rc == 0)
                                 eco->eco_deleted = 1;
                         echo_put_object(eco);

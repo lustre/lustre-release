@@ -162,7 +162,7 @@ static struct dt_object *dt_locate(const struct lu_context *ctx,
         struct lu_object *obj;
         struct dt_object *dt;
 
-        obj = lu_object_find(ctx, dev->dd_lu_dev.ld_site, fid);
+        obj = lu_object_find(ctx, dev->dd_lu_dev.ld_site, fid, BYPASS_CAPA);
         if (!IS_ERR(obj)) {
                 obj = lu_object_locate(obj->lo_header, dev->dd_lu_dev.ld_type);
                 LASSERT(obj != NULL);
@@ -185,6 +185,7 @@ struct dt_object *dt_store_open(const struct lu_context *ctx,
         if (result == 0) {
                 root = dt_locate(ctx, dt, fid);
                 if (!IS_ERR(root)) {
+                        lu_object_bypass_capa(&root->do_lu);
                         result = dt_lookup(ctx, root, name, fid);
                         if (result == 0)
                                 child = dt_locate(ctx, dt, fid);

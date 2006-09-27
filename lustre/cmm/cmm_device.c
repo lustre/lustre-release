@@ -85,10 +85,37 @@ static int cmm_maxsize_get(const struct lu_context *ctxt, struct md_device *md,
         RETURN(rc);
 }
 
+static int cmm_init_capa_keys(struct md_device *md,
+                              struct lustre_capa_key *keys)
+{
+        struct cmm_device *cmm_dev = md2cmm_dev(md);
+        int rc;
+        ENTRY;
+        LASSERT(cmm_child_ops(cmm_dev)->mdo_init_capa_keys);
+        rc = cmm_child_ops(cmm_dev)->mdo_init_capa_keys(cmm_dev->cmm_child,
+                                                        keys);
+        RETURN(rc);
+}
+
+static int cmm_update_capa_key(const struct lu_context *ctxt,
+                               struct md_device *md,
+                               struct lustre_capa_key *key)
+{
+        struct cmm_device *cmm_dev = md2cmm_dev(md);
+        int rc;
+        ENTRY;
+        rc = cmm_child_ops(cmm_dev)->mdo_update_capa_key(ctxt,
+                                                         cmm_dev->cmm_child,
+                                                         key);
+        RETURN(rc);
+}
+
 static struct md_device_operations cmm_md_ops = {
         .mdo_statfs         = cmm_statfs,
         .mdo_root_get       = cmm_root_get,
         .mdo_maxsize_get    = cmm_maxsize_get,
+        .mdo_init_capa_keys = cmm_init_capa_keys,
+        .mdo_update_capa_key= cmm_update_capa_key,
 };
 
 extern struct lu_device_type mdc_device_type;
@@ -295,7 +322,6 @@ static void cmm_device_free(const struct lu_context *ctx, struct lu_device *d)
 {
         struct cmm_device *m = lu2cmm_dev(d);
 
-	LASSERT(atomic_read(&d->ld_ref) == 0);
         LASSERT(m->cmm_tgt_count == 0);
         LASSERT(list_empty(&m->cmm_targets));
 	md_device_fini(&m->cmm_md_dev);

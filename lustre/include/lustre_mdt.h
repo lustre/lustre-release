@@ -58,8 +58,4 @@ struct mdt_idmap_table {
                                    [MDT_IDMAP_HASHSIZE];
 };
 
-/* remote perm */
-extern int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
-                               struct ptlrpc_request **request);
-
 #endif

@@ -194,6 +194,8 @@ struct md_object_operations {
                          struct md_object *obj,
                          struct md_attr *ma,
                          struct md_ucred *uc);
+        int (*moo_capa_get)(const struct lu_context *, struct md_object *,
+                            struct lustre_capa *);
 };
 
 /*
@@ -290,6 +292,13 @@ struct md_device_operations {
                           struct md_device *m,
                           struct kstatfs *sfs,
                           struct md_ucred *uc);
+
+        int (*mdo_init_capa_keys)(struct md_device *m,
+                                  struct lustre_capa_key *keys);
+
+        int (*mdo_update_capa_key)(const struct lu_context *ctx,
+                                   struct md_device *m,
+                                   struct lustre_capa_key *key);
 };
 
 enum md_upcall_event {
@@ -491,6 +500,14 @@ static inline int mo_ref_del(const struct lu_context *cx,
 {
         LASSERT(m->mo_ops->moo_ref_del);
         return m->mo_ops->moo_ref_del(cx, m, ma, uc);
+}
+
+static inline int mo_capa_get(const struct lu_context *cx,
+                              struct md_object *m,
+                              struct lustre_capa *c)
+{
+        LASSERT(m->mo_ops->moo_capa_get);
+        return m->mo_ops->moo_capa_get(cx, m, c);
 }
 
 static inline int mdo_lookup(const struct lu_context *cx,

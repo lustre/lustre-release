@@ -135,6 +135,11 @@ struct ll_inode_info {
         /* identifying fields for both metadata and data stacks. */
         struct lu_fid           lli_fid;
         struct lov_stripe_md   *lli_smd;
+
+        /* fid capability */
+        struct obd_capa        *lli_mds_capa;
+        /* oss capability list */
+        struct list_head        lli_oss_capas;
 };
 
 /*
@@ -218,13 +223,15 @@ struct ll_rw_process_info {
 };
 
 /* flags for sbi->ll_flags */
-#define LL_SBI_NOLCK            0x01 /* DLM locking disabled (directio-only) */
-#define LL_SBI_CHECKSUM         0x02 /* checksum each page as it's written */
-#define LL_SBI_FLOCK            0x04
-#define LL_SBI_USER_XATTR       0x08 /* support user xattr */
-#define LL_SBI_ACL              0x10 /* support ACL */
-#define LL_SBI_JOIN             0x20 /* support JOIN */
-#define LL_SBI_RMT_CLIENT       0x40 /* remote client */
+#define LL_SBI_NOLCK             0x01 /* DLM locking disabled (directio-only) */
+#define LL_SBI_CHECKSUM          0x02 /* checksum each page as it's written */
+#define LL_SBI_FLOCK             0x04
+#define LL_SBI_USER_XATTR        0x08 /* support user xattr */
+#define LL_SBI_ACL               0x10 /* support ACL */
+#define LL_SBI_JOIN              0x20 /* support JOIN */
+#define LL_SBI_RMT_CLIENT        0x40 /* remote client */
+#define LL_SBI_MDS_CAPA          0x80 /* support mds capa */
+#define LL_SBI_OSS_CAPA         0x100 /* support oss capa */
 
 struct ll_sb_info {
         struct list_head          ll_list;
@@ -451,9 +458,6 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 struct dentry *ll_find_alias(struct inode *, struct dentry *);
 int ll_md_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                        void *data, int flag);
-void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
-                           struct inode *i2, const char *name, int namelen,
-                           int mode);
 int ll_md_cancel_unused(struct lustre_handle *, struct inode *, int flags,
                         void *opaque);
 #ifndef LUSTRE_KERNEL_VERSION
@@ -569,6 +573,10 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 int ll_process_config(struct lustre_cfg *lcfg);
 int ll_ioctl_getfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc);
 int ll_ioctl_setfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc);
+void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
+                           struct inode *i2, const char *name, int namelen,
+                           int mode);
+void ll_finish_md_op_data(struct md_op_data *op_data);
 
 /* llite/llite_nfs.c */
 extern struct export_operations lustre_export_operations;
@@ -730,5 +738,20 @@ int ll_fid_dt_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
                     struct lu_placement_hint *hint);
 
 ino_t ll_fid_build_ino(struct ll_sb_info *sbi, struct lu_fid *fid);
+
+/* llite/llite_capa.c */
+extern cfs_timer_t ll_capa_timer;
+
+int ll_capa_thread_start(void);
+void ll_capa_thread_stop(void);
+void ll_capa_timer_callback(unsigned long unused);
+struct obd_capa *ll_lookup_oss_capa(struct inode *inode, __u64 opc);
+struct obd_capa *ll_add_capa(struct inode *inode, struct obd_capa *ocapa);
+void ll_oss_capa_open(struct inode *inode, struct file *file);
+void ll_oss_capa_close(struct inode *inode, struct file *file);
+int ll_update_capa(struct obd_capa *ocapa, struct lustre_capa *capa);
+void ll_truncate_free_capa(struct obd_capa *ocapa);
+void ll_clear_inode_capas(struct inode *inode);
+struct obd_capa *ll_i2mdscapa(struct inode *inode);
 
 #endif /* LLITE_INTERNAL_H */

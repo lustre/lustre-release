@@ -638,7 +638,6 @@ static void osd_ro(const struct lu_context *ctx, struct dt_device *d)
         EXIT;
 }
 
-
 static struct dt_device_operations osd_dt_ops = {
         .dt_root_get    = osd_root_get,
         .dt_statfs      = osd_statfs,
@@ -704,13 +703,25 @@ static void osd_object_write_unlock(const struct lu_context *ctx,
         up_write(&obj->oo_sem);
 }
 
-static int osd_attr_get(const struct lu_context *ctxt, struct dt_object *dt,
+static inline int osd_object_auth(const struct lu_context *ctx,
+                                  const struct lu_object *o,
+                                  __u64 opc)
+{
+        return o->lo_ops->loo_object_auth(ctx, o, lu_object_capa(o), opc);
+}
+
+static int osd_attr_get(const struct lu_context *ctxt,
+                        struct dt_object *dt,
                         struct lu_attr *attr)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
         LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
+
+        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_READ))
+                return -EACCES;
 
         return osd_inode_getattr(ctxt, obj->oo_inode, attr);
 }
@@ -725,6 +736,9 @@ static int osd_attr_set(const struct lu_context *ctxt,
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
         LASSERT(osd_write_locked(ctxt, obj));
+
+        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_WRITE))
+                return -EACCES;
 
         return osd_inode_setattr(ctxt, obj->oo_inode, attr);
 }
@@ -985,6 +999,8 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
         /*
          * XXX missing: permission checks.
          */
+        if (osd_object_auth(ctx, &dt->do_lu, CAPA_OPC_INDEX_INSERT))
+                RETURN(-EACCES);
 
         /*
          * XXX missing: sanity checks (valid ->la_mode, etc.)
@@ -1030,6 +1046,12 @@ static void osd_object_ref_add(const struct lu_context *ctxt,
         LASSERT(osd_write_locked(ctxt, obj));
         LASSERT(th != NULL);
 
+        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_WRITE)) {
+                LU_OBJECT_DEBUG(D_ERROR, ctxt, &dt->do_lu,
+                                "no capability to link!\n");
+                return;
+        }
+
         if (inode->i_nlink < LDISKFS_LINK_MAX) {
                 inode->i_nlink ++;
                 mark_inode_dirty(inode);
@@ -1049,6 +1071,12 @@ static void osd_object_ref_del(const struct lu_context *ctxt,
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_write_locked(ctxt, obj));
         LASSERT(th != NULL);
+
+        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_WRITE)) {
+                LU_OBJECT_DEBUG(D_ERROR, ctxt, &dt->do_lu,
+                                "no capability to unlink!\n");
+                return;
+        }
 
         if (inode->i_nlink > 0) {
                 inode->i_nlink --;
@@ -1071,6 +1099,9 @@ static int osd_xattr_get(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(inode->i_op != NULL && inode->i_op->getxattr != NULL);
         LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
 
+        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_READ))
+                return -EACCES;
+
         dentry->d_inode = inode;
         return inode->i_op->getxattr(dentry, name, buf, size);
 }
@@ -1090,6 +1121,9 @@ static int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(inode->i_op != NULL && inode->i_op->setxattr != NULL);
         LASSERT(osd_write_locked(ctxt, obj));
         LASSERT(handle != NULL);
+
+        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_WRITE))
+                return -EACCES;
 
         dentry->d_inode = inode;
 
@@ -1115,6 +1149,9 @@ static int osd_xattr_list(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(inode->i_op != NULL && inode->i_op->listxattr != NULL);
         LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
 
+        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_READ))
+                return -EACCES;
+
         dentry->d_inode = inode;
         return inode->i_op->listxattr(dentry, buf, size);
 }
@@ -1131,6 +1168,9 @@ static int osd_xattr_del(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(inode->i_op != NULL && inode->i_op->removexattr != NULL);
         LASSERT(osd_write_locked(ctxt, obj));
         LASSERT(handle != NULL);
+
+        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_WRITE))
+                return -EACCES;
 
         dentry->d_inode = inode;
         return inode->i_op->removexattr(dentry, name);
@@ -1212,6 +1252,9 @@ static int osd_readpage(const struct lu_context *ctxt,
         LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
 
         LASSERT(rdpg->rp_pages != NULL);
+
+        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_BODY_READ))
+                return -EACCES;
 
         if (rdpg->rp_count <= 0)
                 return -EFAULT;
@@ -1395,6 +1438,9 @@ static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
 
+        if (osd_object_auth(ctx, &dt->do_lu, CAPA_OPC_INDEX_LOOKUP))
+                RETURN(-EACCES);
+
         if (osd_sb(osd_obj2dev(obj))->s_root->d_inode == obj->oo_inode) {
                 dt->do_index_ops = &osd_index_compat_ops;
                 result = 0;
@@ -1446,6 +1492,9 @@ static int osd_index_delete(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(obj->oo_ipd != NULL);
         LASSERT(handle != NULL);
 
+        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_INDEX_DELETE))
+                RETURN(-EACCES);
+
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
 
@@ -1469,6 +1518,9 @@ static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(obj->oo_container.ic_object == obj->oo_inode);
         LASSERT(obj->oo_ipd != NULL);
 
+        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_INDEX_LOOKUP))
+                return -EACCES;
+
         rc = iam_lookup(&obj->oo_container, (const struct iam_key *)key,
                         (struct iam_rec *)rec, obj->oo_ipd);
 
@@ -1476,7 +1528,6 @@ static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
 
         RETURN(rc);
 }
-
 
 static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
                             const struct dt_rec *rec, const struct dt_key *key,
@@ -1494,6 +1545,9 @@ static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
         LASSERT(obj->oo_container.ic_object == obj->oo_inode);
         LASSERT(obj->oo_ipd != NULL);
         LASSERT(th != NULL);
+
+        if (osd_object_auth(ctx, &dt->do_lu, CAPA_OPC_INDEX_INSERT))
+                return -EACCES;
 
         oh = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
@@ -1554,12 +1608,14 @@ static int osd_it_get(const struct lu_context *ctx,
 static void osd_it_put(const struct lu_context *ctx, struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
+
         iam_it_put(&it->oi_it);
 }
 
 static int osd_it_next(const struct lu_context *ctx, struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
+
         return iam_it_next(&it->oi_it);
 }
 
@@ -1570,6 +1626,7 @@ static int osd_it_del(const struct lu_context *ctx, struct dt_it *di,
         struct osd_thandle *oh;
 
         LASSERT(th != NULL);
+
         oh = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
 
@@ -1580,12 +1637,14 @@ static struct dt_key *osd_it_key(const struct lu_context *ctx,
                                  const struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
+
         return (struct dt_key *)iam_it_key_get(&it->oi_it);
 }
 
 static int osd_it_key_size(const struct lu_context *ctx, const struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
+
         return iam_it_key_size(&it->oi_it);
 }
 
@@ -1593,12 +1652,14 @@ static struct dt_rec *osd_it_rec(const struct lu_context *ctx,
                                  const struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
+
         return (struct dt_rec *)iam_it_rec_get(&it->oi_it);
 }
 
 static __u32 osd_it_store(const struct lu_context *ctxt, const struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
+
         return iam_it_store(&it->oi_it);
 }
 
@@ -1606,6 +1667,7 @@ static int osd_it_load(const struct lu_context *ctxt,
                        const struct dt_it *di, __u32 hash)
 {
         struct osd_it *it = (struct osd_it *)di;
+
         return iam_it_load(&it->oi_it, hash);
 }
 
@@ -1638,6 +1700,7 @@ static int osd_index_compat_delete(const struct lu_context *ctxt,
         LASSERT(handle != NULL);
         LASSERT(S_ISDIR(obj->oo_inode->i_mode));
         ENTRY;
+
         RETURN(-EOPNOTSUPP);
 }
 
@@ -1786,7 +1849,7 @@ static int osd_index_compat_insert(const struct lu_context *ctx,
         LASSERT(osd_invariant(obj));
         LASSERT(th != NULL);
 
-        luch = lu_object_find(ctx, ludev->ld_site, fid);
+        luch = lu_object_find(ctx, ludev->ld_site, fid, BYPASS_CAPA);
         if (!IS_ERR(luch)) {
                 if (lu_object_exists(luch)) {
                         struct osd_object *child;
@@ -2241,13 +2304,102 @@ static int osd_object_invariant(const struct lu_object *l)
         return osd_invariant(osd_obj(l));
 }
 
+static int capa_is_sane(const struct lu_context *ctx,
+                        struct lustre_capa *capa,
+                        struct lustre_capa_key *keys)
+{
+        struct obd_capa *c;
+        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        int i, rc;
+        ENTRY;
+
+        c = capa_lookup(capa);
+        if (c) {
+                spin_lock(&c->c_lock);
+                if (memcmp(&c->c_capa, capa, sizeof(*capa))) {
+                        DEBUG_CAPA(D_ERROR, capa, "HMAC mismatch");
+                        rc = -EACCES;
+                } else if (capa_is_expired(c)) {
+                        DEBUG_CAPA(D_ERROR, capa, "expired");
+                        rc = -ESTALE;
+                }
+                spin_unlock(&c->c_lock);
+
+                capa_put(c);
+                RETURN(rc);
+        }
+
+        spin_lock(&capa_lock);
+        for (i = 0; i < 2; i++) {
+                if (keys[i].lk_keyid == capa->lc_keyid) {
+                        oti->oti_capa_key = keys[i];
+                        break;
+                }
+        }
+        spin_unlock(&capa_lock);
+
+        if (i == 2) {
+                DEBUG_CAPA(D_ERROR, capa, "no matched capa key");
+                RETURN(-ESTALE);
+        }
+
+        rc = capa_hmac(oti->oti_capa_hmac, capa, oti->oti_capa_key.lk_key);
+        if (rc)
+                RETURN(rc);
+        if (memcmp(oti->oti_capa_hmac, capa->lc_hmac, sizeof(capa->lc_hmac))) {
+                DEBUG_CAPA(D_ERROR, capa, "HMAC mismatch");
+                RETURN(-EACCES);
+        }
+
+        capa_add(capa);
+
+        RETURN(0);
+}
+
+static int osd_object_capa_auth(const struct lu_context *ctx,
+                                const struct lu_object *obj,
+                                struct lustre_capa *capa,
+                                __u64 opc)
+{
+        const struct lu_fid *fid = lu_object_fid(obj);
+
+        return 0;
+
+        if (lu_object_capa_bypass(obj))
+                return 0;
+
+        if (!capa) {
+                CERROR("no capability is provided for fid "DFID"\n", PFID(fid));
+                return -EACCES;
+        }
+
+        if (!lu_fid_eq(fid, &capa->lc_fid)) {
+                DEBUG_CAPA(D_ERROR, capa, "fid "DFID" mismatch with",
+                           PFID(fid));
+                return -EACCES;
+        }
+
+        if (!capa_opc_supported(capa, opc)) {
+                DEBUG_CAPA(D_ERROR, capa, "opc "LPX64" not supported by", opc);
+                return -EACCES;
+        }
+
+        if (!capa_is_sane(ctx, capa, obj->lo_dev->ld_site->ls_capa_keys)) {
+                DEBUG_CAPA(D_ERROR, capa, "insane");
+                return -EACCES;
+        }
+
+        return 0;
+}
+
 static struct lu_object_operations osd_lu_obj_ops = {
         .loo_object_init      = osd_object_init,
         .loo_object_delete    = osd_object_delete,
         .loo_object_release   = osd_object_release,
         .loo_object_free      = osd_object_free,
         .loo_object_print     = osd_object_print,
-        .loo_object_invariant = osd_object_invariant
+        .loo_object_invariant = osd_object_invariant,
+        .loo_object_auth      = osd_object_capa_auth
 };
 
 static struct lu_device_operations osd_lu_ops = {

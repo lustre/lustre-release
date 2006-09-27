@@ -451,7 +451,7 @@ static int llu_inode_revalidate(struct inode *inode)
                         valid |= OBD_MD_FLEASIZE;
                 }
                 rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
-                                valid, ealen, &req);
+                                NULL, valid, ealen, &req);
                 if (rc) {
                         CERROR("failure %d inode %llu\n", rc,
                                (long long)llu_i2stat(inode)->st_ino);
@@ -982,7 +982,7 @@ static int llu_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
+        rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), NULL,
                         OBD_MD_LINKNAME, symlen, request);
         if (rc) {
                 CERROR("inode %llu: rc = %d\n", (long long)st->st_ino, rc);
@@ -2124,7 +2124,7 @@ llu_fsswop_mount(const char *source,
 
         llu_init_ea_size(sbi->ll_md_exp, sbi->ll_dt_exp);
 
-        err = md_getstatus(sbi->ll_md_exp, &rootfid);
+        err = md_getstatus(sbi->ll_md_exp, &rootfid, NULL);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_dt_fid, err);
@@ -2133,7 +2133,7 @@ llu_fsswop_mount(const char *source,
         sbi->ll_root_fid = rootfid;
 
         /* fetch attr of root inode */
-        err = md_getattr(sbi->ll_md_exp, &rootfid,
+        err = md_getattr(sbi->ll_md_exp, &rootfid, NULL,
                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);

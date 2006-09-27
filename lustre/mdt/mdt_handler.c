@@ -256,6 +256,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                                 struct mdt_object *o)
 {
         struct md_object        *next = mdt_object_child(o);
+        struct mdt_device       *mdt = info->mti_mdt;
         const struct mdt_body   *reqbody = info->mti_body;
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct md_attr          *ma = &info->mti_attr;
@@ -359,7 +360,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         repbody->aclsize = sizeof(struct mdt_remote_perm);
                 }
         }
-
 #ifdef CONFIG_FS_POSIX_ACL
         else if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
                  (reqbody->valid & OBD_MD_FLACL)) {
@@ -381,6 +381,23 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         }
 #endif
 
+        if (mdt->mdt_opts.mo_mds_capa) {
+                struct lustre_capa *capa;
+
+                spin_lock(&capa_lock);
+                info->mti_capa_key = *red_capa_key(mdt);
+                spin_unlock(&capa_lock);
+
+                capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
+                LASSERT(capa);
+                capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
+                rc = mo_capa_get(ctxt, next, capa);
+                if (rc)
+                        RETURN(rc);
+                else
+                        repbody->valid |= OBD_MD_FLMDSCAPA;
+        }
+ 
         RETURN(rc);
 }
 
@@ -406,7 +423,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
         }
 
         rc = mdt_getattr_internal(info, obj);
-        mdt_shrink_reply(info, REPLY_REC_OFF + 1);
+        mdt_shrink_reply(info, REPLY_REC_OFF + 1, 1, 0);
         if (reqbody->valid & OBD_MD_FLRMTPERM) 
                 mdt_exit_ucred(info);
         RETURN(rc);
@@ -544,7 +561,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
          *step 3: find the child object by fid & lock it.
          *        regardless if it is local or remote.
          */
-        child = mdt_object_find(info->mti_ctxt, info->mti_mdt, child_fid);
+        child = mdt_object_find(info->mti_ctxt, info->mti_mdt, child_fid,
+                                BYPASS_CAPA);
         if (IS_ERR(child))
                 GOTO(out_parent, rc = PTR_ERR(child));
         if (is_resent) {
@@ -632,7 +650,7 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
                 ldlm_lock_decref(&lhc->mlh_lh, lhc->mlh_mode);
                 lhc->mlh_lh.cookie = 0;
         }
-        mdt_shrink_reply(info, REPLY_REC_OFF + 1);
+        mdt_shrink_reply(info, REPLY_REC_OFF + 1, 1, 0);
         mdt_exit_ucred(info);
         RETURN(rc);
 }
@@ -1130,6 +1148,37 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
         return -EOPNOTSUPP;
 }
 
+static int mdt_renew_capa(struct mdt_thread_info *info)
+{
+        struct mdt_device *mdt = info->mti_mdt;
+        struct mdt_object *obj;
+        struct mdt_body *body;
+        struct lustre_capa *capa;
+        int rc;
+
+        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        LASSERT(body);
+
+        capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
+        LASSERT(capa);
+
+        spin_lock(&capa_lock);
+        info->mti_capa_key = *red_capa_key(mdt);
+        spin_unlock(&capa_lock);
+
+        obj = mdt_object_find(info->mti_ctxt, info->mti_mdt, &capa->lc_fid,
+                              capa);
+        if (!IS_ERR(obj))
+                rc = PTR_ERR(obj);
+
+        /* TODO: add capa check */
+        rc = mo_capa_get(info->mti_ctxt, mdt_object_child(obj), capa);
+        if (rc)
+                RETURN(rc);
+
+        RETURN(rc);
+}
+
 /*
  * OBD PING and other handlers.
  */
@@ -1226,13 +1275,17 @@ static struct mdt_object *mdt_obj(struct lu_object *o)
 
 struct mdt_object *mdt_object_find(const struct lu_context *ctxt,
                                    struct mdt_device *d,
-                                   const struct lu_fid *f)
+                                   const struct lu_fid *f,
+                                   struct lustre_capa *c)
 {
         struct lu_object *o;
         struct mdt_object *m;
         ENTRY;
 
-        o = lu_object_find(ctxt, d->mdt_md_dev.md_lu_dev.ld_site, f);
+        if (!d->mdt_opts.mo_mds_capa)
+                c = BYPASS_CAPA;
+
+        o = lu_object_find(ctxt, d->mdt_md_dev.md_lu_dev.ld_site, f, c);
         if (IS_ERR(o))
                 m = (struct mdt_object *)o;
         else
@@ -1300,11 +1353,12 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
 struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
                                         const struct lu_fid *f,
                                         struct mdt_lock_handle *lh,
-                                        __u64 ibits)
+                                        __u64 ibits,
+                                        struct lustre_capa *capa)
 {
         struct mdt_object *o;
 
-        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, f);
+        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, f, capa);
         if (!IS_ERR(o)) {
                 int rc;
 
@@ -1383,36 +1437,40 @@ static int mdt_lock_reply_compat(struct mdt_device *m, struct ldlm_reply *rep)
  */
 static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
 {
-        const struct mdt_body   *body;
-        struct mdt_object       *obj;
-        const struct lu_context *ctx;
-        struct req_capsule      *pill;
-        int                     rc;
+        const struct mdt_body    *body;
+        struct lustre_capa *capa = NULL;
+        struct mdt_object        *obj;
+        const struct lu_context  *ctx;
+        struct req_capsule       *pill;
+        int                       rc;
 
         ctx = info->mti_ctxt;
         pill = &info->mti_pill;
 
         body = info->mti_body = req_capsule_client_get(pill, &RMF_MDT_BODY);
-        if (body != NULL) {
-                if (fid_is_sane(&body->fid1)) {
-                        obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1);
-                        if (!IS_ERR(obj)) {
-                                if ((flags & HABEO_CORPUS) &&
-                                    !lu_object_exists(&obj->mot_obj.mo_lu)) {
-                                        mdt_object_put(ctx, obj);
-                                        rc = -ENOENT;
-                                } else {
-                                        info->mti_object = obj;
-                                        rc = 0;
-                                }
-                        } else
-                                rc = PTR_ERR(obj);
+        if (body == NULL)
+                return -EFAULT;
+
+        if (!fid_is_sane(&body->fid1)) {
+                CERROR("Invalid fid: "DFID"\n", PFID(&body->fid1));
+                return -EINVAL;
+        }
+
+        if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
+                capa = req_capsule_client_get(pill, &RMF_CAPA1);
+        obj = mdt_object_find(ctx, info->mti_mdt, &body->fid1, capa);
+        if (!IS_ERR(obj)) {
+                if ((flags & HABEO_CORPUS) &&
+                    !lu_object_exists(&obj->mot_obj.mo_lu)) {
+                        mdt_object_put(ctx, obj);
+                        rc = -ENOENT;
                 } else {
-                        CERROR("Invalid fid: "DFID"\n", PFID(&body->fid1));
-                        rc = -EINVAL;
+                        info->mti_object = obj;
+                        rc = 0;
                 }
         } else
-                rc = -EFAULT;
+                rc = PTR_ERR(obj);
+
         return rc;
 }
 
@@ -2105,7 +2163,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         
         ldlm_rep->lock_policy_res2 =
                 mdt_getattr_name_lock(info, lhc, child_bits, ldlm_rep);
-        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1);
+        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 1, 0);
 
         if (mdt_get_disposition(ldlm_rep, DISP_LOOKUP_NEG))
                 ldlm_rep->lock_policy_res2 = 0;
@@ -3034,6 +3092,10 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
                 m->mdt_rootsquash_info = NULL;
         }
 
+        cleanup_capas(CAPA_SITE_SERVER);
+        del_timer(&m->mdt_ck_timer);
+        mdt_ck_thread_stop(m);
+
         mdt_fs_cleanup(ctx, m);
 
         /* finish the stack */
@@ -3080,6 +3142,11 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         m->mdt_opts.mo_user_xattr = 0;
         m->mdt_opts.mo_acl = 0;
         m->mdt_opts.mo_compat_resname = 0;
+        m->mdt_opts.mo_mds_capa = 0;
+        m->mdt_opts.mo_oss_capa = 0;
+        m->mdt_capa_alg = CAPA_HMAC_ALG_SHA1;
+        m->mdt_capa_timeout = CAPA_TIMEOUT;
+        m->mdt_ck_timeout = CAPA_KEY_TIMEOUT;
         obd->obd_replayable = 1;
         spin_lock_init(&m->mdt_client_bitmap_lock);
 
@@ -3154,9 +3221,20 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
                 GOTO(err_free_ns, rc);
         }
 
-        rc = mdt_start_ptlrpc_service(m);
+        rc = mdt_ck_thread_start(m);
         if (rc)
                 GOTO(err_free_ns, rc);
+        m->mdt_ck_timer.function = mdt_ck_timer_callback;
+        m->mdt_ck_timer.data = (unsigned long)m;
+        init_timer(&m->mdt_ck_timer);
+
+        s->ls_capa_keys = m->mdt_capa_keys;
+        s->ls_capa_timeout = m->mdt_capa_timeout;
+        s->ls_capa_alg = m->mdt_capa_alg;
+
+        rc = mdt_start_ptlrpc_service(m);
+        if (rc)
+                GOTO(err_capa, rc);
 
         ping_evictor_start();
         rc = mdt_fs_setup(ctx, m, obd);
@@ -3172,6 +3250,9 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
 
 err_stop_service:
         mdt_stop_ptlrpc_service(m);
+err_capa:
+        del_timer(&m->mdt_ck_timer);
+        mdt_ck_thread_stop(m);
 err_free_ns:
         upcall_cache_cleanup(m->mdt_rmtacl_cache);
         m->mdt_rmtacl_cache = NULL;
@@ -3421,6 +3502,12 @@ static int mdt_connect_internal(struct obd_export *exp,
                 if (!mdt->mdt_opts.mo_user_xattr)
                         data->ocd_connect_flags &= ~OBD_CONNECT_XATTR;
 
+                if (!mdt->mdt_opts.mo_mds_capa)
+                        data->ocd_connect_flags &= ~OBD_CONNECT_MDS_CAPA;
+
+                if (!mdt->mdt_opts.mo_oss_capa)
+                        data->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
+
                 exp->exp_connect_flags = data->ocd_connect_flags;
                 data->ocd_version = LUSTRE_VERSION_CODE;
                 exp->exp_mdt_data.med_ibits_known = data->ocd_ibits_known;
@@ -3436,6 +3523,21 @@ static int mdt_connect_internal(struct obd_export *exp,
         flags = OBD_CONNECT_LCL_CLIENT | OBD_CONNECT_RMT_CLIENT;
         if ((exp->exp_connect_flags & flags) == flags) {
                 CWARN("%s: both local and remote client flags are set\n",
+                      mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
+                return -EBADE;
+        }
+
+        if (mdt->mdt_opts.mo_mds_capa &&
+            ((exp->exp_connect_flags & OBD_CONNECT_MDS_CAPA) == 0)) {
+                CWARN("%s: MDS requires capability support, but client not\n",
+                      mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
+                return -EBADE;
+        }
+
+        if (mdt->mdt_opts.mo_oss_capa &&
+            ((exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA) == 0)) {
+                CWARN("%s: MDS requires OSS capability support, "
+                      "but client not\n",
                       mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
                 return -EBADE;
         }
@@ -3898,6 +4000,7 @@ static int __init mdt_mod_init(void)
         rc = class_register_type(&mdt_obd_device_ops, NULL,
                                  lvars.module_vars, LUSTRE_MDT_NAME,
                                  &mdt_device_type);
+
         return rc;
 }
 
@@ -3959,7 +4062,8 @@ DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),
 DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, IS_SUBDIR,    mdt_is_subdir),
 DEF_MDT_HNDL_0(0,                         QUOTACHECK,   mdt_quotacheck_handle),
-DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_quotactl_handle)
+DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_quotactl_handle),
+DEF_MDT_HNDL_0(0           |HABEO_REFERO, RENEW_CAPA,   mdt_renew_capa)
 };
 
 #define DEF_OBD_HNDL(flags, name, fn)                   \

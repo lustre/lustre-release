@@ -215,7 +215,8 @@ static int mdc_attr_get(const struct lu_context *ctx, struct md_object *mo,
 
         memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
 
-        rc = md_getattr(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
+        /* FIXME: split capability */
+        rc = md_getattr(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu), NULL,
                         OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID |
                         OBD_MD_FLFLAGS,
                         0, &mci->mci_req);
@@ -463,9 +464,9 @@ static int mdc_is_subdir(const struct lu_context *ctx, struct md_object *mo,
 
         mci = mdc_info_init(ctx);
         
+        /* FIXME: capability for split! */
         rc = md_is_subdir(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
-                          fid, &mci->mci_req);
-
+                          fid, NULL, NULL, &mci->mci_req);
         if (rc)
                 GOTO(out, rc);
 

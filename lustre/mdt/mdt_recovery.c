@@ -37,9 +37,9 @@ static int mdt_server_data_update(const struct lu_context *ctx,
                                   struct mdt_device *mdt);
 
 /* TODO: maybe this pair should be defined in dt_object.c */
-static int mdt_record_read(const struct lu_context *ctx,
-                           struct dt_object *dt, void *buf,
-                           size_t count, loff_t *pos)
+int mdt_record_read(const struct lu_context *ctx,
+                    struct dt_object *dt, void *buf,
+                    size_t count, loff_t *pos)
 {
         int rc;
 
@@ -54,9 +54,9 @@ static int mdt_record_read(const struct lu_context *ctx,
         return rc;
 }
 
-static int mdt_record_write(const struct lu_context *ctx,
-                            struct dt_object *dt, const void *buf,
-                            size_t count, loff_t *pos, struct thandle *th)
+int mdt_record_write(const struct lu_context *ctx,
+                     struct dt_object *dt, const void *buf,
+                     size_t count, loff_t *pos, struct thandle *th)
 {
         int rc;
 
@@ -75,8 +75,8 @@ enum {
         MDT_TXN_LAST_RCVD_WRITE_CREDITS = 3
 };
 
-static struct thandle* mdt_trans_start(const struct lu_context *ctx,
-                                       struct mdt_device *mdt, int credits)
+struct thandle* mdt_trans_start(const struct lu_context *ctx,
+                                struct mdt_device *mdt, int credits)
 {
         struct mdt_thread_info *mti;
         struct txn_param *p;
@@ -87,8 +87,8 @@ static struct thandle* mdt_trans_start(const struct lu_context *ctx,
         return mdt->mdt_bottom->dd_ops->dt_trans_start(ctx, mdt->mdt_bottom, p);
 }
 
-static void mdt_trans_stop(const struct lu_context *ctx,
-                           struct mdt_device *mdt, struct thandle *th)
+void mdt_trans_stop(const struct lu_context *ctx,
+                    struct mdt_device *mdt, struct thandle *th)
 {
         mdt->mdt_bottom->dd_ops->dt_trans_stop(ctx, th);
 }
@@ -880,8 +880,8 @@ static int mdt_txn_commit_cb(const struct lu_context *ctx,
 int mdt_fs_setup(const struct lu_context *ctx, struct mdt_device *mdt,
                  struct obd_device *obd)
 {
-        struct lu_fid last_fid;
-        struct dt_object *last;
+        struct lu_fid fid;
+        struct dt_object *o;
         int rc = 0;
         ENTRY;
 
@@ -893,26 +893,47 @@ int mdt_fs_setup(const struct lu_context *ctx, struct mdt_device *mdt,
 
         dt_txn_callback_add(mdt->mdt_bottom, &mdt->mdt_txn_cb);
 
-        last = dt_store_open(ctx, mdt->mdt_bottom,
-                             LAST_RCVD, &last_fid);
-        if(!IS_ERR(last)) {
-                mdt->mdt_last_rcvd = last;
+        o = dt_store_open(ctx, mdt->mdt_bottom, LAST_RCVD, &fid);
+        if(!IS_ERR(o)) {
+                mdt->mdt_last_rcvd = o;
                 rc = mdt_server_data_init(ctx, mdt);
                 if (rc) {
-                        lu_object_put(ctx, &last->do_lu);
+                        lu_object_put(ctx, &o->do_lu);
                         mdt->mdt_last_rcvd = NULL;
                 }
         } else {
-                rc = PTR_ERR(last);
+                rc = PTR_ERR(o);
                 CERROR("cannot open %s: rc = %d\n", LAST_RCVD, rc);
         }
+
+        if (rc)
+                RETURN(rc);
+
+        o = dt_store_open(ctx, mdt->mdt_bottom, CAPA_KEYS, &fid);
+        if(!IS_ERR(o)) {
+                struct md_device *next = mdt->mdt_child;
+                mdt->mdt_ck_obj = o;
+                rc = mdt_capa_keys_init(ctx, mdt);
+                if (rc) {
+                        lu_object_put(ctx, &o->do_lu);
+                        mdt->mdt_ck_obj = NULL;
+                        RETURN(rc);
+                }
+                rc = next->md_ops->mdo_init_capa_keys(next, mdt->mdt_capa_keys);
+        } else {
+                rc = PTR_ERR(o);
+                CERROR("cannot open %s: rc = %d\n", CAPA_KEYS, rc);
+        }
+
+        if (rc)
+                RETURN(rc);
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
         obd->obd_lvfs_ctxt.pwdmnt = current->fs->pwdmnt;
         obd->obd_lvfs_ctxt.pwd = current->fs->pwd;
         obd->obd_lvfs_ctxt.fs = get_ds();
 
-        RETURN (rc);
+        RETURN(0);
 }
 
 
@@ -927,6 +948,9 @@ void mdt_fs_cleanup(const struct lu_context *ctx, struct mdt_device *mdt)
         if (mdt->mdt_last_rcvd)
                 lu_object_put(ctx, &mdt->mdt_last_rcvd->do_lu);
         mdt->mdt_last_rcvd = NULL;
+        if (mdt->mdt_ck_obj)
+                lu_object_put(ctx, &mdt->mdt_ck_obj->do_lu);
+        mdt->mdt_ck_obj = NULL;
 }
 
 /* reconstruction code */
@@ -974,7 +998,8 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
                 return;
 
         /* if no error, so child was created with requested fid */
-        child = mdt_object_find(mti->mti_ctxt, mdt, mti->mti_rr.rr_fid2);
+        child = mdt_object_find(mti->mti_ctxt, mdt, mti->mti_rr.rr_fid2,
+                                mti->mti_rr.rr_capa2);
         LASSERT(!IS_ERR(child));
 
         body = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
@@ -1004,7 +1029,8 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
                 return;
 
         body = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
-        obj = mdt_object_find(mti->mti_ctxt, mdt, mti->mti_rr.rr_fid1);
+        obj = mdt_object_find(mti->mti_ctxt, mdt, mti->mti_rr.rr_fid1,
+                              mti->mti_rr.rr_capa1);
         LASSERT(!IS_ERR(obj));
         mo_attr_get(mti->mti_ctxt, mdt_object_child(obj),
                     &mti->mti_attr, NULL);
@@ -1027,7 +1053,7 @@ static void mdt_reconstruct_with_shrink(struct mdt_thread_info *mti,
                                         struct mdt_lock_handle *lhc)
 {
         mdt_reconstruct_generic(mti, lhc);
-        mdt_shrink_reply(mti, REPLY_REC_OFF + 1);
+        mdt_shrink_reply(mti, REPLY_REC_OFF + 1, 0, 0);
 }
 
 typedef void (*mdt_reconstructor)(struct mdt_thread_info *mti,

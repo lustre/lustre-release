@@ -77,6 +77,11 @@ struct osd_thread_info {
         int                 oti_r_locks;
         int                 oti_w_locks;
         int                 oti_txns;
+        /*
+         *XXX temporary: for capa operations.
+         */
+        char                   oti_capa_hmac[CAPA_HMAC_KEY_MAX_LEN];
+        struct lustre_capa_key oti_capa_key;
 };
 
 #endif /* __KERNEL__ */

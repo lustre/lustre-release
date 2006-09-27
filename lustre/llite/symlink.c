@@ -36,6 +36,7 @@ static int ll_readlink_internal(struct inode *inode,
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         int rc, symlen = inode->i_size + 1;
         struct mdt_body *body;
+        struct obd_capa *oc;
         ENTRY;
 
         *request = NULL;
@@ -46,8 +47,10 @@ static int ll_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode),
+        oc = ll_i2mdscapa(inode);
+        rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
                         OBD_MD_LINKNAME, symlen, request);
+        capa_put(oc);
         if (rc) {
                 if (rc != -ENOENT)
                         CERROR("inode %lu: rc = %d\n", inode->i_ino, rc);

@@ -130,7 +130,7 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
 
 int echo_destroy(struct obd_export *exp, struct obdo *oa,
                  struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                 struct obd_export *md_exp)
+                 struct obd_export *md_exp, void *unused)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
@@ -270,7 +270,7 @@ echo_page_debug_check(cfs_page_t *page, obd_id id,
 int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                 int objcount, struct obd_ioobj *obj, int niocount,
                 struct niobuf_remote *nb, struct niobuf_local *res,
-                struct obd_trans_info *oti)
+                struct obd_trans_info *oti, struct lustre_capa *unused)
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;

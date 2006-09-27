@@ -103,6 +103,7 @@ void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg));
 static int __init init_lustre_lite(void)
 {
         int rc, seed[2];
+
         printk(KERN_INFO "Lustre: Lustre Client File System; "
                "info@clusterfs.com\n");
         rc = ll_init_inodecache();
@@ -150,12 +151,21 @@ static int __init init_lustre_lite(void)
         get_random_bytes(seed, sizeof(seed));
         ll_srand(seed[0], seed[1]);
         
+        init_timer(&ll_capa_timer);
+        ll_capa_timer.function = ll_capa_timer_callback;
+        rc = ll_capa_thread_start();
         return rc;
 }
 
 static void __exit exit_lustre_lite(void)
 {
         int rc;
+
+        del_timer(&ll_capa_timer);
+        ll_capa_thread_stop();
+        LASSERTF(capa_count[CAPA_SITE_CLIENT] == 0,
+                 "client remaining capa count %d\n",
+                 capa_count[CAPA_SITE_CLIENT]);
 
         lustre_register_client_fill_super(NULL);
         lustre_register_client_process_config(NULL);

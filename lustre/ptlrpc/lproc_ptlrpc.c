@@ -77,6 +77,7 @@ struct ll_rpc_opcode {
         { MDS_SETXATTR,     "mds_setxattr" },
         { MDS_WRITEPAGE,    "mds_writepage" },
         { MDS_IS_SUBDIR,    "mds_is_subdir" },
+        { MDS_RENEW_CAPA,   "mds_renew_capa" },
         { LDLM_ENQUEUE,     "ldlm_enqueue" },
         { LDLM_CONVERT,     "ldlm_convert" },
         { LDLM_CANCEL,      "ldlm_cancel" },

@@ -388,7 +388,7 @@ static const char *obd_connect_names[] = {
         "remote_client",
         "max_byte_per_rpc",
         "64bit_qdata",
-        "fid_capability",
+        "mds_capability",
         "oss_capability",
         NULL
 };

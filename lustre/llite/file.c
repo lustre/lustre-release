@@ -60,6 +60,7 @@ void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
         ((struct ll_iattr *)&op_data->attr)->ia_attr_flags = inode->i_flags;
         op_data->ioepoch = ll_i2info(inode)->lli_ioepoch;
         memcpy(&op_data->handle, fh, sizeof(op_data->handle));
+        op_data->mod_capa1 = ll_i2mdscapa(inode);
 }
 
 static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
@@ -138,6 +139,9 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         epoch_close = (op_data->flags & MF_EPOCH_CLOSE) || 
                       !S_ISREG(inode->i_mode);
         rc = md_close(md_exp, op_data, och, &req);
+
+        ll_finish_md_op_data(op_data);
+        OBD_FREE_PTR(op_data);
         if (rc == -EAGAIN) {
                 /* This close must have closed the epoch. */
                 LASSERT(epoch_close);
@@ -156,8 +160,6 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         
         if (!epoch_close)
                 ll_init_done_writing(inode);
-
-        OBD_FREE_PTR(op_data);
 
         if (rc == 0) {
                 rc = ll_objects_destroy(req, inode);
@@ -282,6 +284,7 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
         
         LUSTRE_FPRIVATE(file) = NULL;
         ll_file_data_put(fd);
+        ll_oss_capa_close(inode, file);
 
         RETURN(rc);
 }
@@ -360,6 +363,8 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, itp, LCK_PW, op_data,
                         &lockh, lmm, lmmsize, ldlm_completion_ast,
                         ll_md_blocking_ast, NULL, 0);
+
+        ll_finish_md_op_data(op_data);
         OBD_FREE_PTR(op_data);
         if (rc < 0) {
                 CERROR("lock enqueue: err: %d\n", rc);
@@ -590,6 +595,8 @@ int ll_file_open(struct inode *inode, struct file *file)
         if (!S_ISREG(inode->i_mode))
                 GOTO(out, rc);
 
+        ll_oss_capa_open(inode, file);
+
         lsm = lli->lli_smd;
         if (lsm == NULL) {
                 if (file->f_flags & O_LOV_DELAY_CREATE ||
@@ -639,6 +646,7 @@ int ll_inode_getattr(struct inode *inode, struct obdo *obdo)
                                OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
                                OBD_MD_FLCTIME | OBD_MD_FLGROUP;
+        oinfo.oi_capa = ll_i2mdscapa(inode);
 
         set = ptlrpc_prep_set();
         if (set == NULL) {
@@ -650,6 +658,7 @@ int ll_inode_getattr(struct inode *inode, struct obdo *obdo)
                         rc = ptlrpc_set_wait(set);
                 ptlrpc_set_destroy(set);
         }
+        capa_put(oinfo.oi_capa);
         if (rc)
                 RETURN(rc);
 
@@ -2215,6 +2224,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct ptlrpc_request *req;
+        struct obd_capa *oc;
         int rc, err;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
@@ -2238,8 +2248,10 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                         rc = err;
         }
 
-        err = md_sync(ll_i2sbi(inode)->ll_md_exp,
-                      ll_inode2fid(inode), &req);
+        oc = ll_i2mdscapa(inode);
+        err = md_sync(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
+                      &req);
+        capa_put(oc);
         if (!rc)
                 rc = err;
         if (!err)
@@ -2247,6 +2259,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 
         if (data && lsm) {
                 struct obdo *oa = obdo_alloc();
+                struct obd_capa *ocapa;
 
                 if (!oa)
                         RETURN(rc ? rc : -ENOMEM);
@@ -2257,8 +2270,10 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                            OBD_MD_FLGROUP);
 
+                ocapa = ll_lookup_oss_capa(inode, CAPA_OPC_OSS_WRITE);
                 err = obd_sync(ll_i2sbi(inode)->ll_dt_exp, oa, lsm,
-                               0, OBD_OBJECT_EOF);
+                               0, OBD_OBJECT_EOF, ocapa);
+                capa_put(ocapa);
                 if (!rc)
                         rc = err;
                 obdo_free(oa);
@@ -2464,6 +2479,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 obd_valid valid = OBD_MD_FLGETATTR;
                 int ealen = 0;
+                struct obd_capa *oc;
 
                 if (S_ISREG(inode->i_mode)) {
                         rc = ll_get_max_mdsize(sbi, &ealen);
@@ -2471,7 +2487,10 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                                 RETURN(rc); 
                         valid |= OBD_MD_FLEASIZE | OBD_MD_FLMODEASIZE;
                 }
-                rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), valid, ealen, &req);
+                oc = ll_i2mdscapa(inode);
+                rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), oc, valid,
+                                ealen, &req);
+                capa_put(oc);
                 if (rc) {
                         rc = ll_inode_revalidate_fini(inode, rc);
                         RETURN(rc);

@@ -276,6 +276,8 @@ EXPORT_SYMBOL(lustre_msg_set_conn_cnt);
 EXPORT_SYMBOL(lustre_swab_mgs_target_info);
 EXPORT_SYMBOL(lustre_swab_md_fld);
 EXPORT_SYMBOL(lustre_swab_generic_32s);
+EXPORT_SYMBOL(lustre_swab_lustre_capa);
+EXPORT_SYMBOL(lustre_swab_lustre_capa_key);
 
 /* recover.c */
 EXPORT_SYMBOL(ptlrpc_disconnect_import);

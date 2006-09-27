@@ -513,6 +513,9 @@ int obd_init_checks(void)
 #define obd_init_checks() do {} while(0)
 #endif
 
+extern int init_capa_hash(void);
+extern void cleanup_capa_hash(void);
+
 extern spinlock_t obd_types_lock;
 extern spinlock_t handle_lock;
 extern int class_procfs_init(void);
@@ -536,6 +539,10 @@ int init_obdclass(void)
         CDEBUG(D_INFO, "        Lustre Version: "LUSTRE_VERSION_STRING"\n");
         CDEBUG(D_INFO, "        Build Version: "BUILD_VERSION"\n");
 #endif
+
+        err = init_capa_hash();
+        if (err)
+                return err;
 
         spin_lock_init(&obd_types_lock);
         spin_lock_init(&handle_lock);
@@ -602,6 +609,7 @@ static void cleanup_obdclass(void)
         }
         lu_global_fini();
 
+        cleanup_capa_hash();
         obd_cleanup_caches();
         obd_sysctl_clean();
 

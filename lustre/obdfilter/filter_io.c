@@ -271,7 +271,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                               int objcount, struct obd_ioobj *obj,
                               int niocount, struct niobuf_remote *nb,
                               struct niobuf_local *res,
-                              struct obd_trans_info *oti)
+                              struct obd_trans_info *oti,
+                              struct lustre_capa *capa)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lvfs_run_ctxt saved;
@@ -289,6 +290,11 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
          * These values are verified in ost_brw_write() from the wire. */
         LASSERTF(objcount == 1, "%d\n", objcount);
         LASSERTF(obj->ioo_bufcnt > 0, "%d\n", obj->ioo_bufcnt);
+
+        rc = filter_verify_capa(exp, NULL, obdo_mdsno(oa), capa,
+                                CAPA_OPC_OSS_READ);
+        if (rc)
+                RETURN(rc);
 
         if (oa && oa->o_valid & OBD_MD_FLGRANT) {
                 spin_lock(&obd->obd_osfs_lock);
@@ -504,7 +510,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                                int objcount, struct obd_ioobj *obj,
                                int niocount, struct niobuf_remote *nb,
                                struct niobuf_local *res,
-                               struct obd_trans_info *oti)
+                               struct obd_trans_info *oti,
+                               struct lustre_capa *capa)
 {
         struct lvfs_run_ctxt saved;
         struct niobuf_remote *rnb;
@@ -519,6 +526,11 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         ENTRY;
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
+
+        rc = filter_verify_capa(exp, NULL, obdo_mdsno(oa), capa,
+                                CAPA_OPC_OSS_WRITE);
+        if (rc)
+                RETURN(rc);
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         iobuf = filter_iobuf_get(&exp->exp_obd->u.filter, oti);
@@ -676,14 +688,14 @@ cleanup:
 int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                   int objcount, struct obd_ioobj *obj, int niocount,
                   struct niobuf_remote *nb, struct niobuf_local *res,
-                  struct obd_trans_info *oti)
+                  struct obd_trans_info *oti, struct lustre_capa *capa)
 {
         if (cmd == OBD_BRW_WRITE)
                 return filter_preprw_write(cmd, exp, oa, objcount, obj,
-                                           niocount, nb, res, oti);
+                                           niocount, nb, res, oti, capa);
         if (cmd == OBD_BRW_READ)
                 return filter_preprw_read(cmd, exp, oa, objcount, obj,
-                                          niocount, nb, res, oti);
+                                          niocount, nb, res, oti, capa);
         LBUG();
         return -EPROTO;
 }
@@ -851,7 +863,7 @@ int filter_brw(int cmd, struct obd_export *exp, struct obd_info *oinfo,
         ioo.ioo_bufcnt = oa_bufs;
 
         ret = filter_preprw(cmd, exp, oinfo->oi_oa, 1, &ioo,
-                            oa_bufs, rnb, lnb, oti);
+                            oa_bufs, rnb, lnb, oti, oinfo_capa(oinfo));
         if (ret != 0)
                 GOTO(out, ret);
 

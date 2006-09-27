@@ -59,9 +59,11 @@ static int ll_nfs_test_inode(struct inode *inode, void *opaque)
 
 static struct inode *search_inode_for_lustre(struct super_block *sb,
                                              struct lu_fid *fid,
+                                             struct lustre_capa *capa,
                                              int mode)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
+        struct obd_capa *ocapa = NULL;
         struct ptlrpc_request *req = NULL;
         struct inode *inode = NULL;
         unsigned long valid = 0;
@@ -79,7 +81,16 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
                 valid |= OBD_MD_FLEASIZE;
         }
 
-        rc = md_getattr(sbi->ll_md_exp, fid, valid, eadatalen, &req);
+        if (capa) {
+                ocapa = alloc_capa(CAPA_SITE_CLIENT);
+                if (!ocapa)
+                        return ERR_PTR(-ENOMEM);
+                ocapa->c_capa = *capa;
+        }
+
+        rc = md_getattr(sbi->ll_md_exp, fid, (struct obd_capa *)ocapa,
+                        valid, eadatalen, &req);
+        free_capa(ocapa);
         if (rc) {
                 CERROR("can't get object attrs, fid "DFID", rc %d\n",
                        PFID(fid), rc);
@@ -99,7 +110,9 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
 extern struct dentry_operations ll_d_ops;
 
 static struct dentry *ll_iget_for_nfs(struct super_block *sb,
-                                      struct lu_fid *fid, umode_t mode)
+                                      struct lu_fid *fid,
+                                      struct lustre_capa *capa,
+                                      umode_t mode)
 {
         struct inode *inode;
         struct dentry *result;
@@ -110,7 +123,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb,
         if (!fid_is_sane(fid))
                 return ERR_PTR(-ESTALE);
 
-        inode = search_inode_for_lustre(sb, fid, mode);
+        inode = search_inode_for_lustre(sb, fid, capa, mode);
         if (IS_ERR(inode))
                 return ERR_PTR(PTR_ERR(inode));
 
@@ -160,6 +173,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb,
         return result;
 }
 
+#if 0
 static void ll_fh_to_fid(struct lu_fid *fid, __u32 *mode, __u32 *datap)
 {
         /* unpacking ->f_seq */
@@ -246,24 +260,63 @@ int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
         *lenp = 5;
         return 1;
 }
+#endif
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+struct dentry *ll_decode_fh(struct super_block *sb, __u32 *fh, int fh_len,
+                            int fh_type,
+                            int (*acceptable)(void *, struct dentry *),
+                            void *context)
+{
+        int len = (sizeof(struct lu_fid) + sizeof(struct lustre_capa) + 3)/4;
+
+        if (fh_type != 1)
+                return ERR_PTR(-ESTALE);
+        if (fh_len < len)
+                return ERR_PTR(-ESTALE);
+        return sb->s_export_op->find_exported_dentry(sb, fh, NULL, acceptable,
+                                                     context);
+}
+
+int ll_encode_fh(struct dentry *de, __u32 *fh, int *plen, int connectable)
+{
+        struct inode *inode = de->d_inode;
+        struct lu_fid *fid = ll_inode2fid(inode);
+        struct obd_capa *ocapa = ll_i2mdscapa(inode);
+        int len = (sizeof(*fid) + sizeof(struct lustre_capa) + 3)/4;
+        char *p = (char *)fh;
+
+        if (*plen < len)
+                return 255;
+
+        memcpy(p, fid, sizeof(*fid));
+        p += sizeof(*fid);
+        if (ocapa) {
+                capa_cpy(p, ocapa);
+                capa_put(ocapa);
+        }
+        *plen = len;
+        return 1;
+}
+
 struct dentry *ll_get_dentry(struct super_block *sb, void *data)
 {
-        __u32 *inump = (__u32*)data;
-        struct lu_fid fid;
+        char *p = (char *)data;
+        struct lu_fid *fid;
+        struct lustre_capa *capa;
+
+        fid = (struct lu_fid *)p;
+        capa = (struct lustre_capa *)(p + sizeof(*fid));
         
-        /* FIXME: seems this is not enough */
-        fid.f_seq = inump[0];
-        fid.f_oid = inump[1];
-        
-        return ll_iget_for_nfs(sb, &fid, S_IFREG);
+        return ll_iget_for_nfs(sb, fid, (capa->lc_opc == 0) ? capa : NULL,
+                               S_IFREG);
 }
 
 struct dentry *ll_get_parent(struct dentry *dchild)
 {
         struct ptlrpc_request *req = NULL;
         struct inode *dir = dchild->d_inode;
+        struct obd_capa *oc;
         struct ll_sb_info *sbi;
         struct dentry *result = NULL;
         struct mdt_body *body;
@@ -275,18 +328,21 @@ struct dentry *ll_get_parent(struct dentry *dchild)
         
         sbi = ll_s2sbi(dir->i_sb);
  
-        rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(dir),
-                             dotdot, strlen(dotdot) + 1,
-                             0, 0, &req);
+        oc = ll_i2mdscapa(dir);
+        rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(dir), oc,
+                             dotdot, strlen(dotdot) + 1, 0, 0, &req);
         if (rc) {
+                capa_put(oc);
                 CERROR("failure %d inode %lu get parent\n", rc, dir->i_ino);
-                return ERR_PTR(rc);
+                RETURN(ERR_PTR(rc));
         }
-        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (*body)); 
+        body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body)); 
        
         LASSERT((body->valid & OBD_MD_FLGENER) && (body->valid & OBD_MD_FLID));
         
-        result = ll_iget_for_nfs(dir->i_sb, ll_inode2fid(dir), S_IFDIR);
+        result = ll_iget_for_nfs(dir->i_sb, ll_inode2fid(dir),
+                                 oc ? &oc->c_capa : NULL, S_IFDIR);
+        capa_put(oc);
 
         if (IS_ERR(result))
                 rc = PTR_ERR(result);

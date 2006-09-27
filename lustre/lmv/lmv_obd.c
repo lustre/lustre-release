@@ -1050,7 +1050,8 @@ out_free_temp:
 }
 
 static int lmv_getstatus(struct obd_export *exp,
-                         struct lu_fid *fid)
+                         struct lu_fid *fid,
+                         struct obd_capa **pc)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1061,15 +1062,15 @@ static int lmv_getstatus(struct obd_export *exp,
         if (rc)
                 RETURN(rc);
 
-        rc = md_getstatus(lmv->tgts[0].ltd_exp, fid);
+        rc = md_getstatus(lmv->tgts[0].ltd_exp, fid, pc);
 
         RETURN(rc);
 }
 
 static int lmv_getxattr(struct obd_export *exp, const struct lu_fid *fid,
-                        obd_valid valid, const char *name, const char *input,
-                        int input_size, int output_size, int flags,
-                        struct ptlrpc_request **request)
+                        struct obd_capa *oc, obd_valid valid, const char *name,
+                        const char *input, int input_size, int output_size,
+                        int flags, struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1085,16 +1086,16 @@ static int lmv_getxattr(struct obd_export *exp, const struct lu_fid *fid,
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        rc = md_getxattr(tgt_exp, fid, valid, name, input, input_size,
+        rc = md_getxattr(tgt_exp, fid, oc, valid, name, input, input_size,
                          output_size, flags, request);
 
         RETURN(rc);
 }
 
 static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
-                        obd_valid valid, const char *name, const char *input,
-                        int input_size, int output_size, int flags,
-                        struct ptlrpc_request **request)
+                        struct obd_capa *oc, obd_valid valid, const char *name,
+                        const char *input, int input_size, int output_size,
+                        int flags, struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1110,14 +1111,14 @@ static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        rc = md_setxattr(tgt_exp, fid, valid, name,
+        rc = md_setxattr(tgt_exp, fid, oc, valid, name,
                          input, input_size, output_size, flags, request);
         
         RETURN(rc);
 }
 
 static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
-                       obd_valid valid, int ea_size,
+                       struct obd_capa *oc, obd_valid valid, int ea_size,
                        struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -1135,7 +1136,7 @@ static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        rc = md_getattr(tgt_exp, fid, valid, ea_size, request);
+        rc = md_getattr(tgt_exp, fid, oc, valid, ea_size, request);
         if (rc)
                 RETURN(rc);
 
@@ -1157,7 +1158,7 @@ static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
                         RETURN(rc);
                 }
 
-                body = lustre_msg_buf((*request)->rq_repmsg, REQ_REC_OFF,
+                body = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF,
                                       sizeof(*body));
                 LASSERT(body != NULL);
 
@@ -1184,10 +1185,8 @@ static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(rc);
 }
 
-static int lmv_change_cbdata(struct obd_export *exp,
-                             const struct lu_fid *fid,
-                             ldlm_iterator_t it,
-                             void *data)
+static int lmv_change_cbdata(struct obd_export *exp, const struct lu_fid *fid,
+                             ldlm_iterator_t it, void *data)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1235,7 +1234,8 @@ static int lmv_close(struct obd_export *exp,
 
 /* called in the case MDS returns -ERESTART on create on open, what means that
  * directory is split and its LMV presentation object has to be updated. */
-int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid)
+int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid,
+                     struct obd_capa *oc)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1257,7 +1257,7 @@ int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid)
                 RETURN(PTR_ERR(tgt_exp));
 
         /* time to update mea of parent fid */
-        rc = md_getattr(tgt_exp, fid, valid, mealen, &req);
+        rc = md_getattr(tgt_exp, fid, oc, valid, mealen, &req);
         if (rc) {
                 CERROR("md_getattr() failed, error %d\n", rc);
                 GOTO(cleanup, rc);
@@ -1272,7 +1272,7 @@ int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid)
         if (md.mea == NULL)
                 GOTO(cleanup, rc = -ENODATA);
 
-        obj = lmv_obj_create(exp, fid, md.mea);
+        obj = lmv_obj_create(exp, fid, oc, md.mea);
         if (IS_ERR(obj))
                 rc = PTR_ERR(obj);
         else
@@ -1312,7 +1312,8 @@ repeat:
                 
                 mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                    op_data->name, op_data->namelen);
-                op_data->fid1 = obj->lo_inodes[mds].li_fid;
+                op_data->fid1      = obj->lo_inodes[mds].li_fid;
+                op_data->mod_capa1 = obj->lo_inodes[mds].li_capa;
                 lmv_obj_put(obj);
         }
 
@@ -1328,13 +1329,14 @@ repeat:
         if (rc == 0) {
                 if (*request == NULL)
                         RETURN(rc);
-                CDEBUG(D_OTHER, "created. "DFID"\n", PFID(&op_data->fid1));
+                CDEBUG(D_OTHER, "created. "DFID"\n",
+                       PFID(&op_data->fid1));
         } else if (rc == -ERESTART) {
                 /*
                  * Directory got split. time to update local object and repeat
                  * the request with proper MDS.
                  */
-                rc = lmv_handle_split(exp, &op_data->fid1);
+                rc = lmv_handle_split(exp, &op_data->fid1, op_data->mod_capa1);
                 if (rc == 0) {
                         ptlrpc_req_finished(*request);
                         rc = lmv_alloc_fid_for_split(obd, &op_data->fid1,
@@ -1530,7 +1532,8 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
                          * name */
                         mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                            (char *)op_data->name, op_data->namelen);
-                        op_data->fid1 = obj->lo_inodes[mds].li_fid;
+                        op_data->fid1      = obj->lo_inodes[mds].li_fid;
+                        op_data->mod_capa1 = obj->lo_inodes[mds].li_capa;
                         lmv_obj_put(obj);
                 }
         }
@@ -1555,13 +1558,14 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
 
 static int
 lmv_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
-                 const char *filename, int namelen, obd_valid valid,
-                 int ea_size, struct ptlrpc_request **request)
+                 struct obd_capa *oc, const char *filename, int namelen,
+                 obd_valid valid, int ea_size, struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct obd_export *tgt_exp;
         struct lu_fid rid = *fid;
+        struct obd_capa *rcapa = oc;
+        struct obd_export *tgt_exp;
         struct mdt_body *body;
         struct lmv_obj *obj;
         int rc, loop = 0;
@@ -1574,12 +1578,13 @@ lmv_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
 
 repeat:
         LASSERT(++loop <= 2);
-        obj = lmv_obj_grab(obd, fid);
+        obj = lmv_obj_grab(obd, &rid);
         if (obj) {
                 /* directory is split. look for right mds for this name */
                 mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                    filename, namelen - 1);
                 rid = obj->lo_inodes[mds].li_fid;
+                rcapa = obj->lo_inodes[mds].li_capa;
                 lmv_obj_put(obj);
         }
 
@@ -1590,7 +1595,7 @@ repeat:
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        rc = md_getattr_name(tgt_exp, &rid, filename, namelen, valid,
+        rc = md_getattr_name(tgt_exp, &rid, rcapa, filename, namelen, valid,
                              ea_size, request);
         if (rc == 0) {
                 body = lustre_msg_buf((*request)->rq_repmsg,
@@ -1610,15 +1615,15 @@ repeat:
                                 RETURN(PTR_ERR(tgt_exp));
                         }
                         
-                        rc = md_getattr_name(tgt_exp, &rid, NULL, 1, valid,
-                                             ea_size, &req);
+                        rc = md_getattr_name(tgt_exp, &rid, rcapa, NULL, 1,
+                                             valid, ea_size, &req);
                         ptlrpc_req_finished(*request);
                         *request = req;
                 }
         } else if (rc == -ERESTART) {
                 /* directory got split. time to update local object and repeat
                  * the request with proper MDS */
-                rc = lmv_handle_split(exp, &rid);
+                rc = lmv_handle_split(exp, &rid, rcapa);
                 if (rc == 0) {
                         ptlrpc_req_finished(*request);
                         goto repeat;
@@ -1651,7 +1656,8 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
                 if (obj) {
                         rc = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                           op_data->name, op_data->namelen);
-                        op_data->fid2 = obj->lo_inodes[rc].li_fid;
+                        op_data->fid2      = obj->lo_inodes[rc].li_fid;
+                        op_data->mod_capa2 = obj->lo_inodes[rc].li_capa;
                         lmv_obj_put(obj);
                 }
 
@@ -1695,8 +1701,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
         ENTRY;
 
         CDEBUG(D_OTHER, "rename %*s in "DFID" to %*s in "DFID"\n",
-               oldlen, old, PFID(&op_data->fid1), newlen, new,
-               PFID(&op_data->fid2));
+               oldlen, old, PFID(&op_data->fid1),
+               newlen, new, PFID(&op_data->fid2));
 
         rc = lmv_check_connect(obd);
 	if (rc)
@@ -1724,7 +1730,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                 if (obj) {
                         mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                            (char *)new, newlen);
-                        op_data->fid2 = obj->lo_inodes[mds].li_fid;
+                        op_data->fid2      = obj->lo_inodes[mds].li_fid;
+                        op_data->mod_capa2 = obj->lo_inodes[mds].li_capa;
                         CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n", mds,
                                PFID(&op_data->fid2));
                         lmv_obj_put(obj);
@@ -1740,7 +1747,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                  */
                 mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                    (char *)old, oldlen);
-                op_data->fid1 = obj->lo_inodes[mds].li_fid;
+                op_data->fid1      = obj->lo_inodes[mds].li_fid;
+                op_data->mod_capa1 = obj->lo_inodes[mds].li_capa;
                 CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n", mds,
                        PFID(&op_data->fid1));
                 lmv_obj_put(obj);
@@ -1756,6 +1764,7 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                                    (char *)new, newlen);
 
                 op_data->fid2 = obj->lo_inodes[mds].li_fid;
+                op_data->mod_capa2 = obj->lo_inodes[mds].li_capa;
                 CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n", mds,
                        PFID(&op_data->fid2));
                 lmv_obj_put(obj);
@@ -1772,8 +1781,8 @@ request:
 
         if (mds != mds2) {
                 CDEBUG(D_OTHER,"cross-node rename "DFID"/%*s to "DFID"/%*s\n",
-                       PFID(&op_data->fid1), oldlen, old, PFID(&op_data->fid2),
-                       newlen, new);
+                       PFID(&op_data->fid1), oldlen, old,
+                       PFID(&op_data->fid2), newlen, new);
         }
         op_data->fsuid = current->fsuid;
         op_data->fsgid = current->fsgid;
@@ -1807,7 +1816,8 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
 
         if (obj) {
                 for (i = 0; i < obj->lo_objcount; i++) {
-                        op_data->fid1 = obj->lo_inodes[i].li_fid;
+                        op_data->fid1      = obj->lo_inodes[i].li_fid;
+                        op_data->mod_capa1 = obj->lo_inodes[i].li_capa;
 
                         tgt_exp = lmv_get_export(lmv, &op_data->fid1);
                         if (IS_ERR(tgt_exp)) {
@@ -1844,7 +1854,7 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
 }
 
 static int lmv_sync(struct obd_export *exp, const struct lu_fid *fid,
-                    struct ptlrpc_request **request)
+                    struct obd_capa *oc, struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1860,7 +1870,7 @@ static int lmv_sync(struct obd_export *exp, const struct lu_fid *fid,
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        rc = md_sync(tgt_exp, fid, request);
+        rc = md_sync(tgt_exp, fid, oc, request);
         RETURN(rc);
 }
 
@@ -1912,7 +1922,8 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
         struct page *page = NULL;
         struct lu_dirpage *next_dp;
         struct obd_export *tgt_exp;
-        struct lu_fid rid = *fid;
+        struct lu_fid rid;
+        struct obd_capa *rcapa;
         __u32 seg_end, max_hash = MAX_HASH_SIZE;
         int rc = 0;
         
@@ -1926,6 +1937,7 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
         
         /* Get start offset from next segment */
         rid = obj->lo_inodes[index].li_fid;
+        rcapa = obj->lo_inodes[index].li_capa;
         tgt_exp = lmv_get_export(lmv, &rid);
         if (IS_ERR(tgt_exp))
                 GOTO(cleanup, PTR_ERR(tgt_exp));
@@ -1936,7 +1948,7 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
         if (!page)
                 GOTO(cleanup, rc = -ENOMEM);
     
-        rc = md_readpage(tgt_exp, &rid, seg_end, page, &tmp_req);
+        rc = md_readpage(tgt_exp, &rid, rcapa, seg_end, page, &tmp_req);
         if (rc) {
                 /* E2BIG means it already reached the end of the dir, 
                  * no need reset the hash segment end */
@@ -1963,15 +1975,15 @@ cleanup:
         RETURN(rc);
 }
 
-static int lmv_readpage(struct obd_export *exp,
-                        const struct lu_fid *fid,
-                        __u64 offset, struct page *page,
+static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
+                        struct obd_capa *oc, __u64 offset, struct page *page,
                         struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_export *tgt_exp;
         struct lu_fid rid = *fid;
+        struct obd_capa *rcapa = oc;
         struct lmv_obj *obj;
         int i = 0, rc;
         ENTRY;
@@ -1994,6 +2006,7 @@ static int lmv_readpage(struct obd_export *exp,
                 do_div(index, seg);
                 i = (int)index;
                 rid = obj->lo_inodes[i].li_fid;
+                rcapa = obj->lo_inodes[i].li_capa;
 
                 lmv_obj_unlock(obj);
 
@@ -2005,7 +2018,7 @@ static int lmv_readpage(struct obd_export *exp,
         if (IS_ERR(tgt_exp))
                 GOTO(cleanup, PTR_ERR(tgt_exp));
 
-        rc = md_readpage(tgt_exp, &rid, offset, page, request);
+        rc = md_readpage(tgt_exp, &rid, rcapa, offset, page, request);
         if (rc) 
                 GOTO(cleanup, rc);
 
@@ -2108,7 +2121,8 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                 if (obj) {
                         i = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                          op_data->name, op_data->namelen);
-                        op_data->fid1 = obj->lo_inodes[i].li_fid;
+                        op_data->fid1      = obj->lo_inodes[i].li_fid;
+                        op_data->mod_capa1 = obj->lo_inodes[i].li_capa;
                         lmv_obj_put(obj);
                         CDEBUG(D_OTHER, "unlink '%*s' in "DFID" -> %u\n",
                                op_data->namelen, op_data->name,
@@ -2479,6 +2493,7 @@ int lmv_clear_open_replay_data(struct obd_export *exp,
 }
 
 static int lmv_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
+                               struct obd_capa *oc,
                                struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -2496,8 +2511,29 @@ static int lmv_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        rc = md_get_remote_perm(tgt_exp, fid, request);
+        rc = md_get_remote_perm(tgt_exp, fid, oc, request);
 
+        RETURN(rc);
+}
+
+static int lmv_renew_capa(struct obd_export *exp, struct obd_capa *ocapa,
+                          renew_capa_cb_t cb)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct obd_export *tgt_exp;
+        int rc;
+        ENTRY;
+
+        rc = lmv_check_connect(obd);
+        if (rc)
+                RETURN(rc);
+
+        tgt_exp = lmv_get_export(lmv, &ocapa->c_capa.lc_fid);
+        if (IS_ERR(tgt_exp))
+                RETURN(PTR_ERR(tgt_exp));
+
+        rc = md_renew_capa(tgt_exp, ocapa, cb);
         RETURN(rc);
 }
 
@@ -2550,7 +2586,8 @@ struct md_ops lmv_md_ops = {
         .m_free_lustre_md       = lmv_free_lustre_md,
         .m_set_open_replay_data = lmv_set_open_replay_data,
         .m_clear_open_replay_data = lmv_clear_open_replay_data,
-        .m_get_remote_perm      = lmv_get_remote_perm
+        .m_get_remote_perm      = lmv_get_remote_perm,
+        .m_renew_capa           = lmv_renew_capa
 };
 
 int __init lmv_init(void)
