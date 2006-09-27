@@ -1145,92 +1145,6 @@ static int filter_prep_groups(struct obd_device *obd)
         }
         return rc;
 
-#if 0
-        OBD_ALLOC(filter->fo_last_objids, FILTER_GROUPS * sizeof(__u64));
-        if (filter->fo_last_objids == NULL)
-                GOTO(cleanup, rc = -ENOMEM);
-        cleanup_phase = 2; /* groups */
-
-        OBD_ALLOC(filter->fo_dentry_O_groups, FILTER_GROUPS * sizeof(dentry));
-        if (filter->fo_dentry_O_groups == NULL)
-                GOTO(cleanup, rc = -ENOMEM);
-        OBD_ALLOC(filter->fo_last_objid_files, FILTER_GROUPS * sizeof(filp));
-        if (filter->fo_last_objid_files == NULL)
-                GOTO(cleanup, rc = -ENOMEM);
-
-        for (i = 0; i < FILTER_GROUPS; i++) {
-                char name[25];
-                loff_t off = 0;
-
-                sprintf(name, "%d", i);
-                dentry = simple_mkdir(O_dentry, name, 0700, 1);
-                CDEBUG(D_INODE, "got/created O/%s: %p\n", name, dentry);
-                if (IS_ERR(dentry)) {
-                        rc = PTR_ERR(dentry);
-                        CERROR("cannot lookup/create O/%s: rc = %d\n",
-                               name, rc);
-                        GOTO(cleanup, rc);
-                }
-                filter->fo_dentry_O_groups[i] = dentry;
-
-                sprintf(name, "O/%d/LAST_ID", i);
-                filp = filp_open(name, O_CREAT | O_RDWR, 0700);
-                if (IS_ERR(filp)) {
-                        rc = PTR_ERR(filp);
-                        CERROR("cannot create %s: rc = %d\n", name, rc);
-                        GOTO(cleanup, rc);
-                }
-                filter->fo_last_objid_files[i] = filp;
-
-                if (filp->f_dentry->d_inode->i_size == 0) {
-                        filter->fo_last_objids[i] = FILTER_INIT_OBJID;
-                        rc = filter_update_last_objid(obd, i, 1);
-                        if (rc)
-                                GOTO(cleanup, rc);
-                        continue;
-                }
-
-                rc = fsfilt_read_record(obd, filp, &filter->fo_last_objids[i],
-                                        sizeof(__u64), &off);
-                if (rc) {
-                        CDEBUG(D_INODE,"OBD filter: error reading %s: rc %d\n",
-                               name, rc);
-                        GOTO(cleanup, rc);
-                }
-                filter->fo_last_objids[i] =
-                        le64_to_cpu(filter->fo_last_objids[i]);
-                CDEBUG(D_HA, "%s: server last_objid group %d: "LPU64"\n",
-                       obd->obd_name, i, filter->fo_last_objids[i]);
-        }
-
-        if (filter->fo_subdir_count) {
-                O_dentry = filter->fo_dentry_O_groups[0];
-                OBD_ALLOC(filter->fo_dentry_O_sub,
-                          filter->fo_subdir_count * sizeof(dentry));
-                if (filter->fo_dentry_O_sub == NULL)
-                        GOTO(cleanup, rc = -ENOMEM);
-
-                for (i = 0; i < filter->fo_subdir_count; i++) {
-                        char dir[20];
-                        snprintf(dir, sizeof(dir), "d%u", i);
-
-                        dentry = simple_mkdir(O_dentry, dir, 0700, 1);
-                        CDEBUG(D_INODE, "got/created O/0/%s: %p\n", dir,dentry);
-                        if (IS_ERR(dentry)) {
-                                rc = PTR_ERR(dentry);
-                                CERROR("can't lookup/create O/0/%s: rc = %d\n",
-                                       dir, rc);
-                                GOTO(cleanup, rc);
-                        }
-                        filter->fo_dentry_O_sub[i] = dentry;
-                }
-        }
-        RETURN(0);
-
- cleanup:
-        filter_cleanup_groups(obd);
-        return rc;
-#endif 
 }
 
 /* setup the object store with correct subdirectories */
@@ -2206,18 +2120,7 @@ struct obd_llogs *filter_grab_llog_for_group(struct obd_device *obd, int group,
         spin_lock(&filter->fo_llog_list_lock);
         list_for_each(cur, &filter->fo_llog_list) {
                 nlog = list_entry(cur, struct filter_group_llog, list);
-#if 0
-                if (nlog->group == group) {
-                        CWARN("Interesting! someone already init group %d\n",
-                               group);
-                        spin_unlock(&filter->fo_llog_list_lock);
-                        OBD_FREE(fglog->llogs, sizeof(*(fglog->llogs)));
-                        OBD_FREE(fglog, sizeof(*fglog));
-                        RETURN(nlog->llogs);
-                }
-#else
                 LASSERT(nlog->group != group);
-#endif
         }
         list_add(&fglog->list, &filter->fo_llog_list);
         spin_unlock(&filter->fo_llog_list_lock);
@@ -3797,7 +3700,6 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         obd->u.filter.fo_mdc_conn.cookie = exp->exp_handle.h_cookie;
 
         /* setup llog imports */
-#if 0
         LASSERT(val != NULL);
         group = (int)(*(__u32 *)val);
         LASSERT(group >= FILTER_GROUP_MDS0); 
@@ -3806,9 +3708,6 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         LASSERT(llog != NULL);
         ctxt = llog_get_context_from_llogs(llog, LLOG_MDS_OST_REPL_CTXT);
         LASSERTF(ctxt != NULL, "ctxt is not null\n"),
-#else
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
-#endif
 
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
 

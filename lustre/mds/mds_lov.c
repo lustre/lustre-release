@@ -644,8 +644,8 @@ static int __mds_lov_synchronize(void *data)
         struct mds_obd *mds = &obd->u.mds;
         struct obd_uuid *uuid;
         __u32  idx = mlsi->mlsi_index;
+        struct mds_group_info mgi;
         int rc = 0;
-        __u32 group;
         ENTRY;
 
         OBD_FREE(mlsi, sizeof(*mlsi));
@@ -658,9 +658,10 @@ static int __mds_lov_synchronize(void *data)
         rc = mds_lov_update_mds(obd, watched, idx, uuid);
         if (rc != 0)
                 GOTO(out, rc);
-        group = FILTER_GROUP_MDS0 + mds->mds_id;
+        mgi.group = FILTER_GROUP_MDS0 + mds->mds_id;
+        mgi.uuid = uuid; 
         rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
-                                KEY_MDS_CONN, sizeof(group), &group/*uuid*/, NULL);
+                                KEY_MDS_CONN, sizeof(mgi), &mgi, NULL);
         if (rc != 0)
                 GOTO(out, rc);
 

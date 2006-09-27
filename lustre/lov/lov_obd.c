@@ -2405,15 +2405,24 @@ static int lov_set_info_async(struct obd_export *exp, obd_count keylen,
                 GOTO(out, rc);
         }
         if (KEY_IS(KEY_MDS_CONN)) {
+                struct mds_group_info mgi;
+                
+                LASSERT(vallen == sizeof(mgi));
+                mgi =  (*(struct mds_group_info *)val);
+
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_exp)
                                 continue;
                         
+                        if (mgi.uuid && !obd_uuid_equals(mgi.uuid, 
+                                                &lov->lov_tgts[i]->ltd_uuid))
+                                continue;
                         if (!val && !lov->lov_tgts[i]->ltd_active)
                                 continue;
 
                         err = obd_set_info_async(lov->lov_tgts[i]->ltd_exp,
-                                                 keylen, key, vallen, val, set);
+                                                 keylen, key, sizeof(int), 
+                                                 &mgi.group, set);
                         if (!rc)
                                 rc = err;
                 }

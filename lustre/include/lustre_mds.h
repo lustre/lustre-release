@@ -68,6 +68,11 @@ struct mds_file_data {
         struct dentry        *mfd_dentry;
 };
 
+struct mds_group_info {
+        struct obd_uuid *uuid;
+        int group;
+};
+
 /* mds/mds_reint.c */
 struct inode;
 
