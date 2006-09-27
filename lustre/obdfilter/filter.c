@@ -2206,6 +2206,7 @@ struct obd_llogs *filter_grab_llog_for_group(struct obd_device *obd, int group,
         spin_lock(&filter->fo_llog_list_lock);
         list_for_each(cur, &filter->fo_llog_list) {
                 nlog = list_entry(cur, struct filter_group_llog, list);
+#if 0
                 if (nlog->group == group) {
                         CWARN("Interesting! someone already init group %d\n",
                                group);
@@ -2214,6 +2215,9 @@ struct obd_llogs *filter_grab_llog_for_group(struct obd_device *obd, int group,
                         OBD_FREE(fglog, sizeof(*fglog));
                         RETURN(nlog->llogs);
                 }
+#else
+                LASSERT(nlog->group != group);
+#endif
         }
         list_add(&fglog->list, &filter->fo_llog_list);
         spin_unlock(&filter->fo_llog_list_lock);
@@ -3793,6 +3797,7 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         obd->u.filter.fo_mdc_conn.cookie = exp->exp_handle.h_cookie;
 
         /* setup llog imports */
+#if 0
         LASSERT(val != NULL);
         group = (int)(*(__u32 *)val);
         LASSERT(group >= FILTER_GROUP_MDS0); 
@@ -3801,6 +3806,9 @@ static int filter_set_info_async(struct obd_export *exp, __u32 keylen,
         LASSERT(llog != NULL);
         ctxt = llog_get_context_from_llogs(llog, LLOG_MDS_OST_REPL_CTXT);
         LASSERTF(ctxt != NULL, "ctxt is not null\n"),
+#else
+        ctxt = llog_get_context(obd, LLOG_MDS_OST_REPL_CTXT);
+#endif
 
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
 
