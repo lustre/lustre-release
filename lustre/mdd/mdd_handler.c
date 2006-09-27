@@ -183,6 +183,11 @@ static int mdd_in_group_p(struct md_ucred *uc, gid_t grp)
         if (grp != uc->mu_fsgid) {
                 struct group_info *group_info = NULL;
 
+                if (uc->mu_ginfo || (uc->mu_valid == UCRED_OLD))
+                        if ((grp == uc->mu_suppgids[0]) ||
+                            (grp == uc->mu_suppgids[1]))
+                                return 1;
+
                 if (uc->mu_ginfo)
                         group_info = uc->mu_ginfo;
                 else if (uc->mu_identity)

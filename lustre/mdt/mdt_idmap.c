@@ -390,9 +390,6 @@ int mdt_handle_idmap(struct mdt_thread_info *info)
         if (!med->med_rmtclient)
                 RETURN(0);
 
-        if (req->rq_auth_usr_mdt)
-                RETURN(0);
-
         opc = lustre_msg_get_opc(req->rq_reqmsg);
         /* Bypass other opc */
         if ((opc != SEC_CTX_INIT) && (opc != SEC_CTX_INIT_CONT) &&
@@ -517,9 +514,6 @@ int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *req,
         if (!med->med_rmtclient)
                 return 0;
 
-        if (req->rq_auth_usr_mdt)
-                return 0;
-
         uid = mdt_idmap_lookup_uid(idmap, 0, pud->pud_uid);
         if (uid == MDT_IDMAP_NOTFOUND) {
                 CERROR("no mapping for uid %u\n", pud->pud_uid);
@@ -557,21 +551,6 @@ int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *req,
         pud->pud_fsuid = fsuid;
         pud->pud_fsgid = fsgid;
 
-#if 0
-        /* remote client doesn't support setgroups */
-        if (med->med_rmtclient)
-                return 0;
-
-        for (i = 0; i < pud->pud_ngroups; i++) {
-                gid = mdt_idmap_lookup_gid(idmap, 0, pud->pud_groups[i]);
-                if (gid == MDT_IDMAP_NOTFOUND) {
-                        CERROR("no mapping for gid %u\n", pud->pud_gid);
-                        return -EACCES;
-                }
-                pud->pud_groups[i] = gid;
-        }
-#endif
-
         return 0;
 }
 
@@ -588,16 +567,18 @@ void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
         if (!med->med_rmtclient)
                 return;
 
-        if (req->rq_auth_usr_mdt)
-                return;
-
         if (body->valid & OBD_MD_FLUID) {
-                if (body->uid == uc->mu_uid)
-                        uid = uc->mu_o_uid;
-                else if (body->uid == uc->mu_fsuid)
-                        uid = uc->mu_o_fsuid;
-                else
+                if ((uc->mu_valid == UCRED_OLD) ||
+                    (uc->mu_valid == UCRED_NEW)) {
+                        if (body->uid == uc->mu_uid)
+                                uid = uc->mu_o_uid;
+                        else if (body->uid == uc->mu_fsuid)
+                                uid = uc->mu_o_fsuid;
+                        else
+                                uid = mdt_idmap_lookup_uid(idmap, 1, body->uid);
+                } else {
                         uid = mdt_idmap_lookup_uid(idmap, 1, body->uid);
+                }
 
                 if (uid == MDT_IDMAP_NOTFOUND) {
                         uid = med->med_nllu;
@@ -610,12 +591,17 @@ void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
         }
 
         if (body->valid & OBD_MD_FLGID) {
-                if (body->gid == uc->mu_gid)
-                        gid = uc->mu_o_gid;
-                else if (body->gid == uc->mu_fsgid)
-                        gid = uc->mu_o_fsgid;
-                else
+                if ((uc->mu_valid == UCRED_OLD) ||
+                    (uc->mu_valid == UCRED_NEW)) {
+                        if (body->gid == uc->mu_gid)
+                                gid = uc->mu_o_gid;
+                        else if (body->gid == uc->mu_fsgid)
+                                gid = uc->mu_o_fsgid;
+                        else
+                                gid = mdt_idmap_lookup_gid(idmap, 1, body->gid);
+                } else {
                         gid = mdt_idmap_lookup_gid(idmap, 1, body->gid);
+                }
 
                 if (gid == MDT_IDMAP_NOTFOUND) {
                         gid = med->med_nllg;
@@ -687,8 +673,8 @@ int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
         if (!med->med_rmtclient)
                 RETURN(0);
 
-        if (req->rq_auth_usr_mdt)
-                RETURN(0);
+        if ((uc->mu_valid != UCRED_OLD) && (uc->mu_valid != UCRED_NEW))
+                RETURN(-EINVAL);
 
         if (op != REINT_SETATTR) {
                 if ((attr->la_valid & LA_UID) && (attr->la_uid != -1))

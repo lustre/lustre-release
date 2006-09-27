@@ -64,6 +64,7 @@ struct md_ucred {
         __u32                   mu_gid;
         __u32                   mu_fsuid;
         __u32                   mu_fsgid;
+        __u32                   mu_suppgids[2];
         __u32                   mu_cap;
         __u32                   mu_umask;
 	struct group_info      *mu_ginfo;

@@ -171,6 +171,9 @@ struct mdt_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid)
 {
         struct upcall_cache_entry *entry;
 
+        if (!cache)
+                return NULL;
+
         entry = upcall_cache_get_entry(cache, (__u64)uid, NULL);
         if (IS_ERR(entry)) {
                 CERROR("upcall_cache_get_entry failed: %ld\n", PTR_ERR(entry));
@@ -179,30 +182,12 @@ struct mdt_identity *mdt_identity_get(struct upcall_cache *cache, __u32 uid)
 
         return &entry->u.identity;
 }
-
-#if 0
-struct mdt_identity *mdt_identity_get(struct mdt_thread_info *info,
-                                      struct upcall_cache *cache, __u32 uid)
-{
-        struct ptlrpc_request *req = mdt_info_req(info);
-        struct lvfs_run_ctxt saved;
-        struct obd_device *obd = req->rq_export->exp_obd;
-        struct upcall_cache_entry *entry;
-
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &info->mti_uc);
-        entry = upcall_cache_get_entry(cache, (__u64)uid, NULL);
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &info->mti_uc);
-        if (IS_ERR(entry)) {
-                CERROR("upcall_cache_get_entry failed: %ld\n", PTR_ERR(entry));
-                return NULL;
-        }
-
-        return &entry->u.identity;
-}
-#endif
 
 void mdt_identity_put(struct upcall_cache *cache, struct mdt_identity *identity)
 {
+        if (!cache)
+                return;
+
         LASSERT(identity);
         upcall_cache_put_entry(cache, identity->mi_uc_entry);
 }
@@ -255,53 +240,21 @@ int mdt_pack_remote_perm(struct mdt_thread_info *info, struct mdt_object *o,
         if (!med->med_rmtclient)
                 RETURN(-EBADE);
 
+        if ((uc->mu_valid != UCRED_OLD) && (uc->mu_valid != UCRED_NEW))
+                RETURN(-EINVAL);
+
         perm->rp_uid = uc->mu_o_uid;
         perm->rp_gid = uc->mu_o_gid;
         perm->rp_fsuid = uc->mu_o_fsuid;
         perm->rp_fsgid = uc->mu_o_fsgid;
 
         perm->rp_access_perm = 0;
-        if (mo_permission(info->mti_ctxt, next, MAY_READ, &info->mti_uc) == 0)
+        if (mo_permission(info->mti_ctxt, next, MAY_READ, uc) == 0)
                 perm->rp_access_perm |= MAY_READ;
-        if (mo_permission(info->mti_ctxt, next, MAY_WRITE, &info->mti_uc) == 0)
+        if (mo_permission(info->mti_ctxt, next, MAY_WRITE, uc) == 0)
                 perm->rp_access_perm |= MAY_WRITE;
-        if (mo_permission(info->mti_ctxt, next, MAY_EXEC, &info->mti_uc) == 0)
+        if (mo_permission(info->mti_ctxt, next, MAY_EXEC, uc) == 0)
                 perm->rp_access_perm |= MAY_EXEC;
 
         RETURN(0);
 }
-
-#if 0
-int mdt_pack_remote_perm(struct mdt_thread_info *info, struct mdt_object *o,
-                         void *buf)
-{
-        struct ptlrpc_request   *req = mdt_info_req(info);
-        struct lvfs_ucred       *uc = &info->mti_uc;
-        struct md_object        *next = mdt_object_child(o);
-        struct mdt_export_data  *med = mdt_req2med(req);
-        struct ptlrpc_user_desc *pud = req->rq_user_desc;
-        struct mdt_remote_perm  *perm = buf;
-        int                     rc;
-        ENTRY;
-
-        /* remote client request always pack ptlrpc_user_desc! */
-        LASSERT(pud);
-        LASSERT(perm);
-
-        if (!med->med_rmtclient)
-                RETURN(-EBADE);
-
-        perm->rp_uid = pud->pud_uid;
-        perm->rp_gid = pud->pud_gid;
-        perm->rp_fsuid = pud->pud_fsuid;
-        perm->rp_fsgid = pud->pud_fsgid;
-
-        rc = mdt_remote_perm_reverse_idmap(req, perm);
-        if (rc)
-                RETURN(rc);
-
-        return mo_permission(ctxt, &info->mti_uc, next,
-                             (MAY_EXEC | MAY_WRITE | MAY_READ),
-                             &perm->rp_access_perm);
-}
-#endif

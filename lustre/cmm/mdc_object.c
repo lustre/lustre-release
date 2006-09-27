@@ -258,10 +258,15 @@ static int mdc_object_create(const struct lu_context *ctx,
                 uid = uc->mu_fsuid;
                 gid = uc->mu_fsgid;
                 cap = uc->mu_cap;
+                if (uc->mu_ginfo || (uc->mu_valid == UCRED_OLD))
+                        mci->mci_opdata.suppgids[0] = uc->mu_suppgids[0];
+                else
+                        mci->mci_opdata.suppgids[0] = -1;
         } else {
                 uid = la->la_uid;
                 gid = la->la_gid;
                 cap = 0;
+                mci->mci_opdata.suppgids[0] = -1;
         }
 
         /* get data from spec */
@@ -312,10 +317,18 @@ static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo,
                 mci->mci_opdata.fsuid = uc->mu_fsuid;
                 mci->mci_opdata.fsgid = uc->mu_fsgid;
                 mci->mci_opdata.cap = uc->mu_cap;
+                if (uc->mu_ginfo || (uc->mu_valid == UCRED_OLD)) {
+                        mci->mci_opdata.suppgids[0] = uc->mu_suppgids[0];
+                        mci->mci_opdata.suppgids[1] = uc->mu_suppgids[1];
+                } else {
+                        mci->mci_opdata.suppgids[0] =
+                                mci->mci_opdata.suppgids[1] = -1;
+                }
         } else {
                 mci->mci_opdata.fsuid = current->fsuid;
                 mci->mci_opdata.fsgid = current->fsgid;
                 mci->mci_opdata.cap = current->cap_effective;
+                mci->mci_opdata.suppgids[0] = mci->mci_opdata.suppgids[1] = -1;
         }
 
 
@@ -344,10 +357,15 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
                 mci->mci_opdata.fsuid = uc->mu_fsuid;
                 mci->mci_opdata.fsgid = uc->mu_fsgid;
                 mci->mci_opdata.cap = uc->mu_cap;
+                if (uc->mu_ginfo || (uc->mu_valid == UCRED_OLD))
+                        mci->mci_opdata.suppgids[0] = uc->mu_suppgids[0];
+                else
+                        mci->mci_opdata.suppgids[0] = -1;
         } else {
                 mci->mci_opdata.fsuid = la->la_uid;
                 mci->mci_opdata.fsgid = la->la_gid;
                 mci->mci_opdata.cap = current->cap_effective;
+                mci->mci_opdata.suppgids[0] = -1;
         }
 
         rc = md_unlink(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
@@ -407,10 +425,18 @@ static int mdc_rename_tgt(const struct lu_context *ctx, struct md_object *mo_p,
                 mci->mci_opdata.fsuid = uc->mu_fsuid;
                 mci->mci_opdata.fsgid = uc->mu_fsgid;
                 mci->mci_opdata.cap = uc->mu_cap;
+                if (uc->mu_ginfo || (uc->mu_valid == UCRED_OLD)) {
+                        mci->mci_opdata.suppgids[0] = uc->mu_suppgids[0];
+                        mci->mci_opdata.suppgids[1] = uc->mu_suppgids[1];
+                } else {
+                        mci->mci_opdata.suppgids[0] =
+                                mci->mci_opdata.suppgids[1] = -1;
+                }
         } else {
                 mci->mci_opdata.fsuid = la->la_uid;
                 mci->mci_opdata.fsgid = la->la_gid;
                 mci->mci_opdata.cap = current->cap_effective;
+                mci->mci_opdata.suppgids[0] = mci->mci_opdata.suppgids[1] = -1;
         }
 
         rc = md_rename(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,

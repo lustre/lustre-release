@@ -41,6 +41,11 @@
 #include "mdt_internal.h"
 
 
+typedef enum ucred_init_type {
+        BODY_INIT       = 0,
+        REC_INIT        = 1,
+} ucred_init_type_t;
+
 int groups_from_list(struct group_info *ginfo, gid_t *glist)
 {
         int i;
@@ -96,6 +101,7 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
         struct mdt_device *mdt = info->mti_mdt;
 
         if (uc->mu_valid != UCRED_INIT) {
+                uc->mu_suppgids[0] = uc->mu_suppgids[1] = -1;
                 if (uc->mu_ginfo) {
                         groups_free(uc->mu_ginfo);
                         uc->mu_ginfo = NULL;
@@ -109,35 +115,93 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
         }
 }
 
+static int old_init_ucred(struct mdt_thread_info *info,
+                          struct mdt_body *body)
+{
+        struct md_ucred     *uc = &info->mti_uc;
+        struct mdt_device   *mdt = info->mti_mdt;
+        struct mdt_identity *identity = NULL;
+
+        ENTRY;
+
+        uc->mu_valid = UCRED_INVALID;
+
+        if (!mdt->no_gss_support) {
+                /* get identity info of this user */
+                identity = mdt_identity_get(mdt->mdt_identity_cache,
+                                            body->fsuid);
+                if (!identity) {
+                        CERROR("Deny access without identity: uid %d\n",
+                               body->fsuid);
+                        RETURN(-EACCES);
+                }
+        }
+
+        uc->mu_valid = UCRED_OLD;
+        uc->mu_o_uid = uc->mu_uid = body->uid;
+        uc->mu_o_gid = uc->mu_gid = body->gid;
+        uc->mu_o_fsuid = uc->mu_fsuid = body->fsuid;
+        uc->mu_o_fsgid = uc->mu_fsgid = body->fsgid;
+        uc->mu_suppgids[0] = body->suppgid;
+        uc->mu_suppgids[1] = -1;
+        uc->mu_cap = body->capability;
+        uc->mu_ginfo = NULL;
+        uc->mu_identity = identity;
+
+        RETURN(0);
+}
+
+static int old_init_ucred_reint(struct mdt_thread_info *info)
+{
+        struct md_ucred     *uc = &info->mti_uc;
+        struct mdt_device   *mdt = info->mti_mdt;
+        struct mdt_identity *identity = NULL;
+
+        ENTRY;
+
+        uc->mu_valid = UCRED_INVALID;
+
+        if (!mdt->no_gss_support) {
+                /* get identity info of this user */
+                identity = mdt_identity_get(mdt->mdt_identity_cache,
+                                            uc->mu_fsuid);
+                if (!identity) {
+                        CERROR("Deny access without identity: uid %d\n",
+                               uc->mu_fsuid);
+                        RETURN(-EACCES);
+                }
+        }
+
+        uc->mu_valid = UCRED_OLD;
+        uc->mu_o_uid = uc->mu_o_fsuid = uc->mu_uid = uc->mu_fsuid;
+        uc->mu_o_gid = uc->mu_o_fsgid = uc->mu_gid = uc->mu_fsgid;
+        uc->mu_ginfo = NULL;
+        uc->mu_identity = identity;
+
+        RETURN(0);
+}
+
 static int nid_nosquash(struct mdt_device *mdt, lnet_nid_t nid)
 {
         struct rootsquash_info *rsi = mdt->mdt_rootsquash_info;
         int i;
 
         for (i = 0; i < rsi->rsi_n_nosquash_nids; i++)
-                if (rsi->rsi_nosquash_nids[i] == nid ||
-                    rsi->rsi_nosquash_nids[i] == LNET_NID_ANY)
+                if ((rsi->rsi_nosquash_nids[i] == nid) ||
+                    (rsi->rsi_nosquash_nids[i] == LNET_NID_ANY))
                         return 1;
 
         return 0;
 }
 
-/*
- * FIXME: here we follow simple rule: once uid/fsuid is root, we also squash
- *        the gid/fsgid, don't care setuid/setgid attributes.
- *
- * NB: don't change pud fields in root squash, because xid in pud will be
- *     packed in remote perm reply.
- */
 static int mdt_squash_root(struct mdt_device *mdt, struct md_ucred *ucred,
                            struct ptlrpc_user_desc *pud, lnet_nid_t peernid)
 {
         struct rootsquash_info *rsi = mdt->mdt_rootsquash_info;
+        int squash_count = 0;
 
-        if (pud->pud_uid && pud->pud_fsuid)
-                return 0;
-
-        if (!rsi || !rsi->rsi_uid || nid_nosquash(mdt, peernid))
+        if (!rsi || (!rsi->rsi_uid && !rsi->rsi_gid) ||
+            nid_nosquash(mdt, peernid))
                 return 0;
 
         CDEBUG(D_SEC, "squash req from "LPX64":"
@@ -150,28 +214,64 @@ static int mdt_squash_root(struct mdt_device *mdt, struct md_ucred *ucred,
                pud->pud_fsuid ? pud->pud_fsgid : rsi->rsi_gid,
                pud->pud_cap & ~CAP_FS_MASK);
 
-        if (pud->pud_uid == 0) {
-                ucred->mu_uid = rsi->rsi_uid;
-                ucred->mu_gid = rsi->rsi_gid;
-        } else {
-                ucred->mu_uid = pud->pud_uid;
-                ucred->mu_gid = pud->pud_gid;
+        if (rsi->rsi_uid) {
+                if (!pud->pud_uid) {
+                        ucred->mu_uid = rsi->rsi_uid;
+                        squash_count++;
+                } else {
+                        ucred->mu_uid = pud->pud_uid;
+                }
+
+                if (!pud->pud_fsuid) {
+                        ucred->mu_fsuid = rsi->rsi_uid;
+                        squash_count++;
+                } else {
+                        ucred->mu_fsuid = pud->pud_fsuid;
+                }
         }
 
-        if (pud->pud_fsuid == 0) {
-                ucred->mu_fsuid = rsi->rsi_uid;
-                ucred->mu_fsgid = rsi->rsi_gid;
-        } else {
-                ucred->mu_fsuid = pud->pud_fsuid;
-                ucred->mu_fsgid = pud->pud_fsgid;
+        if (rsi->rsi_gid) {
+                int i;
+
+                if (!pud->pud_gid) {
+                        ucred->mu_gid = rsi->rsi_gid;
+                        squash_count++;
+                } else {
+                        ucred->mu_gid = pud->pud_gid;
+                }
+
+                if (!pud->pud_fsgid) {
+                        ucred->mu_fsgid = rsi->rsi_gid;
+                        squash_count++;
+                } else {
+                        ucred->mu_fsgid = pud->pud_fsgid;
+                }
+
+                for (i = 0; i < 2; i++) {
+                        if (!ucred->mu_suppgids[i]) {
+                                ucred->mu_suppgids[i] = rsi->rsi_gid;
+                                squash_count++;
+                        }
+                }
+
+                for (i = 0; i < pud->pud_ngroups; i++) {
+                        if (!pud->pud_groups[i]) {
+                                pud->pud_groups[i] = rsi->rsi_gid;
+                                squash_count++;
+                        }
+                }
         }
 
-        ucred->mu_cap &= (pud->pud_cap & ~CAP_FS_MASK);
+        if (squash_count || ucred->mu_fsuid)
+                ucred->mu_cap = (pud->pud_cap & ~CAP_FS_MASK);
+        else
+                ucred->mu_cap = pud->pud_cap;
 
         return 1;
 }
 
-static int new_init_ucred(struct mdt_thread_info *info)
+static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
+                          void *buf)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_export_data  *med = mdt_req2med(req);
@@ -182,6 +282,8 @@ static int new_init_ucred(struct mdt_thread_info *info)
         lnet_nid_t              peernid = req->rq_peer.nid;
         __u32                   setxid_perm = 0;
         int                     root_squashed = 0;
+        int                     setuid;
+        int                     setgid;
         int                     rc = 0;
 
         ENTRY;
@@ -199,10 +301,31 @@ static int new_init_ucred(struct mdt_thread_info *info)
                 RETURN(-EACCES);
         }
 
+        if (req->rq_auth_usr_mdt) {
+                switch (type) {
+                case BODY_INIT:
+                        ucred->mu_valid = UCRED_INIT;
+                        RETURN(old_init_ucred(info, (struct mdt_body *)buf));
+                case REC_INIT:
+                        ucred->mu_valid = UCRED_INIT;
+                        RETURN(old_init_ucred_reint(info));
+                default:
+                        CWARN("Invalid ucred init type\n");
+                        RETURN(-EINVAL);
+                }
+        }
+
         ucred->mu_o_uid   = pud->pud_uid;
         ucred->mu_o_gid   = pud->pud_gid;
         ucred->mu_o_fsuid = pud->pud_fsuid;
         ucred->mu_o_fsgid = pud->pud_fsgid;
+
+        if (type == BODY_INIT) {
+                struct mdt_body *body = (struct mdt_body *)buf;
+
+                ucred->mu_suppgids[0] = body->suppgid;
+                ucred->mu_suppgids[1] = -1;
+        }
 
         /* sanity check: if we use strong authentication, we expect the
          * uid which client claimed is true */
@@ -241,40 +364,34 @@ static int new_init_ucred(struct mdt_thread_info *info)
                 RETURN(-EACCES);
         }
 
-        /* check setuid/setgid permissions */
-        if (!req->rq_auth_usr_mdt) {
-                int setuid, setgid;
+        /* find out the setuid/setgid attempt */
+        setuid = (pud->pud_uid != pud->pud_fsuid);
+        setgid = (pud->pud_gid != pud->pud_fsgid ||
+                  pud->pud_gid != identity->mi_gid);
 
-                /* find out the setuid/setgid attempt */
-                setuid = (pud->pud_uid != pud->pud_fsuid);
-                setgid = (pud->pud_gid != pud->pud_fsgid ||
-                          pud->pud_gid != identity->mi_gid);
+        setxid_perm = mdt_identity_get_setxid_perm(identity,
+                                                   med->med_rmtclient,
+                                                   peernid);
 
-                setxid_perm = mdt_identity_get_setxid_perm(identity,
-                                                           med->med_rmtclient,
-                                                           peernid);
+        /* check permission of setuid */
+        if (setuid && !(setxid_perm & LUSTRE_SETUID_PERM)) {
+                CWARN("mdt blocked setuid attempt (%u -> %u) from "
+                      LPX64"\n", pud->pud_uid, pud->pud_fsuid, peernid);
+                GOTO(out, rc = -EACCES);
+        }
 
-                /* check permission of setuid */
-                if (setuid && !(setxid_perm & LUSTRE_SETUID_PERM)) {
-                        CWARN("mdt blocked setuid attempt (%u -> %u) from "
-                              LPX64"\n", pud->pud_uid, pud->pud_fsuid, peernid);
-                        GOTO(out, rc = -EACCES);
-                }
-
-                /* check permission of setgid */
-                if (setgid && !(setxid_perm & LUSTRE_SETGID_PERM)) {
-                        CWARN("mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
-                              "from "LPX64"\n", pud->pud_uid, pud->pud_gid,
-                              pud->pud_fsuid, pud->pud_fsgid, identity->mi_gid,
-                              peernid);
-                        GOTO(out, rc = -EACCES);
-                }
+        /* check permission of setgid */
+        if (setgid && !(setxid_perm & LUSTRE_SETGID_PERM)) {
+                CWARN("mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
+                      "from "LPX64"\n", pud->pud_uid, pud->pud_gid,
+                      pud->pud_fsuid, pud->pud_fsgid, identity->mi_gid,
+                      peernid);
+                GOTO(out, rc = -EACCES);
         }
 
 check_squash:
         /* FIXME: The exact behavior of root_squash is not defined. */
-        if (!req->rq_auth_usr_mdt)
-                root_squashed = mdt_squash_root(mdt, ucred, pud, peernid);
+        root_squashed = mdt_squash_root(mdt, ucred, pud, peernid);
         if (!root_squashed) {
                 ucred->mu_uid   = pud->pud_uid;
                 ucred->mu_gid   = pud->pud_gid;
@@ -286,17 +403,11 @@ check_squash:
                         ucred->mu_cap &= ~CAP_FS_MASK;
         }
 
-        /* by now every fields other than groups have been granted */
-        ucred->mu_identity = identity;
-
-        /* setgroups for local client with LUSTRE_SETGRP_PERM, and no_squash_
-         * root, otherwise install groups from local user supplementary groups.
-         *
+        /*
          * NB: remote client not allowed to setgroups anyway.
          */
-        if (req->rq_auth_usr_mdt ||
-            (pud->pud_ngroups && !med->med_rmtclient && !root_squashed &&
-            (setxid_perm & LUSTRE_SETGRP_PERM))) {
+        if (pud->pud_ngroups && !med->med_rmtclient &&
+            ((setxid_perm & LUSTRE_SETGRP_PERM) || mdt->no_gss_support)) {
                 struct group_info *ginfo;
 
                 /* setgroups for local client */
@@ -313,6 +424,7 @@ check_squash:
                 ucred->mu_ginfo = NULL;
         }
 
+        ucred->mu_identity = identity;
         ucred->mu_valid = UCRED_NEW;
 
 out:
@@ -320,44 +432,6 @@ out:
                 mdt_identity_put(mdt->mdt_identity_cache, identity);
 
         RETURN(rc);
-}
-
-static int old_init_ucred(struct mdt_thread_info *info,
-                          struct mdt_body *body)
-{
-        struct md_ucred     *uc = &info->mti_uc;
-        struct mdt_device   *mdt = info->mti_mdt;
-        struct mdt_identity *identity = NULL;
-
-        ENTRY;
-
-        uc->mu_valid = UCRED_INVALID;
-
-        if (!mdt->no_gss_support) {
-                /* get identity info of this user */
-                identity = mdt_identity_get(mdt->mdt_identity_cache,
-                                            body->fsuid);
-                if (!identity) {
-                        CERROR("Deny access without identity: uid %d\n",
-                               body->fsuid);
-                        RETURN(-EACCES);
-                }
-        }
-
-        uc->mu_valid = UCRED_OLD;
-        uc->mu_o_uid = body->uid;
-        uc->mu_o_gid = body->gid;
-        uc->mu_o_fsuid = body->fsuid;
-        uc->mu_o_fsgid = body->fsgid;
-        uc->mu_uid = body->uid;
-        uc->mu_gid = body->gid;
-        uc->mu_fsuid = body->fsuid;
-        uc->mu_fsgid = body->fsgid;
-        uc->mu_cap = body->capability;
-        uc->mu_ginfo = NULL;
-        uc->mu_identity = identity;
-
-        RETURN(0);
 }
 
 int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
@@ -371,38 +445,8 @@ int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
         mdt_exit_ucred(info);
 
         /* !rq_user_desc means null security */
-        return req->rq_user_desc ? new_init_ucred(info) :
+        return req->rq_user_desc ? new_init_ucred(info, BODY_INIT, body) :
                                    old_init_ucred(info, body);
-}
-
-static int old_init_ucred_reint(struct mdt_thread_info *info)
-{
-        struct md_ucred     *uc = &info->mti_uc;
-        struct mdt_device   *mdt = info->mti_mdt;
-        struct mdt_identity *identity = NULL;
-
-        ENTRY;
-
-        uc->mu_valid = UCRED_INVALID;
-
-        if (!mdt->no_gss_support) {
-                /* get identity info of this user */
-                identity = mdt_identity_get(mdt->mdt_identity_cache,
-                                            uc->mu_fsuid);
-                if (!identity) {
-                        CERROR("Deny access without identity: uid %d\n",
-                               uc->mu_fsuid);
-                        RETURN(-EACCES);
-                }
-        }
-
-        uc->mu_valid = UCRED_OLD;
-        uc->mu_o_uid = uc->mu_o_fsuid = uc->mu_uid = uc->mu_fsuid;
-        uc->mu_o_gid = uc->mu_o_fsgid = uc->mu_gid = uc->mu_fsgid;
-        uc->mu_ginfo = NULL;
-        uc->mu_identity = identity;
-
-        RETURN(0);
 }
 
 int mdt_init_ucred_reint(struct mdt_thread_info *info)
@@ -416,7 +460,7 @@ int mdt_init_ucred_reint(struct mdt_thread_info *info)
         mdt_exit_ucred(info);
 
         /* !rq_user_desc means null security */
-        return req->rq_user_desc ? new_init_ucred(info) :
+        return req->rq_user_desc ? new_init_ucred(info, REC_INIT, NULL) :
                                    old_init_ucred_reint(info);
 }
 
@@ -565,6 +609,8 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
         uc->mu_uid   = rec->sa_uid;
         uc->mu_gid   = rec->sa_gid;
         uc->mu_cap   = rec->sa_cap;
+        uc->mu_suppgids[0] = rec->sa_suppgid;
+        uc->mu_suppgids[1] = -1;
  
         rr->rr_fid1 = &rec->sa_fid;
         la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma);
@@ -655,6 +701,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 uc->mu_fsuid = rec->cr_fsuid;
                 uc->mu_fsgid = rec->cr_fsgid;
                 uc->mu_cap   = rec->cr_cap;
+                uc->mu_suppgids[0] = rec->cr_suppgid;
+                uc->mu_suppgids[1] = -1;
  
                 rr->rr_fid1 = &rec->cr_fid1;
                 rr->rr_fid2 = &rec->cr_fid2;
@@ -720,6 +768,8 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
                 uc->mu_fsuid = rec->lk_fsuid;
                 uc->mu_fsgid = rec->lk_fsgid;
                 uc->mu_cap   = rec->lk_cap;
+                uc->mu_suppgids[0] = rec->lk_suppgid1;
+                uc->mu_suppgids[1] = rec->lk_suppgid2;
  
                 attr->la_uid = rec->lk_fsuid;
                 attr->la_gid = rec->lk_fsgid;
@@ -751,6 +801,8 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
                 uc->mu_fsuid = rec->ul_fsuid;
                 uc->mu_fsgid = rec->ul_fsgid;
                 uc->mu_cap   = rec->ul_cap;
+                uc->mu_suppgids[0] = rec->ul_suppgid;
+                uc->mu_suppgids[1] = -1;
  
                 attr->la_uid = rec->ul_fsuid;
                 attr->la_gid = rec->ul_fsgid;
@@ -785,6 +837,8 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
                 uc->mu_fsuid = rec->rn_fsuid;
                 uc->mu_fsgid = rec->rn_fsgid;
                 uc->mu_cap   = rec->rn_cap;
+                uc->mu_suppgids[0] = rec->rn_suppgid1;
+                uc->mu_suppgids[1] = rec->rn_suppgid2;
  
                 attr->la_uid = rec->rn_fsuid;
                 attr->la_gid = rec->rn_fsgid;
@@ -820,6 +874,8 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
                 uc->mu_fsuid = rec->cr_fsuid;
                 uc->mu_fsgid = rec->cr_fsgid;
                 uc->mu_cap   = rec->cr_cap;
+                uc->mu_suppgids[0] = rec->cr_suppgid;
+                uc->mu_suppgids[1] = -1;
  
                 rr->rr_fid1   = &rec->cr_fid1;
                 rr->rr_fid2   = &rec->cr_fid2;
