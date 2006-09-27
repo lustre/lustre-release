@@ -388,14 +388,27 @@ static int mdt_getattr(struct mdt_thread_info *info)
 {
         int rc;
         struct mdt_object *obj;
+        struct mdt_body *reqbody;
 
         obj = info->mti_object;
         LASSERT(obj != NULL);
         LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
         ENTRY;
 
+        reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
+        if (reqbody == NULL)
+                RETURN(-EFAULT);
+
+        if (reqbody->valid & OBD_MD_FLRMTPERM) {
+                rc = mdt_init_ucred(info, reqbody);
+                if (rc)
+                        RETURN(rc);
+        }
+
         rc = mdt_getattr_internal(info, obj);
         mdt_shrink_reply(info, REPLY_REC_OFF + 1);
+        if (reqbody->valid & OBD_MD_FLRMTPERM) 
+                mdt_exit_ucred(info);
         RETURN(rc);
 }
 
@@ -2998,14 +3011,14 @@ static void mdt_fini(const struct lu_context *ctx, struct mdt_device *m)
         ENTRY;
         target_cleanup_recovery(m->mdt_md_dev.md_lu_dev.ld_obd);
 
+        ping_evictor_stop();
+        mdt_stop_ptlrpc_service(m);
+
         upcall_cache_cleanup(m->mdt_rmtacl_cache);
         m->mdt_rmtacl_cache = NULL;
 
         upcall_cache_cleanup(m->mdt_identity_cache);
         m->mdt_identity_cache = NULL;
-
-        ping_evictor_stop();
-        mdt_stop_ptlrpc_service(m);
 
         if (m->mdt_namespace != NULL) {
                 ldlm_namespace_free(m->mdt_namespace, 0);
@@ -3122,6 +3135,25 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
         /* set obd_namespace for compatibility with old code */
         obd->obd_namespace = m->mdt_namespace;
+
+        m->mdt_identity_cache = upcall_cache_init(obd->obd_name,
+                                                  MDT_IDENTITY_UPCALL_PATH,
+                                                  &mdt_identity_upcall_cache_ops);
+        if (IS_ERR(m->mdt_identity_cache)) {
+                rc = PTR_ERR(m->mdt_identity_cache);
+                m->mdt_identity_cache = NULL;
+                GOTO(err_free_ns, rc);
+        }
+
+        m->mdt_rmtacl_cache = upcall_cache_init(obd->obd_name,
+                                                MDT_RMTACL_UPCALL_PATH,
+                                                &mdt_rmtacl_upcall_cache_ops);
+        if (IS_ERR(m->mdt_rmtacl_cache)) {
+                rc = PTR_ERR(m->mdt_rmtacl_cache);
+                m->mdt_rmtacl_cache = NULL;
+                GOTO(err_free_ns, rc);
+        }
+
         rc = mdt_start_ptlrpc_service(m);
         if (rc)
                 GOTO(err_free_ns, rc);
@@ -3131,24 +3163,6 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
         if (rc)
                 GOTO(err_stop_service, rc);
 
-        m->mdt_identity_cache = upcall_cache_init(obd->obd_name,
-                                                  MDT_IDENTITY_UPCALL_PATH,
-                                                  &mdt_identity_upcall_cache_ops);
-        if (IS_ERR(m->mdt_identity_cache)) {
-                rc = PTR_ERR(m->mdt_identity_cache);
-                m->mdt_identity_cache = NULL;
-                GOTO(err_fs, rc);
-        }
-
-        m->mdt_rmtacl_cache = upcall_cache_init(obd->obd_name,
-                                                MDT_RMTACL_UPCALL_PATH,
-                                                &mdt_rmtacl_upcall_cache_ops);
-        if (IS_ERR(m->mdt_rmtacl_cache)) {
-                rc = PTR_ERR(m->mdt_rmtacl_cache);
-                m->mdt_rmtacl_cache = NULL;
-                GOTO(err_fs, rc);
-        }
-
         if(obd->obd_recovering == 0)
                 mdt_postrecov(ctx, m);
 
@@ -3156,15 +3170,13 @@ static int mdt_init0(const struct lu_context *ctx, struct mdt_device *m,
 
         RETURN(0);
 
-err_fs:
+err_stop_service:
+        mdt_stop_ptlrpc_service(m);
+err_free_ns:
         upcall_cache_cleanup(m->mdt_rmtacl_cache);
         m->mdt_rmtacl_cache = NULL;
         upcall_cache_cleanup(m->mdt_identity_cache);
         m->mdt_identity_cache = NULL;
-        mdt_fs_cleanup(ctx, m);
-err_stop_service:
-        mdt_stop_ptlrpc_service(m);
-err_free_ns:
         ldlm_namespace_free(m->mdt_namespace, 0);
         obd->obd_namespace = m->mdt_namespace = NULL;
 err_fini_seq:

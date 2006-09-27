@@ -337,13 +337,23 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
         mdt_body_reverse_idmap(info, repbody);
 
+        if (med->med_rmtclient) {
+                void *buf = req_capsule_server_get(&info->mti_pill, &RMF_ACL);
+
+                rc = mdt_pack_remote_perm(info, o, buf);
+                if (rc == 0) {
+                        repbody->valid |= OBD_MD_FLRMTPERM;
+                        repbody->aclsize = sizeof(struct mdt_remote_perm);
+                }
+        }
+
         /* if we are following a symlink, don't open; and
          * do not return open handle for special nodes as client required
          */
         if (islnk || (!isreg && !isdir &&
             (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))) {
                 lustre_msg_set_transno(req->rq_repmsg, 0);
-                GOTO(out, rc = 0);
+                RETURN(0);
         }
 
         mdt_set_disposition(info, rep, DISP_OPEN_OPEN);
@@ -406,7 +416,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         
                 if (mfd != NULL) {
                         repbody->handle.cookie = mfd->mfd_handle.h_cookie;
-                        GOTO(out, rc = 0);
+                        RETURN(0);
                 }
         }
 
@@ -449,21 +459,6 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 mdt_open_transno(info);
         } else
                 rc = -ENOMEM;
-
-out:
-        if (rc == 0) {
-                if (med->med_rmtclient) {
-                        void *buf = req_capsule_server_get(&info->mti_pill,
-                                                           &RMF_ACL);
-
-                        rc = mdt_pack_remote_perm(info, o, buf);
-                        if (rc == 0) {
-                                repbody->valid |= OBD_MD_FLRMTPERM;
-                                repbody->aclsize =
-                                                sizeof(struct mdt_remote_perm);
-                        }
-                }
-        }
 
         RETURN(rc);
 }
