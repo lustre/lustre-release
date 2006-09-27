@@ -1,7 +1,7 @@
 Index: linux-stage/fs/ext3/Makefile
 ===================================================================
---- linux-stage.orig/fs/ext3/Makefile	2006-09-22 15:40:02.000000000 +0800
-+++ linux-stage/fs/ext3/Makefile	2006-09-22 15:40:05.000000000 +0800
+--- linux-stage.orig/fs/ext3/Makefile	2006-09-27 15:48:48.000000000 +0800
++++ linux-stage/fs/ext3/Makefile	2006-09-27 15:49:15.000000000 +0800
 @@ -6,7 +6,7 @@
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,7 +14,7 @@ Index: linux-stage/fs/ext3/Makefile
 Index: linux-stage/fs/ext3/iam.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/iam.c	2006-05-31 09:15:07.000000000 +0800
-+++ linux-stage/fs/ext3/iam.c	2006-09-22 15:40:05.000000000 +0800
++++ linux-stage/fs/ext3/iam.c	2006-09-27 15:49:15.000000000 +0800
 @@ -0,0 +1,1325 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -1344,7 +1344,7 @@ Index: linux-stage/fs/ext3/iam.c
 Index: linux-stage/fs/ext3/iam_htree.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/iam_htree.c	2006-05-31 09:15:07.000000000 +0800
-+++ linux-stage/fs/ext3/iam_htree.c	2006-09-22 15:40:05.000000000 +0800
++++ linux-stage/fs/ext3/iam_htree.c	2006-09-27 15:49:15.000000000 +0800
 @@ -0,0 +1,665 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2014,7 +2014,7 @@ Index: linux-stage/fs/ext3/iam_htree.c
 Index: linux-stage/fs/ext3/iam_lfix.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/iam_lfix.c	2006-05-31 09:15:07.000000000 +0800
-+++ linux-stage/fs/ext3/iam_lfix.c	2006-09-22 15:40:05.000000000 +0800
++++ linux-stage/fs/ext3/iam_lfix.c	2006-09-27 15:49:15.000000000 +0800
 @@ -0,0 +1,670 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2689,8 +2689,8 @@ Index: linux-stage/fs/ext3/iam_lfix.c
 Index: linux-stage/fs/ext3/iam_lvar.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/iam_lvar.c	2006-05-31 09:15:07.000000000 +0800
-+++ linux-stage/fs/ext3/iam_lvar.c	2006-09-22 22:53:31.000000000 +0800
-@@ -0,0 +1,896 @@
++++ linux-stage/fs/ext3/iam_lvar.c	2006-09-27 15:51:04.000000000 +0800
+@@ -0,0 +1,897 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3471,6 +3471,7 @@ Index: linux-stage/fs/ext3/iam_lvar.c
 +         *
 +         * XXX: this key is hard-coded to be a sequence of 0's.
 +         */
++        assert(*(lvar_hash_t *)entry == 0);
 +        entry += sizeof(lvar_hash_t);
 +        /* now @entry points to <ptr> */
 +        if (ptrsize == 4)
@@ -3589,8 +3590,8 @@ Index: linux-stage/fs/ext3/iam_lvar.c
 +
 Index: linux-stage/fs/ext3/namei.c
 ===================================================================
---- linux-stage.orig/fs/ext3/namei.c	2006-09-22 15:40:04.000000000 +0800
-+++ linux-stage/fs/ext3/namei.c	2006-09-22 15:40:05.000000000 +0800
+--- linux-stage.orig/fs/ext3/namei.c	2006-09-27 15:49:15.000000000 +0800
++++ linux-stage/fs/ext3/namei.c	2006-09-27 15:49:15.000000000 +0800
 @@ -24,81 +24,6 @@
   * 	Theodore Ts'o, 2002
   */
@@ -5589,8 +5590,8 @@ Index: linux-stage/fs/ext3/namei.c
  
 Index: linux-stage/include/linux/lustre_iam.h
 ===================================================================
---- linux-stage.orig/include/linux/lustre_iam.h	2006-09-22 15:40:04.000000000 +0800
-+++ linux-stage/include/linux/lustre_iam.h	2006-09-22 15:40:05.000000000 +0800
+--- linux-stage.orig/include/linux/lustre_iam.h	2006-09-27 15:49:15.000000000 +0800
++++ linux-stage/include/linux/lustre_iam.h	2006-09-27 15:49:15.000000000 +0800
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
