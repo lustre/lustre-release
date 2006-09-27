@@ -477,12 +477,12 @@ struct obd_connect_data {
         __u32 ocd_version;              /* lustre release version number */
         __u32 ocd_grant;                /* initial cache grant amount (bytes) */
         __u32 ocd_index;                /* LOV index to connect to */
-        __u32 ocd_group;                /* MDS group on OST */
         __u32 ocd_brw_size;             /* Maximum BRW size in bytes */
         __u64 ocd_ibits_known;          /* inode bits this client understands */
         __u32 ocd_nllu;                 /* non-local-lustre-user */
         __u32 ocd_nllg;                 /* non-local-lustre-group */
-        __u64 padding1;                 /* also fix lustre_swab_connect */
+        __u32 ocd_group;                /* MDS group on OST */
+        __u32 padding1;                 /* also fix lustre_swab_connect */
         __u64 padding2;                 /* also fix lustre_swab_connect */
         __u64 padding3;                 /* also fix lustre_swab_connect */
         __u64 padding4;                 /* also fix lustre_swab_connect */
@@ -1026,7 +1026,7 @@ struct mdt_epoch {
         __u32  flags;
 };
 
-extern void lustre_swab_mdt_epoch (struct mdt_body *b);
+extern void lustre_swab_mdt_epoch (struct mdt_epoch *b);
 
 struct lustre_md {
         struct mdt_body         *body;

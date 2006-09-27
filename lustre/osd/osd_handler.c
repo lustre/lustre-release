@@ -2310,7 +2310,7 @@ static int capa_is_sane(const struct lu_context *ctx,
 {
         struct obd_capa *c;
         struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
-        int i, rc;
+        int i, rc = 0;
         ENTRY;
 
         c = capa_lookup(capa);

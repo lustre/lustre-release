@@ -1508,6 +1508,7 @@ void lustre_swab_connect(struct obd_connect_data *ocd)
         __swab64s(&ocd->ocd_ibits_known);
         __swab32s(&ocd->ocd_nllu);
         __swab32s(&ocd->ocd_nllg);
+        __swab32s(&ocd->ocd_group);
         CLASSERT(offsetof(typeof(*ocd), padding1) != 0);
         CLASSERT(offsetof(typeof(*ocd), padding2) != 0);
         CLASSERT(offsetof(typeof(*ocd), padding3) != 0);
@@ -1661,7 +1662,7 @@ void lustre_swab_mdt_body (struct mdt_body *b)
         __swab32s (&b->max_cookiesize);
 }
 
-void lustre_swab_mdt_epoch (struct mdt_body *b)
+void lustre_swab_mdt_epoch (struct mdt_epoch *b)
 {
         /* handle is opaque */
          __swab64s (&b->ioepoch);

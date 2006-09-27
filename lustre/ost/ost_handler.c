@@ -80,7 +80,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                        struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
-        struct lustre_capa *capa;
+        struct lustre_capa *capa = NULL;
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
