@@ -623,10 +623,10 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 req->rq_request_portal = OST_IO_PORTAL;
 
         body = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*body));
-        body->oa = *oa;
         if (oti != NULL && oa->o_valid & OBD_MD_FLCOOKIE)
                 memcpy(obdo_logcookie(oa), oti->oti_logcookies,
                        sizeof(*oti->oti_logcookies));
+        body->oa = *oa;
 
         osc_pack_capa(req, REQ_REC_OFF + 1, body, capa);
 
