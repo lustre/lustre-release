@@ -862,7 +862,7 @@ test_41() {
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
     cancel_lru_locks osc
     # fail ost2 and read from ost1
-    local osc2dev=`grep ${ost2_svc}-osc-MDT $LPROC/devices | awk '{print $1}'`
+    local osc2dev=`grep ${ost2_svc}-osc-MDT0000 $LPROC/devices | awk '{print $1}'`
     [ "$osc2dev" ] || return 4
     $LCTL --device $osc2dev deactivate || return 1
     do_facet client dd if=$f of=/dev/null bs=4k count=1 || return 3
