@@ -128,13 +128,15 @@ static int cmm_alloc_fid(const struct lu_context *ctx, struct cmm_device *cmm,
 
 struct cmm_object *cmm_object_find(const struct lu_context *ctxt,
                                    struct cmm_device *d,
-                                   const struct lu_fid *f)
+                                   const struct lu_fid *f,
+                                   struct lustre_capa *capa)
 {
         struct lu_object *o;
         struct cmm_object *m;
         ENTRY;
 
-        o = lu_object_find(ctxt, d->cmm_md_dev.md_lu_dev.ld_site, f);
+        o = lu_object_find(ctxt, d->cmm_md_dev.md_lu_dev.ld_site, f,
+                           capa);
         if (IS_ERR(o))
                 m = (struct cmm_object *)o;
         else
@@ -160,7 +162,9 @@ static int cmm_creat_remote_obj(const struct lu_context *ctx,
         int rc;
         ENTRY;
 
-        obj = cmm_object_find(ctx, cmm, fid);
+        /* XXX Since capablity will not work with split. so we 
+         * pass NULL capablity here */
+        obj = cmm_object_find(ctx, cmm, fid, NULL);
         if (IS_ERR(obj))
                 RETURN(PTR_ERR(obj));
 
@@ -238,7 +242,7 @@ static int cmm_send_split_pages(const struct lu_context *ctx,
         int rc = 0;
         ENTRY;
 
-        obj = cmm_object_find(ctx, cmm, fid);
+        obj = cmm_object_find(ctx, cmm, fid, NULL);
         if (IS_ERR(obj))
                 RETURN(PTR_ERR(obj));
 

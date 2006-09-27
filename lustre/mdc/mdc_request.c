@@ -903,12 +903,12 @@ int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
         struct ptlrpc_request *req = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
         struct mdt_body *body;
-        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         CDEBUG(D_INODE, "object: "DFID"\n", PFID(fid));
 
-        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_WRITEPAGE, 2, size,
+        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_WRITEPAGE, 3, size,
                               NULL);
         if (req == NULL)
                 GOTO(out, rc = -ENOMEM);
@@ -921,7 +921,7 @@ int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
         /* NB req now owns desc and will free it when it gets freed */
         ptlrpc_prep_bulk_page(desc, (struct page*)page, 0, offset);
 
-        mdc_readdir_pack(req, REQ_REC_OFF, 0, offset, fid);
+        mdc_readdir_pack(req, REQ_REC_OFF, 0, offset, fid, NULL);
 
         ptlrpc_req_set_repsize(req, 2, size);
         rc = ptlrpc_queue_wait(req);

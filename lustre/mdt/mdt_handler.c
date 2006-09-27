@@ -2463,6 +2463,24 @@ out_seq_fini:
         return rc;
 }
 
+static int mdt_md_connect(const struct lu_context *ctx,
+                          struct lustre_handle *conn,
+                          struct obd_device *mdc)
+{
+        struct obd_connect_data *ocd;
+        int rc;
+        
+        OBD_ALLOC_PTR(ocd);
+        if (!ocd)
+                RETURN(-ENOMEM);
+        /* The connection between MDS must be local */
+        ocd->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
+        rc = obd_connect(ctx, conn, mdc, &mdc->obd_uuid, ocd);
+        
+        OBD_FREE_PTR(ocd);
+        
+        RETURN(rc);
+}
 /*
  * Init client sequence manager which is used by local MDS to talk to sequence
  * controller on remote node.
@@ -2513,12 +2531,11 @@ static int mdt_seq_init_cli(const struct lu_context *ctx,
                 rc = -EINVAL;
         } else {
                 struct lustre_handle conn = {0, };
-
+                
                 CDEBUG(D_CONFIG, "connect to controller %s(%s)\n",
                        mdc->obd_name, mdc->obd_uuid.uuid);
 
-                rc = obd_connect(ctx, &conn, mdc, &mdc->obd_uuid, NULL);
-
+                rc = mdt_md_connect(ctx, &conn, mdc);
                 if (rc) {
                         CERROR("target %s connect error %d\n",
                                mdc->obd_name, rc);

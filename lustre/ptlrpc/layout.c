@@ -704,9 +704,10 @@ const struct req_format RQF_MDS_READPAGE =
                         mdt_body_capa, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_READPAGE);
 
+/* This is for split */
 const struct req_format RQF_MDS_WRITEPAGE =
         DEFINE_REQ_FMT0("MDS_WRITEPAGE",
-                        mdt_body_only, mdt_body_only);
+                        mdt_body_capa, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_WRITEPAGE);
 
 const struct req_format RQF_MDS_IS_SUBDIR =
