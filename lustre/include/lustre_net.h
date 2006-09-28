@@ -41,6 +41,7 @@
 #include <lustre_sec.h>
 #include <lustre_import.h>
 #include <lprocfs_status.h>
+#include <lu_object.h>
 
 /* MD flags we _always_ use */
 #define PTLRPC_MD_OPTIONS  0
@@ -308,6 +309,8 @@ struct ptlrpc_request_pool {
         void (*prp_populate)(struct ptlrpc_request_pool *, int);
 };
 
+struct lu_context;
+
 struct ptlrpc_request {
         int rq_type; /* one of PTL_RPC_MSG_* */
         struct list_head rq_list;
@@ -427,6 +430,7 @@ struct ptlrpc_request {
         void *rq_ptlrpcd_data;
         struct ptlrpc_request_pool *rq_pool;    /* Pool if request from
                                                    preallocated list */
+        struct lu_context           rq_session;
 };
 
 static inline const char *
@@ -523,7 +527,6 @@ struct ptlrpc_bulk_desc {
 #endif
 };
 
-struct lu_context;
 struct ptlrpc_thread {
 
         struct list_head t_link; /* active threads for service, from svc->srv_threads */

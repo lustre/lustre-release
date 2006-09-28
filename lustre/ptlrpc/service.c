@@ -520,6 +520,26 @@ static void ptlrpc_update_export_timer(struct obd_export *exp, long extra_delay)
         EXIT;
 }
 
+#ifndef __KERNEL__
+int lu_context_init(struct lu_context *ctx, __u32 tags)
+{
+        return 0;
+}
+
+void lu_context_fini(struct lu_context *ctx)
+{
+}
+
+void lu_context_enter(struct lu_context *ctx)
+{
+}
+
+void lu_context_exit(struct lu_context *ctx)
+{
+}
+
+#endif
+
 static int
 ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                              struct ptlrpc_thread *thread)
@@ -604,6 +624,14 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 goto out;
         }
 
+        rc = lu_context_init(&request->rq_session, LCT_SESSION);
+        if (rc) {
+                CERROR("Failure to initialize session: %d\n", rc);
+                goto out;
+        }
+        request->rq_session.lc_thread = thread;
+        lu_context_enter(&request->rq_session);
+
         CDEBUG(D_NET, "got req "LPD64"\n", request->rq_xid);
 
         request->rq_svc_thread = thread;
@@ -676,6 +704,9 @@ put_conn:
                 class_export_put(request->rq_export);
 
  out:
+        lu_context_exit(&request->rq_session);
+        lu_context_fini(&request->rq_session);
+
         do_gettimeofday(&work_end);
 
         timediff = cfs_timeval_sub(&work_end, &work_start, NULL);

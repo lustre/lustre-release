@@ -344,7 +344,6 @@ enum lu_object_flags {
  */
 /* valid flags */
 enum la_valid {
-        /*mapped ATTR flag*/
         LA_ATIME = 1 << 0,
         LA_MTIME = 1 << 1,
         LA_CTIME = 1 << 2,
@@ -908,10 +907,26 @@ struct lu_context {
  */
 
 enum lu_context_tag {
+        /*
+         * Thread on md server
+         */
         LCT_MD_THREAD = 1 << 0,
+        /*
+         * Thread on dt server
+         */
         LCT_DT_THREAD = 1 << 1,
+        /*
+         * Context for transaction handle
+         */
         LCT_TX_HANDLE = 1 << 2,
-        LCT_CL_THREAD = 1 << 3
+        /*
+         * Thread on client
+         */
+        LCT_CL_THREAD = 1 << 3,
+        /*
+         * Per-request session on server
+         */
+        LCT_SESSION   = 1 << 4
 };
 
 /*

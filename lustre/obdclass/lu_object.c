@@ -65,7 +65,7 @@ void lu_object_put(const struct lu_context *ctxt, struct lu_object *o)
                  * When last reference is released, iterate over object
                  * layers, and notify them that object is no longer busy.
                  */
-                list_for_each_entry(o, &top->loh_layers, lo_linkage) {
+                list_for_each_entry_reverse(o, &top->loh_layers, lo_linkage) {
                         if (o->lo_ops->loo_object_release != NULL)
                                 o->lo_ops->loo_object_release(ctxt, o);
                 }
@@ -854,8 +854,7 @@ int lu_context_init(struct lu_context *ctx, __u32 tags)
 {
         memset(ctx, 0, sizeof *ctx);
         ctx->lc_tags = tags;
-        keys_init(ctx);
-        return 0;
+        return keys_init(ctx);
 }
 EXPORT_SYMBOL(lu_context_init);
 
