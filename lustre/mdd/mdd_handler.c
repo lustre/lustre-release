@@ -99,99 +99,77 @@ struct mdd_txn_op_descr {
 /* Calculate the credits of each transaction here */
 /* Note: we did not count into QUOTA here, If we mount with --data_journal
  * we may need more*/
-
+enum { 
 /* Insert/Delete IAM  
  * EXT3_INDEX_EXTRA_TRANS_BLOCKS(8) + EXT3_SINGLEDATA_TRANS_BLOCKS 8
  * XXX Note: maybe iam need more,since iam have more level than Ext3 htree
  */
-#define INSERT_IAM_CREDITS 16 
+
+        INSERT_IAM_CREDITS  = 16,
 
 /* Insert/Delete Oi
  * same as IAM insert/delete 16 
  * */
-#define INSERT_OI_CREDITS 16 
+        INSERT_OI_CREDITS = 16,
 
 /* Create a object 
  * Same as create object in Ext3 filesystem, but did not count QUOTA i
  * EXT3_DATA_TRANS_BLOCKS(12) + INDEX_EXTRA_BLOCKS(8) + 
  * 3(inode bits,groups, GDT)*/
-#define CREATE_OBJECT_CREDITS 23
-
-/* OBJECT CREATE
- * OI_INSERT + CREATE 
- */
-#define TXN_OBJECT_CREATE_CREDITS (INSERT_OI_CREDITS + CREATE_OBJECT_CREDITS)
-
-/* CREATE 
- * IAM_INSERT + OI_INSERT + CREATE_OBJECT_CREDITS 
- * SET_MD CREDITS is already counted in CREATE_OBJECT CREDITS */
-#define TXN_CREATE_CREDITS (INSERT_IAM_CREDITS + INSERT_OI_CREDITS \
-                            + CREATE_OBJECT_CREDITS)
+        CREATE_OBJECT_CREDITS = 23,
 
 /* XATTR_SET
  * SAME AS XATTR of EXT3 EXT3_DATA_TRANS_BLOCKS
- * XXX Note: in original MDS implmentation EXT3_INDEX_EXTRA_TRANS_BLOCKS are 
+ * XXX Note: in original MDS implmentation EXT3_INDEX_EXTRA_TRANS_BLOCKS are
  * also counted in. Do not know why? */
-#define TXN_XATTR_SET_CREDITS 12
+        XATTR_SET_CREDITS = 12,
 
-/* ATTR SET
- * XATTR_SET + ATTR set(3)
- * */
-#define TXN_ATTR_SET_CREDITS (TXN_XATTR_SET_CREDITS + 3)
-
-/* INDEX_INSERT
- * Same as IAM_INSERT */
-
-#define TXN_INDEX_INSERT_CREDITS INSERT_IAM_CREDITS
-
-/* INDEX DELETE
- * same as IAM_INSERT */
-#define TXN_INDEX_DELETE_CREDITS INSERT_IAM_CREDITS
-
-/* LINK CREDIT
- * IAM_INSERT 
+ /* A log rec need EXT3_INDEX_EXTRA_TRANS_BLOCKS(8) +
+ *                        EXT3_SINGLEDATA_TRANS_BLOCKS(8))
  */
-#define TXN_LINK_CREDITS INSERT_IAM_CREDITS
+        LOG_REC_CREDIT = 16 
+};
 
-/* UNLINK CREDITS
+/* XXX we should know the ost count to calculate the llog */ 
+#define DEFAULT_LSM_COUNT 4  /* FIXME later */
+enum {
+        MDD_TXN_OBJECT_DESTROY_CREDITS = 20,
+        /* OBJECT CREATE :OI_INSERT + CREATE */ 
+        MDD_TXN_OBJECT_CREATE_CREDITS  = (INSERT_OI_CREDITS + \
+                                        CREATE_OBJECT_CREDITS),
+        /* ATTR SET: XATTR_SET + ATTR set(3)*/
+        MDD_TXN_ATTR_SET_CREDITS       = (XATTR_SET_CREDITS + 3),
+        
+        MDD_TXN_XATTR_SET_CREDITS      = XATTR_SET_CREDITS,
+        
+        MDD_TXN_INDEX_INSERT_CREDITS   = INSERT_IAM_CREDITS,
+        MDD_TXN_INDEX_DELETE_CREDITS   = INSERT_IAM_CREDITS,
+        MDD_TXN_LINK_CREDITS           = INSERT_IAM_CREDITS,
+
+/* 
+ * UNLINK CREDITS
  * IAM_INSERT_CREDITS + UNLINK log
  * Unlink log = ((EXT3_INDEX_EXTRA_TRANS_BLOCKS(8) +
  *                        EXT3_SINGLEDATA_TRANS_BLOCKS(8)) * lsm stripe count
- * XXX we should know the ost count to calculate the llog */ 
-#define DEFAULT_LSM_COUNT 4  /* FIXME later */
-#define LOG_REC_CREDIT  (8 + 8)
-
-#define TXN_UNLINK_CREDITS (INSERT_IAM_CREDITS + LOG_REC_CREDIT*DEFAULT_LSM_COUNT)
-
-/* RENAME CREDITS 
+ * XXX we should know the ost count to calculate the llog 
+ */
+        MDD_TXN_UNLINK_CREDITS      = (INSERT_IAM_CREDITS +
+                                       LOG_REC_CREDIT*DEFAULT_LSM_COUNT),
+/* 
+ * RENAME CREDITS 
  * 2 IAM_INSERT + 1 IAM_DELETE + UNLINK LOG
  */
-
-#define TXN_RENAME_CREDITS (3 * INSERT_IAM_CREDITS + \
-                            LOG_REC_CREDIT * DEFAULT_LSM_COUNT)
-
+        MDD_TXN_RENAME_CREDITS      = (3 * INSERT_IAM_CREDITS + \
+                                       LOG_REC_CREDIT * DEFAULT_LSM_COUNT),
 /* CREATE_DATA CREDITS
  * SET_XATTR  
  * */
-#define TXN_CREATE_DATA_CREDITS TXN_XATTR_SET_CREDITS 
-
-/* MKDIR CREDITS == CREATE CREDITS
- * Although mkdir did not include the set lov EA, but which is
- * actually be already counted in CREATE_DATA_CREDITS */
-#define TXN_MKDIR_CREDITS TXN_CREATE_CREDITS
-
-enum {
-        MDD_TXN_OBJECT_DESTROY_CREDITS = 20,
-        MDD_TXN_OBJECT_CREATE_CREDITS  = TXN_OBJECT_CREATE_CREDITS,
-        MDD_TXN_ATTR_SET_CREDITS       = TXN_ATTR_SET_CREDITS,
-        MDD_TXN_XATTR_SET_CREDITS      = TXN_XATTR_SET_CREDITS,
-        MDD_TXN_INDEX_INSERT_CREDITS   = TXN_INDEX_INSERT_CREDITS,
-        MDD_TXN_INDEX_DELETE_CREDITS   = TXN_INDEX_INSERT_CREDITS,
-        MDD_TXN_LINK_CREDITS           = TXN_LINK_CREDITS,
-        MDD_TXN_UNLINK_CREDITS         = TXN_UNLINK_CREDITS,
-        MDD_TXN_RENAME_CREDITS         = TXN_RENAME_CREDITS,
-        MDD_TXN_CREATE_DATA_CREDITS    = TXN_CREATE_DATA_CREDITS,
-        MDD_TXN_MKDIR_CREDITS          = TXN_MKDIR_CREDITS 
+        MDD_TXN_CREATE_DATA_CREDITS = XATTR_SET_CREDITS,
+/* CREATE 
+ * IAM_INSERT + OI_INSERT + CREATE_OBJECT_CREDITS 
+ * SET_MD CREDITS is already counted in CREATE_OBJECT CREDITS */
+        MDD_TXN_MKDIR_CREDITS       =  (INSERT_IAM_CREDITS + INSERT_OI_CREDITS \
+                                       + CREATE_OBJECT_CREDITS)
 };
 
 #define DEFINE_MDD_TXN_OP_DESC(opname)          \
