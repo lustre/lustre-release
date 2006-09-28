@@ -376,13 +376,13 @@ void ldlm_lock_debug(cfs_debug_limit_state_t *cdls,
                      char *fmt, ...);
 
 #define LDLM_DEBUG(lock, fmt, a...) ldlm_lock_debug(NULL, D_DLMTRACE, lock, \
-                   __FILE__, __func__, __LINE__, "### " fmt, ## a)
+                   __FILE__, __func__, __LINE__, "### " fmt "\n", ## a)
 
 #define LDLM_ERROR(lock, fmt, a...)                                      \
 do {                                                                     \
         static cfs_debug_limit_state_t cdls;                             \
         ldlm_lock_debug(&cdls, D_ERROR, lock,                             \
-                        __FILE__, __func__, __LINE__, "### " fmt, ## a); \
+                        __FILE__, __func__, __LINE__, "### " fmt "\n", ## a); \
 } while (0)
 
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \
