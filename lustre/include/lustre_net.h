@@ -310,6 +310,7 @@ struct ptlrpc_request_pool {
 };
 
 struct lu_context;
+struct lu_env;
 
 struct ptlrpc_request {
         int rq_type; /* one of PTL_RPC_MSG_* */
@@ -536,7 +537,7 @@ struct ptlrpc_thread {
 
         unsigned int t_id; /* service thread index, from ptlrpc_start_threads */
         cfs_waitq_t t_ctl_waitq;
-        struct lu_context *t_ctx;
+        struct lu_env *t_env;
 };
 
 struct ptlrpc_request_buffer_desc {
@@ -926,7 +927,7 @@ ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, int *lens)
 /* ldlm/ldlm_lib.c */
 int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg);
 int client_obd_cleanup(struct obd_device *obddev);
-int client_connect_import(const struct lu_context *ctx,
+int client_connect_import(const struct lu_env *env,
                           struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid, struct obd_connect_data *);
 int client_disconnect_export(struct obd_export *exp);

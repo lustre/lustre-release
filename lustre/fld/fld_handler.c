@@ -85,13 +85,13 @@ static int __init fld_mod_init(void)
 {
         printk(KERN_INFO "Lustre: Fid Location Database; "
                "info@clusterfs.com\n");
-        
+
         fld_type_proc_dir = lprocfs_register(LUSTRE_FLD_NAME,
                                              proc_lustre_root,
                                              NULL, NULL);
         if (IS_ERR(fld_type_proc_dir))
                 return PTR_ERR(fld_type_proc_dir);
-        
+
         lu_context_key_register(&fld_thread_key);
         return 0;
 }
@@ -107,33 +107,33 @@ static void __exit fld_mod_exit(void)
 
 /* insert index entry and update cache */
 int fld_server_create(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
+                      const struct lu_env *env,
                       seqno_t seq, mdsno_t mds)
 {
-        return fld_index_create(fld, ctx, seq, mds);
+        return fld_index_create(fld, env, seq, mds);
 }
 EXPORT_SYMBOL(fld_server_create);
 
 /* delete index entry */
 int fld_server_delete(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
+                      const struct lu_env *env,
                       seqno_t seq)
 {
-        return fld_index_delete(fld, ctx, seq);
+        return fld_index_delete(fld, env, seq);
 }
 EXPORT_SYMBOL(fld_server_delete);
 
 /* issue on-disk index lookup */
 int fld_server_lookup(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
+                      const struct lu_env *env,
                       seqno_t seq, mdsno_t *mds)
 {
-        return fld_index_lookup(fld, ctx, seq, mds);
+        return fld_index_lookup(fld, env, seq, mds);
 }
 EXPORT_SYMBOL(fld_server_lookup);
 
 static int fld_server_handle(struct lu_server_fld *fld,
-                             const struct lu_context *ctx,
+                             const struct lu_env *env,
                              __u32 opc, struct md_fld *mf,
                              struct fld_thread_info *info)
 {
@@ -142,7 +142,7 @@ static int fld_server_handle(struct lu_server_fld *fld,
 
         switch (opc) {
         case FLD_CREATE:
-                rc = fld_server_create(fld, ctx,
+                rc = fld_server_create(fld, env,
                                        mf->mf_seq, mf->mf_mds);
 
                 /* do not return -EEXIST error for resent case */
@@ -150,14 +150,14 @@ static int fld_server_handle(struct lu_server_fld *fld,
                         rc = 0;
                 break;
         case FLD_DELETE:
-                rc = fld_server_delete(fld, ctx, mf->mf_seq);
+                rc = fld_server_delete(fld, env, mf->mf_seq);
 
                 /* do not return -ENOENT error for resent case */
                 if ((info->fti_flags & MSG_RESENT) && rc == -ENOENT)
                         rc = 0;
                 break;
         case FLD_LOOKUP:
-                rc = fld_server_lookup(fld, ctx,
+                rc = fld_server_lookup(fld, env,
                                        mf->mf_seq, &mf->mf_mds);
                 break;
         default:
@@ -179,7 +179,7 @@ static int fld_req_handle(struct ptlrpc_request *req,
         ENTRY;
 
         site = req->rq_export->exp_obd->obd_lu_dev->ld_site;
-        
+
         rc = req_capsule_pack(&info->fti_pill);
         if (rc)
                 RETURN(rc);
@@ -195,7 +195,7 @@ static int fld_req_handle(struct ptlrpc_request *req,
                 *out = *in;
 
                 rc = fld_server_handle(site->ls_server_fld,
-                                       req->rq_svc_thread->t_ctx,
+                                       req->rq_svc_thread->t_env,
                                        *opc, out, info);
         } else
                 rc = -EPROTO;
@@ -209,7 +209,7 @@ static void fld_thread_info_init(struct ptlrpc_request *req,
         int i;
 
         info->fti_flags = lustre_msg_get_flags(req->rq_reqmsg);
-        
+
         /* mark rep buffer as req-layout stuff expects */
         for (i = 0; i < ARRAY_SIZE(info->fti_rep_buf_size); i++)
                 info->fti_rep_buf_size[i] = -1;
@@ -228,15 +228,14 @@ static void fld_thread_info_fini(struct fld_thread_info *info)
 
 static int fld_handle(struct ptlrpc_request *req)
 {
-        const struct lu_context *ctx;
+        const struct lu_env *env;
         struct fld_thread_info *info;
         int rc;
-        
-        ctx = req->rq_svc_thread->t_ctx;
-        LASSERT(ctx != NULL);
-        LASSERT(ctx->lc_thread == req->rq_svc_thread);
 
-        info = lu_context_key_get(ctx, &fld_thread_key);
+        env = req->rq_svc_thread->t_env;
+        LASSERT(env != NULL);
+
+        info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
         LASSERT(info != NULL);
 
         fld_thread_info_init(req, info);
@@ -323,7 +322,7 @@ static void fld_server_proc_fini(struct lu_server_fld *fld)
 #endif
 
 int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
-                    const char *prefix, const struct lu_context *ctx)
+                    const char *prefix, const struct lu_env *env)
 {
         int rc;
         ENTRY;
@@ -331,7 +330,7 @@ int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
         snprintf(fld->lsf_name, sizeof(fld->lsf_name),
                  "srv-%s", prefix);
 
-        rc = fld_index_init(fld, ctx, dt);
+        rc = fld_index_init(fld, env, dt);
         if (rc)
                 GOTO(out, rc);
 
@@ -342,19 +341,19 @@ int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
         EXIT;
 out:
         if (rc)
-                fld_server_fini(fld, ctx);
+                fld_server_fini(fld, env);
         return rc;
 }
 EXPORT_SYMBOL(fld_server_init);
 
 void fld_server_fini(struct lu_server_fld *fld,
-                     const struct lu_context *ctx)
+                     const struct lu_env *env)
 {
         ENTRY;
 
         fld_server_proc_fini(fld);
-        fld_index_fini(fld, ctx);
-        
+        fld_index_fini(fld, env);
+
         EXIT;
 }
 EXPORT_SYMBOL(fld_server_fini);

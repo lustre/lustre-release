@@ -356,7 +356,7 @@ int client_obd_cleanup(struct obd_device *obddev)
 }
 
 /* ->o_connect() method for client side (OSC and MDC and MGC) */
-int client_connect_import(const struct lu_context *ctx,
+int client_connect_import(const struct lu_env *env,
                           struct lustre_handle *dlm_handle,
                           struct obd_device *obd, struct obd_uuid *cluuid,
                           struct obd_connect_data *data)
@@ -585,8 +585,8 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 GOTO(out, rc = -ENODEV);
         }
 
-        /* Make sure the target isn't cleaned up while we're here. Yes, 
-           there's still a race between the above check and our incref here. 
+        /* Make sure the target isn't cleaned up while we're here. Yes,
+           there's still a race between the above check and our incref here.
            Really, class_uuid2obd should take the ref. */
         targref = class_incref(target);
 
@@ -727,7 +727,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                         rc = -EBUSY;
                 } else {
  dont_check_exports:
-                        rc = obd_connect(req->rq_svc_thread->t_ctx,
+                        rc = obd_connect(req->rq_svc_thread->t_env,
                                          &conn, target, &cluuid, data);
                 }
         } else {
@@ -776,7 +776,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                        cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
                        export->exp_conn_cnt,
                        lustre_msg_get_conn_cnt(req->rq_reqmsg));
-                       
+
                 spin_unlock(&export->exp_lock);
                 GOTO(out, rc = -EALREADY);
         }
@@ -837,7 +837,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 out:
         if (export)
                 export->exp_connecting = 0;
-        if (targref) 
+        if (targref)
                 class_decref(targref);
         if (rc)
                 req->rq_status = rc;
@@ -1472,9 +1472,9 @@ int target_handle_ping(struct ptlrpc_request *req)
 void target_committed_to_req(struct ptlrpc_request *req)
 {
         struct obd_device *obd;
-        
+
         if (req == NULL || req->rq_export == NULL)
-                return; 
+                return;
 
         obd = req->rq_export->exp_obd;
         if (obd == NULL)
@@ -1523,7 +1523,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         int repsize[2] = { sizeof(struct ptlrpc_body),
                            sizeof(struct qunit_data) };
         ENTRY;
-        
+
         rc = lustre_pack_reply(req, 2, repsize, NULL);
         if (rc) {
                 CERROR("packing reply failed!: rc = %d\n", rc);
@@ -1535,17 +1535,17 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         if ((req->rq_export->exp_connect_flags & OBD_CONNECT_QUOTA64) &&
             !OBD_FAIL_CHECK(OBD_FAIL_QUOTA_QD_COUNT_32BIT)) {
                 CDEBUG(D_QUOTA, "qd_count is 64bit!\n");
-                rep = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, 
+                rep = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                      sizeof(struct qunit_data));
                 LASSERT(rep);
-                qdata = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*qdata), 
+                qdata = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*qdata),
                                            lustre_swab_qdata);
         } else {
                 CDEBUG(D_QUOTA, "qd_count is 32bit!\n");
-                rep = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, 
+                rep = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                      sizeof(struct qunit_data_old));
                 LASSERT(rep);
-                qdata_old = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*qdata_old), 
+                qdata_old = lustre_swab_reqbuf(req, REQ_REC_OFF, sizeof(*qdata_old),
                                                lustre_swab_qdata_old);
                 qdata = lustre_quota_old_to_new(qdata_old);
         }

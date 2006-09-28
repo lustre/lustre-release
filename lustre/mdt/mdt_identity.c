@@ -249,11 +249,11 @@ int mdt_pack_remote_perm(struct mdt_thread_info *info, struct mdt_object *o,
         perm->rp_fsgid = uc->mu_o_fsgid;
 
         perm->rp_access_perm = 0;
-        if (mo_permission(info->mti_ctxt, next, MAY_READ, uc) == 0)
+        if (mo_permission(info->mti_env, next, MAY_READ, uc) == 0)
                 perm->rp_access_perm |= MAY_READ;
-        if (mo_permission(info->mti_ctxt, next, MAY_WRITE, uc) == 0)
+        if (mo_permission(info->mti_env, next, MAY_WRITE, uc) == 0)
                 perm->rp_access_perm |= MAY_WRITE;
-        if (mo_permission(info->mti_ctxt, next, MAY_EXEC, uc) == 0)
+        if (mo_permission(info->mti_env, next, MAY_EXEC, uc) == 0)
                 perm->rp_access_perm |= MAY_EXEC;
 
         RETURN(0);

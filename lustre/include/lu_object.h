@@ -94,6 +94,8 @@ struct lu_object;
 struct lu_device;
 struct lu_object_header;
 struct lu_context;
+struct lu_env;
+
 /*
  * Operations common for data and meta-data devices.
  */
@@ -132,15 +134,15 @@ struct lu_device_operations {
          * postcondition: ergo(!IS_ERR(result), result->lo_dev ==  d &&
          *                                      result->lo_ops != NULL);
          */
-        struct lu_object *(*ldo_object_alloc)(const struct lu_context *ctx,
+        struct lu_object *(*ldo_object_alloc)(const struct lu_env *env,
                                               const struct lu_object_header *h,
                                               struct lu_device *d);
         /*
          * process config specific for device
          */
-        int (*ldo_process_config)(const struct lu_context *ctx,
+        int (*ldo_process_config)(const struct lu_env *env,
                                   struct lu_device *, struct lustre_cfg *);
-        int (*ldo_recovery_complete)(const struct lu_context *,
+        int (*ldo_recovery_complete)(const struct lu_env *,
                                      struct lu_device *);
 
 };
@@ -151,7 +153,7 @@ struct lu_device_operations {
  * Printer function is needed to provide some flexibility in (semi-)debugging
  * output: possible implementations: printk, CDEBUG, sysfs/seq_file
  */
-typedef int (*lu_printer_t)(const struct lu_context *ctx,
+typedef int (*lu_printer_t)(const struct lu_env *env,
                             void *cookie, const char *format, ...)
         __attribute__ ((format (printf, 3, 4)));
 
@@ -168,39 +170,39 @@ struct lu_object_operations {
          * stack. It's responsibility of this method to insert lower-layer
          * object(s) it create into appropriate places of object stack.
          */
-        int (*loo_object_init)(const struct lu_context *ctx,
+        int (*loo_object_init)(const struct lu_env *env,
                                struct lu_object *o);
         /*
          * Called (in top-to-bottom order) during object allocation after all
          * layers were allocated and initialized. Can be used to perform
          * initialization depending on lower layers.
          */
-        int (*loo_object_start)(const struct lu_context *ctx,
+        int (*loo_object_start)(const struct lu_env *env,
                                 struct lu_object *o);
         /*
          * Called before ->loo_object_free() to signal that object is being
          * destroyed. Dual to ->loo_object_init().
          */
-        void (*loo_object_delete)(const struct lu_context *ctx,
+        void (*loo_object_delete)(const struct lu_env *env,
                                   struct lu_object *o);
 
         /*
          * Dual to ->ldo_object_alloc(). Called when object is removed from
          * memory.
          */
-        void (*loo_object_free)(const struct lu_context *ctx,
+        void (*loo_object_free)(const struct lu_env *env,
                                 struct lu_object *o);
 
         /*
          * Called when last active reference to the object is released (and
          * object returns to the cache). This method is optional.
          */
-        void (*loo_object_release)(const struct lu_context *ctx,
+        void (*loo_object_release)(const struct lu_env *env,
                                    struct lu_object *o);
         /*
          * Debugging helper. Print given object.
          */
-        int (*loo_object_print)(const struct lu_context *ctx, void *cookie,
+        int (*loo_object_print)(const struct lu_env *env, void *cookie,
                                 lu_printer_t p, const struct lu_object *o);
         /*
          * Optional debugging method. Returns true iff method is internally
@@ -210,7 +212,7 @@ struct lu_object_operations {
         /*
          * Called to authorize action by capability.
          */
-        int (*loo_object_auth)(const struct lu_context *ctx,
+        int (*loo_object_auth)(const struct lu_env *env,
                                const struct lu_object *o,
                                struct lustre_capa *capa,
                                __u64 opc);
@@ -296,25 +298,25 @@ struct lu_device_type_operations {
         /*
          * Allocate new device.
          */
-        struct lu_device *(*ldto_device_alloc)(const struct lu_context *ctx,
+        struct lu_device *(*ldto_device_alloc)(const struct lu_env *env,
                                                struct lu_device_type *t,
                                                struct lustre_cfg *lcfg);
         /*
          * Free device. Dual to ->ldto_device_alloc().
          */
-        void (*ldto_device_free)(const struct lu_context *,
+        void (*ldto_device_free)(const struct lu_env *,
                                  struct lu_device *);
 
         /*
          * Initialize the devices after allocation
          */
-        int  (*ldto_device_init)(const struct lu_context *ctx,
+        int  (*ldto_device_init)(const struct lu_env *env,
                                  struct lu_device *, struct lu_device *);
         /*
          * Finalize device. Dual to ->ldto_device_init(). Returns pointer to
          * the next device in the stack.
          */
-        struct lu_device *(*ldto_device_fini)(const struct lu_context *ctx,
+        struct lu_device *(*ldto_device_fini)(const struct lu_env *env,
                                               struct lu_device *);
 
         /*
@@ -682,13 +684,13 @@ static inline int lu_object_is_dying(const struct lu_object_header *h)
  * object to the cache, unless lu_object_is_dying(o) holds. In the latter
  * case, free object immediately.
  */
-void lu_object_put(const struct lu_context *ctxt,
+void lu_object_put(const struct lu_env *env,
                    struct lu_object *o);
 
 /*
  * Free @nr objects from the cold end of the site LRU list.
  */
-void lu_site_purge(const struct lu_context *ctx,
+void lu_site_purge(const struct lu_env *env,
                    struct lu_site *s, int nr);
 
 /*
@@ -696,14 +698,14 @@ void lu_site_purge(const struct lu_context *ctx,
  * it. Otherwise, create new object, insert it into cache and return it. In
  * any case, additional reference is acquired on the returned object.
  */
-struct lu_object *lu_object_find(const struct lu_context *ctxt,
+struct lu_object *lu_object_find(const struct lu_env *env,
                                  struct lu_site *s, const struct lu_fid *f,
                                  struct lustre_capa *c);
 
 /*
  * Auth lu_object capability.
  */
-int lu_object_auth(const struct lu_context *ctxt, const struct lu_object *o,
+int lu_object_auth(const struct lu_env *env, const struct lu_object *o,
                    struct lustre_capa *capa, __u64 opc);
 
 /*
@@ -776,13 +778,13 @@ struct lu_cdebug_print_info {
 /*
  * Printer function emitting messages through libcfs_debug_msg().
  */
-int lu_cdebug_printer(const struct lu_context *ctx,
+int lu_cdebug_printer(const struct lu_env *env,
                       void *cookie, const char *format, ...);
 
 /*
  * Print object description followed by user-supplied message.
  */
-#define LU_OBJECT_DEBUG(mask, ctx, object, format, ...)                 \
+#define LU_OBJECT_DEBUG(mask, env, object, format, ...)                 \
 ({                                                                      \
         static struct lu_cdebug_print_info __info = {                   \
                 .lpi_subsys = DEBUG_SUBSYSTEM,                          \
@@ -791,14 +793,14 @@ int lu_cdebug_printer(const struct lu_context *ctx,
                 .lpi_fn     = __FUNCTION__,                             \
                 .lpi_line   = __LINE__                                  \
         };                                                              \
-        lu_object_print(ctx, &__info, lu_cdebug_printer, object);       \
+        lu_object_print(env, &__info, lu_cdebug_printer, object);       \
         CDEBUG(mask, format , ## __VA_ARGS__);                          \
 })
 
 /*
  * Print human readable representation of the @o to the @f.
  */
-void lu_object_print(const struct lu_context *ctxt, void *cookie,
+void lu_object_print(const struct lu_env *env, void *cookie,
                      lu_printer_t printer, const struct lu_object *o);
 
 /*
@@ -1006,6 +1008,23 @@ void lu_context_exit(struct lu_context *ctx);
  * creation.
  */
 int lu_context_refill(const struct lu_context *ctx);
+
+/*
+ * Environment.
+ */
+struct lu_env {
+        /*
+         * "Local" context, used to store data instead of stack.
+         */
+        struct lu_context  le_ctx;
+        /*
+         * "Session" context for per-request data.
+         */
+        struct lu_context *le_ses;
+};
+
+int  lu_env_init(struct lu_env *env, struct lu_context *ses, __u32 tags);
+void lu_env_fini(struct lu_env *env);
 
 /*
  * One-time initializers, called at obdclass module initialization, not

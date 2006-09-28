@@ -64,7 +64,7 @@ static int mdc_obd_update(struct obd_device *host,
  * mdc_add_obd() find that obd by uuid and connects to it.
  * Local MDT uuid is used for connection
  * */
-static int mdc_add_obd(const struct lu_context *ctx,
+static int mdc_add_obd(const struct lu_env *env,
                        struct mdc_device *mc, struct lustre_cfg *cfg)
 {
         struct mdc_cli_desc *desc = &mc->mc_desc;
@@ -108,7 +108,7 @@ static int mdc_add_obd(const struct lu_context *ctx,
                         RETURN(-ENOMEM);
                 /* The connection between MDS must be local */
                 ocd->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
-                rc = obd_connect(ctx, conn, mdc, &mdc->obd_uuid, ocd);
+                rc = obd_connect(env, conn, mdc, &mdc->obd_uuid, ocd);
                 OBD_FREE_PTR(ocd);
                 if (rc) {
                         CERROR("target %s connect error %d\n",
@@ -144,13 +144,13 @@ static int mdc_del_obd(struct mdc_device *mc)
 
         CDEBUG(D_CONFIG, "disconnect from %s\n",
                mdc_obd->obd_name);
- 
+
         rc = obd_fid_fini(desc->cl_exp);
         if (rc)
                 CERROR("fid init error %d \n", rc);
 
         obd_register_observer(mdc_obd, NULL);
-        
+
         /*TODO: Give the same shutdown flags as we have */
         /*
         desc->cl_exp->exp_obd->obd_force = mdt_obd->obd_force;
@@ -167,7 +167,7 @@ static int mdc_del_obd(struct mdc_device *mc)
         RETURN(rc);
 }
 
-static int mdc_process_config(const struct lu_context *ctx,
+static int mdc_process_config(const struct lu_env *env,
                               struct lu_device *ld, struct lustre_cfg *cfg)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
@@ -176,7 +176,7 @@ static int mdc_process_config(const struct lu_context *ctx,
         ENTRY;
         switch (cfg->lcfg_command) {
         case LCFG_ADD_MDC:
-                rc = mdc_add_obd(ctx, mc, cfg);
+                rc = mdc_add_obd(env, mc, cfg);
                 break;
         default:
                 rc = -EOPNOTSUPP;
@@ -189,13 +189,13 @@ static struct lu_device_operations mdc_lu_ops = {
         .ldo_process_config = mdc_process_config
 };
 
-static int mdc_device_init(const struct lu_context *ctx,
+static int mdc_device_init(const struct lu_env *env,
                            struct lu_device *ld, struct lu_device *next)
 {
         return 0;
 }
 
-static struct lu_device *mdc_device_fini(const struct lu_context *ctx,
+static struct lu_device *mdc_device_fini(const struct lu_env *env,
                                          struct lu_device *ld)
 {
 	struct mdc_device *mc = lu2mdc_dev(ld);
@@ -207,7 +207,7 @@ static struct lu_device *mdc_device_fini(const struct lu_context *ctx,
         RETURN (NULL);
 }
 
-struct lu_device *mdc_device_alloc(const struct lu_context *ctx,
+struct lu_device *mdc_device_alloc(const struct lu_env *env,
                                    struct lu_device_type *ldt,
                                    struct lustre_cfg *cfg)
 {
@@ -228,7 +228,7 @@ struct lu_device *mdc_device_alloc(const struct lu_context *ctx,
 
         RETURN (ld);
 }
-void mdc_device_free(const struct lu_context *ctx, struct lu_device *ld)
+void mdc_device_free(const struct lu_env *env, struct lu_device *ld)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
 
@@ -240,8 +240,8 @@ void mdc_device_free(const struct lu_context *ctx, struct lu_device *ld)
 
 /* context key constructor/destructor */
 
-static void *mdc_thread_init(const struct lu_context *ctx,
-                             struct lu_context_key *key)
+static void *mdc_key_init(const struct lu_context *ctx,
+                          struct lu_context_key *key)
 {
         struct mdc_thread_info *info;
 
@@ -252,8 +252,8 @@ static void *mdc_thread_init(const struct lu_context *ctx,
         return info;
 }
 
-static void mdc_thread_fini(const struct lu_context *ctx,
-                            struct lu_context_key *key, void *data)
+static void mdc_key_fini(const struct lu_context *ctx,
+                         struct lu_context_key *key, void *data)
 {
         struct mdc_thread_info *info = data;
         OBD_FREE_PTR(info);
@@ -261,8 +261,8 @@ static void mdc_thread_fini(const struct lu_context *ctx,
 
 struct lu_context_key mdc_thread_key = {
         .lct_tags = LCT_MD_THREAD|LCT_CL_THREAD,
-        .lct_init = mdc_thread_init,
-        .lct_fini = mdc_thread_fini
+        .lct_init = mdc_key_init,
+        .lct_fini = mdc_key_fini
 };
 
 int mdc_type_init(struct lu_device_type *ldt)

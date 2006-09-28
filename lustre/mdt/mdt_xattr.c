@@ -71,11 +71,11 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))
                         rc = RMTACL_SIZE_MAX;
                 else
-                        rc = mo_xattr_get(info->mti_ctxt,
+                        rc = mo_xattr_get(info->mti_env,
                                           mdt_object_child(info->mti_object),
                                           NULL, 0, xattr_name, NULL);
         } else if ((valid & OBD_MD_FLXATTRLS) == OBD_MD_FLXATTRLS) {
-                rc = mo_xattr_list(info->mti_ctxt,
+                rc = mo_xattr_list(info->mti_env,
                                    mdt_object_child(info->mti_object),
                                    NULL, 0, NULL);
         } else {
@@ -175,7 +175,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
                         rc = do_remote_getfacl(info, &body->fid1,
                                                buf, buflen);
                 } else {
-                        rc = mo_xattr_get(info->mti_ctxt, next, buf, buflen,
+                        rc = mo_xattr_get(info->mti_env, next, buf, buflen,
                                           xattr_name, NULL);
                 }
 
@@ -185,7 +185,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         } else if (info->mti_body->valid & OBD_MD_FLXATTRLS) {
                 CDEBUG(D_INODE, "listxattr\n");
 
-                rc = mo_xattr_list(info->mti_ctxt, next, buf, buflen, NULL);
+                rc = mo_xattr_list(info->mti_env, next, buf, buflen, NULL);
                 if (rc < 0)
                         CDEBUG(D_OTHER, "listxattr failed: %d\n", rc);
         } else
@@ -207,7 +207,7 @@ static int mdt_setxattr_pack_reply(struct mdt_thread_info * info)
         __u64                   valid = info->mti_body->valid;
         int                     rc = 0, rc1;
 
-        if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) { 
+        if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
                 char *xattr_name;
 
                 xattr_name = req_capsule_client_get(pill, &RMF_NAME);
@@ -259,7 +259,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
         struct req_capsule      *pill = &info->mti_pill;
         struct mdt_object       *obj  = info->mti_object;
         struct mdt_body         *body = (struct mdt_body *)info->mti_body;
-        const struct lu_context *ctx  = info->mti_ctxt;
+        const struct lu_env *env  = info->mti_env;
         struct md_object        *child  = mdt_object_child(obj);
         __u64                    valid  = body->valid;
         char                    *xattr_name;
@@ -337,14 +337,14 @@ int mdt_setxattr(struct mdt_thread_info *info)
                         if (body->flags & XATTR_CREATE)
                                 flags |= LU_XATTR_CREATE;
 
-                        mdt_fail_write(ctx, info->mti_mdt->mdt_bottom,
+                        mdt_fail_write(env, info->mti_mdt->mdt_bottom,
                                        OBD_FAIL_MDS_SETXATTR_WRITE);
 
-                        rc = mo_xattr_set(ctx, child, xattr, xattr_len,
+                        rc = mo_xattr_set(env, child, xattr, xattr_len,
                                           xattr_name, flags, &info->mti_uc);
                 }
         } else if ((valid & OBD_MD_FLXATTRRM) == OBD_MD_FLXATTRRM) {
-                rc = mo_xattr_del(ctx, child, xattr_name, &info->mti_uc);
+                rc = mo_xattr_del(env, child, xattr_name, &info->mti_uc);
         } else {
                 CERROR("valid bits: "LPX64"\n", body->valid);
                 rc = -EINVAL;

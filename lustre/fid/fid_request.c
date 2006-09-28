@@ -78,7 +78,7 @@ static int seq_client_rpc(struct lu_client_seq *seq,
         /* zero out input range, this is not recovery yet. */
         in = req_capsule_client_get(&pill, &RMF_SEQ_RANGE);
         range_zero(in);
-        
+
         size[1] = sizeof(struct lu_range);
         ptlrpc_req_set_repsize(req, 2, size);
 
@@ -111,10 +111,10 @@ static int seq_client_rpc(struct lu_client_seq *seq,
 
         /* Save server out to request for recovery case. */
         *in = *out;
-                
-        CDEBUG(D_INFO, "%s: Allocated %s-sequence "DRANGE"]\n", 
+
+        CDEBUG(D_INFO, "%s: Allocated %s-sequence "DRANGE"]\n",
                seq->lcs_name, opcname, PRANGE(range));
-        
+
         EXIT;
 out_req:
         req_capsule_fini(&pill);
@@ -124,16 +124,16 @@ out_req:
 
 /* request sequence-controller node to allocate new super-sequence. */
 static int __seq_client_alloc_super(struct lu_client_seq *seq,
-                                    const struct lu_context *ctx)
+                                    const struct lu_env *env)
 {
         int rc;
-        
+
 #ifdef __KERNEL__
         if (seq->lcs_srv) {
-                LASSERT(ctx != NULL);
+                LASSERT(env != NULL);
                 rc = seq_server_alloc_super(seq->lcs_srv, NULL,
                                             &seq->lcs_range,
-                                            ctx);
+                                            env);
         } else {
 #endif
                 rc = seq_client_rpc(seq, &seq->lcs_range,
@@ -145,13 +145,13 @@ static int __seq_client_alloc_super(struct lu_client_seq *seq,
 }
 
 int seq_client_alloc_super(struct lu_client_seq *seq,
-                           const struct lu_context *ctx)
+                           const struct lu_env *env)
 {
         int rc;
         ENTRY;
 
         down(&seq->lcs_sem);
-        rc = __seq_client_alloc_super(seq, ctx);
+        rc = __seq_client_alloc_super(seq, env);
         up(&seq->lcs_sem);
 
         RETURN(rc);
@@ -160,16 +160,16 @@ EXPORT_SYMBOL(seq_client_alloc_super);
 
 /* request sequence-controller node to allocate new meta-sequence. */
 static int __seq_client_alloc_meta(struct lu_client_seq *seq,
-                                   const struct lu_context *ctx)
+                                   const struct lu_env *env)
 {
         int rc;
 
 #ifdef __KERNEL__
         if (seq->lcs_srv) {
-                LASSERT(ctx != NULL);
+                LASSERT(env != NULL);
                 rc = seq_server_alloc_meta(seq->lcs_srv, NULL,
                                            &seq->lcs_range,
-                                           ctx);
+                                           env);
         } else {
 #endif
                 rc = seq_client_rpc(seq, &seq->lcs_range,
@@ -181,13 +181,13 @@ static int __seq_client_alloc_meta(struct lu_client_seq *seq,
 }
 
 int seq_client_alloc_meta(struct lu_client_seq *seq,
-                          const struct lu_context *ctx)
+                          const struct lu_env *env)
 {
         int rc;
         ENTRY;
 
         down(&seq->lcs_sem);
-        rc = __seq_client_alloc_meta(seq, ctx);
+        rc = __seq_client_alloc_meta(seq, env);
         up(&seq->lcs_sem);
 
         RETURN(rc);
@@ -248,7 +248,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
             fid_oid(&seq->lcs_fid) >= seq->lcs_width)
         {
                 seqno_t seqnr;
-                
+
                 /* allocate new sequence for case client has no sequence at all
                  * or sequence is exhausted and should be switched. */
                 rc = __seq_client_alloc_seq(seq, &seqnr);
@@ -297,7 +297,7 @@ static int seq_client_proc_init(struct lu_client_seq *seq)
                                              NULL, NULL);
 
         if (IS_ERR(seq->lcs_proc_dir)) {
-                CERROR("%s: LProcFS failed in seq-init\n", 
+                CERROR("%s: LProcFS failed in seq-init\n",
                        seq->lcs_name);
                 rc = PTR_ERR(seq->lcs_proc_dir);
                 RETURN(rc);

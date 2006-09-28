@@ -7,7 +7,7 @@
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
  *   Author: Mike Pershin <tappro@clusterfs.com>
- *   
+ *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
  *
@@ -93,11 +93,11 @@ static inline struct mdc_device *lu2mdc_dev(struct lu_device *ld)
 	return container_of0(ld, struct mdc_device, mc_md_dev.md_lu_dev);
 }
 
-struct lu_object *mdc_object_alloc(const struct lu_context *,
+struct lu_object *mdc_object_alloc(const struct lu_env *,
                                    const struct lu_object_header *,
                                    struct lu_device *);
 #ifdef HAVE_SPLIT_SUPPORT
-int mdc_send_page(struct cmm_device *cmm, const struct lu_context *ctx,
+int mdc_send_page(struct cmm_device *cmm, const struct lu_env *env,
                   struct md_object *mo, struct page *page, __u32 end,
                   struct md_ucred *uc);
 #endif

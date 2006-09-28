@@ -54,7 +54,7 @@ enum {
 
 /* this function implies that caller takes care about locking */
 int seq_store_write(struct lu_server_seq *seq,
-                    const struct lu_context *ctx)
+                    const struct lu_env *env)
 {
         struct dt_object *dt_obj = seq->lss_obj;
         struct seq_thread_info *info;
@@ -65,19 +65,19 @@ int seq_store_write(struct lu_server_seq *seq,
 	ENTRY;
 
         dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
-        info = lu_context_key_get(ctx, &seq_thread_key);
+        info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
         LASSERT(info != NULL);
 
         /* stub here, will fix it later */
         info->sti_txn.tp_credits = SEQ_TXN_STORE_CREDITS;
 
-        th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &info->sti_txn);
+        th = dt_dev->dd_ops->dt_trans_start(env, dt_dev, &info->sti_txn);
         if (!IS_ERR(th)) {
                 /* store ranges in le format */
                 range_cpu_to_le(&info->sti_record.ssr_space, &seq->lss_space);
                 range_cpu_to_le(&info->sti_record.ssr_super, &seq->lss_super);
- 
-                rc = dt_obj->do_body_ops->dbo_write(ctx, dt_obj,
+
+                rc = dt_obj->do_body_ops->dbo_write(env, dt_obj,
                                                     (char *)&info->sti_record,
                                                     sizeof(info->sti_record),
                                                     &pos, th);
@@ -89,8 +89,8 @@ int seq_store_write(struct lu_server_seq *seq,
                 } else if (rc >= 0) {
                         rc = -EIO;
                 }
-                
-                dt_dev->dd_ops->dt_trans_stop(ctx, th);
+
+                dt_dev->dd_ops->dt_trans_stop(env, th);
         } else {
                 rc = PTR_ERR(th);
         }
@@ -101,7 +101,7 @@ int seq_store_write(struct lu_server_seq *seq,
 /* this function implies that caller takes care about locking or locking is not
  * needed (init time). */
 int seq_store_read(struct lu_server_seq *seq,
-                   const struct lu_context *ctx)
+                   const struct lu_env *env)
 {
         struct dt_object *dt_obj = seq->lss_obj;
         struct seq_thread_info *info;
@@ -109,25 +109,25 @@ int seq_store_read(struct lu_server_seq *seq,
 	int rc;
 	ENTRY;
 
-        info = lu_context_key_get(ctx, &seq_thread_key);
+        info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
         LASSERT(info != NULL);
 
-        rc = dt_obj->do_body_ops->dbo_read(ctx, dt_obj,
+        rc = dt_obj->do_body_ops->dbo_read(env, dt_obj,
                                            (char *)&info->sti_record,
                                            sizeof(info->sti_record), &pos);
-        
+
         if (rc == sizeof(info->sti_record)) {
                 range_le_to_cpu(&seq->lss_space, &info->sti_record.ssr_space);
                 range_le_to_cpu(&seq->lss_super, &info->sti_record.ssr_super);
 
                 CDEBUG(D_INFO|D_WARNING, "%s: Read ranges: Space - "
-                       DRANGE", Super - "DRANGE"\n", seq->lss_name, 
+                       DRANGE", Super - "DRANGE"\n", seq->lss_name,
                        PRANGE(&seq->lss_space), PRANGE(&seq->lss_super));
                 rc = 0;
         } else if (rc == 0) {
                 rc = -ENODATA;
         } else if (rc >= 0) {
-                CERROR("%s: Read only %d bytes of %d\n", seq->lss_name, 
+                CERROR("%s: Read only %d bytes of %d\n", seq->lss_name,
                        rc, sizeof(info->sti_record));
                 rc = -EIO;
         }
@@ -136,7 +136,7 @@ int seq_store_read(struct lu_server_seq *seq,
 }
 
 int seq_store_init(struct lu_server_seq *seq,
-                   const struct lu_context *ctx,
+                   const struct lu_env *env,
                    struct dt_device *dt)
 {
         struct dt_object *dt_obj;
@@ -147,8 +147,8 @@ int seq_store_init(struct lu_server_seq *seq,
 
         name = seq->lss_type == LUSTRE_SEQ_SERVER ?
                 LUSTRE_SEQ_SRV_NAME : LUSTRE_SEQ_CTL_NAME;
-        
-        dt_obj = dt_store_open(ctx, dt, name, &fid);
+
+        dt_obj = dt_store_open(env, dt, name, &fid);
         if (!IS_ERR(dt_obj)) {
                 seq->lss_obj = dt_obj;
 		rc = 0;
@@ -162,16 +162,16 @@ int seq_store_init(struct lu_server_seq *seq,
 }
 
 void seq_store_fini(struct lu_server_seq *seq,
-                    const struct lu_context *ctx)
+                    const struct lu_env *env)
 {
         ENTRY;
 
         if (seq->lss_obj != NULL) {
                 if (!IS_ERR(seq->lss_obj))
-                        lu_object_put(ctx, &seq->lss_obj->do_lu);
+                        lu_object_put(env, &seq->lss_obj->do_lu);
                 seq->lss_obj = NULL;
         }
-        
+
         EXIT;
 }
 #endif

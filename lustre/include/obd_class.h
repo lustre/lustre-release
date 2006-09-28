@@ -89,7 +89,7 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid);
 
 /* obd_config.c */
 int class_process_config(struct lustre_cfg *lcfg);
-int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars, 
+int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                              struct lustre_cfg *lcfg, void *data);
 int class_attach(struct lustre_cfg *lcfg);
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
@@ -367,14 +367,12 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 #ifdef __KERNEL__
         ldt = obd->obd_type->typ_lu;
         if (ldt != NULL) {
-                struct lu_context ctx;
+                struct lu_env env;
 
-                rc = lu_context_init(&ctx, ldt->ldt_ctx_tags);
+                rc = lu_env_init(&env, NULL, ldt->ldt_ctx_tags);
                 if (rc == 0) {
-                        lu_context_enter(&ctx);
-                        d = ldt->ldt_ops->ldto_device_alloc(&ctx, ldt, cfg);
-                        lu_context_exit(&ctx);
-                        lu_context_fini(&ctx);
+                        d = ldt->ldt_ops->ldto_device_alloc(&env, ldt, cfg);
+                        lu_env_fini(&env);
                         if (!IS_ERR(d)) {
                                 obd->obd_lu_dev = d;
                                 d->ld_obd = obd;
@@ -406,14 +404,12 @@ static inline int obd_precleanup(struct obd_device *obd,
         if (ldt != NULL) {
                 LASSERT(d != NULL);
                 if (cleanup_stage == OBD_CLEANUP_EXPORTS) {
-                        struct lu_context ctx;
-                        
-                        rc = lu_context_init(&ctx, ldt->ldt_ctx_tags);
+                        struct lu_env env;
+
+                        rc = lu_env_init(&env, NULL, ldt->ldt_ctx_tags);
                         if (rc == 0) {
-                                lu_context_enter(&ctx);
-                                ldt->ldt_ops->ldto_device_fini(&ctx, d);
-                                lu_context_exit(&ctx);
-                                lu_context_fini(&ctx);
+                                ldt->ldt_ops->ldto_device_fini(&env, d);
+                                lu_env_fini(&env);
                         }
                 } else {
                         rc = 0;
@@ -424,7 +420,7 @@ static inline int obd_precleanup(struct obd_device *obd,
                 OBD_CHECK_DT_OP(obd, precleanup, 0);
                 rc = OBP(obd, precleanup)(obd, cleanup_stage);
         }
-        
+
         OBD_COUNTER_INCREMENT(obd, precleanup);
         RETURN(rc);
 }
@@ -441,15 +437,13 @@ static inline int obd_cleanup(struct obd_device *obd)
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL) {
-                struct lu_context ctx;
+                struct lu_env env;
                 LASSERT(d != NULL);
 
-                rc = lu_context_init(&ctx, ldt->ldt_ctx_tags);
+                rc = lu_env_init(&env, NULL, ldt->ldt_ctx_tags);
                 if (rc == 0) {
-                        lu_context_enter(&ctx);
-                        ldt->ldt_ops->ldto_device_free(&ctx, d);
-                        lu_context_exit(&ctx);
-                        lu_context_fini(&ctx);
+                        ldt->ldt_ops->ldto_device_free(&env, d);
+                        lu_env_fini(&env);
                         obd->obd_lu_dev = NULL;
                 }
         } else
@@ -475,14 +469,12 @@ obd_process_config(struct obd_device *obd, int datalen, void *data)
         ldt = obd->obd_type->typ_lu;
         d = obd->obd_lu_dev;
         if (ldt != NULL && d != NULL) {
-                struct lu_context ctx;
+                struct lu_env env;
 
-                rc = lu_context_init(&ctx, ldt->ldt_ctx_tags);
+                rc = lu_env_init(&env, NULL, ldt->ldt_ctx_tags);
                 if (rc == 0) {
-                        lu_context_enter(&ctx);
-                        rc = d->ld_ops->ldo_process_config(&ctx, d, data);
-                        lu_context_exit(&ctx);
-                        lu_context_fini(&ctx);
+                        rc = d->ld_ops->ldo_process_config(&env, d, data);
+                        lu_env_fini(&env);
                 }
         } else
 #endif
@@ -729,7 +721,7 @@ static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
         RETURN(rc);
 }
 
-static inline int obd_connect(const struct lu_context *ctx,
+static inline int obd_connect(const struct lu_env *env,
                               struct lustre_handle *conn,struct obd_device *obd,
                               struct obd_uuid *cluuid,
                               struct obd_connect_data *d)
@@ -742,7 +734,7 @@ static inline int obd_connect(const struct lu_context *ctx,
         OBD_CHECK_DT_OP(obd, connect, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, connect);
 
-        rc = OBP(obd, connect)(ctx, conn, obd, cluuid, d);
+        rc = OBP(obd, connect)(env, conn, obd, cluuid, d);
         /* check that only subset is granted */
         LASSERT(ergo(d != NULL,
                      (d->ocd_connect_flags & ocf) == d->ocd_connect_flags));
@@ -1441,7 +1433,7 @@ static inline int obd_llog_connect(struct obd_export *exp,
                                    struct llogd_conn_body *body)
 {
         ENTRY;
-        
+
         OBD_CHECK_DT_OP(exp->exp_obd, llog_connect, 0);
         OBD_COUNTER_INCREMENT(exp->exp_obd, llog_connect);
 

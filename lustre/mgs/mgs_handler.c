@@ -49,7 +49,7 @@
 
 
 /* Establish a connection to the MGS.*/
-static int mgs_connect(const struct lu_context *ctx,
+static int mgs_connect(const struct lu_env *env,
                        struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
@@ -292,13 +292,13 @@ static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
         ENTRY;
 
         rc = mgc_logname2resid(fsname, &res_id);
-        if (!rc) 
+        if (!rc)
                 rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id,
                                             LDLM_PLAIN, NULL, LCK_EX,
                                             &flags, ldlm_blocking_ast,
                                             ldlm_completion_ast, NULL,
                                             fsname, 0, NULL, lockh);
-        if (rc) 
+        if (rc)
                 CERROR("can't take cfg lock for %s (%d)\n", fsname, rc);
 
         RETURN(rc);
@@ -364,7 +364,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                        mti->mti_svname, obd_export_nid2str(req->rq_export));
                 rc = mgs_check_target(obd, mti);
                 /* above will set appropriate mti flags */
-                if (rc <= 0) 
+                if (rc <= 0)
                         /* Nothing wrong, or fatal error */
                         GOTO(out_nolock, rc);
         }
@@ -391,10 +391,10 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                         CERROR("Can't upgrade from 1.4 (%d)\n", rc);
                         GOTO(out, rc);
                 }
-                
+
                 /* Turn off all other update-related flags; we're done. */
-                mti->mti_flags &= ~(LDD_F_UPGRADE14 | 
-                                    LDD_F_VIRGIN | LDD_F_UPDATE | 
+                mti->mti_flags &= ~(LDD_F_UPGRADE14 |
+                                    LDD_F_VIRGIN | LDD_F_UPDATE |
                                     LDD_F_NEED_INDEX | LDD_F_WRITECONF);
                 mti->mti_flags |= LDD_F_REWRITE_LDD;
                 goto out;
@@ -418,10 +418,10 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         }
 
         if (mti->mti_flags & LDD_F_UPDATE) {
-                CDEBUG(D_MGS, "updating %s, index=%d\n", mti->mti_svname, 
+                CDEBUG(D_MGS, "updating %s, index=%d\n", mti->mti_svname,
                        mti->mti_stripe_index);
-                
-                /* create or update the target log 
+
+                /* create or update the target log
                    and update the client/mdt logs */
                 rc = mgs_write_log_target(obd, mti);
                 if (rc) {
@@ -430,7 +430,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                         GOTO(out, rc);
                 }
 
-                mti->mti_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE | 
+                mti->mti_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE |
                                     LDD_F_NEED_INDEX | LDD_F_WRITECONF);
                 mti->mti_flags |= LDD_F_REWRITE_LDD;
         }
@@ -442,7 +442,7 @@ out:
 out_nolock:
         CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname,
                mti->mti_stripe_index, rc);
-        lustre_pack_reply(req, 2, rep_size, NULL); 
+        lustre_pack_reply(req, 2, rep_size, NULL);
         /* send back the whole mti in the reply */
         rep_mti = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*rep_mti));
@@ -545,8 +545,8 @@ int mgs_handle(struct ptlrpc_request *req)
         }
 
         LASSERT(current->journal_info == NULL);
-       
-        if (rc) 
+
+        if (rc)
                 CDEBUG(D_CONFIG | D_ERROR, "MGS handle cmd=%d rc=%d\n", opc, rc);
         else
                 CDEBUG(D_CONFIG, "MGS handle cmd=%d rc=%d\n", opc, rc);

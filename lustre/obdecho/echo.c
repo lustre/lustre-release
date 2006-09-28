@@ -49,7 +49,7 @@ enum {
         LPROC_ECHO_LAST = LPROC_ECHO_WRITE_BYTES +1
 };
 
-static int echo_connect(const struct lu_context *ctx,
+static int echo_connect(const struct lu_env *env,
                         struct lustre_handle *conn, struct obd_device *obd,
                         struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
@@ -167,7 +167,7 @@ static int echo_getattr(struct obd_export *exp, struct obd_info *oinfo)
         }
 
         if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
+                CERROR("obdo missing FLID valid flag: "LPX64"\n",
                        oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
@@ -191,7 +191,7 @@ static int echo_setattr(struct obd_export *exp, struct obd_info *oinfo,
         }
 
         if (!(oinfo->oi_oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: "LPX64"\n", 
+                CERROR("obdo missing FLID valid flag: "LPX64"\n",
                        oinfo->oi_oa->o_valid);
                 RETURN(-EINVAL);
         }
@@ -472,9 +472,9 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-ENOMEM);
         }
 
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, LDLM_PLAIN, 
-                                    NULL, LCK_NL, &lock_flags, NULL, 
-                                    ldlm_completion_ast, NULL, NULL, 
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, LDLM_PLAIN,
+                                    NULL, LCK_NL, &lock_flags, NULL,
+                                    ldlm_completion_ast, NULL, NULL,
                                     0, NULL, &obd->u.echo.eo_nl_lock);
         LASSERT (rc == ELDLM_OK);
 

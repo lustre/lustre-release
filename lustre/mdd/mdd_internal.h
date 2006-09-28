@@ -83,60 +83,60 @@ struct mdd_thread_info {
         struct obd_trans_info mti_oti;
 };
 
-int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
+int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
                  struct lustre_cfg *cfg);
-int mdd_fini_obd(const struct lu_context *, struct mdd_device *);
-int mdd_xattr_set_txn(const struct lu_context *ctxt, struct mdd_object *obj,
+int mdd_fini_obd(const struct lu_env *, struct mdd_device *);
+int mdd_xattr_set_txn(const struct lu_env *env, struct mdd_object *obj,
                       const void *buf, int buf_len, const char *name, int fl,
                       struct thandle *txn);
-int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
+int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
                    struct mdd_object *child, struct lov_mds_md *lmm,
                    int lmm_size, struct thandle *handle, int set_stripe);
-int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
+int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size,
                    const struct md_create_spec *spec, struct lu_attr *la);
-void mdd_lov_create_finish(const struct lu_context *ctxt,
+void mdd_lov_create_finish(const struct lu_env *env,
                            struct mdd_device *mdd, int rc);
-int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
+int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                void *md, int *md_size, const char *name);
-int mdd_get_md_locked(const struct lu_context *ctxt, struct mdd_object *obj,
+int mdd_get_md_locked(const struct lu_env *env, struct mdd_object *obj,
                       void *md, int *md_size, const char *name);
 
-int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
+int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma);
 
-int mdd_attr_set_internal(const struct lu_context *ctxt, struct mdd_object *o,
+int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
                           const struct lu_attr *attr, struct thandle *handle);
-int mdd_get_cookie_size(const struct lu_context *ctxt, struct mdd_device *mdd,
+int mdd_get_cookie_size(const struct lu_env *env, struct mdd_device *mdd,
                         struct lov_mds_md *lmm);
 
-int mdd_lov_setattr_async(const struct lu_context *ctxt, struct mdd_object *obj,
+int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
                           struct lov_mds_md *lmm, int lmm_size);
 
-struct mdd_thread_info *mdd_ctx_info(const struct lu_context *ctx);
+struct mdd_thread_info *mdd_env_info(const struct lu_env *env);
 
-void mdd_read_lock(const struct lu_context *ctxt, struct mdd_object *obj);
-void mdd_read_unlock(const struct lu_context *ctxt, struct mdd_object *obj);
-void mdd_write_lock(const struct lu_context *ctxt, struct mdd_object *obj);
-void mdd_write_unlock(const struct lu_context *ctxt, struct mdd_object *obj);
+void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj);
+void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj);
+void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj);
+void mdd_write_unlock(const struct lu_env *env, struct mdd_object *obj);
 
-int __mdd_orphan_cleanup(const struct lu_context *ctx, struct mdd_device *d);
-int __mdd_orphan_add(const struct lu_context *, struct mdd_object *,
+int __mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d);
+int __mdd_orphan_add(const struct lu_env *, struct mdd_object *,
                      struct thandle *);
-int __mdd_orphan_del(const struct lu_context *, struct mdd_object *,
+int __mdd_orphan_del(const struct lu_env *, struct mdd_object *,
                      struct thandle *);
-int orph_index_init(const struct lu_context *ctx, struct mdd_device *mdd);
-void orph_index_fini(const struct lu_context *ctx, struct mdd_device *mdd);
-int __mdd_object_kill(const struct lu_context *, struct mdd_object *,
+int orph_index_init(const struct lu_env *env, struct mdd_device *mdd);
+void orph_index_fini(const struct lu_env *env, struct mdd_device *mdd);
+int __mdd_object_kill(const struct lu_env *, struct mdd_object *,
                       struct md_attr *);
-struct mdd_object *mdd_object_find(const struct lu_context *,
+struct mdd_object *mdd_object_find(const struct lu_env *,
                                    struct mdd_device *,
                                    const struct lu_fid *);
-static inline void mdd_object_put(const struct lu_context *ctxt,
+static inline void mdd_object_put(const struct lu_env *env,
                                   struct mdd_object *o)
 {
-        lu_object_put(ctxt, &o->mod_obj.mo_lu);
+        lu_object_put(env, &o->mod_obj.mo_lu);
 }
 
 extern struct lu_device_operations mdd_lu_ops;
@@ -202,14 +202,14 @@ static inline umode_t mdd_object_type(const struct mdd_object *obj)
         return lu_object_attr(&obj->mod_obj.mo_lu);
 }
 
-static inline int mdd_lov_mdsize(const struct lu_context *ctxt,
+static inline int mdd_lov_mdsize(const struct lu_env *env,
                                  struct mdd_device *mdd)
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
         return obd->u.mds.mds_max_mdsize;
 }
 
-static inline int mdd_lov_cookiesize(const struct lu_context *ctxt,
+static inline int mdd_lov_cookiesize(const struct lu_env *env,
                                      struct mdd_device *mdd)
 {
         struct obd_device *obd = mdd2obd_dev(mdd);

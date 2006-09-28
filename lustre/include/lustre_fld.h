@@ -81,7 +81,7 @@ struct fld_cache_entry {
 };
 
 struct fld_cache_info {
-        /* 
+        /*
          * cache guard, protects fci_hash mostly because others immutable after
          * init is finished.
          */
@@ -89,7 +89,7 @@ struct fld_cache_info {
 
         /* cache shrink threshold */
         int                      fci_threshold;
-        
+
         /* prefered number of cached entries */
         int                      fci_cache_size;
 
@@ -140,21 +140,21 @@ int fld_query(struct com_thread_info *info);
 int fld_server_init(struct lu_server_fld *fld,
                     struct dt_device *dt,
                     const char *prefix,
-                    const struct lu_context *ctx);
+                    const struct lu_env *env);
 
 void fld_server_fini(struct lu_server_fld *fld,
-                     const struct lu_context *ctx);
+                     const struct lu_env *env);
 
 int fld_server_create(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
+                      const struct lu_env *env,
                       seqno_t seq, mdsno_t mds);
 
 int fld_server_delete(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
+                      const struct lu_env *env,
                       seqno_t seq);
 
 int fld_server_lookup(struct lu_server_fld *fld,
-                      const struct lu_context *ctx,
+                      const struct lu_env *env,
                       seqno_t seq, mdsno_t *mds);
 
 /* Client methods */
@@ -165,15 +165,15 @@ void fld_client_fini(struct lu_client_fld *fld);
 
 int fld_client_lookup(struct lu_client_fld *fld,
                       seqno_t seq, mdsno_t *mds,
-                      const struct lu_context *ctx);
+                      const struct lu_env *env);
 
 int fld_client_create(struct lu_client_fld *fld,
                       seqno_t seq, mdsno_t mds,
-                      const struct lu_context *ctx);
+                      const struct lu_env *env);
 
 int fld_client_delete(struct lu_client_fld *fld,
                       seqno_t seq,
-                      const struct lu_context *ctx);
+                      const struct lu_env *env);
 
 int fld_client_add_target(struct lu_client_fld *fld,
                           struct lu_fld_target *tar);

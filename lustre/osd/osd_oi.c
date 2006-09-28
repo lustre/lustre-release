@@ -76,25 +76,25 @@ int osd_oi_init(struct osd_thread_info *info,
                 struct osd_oi *oi, struct dt_device *dev)
 {
         int rc;
-        struct dt_object        *obj;
-        const struct lu_context *ctx;
+        struct dt_object    *obj;
+        const struct lu_env *env;
 
-        ctx = info->oti_ctx;
+        env = info->oti_env;
         /*
          * Initialize ->oi_lock first, because of possible oi re-entrance in
          * dt_store_open().
          */
         init_rwsem(&oi->oi_lock);
 
-        obj = dt_store_open(ctx, dev, oi_dirname, &info->oti_fid);
+        obj = dt_store_open(env, dev, oi_dirname, &info->oti_fid);
         if (!IS_ERR(obj)) {
-                rc = obj->do_ops->do_index_try(ctx, obj, &oi_index_features);
+                rc = obj->do_ops->do_index_try(env, obj, &oi_index_features);
                 if (rc == 0) {
                         LASSERT(obj->do_index_ops != NULL);
                         oi->oi_dir = obj;
                 } else {
                         CERROR("Wrong index \"%s\": %d\n", oi_dirname, rc);
-                        lu_object_put(ctx, &obj->do_lu);
+                        lu_object_put(env, &obj->do_lu);
                 }
         } else {
                 rc = PTR_ERR(obj);
@@ -106,7 +106,7 @@ int osd_oi_init(struct osd_thread_info *info,
 void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi)
 {
         if (oi->oi_dir != NULL) {
-                lu_object_put(info->oti_ctx, &oi->oi_dir->do_lu);
+                lu_object_put(info->oti_env, &oi->oi_dir->do_lu);
                 oi->oi_dir = NULL;
         }
 }
@@ -163,7 +163,7 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                 rc = 0;
         } else {
                 rc = oi->oi_dir->do_index_ops->dio_lookup
-                        (info->oti_ctx, oi->oi_dir,
+                        (info->oti_env, oi->oi_dir,
                          (struct dt_rec *)id, oi_fid_key(info, fid));
                 osd_inode_id_init(id, id->oii_ino, id->oii_gen);
         }
@@ -188,7 +188,7 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         dev = lu2dt_dev(idx->do_lu.lo_dev);
         id = &info->oti_id;
         osd_inode_id_init(id, id0->oii_ino, id0->oii_gen);
-        return idx->do_index_ops->dio_insert(info->oti_ctx, idx,
+        return idx->do_index_ops->dio_insert(info->oti_env, idx,
                                              (const struct dt_rec *)id,
                                              oi_fid_key(info, fid), th);
 }
@@ -208,7 +208,7 @@ int osd_oi_delete(struct osd_thread_info *info,
 
         idx = oi->oi_dir;
         dev = lu2dt_dev(idx->do_lu.lo_dev);
-        return idx->do_index_ops->dio_delete(info->oti_ctx, idx,
+        return idx->do_index_ops->dio_delete(info->oti_env, idx,
                                              oi_fid_key(info, fid), th);
 }
 

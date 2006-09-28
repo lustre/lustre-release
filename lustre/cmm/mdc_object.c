@@ -44,7 +44,7 @@ static struct lu_object_operations mdc_obj_ops;
 
 extern struct lu_context_key mdc_thread_key;
 
-struct lu_object *mdc_object_alloc(const struct lu_context *ctx,
+struct lu_object *mdc_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *ld)
 {
@@ -65,24 +65,24 @@ struct lu_object *mdc_object_alloc(const struct lu_context *ctx,
 		RETURN(NULL);
 }
 
-static void mdc_object_free(const struct lu_context *ctx, struct lu_object *lo)
+static void mdc_object_free(const struct lu_env *env, struct lu_object *lo)
 {
         struct mdc_object *mco = lu2mdc_obj(lo);
 	lu_object_fini(lo);
         OBD_FREE_PTR(mco);
 }
 
-static int mdc_object_init(const struct lu_context *ctx, struct lu_object *lo)
+static int mdc_object_init(const struct lu_env *env, struct lu_object *lo)
 {
         ENTRY;
         lo->lo_header->loh_attr |= LOHA_REMOTE;
         RETURN(0);
 }
 
-static int mdc_object_print(const struct lu_context *ctx, void *cookie,
+static int mdc_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *lo)
 {
-	return (*p)(ctx, cookie, LUSTRE_CMM_MDC_NAME"-object@%p", lo);
+	return (*p)(env, cookie, LUSTRE_CMM_MDC_NAME"-object@%p", lo);
 }
 
 static struct lu_object_operations mdc_obj_ops = {
@@ -92,22 +92,22 @@ static struct lu_object_operations mdc_obj_ops = {
 };
 
 /* md_object_operations */
-static  
-struct mdc_thread_info *mdc_info_get(const struct lu_context *ctx)
+static
+struct mdc_thread_info *mdc_info_get(const struct lu_env *env)
 {
         struct mdc_thread_info *mci;
 
-        mci = lu_context_key_get(ctx, &mdc_thread_key);
+        mci = lu_context_key_get(&env->le_ctx, &mdc_thread_key);
         LASSERT(mci);
         return mci;
 }
 
-static 
-struct mdc_thread_info *mdc_info_init(const struct lu_context *ctx)
+static
+struct mdc_thread_info *mdc_info_init(const struct lu_env *env)
 {
         struct mdc_thread_info *mci;
 
-        mci = mdc_info_get(ctx);
+        mci = mdc_info_get(env);
 
         memset(mci, 0, sizeof(*mci));
 
@@ -144,7 +144,7 @@ static void mdc_body2attr(struct mdt_body *body, struct md_attr *ma)
         ma->ma_valid = MA_INODE;
 }
 
-static int mdc_req2attr_update(const struct lu_context *ctx,
+static int mdc_req2attr_update(const struct lu_env *env,
                                 struct md_attr *ma)
 {
         struct mdc_thread_info *mci;
@@ -152,9 +152,9 @@ static int mdc_req2attr_update(const struct lu_context *ctx,
         struct mdt_body *body;
         struct lov_mds_md *lov;
         struct llog_cookie *cookie;
-        
+
         ENTRY;
-        mci = mdc_info_get(ctx);
+        mci = mdc_info_get(env);
         req = mci->mci_req;
         LASSERT(req);
         body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*body));
@@ -168,7 +168,7 @@ static int mdc_req2attr_update(const struct lu_context *ctx,
                 CERROR("OBD_MD_FLEASIZE is set but eadatasize is zero\n");
                 RETURN(-EPROTO);
         }
-        
+
         lov = lustre_swab_repbuf(req, REPLY_REC_OFF + 1,
                                  body->eadatasize, NULL);
         if (lov == NULL) {
@@ -182,7 +182,7 @@ static int mdc_req2attr_update(const struct lu_context *ctx,
         ma->ma_valid |= MA_LOV;
         if (!(body->valid & OBD_MD_FLCOOKIE))
                 RETURN(0);
-        
+
         if (body->aclsize == 0) {
                 CERROR("OBD_MD_FLCOOKIE is set but cookie size is zero\n");
                 RETURN(-EPROTO);
@@ -202,7 +202,7 @@ static int mdc_req2attr_update(const struct lu_context *ctx,
         RETURN(0);
 }
 
-static int mdc_attr_get(const struct lu_context *ctx, struct md_object *mo,
+static int mdc_attr_get(const struct lu_env *env, struct md_object *mo,
                         struct md_attr *ma, struct md_ucred *uc)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
@@ -210,7 +210,7 @@ static int mdc_attr_get(const struct lu_context *ctx, struct md_object *mo,
         int rc;
         ENTRY;
 
-        mci = lu_context_key_get(ctx, &mdc_thread_key);
+        mci = lu_context_key_get(&env->le_ctx, &mdc_thread_key);
         LASSERT(mci);
 
         memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
@@ -223,7 +223,7 @@ static int mdc_attr_get(const struct lu_context *ctx, struct md_object *mo,
 
         if (rc == 0) {
                 /* get attr from request */
-                rc = mdc_req2attr_update(ctx, ma);
+                rc = mdc_req2attr_update(env, ma);
         }
 
         ptlrpc_req_finished(mci->mci_req);
@@ -232,7 +232,7 @@ static int mdc_attr_get(const struct lu_context *ctx, struct md_object *mo,
 }
 
 
-static int mdc_object_create(const struct lu_context *ctx,
+static int mdc_object_create(const struct lu_env *env,
                              struct md_object *mo,
                              const struct md_create_spec *spec,
                              struct md_attr *ma,
@@ -249,7 +249,7 @@ static int mdc_object_create(const struct lu_context *ctx,
         ENTRY;
 
         LASSERT(spec->u.sp_pfid != NULL);
-        mci = mdc_info_init(ctx);
+        mci = mdc_info_init(env);
         mci->mci_opdata.fid2 = *lu_object_fid(&mo->mo_lu);
         /* parent fid is needed to create dotdot on the remote node */
         mci->mci_opdata.fid1 = *(spec->u.sp_pfid);
@@ -280,7 +280,7 @@ static int mdc_object_create(const struct lu_context *ctx,
                 symname = spec->u.sp_symname;
                 symlen = symname ? strlen(symname) + 1 : 0;
         }
-        
+
         rc = md_create(mc->mc_desc.cl_exp, &mci->mci_opdata,
                        symname, symlen,
                        la->la_mode, uid, gid, cap, la->la_rdev,
@@ -288,7 +288,7 @@ static int mdc_object_create(const struct lu_context *ctx,
 
         if (rc == 0) {
                 /* get attr from request */
-                rc = mdc_req2attr_update(ctx, ma);
+                rc = mdc_req2attr_update(env, ma);
         }
 
         ptlrpc_req_finished(mci->mci_req);
@@ -296,7 +296,7 @@ static int mdc_object_create(const struct lu_context *ctx,
         RETURN(rc);
 }
 
-static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo,
+static int mdc_ref_add(const struct lu_env *env, struct md_object *mo,
                        struct md_ucred *uc)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
@@ -304,7 +304,7 @@ static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo,
         int rc;
         ENTRY;
 
-        mci = lu_context_key_get(ctx, &mdc_thread_key);
+        mci = lu_context_key_get(&env->le_ctx, &mdc_thread_key);
         LASSERT(mci);
 
         memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
@@ -340,7 +340,7 @@ static int mdc_ref_add(const struct lu_context *ctx, struct md_object *mo,
         RETURN(rc);
 }
 
-static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
+static int mdc_ref_del(const struct lu_env *env, struct md_object *mo,
                        struct md_attr *ma, struct md_ucred *uc)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
@@ -349,7 +349,7 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
         int rc;
         ENTRY;
 
-        mci = mdc_info_init(ctx);
+        mci = mdc_info_init(env);
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
         mci->mci_opdata.mode = la->la_mode;
         mci->mci_opdata.mod_time = la->la_ctime;
@@ -372,7 +372,7 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
         rc = md_unlink(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
         if (rc == 0) {
                 /* get attr from request */
-                rc = mdc_req2attr_update(ctx, ma);
+                rc = mdc_req2attr_update(env, ma);
         }
 
         ptlrpc_req_finished(mci->mci_req);
@@ -381,7 +381,7 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
 }
 
 #ifdef HAVE_SPLIT_SUPPORT
-int mdc_send_page(struct cmm_device *cm, const struct lu_context *ctx,
+int mdc_send_page(struct cmm_device *cm, const struct lu_env *env,
                   struct md_object *mo, struct page *page, __u32 offset,
                   struct md_ucred *uc)
 {
@@ -405,7 +405,7 @@ static struct md_object_operations mdc_mo_ops = {
 };
 
 /* md_dir_operations */
-static int mdc_rename_tgt(const struct lu_context *ctx, struct md_object *mo_p,
+static int mdc_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
                           struct md_object *mo_t, const struct lu_fid *lf,
                           const char *name, struct md_attr *ma,
                           struct md_ucred *uc)
@@ -416,7 +416,7 @@ static int mdc_rename_tgt(const struct lu_context *ctx, struct md_object *mo_p,
         int rc;
         ENTRY;
 
-        mci = mdc_info_init(ctx);
+        mci = mdc_info_init(env);
         mci->mci_opdata.fid1 = *lu_object_fid(&mo_p->mo_lu);
         mci->mci_opdata.fid2 = *lf;
         mci->mci_opdata.mode = la->la_mode;
@@ -444,7 +444,7 @@ static int mdc_rename_tgt(const struct lu_context *ctx, struct md_object *mo_p,
                        name, strlen(name), &mci->mci_req);
         if (rc == 0) {
                 /* get attr from request */
-                mdc_req2attr_update(ctx, ma);
+                mdc_req2attr_update(env, ma);
         }
 
         ptlrpc_req_finished(mci->mci_req);
@@ -452,7 +452,7 @@ static int mdc_rename_tgt(const struct lu_context *ctx, struct md_object *mo_p,
         RETURN(rc);
 }
 
-static int mdc_is_subdir(const struct lu_context *ctx, struct md_object *mo,
+static int mdc_is_subdir(const struct lu_env *env, struct md_object *mo,
                          const struct lu_fid *fid, struct lu_fid *sfid,
                          struct md_ucred *uc)
 {
@@ -462,8 +462,8 @@ static int mdc_is_subdir(const struct lu_context *ctx, struct md_object *mo,
         int rc;
         ENTRY;
 
-        mci = mdc_info_init(ctx);
-        
+        mci = mdc_info_init(env);
+
         /* FIXME: capability for split! */
         rc = md_is_subdir(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
                           fid, NULL, NULL, &mci->mci_req);
@@ -472,7 +472,7 @@ static int mdc_is_subdir(const struct lu_context *ctx, struct md_object *mo,
 
         body = lustre_msg_buf(mci->mci_req->rq_repmsg, REPLY_REC_OFF,
                               sizeof(*body));
-        
+
         LASSERT(body->valid & (OBD_MD_FLMODE | OBD_MD_FLID) &&
                 (body->mode == 0 || body->mode == 1 || body->mode == EREMOTE));
 

@@ -71,26 +71,26 @@ enum {
 
 extern struct lu_context_key fld_thread_key;
 
-static struct dt_key *fld_key(const struct lu_context *ctx,
+static struct dt_key *fld_key(const struct lu_env *env,
                               const seqno_t seq)
 {
         struct fld_thread_info *info;
         ENTRY;
 
-        info = lu_context_key_get(ctx, &fld_thread_key);
+        info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
         LASSERT(info != NULL);
 
         info->fti_key = cpu_to_be64(seq);
         RETURN((void *)&info->fti_key);
 }
 
-static struct dt_rec *fld_rec(const struct lu_context *ctx,
+static struct dt_rec *fld_rec(const struct lu_env *env,
                               const mdsno_t mds)
 {
         struct fld_thread_info *info;
         ENTRY;
 
-        info = lu_context_key_get(ctx, &fld_thread_key);
+        info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
         LASSERT(info != NULL);
 
         info->fti_rec = cpu_to_be64(mds);
@@ -98,7 +98,7 @@ static struct dt_rec *fld_rec(const struct lu_context *ctx,
 }
 
 int fld_index_create(struct lu_server_fld *fld,
-                     const struct lu_context *ctx,
+                     const struct lu_env *env,
                      seqno_t seq, mdsno_t mds)
 {
         struct dt_object *dt_obj = fld->lsf_obj;
@@ -109,23 +109,23 @@ int fld_index_create(struct lu_server_fld *fld,
         ENTRY;
 
         dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
-        
+
         /* stub here, will fix it later */
         txn.tp_credits = FLD_TXN_INDEX_INSERT_CREDITS;
 
-        th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &txn);
+        th = dt_dev->dd_ops->dt_trans_start(env, dt_dev, &txn);
         if (!IS_ERR(th)) {
-                rc = dt_obj->do_index_ops->dio_insert(ctx, dt_obj,
-                                                      fld_rec(ctx, mds),
-                                                      fld_key(ctx, seq), th);
-                dt_dev->dd_ops->dt_trans_stop(ctx, th);
+                rc = dt_obj->do_index_ops->dio_insert(env, dt_obj,
+                                                      fld_rec(env, mds),
+                                                      fld_key(env, seq), th);
+                dt_dev->dd_ops->dt_trans_stop(env, th);
         } else
                 rc = PTR_ERR(th);
         RETURN(rc);
 }
 
 int fld_index_delete(struct lu_server_fld *fld,
-                     const struct lu_context *ctx,
+                     const struct lu_env *env,
                      seqno_t seq)
 {
         struct dt_object *dt_obj = fld->lsf_obj;
@@ -137,34 +137,34 @@ int fld_index_delete(struct lu_server_fld *fld,
 
         dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
         txn.tp_credits = FLD_TXN_INDEX_DELETE_CREDITS;
-        th = dt_dev->dd_ops->dt_trans_start(ctx, dt_dev, &txn);
+        th = dt_dev->dd_ops->dt_trans_start(env, dt_dev, &txn);
         if (!IS_ERR(th)) {
-                rc = dt_obj->do_index_ops->dio_delete(ctx, dt_obj,
-                                                      fld_key(ctx, seq), th);
-                dt_dev->dd_ops->dt_trans_stop(ctx, th);
+                rc = dt_obj->do_index_ops->dio_delete(env, dt_obj,
+                                                      fld_key(env, seq), th);
+                dt_dev->dd_ops->dt_trans_stop(env, th);
         } else
                 rc = PTR_ERR(th);
         RETURN(rc);
 }
 
 int fld_index_lookup(struct lu_server_fld *fld,
-                     const struct lu_context *ctx,
+                     const struct lu_env *env,
                      seqno_t seq, mdsno_t *mds)
 {
         struct dt_object *dt_obj = fld->lsf_obj;
-        struct dt_rec    *rec = fld_rec(ctx, 0);
+        struct dt_rec    *rec = fld_rec(env, 0);
         int rc;
         ENTRY;
 
-        rc = dt_obj->do_index_ops->dio_lookup(ctx, dt_obj, rec,
-                                              fld_key(ctx, seq));
+        rc = dt_obj->do_index_ops->dio_lookup(env, dt_obj, rec,
+                                              fld_key(env, seq));
         if (rc == 0)
                 *mds = be64_to_cpu(*(__u64 *)rec);
         RETURN(rc);
 }
 
 int fld_index_init(struct lu_server_fld *fld,
-                   const struct lu_context *ctx,
+                   const struct lu_env *env,
                    struct dt_device *dt)
 {
         struct dt_object *dt_obj;
@@ -172,10 +172,10 @@ int fld_index_init(struct lu_server_fld *fld,
         int rc;
         ENTRY;
 
-        dt_obj = dt_store_open(ctx, dt, fld_index_name, &fid);
+        dt_obj = dt_store_open(env, dt, fld_index_name, &fid);
         if (!IS_ERR(dt_obj)) {
                 fld->lsf_obj = dt_obj;
-                rc = dt_obj->do_ops->do_index_try(ctx, dt_obj,
+                rc = dt_obj->do_ops->do_index_try(env, dt_obj,
                                                   &fld_index_features);
                 if (rc == 0)
                         LASSERT(dt_obj->do_index_ops != NULL);
@@ -192,12 +192,12 @@ int fld_index_init(struct lu_server_fld *fld,
 }
 
 void fld_index_fini(struct lu_server_fld *fld,
-                    const struct lu_context *ctx)
+                    const struct lu_env *env)
 {
         ENTRY;
         if (fld->lsf_obj != NULL) {
                 if (!IS_ERR(fld->lsf_obj))
-                        lu_object_put(ctx, &fld->lsf_obj->do_lu);
+                        lu_object_put(env, &fld->lsf_obj->do_lu);
                 fld->lsf_obj = NULL;
         }
         EXIT;

@@ -84,7 +84,7 @@ struct osd_object {
         struct iam_container   oo_container;
         struct iam_descr       oo_descr;
         struct iam_path_descr *oo_ipd;
-        const struct lu_context *oo_owner;
+        const struct lu_env   *oo_owner;
 };
 
 /*
@@ -103,18 +103,18 @@ struct osd_device {
          */
         struct dentry            *od_obj_area;
 
-        /* Thread context for transaction commit callback.
+        /* Environment for transaction commit callback.
          * Currently, OSD is based on ext3/JBD. Transaction commit in ext3/JBD
          * is serialized, that is there is no more than one transaction commit
          * at a time (JBD journal_commit_transaction() is serialized).
          * This means that it's enough to have _one_ lu_context.
          */
-        struct lu_context         od_ctx_for_commit;
+        struct lu_env             od_env_for_commit;
 };
 
-static int   osd_root_get      (const struct lu_context *ctxt,
+static int   osd_root_get      (const struct lu_env *env,
                                 struct dt_device *dev, struct lu_fid *f);
-static int   osd_statfs        (const struct lu_context *ctxt,
+static int   osd_statfs        (const struct lu_env *env,
                                 struct dt_device *dev, struct kstatfs *sfs);
 
 static int   lu_device_is_osd  (const struct lu_device *d);
@@ -122,13 +122,13 @@ static void  osd_mod_exit      (void) __exit;
 static int   osd_mod_init      (void) __init;
 static int   osd_type_init     (struct lu_device_type *t);
 static void  osd_type_fini     (struct lu_device_type *t);
-static int   osd_object_init   (const struct lu_context *ctxt,
+static int   osd_object_init   (const struct lu_env *env,
                                 struct lu_object *l);
-static void  osd_object_release(const struct lu_context *ctxt,
+static void  osd_object_release(const struct lu_env *env,
                                 struct lu_object *l);
-static int   osd_object_print  (const struct lu_context *ctx, void *cookie,
+static int   osd_object_print  (const struct lu_env *env, void *cookie,
                                 lu_printer_t p, const struct lu_object *o);
-static void  osd_device_free   (const struct lu_context *ctx,
+static void  osd_device_free   (const struct lu_env *env,
                                 struct lu_device *m);
 static void *osd_key_init      (const struct lu_context *ctx,
                                 struct lu_context_key *key);
@@ -138,53 +138,53 @@ static void  osd_key_exit      (const struct lu_context *ctx,
                                 struct lu_context_key *key, void *data);
 static int   osd_has_index     (const struct osd_object *obj);
 static void  osd_object_init0  (struct osd_object *obj);
-static int   osd_device_init   (const struct lu_context *ctx,
+static int   osd_device_init   (const struct lu_env *env,
                                 struct lu_device *d, struct lu_device *);
-static int   osd_fid_lookup    (const struct lu_context *ctx,
+static int   osd_fid_lookup    (const struct lu_env *env,
                                 struct osd_object *obj,
                                 const struct lu_fid *fid);
-static int   osd_inode_getattr (const struct lu_context *ctx,
+static int   osd_inode_getattr (const struct lu_env *env,
                                 struct inode *inode, struct lu_attr *attr);
-static int   osd_inode_setattr (const struct lu_context *ctx,
+static int   osd_inode_setattr (const struct lu_env *env,
                                 struct inode *inode, const struct lu_attr *attr);
 static int   osd_param_is_sane (const struct osd_device *dev,
                                 const struct txn_param *param);
-static int   osd_index_lookup  (const struct lu_context *ctxt,
+static int   osd_index_lookup  (const struct lu_env *env,
                                 struct dt_object *dt,
                                 struct dt_rec *rec, const struct dt_key *key);
-static int   osd_index_insert  (const struct lu_context *ctxt,
+static int   osd_index_insert  (const struct lu_env *env,
                                 struct dt_object *dt,
                                 const struct dt_rec *rec,
                                 const struct dt_key *key,
                                 struct thandle *handle);
-static int   osd_index_delete  (const struct lu_context *ctxt,
+static int   osd_index_delete  (const struct lu_env *env,
                                 struct dt_object *dt, const struct dt_key *key,
                                 struct thandle *handle);
-static int   osd_index_probe   (const struct lu_context *ctxt,
+static int   osd_index_probe   (const struct lu_env *env,
                                 struct osd_object *o,
                                 const struct dt_index_features *feat);
-static int   osd_index_try     (const struct lu_context *ctx,
+static int   osd_index_try     (const struct lu_env *env,
                                 struct dt_object *dt,
                                 const struct dt_index_features *feat);
 static void  osd_index_fini    (struct osd_object *o);
 
-static void  osd_it_fini       (const struct lu_context *ctx, struct dt_it *di);
-static int   osd_it_get        (const struct lu_context *ctx,
+static void  osd_it_fini       (const struct lu_env *env, struct dt_it *di);
+static int   osd_it_get        (const struct lu_env *env,
                                 struct dt_it *di, const struct dt_key *key);
-static void  osd_it_put        (const struct lu_context *ctx, struct dt_it *di);
-static int   osd_it_next       (const struct lu_context *ctx, struct dt_it *di);
-static int   osd_it_del        (const struct lu_context *ctx, struct dt_it *di,
+static void  osd_it_put        (const struct lu_env *env, struct dt_it *di);
+static int   osd_it_next       (const struct lu_env *env, struct dt_it *di);
+static int   osd_it_del        (const struct lu_env *env, struct dt_it *di,
                                 struct thandle *th);
-static int   osd_it_key_size   (const struct lu_context *ctx,
+static int   osd_it_key_size   (const struct lu_env *env,
                                 const struct dt_it *di);
-static void  osd_conf_get      (const struct lu_context *ctx,
+static void  osd_conf_get      (const struct lu_env *env,
                                 const struct dt_device *dev,
                                 struct dt_device_param *param);
-static int   osd_read_locked   (const struct lu_context *ctx,
+static int   osd_read_locked   (const struct lu_env *env,
                                 struct osd_object *o);
-static int   osd_write_locked  (const struct lu_context *ctx,
+static int   osd_write_locked  (const struct lu_env *env,
                                 struct osd_object *o);
-static void  osd_trans_stop    (const struct lu_context *ctx,
+static void  osd_trans_stop    (const struct lu_env *env,
                                 struct thandle *th);
 
 static struct osd_object  *osd_obj          (const struct lu_object *o);
@@ -193,28 +193,28 @@ static struct osd_device  *osd_dt_dev       (const struct dt_device *d);
 static struct osd_object  *osd_dt_obj       (const struct dt_object *d);
 static struct osd_device  *osd_obj2dev      (const struct osd_object *o);
 static struct lu_device   *osd2lu_dev       (struct osd_device *osd);
-static struct lu_device   *osd_device_fini  (const struct lu_context *ctx,
+static struct lu_device   *osd_device_fini  (const struct lu_env *env,
                                              struct lu_device *d);
-static struct lu_device   *osd_device_alloc (const struct lu_context *ctx,
+static struct lu_device   *osd_device_alloc (const struct lu_env *env,
                                              struct lu_device_type *t,
                                              struct lustre_cfg *cfg);
-static struct lu_object   *osd_object_alloc (const struct lu_context *ctx,
+static struct lu_object   *osd_object_alloc (const struct lu_env *env,
                                              const struct lu_object_header *hdr,
                                              struct lu_device *d);
 static struct inode       *osd_iget         (struct osd_thread_info *info,
                                              struct osd_device *dev,
                                              const struct osd_inode_id *id);
 static struct super_block *osd_sb           (const struct osd_device *dev);
-static struct dt_it       *osd_it_init      (const struct lu_context *ctx,
+static struct dt_it       *osd_it_init      (const struct lu_env *env,
                                              struct dt_object *dt, int wable);
-static struct dt_key      *osd_it_key       (const struct lu_context *ctx,
+static struct dt_key      *osd_it_key       (const struct lu_env *env,
                                              const struct dt_it *di);
-static struct dt_rec      *osd_it_rec       (const struct lu_context *ctx,
+static struct dt_rec      *osd_it_rec       (const struct lu_env *env,
                                              const struct dt_it *di);
-static struct timespec    *osd_inode_time   (const struct lu_context *ctx,
+static struct timespec    *osd_inode_time   (const struct lu_env *env,
                                              struct inode *inode,
                                              __u64 seconds);
-static struct thandle     *osd_trans_start  (const struct lu_context *ctx,
+static struct thandle     *osd_trans_start  (const struct lu_env *env,
                                              struct dt_device *d,
                                              struct txn_param *p);
 static journal_t          *osd_journal      (const struct osd_device *dev);
@@ -259,18 +259,18 @@ static int osd_invariant(const struct osd_object *obj)
 #define osd_invariant(obj) (1)
 #endif
 
-static int osd_read_locked(const struct lu_context *ctx, struct osd_object *o)
+static int osd_read_locked(const struct lu_env *env, struct osd_object *o)
 {
-        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
 
         return oti->oti_r_locks > 0;
 }
 
-static int osd_write_locked(const struct lu_context *ctx, struct osd_object *o)
+static int osd_write_locked(const struct lu_env *env, struct osd_object *o)
 {
-        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
 
-        return oti->oti_w_locks > 0 && o->oo_owner == ctx;
+        return oti->oti_w_locks > 0 && o->oo_owner == env;
 }
 
 static void osd_fid_build_name(const struct lu_fid *fid, char *name)
@@ -281,10 +281,10 @@ static void osd_fid_build_name(const struct lu_fid *fid, char *name)
 }
 
 /* helper to push us into KERNEL_DS context */
-static struct file *osd_rw_init(const struct lu_context *ctxt,
+static struct file *osd_rw_init(const struct lu_env *env,
                                 struct inode *inode, mm_segment_t *seg)
 {
-        struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
+        struct osd_thread_info *info   = lu_context_key_get(&env->le_ctx, &osd_key);
         struct dentry          *dentry = &info->oti_dentry;
         struct file            *file   = &info->oti_file;
 
@@ -305,7 +305,7 @@ static void osd_rw_fini(mm_segment_t *seg)
         set_fs(*seg);
 }
 
-static int osd_root_get(const struct lu_context *ctx,
+static int osd_root_get(const struct lu_env *env,
                         struct dt_device *dev, struct lu_fid *f)
 {
         struct inode *inode;
@@ -319,7 +319,7 @@ static int osd_root_get(const struct lu_context *ctx,
  * OSD object methods.
  */
 
-static struct lu_object *osd_object_alloc(const struct lu_context *ctx,
+static struct lu_object *osd_object_alloc(const struct lu_env *env,
                                           const struct lu_object_header *hdr,
                                           struct lu_device *d)
 {
@@ -347,14 +347,14 @@ static void osd_object_init0(struct osd_object *obj)
                 (LOHA_EXISTS | (obj->oo_inode->i_mode & S_IFMT));
 }
 
-static int osd_object_init(const struct lu_context *ctxt, struct lu_object *l)
+static int osd_object_init(const struct lu_env *env, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
         int result;
 
         LASSERT(osd_invariant(obj));
 
-        result = osd_fid_lookup(ctxt, obj, lu_object_fid(l));
+        result = osd_fid_lookup(env, obj, lu_object_fid(l));
         if (result == 0) {
                 if (obj->oo_inode != NULL)
                         osd_object_init0(obj);
@@ -363,7 +363,7 @@ static int osd_object_init(const struct lu_context *ctxt, struct lu_object *l)
         return result;
 }
 
-static void osd_object_free(const struct lu_context *ctx, struct lu_object *l)
+static void osd_object_free(const struct lu_env *env, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
 
@@ -398,27 +398,27 @@ enum {
         OSD_TXN_RMENTRY_CREDITS = 20
 };
 
-static int osd_inode_remove(const struct lu_context *ctx,
+static int osd_inode_remove(const struct lu_env *env,
                             struct osd_object *obj)
 {
         const struct lu_fid    *fid = lu_object_fid(&obj->oo_dt.do_lu);
         struct osd_device      *osd = osd_obj2dev(obj);
-        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
         struct txn_param       *prm = &oti->oti_txn;
         struct thandle         *th;
         struct dentry          *dentry;
         int result;
 
         prm->tp_credits = OSD_TXN_OI_DELETE_CREDITS + OSD_TXN_RMENTRY_CREDITS;
-        th = osd_trans_start(ctx, &osd->od_dt_dev, prm);
+        th = osd_trans_start(env, &osd->od_dt_dev, prm);
         if (!IS_ERR(th)) {
                 osd_oi_write_lock(&osd->od_oi);
                 result = osd_oi_delete(oti, &osd->od_oi, fid, th);
                 osd_oi_write_unlock(&osd->od_oi);
 
-                /* 
+                /*
                  * The following is added by huanghua@clusterfs.com as
-                 * a temporary hack, to remove the directory entry in 
+                 * a temporary hack, to remove the directory entry in
                  * "*OBJ_TEMP*". We will finally do not use this hack,
                  * and at that time we will remove these code.
                  */
@@ -435,7 +435,7 @@ static int osd_inode_remove(const struct lu_context *ctx,
                         dput(dentry);
                 } else
                         iput(obj->oo_inode);
-                osd_trans_stop(ctx, th);
+                osd_trans_stop(env, th);
         } else
                 result = PTR_ERR(th);
         return result;
@@ -445,7 +445,7 @@ static int osd_inode_remove(const struct lu_context *ctx,
  * Called just before object is freed. Releases all resources except for
  * object itself (that is released by osd_object_free()).
  */
-static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
+static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 {
         struct osd_object *obj   = osd_obj(l);
         struct inode      *inode = obj->oo_inode;
@@ -461,15 +461,15 @@ static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
          * ("*OBJ-TEMP*"), but name in that directory is _not_ counted in
          * inode ->i_nlink.
          */
-        
+
         osd_index_fini(obj);
         if (inode != NULL) {
                 int result;
 
                 if (osd_inode_unlinked(inode)) {
-                        result = osd_inode_remove(ctx, obj);
+                        result = osd_inode_remove(env, obj);
                         if (result != 0)
-                                LU_OBJECT_DEBUG(D_ERROR, ctx, l,
+                                LU_OBJECT_DEBUG(D_ERROR, env, l,
                                                 "Failed to cleanup: %d\n",
                                                 result);
                 } else
@@ -478,7 +478,7 @@ static void osd_object_delete(const struct lu_context *ctx, struct lu_object *l)
         }
 }
 
-static void osd_object_release(const struct lu_context *ctxt,
+static void osd_object_release(const struct lu_env *env,
                                struct lu_object *l)
 {
         struct osd_object *o = osd_obj(l);
@@ -488,21 +488,21 @@ static void osd_object_release(const struct lu_context *ctxt,
                 set_bit(LU_OBJECT_HEARD_BANSHEE, &l->lo_header->loh_flags);
 }
 
-static int osd_object_print(const struct lu_context *ctx, void *cookie,
+static int osd_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *l)
 {
         struct osd_object *o = osd_obj(l);
         struct iam_descr  *d;
 
         d = o->oo_container.ic_descr;
-        return (*p)(ctx, cookie, LUSTRE_OSD_NAME"-object@%p(i:%p:%lu/%u)[%s]",
+        return (*p)(env, cookie, LUSTRE_OSD_NAME"-object@%p(i:%p:%lu/%u)[%s]",
                     o, o->oo_inode,
                     o->oo_inode ? o->oo_inode->i_ino : 0UL,
                     o->oo_inode ? o->oo_inode->i_generation : 0,
                     d ? d->id_ops->id_name : "plain");
 }
 
-static int osd_statfs(const struct lu_context *ctx,
+static int osd_statfs(const struct lu_env *env,
                       struct dt_device *d, struct kstatfs *sfs)
 {
         struct osd_device *osd = osd_dt_dev(d);
@@ -517,7 +517,7 @@ static int osd_statfs(const struct lu_context *ctx,
         RETURN (result);
 }
 
-static void osd_conf_get(const struct lu_context *ctx,
+static void osd_conf_get(const struct lu_env *env,
                          const struct dt_device *dev,
                          struct dt_device_param *param)
 {
@@ -553,7 +553,7 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
                 /* This dd_ctx_for_commit is only for commit usage.
                  * see "struct dt_device"
                  */
-                dt_txn_hook_commit(&osd_dt_dev(dev)->od_ctx_for_commit, th);
+                dt_txn_hook_commit(&osd_dt_dev(dev)->od_env_for_commit, th);
         }
 
         lu_device_put(&dev->dd_lu_dev);
@@ -564,7 +564,7 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
         OBD_FREE_PTR(oh);
 }
 
-static struct thandle *osd_trans_start(const struct lu_context *ctx,
+static struct thandle *osd_trans_start(const struct lu_env *env,
                                        struct dt_device *d,
                                        struct txn_param *p)
 {
@@ -572,12 +572,12 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
         handle_t               *jh;
         struct osd_thandle     *oh;
         struct thandle         *th;
-        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
         int hook_res;
 
         ENTRY;
 
-        hook_res = dt_txn_hook_start(ctx, d, p);
+        hook_res = dt_txn_hook_start(env, d, p);
         if (hook_res != 0)
                 RETURN(ERR_PTR(hook_res));
 
@@ -618,11 +618,11 @@ static struct thandle *osd_trans_start(const struct lu_context *ctx,
         RETURN(th);
 }
 
-static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
+static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
 {
         int result;
         struct osd_thandle     *oh;
-        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
 
         ENTRY;
 
@@ -632,7 +632,7 @@ static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
                 /*
                  * XXX temporary stuff. Some abstraction layer should be used.
                  */
-                result = dt_txn_hook_stop(ctx, th);
+                result = dt_txn_hook_stop(env, th);
                 if (result != 0)
                         CERROR("Failure in transaction hook: %d\n", result);
 
@@ -650,13 +650,13 @@ static void osd_trans_stop(const struct lu_context *ctx, struct thandle *th)
         EXIT;
 }
 
-static int osd_sync(const struct lu_context *ctx, struct dt_device *d)
+static int osd_sync(const struct lu_env *env, struct dt_device *d)
 {
         CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_OSD_NAME);
         return ldiskfs_force_commit(osd_sb(osd_dt_dev(d)));
 }
 
-static void osd_ro(const struct lu_context *ctx, struct dt_device *d)
+static void osd_ro(const struct lu_env *env, struct dt_device *d)
 {
         ENTRY;
 
@@ -676,40 +676,40 @@ static struct dt_device_operations osd_dt_ops = {
         .dt_ro          = osd_ro
 };
 
-static void osd_object_read_lock(const struct lu_context *ctx,
+static void osd_object_read_lock(const struct lu_env *env,
                                  struct dt_object *dt)
 {
         struct osd_object      *obj = osd_dt_obj(dt);
-        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
 
         LASSERT(osd_invariant(obj));
 
-        LASSERT(obj->oo_owner != ctx);
+        LASSERT(obj->oo_owner != env);
         down_read(&obj->oo_sem);
         LASSERT(obj->oo_owner == NULL);
         oti->oti_r_locks++;
 }
 
-static void osd_object_write_lock(const struct lu_context *ctx,
+static void osd_object_write_lock(const struct lu_env *env,
                                   struct dt_object *dt)
 {
         struct osd_object      *obj = osd_dt_obj(dt);
-        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
 
         LASSERT(osd_invariant(obj));
 
-        LASSERT(obj->oo_owner != ctx);
+        LASSERT(obj->oo_owner != env);
         down_write(&obj->oo_sem);
         LASSERT(obj->oo_owner == NULL);
-        obj->oo_owner = ctx;
+        obj->oo_owner = env;
         oti->oti_w_locks++;
 }
 
-static void osd_object_read_unlock(const struct lu_context *ctx,
+static void osd_object_read_unlock(const struct lu_env *env,
                                    struct dt_object *dt)
 {
         struct osd_object      *obj = osd_dt_obj(dt);
-        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
 
         LASSERT(osd_invariant(obj));
         LASSERT(oti->oti_r_locks > 0);
@@ -717,28 +717,28 @@ static void osd_object_read_unlock(const struct lu_context *ctx,
         up_read(&obj->oo_sem);
 }
 
-static void osd_object_write_unlock(const struct lu_context *ctx,
+static void osd_object_write_unlock(const struct lu_env *env,
                                     struct dt_object *dt)
 {
         struct osd_object      *obj = osd_dt_obj(dt);
-        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
 
         LASSERT(osd_invariant(obj));
-        LASSERT(obj->oo_owner == ctx);
+        LASSERT(obj->oo_owner == env);
         LASSERT(oti->oti_w_locks > 0);
         oti->oti_w_locks--;
         obj->oo_owner = NULL;
         up_write(&obj->oo_sem);
 }
 
-static inline int osd_object_auth(const struct lu_context *ctx,
+static inline int osd_object_auth(const struct lu_env *env,
                                   const struct lu_object *o,
                                   __u64 opc)
 {
-        return o->lo_ops->loo_object_auth(ctx, o, lu_object_capa(o), opc);
+        return o->lo_ops->loo_object_auth(env, o, lu_object_capa(o), opc);
 }
 
-static int osd_attr_get(const struct lu_context *ctxt,
+static int osd_attr_get(const struct lu_env *env,
                         struct dt_object *dt,
                         struct lu_attr *attr)
 {
@@ -746,15 +746,15 @@ static int osd_attr_get(const struct lu_context *ctxt,
 
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
-        LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
+        LASSERT(osd_read_locked(env, obj) || osd_write_locked(env, obj));
 
-        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_READ))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_META_READ))
                 return -EACCES;
 
-        return osd_inode_getattr(ctxt, obj->oo_inode, attr);
+        return osd_inode_getattr(env, obj->oo_inode, attr);
 }
 
-static int osd_attr_set(const struct lu_context *ctxt,
+static int osd_attr_set(const struct lu_env *env,
                         struct dt_object *dt,
                         const struct lu_attr *attr,
                         struct thandle *handle)
@@ -763,18 +763,18 @@ static int osd_attr_set(const struct lu_context *ctxt,
         LASSERT(handle != NULL);
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
-        LASSERT(osd_write_locked(ctxt, obj));
+        LASSERT(osd_write_locked(env, obj));
 
-        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_WRITE))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
-        return osd_inode_setattr(ctxt, obj->oo_inode, attr);
+        return osd_inode_setattr(env, obj->oo_inode, attr);
 }
 
-static struct timespec *osd_inode_time(const struct lu_context *ctx,
+static struct timespec *osd_inode_time(const struct lu_env *env,
                                        struct inode *inode, __u64 seconds)
 {
-        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
         struct timespec        *t   = &oti->oti_time;
 
         t->tv_sec  = seconds;
@@ -783,7 +783,7 @@ static struct timespec *osd_inode_time(const struct lu_context *ctx,
         return t;
 }
 
-static int osd_inode_setattr(const struct lu_context *ctx,
+static int osd_inode_setattr(const struct lu_env *env,
                              struct inode *inode, const struct lu_attr *attr)
 {
         __u64 bits;
@@ -794,11 +794,11 @@ static int osd_inode_setattr(const struct lu_context *ctx,
         LASSERT(!(bits & LA_TYPE)); /* Huh? You want too much. */
 
         if (bits & LA_ATIME)
-                inode->i_atime  = *osd_inode_time(ctx, inode, attr->la_atime);
+                inode->i_atime  = *osd_inode_time(env, inode, attr->la_atime);
         if (bits & LA_CTIME)
-                inode->i_ctime  = *osd_inode_time(ctx, inode, attr->la_ctime);
+                inode->i_ctime  = *osd_inode_time(env, inode, attr->la_ctime);
         if (bits & LA_MTIME)
-                inode->i_mtime  = *osd_inode_time(ctx, inode, attr->la_mtime);
+                inode->i_mtime  = *osd_inode_time(env, inode, attr->la_mtime);
         if (bits & LA_SIZE)
                 LDISKFS_I(inode)->i_disksize = inode->i_size = attr->la_size;
         if (bits & LA_BLOCKS)
@@ -1001,26 +1001,26 @@ static osd_obj_type_f osd_create_type_f(__u32 mode)
         return result;
 }
 
-static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
+static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
                              struct lu_attr *attr, struct thandle *th)
 {
         const struct lu_fid    *fid  = lu_object_fid(&dt->do_lu);
         struct osd_object      *obj  = osd_dt_obj(dt);
         struct osd_device      *osd  = osd_obj2dev(obj);
-        struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *info = lu_context_key_get(&env->le_ctx, &osd_key);
         int result;
 
         ENTRY;
 
         LASSERT(osd_invariant(obj));
         LASSERT(!dt_object_exists(dt));
-        LASSERT(osd_write_locked(ctx, obj));
+        LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
 
         /*
          * XXX missing: permission checks.
          */
-        if (osd_object_auth(ctx, &dt->do_lu, CAPA_OPC_INDEX_INSERT))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_INDEX_INSERT))
                 RETURN(-EACCES);
 
         /*
@@ -1056,7 +1056,7 @@ static int osd_object_create(const struct lu_context *ctx, struct dt_object *dt,
         return result;
 }
 
-static void osd_object_ref_add(const struct lu_context *ctxt,
+static void osd_object_ref_add(const struct lu_env *env,
                                struct dt_object *dt, struct thandle *th)
 {
         struct osd_object *obj = osd_dt_obj(dt);
@@ -1064,11 +1064,11 @@ static void osd_object_ref_add(const struct lu_context *ctxt,
 
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
-        LASSERT(osd_write_locked(ctxt, obj));
+        LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
 
-        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_WRITE)) {
-                LU_OBJECT_DEBUG(D_ERROR, ctxt, &dt->do_lu,
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_META_WRITE)) {
+                LU_OBJECT_DEBUG(D_ERROR, env, &dt->do_lu,
                                 "no capability to link!\n");
                 return;
         }
@@ -1077,12 +1077,12 @@ static void osd_object_ref_add(const struct lu_context *ctxt,
                 inode->i_nlink ++;
                 mark_inode_dirty(inode);
         } else
-                LU_OBJECT_DEBUG(D_ERROR, ctxt, &dt->do_lu,
+                LU_OBJECT_DEBUG(D_ERROR, env, &dt->do_lu,
                                 "Overflowed nlink\n");
         LASSERT(osd_invariant(obj));
 }
 
-static void osd_object_ref_del(const struct lu_context *ctxt,
+static void osd_object_ref_del(const struct lu_env *env,
                                struct dt_object *dt, struct thandle *th)
 {
         struct osd_object *obj = osd_dt_obj(dt);
@@ -1090,11 +1090,11 @@ static void osd_object_ref_del(const struct lu_context *ctxt,
 
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
-        LASSERT(osd_write_locked(ctxt, obj));
+        LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
 
-        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_WRITE)) {
-                LU_OBJECT_DEBUG(D_ERROR, ctxt, &dt->do_lu,
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_META_WRITE)) {
+                LU_OBJECT_DEBUG(D_ERROR, env, &dt->do_lu,
                                 "no capability to unlink!\n");
                 return;
         }
@@ -1103,31 +1103,31 @@ static void osd_object_ref_del(const struct lu_context *ctxt,
                 inode->i_nlink --;
                 mark_inode_dirty(inode);
         } else
-                LU_OBJECT_DEBUG(D_ERROR, ctxt, &dt->do_lu,
+                LU_OBJECT_DEBUG(D_ERROR, env, &dt->do_lu,
                                 "Underflowed nlink\n");
         LASSERT(osd_invariant(obj));
 }
 
-static int osd_xattr_get(const struct lu_context *ctxt, struct dt_object *dt,
+static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
                          void *buf, int size, const char *name)
 {
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
-        struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
+        struct osd_thread_info *info   = lu_context_key_get(&env->le_ctx, &osd_key);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->getxattr != NULL);
-        LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
+        LASSERT(osd_read_locked(env, obj) || osd_write_locked(env, obj));
 
-        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_READ))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_META_READ))
                 return -EACCES;
 
         dentry->d_inode = inode;
         return inode->i_op->getxattr(dentry, name, buf, size);
 }
 
-static int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
+static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
                          const void *buf, int size, const char *name, int fl,
                          struct thandle *handle)
 {
@@ -1135,15 +1135,15 @@ static int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
 
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
-        struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
+        struct osd_thread_info *info   = lu_context_key_get(&env->le_ctx, &osd_key);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->setxattr != NULL);
-        LASSERT(osd_write_locked(ctxt, obj));
+        LASSERT(osd_write_locked(env, obj));
         LASSERT(handle != NULL);
 
-        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_WRITE))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
         dentry->d_inode = inode;
@@ -1158,52 +1158,52 @@ static int osd_xattr_set(const struct lu_context *ctxt, struct dt_object *dt,
         return inode->i_op->setxattr(dentry, name, buf, size, fs_flags);
 }
 
-static int osd_xattr_list(const struct lu_context *ctxt, struct dt_object *dt,
+static int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
                           void *buf, int size)
 {
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
-        struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
+        struct osd_thread_info *info   = lu_context_key_get(&env->le_ctx, &osd_key);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->listxattr != NULL);
-        LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
+        LASSERT(osd_read_locked(env, obj) || osd_write_locked(env, obj));
 
-        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_READ))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_META_READ))
                 return -EACCES;
 
         dentry->d_inode = inode;
         return inode->i_op->listxattr(dentry, buf, size);
 }
 
-static int osd_xattr_del(const struct lu_context *ctxt, struct dt_object *dt,
+static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
                          const char *name, struct thandle *handle)
 {
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
-        struct osd_thread_info *info   = lu_context_key_get(ctxt, &osd_key);
+        struct osd_thread_info *info   = lu_context_key_get(&env->le_ctx, &osd_key);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->removexattr != NULL);
-        LASSERT(osd_write_locked(ctxt, obj));
+        LASSERT(osd_write_locked(env, obj));
         LASSERT(handle != NULL);
 
-        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_META_WRITE))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
         dentry->d_inode = inode;
         return inode->i_op->removexattr(dentry, name);
 }
 
-static int osd_dir_page_build(const struct lu_context *ctx, int first,
+static int osd_dir_page_build(const struct lu_env *env, int first,
                               void *area, int nob,
                               struct dt_it_ops  *iops, struct dt_it *it,
                               __u32 *start, __u32 *end, struct lu_dirent **last)
 {
         int result;
-        struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *info = lu_context_key_get(&env->le_ctx, &osd_key);
         struct lu_fid          *fid  = &info->oti_fid;
         struct lu_dirent       *ent;
 
@@ -1222,14 +1222,14 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
                 int    recsize;
                 __u32  hash;
 
-                name = (char *)iops->key(ctx, it);
-                len  = iops->key_size(ctx, it);
+                name = (char *)iops->key(env, it);
+                len  = iops->key_size(env, it);
 
-                *fid  = *(struct lu_fid *)iops->rec(ctx, it);
+                *fid  = *(struct lu_fid *)iops->rec(env, it);
                 fid_cpu_to_le(fid, fid);
 
                 recsize = (sizeof *ent + len + 3) & ~3;
-                hash = iops->store(ctx, it);
+                hash = iops->store(env, it);
                 *end = hash;
                 CDEBUG(D_INODE, "%p %p %d "DFID": %#8.8x (%d)\"%*.*s\"\n",
                        area, ent, nob, PFID(fid), hash, len, len, len, name);
@@ -1244,7 +1244,7 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
                         *last = ent;
                         ent = (void *)ent + recsize;
                         nob -= recsize;
-                        result = iops->next(ctx, it);
+                        result = iops->next(env, it);
                 } else {
                         /*
                          * record doesn't fit into page, enlarge previous one.
@@ -1259,7 +1259,7 @@ static int osd_dir_page_build(const struct lu_context *ctx, int first,
         return result;
 }
 
-static int osd_readpage(const struct lu_context *ctxt,
+static int osd_readpage(const struct lu_env *env,
                         struct dt_object *dt, const struct lu_rdpg *rdpg)
 {
         struct dt_it      *it;
@@ -1270,11 +1270,11 @@ static int osd_readpage(const struct lu_context *ctxt,
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
         LASSERT(osd_has_index(obj));
-        LASSERT(osd_read_locked(ctxt, obj) || osd_write_locked(ctxt, obj));
+        LASSERT(osd_read_locked(env, obj) || osd_write_locked(env, obj));
 
         LASSERT(rdpg->rp_pages != NULL);
 
-        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_BODY_READ))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_BODY_READ))
                 return -EACCES;
 
         if (rdpg->rp_count <= 0)
@@ -1290,20 +1290,20 @@ static int osd_readpage(const struct lu_context *ctxt,
          * iterating through directory and fill pages from @rdpg
          */
         iops = &dt->do_index_ops->dio_it;
-        it = iops->init(ctxt, dt, 0);
+        it = iops->init(env, dt, 0);
         if (it == NULL)
                 return -ENOMEM;
         /*
          * XXX position iterator at rdpg->rp_hash
          */
-        rc = iops->load(ctxt, it, rdpg->rp_hash);
-       
-        /* When spliting, it need read entries from some offset by computing 
+        rc = iops->load(env, it, rdpg->rp_hash);
+
+        /* When spliting, it need read entries from some offset by computing
          * not by some entries offset like readdir, so it might return 0 here.
          */
         if (rc == 0)
                 rc1 = -ERANGE;
-        
+
         if (rc >= 0) {
                 struct page      *pg; /* no, Richard, it _is_ initialized */
                 struct lu_dirent *last;
@@ -1314,7 +1314,7 @@ static int osd_readpage(const struct lu_context *ctxt,
                      rc == 0 && nob > 0; i++, nob -= CFS_PAGE_SIZE) {
                         LASSERT(i < rdpg->rp_npages);
                         pg = rdpg->rp_pages[i];
-                        rc = osd_dir_page_build(ctxt, !i, kmap(pg),
+                        rc = osd_dir_page_build(env, !i, kmap(pg),
                                                 min_t(int, nob, CFS_PAGE_SIZE),
                                                 iops, it,
                                                 &hash_start, &hash_end, &last);
@@ -1322,7 +1322,7 @@ static int osd_readpage(const struct lu_context *ctxt,
                                 last->lde_reclen = 0;
                         kunmap(pg);
                 }
-                iops->put(ctxt, it);
+                iops->put(env, it);
                 if (rc > 0) {
                         /*
                          * end of directory.
@@ -1338,10 +1338,10 @@ static int osd_readpage(const struct lu_context *ctxt,
                         dp->ldp_hash_end   = hash_end;
                         kunmap(rdpg->rp_pages[0]);
                 }
-        } 
-        iops->put(ctxt, it);
-        iops->fini(ctxt, it);
-        
+        }
+        iops->put(env, it);
+        iops->fini(env, it);
+
         return rc ? rc : rc1;
 }
 
@@ -1367,7 +1367,7 @@ static struct dt_object_operations osd_obj_ops = {
  * Body operations.
  */
 
-static ssize_t osd_read(const struct lu_context *ctxt, struct dt_object *dt,
+static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
                         void *buf, size_t count, loff_t *pos)
 {
         struct inode *inode = osd_dt_obj(dt)->oo_inode;
@@ -1375,7 +1375,7 @@ static ssize_t osd_read(const struct lu_context *ctxt, struct dt_object *dt,
         mm_segment_t  seg;
         ssize_t       result;
 
-        file = osd_rw_init(ctxt, inode, &seg);
+        file = osd_rw_init(env, inode, &seg);
         /*
          * We'd like to use vfs_read() here, but it messes with
          * dnotify_parent() and locks.
@@ -1391,7 +1391,7 @@ static ssize_t osd_read(const struct lu_context *ctxt, struct dt_object *dt,
         return result;
 }
 
-static ssize_t osd_write(const struct lu_context *ctxt, struct dt_object *dt,
+static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
                          const void *buf, size_t count, loff_t *pos,
                          struct thandle *handle)
 {
@@ -1402,7 +1402,7 @@ static ssize_t osd_write(const struct lu_context *ctxt, struct dt_object *dt,
 
         LASSERT(handle != NULL);
 
-        file = osd_rw_init(ctxt, inode, &seg);
+        file = osd_rw_init(env, inode, &seg);
         if (file->f_op->write)
                 result = file->f_op->write(file, buf, count, pos);
         else {
@@ -1422,7 +1422,7 @@ static struct dt_body_operations osd_body_ops = {
  * Index operations.
  */
 
-static int osd_index_probe(const struct lu_context *ctxt, struct osd_object *o,
+static int osd_index_probe(const struct lu_env *env, struct osd_object *o,
                            const struct dt_index_features *feat)
 {
         struct iam_descr *descr;
@@ -1450,7 +1450,7 @@ static int osd_index_probe(const struct lu_context *ctxt, struct osd_object *o,
                                 * writable */);
 }
 
-static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
+static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
                          const struct dt_index_features *feat)
 {
         int result;
@@ -1459,7 +1459,7 @@ static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
 
-        if (osd_object_auth(ctx, &dt->do_lu, CAPA_OPC_INDEX_LOOKUP))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_INDEX_LOOKUP))
                 RETURN(-EACCES);
 
         if (osd_sb(osd_obj2dev(obj))->s_root->d_inode == obj->oo_inode) {
@@ -1488,7 +1488,7 @@ static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
                 result = 0;
 
         if (result == 0) {
-                if (osd_index_probe(ctx, obj, feat))
+                if (osd_index_probe(env, obj, feat))
                         result = 0;
                 else
                         result = -ENOTDIR;
@@ -1498,7 +1498,7 @@ static int osd_index_try(const struct lu_context *ctx, struct dt_object *dt,
         return result;
 }
 
-static int osd_index_delete(const struct lu_context *ctxt, struct dt_object *dt,
+static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
                             const struct dt_key *key, struct thandle *handle)
 {
         struct osd_object     *obj = osd_dt_obj(dt);
@@ -1513,7 +1513,7 @@ static int osd_index_delete(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(obj->oo_ipd != NULL);
         LASSERT(handle != NULL);
 
-        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_INDEX_DELETE))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_INDEX_DELETE))
                 RETURN(-EACCES);
 
         oh = container_of0(handle, struct osd_thandle, ot_super);
@@ -1526,7 +1526,7 @@ static int osd_index_delete(const struct lu_context *ctxt, struct dt_object *dt,
         RETURN(rc);
 }
 
-static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
+static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
                             struct dt_rec *rec, const struct dt_key *key)
 {
         struct osd_object *obj = osd_dt_obj(dt);
@@ -1539,7 +1539,7 @@ static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
         LASSERT(obj->oo_container.ic_object == obj->oo_inode);
         LASSERT(obj->oo_ipd != NULL);
 
-        if (osd_object_auth(ctxt, &dt->do_lu, CAPA_OPC_INDEX_LOOKUP))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_INDEX_LOOKUP))
                 return -EACCES;
 
         rc = iam_lookup(&obj->oo_container, (const struct iam_key *)key,
@@ -1550,7 +1550,7 @@ static int osd_index_lookup(const struct lu_context *ctxt, struct dt_object *dt,
         RETURN(rc);
 }
 
-static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
+static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
                             const struct dt_rec *rec, const struct dt_key *key,
                             struct thandle *th)
 {
@@ -1567,7 +1567,7 @@ static int osd_index_insert(const struct lu_context *ctx, struct dt_object *dt,
         LASSERT(obj->oo_ipd != NULL);
         LASSERT(th != NULL);
 
-        if (osd_object_auth(ctx, &dt->do_lu, CAPA_OPC_INDEX_INSERT))
+        if (osd_object_auth(env, &dt->do_lu, CAPA_OPC_INDEX_INSERT))
                 return -EACCES;
 
         oh = container_of0(th, struct osd_thandle, ot_super);
@@ -1588,7 +1588,7 @@ struct osd_it {
         struct iam_iterator oi_it;
 };
 
-static struct dt_it *osd_it_init(const struct lu_context *ctx,
+static struct dt_it *osd_it_init(const struct lu_env *env,
                                  struct dt_object *dt, int writable)
 {
         struct osd_it     *it;
@@ -1609,16 +1609,16 @@ static struct dt_it *osd_it_init(const struct lu_context *ctx,
         return (struct dt_it *)it;
 }
 
-static void osd_it_fini(const struct lu_context *ctx, struct dt_it *di)
+static void osd_it_fini(const struct lu_env *env, struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
 
         iam_it_fini(&it->oi_it);
-        lu_object_put(ctx, &it->oi_obj->oo_dt.do_lu);
+        lu_object_put(env, &it->oi_obj->oo_dt.do_lu);
         OBD_FREE_PTR(it);
 }
 
-static int osd_it_get(const struct lu_context *ctx,
+static int osd_it_get(const struct lu_env *env,
                       struct dt_it *di, const struct dt_key *key)
 {
         struct osd_it *it = (struct osd_it *)di;
@@ -1626,21 +1626,21 @@ static int osd_it_get(const struct lu_context *ctx,
         return iam_it_get(&it->oi_it, (const struct iam_key *)key);
 }
 
-static void osd_it_put(const struct lu_context *ctx, struct dt_it *di)
+static void osd_it_put(const struct lu_env *env, struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
 
         iam_it_put(&it->oi_it);
 }
 
-static int osd_it_next(const struct lu_context *ctx, struct dt_it *di)
+static int osd_it_next(const struct lu_env *env, struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
 
         return iam_it_next(&it->oi_it);
 }
 
-static int osd_it_del(const struct lu_context *ctx, struct dt_it *di,
+static int osd_it_del(const struct lu_env *env, struct dt_it *di,
                       struct thandle *th)
 {
         struct osd_it      *it = (struct osd_it *)di;
@@ -1654,7 +1654,7 @@ static int osd_it_del(const struct lu_context *ctx, struct dt_it *di,
         return iam_it_rec_delete(oh->ot_handle, &it->oi_it);
 }
 
-static struct dt_key *osd_it_key(const struct lu_context *ctx,
+static struct dt_key *osd_it_key(const struct lu_env *env,
                                  const struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
@@ -1662,14 +1662,14 @@ static struct dt_key *osd_it_key(const struct lu_context *ctx,
         return (struct dt_key *)iam_it_key_get(&it->oi_it);
 }
 
-static int osd_it_key_size(const struct lu_context *ctx, const struct dt_it *di)
+static int osd_it_key_size(const struct lu_env *env, const struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
 
         return iam_it_key_size(&it->oi_it);
 }
 
-static struct dt_rec *osd_it_rec(const struct lu_context *ctx,
+static struct dt_rec *osd_it_rec(const struct lu_env *env,
                                  const struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
@@ -1677,14 +1677,14 @@ static struct dt_rec *osd_it_rec(const struct lu_context *ctx,
         return (struct dt_rec *)iam_it_rec_get(&it->oi_it);
 }
 
-static __u32 osd_it_store(const struct lu_context *ctxt, const struct dt_it *di)
+static __u32 osd_it_store(const struct lu_env *env, const struct dt_it *di)
 {
         struct osd_it *it = (struct osd_it *)di;
 
         return iam_it_store(&it->oi_it);
 }
 
-static int osd_it_load(const struct lu_context *ctxt,
+static int osd_it_load(const struct lu_env *env,
                        const struct dt_it *di, __u32 hash)
 {
         struct osd_it *it = (struct osd_it *)di;
@@ -1711,7 +1711,7 @@ static struct dt_index_operations osd_index_ops = {
         }
 };
 
-static int osd_index_compat_delete(const struct lu_context *ctxt,
+static int osd_index_compat_delete(const struct lu_env *env,
                                    struct dt_object *dt,
                                    const struct dt_key *key,
                                    struct thandle *handle)
@@ -1739,14 +1739,14 @@ static int osd_build_fid(struct osd_device *osd,
         return 0;
 }
 
-static int osd_index_compat_lookup(const struct lu_context *ctxt,
+static int osd_index_compat_lookup(const struct lu_env *env,
                                    struct dt_object *dt,
                                    struct dt_rec *rec, const struct dt_key *key)
 {
         struct osd_object *obj = osd_dt_obj(dt);
 
         struct osd_device      *osd  = osd_obj2dev(obj);
-        struct osd_thread_info *info = lu_context_key_get(ctxt, &osd_key);
+        struct osd_thread_info *info = lu_context_key_get(&env->le_ctx, &osd_key);
         struct inode           *dir;
 
         int result;
@@ -1849,7 +1849,7 @@ static int osd_add_rec(struct osd_thread_info *info, struct osd_device *dev,
 /*
  * XXX Temporary stuff.
  */
-static int osd_index_compat_insert(const struct lu_context *ctx,
+static int osd_index_compat_insert(const struct lu_env *env,
                                    struct dt_object *dt,
                                    const struct dt_rec *rec,
                                    const struct dt_key *key, struct thandle *th)
@@ -1862,7 +1862,7 @@ static int osd_index_compat_insert(const struct lu_context *ctx,
         struct lu_device    *ludev = dt->do_lu.lo_dev;
         struct lu_object    *luch;
 
-        struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *info = lu_context_key_get(&env->le_ctx, &osd_key);
 
         int result;
 
@@ -1870,7 +1870,7 @@ static int osd_index_compat_insert(const struct lu_context *ctx,
         LASSERT(osd_invariant(obj));
         LASSERT(th != NULL);
 
-        luch = lu_object_find(ctx, ludev->ld_site, fid, BYPASS_CAPA);
+        luch = lu_object_find(env, ludev->ld_site, fid, BYPASS_CAPA);
         if (!IS_ERR(luch)) {
                 if (lu_object_exists(luch)) {
                         struct osd_object *child;
@@ -1891,7 +1891,7 @@ static int osd_index_compat_insert(const struct lu_context *ctx,
                         CERROR("Sorry.\n");
                         result = -ENOENT;
                 }
-                lu_object_put(ctx, luch);
+                lu_object_put(env, luch);
         } else
                 result = PTR_ERR(luch);
         LASSERT(osd_invariant(obj));
@@ -1931,7 +1931,7 @@ static void *osd_key_init(const struct lu_context *ctx,
 
         OBD_ALLOC_PTR(info);
         if (info != NULL)
-                info->oti_ctx = ctx;
+                info->oti_env = container_of(ctx, struct lu_env, le_ctx);
         else
                 info = ERR_PTR(-ENOMEM);
         return info;
@@ -1954,19 +1954,15 @@ static void osd_key_exit(const struct lu_context *ctx,
         LASSERT(info->oti_txns    == 0);
 }
 
-static int osd_device_init(const struct lu_context *ctx,
+static int osd_device_init(const struct lu_env *env,
                            struct lu_device *d, struct lu_device *next)
 {
-        int rc;
-        rc = lu_context_init(&osd_dev(d)->od_ctx_for_commit, LCT_MD_THREAD);
-        if (rc == 0)
-                lu_context_enter(&osd_dev(d)->od_ctx_for_commit);
-        return rc;
+        return lu_env_init(&osd_dev(d)->od_env_for_commit, NULL, LCT_MD_THREAD);
 }
 
-static int osd_shutdown(const struct lu_context *ctx, struct osd_device *o)
+static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 {
-        struct osd_thread_info *info = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *info = lu_context_key_get(&env->le_ctx, &osd_key);
         ENTRY;
         if (o->od_obj_area != NULL) {
                 dput(o->od_obj_area);
@@ -1977,12 +1973,12 @@ static int osd_shutdown(const struct lu_context *ctx, struct osd_device *o)
         RETURN(0);
 }
 
-static int osd_mount(const struct lu_context *ctx,
+static int osd_mount(const struct lu_env *env,
                      struct osd_device *o, struct lustre_cfg *cfg)
 {
         struct lustre_mount_info *lmi;
         const char               *dev = lustre_cfg_string(cfg, 0);
-        struct osd_thread_info   *info = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info   *info = lu_context_key_get(&env->le_ctx, &osd_key);
         int result;
 
         ENTRY;
@@ -2014,29 +2010,28 @@ static int osd_mount(const struct lu_context *ctx,
                         result = PTR_ERR(d);
         }
         if (result != 0)
-                osd_shutdown(ctx, o);
+                osd_shutdown(env, o);
         RETURN(result);
 }
 
-static struct lu_device *osd_device_fini(const struct lu_context *ctx,
+static struct lu_device *osd_device_fini(const struct lu_env *env,
                                          struct lu_device *d)
 {
         ENTRY;
 
         shrink_dcache_sb(osd_sb(osd_dev(d)));
-        osd_sync(ctx, lu2dt_dev(d));
+        osd_sync(env, lu2dt_dev(d));
 
         if (osd_dev(d)->od_mount)
                 server_put_mount(osd_dev(d)->od_mount->lmi_name,
                                  osd_dev(d)->od_mount->lmi_mnt);
         osd_dev(d)->od_mount = NULL;
 
-        lu_context_exit(&osd_dev(d)->od_ctx_for_commit);
-        lu_context_fini(&osd_dev(d)->od_ctx_for_commit);
+        lu_env_fini(&osd_dev(d)->od_env_for_commit);
         RETURN(NULL);
 }
 
-static struct lu_device *osd_device_alloc(const struct lu_context *ctx,
+static struct lu_device *osd_device_alloc(const struct lu_env *env,
                                           struct lu_device_type *t,
                                           struct lustre_cfg *cfg)
 {
@@ -2059,7 +2054,7 @@ static struct lu_device *osd_device_alloc(const struct lu_context *ctx,
         return l;
 }
 
-static void osd_device_free(const struct lu_context *ctx, struct lu_device *d)
+static void osd_device_free(const struct lu_env *env, struct lu_device *d)
 {
         struct osd_device *o = osd_dev(d);
 
@@ -2067,7 +2062,7 @@ static void osd_device_free(const struct lu_context *ctx, struct lu_device *d)
         OBD_FREE_PTR(o);
 }
 
-static int osd_process_config(const struct lu_context *ctx,
+static int osd_process_config(const struct lu_env *env,
                               struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct osd_device *o = osd_dev(d);
@@ -2076,10 +2071,10 @@ static int osd_process_config(const struct lu_context *ctx,
 
         switch(cfg->lcfg_command) {
         case LCFG_SETUP:
-                err = osd_mount(ctx, o, cfg);
+                err = osd_mount(env, o, cfg);
                 break;
         case LCFG_CLEANUP:
-                err = osd_shutdown(ctx, o);
+                err = osd_shutdown(env, o);
                 break;
         default:
                 err = -ENOTTY;
@@ -2090,7 +2085,7 @@ static int osd_process_config(const struct lu_context *ctx,
 extern void ldiskfs_orphan_cleanup (struct super_block * sb,
 				    struct ldiskfs_super_block * es);
 
-static int osd_recovery_complete(const struct lu_context *ctxt,
+static int osd_recovery_complete(const struct lu_env *env,
                                  struct lu_device *d)
 {
         struct osd_device *o = osd_dev(d);
@@ -2191,7 +2186,7 @@ static struct inode *osd_iget(struct osd_thread_info *info,
 
 }
 
-static int osd_fid_lookup(const struct lu_context *ctx,
+static int osd_fid_lookup(const struct lu_env *env,
                           struct osd_object *obj, const struct lu_fid *fid)
 {
         struct osd_thread_info *info;
@@ -2209,7 +2204,7 @@ static int osd_fid_lookup(const struct lu_context *ctx,
 
         ENTRY;
 
-        info = lu_context_key_get(ctx, &osd_key);
+        info = lu_context_key_get(&env->le_ctx, &osd_key);
         dev  = osd_dev(ldev);
         id   = &info->oti_id;
         oi   = &dev->od_oi;
@@ -2241,7 +2236,7 @@ static int osd_fid_lookup(const struct lu_context *ctx,
         RETURN(result);
 }
 
-static int osd_inode_getattr(const struct lu_context *ctx,
+static int osd_inode_getattr(const struct lu_env *env,
                              struct inode *inode, struct lu_attr *attr)
 {
         attr->la_valid      |= LA_ATIME | LA_MTIME | LA_CTIME | LA_MODE |
@@ -2325,12 +2320,12 @@ static int osd_object_invariant(const struct lu_object *l)
         return osd_invariant(osd_obj(l));
 }
 
-static int capa_is_sane(const struct lu_context *ctx,
+static int capa_is_sane(const struct lu_env *env,
                         struct lustre_capa *capa,
                         struct lustre_capa_key *keys)
 {
         struct obd_capa *c;
-        struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
+        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
         int i, rc = 0;
         ENTRY;
 
@@ -2377,7 +2372,7 @@ static int capa_is_sane(const struct lu_context *ctx,
         RETURN(0);
 }
 
-static int osd_object_capa_auth(const struct lu_context *ctx,
+static int osd_object_capa_auth(const struct lu_env *env,
                                 const struct lu_object *obj,
                                 struct lustre_capa *capa,
                                 __u64 opc)
@@ -2405,7 +2400,7 @@ static int osd_object_capa_auth(const struct lu_context *ctx,
                 return -EACCES;
         }
 
-        if (!capa_is_sane(ctx, capa, obj->lo_dev->ld_site->ls_capa_keys)) {
+        if (!capa_is_sane(env, capa, obj->lo_dev->ld_site->ls_capa_keys)) {
                 DEBUG_CAPA(D_ERROR, capa, "insane");
                 return -EACCES;
         }

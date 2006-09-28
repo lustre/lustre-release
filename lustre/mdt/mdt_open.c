@@ -85,7 +85,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
                 RETURN(0);
 
         ma->ma_need = MA_INODE | MA_LOV;
-        rc = mdo_create_data(info->mti_ctxt,
+        rc = mdo_create_data(info->mti_env,
                              p ? mdt_object_child(p) : NULL,
                              mdt_object_child(o), spec, ma, &info->mti_uc);
         RETURN(rc);
@@ -127,7 +127,7 @@ int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o,
 
         if (!S_ISREG(lu_object_attr(&o->mot_obj.mo_lu)))
                 RETURN(0);
-        
+
         spin_lock(&mdt->mdt_ioepoch_lock);
         if (mdt_epoch_opened(o)) {
                 /* Epoch continues even if there is no writers yet. */
@@ -165,7 +165,7 @@ static int mdt_sizeonmds_update(struct mdt_thread_info *info,
 
         CDEBUG(D_INODE, "Closing epoch "LPU64" on "DFID". Count %d\n",
                o->mot_ioepoch, PFID(mdt_object_fid(o)), o->mot_epochcount);
- 
+
         if (info->mti_attr.ma_attr.la_valid & LA_SIZE)
                 /* Do Size-on-MDS attribute update.
                  * Size-on-MDS is re-enabled inside. */
@@ -193,7 +193,7 @@ static int mdt_epoch_close(struct mdt_thread_info *info, struct mdt_object *o)
                 RETURN(0);
 
         spin_lock(&info->mti_mdt->mdt_ioepoch_lock);
-        
+
         /* Epoch closes only if client tells about it or eviction occures. */
         if (eviction || (info->mti_epoch->flags & MF_EPOCH_CLOSE)) {
                 LASSERT(o->mot_epochcount);
@@ -202,10 +202,10 @@ static int mdt_epoch_close(struct mdt_thread_info *info, struct mdt_object *o)
                 CDEBUG(D_INODE, "Closing epoch "LPU64" on "DFID". Count %d\n",
                        o->mot_ioepoch, PFID(mdt_object_fid(o)),
                        o->mot_epochcount);
-                
+
                 if (!eviction)
                         achange = (info->mti_epoch->flags & MF_SOM_CHANGE);
-                
+
                 rc = 0;
                 if (!eviction && !mdt_epoch_opened(o)) {
                         /* Epoch ends. Is an Size-on-MDS update needed? */
@@ -215,16 +215,16 @@ static int mdt_epoch_close(struct mdt_thread_info *info, struct mdt_object *o)
                                  * update, re-ask client. */
                                 rc = -EAGAIN;
                         } else if (!(la->la_valid & LA_SIZE) && achange) {
-                                /* Attributes were changed by the last writer 
+                                /* Attributes were changed by the last writer
                                  * only but no Size-on-MDS update is received.*/
                                 rc = -EAGAIN;
                         }
                 }
-                
+
                 if (achange || eviction)
                         o->mot_flags |= MF_SOM_CHANGE;
         }
-        
+
         opened = mdt_epoch_opened(o);
         spin_unlock(&info->mti_mdt->mdt_ioepoch_lock);
 
@@ -311,7 +311,7 @@ static void mdt_open_transno(struct mdt_thread_info* info)
 static int mdt_mfd_open(struct mdt_thread_info *info,
                         struct mdt_object *p,
                         struct mdt_object *o,
-                        int flags, 
+                        int flags,
                         int created,
                         struct ldlm_reply *rep)
 {
@@ -357,7 +357,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
-                rc = mo_capa_get(info->mti_ctxt, mdt_object_child(o), capa);
+                rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa);
                 if (rc)
                         RETURN(rc);
                 repbody->valid |= OBD_MD_FLMDSCAPA;
@@ -368,7 +368,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA2);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_OSS_DEFAULT;
-                rc = mo_capa_get(info->mti_ctxt, mdt_object_child(o), capa);
+                rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa);
                 if (rc)
                         RETURN(rc);
                 repbody->valid |= OBD_MD_FLOSSCAPA;
@@ -440,7 +440,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                         mfd = NULL;
                 }
                 spin_unlock(&med->med_open_lock);
-        
+
                 if (mfd != NULL) {
                         repbody->handle.cookie = mfd->mfd_handle.h_cookie;
                         RETURN(0);
@@ -460,7 +460,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         if (rc)
                 RETURN(rc);
 
-        rc = mo_open(info->mti_ctxt, mdt_object_child(o),
+        rc = mo_open(info->mti_env, mdt_object_child(o),
                      created ? flags | MDS_OPEN_CREATED : flags,
                      &info->mti_uc);
         if (rc)
@@ -468,10 +468,10 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
 
         mfd = mdt_mfd_new();
         if (mfd != NULL) {
-                
+
                 /* keep a reference on this object for this open,
                 * and is released by mdt_mfd_close() */
-                mdt_object_get(info->mti_ctxt, o);
+                mdt_object_get(info->mti_env, o);
                 /* open handling */
 
                 mfd->mfd_mode = flags;
@@ -496,7 +496,7 @@ extern void mdt_req_from_mcd(struct ptlrpc_request *req,
 void mdt_reconstruct_open(struct mdt_thread_info *info,
                           struct mdt_lock_handle *lhc)
 {
-        const struct lu_context *ctxt = info->mti_ctxt;
+        const struct lu_env *env = info->mti_env;
         struct mdt_device       *mdt  = info->mti_mdt;
         struct req_capsule      *pill = &info->mti_pill;
         struct ptlrpc_request   *req  = mdt_info_req(info);
@@ -531,7 +531,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         CERROR("This is reconstruct open: disp="LPX64", result=%d\n",
                 ldlm_rep->lock_policy_res1, req->rq_status);
 
-        if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE) && 
+        if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE) &&
             req->rq_status != 0) {
                 /* We did not create successfully, return error to client. */
                 mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 1, 1);
@@ -539,23 +539,23 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         }
 
         if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE)) {
-                /* 
-                 * We failed after creation, but we do not know in which step 
+                /*
+                 * We failed after creation, but we do not know in which step
                  * we failed. So try to check the child object.
                  */
-                parent = mdt_object_find(ctxt, mdt, rr->rr_fid1, rr->rr_capa1);
+                parent = mdt_object_find(env, mdt, rr->rr_fid1, rr->rr_capa1);
                 LASSERT(!IS_ERR(parent));
 
-                child = mdt_object_find(ctxt, mdt, rr->rr_fid2, rr->rr_capa2);
+                child = mdt_object_find(env, mdt, rr->rr_fid2, rr->rr_capa2);
                 LASSERT(!IS_ERR(child));
 
                 rc = lu_object_exists(&child->mot_obj.mo_lu);
                 if (rc > 0) {
                         struct md_object *next;
                         next = mdt_object_child(child);
-                        rc = mo_attr_get(ctxt, next, ma, NULL);
+                        rc = mo_attr_get(env, next, ma, NULL);
                         if (rc == 0)
-                              rc = mdt_mfd_open(info, parent, child, 
+                              rc = mdt_mfd_open(info, parent, child,
                                                 flags, 1, ldlm_rep);
                 } else if (rc < 0) {
                         /* the child object was created on remote server */
@@ -564,12 +564,12 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                         rc = 0;
                 } else if (rc == 0) {
                         /* the child does not exist, we should do regular open */
-                        mdt_object_put(ctxt, parent);
-                        mdt_object_put(ctxt, child);
+                        mdt_object_put(env, parent);
+                        mdt_object_put(env, child);
                         GOTO(regular_open, 0);
                 }
-                mdt_object_put(ctxt, parent);
-                mdt_object_put(ctxt, child);
+                mdt_object_put(env, parent);
+                mdt_object_put(env, child);
                 mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 1, 1);
                 GOTO(out, rc);
         } else {
@@ -584,7 +584,7 @@ out:
         lustre_msg_set_status(req->rq_repmsg, req->rq_status);
 }
 
-static int mdt_open_by_fid(struct mdt_thread_info* info, 
+static int mdt_open_by_fid(struct mdt_thread_info* info,
                            struct ldlm_reply *rep)
 {
         __u32                    flags = info->mti_spec.sp_cr_flags;
@@ -594,20 +594,20 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         int                     rc;
         ENTRY;
 
-        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, rr->rr_fid2,
+        o = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid2,
                             rr->rr_capa2);
-        if (IS_ERR(o)) 
+        if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
         rc = lu_object_exists(&o->mot_obj.mo_lu);
         if (rc > 0) {
-                const struct lu_context *ctxt = info->mti_ctxt;
+                const struct lu_env *env = info->mti_env;
 
                 mdt_set_disposition(info, rep, (DISP_IT_EXECD |
                                                 DISP_LOOKUP_EXECD |
                                                 DISP_LOOKUP_POS));
 
-                rc = mo_attr_get(ctxt, mdt_object_child(o), ma, NULL);
+                rc = mo_attr_get(env, mdt_object_child(o), ma, NULL);
                 if (rc == 0)
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
@@ -620,7 +620,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
                 repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
                 rc = 0;
         }
-        mdt_object_put(info->mti_ctxt, o);
+        mdt_object_put(info->mti_env, o);
         RETURN(rc);
 }
 
@@ -640,13 +640,13 @@ static int mdt_cross_open(struct mdt_thread_info* info,
         int                rc;
         ENTRY;
 
-        o = mdt_object_find(info->mti_ctxt, info->mti_mdt, fid, BYPASS_CAPA);
-        if (IS_ERR(o)) 
+        o = mdt_object_find(info->mti_env, info->mti_mdt, fid, BYPASS_CAPA);
+        if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
         rc = lu_object_exists(&o->mot_obj.mo_lu);
         if (rc > 0) {
-                rc = mo_attr_get(info->mti_ctxt, mdt_object_child(o), ma, NULL);
+                rc = mo_attr_get(info->mti_env, mdt_object_child(o), ma, NULL);
                 if (rc == 0)
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
@@ -661,7 +661,7 @@ static int mdt_cross_open(struct mdt_thread_info* info,
                 CERROR("The object isn't on this server! FLD error?\n");
                 rc = -EFAULT;
         }
-        mdt_object_put(info->mti_ctxt, o);
+        mdt_object_put(info->mti_env, o);
         RETURN(rc);
 }
 
@@ -735,7 +735,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 
         mdt_set_disposition(info, ldlm_rep,
                             (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
-        
+
         if (rr->rr_name[0] == 0) {
                 /* this is cross-ref open */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
@@ -754,7 +754,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         if (IS_ERR(parent))
                 GOTO(out, result = PTR_ERR(parent));
 
-        result = mdo_lookup(info->mti_ctxt, mdt_object_child(parent),
+        result = mdo_lookup(info->mti_env, mdt_object_child(parent),
                             rr->rr_name, child_fid, &info->mti_uc);
         if (result != 0 && result != -ENOENT && result != -ESTALE)
                 GOTO(out_parent, result);
@@ -781,14 +781,14 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
         }
 
-        child = mdt_object_find(info->mti_ctxt, mdt, child_fid, BYPASS_CAPA);
+        child = mdt_object_find(info->mti_env, mdt, child_fid, BYPASS_CAPA);
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
 
         if (result == -ENOENT) {
                 /* Not found and with MDS_OPEN_CREAT: let's create it. */
                 mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
-                result = mdo_create(info->mti_ctxt,
+                result = mdo_create(info->mti_env,
                                     mdt_object_child(parent),
                                     rr->rr_name,
                                     mdt_object_child(child),
@@ -796,37 +796,37 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                                     &info->mti_attr,
                                     &info->mti_uc);
                 if (result == -ERESTART) {
-                        mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);        
+                        mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
                         GOTO(out_child, result);
                 }
-                else {        
+                else {
                         if (result != 0)
                                 GOTO(out_child, result);
                 }
                 created = 1;
         } else {
                 /* We have to get attr & lov ea for this object */
-                result = mo_attr_get(info->mti_ctxt, mdt_object_child(child),
+                result = mo_attr_get(info->mti_env, mdt_object_child(child),
                                      ma, NULL);
                 /*
                  * The object is on remote node, return its FID for remote open.
                  */
                 if (result == -EREMOTE) {
                         int rc;
-                        
-                        /* 
+
+                        /*
                          * Check if this lock already was sent to client and
                          * this is resent case. For resent case do not take lock
                          * again, use what is already granted.
                          */
                         LASSERT(lhc != NULL);
-                        
+
                         if (lustre_handle_is_used(&lhc->mlh_lh)) {
                                 struct ldlm_lock *lock;
-                                
+
                                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
                                         MSG_RESENT);
-                                
+
                                 lock = ldlm_handle2lock(&lhc->mlh_lh);
                                 if (!lock) {
                                         CERROR("Invalid lock handle "LPX64"\n",
@@ -840,7 +840,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                         } else {
                                 mdt_lock_handle_init(lhc);
                                 lhc->mlh_mode = LCK_CR;
-                                
+
                                 rc = mdt_object_lock(info, child, lhc,
                                                      MDS_INODELOCK_LOOKUP);
                         }
@@ -853,7 +853,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         }
 
         /* Try to open it now. */
-        result = mdt_mfd_open(info, parent, child, create_flags, 
+        result = mdt_mfd_open(info, parent, child, create_flags,
                               created, ldlm_rep);
         GOTO(finish_open, result);
 
@@ -862,7 +862,7 @@ finish_open:
                 int rc2;
                 ma->ma_need = 0;
                 ma->ma_cookie_size = 0;
-                rc2 = mdo_unlink(info->mti_ctxt,
+                rc2 = mdo_unlink(info->mti_env,
                                  mdt_object_child(parent),
                                  mdt_object_child(child),
                                  rr->rr_name,
@@ -872,7 +872,7 @@ finish_open:
                         CERROR("error in cleanup of open");
         }
 out_child:
-        mdt_object_put(info->mti_ctxt, child);
+        mdt_object_put(info->mti_env, child);
 out_parent:
         mdt_object_unlock_put(info, parent, lh, result);
 out:
@@ -912,11 +912,11 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
         }
 
         ma->ma_need |= MA_INODE;
-                
+
         if (!MFD_CLOSED(mode))
-                rc = mo_close(info->mti_ctxt, next, ma, NULL);
+                rc = mo_close(info->mti_env, next, ma, NULL);
         else if (ret == -EAGAIN)
-                rc = mo_attr_get(info->mti_ctxt, next, ma, NULL);
+                rc = mo_attr_get(info->mti_env, next, ma, NULL);
 
         /* If the object is unlinked, do not try to re-enable SIZEONMDS */
         if ((ret == -EAGAIN) && (ma->ma_valid & MA_INODE) &&
@@ -945,7 +945,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
                 }
         } else {
                 mdt_mfd_free(mfd);
-                mdt_object_put(info->mti_ctxt, o);
+                mdt_object_put(info->mti_env, o);
         }
 
         RETURN(rc ? rc : ret);
@@ -975,9 +975,9 @@ int mdt_close(struct mdt_thread_info *info)
         rc = req_capsule_pack(&info->mti_pill);
         /* Continue to close handle even if we can not pack reply */
         if (rc == 0) {
-                repbody = req_capsule_server_get(&info->mti_pill, 
+                repbody = req_capsule_server_get(&info->mti_pill,
                                                  &RMF_MDT_BODY);
-                ma->ma_lmm = req_capsule_server_get(&info->mti_pill, 
+                ma->ma_lmm = req_capsule_server_get(&info->mti_pill,
                                                     &RMF_MDT_MD);
                 ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                        &RMF_MDT_MD,
@@ -1009,18 +1009,18 @@ int mdt_close(struct mdt_thread_info *info)
 
                 /* Do not lose object before last unlink. */
                 o = mfd->mfd_object;
-                mdt_object_get(info->mti_ctxt, o);
+                mdt_object_get(info->mti_env, o);
                 ret = mdt_mfd_close(info, mfd);
                 if (repbody != NULL)
                         rc = mdt_handle_last_unlink(info, o, ma);
-                mdt_object_put(info->mti_ctxt, o);
+                mdt_object_put(info->mti_env, o);
         }
         if (repbody != NULL)
                 mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
                 RETURN(-ENOMEM);
-        
+
         RETURN(rc ? rc : ret);
 }
 
@@ -1035,8 +1035,8 @@ int mdt_done_writing(struct mdt_thread_info *info)
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
                 RETURN(rc);
-        
-        repbody = req_capsule_server_get(&info->mti_pill, 
+
+        repbody = req_capsule_server_get(&info->mti_pill,
                                          &RMF_MDT_BODY);
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
@@ -1056,7 +1056,7 @@ int mdt_done_writing(struct mdt_thread_info *info)
                        info->mti_epoch->handle.cookie);
                 rc = -ESTALE;
         } else {
-                LASSERT((mfd->mfd_mode == FMODE_EPOCH) || 
+                LASSERT((mfd->mfd_mode == FMODE_EPOCH) ||
                         (mfd->mfd_mode == FMODE_EPOCHLCK));
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);

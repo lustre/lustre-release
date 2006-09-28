@@ -60,22 +60,22 @@ struct fld_thread_info {
 };
 
 int fld_index_init(struct lu_server_fld *fld,
-                   const struct lu_context *ctx,
+                   const struct lu_env *env,
                    struct dt_device *dt);
 
 void fld_index_fini(struct lu_server_fld *fld,
-                    const struct lu_context *ctx);
+                    const struct lu_env *env);
 
 int fld_index_create(struct lu_server_fld *fld,
-                     const struct lu_context *ctx,
+                     const struct lu_env *env,
                      seqno_t seq, mdsno_t mds);
 
 int fld_index_delete(struct lu_server_fld *fld,
-                     const struct lu_context *ctx,
+                     const struct lu_env *env,
                      seqno_t seq);
 
 int fld_index_lookup(struct lu_server_fld *fld,
-                     const struct lu_context *ctx,
+                     const struct lu_env *env,
                      seqno_t seq, mdsno_t *mds);
 
 #ifdef LPROCFS

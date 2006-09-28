@@ -51,7 +51,7 @@ int osd_lookup_id(struct dt_device *dev, const char *name, mode_t mode,
                   struct osd_inode_id *id);
 
 struct osd_thread_info {
-        const struct lu_context  *oti_ctx;
+        const struct lu_env *oti_env;
 
         struct lu_fid       oti_fid;
         struct osd_inode_id oti_id;

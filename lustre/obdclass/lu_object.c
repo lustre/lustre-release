@@ -41,14 +41,14 @@
 #include <lu_object.h>
 #include <libcfs/list.h>
 
-static void lu_object_free(const struct lu_context *ctx, struct lu_object *o);
+static void lu_object_free(const struct lu_env *env, struct lu_object *o);
 
 /*
  * Decrease reference counter on object. If last reference is freed, return
  * object to the cache, unless lu_object_is_dying(o) holds. In the latter
  * case, free object immediately.
  */
-void lu_object_put(const struct lu_context *ctxt, struct lu_object *o)
+void lu_object_put(const struct lu_env *env, struct lu_object *o)
 {
         struct lu_object_header *top;
         struct lu_site          *site;
@@ -67,7 +67,7 @@ void lu_object_put(const struct lu_context *ctxt, struct lu_object *o)
                  */
                 list_for_each_entry_reverse(o, &top->loh_layers, lo_linkage) {
                         if (o->lo_ops->loo_object_release != NULL)
-                                o->lo_ops->loo_object_release(ctxt, o);
+                                o->lo_ops->loo_object_release(env, o);
                 }
                 -- site->ls_busy;
                 if (lu_object_is_dying(top)) {
@@ -95,7 +95,7 @@ void lu_object_put(const struct lu_context *ctxt, struct lu_object *o)
                  * Object was already removed from hash and lru above, can
                  * kill it.
                  */
-                lu_object_free(ctxt, orig);
+                lu_object_free(env, orig);
 }
 EXPORT_SYMBOL(lu_object_put);
 
@@ -105,7 +105,7 @@ EXPORT_SYMBOL(lu_object_put);
  * This follows object creation protocol, described in the comment within
  * struct lu_device_operations definition.
  */
-static struct lu_object *lu_object_alloc(const struct lu_context *ctxt,
+static struct lu_object *lu_object_alloc(const struct lu_env *env,
                                          struct lu_site *s,
                                          const struct lu_fid *f,
                                          const struct lustre_capa *capa)
@@ -120,7 +120,7 @@ static struct lu_object *lu_object_alloc(const struct lu_context *ctxt,
          * Create top-level object slice. This will also create
          * lu_object_header.
          */
-        top = s->ls_top_dev->ld_ops->ldo_object_alloc(ctxt,
+        top = s->ls_top_dev->ld_ops->ldo_object_alloc(env,
                                                       NULL, s->ls_top_dev);
         if (IS_ERR(top))
                 RETURN(top);
@@ -146,9 +146,9 @@ static struct lu_object *lu_object_alloc(const struct lu_context *ctxt,
                                 continue;
                         clean = 0;
                         scan->lo_header = top->lo_header;
-                        result = scan->lo_ops->loo_object_init(ctxt, scan);
+                        result = scan->lo_ops->loo_object_init(env, scan);
                         if (result != 0) {
-                                lu_object_free(ctxt, top);
+                                lu_object_free(env, top);
                                 RETURN(ERR_PTR(result));
                         }
                         scan->lo_flags |= LU_OBJECT_ALLOCATED;
@@ -157,9 +157,9 @@ static struct lu_object *lu_object_alloc(const struct lu_context *ctxt,
 
         list_for_each_entry_reverse(scan, layers, lo_linkage) {
                 if (scan->lo_ops->loo_object_start != NULL) {
-                        result = scan->lo_ops->loo_object_start(ctxt, scan);
+                        result = scan->lo_ops->loo_object_start(env, scan);
                         if (result != 0) {
-                                lu_object_free(ctxt, top);
+                                lu_object_free(env, top);
                                 RETURN(ERR_PTR(result));
                         }
                 }
@@ -172,7 +172,7 @@ static struct lu_object *lu_object_alloc(const struct lu_context *ctxt,
 /*
  * Free object.
  */
-static void lu_object_free(const struct lu_context *ctx, struct lu_object *o)
+static void lu_object_free(const struct lu_env *env, struct lu_object *o)
 {
         struct list_head splice;
         struct lu_object *scan;
@@ -183,7 +183,7 @@ static void lu_object_free(const struct lu_context *ctx, struct lu_object *o)
         list_for_each_entry_reverse(scan,
                                     &o->lo_header->loh_layers, lo_linkage) {
                 if (scan->lo_ops->loo_object_delete != NULL)
-                        scan->lo_ops->loo_object_delete(ctx, scan);
+                        scan->lo_ops->loo_object_delete(env, scan);
         }
         -- o->lo_dev->ld_site->ls_total;
         /*
@@ -198,14 +198,14 @@ static void lu_object_free(const struct lu_context *ctx, struct lu_object *o)
                 o = container_of0(splice.next, struct lu_object, lo_linkage);
                 list_del_init(&o->lo_linkage);
                 LASSERT(o->lo_ops->loo_object_free != NULL);
-                o->lo_ops->loo_object_free(ctx, o);
+                o->lo_ops->loo_object_free(env, o);
         }
 }
 
 /*
  * Free @nr objects from the cold end of the site LRU list.
  */
-void lu_site_purge(const struct lu_context *ctx, struct lu_site *s, int nr)
+void lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
 {
         struct list_head         dispose;
         struct lu_object_header *h;
@@ -234,7 +234,7 @@ void lu_site_purge(const struct lu_context *ctx, struct lu_site *s, int nr)
                 h = container_of0(dispose.next,
                                  struct lu_object_header, loh_lru);
                 list_del_init(&h->loh_lru);
-                lu_object_free(ctx, lu_object_top(h));
+                lu_object_free(env, lu_object_top(h));
                 s->ls_stats.s_lru_purged ++;
         }
 }
@@ -303,7 +303,7 @@ static struct lu_context_key lu_cdebug_key = {
 /*
  * Printer function emitting messages through libcfs_debug_msg().
  */
-int lu_cdebug_printer(const struct lu_context *ctx,
+int lu_cdebug_printer(const struct lu_env *env,
                       void *cookie, const char *format, ...)
 {
         struct lu_cdebug_print_info *info = cookie;
@@ -314,7 +314,7 @@ int lu_cdebug_printer(const struct lu_context *ctx,
 
         va_start(args, format);
 
-        key = lu_context_key_get(ctx, &lu_cdebug_key);
+        key = lu_context_key_get(&env->le_ctx, &lu_cdebug_key);
         LASSERT(key != NULL);
 
         used = strlen(key->lck_area);
@@ -338,11 +338,11 @@ EXPORT_SYMBOL(lu_cdebug_printer);
 /*
  * Print object header.
  */
-static void lu_object_header_print(const struct lu_context *ctx,
+static void lu_object_header_print(const struct lu_env *env,
                                    void *cookie, lu_printer_t printer,
                                    const struct lu_object_header *hdr)
 {
-        (*printer)(ctx, cookie, "header@%p[%#lx, %d, "DFID"%s%s]",
+        (*printer)(env, cookie, "header@%p[%#lx, %d, "DFID"%s%s]",
                    hdr, hdr->loh_flags, hdr->loh_ref, PFID(&hdr->loh_fid),
                    hlist_unhashed(&hdr->loh_hash) ? "" : " hash",
                    list_empty(&hdr->loh_lru) ? "" : " lru");
@@ -351,7 +351,7 @@ static void lu_object_header_print(const struct lu_context *ctx,
 /*
  * Print human readable representation of the @o to the @printer.
  */
-void lu_object_print(const struct lu_context *ctx, void *cookie,
+void lu_object_print(const struct lu_env *env, void *cookie,
                      lu_printer_t printer, const struct lu_object *o)
 {
         static const char ruler[] = "........................................";
@@ -359,17 +359,17 @@ void lu_object_print(const struct lu_context *ctx, void *cookie,
         int depth;
 
         top = o->lo_header;
-        lu_object_header_print(ctx, cookie, printer, top);
-        (*printer)(ctx, cookie, "\n");
+        lu_object_header_print(env, cookie, printer, top);
+        (*printer)(env, cookie, "\n");
         list_for_each_entry(o, &top->loh_layers, lo_linkage) {
                 depth = o->lo_depth + 4;
                 LASSERT(o->lo_ops->loo_object_print != NULL);
                 /*
                  * print `.' @depth times.
                  */
-                (*printer)(ctx, cookie, "%*.*s", depth, depth, ruler);
-                o->lo_ops->loo_object_print(ctx, cookie, printer, o);
-                (*printer)(ctx, cookie, "\n");
+                (*printer)(env, cookie, "%*.*s", depth, depth, ruler);
+                o->lo_ops->loo_object_print(env, cookie, printer, o);
+                (*printer)(env, cookie, "\n");
         }
 }
 EXPORT_SYMBOL(lu_object_print);
@@ -426,7 +426,7 @@ static __u32 fid_hash(const struct lu_fid *f)
  * it. Otherwise, create new object, insert it into cache and return it. In
  * any case, additional reference is acquired on the returned object.
  */
-struct lu_object *lu_object_find(const struct lu_context *ctxt,
+struct lu_object *lu_object_find(const struct lu_env *env,
                                  struct lu_site *s, const struct lu_fid *f,
                                  struct lustre_capa *capa)
 {
@@ -458,7 +458,7 @@ struct lu_object *lu_object_find(const struct lu_context *ctxt,
                 if (capa == BYPASS_CAPA) {
                         o->lo_header->loh_capa_bypass = 1;
                 } else {
-                        rc = lu_object_auth(ctxt, o, capa,
+                        rc = lu_object_auth(env, o, capa,
                                             CAPA_OPC_INDEX_LOOKUP);
                         if (rc)
                                 return ERR_PTR(rc);
@@ -472,7 +472,7 @@ struct lu_object *lu_object_find(const struct lu_context *ctxt,
          * Allocate new object. This may result in rather complicated
          * operations, including fld queries, inode loading, etc.
          */
-        o = lu_object_alloc(ctxt, s, f, capa);
+        o = lu_object_alloc(env, s, f, capa);
         if (IS_ERR(o))
                 return o;
 
@@ -490,12 +490,12 @@ struct lu_object *lu_object_find(const struct lu_context *ctxt,
                 s->ls_stats.s_cache_race ++;
         spin_unlock(&s->ls_guard);
         if (o != NULL)
-                lu_object_free(ctxt, o);
+                lu_object_free(env, o);
         return shadow;
 }
 EXPORT_SYMBOL(lu_object_find);
 
-int lu_object_auth(const struct lu_context *ctxt, const struct lu_object *o,
+int lu_object_auth(const struct lu_env *env, const struct lu_object *o,
                    struct lustre_capa *capa, __u64 opc)
 {
         struct lu_object_header *top = o->lo_header;
@@ -503,7 +503,7 @@ int lu_object_auth(const struct lu_context *ctxt, const struct lu_object *o,
 
         list_for_each_entry(o, &top->loh_layers, lo_linkage) {
                 if (o->lo_ops->loo_object_auth) {
-                        rc = o->lo_ops->loo_object_auth(ctxt, o, capa, opc);
+                        rc = o->lo_ops->loo_object_auth(env, o, capa, opc);
                         if (rc)
                                 return rc;
                 }
@@ -908,6 +908,26 @@ int lu_context_refill(const struct lu_context *ctx)
         return keys_fill(ctx);
 }
 EXPORT_SYMBOL(lu_context_refill);
+
+int lu_env_init(struct lu_env *env, struct lu_context *ses, __u32 tags)
+{
+        int result;
+
+        env->le_ses = ses;
+        result = lu_context_init(&env->le_ctx, tags);
+        if (result == 0)
+                lu_context_enter(&env->le_ctx);
+        return result;
+}
+EXPORT_SYMBOL(lu_env_init);
+
+void lu_env_fini(struct lu_env *env)
+{
+        lu_context_exit(&env->le_ctx);
+        lu_context_fini(&env->le_ctx);
+        env->le_ses = NULL;
+}
+EXPORT_SYMBOL(lu_env_fini);
 
 /*
  * Initialization of global lu_* data.

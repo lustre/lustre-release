@@ -177,7 +177,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
         struct dentry *de = mds_fid2dentry(mds, fid, mnt), *retval = de;
         struct ldlm_res_id res_id = { .name = {0} };
         int flags = LDLM_FL_ATOMIC_CB, rc;
-        ldlm_policy_data_t policy = { .l_inodebits = { lockpart} }; 
+        ldlm_policy_data_t policy = { .l_inodebits = { lockpart} };
         ENTRY;
 
         if (IS_ERR(de))
@@ -185,8 +185,8 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
 
         res_id.name[0] = de->d_inode->i_ino;
         res_id.name[1] = de->d_inode->i_generation;
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, 
-                                    LDLM_IBITS, &policy, lock_mode, &flags, 
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id,
+                                    LDLM_IBITS, &policy, lock_mode, &flags,
                                     ldlm_blocking_ast, ldlm_completion_ast,
                                     NULL, NULL, 0, NULL, lockh);
         if (rc != ELDLM_OK) {
@@ -312,7 +312,7 @@ static int mds_reconnect(struct obd_export *exp, struct obd_device *obd,
  * about that client, like open files, the last operation number it did
  * on the server, etc.
  */
-static int mds_connect(const struct lu_context *ctx,
+static int mds_connect(const struct lu_env *env,
                        struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct obd_connect_data *data)
 {
@@ -887,9 +887,9 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
 
         if (resent_req == 0) {
                 if (name) {
-                        rc = mds_get_parent_child_locked(obd, &obd->u.mds, 
+                        rc = mds_get_parent_child_locked(obd, &obd->u.mds,
                                                          &body->fid1,
-                                                         &parent_lockh, 
+                                                         &parent_lockh,
                                                          &dparent, LCK_CR,
                                                          MDS_INODELOCK_UPDATE,
                                                          name, namesize,
@@ -903,7 +903,7 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                         LASSERT(dchild);
                         if (IS_ERR(dchild))
                                 rc = PTR_ERR(dchild);
-                } 
+                }
                 if (rc)
                         GOTO(cleanup, rc);
         } else {
@@ -1735,7 +1735,7 @@ int mds_handle(struct ptlrpc_request *req)
         /* If we're DISCONNECTing, the mds_export_data is already freed */
         if (!rc && lustre_msg_get_opc(req->rq_reqmsg) != MDS_DISCONNECT) {
                 struct mds_export_data *med = &req->rq_export->exp_mds_data;
-                
+
                 /* I don't think last_xid is used for anyway, so I'm not sure
                    if we need to care about last_close_xid here.*/
                 lustre_msg_set_last_xid(req->rq_repmsg,
@@ -1877,7 +1877,7 @@ static int mds_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         ENTRY;
 
         /* setup 1:/dev/loop/0 2:ext3 3:mdsA 4:errors=remount-ro,iopen_nopriv */
-        
+
         CLASSERT(offsetof(struct obd_device, u.obt) ==
                  offsetof(struct obd_device, u.mds.mds_obt));
 
@@ -2213,11 +2213,11 @@ static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         case OBD_CLEANUP_EARLY:
                 break;
         case OBD_CLEANUP_EXPORTS:
-                /*XXX Use this for mdd mds cleanup, so comment out 
+                /*XXX Use this for mdd mds cleanup, so comment out
                  *this target_cleanup_recovery for this tmp MDD MDS
                  *Wangdi*/
                 if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))
-                        target_cleanup_recovery(obd); 
+                        target_cleanup_recovery(obd);
                 mds_lov_early_clean(obd);
                 break;
         case OBD_CLEANUP_SELF_EXP:
@@ -2274,7 +2274,7 @@ static int mds_cleanup(struct obd_device *obd)
                 unlock_kernel();
                 must_relock++;
         }
-        
+
         if (must_put) {
                 /* In case we didn't mount with lustre_get_mount -- old method*/
                 mntput(mds->mds_vfsmnt);
@@ -2705,7 +2705,7 @@ static int mds_process_config(struct obd_device *obd, obd_count len, void *buf)
         int rc;
 
         lprocfs_init_vars(mds, &lvars);
-        
+
         rc = class_process_proc_param(PARAM_MDT, lvars.obd_vars, lcfg, obd);
         return(rc);
 }
@@ -2799,15 +2799,15 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         CDEBUG(D_INFO, "obd %s setup \n", obd->obd_name);
         if (strncmp(obd->obd_name, MDD_OBD_NAME, strlen(MDD_OBD_NAME)))
                 RETURN(0);
-     
+
         if (lcfg->lcfg_bufcount < 5) {
                 CERROR("invalid arg for setup %s\n", MDD_OBD_NAME);
                 RETURN(-EINVAL);
         }
         dev = lustre_cfg_string(lcfg, 4);
         lmi = server_get_mount(dev);
-        LASSERT(lmi != NULL); 
-        
+        LASSERT(lmi != NULL);
+
         lsi = s2lsi(lmi->lmi_sb);
         mnt = lmi->lmi_mnt;
         /* FIXME: MDD LOV initialize objects.
@@ -2843,7 +2843,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
                 GOTO(err_fid, rc);
         }
-        
+
         /* open and test the lov objd file */
         file = filp_open(LOV_OBJID, O_RDWR | O_CREAT, 0644);
         if (IS_ERR(file)) {
@@ -2866,10 +2866,10 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_async_recov = 1;
         rc = mds_postsetup(obd);
         obd->obd_async_recov = 0;
-        
+
         if (rc)
                 GOTO(err_objects, rc);
-        
+
         mds->mds_max_mdsize = sizeof(struct lov_mds_md);
         mds->mds_max_cookiesize = sizeof(struct llog_cookie);
 
@@ -2877,7 +2877,7 @@ err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
 err_lov_objid:
-        if (mds->mds_lov_objid_filp && 
+        if (mds->mds_lov_objid_filp &&
                 filp_close((struct file *)mds->mds_lov_objid_filp, 0))
                 CERROR("can't close %s after error\n", LOV_OBJID);
 err_fid:
@@ -2919,7 +2919,7 @@ static int mds_cmd_cleanup(struct obd_device *obd)
         dput(mds->mds_fid_de);
         LL_DQUOT_OFF(obd->u.obt.obt_sb);
         fsfilt_put_ops(obd->obd_fsops);
-        
+
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         RETURN(rc);
 }

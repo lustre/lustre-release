@@ -36,7 +36,7 @@
 #include <dt_object.h>
 #include <libcfs/list.h>
 
-/* no lock is necessary to protect the list, because call-backs 
+/* no lock is necessary to protect the list, because call-backs
  * are added during system startup. Please refer to "struct dt_device".
  */
 void dt_txn_callback_add(struct dt_device *dev, struct dt_txn_callback *cb)
@@ -51,7 +51,7 @@ void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb)
 }
 EXPORT_SYMBOL(dt_txn_callback_del);
 
-int dt_txn_hook_start(const struct lu_context *ctxt,
+int dt_txn_hook_start(const struct lu_env *env,
                       struct dt_device *dev, struct txn_param *param)
 {
         int result;
@@ -61,7 +61,7 @@ int dt_txn_hook_start(const struct lu_context *ctxt,
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_start == NULL)
                         continue;
-                result = cb->dtc_txn_start(ctxt, param, cb->dtc_cookie);
+                result = cb->dtc_txn_start(env, param, cb->dtc_cookie);
                 if (result < 0)
                         break;
         }
@@ -69,7 +69,7 @@ int dt_txn_hook_start(const struct lu_context *ctxt,
 }
 EXPORT_SYMBOL(dt_txn_hook_start);
 
-int dt_txn_hook_stop(const struct lu_context *ctxt, struct thandle *txn)
+int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn)
 {
         struct dt_device       *dev = txn->th_dev;
         struct dt_txn_callback *cb;
@@ -79,7 +79,7 @@ int dt_txn_hook_stop(const struct lu_context *ctxt, struct thandle *txn)
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_stop == NULL)
                         continue;
-                result = cb->dtc_txn_stop(ctxt, txn, cb->dtc_cookie);
+                result = cb->dtc_txn_stop(env, txn, cb->dtc_cookie);
                 if (result < 0)
                         break;
         }
@@ -87,7 +87,7 @@ int dt_txn_hook_stop(const struct lu_context *ctxt, struct thandle *txn)
 }
 EXPORT_SYMBOL(dt_txn_hook_stop);
 
-int dt_txn_hook_commit(const struct lu_context *ctxt, struct thandle *txn)
+int dt_txn_hook_commit(const struct lu_env *env, struct thandle *txn)
 {
         struct dt_device       *dev = txn->th_dev;
         struct dt_txn_callback *cb;
@@ -97,7 +97,7 @@ int dt_txn_hook_commit(const struct lu_context *ctxt, struct thandle *txn)
         list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_commit == NULL)
                         continue;
-                result = cb->dtc_txn_commit(ctxt, txn, cb->dtc_cookie);
+                result = cb->dtc_txn_commit(env, txn, cb->dtc_cookie);
                 if (result < 0)
                         break;
         }
@@ -133,36 +133,36 @@ void dt_object_fini(struct dt_object *obj)
 }
 EXPORT_SYMBOL(dt_object_fini);
 
-int dt_try_as_dir(const struct lu_context *ctx, struct dt_object *obj)
+int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj)
 {
         if (obj->do_index_ops == NULL)
-                obj->do_ops->do_index_try(ctx, obj, &dt_directory_features);
+                obj->do_ops->do_index_try(env, obj, &dt_directory_features);
         return obj->do_index_ops != NULL;
 }
 EXPORT_SYMBOL(dt_try_as_dir);
 
-static int dt_lookup(const struct lu_context *ctx, struct dt_object *dir,
+static int dt_lookup(const struct lu_env *env, struct dt_object *dir,
                      const char *name, struct lu_fid *fid)
 {
         struct dt_rec       *rec = (struct dt_rec *)fid;
         const struct dt_key *key = (const struct dt_key *)name;
         int result;
 
-        if (dt_try_as_dir(ctx, dir))
-                result = dir->do_index_ops->dio_lookup(ctx, dir, rec, key);
+        if (dt_try_as_dir(env, dir))
+                result = dir->do_index_ops->dio_lookup(env, dir, rec, key);
         else
                 result = -ENOTDIR;
         return result;
 }
 
-static struct dt_object *dt_locate(const struct lu_context *ctx,
+static struct dt_object *dt_locate(const struct lu_env *env,
                                    struct dt_device *dev,
                                    const struct lu_fid *fid)
 {
         struct lu_object *obj;
         struct dt_object *dt;
 
-        obj = lu_object_find(ctx, dev->dd_lu_dev.ld_site, fid, BYPASS_CAPA);
+        obj = lu_object_find(env, dev->dd_lu_dev.ld_site, fid, BYPASS_CAPA);
         if (!IS_ERR(obj)) {
                 obj = lu_object_locate(obj->lo_header, dev->dd_lu_dev.ld_type);
                 LASSERT(obj != NULL);
@@ -172,7 +172,7 @@ static struct dt_object *dt_locate(const struct lu_context *ctx,
         return dt;
 }
 
-struct dt_object *dt_store_open(const struct lu_context *ctx,
+struct dt_object *dt_store_open(const struct lu_env *env,
                                 struct dt_device *dt, const char *name,
                                 struct lu_fid *fid)
 {
@@ -181,17 +181,17 @@ struct dt_object *dt_store_open(const struct lu_context *ctx,
         struct dt_object *root;
         struct dt_object *child;
 
-        result = dt->dd_ops->dt_root_get(ctx, dt, fid);
+        result = dt->dd_ops->dt_root_get(env, dt, fid);
         if (result == 0) {
-                root = dt_locate(ctx, dt, fid);
+                root = dt_locate(env, dt, fid);
                 if (!IS_ERR(root)) {
                         lu_object_bypass_capa(&root->do_lu);
-                        result = dt_lookup(ctx, root, name, fid);
+                        result = dt_lookup(env, root, name, fid);
                         if (result == 0)
-                                child = dt_locate(ctx, dt, fid);
+                                child = dt_locate(env, dt, fid);
                         else
                                 child = ERR_PTR(result);
-                        lu_object_put(ctx, &root->do_lu);
+                        lu_object_put(env, &root->do_lu);
                 } else {
                         CERROR("No root\n");
                         child = (void *)root;

@@ -1,6 +1,8 @@
---- linux.orig/fs/ext3/super.c	2006-08-25 12:39:48.000000000 +0400
-+++ linux/fs/ext3/super.c	2006-09-27 02:37:46.000000000 +0400
-@@ -1139,8 +1139,8 @@
+Index: iam/fs/ext3/super.c
+===================================================================
+--- iam.orig/fs/ext3/super.c	2006-09-28 22:41:30.000000000 +0400
++++ iam/fs/ext3/super.c	2006-09-28 22:41:31.000000000 +0400
+@@ -1168,8 +1168,8 @@ static int ext3_check_descriptors (struc
   * e2fsck was run on this filesystem, and it must have already done the orphan
   * inode cleanup for us, so we can safely abort without any further action.
   */
@@ -11,7 +13,7 @@
  {
  	unsigned int s_flags = sb->s_flags;
  	int nr_orphans = 0, nr_truncates = 0;
-@@ -1227,7 +1227,9 @@
+@@ -1256,7 +1256,9 @@ static void ext3_orphan_cleanup (struct 
  	}
  #endif
  	sb->s_flags = s_flags; /* Restore MS_RDONLY status */
@@ -21,7 +23,7 @@
  
  #define log2(n) ffz(~(n))
  
-@@ -1641,9 +1643,8 @@
+@@ -1682,9 +1684,8 @@ static int ext3_fill_super (struct super
  	 * superblock lock.
  	 */
  	EXT3_SB(sb)->s_mount_state |= EXT3_ORPHAN_FS;

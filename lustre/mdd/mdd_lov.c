@@ -65,7 +65,7 @@ static int mdd_lov_update(struct obd_device *host,
 }
 
 /* The obd is created for handling data stack for mdd */
-int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
+int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
                  struct lustre_cfg *cfg)
 {
         struct lustre_cfg_bufs *bufs;
@@ -130,7 +130,7 @@ int mdd_init_obd(const struct lu_context *ctxt, struct mdd_device *mdd,
                 GOTO(class_detach, rc);
         /*
          * Add here for obd notify mechiasm,
-         * when adding a new ost, the mds will notify this mdd 
+         * when adding a new ost, the mds will notify this mdd
          */
         obd->obd_upcall.onu_owner = mdd;
         obd->obd_upcall.onu_upcall = mdd_lov_update;
@@ -147,7 +147,7 @@ cleanup_mem:
         RETURN(rc);
 }
 
-int mdd_fini_obd(const struct lu_context *ctxt, struct mdd_device *mdd)
+int mdd_fini_obd(const struct lu_env *env, struct mdd_device *mdd)
 {
         struct lustre_cfg_bufs *bufs;
         struct lustre_cfg      *lcfg;
@@ -157,7 +157,7 @@ int mdd_fini_obd(const struct lu_context *ctxt, struct mdd_device *mdd)
 
         obd = mdd2obd_dev(mdd);
         LASSERT(obd);
-        
+
         OBD_ALLOC_PTR(bufs);
         if (!bufs)
                 RETURN(-ENOMEM);
@@ -180,7 +180,7 @@ lcfg_cleanup:
         RETURN(rc);
 }
 
-int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
+int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                void *md, int *md_size, const char *name)
 {
         struct dt_object *next;
@@ -188,7 +188,7 @@ int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
         ENTRY;
 
         next = mdd_object_child(obj);
-        rc = next->do_ops->do_xattr_get(ctxt, next, md, *md_size, name);
+        rc = next->do_ops->do_xattr_get(env, next, md, *md_size, name);
         /*
          * XXX: handling of -ENODATA, the right way is to have ->do_md_get()
          * exported by dt layer.
@@ -206,17 +206,17 @@ int mdd_get_md(const struct lu_context *ctxt, struct mdd_object *obj,
         RETURN (rc);
 }
 
-int mdd_get_md_locked(const struct lu_context *ctxt, struct mdd_object *obj,
+int mdd_get_md_locked(const struct lu_env *env, struct mdd_object *obj,
                       void *md, int *md_size, const char *name)
 {
         int rc = 0;
-        mdd_read_lock(ctxt, obj);
-        rc = mdd_get_md(ctxt, obj, md, md_size, name);
-        mdd_read_unlock(ctxt, obj);
+        mdd_read_lock(env, obj);
+        rc = mdd_get_md(env, obj, md, md_size, name);
+        mdd_read_unlock(env, obj);
         return rc;
 }
 
-static int mdd_lov_set_stripe_md(const struct lu_context *ctxt,
+static int mdd_lov_set_stripe_md(const struct lu_env *env,
                                  struct mdd_object *obj, struct lov_mds_md *lmmp,
                                  int lmm_size, struct thandle *handle)
 {
@@ -233,14 +233,14 @@ static int mdd_lov_set_stripe_md(const struct lu_context *ctxt,
                 RETURN(rc);
         obd_free_memmd(lov_exp, &lsm);
 
-        rc = mdd_xattr_set_txn(ctxt, obj, lmmp, lmm_size, MDS_LOV_MD_NAME, 0,
+        rc = mdd_xattr_set_txn(env, obj, lmmp, lmm_size, MDS_LOV_MD_NAME, 0,
                                handle);
 
         CDEBUG(D_INFO, "set lov ea of "DFID" rc %d \n", PFID(mdo2fid(obj)), rc);
         RETURN(rc);
 }
 
-static int mdd_lov_set_dir_md(const struct lu_context *ctxt,
+static int mdd_lov_set_dir_md(const struct lu_env *env,
                               struct mdd_object *obj, struct lov_mds_md *lmmp,
                               int lmm_size, struct thandle *handle)
 {
@@ -258,19 +258,19 @@ static int mdd_lov_set_dir_md(const struct lu_context *ctxt,
              lum->lmm_stripe_offset == (typeof(lum->lmm_stripe_offset))(-1)) ||
              /* lmm_stripe_size == -1 is deprecated in 1.4.6 */
              lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1)){
-                rc = mdd_xattr_set_txn(ctxt, obj, NULL, 0, MDS_LOV_MD_NAME, 0,
+                rc = mdd_xattr_set_txn(env, obj, NULL, 0, MDS_LOV_MD_NAME, 0,
                                        handle);
                 if (rc == -ENODATA)
                         rc = 0;
                 CDEBUG(D_INFO, "delete lov ea of "DFID" rc %d \n",
                                 PFID(mdo2fid(obj)), rc);
         } else {
-                rc = mdd_lov_set_stripe_md(ctxt, obj, lmmp, lmm_size, handle);
+                rc = mdd_lov_set_stripe_md(env, obj, lmmp, lmm_size, handle);
         }
         RETURN(rc);
 }
 
-int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
+int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
                    struct mdd_object *child, struct lov_mds_md *lmmp,
                    int lmm_size, struct thandle *handle, int set_stripe)
 {
@@ -281,23 +281,23 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
         mode = mdd_object_type(child);
         if (S_ISREG(mode) && lmm_size > 0) {
                 if (set_stripe) {
-                        rc = mdd_lov_set_stripe_md(ctxt, child, lmmp, lmm_size,
+                        rc = mdd_lov_set_stripe_md(env, child, lmmp, lmm_size,
                                                    handle);
                 } else {
-                        rc = mdd_xattr_set_txn(ctxt, child, lmmp, lmm_size,
+                        rc = mdd_xattr_set_txn(env, child, lmmp, lmm_size,
                                                MDS_LOV_MD_NAME, 0, handle);
                 }
         } else  if (S_ISDIR(mode)) {
                 if (lmmp == NULL && lmm_size == 0) {
-                        struct lov_mds_md *lmm = &mdd_ctx_info(ctxt)->mti_lmm;
+                        struct lov_mds_md *lmm = &mdd_env_info(env)->mti_lmm;
                         int size = sizeof(lmm);
 
                         /* Get parent dir stripe and set */
                         if (pobj != NULL)
-                                rc = mdd_get_md(ctxt, pobj, &lmm, &size,
+                                rc = mdd_get_md(env, pobj, &lmm, &size,
                                                 MDS_LOV_MD_NAME);
                         if (rc > 0) {
-                                rc = mdd_xattr_set_txn(ctxt, child, lmm, size,
+                                rc = mdd_xattr_set_txn(env, child, lmm, size,
                                                MDS_LOV_MD_NAME, 0, handle);
                                 if (rc)
                                         CERROR("error on copy stripe info: rc "
@@ -305,7 +305,7 @@ int mdd_lov_set_md(const struct lu_context *ctxt, struct mdd_object *pobj,
                         }
                 } else {
                        LASSERT(lmmp != NULL && lmm_size > 0);
-                       rc = mdd_lov_set_dir_md(ctxt, child, lmmp, 
+                       rc = mdd_lov_set_dir_md(env, child, lmmp,
                                                lmm_size, handle);
                 }
         }
@@ -323,37 +323,37 @@ static obd_id mdd_lov_create_id(const struct lu_fid *fid)
         return ((fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid));
 }
 
-static int mdd_lov_objid_alloc(const struct lu_context *ctxt,
+static int mdd_lov_objid_alloc(const struct lu_env *env,
                                struct mdd_device *mdd)
 {
-        struct mdd_thread_info *info = mdd_ctx_info(ctxt);
+        struct mdd_thread_info *info = mdd_env_info(env);
         struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
-        
+
         OBD_ALLOC(info->mti_oti.oti_objid,
                   mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id));
         return (info->mti_oti.oti_objid == NULL ? -ENOMEM : 0);
 }
 
-static void mdd_lov_objid_update(const struct lu_context *ctxt,
+static void mdd_lov_objid_update(const struct lu_env *env,
                           struct mdd_device *mdd)
 {
-        struct mdd_thread_info *info = mdd_ctx_info(ctxt);
+        struct mdd_thread_info *info = mdd_env_info(env);
         mds_lov_update_objids(mdd->mdd_obd_dev, info->mti_oti.oti_objid);
 }
 
-static void mdd_lov_objid_from_lmm(const struct lu_context *ctx,
-                                   struct mdd_device *mdd, 
+static void mdd_lov_objid_from_lmm(const struct lu_env *env,
+                                   struct mdd_device *mdd,
                                    struct lov_mds_md *lmm)
 {
         struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
-        struct mdd_thread_info *info = mdd_ctx_info(ctx);
+        struct mdd_thread_info *info = mdd_env_info(env);
         mds_objids_from_lmm(info->mti_oti.oti_objid, lmm, &mds->mds_lov_desc);
 }
 
-static void mdd_lov_objid_free(const struct lu_context *ctxt,
+static void mdd_lov_objid_free(const struct lu_env *env,
                                struct mdd_device *mdd)
 {
-        struct mdd_thread_info *info = mdd_ctx_info(ctxt);
+        struct mdd_thread_info *info = mdd_env_info(env);
         struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
 
         OBD_FREE(info->mti_oti.oti_objid,
@@ -361,19 +361,19 @@ static void mdd_lov_objid_free(const struct lu_context *ctxt,
         info->mti_oti.oti_objid = NULL;
 }
 
-void mdd_lov_create_finish(const struct lu_context *ctxt,
+void mdd_lov_create_finish(const struct lu_env *env,
                            struct mdd_device *mdd, int rc)
 {
-        struct mdd_thread_info *info = mdd_ctx_info(ctxt);
+        struct mdd_thread_info *info = mdd_env_info(env);
 
         if (info->mti_oti.oti_objid != NULL) {
                 if (rc == 0)
-                        mdd_lov_objid_update(ctxt, mdd);
-                mdd_lov_objid_free(ctxt, mdd);
+                        mdd_lov_objid_update(env, mdd);
+                mdd_lov_objid_free(env, mdd);
         }
 }
 
-int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
+int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size,
                    const struct md_create_spec *spec, struct lu_attr *la)
@@ -385,7 +385,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         const void            *eadata = spec->u.sp_ea.eadata;
         __u32                  create_flags = spec->sp_cr_flags;
         int                    rc = 0;
-        struct obd_trans_info *oti = &mdd_ctx_info(ctxt)->mti_oti;
+        struct obd_trans_info *oti = &mdd_env_info(env)->mti_oti;
         ENTRY;
 
         if (create_flags & MDS_OPEN_DELAY_CREATE ||
@@ -393,16 +393,16 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                 RETURN(0);
 
         oti_init(oti, NULL);
-        rc = mdd_lov_objid_alloc(ctxt, mdd);
+        rc = mdd_lov_objid_alloc(env, mdd);
         if (rc != 0)
                 RETURN(rc);
 
         /* replay case, should get lov from eadata */
         if (spec->u.sp_ea.no_lov_create != 0) {
-                mdd_lov_objid_from_lmm(ctxt, mdd, (struct lov_mds_md *)eadata);
+                mdd_lov_objid_from_lmm(env, mdd, (struct lov_mds_md *)eadata);
                 RETURN(0);
         }
-        
+
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
                         GOTO(out_ids, rc = -ENOMEM);
 
@@ -419,7 +419,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLFLAGS |
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGROUP;
         oa->o_size = 0;
-        
+
         if (!(create_flags & MDS_OPEN_HAS_OBJS)) {
                 if (create_flags & MDS_OPEN_HAS_EA) {
                         LASSERT(eadata != NULL);
@@ -433,14 +433,14 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
                         /* get lov ea from parent and set to lov */
                         struct lov_mds_md *__lmm;
                         int __lmm_size, returned_lmm_size;
-                        __lmm_size = mdd_lov_mdsize(ctxt, mdd);
+                        __lmm_size = mdd_lov_mdsize(env, mdd);
                         returned_lmm_size = __lmm_size;
 
                         OBD_ALLOC(__lmm, __lmm_size);
                         if (__lmm == NULL)
                                 GOTO(out_oa, rc = -ENOMEM);
 
-                        rc = mdd_get_md_locked(ctxt, parent, __lmm,
+                        rc = mdd_get_md_locked(env, parent, __lmm,
                                         &returned_lmm_size, MDS_LOV_MD_NAME);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
@@ -475,13 +475,13 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
          * attr is in charged by OST.
          */
         if (la->la_size && la->la_valid & LA_SIZE) {
-                struct obd_info *oinfo = &mdd_ctx_info(ctxt)->mti_oi;
+                struct obd_info *oinfo = &mdd_env_info(env)->mti_oi;
 
                 memset(oinfo, 0, sizeof(*oinfo));
 
                 oa->o_size = la->la_size;
                 /* when setting attr to ost, FLBKSZ is not needed */
-                oa->o_valid &= ~OBD_MD_FLBLKSZ; 
+                oa->o_valid &= ~OBD_MD_FLBLKSZ;
                 obdo_from_la(oa, la, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
 
@@ -509,7 +509,7 @@ int mdd_lov_create(const struct lu_context *ctxt, struct mdd_device *mdd,
         /* blksize should be changed after create data object */
         la->la_valid |= LA_BLKSIZE;
         la->la_blksize = oa->o_blksize;
-        
+
         rc = obd_packmd(lov_exp, lmm, lsm);
         if (rc < 0) {
                 CERROR("cannot pack lsm, err = %d\n", rc);
@@ -523,12 +523,12 @@ out_oa:
 out_ids:
         if (lsm)
                 obd_free_memmd(lov_exp, &lsm);
-        if (rc != 0) 
-                mdd_lov_objid_free(ctxt, mdd);
+        if (rc != 0)
+                mdd_lov_objid_free(env, mdd);
         RETURN(rc);
 }
 
-int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
+int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma)
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
@@ -543,19 +543,19 @@ int mdd_unlink_log(const struct lu_context *ctxt, struct mdd_device *mdd,
         return 0;
 }
 
-int mdd_lov_setattr_async(const struct lu_context *ctxt, struct mdd_object *obj,
+int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
                           struct lov_mds_md *lmm, int lmm_size)
 {
         struct mdd_device       *mdd = mdo2mdd(&obj->mod_obj);
         struct obd_device       *obd = mdd2obd_dev(mdd);
-        struct lu_attr          *tmp_la = &mdd_ctx_info(ctxt)->mti_la;
+        struct lu_attr          *tmp_la = &mdd_env_info(env)->mti_la;
         struct dt_object        *next = mdd_object_child(obj);
         __u32  seq  = lu_object_fid(mdd2lu_obj(obj))->f_seq;
         __u32  oid  = lu_object_fid(mdd2lu_obj(obj))->f_oid;
         int rc = 0;
         ENTRY;
 
-        rc = next->do_ops->do_attr_get(ctxt, next, tmp_la);
+        rc = next->do_ops->do_attr_get(env, next, tmp_la);
         if (rc)
                 RETURN(rc);
 

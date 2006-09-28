@@ -117,35 +117,35 @@ struct md_create_spec {
  * Operations implemented for each md object (both directory and leaf).
  */
 struct md_object_operations {
-        int (*moo_permission)(const struct lu_context *ctxt,
+        int (*moo_permission)(const struct lu_env *env,
                               struct md_object *obj,
                               int mask,
                               struct md_ucred *uc);
 
-        int (*moo_attr_get)(const struct lu_context *ctxt,
+        int (*moo_attr_get)(const struct lu_env *env,
                             struct md_object *obj,
                             struct md_attr *attr,
                             struct md_ucred *uc);
 
-        int (*moo_attr_set)(const struct lu_context *ctxt,
+        int (*moo_attr_set)(const struct lu_env *env,
                             struct md_object *obj,
                             const struct md_attr *attr,
                             struct md_ucred *uc);
 
-        int (*moo_xattr_get)(const struct lu_context *ctxt,
+        int (*moo_xattr_get)(const struct lu_env *env,
                              struct md_object *obj,
                              void *buf,
                              int buf_len,
                              const char *name,
                              struct md_ucred *uc);
 
-        int (*moo_xattr_list)(const struct lu_context *ctxt,
+        int (*moo_xattr_list)(const struct lu_env *env,
                               struct md_object *obj,
                               void *buf,
                               int buf_len,
                               struct md_ucred *uc);
 
-        int (*moo_xattr_set)(const struct lu_context *ctxt,
+        int (*moo_xattr_set)(const struct lu_env *env,
                              struct md_object *obj,
                              const void *buf,
                              int buf_len,
@@ -153,48 +153,48 @@ struct md_object_operations {
                              int fl,
                              struct md_ucred *uc);
 
-        int (*moo_xattr_del)(const struct lu_context *ctxt,
+        int (*moo_xattr_del)(const struct lu_env *env,
                              struct md_object *obj,
                              const char *name,
                              struct md_ucred *uc);
 
-        int (*moo_readpage)(const struct lu_context *ctxt,
+        int (*moo_readpage)(const struct lu_env *env,
                             struct md_object *obj,
                             const struct lu_rdpg *rdpg,
                             struct md_ucred *uc);
 
-        int (*moo_readlink)(const struct lu_context *ctxt,
+        int (*moo_readlink)(const struct lu_env *env,
                             struct md_object *obj,
                             void *buf,
                             int buf_len,
                             struct md_ucred *uc);
 
         /* part of cross-ref operation */
-        int (*moo_object_create)(const struct lu_context *ctxt,
+        int (*moo_object_create)(const struct lu_env *env,
                                  struct md_object *obj,
                                  const struct md_create_spec *spec,
                                  struct md_attr *ma,
                                  struct md_ucred *uc);
 
-        int (*moo_ref_add)(const struct lu_context * ctxt,
+        int (*moo_ref_add)(const struct lu_env *env,
                            struct md_object *obj,
                            struct md_ucred *uc);
 
-        int (*moo_ref_del)(const struct lu_context *ctxt,
+        int (*moo_ref_del)(const struct lu_env *env,
                            struct md_object *obj,
                            struct md_attr *ma,
                            struct md_ucred *uc);
 
-        int (*moo_open)(const struct lu_context *ctxt,
+        int (*moo_open)(const struct lu_env *env,
                         struct md_object *obj,
                         int flag,
                         struct md_ucred *uc);
 
-        int (*moo_close)(const struct lu_context *ctxt,
+        int (*moo_close)(const struct lu_env *env,
                          struct md_object *obj,
                          struct md_attr *ma,
                          struct md_ucred *uc);
-        int (*moo_capa_get)(const struct lu_context *, struct md_object *,
+        int (*moo_capa_get)(const struct lu_env *, struct md_object *,
                             struct lustre_capa *);
 };
 
@@ -202,19 +202,19 @@ struct md_object_operations {
  * Operations implemented for each directory object.
  */
 struct md_dir_operations {
-        int (*mdo_is_subdir) (const struct lu_context *ctxt,
+        int (*mdo_is_subdir) (const struct lu_env *env,
                               struct md_object *obj,
                               const struct lu_fid *fid,
                               struct lu_fid *sfid,
                               struct md_ucred *uc);
-        
-        int (*mdo_lookup)(const struct lu_context *ctxt,
+
+        int (*mdo_lookup)(const struct lu_env *env,
                           struct md_object *obj,
                           const char *name,
                           struct lu_fid *fid,
                           struct md_ucred *uc);
 
-        int (*mdo_create)(const struct lu_context *ctxt,
+        int (*mdo_create)(const struct lu_env *env,
                           struct md_object *pobj,
                           const char *name,
                           struct md_object *child,
@@ -223,14 +223,14 @@ struct md_dir_operations {
                           struct md_ucred *uc);
 
         /* This method is used for creating data object for this meta object*/
-        int (*mdo_create_data)(const struct lu_context *ctxt,
+        int (*mdo_create_data)(const struct lu_env *env,
                                struct md_object *p,
                                struct md_object *o,
                                const struct md_create_spec *spec,
                                struct md_attr *ma,
                                struct md_ucred *uc);
 
-        int (*mdo_rename)(const struct lu_context *ctxt,
+        int (*mdo_rename)(const struct lu_env *env,
                           struct md_object *spobj,
                           struct md_object *tpobj,
                           const struct lu_fid *lf,
@@ -240,14 +240,14 @@ struct md_dir_operations {
                           struct md_attr *ma,
                           struct md_ucred *uc);
 
-        int (*mdo_link)(const struct lu_context *ctxt,
+        int (*mdo_link)(const struct lu_env *env,
                         struct md_object *tgt_obj,
                         struct md_object *src_obj,
                         const char *name,
                         struct md_attr *ma,
                         struct md_ucred *uc);
 
-        int (*mdo_unlink)(const struct lu_context *ctxt,
+        int (*mdo_unlink)(const struct lu_env *env,
                           struct md_object *pobj,
                           struct md_object *cobj,
                           const char *name,
@@ -255,18 +255,18 @@ struct md_dir_operations {
                           struct md_ucred *uc);
 
         /* partial ops for cross-ref case */
-        int (*mdo_name_insert)(const struct lu_context *ctxt,
+        int (*mdo_name_insert)(const struct lu_env *env,
                                struct md_object *obj,
                                const char *name,
                                const struct lu_fid *fid,
                                int isdir,
                                struct md_ucred *uc);
 
-        int (*mdo_name_remove)(const struct lu_context *ctxt,
+        int (*mdo_name_remove)(const struct lu_env *env,
                                struct md_object *obj, const char *name,
                                struct md_ucred *uc);
 
-        int (*mdo_rename_tgt)(const struct lu_context *ctxt,
+        int (*mdo_rename_tgt)(const struct lu_env *env,
                               struct md_object *pobj,
                               struct md_object *tobj,
                               const struct lu_fid *fid,
@@ -277,18 +277,18 @@ struct md_dir_operations {
 
 struct md_device_operations {
         /* meta-data device related handlers. */
-        int (*mdo_root_get)(const struct lu_context *ctx,
+        int (*mdo_root_get)(const struct lu_env *env,
                             struct md_device *m,
                             struct lu_fid *f,
                             struct md_ucred *uc);
 
-        int (*mdo_maxsize_get)(const struct lu_context *ctx,
+        int (*mdo_maxsize_get)(const struct lu_env *env,
                                struct md_device *m,
                                int *md_size,
                                int *cookie_size,
                                struct md_ucred *uc);
 
-        int (*mdo_statfs)(const struct lu_context *ctx,
+        int (*mdo_statfs)(const struct lu_env *env,
                           struct md_device *m,
                           struct kstatfs *sfs,
                           struct md_ucred *uc);
@@ -296,7 +296,7 @@ struct md_device_operations {
         int (*mdo_init_capa_keys)(struct md_device *m,
                                   struct lustre_capa_key *keys);
 
-        int (*mdo_update_capa_key)(const struct lu_context *ctx,
+        int (*mdo_update_capa_key)(const struct lu_env *env,
                                    struct md_device *m,
                                    struct lustre_capa_key *key);
 };
@@ -309,7 +309,7 @@ enum md_upcall_event {
 
 struct md_upcall {
         struct md_device            *mu_upcall_dev;
-        int (*mu_upcall)(const struct lu_context *ctxt, struct md_device *md,
+        int (*mu_upcall)(const struct lu_env *env, struct md_device *md,
                          enum md_upcall_event ev);
 };
 
@@ -369,44 +369,44 @@ static inline void md_device_fini(struct md_device *md)
 }
 
 /* md operations */
-static inline int mo_permission(const struct lu_context *cx,
+static inline int mo_permission(const struct lu_env *env,
                                 struct md_object *m,
                                 int mask,
                                 struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_permission);
-        return m->mo_ops->moo_permission(cx, m, mask, uc);
+        return m->mo_ops->moo_permission(env, m, mask, uc);
 }
 
-static inline int mo_attr_get(const struct lu_context *cx,
+static inline int mo_attr_get(const struct lu_env *env,
                               struct md_object *m,
                               struct md_attr *at,
                               struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_attr_get);
-        return m->mo_ops->moo_attr_get(cx, m, at, uc);
+        return m->mo_ops->moo_attr_get(env, m, at, uc);
 }
 
-static inline int mo_readlink(const struct lu_context *cx,
+static inline int mo_readlink(const struct lu_env *env,
                               struct md_object *m,
                               void *buf,
                               int buf_len,
                               struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_readlink);
-        return m->mo_ops->moo_readlink(cx, m, buf, buf_len, uc);
+        return m->mo_ops->moo_readlink(env, m, buf, buf_len, uc);
 }
 
-static inline int mo_attr_set(const struct lu_context *cx,
+static inline int mo_attr_set(const struct lu_env *env,
                               struct md_object *m,
                               const struct md_attr *at,
                               struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_attr_set);
-        return m->mo_ops->moo_attr_set(cx, m, at, uc);
+        return m->mo_ops->moo_attr_set(env, m, at, uc);
 }
 
-static inline int mo_xattr_get(const struct lu_context *cx,
+static inline int mo_xattr_get(const struct lu_env *env,
                                struct md_object *m,
                                void *buf,
                                int buf_len,
@@ -414,19 +414,19 @@ static inline int mo_xattr_get(const struct lu_context *cx,
                                struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_xattr_get);
-        return m->mo_ops->moo_xattr_get(cx, m, buf, buf_len, name, uc);
+        return m->mo_ops->moo_xattr_get(env, m, buf, buf_len, name, uc);
 }
 
-static inline int mo_xattr_del(const struct lu_context *cx,
+static inline int mo_xattr_del(const struct lu_env *env,
                                struct md_object *m,
                                const char *name,
                                struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_xattr_del);
-        return m->mo_ops->moo_xattr_del(cx, m, name, uc);
+        return m->mo_ops->moo_xattr_del(env, m, name, uc);
 }
 
-static inline int mo_xattr_set(const struct lu_context *cx,
+static inline int mo_xattr_set(const struct lu_env *env,
                                struct md_object *m,
                                const void *buf,
                                int buf_len,
@@ -435,92 +435,92 @@ static inline int mo_xattr_set(const struct lu_context *cx,
                                struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_xattr_set);
-        return m->mo_ops->moo_xattr_set(cx, m, buf, buf_len, name, flags, uc);
+        return m->mo_ops->moo_xattr_set(env, m, buf, buf_len, name, flags, uc);
 }
 
-static inline int mo_xattr_list(const struct lu_context *cx,
+static inline int mo_xattr_list(const struct lu_env *env,
                                 struct md_object *m,
                                 void *buf,
                                 int buf_len,
                                 struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_xattr_list);
-        return m->mo_ops->moo_xattr_list(cx, m, buf, buf_len, uc);
+        return m->mo_ops->moo_xattr_list(env, m, buf, buf_len, uc);
 }
 
-static inline int mo_open(const struct lu_context *cx,
+static inline int mo_open(const struct lu_env *env,
                           struct md_object *m,
                           int flags,
                           struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_open);
-        return m->mo_ops->moo_open(cx, m, flags, uc);
+        return m->mo_ops->moo_open(env, m, flags, uc);
 }
 
-static inline int mo_close(const struct lu_context *cx,
+static inline int mo_close(const struct lu_env *env,
                            struct md_object *m,
                            struct md_attr *ma,
                            struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_close);
-        return m->mo_ops->moo_close(cx, m, ma, uc);
+        return m->mo_ops->moo_close(env, m, ma, uc);
 }
 
-static inline int mo_readpage(const struct lu_context *cx,
+static inline int mo_readpage(const struct lu_env *env,
                               struct md_object *m,
                               const struct lu_rdpg *rdpg,
                               struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_readpage);
-        return m->mo_ops->moo_readpage(cx, m, rdpg, uc);
+        return m->mo_ops->moo_readpage(env, m, rdpg, uc);
 }
 
-static inline int mo_object_create(const struct lu_context *cx,
+static inline int mo_object_create(const struct lu_env *env,
                                    struct md_object *m,
                                    const struct md_create_spec *spc,
                                    struct md_attr *at,
                                    struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_object_create);
-        return m->mo_ops->moo_object_create(cx, m, spc, at, uc);
+        return m->mo_ops->moo_object_create(env, m, spc, at, uc);
 }
 
-static inline int mo_ref_add(const struct lu_context *cx,
+static inline int mo_ref_add(const struct lu_env *env,
                              struct md_object *m,
                              struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_ref_add);
-        return m->mo_ops->moo_ref_add(cx, m, uc);
+        return m->mo_ops->moo_ref_add(env, m, uc);
 }
 
-static inline int mo_ref_del(const struct lu_context *cx,
+static inline int mo_ref_del(const struct lu_env *env,
                              struct md_object *m,
                              struct md_attr *ma,
                              struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_ref_del);
-        return m->mo_ops->moo_ref_del(cx, m, ma, uc);
+        return m->mo_ops->moo_ref_del(env, m, ma, uc);
 }
 
-static inline int mo_capa_get(const struct lu_context *cx,
+static inline int mo_capa_get(const struct lu_env *env,
                               struct md_object *m,
                               struct lustre_capa *c)
 {
         LASSERT(m->mo_ops->moo_capa_get);
-        return m->mo_ops->moo_capa_get(cx, m, c);
+        return m->mo_ops->moo_capa_get(env, m, c);
 }
 
-static inline int mdo_lookup(const struct lu_context *cx,
+static inline int mdo_lookup(const struct lu_env *env,
                              struct md_object *p,
                              const char *name,
                              struct lu_fid *f,
                              struct md_ucred *uc)
 {
         LASSERT(p->mo_dir_ops->mdo_lookup);
-        return p->mo_dir_ops->mdo_lookup(cx, p, name, f, uc);
+        return p->mo_dir_ops->mdo_lookup(env, p, name, f, uc);
 }
 
-static inline int mdo_create(const struct lu_context *cx,
+static inline int mdo_create(const struct lu_env *env,
                              struct md_object *p,
                              const char *child_name,
                              struct md_object *c,
@@ -529,10 +529,10 @@ static inline int mdo_create(const struct lu_context *cx,
                              struct md_ucred *uc)
 {
         LASSERT(c->mo_dir_ops->mdo_create);
-        return c->mo_dir_ops->mdo_create(cx, p, child_name, c, spc, at, uc);
+        return c->mo_dir_ops->mdo_create(env, p, child_name, c, spc, at, uc);
 }
 
-static inline int mdo_create_data(const struct lu_context *cx,
+static inline int mdo_create_data(const struct lu_env *env,
                                   struct md_object *p,
                                   struct md_object *c,
                                   const struct md_create_spec *spec,
@@ -540,10 +540,10 @@ static inline int mdo_create_data(const struct lu_context *cx,
                                   struct md_ucred *uc)
 {
         LASSERT(c->mo_dir_ops->mdo_create_data);
-        return c->mo_dir_ops->mdo_create_data(cx, p, c, spec, ma, uc);
+        return c->mo_dir_ops->mdo_create_data(env, p, c, spec, ma, uc);
 }
 
-static inline int mdo_rename(const struct lu_context *cx,
+static inline int mdo_rename(const struct lu_env *env,
                              struct md_object *sp,
                              struct md_object *tp,
                              const struct lu_fid *lf,
@@ -554,21 +554,21 @@ static inline int mdo_rename(const struct lu_context *cx,
                              struct md_ucred *uc)
 {
         LASSERT(tp->mo_dir_ops->mdo_rename);
-        return tp->mo_dir_ops->mdo_rename(cx, sp, tp, lf, sname, t, tname,
+        return tp->mo_dir_ops->mdo_rename(env, sp, tp, lf, sname, t, tname,
                                           ma, uc);
 }
 
-static inline int mdo_is_subdir(const struct lu_context *cx,
+static inline int mdo_is_subdir(const struct lu_env *env,
                                 struct md_object *mo,
                                 const struct lu_fid *fid,
                                 struct lu_fid *sfid,
                                 struct md_ucred *uc)
 {
         LASSERT(mo->mo_dir_ops->mdo_is_subdir);
-        return mo->mo_dir_ops->mdo_is_subdir(cx, mo, fid, sfid, uc);
+        return mo->mo_dir_ops->mdo_is_subdir(env, mo, fid, sfid, uc);
 }
 
-static inline int mdo_link(const struct lu_context *cx,
+static inline int mdo_link(const struct lu_env *env,
                            struct md_object *p,
                            struct md_object *s,
                            const char *name,
@@ -576,10 +576,10 @@ static inline int mdo_link(const struct lu_context *cx,
                            struct md_ucred *uc)
 {
         LASSERT(s->mo_dir_ops->mdo_link);
-        return s->mo_dir_ops->mdo_link(cx, p, s, name, ma, uc);
+        return s->mo_dir_ops->mdo_link(env, p, s, name, ma, uc);
 }
 
-static inline int mdo_unlink(const struct lu_context *cx,
+static inline int mdo_unlink(const struct lu_env *env,
                              struct md_object *p,
                              struct md_object *c,
                              const char *name,
@@ -587,10 +587,10 @@ static inline int mdo_unlink(const struct lu_context *cx,
                              struct md_ucred *uc)
 {
         LASSERT(c->mo_dir_ops->mdo_unlink);
-        return c->mo_dir_ops->mdo_unlink(cx, p, c, name, ma, uc);
+        return c->mo_dir_ops->mdo_unlink(env, p, c, name, ma, uc);
 }
 
-static inline int mdo_name_insert(const struct lu_context *cx,
+static inline int mdo_name_insert(const struct lu_env *env,
                                   struct md_object *p,
                                   const char *name,
                                   const struct lu_fid *f,
@@ -598,19 +598,19 @@ static inline int mdo_name_insert(const struct lu_context *cx,
                                   struct md_ucred *uc)
 {
         LASSERT(p->mo_dir_ops->mdo_name_insert);
-        return p->mo_dir_ops->mdo_name_insert(cx, p, name, f, isdir, uc);
+        return p->mo_dir_ops->mdo_name_insert(env, p, name, f, isdir, uc);
 }
 
-static inline int mdo_name_remove(const struct lu_context *cx,
+static inline int mdo_name_remove(const struct lu_env *env,
                                   struct md_object *p,
                                   const char *name,
                                   struct md_ucred *uc)
 {
         LASSERT(p->mo_dir_ops->mdo_name_remove);
-        return p->mo_dir_ops->mdo_name_remove(cx, p, name, uc);
+        return p->mo_dir_ops->mdo_name_remove(env, p, name, uc);
 }
 
-static inline int mdo_rename_tgt(const struct lu_context *cx,
+static inline int mdo_rename_tgt(const struct lu_env *env,
                                  struct md_object *p,
                                  struct md_object *t,
                                  const struct lu_fid *lf,
@@ -620,11 +620,11 @@ static inline int mdo_rename_tgt(const struct lu_context *cx,
 {
         if (t) {
                 LASSERT(t->mo_dir_ops->mdo_rename_tgt);
-                return t->mo_dir_ops->mdo_rename_tgt(cx, p, t, lf, name,
+                return t->mo_dir_ops->mdo_rename_tgt(env, p, t, lf, name,
                                                      ma, uc);
         } else {
                 LASSERT(p->mo_dir_ops->mdo_rename_tgt);
-                return p->mo_dir_ops->mdo_rename_tgt(cx, p, t, lf, name,
+                return p->mo_dir_ops->mdo_rename_tgt(env, p, t, lf, name,
                                                      ma, uc);
         }
 }

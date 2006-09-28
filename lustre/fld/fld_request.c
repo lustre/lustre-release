@@ -168,7 +168,7 @@ int fld_client_add_target(struct lu_client_fld *fld,
 
         list_add_tail(&target->ft_chain,
                       &fld->lcf_targets);
-        
+
         fld->lcf_count++;
         spin_unlock(&fld->lcf_lock);
 
@@ -190,7 +190,7 @@ int fld_client_del_target(struct lu_client_fld *fld,
                         fld->lcf_count--;
                         list_del(&target->ft_chain);
                         spin_unlock(&fld->lcf_lock);
-                        
+
                         if (target->ft_exp != NULL)
                                 class_export_put(target->ft_exp);
 
@@ -216,7 +216,7 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
                                              NULL, NULL);
 
         if (IS_ERR(fld->lcf_proc_dir)) {
-                CERROR("%s: LProcFS failed in fld-init\n", 
+                CERROR("%s: LProcFS failed in fld-init\n",
                        fld->lcf_name);
                 rc = PTR_ERR(fld->lcf_proc_dir);
                 RETURN(rc);
@@ -225,7 +225,7 @@ static int fld_client_proc_init(struct lu_client_fld *fld)
         rc = lprocfs_add_vars(fld->lcf_proc_dir,
                               fld_client_proc_list, fld);
         if (rc) {
-                CERROR("%s: Can't init FLD proc, rc %d\n", 
+                CERROR("%s: Can't init FLD proc, rc %d\n",
                        fld->lcf_name, rc);
                 GOTO(out_cleanup, rc);
         }
@@ -285,7 +285,7 @@ int fld_client_init(struct lu_client_fld *fld,
                  "cli-%s", prefix);
 
         if (!hash_is_sane(hash)) {
-                CERROR("%s: Wrong hash function %#x\n", 
+                CERROR("%s: Wrong hash function %#x\n",
                        fld->lcf_name, hash);
                 RETURN(-EINVAL);
         }
@@ -409,7 +409,7 @@ out_req:
 
 int fld_client_create(struct lu_client_fld *fld,
                       seqno_t seq, mdsno_t mds,
-                      const struct lu_context *ctx)
+                      const struct lu_env *env)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = mds };
         struct lu_fld_target *target;
@@ -421,9 +421,9 @@ int fld_client_create(struct lu_client_fld *fld,
 
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
-                LASSERT(ctx != NULL);
+                LASSERT(env != NULL);
                 rc = fld_server_create(target->ft_srv,
-                                       ctx, seq, mds);
+                                       env, seq, mds);
         } else {
 #endif
                 rc = fld_client_rpc(target->ft_exp,
@@ -441,7 +441,7 @@ int fld_client_create(struct lu_client_fld *fld,
                  */
                 fld_cache_insert(fld->lcf_cache, seq, mds);
         } else {
-                CERROR("%s: Can't create FLD entry, rc %d\n", 
+                CERROR("%s: Can't create FLD entry, rc %d\n",
                        fld->lcf_name, rc);
         }
         RETURN(rc);
@@ -449,7 +449,7 @@ int fld_client_create(struct lu_client_fld *fld,
 EXPORT_SYMBOL(fld_client_create);
 
 int fld_client_delete(struct lu_client_fld *fld, seqno_t seq,
-                      const struct lu_context *ctx)
+                      const struct lu_env *env)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
         struct lu_fld_target *target;
@@ -463,9 +463,9 @@ int fld_client_delete(struct lu_client_fld *fld, seqno_t seq,
 
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
-                LASSERT(ctx != NULL);
+                LASSERT(env != NULL);
                 rc = fld_server_delete(target->ft_srv,
-                                       ctx, seq);
+                                       env, seq);
         } else {
 #endif
                 rc = fld_client_rpc(target->ft_exp,
@@ -480,7 +480,7 @@ EXPORT_SYMBOL(fld_client_delete);
 
 int fld_client_lookup(struct lu_client_fld *fld,
                       seqno_t seq, mdsno_t *mds,
-                      const struct lu_context *ctx)
+                      const struct lu_env *env)
 {
         struct md_fld md_fld = { .mf_seq = seq, .mf_mds = 0 };
         struct lu_fld_target *target;
@@ -498,9 +498,9 @@ int fld_client_lookup(struct lu_client_fld *fld,
 
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
-                LASSERT(ctx != NULL);
+                LASSERT(env != NULL);
                 rc = fld_server_lookup(target->ft_srv,
-                                       ctx, seq, &md_fld.mf_mds);
+                                       env, seq, &md_fld.mf_mds);
         } else {
 #endif
                 rc = fld_client_rpc(target->ft_exp,

@@ -635,6 +635,8 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         CDEBUG(D_NET, "got req "LPD64"\n", request->rq_xid);
 
         request->rq_svc_thread = thread;
+        request->rq_svc_thread->t_env->le_ses = &request->rq_session;
+
         request->rq_export = class_conn2export(
                                      lustre_msg_get_handle(request->rq_reqmsg));
 
@@ -944,7 +946,7 @@ static int ptlrpc_main(void *arg)
 #ifdef WITH_GROUP_INFO
         struct group_info *ginfo = NULL;
 #endif
-        struct lu_context ctx;
+        struct lu_env env;
         int rc = 0;
         ENTRY;
 
@@ -984,12 +986,12 @@ static int ptlrpc_main(void *arg)
                         goto out;
         }
 
-        rc = lu_context_init(&ctx, svc->srv_ctx_tags);
+        rc = lu_context_init(&env.le_ctx, svc->srv_ctx_tags);
         if (rc)
                 goto out_srv_init;
 
-        thread->t_ctx = &ctx;
-        ctx.lc_thread = thread;
+        thread->t_env = &env;
+        env.le_ctx.lc_thread = thread;
 
         /* Alloc reply state structure for this one */
         OBD_ALLOC_GFP(rs, svc->srv_max_reply_size, CFS_ALLOC_STD);
@@ -1051,9 +1053,9 @@ static int ptlrpc_main(void *arg)
                 if (!list_empty (&svc->srv_request_queue) &&
                     (svc->srv_n_difficult_replies == 0 ||
                      svc->srv_n_active_reqs < (svc->srv_nthreads - 1))) {
-                        lu_context_enter(&ctx);
+                        lu_context_enter(&env.le_ctx);
                         ptlrpc_server_handle_request(svc, thread);
-                        lu_context_exit(&ctx);
+                        lu_context_exit(&env.le_ctx);
                 }
 
                 if (!list_empty(&svc->srv_idle_rqbds) &&
@@ -1077,7 +1079,7 @@ out_srv_init:
                 svc->srv_done(thread);
 
 out:
-        lu_context_fini(&ctx);
+        lu_env_fini(&env);
 
         CDEBUG(D_NET, "service thread %d exiting: rc %d\n", thread->t_id, rc);
 

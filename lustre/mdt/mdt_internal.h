@@ -243,7 +243,7 @@ struct mdt_thread_info {
          */
         struct req_capsule         mti_pill;
 
-        const struct lu_context   *mti_ctxt;
+        const struct lu_env       *mti_env;
         struct mdt_device         *mti_mdt;
         /*
          * number of buffers in reply message.
@@ -355,16 +355,16 @@ static inline struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
          return info->mti_pill.rc_req;
 }
 
-static inline void mdt_object_get(const struct lu_context *ctxt,
+static inline void mdt_object_get(const struct lu_env *env,
                                   struct mdt_object *o)
 {
         lu_object_get(&o->mot_obj.mo_lu);
 }
 
-static inline void mdt_object_put(const struct lu_context *ctxt,
+static inline void mdt_object_put(const struct lu_env *env,
                                   struct mdt_object *o)
 {
-        lu_object_put(ctxt, &o->mot_obj.mo_lu);
+        lu_object_put(env, &o->mot_obj.mo_lu);
 }
 
 static inline const struct lu_fid *mdt_object_fid(struct mdt_object *o)
@@ -393,7 +393,7 @@ void mdt_object_unlock(struct mdt_thread_info *,
                        struct mdt_lock_handle *,
                        int decref);
 
-struct mdt_object *mdt_object_find(const struct lu_context *,
+struct mdt_object *mdt_object_find(const struct lu_env *,
                                    struct mdt_device *,
                                    const struct lu_fid *,
                                    struct lustre_capa *);
@@ -423,18 +423,18 @@ void mdt_lock_handle_fini(struct mdt_lock_handle *lh);
 
 void mdt_reconstruct(struct mdt_thread_info *, struct mdt_lock_handle *);
 
-int mdt_fs_setup(const struct lu_context *, struct mdt_device *,
+int mdt_fs_setup(const struct lu_env *, struct mdt_device *,
                  struct obd_device *);
-void mdt_fs_cleanup(const struct lu_context *, struct mdt_device *);
+void mdt_fs_cleanup(const struct lu_env *, struct mdt_device *);
 
-int mdt_client_del(const struct lu_context *ctxt,
+int mdt_client_del(const struct lu_env *env,
                     struct mdt_device *mdt,
                     struct mdt_export_data *med);
-int mdt_client_add(const struct lu_context *ctxt,
+int mdt_client_add(const struct lu_env *env,
                    struct mdt_device *mdt,
                    struct mdt_export_data *med,
                    int cl_idx);
-int mdt_client_new(const struct lu_context *ctxt,
+int mdt_client_new(const struct lu_env *env,
                    struct mdt_device *mdt,
                    struct mdt_export_data *med);
 
@@ -465,14 +465,14 @@ void mdt_shrink_reply(struct mdt_thread_info *info, int offset,
 int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
                            const struct md_attr *);
 void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
-struct thandle* mdt_trans_start(const struct lu_context *ctx,
+struct thandle* mdt_trans_start(const struct lu_env *env,
                                 struct mdt_device *mdt, int credits);
-void mdt_trans_stop(const struct lu_context *ctx,
+void mdt_trans_stop(const struct lu_env *env,
                     struct mdt_device *mdt, struct thandle *th);
-int mdt_record_write(const struct lu_context *ctx,
+int mdt_record_write(const struct lu_env *env,
                      struct dt_object *dt, const void *buf,
                      size_t count, loff_t *pos, struct thandle *th);
-int mdt_record_read(const struct lu_context *ctx,
+int mdt_record_read(const struct lu_env *env,
                     struct dt_object *dt, void *buf,
                     size_t count, loff_t *pos);
 
@@ -531,13 +531,13 @@ int mdt_rmtacl_upcall(struct mdt_thread_info *, unsigned long,
 
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/
-static inline void mdt_fail_write(const struct lu_context *ctx,
+static inline void mdt_fail_write(const struct lu_env *env,
                                   struct dt_device *dd, int id)
 {
         if (OBD_FAIL_CHECK(id)) {
                 CERROR(LUSTRE_MDT_NAME": obd_fail_loc=%x, fail write ops\n",
                        id);
-                dd->dd_ops->dt_ro(ctx, dd);
+                dd->dd_ops->dt_ro(env, dd);
                 /* We set FAIL_ONCE because we never "un-fail" a device */
                 obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;
         }
@@ -580,7 +580,7 @@ do {                                                                         \
 int mdt_ck_thread_start(struct mdt_device *mdt);
 void mdt_ck_thread_stop(struct mdt_device *mdt);
 void mdt_ck_timer_callback(unsigned long castmeharder);
-int mdt_capa_keys_init(const struct lu_context *ctx, struct mdt_device *mdt);
+int mdt_capa_keys_init(const struct lu_env *env, struct mdt_device *mdt);
 
 static inline struct lustre_capa_key *red_capa_key(struct mdt_device *mdt)
 {

@@ -144,24 +144,24 @@ int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
                     const char *prefix,
                     enum lu_mgr_type type,
-                    const struct lu_context *ctx);
+                    const struct lu_env *env);
 
 void seq_server_fini(struct lu_server_seq *seq,
-                     const struct lu_context *ctx);
+                     const struct lu_env *env);
 
 int seq_server_alloc_super(struct lu_server_seq *seq,
                            struct lu_range *in,
                            struct lu_range *out,
-                           const struct lu_context *ctx);
+                           const struct lu_env *env);
 
 int seq_server_alloc_meta(struct lu_server_seq *seq,
                           struct lu_range *in,
                           struct lu_range *out,
-                          const struct lu_context *ctx);
+                          const struct lu_env *env);
 
 int seq_server_set_cli(struct lu_server_seq *seq,
                        struct lu_client_seq *cli,
-                       const struct lu_context *ctx);
+                       const struct lu_env *env);
 
 /* Client methods */
 int seq_client_init(struct lu_client_seq *seq,
@@ -173,10 +173,10 @@ int seq_client_init(struct lu_client_seq *seq,
 void seq_client_fini(struct lu_client_seq *seq);
 
 int seq_client_alloc_super(struct lu_client_seq *seq,
-                           const struct lu_context *ctx);
+                           const struct lu_env *env);
 
 int seq_client_alloc_meta(struct lu_client_seq *seq,
-                          const struct lu_context *ctx);
+                          const struct lu_env *env);
 
 int seq_client_alloc_seq(struct lu_client_seq *seq,
                          seqno_t *seqnr);

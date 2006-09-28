@@ -51,14 +51,14 @@
 /* assigns client to sequence controller node */
 int seq_server_set_cli(struct lu_server_seq *seq,
                        struct lu_client_seq *cli,
-                       const struct lu_context *ctx)
+                       const struct lu_env *env)
 {
         int rc = 0;
         ENTRY;
 
         if (cli == NULL) {
                 CDEBUG(D_INFO|D_WARNING, "%s: Detached "
-                       "sequence client %s\n", seq->lss_name, 
+                       "sequence client %s\n", seq->lss_name,
                        cli->lcs_name);
                 seq->lss_cli = cli;
                 RETURN(0);
@@ -84,7 +84,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
         /* get new range from controller only if super-sequence is not yet
          * initialized from backing store or something else. */
         if (range_is_zero(&seq->lss_super)) {
-                rc = seq_client_alloc_super(cli, ctx);
+                rc = seq_client_alloc_super(cli, env);
                 if (rc) {
                         up(&seq->lss_sem);
                         CERROR("%s: Can't allocate super-sequence, "
@@ -98,7 +98,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 seq->lss_super = cli->lcs_range;
 
                 /* save init seq to backing store. */
-                rc = seq_store_write(seq, ctx);
+                rc = seq_store_write(seq, env);
                 if (rc) {
                         CERROR("%s: Can't write sequence state, "
                                "rc = %d\n", seq->lss_name, rc);
@@ -115,7 +115,7 @@ EXPORT_SYMBOL(seq_server_set_cli);
 static int __seq_server_alloc_super(struct lu_server_seq *seq,
                                     struct lu_range *in,
                                     struct lu_range *out,
-                                    const struct lu_context *ctx)
+                                    const struct lu_env *env)
 {
         struct lu_range *space = &seq->lss_space;
         int rc;
@@ -137,12 +137,12 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
         } else {
                 if (range_space(space) < seq->lss_super_width) {
                         CWARN("%s: Sequences space to be exhausted soon. "
-                              "Only "LPU64" sequences left\n", seq->lss_name, 
+                              "Only "LPU64" sequences left\n", seq->lss_name,
                               range_space(space));
                         *out = *space;
                         space->lr_start = space->lr_end;
                 } else if (range_is_exhausted(space)) {
-                        CERROR("%s: Sequences space is exhausted\n", 
+                        CERROR("%s: Sequences space is exhausted\n",
                                seq->lss_name);
                         RETURN(-ENOSPC);
                 } else {
@@ -150,7 +150,7 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
                 }
         }
 
-        rc = seq_store_write(seq, ctx);
+        rc = seq_store_write(seq, env);
         if (rc) {
                 CERROR("%s: Can't save state, rc %d\n", seq->lss_name, rc);
                 RETURN(rc);
@@ -165,13 +165,13 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
 int seq_server_alloc_super(struct lu_server_seq *seq,
                            struct lu_range *in,
                            struct lu_range *out,
-                           const struct lu_context *ctx)
+                           const struct lu_env *env)
 {
         int rc;
         ENTRY;
 
         down(&seq->lss_sem);
-        rc = __seq_server_alloc_super(seq, in, out, ctx);
+        rc = __seq_server_alloc_super(seq, in, out, env);
         up(&seq->lss_sem);
 
         RETURN(rc);
@@ -180,7 +180,7 @@ int seq_server_alloc_super(struct lu_server_seq *seq,
 static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                                    struct lu_range *in,
                                    struct lu_range *out,
-                                   const struct lu_context *ctx)
+                                   const struct lu_env *env)
 {
         struct lu_range *super = &seq->lss_super;
         int rc = 0;
@@ -188,7 +188,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 
         LASSERT(range_is_sane(super));
 
-        /* 
+        /*
          * This is recovery case. Adjust super range if input range looks like
          * it is allocated from new super.
          */
@@ -200,17 +200,17 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                 if (range_is_exhausted(super)) {
                         LASSERT(in->lr_start > super->lr_start);
 
-                        /* 
+                        /*
                          * Server cannot send to client empty range, this is why
                          * we check here that range from client is "newer" than
                          * exhausted super.
                          */
                         super->lr_start = in->lr_start;
-                        
+
                         super->lr_end = super->lr_start +
                                 LUSTRE_SEQ_SUPER_WIDTH;
                 } else {
-                        /* 
+                        /*
                          * Update super start by start from client's range. End
                          * should not be changed if range was not exhausted.
                          */
@@ -234,7 +234,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                                 RETURN(-EOPNOTSUPP);
                         }
 
-                        rc = seq_client_alloc_super(seq->lss_cli, ctx);
+                        rc = seq_client_alloc_super(seq->lss_cli, env);
                         if (rc) {
                                 CERROR("%s: Can't allocate super-sequence, "
                                        "rc %d\n", seq->lss_name, rc);
@@ -248,7 +248,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                 range_alloc(out, super, seq->lss_meta_width);
         }
 
-        rc = seq_store_write(seq, ctx);
+        rc = seq_store_write(seq, env);
         if (rc) {
                 CERROR("%s: Can't save state, rc = %d\n",
 		       seq->lss_name, rc);
@@ -265,26 +265,26 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 int seq_server_alloc_meta(struct lu_server_seq *seq,
                           struct lu_range *in,
                           struct lu_range *out,
-                          const struct lu_context *ctx)
+                          const struct lu_env *env)
 {
         int rc;
         ENTRY;
 
         down(&seq->lss_sem);
-        rc = __seq_server_alloc_meta(seq, in, out, ctx);
+        rc = __seq_server_alloc_meta(seq, in, out, env);
         up(&seq->lss_sem);
 
         RETURN(rc);
 }
 
 static int seq_server_handle(struct lu_site *site,
-                             const struct lu_context *ctx,
+                             const struct lu_env *env,
                              __u32 opc, struct lu_range *in,
                              struct lu_range *out)
 {
         int rc;
         ENTRY;
-        
+
         switch (opc) {
         case SEQ_ALLOC_META:
                 if (!site->ls_server_seq) {
@@ -293,7 +293,7 @@ static int seq_server_handle(struct lu_site *site,
                         RETURN(-EINVAL);
                 }
                 rc = seq_server_alloc_meta(site->ls_server_seq,
-                                           in, out, ctx);
+                                           in, out, env);
                 break;
         case SEQ_ALLOC_SUPER:
                 if (!site->ls_control_seq) {
@@ -302,7 +302,7 @@ static int seq_server_handle(struct lu_site *site,
                         RETURN(-EINVAL);
                 }
                 rc = seq_server_alloc_super(site->ls_control_seq,
-                                            in, out, ctx);
+                                            in, out, env);
                 break;
         default:
                 rc = -EINVAL;
@@ -312,7 +312,7 @@ static int seq_server_handle(struct lu_site *site,
         RETURN(rc);
 }
 
-static int seq_req_handle(struct ptlrpc_request *req,
+static int seq_req_handle(struct ptlrpc_request *req, const struct lu_env *env,
                           struct seq_thread_info *info)
 {
         struct lu_range *out, *in = NULL;
@@ -331,8 +331,6 @@ static int seq_req_handle(struct ptlrpc_request *req,
         opc = req_capsule_client_get(&info->sti_pill,
                                      &RMF_SEQ_OPC);
         if (opc != NULL) {
-                const struct lu_context *ctx;
-                
                 out = req_capsule_server_get(&info->sti_pill,
                                              &RMF_SEQ_RANGE);
                 if (out == NULL)
@@ -344,19 +342,16 @@ static int seq_req_handle(struct ptlrpc_request *req,
 
                         LASSERT(!range_is_zero(in) && range_is_sane(in));
                 }
-        
-                ctx = req->rq_svc_thread->t_ctx;
-                LASSERT(ctx != NULL);
-                LASSERT(ctx->lc_thread == req->rq_svc_thread);
-                rc = seq_server_handle(site, ctx, *opc, in, out);
+
+                rc = seq_server_handle(site, env, *opc, in, out);
         } else
                 rc = -EPROTO;
 
         RETURN(rc);
 }
 
-static void *seq_thread_init(const struct lu_context *ctx,
-                             struct lu_context_key *key)
+static void *seq_key_init(const struct lu_context *ctx,
+                          struct lu_context_key *key)
 {
         struct seq_thread_info *info;
 
@@ -370,8 +365,8 @@ static void *seq_thread_init(const struct lu_context *ctx,
         return info;
 }
 
-static void seq_thread_fini(const struct lu_context *ctx,
-                            struct lu_context_key *key, void *data)
+static void seq_key_fini(const struct lu_context *ctx,
+                         struct lu_context_key *key, void *data)
 {
         struct seq_thread_info *info = data;
         OBD_FREE_PTR(info);
@@ -379,8 +374,8 @@ static void seq_thread_fini(const struct lu_context *ctx,
 
 struct lu_context_key seq_thread_key = {
         .lct_tags = LCT_MD_THREAD,
-        .lct_init = seq_thread_init,
-        .lct_fini = seq_thread_fini
+        .lct_init = seq_key_init,
+        .lct_fini = seq_key_fini
 };
 
 static void seq_thread_info_init(struct ptlrpc_request *req,
@@ -406,19 +401,18 @@ static void seq_thread_info_fini(struct seq_thread_info *info)
 
 static int seq_handle(struct ptlrpc_request *req)
 {
-        const struct lu_context *ctx;
+        const struct lu_env *env;
         struct seq_thread_info *info;
         int rc;
-        
-        ctx = req->rq_svc_thread->t_ctx;
-        LASSERT(ctx != NULL);
-        LASSERT(ctx->lc_thread == req->rq_svc_thread);
 
-        info = lu_context_key_get(ctx, &seq_thread_key);
+        env = req->rq_svc_thread->t_env;
+        LASSERT(env != NULL);
+
+        info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
         LASSERT(info != NULL);
 
         seq_thread_info_init(req, info);
-        rc = seq_req_handle(req, info);
+        rc = seq_req_handle(req, env, info);
         seq_thread_info_fini(info);
 
         return rc;
@@ -490,7 +484,7 @@ int seq_server_init(struct lu_server_seq *seq,
                     struct dt_device *dev,
                     const char *prefix,
                     enum lu_mgr_type type,
-                    const struct lu_context *ctx)
+                    const struct lu_env *env)
 {
         int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
         ENTRY;
@@ -505,18 +499,18 @@ int seq_server_init(struct lu_server_seq *seq,
         seq->lss_super_width = LUSTRE_SEQ_SUPER_WIDTH;
         seq->lss_meta_width = LUSTRE_SEQ_META_WIDTH;
 
-        snprintf(seq->lss_name, sizeof(seq->lss_name), 
+        snprintf(seq->lss_name, sizeof(seq->lss_name),
                  "%s-%s", (is_srv ? "srv" : "ctl"), prefix);
 
         seq->lss_space = LUSTRE_SEQ_SPACE_RANGE;
         seq->lss_super = LUSTRE_SEQ_ZERO_RANGE;
 
-        rc = seq_store_init(seq, ctx, dev);
+        rc = seq_store_init(seq, env, dev);
         if (rc)
                 GOTO(out, rc);
 
         /* request backing store for saved sequence info */
-        rc = seq_store_read(seq, ctx);
+        rc = seq_store_read(seq, env);
         if (rc == -ENODATA) {
                 CDEBUG(D_INFO|D_WARNING, "%s: No data found "
                        "on storage, %s\n", seq->lss_name,
@@ -535,18 +529,18 @@ int seq_server_init(struct lu_server_seq *seq,
 	EXIT;
 out:
 	if (rc)
-		seq_server_fini(seq, ctx);
+		seq_server_fini(seq, env);
 	return rc;
 }
 EXPORT_SYMBOL(seq_server_init);
 
 void seq_server_fini(struct lu_server_seq *seq,
-                     const struct lu_context *ctx)
+                     const struct lu_env *env)
 {
         ENTRY;
 
         seq_server_proc_fini(seq);
-        seq_store_fini(seq, ctx);
+        seq_store_fini(seq, env);
 
         EXIT;
 }
@@ -558,13 +552,13 @@ static int __init fid_mod_init(void)
 {
         printk(KERN_INFO "Lustre: Sequence Manager; "
                "info@clusterfs.com\n");
-        
+
         seq_type_proc_dir = lprocfs_register(LUSTRE_SEQ_NAME,
                                              proc_lustre_root,
                                              NULL, NULL);
         if (IS_ERR(seq_type_proc_dir))
                 return PTR_ERR(seq_type_proc_dir);
-        
+
         lu_context_key_register(&seq_thread_key);
         return 0;
 }

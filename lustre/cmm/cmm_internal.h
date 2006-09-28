@@ -6,7 +6,7 @@
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
  *   Author: Mike Pershin <tappro@clusterfs.com>
- *   
+ *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
  *
@@ -118,16 +118,16 @@ static inline struct md_object *cmm2child_obj(struct cmm_object *o)
 }
 
 /* cmm_object.c */
-struct lu_object *cmm_object_alloc(const struct lu_context *ctx,
+struct lu_object *cmm_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *);
 
 
-int cmm_upcall(const struct lu_context *ctxt, struct md_device *md,
+int cmm_upcall(const struct lu_env *env, struct md_device *md,
                enum md_upcall_event ev);
 #ifdef HAVE_SPLIT_SUPPORT
 /* cmm_split.c */
-int cml_try_to_split(const struct lu_context *ctx,
+int cml_try_to_split(const struct lu_env *env,
                      struct md_object *mo, struct md_ucred *uc);
 #endif
 

@@ -66,35 +66,35 @@ struct dt_device_operations {
         /*
          * Return device-wide statistics.
          */
-        int   (*dt_statfs)(const struct lu_context *ctx,
+        int   (*dt_statfs)(const struct lu_env *env,
                            struct dt_device *dev, struct kstatfs *sfs);
         /*
          * Start transaction, described by @param.
          */
-        struct thandle *(*dt_trans_start)(const struct lu_context *ctx,
+        struct thandle *(*dt_trans_start)(const struct lu_env *env,
                                           struct dt_device *dev,
                                           struct txn_param *param);
         /*
          * Finish previously started transaction.
          */
-        void  (*dt_trans_stop)(const struct lu_context *ctx,
+        void  (*dt_trans_stop)(const struct lu_env *env,
                                struct thandle *th);
         /*
          * Return fid of root index object.
          */
-        int   (*dt_root_get)(const struct lu_context *ctx,
+        int   (*dt_root_get)(const struct lu_env *env,
                              struct dt_device *dev, struct lu_fid *f);
         /*
          * Return device configuration data.
          */
-        void  (*dt_conf_get)(const struct lu_context *ctx,
+        void  (*dt_conf_get)(const struct lu_env *env,
                              const struct dt_device *dev,
                              struct dt_device_param *param);
         /*
          *  handling device state, mostly for tests
          */
-        int   (*dt_sync)(const struct lu_context *ctx, struct dt_device *dev);
-        void  (*dt_ro)(const struct lu_context *ctx, struct dt_device *dev);
+        int   (*dt_sync)(const struct lu_env *env, struct dt_device *dev);
+        void  (*dt_ro)(const struct lu_env *env, struct dt_device *dev);
 
 };
 
@@ -132,13 +132,13 @@ extern const struct dt_index_features dt_directory_features;
  * Per-dt-object operations.
  */
 struct dt_object_operations {
-        void  (*do_read_lock)(const struct lu_context *ctx,
+        void  (*do_read_lock)(const struct lu_env *env,
                               struct dt_object *dt);
-        void  (*do_write_lock)(const struct lu_context *ctx,
+        void  (*do_write_lock)(const struct lu_env *env,
                                struct dt_object *dt);
-        void  (*do_read_unlock)(const struct lu_context *ctx,
+        void  (*do_read_unlock)(const struct lu_env *env,
                                 struct dt_object *dt);
-        void  (*do_write_unlock)(const struct lu_context *ctx,
+        void  (*do_write_unlock)(const struct lu_env *env,
                                  struct dt_object *dt);
         /*
          * Note: following ->do_{x,}attr_{set,get}() operations are very
@@ -155,14 +155,14 @@ struct dt_object_operations {
          *
          * precondition: lu_object_exists(&dt->do_lu);
          */
-        int   (*do_attr_get)(const struct lu_context *ctxt,
+        int   (*do_attr_get)(const struct lu_env *env,
                              struct dt_object *dt, struct lu_attr *attr);
         /*
          * Set standard attributes.
          *
          * precondition: dt_object_exists(dt);
          */
-        int   (*do_attr_set)(const struct lu_context *ctxt,
+        int   (*do_attr_set)(const struct lu_env *env,
                              struct dt_object *dt,
                              const struct lu_attr *attr,
                              struct thandle *handle);
@@ -171,7 +171,7 @@ struct dt_object_operations {
          *
          * precondition: dt_object_exists(dt);
          */
-        int   (*do_xattr_get)(const struct lu_context *ctxt,
+        int   (*do_xattr_get)(const struct lu_env *env,
                               struct dt_object *dt,
                               void *buf, int buf_len, const char *name);
         /*
@@ -181,7 +181,7 @@ struct dt_object_operations {
          *
          * precondition: dt_object_exists(dt);
          */
-        int   (*do_xattr_set)(const struct lu_context *ctxt,
+        int   (*do_xattr_set)(const struct lu_env *env,
                               struct dt_object *dt,
                               const void *buf, int buf_len,
                               const char *name, int fl, struct thandle *handle);
@@ -190,7 +190,7 @@ struct dt_object_operations {
          *
          * precondition: dt_object_exists(dt);
          */
-        int   (*do_xattr_del)(const struct lu_context *ctxt,
+        int   (*do_xattr_del)(const struct lu_env *env,
                               struct dt_object *dt,
                               const char *name, struct thandle *handle);
         /*
@@ -199,7 +199,7 @@ struct dt_object_operations {
          *
          * precondition: dt_object_exists(dt);
          */
-        int   (*do_xattr_list)(const struct lu_context *ctxt,
+        int   (*do_xattr_list)(const struct lu_env *env,
                                struct dt_object *dt, void *buf, int buf_len);
         /*
          * Create new object on this device.
@@ -207,7 +207,7 @@ struct dt_object_operations {
          * precondition: !dt_object_exists(dt);
          * postcondition: ergo(result == 0, dt_object_exists(dt));
          */
-        int   (*do_create)(const struct lu_context *ctxt, struct dt_object *dt,
+        int   (*do_create)(const struct lu_env *env, struct dt_object *dt,
                            struct lu_attr *attr, struct thandle *th);
         /*
          * Announce that this object is going to be used as an index. This
@@ -217,23 +217,23 @@ struct dt_object_operations {
          * Also probes for features. Operation is successful if all required
          * features are supported.
          */
-        int   (*do_index_try)(const struct lu_context *ctxt,
+        int   (*do_index_try)(const struct lu_env *env,
                               struct dt_object *dt,
                               const struct dt_index_features *feat);
         /*
          * Add nlink of the object
          * precondition: dt_object_exists(dt);
          */
-        void  (*do_ref_add)(const struct lu_context *ctxt,
+        void  (*do_ref_add)(const struct lu_env *env,
                             struct dt_object *dt, struct thandle *th);
         /*
          * Del nlink of the object
          * precondition: dt_object_exists(dt);
          */
-        void  (*do_ref_del)(const struct lu_context *ctxt,
+        void  (*do_ref_del)(const struct lu_env *env,
                             struct dt_object *dt, struct thandle *th);
 
-        int (*do_readpage)(const struct lu_context *ctxt,
+        int (*do_readpage)(const struct lu_env *env,
                            struct dt_object *dt, const struct lu_rdpg *rdpg);
 };
 
@@ -244,12 +244,12 @@ struct dt_body_operations {
         /*
          * precondition: dt_object_exists(dt);
          */
-        ssize_t (*dbo_read)(const struct lu_context *ctxt, struct dt_object *dt,
+        ssize_t (*dbo_read)(const struct lu_env *env, struct dt_object *dt,
                             void *buf, size_t count, loff_t *pos);
         /*
          * precondition: dt_object_exists(dt);
          */
-        ssize_t (*dbo_write)(const struct lu_context *ctxt,
+        ssize_t (*dbo_write)(const struct lu_env *env,
                              struct dt_object *dt, const void *buf,
                              size_t count, loff_t *pos, struct thandle *handle);
 };
@@ -276,18 +276,18 @@ struct dt_index_operations {
         /*
          * precondition: dt_object_exists(dt);
          */
-        int (*dio_lookup)(const struct lu_context *ctxt, struct dt_object *dt,
+        int (*dio_lookup)(const struct lu_env *env, struct dt_object *dt,
                           struct dt_rec *rec, const struct dt_key *key);
         /*
          * precondition: dt_object_exists(dt);
          */
-        int (*dio_insert)(const struct lu_context *ctxt, struct dt_object *dt,
+        int (*dio_insert)(const struct lu_env *env, struct dt_object *dt,
                           const struct dt_rec *rec, const struct dt_key *key,
                           struct thandle *handle);
         /*
          * precondition: dt_object_exists(dt);
          */
-        int (*dio_delete)(const struct lu_context *ctxt, struct dt_object *dt,
+        int (*dio_delete)(const struct lu_env *env, struct dt_object *dt,
                           const struct dt_key *key, struct thandle *handle);
         /*
          * Iterator interface
@@ -298,28 +298,28 @@ struct dt_index_operations {
                  *
                  * precondition: dt_object_exists(dt);
                  */
-                struct dt_it *(*init)(const struct lu_context *ctxt,
+                struct dt_it *(*init)(const struct lu_env *env,
                                       struct dt_object *dt, int writable);
-                void          (*fini)(const struct lu_context *ctxt,
+                void          (*fini)(const struct lu_env *env,
                                       struct dt_it *di);
-                int            (*get)(const struct lu_context *ctxt,
+                int            (*get)(const struct lu_env *env,
                                       struct dt_it *di,
                                       const struct dt_key *key);
-                void           (*put)(const struct lu_context *ctxt,
+                void           (*put)(const struct lu_env *env,
                                       struct dt_it *di);
-                int            (*del)(const struct lu_context *ctxt,
+                int            (*del)(const struct lu_env *env,
                                       struct dt_it *di, struct thandle *th);
-                int           (*next)(const struct lu_context *ctxt,
+                int           (*next)(const struct lu_env *env,
                                       struct dt_it *di);
-                struct dt_key *(*key)(const struct lu_context *ctxt,
+                struct dt_key *(*key)(const struct lu_env *env,
                                       const struct dt_it *di);
-                int       (*key_size)(const struct lu_context *ctxt,
+                int       (*key_size)(const struct lu_env *env,
                                       const struct dt_it *di);
-                struct dt_rec *(*rec)(const struct lu_context *ctxt,
+                struct dt_rec *(*rec)(const struct lu_env *env,
                                       const struct dt_it *di);
-                __u32        (*store)(const struct lu_context *ctxt,
+                __u32        (*store)(const struct lu_env *env,
                                       const struct dt_it *di);
-                int           (*load)(const struct lu_context *ctxt,
+                int           (*load)(const struct lu_env *env,
                                       const struct dt_it *di, __u32 hash);
         } dio_it;
 };
@@ -410,11 +410,11 @@ struct thandle {
  * before each transaction commit.
  */
 struct dt_txn_callback {
-        int (*dtc_txn_start)(const struct lu_context *ctx,
+        int (*dtc_txn_start)(const struct lu_env *env,
                              struct txn_param *param, void *cookie);
-        int (*dtc_txn_stop)(const struct lu_context *ctx,
+        int (*dtc_txn_stop)(const struct lu_env *env,
                             struct thandle *txn, void *cookie);
-        int (*dtc_txn_commit)(const struct lu_context *ctx,
+        int (*dtc_txn_commit)(const struct lu_env *env,
                               struct thandle *txn, void *cookie);
         void            *dtc_cookie;
         struct list_head dtc_linkage;
@@ -423,13 +423,13 @@ struct dt_txn_callback {
 void dt_txn_callback_add(struct dt_device *dev, struct dt_txn_callback *cb);
 void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb);
 
-int dt_txn_hook_start(const struct lu_context *ctx,
+int dt_txn_hook_start(const struct lu_env *env,
                       struct dt_device *dev, struct txn_param *param);
-int dt_txn_hook_stop(const struct lu_context *ctx, struct thandle *txn);
-int dt_txn_hook_commit(const struct lu_context *ctx, struct thandle *txn);
+int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn);
+int dt_txn_hook_commit(const struct lu_env *env, struct thandle *txn);
 
-int dt_try_as_dir(const struct lu_context *ctx, struct dt_object *obj);
-struct dt_object *dt_store_open(const struct lu_context *ctx,
+int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj);
+struct dt_object *dt_store_open(const struct lu_env *env,
                                 struct dt_device *dt, const char *name,
                                 struct lu_fid *fid);
 

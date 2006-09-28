@@ -51,17 +51,17 @@ struct seq_thread_info {
 extern struct lu_context_key seq_thread_key;
 
 int seq_store_init(struct lu_server_seq *seq,
-                   const struct lu_context *ctx,
+                   const struct lu_env *env,
                    struct dt_device *dt);
 
 void seq_store_fini(struct lu_server_seq *seq,
-                    const struct lu_context *ctx);
+                    const struct lu_env *env);
 
 int seq_store_write(struct lu_server_seq *seq,
-                    const struct lu_context *ctx);
+                    const struct lu_env *env);
 
 int seq_store_read(struct lu_server_seq *seq,
-                   const struct lu_context *ctx);
+                   const struct lu_env *env);
 
 #ifdef LPROCFS
 extern struct lprocfs_vars seq_server_proc_list[];

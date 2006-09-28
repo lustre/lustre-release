@@ -51,36 +51,36 @@ static inline int lu_device_is_cmm(struct lu_device *d)
 	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &cmm_lu_ops);
 }
 
-int cmm_root_get(const struct lu_context *ctx, struct md_device *md,
+int cmm_root_get(const struct lu_env *env, struct md_device *md,
                  struct lu_fid *fid, struct md_ucred *uc)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
         /* valid only on master MDS */
         if (cmm_dev->cmm_local_num == 0)
-                return cmm_child_ops(cmm_dev)->mdo_root_get(ctx,
+                return cmm_child_ops(cmm_dev)->mdo_root_get(env,
                                      cmm_dev->cmm_child, fid, uc);
         else
                 return -EINVAL;
 }
 
-static int cmm_statfs(const struct lu_context *ctxt, struct md_device *md,
+static int cmm_statfs(const struct lu_env *env, struct md_device *md,
                       struct kstatfs *sfs, struct md_ucred *uc) {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
 	int rc;
 
         ENTRY;
-        rc = cmm_child_ops(cmm_dev)->mdo_statfs(ctxt,
+        rc = cmm_child_ops(cmm_dev)->mdo_statfs(env,
                                                 cmm_dev->cmm_child, sfs, uc);
         RETURN (rc);
 }
 
-static int cmm_maxsize_get(const struct lu_context *ctxt, struct md_device *md,
+static int cmm_maxsize_get(const struct lu_env *env, struct md_device *md,
                            int *md_size, int *cookie_size, struct md_ucred *uc)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
         int rc;
         ENTRY;
-        rc = cmm_child_ops(cmm_dev)->mdo_maxsize_get(ctxt, cmm_dev->cmm_child,
+        rc = cmm_child_ops(cmm_dev)->mdo_maxsize_get(env, cmm_dev->cmm_child,
                                                      md_size, cookie_size, uc);
         RETURN(rc);
 }
@@ -97,14 +97,14 @@ static int cmm_init_capa_keys(struct md_device *md,
         RETURN(rc);
 }
 
-static int cmm_update_capa_key(const struct lu_context *ctxt,
+static int cmm_update_capa_key(const struct lu_env *env,
                                struct md_device *md,
                                struct lustre_capa_key *key)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
         int rc;
         ENTRY;
-        rc = cmm_child_ops(cmm_dev)->mdo_update_capa_key(ctxt,
+        rc = cmm_child_ops(cmm_dev)->mdo_update_capa_key(env,
                                                          cmm_dev->cmm_child,
                                                          key);
         RETURN(rc);
@@ -122,7 +122,7 @@ extern struct lu_device_type mdc_device_type;
 
 /* --- cmm_lu_operations --- */
 /* add new MDC to the CMM, create MDC lu_device and connect it to mdc_obd */
-static int cmm_add_mdc(const struct lu_context *ctx,
+static int cmm_add_mdc(const struct lu_env *env,
                        struct cmm_device *cm, struct lustre_cfg *cfg)
 {
         struct lu_device_type *ldt = &mdc_device_type;
@@ -152,24 +152,24 @@ static int cmm_add_mdc(const struct lu_context *ctx,
                 }
         }
         spin_unlock(&cm->cmm_tgt_guard);
-        ld = ldt->ldt_ops->ldto_device_alloc(ctx, ldt, cfg);
+        ld = ldt->ldt_ops->ldto_device_alloc(env, ldt, cfg);
         ld->ld_site = cmm2lu_dev(cm)->ld_site;
 
-        rc = ldt->ldt_ops->ldto_device_init(ctx, ld, NULL);
+        rc = ldt->ldt_ops->ldto_device_init(env, ld, NULL);
         if (rc) {
-                ldt->ldt_ops->ldto_device_free(ctx, ld);
+                ldt->ldt_ops->ldto_device_free(env, ld);
                 RETURN (rc);
         }
         /* pass config to the just created MDC */
-        rc = ld->ld_ops->ldo_process_config(ctx, ld, cfg);
+        rc = ld->ld_ops->ldo_process_config(env, ld, cfg);
         if (rc == 0) {
                 spin_lock(&cm->cmm_tgt_guard);
                 list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
                                          mc_linkage) {
                         if (mc->mc_num == mdc_num) {
                                 spin_unlock(&cm->cmm_tgt_guard);
-                                ldt->ldt_ops->ldto_device_fini(ctx, ld);
-                                ldt->ldt_ops->ldto_device_free(ctx, ld);
+                                ldt->ldt_ops->ldto_device_fini(env, ld);
+                                ldt->ldt_ops->ldto_device_free(env, ld);
                                 RETURN(-EEXIST);
                         }
                 }
@@ -185,13 +185,13 @@ static int cmm_add_mdc(const struct lu_context *ctx,
                 target.ft_srv = NULL;
                 target.ft_idx = mc->mc_num;
                 target.ft_exp = mc->mc_desc.cl_exp;
-        
+
                 fld_client_add_target(ls->ls_client_fld, &target);
         }
         RETURN(rc);
 }
 
-static void cmm_device_shutdown(const struct lu_context *ctx,
+static void cmm_device_shutdown(const struct lu_env *env,
                                 struct cmm_device *cm)
 {
         struct mdc_device *mc, *tmp;
@@ -204,20 +204,20 @@ static void cmm_device_shutdown(const struct lu_context *ctx,
 
                 list_del_init(&mc->mc_linkage);
                 lu_device_put(cmm2lu_dev(cm));
-                ld_m->ld_type->ldt_ops->ldto_device_fini(ctx, ld_m);
-                ld_m->ld_type->ldt_ops->ldto_device_free(ctx, ld_m);
+                ld_m->ld_type->ldt_ops->ldto_device_fini(env, ld_m);
+                ld_m->ld_type->ldt_ops->ldto_device_free(env, ld_m);
                 cm->cmm_tgt_count--;
         }
         spin_unlock(&cm->cmm_tgt_guard);
 
         EXIT;
 }
-static int cmm_device_mount(const struct lu_context *ctx,
+static int cmm_device_mount(const struct lu_env *env,
                             struct cmm_device *m, struct lustre_cfg *cfg)
 {
         const char *index = lustre_cfg_string(cfg, 2);
         char *p;
-        
+
         LASSERT(index != NULL);
 
         m->cmm_local_num = simple_strtol(index, &p, 10);
@@ -225,11 +225,11 @@ static int cmm_device_mount(const struct lu_context *ctx,
                 CERROR("Invalid index in lustre_cgf\n");
                 RETURN(-EINVAL);
         }
-        
+
         RETURN(0);
 }
 
-static int cmm_process_config(const struct lu_context *ctx,
+static int cmm_process_config(const struct lu_env *env,
                               struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct cmm_device *m = lu2cmm_dev(d);
@@ -239,7 +239,7 @@ static int cmm_process_config(const struct lu_context *ctx,
 
         switch(cfg->lcfg_command) {
         case LCFG_ADD_MDC:
-                err = cmm_add_mdc(ctx, m, cfg);
+                err = cmm_add_mdc(env, m, cfg);
                 /* the first ADD_MDC can be counted as setup is finished */
                 if ((m->cmm_flags & CMM_INITIALIZED) == 0)
                         m->cmm_flags |= CMM_INITIALIZED;
@@ -247,29 +247,29 @@ static int cmm_process_config(const struct lu_context *ctx,
         case LCFG_SETUP:
         {
                 /* lower layers should be set up at first */
-                err = next->ld_ops->ldo_process_config(ctx, next, cfg);
+                err = next->ld_ops->ldo_process_config(env, next, cfg);
                 if (err == 0)
-                        err = cmm_device_mount(ctx, m, cfg);
+                        err = cmm_device_mount(env, m, cfg);
                 break;
         }
         case LCFG_CLEANUP:
         {
-                cmm_device_shutdown(ctx, m);
+                cmm_device_shutdown(env, m);
         }
         default:
-                err = next->ld_ops->ldo_process_config(ctx, next, cfg);
+                err = next->ld_ops->ldo_process_config(env, next, cfg);
         }
         RETURN(err);
 }
 
-static int cmm_recovery_complete(const struct lu_context *ctxt,
+static int cmm_recovery_complete(const struct lu_env *env,
                                  struct lu_device *d)
 {
         struct cmm_device *m = lu2cmm_dev(d);
         struct lu_device *next = md2lu_dev(m->cmm_child);
         int rc;
         ENTRY;
-        rc = next->ld_ops->ldo_recovery_complete(ctxt, next);
+        rc = next->ld_ops->ldo_recovery_complete(env, next);
         RETURN(rc);
 }
 
@@ -280,7 +280,7 @@ static struct lu_device_operations cmm_lu_ops = {
 };
 
 /* --- lu_device_type operations --- */
-int cmm_upcall(const struct lu_context *ctxt, struct md_device *md,
+int cmm_upcall(const struct lu_env *env, struct md_device *md,
                enum md_upcall_event ev)
 {
         struct md_device *upcall_dev;
@@ -290,12 +290,12 @@ int cmm_upcall(const struct lu_context *ctxt, struct md_device *md,
         upcall_dev = md->md_upcall.mu_upcall_dev;
 
         LASSERT(upcall_dev);
-        rc = upcall_dev->md_upcall.mu_upcall(ctxt, md->md_upcall.mu_upcall_dev, ev);
+        rc = upcall_dev->md_upcall.mu_upcall(env, md->md_upcall.mu_upcall_dev, ev);
 
         RETURN(rc);
 }
 
-static struct lu_device *cmm_device_alloc(const struct lu_context *ctx,
+static struct lu_device *cmm_device_alloc(const struct lu_env *env,
                                           struct lu_device_type *t,
                                           struct lustre_cfg *cfg)
 {
@@ -318,7 +318,7 @@ static struct lu_device *cmm_device_alloc(const struct lu_context *ctx,
         RETURN (l);
 }
 
-static void cmm_device_free(const struct lu_context *ctx, struct lu_device *d)
+static void cmm_device_free(const struct lu_env *env, struct lu_device *d)
 {
         struct cmm_device *m = lu2cmm_dev(d);
 
@@ -329,8 +329,8 @@ static void cmm_device_free(const struct lu_context *ctx, struct lu_device *d)
 }
 
 /* context key constructor/destructor */
-static void *cmm_thread_init(const struct lu_context *ctx,
-                             struct lu_context_key *key)
+static void *cmm_key_init(const struct lu_context *ctx,
+                          struct lu_context_key *key)
 {
         struct cmm_thread_info *info;
 
@@ -341,8 +341,8 @@ static void *cmm_thread_init(const struct lu_context *ctx,
         return info;
 }
 
-static void cmm_thread_fini(const struct lu_context *ctx,
-                            struct lu_context_key *key, void *data)
+static void cmm_key_fini(const struct lu_context *ctx,
+                         struct lu_context_key *key, void *data)
 {
         struct cmm_thread_info *info = data;
         OBD_FREE_PTR(info);
@@ -350,8 +350,8 @@ static void cmm_thread_fini(const struct lu_context *ctx,
 
 struct lu_context_key cmm_thread_key = {
         .lct_tags = LCT_MD_THREAD,
-        .lct_init = cmm_thread_init,
-        .lct_fini = cmm_thread_fini
+        .lct_init = cmm_key_init,
+        .lct_fini = cmm_key_fini
 };
 
 static int cmm_type_init(struct lu_device_type *t)
@@ -364,7 +364,7 @@ static void cmm_type_fini(struct lu_device_type *t)
         lu_context_key_degister(&cmm_thread_key);
 }
 
-static int cmm_device_init(const struct lu_context *ctx,
+static int cmm_device_init(const struct lu_env *env,
                            struct lu_device *d, struct lu_device *next)
 {
         struct cmm_device *m = lu2cmm_dev(d);
@@ -379,7 +379,7 @@ static int cmm_device_init(const struct lu_context *ctx,
         RETURN(err);
 }
 
-static struct lu_device *cmm_device_fini(const struct lu_context *ctx,
+static struct lu_device *cmm_device_fini(const struct lu_env *env,
                                          struct lu_device *ld)
 {
 	struct cmm_device *cm = lu2cmm_dev(ld);

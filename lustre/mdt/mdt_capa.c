@@ -3,7 +3,7 @@
  *
  *  lustre/mdt/mdt_capa.c
  *  Lustre Metadata Target (mdt) capability key read/write/update.
- * 
+ *
  *  Copyright (C) 2005 Cluster File Systems, Inc.
  *   Author: Lai Siyao <lsy@clusterfs.com>
  *
@@ -68,7 +68,7 @@ static inline void lck_le_to_cpu(struct lustre_capa_key *tgt,
         memcpy(tgt->lk_key, src->lk_key, sizeof(src->lk_key));
 }
 
-static int write_capa_keys(const struct lu_context *ctx,
+static int write_capa_keys(const struct lu_env *env,
                            struct mdt_device *mdt,
                            struct lustre_capa_key *keys)
 {
@@ -78,9 +78,9 @@ static int write_capa_keys(const struct lu_context *ctx,
         loff_t off = 0;
         int i, rc;
 
-        mti = lu_context_key_get(ctx, &mdt_thread_key);
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
 
-        th = mdt_trans_start(ctx, mdt, MDT_TXN_CAPA_KEYS_WRITE_CREDITS);
+        th = mdt_trans_start(env, mdt, MDT_TXN_CAPA_KEYS_WRITE_CREDITS);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 
@@ -89,19 +89,19 @@ static int write_capa_keys(const struct lu_context *ctx,
         for (i = 0; i < 2; i++) {
                 lck_cpu_to_le(tmp, &keys[i]);
 
-                rc = mdt_record_write(ctx, mdt->mdt_ck_obj, tmp, sizeof(*tmp),
+                rc = mdt_record_write(env, mdt->mdt_ck_obj, tmp, sizeof(*tmp),
                                       &off, th);
                 if (rc)
                         break;
         }
 
-        mdt_trans_stop(ctx, mdt, th);
+        mdt_trans_stop(env, mdt, th);
 
         CDEBUG(D_INFO, "write capability keys rc = %d:\n", rc);
         return rc;
 }
 
-static int read_capa_keys(const struct lu_context *ctx,
+static int read_capa_keys(const struct lu_env *env,
                           struct mdt_device *mdt,
                           struct lustre_capa_key *keys)
 {
@@ -110,11 +110,11 @@ static int read_capa_keys(const struct lu_context *ctx,
         loff_t off = 0;
         int i, rc;
 
-        mti = lu_context_key_get(ctx, &mdt_thread_key);
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         tmp = &mti->mti_capa_key;
 
         for (i = 0; i < 2; i++) {
-                rc = mdt_record_read(ctx, mdt->mdt_ck_obj, tmp, sizeof(*tmp),
+                rc = mdt_record_read(env, mdt->mdt_ck_obj, tmp, sizeof(*tmp),
                                      &off);
                 if (rc)
                         return rc;
@@ -127,7 +127,7 @@ static int read_capa_keys(const struct lu_context *ctx,
         return 0;
 }
 
-int mdt_capa_keys_init(const struct lu_context *ctx, struct mdt_device *mdt)
+int mdt_capa_keys_init(const struct lu_env *env, struct mdt_device *mdt)
 {
         struct lustre_capa_key  *keys = mdt->mdt_capa_keys;
         struct mdt_thread_info  *mti;
@@ -140,14 +140,14 @@ int mdt_capa_keys_init(const struct lu_context *ctx, struct mdt_device *mdt)
 
         mdsnum = mdt->mdt_md_dev.md_lu_dev.ld_site->ls_node_id;
 
-        mti = lu_context_key_get(ctx, &mdt_thread_key);
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         LASSERT(mti != NULL);
         la = &mti->mti_attr.ma_attr;
 
         obj = mdt->mdt_ck_obj;
-        obj->do_ops->do_read_lock(ctx, obj);
-        rc = obj->do_ops->do_attr_get(ctx, mdt->mdt_ck_obj, la);
-        obj->do_ops->do_read_unlock(ctx, obj);
+        obj->do_ops->do_read_lock(env, obj);
+        rc = obj->do_ops->do_attr_get(env, mdt->mdt_ck_obj, la);
+        obj->do_ops->do_read_unlock(env, obj);
         if (rc)
                 RETURN(rc);
 
@@ -160,13 +160,13 @@ int mdt_capa_keys_init(const struct lu_context *ctx, struct mdt_device *mdt)
                         DEBUG_CAPA_KEY(D_SEC, &keys[i], "initializing");
                 }
 
-                rc = write_capa_keys(ctx, mdt, keys);
+                rc = write_capa_keys(env, mdt, keys);
                 if (rc) {
                         CERROR("error writing MDS %s: rc %d\n", CAPA_KEYS, rc);
                         RETURN(rc);
                 }
         } else {
-                rc = read_capa_keys(ctx, mdt, keys);
+                rc = read_capa_keys(env, mdt, keys);
                 if (rc) {
                         CERROR("error reading MDS %s: rc %d\n", CAPA_KEYS, rc);
                         RETURN(rc);
@@ -194,7 +194,7 @@ static int mdt_ck_thread_main(void *args)
         struct mdt_device      *mdt = args;
         struct ptlrpc_thread   *thread = &mdt->mdt_ck_thread;
         struct lustre_capa_key *tmp, *key = red_capa_key(mdt);
-        struct lu_context       ctx;
+        struct lu_env           env;
         struct mdt_thread_info *info;
         struct md_device       *next;
         struct l_wait_info      lwi = { 0 };
@@ -208,15 +208,14 @@ static int mdt_ck_thread_main(void *args)
         thread->t_flags = SVC_RUNNING;
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
-        rc = lu_context_init(&ctx, LCT_MD_THREAD);
+        rc = lu_env_init(&env, NULL, LCT_MD_THREAD);
         if (rc)
                 RETURN(rc);
 
-        thread->t_ctx = &ctx;
-        ctx.lc_thread = thread;
+        thread->t_env = &env;
+        env.le_ctx.lc_thread = thread;
 
-        lu_context_enter(&ctx);
-        info = lu_context_key_get(&ctx, &mdt_thread_key);
+        info = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
         LASSERT(info != NULL);
 
         tmp = &info->mti_capa_key;
@@ -237,9 +236,9 @@ static int mdt_ck_thread_main(void *args)
                 make_capa_key(tmp, mdsnum, key->lk_keyid);
 
                 next = mdt->mdt_child;
-                rc = next->md_ops->mdo_update_capa_key(&ctx, next, tmp);
+                rc = next->md_ops->mdo_update_capa_key(&env, next, tmp);
                 if (!rc) {
-                        rc = write_capa_keys(&ctx, mdt, mdt->mdt_capa_keys);
+                        rc = write_capa_keys(&env, mdt, mdt->mdt_capa_keys);
                         if (!rc) {
                                 spin_lock(&capa_lock);
                                 mdt->mdt_capa_keys[0] = *key;
@@ -260,8 +259,7 @@ static int mdt_ck_thread_main(void *args)
                 mod_timer(&mdt->mdt_ck_timer, mdt->mdt_ck_expiry);
                 CDEBUG(D_SEC, "mdt_ck_timer %lu\n", mdt->mdt_ck_expiry);
         }
-        lu_context_exit(&ctx);
-        lu_context_fini(&ctx);
+        lu_env_fini(&env);
 
         thread->t_flags = SVC_STOPPED;
         cfs_waitq_signal(&thread->t_ctl_waitq);

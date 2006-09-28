@@ -330,7 +330,7 @@ struct filter_obd {
         struct semaphore     fo_init_lock;      /* group initialization lock */
         int                  fo_committed_group;
 
-        
+
         spinlock_t           fo_objidlock;      /* protect fo_lastobjid */
         spinlock_t           fo_translock;      /* protect fsd_last_transno */
         struct file         *fo_rcvd_filp;
@@ -865,7 +865,7 @@ struct obd_device {
         unsigned int obd_attached:1,      /* finished attach */
                      obd_set_up:1,        /* finished setup */
                      obd_recovering:1,    /* there are recoverable clients */
-                     obd_abort_recovery:1,/* somebody ioctl'ed us to abort */ 
+                     obd_abort_recovery:1,/* somebody ioctl'ed us to abort */
                      obd_replayable:1,    /* recovery is enabled; inform clients */
                      obd_no_transno:1,    /* no committed-transno notification */
                      obd_no_recov:1,      /* fail instead of retry messages */
@@ -997,7 +997,7 @@ struct obd_ops {
          * data. @ocd->ocd_connect_flags is modified to reflect flags actually
          * granted by the target, which are guaranteed to be a subset of flags
          * asked for. If @ocd == NULL, use default parameters. */
-        int (*o_connect)(const struct lu_context *ctx,
+        int (*o_connect)(const struct lu_env *env,
                          struct lustre_handle *conn, struct obd_device *src,
                          struct obd_uuid *cluuid, struct obd_connect_data *ocd);
         int (*o_reconnect)(struct obd_export *exp, struct obd_device *src,
@@ -1121,12 +1121,12 @@ struct obd_ops {
                              int cmd, obd_off *);
 
         /* llog related obd_methods */
-        int (*o_llog_init)(struct obd_device *obd, struct obd_llogs *llog, 
-                           struct obd_device *disk_obd, int count, 
+        int (*o_llog_init)(struct obd_device *obd, struct obd_llogs *llog,
+                           struct obd_device *disk_obd, int count,
                            struct llog_catid *logid, struct obd_uuid *uuid);
         int (*o_llog_finish)(struct obd_device *obd, int count);
         int (*o_llog_connect)(struct obd_export *, struct llogd_conn_body *);
-        
+
         /* metadata-only methods */
         int (*o_pin)(struct obd_export *, const struct lu_fid *fid,
                      struct obd_capa *, struct obd_client_handle *, int flag);
@@ -1210,7 +1210,7 @@ struct md_ops {
         int (*m_init_ea_size)(struct obd_export *, int, int, int);
 
         int (*m_get_lustre_md)(struct obd_export *, struct ptlrpc_request *,
-                               int, struct obd_export *, struct obd_export *, 
+                               int, struct obd_export *, struct obd_export *,
                                struct lustre_md *);
 
         int (*m_free_lustre_md)(struct obd_export *, struct lustre_md *);

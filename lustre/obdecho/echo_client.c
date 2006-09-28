@@ -818,7 +818,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
                 /* sleep until we have a page to send */
                 spin_unlock(&eas.eas_lock);
-                rc = wait_event_interruptible(eas.eas_waitq, 
+                rc = wait_event_interruptible(eas.eas_waitq,
                                               eas_should_wake(&eas));
                 spin_lock(&eas.eas_lock);
                 if (rc && !eas.eas_rc)
@@ -878,7 +878,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
         /* now we just spin waiting for all the rpcs to complete */
         while(eas.eas_in_flight) {
                 spin_unlock(&eas.eas_lock);
-                wait_event_interruptible(eas.eas_waitq, 
+                wait_event_interruptible(eas.eas_waitq,
                                          eas.eas_in_flight == 0);
                 spin_lock(&eas.eas_lock);
         }
@@ -1418,7 +1418,7 @@ static int echo_client_cleanup(struct obd_device *obddev)
         RETURN(rc);
 }
 
-static int echo_client_connect(const struct lu_context *ctx,
+static int echo_client_connect(const struct lu_env *env,
                                struct lustre_handle *conn,
                                struct obd_device *src, struct obd_uuid *cluuid,
                                struct obd_connect_data *data)
