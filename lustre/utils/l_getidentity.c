@@ -52,9 +52,9 @@ static char *progname;
 static void usage(void)
 {
         fprintf(stderr,
-                "\nusage: %s {mdsname} {uid}\n"
+                "\nusage: %s {mdtname} {uid}\n"
                 "Normally invoked as an upcall from Lustre, set via:\n"
-                "  /proc/fs/lustre/mds/{mdsname}/identity_upcall\n",
+                "  /proc/fs/lustre/mdt/{mdtname}/identity_upcall\n",
                 progname);
 }
 
@@ -84,6 +84,7 @@ int get_groups_local(struct identity_downcall_data *data)
         unsigned int ngroups = 0;
         struct passwd *pw;
         struct group *gr;
+        char pw_name[32];
         int i;
 
         pw = getpwuid(data->idd_uid);
@@ -94,6 +95,9 @@ int get_groups_local(struct identity_downcall_data *data)
         }
         data->idd_gid = pw->pw_gid;
 
+        memset(pw_name, 0, sizeof(pw_name));
+        strncpy(pw_name, pw->pw_name, sizeof(pw_name) - 1);
+
         maxgroups = sysconf(_SC_NGROUPS_MAX);
         if (maxgroups > NGROUPS_MAX)
                 maxgroups = NGROUPS_MAX;
@@ -101,12 +105,12 @@ int get_groups_local(struct identity_downcall_data *data)
 
         groups[ngroups++] = pw->pw_gid;
         while ((gr = getgrent())) {
-                if (gr->gr_gid == pw->pw_gid)
+                if (gr->gr_gid == groups[0])
                         continue;
                 if (!gr->gr_mem)
                         continue;
                 for (i = 0; gr->gr_mem[i]; i++) {
-                        if (!strcmp(gr->gr_mem[i], pw->pw_name)) {
+                        if (!strcmp(gr->gr_mem[i], pw_name)) {
                                 groups[ngroups++] = gr->gr_gid;
                                 break;
                         }
@@ -338,7 +342,7 @@ downcall:
         }
 
         snprintf(procname, sizeof(procname),
-                 "/proc/fs/lustre/mds/%s/identity_info", argv[1]);
+                 "/proc/fs/lustre/mdt/%s/identity_info", argv[1]);
         fd = open(procname, O_WRONLY);
         if (fd < 0) {
                 errlog("can't open file %s: %s\n", procname, strerror(errno));

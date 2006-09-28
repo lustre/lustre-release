@@ -46,9 +46,9 @@ static char *progname;
 static void usage(void)
 {
         fprintf(stderr,
-                "\nusage: %s {mdsname} {ino} {handle} {cmd}\n"
+                "\nusage: %s {mdtname} {ino} {handle} {cmd}\n"
                 "Normally invoked as an upcall from Lustre, set via:\n"
-                "  /proc/fs/lustre/mds/{mdsname}/rmtacl_upcall\n",
+                "  /proc/fs/lustre/mdt/{mdtname}/rmtacl_upcall\n",
                 progname);
 }
 
@@ -217,7 +217,7 @@ downcall:
         }
 
         snprintf(procname, sizeof(procname),
-                 "/proc/fs/lustre/mds/%s/rmtacl_info", argv[1]);
+                 "/proc/fs/lustre/mdt/%s/rmtacl_info", argv[1]);
         fd = open(procname, O_WRONLY);
         if (fd < 0) {
                 fprintf(stderr, "open %s failed: %s\n",
