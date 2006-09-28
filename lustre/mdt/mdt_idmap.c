@@ -269,7 +269,7 @@ static int idmap_insert_entry(struct list_head *mie_rmt_hash,
                 list_add_tail(&new->mie_lcl_hash, lcl_head);
                 return 0;
         } else {
-                return 1; 
+                return 1;
         }
 }
 
@@ -399,7 +399,7 @@ int mdt_handle_idmap(struct mdt_thread_info *info)
         LASSERT(pud);
         LASSERT(med->med_idmap);
 
-        if (mdt->no_gss_support) {
+        if (mdt->mdt_opts.mo_no_gss_support) {
                 CWARN("The server is running with no GSS support now! "
                       "and don't permit remote client to access!\n");
                 RETURN(-EACCES);

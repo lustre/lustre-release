@@ -126,7 +126,7 @@ static int old_init_ucred(struct mdt_thread_info *info,
 
         uc->mu_valid = UCRED_INVALID;
 
-        if (!mdt->no_gss_support) {
+        if (!mdt->mdt_opts.mo_no_gss_support) {
                 /* get identity info of this user */
                 identity = mdt_identity_get(mdt->mdt_identity_cache,
                                             body->fsuid);
@@ -161,7 +161,7 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 
         uc->mu_valid = UCRED_INVALID;
 
-        if (!mdt->no_gss_support) {
+        if (!mdt->mdt_opts.mo_no_gss_support) {
                 /* get identity info of this user */
                 identity = mdt_identity_get(mdt->mdt_identity_cache,
                                             uc->mu_fsuid);
@@ -290,7 +290,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
         ucred->mu_valid = UCRED_INVALID;
 
-        if (mdt->no_gss_support && med->med_rmtclient) {
+        if (mdt->mdt_opts.mo_no_gss_support && med->med_rmtclient) {
                 CWARN("The server is running with no GSS support now! "
                       "and don't permit remote client to access!\n");
                 RETURN(-EACCES);
@@ -354,7 +354,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                 }
         }
 
-        if (mdt->no_gss_support)
+        if (mdt->mdt_opts.mo_no_gss_support)
                 goto check_squash;
 
         identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid);
@@ -407,7 +407,8 @@ check_squash:
          * NB: remote client not allowed to setgroups anyway.
          */
         if (pud->pud_ngroups && !med->med_rmtclient &&
-            ((setxid_perm & LUSTRE_SETGRP_PERM) || mdt->no_gss_support)) {
+            ((setxid_perm & LUSTRE_SETGRP_PERM) ||
+             mdt->mdt_opts.mo_no_gss_support)) {
                 struct group_info *ginfo;
 
                 /* setgroups for local client */
@@ -619,7 +620,7 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
         uc->mu_cap   = rec->sa_cap;
         uc->mu_suppgids[0] = rec->sa_suppgid;
         uc->mu_suppgids[1] = -1;
- 
+
         rr->rr_fid1 = &rec->sa_fid;
         la->la_valid = mdt_attr_valid_xlate(rec->sa_valid, rr, ma);
         la->la_mode  = rec->sa_mode;
@@ -825,7 +826,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
         uc->mu_cap   = rec->ul_cap;
         uc->mu_suppgids[0] = rec->ul_suppgid;
         uc->mu_suppgids[1] = -1;
- 
+
         attr->la_uid = rec->ul_fsuid;
         attr->la_gid = rec->ul_fsgid;
         rr->rr_fid1 = &rec->ul_fid1;
@@ -863,7 +864,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
         uc->mu_cap   = rec->rn_cap;
         uc->mu_suppgids[0] = rec->rn_suppgid1;
         uc->mu_suppgids[1] = rec->rn_suppgid2;
- 
+
         attr->la_uid = rec->rn_fsuid;
         attr->la_gid = rec->rn_fsgid;
         rr->rr_fid1 = &rec->rn_fid1;

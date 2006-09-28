@@ -137,7 +137,8 @@ struct mdt_device {
                                    mo_acl        :1,
                                    mo_compat_resname:1,
                                    mo_mds_capa   :1,
-                                   mo_oss_capa   :1;
+                                   mo_oss_capa   :1,
+                                   mo_no_gss_support :1;
         } mdt_opts;
 
         /* lock to pretect epoch and write count */
@@ -169,7 +170,6 @@ struct mdt_device {
 
         /* root squash */
         struct rootsquash_info     *mdt_rootsquash_info;
-        int                        no_gss_support;
 
         /* capability */
         __u32                      mdt_capa_alg;
@@ -457,7 +457,7 @@ struct mdt_file_data *mdt_mfd_new(void);
 int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd);
 void mdt_mfd_free(struct mdt_file_data *mfd);
 int mdt_close(struct mdt_thread_info *info);
-int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, 
+int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
                  int flags);
 int mdt_done_writing(struct mdt_thread_info *info);
 void mdt_shrink_reply(struct mdt_thread_info *info, int offset,
