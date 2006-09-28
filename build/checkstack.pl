@@ -27,7 +27,7 @@
 # use anything else and feel the pain ;)
 {
 	my $arch = shift;
-	$x	= "[0-9a-f]{3,5}";		# hex number     >= 256
+	$x	= "[0-9a-f]{2,5}";		# hex number     >= 256
 	$d	= "([0-9]{2}|[2-9])[0-9]{2}";	# decimal number >= 200
 	if ($arch eq "") {
 		$arch = `uname -m`;
