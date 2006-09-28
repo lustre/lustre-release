@@ -52,6 +52,7 @@ void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
                           struct lustre_handle *fh)
 {
         op_data->fid1 = ll_i2info(inode)->lli_fid;
+        op_data->mod_capa1 = ll_i2mdscapa(inode);
         op_data->attr.ia_atime = inode->i_atime;
         op_data->attr.ia_mtime = inode->i_mtime;
         op_data->attr.ia_ctime = inode->i_ctime;
@@ -141,7 +142,6 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         rc = md_close(md_exp, op_data, och, &req);
 
         ll_finish_md_op_data(op_data);
-        OBD_FREE_PTR(op_data);
         if (rc == -EAGAIN) {
                 /* This close must have closed the epoch. */
                 LASSERT(epoch_close);
@@ -341,10 +341,6 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         if (!parent)
                 RETURN(-ENOENT);
 
-        OBD_ALLOC_PTR(op_data);
-        if (op_data == NULL)
-                RETURN(-ENOMEM);
-
         /* Usually we come here only for NFSD, and we want open lock.
            But we can also get here with pre 2.6.15 patchless kernels, and in
            that case that lock is also ok */
@@ -357,15 +353,16 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         if (!lmm && !lmmsize)
                 itp->it_flags |= MDS_OPEN_LOCK;
         
-        ll_prepare_md_op_data(op_data, parent->d_inode, NULL,
-                              name, len, O_RDWR);
+        op_data  = ll_prep_md_op_data(NULL, parent->d_inode, NULL, name, len,
+                                      O_RDWR);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
 
         rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, itp, LCK_PW, op_data,
                         &lockh, lmm, lmmsize, ldlm_completion_ast,
                         ll_md_blocking_ast, NULL, 0);
 
         ll_finish_md_op_data(op_data);
-        OBD_FREE_PTR(op_data);
         if (rc < 0) {
                 CERROR("lock enqueue: err: %d\n", rc);
                 RETURN(rc);
@@ -1900,19 +1897,17 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         tail_inode = tail_dentry->d_inode;
         tail_parent = tail_dentry->d_parent->d_inode;
 
-        OBD_ALLOC_PTR(op_data);
-        if (op_data == NULL) {
+        op_data = ll_prep_md_op_data(NULL, head_inode, tail_parent,
+                                     tail_dentry->d_name.name,
+                                     tail_dentry->d_name.len, 0);
+        if (op_data == NULL)
                 RETURN(-ENOMEM);
-        }
-
-        ll_prepare_md_op_data(op_data, head_inode, tail_parent,
-                              tail_dentry->d_name.name,
-                              tail_dentry->d_name.len, 0);
 
         rc = md_enqueue(ll_i2mdexp(head_inode), LDLM_IBITS, &oit, LCK_PW,
                         op_data, &lockh, &tsize, 0, ldlm_completion_ast,
                         ll_md_blocking_ast, &hsize, 0);
 
+        ll_finish_md_op_data(op_data);
         if (rc < 0)
                 GOTO(out, rc);
 
@@ -1931,8 +1926,6 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         }
         ll_release_openhandle(head_filp->f_dentry, &oit);
 out:
-        if (op_data)
-                OBD_FREE_PTR(op_data);
         ll_intent_release(&oit);
         RETURN(rc);
 }
@@ -2437,21 +2430,19 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 struct lookup_intent oit = { .it_op = IT_GETATTR };
                 struct md_op_data *op_data;
 
-                OBD_ALLOC_PTR(op_data);
+                /* Call getattr by fid, so do not provide name at all. */
+                op_data = ll_prep_md_op_data(NULL, dentry->d_parent->d_inode,
+                                             dentry->d_inode, NULL, 0, 0);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
-
-                /* Call getattr by fid, so do not provide name at all. */
-                ll_prepare_md_op_data(op_data, dentry->d_parent->d_inode,
-                                      dentry->d_inode, NULL, 0, 0);
                 it->it_flags |= O_CHECK_STALE;
                 rc = md_intent_lock(exp, op_data, NULL, 0,
                                     /* we are not interested in name
                                        based lookup */
                                     &oit, 0, &req,
                                     ll_md_blocking_ast, 0);
+                ll_finish_md_op_data(op_data);
                 it->it_flags &= ~ O_CHECK_STALE;
-                OBD_FREE_PTR(op_data);
                 if (rc < 0) {
                         rc = ll_inode_revalidate_fini(inode, rc);
                         GOTO (out, rc);

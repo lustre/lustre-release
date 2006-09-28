@@ -275,8 +275,8 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
                 it->it_op_release = ll_intent_release;
         }
 
-        llu_prepare_md_op_data(&op_data, pnode->p_parent->p_base->pb_ino,
-                                pb->pb_ino, pb->pb_name.name, pb->pb_name.len,0);
+        llu_prep_md_op_data(&op_data, pnode->p_parent->p_base->pb_ino,
+                            pb->pb_ino, pb->pb_name.name, pb->pb_name.len,0);
 
         rc = md_intent_lock(exp, &op_data, NULL, 0, it, flags,
                             &req, llu_md_blocking_ast,
@@ -444,9 +444,9 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         icbd.icbd_child = pnode;
         icbd.icbd_parent = parent;
 
-        llu_prepare_md_op_data(&op_data, parent, NULL,
-                               pnode->p_base->pb_name.name,
-                               pnode->p_base->pb_name.len, flags);
+        llu_prep_md_op_data(&op_data, parent, NULL,
+                            pnode->p_base->pb_name.name,
+                            pnode->p_base->pb_name.len, flags);
 
         /* allocate new fid for child */
         if (it->it_op & IT_CREAT || 

@@ -388,10 +388,6 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 
         parent = de->d_parent->d_inode;
 
-        OBD_ALLOC_PTR(op_data);
-        if (op_data == NULL)
-                RETURN(-ENOMEM);
-       
         if (it->it_op & IT_CREAT) {
                 /* 
                  * Allocate new fid for case of create or open(O_CREAT). In both
@@ -406,8 +402,10 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                                                   .ph_cname = &de->d_name,
                                                   .ph_opc = LUSTRE_OPC_CREATE };
 
-                ll_prepare_md_op_data(op_data, parent, NULL,
-                                      de->d_name.name, de->d_name.len, 0);
+                op_data = ll_prep_md_op_data(NULL, parent, NULL,
+                                            de->d_name.name, de->d_name.len, 0);
+                if (op_data == NULL)
+                        RETURN(-ENOMEM);
                 rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2,
                                      &hint);
                 if (rc) {
@@ -415,8 +413,10 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                         LBUG();
                 }
         } else {
-                ll_prepare_md_op_data(op_data, parent, de->d_inode,
-                                      de->d_name.name, de->d_name.len, 0);
+                op_data = ll_prep_md_op_data(NULL, parent, de->d_inode,
+                                            de->d_name.name, de->d_name.len, 0);
+                if (op_data == NULL)
+                        RETURN(-ENOMEM);
         }
 
         if ((it->it_op == IT_OPEN) && de->d_inode) {
@@ -462,7 +462,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                            if it would be, we'll reopen the open request to
                            MDS later during file open path */
                         up(&lli->lli_och_sem);
-                        OBD_FREE_PTR(op_data);
+                        ll_finish_md_op_data(op_data);
                         RETURN(1);
                 } else {
                         up(&lli->lli_och_sem);
@@ -475,7 +475,7 @@ do_lock:
                             &req, ll_md_blocking_ast, 0);
         it->it_flags &= ~O_CHECK_STALE;
         
-        OBD_FREE_PTR(op_data);
+        ll_finish_md_op_data(op_data);
         /* If req is NULL, then md_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0) {
@@ -567,13 +567,11 @@ do_lookup:
                 it = &lookup_it;
         }
         
-        OBD_ALLOC_PTR(op_data);
+        /* do real lookup here */
+        op_data = ll_prep_md_op_data(NULL, parent, NULL,
+                                     de->d_name.name, de->d_name.len, 0);
         if (op_data == NULL)
                 RETURN(-ENOMEM);
-
-        /* do real lookup here */
-        ll_prepare_md_op_data(op_data, parent, NULL,
-                              de->d_name.name, de->d_name.len, 0);
         
         if (it->it_op & IT_CREAT) {
                 /* 
@@ -601,12 +599,13 @@ do_lookup:
                                                            sizeof(*mdt_body));
                 /* see if we got same inode, if not - return error */
                 if(lu_fid_eq(&op_data->fid2, &mdt_body->fid1)) {
-                        OBD_FREE_PTR(op_data);
+                        ll_finish_md_op_data(op_data);
+                        op_data = NULL;
                         goto revalidate_finish;
                 }
                 ll_intent_release(it);
         }
-        OBD_FREE_PTR(op_data);
+        ll_finish_md_op_data(op_data);
         GOTO(out, rc = 0);
 }
 

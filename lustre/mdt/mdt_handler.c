@@ -353,12 +353,10 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 buffer = req_capsule_server_get(pill, &RMF_ACL);
                 /* mdt_getattr_lock only */
                 rc = mdt_pack_remote_perm(info, o, buffer);
-                if (rc) {
+                if (rc)
                         RETURN(rc);
-                } else {
-                        repbody->valid |= OBD_MD_FLRMTPERM;
-                        repbody->aclsize = sizeof(struct mdt_remote_perm);
-                }
+                repbody->valid |= OBD_MD_FLRMTPERM;
+                repbody->aclsize = sizeof(struct mdt_remote_perm);
         }
 #ifdef CONFIG_FS_POSIX_ACL
         else if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
@@ -381,7 +379,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         }
 #endif
 
-        if (mdt->mdt_opts.mo_mds_capa) {
+        if ((reqbody->valid & OBD_MD_FLMDSCAPA) && mdt->mdt_opts.mo_mds_capa) {
                 struct lustre_capa *capa;
 
                 spin_lock(&capa_lock);
@@ -394,8 +392,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 rc = mo_capa_get(ctxt, next, capa);
                 if (rc)
                         RETURN(rc);
-                else
-                        repbody->valid |= OBD_MD_FLMDSCAPA;
+                repbody->valid |= OBD_MD_FLMDSCAPA;
         }
 
         RETURN(rc);
@@ -1151,10 +1148,11 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
 static int mdt_renew_capa(struct mdt_thread_info *info)
 {
         struct mdt_device *mdt = info->mti_mdt;
-        struct mdt_object *obj;
+        struct mdt_object *obj = info->mti_object;
         struct mdt_body *body;
-        struct lustre_capa *capa;
+        struct lustre_capa *capa; 
         int rc;
+        ENTRY;
 
         body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(body);
@@ -1166,11 +1164,7 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
         info->mti_capa_key = *red_capa_key(mdt);
         spin_unlock(&capa_lock);
 
-        obj = mdt_object_find(info->mti_ctxt, info->mti_mdt, &capa->lc_fid,
-                              capa);
-        if (!IS_ERR(obj))
-                rc = PTR_ERR(obj);
-
+        *capa = obj->mot_header.loh_capa;
         /* TODO: add capa check */
         rc = mo_capa_get(info->mti_ctxt, mdt_object_child(obj), capa);
         if (rc)

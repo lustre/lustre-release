@@ -624,9 +624,8 @@ int llu_md_setattr(struct inode *inode, struct md_op_data *op_data)
         int rc;
         ENTRY;
         
-        llu_prepare_md_op_data(op_data, inode, NULL, NULL, 0, 0);
+        llu_prep_md_op_data(op_data, inode, NULL, NULL, 0, 0);
         rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0, &request);
-        OBD_FREE_PTR(op_data);
 
         if (rc) {
                 ptlrpc_req_finished(request);
@@ -946,7 +945,7 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         if (llu_i2stat(dir)->st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
-        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, 0);
+        llu_prep_md_op_data(&op_data, dir, NULL, name, len, 0);
 
         /* allocate new fid */
         err = llu_fid_md_alloc(sbi, &op_data.fid2, &hint);
@@ -1083,10 +1082,9 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:
-                llu_prepare_md_op_data(&op_data, dir, NULL,
-                                       pno->p_base->pb_name.name,
-                                       pno->p_base->pb_name.len,
-                                       0);
+                llu_prep_md_op_data(&op_data, dir, NULL,
+                                    pno->p_base->pb_name.name,
+                                    pno->p_base->pb_name.len, 0);
                 /* allocate new fid */
                 err = llu_fid_md_alloc(sbi, &op_data.fid2, &hint);
                 if (err) {
@@ -1124,7 +1122,7 @@ static int llu_iop_link_raw(struct pnode *old, struct pnode *new)
         LASSERT(dir);
 
         liblustre_wait_event(0);
-        llu_prepare_md_op_data(&op_data, src, dir, name, namelen, 0);
+        llu_prep_md_op_data(&op_data, src, dir, name, namelen, 0);
         rc = md_link(llu_i2sbi(src)->ll_md_exp, &op_data, &request);
         ptlrpc_req_finished(request);
         liblustre_wait_event(0);
@@ -1150,7 +1148,7 @@ static int llu_iop_unlink_raw(struct pnode *pno)
         LASSERT(target);
 
         liblustre_wait_event(0);
-        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, 0);
+        llu_prep_md_op_data(&op_data, dir, NULL, name, len, 0);
         rc = md_unlink(llu_i2sbi(dir)->ll_md_exp, &op_data, &request);
         if (!rc)
                 rc = llu_objects_destroy(request, dir);
@@ -1177,7 +1175,7 @@ static int llu_iop_rename_raw(struct pnode *old, struct pnode *new)
         LASSERT(tgt);
 
         liblustre_wait_event(0);
-        llu_prepare_md_op_data(&op_data, src, tgt, NULL, 0, 0);
+        llu_prep_md_op_data(&op_data, src, tgt, NULL, 0, 0);
         rc = md_rename(llu_i2sbi(src)->ll_md_exp, &op_data,
                        oldname, oldnamelen, newname, newnamelen,
                        &request);
@@ -1329,7 +1327,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         if (st->st_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
-        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, 0);
+        llu_prep_md_op_data(&op_data, dir, NULL, name, len, 0);
 
         /* allocate new fid */
         err = llu_fid_md_alloc(llu_i2sbi(dir), &op_data.fid2, &hint);
@@ -1361,7 +1359,7 @@ static int llu_iop_rmdir_raw(struct pnode *pno)
                (long long)llu_i2stat(dir)->st_ino,
                llu_i2info(dir)->lli_st_generation, dir);
 
-        llu_prepare_md_op_data(&op_data, dir, NULL, name, len, S_IFDIR);
+        llu_prep_md_op_data(&op_data, dir, NULL, name, len, S_IFDIR);
         rc = md_unlink(llu_i2sbi(dir)->ll_md_exp, &op_data, &request);
         ptlrpc_req_finished(request);
 
@@ -1701,7 +1699,7 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
         struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
         int rc = 0;
 
-        llu_prepare_md_op_data(&op_data, ino, NULL, NULL, 0, 0);
+        llu_prep_md_op_data(&op_data, ino, NULL, NULL, 0, 0);
 
         LASSERT(sizeof(lum) == sizeof(*lump));
         LASSERT(sizeof(lum.lmm_objects[0]) ==
@@ -1764,7 +1762,7 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
         lli2->lli_symlink_name = NULL;
         ino->i_private = lli2;
 
-        llu_prepare_md_op_data(&data, NULL, ino, NULL, 0, O_RDWR);
+        llu_prep_md_op_data(&data, NULL, ino, NULL, 0, O_RDWR);
 
         rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, &oit, LCK_CR, &data,
                         &lockh, lum, lum_size, ldlm_completion_ast,

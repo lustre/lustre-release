@@ -111,20 +111,14 @@ static void sort_add_capa(struct obd_capa *ocapa, struct list_head *head)
 static int inode_have_md_lock(struct inode *inode, __u64 inodebits)
 {
         struct obd_export *exp = ll_i2mdexp(inode);
-        struct lustre_handle lockh;
-        struct ldlm_res_id res_id = { .name = {0} };
         ldlm_policy_data_t policy = { .l_inodebits = {inodebits}};
-        int flags, rc;
+        struct lustre_handle lockh;
+        int flags = LDLM_FL_BLOCK_GRANTED|LDLM_FL_CBPENDING|LDLM_FL_TEST_LOCK;
+        int rc;
         ENTRY;
 
-        res_id.name[0] = inode->i_ino;
-        res_id.name[1] = inode->i_generation;
-
-        CDEBUG(D_SEC, "trying to match res "LPU64"\n", res_id.name[0]);
-
-        flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
-        rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags, &res_id,
-                             LDLM_IBITS, &policy, LCK_CR|LCK_CW|LCK_PR, &lockh);
+        rc = md_lock_match(exp, flags, ll_inode2fid(inode),
+                           LDLM_IBITS, &policy, LCK_CR|LCK_CW|LCK_PR, &lockh);
         RETURN(rc);
 }
 
@@ -185,7 +179,7 @@ static int capa_thread_main(void *unused)
                             !ll_have_md_lock(ocapa->u.cli.inode,
                                              MDS_INODELOCK_LOOKUP) &&
                             !obd_capa_is_root(ocapa)) {
-                                /* fid capa without LOOKUP lock won't renew,
+                                /* MDS capa without LOOKUP lock won't renew,
                                  * move to idle list (except root fid) */
                                 DEBUG_CAPA(D_SEC, &ocapa->c_capa,
                                            "skip renewal for");
@@ -362,13 +356,15 @@ struct obd_capa *ll_lookup_oss_capa(struct inode *inode, __u64 opc)
 struct obd_capa *ll_i2mdscapa(struct inode *inode)
 {
         struct obd_capa *ocapa;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        ENTRY;
 
         LASSERT(inode);
         if ((ll_i2sbi(inode)->ll_flags & LL_SBI_MDS_CAPA) == 0)
-                return NULL;
+                RETURN(NULL);
 
         spin_lock(&capa_lock);
-        ocapa = capa_get(ll_i2info(inode)->lli_mds_capa);
+        ocapa = capa_get(lli->lli_mds_capa);
         spin_unlock(&capa_lock);
         if (ocapa && !obd_capa_is_valid(ocapa)) {
                 DEBUG_CAPA(D_ERROR, &ocapa->c_capa, "invalid");
@@ -385,7 +381,7 @@ struct obd_capa *ll_i2mdscapa(struct inode *inode)
                 atomic_set(&ll_capa_debug, 0);
         }
 
-        return ocapa;
+        RETURN(ocapa);
 }
 
 static inline int do_add_mds_capa(struct inode *inode, struct obd_capa **pcapa)
@@ -401,7 +397,7 @@ static inline int do_add_mds_capa(struct inode *inode, struct obd_capa **pcapa)
                 obd_capa_clear_new(ocapa);
                 obd_capa_set_valid(ocapa);
 
-                DEBUG_CAPA(D_SEC, &ocapa->c_capa, "add fid");
+                DEBUG_CAPA(D_SEC, &ocapa->c_capa, "add MDS");
         } else {
                 if (ocapa->c_capa.lc_expiry == old->c_capa.lc_expiry) {
                         rc = -EEXIST;
@@ -411,7 +407,7 @@ static inline int do_add_mds_capa(struct inode *inode, struct obd_capa **pcapa)
                         obd_capa_set_valid(old);
                         spin_unlock(&old->c_lock);
 
-                        DEBUG_CAPA(D_SEC, &old->c_capa, "update fid");
+                        DEBUG_CAPA(D_SEC, &old->c_capa, "update MDS");
                 }
 
                 free_capa(ocapa);
@@ -457,7 +453,7 @@ static inline int do_add_oss_capa(struct inode *inode, struct obd_capa **pcapa)
                 INIT_LIST_HEAD(&ocapa->u.cli.lli_list);
                 obd_capa_set_valid(ocapa);
 
-                DEBUG_CAPA(D_SEC, capa, "add oss");
+                DEBUG_CAPA(D_SEC, capa, "add OSS");
         } else {
                 if (old->c_capa.lc_expiry == capa->lc_expiry) {
                         rc = -EEXIST;
@@ -467,7 +463,7 @@ static inline int do_add_oss_capa(struct inode *inode, struct obd_capa **pcapa)
                         obd_capa_set_valid(old);
                         spin_unlock(&old->c_lock);
 
-                        DEBUG_CAPA(D_SEC, capa, "update oss");
+                        DEBUG_CAPA(D_SEC, capa, "update OSS");
                 }
 
                 free_capa(ocapa);

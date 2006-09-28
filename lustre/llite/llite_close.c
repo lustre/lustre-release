@@ -165,7 +165,7 @@ out:
         if (oa)
                 obdo_free(oa);
         if (op_data)
-                OBD_FREE_PTR(op_data);
+                ll_finish_md_op_data(op_data);
         return rc;
 }
 
@@ -198,7 +198,7 @@ static void ll_done_writing(struct inode *inode)
         ll_pack_inode2opdata(inode, op_data, &och->och_fh);
 
         rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, och);
-        OBD_FREE_PTR(op_data);
+        ll_finish_md_op_data(op_data);
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute from 
                  * OSTs and send setattr to back to MDS. */

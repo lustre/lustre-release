@@ -156,14 +156,14 @@ static int client_common_fill_super(struct super_block *sb,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         struct lu_fid rootfid;
-        struct obd_capa *pc = NULL;
+        struct obd_capa *oc = NULL;
         struct obd_statfs osfs;
         struct ptlrpc_request *request = NULL;
         struct lustre_handle dt_conn = {0, };
         struct lustre_handle md_conn = {0, };
         struct obd_connect_data *data = NULL;
         struct lustre_md lmd;
-        int err;
+        int size, err;
         ENTRY;
 
         obd = class_name2obd(md);
@@ -186,8 +186,8 @@ static int client_common_fill_super(struct super_block *sb,
         /* indicate the features supported by this client */
         data->ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_NODEVOH |
                                   OBD_CONNECT_ACL | OBD_CONNECT_JOIN |
-                                  OBD_CONNECT_ATTRFID | OBD_CONNECT_VERSION;/* |
-                                  OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA;*/
+                                  OBD_CONNECT_ATTRFID | OBD_CONNECT_VERSION |
+                                  OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA;
         data->ocd_ibits_known = MDS_INODELOCK_FULL;
         data->ocd_version = LUSTRE_VERSION_CODE;
 
@@ -228,6 +228,14 @@ static int client_common_fill_super(struct super_block *sb,
         if (err)
                 GOTO(out_md, err);
 
+        size = sizeof(*data);
+        err = obd_get_info(sbi->ll_md_exp, strlen(KEY_CONN_DATA), KEY_CONN_DATA,
+                           &size, data);
+        if (err) {
+                CERROR("Get connect data failed: %d \n", err);
+                GOTO(out_md, err);
+        }
+
         LASSERT(osfs.os_bsize);
         sb->s_blocksize = osfs.os_bsize;
         sb->s_blocksize_bits = log2(osfs.os_bsize);
@@ -265,12 +273,12 @@ static int client_common_fill_super(struct super_block *sb,
         }
 
         if (data->ocd_connect_flags & OBD_CONNECT_MDS_CAPA) {
-                CDEBUG(D_SEC, "client enabled fid capa!\n");
+                CDEBUG(D_SEC, "client enabled MDS capability!\n");
                 sbi->ll_flags |= LL_SBI_MDS_CAPA;
         }
 
         if (data->ocd_connect_flags & OBD_CONNECT_OSS_CAPA) {
-                CDEBUG(D_SEC, "client enabled oss capa!\n");
+                CDEBUG(D_SEC, "client enabled OSS capability!\n");
                 sbi->ll_flags |= LL_SBI_OSS_CAPA;
         }
 
@@ -357,7 +365,7 @@ static int client_common_fill_super(struct super_block *sb,
                 GOTO(out_dt, err);
         }
 
-        err = md_getstatus(sbi->ll_md_exp, &rootfid, &pc);
+        err = md_getstatus(sbi->ll_md_exp, &rootfid, &oc);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_dt_fid, err);
@@ -372,14 +380,14 @@ static int client_common_fill_super(struct super_block *sb,
 
         /* make root inode
          * XXX: move this to after cbd setup? */
-        err = md_getattr(sbi->ll_md_exp, &rootfid, pc,
-                         OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS |
+        err = md_getattr(sbi->ll_md_exp, &rootfid, oc,
+                         OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLMDSCAPA |
                          (sbi->ll_flags & LL_SBI_ACL ? OBD_MD_FLACL : 0),
                          0, &request);
+        if (oc)
+                free_capa(oc);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
-                if (pc)
-                        free_capa(pc);
                 GOTO(out_dt, err);
         }
 
@@ -388,17 +396,12 @@ static int client_common_fill_super(struct super_block *sb,
                                &lmd);
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n", err);
-                if (pc)
-                        free_capa(pc);
                 ptlrpc_req_finished (request);
                 GOTO(out_dt, err);
         }
-        if (pc) {
-                obd_capa_set_root(pc);
-                lmd.mds_capa = pc;
-                lmd.body->valid |= OBD_MD_FLMDSCAPA;
-        }
 
+        if (lmd.mds_capa)
+                obd_capa_set_root(lmd.mds_capa);
         LASSERT(fid_is_sane(&sbi->ll_root_fid));
         root = ll_iget(sb, ll_fid_build_ino(sbi, &sbi->ll_root_fid), &lmd);
         ptlrpc_req_finished(request);
@@ -1245,7 +1248,7 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data)
         int rc;
         ENTRY;
         
-        ll_prepare_md_op_data(op_data, inode, NULL, NULL, 0, 0);
+        op_data = ll_prep_md_op_data(op_data, inode, NULL, NULL, 0, 0);
         rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0, &request);
         if (rc) {
                 ptlrpc_req_finished(request);
@@ -1524,7 +1527,7 @@ out:
         if (op_data) {
                 if (op_data->ioepoch)
                         rc = ll_setattr_done_writing(inode, op_data);
-                OBD_FREE_PTR(op_data);
+                ll_finish_md_op_data(op_data);
         }
         return rc;
 }
@@ -1791,6 +1794,15 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         }
 
         LASSERT(fid_seq(&lli->lli_fid) != 0);
+
+        if (body->valid & OBD_MD_FLMDSCAPA) {
+                LASSERT(md->mds_capa);
+                ll_add_capa(inode, md->mds_capa);
+        }
+        if (body->valid & OBD_MD_FLOSSCAPA) {
+                LASSERT(md->oss_capa);
+                ll_add_capa(inode, md->oss_capa);
+        }
 }
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -1920,17 +1932,15 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 if (!oinfo.oi_oa)
                         RETURN(-ENOMEM);
 
-                OBD_ALLOC_PTR(op_data);
+                op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
-                
-                ll_prepare_md_op_data(op_data, inode, NULL, NULL, 0, 0);
                 
                 ((struct ll_iattr *)&op_data->attr)->ia_attr_flags = flags;
                 op_data->attr.ia_valid |= ATTR_ATTR_FLAG;
                 rc = md_setattr(sbi->ll_md_exp, op_data,
                                 NULL, 0, NULL, 0, &req);
-                OBD_FREE_PTR(op_data);
+                ll_finish_md_op_data(op_data);
                 ptlrpc_req_finished(req);
                 if (rc || lsm == NULL) {
                         obdo_free(oinfo.oi_oa);
@@ -2211,12 +2221,16 @@ int ll_process_config(struct lustre_cfg *lcfg)
 }
 
 /* this function prepares md_op_data hint for passing ot down to MD stack. */
-void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
-                            struct inode *i2, const char *name, int namelen,
-                            int mode)
+struct md_op_data *
+ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
+                   struct inode *i2, const char *name, int namelen, int mode)
 {
         LASSERT(i1 != NULL);
-        LASSERT(op_data != NULL);
+
+        if (!op_data)
+                OBD_ALLOC_PTR(op_data);
+        if (!op_data)
+                return NULL;
 
         ll_i2gids(op_data->suppgids, i1, i2);
         op_data->fid1 = ll_i2info(i1)->lli_fid;
@@ -2236,12 +2250,15 @@ void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
         op_data->fsuid = current->fsuid;
         op_data->fsgid = current->fsgid;
         op_data->cap = current->cap_effective;
+
+        return op_data;
 }
 
 void ll_finish_md_op_data(struct md_op_data *op_data)
 {
         capa_put(op_data->mod_capa1);
         capa_put(op_data->mod_capa2);
+        OBD_FREE_PTR(op_data);
 }
 
 int ll_ioctl_getfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)

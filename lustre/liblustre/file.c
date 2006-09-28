@@ -71,15 +71,12 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
         }
 }
 
-void llu_prepare_md_op_data(struct md_op_data *op_data,
-                            struct inode *i1,
-                            struct inode *i2,
-                            const char *name,
-                            int namelen,
-                            int mode)
+void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
+                         struct inode *i2, const char *name, int namelen,
+                         int mode)
 {
-        LASSERT(op_data);
         LASSERT(i1 != NULL || i2 != NULL);
+        LASSERT(op_data);
         memset(op_data, 0, sizeof(*op_data));
 
         if (i1) {
@@ -97,6 +94,11 @@ void llu_prepare_md_op_data(struct md_op_data *op_data,
         op_data->namelen = namelen;
         op_data->create_mode = mode;
         op_data->mod_time = CURRENT_TIME;
+}
+
+void llu_finish_md_op_data(struct md_op_data *op_data)
+{
+        OBD_FREE_PTR(op_data);
 }
 
 void obdo_refresh_inode(struct inode *dst,

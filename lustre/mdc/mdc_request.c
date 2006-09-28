@@ -150,31 +150,29 @@ int mdc_getstatus(struct obd_export *exp, struct lu_fid *rootfid,
  * of fields. This issue will be fixed later when client gets awar of RPC
  * layouts.  --umka
  */
-static
-int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
-                       unsigned int acl_size, struct ptlrpc_request *req)
+static int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
+                              unsigned int acl_size, int mdscapa,
+                              struct ptlrpc_request *req)
 {
         struct mdt_body *body;
         void *eadata;
         int size[5] = { sizeof(struct ptlrpc_body),
-                        sizeof(*body) };
-        int bufcount = 2, rc;
+                        sizeof(*body),
+                        ea_size,
+                        acl_size };
+        int offset, rc;
         ENTRY;
         
         /* Request message already built. */
-        if (ea_size != 0) {
-                size[bufcount++] = ea_size;
+        if (ea_size)
                 CDEBUG(D_INODE, "reserved %u bytes for MD/symlink in packet\n",
                        ea_size);
-        }
-        
-        if (acl_size) {
-                size[bufcount++] = acl_size;
+        if (acl_size)
                 CDEBUG(D_INODE, "reserved %u bytes for ACL\n", acl_size);
-        }
+        if (mdscapa)
+                size[REPLY_REC_OFF + 2] = sizeof(struct lustre_capa);
 
-        size[bufcount++] = sizeof(struct lustre_capa);
-        ptlrpc_req_set_repsize(req, bufcount, size);
+        ptlrpc_req_set_repsize(req, 5, size);
 
         rc = ptlrpc_queue_wait(req);
         if (rc != 0)
@@ -189,10 +187,11 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
 
         CDEBUG(D_NET, "mode: %o\n", body->mode);
 
-        LASSERT_REPSWAB(req, REPLY_REC_OFF + 1);
+        offset = REPLY_REC_OFF + 1;
+        LASSERT_REPSWAB(req, offset);
         if (body->eadatasize != 0) {
                 /* reply indicates presence of eadata; check it's there... */
-                eadata = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF + 1,
+                eadata = lustre_msg_buf(req->rq_repmsg, offset++,
                                         body->eadatasize);
                 if (eadata == NULL) {
                         CERROR ("Missing/short eadata\n");
@@ -201,13 +200,25 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         }
 
         if (body->valid & OBD_MD_FLMODEASIZE) {
-                if (exp->exp_obd->u.cli.cl_max_mds_easize < body->max_mdsize)
-                        exp->exp_obd->u.cli.cl_max_mds_easize =
-                                                body->max_mdsize;
-                if (exp->exp_obd->u.cli.cl_max_mds_cookiesize <
-                                                body->max_cookiesize)
-                        exp->exp_obd->u.cli.cl_max_mds_cookiesize =
-                                                body->max_cookiesize;
+                struct client_obd *cli = &exp->exp_obd->u.cli;
+
+                if (cli->cl_max_mds_easize < body->max_mdsize)
+                        cli->cl_max_mds_easize = body->max_mdsize;
+                if (cli->cl_max_mds_cookiesize < body->max_cookiesize)
+                        cli->cl_max_mds_cookiesize = body->max_cookiesize;
+        }
+
+        offset += !!body->aclsize;
+
+        if (body->valid & OBD_MD_FLMDSCAPA) {
+                struct lustre_capa *capa;
+
+                LASSERT(mdscapa);
+                capa = lustre_unpack_capa(req->rq_repmsg, offset++);
+                if (capa == NULL) {
+                        CERROR("Missing/short client MDS capability\n");
+                        RETURN(-EPROTO);
+                }
         }
 
         RETURN (0);
@@ -241,7 +252,8 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
         if (valid & OBD_MD_FLACL)
                 acl_size = LUSTRE_POSIX_ACL_MAX_SIZE;
          
-        rc = mdc_getattr_common(exp, ea_size, acl_size, req);
+        rc = mdc_getattr_common(exp, ea_size, acl_size,
+                                !!(valid & OBD_MD_FLMDSCAPA), req);
         if (rc != 0) {
                 ptlrpc_req_finished (req);
                 req = NULL;
@@ -277,7 +289,8 @@ int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
         memcpy(lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2, namelen),
                filename, namelen);
 
-        rc = mdc_getattr_common(exp, ea_size, 0, req);
+        rc = mdc_getattr_common(exp, ea_size, 0, !!(valid & OBD_MD_FLMDSCAPA),
+                                req);
         if (rc != 0) {
                 ptlrpc_req_finished (req);
                 req = NULL;
@@ -483,7 +496,7 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                       struct obd_export *md_exp, 
                       struct lustre_md *md)
 {
-        int rc = 0;
+        int rc;
         ENTRY;
 
         LASSERT(md);
@@ -494,10 +507,6 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
         LASSERT_REPSWABBED(req, offset);
         offset++;
 
-        if (!(md->body->valid & OBD_MD_FLEASIZE) &&
-            !(md->body->valid & OBD_MD_FLDIREA))
-                RETURN(0);
-
         if (md->body->valid & OBD_MD_FLEASIZE) {
                 int lmmsize;
                 struct lov_mds_md *lmm;
@@ -505,7 +514,7 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                 LASSERT(S_ISREG(md->body->mode));
 
                 if (md->body->eadatasize == 0) {
-                        CERROR ("OBD_MD_FLEASIZE set, but eadatasize 0\n");
+                        CERROR("OBD_MD_FLEASIZE set, but eadatasize 0\n");
                         RETURN(-EPROTO);
                 }
                 lmmsize = md->body->eadatasize;
@@ -518,8 +527,6 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                         RETURN(rc);
 
                 LASSERT (rc >= sizeof (*md->lsm));
-                rc = 0;
-
                 offset++;
         } else if (md->body->valid & OBD_MD_FLDIREA) {
                 int lmvsize;
@@ -527,7 +534,8 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                 LASSERT(S_ISDIR(md->body->mode));
         
                 if (md->body->eadatasize == 0) {
-                        RETURN(0);
+                        CERROR("OBD_MD_FLEASIZE set, but eadatasize 0\n");
+                        RETURN(-EPROTO);
                 }
                 if (md->body->valid & OBD_MD_MEA) {
                         lmvsize = md->body->eadatasize;
@@ -542,44 +550,40 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
 
                         LASSERT (rc >= sizeof (*md->mea));
                 }
-                rc = 0;
-                offset ++; 
+                offset++;
         }
+        rc = 0;
 
         /* for ACL, it's possible that FLACL is set but aclsize is zero.  only
          * when aclsize != 0 there's an actual segment for ACL in reply
          * buffer. */
         if ((md->body->valid & OBD_MD_FLACL) && md->body->aclsize) {
-                rc = mdc_unpack_acl(dt_exp, req, md, offset);
+                rc = mdc_unpack_acl(dt_exp, req, md, offset++);
                 if (rc)
                         GOTO(out, rc);
-                offset++;
         }
 
         /* remote permission */
         if (md->body->valid & OBD_MD_FLRMTPERM) {
-                md->remote_perm = lustre_msg_buf(req->rq_repmsg, offset,
+                md->remote_perm = lustre_msg_buf(req->rq_repmsg, offset++,
                                                 sizeof(struct mdt_remote_perm));
                 LASSERT(md->remote_perm);
-                offset++;
         }
 
         if (md->body->valid & OBD_MD_FLMDSCAPA) {
-                struct obd_capa *oc = mdc_unpack_capa(req, offset);
+                struct obd_capa *oc = mdc_unpack_capa(req, offset++);
 
                 if (IS_ERR(oc))
                         GOTO(out, rc = PTR_ERR(oc));
                 md->mds_capa = oc;
-                offset++;
         }
 
         if (md->body->valid & OBD_MD_FLOSSCAPA) {
-                struct obd_capa *oc = mdc_unpack_capa(req, offset);
+                struct obd_capa *oc = mdc_unpack_capa(req, offset++);
 
                 if (IS_ERR(oc))
                         GOTO(out, rc = PTR_ERR(oc));
                 md->oss_capa = oc;
-                offset++;
         }
 
         EXIT;
@@ -1124,8 +1128,7 @@ int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
 {
         int rc = -EINVAL;
 
-        if (keylen == strlen("max_easize") &&
-            memcmp(key, "max_easize", strlen("max_easize")) == 0) {
+        if (KEY_IS(KEY_MAX_EASIZE)) {
                 int mdsize, *max_easize;
 
                 if (*vallen != sizeof(int))
@@ -1137,6 +1140,17 @@ int mdc_get_info(struct obd_export *exp, __u32 keylen, void *key,
                 *max_easize = exp->exp_obd->u.cli.cl_max_mds_easize;
                 RETURN(0);
         }
+        if (KEY_IS(KEY_CONN_DATA)) {
+                struct obd_import *imp = class_exp2cliimp(exp);
+                struct obd_connect_data *data = val;
+
+                if (*vallen != sizeof(*data))
+                        RETURN(-EINVAL);
+
+                *data = imp->imp_connect_data;
+                RETURN(0);
+        }
+                
         RETURN(rc);
 }
 

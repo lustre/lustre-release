@@ -3176,7 +3176,7 @@ static int mdd_capa_get(const struct lu_context *ctxt, struct md_object *obj,
                 capa->lc_flags |= CAPA_FL_SHORT_EXPIRY;
         if (lu_fid_eq(&capa->lc_fid, &mdd->mdd_root_fid))
                 capa->lc_flags |= CAPA_FL_ROOT;
-        capa->lc_flags = ls->ls_capa_alg << 23;
+        capa->lc_flags = ls->ls_capa_alg << 24;
 
         /* TODO: get right permission here after remote uid landing */
         ocapa = capa_lookup(capa);

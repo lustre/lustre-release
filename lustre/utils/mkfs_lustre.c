@@ -1307,7 +1307,7 @@ static int mkfs_mdt(struct mkfs_opts *mop)
         }
 
         snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, CAPA_KEYS);
-        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 1, 1, 4);
+        ret = touch_file(filepnm);
         if (ret) {
                 goto out_umount;
         }

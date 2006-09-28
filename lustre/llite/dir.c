@@ -291,18 +291,16 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
                 struct ptlrpc_request *request;
                 struct md_op_data *op_data;
 
-                OBD_ALLOC_PTR(op_data);
+                op_data = ll_prep_md_op_data(NULL, dir, NULL, NULL, 0, 0);
                 if (op_data == NULL)
                         return ERR_PTR(-ENOMEM);
-
-                ll_prepare_md_op_data(op_data, dir, NULL, NULL, 0, 0);
 
                 rc = md_enqueue(ll_i2sbi(dir)->ll_md_exp, LDLM_IBITS, &it,
                                 LCK_CR, op_data, &lockh, NULL, 0,
                                 ldlm_completion_ast, ll_md_blocking_ast, dir,
                                 0);
 
-                OBD_FREE_PTR(op_data);
+                ll_finish_md_op_data(op_data);
 
                 request = (struct ptlrpc_request *)it.d.lustre.it_data;
                 if (request)
@@ -620,10 +618,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct md_op_data *op_data;
                 int rc = 0;
 
-                OBD_ALLOC_PTR(op_data);
-                if (op_data == NULL)
-                        RETURN(-ENOMEM);
-
                 LASSERT(sizeof(lum) == sizeof(*lump));
                 LASSERT(sizeof(lum.lmm_objects[0]) ==
                         sizeof(lump->lmm_objects[0]));
@@ -643,7 +637,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         lustre_swab_lov_user_md(&lum);
 
                 /* swabbing is done in lov_setstripe() on server side */
-                ll_prepare_md_op_data(op_data, inode, NULL, NULL, 0, 0);
+                op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0);
+                if (op_data == NULL)
+                        RETURN(-ENOMEM);
                 rc = md_setattr(sbi->ll_md_exp, op_data, &lum,
                                 sizeof(lum), NULL, 0, &request);
                 ll_finish_md_op_data(op_data);
@@ -651,7 +647,6 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         if (rc != -EPERM && rc != -EACCES)
                                 CERROR("md_setattr fails: rc = %d\n", rc);
                 }
-                OBD_FREE_PTR(op_data);
                 ptlrpc_req_finished(request);
                 RETURN(rc);
         }

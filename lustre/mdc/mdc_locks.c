@@ -404,6 +404,8 @@ int mdc_enqueue(struct obd_export *exp,
                 size[DLM_INTENT_REC_OFF] = sizeof(struct mdt_body);
                 size[DLM_INTENT_REC_OFF + 1] = op_data->mod_capa1 ?
                                                sizeof(struct lustre_capa) : 0;
+                if (op_data->mod_capa1)
+                        valid |= OBD_MD_FLMDSCAPA;
                 size[DLM_INTENT_REC_OFF + 2] = op_data->namelen + 1;
 
                 if (it->it_op & IT_GETATTR)
@@ -598,7 +600,7 @@ int mdc_enqueue(struct obd_export *exp,
 
                         capa = lustre_unpack_capa(req->rq_repmsg, reply_off++);
                         if (capa == NULL) {
-                                CERROR("Missing/short client fid capa\n");
+                                CERROR("Missing/short MDS capability\n");
                                 RETURN(-EPROTO);
                         }
 
@@ -616,7 +618,7 @@ int mdc_enqueue(struct obd_export *exp,
 
                         capa = lustre_unpack_capa(req->rq_repmsg, reply_off++);
                         if (capa == NULL) {
-                                CERROR("Missing/short client oss capa\n");
+                                CERROR("Missing/short OSS capability\n");
                                 RETURN(-EPROTO);
                         }
                 }

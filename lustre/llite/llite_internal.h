@@ -573,9 +573,10 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *max_mdsize);
 int ll_process_config(struct lustre_cfg *lcfg);
 int ll_ioctl_getfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc);
 int ll_ioctl_setfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc);
-void ll_prepare_md_op_data(struct md_op_data *op_data, struct inode *i1,
-                           struct inode *i2, const char *name, int namelen,
-                           int mode);
+struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
+                                      struct inode *i1, struct inode *i2,
+                                      const char *name, int namelen,
+                                      int mode);
 void ll_finish_md_op_data(struct md_op_data *op_data);
 
 /* llite/llite_nfs.c */

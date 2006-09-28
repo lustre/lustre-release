@@ -451,11 +451,14 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_ACL | OBD_CONNECT_XATTR | \
                                 OBD_CONNECT_IBITS | OBD_CONNECT_JOIN | \
                                 OBD_CONNECT_NODEVOH | OBD_CONNECT_ATTRFID | \
-                                OBD_CONNECT_LCL_CLIENT | OBD_CONNECT_RMT_CLIENT)
+                                OBD_CONNECT_LCL_CLIENT | \
+                                OBD_CONNECT_RMT_CLIENT | \
+                                OBD_CONNECT_MDS_CAPA | OBD_CONNECT_OSS_CAPA)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
-                                OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64)
+                                OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
+                                OBD_CONNECT_OSS_CAPA)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION)
 

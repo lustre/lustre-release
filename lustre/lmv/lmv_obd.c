@@ -2213,8 +2213,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                                 RETURN(0);
                 }
                 RETURN(-EINVAL);
-        } else if (keylen >= strlen("max_easize") && !strcmp(key, "max_easize")) {
-                
+        } else if (KEY_IS(KEY_MAX_EASIZE) || KEY_IS(KEY_CONN_DATA)) {
                 rc = lmv_check_connect(obd);
                 if (rc)
                         RETURN(rc);

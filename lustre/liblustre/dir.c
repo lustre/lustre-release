@@ -85,7 +85,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
                              &res_id, LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
-                llu_prepare_md_op_data(&op_data, inode, NULL, NULL, 0, 0);
+                llu_prep_md_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
                 rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, &it, LCK_CR,
                                 &op_data, &lockh, NULL, 0,

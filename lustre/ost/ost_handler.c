@@ -99,7 +99,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
-                capa = lustre_unpack_capa(req->rq_repmsg, REQ_REC_OFF + 1);
+                capa = lustre_unpack_capa(req->rq_reqmsg, REQ_REC_OFF + 1);
         req->rq_status = obd_destroy(exp, &body->oa, NULL, oti, NULL, capa);
         RETURN(0);
 }

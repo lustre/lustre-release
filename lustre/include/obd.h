@@ -967,6 +967,8 @@ enum obd_cleanup_stage {
 #define KEY_INIT_RECOV_BACKUP   "init_recov_bk"
 #define KEY_FLUSH_CTX           "flush_ctx"
 #define KEY_CAPA_KEY            "capa_key"
+#define KEY_CONN_DATA           "conn_data"
+#define KEY_MAX_EASIZE          "max_easize"
 
 struct lu_context;
 
