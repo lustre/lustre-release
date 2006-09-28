@@ -122,7 +122,7 @@ int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o,
 {
         struct mdt_device *mdt = info->mti_mdt;
         int cancel = 0;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         if (!S_ISREG(lu_object_attr(&o->mot_obj.mo_lu)))
@@ -153,9 +153,8 @@ int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o,
                 lh->mlh_mode = LCK_EX;
                 rc = mdt_object_lock(info, o, lh, MDS_INODELOCK_UPDATE);
                 mdt_object_unlock(info, o, lh, 1);
-                RETURN(rc);
         }
-        RETURN(0);
+        RETURN(rc);
 }
 
 /* Update the on-disk attributes if needed and re-enable Size-on-MDS caching. */

@@ -273,6 +273,13 @@ static int osd_write_locked(const struct lu_context *ctx, struct osd_object *o)
         return oti->oti_w_locks > 0 && o->oo_owner == ctx;
 }
 
+static void osd_fid_build_name(const struct lu_fid *fid, char *name)
+{
+        static const char *qfmt = LPX64":%lx:%lx";
+
+        sprintf(name, qfmt, fid_seq(fid), fid_oid(fid), fid_ver(fid));
+}
+
 /* helper to push us into KERNEL_DS context */
 static struct file *osd_rw_init(const struct lu_context *ctxt,
                                 struct inode *inode, mm_segment_t *seg)
@@ -387,26 +394,47 @@ static int osd_inode_unlinked(const struct inode *inode)
 }
 
 enum {
-        OSD_TXN_OI_DELETE_CREDITS = 20
+        OSD_TXN_OI_DELETE_CREDITS = 20,
+        OSD_TXN_RMENTRY_CREDITS = 20
 };
 
 static int osd_inode_remove(const struct lu_context *ctx,
                             struct osd_object *obj)
 {
+        const struct lu_fid    *fid = lu_object_fid(&obj->oo_dt.do_lu);
         struct osd_device      *osd = osd_obj2dev(obj);
         struct osd_thread_info *oti = lu_context_key_get(ctx, &osd_key);
         struct txn_param       *prm = &oti->oti_txn;
         struct thandle         *th;
+        struct dentry          *dentry;
         int result;
 
-        prm->tp_credits = OSD_TXN_OI_DELETE_CREDITS;
+        prm->tp_credits = OSD_TXN_OI_DELETE_CREDITS + OSD_TXN_RMENTRY_CREDITS;
         th = osd_trans_start(ctx, &osd->od_dt_dev, prm);
         if (!IS_ERR(th)) {
                 osd_oi_write_lock(&osd->od_oi);
-                result = osd_oi_delete(oti, &osd->od_oi,
-                                       lu_object_fid(&obj->oo_dt.do_lu), th);
-                iput(obj->oo_inode);
+                result = osd_oi_delete(oti, &osd->od_oi, fid, th);
                 osd_oi_write_unlock(&osd->od_oi);
+
+                /* 
+                 * The following is added by huanghua@clusterfs.com as
+                 * a temporary hack, to remove the directory entry in 
+                 * "*OBJ_TEMP*". We will finally do not use this hack,
+                 * and at that time we will remove these code.
+                 */
+                osd_fid_build_name(fid, oti->oti_name);
+                oti->oti_str.name = oti->oti_name;
+                oti->oti_str.len  = strlen(oti->oti_name);
+
+                dentry = d_alloc(osd->od_obj_area, &oti->oti_str);
+                if (dentry != NULL) {
+                        struct inode *dir = osd->od_obj_area->d_inode;
+                        obj->oo_inode->i_nlink = 1;
+                        d_instantiate(dentry, obj->oo_inode);
+                        result = dir->i_op->unlink(dir, dentry);
+                        dput(dentry);
+                } else
+                        iput(obj->oo_inode);
                 osd_trans_stop(ctx, th);
         } else
                 result = PTR_ERR(th);
@@ -818,13 +846,6 @@ static int osd_create_post(struct osd_thread_info *info, struct osd_object *obj,
 
         osd_object_init0(obj);
         return 0;
-}
-
-static void osd_fid_build_name(const struct lu_fid *fid, char *name)
-{
-        static const char *qfmt = LPX64":%lx:%lx";
-
-        sprintf(name, qfmt, fid_seq(fid), fid_oid(fid), fid_ver(fid));
 }
 
 static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
