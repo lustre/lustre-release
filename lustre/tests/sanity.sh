@@ -2166,6 +2166,7 @@ test_52b() {
 run_test 52b "immutable flag test (should return errors) ======="
 
 test_53() {
+	# only test MDT0000 
         for i in `ls -d $LPROC/osc/*-osc-MDT0000 2> /dev/null` ; do
                 ostname=`basename $i | cut -d - -f 1-2`
                 ost_last=`cat $LPROC/obdfilter/$ostname/last_id`
@@ -2460,13 +2461,13 @@ test_63b() {
 	sysctl -w lustre.fail_loc=0x80000406
 	multiop $DIR/$tfile Owy && \
 		$LCTL dk /tmp/test63b.debug && \
-		sysctl -w lnet.debug=$DBG_SAVE && \
+		sysctl -w lnet.debug="$DBG_SAVE" && \
 		error "sync didn't return ENOMEM"
 	grep -q locked $LPROC/llite/*/dump_page_cache && \
 		$LCTL dk /tmp/test63b.debug && \
-		sysctl -w lnet.debug=$DBG_SAVE && \
+		sysctl -w lnet.debug="$DBG_SAVE" && \
 		error "locked page left in cache after async error" || true
-	sysctl -w lnet.debug=$DBG_SAVE
+	sysctl -w lnet.debug="$DBG_SAVE"
 }
 run_test 63b "async write errors should be returned to fsync ==="
 
