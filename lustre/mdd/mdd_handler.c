@@ -696,7 +696,9 @@ static int mdd_readlink(const struct lu_context *ctxt, struct md_object *obj,
         LASSERT(lu_object_exists(&obj->mo_lu));
 
         next = mdd_object_child(mdd_obj);
+        mdd_read_lock(ctxt, mdd_obj);
         rc = next->do_body_ops->dbo_read(ctxt, next, buf, buf_len, &pos);
+        mdd_read_unlock(ctxt, mdd_obj);
         RETURN(rc);
 }
 
@@ -712,7 +714,9 @@ static int mdd_xattr_list(const struct lu_context *ctxt, struct md_object *obj,
         LASSERT(lu_object_exists(&obj->mo_lu));
 
         next = mdd_object_child(mdd_obj);
+        mdd_read_lock(ctxt, mdd_obj);
         rc = next->do_ops->do_xattr_list(ctxt, next, buf, buf_len);
+        mdd_read_unlock(ctxt, mdd_obj);
 
         RETURN(rc);
 }
