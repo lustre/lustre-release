@@ -603,9 +603,10 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         if (rc > 0) {
                 const struct lu_context *ctxt = info->mti_ctxt;
 
-                mdt_set_disposition(info, rep, DISP_IT_EXECD);
-                mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
-                mdt_set_disposition(info, rep, DISP_LOOKUP_POS);
+                mdt_set_disposition(info, rep, (DISP_IT_EXECD |
+                                                DISP_LOOKUP_EXECD |
+                                                DISP_LOOKUP_POS));
+
                 rc = mo_attr_get(ctxt, mdt_object_child(o), ma, NULL);
                 if (rc == 0)
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
@@ -650,13 +651,13 @@ static int mdt_cross_open(struct mdt_thread_info* info,
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
                 /*
-                 * FIXME: something wrong here lookup was positive but there is
+                 * FIXME: something wrong here, lookup was positive but there is
                  * no object!
                  */
-                CERROR("Cross-ref object doesn't exists!\n");
+                CERROR("Cross-ref object doesn't exist!\n");
                 rc = -EFAULT;
         } else  {
-                /* FIXME: something wrong here the object is on another MDS! */
+                /* FIXME: something wrong here, the object is on another MDS! */
                 CERROR("The object isn't on this server! FLD error?\n");
                 rc = -EFAULT;
         }
@@ -705,10 +706,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         }
 
         CDEBUG(D_INODE, "I am going to open "DFID"/("DFID":%s) "
-                        "cr_flag=0%o mode=0%06o msg_flag=0x%x\n",
-                        PFID(rr->rr_fid1), PFID(rr->rr_fid2),
-                        rr->rr_name, create_flags, la->la_mode,
-                        lustre_msg_get_flags(req->rq_reqmsg));
+               "cr_flag=0%o mode=0%06o msg_flag=0x%x\n",
+               PFID(rr->rr_fid1), PFID(rr->rr_fid2),
+               rr->rr_name, create_flags, la->la_mode,
+               lustre_msg_get_flags(req->rq_reqmsg));
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 /* This is a replay request. */
@@ -722,18 +723,19 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                  * via a regular replay.
                  */
                 if (!(create_flags & MDS_OPEN_CREAT)) {
-                        DEBUG_REQ(D_ERROR, req,"OPEN_CREAT not in open replay");
+                        DEBUG_REQ(D_ERROR, req,"OPEN & CREAT not in open replay.");
                         GOTO(out, result = -EFAULT);
                 }
-                CDEBUG(D_INFO, "Open replay failed to find object, "
-                       "continue as regular open\n");
+                CDEBUG(D_INFO, "Open replay did find object, continue as "
+                       "regular open\n");
         }
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
                 GOTO(out, result = -ENOMEM);
 
-        mdt_set_disposition(info, ldlm_rep, DISP_IT_EXECD);
-        mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
+        mdt_set_disposition(info, ldlm_rep,
+                            (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
+        
         if (rr->rr_name[0] == 0) {
                 /* this is cross-ref open */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);

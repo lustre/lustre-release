@@ -134,16 +134,16 @@ fld_client_get_target(struct lu_client_fld *fld,
 int fld_client_add_target(struct lu_client_fld *fld,
                           struct lu_fld_target *tar)
 {
-        const char *tar_name = fld_target_name(tar);
+        const char *name = fld_target_name(tar);
         struct lu_fld_target *target, *tmp;
         ENTRY;
 
         LASSERT(tar != NULL);
-        LASSERT(tar_name != NULL);
+        LASSERT(name != NULL);
         LASSERT(tar->ft_srv != NULL || tar->ft_exp != NULL);
 
         CDEBUG(D_INFO|D_WARNING, "%s: Adding target %s\n",
-	       fld->lcf_name, tar_name);
+	       fld->lcf_name, name);
 
         OBD_ALLOC_PTR(target);
         if (target == NULL)
@@ -151,13 +151,11 @@ int fld_client_add_target(struct lu_client_fld *fld,
 
         spin_lock(&fld->lcf_lock);
         list_for_each_entry(tmp, &fld->lcf_targets, ft_chain) {
-                const char *tmp_name = fld_target_name(tmp);
-                
-                if (strlen(tar_name) == strlen(tmp_name) &&
-                    strcmp(tmp_name, tar_name) == 0)
-                {
+                if (tmp->ft_idx == tar->ft_idx) {
                         spin_unlock(&fld->lcf_lock);
                         OBD_FREE_PTR(target);
+                        CERROR("Target %s exists in FLD and known as %s:#"LPU64"\n",
+                               name, fld_target_name(tmp), tmp->ft_idx);
                         RETURN(-EEXIST);
                 }
         }
@@ -178,7 +176,7 @@ int fld_client_add_target(struct lu_client_fld *fld,
 }
 EXPORT_SYMBOL(fld_client_add_target);
 
-/* remove export from FLD */
+/* Remove export from FLD */
 int fld_client_del_target(struct lu_client_fld *fld,
                           __u64 idx)
 {

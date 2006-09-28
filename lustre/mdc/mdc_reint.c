@@ -54,7 +54,7 @@ static int mdc_reint(struct ptlrpc_request *request,
         else if (!lustre_swab_repbuf(request, REPLY_REC_OFF,
                                      sizeof(struct mdt_body),
                                      lustre_swab_mdt_body)) {
-                CERROR ("Can't unpack mds_body\n");
+                CERROR ("Can't unpack mdt_body\n");
                 rc = -EPROTO;
         }
         return rc;

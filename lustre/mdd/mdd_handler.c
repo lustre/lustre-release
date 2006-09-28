@@ -55,10 +55,14 @@ static void __mdd_ref_add(const struct lu_context *ctxt, struct mdd_object *obj,
                           struct thandle *handle);
 static void __mdd_ref_del(const struct lu_context *ctxt, struct mdd_object *obj,
                           struct thandle *handle);
-static int mdd_lookup_intent(const struct lu_context *ctxt,
-                             struct md_object *pobj,
-                             const char *name, const struct lu_fid* fid,
-                             int mask, struct md_ucred *uc);
+static int __mdd_lookup(const struct lu_context *ctxt,
+                        struct md_object *pobj,
+                        const char *name, const struct lu_fid* fid,
+                        int mask, struct md_ucred *uc);
+static int __mdd_lookup_locked(const struct lu_context *ctxt,
+                               struct md_object *pobj,
+                               const char *name, const struct lu_fid* fid,
+                               int mask, struct md_ucred *uc);
 static int mdd_exec_permission_lite(const struct lu_context *ctxt,
                                     struct mdd_object *obj,
                                     struct md_ucred *uc);
@@ -1707,7 +1711,8 @@ static int mdd_parent_fid(const struct lu_context *ctxt,
                           struct mdd_object *obj,
                           struct lu_fid *fid)
 {
-        return mdd_lookup_intent(ctxt, &obj->mod_obj, dotdot, fid, 0, NULL);
+        return __mdd_lookup_locked(ctxt, &obj->mod_obj,
+                                   dotdot, fid, 0, NULL);
 }
 
 /*
@@ -1959,10 +1964,10 @@ out:
         RETURN(rc);
 }
 
-static int mdd_lookup_intent(const struct lu_context *ctxt,
-                             struct md_object *pobj,
-                             const char *name, const struct lu_fid* fid,
-                             int mask, struct md_ucred *uc)
+static int
+__mdd_lookup(const struct lu_context *ctxt, struct md_object *pobj,
+             const char *name, const struct lu_fid* fid, int mask,
+             struct md_ucred *uc)
 {
         struct mdd_object   *mdd_obj = md2mdd_obj(pobj);
         struct dt_object    *dir = mdd_object_child(mdd_obj);
@@ -1974,22 +1979,34 @@ static int mdd_lookup_intent(const struct lu_context *ctxt,
         if (mdd_is_dead_obj(mdd_obj))
                 RETURN(-ESTALE);
 
-        mdd_read_lock(ctxt, mdd_obj);
         if (mask == MAY_EXEC)
                 rc = mdd_exec_permission_lite(ctxt, mdd_obj, uc);
         else
                 rc = mdd_permission_internal(ctxt, mdd_obj, mask, uc);
         if (rc)
-                GOTO(out_unlock, rc);
+                RETURN(rc);
 
         if (S_ISDIR(mdd_object_type(mdd_obj)) && dt_try_as_dir(ctxt, dir))
                 rc = dir->do_index_ops->dio_lookup(ctxt, dir, rec, key);
         else
                 rc = -ENOTDIR;
 
-out_unlock:
-        mdd_read_unlock(ctxt, mdd_obj);
         RETURN(rc);
+}
+
+static int
+__mdd_lookup_locked(const struct lu_context *ctxt, struct md_object *pobj,
+                    const char *name, const struct lu_fid* fid, int mask,
+                    struct md_ucred *uc)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(pobj);
+        int rc;
+        
+        mdd_read_lock(ctxt, mdd_obj);
+        rc = __mdd_lookup(ctxt, pobj, name, fid, mask, uc); 
+        mdd_read_unlock(ctxt, mdd_obj);
+
+        return rc;
 }
 
 static int mdd_lookup(const struct lu_context *ctxt,
@@ -1998,7 +2015,7 @@ static int mdd_lookup(const struct lu_context *ctxt,
 {
         int rc;
         ENTRY;
-        rc = mdd_lookup_intent(ctxt, pobj, name, fid, MAY_EXEC, uc);
+        rc = __mdd_lookup_locked(ctxt, pobj, name, fid, MAY_EXEC, uc);
         RETURN(rc);
 }
 
@@ -2164,7 +2181,8 @@ static int mdd_create_sanity_check(const struct lu_context *ctxt,
         if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
 
-        rc = mdd_lookup_intent(ctxt, pobj, name, fid, MAY_WRITE | MAY_EXEC, uc);
+        rc = __mdd_lookup_locked(ctxt, pobj, name, fid,
+                                 MAY_WRITE | MAY_EXEC, uc);
         if (rc != -ENOENT)
                 RETURN(rc ? : -EEXIST);
 
@@ -2442,7 +2460,10 @@ static int mdd_object_create(const struct lu_context *ctxt,
         RETURN(rc);
 }
 
-/* partial operation */
+/*
+ * Partial operation. Be aware, this is called with write lock taken, so we use
+ * locksless version of __mdd_lookup() here.
+ */
 static int mdd_ni_sanity_check(const struct lu_context *ctxt,
                                struct md_object *pobj,
                                const char *name,
@@ -2457,7 +2478,7 @@ static int mdd_ni_sanity_check(const struct lu_context *ctxt,
         if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
 
-        rc = mdd_lookup_intent(ctxt, pobj, name, fid, MAY_WRITE | MAY_EXEC, uc);
+        rc = __mdd_lookup(ctxt, pobj, name, fid, MAY_WRITE | MAY_EXEC, uc);
         if (rc != -ENOENT)
                 RETURN(rc ? : -EEXIST);
         else
@@ -2493,6 +2514,10 @@ out_unlock:
         RETURN(rc);
 }
 
+/*
+ * Be aware, this is called with write lock taken, so we use locksless version
+ * of __mdd_lookup() here.
+ */
 static int mdd_nr_sanity_check(const struct lu_context *ctxt,
                                struct md_object *pobj,
                                const char *name,
@@ -2508,7 +2533,7 @@ static int mdd_nr_sanity_check(const struct lu_context *ctxt,
         if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
 
-        rc = mdd_lookup_intent(ctxt, pobj, name, fid, MAY_WRITE | MAY_EXEC, uc);
+        rc = __mdd_lookup(ctxt, pobj, name, fid, MAY_WRITE | MAY_EXEC, uc);
         RETURN(rc);
 }
 

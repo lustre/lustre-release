@@ -298,7 +298,7 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         rec->ul_fsuid = op_data->fsuid;//current->fsuid;
         rec->ul_fsgid = op_data->fsgid;//current->fsgid;
         rec->ul_cap = op_data->cap;//current->cap_effective;
-        rec->ul_mode = op_data->create_mode;
+        rec->ul_mode = op_data->mode;
         rec->ul_suppgid = op_data->suppgids[0];
         rec->ul_fid1 = op_data->fid1;
         rec->ul_fid2 = op_data->fid2;
@@ -355,7 +355,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_fid1 = op_data->fid1;
         rec->rn_fid2 = op_data->fid2;
         rec->rn_time = op_data->mod_time;
-        rec->rn_mode = op_data->create_mode;
+        rec->rn_mode = op_data->mode;
 
         mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
         mdc_pack_capa(req, offset + 2, op_data->mod_capa2);

@@ -1823,7 +1823,6 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
         RETURN(rc);
 }
 
-
 int ptlrpc_replay_req(struct ptlrpc_request *req)
 {
         struct ptlrpc_replay_async_args *aa;

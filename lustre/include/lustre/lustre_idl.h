@@ -604,7 +604,7 @@ struct md_op_data {
         __u64                 mod_time;
         const char           *name;
         int                   namelen;
-        __u32                 create_mode;
+        __u32                 mode;
         struct lmv_stripe_md *mea1;
         struct lmv_stripe_md *mea2;
         __u32                 suppgids[2];

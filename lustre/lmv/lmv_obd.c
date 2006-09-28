@@ -379,11 +379,12 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 cluuid->uuid);
 
         if (!mdc_obd->obd_set_up) {
-                CERROR("target %s not set up\n", tgt->uuid.uuid);
+                CERROR("target %s is not set up\n", tgt->uuid.uuid);
                 RETURN(-EINVAL);
         }
 
-        rc = obd_connect(NULL, &conn, mdc_obd, &lmv_mdc_uuid, &lmv->conn_data);
+        rc = obd_connect(NULL, &conn, mdc_obd, &lmv_mdc_uuid,
+                         &lmv->conn_data);
         if (rc) {
                 CERROR("target %s connect error %d\n", tgt->uuid.uuid, rc);
                 RETURN(rc);
@@ -2052,7 +2053,7 @@ static int lmv_unlink_slaves(struct obd_export *exp,
         for (i = 0; i < mea->mea_count; i++) {
                 memset(op_data2, 0, sizeof(*op_data2));
                 op_data2->fid1 = mea->mea_ids[i];
-                op_data2->create_mode = MDS_MODE_DONT_LOCK | S_IFDIR;
+                op_data2->mode = MDS_MODE_DONT_LOCK | S_IFDIR;
                 op_data2->fsuid = current->fsuid;
                 op_data2->fsgid = current->fsgid;
                 tgt_exp = lmv_get_export(lmv, &op_data2->fid1);

@@ -1664,6 +1664,7 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
         info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
         info->mti_ctxt = req->rq_svc_thread->t_ctx;
         info->mti_transno = lustre_msg_get_transno(req->rq_reqmsg);
+        
         /* it can be NULL while CONNECT */
         if (req->rq_export)
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);

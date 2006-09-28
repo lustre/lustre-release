@@ -351,7 +351,7 @@ static int mdc_ref_del(const struct lu_context *ctx, struct md_object *mo,
 
         mci = mdc_info_init(ctx);
         mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
-        mci->mci_opdata.create_mode = la->la_mode;
+        mci->mci_opdata.mode = la->la_mode;
         mci->mci_opdata.mod_time = la->la_ctime;
         if (uc &&
             ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))) {
@@ -419,7 +419,7 @@ static int mdc_rename_tgt(const struct lu_context *ctx, struct md_object *mo_p,
         mci = mdc_info_init(ctx);
         mci->mci_opdata.fid1 = *lu_object_fid(&mo_p->mo_lu);
         mci->mci_opdata.fid2 = *lf;
-        mci->mci_opdata.create_mode = la->la_mode;
+        mci->mci_opdata.mode = la->la_mode;
         mci->mci_opdata.mod_time = la->la_ctime;
         if (uc &&
             ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))) {
