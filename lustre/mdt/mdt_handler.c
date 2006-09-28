@@ -168,7 +168,7 @@ static int mdt_getstatus(struct mdt_thread_info *info)
         } else {
                 body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
                 rc = next->md_ops->mdo_root_get(info->mti_env, next,
-                                                &body->fid1, NULL);
+                                                &body->fid1);
                 if (rc == 0)
                         body->valid |= OBD_MD_FLID;
         }
@@ -195,7 +195,7 @@ static int mdt_statfs(struct mdt_thread_info *info)
                 osfs = req_capsule_server_get(&info->mti_pill,&RMF_OBD_STATFS);
                 /* XXX max_age optimisation is needed here. See mds_statfs */
                 rc = next->md_ops->mdo_statfs(info->mti_env, next,
-                                              &info->mti_u.ksfs, NULL);
+                                              &info->mti_u.ksfs);
                 statfs_pack(osfs, &info->mti_u.ksfs);
         }
 
@@ -287,7 +287,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD,
                                                              RCL_SERVER);
         }
-        rc = mo_attr_get(env, next, ma, NULL);
+        rc = mo_attr_get(env, next, ma);
         if (rc == -EREMOTE) {
                 /* This object is located on remote node.*/
                 repbody->fid1 = *mdt_object_fid(o);
@@ -326,7 +326,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                           reqbody->valid & OBD_MD_LINKNAME) {
                 buffer->lb_buf = ma->ma_lmm;
                 buffer->lb_len = ma->ma_lmm_size;
-                rc = mo_readlink(env, next, buffer, NULL);
+                rc = mo_readlink(env, next, buffer);
                 if (rc <= 0) {
                         CERROR("readlink failed: %d\n", rc);
                         rc = -EFAULT;
@@ -367,7 +367,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                                                       &RMF_ACL, RCL_SERVER);
                 if (buffer->lb_len > 0) {
                         rc = mo_xattr_get(env, next, buffer,
-                                          XATTR_NAME_ACL_ACCESS, NULL);
+                                          XATTR_NAME_ACL_ACCESS);
                         if (rc < 0) {
                                 if (rc == -ENODATA || rc == -EOPNOTSUPP)
                                         rc = 0;
@@ -448,7 +448,7 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
          */
         LASSERT(fid_is_sane(&info->mti_body->fid2));
         rc = mdo_is_subdir(info->mti_env, mdt_object_child(obj),
-                           &info->mti_body->fid2, &repbody->fid1, NULL);
+                           &info->mti_body->fid2, &repbody->fid1);
         if (rc < 0)
                 RETURN(rc);
 
@@ -549,7 +549,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 RETURN(rc);
 
         /*step 2: lookup child's fid by name */
-        rc = mdo_lookup(info->mti_env, next, name, child_fid, &info->mti_uc);
+        rc = mdo_lookup(info->mti_env, next, name, child_fid);
         if (rc != 0) {
                 if (rc == -ENOENT)
                         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
@@ -931,8 +931,7 @@ static int mdt_readpage(struct mdt_thread_info *info)
         }
 
         /* call lower layers to fill allocated pages with directory data */
-        rc = mo_readpage(info->mti_env, mdt_object_child(object), rdpg,
-                         &info->mti_uc);
+        rc = mo_readpage(info->mti_env, mdt_object_child(object), rdpg);
         if (rc) {
                 if (rc == -ERANGE)
                         rc1 = rc;
@@ -1123,7 +1122,7 @@ static int mdt_sync(struct mdt_thread_info *info)
                                 next = mdt_object_child(info->mti_object);
                                 info->mti_attr.ma_need = MA_INODE;
                                 rc = mo_attr_get(info->mti_env, next,
-                                                 &info->mti_attr, NULL);
+                                                 &info->mti_attr);
                                 if (rc == 0) {
                                         body = req_capsule_server_get(pill,
                                                                 &RMF_MDT_BODY);
@@ -3768,7 +3767,7 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                 case MD_LOV_SYNC:
                         rc = next->md_ops->mdo_maxsize_get(env, next,
                                         &m->mdt_max_mdsize,
-                                        &m->mdt_max_cookiesize, NULL);
+                                        &m->mdt_max_cookiesize);
                         CDEBUG(D_INFO, "get max mdsize %d max cookiesize %d\n",
                                      m->mdt_max_mdsize, m->mdt_max_cookiesize);
                         break;
@@ -3958,6 +3957,10 @@ struct lu_context_key mdt_txn_key = {
         .lct_fini = mdt_txn_key_fini
 };
 
+struct md_ucred *mdt_ucred(const struct mdt_thread_info *info)
+{
+        return md_ucred(info->mti_env);
+}
 
 static int mdt_type_init(struct lu_device_type *t)
 {

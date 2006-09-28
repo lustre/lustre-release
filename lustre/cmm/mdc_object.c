@@ -203,7 +203,7 @@ static int mdc_req2attr_update(const struct lu_env *env,
 }
 
 static int mdc_attr_get(const struct lu_env *env, struct md_object *mo,
-                        struct md_attr *ma, struct md_ucred *uc)
+                        struct md_attr *ma)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct mdc_thread_info *mci;
@@ -235,13 +235,13 @@ static int mdc_attr_get(const struct lu_env *env, struct md_object *mo,
 static int mdc_object_create(const struct lu_env *env,
                              struct md_object *mo,
                              const struct md_create_spec *spec,
-                             struct md_attr *ma,
-                             struct md_ucred *uc)
+                             struct md_attr *ma)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct lu_attr *la = &ma->ma_attr;
         struct mdc_thread_info *mci;
         const void *symname;
+        struct md_ucred *uc = md_ucred(env);
         int rc, symlen;
         uid_t uid;
         gid_t gid;
@@ -296,11 +296,11 @@ static int mdc_object_create(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int mdc_ref_add(const struct lu_env *env, struct md_object *mo,
-                       struct md_ucred *uc)
+static int mdc_ref_add(const struct lu_env *env, struct md_object *mo)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct mdc_thread_info *mci;
+        struct md_ucred *uc = md_ucred(env);
         int rc;
         ENTRY;
 
@@ -341,11 +341,12 @@ static int mdc_ref_add(const struct lu_env *env, struct md_object *mo,
 }
 
 static int mdc_ref_del(const struct lu_env *env, struct md_object *mo,
-                       struct md_attr *ma, struct md_ucred *uc)
+                       struct md_attr *ma)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct lu_attr *la = &ma->ma_attr;
         struct mdc_thread_info *mci;
+        struct md_ucred *uc = md_ucred(env);
         int rc;
         ENTRY;
 
@@ -382,8 +383,7 @@ static int mdc_ref_del(const struct lu_env *env, struct md_object *mo,
 
 #ifdef HAVE_SPLIT_SUPPORT
 int mdc_send_page(struct cmm_device *cm, const struct lu_env *env,
-                  struct md_object *mo, struct page *page, __u32 offset,
-                  struct md_ucred *uc)
+                  struct md_object *mo, struct page *page, __u32 offset)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         int rc;
@@ -407,12 +407,12 @@ static struct md_object_operations mdc_mo_ops = {
 /* md_dir_operations */
 static int mdc_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
                           struct md_object *mo_t, const struct lu_fid *lf,
-                          const char *name, struct md_attr *ma,
-                          struct md_ucred *uc)
+                          const char *name, struct md_attr *ma)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo_p));
         struct lu_attr *la = &ma->ma_attr;
         struct mdc_thread_info *mci;
+        struct md_ucred *uc = md_ucred(env);
         int rc;
         ENTRY;
 
@@ -453,8 +453,7 @@ static int mdc_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
 }
 
 static int mdc_is_subdir(const struct lu_env *env, struct md_object *mo,
-                         const struct lu_fid *fid, struct lu_fid *sfid,
-                         struct md_ucred *uc)
+                         const struct lu_fid *fid, struct lu_fid *sfid)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));
         struct mdc_thread_info *mci;

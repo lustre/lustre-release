@@ -128,7 +128,7 @@ int cmm_upcall(const struct lu_env *env, struct md_device *md,
 #ifdef HAVE_SPLIT_SUPPORT
 /* cmm_split.c */
 int cml_try_to_split(const struct lu_env *env,
-                     struct md_object *mo, struct md_ucred *uc);
+                     struct md_object *mo);
 #endif
 
 #endif /* __KERNEL__ */

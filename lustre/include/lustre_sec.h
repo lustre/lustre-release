@@ -511,4 +511,6 @@ int bulk_csum_cli_reply(struct ptlrpc_bulk_desc *desc, int read,
 int bulk_csum_svc(struct ptlrpc_bulk_desc *desc, int read,
                   struct lustre_msg *vmsg, int voff,
                   struct lustre_msg *rmsg, int roff);
+
+
 #endif /* _LUSTRE_SEC_H_ */

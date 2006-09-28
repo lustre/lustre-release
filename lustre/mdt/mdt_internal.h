@@ -266,10 +266,6 @@ struct mdt_thread_info {
          */
         struct mdt_object         *mti_object;
         /*
-         * User credential.
-         */
-        struct md_ucred            mti_uc;
-        /*
          * Object attributes.
          */
         struct md_attr             mti_attr;
@@ -577,6 +573,8 @@ do {                                                                         \
                 RETURN(ret);                                                 \
         }                                                                    \
 } while(0)
+
+struct md_ucred *mdt_ucred(const struct mdt_thread_info *info);
 
 /*
  * fid Capability

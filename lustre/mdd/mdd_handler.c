@@ -58,18 +58,16 @@ static void __mdd_ref_del(const struct lu_env *env, struct mdd_object *obj,
 static int __mdd_lookup(const struct lu_env *env,
                         struct md_object *pobj,
                         const char *name, const struct lu_fid* fid,
-                        int mask, struct md_ucred *uc);
+                        int mask);
 static int __mdd_lookup_locked(const struct lu_env *env,
                                struct md_object *pobj,
                                const char *name, const struct lu_fid* fid,
-                               int mask, struct md_ucred *uc);
+                               int mask);
 static int mdd_exec_permission_lite(const struct lu_env *env,
-                                    struct mdd_object *obj,
-                                    struct md_ucred *uc);
+                                    struct mdd_object *obj);
 static int __mdd_permission_internal(const struct lu_env *env,
                                      struct mdd_object *obj,
-                                     int mask, int getattr,
-                                     struct md_ucred *uc);
+                                     int mask, int getattr);
 
 static struct md_object_operations mdd_obj_ops;
 static struct md_dir_operations    mdd_dir_ops;
@@ -291,10 +289,9 @@ static int mdd_in_group_p(struct md_ucred *uc, gid_t grp)
 }
 
 static inline int mdd_permission_internal(const struct lu_env *env,
-                                          struct mdd_object *obj, int mask,
-                                          struct md_ucred *uc)
+                                          struct mdd_object *obj, int mask)
 {
-        return __mdd_permission_internal(env, obj, mask, 1, uc);
+        return __mdd_permission_internal(env, obj, mask, 1);
 }
 
 struct mdd_thread_info *mdd_env_info(const struct lu_env *env)
@@ -449,7 +446,7 @@ static inline int mdd_is_dead_obj(struct mdd_object *obj)
 /*Check whether it may create the cobj under the pobj*/
 static int mdd_may_create(const struct lu_env *env,
                           struct mdd_object *pobj, struct mdd_object *cobj,
-                          int need_check, struct md_ucred *uc)
+                          int need_check)
 {
         int rc = 0;
         ENTRY;
@@ -463,7 +460,7 @@ static int mdd_may_create(const struct lu_env *env,
         /*check pobj may create or not*/
         if (need_check)
                 rc = mdd_permission_internal(env, pobj,
-                                             MAY_WRITE | MAY_EXEC, uc);
+                                             MAY_WRITE | MAY_EXEC);
 
         RETURN(rc);
 }
@@ -521,10 +518,10 @@ static inline int mdd_capable(struct md_ucred *uc, int cap)
  */
 static inline int mdd_is_sticky(const struct lu_env *env,
                                 struct mdd_object *pobj,
-                                struct mdd_object *cobj,
-                                struct md_ucred *uc)
+                                struct mdd_object *cobj)
 {
         struct lu_attr *tmp_la = &mdd_env_info(env)->mti_la;
+        struct md_ucred *uc = md_ucred(env);
         int rc;
 
         rc = __mdd_la_get(env, cobj, tmp_la);
@@ -548,7 +545,7 @@ static inline int mdd_is_sticky(const struct lu_env *env,
 /*Check whether it may delete the cobj under the pobj*/
 static int mdd_may_delete(const struct lu_env *env,
                           struct mdd_object *pobj, struct mdd_object *cobj,
-                          int is_dir, int need_check, struct md_ucred *uc)
+                          int is_dir, int need_check)
 {
         struct mdd_device *mdd = mdo2mdd(&cobj->mod_obj);
         int rc = 0;
@@ -577,12 +574,12 @@ static int mdd_may_delete(const struct lu_env *env,
                 if (mdd_is_dead_obj(pobj))
                         RETURN(-ENOENT);
 
-                if (mdd_is_sticky(env, pobj, cobj, uc))
+                if (mdd_is_sticky(env, pobj, cobj))
                         RETURN(-EPERM);
 
                 if (need_check)
                         rc = mdd_permission_internal(env, pobj,
-                                                     MAY_WRITE | MAY_EXEC, uc);
+                                                     MAY_WRITE | MAY_EXEC);
         }
         RETURN(rc);
 }
@@ -671,7 +668,7 @@ static inline int mdd_attr_get_internal_locked(const struct lu_env *env,
  * No permission check is needed.
  */
 static int mdd_attr_get(const struct lu_env *env, struct md_object *obj,
-                        struct md_attr *ma, struct md_ucred *uc)
+                        struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         int                rc;
@@ -686,7 +683,7 @@ static int mdd_attr_get(const struct lu_env *env, struct md_object *obj,
  */
 static int mdd_xattr_get(const struct lu_env *env,
                          struct md_object *obj, struct lu_buf *buf,
-                         const char *name, struct md_ucred *uc)
+                         const char *name)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct dt_object  *next;
@@ -709,7 +706,7 @@ static int mdd_xattr_get(const struct lu_env *env,
  * no need check again.
  */
 static int mdd_readlink(const struct lu_env *env, struct md_object *obj,
-                        struct lu_buf *buf, struct md_ucred *uc)
+                        struct lu_buf *buf)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct dt_object  *next;
@@ -727,7 +724,7 @@ static int mdd_readlink(const struct lu_env *env, struct md_object *obj,
 }
 
 static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
-                          struct lu_buf *buf, struct md_ucred *uc)
+                          struct lu_buf *buf)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct dt_object  *next;
@@ -1025,9 +1022,10 @@ static int __mdd_xattr_set(const struct lu_env *env, struct mdd_object *o,
  * and port to
  */
 int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
-                 struct lu_attr *la, struct md_ucred *uc)
+                 struct lu_attr *la)
 {
         struct lu_attr   *tmp_la     = &mdd_env_info(env)->mti_la;
+        struct md_ucred  *uc         = md_ucred(env);
         time_t            now        = CURRENT_SECONDS;
         int               rc;
         ENTRY;
@@ -1163,7 +1161,7 @@ int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
         /* For tuncate (or setsize), we should have MAY_WRITE perm */
         if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
-                rc = mdd_permission_internal(env, obj, MAY_WRITE, uc);
+                rc = mdd_permission_internal(env, obj, MAY_WRITE);
                 if (rc)
                         RETURN(rc);
 
@@ -1196,7 +1194,7 @@ int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
 /* set attr and LOV EA at once, return updated attr */
 static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
-                        const struct md_attr *ma, struct md_ucred *uc)
+                        const struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -1232,7 +1230,7 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 
         *la_copy = ma->ma_attr;
         mdd_write_lock(env, mdd_obj);
-        rc = mdd_fix_attr(env, mdd_obj, la_copy, uc);
+        rc = mdd_fix_attr(env, mdd_obj, la_copy);
         mdd_write_unlock(env, mdd_obj);
         if (rc)
                 GOTO(cleanup, rc);
@@ -1290,10 +1288,10 @@ int mdd_xattr_set_txn(const struct lu_env *env, struct mdd_object *obj,
 }
 
 static int mdd_xattr_sanity_check(const struct lu_env *env,
-                                  struct mdd_object *obj,
-                                  struct md_ucred *uc)
+                                  struct mdd_object *obj)
 {
-        struct lu_attr *tmp_la = &mdd_env_info(env)->mti_la;
+        struct lu_attr  *tmp_la = &mdd_env_info(env)->mti_la;
+        struct md_ucred *uc     = md_ucred(env);
         int rc;
         ENTRY;
 
@@ -1313,8 +1311,7 @@ static int mdd_xattr_sanity_check(const struct lu_env *env,
 }
 
 static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
-                         const struct lu_buf *buf, const char *name, int fl,
-                         struct md_ucred *uc)
+                         const struct lu_buf *buf, const char *name, int fl)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -1322,7 +1319,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
         int  rc;
         ENTRY;
 
-        rc = mdd_xattr_sanity_check(env, mdd_obj, uc);
+        rc = mdd_xattr_sanity_check(env, mdd_obj);
         if (rc)
                 RETURN(rc);
 
@@ -1362,7 +1359,7 @@ static int __mdd_xattr_del(const struct lu_env *env,struct mdd_device *mdd,
 }
 
 int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
-                  const char *name, struct md_ucred *uc)
+                  const char *name)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -1370,7 +1367,7 @@ int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
         int  rc;
         ENTRY;
 
-        rc = mdd_xattr_sanity_check(env, mdd_obj, uc);
+        rc = mdd_xattr_sanity_check(env, mdd_obj);
         if (rc)
                 RETURN(rc);
 
@@ -1457,13 +1454,12 @@ static int __mdd_index_delete(const struct lu_env *env,
 
 static int mdd_link_sanity_check(const struct lu_env *env,
                                  struct mdd_object *tgt_obj,
-                                 struct mdd_object *src_obj,
-                                 struct md_ucred *uc)
+                                 struct mdd_object *src_obj)
 {
         int rc;
         ENTRY;
 
-        rc = mdd_may_create(env, tgt_obj, NULL, 1, uc);
+        rc = mdd_may_create(env, tgt_obj, NULL, 1);
         if (rc)
                 RETURN(rc);
 
@@ -1478,7 +1474,7 @@ static int mdd_link_sanity_check(const struct lu_env *env,
 
 static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
                     struct md_object *src_obj, const char *name,
-                    struct md_attr *ma, struct md_ucred *uc)
+                    struct md_attr *ma)
 {
         struct mdd_object *mdd_tobj = md2mdd_obj(tgt_obj);
         struct mdd_object *mdd_sobj = md2mdd_obj(src_obj);
@@ -1495,7 +1491,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 
         mdd_lock2(env, mdd_tobj, mdd_sobj);
 
-        rc = mdd_link_sanity_check(env, mdd_tobj, mdd_sobj, uc);
+        rc = mdd_link_sanity_check(env, mdd_tobj, mdd_sobj);
         if (rc)
                 GOTO(out, rc);
 
@@ -1609,15 +1605,14 @@ static int __mdd_finish_unlink(const struct lu_env *env,
 static int mdd_unlink_sanity_check(const struct lu_env *env,
                                    struct mdd_object *pobj,
                                    struct mdd_object *cobj,
-                                   struct md_attr *ma,
-                                   struct md_ucred *uc)
+                                   struct md_attr *ma)
 {
         struct dt_object  *dt_cobj  = mdd_object_child(cobj);
         int rc = 0;
         ENTRY;
 
         rc = mdd_may_delete(env, pobj, cobj,
-                            S_ISDIR(ma->ma_attr.la_mode), 1, uc);
+                            S_ISDIR(ma->ma_attr.la_mode), 1);
         if (rc)
                 RETURN(rc);
 
@@ -1633,7 +1628,7 @@ static int mdd_unlink_sanity_check(const struct lu_env *env,
 
 static int mdd_unlink(const struct lu_env *env,
                       struct md_object *pobj, struct md_object *cobj,
-                      const char *name, struct md_attr *ma, struct md_ucred *uc)
+                      const char *name, struct md_attr *ma)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
@@ -1650,7 +1645,7 @@ static int mdd_unlink(const struct lu_env *env,
 
         mdd_lock2(env, mdd_pobj, mdd_cobj);
 
-        rc = mdd_unlink_sanity_check(env, mdd_pobj, mdd_cobj, ma, uc);
+        rc = mdd_unlink_sanity_check(env, mdd_pobj, mdd_cobj, ma);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -1692,7 +1687,7 @@ cleanup:
 
 /* partial unlink */
 static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
-                       struct md_attr *ma, struct md_ucred *uc)
+                       struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -1707,7 +1702,7 @@ static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
 
         mdd_write_lock(env, mdd_obj);
 
-        rc = mdd_unlink_sanity_check(env, NULL, mdd_obj, ma, uc);
+        rc = mdd_unlink_sanity_check(env, NULL, mdd_obj, ma);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -1732,7 +1727,7 @@ static int mdd_parent_fid(const struct lu_env *env,
                           struct lu_fid *fid)
 {
         return __mdd_lookup_locked(env, &obj->mod_obj,
-                                   dotdot, fid, 0, NULL);
+                                   dotdot, fid, 0);
 }
 
 /*
@@ -1841,15 +1836,14 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
                                    const struct lu_fid *sfid,
                                    int src_is_dir,
                                    struct mdd_object *sobj,
-                                   struct mdd_object *tobj,
-                                   struct md_ucred *uc)
+                                   struct mdd_object *tobj)
 {
         struct mdd_device *mdd = mdo2mdd(&src_pobj->mod_obj);
         int rc = 0, need_check = 1;
         ENTRY;
 
         mdd_read_lock(env, src_pobj);
-        rc = mdd_may_delete(env, src_pobj, sobj, src_is_dir, need_check, uc);
+        rc = mdd_may_delete(env, src_pobj, sobj, src_is_dir, need_check);
         mdd_read_unlock(env, src_pobj);
         if (rc)
                 RETURN(rc);
@@ -1859,12 +1853,12 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 
         if (!tobj) {
                 mdd_read_lock(env, tgt_pobj);
-                rc = mdd_may_create(env, tgt_pobj, NULL, need_check, uc);
+                rc = mdd_may_create(env, tgt_pobj, NULL, need_check);
                 mdd_read_unlock(env, tgt_pobj);
         } else {
                 mdd_read_lock(env, tgt_pobj);
                 rc = mdd_may_delete(env, tgt_pobj, tobj, src_is_dir,
-                                    need_check, uc);
+                                    need_check);
                 mdd_read_unlock(env, tgt_pobj);
                 if (!rc && S_ISDIR(mdd_object_type(tobj)) &&
                     mdd_dir_is_empty(env, tobj))
@@ -1882,7 +1876,7 @@ static int mdd_rename(const struct lu_env *env,
                       struct md_object *src_pobj, struct md_object *tgt_pobj,
                       const struct lu_fid *lf, const char *sname,
                       struct md_object *tobj, const char *tname,
-                      struct md_attr *ma, struct md_ucred *uc)
+                      struct md_attr *ma)
 {
         struct mdd_device *mdd = mdo2mdd(src_pobj);
         struct mdd_object *mdd_spobj = md2mdd_obj(src_pobj);
@@ -1906,7 +1900,7 @@ static int mdd_rename(const struct lu_env *env,
 
         /*XXX: shouldn't this check be done under lock below? */
         rc = mdd_rename_sanity_check(env, mdd_spobj, mdd_tpobj,
-                                     lf, is_dir, mdd_sobj, mdd_tobj, uc);
+                                     lf, is_dir, mdd_sobj, mdd_tobj);
         if (rc)
                 GOTO(out, rc);
 
@@ -1986,8 +1980,7 @@ out:
 
 static int
 __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
-             const char *name, const struct lu_fid* fid, int mask,
-             struct md_ucred *uc)
+             const char *name, const struct lu_fid* fid, int mask)
 {
         struct mdd_object   *mdd_obj = md2mdd_obj(pobj);
         struct dt_object    *dir = mdd_object_child(mdd_obj);
@@ -2000,9 +1993,9 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                 RETURN(-ESTALE);
 
         if (mask == MAY_EXEC)
-                rc = mdd_exec_permission_lite(env, mdd_obj, uc);
+                rc = mdd_exec_permission_lite(env, mdd_obj);
         else
-                rc = mdd_permission_internal(env, mdd_obj, mask, uc);
+                rc = mdd_permission_internal(env, mdd_obj, mask);
         if (rc)
                 RETURN(rc);
 
@@ -2016,14 +2009,13 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 
 static int
 __mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
-                    const char *name, const struct lu_fid* fid, int mask,
-                    struct md_ucred *uc)
+                    const char *name, const struct lu_fid* fid, int mask)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
         int rc;
 
         mdd_read_lock(env, mdd_obj);
-        rc = __mdd_lookup(env, pobj, name, fid, mask, uc);
+        rc = __mdd_lookup(env, pobj, name, fid, mask);
         mdd_read_unlock(env, mdd_obj);
 
        return rc;
@@ -2031,11 +2023,11 @@ __mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
 
 static int mdd_lookup(const struct lu_env *env,
                       struct md_object *pobj, const char *name,
-                      struct lu_fid* fid, struct md_ucred *uc)
+                      struct lu_fid* fid)
 {
         int rc;
         ENTRY;
-        rc = __mdd_lookup_locked(env, pobj, name, fid, MAY_EXEC, uc);
+        rc = __mdd_lookup_locked(env, pobj, name, fid, MAY_EXEC);
         RETURN(rc);
 }
 
@@ -2050,7 +2042,7 @@ static int mdd_lookup(const struct lu_env *env,
  */
 static int mdd_is_subdir(const struct lu_env *env,
                          struct md_object *mo, const struct lu_fid *fid,
-                         struct lu_fid *sfid, struct md_ucred *uc)
+                         struct lu_fid *sfid)
 {
         struct mdd_device *mdd = mdo2mdd(mo);
         int rc;
@@ -2110,7 +2102,7 @@ static int __mdd_object_initialize(const struct lu_env *env,
  * XXX: Need MAY_WRITE to be checked?
  */
 static int mdd_cd_sanity_check(const struct lu_env *env,
-                               struct mdd_object *obj, struct md_ucred *uc)
+                               struct mdd_object *obj)
 {
         int rc = 0;
         ENTRY;
@@ -2121,7 +2113,7 @@ static int mdd_cd_sanity_check(const struct lu_env *env,
 
 #if 0
         mdd_read_lock(env, obj);
-        rc = mdd_permission_internal(env, obj, MAY_WRITE, uc);
+        rc = mdd_permission_internal(env, obj, MAY_WRITE);
         mdd_read_unlock(env, obj);
 #endif
 
@@ -2132,7 +2124,7 @@ static int mdd_cd_sanity_check(const struct lu_env *env,
 static int mdd_create_data(const struct lu_env *env,
                            struct md_object *pobj, struct md_object *cobj,
                            const struct md_create_spec *spec,
-                           struct md_attr *ma, struct md_ucred *uc)
+                           struct md_attr *ma)
 {
         struct mdd_device *mdd = mdo2mdd(cobj);
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);/* XXX maybe NULL */
@@ -2144,7 +2136,7 @@ static int mdd_create_data(const struct lu_env *env,
         int                rc;
         ENTRY;
 
-        rc = mdd_cd_sanity_check(env, son, uc);
+        rc = mdd_cd_sanity_check(env, son);
         if (rc)
                 RETURN(rc);
 
@@ -2187,8 +2179,7 @@ static int mdd_create_data(const struct lu_env *env,
 
 static int mdd_create_sanity_check(const struct lu_env *env,
                                    struct md_object *pobj,
-                                   const char *name, struct md_attr *ma,
-                                   struct md_ucred *uc)
+                                   const char *name, struct md_attr *ma)
 {
         struct mdd_thread_info *info = mdd_env_info(env);
         struct lu_attr    *la        = &info->mti_la;
@@ -2202,7 +2193,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                 RETURN(-ENOENT);
 
         rc = __mdd_lookup_locked(env, pobj, name, fid,
-                                 MAY_WRITE | MAY_EXEC, uc);
+                                 MAY_WRITE | MAY_EXEC);
         if (rc != -ENOENT)
                 RETURN(rc ? : -EEXIST);
 
@@ -2245,7 +2236,7 @@ static int mdd_create(const struct lu_env *env,
                       struct md_object *pobj, const char *name,
                       struct md_object *child,
                       const struct md_create_spec *spec,
-                      struct md_attr* ma, struct md_ucred *uc)
+                      struct md_attr* ma)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
@@ -2258,7 +2249,7 @@ static int mdd_create(const struct lu_env *env,
         ENTRY;
 
         /* sanity checks before big job */
-        rc = mdd_create_sanity_check(env, pobj, name, ma, uc);
+        rc = mdd_create_sanity_check(env, pobj, name, ma);
         if (rc)
                 RETURN(rc);
 
@@ -2410,8 +2401,7 @@ cleanup:
 /* partial operation */
 static int mdd_oc_sanity_check(const struct lu_env *env,
                                struct mdd_object *obj,
-                               struct md_attr *ma,
-                               struct md_ucred *uc)
+                               struct md_attr *ma)
 {
         int rc;
         ENTRY;
@@ -2440,8 +2430,7 @@ static int mdd_oc_sanity_check(const struct lu_env *env,
 static int mdd_object_create(const struct lu_env *env,
                              struct md_object *obj,
                              const struct md_create_spec *spec,
-                             struct md_attr *ma,
-                             struct md_ucred *uc)
+                             struct md_attr *ma)
 {
 
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -2451,7 +2440,7 @@ static int mdd_object_create(const struct lu_env *env,
         int rc;
         ENTRY;
 
-        rc = mdd_oc_sanity_check(env, mdd_obj, ma, uc);
+        rc = mdd_oc_sanity_check(env, mdd_obj, ma);
         if (rc)
                 RETURN(rc);
 
@@ -2492,8 +2481,7 @@ static int mdd_object_create(const struct lu_env *env,
 static int mdd_ni_sanity_check(const struct lu_env *env,
                                struct md_object *pobj,
                                const char *name,
-                               const struct lu_fid *fid,
-                               struct md_ucred *uc)
+                               const struct lu_fid *fid)
 {
         struct mdd_object *obj       = md2mdd_obj(pobj);
         int rc;
@@ -2503,7 +2491,7 @@ static int mdd_ni_sanity_check(const struct lu_env *env,
         if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
 
-        rc = __mdd_lookup(env, pobj, name, fid, MAY_WRITE | MAY_EXEC, uc);
+        rc = __mdd_lookup(env, pobj, name, fid, MAY_WRITE | MAY_EXEC);
         if (rc != -ENOENT)
                 RETURN(rc ? : -EEXIST);
         else
@@ -2513,7 +2501,7 @@ static int mdd_ni_sanity_check(const struct lu_env *env,
 static int mdd_name_insert(const struct lu_env *env,
                            struct md_object *pobj,
                            const char *name, const struct lu_fid *fid,
-                           int isdir, struct md_ucred *uc)
+                           int isdir)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
         struct thandle *handle;
@@ -2526,7 +2514,7 @@ static int mdd_name_insert(const struct lu_env *env,
                 RETURN(PTR_ERR(handle));
 
         mdd_write_lock(env, mdd_obj);
-        rc = mdd_ni_sanity_check(env, pobj, name, fid, uc);
+        rc = mdd_ni_sanity_check(env, pobj, name, fid);
         if (rc)
                 GOTO(out_unlock, rc);
 
@@ -2545,8 +2533,7 @@ out_unlock:
  */
 static int mdd_nr_sanity_check(const struct lu_env *env,
                                struct md_object *pobj,
-                               const char *name,
-                               struct md_ucred *uc)
+                               const char *name)
 {
         struct mdd_thread_info *info = mdd_env_info(env);
         struct lu_fid     *fid       = &info->mti_fid;
@@ -2558,14 +2545,13 @@ static int mdd_nr_sanity_check(const struct lu_env *env,
         if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
 
-        rc = __mdd_lookup(env, pobj, name, fid, MAY_WRITE | MAY_EXEC, uc);
+        rc = __mdd_lookup(env, pobj, name, fid, MAY_WRITE | MAY_EXEC);
         RETURN(rc);
 }
 
 static int mdd_name_remove(const struct lu_env *env,
                            struct md_object *pobj,
-                           const char *name,
-                           struct md_ucred *uc)
+                           const char *name)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
@@ -2579,7 +2565,7 @@ static int mdd_name_remove(const struct lu_env *env,
                 RETURN(PTR_ERR(handle));
 
         mdd_write_lock(env, mdd_obj);
-        rc = mdd_nr_sanity_check(env, pobj, name, uc);
+        rc = mdd_nr_sanity_check(env, pobj, name);
         if (rc)
                 GOTO(out_unlock, rc);
 
@@ -2596,8 +2582,7 @@ static int mdd_rt_sanity_check(const struct lu_env *env,
                                struct mdd_object *tgt_pobj,
                                struct mdd_object *tobj,
                                const struct lu_fid *sfid,
-                               const char *name, struct md_attr *ma,
-                               struct md_ucred *uc)
+                               const char *name, struct md_attr *ma)
 {
         struct mdd_device *mdd = mdo2mdd(&tgt_pobj->mod_obj);
         int rc, src_is_dir;
@@ -2609,12 +2594,12 @@ static int mdd_rt_sanity_check(const struct lu_env *env,
 
         src_is_dir = S_ISDIR(ma->ma_attr.la_mode);
         if (tobj) {
-                rc = mdd_may_delete(env, tgt_pobj, tobj, src_is_dir, 1, uc);
+                rc = mdd_may_delete(env, tgt_pobj, tobj, src_is_dir, 1);
                 if (!rc && S_ISDIR(mdd_object_type(tobj)) &&
                      mdd_dir_is_empty(env, tobj))
                                 RETURN(-ENOTEMPTY);
         } else {
-                rc = mdd_may_create(env, tgt_pobj, NULL, 1, uc);
+                rc = mdd_may_create(env, tgt_pobj, NULL, 1);
         }
 
         /* source should not be ancestor of target dir */
@@ -2627,7 +2612,7 @@ static int mdd_rt_sanity_check(const struct lu_env *env,
 static int mdd_rename_tgt(const struct lu_env *env,
                           struct md_object *pobj, struct md_object *tobj,
                           const struct lu_fid *lf, const char *name,
-                          struct md_attr *ma, struct md_ucred *uc)
+                          struct md_attr *ma)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_tpobj = md2mdd_obj(pobj);
@@ -2649,7 +2634,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
         }
 
         /*TODO rename sanity checking*/
-        rc = mdd_rt_sanity_check(env, mdd_tpobj, mdd_tobj, lf, name, ma, uc);
+        rc = mdd_rt_sanity_check(env, mdd_tpobj, mdd_tobj, lf, name, ma);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -2678,8 +2663,7 @@ cleanup:
  * No permission check is needed.
  */
 static int mdd_root_get(const struct lu_env *env,
-                        struct md_device *m, struct lu_fid *f,
-                        struct md_ucred *uc)
+                        struct md_device *m, struct lu_fid *f)
 {
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
 
@@ -2692,7 +2676,7 @@ static int mdd_root_get(const struct lu_env *env,
  * No permission check is needed.
  */
 static int mdd_statfs(const struct lu_env *env, struct md_device *m,
-                      struct kstatfs *sfs, struct md_ucred *uc)
+                      struct kstatfs *sfs)
 {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         int rc;
@@ -2708,7 +2692,7 @@ static int mdd_statfs(const struct lu_env *env, struct md_device *m,
  * No permission check is needed.
  */
 static int mdd_maxsize_get(const struct lu_env *env, struct md_device *m,
-                           int *md_size, int *cookie_size, struct md_ucred *uc)
+                           int *md_size, int *cookie_size)
 {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         ENTRY;
@@ -2758,7 +2742,7 @@ static void __mdd_ref_add(const struct lu_env *env, struct mdd_object *obj,
  * XXX: if permission check is needed here?
  */
 static int mdd_ref_add(const struct lu_env *env,
-                       struct md_object *obj, struct md_ucred *uc)
+                       struct md_object *obj)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
@@ -2814,8 +2798,7 @@ static int accmode(struct mdd_object *mdd_obj, int flags)
 }
 
 static int mdd_open_sanity_check(const struct lu_env *env,
-                                 struct mdd_object *obj, int flag,
-                                 struct md_ucred *uc)
+                                 struct mdd_object *obj, int flag)
 {
         struct lu_attr *tmp_la = &mdd_env_info(env)->mti_la;
         int mode = accmode(obj, flag);
@@ -2837,7 +2820,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
                 RETURN(-EISDIR);
 
         if (!(flag & MDS_OPEN_CREATED)) {
-                rc = __mdd_permission_internal(env, obj, mode, 0, uc);
+                rc = __mdd_permission_internal(env, obj, mode, 0);
                 if (rc)
                         RETURN(rc);
         }
@@ -2862,22 +2845,26 @@ static int mdd_open_sanity_check(const struct lu_env *env,
         }
 
         /* O_NOATIME can only be set by the owner or superuser */
-        if (flag & O_NOATIME)
-                if (uc->mu_fsuid != tmp_la->la_uid && !mdd_capable(uc, CAP_FOWNER))
+        if (flag & O_NOATIME) {
+                struct md_ucred *uc = md_ucred(env);
+
+                if (uc->mu_fsuid != tmp_la->la_uid &&
+                    !mdd_capable(uc, CAP_FOWNER))
                         RETURN(-EPERM);
+        }
 
         RETURN(0);
 }
 
 static int mdd_open(const struct lu_env *env, struct md_object *obj,
-                    int flags, struct md_ucred *uc)
+                    int flags)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         int rc = 0;
 
         mdd_write_lock(env, mdd_obj);
 
-        rc = mdd_open_sanity_check(env, mdd_obj, flags, uc);
+        rc = mdd_open_sanity_check(env, mdd_obj, flags);
         if (rc == 0)
                 mdd_obj->mod_count ++;
 
@@ -2889,7 +2876,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
  * No permission check is needed.
  */
 static int mdd_close(const struct lu_env *env, struct md_object *obj,
-                     struct md_attr *ma, struct md_ucred *uc)
+                     struct md_attr *ma)
 {
         int rc;
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
@@ -2909,8 +2896,7 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
 }
 
 static int mdd_readpage_sanity_check(const struct lu_env *env,
-                                     struct mdd_object *obj,
-                                     struct md_ucred *uc)
+                                     struct mdd_object *obj)
 {
         struct dt_object *next = mdd_object_child(obj);
         int rc;
@@ -2918,7 +2904,7 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
 
         if (S_ISDIR(mdd_object_type(obj)) &&
             dt_try_as_dir(env, next))
-                rc = mdd_permission_internal(env, obj, MAY_READ, uc);
+                rc = mdd_permission_internal(env, obj, MAY_READ);
         else
                 rc = -ENOTDIR;
 
@@ -2926,7 +2912,7 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
 }
 
 static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
-                        const struct lu_rdpg *rdpg, struct md_ucred *uc)
+                        const struct lu_rdpg *rdpg)
 {
         struct dt_object *next;
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
@@ -2937,7 +2923,7 @@ static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
         next = mdd_object_child(mdd_obj);
 
         mdd_read_lock(env, mdd_obj);
-        rc = mdd_readpage_sanity_check(env, mdd_obj, uc);
+        rc = mdd_readpage_sanity_check(env, mdd_obj);
         if (rc)
                 GOTO(out_unlock, rc);
 
@@ -3022,11 +3008,12 @@ check_perm:
 #endif
 
 static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
-                         struct lu_attr* la, int mask, struct md_ucred *uc)
+                         struct lu_attr* la, int mask)
 {
 #ifdef CONFIG_FS_POSIX_ACL
         struct dt_object *next;
         struct lu_buf    *buf = &mdd_env_info(env)->mti_buf;
+        struct md_ucred  *uc  = md_ucred(env);
         posix_acl_xattr_entry *entry;
         int entry_count;
         int rc;
@@ -3060,10 +3047,10 @@ out:
 }
 
 static int mdd_exec_permission_lite(const struct lu_env *env,
-                                    struct mdd_object *obj,
-                                    struct md_ucred *uc)
+                                    struct mdd_object *obj)
 {
-        struct lu_attr *la = &mdd_env_info(env)->mti_la;
+        struct lu_attr  *la = &mdd_env_info(env)->mti_la;
+        struct md_ucred *uc = md_ucred(env);
         umode_t mode;
         int rc;
         ENTRY;
@@ -3101,10 +3088,10 @@ static int mdd_exec_permission_lite(const struct lu_env *env,
 
 static int __mdd_permission_internal(const struct lu_env *env,
                                      struct mdd_object *obj,
-                                     int mask, int getattr,
-                                     struct md_ucred *uc)
+                                     int mask, int getattr)
 {
-        struct lu_attr *la = &mdd_env_info(env)->mti_la;
+        struct lu_attr  *la = &mdd_env_info(env)->mti_la;
+        struct md_ucred *uc = md_ucred(env);
         __u32 mode;
         int rc;
 
@@ -3141,7 +3128,7 @@ static int __mdd_permission_internal(const struct lu_env *env,
                         if (((mode >> 3) & mask & S_IRWXO) != mask)
                                 goto check_groups;
 
-                        rc = mdd_check_acl(env, obj, la, mask, uc);
+                        rc = mdd_check_acl(env, obj, la, mask);
                         if (rc == -EACCES)
                                 goto check_capabilities;
                         else if ((rc != -EAGAIN) && (rc != -EOPNOTSUPP))
@@ -3184,25 +3171,25 @@ check_capabilities:
 
 static inline int mdd_permission_internal_locked(const struct lu_env *env,
                                                  struct mdd_object *obj,
-                                                 int mask, struct md_ucred *uc)
+                                                 int mask)
 {
         int rc;
 
         mdd_read_lock(env, obj);
-        rc = mdd_permission_internal(env, obj, mask, uc);
+        rc = mdd_permission_internal(env, obj, mask);
         mdd_read_unlock(env, obj);
 
         return rc;
 }
 
 static int mdd_permission(const struct lu_env *env, struct md_object *obj,
-                          int mask, struct md_ucred *uc)
+                          int mask)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         int rc;
         ENTRY;
 
-        rc = mdd_permission_internal_locked(env, mdd_obj, mask, uc);
+        rc = mdd_permission_internal_locked(env, mdd_obj, mask);
 
         RETURN(rc);
 }
@@ -3319,13 +3306,50 @@ static void mdd_device_free(const struct lu_env *env,
         OBD_FREE_PTR(m);
 }
 
+static void *mdd_ucred_key_init(const struct lu_context *ctx,
+                                struct lu_context_key *key)
+{
+        struct md_ucred *uc;
+
+        OBD_ALLOC_PTR(uc);
+        if (uc == NULL)
+                uc = ERR_PTR(-ENOMEM);
+        return uc;
+}
+
+static void mdd_ucred_key_fini(const struct lu_context *ctx,
+                             struct lu_context_key *key, void *data)
+{
+        struct md_ucred *uc = data;
+        OBD_FREE_PTR(uc);
+}
+
+static struct lu_context_key mdd_ucred_key = {
+        .lct_tags = LCT_SESSION,
+        .lct_init = mdd_ucred_key_init,
+        .lct_fini = mdd_ucred_key_fini
+};
+
+struct md_ucred *md_ucred(const struct lu_env *env)
+{
+        LASSERT(env->le_ses != NULL);
+        return lu_context_key_get(env->le_ses, &mdd_ucred_key);
+}
+EXPORT_SYMBOL(md_ucred);
+
 static int mdd_type_init(struct lu_device_type *t)
 {
-        return lu_context_key_register(&mdd_thread_key);
+        int result;
+
+        result = lu_context_key_register(&mdd_thread_key);
+        if (result == 0)
+                result = lu_context_key_register(&mdd_ucred_key);
+        return result;
 }
 
 static void mdd_type_fini(struct lu_device_type *t)
 {
+        lu_context_key_degister(&mdd_ucred_key);
         lu_context_key_degister(&mdd_thread_key);
 }
 

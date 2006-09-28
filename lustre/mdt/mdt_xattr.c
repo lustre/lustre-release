@@ -73,11 +73,11 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 else
                         rc = mo_xattr_get(info->mti_env,
                                           mdt_object_child(info->mti_object),
-                                          &LU_BUF_NULL, xattr_name, NULL);
+                                          &LU_BUF_NULL, xattr_name);
         } else if ((valid & OBD_MD_FLXATTRLS) == OBD_MD_FLXATTRLS) {
                 rc = mo_xattr_list(info->mti_env,
                                    mdt_object_child(info->mti_object),
-                                   &LU_BUF_NULL, NULL);
+                                   &LU_BUF_NULL);
         } else {
                 CERROR("valid bits: "LPX64"\n", info->mti_body->valid);
                 return -EINVAL;
@@ -174,8 +174,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
 
                         rc = do_remote_getfacl(info, &body->fid1, buf);
                 } else {
-                        rc = mo_xattr_get(info->mti_env, next, buf,
-                                          xattr_name, NULL);
+                        rc = mo_xattr_get(info->mti_env, next, buf, xattr_name);
                 }
 
                 if (rc < 0 && rc != -ENODATA && rc != -EOPNOTSUPP &&
@@ -184,7 +183,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         } else if (info->mti_body->valid & OBD_MD_FLXATTRLS) {
                 CDEBUG(D_INODE, "listxattr\n");
 
-                rc = mo_xattr_list(info->mti_env, next, buf, NULL);
+                rc = mo_xattr_list(info->mti_env, next, buf);
                 if (rc < 0)
                         CDEBUG(D_OTHER, "listxattr failed: %d\n", rc);
         } else
@@ -344,11 +343,10 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
                         buf->lb_buf = xattr;
                         buf->lb_len = xattr_len;
-                        rc = mo_xattr_set(env, child, buf,
-                                          xattr_name, flags, &info->mti_uc);
+                        rc = mo_xattr_set(env, child, buf, xattr_name, flags);
                 }
         } else if ((valid & OBD_MD_FLXATTRRM) == OBD_MD_FLXATTRRM) {
-                rc = mo_xattr_del(env, child, xattr_name, &info->mti_uc);
+                rc = mo_xattr_del(env, child, xattr_name);
         } else {
                 CERROR("valid bits: "LPX64"\n", body->valid);
                 rc = -EINVAL;

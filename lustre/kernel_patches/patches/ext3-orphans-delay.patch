@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/super.c
 ===================================================================
---- iam.orig/fs/ext3/super.c	2006-09-29 01:08:34.000000000 +0400
-+++ iam/fs/ext3/super.c	2006-09-29 01:08:34.000000000 +0400
+--- iam.orig/fs/ext3/super.c	2006-09-29 02:41:03.000000000 +0400
++++ iam/fs/ext3/super.c	2006-09-29 02:41:03.000000000 +0400
 @@ -1168,8 +1168,8 @@ static int ext3_check_descriptors (struc
   * e2fsck was run on this filesystem, and it must have already done the orphan
   * inode cleanup for us, so we can safely abort without any further action.

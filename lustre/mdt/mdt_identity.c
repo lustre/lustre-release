@@ -227,7 +227,7 @@ int mdt_pack_remote_perm(struct mdt_thread_info *info, struct mdt_object *o,
                          void *buf)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
-        struct md_ucred         *uc = &info->mti_uc;
+        struct md_ucred         *uc = mdt_ucred(info);
         struct md_object        *next = mdt_object_child(o);
         struct mdt_export_data  *med = mdt_req2med(req);
         struct mdt_remote_perm  *perm = buf;
@@ -249,11 +249,11 @@ int mdt_pack_remote_perm(struct mdt_thread_info *info, struct mdt_object *o,
         perm->rp_fsgid = uc->mu_o_fsgid;
 
         perm->rp_access_perm = 0;
-        if (mo_permission(info->mti_env, next, MAY_READ, uc) == 0)
+        if (mo_permission(info->mti_env, next, MAY_READ) == 0)
                 perm->rp_access_perm |= MAY_READ;
-        if (mo_permission(info->mti_env, next, MAY_WRITE, uc) == 0)
+        if (mo_permission(info->mti_env, next, MAY_WRITE) == 0)
                 perm->rp_access_perm |= MAY_WRITE;
-        if (mo_permission(info->mti_env, next, MAY_EXEC, uc) == 0)
+        if (mo_permission(info->mti_env, next, MAY_EXEC) == 0)
                 perm->rp_access_perm |= MAY_EXEC;
 
         RETURN(0);

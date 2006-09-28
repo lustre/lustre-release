@@ -202,6 +202,7 @@ int mdt_rmtacl_upcall(struct mdt_thread_info *info, unsigned long key,
         struct obd_device               *obd = req->rq_export->exp_obd;
         struct mdt_device               *mdt = info->mti_mdt;
         struct lvfs_ucred               uc;
+        struct md_ucred                *uc0 = mdt_ucred(info);
         struct lvfs_run_ctxt            saved;
         struct rmtacl_upcall_data       data;
         struct upcall_cache_entry       *entry;
@@ -215,14 +216,14 @@ int mdt_rmtacl_upcall(struct mdt_thread_info *info, unsigned long key,
 
         data.aud_cmd = cmd;
 
-        uc.luc_uid      = info->mti_uc.mu_uid;
-        uc.luc_gid      = info->mti_uc.mu_gid;
-        uc.luc_fsuid    = info->mti_uc.mu_fsuid;
-        uc.luc_fsgid    = info->mti_uc.mu_fsgid;
-        uc.luc_cap      = info->mti_uc.mu_cap;
-        uc.luc_umask    = info->mti_uc.mu_umask;
-        uc.luc_ginfo    = info->mti_uc.mu_ginfo;
-        uc.luc_identity = info->mti_uc.mu_identity;
+        uc.luc_uid      = uc0->mu_uid;
+        uc.luc_gid      = uc0->mu_gid;
+        uc.luc_fsuid    = uc0->mu_fsuid;
+        uc.luc_fsgid    = uc0->mu_fsgid;
+        uc.luc_cap      = uc0->mu_cap;
+        uc.luc_umask    = uc0->mu_umask;
+        uc.luc_ginfo    = uc0->mu_ginfo;
+        uc.luc_identity = uc0->mu_identity;
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         entry = upcall_cache_get_entry(mdt->mdt_rmtacl_cache, (__u64)key,

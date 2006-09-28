@@ -558,7 +558,7 @@ int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *req,
 void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
-        struct md_ucred         *uc = &info->mti_uc;
+        struct md_ucred         *uc = mdt_ucred(info);
         struct mdt_export_data  *med = mdt_req2med(req);
         struct mdt_idmap_table  *idmap = med->med_idmap;
         uid_t uid;
@@ -663,7 +663,7 @@ int mdt_remote_perm_reverse_idmap(struct ptlrpc_request *req,
 int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
-        struct md_ucred         *uc = &info->mti_uc;
+        struct md_ucred         *uc = mdt_ucred(info);
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_export_data  *med = mdt_req2med(req);
         struct mdt_idmap_table  *idmap = med->med_idmap;

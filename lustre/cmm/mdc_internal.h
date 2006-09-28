@@ -98,8 +98,7 @@ struct lu_object *mdc_object_alloc(const struct lu_env *,
                                    struct lu_device *);
 #ifdef HAVE_SPLIT_SUPPORT
 int mdc_send_page(struct cmm_device *cmm, const struct lu_env *env,
-                  struct md_object *mo, struct page *page, __u32 end,
-                  struct md_ucred *uc);
+                  struct md_object *mo, struct page *page, __u32 end);
 #endif
 
 #endif /* __KERNEL__ */

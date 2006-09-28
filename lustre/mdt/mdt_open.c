@@ -87,7 +87,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
         ma->ma_need = MA_INODE | MA_LOV;
         rc = mdo_create_data(info->mti_env,
                              p ? mdt_object_child(p) : NULL,
-                             mdt_object_child(o), spec, ma, &info->mti_uc);
+                             mdt_object_child(o), spec, ma);
         RETURN(rc);
 }
 
@@ -461,8 +461,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 RETURN(rc);
 
         rc = mo_open(info->mti_env, mdt_object_child(o),
-                     created ? flags | MDS_OPEN_CREATED : flags,
-                     &info->mti_uc);
+                     created ? flags | MDS_OPEN_CREATED : flags);
         if (rc)
                 RETURN(rc);
 
@@ -553,7 +552,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                 if (rc > 0) {
                         struct md_object *next;
                         next = mdt_object_child(child);
-                        rc = mo_attr_get(env, next, ma, NULL);
+                        rc = mo_attr_get(env, next, ma);
                         if (rc == 0)
                               rc = mdt_mfd_open(info, parent, child,
                                                 flags, 1, ldlm_rep);
@@ -607,7 +606,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
                                                 DISP_LOOKUP_EXECD |
                                                 DISP_LOOKUP_POS));
 
-                rc = mo_attr_get(env, mdt_object_child(o), ma, NULL);
+                rc = mo_attr_get(env, mdt_object_child(o), ma);
                 if (rc == 0)
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
@@ -646,7 +645,7 @@ static int mdt_cross_open(struct mdt_thread_info* info,
 
         rc = lu_object_exists(&o->mot_obj.mo_lu);
         if (rc > 0) {
-                rc = mo_attr_get(info->mti_env, mdt_object_child(o), ma, NULL);
+                rc = mo_attr_get(info->mti_env, mdt_object_child(o), ma);
                 if (rc == 0)
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
@@ -755,7 +754,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 GOTO(out, result = PTR_ERR(parent));
 
         result = mdo_lookup(info->mti_env, mdt_object_child(parent),
-                            rr->rr_name, child_fid, &info->mti_uc);
+                            rr->rr_name, child_fid);
         if (result != 0 && result != -ENOENT && result != -ESTALE)
                 GOTO(out_parent, result);
 
@@ -793,8 +792,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                                     rr->rr_name,
                                     mdt_object_child(child),
                                     &info->mti_spec,
-                                    &info->mti_attr,
-                                    &info->mti_uc);
+                                    &info->mti_attr);
                 if (result == -ERESTART) {
                         mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
                         GOTO(out_child, result);
@@ -807,7 +805,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         } else {
                 /* We have to get attr & lov ea for this object */
                 result = mo_attr_get(info->mti_env, mdt_object_child(child),
-                                     ma, NULL);
+                                     ma);
                 /*
                  * The object is on remote node, return its FID for remote open.
                  */
@@ -866,8 +864,7 @@ finish_open:
                                  mdt_object_child(parent),
                                  mdt_object_child(child),
                                  rr->rr_name,
-                                 &info->mti_attr,
-                                 &info->mti_uc);
+                                 &info->mti_attr);
                 if (rc2 != 0)
                         CERROR("error in cleanup of open");
         }
@@ -914,9 +911,9 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
         ma->ma_need |= MA_INODE;
 
         if (!MFD_CLOSED(mode))
-                rc = mo_close(info->mti_env, next, ma, NULL);
+                rc = mo_close(info->mti_env, next, ma);
         else if (ret == -EAGAIN)
-                rc = mo_attr_get(info->mti_env, next, ma, NULL);
+                rc = mo_attr_get(info->mti_env, next, ma);
 
         /* If the object is unlinked, do not try to re-enable SIZEONMDS */
         if ((ret == -EAGAIN) && (ma->ma_valid & MA_INODE) &&

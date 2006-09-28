@@ -97,7 +97,7 @@ void groups_sort(struct group_info *group_info)
 
 void mdt_exit_ucred(struct mdt_thread_info *info)
 {
-        struct md_ucred   *uc = &info->mti_uc;
+        struct md_ucred   *uc  = mdt_ucred(info);
         struct mdt_device *mdt = info->mti_mdt;
 
         if (uc->mu_valid != UCRED_INIT) {
@@ -118,7 +118,7 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
 static int old_init_ucred(struct mdt_thread_info *info,
                           struct mdt_body *body)
 {
-        struct md_ucred     *uc = &info->mti_uc;
+        struct md_ucred     *uc  = mdt_ucred(info);
         struct mdt_device   *mdt = info->mti_mdt;
         struct mdt_identity *identity = NULL;
 
@@ -153,7 +153,7 @@ static int old_init_ucred(struct mdt_thread_info *info,
 
 static int old_init_ucred_reint(struct mdt_thread_info *info)
 {
-        struct md_ucred     *uc = &info->mti_uc;
+        struct md_ucred     *uc  = mdt_ucred(info);
         struct mdt_device   *mdt = info->mti_mdt;
         struct mdt_identity *identity = NULL;
 
@@ -277,7 +277,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         struct mdt_export_data  *med = mdt_req2med(req);
         struct mdt_device       *mdt = info->mti_mdt;
         struct ptlrpc_user_desc *pud = req->rq_user_desc;
-        struct md_ucred         *ucred = &info->mti_uc;
+        struct md_ucred         *ucred = mdt_ucred(info);
         struct mdt_identity     *identity = NULL;
         lnet_nid_t              peernid = req->rq_peer.nid;
         __u32                   setxid_perm = 0;
@@ -438,7 +438,7 @@ out:
 int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
-        struct md_ucred       *uc = &info->mti_uc;
+        struct md_ucred       *uc  = mdt_ucred(info);
 
         if ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))
                 return 0;
@@ -453,7 +453,7 @@ int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
 int mdt_init_ucred_reint(struct mdt_thread_info *info)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
-        struct md_ucred       *uc = &info->mti_uc;
+        struct md_ucred       *uc  = mdt_ucred(info);
 
         if ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))
                 return 0;
@@ -601,7 +601,7 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 
 static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc = &info->mti_uc;
+        struct md_ucred         *uc  = mdt_ucred(info);
         struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *la = &ma->ma_attr;
         struct req_capsule      *pill = &info->mti_pill;
@@ -702,7 +702,7 @@ int mdt_close_unpack(struct mdt_thread_info *info)
 
 static int mdt_create_unpack(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc = &info->mti_uc;
+        struct md_ucred         *uc  = mdt_ucred(info);
         struct mdt_rec_create   *rec;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
@@ -771,7 +771,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 
 static int mdt_link_unpack(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc = &info->mti_uc;
+        struct md_ucred         *uc  = mdt_ucred(info);
         struct mdt_rec_link     *rec;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
@@ -810,7 +810,7 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 
 static int mdt_unlink_unpack(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc = &info->mti_uc;
+        struct md_ucred         *uc  = mdt_ucred(info);
         struct mdt_rec_unlink   *rec;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
@@ -848,7 +848,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 
 static int mdt_rename_unpack(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc = &info->mti_uc;
+        struct md_ucred         *uc = mdt_ucred(info);
         struct mdt_rec_rename   *rec;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
@@ -890,7 +890,7 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
 
 static int mdt_open_unpack(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc = &info->mti_uc;
+        struct md_ucred         *uc = mdt_ucred(info);
         struct mdt_rec_create   *rec;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct req_capsule      *pill = &info->mti_pill;
