@@ -96,7 +96,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 
         rc1 = req_capsule_pack(pill);
 
-        return rc = !rc1? rc1 : rc;
+        return rc = rc1 ? rc1 : rc;
 }
 
 static int do_remote_getfacl(struct mdt_thread_info *info,
@@ -222,7 +222,7 @@ static int mdt_setxattr_pack_reply(struct mdt_thread_info * info)
 
         rc1 = req_capsule_pack(pill);
 
-        return rc = !rc1? rc1 : rc;
+        return rc = rc1 ? rc1 : rc;
 }
 
 static int do_remote_setfacl(struct mdt_thread_info *info, struct lu_fid *fid)

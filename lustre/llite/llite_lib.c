@@ -2247,7 +2247,7 @@ void ll_finish_md_op_data(struct md_op_data *op_data)
 int ll_ioctl_getfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)
 {
         struct ptlrpc_request *req = NULL;
-        struct mds_body *body;
+        struct mdt_body *body;
         char *cmd, *buf;
         struct obd_capa *oc;
         int rc, buflen;
@@ -2263,8 +2263,8 @@ int ll_ioctl_getfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)
 
         oc = ll_i2mdscapa(inode);
         rc = md_getxattr(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
-                          OBD_MD_FLXATTR, XATTR_NAME_LUSTRE_ACL, cmd,
-                          ioc->cmd_len, ioc->res_len, 0, &req);
+                         OBD_MD_FLXATTR, XATTR_NAME_LUSTRE_ACL, cmd,
+                         ioc->cmd_len, ioc->res_len, 0, &req);
         capa_put(oc);
         if (rc < 0) {
                 CERROR("mdc_getxattr %s [%s] failed: %d\n",
@@ -2307,8 +2307,8 @@ int ll_ioctl_setfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)
 
         oc = ll_i2mdscapa(inode);
         rc = md_setxattr(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
-                          OBD_MD_FLXATTR, XATTR_NAME_LUSTRE_ACL, cmd,
-                          ioc->cmd_len, ioc->res_len, 0, &req);
+                         OBD_MD_FLXATTR, XATTR_NAME_LUSTRE_ACL, cmd,
+                         ioc->cmd_len, ioc->res_len, 0, &req);
         capa_put(oc);
         if (rc) {
                 CERROR("mdc_setxattr %s [%s] failed: %d\n",
