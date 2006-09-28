@@ -196,7 +196,7 @@ struct upcall_cache_ops mdt_rmtacl_upcall_cache_ops = {
 };
 
 int mdt_rmtacl_upcall(struct mdt_thread_info *info, unsigned long key,
-                      char *cmd, char *buf, int buflen)
+                      char *cmd, struct lu_buf *buf)
 {
         struct ptlrpc_request           *req = mdt_info_req(info);
         struct obd_device               *obd = req->rq_export->exp_obd;
@@ -232,17 +232,17 @@ int mdt_rmtacl_upcall(struct mdt_thread_info *info, unsigned long key,
         if (IS_ERR(entry))
                 GOTO(out, rc = PTR_ERR(entry));
 
-        if (buflen <= strlen(entry->u.acl.ra_buf))
+        if (buf->lb_len <= strlen(entry->u.acl.ra_buf))
                 GOTO(out, rc = -EFAULT);
 
-        memcpy(buf, entry->u.acl.ra_buf, strlen(entry->u.acl.ra_buf));
+        memcpy(buf->lb_buf, entry->u.acl.ra_buf, strlen(entry->u.acl.ra_buf));
         /* remote acl operation expire at once! */
         UC_CACHE_SET_EXPIRED(entry);
         upcall_cache_put_entry(mdt->mdt_rmtacl_cache, entry);
 
 out:
         if (rc)
-                sprintf(buf, "server processing error: %d\n", rc);
+                sprintf(buf->lb_buf, "server processing error: %d\n", rc);
         OBD_FREE(tmp, PAGE_SIZE);
         RETURN(0);
 }

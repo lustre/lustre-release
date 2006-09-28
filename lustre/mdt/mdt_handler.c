@@ -262,10 +262,9 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *la = &ma->ma_attr;
         struct req_capsule      *pill = &info->mti_pill;
-        const struct lu_env *env = info->mti_env;
+        const struct lu_env     *env = info->mti_env;
         struct mdt_body         *repbody;
-        void                    *buffer;
-        int                     length;
+        struct lu_buf           *buffer = &info->mti_buf;
         int                     rc;
         ENTRY;
 
@@ -325,7 +324,9 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 }
         } else if (S_ISLNK(la->la_mode) &&
                           reqbody->valid & OBD_MD_LINKNAME) {
-                rc = mo_readlink(env, next, ma->ma_lmm, ma->ma_lmm_size, NULL);
+                buffer->lb_buf = ma->ma_lmm;
+                buffer->lb_len = ma->ma_lmm_size;
+                rc = mo_readlink(env, next, buffer, NULL);
                 if (rc <= 0) {
                         CERROR("readlink failed: %d\n", rc);
                         rc = -EFAULT;
@@ -350,7 +351,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         }
 
         if (reqbody->valid & OBD_MD_FLRMTPERM) {
-                buffer = req_capsule_server_get(pill, &RMF_ACL);
+                buffer->lb_buf = req_capsule_server_get(pill, &RMF_ACL);
                 /* mdt_getattr_lock only */
                 rc = mdt_pack_remote_perm(info, o, buffer);
                 if (rc)
@@ -361,10 +362,11 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 #ifdef CONFIG_FS_POSIX_ACL
         else if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
                  (reqbody->valid & OBD_MD_FLACL)) {
-                buffer = req_capsule_server_get(pill, &RMF_ACL);
-                length = req_capsule_get_size(pill, &RMF_ACL, RCL_SERVER);
-                if (length > 0) {
-                        rc = mo_xattr_get(env, next, buffer, length,
+                buffer->lb_buf = req_capsule_server_get(pill, &RMF_ACL);
+                buffer->lb_len = req_capsule_get_size(pill,
+                                                      &RMF_ACL, RCL_SERVER);
+                if (buffer->lb_len > 0) {
+                        rc = mo_xattr_get(env, next, buffer,
                                           XATTR_NAME_ACL_ACCESS, NULL);
                         if (rc < 0) {
                                 if (rc == -ENODATA || rc == -EOPNOTSUPP)
@@ -1664,7 +1666,7 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
         info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
         info->mti_env = req->rq_svc_thread->t_env;
         info->mti_transno = lustre_msg_get_transno(req->rq_reqmsg);
-        
+
         /* it can be NULL while CONNECT */
         if (req->rq_export)
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);

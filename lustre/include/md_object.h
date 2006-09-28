@@ -132,26 +132,16 @@ struct md_object_operations {
                             const struct md_attr *attr,
                             struct md_ucred *uc);
 
-        int (*moo_xattr_get)(const struct lu_env *env,
-                             struct md_object *obj,
-                             void *buf,
-                             int buf_len,
-                             const char *name,
+        int (*moo_xattr_get)(const struct lu_env *env, struct md_object *obj,
+                             struct lu_buf *buf, const char *name,
                              struct md_ucred *uc);
 
-        int (*moo_xattr_list)(const struct lu_env *env,
-                              struct md_object *obj,
-                              void *buf,
-                              int buf_len,
-                              struct md_ucred *uc);
+        int (*moo_xattr_list)(const struct lu_env *env, struct md_object *obj,
+                              struct lu_buf *buf, struct md_ucred *uc);
 
-        int (*moo_xattr_set)(const struct lu_env *env,
-                             struct md_object *obj,
-                             const void *buf,
-                             int buf_len,
-                             const char *name,
-                             int fl,
-                             struct md_ucred *uc);
+        int (*moo_xattr_set)(const struct lu_env *env, struct md_object *obj,
+                             const struct lu_buf *buf, const char *name,
+                             int fl, struct md_ucred *uc);
 
         int (*moo_xattr_del)(const struct lu_env *env,
                              struct md_object *obj,
@@ -163,11 +153,8 @@ struct md_object_operations {
                             const struct lu_rdpg *rdpg,
                             struct md_ucred *uc);
 
-        int (*moo_readlink)(const struct lu_env *env,
-                            struct md_object *obj,
-                            void *buf,
-                            int buf_len,
-                            struct md_ucred *uc);
+        int (*moo_readlink)(const struct lu_env *env, struct md_object *obj,
+                            struct lu_buf *buf, struct md_ucred *uc);
 
         /* part of cross-ref operation */
         int (*moo_object_create)(const struct lu_env *env,
@@ -389,12 +376,11 @@ static inline int mo_attr_get(const struct lu_env *env,
 
 static inline int mo_readlink(const struct lu_env *env,
                               struct md_object *m,
-                              void *buf,
-                              int buf_len,
+                              struct lu_buf *buf,
                               struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_readlink);
-        return m->mo_ops->moo_readlink(env, m, buf, buf_len, uc);
+        return m->mo_ops->moo_readlink(env, m, buf, uc);
 }
 
 static inline int mo_attr_set(const struct lu_env *env,
@@ -408,13 +394,12 @@ static inline int mo_attr_set(const struct lu_env *env,
 
 static inline int mo_xattr_get(const struct lu_env *env,
                                struct md_object *m,
-                               void *buf,
-                               int buf_len,
+                               struct lu_buf *buf,
                                const char *name,
                                struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_xattr_get);
-        return m->mo_ops->moo_xattr_get(env, m, buf, buf_len, name, uc);
+        return m->mo_ops->moo_xattr_get(env, m, buf, name, uc);
 }
 
 static inline int mo_xattr_del(const struct lu_env *env,
@@ -428,24 +413,22 @@ static inline int mo_xattr_del(const struct lu_env *env,
 
 static inline int mo_xattr_set(const struct lu_env *env,
                                struct md_object *m,
-                               const void *buf,
-                               int buf_len,
+                               const struct lu_buf *buf,
                                const char *name,
                                int flags,
                                struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_xattr_set);
-        return m->mo_ops->moo_xattr_set(env, m, buf, buf_len, name, flags, uc);
+        return m->mo_ops->moo_xattr_set(env, m, buf, name, flags, uc);
 }
 
 static inline int mo_xattr_list(const struct lu_env *env,
                                 struct md_object *m,
-                                void *buf,
-                                int buf_len,
+                                struct lu_buf *buf,
                                 struct md_ucred *uc)
 {
         LASSERT(m->mo_ops->moo_xattr_list);
-        return m->mo_ops->moo_xattr_list(env, m, buf, buf_len, uc);
+        return m->mo_ops->moo_xattr_list(env, m, buf, uc);
 }
 
 static inline int mo_open(const struct lu_env *env,

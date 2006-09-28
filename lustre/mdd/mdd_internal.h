@@ -81,13 +81,14 @@ struct mdd_thread_info {
         struct obd_info       mti_oi;
         struct orph_key       mti_orph_key;
         struct obd_trans_info mti_oti;
+        struct lu_buf         mti_buf;
 };
 
 int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
                  struct lustre_cfg *cfg);
 int mdd_fini_obd(const struct lu_env *, struct mdd_device *);
 int mdd_xattr_set_txn(const struct lu_env *env, struct mdd_object *obj,
-                      const void *buf, int buf_len, const char *name, int fl,
+                      const struct lu_buf *buf, const char *name, int fl,
                       struct thandle *txn);
 int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
                    struct mdd_object *child, struct lov_mds_md *lmm,
@@ -115,6 +116,10 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
                           struct lov_mds_md *lmm, int lmm_size);
 
 struct mdd_thread_info *mdd_env_info(const struct lu_env *env);
+
+struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len);
+const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
+                                       const void *area, ssize_t len);
 
 void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj);
 void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj);

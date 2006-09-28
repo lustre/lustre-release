@@ -171,9 +171,8 @@ struct dt_object_operations {
          *
          * precondition: dt_object_exists(dt);
          */
-        int   (*do_xattr_get)(const struct lu_env *env,
-                              struct dt_object *dt,
-                              void *buf, int buf_len, const char *name);
+        int   (*do_xattr_get)(const struct lu_env *env, struct dt_object *dt,
+                              struct lu_buf *buf, const char *name);
         /*
          * Set value of an extended attribute.
          *
@@ -182,8 +181,7 @@ struct dt_object_operations {
          * precondition: dt_object_exists(dt);
          */
         int   (*do_xattr_set)(const struct lu_env *env,
-                              struct dt_object *dt,
-                              const void *buf, int buf_len,
+                              struct dt_object *dt, const struct lu_buf *buf,
                               const char *name, int fl, struct thandle *handle);
         /*
          * Delete existing extended attribute.
@@ -200,7 +198,7 @@ struct dt_object_operations {
          * precondition: dt_object_exists(dt);
          */
         int   (*do_xattr_list)(const struct lu_env *env,
-                               struct dt_object *dt, void *buf, int buf_len);
+                               struct dt_object *dt, struct lu_buf *buf);
         /*
          * Create new object on this device.
          *
@@ -245,13 +243,13 @@ struct dt_body_operations {
          * precondition: dt_object_exists(dt);
          */
         ssize_t (*dbo_read)(const struct lu_env *env, struct dt_object *dt,
-                            void *buf, size_t count, loff_t *pos);
+                            struct lu_buf *buf, loff_t *pos);
         /*
          * precondition: dt_object_exists(dt);
          */
-        ssize_t (*dbo_write)(const struct lu_env *env,
-                             struct dt_object *dt, const void *buf,
-                             size_t count, loff_t *pos, struct thandle *handle);
+        ssize_t (*dbo_write)(const struct lu_env *env, struct dt_object *dt,
+                             const struct lu_buf *buf, loff_t *pos,
+                             struct thandle *handle);
 };
 
 /*

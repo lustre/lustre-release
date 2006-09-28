@@ -184,11 +184,12 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                void *md, int *md_size, const char *name)
 {
         struct dt_object *next;
-        int rc = 0;
+        int rc;
         ENTRY;
 
         next = mdd_object_child(obj);
-        rc = next->do_ops->do_xattr_get(env, next, md, *md_size, name);
+        rc = next->do_ops->do_xattr_get(env, next,
+                                        mdd_buf_get(env, md, *md_size), name);
         /*
          * XXX: handling of -ENODATA, the right way is to have ->do_md_get()
          * exported by dt layer.
@@ -198,7 +199,7 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                 rc = 0;
         } else if (rc < 0) {
                 CERROR("Error %d reading eadata \n", rc);
-        } else if (rc > 0) {
+        } else {
                 /* FIXME convert lov EA but fixed after verification test */
                 *md_size = rc;
         }
@@ -217,8 +218,8 @@ int mdd_get_md_locked(const struct lu_env *env, struct mdd_object *obj,
 }
 
 static int mdd_lov_set_stripe_md(const struct lu_env *env,
-                                 struct mdd_object *obj, struct lov_mds_md *lmmp,
-                                 int lmm_size, struct thandle *handle)
+                                 struct mdd_object *obj, struct lu_buf *buf,
+                                 struct thandle *handle)
 {
         struct mdd_device       *mdd = mdo2mdd(&obj->mod_obj);
         struct obd_device       *obd = mdd2obd_dev(mdd);
@@ -228,21 +229,21 @@ static int mdd_lov_set_stripe_md(const struct lu_env *env,
         ENTRY;
 
         LASSERT(S_ISDIR(mdd_object_type(obj)) || S_ISREG(mdd_object_type(obj)));
-        rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, lov_exp, 0, &lsm, lmmp);
+        rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, lov_exp, 0,
+                           &lsm, buf->lb_buf);
         if (rc)
                 RETURN(rc);
         obd_free_memmd(lov_exp, &lsm);
 
-        rc = mdd_xattr_set_txn(env, obj, lmmp, lmm_size, MDS_LOV_MD_NAME, 0,
-                               handle);
+        rc = mdd_xattr_set_txn(env, obj, buf, MDS_LOV_MD_NAME, 0, handle);
 
         CDEBUG(D_INFO, "set lov ea of "DFID" rc %d \n", PFID(mdo2fid(obj)), rc);
         RETURN(rc);
 }
 
 static int mdd_lov_set_dir_md(const struct lu_env *env,
-                              struct mdd_object *obj, struct lov_mds_md *lmmp,
-                              int lmm_size, struct thandle *handle)
+                              struct mdd_object *obj, struct lu_buf *buf,
+                              struct thandle *handle)
 {
         struct lov_user_md *lum = NULL;
         int rc = 0;
@@ -250,7 +251,7 @@ static int mdd_lov_set_dir_md(const struct lu_env *env,
 
         /*TODO check permission*/
         LASSERT(S_ISDIR(mdd_object_type(obj)));
-        lum = (struct lov_user_md*)lmmp;
+        lum = (struct lov_user_md*)buf->lb_buf;
 
         /* if { size, offset, count } = { 0, -1, 0 } (i.e. all default
          * values specified) then delete default striping from dir. */
@@ -258,14 +259,14 @@ static int mdd_lov_set_dir_md(const struct lu_env *env,
              lum->lmm_stripe_offset == (typeof(lum->lmm_stripe_offset))(-1)) ||
              /* lmm_stripe_size == -1 is deprecated in 1.4.6 */
              lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1)){
-                rc = mdd_xattr_set_txn(env, obj, NULL, 0, MDS_LOV_MD_NAME, 0,
-                                       handle);
+                rc = mdd_xattr_set_txn(env, obj, &LU_BUF_NULL,
+                                       MDS_LOV_MD_NAME, 0, handle);
                 if (rc == -ENODATA)
                         rc = 0;
                 CDEBUG(D_INFO, "delete lov ea of "DFID" rc %d \n",
                                 PFID(mdo2fid(obj)), rc);
         } else {
-                rc = mdd_lov_set_stripe_md(env, obj, lmmp, lmm_size, handle);
+                rc = mdd_lov_set_stripe_md(env, obj, buf, handle);
         }
         RETURN(rc);
 }
@@ -276,15 +277,16 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
 {
         int rc = 0;
         umode_t mode;
+        struct lu_buf *buf;
         ENTRY;
 
+        buf = mdd_buf_get(env, lmmp, lmm_size);
         mode = mdd_object_type(child);
         if (S_ISREG(mode) && lmm_size > 0) {
                 if (set_stripe) {
-                        rc = mdd_lov_set_stripe_md(env, child, lmmp, lmm_size,
-                                                   handle);
+                        rc = mdd_lov_set_stripe_md(env, child, buf, handle);
                 } else {
-                        rc = mdd_xattr_set_txn(env, child, lmmp, lmm_size,
+                        rc = mdd_xattr_set_txn(env, child, buf,
                                                MDS_LOV_MD_NAME, 0, handle);
                 }
         } else  if (S_ISDIR(mode)) {
@@ -297,16 +299,16 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
                                 rc = mdd_get_md(env, pobj, &lmm, &size,
                                                 MDS_LOV_MD_NAME);
                         if (rc > 0) {
-                                rc = mdd_xattr_set_txn(env, child, lmm, size,
+                                buf = mdd_buf_get(env, lmm, size);
+                                rc = mdd_xattr_set_txn(env, child, buf,
                                                MDS_LOV_MD_NAME, 0, handle);
                                 if (rc)
                                         CERROR("error on copy stripe info: rc "
                                                 "= %d\n", rc);
                         }
                 } else {
-                       LASSERT(lmmp != NULL && lmm_size > 0);
-                       rc = mdd_lov_set_dir_md(env, child, lmmp,
-                                               lmm_size, handle);
+                        LASSERT(lmmp != NULL && lmm_size > 0);
+                        rc = mdd_lov_set_dir_md(env, child, buf, handle);
                 }
         }
         CDEBUG(D_INFO, "Set lov md %p size %d for fid "DFID" rc %d\n",

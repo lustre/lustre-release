@@ -203,6 +203,27 @@ static void mdd_txn_param_build(const struct lu_env *env,
         mdd_env_info(env)->mti_param.tp_credits = opd->mod_credits;
 }
 
+struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len)
+{
+        struct lu_buf *buf;
+
+        buf = &mdd_env_info(env)->mti_buf;
+        buf->lb_buf = area;
+        buf->lb_len = len;
+        return buf;
+}
+
+const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
+                                       const void *area, ssize_t len)
+{
+        struct lu_buf *buf;
+
+        buf = &mdd_env_info(env)->mti_buf;
+        buf->lb_buf = (void *)area;
+        buf->lb_len = len;
+        return buf;
+}
+
 #define mdd_get_group_info(group_info) do {             \
         atomic_inc(&(group_info)->usage);               \
 } while (0)
@@ -664,7 +685,7 @@ static int mdd_attr_get(const struct lu_env *env, struct md_object *obj,
  * No permission check is needed.
  */
 static int mdd_xattr_get(const struct lu_env *env,
-                         struct md_object *obj, void *buf, int buf_len,
+                         struct md_object *obj, struct lu_buf *buf,
                          const char *name, struct md_ucred *uc)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
@@ -677,7 +698,7 @@ static int mdd_xattr_get(const struct lu_env *env,
 
         next = mdd_object_child(mdd_obj);
         mdd_read_lock(env, mdd_obj);
-        rc = next->do_ops->do_xattr_get(env, next, buf, buf_len, name);
+        rc = next->do_ops->do_xattr_get(env, next, buf, name);
         mdd_read_unlock(env, mdd_obj);
 
         RETURN(rc);
@@ -688,7 +709,7 @@ static int mdd_xattr_get(const struct lu_env *env,
  * no need check again.
  */
 static int mdd_readlink(const struct lu_env *env, struct md_object *obj,
-                        void *buf, int buf_len, struct md_ucred *uc)
+                        struct lu_buf *buf, struct md_ucred *uc)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct dt_object  *next;
@@ -700,13 +721,13 @@ static int mdd_readlink(const struct lu_env *env, struct md_object *obj,
 
         next = mdd_object_child(mdd_obj);
         mdd_read_lock(env, mdd_obj);
-        rc = next->do_body_ops->dbo_read(env, next, buf, buf_len, &pos);
+        rc = next->do_body_ops->dbo_read(env, next, buf, &pos);
         mdd_read_unlock(env, mdd_obj);
         RETURN(rc);
 }
 
 static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
-                          void *buf, int buf_len, struct md_ucred *uc)
+                          struct lu_buf *buf, struct md_ucred *uc)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct dt_object  *next;
@@ -718,7 +739,7 @@ static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
 
         next = mdd_object_child(mdd_obj);
         mdd_read_lock(env, mdd_obj);
-        rc = next->do_ops->do_xattr_list(env, next, buf, buf_len);
+        rc = next->do_ops->do_xattr_list(env, next, buf);
         mdd_read_unlock(env, mdd_obj);
 
         RETURN(rc);
@@ -978,7 +999,7 @@ int mdd_attr_set_internal_locked(const struct lu_env *env,
 }
 
 static int __mdd_xattr_set(const struct lu_env *env, struct mdd_object *o,
-                           const void *buf, int buf_len, const char *name,
+                           const struct lu_buf *buf, const char *name,
                            int fl, struct thandle *handle)
 {
         struct dt_object *next;
@@ -987,10 +1008,10 @@ static int __mdd_xattr_set(const struct lu_env *env, struct mdd_object *o,
 
         LASSERT(lu_object_exists(mdd2lu_obj(o)));
         next = mdd_object_child(o);
-        if (buf && buf_len > 0) {
-                rc = next->do_ops->do_xattr_set(env, next, buf, buf_len, name,
+        if (buf->lb_buf && buf->lb_len > 0) {
+                rc = next->do_ops->do_xattr_set(env, next, buf, name,
                                                 0, handle);
-        }else if (buf == NULL && buf_len == 0) {
+        } else if (buf->lb_buf == NULL && buf->lb_len == 0) {
                 rc = next->do_ops->do_xattr_del(env, next, name, handle);
         }
         RETURN(rc);
@@ -1255,14 +1276,14 @@ cleanup:
 }
 
 int mdd_xattr_set_txn(const struct lu_env *env, struct mdd_object *obj,
-                      const void *buf, int buf_len, const char *name, int fl,
+                      const struct lu_buf *buf, const char *name, int fl,
                       struct thandle *handle)
 {
         int  rc;
         ENTRY;
 
         mdd_write_lock(env, obj);
-        rc = __mdd_xattr_set(env, obj, buf, buf_len, name, fl, handle);
+        rc = __mdd_xattr_set(env, obj, buf, name, fl, handle);
         mdd_write_unlock(env, obj);
 
         RETURN(rc);
@@ -1292,7 +1313,7 @@ static int mdd_xattr_sanity_check(const struct lu_env *env,
 }
 
 static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
-                         const void *buf, int buf_len, const char *name, int fl,
+                         const struct lu_buf *buf, const char *name, int fl,
                          struct md_ucred *uc)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
@@ -1310,7 +1331,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        rc = mdd_xattr_set_txn(env, md2mdd_obj(obj), buf, buf_len, name,
+        rc = mdd_xattr_set_txn(env, md2mdd_obj(obj), buf, name,
                                fl, handle);
 #ifdef HAVE_SPLIT_SUPPORT
         if (rc == 0) {
@@ -2345,8 +2366,11 @@ static int mdd_create(const struct lu_env *env,
                 int sym_len = strlen(target_name);
                 loff_t pos = 0;
 
-                rc = dt->do_body_ops->dbo_write(env, dt, target_name,
-                                                sym_len, &pos, handle);
+                rc = dt->do_body_ops->dbo_write(env, dt,
+                                                mdd_buf_get_const(env,
+                                                                  target_name,
+                                                                  sym_len),
+                                                &pos, handle);
                 if (rc == sym_len)
                         rc = 0;
                 else
@@ -2440,9 +2464,11 @@ static int mdd_object_create(const struct lu_env *env,
         rc = __mdd_object_create(env, mdd_obj, ma, handle);
         if (rc == 0 && spec->sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
                 /* if creating the slave object, set slave EA here */
-                rc = __mdd_xattr_set(env, mdd_obj, spec->u.sp_ea.eadata,
-                                     spec->u.sp_ea.eadatalen, MDS_LMV_MD_NAME,
-                                     0, handle);
+                rc = __mdd_xattr_set(env, mdd_obj,
+                                     mdd_buf_get_const(env,
+                                                       spec->u.sp_ea.eadata,
+                                                       spec->u.sp_ea.eadatalen),
+                                     MDS_LMV_MD_NAME, 0, handle);
                 pfid = spec->u.sp_ea.fid;
                 CWARN("set slave ea "DFID" eadatalen %d rc %d \n",
                        PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
@@ -2999,24 +3025,23 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
                          struct lu_attr* la, int mask, struct md_ucred *uc)
 {
 #ifdef CONFIG_FS_POSIX_ACL
-        struct dt_object  *next;
-        void *buf;
-        int buf_len;
+        struct dt_object *next;
+        struct lu_buf    *buf = &mdd_env_info(env)->mti_buf;
         posix_acl_xattr_entry *entry;
         int entry_count;
         int rc;
         ENTRY;
 
         next = mdd_object_child(obj);
-        buf_len = next->do_ops->do_xattr_get(env, next, NULL, 0, "");
-        if (buf_len <= 0)
-                RETURN(buf_len ? : -EACCES);
+        buf->lb_len = next->do_ops->do_xattr_get(env, next, &LU_BUF_NULL, "");
+        if (buf->lb_len <= 0)
+                RETURN(buf->lb_len ? : -EACCES);
 
-        OBD_ALLOC(buf, buf_len);
-        if (buf == NULL)
+        OBD_ALLOC(buf->lb_buf, buf->lb_len);
+        if (buf->lb_buf == NULL)
                 RETURN(-ENOMEM);
 
-        rc = next->do_ops->do_xattr_get(env, next, buf, buf_len, "");
+        rc = next->do_ops->do_xattr_get(env, next, buf, "");
         if (rc <= 0)
                 GOTO(out, rc = rc ? : -EACCES);
 
@@ -3026,7 +3051,7 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
         rc = mdd_posix_acl_permission(uc, la, mask, entry, entry_count);
 
 out:
-        OBD_FREE(buf, buf_len);
+        OBD_FREE(buf->lb_buf, buf->lb_len);
         RETURN(rc);
 #else
         ENTRY;

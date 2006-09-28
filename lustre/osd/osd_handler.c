@@ -1109,7 +1109,7 @@ static void osd_object_ref_del(const struct lu_env *env,
 }
 
 static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
-                         void *buf, int size, const char *name)
+                         struct lu_buf *buf, const char *name)
 {
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
@@ -1124,11 +1124,11 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
                 return -EACCES;
 
         dentry->d_inode = inode;
-        return inode->i_op->getxattr(dentry, name, buf, size);
+        return inode->i_op->getxattr(dentry, name, buf->lb_buf, buf->lb_len);
 }
 
 static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
-                         const void *buf, int size, const char *name, int fl,
+                         const struct lu_buf *buf, const char *name, int fl,
                          struct thandle *handle)
 {
         int fs_flags;
@@ -1155,11 +1155,12 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
         if (fl & LU_XATTR_CREATE)
                 fs_flags |= XATTR_CREATE;
 
-        return inode->i_op->setxattr(dentry, name, buf, size, fs_flags);
+        return inode->i_op->setxattr(dentry, name,
+                                     buf->lb_buf, buf->lb_len, fs_flags);
 }
 
 static int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
-                          void *buf, int size)
+                          struct lu_buf *buf)
 {
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
@@ -1174,7 +1175,7 @@ static int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
                 return -EACCES;
 
         dentry->d_inode = inode;
-        return inode->i_op->listxattr(dentry, buf, size);
+        return inode->i_op->listxattr(dentry, buf->lb_buf, buf->lb_len);
 }
 
 static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
@@ -1368,7 +1369,7 @@ static struct dt_object_operations osd_obj_ops = {
  */
 
 static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
-                        void *buf, size_t count, loff_t *pos)
+                        struct lu_buf *buf, loff_t *pos)
 {
         struct inode *inode = osd_dt_obj(dt)->oo_inode;
         struct file  *file;
@@ -1381,7 +1382,7 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
          * dnotify_parent() and locks.
          */
         if (file->f_op->read)
-                result = file->f_op->read(file, buf, count, pos);
+                result = file->f_op->read(file, buf->lb_buf, buf->lb_len, pos);
         else {
                 /* TODO: how to serve symlink readlink()? */
                 CERROR("read not implemented currently\n");
@@ -1392,7 +1393,7 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 }
 
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
-                         const void *buf, size_t count, loff_t *pos,
+                         const struct lu_buf *buf, loff_t *pos,
                          struct thandle *handle)
 {
         struct inode *inode = osd_dt_obj(dt)->oo_inode;
@@ -1404,7 +1405,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 
         file = osd_rw_init(env, inode, &seg);
         if (file->f_op->write)
-                result = file->f_op->write(file, buf, count, pos);
+                result = file->f_op->write(file, buf->lb_buf, buf->lb_len, pos);
         else {
                 CERROR("write not implemented currently\n");
                 result = -ENOSYS;

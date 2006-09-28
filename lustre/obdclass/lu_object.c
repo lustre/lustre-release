@@ -947,3 +947,9 @@ void lu_global_fini(void)
 {
         lu_context_key_degister(&lu_cdebug_key);
 }
+
+struct lu_buf LU_BUF_NULL = {
+        .lb_buf = NULL,
+        .lb_len = 0
+};
+EXPORT_SYMBOL(LU_BUF_NULL);

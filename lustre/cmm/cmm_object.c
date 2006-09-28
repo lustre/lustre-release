@@ -246,40 +246,40 @@ static int cml_attr_set(const struct lu_env *env, struct md_object *mo,
 }
 
 static int cml_xattr_get(const struct lu_env *env, struct md_object *mo,
-                         void *buf, int buflen, const char *name,
+                         struct lu_buf *buf, const char *name,
                          struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_get(env, md_object_next(mo), buf, buflen, name, uc);
+        rc = mo_xattr_get(env, md_object_next(mo), buf, name, uc);
         RETURN(rc);
 }
 
 static int cml_readlink(const struct lu_env *env, struct md_object *mo,
-                        void *buf, int buflen, struct md_ucred *uc)
+                        struct lu_buf *buf, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_readlink(env, md_object_next(mo), buf, buflen, uc);
+        rc = mo_readlink(env, md_object_next(mo), buf, uc);
         RETURN(rc);
 }
 
 static int cml_xattr_list(const struct lu_env *env, struct md_object *mo,
-                          void *buf, int buflen, struct md_ucred *uc)
+                          struct lu_buf *buf, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_list(env, md_object_next(mo), buf, buflen, uc);
+        rc = mo_xattr_list(env, md_object_next(mo), buf, uc);
         RETURN(rc);
 }
 
 static int cml_xattr_set(const struct lu_env *env, struct md_object *mo,
-                         const void *buf, int buflen,
+                         const struct lu_buf *buf,
                          const char *name, int fl, struct md_ucred *uc)
 {
         int rc;
         ENTRY;
-        rc = mo_xattr_set(env, md_object_next(mo), buf, buflen, name, fl, uc);
+        rc = mo_xattr_set(env, md_object_next(mo), buf, name, fl, uc);
         RETURN(rc);
 }
 
@@ -673,26 +673,26 @@ static int cmr_attr_set(const struct lu_env *env, struct md_object *mo,
 }
 
 static int cmr_xattr_get(const struct lu_env *env, struct md_object *mo,
-                         void *buf, int buflen, const char *name,
+                         struct lu_buf *buf, const char *name,
                          struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
 static int cmr_readlink(const struct lu_env *env, struct md_object *mo,
-                        void *buf, int buflen, struct md_ucred *uc)
+                        struct lu_buf *buf, struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
 static int cmr_xattr_list(const struct lu_env *env, struct md_object *mo,
-                          void *buf, int buflen, struct md_ucred *uc)
+                          struct lu_buf *buf, struct md_ucred *uc)
 {
         RETURN(-EFAULT);
 }
 
 static int cmr_xattr_set(const struct lu_env *env, struct md_object *mo,
-                         const void *buf, int buflen, const char *name, int fl,
+                         const struct lu_buf *buf, const char *name, int fl,
                          struct md_ucred *uc)
 {
         RETURN(-EFAULT);

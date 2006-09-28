@@ -73,11 +73,11 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 else
                         rc = mo_xattr_get(info->mti_env,
                                           mdt_object_child(info->mti_object),
-                                          NULL, 0, xattr_name, NULL);
+                                          &LU_BUF_NULL, xattr_name, NULL);
         } else if ((valid & OBD_MD_FLXATTRLS) == OBD_MD_FLXATTRLS) {
                 rc = mo_xattr_list(info->mti_env,
                                    mdt_object_child(info->mti_object),
-                                   NULL, 0, NULL);
+                                   &LU_BUF_NULL, NULL);
         } else {
                 CERROR("valid bits: "LPX64"\n", info->mti_body->valid);
                 return -EINVAL;
@@ -100,14 +100,14 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
 }
 
 static int do_remote_getfacl(struct mdt_thread_info *info,
-                             struct lu_fid *fid, void *buf, int buflen)
+                             struct lu_fid *fid, struct lu_buf *buf)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
         char *cmd;
         int rc;
         ENTRY;
 
-        if (!buf || (buflen != RMTACL_SIZE_MAX))
+        if (!buf->lb_buf || (buf->lb_len != RMTACL_SIZE_MAX))
                 RETURN(-EINVAL);
 
         cmd = req_capsule_client_get(&info->mti_pill, &RMF_EADATA);
@@ -116,12 +116,12 @@ static int do_remote_getfacl(struct mdt_thread_info *info,
                 RETURN(-EFAULT);
         }
 
-        rc = mdt_rmtacl_upcall(info, fid_oid(fid), cmd, buf, buflen);
+        rc = mdt_rmtacl_upcall(info, fid_oid(fid), cmd, buf);
         if (rc)
                 CERROR("remote acl upcall failed: %d\n", rc);
 
-        lustre_shrink_reply(req, REPLY_REC_OFF + 1, strlen(buf) + 1, 0);
-        RETURN(rc ?: strlen(buf) + 1);
+        lustre_shrink_reply(req, REPLY_REC_OFF + 1, strlen(buf->lb_buf) + 1, 0);
+        RETURN(rc ?: strlen(buf->lb_buf) + 1);
 }
 
 int mdt_getxattr(struct mdt_thread_info *info)
@@ -129,8 +129,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         struct  mdt_body       *reqbody;
         struct  mdt_body       *repbody;
         struct  md_object      *next;
-        char                   *buf;
-        int                     buflen;
+        struct  lu_buf         *buf;
         int                     rc, rc1;
 
         ENTRY;
@@ -160,8 +159,9 @@ int mdt_getxattr(struct mdt_thread_info *info)
         if (rc == 0)
                 GOTO(no_xattr, rc);
 
-        buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
-        buflen = rc;
+        buf = &info->mti_buf;
+        buf->lb_buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
+        buf->lb_len = rc;
 
         if (info->mti_body->valid & OBD_MD_FLXATTR) {
                 char *xattr_name = req_capsule_client_get(&info->mti_pill,
@@ -172,10 +172,9 @@ int mdt_getxattr(struct mdt_thread_info *info)
                         struct mdt_body *body =
                                         (struct mdt_body *)info->mti_body;
 
-                        rc = do_remote_getfacl(info, &body->fid1,
-                                               buf, buflen);
+                        rc = do_remote_getfacl(info, &body->fid1, buf);
                 } else {
-                        rc = mo_xattr_get(info->mti_env, next, buf, buflen,
+                        rc = mo_xattr_get(info->mti_env, next, buf,
                                           xattr_name, NULL);
                 }
 
@@ -185,7 +184,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         } else if (info->mti_body->valid & OBD_MD_FLXATTRLS) {
                 CDEBUG(D_INODE, "listxattr\n");
 
-                rc = mo_xattr_list(info->mti_env, next, buf, buflen, NULL);
+                rc = mo_xattr_list(info->mti_env, next, buf, NULL);
                 if (rc < 0)
                         CDEBUG(D_OTHER, "listxattr failed: %d\n", rc);
         } else
@@ -227,8 +226,9 @@ static int mdt_setxattr_pack_reply(struct mdt_thread_info * info)
 
 static int do_remote_setfacl(struct mdt_thread_info *info, struct lu_fid *fid)
 {
-        struct  ptlrpc_request *req = mdt_info_req(info);
-        char *cmd, *buf;
+        struct ptlrpc_request *req = mdt_info_req(info);
+        struct lu_buf         *buf = &info->mti_buf;
+        char *cmd;
         int rc;
         ENTRY;
 
@@ -238,14 +238,15 @@ static int do_remote_setfacl(struct mdt_thread_info *info, struct lu_fid *fid)
                 RETURN(-EFAULT);
         }
 
-        buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
-        LASSERT(buf);
+        buf->lb_buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
+        LASSERT(buf->lb_buf);
+        buf->lb_len = RMTACL_SIZE_MAX;
 
-        rc = mdt_rmtacl_upcall(info, fid_oid(fid), cmd, buf, RMTACL_SIZE_MAX);
+        rc = mdt_rmtacl_upcall(info, fid_oid(fid), cmd, buf);
         if (rc)
                 CERROR("remote acl upcall failed: %d\n", rc);
 
-        lustre_shrink_reply(req, REPLY_REC_OFF, strlen(buf) + 1, 0);
+        lustre_shrink_reply(req, REPLY_REC_OFF, strlen(buf->lb_buf) + 1, 0);
         RETURN(rc);
 }
 
@@ -259,8 +260,9 @@ int mdt_setxattr(struct mdt_thread_info *info)
         struct req_capsule      *pill = &info->mti_pill;
         struct mdt_object       *obj  = info->mti_object;
         struct mdt_body         *body = (struct mdt_body *)info->mti_body;
-        const struct lu_env *env  = info->mti_env;
+        const struct lu_env     *env  = info->mti_env;
         struct md_object        *child  = mdt_object_child(obj);
+        struct lu_buf           *buf  = &info->mti_buf;
         __u64                    valid  = body->valid;
         char                    *xattr_name;
         int                      xattr_len;
@@ -340,7 +342,9 @@ int mdt_setxattr(struct mdt_thread_info *info)
                         mdt_fail_write(env, info->mti_mdt->mdt_bottom,
                                        OBD_FAIL_MDS_SETXATTR_WRITE);
 
-                        rc = mo_xattr_set(env, child, xattr, xattr_len,
+                        buf->lb_buf = xattr;
+                        buf->lb_len = xattr_len;
+                        rc = mo_xattr_set(env, child, buf,
                                           xattr_name, flags, &info->mti_uc);
                 }
         } else if ((valid & OBD_MD_FLXATTRRM) == OBD_MD_FLXATTRRM) {

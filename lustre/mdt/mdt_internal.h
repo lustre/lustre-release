@@ -331,6 +331,7 @@ struct mdt_thread_info {
         loff_t                     mti_off;
         struct txn_param           mti_txn_param;
         struct lustre_capa_key     mti_capa_key;
+        struct lu_buf              mti_buf;
 };
 /*
  * Info allocated per-transaction.
@@ -470,11 +471,14 @@ struct thandle* mdt_trans_start(const struct lu_env *env,
 void mdt_trans_stop(const struct lu_env *env,
                     struct mdt_device *mdt, struct thandle *th);
 int mdt_record_write(const struct lu_env *env,
-                     struct dt_object *dt, const void *buf,
-                     size_t count, loff_t *pos, struct thandle *th);
+                     struct dt_object *dt, const struct lu_buf *buf,
+                     loff_t *pos, struct thandle *th);
 int mdt_record_read(const struct lu_env *env,
-                    struct dt_object *dt, void *buf,
-                    size_t count, loff_t *pos);
+                    struct dt_object *dt, struct lu_buf *buf, loff_t *pos);
+
+struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len);
+const struct lu_buf *mdt_buf_const(const struct lu_env *env,
+                                   const void *area, ssize_t len);
 
 void mdt_dump_lmm(int level, const struct lov_mds_md *lmm);
 
@@ -527,7 +531,7 @@ int mdt_pack_remote_perm(struct mdt_thread_info *, struct mdt_object *, void *);
 extern struct upcall_cache_ops mdt_rmtacl_upcall_cache_ops;
 
 int mdt_rmtacl_upcall(struct mdt_thread_info *, unsigned long,
-                      char *, char *, int);
+                      char *, struct lu_buf *);
 
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/

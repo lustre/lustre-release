@@ -36,18 +36,43 @@
 static int mdt_server_data_update(const struct lu_env *env,
                                   struct mdt_device *mdt);
 
+struct lu_buf *mdt_buf(const struct lu_env *env, void *area, ssize_t len)
+{
+        struct lu_buf *buf;
+        struct mdt_thread_info *mti;
+
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+        buf = &mti->mti_buf;
+        buf->lb_buf = area;
+        buf->lb_len = len;
+        return buf;
+}
+
+const struct lu_buf *mdt_buf_const(const struct lu_env *env,
+                                   const void *area, ssize_t len)
+{
+        struct lu_buf *buf;
+        struct mdt_thread_info *mti;
+
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+        buf = &mti->mti_buf;
+
+        buf->lb_buf = (void *)area;
+        buf->lb_len = len;
+        return buf;
+}
+
 /* TODO: maybe this pair should be defined in dt_object.c */
 int mdt_record_read(const struct lu_env *env,
-                    struct dt_object *dt, void *buf,
-                    size_t count, loff_t *pos)
+                    struct dt_object *dt, struct lu_buf *buf, loff_t *pos)
 {
         int rc;
 
         LASSERTF(dt != NULL, "dt is NULL when we want to read record\n");
 
-        rc = dt->do_body_ops->dbo_read(env, dt, buf, count, pos);
+        rc = dt->do_body_ops->dbo_read(env, dt, buf, pos);
 
-        if (rc == count)
+        if (rc == buf->lb_len)
                 rc = 0;
         else if (rc >= 0)
                 rc = -EFAULT;
@@ -55,15 +80,15 @@ int mdt_record_read(const struct lu_env *env,
 }
 
 int mdt_record_write(const struct lu_env *env,
-                     struct dt_object *dt, const void *buf,
-                     size_t count, loff_t *pos, struct thandle *th)
+                     struct dt_object *dt, const struct lu_buf *buf,
+                     loff_t *pos, struct thandle *th)
 {
         int rc;
 
         LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
         LASSERT(th != NULL);
-        rc = dt->do_body_ops->dbo_write(env, dt, buf, count, pos, th);
-        if (rc == count)
+        rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th);
+        if (rc == buf->lb_len)
                 rc = 0;
         else if (rc >= 0)
                 rc = -EFAULT;
@@ -163,7 +188,7 @@ static int mdt_last_rcvd_header_read(const struct lu_env *env,
         off = &mti->mti_off;
         *off = 0;
         rc = mdt_record_read(env, mdt->mdt_last_rcvd,
-                             tmp, sizeof(*tmp), off);
+                             mdt_buf(env, tmp, sizeof(*tmp)), off);
         if (rc == 0)
                 msd_le_to_cpu(tmp, msd);
 
@@ -200,7 +225,7 @@ static int mdt_last_rcvd_header_write(const struct lu_env *env,
         msd_cpu_to_le(msd, tmp);
 
         rc = mdt_record_write(env, mdt->mdt_last_rcvd,
-                              tmp, sizeof(*tmp), off, th);
+                              mdt_buf_const(env, tmp, sizeof(*tmp)), off, th);
 
         mdt_trans_stop(env, mdt, th);
 
@@ -223,7 +248,8 @@ static int mdt_last_rcvd_read(const struct lu_env *env,
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         tmp = &mti->mti_mcd;
-        rc = mdt_record_read(env, mdt->mdt_last_rcvd, tmp, sizeof(*tmp), off);
+        rc = mdt_record_read(env, mdt->mdt_last_rcvd,
+                             mdt_buf(env, tmp, sizeof(*tmp)), off);
         if (rc == 0)
                 mcd_le_to_cpu(tmp, mcd);
 
@@ -266,7 +292,7 @@ static int mdt_last_rcvd_write(const struct lu_env *env,
         mcd_cpu_to_le(mcd, tmp);
 
         rc = mdt_record_write(env, mdt->mdt_last_rcvd,
-                              tmp, sizeof(*tmp), off, th);
+                              mdt_buf_const(env, tmp, sizeof(*tmp)), off, th);
 
         CDEBUG(D_INFO, "write mcd @%d rc = %d:\n"
                        "uuid = %s\n"

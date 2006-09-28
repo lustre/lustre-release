@@ -52,6 +52,16 @@ enum {
         SEQ_TXN_STORE_CREDITS = 20
 };
 
+static struct lu_buf *seq_record_buf(struct seq_thread_info *info)
+{
+        struct lu_buf *buf;
+
+        buf = &info->sti_buf;
+        buf->lb_buf = &info->sti_record;
+        buf->lb_len = sizeof(info->sti_record);
+        return buf;
+}
+
 /* this function implies that caller takes care about locking */
 int seq_store_write(struct lu_server_seq *seq,
                     const struct lu_env *env)
@@ -78,8 +88,7 @@ int seq_store_write(struct lu_server_seq *seq,
                 range_cpu_to_le(&info->sti_record.ssr_super, &seq->lss_super);
 
                 rc = dt_obj->do_body_ops->dbo_write(env, dt_obj,
-                                                    (char *)&info->sti_record,
-                                                    sizeof(info->sti_record),
+                                                    seq_record_buf(info),
                                                     &pos, th);
                 if (rc == sizeof(info->sti_record)) {
                         CDEBUG(D_INFO|D_WARNING, "%s: Store ranges: Space - "
@@ -113,8 +122,7 @@ int seq_store_read(struct lu_server_seq *seq,
         LASSERT(info != NULL);
 
         rc = dt_obj->do_body_ops->dbo_read(env, dt_obj,
-                                           (char *)&info->sti_record,
-                                           sizeof(info->sti_record), &pos);
+                                           seq_record_buf(info), &pos);
 
         if (rc == sizeof(info->sti_record)) {
                 range_le_to_cpu(&seq->lss_space, &info->sti_record.ssr_space);

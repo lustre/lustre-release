@@ -1027,6 +1027,17 @@ int  lu_env_init(struct lu_env *env, struct lu_context *ses, __u32 tags);
 void lu_env_fini(struct lu_env *env);
 
 /*
+ * Common buffer structure to be passed around for various xattr_{s,g}et()
+ * methods.
+ */
+struct lu_buf {
+        void   *lb_buf;
+        ssize_t lb_len;
+};
+
+extern struct lu_buf LU_BUF_NULL; /* null buffer */
+
+/*
  * One-time initializers, called at obdclass module initialization, not
  * exported.
  */
