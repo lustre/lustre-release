@@ -84,7 +84,8 @@ int get_groups_local(struct identity_downcall_data *data)
         unsigned int ngroups = 0;
         struct passwd *pw;
         struct group *gr;
-        char pw_name[32];
+        char *pw_name;
+        int namelen;
         int i;
 
         pw = getpwuid(data->idd_uid);
@@ -95,8 +96,17 @@ int get_groups_local(struct identity_downcall_data *data)
         }
         data->idd_gid = pw->pw_gid;
 
-        memset(pw_name, 0, sizeof(pw_name));
-        strncpy(pw_name, pw->pw_name, sizeof(pw_name) - 1);
+        namelen = sysconf(_SC_LOGIN_NAME_MAX);
+        if (namelen < _POSIX_LOGIN_NAME_MAX)
+                namelen = _POSIX_LOGIN_NAME_MAX;
+        pw_name = (char *)malloc(namelen);
+        if (!pw_name) {
+                errlog("malloc error\n");
+                data->idd_err = errno;
+                return -1;
+        }
+        memset(pw_name, 0, namelen);
+        strncpy(pw_name, pw->pw_name, namelen - 1);
 
         maxgroups = sysconf(_SC_NGROUPS_MAX);
         if (maxgroups > NGROUPS_MAX)
@@ -122,6 +132,7 @@ int get_groups_local(struct identity_downcall_data *data)
         qsort(groups, ngroups, sizeof(*groups), compare_u32);
         data->idd_ngroups = ngroups;
 
+        free(pw_name);
         return 0;
 }
 
