@@ -98,13 +98,18 @@ static int mdc_add_obd(const struct lu_context *ctx,
                 rc = -EINVAL;
         } else {
                 struct lustre_handle *conn = &desc->cl_conn;
+                struct obd_connect_data *ocd;
 
                 CDEBUG(D_CONFIG, "connect to %s(%s)\n",
                        mdc->obd_name, mdc->obd_uuid.uuid);
 
-                
-                rc = obd_connect(ctx, conn, mdc, &mdc->obd_uuid, NULL);
-
+                OBD_ALLOC_PTR(ocd);
+                if (!ocd)
+                        RETURN(-ENOMEM);
+                /* The connection between MDS must be local */
+                ocd->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
+                rc = obd_connect(ctx, conn, mdc, &mdc->obd_uuid, ocd);
+                OBD_FREE_PTR(ocd);
                 if (rc) {
                         CERROR("target %s connect error %d\n",
                                mdc->obd_name, rc);
