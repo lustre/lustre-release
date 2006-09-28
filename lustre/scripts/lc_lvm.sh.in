@@ -10,11 +10,17 @@
 usage() {
     cat >&2 <<EOF
 
-Usage:  `basename $0` [-h] [-v] <csv file>
+Usage:  `basename $0` [options] <csv file>
 
     This script is used to configure Linux LVM devices in a Lustre cluster
     from a csv file.
 
+    Options:
+    -a          select all the nodes from the csv file to operate on
+    -w hostname,hostname,...
+                select the specified list of nodes (separated by commas)
+    -x hostname,hostname,...
+                exclude the specified list of nodes (separated by commas)
     -h          help and examples
     -v          verbose mode
     csv file    a spreadsheet that contains configuration parameters
@@ -126,8 +132,20 @@ declare -i pid_num=0
 
 VERBOSE_OUTPUT=false
 # Get and check the positional parameters
-while getopts "hv" OPTION; do
+while getopts "aw:x:hv" OPTION; do
     case $OPTION in
+    a)
+        [ -z "${SPECIFIED_NODELIST}" ] && [ -z "${EXCLUDED_NODELIST}" ] \
+        && USE_ALLNODES=true
+        ;;
+    w)
+        USE_ALLNODES=false
+        SPECIFIED_NODELIST=$OPTARG
+        ;;
+    x)
+        USE_ALLNODES=false
+        EXCLUDED_NODELIST=$OPTARG
+        ;;
     h)
         sample
         ;;
@@ -225,6 +243,7 @@ get_lvm_items() {
 
     CSV_FILE=$1
     local LINE line_marker
+    local hostname
     declare -i line_num=0
     declare -i idx=0
 
@@ -235,10 +254,16 @@ get_lvm_items() {
         [ -z "`echo \"${LINE}\" | egrep -v \"([[:space:]]|^)#\"`" ] && continue
 
         # Skip the non-LVM line
-        line_marker=`echo ${LINE} | awk -F, '{print $2}'`
+        line_marker=$(echo ${LINE} | cut -d, -f 2)
         [ "${line_marker}" != "${PV_MARKER}" ] \
         && [ "${line_marker}" != "${VG_MARKER}" ] \
         && [ "${line_marker}" != "${LV_MARKER}" ] && continue
+
+        # Skip the host which is not specified in the host list
+        if ! ${USE_ALLNODES}; then
+            hostname=$(echo ${LINE} | cut -d, -f 1)
+            ! host_in_hostlist ${hostname} ${NODES_TO_USE} && continue
+        fi
 
         # Parse the config line into CONFIG_ITEM
         if ! parse_line "$LINE"; then
@@ -527,7 +552,7 @@ config_lvm() {
     failed_status=false
     for ((pid_num = 0; pid_num < ${#REMOTE_PID[@]}; pid_num++)); do
         wait ${REMOTE_PID[${pid_num}]}
-        if [ $? -ne 0 ]; then
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo >&2 "`basename $0`: config_lvm() error: Failed"\
                  "to execute \"${REMOTE_CMD[${pid_num}]}\"!"
             failed_status=true
@@ -547,6 +572,13 @@ config_lvm() {
 if ! check_file $1; then
     exit 1    
 fi
+
+# Get the list of nodes to be operated on
+NODES_TO_USE=$(get_nodelist)
+[ ${PIPESTATUS[0]} -ne 0 ] && echo >&2 "${NODES_TO_USE}" && exit 1
+
+# Check the node list
+check_nodelist ${NODES_TO_USE} || exit 1
 
 # Get all the LVM device items from the csv file 
 if ! get_lvm_items ${CSV_FILE}; then

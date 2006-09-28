@@ -19,12 +19,19 @@
 usage() {
     cat >&2 <<EOF
 
-Usage:  `basename $0` [-t HAtype] [-n] [-d] [-f] [-m] [-h] [-v] <csv file>
+Usage:  `basename $0` [options] <csv file>
 
     This script is used to format and set up multiple lustre servers from a
     csv file.
 
+    Options:
     -h          help and examples
+    -a          select all the nodes from the csv file to operate on
+    -w hostname,hostname,...
+                select the specified list of nodes (separated by commas) to
+                operate on rather than all the nodes in the csv file
+    -x hostname,hostname,...
+                exclude the specified list of nodes (separated by commas)
     -t HAtype   produce High-Availability software configurations
                 The argument following -t is used to indicate the High-
                 Availability software type. The HA software types which 
@@ -172,7 +179,7 @@ Example 2 - Separate MGS/MDT, two networks interfaces:
 lustre-mgs1,options lnet 'networks="tcp,elan"',/dev/sda,/mnt/mgs,mgs,,,,--quiet --param="sys.timeout=50",,"defaults,noauto","lustre-mgs2,2@elan"
 
 # mdt
-lustre-mdt1,options lnet 'networks="tcp,elan"',/dev/sdb,/mnt/mdt,mdt,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--quiet --param="lov.stripe.size=4194304",-J size=16,"defaults,noauto",lustre-mdt2
+lustre-mdt1,options lnet 'networks="tcp,elan"',/dev/sdb,/mnt/mdt,mdt,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--quiet --param="lov.stripesize=4194304",-J size=16,"defaults,noauto",lustre-mdt2
 
 # ost
 lustre-ost1,options lnet 'networks="tcp,elan"',/dev/sdc,/mnt/ost,ost,lustre2,"lustre-mgs1,1@elan:lustre-mgs2,2@elan",,--quiet,-I 512,"defaults,noauto",lustre-ost2
@@ -245,8 +252,23 @@ CONFIG_MD_LVM=false
 MODIFY_FSTAB=true
 VERBOSE_OUTPUT=false
 # Get and check the positional parameters
-while getopts "t:ndfmhv" OPTION; do
+while getopts "aw:x:t:ndfmhv" OPTION; do
     case $OPTION in
+    a)
+        [ -z "${SPECIFIED_NODELIST}" ] && [ -z "${EXCLUDED_NODELIST}" ] \
+        && USE_ALLNODES=true
+        NODELIST_OPT="${NODELIST_OPT} -a"
+        ;;
+    w)
+        USE_ALLNODES=false
+        SPECIFIED_NODELIST=$OPTARG
+        NODELIST_OPT="${NODELIST_OPT} -w ${SPECIFIED_NODELIST}"
+        ;;
+    x)
+        USE_ALLNODES=false
+        EXCLUDED_NODELIST=$OPTARG
+        NODELIST_OPT="${NODELIST_OPT} -x ${EXCLUDED_NODELIST}"
+        ;;
     t)
         HATYPE_OPT=$OPTARG
         if [ "${HATYPE_OPT}" != "${HBVER_HBV1}" ] \
@@ -583,7 +605,7 @@ get_nodenames() {
     for nids in ${FAILOVERS_NAMES[i]//:/ }
     do
         NODE_NAMES[idx]=$(nids2hostname ${nids})
-        if [ $? -ne 0 ]; then
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo >&2 "${NODE_NAMES[idx]}"
             return 1
         fi
@@ -647,7 +669,7 @@ gen_ha_config() {
                "${HOST_NAME[i]} failover group..."
     verbose_output "${cmd_line}"
     eval $(echo "${cmd_line}")
-    if [ $? -ne 0 ]; then
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
         return 1
     fi
     verbose_output "Generate HA software's configurations in"\
@@ -715,7 +737,6 @@ config_ha() {
     return 0
 }
 
-
 # Get all the items in the csv file and do some checks.
 get_items() {
     # Check argument
@@ -728,6 +749,7 @@ get_items() {
     CSV_FILE=$1
     local LINE
     local marker
+    local hostname
     declare -i line_num=0
     declare -i idx=0
 
@@ -747,10 +769,16 @@ get_items() {
         fi
 
         # Skip the Linux MD/LVM line
-        marker=`echo ${LINE} | awk -F, '{print $2}'`
+        marker=$(echo ${LINE} | cut -d, -f 2)
         if [ "${marker}" = "${MD_MARKER}" -o "${marker}" = "${PV_MARKER}" ] \
         || [ "${marker}" = "${VG_MARKER}" -o "${marker}" = "${LV_MARKER}" ]; then
             continue
+        fi
+
+        # Skip the host which is not specified in the host list
+        if ! ${USE_ALLNODES}; then
+            hostname=$(echo ${LINE} | cut -d, -f 1)
+            ! host_in_hostlist ${hostname} ${NODES_TO_USE} && continue
         fi
 
         # Parse the config line into CONFIG_ITEM
@@ -777,13 +805,13 @@ get_items() {
 
         # Convert IP addresses in NIDs to hostnames
         MGS_NIDS_NAMES[idx]=$(ip2hostname_multi_node ${MGS_NIDS[idx]})
-        if [ $? -ne 0 ]; then
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo >&2 "${MGS_NIDS_NAMES[idx]}"
             return 1
         fi
 
         FAILOVERS_NAMES[idx]=$(ip2hostname_multi_node ${FAILOVERS[idx]})
-        if [ $? -ne 0 ]; then
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo >&2 "${FAILOVERS_NAMES[idx]}"
             return 1
         fi
@@ -832,7 +860,7 @@ check_lnet_connect() {
     else
         for nids in ${MGS_NIDS[i]//:/ }; do
             nids_names=$(ip2hostname_single_node ${nids})
-            if [ $? -ne 0 ]; then
+            if [ ${PIPESTATUS[0]} -ne 0 ]; then
                 echo >&2 "${nids_names}"
                 return 1
             fi
@@ -853,8 +881,8 @@ check_lnet_connect() {
     for mgs_nid in ${nids_str//,/ }
     do
         COMMAND=$"${LCTL} ping ${mgs_nid} 5 || echo failed 2>&1"
-        RET_STR=`${REMOTE} ${HOST_NAME[i]} "${COMMAND}" 2>&1`
-        if [ $? -eq 0 -a "${RET_STR}" = "${RET_STR#*failed*}" ]
+        RET_STR=$(${REMOTE} ${HOST_NAME[i]} "${COMMAND}" 2>&1)
+        if [ ${PIPESTATUS[0]} -eq 0 -a "${RET_STR}" = "${RET_STR#*failed*}" ]
         then
             # This node can contact the MGS node
             verbose_output "${HOST_NAME[i]} can contact the MGS" \
@@ -894,9 +922,9 @@ check_lnet() {
 
     # Execute remote command to start lnet network
     verbose_output "Starting lnet network in ${HOST_NAME[i]}"
-    COMMAND=$"modprobe lnet; ${LCTL} network up 2>&1"
-    RET_STR=`${REMOTE} ${HOST_NAME[i]} "(${EXPORT_PATH} ${COMMAND})" 2>&1`
-    if [ $? -ne 0 -o "${RET_STR}" = "${RET_STR#*LNET configured*}" ]
+    COMMAND="PATH=\$PATH:/sbin:/usr/sbin modprobe lnet; ${LCTL} network up 2>&1"
+    RET_STR=$(${REMOTE} ${HOST_NAME[i]} "${COMMAND}" 2>&1)
+    if [ ${PIPESTATUS[0]} -ne 0 -o "${RET_STR}" = "${RET_STR#*LNET configured*}" ]
     then
         echo >&2 "`basename $0`: check_lnet() error: remote" \
                  "${HOST_NAME[i]} error: ${RET_STR}"
@@ -925,7 +953,11 @@ start_mgs_lnet() {
     local COMMAND
 
     if [ -z "${MGS_NODENAME[0]}" -a  -z "${MGS_NODENAME[1]}" ]; then
-        verbose_output "There is no MGS target in the ${CSV_FILE} file."
+        if ${USE_ALLNODES}; then
+            verbose_output "There is no MGS target in the ${CSV_FILE} file."
+        else
+            verbose_output "There is no MGS target in the node list \"${NODES_TO_USE}\"."
+        fi
         return 0
     fi
 
@@ -936,7 +968,7 @@ start_mgs_lnet() {
         COMMAND=$"echo \"${MODULE_OPTS[${idx}]}\"|${MODULE_CONFIG}"
         verbose_output "Adding lnet module options to ${MGS_NODENAME[i]}"
         ${REMOTE} ${MGS_NODENAME[i]} "${COMMAND}" >&2 
-        if [ $? -ne 0 ]; then
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo >&2 "`basename $0`: start_mgs_lnet() error:"\
                  "Failed to execute remote command to" \
                  "add module options to ${MGS_NODENAME[i]}!"\
@@ -982,8 +1014,8 @@ mass_config() {
         COMMAND="mkdir -p ${MOUNT_POINT[i]}"
         verbose_output "Creating the mount point ${MOUNT_POINT[i]} on" \
                        "${HOST_NAME[i]}"
-        ${REMOTE} ${HOST_NAME[i]} "(${EXPORT_PATH} ${COMMAND})" >&2 
-        if [ $? -ne 0 ]; then
+        ${REMOTE} ${HOST_NAME[i]} "${COMMAND}" >&2 
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo >&2 "`basename $0`: mass_config() error:"\
                  "Failed to execute remote command to"\
                  "create the mountpoint on ${HOST_NAME[i]}!"
@@ -997,7 +1029,7 @@ mass_config() {
             verbose_output "Adding lnet module options to" \
                        "${HOST_NAME[i]}"
             ${REMOTE} ${HOST_NAME[i]} "${COMMAND}" >&2 
-            if [ $? -ne 0 ]; then
+            if [ ${PIPESTATUS[0]} -ne 0 ]; then
                 echo >&2 "`basename $0`: mass_config() error:"\
                      "Failed to execute remote command to"\
                      "add module options to ${HOST_NAME[i]}!"
@@ -1025,7 +1057,7 @@ mass_config() {
     fail_exit_status=false
     for ((pid_num = 0; pid_num < ${#REMOTE_PID[@]}; pid_num++)); do
         wait ${REMOTE_PID[${pid_num}]}
-        if [ $? -ne 0 ]; then
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo >&2 "`basename $0`: mass_config() error: Failed"\
             "to execute \"${REMOTE_CMD[${pid_num}]}\"!"
             fail_exit_status=true
@@ -1053,9 +1085,9 @@ get_mntopts() {
 
     # Execute remote command to check whether the device
     # is a block device or not
-    ret_str=`${REMOTE} ${host_name} \
-            "[ -b ${device_name} ] && echo block || echo loop" 2>&1`
-    if [ $? -ne 0 -a -n "${ret_str}" ]; then
+    ret_str=$(${REMOTE} ${host_name} \
+            "[ -b ${device_name} ] && echo block || echo loop" 2>&1)
+    if [ ${PIPESTATUS[0]} -ne 0 -a -n "${ret_str}" ]; then
         echo "`basename $0`: get_mntopts() error:" \
         "remote command to ${host_name} error: ${ret_str}"
         return 1
@@ -1096,7 +1128,7 @@ modify_fstab() {
         else
             mntopts=$(get_mntopts ${HOST_NAME[i]} ${DEVICE_NAME[i]}\
                     ${FAILOVERS[i]})
-            if [ $? -ne 0 ]; then
+            if [ ${PIPESTATUS[0]} -ne 0 ]; then
                 echo >&2 "${mntopts}"
                 return 1
             fi
@@ -1110,8 +1142,8 @@ modify_fstab() {
         COMMAND=". @scriptlibdir@/lc_common.sh; \
                 sed -i \"/^${device_name}\t/d\" \$(fcanon /etc/fstab); \
                 echo -e \"${mntent}\" >> \$(fcanon /etc/fstab)"
-        ${REMOTE} ${HOST_NAME[i]} "(${EXPORT_PATH} ${COMMAND})" >&2
-        if [ $? -ne 0 ]; then
+        ${REMOTE} ${HOST_NAME[i]} "${COMMAND}" >&2
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo >&2 "`basename $0`: modify_fstab() error:"\
             "Failed to modify /etc/fstab of host ${HOST_NAME[i]}"\
             "to add Lustre target ${DEVICE_NAME[i]}!"
@@ -1125,14 +1157,21 @@ modify_fstab() {
 # Main flow
 # Check the csv file
 if ! check_file $1; then
-    exit 1    
+    exit 1 
 fi
+
+# Get the list of nodes to be operated on
+NODES_TO_USE=$(get_nodelist)
+[ ${PIPESTATUS[0]} -ne 0 ] && echo >&2 "${NODES_TO_USE}" && exit 1
+
+# Check the node list
+check_nodelist ${NODES_TO_USE} || exit 1
 
 if ${VERIFY_CONNECT}; then
 # Check the network connectivity and hostnames
     echo "`basename $0`: Checking the cluster network connectivity"\
          "and hostnames..."
-    if ! ${VERIFY_CLUSTER_NET} ${VERBOSE_OPT} ${CSV_FILE}; then
+    if ! ${VERIFY_CLUSTER_NET} ${NODELIST_OPT} ${VERBOSE_OPT} ${CSV_FILE}; then
         exit 1
     fi
     echo "`basename $0`: Check the cluster network connectivity"\
@@ -1143,11 +1182,11 @@ fi
 if ${CONFIG_MD_LVM}; then
 # Configure Linux MD/LVM devices
     echo "`basename $0`: Configuring Linux MD/LVM devices..."
-    if ! ${SCRIPT_CONFIG_MD} ${VERBOSE_OPT} ${CSV_FILE}; then
+    if ! ${SCRIPT_CONFIG_MD} ${NODELIST_OPT} ${VERBOSE_OPT} ${CSV_FILE}; then
         exit 1
     fi
 
-    if ! ${SCRIPT_CONFIG_LVM} ${VERBOSE_OPT} ${CSV_FILE}; then
+    if ! ${SCRIPT_CONFIG_LVM} ${NODELIST_OPT} ${VERBOSE_OPT} ${CSV_FILE}; then
         exit 1
     fi
     echo "`basename $0`: Configure Linux MD/LVM devices OK!"

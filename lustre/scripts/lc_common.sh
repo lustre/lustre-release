@@ -72,6 +72,13 @@ LV_MARKER=${LV_MARKER:-"LV"}
 declare -a CONFIG_ITEM              # Items in each line of the csv file
 declare -a NODE_NAME                # Hostnames of nodes have been configured
 
+# Nodelist variables
+USE_ALLNODES=false                  # default is not to operate on all the nodes
+SPECIFIED_NODELIST=""               # specified list of nodes to be operated on
+EXCLUDED_NODELIST=""                # list of nodes to be excluded
+
+export PATH=$PATH:$CMD_PATH:$SCRIPTS_PATH:$CLUMAN_TOOLS_PATH:$RAID_CMD_PATH:/sbin:/usr/sbin
+
 
 # verbose_output string
 # Output verbose information $string
@@ -285,8 +292,8 @@ nid2hostname() {
         fi
 
         # Execute remote command to get the host name
-        ret_str=`${REMOTE} ${ip_addr} "hostname" 2>&1`
-        if [ $? -ne 0 -a -n "${ret_str}" ]; then
+        ret_str=$(${REMOTE} ${ip_addr} "hostname" 2>&1)
+        if [ ${PIPESTATUS[0]} -ne 0 -a -n "${ret_str}" ]; then
             echo "`basename $0`: nid2hostname() error:" \
             "remote command to ${ip_addr} error: ${ret_str}"
             return 1
@@ -320,7 +327,7 @@ nids2hostname() {
         lo* | elan* | gm* | ptl*) ;;
         *)  # tcp, o2ib, cib, openib, iib, vib, ra
             host_name=$(nid2hostname ${nid})
-            if [ $? -ne 0 ]; then
+            if [ ${PIPESTATUS[0]} -ne 0 ]; then
                 echo "${host_name}"
                 return 1
             fi
@@ -354,7 +361,7 @@ ip2hostname_single_node() {
         lo* | elan* | gm* | ptl*) ;;
         *)  # tcp, o2ib, cib, openib, iib, vib, ra
             host_name=$(nid2hostname ${nid})
-            if [ $? -ne 0 ]; then
+            if [ ${PIPESTATUS[0]} -ne 0 ]; then
                 echo "${host_name}"
                 return 1
             fi
@@ -380,7 +387,7 @@ ip2hostname_multi_node() {
 
     for nid in ${orig_nids//:/ }; do
         nid=$(ip2hostname_single_node ${nid})
-        if [ $? -ne 0 ]; then
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo "${nid}"
             return 1
         fi
@@ -389,5 +396,129 @@ ip2hostname_multi_node() {
     done
 
     echo ${nids}
+    return 0
+}
+
+# comma_list space-delimited-list
+# Convert a space-delimited list to a sorted list of unique values
+# separated by commas.
+comma_list() {
+    # the sed converts spaces to commas, but leaves the last space
+    # alone, so the line doesn't end with a comma.
+    echo "$*" | tr -s " " "\n" | sort -b -u | tr "\n" " " | sed 's/ \([^$]\)/,\1/g'
+}
+
+# host_in_hostlist hostname hostlist
+# Given a hostname, and a list of hostnames, return true if the hostname
+# appears in the list of hostnames, or false otherwise.
+host_in_hostlist() {
+    local HOST=$1
+    local HOSTLIST=$2
+
+    [ -z "$HOST" -o -z "$HOSTLIST" ] && false && return
+
+    # Hostnames in the list are separated by commas.
+    [[ ,$HOSTLIST, == *,$HOST,* ]] && true && return
+
+    false && return
+}
+
+# exclude_items_from_list list_of_items list_of_items_to_exclude
+# Given a list of items, and a second list of items to exclude from
+# the first list, return the contents of the first list minus the contents
+# of the second.
+exclude_items_from_list() {
+    local INLIST=$1
+    local EXCLUDELIST=$2
+    local ITEM OUTLIST
+
+    # Handle an empty inlist by throwing back an empty string.
+    if [ -z "$INLIST" ]; then
+        echo ""
+        return 0
+    fi
+
+    # Handle an empty excludelist by throwing back the inlist unmodified.
+    if [ -z "$EXCLUDELIST" ]; then
+        echo $INLIST
+        return 0
+    fi
+
+    for ITEM in ${INLIST//,/ }; do
+        if ! host_in_hostlist $ITEM $EXCLUDELIST; then
+           OUTLIST="$OUTLIST,$ITEM"
+        fi
+    done
+                                
+    # strip leading comma
+    echo ${OUTLIST#,}
+}
+
+# get_csv_nodelist csv_file
+# Get the comma-separated list of all the nodes from the csv file
+get_csv_nodelist() {
+    local csv_file=$1
+    local all_nodelist
+
+    # Check the csv file
+    ! check_file ${csv_file} 2>&1 && return 1
+
+    all_nodelist=$(egrep -v "([[:space:]]|^)#" ${csv_file} | cut -d, -f 1)
+    all_nodelist=$(comma_list ${all_nodelist})
+
+    echo ${all_nodelist}
+    return 0
+}
+
+# get_nodelist
+# Get the comma-separated list of nodes to be operated on
+# Note: CSV_FILE, USE_ALLNODES, SPECIFIED_NODELIST and EXCLUDED_NODELIST
+# are global variables
+get_nodelist() {
+    local ALL_NODELIST
+
+    # Get the list of all the nodes in the csv file
+    ALL_NODELIST=$(get_csv_nodelist ${CSV_FILE})
+    [ ${PIPESTATUS[0]} -ne 0 ] && echo "${ALL_NODELIST}" && return 1
+
+    if [ -z "${ALL_NODELIST}" ]; then
+        echo "`basename $0`: get_nodelist() error:"\
+             "There are no hosts in the ${CSV_FILE} file!"
+        return 1
+    fi
+
+    if ${USE_ALLNODES}; then
+        echo ${ALL_NODELIST} && return 0
+    fi
+
+    if [ -n "${SPECIFIED_NODELIST}" ]; then
+        echo $(exclude_items_from_list ${SPECIFIED_NODELIST} ${EXCLUDED_NODELIST})
+        return 0
+    fi
+
+    if [ -n "${EXCLUDED_NODELIST}" ]; then
+        echo $(exclude_items_from_list ${ALL_NODELIST} ${EXCLUDED_NODELIST})
+        return 0
+    fi
+
+    # No hosts to be operated on
+    echo ""
+    return 0
+}
+
+# check_nodelist nodelist
+# Given a list of nodes to be operated on, check whether the nodelist is 
+# empty or not and output prompt message.
+check_nodelist() {
+    local nodes_to_use=$1
+
+    if [ -z "${nodes_to_use}" ]; then
+        echo "`basename $0`: There are no hosts to be operated on."\
+             "Check the node selection options (-a, -w or -x)."
+        usage
+    else
+        verbose_output "Operating on the following nodes: ${nodes_to_use}"
+    fi
+
     return 0
 }

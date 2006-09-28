@@ -8,8 +8,14 @@
 usage() {
 	cat >&2 <<EOF
 
-Usage:	`basename $0` [-v] <csv file>
+Usage:	`basename $0` [options] <csv file>
 
+	Options:
+	-a		select all the nodes from the csv file to operate on
+	-w hostname,hostname,...
+			select the specified list of nodes (separated by commas)
+	-x hostname,hostname,...
+			exclude the specified list of nodes (separated by commas)
 	-v		verbose mode
 	csv file	a spreadsheet that contains configuration parameters 
 			(separated by commas) for each target in a Lustre cl-
@@ -25,8 +31,20 @@ EOF
 
 VERBOSE_OUTPUT=false
 # Get and check the positional parameters
-while getopts "v" OPTION; do
+while getopts "aw:x:v" OPTION; do
 	case $OPTION in
+	a)
+		[ -z "${SPECIFIED_NODELIST}" ] && [ -z "${EXCLUDED_NODELIST}" ]\
+		&& USE_ALLNODES=true
+		;;
+	w)
+		USE_ALLNODES=false
+		SPECIFIED_NODELIST=$OPTARG
+		;;
+	x)
+		USE_ALLNODES=false
+		EXCLUDED_NODELIST=$OPTARG
+		;;
 	v) 
 		VERBOSE_OUTPUT=true
 		;;
@@ -49,34 +67,26 @@ CSV_FILE=$1
 declare -a HOST_NAMES
 declare -a HOST_IPADDRS
 
-# Get the host names from the csv file
+# Get the hosts to be operated on
 get_hostnames() {
-	local NAME CHECK_STR
-	declare -i i
-	declare -i j
+	local NODES_TO_USE
 
 	# Initialize the HOST_NAMES array
 	unset HOST_NAMES
 
-	CHECK_STR=`egrep -v "([[:space:]]|^)#" ${CSV_FILE} | awk -F, \
-		  '/[[:alnum:]]/{if ($1 !~/[[:alnum:]]/) print $0}'`
-	if [ -n "${CHECK_STR}" ]; then
-                echo >&2 $"`basename $0`: get_hostnames() error: Missing"\
-			  "hostname field in the line - ${CHECK_STR}"
+	# Get the list of nodes to be operated on
+	NODES_TO_USE=$(get_nodelist)
+	[ ${PIPESTATUS[0]} -ne 0 ] && echo >&2 "${NODES_TO_USE}" && return 1
+
+	# Check the node list
+	if [ -z "${NODES_TO_USE}" ]; then
+		echo "`basename $0`: There are no hosts to be operated on."\
+		"Check the node selection options (-a, -w or -x)."
 		return 1
 	fi
 
-	i=0
-	for NAME in `egrep -v "([[:space:]]|^)#" ${CSV_FILE}\
-		    | awk -F, '/[[:alnum:]]/{print $1}'`
-	do
-		for ((j = 0; j < ${#HOST_NAMES[@]}; j++)); do
-			[ "${NAME}" = "${HOST_NAMES[j]}" ] && continue 2
-        	done
-
-		HOST_NAMES[i]=${NAME}
-		i=$i+1
-	done
+	# Load the hostnames in the nodelist into the array
+	HOST_NAMES=( $(echo ${NODES_TO_USE//,/ }) )
 
 	return 0
 }
@@ -95,8 +105,8 @@ ping_host() {
 	fi
 
 	# Run ping command
-	ret_str=`ping -c1 ${host_name} 2>&1`
-	if [ $? -ne 0 ]; then
+	ret_str=$(ping -c1 ${host_name} 2>&1)
+	if [ ${PIPESTATUS[0]} -ne 0 ]; then
 		if [ -n "${ret_str}" ]; then
 			echo "`basename $0`: ping_host() error: ${ret_str}!"
 		else
@@ -122,7 +132,7 @@ local_check() {
 	# Check whether ${HOST_NAMES[i]} is reachable
 	# and get the IP address of this host from ping
 	HOST_IPADDRS[i]=$(ping_host ${HOST_NAMES[i]})
-	if [ $? -ne 0 ]; then
+	if [ ${PIPESTATUS[0]} -ne 0 ]; then
 		echo >&2 "${HOST_IPADDRS[i]}"
 		return 1
 	fi
@@ -141,8 +151,8 @@ remote_check() {
 	# Execute remote command to check whether ${HOST_NAMES[i]}
 	# can resolve its own name
 	cmd="ping -c1 ${HOST_NAMES[i]} 2>&1"
-	ret_str=`${REMOTE} ${HOST_NAMES[i]} "(${EXPORT_PATH} ${cmd})" 2>&1`
-	if [ $? -ne 0 -a -n "${ret_str}" ]; then
+	ret_str=$(${REMOTE} ${HOST_NAMES[i]} "${cmd}" 2>&1)
+	if [ ${PIPESTATUS[0]} -ne 0 -a -n "${ret_str}" ]; then
 		echo >&2 "`basename $0`: remote_check() error:"\
 		"remote to ${HOST_NAMES[i]} error: ${ret_str}!"
 		return 1
@@ -185,7 +195,7 @@ network_verify() {
 	# Initialize the HOST_IPADDRS array
 	unset HOST_IPADDRS
 
-	# Get all the host names from the csv file
+	# Get all the host names to be operated on 
 	! get_hostnames && return 1
 
 	# Check the network connectivity between local host 

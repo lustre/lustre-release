@@ -10,11 +10,17 @@
 usage() {
     cat >&2 <<EOF
 
-Usage:  `basename $0` [-h] [-v] <csv file>
+Usage:  `basename $0` [options] <csv file>
 
     This script is used to configure Linux MD devices in a Lustre cluster
     from a csv file.
 
+    Options:
+    -a          select all the nodes from the csv file to operate on
+    -w hostname,hostname,...
+                select the specified list of nodes (separated by commas)
+    -x hostname,hostname,...
+                exclude the specified list of nodes (separated by commas)
     -h          help and examples
     -v          verbose mode
     csv file    a spreadsheet that contains configuration parameters
@@ -78,8 +84,20 @@ declare -i pid_num=0
 
 VERBOSE_OUTPUT=false
 # Get and check the positional parameters
-while getopts "hv" OPTION; do
+while getopts "aw:x:hv" OPTION; do
     case $OPTION in
+    a)
+        [ -z "${SPECIFIED_NODELIST}" ] && [ -z "${EXCLUDED_NODELIST}" ] \
+        && USE_ALLNODES=true
+        ;;
+    w)
+        USE_ALLNODES=false
+        SPECIFIED_NODELIST=$OPTARG
+        ;;
+    x)
+        USE_ALLNODES=false
+        EXCLUDED_NODELIST=$OPTARG
+        ;;
     h)
         sample
         ;;
@@ -157,6 +175,7 @@ get_md_items() {
 
     CSV_FILE=$1
     local LINE
+    local hostname
     declare -i line_num=0
     declare -i idx=0
 
@@ -167,7 +186,13 @@ get_md_items() {
         [ -z "`echo \"${LINE}\" | egrep -v \"([[:space:]]|^)#\"`" ] && continue
 
         # Skip the non-MD line
-        [ "`echo ${LINE}|awk -F, '{print $2}'`" != "${MD_MARKER}" ] && continue
+        [ "$(echo ${LINE} | cut -d, -f 2)" != "${MD_MARKER}" ] && continue
+
+        # Skip the host which is not specified in the host list
+        if ! ${USE_ALLNODES}; then
+            hostname=$(echo ${LINE} | cut -d, -f 1)
+            ! host_in_hostlist ${hostname} ${NODES_TO_USE} && continue
+        fi
 
         # Parse the config line into CONFIG_ITEM
         if ! parse_line "$LINE"; then
@@ -203,8 +228,8 @@ md_is_active() {
     local cmd ret_str
 
     cmd="grep -q ${md_name##*/} /proc/mdstat 2>&1"
-    ret_str=`${REMOTE} ${host_name} "${cmd}" 2>&1`
-    if [ $? -ne 0 ]; then
+    ret_str=$(${REMOTE} ${host_name} "${cmd}" 2>&1)
+    if [ ${PIPESTATUS[0]} -ne 0 ]; then
         if [ -n "${ret_str}" ]; then
             echo >&2 "`basename $0`: md_is_active() error:"\
             "remote command to ${host_name} error: ${ret_str}!"
@@ -318,7 +343,7 @@ construct_mdadm_cmdline() {
             "" | create)
                     # Check the status of the MD array
                     md_is_active ${host_name} ${MD_NAME[i]}
-                    rc=$?
+                    rc=${PIPESTATUS[0]}
                     if [ "$rc" -eq "2" ]; then
                         return 1
                     elif [ "$rc" -eq "0" ]; then
@@ -339,7 +364,7 @@ construct_mdadm_cmdline() {
 
                     # Construct the create command line
                     mdadm_cmd=$(construct_mdadm_create_cmdline ${i})
-                    if [ $? -ne 0 ]; then
+                    if [ ${PIPESTATUS[0]} -ne 0 ]; then
                         echo >&2 "${mdadm_cmd}"
                         return 1
                     fi
@@ -445,7 +470,7 @@ config_md() {
     failed_status=false
     for ((pid_num = 0; pid_num < ${#REMOTE_PID[@]}; pid_num++)); do
         wait ${REMOTE_PID[${pid_num}]}
-        if [ $? -ne 0 ]; then
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo >&2 "`basename $0`: config_md() error: Failed"\
                  "to execute \"${REMOTE_CMD[${pid_num}]}\"!"
             failed_status=true
@@ -465,6 +490,13 @@ config_md() {
 if ! check_file $1; then
     exit 1    
 fi
+
+# Get the list of nodes to be operated on
+NODES_TO_USE=$(get_nodelist)
+[ ${PIPESTATUS[0]} -ne 0 ] && echo >&2 "${NODES_TO_USE}" && exit 1
+
+# Check the node list
+check_nodelist ${NODES_TO_USE} || exit 1
 
 # Get all the MD device items from the csv file 
 if ! get_md_items ${CSV_FILE}; then
