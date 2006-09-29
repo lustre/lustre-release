@@ -3020,25 +3020,18 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
         ENTRY;
 
         next = mdd_object_child(obj);
-        buf->lb_len = next->do_ops->do_xattr_get(env, next, &LU_BUF_NULL, "");
-        if (buf->lb_len <= 0)
-                RETURN(buf->lb_len ? : -EACCES);
 
-        OBD_ALLOC(buf->lb_buf, buf->lb_len);
-        if (buf->lb_buf == NULL)
-                RETURN(-ENOMEM);
-
-        rc = next->do_ops->do_xattr_get(env, next, buf, "");
+        buf->lb_buf = mdd_env_info(env)->mti_xattr_buf;
+        buf->lb_len = sizeof(mdd_env_info(env)->mti_xattr_buf);
+        rc = next->do_ops->do_xattr_get(env, next, buf,
+                                        XATTR_NAME_ACL_ACCESS);
         if (rc <= 0)
-                GOTO(out, rc = rc ? : -EACCES);
+                RETURN(rc ? : -EACCES);
 
-        entry = ((posix_acl_xattr_header *)buf)->a_entries;
+        entry = ((posix_acl_xattr_header *)(buf->lb_buf))->a_entries;
         entry_count = (rc - 4) / sizeof(posix_acl_xattr_entry);
 
         rc = mdd_posix_acl_permission(uc, la, mask, entry, entry_count);
-
-out:
-        OBD_FREE(buf->lb_buf, buf->lb_len);
         RETURN(rc);
 #else
         ENTRY;

@@ -28,8 +28,10 @@
 #  define mds_xattr_acl_size(entry) posix_acl_xattr_size(entry)
 # endif
 # define LUSTRE_POSIX_ACL_MAX_ENTRIES   (32)
-# define LUSTRE_POSIX_ACL_MAX_SIZE      \
-                (mds_xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES))
+# define LUSTRE_POSIX_ACL_MAX_SIZE              \
+                (sizeof(xattr_acl_header) +     \
+                LUSTRE_POSIX_ACL_MAX_ENTRIES *  \
+                sizeof(xattr_acl_entry))
 #else
 # define LUSTRE_POSIX_ACL_MAX_SIZE      0
 #endif

@@ -29,6 +29,7 @@
 
 #include <asm/semaphore.h>
 
+#include <linux/lustre_acl.h>
 #include <md_object.h>
 #include <dt_object.h>
 #include <linux/sched.h>
@@ -82,6 +83,7 @@ struct mdd_thread_info {
         struct orph_key       mti_orph_key;
         struct obd_trans_info mti_oti;
         struct lu_buf         mti_buf;
+        char                  mti_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
 };
 
 int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
