@@ -666,6 +666,59 @@ static void osd_ro(const struct lu_env *env, struct dt_device *d)
         EXIT;
 }
 
+/* Note: we did not count into QUOTA here, If we mount with --data_journal
+ * we may need more*/
+enum {
+        /* Insert/Delete IAM
+         * EXT3_INDEX_EXTRA_TRANS_BLOCKS(8) + EXT3_SINGLEDATA_TRANS_BLOCKS 8
+         * XXX Note: maybe iam need more,since iam have more level than Ext3 
+         * htree
+         */
+        INSERT_IAM_CREDITS  = 16,
+
+        /* Create a object
+         * Same as create object in Ext3 filesystem, but did not count QUOTA i
+         * EXT3_DATA_TRANS_BLOCKS(12) + INDEX_EXTRA_BLOCKS(8) +
+         * 3(inode bits,groups, GDT)*/
+         CREATE_OBJECT_CREDITS = 23,
+
+        /* XATTR_SET
+         * SAME AS XATTR of EXT3 EXT3_DATA_TRANS_BLOCKS
+         * XXX Note: in original MDS implmentation EXT3_INDEX_EXTRA_TRANS_BLOCKS are
+         * also counted in. Do not know why? */
+         XATTR_SET_CREDITS = 12,
+
+        /* A log rec need EXT3_INDEX_EXTRA_TRANS_BLOCKS(8) +
+         *                EXT3_SINGLEDATA_TRANS_BLOCKS(8))
+         */
+        LOG_REC_CREDIT = 16,
+
+        /* Attr set credits 3 inode, group, GDT */
+        ATTR_SET_CREDITS = 3
+};
+
+static int osd_credit_get(const struct lu_env *env, struct dt_device *d,
+                          int op)
+{
+        switch(op) {
+                case INSERT_IAM:
+                        return INSERT_IAM_CREDITS;
+                case CREATE_OBJECT:
+                        return CREATE_OBJECT_CREDITS;
+                case XATTR_SET:
+                        return XATTR_SET_CREDITS;
+                case LOG_REC:
+                        return LOG_REC_CREDIT;
+                case ATTR_SET:
+                        return ATTR_SET_CREDITS;
+                default:
+                        CERROR("Not recorgonized op %d", op);
+                        LBUG();
+                        return -EINVAL; 
+        }
+        return (-EINVAL);
+}
+                
 static struct dt_device_operations osd_dt_ops = {
         .dt_root_get    = osd_root_get,
         .dt_statfs      = osd_statfs,
@@ -673,7 +726,8 @@ static struct dt_device_operations osd_dt_ops = {
         .dt_trans_stop  = osd_trans_stop,
         .dt_conf_get    = osd_conf_get,
         .dt_sync        = osd_sync,
-        .dt_ro          = osd_ro
+        .dt_ro          = osd_ro,
+        .dt_credit_get  = osd_credit_get
 };
 
 static void osd_object_read_lock(const struct lu_env *env,

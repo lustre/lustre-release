@@ -60,7 +60,11 @@ static int mdd_lov_update(struct obd_device *host,
         upcall_dev = mdd->mdd_md_dev.md_upcall.mu_upcall_dev;
 
         rc = upcall_dev->md_upcall.mu_upcall(NULL, upcall_dev, MD_LOV_SYNC);
-
+        if (rc)
+                RETURN(rc);
+        
+        rc = mdd_init_txn_credits(NULL, mdd);
+        
         RETURN(rc);
 }
 

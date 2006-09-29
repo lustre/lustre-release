@@ -140,6 +140,8 @@ int __mdd_object_kill(const struct lu_env *, struct mdd_object *,
 struct mdd_object *mdd_object_find(const struct lu_env *,
                                    struct mdd_device *,
                                    const struct lu_fid *);
+int mdd_init_txn_credits(const struct lu_env *env, struct mdd_device *mdd);
+
 static inline void mdd_object_put(const struct lu_env *env,
                                   struct mdd_object *o)
 {

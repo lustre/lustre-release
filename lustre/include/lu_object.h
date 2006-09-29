@@ -1052,4 +1052,14 @@ int lu_global_init(void);
  */
 void lu_global_fini(void);
 
+/*
+ * Basic transaction credit op
+ */
+enum lu_txn_op {
+        INSERT_IAM      = 0,
+        CREATE_OBJECT   = 1,
+        XATTR_SET       = 2,
+        LOG_REC         = 3,
+        ATTR_SET        = 4
+};
 #endif /* __LUSTRE_LU_OBJECT_H */

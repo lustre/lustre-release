@@ -96,6 +96,11 @@ struct dt_device_operations {
         int   (*dt_sync)(const struct lu_env *env, struct dt_device *dev);
         void  (*dt_ro)(const struct lu_env *env, struct dt_device *dev);
 
+        /*
+         *  dt get credits from osd 
+         */
+        int (*dt_credit_get)(const struct lu_env *env, struct dt_device *dev,
+                             int op);
 };
 
 struct dt_index_features {
