@@ -2746,7 +2746,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                         [DLM_LOCKREQ_OFF]     = sizeof(struct ldlm_request) };
 
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
-                                      LDLM_ENQUEUE, 3, size, NULL);
+                                      LDLM_ENQUEUE, 2, size, NULL);
                 if (req == NULL)
                         RETURN(-ENOMEM);
 
