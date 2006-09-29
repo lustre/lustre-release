@@ -608,7 +608,7 @@ static int mdd_may_delete(const struct lu_env *env,
                           struct mdd_object *cobj,
                           int is_dir, int need_check)
 {
-        struct mdd_device *mdd = mdo2mdd(&pobj->mod_obj);
+        struct mdd_device *mdd = mdo2mdd(&cobj->mod_obj);
         int rc = 0;
         ENTRY;
 
