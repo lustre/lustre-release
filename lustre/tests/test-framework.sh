@@ -126,9 +126,9 @@ load_modules() {
     load_module osc/osc
     load_module lov/lov
     load_module mds/mds
+    load_module mdd/mdd
     load_module mdt/mdt
     load_module cmm/cmm
-    load_module mdd/mdd
     load_module ldiskfs/ldiskfs
     load_module lvfs/fsfilt_ldiskfs
     load_module osd/osd
