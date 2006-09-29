@@ -968,7 +968,7 @@ struct lu_context_key {
          * Internal implementation detail: number of values created for this
          * key.
          */
-        unsigned lct_used;
+        atomic_t lct_used;
 };
 
 /*

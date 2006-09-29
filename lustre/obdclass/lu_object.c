@@ -744,7 +744,7 @@ int lu_context_key_register(struct lu_context_key *key)
         for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
                 if (lu_keys[i] == NULL) {
                         key->lct_index = i;
-                        key->lct_used = 1;
+                        atomic_set(&key->lct_used, 1);
                         lu_keys[i] = key;
                         result = 0;
                         break;
@@ -760,10 +760,10 @@ EXPORT_SYMBOL(lu_context_key_register);
  */
 void lu_context_key_degister(struct lu_context_key *key)
 {
-        LASSERT(key->lct_used >= 1);
+        LASSERT(atomic_read(&key->lct_used) >= 1);
         LASSERT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
 
-        if (key->lct_used > 1)
+        if (atomic_read(&key->lct_used) > 1)
                 CERROR("key has instances.\n");
         spin_lock(&lu_keys_guard);
         lu_keys[key->lct_index] = NULL;
@@ -794,10 +794,10 @@ static void keys_fini(struct lu_context *ctx)
                                 key = lu_keys[i];
                                 LASSERT(key != NULL);
                                 LASSERT(key->lct_fini != NULL);
-                                LASSERT(key->lct_used > 1);
+                                LASSERT(atomic_read(&key->lct_used) > 1);
 
                                 key->lct_fini(ctx, key, ctx->lc_value[i]);
-                                key->lct_used--;
+                                atomic_dec(&key->lct_used);
                                 ctx->lc_value[i] = NULL;
                         }
                 }
@@ -825,7 +825,7 @@ static int keys_fill(const struct lu_context *ctx)
                         value = key->lct_init(ctx, key);
                         if (IS_ERR(value))
                                 return PTR_ERR(value);
-                        key->lct_used++;
+                        atomic_inc(&key->lct_used);
                         ctx->lc_value[i] = value;
                 }
         }
