@@ -1456,7 +1456,8 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
          * contains capa actually. There are some requests which do not, for
          * instance MDS_IS_SUBDIR.
          */
-        if (req_capsule_field_present(pill, &RMF_CAPA1, RCL_CLIENT)) {
+        if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_CLIENT) && 
+                req_capsule_field_present(pill, &RMF_CAPA1, RCL_CLIENT)) {
                 int len = req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT);
                 if (len == sizeof(struct lustre_capa)) 
                         capa = req_capsule_client_get(pill, &RMF_CAPA1);
