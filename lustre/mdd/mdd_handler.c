@@ -1480,8 +1480,9 @@ static int __mdd_index_insert(const struct lu_env *env,
 
         if (dt_try_as_dir(env, next))
                 rc = next->do_index_ops->dio_insert(env, next,
-                                         (struct dt_rec *)lf,
-                                         (struct dt_key *)name, th);
+                                                    (struct dt_rec *)lf,
+                                                    (struct dt_key *)name,
+                                                    th);
         else
                 rc = -ENOTDIR;
 
@@ -1500,16 +1501,19 @@ static int __mdd_index_insert(const struct lu_env *env,
 
 static int __mdd_index_delete(const struct lu_env *env,
                               struct mdd_object *pobj, const char *name,
-                              struct thandle *handle)
+                              int is_dir, struct thandle *handle)
 {
         int rc;
         struct dt_object *next = mdd_object_child(pobj);
         ENTRY;
 
-        if (dt_try_as_dir(env, next))
+        if (dt_try_as_dir(env, next)) {
                 rc = next->do_index_ops->dio_delete(env, next,
-                                        (struct dt_key *)name, handle);
-        else
+                                                    (struct dt_key *)name,
+                                                    handle);
+                if (rc == 0 && is_dir)
+                        __mdd_ref_del(env, pobj, handle);
+        } else
                 rc = -ENOTDIR;
         RETURN(rc);
 }
@@ -1697,7 +1701,7 @@ static int mdd_unlink(const struct lu_env *env,
         struct mdd_object *mdd_cobj = md2mdd_obj(cobj);
         struct lu_attr    *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         struct thandle    *handle;
-        int rc;
+        int rc, is_dir;
         ENTRY;
 
         mdd_txn_param_build(env, MDD_TXN_UNLINK_OP);
@@ -1711,17 +1715,16 @@ static int mdd_unlink(const struct lu_env *env,
         if (rc)
                 GOTO(cleanup, rc);
 
-        rc = __mdd_index_delete(env, mdd_pobj, name, handle);
+        is_dir = S_ISDIR(lu_object_attr(&cobj->mo_lu));
+        rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle);
         if (rc)
                 GOTO(cleanup, rc);
 
         __mdd_ref_del(env, mdd_cobj, handle);
         *la_copy = ma->ma_attr;
-        if (S_ISDIR(lu_object_attr(&cobj->mo_lu))) {
+        if (is_dir) {
                 /* unlink dot */
                 __mdd_ref_del(env, mdd_cobj, handle);
-                /* unlink dotdot */
-                __mdd_ref_del(env, mdd_pobj, handle);
         } else {
                 la_copy->la_valid = LA_CTIME;
                 rc = mdd_attr_set_internal(env, mdd_cobj, la_copy, handle);
@@ -1976,17 +1979,13 @@ static int mdd_rename(const struct lu_env *env,
         if (rc)
                 GOTO(cleanup_unlocked, rc);
 
-        rc = __mdd_index_delete(env, mdd_spobj, sname, handle);
+        rc = __mdd_index_delete(env, mdd_spobj, sname, is_dir, handle);
         if (rc)
                 GOTO(cleanup, rc);
 
-        /*if sobj is dir, its parent object nlink should be dec too*/
-        if (is_dir)
-                __mdd_ref_del(env, mdd_spobj, handle);
-
-        rc = __mdd_index_delete(env, mdd_tpobj, tname, handle);
         /* tobj can be remote one,
          * so we do index_delete unconditionally and -ENOENT is allowed */
+        rc = __mdd_index_delete(env, mdd_tpobj, tname, is_dir, handle);
         if (rc != 0 && rc != -ENOENT)
                 GOTO(cleanup, rc);
 
@@ -2148,7 +2147,7 @@ static int __mdd_object_initialize(const struct lu_env *env,
                                 int rc2;
 
                                 rc2 = __mdd_index_delete(env,
-                                                         child, dot, handle);
+                                                         child, dot, 0, handle);
                                 if (rc2 != 0)
                                         CERROR("Failure to cleanup after dotdot"
                                                " creation: %d (%d)\n", rc2, rc);
@@ -2443,7 +2442,9 @@ cleanup:
                 int rc2 = 0;
 
                 if (inserted) {
-                        rc2 = __mdd_index_delete(env, mdd_pobj, name, handle);
+                        rc2 = __mdd_index_delete(env, mdd_pobj, name,
+                                                 S_ISDIR(attr->la_mode),
+                                                 handle);
                         if (rc2)
                                 CERROR("error can not cleanup destroy %d\n",
                                        rc2);
@@ -2613,7 +2614,7 @@ static int mdd_nr_sanity_check(const struct lu_env *env,
 
 static int mdd_name_remove(const struct lu_env *env,
                            struct md_object *pobj,
-                           const char *name)
+                           const char *name, int is_dir)
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
@@ -2631,7 +2632,7 @@ static int mdd_name_remove(const struct lu_env *env,
         if (rc)
                 GOTO(out_unlock, rc);
 
-        rc = __mdd_index_delete(env, mdd_obj, name, handle);
+        rc = __mdd_index_delete(env, mdd_obj, name, is_dir, handle);
 
 out_unlock:
         mdd_write_unlock(env, mdd_obj);
@@ -2678,7 +2679,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
 {
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_tpobj = md2mdd_obj(pobj);
-        struct mdd_object *mdd_tobj = NULL;
+        struct mdd_object *mdd_tobj = md2mdd_obj(tobj);
         struct thandle *handle;
         int rc;
         ENTRY;
@@ -2688,23 +2689,21 @@ static int mdd_rename_tgt(const struct lu_env *env,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        if (tobj) {
-                mdd_tobj = md2mdd_obj(tobj);
+        if (mdd_tobj)
                 mdd_lock2(env, mdd_tpobj, mdd_tobj);
-        } else {
+        else
                 mdd_write_lock(env, mdd_tpobj);
-        }
 
         /*TODO rename sanity checking*/
         rc = mdd_rt_sanity_check(env, mdd_tpobj, mdd_tobj, lf, name, ma);
         if (rc)
                 GOTO(cleanup, rc);
 
-        if (tobj) {
-                rc = __mdd_index_delete(env, mdd_tpobj, name, handle);
-                if (rc)
-                        GOTO(cleanup, rc);
-        }
+        /* if rename_tgt is called then we should just re-insert name with
+         * correct fid, no need to dec/inc parent nlink if obj is dir */
+        rc = __mdd_index_delete(env, mdd_tpobj, name, 0, handle);
+        if (rc)
+                GOTO(cleanup, rc);
 
         rc = __mdd_index_insert_only(env, mdd_tpobj, lf, name, handle);
         if (rc)

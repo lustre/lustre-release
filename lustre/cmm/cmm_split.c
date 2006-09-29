@@ -272,7 +272,7 @@ static int cmm_remove_entries(const struct lu_env *env,
                                 OBD_ALLOC(name, ent->lde_namelen + 1);
                                 memcpy(name, ent->lde_name, ent->lde_namelen);
                                 rc = mdo_name_remove(env, md_object_next(mo),
-                                                     name);
+                                                     name, 0);
                                 OBD_FREE(name, ent->lde_namelen + 1);
                         }
                         if (rc) {

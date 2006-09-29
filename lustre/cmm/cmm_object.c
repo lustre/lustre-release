@@ -830,7 +830,8 @@ static int cmr_unlink(const struct lu_env *env, struct md_object *mo_p,
 
         rc = mo_ref_del(env, md_object_next(mo_c), ma);
         if (rc == 0) {
-                rc = mdo_name_remove(env, md_object_next(mo_p), name);
+                rc = mdo_name_remove(env, md_object_next(mo_p),
+                                     name, S_ISDIR(ma->ma_attr.la_mode));
         }
 
         RETURN(rc);
@@ -859,13 +860,13 @@ static int cmr_rename(const struct lu_env *env,
         /* only old name is removed localy */
         if (rc == 0)
                 rc = mdo_name_remove(env, md_object_next(mo_po),
-                                     s_name);
+                                     s_name, S_ISDIR(ma->ma_attr.la_mode));
 
         RETURN(rc);
 }
 
 /* part of cross-ref rename(). Used to insert new name in new parent
- * and unlink target with same name if it exists */
+ * and unlink target */
 static int cmr_rename_tgt(const struct lu_env *env,
                           struct md_object *mo_p, struct md_object *mo_t,
                           const struct lu_fid *lf, const char *name,

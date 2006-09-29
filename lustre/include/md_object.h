@@ -212,8 +212,8 @@ struct md_dir_operations {
                                const char *name, const struct lu_fid *fid,
                                int isdir);
 
-        int (*mdo_name_remove)(const struct lu_env *env,
-                               struct md_object *obj, const char *name);
+        int (*mdo_name_remove)(const struct lu_env *env, struct md_object *obj,
+                               const char *name, int is_dir);
 
         int (*mdo_rename_tgt)(const struct lu_env *env, struct md_object *pobj,
                               struct md_object *tobj, const struct lu_fid *fid,
@@ -514,10 +514,10 @@ static inline int mdo_name_insert(const struct lu_env *env,
 
 static inline int mdo_name_remove(const struct lu_env *env,
                                   struct md_object *p,
-                                  const char *name)
+                                  const char *name, int is_dir)
 {
         LASSERT(p->mo_dir_ops->mdo_name_remove);
-        return p->mo_dir_ops->mdo_name_remove(env, p, name);
+        return p->mo_dir_ops->mdo_name_remove(env, p, name, is_dir);
 }
 
 static inline int mdo_rename_tgt(const struct lu_env *env,
