@@ -349,11 +349,20 @@ static void cmm_key_fini(const struct lu_context *ctx,
         OBD_FREE_PTR(info);
 }
 
-struct lu_context_key cmm_thread_key = {
+static struct lu_context_key cmm_thread_key = {
         .lct_tags = LCT_MD_THREAD,
         .lct_init = cmm_key_init,
         .lct_fini = cmm_key_fini
 };
+
+struct cmm_thread_info *cmm_env_info(const struct lu_env *env)
+{
+        struct cmm_thread_info *info;
+
+        info = lu_context_key_get(&env->le_ctx, &cmm_thread_key);
+        LASSERT(info != NULL);
+        return info;
+}
 
 static int cmm_type_init(struct lu_device_type *t)
 {

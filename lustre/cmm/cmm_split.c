@@ -398,10 +398,22 @@ free_rdpg:
         RETURN(rc);
 }
 
+static struct lu_buf *cmm_buf_get(const struct lu_env *env, void *area,
+                                  ssize_t len)
+{
+        struct lu_buf *buf;
+        
+        buf = &cmm_env_info(env)->cmi_buf;
+        buf->lb_buf = area;
+        buf->lb_len = len;
+        return buf;
+}
+
 int cml_try_to_split(const struct lu_env *env, struct md_object *mo)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct md_attr *ma;
+        struct lu_buf *buf;
         int rc = 0;
         ENTRY;
 
@@ -438,10 +450,9 @@ int cml_try_to_split(const struct lu_env *env, struct md_object *mo)
         if (rc)
                 GOTO(cleanup, ma);
 
+        buf = cmm_buf_get(env, ma->ma_lmv, ma->ma_lmv_size);
         /* step4: set mea to the master object */
-        rc = mo_xattr_set(env, md_object_next(mo), ma->ma_lmv,
-                          ma->ma_lmv_size, MDS_LMV_MD_NAME, 0);
-
+        rc = mo_xattr_set(env, md_object_next(mo), buf, MDS_LMV_MD_NAME, 0);
         if (rc == -ERESTART)
                 CWARN("Dir"DFID" has been split \n",
                                 PFID(lu_object_fid(&mo->mo_lu)));

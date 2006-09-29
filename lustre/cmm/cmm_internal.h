@@ -93,6 +93,7 @@ struct cmr_object {
 
 struct cmm_thread_info {
         struct md_attr  cmi_ma;
+        struct lu_buf   cmi_buf;
 };
 
 static inline struct cmm_device *cmm_obj2dev(struct cmm_object *c)
@@ -117,6 +118,7 @@ static inline struct md_object *cmm2child_obj(struct cmm_object *o)
         return (o ? lu2md(lu_object_next(&o->cmo_obj.mo_lu)) : NULL);
 }
 
+struct cmm_thread_info *cmm_env_info(const struct lu_env *env);
 /* cmm_object.c */
 struct lu_object *cmm_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,

@@ -36,8 +36,6 @@
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
-extern struct lu_context_key cmm_thread_key;
-
 static int cmm_fld_lookup(struct cmm_device *cm,
                           const struct lu_fid *fid, mdsno_t *mds,
                           const struct lu_env *env)
@@ -458,7 +456,7 @@ static int __cmm_mode_get(const struct lu_env *env, struct md_device *md,
         if (IS_ERR(mo_s))
                 RETURN(PTR_ERR(mo_s));
 
-        cmi = lu_context_key_get(&env->le_ctx, &cmm_thread_key);
+        cmi = cmm_env_info(env);
         LASSERT(cmi);
         tmp_ma = &cmi->cmi_ma;
         tmp_ma->ma_need = MA_INODE;
@@ -532,7 +530,7 @@ static int cmm_is_subdir(const struct lu_env *env, struct md_object *mo,
         int rc;
         ENTRY;
 
-        cmi = lu_context_key_get(&env->le_ctx, &cmm_thread_key);
+        cmi = cmm_env_info(env);
         rc = __cmm_mode_get(env, md_obj2dev(mo), fid, &cmi->cmi_ma);
         if (rc)
                 RETURN(rc);
@@ -779,7 +777,7 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
 
         ENTRY;
         /* check the SGID attr */
-        cmi = lu_context_key_get(&env->le_ctx, &cmm_thread_key);
+        cmi = cmm_env_info(env);
         LASSERT(cmi);
         tmp_ma = &cmi->cmi_ma;
         tmp_ma->ma_need = MA_INODE;
