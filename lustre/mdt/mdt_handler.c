@@ -1451,6 +1451,11 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
                 return -EINVAL;
         }
 
+        /*
+         * Dot not get size or any capa fields before we check that request
+         * contains capa actually. There are some requests which do not, for
+         * instance MDS_IS_SUBDIR.
+         */
         if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_CLIENT))
                 capa = req_capsule_client_get(pill, &RMF_CAPA1);
         

@@ -604,10 +604,11 @@ static inline int mdd_is_sticky(const struct lu_env *env,
 
 /* Check whether it may delete the cobj under the pobj. */
 static int mdd_may_delete(const struct lu_env *env,
-                          struct mdd_object *pobj, struct mdd_object *cobj,
+                          struct mdd_object *pobj,
+                          struct mdd_object *cobj,
                           int is_dir, int need_check)
 {
-        struct mdd_device *mdd = mdo2mdd(&cobj->mod_obj);
+        struct mdd_device *mdd = mdo2mdd(&pobj->mod_obj);
         int rc = 0;
         ENTRY;
 
