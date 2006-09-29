@@ -602,7 +602,7 @@ static inline int mdd_is_sticky(const struct lu_env *env,
         }
 }
 
-/*Check whether it may delete the cobj under the pobj*/
+/* Check whether it may delete the cobj under the pobj. */
 static int mdd_may_delete(const struct lu_env *env,
                           struct mdd_object *pobj, struct mdd_object *cobj,
                           int is_dir, int need_check)

@@ -1432,8 +1432,8 @@ static int mdt_lock_reply_compat(struct mdt_device *m, struct ldlm_reply *rep)
  */
 static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
 {
+        struct lustre_capa       *capa = NULL;
         const struct mdt_body    *body;
-        struct lustre_capa *capa = NULL;
         struct mdt_object        *obj;
         const struct lu_env      *env;
         struct req_capsule       *pill;
@@ -1451,8 +1451,9 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
                 return -EINVAL;
         }
 
-        if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
+        if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_CLIENT))
                 capa = req_capsule_client_get(pill, &RMF_CAPA1);
+        
         obj = mdt_object_find(env, info->mti_mdt, &body->fid1, capa);
         if (!IS_ERR(obj)) {
                 if ((flags & HABEO_CORPUS) &&
