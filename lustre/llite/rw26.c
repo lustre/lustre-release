@@ -78,13 +78,14 @@ static int ll_releasepage(struct page *page, gfp_t gfp_mask)
 static int ll_set_page_dirty(struct page *page)
 {
         struct ll_async_page *llap;
+        ENTRY;
         
         llap = llap_from_page(page, LLAP_ORIGIN_UNKNOWN);
         if (IS_ERR(llap))
                 RETURN(PTR_ERR(llap));
         
         llap_write_pending(page->mapping->host, llap);
-        return(__set_page_dirty_nobuffers(page));
+        RETURN(__set_page_dirty_nobuffers(page));
 }
 
 #define MAX_DIRECTIO_SIZE 2*1024*1024*1024UL
