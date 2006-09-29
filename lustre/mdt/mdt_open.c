@@ -321,6 +321,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         struct md_attr         *ma  = &info->mti_attr;
         struct lu_attr         *la  = &ma->ma_attr;
         struct mdt_file_data   *mfd;
+        const struct mdt_body  *reqbody = info->mti_body;
         struct mdt_body        *repbody;
         int                     rc = 0;
         int                     isreg, isdir, islnk;
@@ -337,11 +338,14 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
         mdt_body_reverse_idmap(info, repbody);
 
-        if (med->med_rmtclient) {
+        if (med->med_rmtclient && (reqbody->valid & OBD_MD_FLRMTPERM)) {
                 void *buf = req_capsule_server_get(&info->mti_pill, &RMF_ACL);
 
                 rc = mdt_pack_remote_perm(info, o, buf);
-                if (rc == 0) {
+                if (rc) {
+                        repbody->valid &= ~OBD_MD_FLRMTPERM;
+                        repbody->aclsize = 0;
+                } else {
                         repbody->valid |= OBD_MD_FLRMTPERM;
                         repbody->aclsize = sizeof(struct mdt_remote_perm);
                 }

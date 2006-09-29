@@ -56,6 +56,5 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 #define PARAM_ROOTSQUASH_UID       PARAM_ROOTSQUASH"uid="
 #define PARAM_ROOTSQUASH_GID       PARAM_ROOTSQUASH"gid="
 #define PARAM_ROOTSQUASH_SKIPS     PARAM_ROOTSQUASH"skips="
-#define PARAM_GSS_SUPPORT          PARAM_SEC"gss="
 
 #endif // _LUSTRE_PARAM_H

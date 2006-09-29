@@ -204,10 +204,12 @@ static int client_common_fill_super(struct super_block *sb,
         /* real client */
         data->ocd_connect_flags |= OBD_CONNECT_REAL;
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
+                data->ocd_connect_flags &= ~OBD_CONNECT_LCL_CLIENT;
                 data->ocd_connect_flags |= OBD_CONNECT_RMT_CLIENT;
                 data->ocd_nllu = nllu;
                 data->ocd_nllg = nllg;
         } else {
+                data->ocd_connect_flags &= ~OBD_CONNECT_RMT_CLIENT;
                 data->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
         }
 
@@ -263,13 +265,22 @@ static int client_common_fill_super(struct super_block *sb,
         if (data->ocd_connect_flags & OBD_CONNECT_JOIN)
                 sbi->ll_flags |= LL_SBI_JOIN;
 
-        if ((sbi->ll_flags & LL_SBI_RMT_CLIENT) &&
-            !(data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT)) {
-                /* sometimes local client claims to be remote, but mds
-                 * will disagree when client gss not applied. */
-                LCONSOLE_INFO("client claims to be remote, but server "
-                              "rejected, forced to be local\n");
-                sbi->ll_flags &= ~LL_SBI_RMT_CLIENT;
+        if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
+                if (!(data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT)) {
+                        /* sometimes local client claims to be remote, but mdt
+                         * will disagree when client gss not applied. */
+                        LCONSOLE_INFO("client claims to be remote, but server "
+                                      "rejected, forced to be local.\n");
+                        sbi->ll_flags &= ~LL_SBI_RMT_CLIENT;
+                }
+        } else {
+                if (!(data->ocd_connect_flags & OBD_CONNECT_LCL_CLIENT)) {
+                        /* with gss applied, remote client can not claim to be
+                         * local, so mdt maybe force client to be remote. */
+                        LCONSOLE_INFO("client claims to be local, but server "
+                                      "rejected, forced to be remote.\n");
+                        sbi->ll_flags |= LL_SBI_RMT_CLIENT;
+                }
         }
 
         if (data->ocd_connect_flags & OBD_CONNECT_MDS_CAPA) {
@@ -1219,7 +1230,7 @@ void ll_clear_inode(struct inode *inode)
 #ifdef CONFIG_FS_POSIX_ACL
         if (lli->lli_posix_acl) {
                 LASSERT(atomic_read(&lli->lli_posix_acl->a_refcount) == 1);
-//                LASSERT(lli->lli_remote_perms == NULL);
+                LASSERT(lli->lli_remote_perms == NULL);
                 posix_acl_release(lli->lli_posix_acl);
                 lli->lli_posix_acl = NULL;
         }

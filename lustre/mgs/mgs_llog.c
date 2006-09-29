@@ -1903,17 +1903,6 @@ static int mgs_write_log_params(struct obd_device *obd, struct fs_db *fsdb,
                         GOTO(end_while, rc);
                 }
 
-                if (!class_match_param(ptr, PARAM_GSS_SUPPORT, NULL)) {
-                        /* Change mdt gss_support params */
-                        lustre_cfg_bufs_reset(&bufs, mti->mti_svname);
-                        lustre_cfg_bufs_set(&bufs, 1, ptr, strlen(ptr));
-                        lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
-                        rc = mgs_write_log_direct(obd, fsdb, mti->mti_svname,
-                                                  mti->mti_svname, lcfg);
-                        lustre_cfg_free(lcfg);
-                        GOTO(end_while, rc);
-                }
-
                 LCONSOLE_WARN("Ignoring unrecognized param '%s'\n", ptr);
 
 end_while:

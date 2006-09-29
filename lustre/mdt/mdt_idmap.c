@@ -4,7 +4,7 @@
  * Copyright (C) 2004-2006 Cluster File Systems, Inc.
  *   Author: Lai Siyao <lsy@clusterfs.com>
  *   Author: Fan Yong <fanyong@clusterfs.com>
-
+ *
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -130,6 +130,13 @@ int mdt_init_idmap(struct mdt_thread_info *info)
         if (data == NULL || reply == NULL)
                 RETURN(-EFAULT);
 
+        if (!req->rq_auth_gss || req->rq_auth_usr_mdt) {
+                med->med_rmtclient = 0;
+                reply->ocd_connect_flags &= ~OBD_CONNECT_RMT_CLIENT;
+                //reply->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
+                RETURN(0);
+        }
+
         remote = data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT;
 
         if (req->rq_auth_uid == INVALID_UID) {
@@ -161,7 +168,7 @@ int mdt_init_idmap(struct mdt_thread_info *info)
                 }
 
                 reply->ocd_connect_flags &= ~OBD_CONNECT_LCL_CLIENT;
-                reply->ocd_connect_flags |= OBD_CONNECT_RMT_CLIENT;
+                //reply->ocd_connect_flags |= OBD_CONNECT_RMT_CLIENT;
                 CDEBUG(D_SEC, "client %s -> target %s is remote.\n",
                        client, obd->obd_name);
 
@@ -169,7 +176,7 @@ int mdt_init_idmap(struct mdt_thread_info *info)
                 rc = mdt_handle_idmap(info);
         } else {
                 reply->ocd_connect_flags &= ~OBD_CONNECT_RMT_CLIENT;
-                reply->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
+                //reply->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
         }
 
         RETURN(rc);
@@ -399,12 +406,6 @@ int mdt_handle_idmap(struct mdt_thread_info *info)
         LASSERT(pud);
         LASSERT(med->med_idmap);
 
-        if (mdt->mdt_opts.mo_no_gss_support) {
-                CWARN("The server is running with no GSS support now! "
-                      "and don't permit remote client to access!\n");
-                RETURN(-EACCES);
-        }
-
         if (req->rq_auth_mapped_uid == INVALID_UID) {
                 CERROR("invalid authorized mapped uid, please check "
                        "/etc/lustre/idmap.conf!\n");
@@ -625,9 +626,6 @@ int mdt_remote_perm_reverse_idmap(struct ptlrpc_request *req,
         gid_t gid, fsgid;
 
         LASSERT(med->med_rmtclient);
-
-        if (req->rq_auth_usr_mdt)
-                return 0;
 
         uid = mdt_idmap_lookup_uid(med->med_idmap, 1, perm->rp_uid);
         if (uid == MDT_IDMAP_NOTFOUND) {

@@ -126,15 +126,11 @@ static int old_init_ucred(struct mdt_thread_info *info,
 
         uc->mu_valid = UCRED_INVALID;
 
-        if (!mdt->mdt_opts.mo_no_gss_support) {
-                /* get identity info of this user */
-                identity = mdt_identity_get(mdt->mdt_identity_cache,
-                                            body->fsuid);
-                if (!identity) {
-                        CERROR("Deny access without identity: uid %d\n",
-                               body->fsuid);
-                        RETURN(-EACCES);
-                }
+        /* get identity info of this user */
+        identity = mdt_identity_get(mdt->mdt_identity_cache, body->fsuid);
+        if (!identity) {
+                CERROR("Deny access without identity: uid %d\n", body->fsuid);
+                RETURN(-EACCES);
         }
 
         uc->mu_valid = UCRED_OLD;
@@ -161,15 +157,11 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 
         uc->mu_valid = UCRED_INVALID;
 
-        if (!mdt->mdt_opts.mo_no_gss_support) {
-                /* get identity info of this user */
-                identity = mdt_identity_get(mdt->mdt_identity_cache,
-                                            uc->mu_fsuid);
-                if (!identity) {
-                        CERROR("Deny access without identity: uid %d\n",
-                               uc->mu_fsuid);
-                        RETURN(-EACCES);
-                }
+        /* get identity info of this user */
+        identity = mdt_identity_get(mdt->mdt_identity_cache, uc->mu_fsuid);
+        if (!identity) {
+                CERROR("Deny access without identity: uid %d\n", uc->mu_fsuid);
+                RETURN(-EACCES);
         }
 
         uc->mu_valid = UCRED_OLD;
@@ -290,29 +282,9 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
         ucred->mu_valid = UCRED_INVALID;
 
-        if (mdt->mdt_opts.mo_no_gss_support && med->med_rmtclient) {
-                CWARN("The server is running with no GSS support now! "
-                      "and don't permit remote client to access!\n");
-                RETURN(-EACCES);
-        }
-
         if (req->rq_auth_gss && req->rq_auth_uid == INVALID_UID) {
                 CWARN("user not authenticated, deny access!\n");
                 RETURN(-EACCES);
-        }
-
-        if (req->rq_auth_usr_mdt) {
-                switch (type) {
-                case BODY_INIT:
-                        ucred->mu_valid = UCRED_INIT;
-                        RETURN(old_init_ucred(info, (struct mdt_body *)buf));
-                case REC_INIT:
-                        ucred->mu_valid = UCRED_INIT;
-                        RETURN(old_init_ucred_reint(info));
-                default:
-                        CWARN("Invalid ucred init type\n");
-                        RETURN(-EINVAL);
-                }
         }
 
         ucred->mu_o_uid   = pud->pud_uid;
@@ -354,9 +326,6 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                 }
         }
 
-        if (mdt->mdt_opts.mo_no_gss_support)
-                goto check_squash;
-
         identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid);
         if (!identity) {
                 CERROR("Deny access without identity: uid %d\n",
@@ -389,7 +358,6 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                 GOTO(out, rc = -EACCES);
         }
 
-check_squash:
         /* FIXME: The exact behavior of root_squash is not defined. */
         root_squashed = mdt_squash_root(mdt, ucred, pud, peernid);
         if (!root_squashed) {
@@ -406,9 +374,8 @@ check_squash:
         /*
          * NB: remote client not allowed to setgroups anyway.
          */
-        if (pud->pud_ngroups && !med->med_rmtclient &&
-            ((setxid_perm & LUSTRE_SETGRP_PERM) ||
-             mdt->mdt_opts.mo_no_gss_support)) {
+        if (!med->med_rmtclient && pud->pud_ngroups &&
+            (setxid_perm & LUSTRE_SETGRP_PERM)) {
                 struct group_info *ginfo;
 
                 /* setgroups for local client */
@@ -445,7 +412,7 @@ int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
 
         mdt_exit_ucred(info);
 
-        /* !rq_user_desc means null security */
+        /* !rq_user_desc means null security, maybe inter-mds ops */
         return req->rq_user_desc ? new_init_ucred(info, BODY_INIT, body) :
                                    old_init_ucred(info, body);
 }
@@ -460,7 +427,7 @@ int mdt_init_ucred_reint(struct mdt_thread_info *info)
 
         mdt_exit_ucred(info);
 
-        /* !rq_user_desc means null security */
+        /* !rq_user_desc means null security, maybe inter-mds ops */
         return req->rq_user_desc ? new_init_ucred(info, REC_INIT, NULL) :
                                    old_init_ucred_reint(info);
 }

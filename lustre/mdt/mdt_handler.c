@@ -259,6 +259,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         struct mdt_device       *mdt = info->mti_mdt;
         const struct mdt_body   *reqbody = info->mti_body;
         struct ptlrpc_request   *req = mdt_info_req(info);
+        struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
         struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *la = &ma->ma_attr;
         struct req_capsule      *pill = &info->mti_pill;
@@ -350,14 +351,19 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                                 repbody->max_cookiesize);
         }
 
-        if (reqbody->valid & OBD_MD_FLRMTPERM) {
-                buffer->lb_buf = req_capsule_server_get(pill, &RMF_ACL);
+        if (med->med_rmtclient && (reqbody->valid & OBD_MD_FLRMTPERM)) {
+                void *buf = req_capsule_server_get(pill, &RMF_ACL);
+
                 /* mdt_getattr_lock only */
-                rc = mdt_pack_remote_perm(info, o, buffer);
-                if (rc)
+                rc = mdt_pack_remote_perm(info, o, buf);
+                if (rc) {
+                        repbody->valid &= ~OBD_MD_FLRMTPERM;
+                        repbody->aclsize = 0;
                         RETURN(rc);
-                repbody->valid |= OBD_MD_FLRMTPERM;
-                repbody->aclsize = sizeof(struct mdt_remote_perm);
+                } else {
+                        repbody->valid |= OBD_MD_FLRMTPERM;
+                        repbody->aclsize = sizeof(struct mdt_remote_perm);
+                }
         }
 #ifdef CONFIG_FS_POSIX_ACL
         else if ((req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) &&
@@ -659,12 +665,6 @@ static struct lu_device_operations mdt_lu_ops;
 static int lu_device_is_mdt(struct lu_device *d)
 {
         return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdt_lu_ops);
-}
-
-static inline struct mdt_device *mdt_dev(struct lu_device *d)
-{
-        LASSERT(lu_device_is_mdt(d));
-        return container_of0(d, struct mdt_device, mdt_md_dev.md_lu_dev);
 }
 
 static int mdt_connect(struct mdt_thread_info *info)
@@ -3277,8 +3277,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if(obd->obd_recovering == 0)
                 mdt_postrecov(env, m);
 
-        m->mdt_opts.mo_no_gss_support = 1;
-
         RETURN(0);
 
 err_stop_service:
@@ -3369,18 +3367,6 @@ static int mdt_process_config(const struct lu_env *env,
 
                         val++;
                         if (class_match_param(key,
-                                              PARAM_GSS_SUPPORT, 0) == 0) {
-                                if (memcmp(val, "no", 2) == 0) {
-                                        m->mdt_opts.mo_no_gss_support = 1;
-                                } else if (memcmp(val, "yes", 3) == 0) {
-                                        m->mdt_opts.mo_no_gss_support = 0;
-                                } else {
-                                        CERROR("Can't parse param %s\n", key);
-                                        rc = -EINVAL;
-                                        /* continue parsing other params */
-                                        continue;
-                                }
-                        } else if (class_match_param(key,
                                         PARAM_ROOTSQUASH_UID, 0) == 0) {
                                 if (!m->mdt_rootsquash_info)
                                         OBD_ALLOC_PTR(m->mdt_rootsquash_info);
@@ -4003,20 +3989,6 @@ static struct lu_device_type mdt_device_type = {
         .ldt_ops      = &mdt_device_type_ops,
         .ldt_ctx_tags = LCT_MD_THREAD
 };
-
-static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
-        { "uuid",            lprocfs_rd_uuid,                0, 0 },
-        { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
-        { "num_exports",     lprocfs_rd_num_exports,         0, 0 },
-        { 0 }
-};
-
-static struct lprocfs_vars lprocfs_mdt_module_vars[] = {
-        { "num_refs",        lprocfs_rd_numrefs,             0, 0 },
-        { 0 }
-};
-
-LPROCFS_INIT_VARS(mdt, lprocfs_mdt_module_vars, lprocfs_mdt_obd_vars);
 
 static int __init mdt_mod_init(void)
 {

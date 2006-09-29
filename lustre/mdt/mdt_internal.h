@@ -137,8 +137,7 @@ struct mdt_device {
                                    mo_acl        :1,
                                    mo_compat_resname:1,
                                    mo_mds_capa   :1,
-                                   mo_oss_capa   :1,
-                                   mo_no_gss_support :1;
+                                   mo_oss_capa   :1;
         } mdt_opts;
 
         /* lock to pretect epoch and write count */
@@ -583,6 +582,12 @@ int mdt_ck_thread_start(struct mdt_device *mdt);
 void mdt_ck_thread_stop(struct mdt_device *mdt);
 void mdt_ck_timer_callback(unsigned long castmeharder);
 int mdt_capa_keys_init(const struct lu_env *env, struct mdt_device *mdt);
+
+static inline struct mdt_device *mdt_dev(struct lu_device *d)
+{
+//        LASSERT(lu_device_is_mdt(d));
+        return container_of0(d, struct mdt_device, mdt_md_dev.md_lu_dev);
+}
 
 static inline struct lustre_capa_key *red_capa_key(struct mdt_device *mdt)
 {
