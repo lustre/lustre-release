@@ -728,7 +728,7 @@ AC_ARG_ENABLE([split],
 			[enable split support]),
 	[],[enable_split='yes'])
 AC_MSG_RESULT([$enable_split])
-if test x$enable_split != xyes; then
+if test x$enable_split != xno; then
    AC_DEFINE(HAVE_SPLIT_SUPPORT, 1, [enable split support])
 fi
 ])
