@@ -1901,40 +1901,30 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
                                    struct mdd_object *tgt_pobj,
                                    const struct lu_fid *sfid,
                                    int src_is_dir,
-                                   struct mdd_object *sobj,
                                    struct mdd_object *tobj)
 {
-        struct mdd_device *mdd = mdo2mdd(&src_pobj->mod_obj);
         int rc = 0, need_check = 1;
         ENTRY;
 
-        mdd_read_lock(env, src_pobj);
-        rc = mdd_may_delete(env, src_pobj, sobj, src_is_dir, need_check);
-        mdd_read_unlock(env, src_pobj);
-        if (rc)
-                RETURN(rc);
+        if (mdd_is_dead_obj(src_pobj))
+                RETURN(-ENOENT);
 
         if (src_pobj == tgt_pobj)
                 need_check = 0;
-
+        
         if (!tobj) {
-                mdd_read_lock(env, tgt_pobj);
                 rc = mdd_may_create(env, tgt_pobj, NULL, need_check);
-                mdd_read_unlock(env, tgt_pobj);
         } else {
-                mdd_read_lock(env, tgt_pobj);
+                mdd_read_lock(env, tobj);
                 rc = mdd_may_delete(env, tgt_pobj, tobj, src_is_dir,
                                     need_check);
-                mdd_read_unlock(env, tgt_pobj);
-                if (!rc && S_ISDIR(mdd_object_type(tobj)) &&
-                    mdd_dir_is_empty(env, tobj))
-                                RETURN(-ENOTEMPTY);
+                if (rc == 0)
+                        if (S_ISDIR(mdd_object_type(tobj))
+                            && mdd_dir_is_empty(env, tobj))
+                                rc = -ENOTEMPTY;
+                mdd_read_unlock(env, tobj);
         }
-
-        /* source should not be ancestor of target dir */
-        if (!rc && src_is_dir && mdd_is_parent(env, mdd, tgt_pobj, sfid, NULL))
-                RETURN(-EINVAL);
-
+        
         RETURN(rc);
 }
 /* src object can be remote that is why we use only fid and type of object */
@@ -1947,7 +1937,7 @@ static int mdd_rename(const struct lu_env *env,
         struct mdd_device *mdd = mdo2mdd(src_pobj);
         struct mdd_object *mdd_spobj = md2mdd_obj(src_pobj);
         struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
-        struct mdd_object *mdd_sobj = mdd_object_find(env, mdd, lf);
+        struct mdd_object *mdd_sobj = NULL;
         struct mdd_object *mdd_tobj = NULL;
         struct lu_attr    *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         struct thandle *handle;
@@ -1959,26 +1949,25 @@ static int mdd_rename(const struct lu_env *env,
         is_dir = S_ISDIR(ma->ma_attr.la_mode);
         if (ma->ma_attr.la_valid & LA_FLAGS &&
             ma->ma_attr.la_flags & (LUSTRE_APPEND_FL | LUSTRE_IMMUTABLE_FL))
-                GOTO(out, rc = -EPERM);
+                RETURN(-EPERM);
 
         if (tobj)
                 mdd_tobj = md2mdd_obj(tobj);
 
-        /*XXX: shouldn't this check be done under lock below? */
-        rc = mdd_rename_sanity_check(env, mdd_spobj, mdd_tpobj,
-                                     lf, is_dir, mdd_sobj, mdd_tobj);
-        if (rc)
-                GOTO(out, rc);
-
         mdd_txn_param_build(env, MDD_TXN_RENAME_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
-                GOTO(out, rc = PTR_ERR(handle));
+                RETURN(PTR_ERR(handle));
 
         /*FIXME: Should consider tobj and sobj too in rename_lock*/
         rc = mdd_rename_lock(env, mdd, mdd_spobj, mdd_tpobj);
         if (rc)
                 GOTO(cleanup_unlocked, rc);
+
+        rc = mdd_rename_sanity_check(env, mdd_spobj, mdd_tpobj,
+                                     lf, is_dir, mdd_tobj);
+        if (rc)
+                GOTO(cleanup, rc);
 
         rc = __mdd_index_delete(env, mdd_spobj, sname, is_dir, handle);
         if (rc)
@@ -1993,7 +1982,8 @@ static int mdd_rename(const struct lu_env *env,
         rc = __mdd_index_insert(env, mdd_tpobj, lf, tname, is_dir, handle);
         if (rc)
                 GOTO(cleanup, rc);
-
+        
+        mdd_sobj = mdd_object_find(env, mdd, lf);
         *la_copy = ma->ma_attr;
         la_copy->la_valid = LA_CTIME;
         if (mdd_sobj) {
@@ -2034,7 +2024,6 @@ cleanup:
         mdd_rename_unlock(env, mdd_spobj, mdd_tpobj);
 cleanup_unlocked:
         mdd_trans_stop(env, mdd, rc, handle);
-out:
         if (mdd_sobj)
                 mdd_object_put(env, mdd_sobj);
         RETURN(rc);
@@ -2263,7 +2252,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
         mdd_read_lock(env, obj);
         rc = __mdd_la_get(env, obj, la);
         mdd_read_unlock(env, obj);
-        if (rc)
+        if (rc != 0)
                 RETURN(rc);
 
         if (la->la_mode & S_ISGID) {
@@ -2469,10 +2458,6 @@ static int mdd_oc_sanity_check(const struct lu_env *env,
 {
         int rc;
         ENTRY;
-
-        /* EEXIST check */
-        if (lu_object_exists(&obj->mod_obj.mo_lu))
-                RETURN(-EEXIST);
 
         switch (ma->ma_attr.la_mode & S_IFMT) {
         case S_IFREG:
