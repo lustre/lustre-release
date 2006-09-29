@@ -784,7 +784,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
                         memcpy(name, ent->lde_name, ent->lde_namelen);
                         rc = mdo_name_insert(info->mti_env,
                                              md_object_next(&object->mot_obj),
-                                             name, lf, 0, NULL);
+                                             name, lf, 0);
                         OBD_FREE(name, ent->lde_namelen + 1);
                         if (rc)
                                 GOTO(out, rc);
