@@ -438,7 +438,7 @@ static void mdd_object_delete(const struct lu_env *env,
                 return;
 
         if (test_bit(LU_OBJECT_ORPHAN, &o->lo_header->loh_flags)) {
-                mdd_txn_param_build(env, MDD_TXN_MKDIR_OP);
+                mdd_txn_param_build(env, MDD_TXN_INDEX_DELETE_OP);
                 handle = mdd_trans_start(env, lu2mdd_dev(o->lo_dev));
                 if (IS_ERR(handle))
                         CERROR("Cannot get thandle\n");
@@ -1761,7 +1761,7 @@ static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
         int rc;
         ENTRY;
 
-        mdd_txn_param_build(env, MDD_TXN_XATTR_SET_OP);
+        mdd_txn_param_build(env, MDD_TXN_UNLINK_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(-ENOMEM);

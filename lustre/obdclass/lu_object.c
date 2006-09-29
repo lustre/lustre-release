@@ -132,8 +132,9 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
         top->lo_header->loh_fid  = *f;
         if (capa == BYPASS_CAPA)
                 lu_object_bypass_capa(top);
-        else
+        else if (capa)
                 top->lo_header->loh_capa = *capa;
+
         layers = &top->lo_header->loh_layers;
         do {
                 /*

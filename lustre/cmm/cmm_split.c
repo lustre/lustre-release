@@ -249,6 +249,48 @@ static int cmm_send_split_pages(const struct lu_env *env,
         RETURN(rc);
 }
 
+static int cmm_remove_dir_ent(const struct lu_env *env, struct md_object *mo,
+                              struct lu_dirent *ent)
+{
+        struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
+        struct cmm_object *obj;
+        char *name;
+        int is_dir, rc;
+        ENTRY;
+
+        if (!strncmp(ent->lde_name, ".", ent->lde_namelen) || 
+            !strncmp(ent->lde_name, "..", ent->lde_namelen))
+                RETURN(0);
+
+        obj = cmm_object_find(env, cmm, &ent->lde_fid, NULL);
+        if (IS_ERR(obj))
+                RETURN(PTR_ERR(obj));
+
+        is_dir = S_ISDIR(lu_object_attr(&obj->cmo_obj.mo_lu));
+        OBD_ALLOC(name, ent->lde_namelen + 1);
+        if (!name)
+                GOTO(cleanup, rc = -ENOMEM);
+                
+        memcpy(name, ent->lde_name, ent->lde_namelen);
+        rc = mdo_name_remove(env, md_object_next(mo),
+                             name, is_dir);
+        OBD_FREE(name, ent->lde_namelen + 1);
+        if (rc) 
+                GOTO(cleanup, rc);
+        
+        /* Because this ent will be transferred to slave MDS and 
+         * insert it there, so in the slave MDS, we should know whether
+         * this object is dir or not, so use the highest bit of the hash
+         * to indicate that (because we do not use highest bit of hash)
+         */ 
+        if (is_dir)
+                ent->lde_hash |= MAX_HASH_HIGHEST_BIT;
+cleanup:
+        cmm_object_put(env, obj);
+        
+        RETURN(rc);
+}
+
 static int cmm_remove_entries(const struct lu_env *env,
                               struct md_object *mo, struct lu_rdpg *rdpg,
                               __u32 hash_end, __u32 *len)
@@ -263,24 +305,11 @@ static int cmm_remove_entries(const struct lu_env *env,
         for (ent = lu_dirent_start(dp); ent != NULL;
                           ent = lu_dirent_next(ent)) {
                 if (ent->lde_hash < hash_end) {
-                        if (strncmp(ent->lde_name, ".", ent->lde_namelen) &&
-                            strncmp(ent->lde_name, "..", ent->lde_namelen)) {
-                                char *name;
-                                /* FIXME: Here we allocate name for each name,
-                                 * maybe stupid, but can not find better way.
-                                 * will find better way */
-                                OBD_ALLOC(name, ent->lde_namelen + 1);
-                                memcpy(name, ent->lde_name, ent->lde_namelen);
-                                rc = mdo_name_remove(env, md_object_next(mo),
-                                                     name, 0);
-                                OBD_FREE(name, ent->lde_namelen + 1);
-                        }
-                        if (rc) {
-                                /* FIXME: Do not know why it return -ENOENT
-                                 * in some case
-                                 * */
-                                if (rc != -ENOENT)
-                                        GOTO(unmap, rc);
+                        rc = cmm_remove_dir_ent(env, mo, ent);  
+                        if (rc) { 
+                                CERROR("Can not del %s rc %d\n", ent->lde_name, 
+                                                                 rc);
+                                GOTO(unmap, rc);
                         }
                 } else {
                         if (ent != lu_dirent_start(dp))

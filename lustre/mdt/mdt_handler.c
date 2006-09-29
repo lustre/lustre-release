@@ -777,14 +777,14 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
                 if (strncmp(ent->lde_name, ".", ent->lde_namelen) &&
                     strncmp(ent->lde_name, "..", ent->lde_namelen)) {
                         char *name;
-                        /* FIXME: Here we allocate name for each name,
-                         * maybe stupid, but can not find better way.
-                         * will find better way */
+                        int is_dir = le32_to_cpu(ent->lde_hash) & 
+                                        MAX_HASH_HIGHEST_BIT;
+                        
                         OBD_ALLOC(name, ent->lde_namelen + 1);
                         memcpy(name, ent->lde_name, ent->lde_namelen);
                         rc = mdo_name_insert(info->mti_env,
                                              md_object_next(&object->mot_obj),
-                                             name, lf, 0);
+                                             name, lf, is_dir);
                         OBD_FREE(name, ent->lde_namelen + 1);
                         if (rc)
                                 GOTO(out, rc);
