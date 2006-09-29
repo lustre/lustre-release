@@ -726,9 +726,9 @@ AC_DEFUN([LC_CONFIG_SPLIT],
 AC_ARG_ENABLE([split], 
 	AC_HELP_STRING([--disable-split],
 			[enable split support]),
-	[disable_split='yes'],[disable_split='no'])
-AC_MSG_RESULT([$disable_split])
-if test x$disable_split != xyes; then
+	[],[enable_split='yes'])
+AC_MSG_RESULT([$enable_split])
+if test x$enable_split != xyes; then
    AC_DEFINE(HAVE_SPLIT_SUPPORT, 1, [enable split support])
 fi
 ])
@@ -787,7 +787,7 @@ AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
 AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
-AM_CONDITIONAL(SPLIT, test x$disable_split = xno)
+AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
 ])
