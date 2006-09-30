@@ -839,10 +839,11 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 tmpex.l_extent.end = tmpex.l_extent.start + PAGE_CACHE_SIZE - 1;
                 l_flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
                 /* check to see if another DLM lock covers this page b=2765 */
-                rc2 = obd_match(ll_s2dtexp(inode->i_sb), lsm, LDLM_EXTENT,
-                                &tmpex, LCK_PR | LCK_PW, &l_flags, inode,
-                                &lockh);
-                if (rc2 == 0 && page->mapping != NULL) {
+                rc2 = ldlm_lock_match(lock->l_resource->lr_namespace,
+                                      l_flags, &lock->l_resource->lr_name, 
+                                      LDLM_EXTENT, &tmpex, LCK_PR | LCK_PW, &lockh);
+                
+                if (rc2 <= 0 && page->mapping != NULL) {
                         struct ll_async_page *llap = llap_cast_private(page);
                         // checking again to account for writeback's lock_page()
                         LL_CDEBUG_PAGE(D_PAGE, page, "truncating\n");

@@ -238,7 +238,7 @@ test_18a() {
 
     do_facet client cp /etc/termcap $f
     sync
-    local osc2dev=`grep ${ost2_svc}-osc-MDT0000 $LPROC/devices | awk '{print $1}'`
+    local osc2dev=`grep ${ost2_svc}-osc- $LPROC/devices | egrep -v 'MDT' | awk '{print $1}'`
     $LCTL --device $osc2dev deactivate || return 3
     # my understanding is that there should be nothing in the page
     # cache after the client reconnects?     
