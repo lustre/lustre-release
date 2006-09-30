@@ -648,7 +648,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         rc = mdt_rename_lock(info, &rename_lh);
         if (rc) {
                 CERROR("can't lock FS for rename, rc %d\n", rc);
-                RETURN(rc);
+                GOTO(out, rc);
         }
 
         lh_newp = &info->mti_lh[MDT_LH_NEW];
@@ -659,7 +659,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         msrcdir = mdt_object_find_lock(info, rr->rr_fid1, lh_srcdirp,
                                        MDS_INODELOCK_UPDATE, rr->rr_capa1);
         if (IS_ERR(msrcdir))
-                GOTO(out, rc = PTR_ERR(msrcdir));
+                GOTO(out_rename_lock, rc = PTR_ERR(msrcdir));
 
         /*step 2: find & lock the target dir*/
         lh_tgtdirp = &info->mti_lh[MDT_LH_CHILD];
@@ -769,8 +769,9 @@ out_unlock_target:
         mdt_object_unlock_put(info, mtgtdir, lh_tgtdirp, rc);
 out_unlock_source:
         mdt_object_unlock_put(info, msrcdir, lh_srcdirp, rc);
-out:
+out_rename_lock:
         mdt_rename_unlock(&rename_lh);
+out:
         mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
         return rc;
 }
