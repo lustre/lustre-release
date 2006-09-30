@@ -1349,7 +1349,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct md_op_data *op_data = NULL;
         int ia_valid = attr->ia_valid;
-        int rc = 0;
+        int rc = 0, rc1 = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu valid %x\n", inode->i_ino,
@@ -1536,11 +1536,12 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         EXIT;
 out:
         if (op_data) {
-                if (op_data->ioepoch)
-                        rc = ll_setattr_done_writing(inode, op_data);
+                if (op_data->ioepoch) {
+                        rc1 = ll_setattr_done_writing(inode, op_data);
+                }
                 ll_finish_md_op_data(op_data);
         }
-        return rc;
+        return rc ? rc : rc1;
 }
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
