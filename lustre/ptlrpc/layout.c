@@ -247,17 +247,17 @@ static const struct req_msg_field *ldlm_intent_server[] = {
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
         &RMF_ACL,
-        &RMF_CAPA1,
-        &RMF_CAPA2
+        &RMF_CAPA1
 };
 
-static const struct req_msg_field *ldlm_intent_getattr_server[] = {
+static const struct req_msg_field *ldlm_intent_open_server[] = {
         &RMF_PTLRPC_BODY,
         &RMF_DLM_REP,
         &RMF_MDT_BODY,
         &RMF_MDT_MD,
         &RMF_ACL,
-        &RMF_CAPA1
+        &RMF_CAPA1,
+        &RMF_CAPA2
 };
 
 static const struct req_msg_field *ldlm_intent_getattr_client[] = {
@@ -676,12 +676,12 @@ EXPORT_SYMBOL(RQF_LDLM_INTENT);
 
 const struct req_format RQF_LDLM_INTENT_GETATTR =
         DEFINE_REQ_FMT0("LDLM_INTENT_GETATTR",
-                        ldlm_intent_getattr_client, ldlm_intent_getattr_server);
+                        ldlm_intent_getattr_client, ldlm_intent_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_GETATTR);
 
 const struct req_format RQF_LDLM_INTENT_OPEN =
         DEFINE_REQ_FMT0("LDLM_INTENT_OPEN",
-                        ldlm_intent_open_client, ldlm_intent_server);
+                        ldlm_intent_open_client, ldlm_intent_open_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_OPEN);
 
 const struct req_format RQF_LDLM_INTENT_CREATE =
