@@ -487,7 +487,7 @@ mds_evict_client() {
 }
 
 ost_evict_client() {
-    UUID=`cat /proc/fs/lustre/osc/${ost1_svc}-osc-*/uuid`
+    UUID=`grep ${ost1_svc}-osc- $LPROC/devices | egrep -v 'MDT' | awk '{print $5}'`
     do_facet ost1 "echo $UUID > /proc/fs/lustre/obdfilter/${ost1_svc}/evict_client"
 }
 
