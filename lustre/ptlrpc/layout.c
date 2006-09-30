@@ -251,6 +251,15 @@ static const struct req_msg_field *ldlm_intent_server[] = {
         &RMF_CAPA2
 };
 
+static const struct req_msg_field *ldlm_intent_getattr_server[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_DLM_REP,
+        &RMF_MDT_BODY,
+        &RMF_MDT_MD,
+        &RMF_ACL,
+        &RMF_CAPA1
+};
+
 static const struct req_msg_field *ldlm_intent_getattr_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_DLM_REQ,
@@ -667,7 +676,7 @@ EXPORT_SYMBOL(RQF_LDLM_INTENT);
 
 const struct req_format RQF_LDLM_INTENT_GETATTR =
         DEFINE_REQ_FMT0("LDLM_INTENT_GETATTR",
-                        ldlm_intent_getattr_client, ldlm_intent_server);
+                        ldlm_intent_getattr_client, ldlm_intent_getattr_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT_GETATTR);
 
 const struct req_format RQF_LDLM_INTENT_OPEN =
