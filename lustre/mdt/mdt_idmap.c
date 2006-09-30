@@ -412,6 +412,11 @@ int mdt_handle_idmap(struct mdt_thread_info *info)
                 RETURN(-EACCES);
         }
 
+        if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
+                CERROR("remote client must run with identity_get enabled!\n");
+                RETURN(-EACCES);
+        }
+
         identity = mdt_identity_get(mdt->mdt_identity_cache,
                                     req->rq_auth_mapped_uid);
         if (!identity) {

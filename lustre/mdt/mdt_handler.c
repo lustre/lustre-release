@@ -3239,7 +3239,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         obd->obd_namespace = m->mdt_namespace;
 
         m->mdt_identity_cache = upcall_cache_init(obd->obd_name,
-                                                  MDT_IDENTITY_UPCALL_PATH,
+                                                  "NONE",
                                                   &mdt_identity_upcall_cache_ops);
         if (IS_ERR(m->mdt_identity_cache)) {
                 rc = PTR_ERR(m->mdt_identity_cache);

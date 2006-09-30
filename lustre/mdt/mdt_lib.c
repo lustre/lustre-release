@@ -126,11 +126,15 @@ static int old_init_ucred(struct mdt_thread_info *info,
 
         uc->mu_valid = UCRED_INVALID;
 
-        /* get identity info of this user */
-        identity = mdt_identity_get(mdt->mdt_identity_cache, body->fsuid);
-        if (!identity) {
-                CERROR("Deny access without identity: uid %d\n", body->fsuid);
-                RETURN(-EACCES);
+        if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
+                /* get identity info of this user */
+                identity = mdt_identity_get(mdt->mdt_identity_cache,
+                                            body->fsuid);
+                if (!identity) {
+                        CERROR("Deny access without identity: uid %d\n",
+                               body->fsuid);
+                        RETURN(-EACCES);
+                }
         }
 
         uc->mu_valid = UCRED_OLD;
@@ -157,11 +161,15 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
 
         uc->mu_valid = UCRED_INVALID;
 
-        /* get identity info of this user */
-        identity = mdt_identity_get(mdt->mdt_identity_cache, uc->mu_fsuid);
-        if (!identity) {
-                CERROR("Deny access without identity: uid %d\n", uc->mu_fsuid);
-                RETURN(-EACCES);
+        if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
+                /* get identity info of this user */
+                identity = mdt_identity_get(mdt->mdt_identity_cache,
+                                            uc->mu_fsuid);
+                if (!identity) {
+                        CERROR("Deny access without identity: uid %d\n",
+                               uc->mu_fsuid);
+                        RETURN(-EACCES);
+                }
         }
 
         uc->mu_valid = UCRED_OLD;
@@ -326,6 +334,17 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                 }
         }
 
+        if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
+                if (med->med_rmtclient) {
+                        CERROR("remote client must run with identity_get "
+                               "enabled!\n");
+                        RETURN(-EACCES);
+                } else {
+                        setxid_perm |= LUSTRE_SETGRP_PERM;
+                        goto check_squash;
+                }
+        }
+
         identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid);
         if (!identity) {
                 CERROR("Deny access without identity: uid %d\n",
@@ -358,6 +377,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                 GOTO(out, rc = -EACCES);
         }
 
+check_squash:
         /* FIXME: The exact behavior of root_squash is not defined. */
         root_squashed = mdt_squash_root(mdt, ucred, pud, peernid);
         if (!root_squashed) {

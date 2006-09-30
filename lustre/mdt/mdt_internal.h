@@ -594,5 +594,10 @@ static inline struct lustre_capa_key *red_capa_key(struct mdt_device *mdt)
         return &mdt->mdt_capa_keys[1];
 }
 
+static inline int is_identity_get_disabled(struct upcall_cache *cache)
+{
+        return cache ? (strcmp(cache->uc_upcall, "NONE") == 0) : 1;
+}
+
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */
