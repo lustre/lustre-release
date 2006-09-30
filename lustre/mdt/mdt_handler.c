@@ -408,30 +408,31 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
 static int mdt_getattr(struct mdt_thread_info *info)
 {
+        struct mdt_object *obj = info->mti_object;
+        struct mdt_body   *reqbody;
         int rc;
-        struct mdt_object *obj;
-        struct mdt_body *reqbody;
+        ENTRY;
 
-        obj = info->mti_object;
         LASSERT(obj != NULL);
         LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
-        ENTRY;
 
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
-                RETURN(-EFAULT);
+                GOTO(out, rc = -EFAULT);
 
         if (reqbody->valid & OBD_MD_FLRMTPERM) {
                 rc = mdt_init_ucred(info, reqbody);
                 if (rc)
-                        RETURN(rc);
+                        GOTO(out, rc);
         }
 
         rc = mdt_getattr_internal(info, obj);
-        mdt_shrink_reply(info, REPLY_REC_OFF + 1, 1, 0);
         if (reqbody->valid & OBD_MD_FLRMTPERM)
                 mdt_exit_ucred(info);
-        RETURN(rc);
+        EXIT;
+out:
+        mdt_shrink_reply(info, REPLY_REC_OFF + 1, 1, 0);
+        return rc;
 }
 
 static int mdt_is_subdir(struct mdt_thread_info *info)
@@ -637,27 +638,28 @@ out:
 static int mdt_getattr_name(struct mdt_thread_info *info)
 {
         struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_CHILD];
-        struct mdt_body *reqbody;
+        struct mdt_body        *reqbody;
         int rc;
-
         ENTRY;
 
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
-                RETURN(-EFAULT);
+                GOTO(out, rc = -EFAULT);
 
         rc = mdt_init_ucred(info, reqbody);
         if (rc)
-                RETURN(rc);
+                GOTO(out, rc);
 
         rc = mdt_getattr_name_lock(info, lhc, MDS_INODELOCK_UPDATE, NULL);
         if (lustre_handle_is_used(&lhc->mlh_lh)) {
                 ldlm_lock_decref(&lhc->mlh_lh, lhc->mlh_mode);
                 lhc->mlh_lh.cookie = 0;
         }
-        mdt_shrink_reply(info, REPLY_REC_OFF + 1, 1, 0);
         mdt_exit_ucred(info);
-        RETURN(rc);
+        EXIT;
+out:
+        mdt_shrink_reply(info, REPLY_REC_OFF + 1, 1, 0);
+        return rc;
 }
 
 static struct lu_device_operations mdt_lu_ops;
@@ -2150,16 +2152,16 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                 break;
         default:
                 CERROR("Unhandled till now");
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
-                RETURN(-EFAULT);
+                GOTO(out, rc = -EFAULT);
 
         rc = mdt_init_ucred(info, reqbody);
         if (rc)
-                RETURN(rc);
+                GOTO(out, rc);
 
         req = info->mti_pill.rc_req;
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
@@ -2170,7 +2172,6 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         ldlm_rep->lock_policy_res2 =
                 mdt_getattr_name_lock(info, lhc, child_bits, ldlm_rep);
-        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 1, 0);
 
         if (mdt_get_disposition(ldlm_rep, DISP_LOOKUP_NEG))
                 ldlm_rep->lock_policy_res2 = 0;
@@ -2180,9 +2181,10 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         }
 
         rc = mdt_intent_lock_replace(info, lockp, new_lock, lhc, flags);
-        EXIT;
-out:
         mdt_exit_ucred(info);
+        GOTO(out, rc);
+out:
+        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 1, 0);
         return rc;
 }
 
