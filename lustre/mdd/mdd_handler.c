@@ -923,7 +923,7 @@ static int mdd_process_config(const struct lu_env *env,
 out:
         RETURN(rc);
 }
-
+#if 0
 static int mdd_lov_set_nextid(const struct lu_env *env,
                               struct mdd_device *mdd)
 {
@@ -945,6 +945,7 @@ static int mdd_cleanup_unlink_llog(const struct lu_env *env,
         /* XXX: to be implemented! */
         return 0;
 }
+#endif
 
 static int mdd_recovery_complete(const struct lu_env *env,
                                  struct lu_device *d)
@@ -957,7 +958,7 @@ static int mdd_recovery_complete(const struct lu_env *env,
         
         LASSERT(mdd != NULL);
         LASSERT(obd != NULL);
-
+#if 0
         /* XXX: Do we need this in new stack? */
         rc = mdd_lov_set_nextid(env, mdd);
         if (rc) {
@@ -973,7 +974,7 @@ static int mdd_recovery_complete(const struct lu_env *env,
                        rc);
                 RETURN(rc);
         }
-
+#endif
         obd_notify(obd->u.mds.mds_osc_obd, NULL,
                    (obd->obd_async_recov ?
                     OBD_NOTIFY_SYNC_NONBLOCK :
