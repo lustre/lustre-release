@@ -1146,6 +1146,7 @@ test_29() {
 	log 'done'
 	LOCKCOUNTCURRENT=`cat $MDCDIR/lock_count`
 	LOCKUNUSEDCOUNTCURRENT=`cat $MDCDIR/lock_unused_count`
+        
 	if [ $LOCKCOUNTCURRENT -gt $LOCKCOUNTORIG ]; then
 		echo > $LPROC/ldlm/dump_namespaces
 		error "CURRENT: $LOCKCOUNTCURRENT > $LOCKCOUNTORIG"

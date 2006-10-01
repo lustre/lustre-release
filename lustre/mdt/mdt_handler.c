@@ -3276,7 +3276,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (rc)
                 GOTO(err_stop_service, rc);
 
-        if(obd->obd_recovering == 0)
+        if (obd->obd_recovering == 0)
                 mdt_postrecov(env, m);
 
         RETURN(0);

@@ -113,8 +113,9 @@ enum {
         MDD_TXN_CREATE_DATA_CREDITS = 0,
         MDD_TXN_MKDIR_CREDITS = 0
 };
-#define DEFINE_MDD_TXN_OP_ARRAY(opname, base)       \
-[opname ## _OP - base ## _OP]= { \
+
+#define DEFINE_MDD_TXN_OP_ARRAY(opname, base)   \
+[opname ## _OP - base ## _OP]= {                \
         .mod_op      = opname ## _OP,           \
         .mod_credits = opname ## _CREDITS,      \
 }
@@ -141,28 +142,30 @@ static struct mdd_txn_op_descr mdd_txn_descrs[] = {
         DEFINE_MDD_TXN_OP_DESC(MDD_TXN_CREATE_DATA),
         DEFINE_MDD_TXN_OP_DESC(MDD_TXN_MKDIR)
 };
-struct rw_semaphore    mdd_txn_sem;
+
+spinlock_t mdd_txn_lock;
 
 static void mdd_txn_param_build(const struct lu_env *env, int op)
 {
         int num_entries, i;
+        
         /* init credits for each ops */
-        num_entries = sizeof (mdd_txn_descrs) / sizeof(struct mdd_txn_op_descr);
+        num_entries = ARRAY_SIZE(mdd_txn_descrs);
 
         LASSERT(num_entries > 0);
 
-        down_read(&mdd_txn_sem);
-        for (i =0; i < num_entries; i++) {
+        spin_lock(&mdd_txn_lock);
+        for (i = 0; i < num_entries; i++) {
                 if (mdd_txn_descrs[i].mod_op == op) {
                         LASSERT(mdd_txn_descrs[i].mod_credits > 0);
                         mdd_env_info(env)->mti_param.tp_credits = 
                                         mdd_txn_descrs[i].mod_credits;
-                        up_read(&mdd_txn_sem);
+                        spin_unlock(&mdd_txn_lock);
                         return;
                 }
         }
-        up_read(&mdd_txn_sem);
-        CERROR("Wrong operation %d \n", op);
+        spin_unlock(&mdd_txn_lock);
+        CERROR("Wrong txn operation %d\n", op);
         LBUG();
 }
 
@@ -176,28 +179,28 @@ static int mdd_credit_get(const struct lu_env *env, struct mdd_device *mdd,
         return credits;
 }
 
-/* FIXME: we should calculate it by lsm count, 
- * not ost count */
-int mdd_init_txn_credits(const struct lu_env *env, struct mdd_device *mdd)
+/* XXX: we should calculate it by lsm count, not ost count. */
+int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
 {
         struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
         int ost_count = mds->mds_lov_desc.ld_tgt_count;
         int iam_credits, xattr_credits, log_credits, create_credits;
         int num_entries, i, attr_credits;
 
-        /* init credits for each ops */
-        num_entries = sizeof (mdd_txn_descrs) / sizeof(struct mdd_txn_op_descr);
+        /* Init credits for each ops. */
+        num_entries = ARRAY_SIZE(mdd_txn_descrs);
         LASSERT(num_entries > 0);
 
-        /* init the basic credits from osd layer */
+        /* Init the basic credits from osd layer. */
         iam_credits = mdd_credit_get(env, mdd, INSERT_IAM);
         log_credits = mdd_credit_get(env, mdd, LOG_REC);
         attr_credits = mdd_credit_get(env, mdd, ATTR_SET);
         xattr_credits = mdd_credit_get(env, mdd, XATTR_SET);
         create_credits = mdd_credit_get(env, mdd, CREATE_OBJECT);
-        /* calculate the mdd credits */
-        down_write(&mdd_txn_sem);
-        for (i =0; i < num_entries; i++) {
+        
+        /* Calculate the mdd credits. */
+        spin_lock(&mdd_txn_lock);
+        for (i = 0; i < num_entries; i++) {
                 int opcode = mdd_txn_descrs[i].mod_op;
                 switch(opcode) {
                         case MDD_TXN_OBJECT_DESTROY_OP:
@@ -252,12 +255,13 @@ int mdd_init_txn_credits(const struct lu_env *env, struct mdd_device *mdd)
                                         2 * iam_credits + create_credits;
                                 break;
                         default:
-                                CERROR("invalid op %d init its credit\n", opcode);
-                                up_write(&mdd_txn_sem);
+                                spin_unlock(&mdd_txn_lock);
+                                CERROR("Invalid op %d init its credit\n",
+                                       opcode);
                                 LBUG();
                 }
         }
-        up_write(&mdd_txn_sem);
+        spin_unlock(&mdd_txn_lock);
         RETURN(0);        
 }
 
@@ -844,7 +848,7 @@ static int mdd_device_init(const struct lu_env *env,
         mdd->mdd_txn_cb.dtc_cookie = mdd;
 
         /* init txn credits */
-        init_rwsem(&mdd_txn_sem);
+        spin_lock_init(&mdd_txn_lock);
         RETURN(rc);
 }
 
@@ -920,6 +924,28 @@ out:
         RETURN(rc);
 }
 
+static int mdd_lov_set_nextid(const struct lu_env *env,
+                              struct mdd_device *mdd)
+{
+        struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
+        int rc;
+        ENTRY;
+
+        LASSERT(mds->mds_lov_objids != NULL);
+        rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_NEXT_ID),
+                                KEY_NEXT_ID, mds->mds_lov_desc.ld_tgt_count,
+                                mds->mds_lov_objids, NULL);
+
+        RETURN(rc);
+}
+
+static int mdd_cleanup_unlink_llog(const struct lu_env *env,
+                                   struct mdd_device *mdd)
+{
+        /* XXX: to be implemented! */
+        return 0;
+}
+
 static int mdd_recovery_complete(const struct lu_env *env,
                                  struct lu_device *d)
 {
@@ -928,25 +954,35 @@ static int mdd_recovery_complete(const struct lu_env *env,
         struct obd_device *obd = mdd2obd_dev(mdd);
         int rc;
         ENTRY;
-        /* TODO:
+        
+        LASSERT(mdd != NULL);
+        LASSERT(obd != NULL);
+
+        /* XXX: Do we need this in new stack? */
         rc = mdd_lov_set_nextid(env, mdd);
         if (rc) {
-                CERROR("%s: mdd_lov_set_nextid failed %d\n",
-                       obd->obd_name, rc);
-                GOTO(out, rc);
+                CERROR("mdd_lov_set_nextid() failed %d\n",
+                       rc);
+                RETURN(rc);
         }
+
+        /* XXX: cleanup unlink. */
         rc = mdd_cleanup_unlink_llog(env, mdd);
+        if (rc) {
+                CERROR("mdd_cleanup_unlink_llog() failed %d\n",
+                       rc);
+                RETURN(rc);
+        }
 
         obd_notify(obd->u.mds.mds_osc_obd, NULL,
-                   obd->obd_async_recov ? OBD_NOTIFY_SYNC_NONBLOCK :
-                   OBD_NOTIFY_SYNC, NULL);
-        */
-        LASSERT(mdd);
-        LASSERT(obd);
+                   (obd->obd_async_recov ?
+                    OBD_NOTIFY_SYNC_NONBLOCK :
+                    OBD_NOTIFY_SYNC), NULL);
 
         obd->obd_recovering = 0;
         obd->obd_type->typ_dt_ops->o_postrecov(obd);
-        /* TODO: orphans handling */
+        
+        /* XXX: orphans handling. */
         __mdd_orphan_cleanup(env, mdd);
         rc = next->ld_ops->ldo_recovery_complete(env, next);
 

@@ -63,7 +63,7 @@ static int mdd_lov_update(struct obd_device *host,
         if (rc)
                 RETURN(rc);
         
-        rc = mdd_init_txn_credits(NULL, mdd);
+        rc = mdd_txn_init_credits(NULL, mdd);
         
         RETURN(rc);
 }
