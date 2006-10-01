@@ -50,6 +50,7 @@ static inline void lmv_drop_intent_lock(struct lookup_intent *it)
         if (it->d.lustre.it_lock_mode != 0) {
                 ldlm_lock_decref((void *)&it->d.lustre.it_lock_handle,
                                  it->d.lustre.it_lock_mode);
+                it->d.lustre.it_lock_mode = 0;
         }
 }
 
@@ -249,13 +250,8 @@ repeat:
                         /* client switches to new sequence, setup fld */
                         goto repeat;
                 }
-        } else if (rc == -ESTALE && it->d.lustre.it_lock_mode) {
-                struct lustre_handle *handle;
-                /* cross-ref open can have lookup lock on child */
-                handle = (struct lustre_handle *)&it->d.lustre.it_lock_handle;
-                ldlm_lock_decref(handle, it->d.lustre.it_lock_mode);
         }
-
+        
         if (rc != 0)
                 GOTO(out_free_sop_data, rc);
 
@@ -604,8 +600,10 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 release_lock:
                 lmv_update_body(body, obj->lo_inodes + i);
 
-                if (it.d.lustre.it_lock_mode)
+                if (it.d.lustre.it_lock_mode) {
                         ldlm_lock_decref(lockh, it.d.lustre.it_lock_mode);
+                        it.d.lustre.it_lock_mode = 0;
+                }
         }
 
         EXIT;
@@ -954,8 +952,10 @@ update:
 release_lock:
                 size += obj->lo_inodes[i].li_size;
 
-                if (it.d.lustre.it_lock_mode)
+                if (it.d.lustre.it_lock_mode) {
                         ldlm_lock_decref(lockh, it.d.lustre.it_lock_mode);
+                        it.d.lustre.it_lock_mode = 0;
+                }
         }
 
         if (*reqp) {
