@@ -651,7 +651,7 @@ AC_DEFUN([LC_CONFIG_GSS],
 AC_ARG_ENABLE([gss], 
 	AC_HELP_STRING([--enable-gss],
 			[enable gss/krb5 support]),
-	[enable_gss='yes'],[enable_gss='no'])
+	[],[enable_gss='no'])
 AC_MSG_RESULT([$enable_gss])
 #if test x$enable_gss != xno; then
 #	PKG_CHECK_MODULES([GSSAPI], [libgssapi >= 0.10])
