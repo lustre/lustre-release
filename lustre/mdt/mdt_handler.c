@@ -2177,10 +2177,11 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                 ldlm_rep->lock_policy_res2 = 0;
         if (!mdt_get_disposition(ldlm_rep, DISP_LOOKUP_POS) ||
                     ldlm_rep->lock_policy_res2) {
-                GOTO(out, rc = ELDLM_LOCK_ABORTED);
+                GOTO(out_ucred, rc = ELDLM_LOCK_ABORTED);
         }
 
         rc = mdt_intent_lock_replace(info, lockp, new_lock, lhc, flags);
+out_ucred:
         mdt_exit_ucred(info);
         GOTO(out, rc);
 out:
