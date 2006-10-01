@@ -202,57 +202,53 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
         spin_lock(&mdd_txn_lock);
         for (i = 0; i < num_entries; i++) {
                 int opcode = mdd_txn_descrs[i].mod_op;
+                int *c = &mdd_txn_descrs[i].mod_credits;
                 switch(opcode) {
                         case MDD_TXN_OBJECT_DESTROY_OP:
-                                mdd_txn_descrs[i].mod_credits = 20;
+                                *c = 20;
                                 break;
                         case MDD_TXN_OBJECT_CREATE_OP:
                                 /* OI_INSERT + CREATE OBJECT */
-                                mdd_txn_descrs[i].mod_credits = 
-                                    iam_credits + create_credits; 
+                                *c = iam_credits + create_credits; 
                                 break;
                         case MDD_TXN_ATTR_SET_OP:
                                 /* ATTR set + XATTR(lsm, lmv) set */
-                                mdd_txn_descrs[i].mod_credits = 
-                                    attr_credits + xattr_credits;
+                                *c = attr_credits + xattr_credits;
                                 break;
                         case MDD_TXN_XATTR_SET_OP:
-                                mdd_txn_descrs[i].mod_credits = xattr_credits;
+                                *c = xattr_credits;
                                 break;
                         case MDD_TXN_INDEX_INSERT_OP:
-                                mdd_txn_descrs[i].mod_credits = iam_credits;
+                                *c = iam_credits;
                                 break;
                         case MDD_TXN_INDEX_DELETE_OP:
-                                mdd_txn_descrs[i].mod_credits = iam_credits;
+                                *c = iam_credits;
                                 break;
                         case MDD_TXN_LINK_OP:
-                                mdd_txn_descrs[i].mod_credits = iam_credits;
+                                *c = iam_credits;
                                 break;
                         case MDD_TXN_UNLINK_OP:
                                 /* delete IAM + Unlink log */
-                                mdd_txn_descrs[i].mod_credits = 
-                                        iam_credits + log_credits * ost_count;
+                                *c = iam_credits + log_credits * ost_count;
                                 break;
                         case MDD_TXN_RENAME_OP:
                                 /* 2 delete IAM + 1 insert + Unlink log */
-                                mdd_txn_descrs[i].mod_credits = 
-                                    3 * iam_credits + log_credits * ost_count;
+                                *c = 3 * iam_credits + log_credits * ost_count;
                                 break;
                         case MDD_TXN_RENAME_TGT_OP:
                                 /* iam insert + iam delete */
-                                mdd_txn_descrs[i].mod_credits = 2 * iam_credits;
+                                *c = 2 * iam_credits;
                                 break;
                         case MDD_TXN_CREATE_DATA_OP:
                                 /* same as set xattr(lsm) */
-                                mdd_txn_descrs[i].mod_credits = xattr_credits;
+                                *c = xattr_credits;
                                 break;
                         case MDD_TXN_MKDIR_OP:
                                 /* IAM_INSERT + OI_INSERT + CREATE_OBJECT_CREDITS
                                  * SET_MD CREDITS is already counted in 
                                  * CREATE_OBJECT CREDITS 
                                  */
-                                mdd_txn_descrs[i].mod_credits = 
-                                        2 * iam_credits + create_credits;
+                                 *c = 2 * iam_credits + create_credits;
                                 break;
                         default:
                                 spin_unlock(&mdd_txn_lock);
