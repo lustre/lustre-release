@@ -13,6 +13,7 @@ URL: http://clusterfs.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
 Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
+BuildRequires: pkgconfig, libgssapi-devel >= 0.10
 
 %description
 Userspace tools and files for the Lustre file system.
