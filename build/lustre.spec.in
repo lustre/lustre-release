@@ -11,7 +11,7 @@ Group: Utilities/System
 Source: lustre-%{version}.tar.gz
 URL: http://clusterfs.com/
 BuildRoot: %{_tmppath}/lustre-%{version}-root
-Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap
+Obsoletes: lustre-lite, lustre-lite-utils, lustre-ldap nfs-utils-lustre
 Provides: lustre-lite = %{version}, lustre-lite-utils = %{version}
 
 %description
