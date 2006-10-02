@@ -354,6 +354,7 @@ static int qos_calc_rr(struct lov_obd *lov)
         list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
                 int j = 0;
                 for (i = 0; i < ost_count; i++) {
+                      LASSERT(lov->lov_tgts[i] != NULL);
                       if (lov->lov_tgts[i]->ltd_qos.ltq_oss == oss) {
                               /* Evenly space these OSTs across arrayspace */
                               int next = j * ost_count / oss->lqo_ost_count;
