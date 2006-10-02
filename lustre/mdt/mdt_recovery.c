@@ -843,7 +843,9 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
         }
 
         if (mti->mti_has_trans) {
-                CWARN("More than one transaction "LPU64"\n", mti->mti_transno);
+                /* XXX: currently there are allowed cases, but the wrong cases
+                 * are also possible, so better check is needed here */
+                CDEBUG(D_INFO, "More than one transaction "LPU64"\n", mti->mti_transno);
                 return 0;
         }
 
@@ -901,8 +903,9 @@ static int mdt_txn_commit_cb(const struct lu_env *env,
         } else
                 spin_unlock(&mdt->mdt_transno_lock);
 
-        CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
-               obd->obd_name, txi->txi_transno);
+        if (txi->txi_transno)
+                CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
+                       obd->obd_name, txi->txi_transno);
 
         return 0;
 }
