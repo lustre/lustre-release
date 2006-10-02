@@ -3673,6 +3673,8 @@ static int mdt_destroy_export(struct obd_export *export)
         struct mdt_thread_info *info;
         struct lu_env           env;
         struct md_attr         *ma;
+        int lmm_size;
+        int cookie_size;
         int rc = 0;
         ENTRY;
 
@@ -3699,10 +3701,10 @@ static int mdt_destroy_export(struct obd_export *export)
         info->mti_mdt = mdt;
 
         ma = &info->mti_attr;
-        ma->ma_lmm_size = mdt->mdt_max_mdsize;
-        ma->ma_cookie_size = mdt->mdt_max_cookiesize;
-        OBD_ALLOC(ma->ma_lmm, mdt->mdt_max_mdsize);
-        OBD_ALLOC(ma->ma_cookie, mdt->mdt_max_cookiesize);
+        lmm_size = ma->ma_lmm_size = mdt->mdt_max_mdsize;
+        cookie_size = ma->ma_cookie_size = mdt->mdt_max_cookiesize;
+        OBD_ALLOC(ma->ma_lmm, lmm_size);
+        OBD_ALLOC(ma->ma_cookie, cookie_size);
 
         if (ma->ma_lmm == NULL || ma->ma_cookie == NULL)
                 GOTO(out, rc = -ENOMEM);
@@ -3714,7 +3716,6 @@ static int mdt_destroy_export(struct obd_export *export)
                 struct list_head *tmp = med->med_open_head.next;
                 struct mdt_file_data *mfd =
                         list_entry(tmp, struct mdt_file_data, mfd_list);
-                struct md_attr *ma = &info->mti_attr;
 
                 /* Remove mfd handle so it can't be found again.
                  * We are consuming the mfd_list reference here. */
@@ -3726,16 +3727,19 @@ static int mdt_destroy_export(struct obd_export *export)
                  * we need to remove it's objects from OST */
                 memset(&ma->ma_attr, 0, sizeof(ma->ma_attr));
                 spin_lock(&med->med_open_lock);
+                ma->ma_lmm_size = lmm_size;
+                ma->ma_cookie_size = cookie_size;
+                ma->ma_need = MA_LOV | MA_COOKIE;
         }
         spin_unlock(&med->med_open_lock);
         info->mti_mdt = NULL;
         mdt_client_del(&env, mdt, med);
 
 out:
-        if (ma->ma_lmm)
-                OBD_FREE(ma->ma_lmm, mdt->mdt_max_mdsize);
-        if (ma->ma_cookie)
-                OBD_FREE(ma->ma_cookie, mdt->mdt_max_cookiesize);
+        if (lmm_size)
+                OBD_FREE(ma->ma_lmm, lmm_size);
+        if (cookie_size)
+                OBD_FREE(ma->ma_cookie, cookie_size);
         lu_env_fini(&env);
 
         RETURN(rc);
