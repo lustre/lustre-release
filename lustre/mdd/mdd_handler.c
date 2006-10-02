@@ -1557,12 +1557,14 @@ static int mdd_link_sanity_check(const struct lu_env *env,
                                  struct mdd_object *tgt_obj,
                                  struct mdd_object *src_obj)
 {
-        int rc;
+        int rc = 0;
         ENTRY;
 
-        rc = mdd_may_create(env, tgt_obj, NULL, 1);
-        if (rc)
-                RETURN(rc);
+        if (tgt_obj) {
+                rc = mdd_may_create(env, tgt_obj, NULL, 1);
+                if (rc)
+                        RETURN(rc);
+        }
 
         if (S_ISDIR(mdd_object_type(src_obj)))
                 RETURN(-EPERM);
@@ -1937,21 +1939,24 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
                                    int src_is_dir,
                                    struct mdd_object *tobj)
 {
-        int rc = 0, need_check = 1;
+        int rc;
         ENTRY;
 
         if (mdd_is_dead_obj(src_pobj))
                 RETURN(-ENOENT);
 
-        if (src_pobj == tgt_pobj)
-                need_check = 0;
-        
+        /* The sobj maybe on the remote, check parent permission only here */
+        rc = mdd_permission_internal(env, src_pobj, MAY_WRITE | MAY_EXEC);
+        if (rc)
+                RETURN(rc);
+
         if (!tobj) {
-                rc = mdd_may_create(env, tgt_pobj, NULL, need_check);
+                rc = mdd_may_create(env, tgt_pobj, NULL,
+                                    (src_pobj != tgt_pobj));
         } else {
                 mdd_read_lock(env, tobj);
                 rc = mdd_may_delete(env, tgt_pobj, tobj, src_is_dir,
-                                    need_check);
+                                    (src_pobj != tgt_pobj));
                 if (rc == 0)
                         if (S_ISDIR(mdd_object_type(tobj))
                             && mdd_dir_is_empty(env, tobj))
@@ -2117,6 +2122,8 @@ static int mdd_lookup(const struct lu_env *env,
 }
 
 /*
+ * No permission check is needed.
+ *
  * returns 1: if fid is ancestor of @mo;
  * returns 0: if fid is not a ancestor of @mo;
  *
@@ -2184,7 +2191,8 @@ static int __mdd_object_initialize(const struct lu_env *env,
 }
 
 /*
- * XXX: Need MAY_WRITE to be checked?
+ * The permission has been checked when obj created,
+ * no need check again.
  */
 static int mdd_cd_sanity_check(const struct lu_env *env,
                                struct mdd_object *obj)
@@ -2277,6 +2285,11 @@ static int mdd_create_sanity_check(const struct lu_env *env,
         if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
 
+        /*
+         * Check if the name already exist, though it will be checked
+         * in _index_insert also, for avoiding rolling back if exists
+         * _index_insert.
+         */
         rc = __mdd_lookup_locked(env, pobj, name, fid,
                                  MAY_WRITE | MAY_EXEC);
         if (rc != -ENOENT)
@@ -2567,18 +2580,24 @@ static int mdd_ni_sanity_check(const struct lu_env *env,
                                const struct lu_fid *fid)
 {
         struct mdd_object *obj       = md2mdd_obj(pobj);
+#if 0
         int rc;
+#endif
         ENTRY;
 
         /* EEXIST check */
         if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
 
+         /* The exist of the name will be checked in _index_insert. */
+#if 0
         rc = __mdd_lookup(env, pobj, name, fid, MAY_WRITE | MAY_EXEC);
         if (rc != -ENOENT)
                 RETURN(rc ? : -EEXIST);
         else
                 RETURN(0);
+#endif
+        RETURN(mdd_permission_internal(env, obj, MAY_WRITE | MAY_EXEC));
 }
 
 static int mdd_name_insert(const struct lu_env *env,
@@ -2618,18 +2637,24 @@ static int mdd_nr_sanity_check(const struct lu_env *env,
                                struct md_object *pobj,
                                const char *name)
 {
+        struct mdd_object *obj       = md2mdd_obj(pobj);
+#if 0
         struct mdd_thread_info *info = mdd_env_info(env);
         struct lu_fid     *fid       = &info->mti_fid;
-        struct mdd_object *obj       = md2mdd_obj(pobj);
         int rc;
+#endif
         ENTRY;
 
         /* EEXIST check */
         if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
 
+         /* The exist of the name will be checked in _index_delete. */
+#if 0
         rc = __mdd_lookup(env, pobj, name, fid, MAY_WRITE | MAY_EXEC);
         RETURN(rc);
+#endif
+        RETURN(mdd_permission_internal(env, obj, MAY_WRITE | MAY_EXEC));
 }
 
 static int mdd_name_remove(const struct lu_env *env,
@@ -2828,6 +2853,7 @@ static int mdd_ref_add(const struct lu_env *env,
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
+        int rc;
         ENTRY;
 
         mdd_txn_param_build(env, MDD_TXN_XATTR_SET_OP);
@@ -2836,7 +2862,9 @@ static int mdd_ref_add(const struct lu_env *env,
                 RETURN(-ENOMEM);
 
         mdd_write_lock(env, mdd_obj);
-        __mdd_ref_add(env, mdd_obj, handle);
+        rc = mdd_link_sanity_check(env, NULL, mdd_obj);
+        if (!rc)
+                __mdd_ref_add(env, mdd_obj, handle);
         mdd_write_unlock(env, mdd_obj);
 
         mdd_trans_stop(env, mdd, 0, handle);
@@ -2976,6 +3004,10 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
         RETURN(rc);
 }
 
+/*
+ * Permission check is done when open,
+ * no need check again.
+ */
 static int mdd_readpage_sanity_check(const struct lu_env *env,
                                      struct mdd_object *obj)
 {
@@ -2983,9 +3015,12 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
         int rc;
         ENTRY;
 
-        if (S_ISDIR(mdd_object_type(obj)) &&
-            dt_try_as_dir(env, next))
+        if (S_ISDIR(mdd_object_type(obj)) && dt_try_as_dir(env, next))
+#if 0
                 rc = mdd_permission_internal(env, obj, MAY_READ);
+#else
+                rc = 0;
+#endif
         else
                 rc = -ENOTDIR;
 
@@ -3199,17 +3234,13 @@ static int __mdd_permission_internal(const struct lu_env *env,
                 mode >>= 6;
         } else {
                 if (mode & S_IRWXG) {
-                        if (((mode >> 3) & mask & S_IRWXO) != mask)
-                                goto check_groups;
-
                         rc = mdd_check_acl(env, obj, la, mask);
                         if (rc == -EACCES)
                                 goto check_capabilities;
-                        else if ((rc != -EAGAIN) && (rc != -EOPNOTSUPP))
+                        else if ((rc != -EAGAIN) && (rc != -EOPNOTSUPP) &&
+                                 (rc != -ENODATA))
                                 RETURN(rc);
                 }
-
-check_groups:
                 if (mdd_in_group_p(uc, la->la_gid))
                         mode >>= 3;
         }
