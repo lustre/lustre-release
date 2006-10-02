@@ -1914,16 +1914,18 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
         struct lu_dirpage *next_dp;
         struct obd_export *tgt_exp;
         struct lu_fid rid;
-        __u32 seg_end, max_hash = MAX_HASH_SIZE;
+        __u64 max_hash = MAX_HASH_SIZE;
+        __u32 seg_end;
         int rc = 0;
-
+        ENTRY;
+        
         /*
          * We have reached the end of this hash segment, and the start offset of
          * next segment need to be gotten out from the next segment, set it to
          * the end of this segment. */
 
         do_div(max_hash, obj->lo_objcount);
-        seg_end = max_hash * index;
+        seg_end = (__u32)max_hash * index;
 
         /* Get start offset from next segment */
         rid = obj->lo_inodes[index].li_fid;
@@ -1980,25 +1982,24 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
 	if (rc)
 		RETURN(rc);
 
-        CDEBUG(D_OTHER, "READPAGE at %llu from "DFID"\n",
-               offset, PFID(&rid));
+        CDEBUG(D_INFO, "READPAGE at %llu from "DFID"\n", offset, PFID(&rid));
 
         obj = lmv_obj_grab(obd, fid);
         if (obj) {
                 __u64 index = offset;
-                __u32 seg = MAX_HASH_SIZE;
+                __u64 seg = MAX_HASH_SIZE;
                 lmv_obj_lock(obj);
 
                 LASSERT(obj->lo_objcount > 0);
                 do_div(seg, obj->lo_objcount);
-                do_div(index, seg);
+                do_div(index, (__u32)seg);
                 i = (int)index;
                 rid = obj->lo_inodes[i].li_fid;
 
                 lmv_obj_unlock(obj);
 
-                CDEBUG(D_OTHER, "forward to "DFID" with offset %lu\n",
-                       PFID(&rid), (unsigned long)offset);
+                CDEBUG(D_INFO, "forward to "DFID" with offset %lu i %d\n",
+                       PFID(&rid), (unsigned long)offset, i);
         }
 
         tgt_exp = lmv_get_export(lmv, &rid);
