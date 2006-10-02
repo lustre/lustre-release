@@ -201,7 +201,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                         LASSERT(in->lr_start > super->lr_start);
 
                         /*
-                         * Server cannot send to client empty range, this is why
+                         * Server cannot send empty range to client, this is why
                          * we check here that range from client is "newer" than
                          * exhausted super.
                          */
@@ -224,7 +224,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                        "super: "DRANGE"\n", seq->lss_name, PRANGE(super));
         } else {
                 /*
-                 * XXX: avoid cascading RPCs using kind of async preallocation
+                 * XXX: Avoid cascading RPCs using kind of async preallocation
                  * when meta-sequence is close to exhausting.
                  */
                 if (range_is_exhausted(super)) {
@@ -241,7 +241,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                                 RETURN(rc);
                         }
 
-                        /* saving new range into allocation space. */
+                        /* Saving new range to allocation space. */
                         *super = seq->lss_cli->lcs_range;
                         LASSERT(range_is_sane(super));
                 }

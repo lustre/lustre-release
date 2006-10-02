@@ -231,8 +231,10 @@ send_sigint() {
 
 start_gss_daemons() {
     # starting on MDT
-    do_facet mds "$LSVCGSSD -v"
-    do_facet mds "$LGSSD -v"
+    for num in `seq $MDSCOUNT`; do
+        do_facet mds$num "$LSVCGSSD -v"
+        do_facet mds$num "$LGSSD -v"
+    done
     # starting on OSTs
     for num in `seq $OSTCOUNT`; do
         do_facet ost$num "$LSVCGSSD -v"
@@ -247,8 +249,10 @@ start_gss_daemons() {
     #
     # check daemons are running
     #
-    check_gss_daemon_facet mds lsvcgssd
-    check_gss_daemon_facet mds lgssd
+    for num in `seq $MDSCOUNT`; do
+        check_gss_daemon_facet mds$num lsvcgssd
+        check_gss_daemon_facet mds$num lgssd
+    done
     for num in `seq $OSTCOUNT`; do
         check_gss_daemon_facet ost$num lsvcgssd
     done
@@ -256,7 +260,9 @@ start_gss_daemons() {
 }
 
 stop_gss_daemons() {
-    send_sigint mds lsvcgssd lgssd
+    for num in `seq $MDSCOUNT`; do
+        send_sigint mds$num lsvcgssd lgssd
+    done
     for num in `seq $OSTCOUNT`; do
         send_sigint ost$num lsvcgssd
     done
@@ -641,21 +647,31 @@ ostdevname() {
     echo -n $DEVPTR
 }
 
+mdsdevname() {
+    num=$1
+    DEVNAME=MDSDEV$num
+    #if $MDSDEVn isn't defined, default is $MDSDEVBASE + num
+    eval DEVPTR=${!DEVNAME:=${MDSDEVBASE}${num}}
+    echo -n $DEVPTR
+}
+
 ########
 ## MountConf setup
 
 stopall() {
     # make sure we are using the primary server, so test-framework will
     # be able to clean up properly.
-    activemds=`facet_active mds`
-    if [ $activemds != "mds" ]; then
-        fail mds
+    activemds=`facet_active mds1`
+    if [ $activemds != "mds1" ]; then
+        fail mds1
     fi
     
     # assume client mount is local 
     grep " $MOUNT " /proc/mounts && zconf_umount `hostname` $MOUNT $*
     grep " $MOUNT2 " /proc/mounts && zconf_umount `hostname` $MOUNT2 $*
-    stop mds -f
+    for num in `seq $MDSCOUNT`; do
+        stop mds$num -f
+    done
     for num in `seq $OSTCOUNT`; do
         stop ost$num -f
     done
@@ -668,18 +684,29 @@ cleanupall() {
     cleanup_krb5_env
 }
 
+mdsmkfsopts()
+{
+    local nr=$1
+    test $nr = 1 && echo -n $MDS_MKFS_OPTS || echo -n $MDSn_MKFS_OPTS
+}
+
 formatall() {
     stopall
+
     # We need ldiskfs here, may as well load them all
     load_modules
-    echo Formatting mds, osts
-    if $VERBOSE; then
-        add mds $MDS_MKFS_OPTS --reformat $MDSDEV || exit 10
-    else
-        add mds $MDS_MKFS_OPTS --reformat $MDSDEV > /dev/null || exit 10
-    fi
+    echo "Formatting mdts, osts"
+    for num in `seq $MDSCOUNT`; do
+        echo "Format mds$num: $(mdsdevname $num)"
+        if $VERBOSE; then
+            add mds$num `mdsmkfsopts $num` --reformat `mdsdevname $num` || exit 9
+        else
+            add mds$num `mdsmkfsopts $num` --reformat `mdsdevname $num` > /dev/null || exit 9
+        fi
+    done
 
     for num in `seq $OSTCOUNT`; do
+        echo "Format ost$num: $(ostdevname $num)"
         if $VERBOSE; then
             add ost$num $OST_MKFS_OPTS --reformat `ostdevname $num` || exit 10
         else
@@ -695,8 +722,11 @@ mount_client() {
 setupall() {
     load_modules
     init_krb5_env
-    echo Setup mdt, osts
-    start mds $MDSDEV $MDS_MOUNT_OPTS
+    echo "Setup mdts, osts"
+    for num in `seq $MDSCOUNT`; do
+        DEVNAME=`mdsdevname $num`
+        start mds$num $DEVNAME $MDS_MOUNT_OPTS
+    done
     for num in `seq $OSTCOUNT`; do
         DEVNAME=`ostdevname $num`
         start ost$num $DEVNAME $OST_MOUNT_OPTS

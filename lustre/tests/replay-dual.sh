@@ -11,7 +11,7 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 
 init_test_env $@
 
-. ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
+. ${CONFIG:=$LUSTRE/tests/cfg/lmv.sh}
 
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
@@ -40,10 +40,10 @@ $SETUP
 
 test_1() {
     touch $MOUNT1/a
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     touch $MOUNT2/b
 
-    fail mds
+    fail $SINGLEMDS
     checkstat $MOUNT2/a || return 1
     checkstat $MOUNT1/b || return 2
     rm $MOUNT2/a $MOUNT1/b
@@ -56,10 +56,10 @@ run_test 1 "|X| simple create"
 
 
 test_2() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mkdir $MOUNT1/adir
 
-    fail mds
+    fail $SINGLEMDS
     checkstat $MOUNT2/adir || return 1
     rmdir $MOUNT2/adir
     checkstat $MOUNT2/adir && return 2
@@ -69,11 +69,11 @@ test_2() {
 run_test 2 "|X| mkdir adir"
 
 test_3() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mkdir $MOUNT1/adir
     mkdir $MOUNT2/adir/bdir
 
-    fail mds
+    fail $SINGLEMDS
     checkstat $MOUNT2/adir      || return 1
     checkstat $MOUNT1/adir/bdir || return 2
     rmdir $MOUNT2/adir/bdir $MOUNT1/adir
@@ -86,11 +86,11 @@ run_test 3 "|X| mkdir adir, mkdir adir/bdir "
 
 test_4() {
     mkdir $MOUNT1/adir
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mkdir $MOUNT1/adir  && return 1
     mkdir $MOUNT2/adir/bdir
 
-    fail mds
+    fail $SINGLEMDS
     checkstat $MOUNT2/adir      || return 2
     checkstat $MOUNT1/adir/bdir || return 3
 
@@ -111,11 +111,11 @@ test_5() {
     # give multiop a chance to open
     sleep 1 
     rm -f $MOUNT1/a
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     kill -USR1 $pid
     wait $pid || return 1
 
-    fail mds
+    fail $SINGLEMDS
     [ -e $MOUNT2/a ] && return 2
     return 0
 }
@@ -131,22 +131,22 @@ test_6() {
     # give multiop a chance to open
     sleep 1 
     rm -f $MOUNT1/a
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     kill -USR1 $pid1
     wait $pid1 || return 1
 
-    fail mds
+    fail $SINGLEMDS
     kill -USR1 $pid2
     wait $pid2 || return 1
     [ -e $MOUNT2/a ] && return 2
     return 0
 }
-run_test 6 "open1, open2, unlink |X| close1 [fail mds] close2"
+run_test 6 "open1, open2, unlink |X| close1 [fail $SINGLEMDS] close2"
 
 test_8() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     drop_reint_reply "mcreate $MOUNT1/$tfile"    || return 1
-    fail mds
+    fail $SINGLEMDS
     checkstat $MOUNT2/$tfile || return 2
     rm $MOUNT1/$tfile || return 3
 
@@ -155,12 +155,12 @@ test_8() {
 run_test 8 "replay of resent request"
 
 test_9() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mcreate $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     # drop first reint reply
     sysctl -w lustre.fail_loc=0x80000119
-    fail mds
+    fail $SINGLEMDS
     sysctl -w lustre.fail_loc=0
 
     rm $MOUNT1/$tfile-[1,2] || return 1
@@ -171,12 +171,12 @@ run_test 9 "resending a replayed create"
 
 test_10() {
     mcreate $MOUNT1/$tfile-1
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     munlink $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     # drop first reint reply
     sysctl -w lustre.fail_loc=0x80000119
-    fail mds
+    fail $SINGLEMDS
     sysctl -w lustre.fail_loc=0
 
     checkstat $MOUNT1/$tfile-1 && return 1
@@ -188,7 +188,7 @@ test_10() {
 run_test 10 "resending a replayed unlink"
 
 test_11() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     mcreate $MOUNT1/$tfile-1
     mcreate $MOUNT2/$tfile-2
     mcreate $MOUNT1/$tfile-3
@@ -208,7 +208,7 @@ test_11() {
 run_test 11 "both clients timeout during replay"
 
 test_12() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
 
     multiop $DIR/$tfile mo_c &
     MULTIPID=$!
@@ -235,7 +235,7 @@ test_13() {
     MULTIPID=$!
     sleep 5
 
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
 
     kill -USR1 $MULTIPID || return 3
     wait $MULTIPID || return 4
@@ -255,7 +255,7 @@ test_13() {
 run_test 13 "close resend timeout"
 
 test_14() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
     createmany -o $MOUNT1/$tfile-3- 25
@@ -275,7 +275,7 @@ test_14() {
 run_test 14 "timeouts waiting for lost client during replay"
 
 test_15() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
     umount $MOUNT2
@@ -295,7 +295,7 @@ test_15a() {
     local ost_last_id=""
     local osc_last_id=""
     
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     echo "data" > "$MOUNT2/${tfile}-m2"
 
     umount $MOUNT2
@@ -341,7 +341,7 @@ test_15a() {
 #CROW run_test 15a "OST clear orphans - synchronize ids on MDS and OST"
 
 test_15b() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     echo "data" > "$MOUNT2/${tfile}-m2"
     umount $MOUNT2
 
@@ -357,7 +357,7 @@ test_15b() {
 #CROW run_test 15b "multiple delayed OST clear orphans"
 
 test_15c() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     for ((i = 0; i < 2000; i++)); do
 	echo "data" > "$MOUNT2/${tfile}-$i" || error "create ${tfile}-$i failed"
     done
@@ -373,7 +373,7 @@ test_15c() {
 run_test 15c "remove multiple OST orphans"
 
 test_16() {
-    replay_barrier mds
+    replay_barrier $SINGLEMDS
     createmany -o $MOUNT1/$tfile- 25
     createmany -o $MOUNT2/$tfile-2- 1
     umount $MOUNT2
