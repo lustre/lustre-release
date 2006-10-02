@@ -60,6 +60,7 @@ enum {
         OBD_DUMP_ON_EVICTION,   /* dump kernel debug log upon eviction */
 };
 
+#if 0
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,8)
 #define ll_proc_dointvec(table,write,filp,buffer,lenp,ppos)             \
         proc_dointvec(table,write,filp,buffer,lenp)
@@ -72,6 +73,7 @@ enum {
 #define LL_PROC_PROTO(name)                                             \
         name(ctl_table *table, int write, struct file *filp,            \
                   void *buffer, size_t *lenp, loff_t *ppos)
+#endif
 #endif
 
 int LL_PROC_PROTO(proc_fail_loc)
