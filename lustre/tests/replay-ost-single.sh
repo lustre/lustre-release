@@ -42,7 +42,7 @@ CLEANUP=${CLEANUP:-"cleanup"}
 
 setup() {
     gen_config
-    start mds $MDSDEV $MDS_MOUNT_OPTS
+    start mds1 `mdsdevname 1` $MDS_MOUNT_OPTS
     start ost1 `ostdevname 1` $OST_MOUNT_OPTS
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 
