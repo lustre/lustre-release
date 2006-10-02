@@ -330,7 +330,7 @@ int mdc_enqueue(struct obd_export *exp,
                                    obddev->u.cli.cl_default_mds_easize);
                 if (do_join)
                         size[DLM_INTENT_REC_OFF + 5] =
-                                                sizeof(struct mds_rec_join);
+                                                sizeof(struct mdt_rec_join);
                 rc = lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic,
                                      8 + do_join, size);
                 if (rc & (rc - 1))

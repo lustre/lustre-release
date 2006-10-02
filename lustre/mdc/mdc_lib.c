@@ -51,13 +51,13 @@ void mdc_pack_capa(struct ptlrpc_request *req, int offset, struct obd_capa *oc)
 {
         struct lustre_capa *c;
 
-        if (!oc) {
+        if (oc == NULL) {
                 LASSERT(lustre_msg_buflen(req->rq_reqmsg, offset) == 0);
                 return;
         }
 
         c = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*c));
-        LASSERT(c);
+        LASSERT(c != NULL);
         capa_cpy(c, oc);
         DEBUG_CAPA(D_SEC, c, "pack");
 }
@@ -307,7 +307,7 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->namelen + 1);
-        LASSERT (tmp != NULL);
+        LASSERT(tmp != NULL);
         LOGL0(op_data->name, op_data->namelen, tmp);
 }
 

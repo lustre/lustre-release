@@ -1108,7 +1108,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         return rc;
 }
 
-static int ll_unlink_generic(struct inode * dir, struct qstr *name)
+static int ll_unlink_generic(struct inode *dir, struct qstr *name)
 {
         struct ptlrpc_request *request = NULL;
         struct md_op_data *op_data;

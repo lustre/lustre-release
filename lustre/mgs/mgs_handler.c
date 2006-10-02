@@ -214,7 +214,7 @@ err_ns:
 err_ops:
         fsfilt_put_ops(obd->obd_fsops);
 err_put:
-        server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
+        server_put_mount(obd->obd_name, mnt);
         mgs->mgs_sb = 0;
         return rc;
 }

@@ -2051,11 +2051,11 @@ err_ops:
         fsfilt_put_ops(obd->obd_fsops);
 err_put:
         if (lmi) {
-                server_put_mount(obd->obd_name, mds->mds_vfsmnt);
+                server_put_mount(obd->obd_name, mnt);
         } else {
                 /* old method */
                 unlock_kernel();
-                mntput(mds->mds_vfsmnt);
+                mntput(mnt);
                 lock_kernel();
         }
         obd->u.obt.obt_sb = NULL;
