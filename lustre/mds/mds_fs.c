@@ -365,7 +365,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
 
 
                 mcd = NULL;
-                exp->exp_replay_needed = 1;
+                exp->exp_req_replay_needed = 1;
                 exp->exp_connecting = 0;
                 obd->obd_recoverable_clients++;
                 obd->obd_max_recoverable_clients++;
@@ -384,6 +384,8 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         obd->obd_last_committed = mds->mds_last_transno;
 
         if (obd->obd_recoverable_clients) {
+                /* shouldn't happen in b_new_cmd */
+                LBUG();
                 CWARN("RECOVERY: service %s, %d recoverable clients, "
                       "last_transno "LPU64"\n", obd->obd_name,
                       obd->obd_recoverable_clients, mds->mds_last_transno);

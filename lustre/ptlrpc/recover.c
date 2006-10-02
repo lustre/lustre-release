@@ -75,7 +75,6 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
         ptlrpc_free_committed(imp);
         last_transno = imp->imp_last_replay_transno;
         spin_unlock(&imp->imp_lock);
-
         CDEBUG(D_HA, "import %p from %s committed "LPU64" last "LPU64"\n",
                imp, obd2cli_tgt(imp->imp_obd),
                imp->imp_peer_committed_transno, last_transno);
@@ -97,7 +96,6 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
          */
         list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
-
                 /* If need to resend the last sent transno (because a
                    reconnect has occurred), then stop on the matching
                    req and send it again. If, however, the last sent

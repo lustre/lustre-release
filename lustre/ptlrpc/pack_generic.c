@@ -1501,18 +1501,18 @@ void lustre_swab_ptlrpc_body(struct ptlrpc_body *b)
 void lustre_swab_connect(struct obd_connect_data *ocd)
 {
         __swab64s(&ocd->ocd_connect_flags);
+        __swab64s(&ocd->ocd_transno);
+        __swab64s(&ocd->ocd_ibits_known);
         __swab32s(&ocd->ocd_version);
         __swab32s(&ocd->ocd_grant);
         __swab32s(&ocd->ocd_index);
         __swab32s(&ocd->ocd_brw_size);
-        __swab64s(&ocd->ocd_ibits_known);
         __swab32s(&ocd->ocd_nllu);
         __swab32s(&ocd->ocd_nllg);
         __swab32s(&ocd->ocd_group);
         CLASSERT(offsetof(typeof(*ocd), padding1) != 0);
         CLASSERT(offsetof(typeof(*ocd), padding2) != 0);
         CLASSERT(offsetof(typeof(*ocd), padding3) != 0);
-        CLASSERT(offsetof(typeof(*ocd), padding4) != 0);
 }
 
 void lustre_swab_obdo (struct obdo  *o)

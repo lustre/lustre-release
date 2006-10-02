@@ -1282,6 +1282,11 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
                 size[DLM_REPLY_REC_OFF] = lock->l_lvb_len;
         }
         ptlrpc_req_set_repsize(req, buffers, size);
+        /* notify the server we've replayed all requests.
+         * also, we mark the request to be put on a dedicated
+         * queue to be processed after all request replayes.
+         * bug 6063 */
+        lustre_msg_set_flags(req->rq_reqmsg, MSG_REQ_REPLAY_DONE);
 
         LDLM_DEBUG(lock, "replaying lock:");
 

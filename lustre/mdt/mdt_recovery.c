@@ -385,10 +385,14 @@ static int mdt_clients_data_init(const struct lu_env *env,
                 rc = mdt_client_add(env, mdt, med, cl_idx);
                 LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
                 mcd = NULL;
-                exp->exp_replay_needed = 1;
                 exp->exp_connecting = 0;
                 obd->obd_recoverable_clients++;
                 obd->obd_max_recoverable_clients++;
+                atomic_inc(&obd->obd_req_replay_clients);
+                exp->exp_req_replay_needed = 1;
+                atomic_inc(&obd->obd_lock_replay_clients);
+                exp->exp_lock_replay_needed = 1;
+                
                 class_export_put(exp);
 
                 CDEBUG(D_OTHER, "client at idx %d has last_transno = "LPU64"\n",
@@ -537,7 +541,7 @@ static int mdt_server_data_init(const struct lu_env *env,
                       "last_transno "LPU64"\n", obd->obd_name,
                       obd->obd_recoverable_clients, mdt->mdt_last_transno);
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
-                obd->obd_recovering = 1;
+                target_start_recovery_thread(obd, mdt_recovery_handle);
                 obd->obd_recovery_start = CURRENT_SECONDS;
                 /* Only used for lprocfs_status */
                 obd->obd_recovery_end = obd->obd_recovery_start +
@@ -780,7 +784,7 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
 
         off = med->med_lr_off;
         mutex_down(&med->med_mcd_lock);
-        if(lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
+        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
                 mcd->mcd_last_close_transno = mti->mti_transno;
                 mcd->mcd_last_close_xid = req->rq_xid;
                 mcd->mcd_last_close_result = rc;
@@ -869,7 +873,7 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
 
         req->rq_transno = mti->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, mti->mti_transno);
-        target_committed_to_req(req);
+        //target_committed_to_req(req);
         lustre_msg_set_last_xid(req->rq_repmsg, req_exp_last_xid(req));
         /* save transno for the commit callback */
         txi->txi_transno = mti->mti_transno;
@@ -980,6 +984,7 @@ void mdt_fs_cleanup(const struct lu_env *env, struct mdt_device *mdt)
 }
 
 /* reconstruction code */
+extern void mds_steal_ack_locks(struct ptlrpc_request *req);
 void mdt_req_from_mcd(struct ptlrpc_request *req,
                       struct mdt_client_data *mcd)
 {
@@ -997,7 +1002,7 @@ void mdt_req_from_mcd(struct ptlrpc_request *req,
                 lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
                 lustre_msg_set_status(req->rq_repmsg, req->rq_status);
         }
-        //mds_steal_ack_locks(req);
+        mds_steal_ack_locks(req);
 }
 
 static void mdt_reconstruct_generic(struct mdt_thread_info *mti,

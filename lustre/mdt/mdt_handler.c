@@ -125,7 +125,6 @@ static struct mdt_opc_slice mdt_fld_handlers[];
 
 static struct mdt_device *mdt_dev(struct lu_device *d);
 static int mdt_regular_handle(struct ptlrpc_request *req);
-static int mdt_recovery_handle(struct ptlrpc_request *req);
 static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags);
 
 static struct lu_object_operations mdt_obj_ops;
@@ -675,7 +674,7 @@ static int mdt_connect(struct mdt_thread_info *info)
         struct ptlrpc_request *req;
 
         req = mdt_info_req(info);
-        rc = target_handle_connect(req, mdt_recovery_handle);
+        rc = target_handle_connect(req);
         if (rc == 0) {
                 LASSERT(req->rq_export != NULL);
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
@@ -1643,7 +1642,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         }
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
-        if (rc == 0 && h->mh_opc != MDS_DISCONNECT)
+        if (h->mh_opc != MDS_DISCONNECT)
                 target_committed_to_req(req);
 
         RETURN(rc);
@@ -1665,6 +1664,7 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
 {
         int i;
 
+        LASSERT(info->mti_env != req->rq_svc_thread->t_env);
         memset(info, 0, sizeof(*info));
 
         info->mti_rep_buf_nr = ARRAY_SIZE(info->mti_rep_buf_size);
@@ -1696,6 +1696,7 @@ static void mdt_thread_info_fini(struct mdt_thread_info *info)
         }
         for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
                 mdt_lock_handle_fini(&info->mti_lh[i]);
+        info->mti_env = NULL;
 }
 
 /* mds/handler.c */
@@ -1711,7 +1712,6 @@ static int mdt_recovery(struct mdt_thread_info *info)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
         int recovering;
-        int abort_recovery;
         struct obd_device *obd;
 
         ENTRY;
@@ -1730,7 +1730,8 @@ static int mdt_recovery(struct mdt_thread_info *info)
                        lustre_msg_get_opc(req->rq_reqmsg),
                        libcfs_id2str(req->rq_peer));
                 req->rq_status = -ENOTCONN;
-                RETURN(-ENOTCONN);
+                target_send_reply(req, -ENOTCONN, info->mti_fail_id);
+                RETURN(0);
         }
 
         /* sanity check: if the xid matches, the request must be marked as a
@@ -1741,6 +1742,7 @@ static int mdt_recovery(struct mdt_thread_info *info)
                       (MSG_RESENT | MSG_REPLAY))) {
                         CERROR("rq_xid "LPU64" matches last_xid, "
                                 "expected RESENT flag\n", req->rq_xid);
+                        LBUG();
                         req->rq_status = -ENOTCONN;
                         RETURN(-ENOTCONN);
                 }
@@ -1756,18 +1758,20 @@ static int mdt_recovery(struct mdt_thread_info *info)
 
         /* Check for aborted recovery... */
         spin_lock_bh(&obd->obd_processing_task_lock);
-        abort_recovery = obd->obd_abort_recovery;
         recovering = obd->obd_recovering;
         spin_unlock_bh(&obd->obd_processing_task_lock);
-        if (abort_recovery) {
-                target_abort_recovery(obd);
-        } else if (recovering) {
+        if (recovering) {
                 int rc;
                 int should_process;
-
+                DEBUG_REQ(D_WARNING, req, "Got new replay");
                 rc = mds_filter_recovery_request(req, obd, &should_process);
                 if (rc != 0 || !should_process)
                         RETURN(rc);
+                else if (should_process < 0) {
+                        req->rq_status = should_process;
+                        rc = ptlrpc_error(req);
+                        RETURN(rc);
+                }
         }
         RETURN(+1);
 }
@@ -1775,24 +1779,7 @@ static int mdt_recovery(struct mdt_thread_info *info)
 static int mdt_reply(struct ptlrpc_request *req, int rc,
                      struct mdt_thread_info *info)
 {
-        struct obd_device *obd;
         ENTRY;
-
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
-                if (lustre_msg_get_opc(req->rq_reqmsg) != OBD_PING)
-                        DEBUG_REQ(D_ERROR, req, "Unexpected MSG_LAST_REPLAY");
-
-                obd = req->rq_export != NULL ? req->rq_export->exp_obd : NULL;
-                if (obd && obd->obd_recovering) {
-                        DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        RETURN(target_queue_final_reply(req, rc));
-                } else {
-                        /*
-                         * Lost a race with recovery; let the error path DTRT.
-                         */
-                        rc = req->rq_status = -ENOTCONN;
-                }
-        }
         target_send_reply(req, rc, info->mti_fail_id);
         RETURN(0);
 }
@@ -1868,7 +1855,7 @@ static int mdt_handle_common(struct ptlrpc_request *req,
  * This is called from recovery code as handler of _all_ RPC types, FLD and SEQ
  * as well.
  */
-static int mdt_recovery_handle(struct ptlrpc_request *req)
+int mdt_recovery_handle(struct ptlrpc_request *req)
 {
         int rc;
         ENTRY;
@@ -3105,8 +3092,14 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         ENTRY;
         target_cleanup_recovery(m->mdt_md_dev.md_lu_dev.ld_obd);
 
+        mdt_fs_cleanup(env, m);
+
         ping_evictor_stop();
         mdt_stop_ptlrpc_service(m);
+
+        cleanup_capas(CAPA_SITE_SERVER);
+        del_timer(&m->mdt_ck_timer);
+        mdt_ck_thread_stop(m);
 
         upcall_cache_cleanup(m->mdt_rmtacl_cache);
         m->mdt_rmtacl_cache = NULL;
@@ -3127,12 +3120,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
                 OBD_FREE_PTR(m->mdt_rootsquash_info);
                 m->mdt_rootsquash_info = NULL;
         }
-
-        cleanup_capas(CAPA_SITE_SERVER);
-        del_timer(&m->mdt_ck_timer);
-        mdt_ck_thread_stop(m);
-
-        mdt_fs_cleanup(env, m);
 
         /* finish the stack */
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
@@ -3273,6 +3260,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 GOTO(err_capa, rc);
 
         ping_evictor_start();
+
         rc = mdt_fs_setup(env, m, obd);
         if (rc)
                 GOTO(err_stop_service, rc);
@@ -3810,7 +3798,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
         case OBD_IOC_ABORT_RECOVERY:
                 CERROR("aborting recovery for device %s\n", obd->obd_name);
-                target_abort_recovery(obd);
+                target_stop_recovery_thread(obd);
                 break;
 
         default:

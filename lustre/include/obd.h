@@ -848,6 +848,13 @@ struct obd_notify_upcall {
         void *onu_owner;
 };
 
+struct target_recovery_data {
+        svc_handler_t     trd_recovery_handler;
+        pid_t             trd_processing_task;
+        struct completion trd_starting;
+        struct completion trd_finishing;
+};
+
 /* corresponds to one of the obd's */
 #define MAX_OBD_NAME 128
 #define OBD_DEVICE_MAGIC        0XAB5CD6EF
@@ -869,6 +876,7 @@ struct obd_device {
                      obd_replayable:1,    /* recovery is enabled; inform clients */
                      obd_no_transno:1,    /* no committed-transno notification */
                      obd_no_recov:1,      /* fail instead of retry messages */
+                     obd_req_replaying:1, /* replaying requests */
                      obd_stopping:1,      /* started cleanup */
                      obd_starting:1,      /* started setup */
                      obd_force:1,         /* cleanup with > 0 obd refcount */
@@ -900,11 +908,13 @@ struct obd_device {
 
         /* XXX encapsulate all this recovery data into one struct */
         svc_handler_t                    obd_recovery_handler;
+        pid_t                            obd_processing_task;
+        
+        /* common recovery fields for b1_x and CMD2 */
         int                              obd_max_recoverable_clients;
         int                              obd_connected_clients;
         int                              obd_recoverable_clients;
         spinlock_t                       obd_processing_task_lock; /* BH lock (timer) */
-        pid_t                            obd_processing_task;
         __u64                            obd_next_recovery_transno;
         int                              obd_replayed_requests;
         int                              obd_requests_queued_for_recovery;
@@ -912,10 +922,18 @@ struct obd_device {
         struct list_head                 obd_uncommitted_replies;
         spinlock_t                       obd_uncommitted_replies_lock;
         cfs_timer_t                      obd_recovery_timer;
-        struct list_head                 obd_recovery_queue;
-        struct list_head                 obd_delayed_reply_queue;
         time_t                           obd_recovery_start;
         time_t                           obd_recovery_end;
+        
+        /* new recovery stuff from CMD2 */
+        struct target_recovery_data      obd_recovery_data;
+        int                              obd_replayed_locks;
+        atomic_t                         obd_req_replay_clients;
+        atomic_t                         obd_lock_replay_clients;
+        struct list_head                 obd_req_replay_queue;
+        struct list_head                 obd_lock_replay_queue;
+        struct list_head                 obd_final_req_queue;
+        int                              obd_recovery_stage;
 
         union {
                 struct obd_device_target obt;

@@ -135,17 +135,17 @@ static void check_obd_connect_data(void)
         BLANK_LINE();
         CHECK_STRUCT(obd_connect_data);
         CHECK_MEMBER(obd_connect_data, ocd_connect_flags);
+        CHECK_MEMBER(obd_connect_data, ocd_transno);
+        CHECK_MEMBER(obd_connect_data, ocd_ibits_known);
         CHECK_MEMBER(obd_connect_data, ocd_version);
         CHECK_MEMBER(obd_connect_data, ocd_grant);
         CHECK_MEMBER(obd_connect_data, ocd_index);
         CHECK_MEMBER(obd_connect_data, ocd_brw_size);
-        CHECK_MEMBER(obd_connect_data, ocd_ibits_known);
         CHECK_MEMBER(obd_connect_data, ocd_nllu);
         CHECK_MEMBER(obd_connect_data, ocd_nllg);
         CHECK_MEMBER(obd_connect_data, padding1);
         CHECK_MEMBER(obd_connect_data, padding2);
         CHECK_MEMBER(obd_connect_data, padding3);
-        CHECK_MEMBER(obd_connect_data, padding4);
 
         CHECK_CDEFINE(OBD_CONNECT_RDONLY);
         CHECK_CDEFINE(OBD_CONNECT_INDEX);

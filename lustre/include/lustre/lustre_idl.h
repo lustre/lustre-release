@@ -409,6 +409,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define MSG_LAST_REPLAY        1
 #define MSG_RESENT             2
 #define MSG_REPLAY             4
+#define MSG_REQ_REPLAY_DONE    8
+#define MSG_LOCK_REPLAY_DONE  16
 
 /*
  * Flags for all connect opcodes (MDS_CONNECT, OST_CONNECT)
@@ -421,7 +423,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define MSG_CONNECT_LIBCLIENT   0x10
 #define MSG_CONNECT_INITIAL     0x20
 #define MSG_CONNECT_ASYNC       0x40
-#define MSG_CONNECT_NEXT_VER    0x80 /* use next version of lustre_msg */
+#define MSG_CONNECT_NEXT_VER    0x80  /* use next version of lustre_msg */
+#define MSG_CONNECT_TRANSNO     0x100 /* report transno */
 
 /* Connect flags */
 #define OBD_CONNECT_RDONLY         0x1ULL /* client allowed read-only access */
@@ -479,18 +482,18 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
  * almost certainly will, then perhaps we stick a union in here. */
 struct obd_connect_data {
         __u64 ocd_connect_flags;        /* OBD_CONNECT_* per above */
+        __u64 ocd_transno;              /* first transno from client to be replayed */
+        __u64 ocd_ibits_known;          /* inode bits this client understands */
         __u32 ocd_version;              /* lustre release version number */
         __u32 ocd_grant;                /* initial cache grant amount (bytes) */
         __u32 ocd_index;                /* LOV index to connect to */
         __u32 ocd_brw_size;             /* Maximum BRW size in bytes */
-        __u64 ocd_ibits_known;          /* inode bits this client understands */
         __u32 ocd_nllu;                 /* non-local-lustre-user */
         __u32 ocd_nllg;                 /* non-local-lustre-group */
         __u32 ocd_group;                /* MDS group on OST */
         __u32 padding1;                 /* also fix lustre_swab_connect */
         __u64 padding2;                 /* also fix lustre_swab_connect */
         __u64 padding3;                 /* also fix lustre_swab_connect */
-        __u64 padding4;                 /* also fix lustre_swab_connect */
 };
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);

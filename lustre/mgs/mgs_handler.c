@@ -475,7 +475,7 @@ int mgs_handle(struct ptlrpc_request *req)
         switch (opc) {
         case MGS_CONNECT:
                 DEBUG_REQ(D_MGS, req, "connect");
-                rc = target_handle_connect(req, mgs_handle);
+                rc = target_handle_connect(req);
                 if (!rc && (lustre_msg_get_conn_cnt(req->rq_reqmsg) > 1))
                         /* Make clients trying to reconnect after a MGS restart
                            happy; also requires obd_replayable */

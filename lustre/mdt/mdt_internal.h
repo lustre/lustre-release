@@ -434,6 +434,8 @@ int mdt_client_new(const struct lu_env *env,
                    struct mdt_device *mdt,
                    struct mdt_export_data *med);
 
+int mdt_recovery_handle(struct ptlrpc_request *);
+
 int mdt_pin(struct mdt_thread_info* info);
 
 int mdt_lock_new_child(struct mdt_thread_info *info,

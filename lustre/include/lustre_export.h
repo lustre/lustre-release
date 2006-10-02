@@ -80,6 +80,7 @@ struct filter_export_data {
 struct obd_export {
         struct portals_handle     exp_handle;
         atomic_t                  exp_refcount;
+        atomic_t                  exp_rpc_count;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
         /* exp_obd_chain_timed fo ping evictor, protected by obd_dev_lock */
@@ -96,9 +97,11 @@ struct obd_export {
         __u64                     exp_connect_flags;
         int                       exp_flags;
         unsigned int              exp_failed:1,
+                                  exp_connected:1,
                                   exp_disconnected:1,
                                   exp_connecting:1,
-                                  exp_replay_needed:1,
+                                  exp_req_replay_needed:1,
+                                  exp_lock_replay_needed:1,
                                   exp_libclient:1; /* liblustre client? */
         union {
                 struct mds_export_data    eu_mds_data;

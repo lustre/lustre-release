@@ -1313,7 +1313,7 @@ int ost_msg_check_version(struct lustre_msg *msg)
         return rc;
 }
 
-static int ost_handle(struct ptlrpc_request *req)
+int ost_handle(struct ptlrpc_request *req)
 {
         struct obd_trans_info trans_info = { 0, };
         struct obd_trans_info *oti = &trans_info;
@@ -1333,7 +1333,7 @@ static int ost_handle(struct ptlrpc_request *req)
 
         /* XXX identical to MDS */
         if (lustre_msg_get_opc(req->rq_reqmsg) != OST_CONNECT) {
-                int abort_recovery, recovering;
+                int recovering;
 
                 if (req->rq_export == NULL) {
                         CDEBUG(D_HA,"operation %d on unconnected OST from %s\n",
@@ -1347,16 +1347,18 @@ static int ost_handle(struct ptlrpc_request *req)
 
                 /* Check for aborted recovery. */
                 spin_lock_bh(&obd->obd_processing_task_lock);
-                abort_recovery = obd->obd_abort_recovery;
                 recovering = obd->obd_recovering;
                 spin_unlock_bh(&obd->obd_processing_task_lock);
-                if (abort_recovery) {
-                        target_abort_recovery(obd);
-                } else if (recovering) {
+                if (recovering) {
                         rc = ost_filter_recovery_request(req, obd,
                                                          &should_process);
                         if (rc || !should_process)
                                 RETURN(rc);
+                        else if (should_process < 0) {
+                                req->rq_status = should_process;
+                                rc = ptlrpc_error(req);
+                                RETURN(rc);
+                        }
                 }
         }
 
@@ -1369,7 +1371,7 @@ static int ost_handle(struct ptlrpc_request *req)
         case OST_CONNECT: {
                 CDEBUG(D_INODE, "connect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CONNECT_NET, 0);
-                rc = target_handle_connect(req, ost_handle);
+                rc = target_handle_connect(req);
                 if (!rc)
                         obd = req->rq_export->exp_obd;
                 break;
@@ -1519,22 +1521,13 @@ static int ost_handle(struct ptlrpc_request *req)
                 target_committed_to_req(req);
 
 out:
-        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_LAST_REPLAY) {
-                if (obd && obd->obd_recovering) {
-                        DEBUG_REQ(D_HA, req, "LAST_REPLAY, queuing reply");
-                        return target_queue_final_reply(req, rc);
-                }
-                /* Lost a race with recovery; let the error path DTRT. */
-                rc = req->rq_status = -ENOTCONN;
-        }
-
         if (!rc)
                 oti_to_request(oti, req);
 
         target_send_reply(req, rc, fail);
         return 0;
 }
-
+EXPORT_SYMBOL(ost_handle);
 /*
  * free per-thread pool created by ost_thread_init().
  */

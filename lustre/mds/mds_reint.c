@@ -359,7 +359,7 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
         }
         spin_unlock(&exp->exp_lock);
 }
-
+EXPORT_SYMBOL(mds_steal_ack_locks);
 void mds_req_from_mcd(struct ptlrpc_request *req, struct mds_client_data *mcd)
 {
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {

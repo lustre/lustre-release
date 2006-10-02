@@ -942,7 +942,8 @@ EXPORT_SYMBOL(class_disconnect_exports);
 
 /* Remove exports that have not completed recovery.
  */
-void class_disconnect_stale_exports(struct obd_device *obd)
+int class_disconnect_stale_exports(struct obd_device *obd,
+                                   int (*test_export)(struct obd_export *))
 {
         struct list_head work_list;
         struct list_head *pos, *n;
@@ -954,18 +955,23 @@ void class_disconnect_stale_exports(struct obd_device *obd)
         spin_lock(&obd->obd_dev_lock);
         list_for_each_safe(pos, n, &obd->obd_exports) {
                 exp = list_entry(pos, struct obd_export, exp_obd_chain);
-                if (exp->exp_replay_needed) {
-                        list_del(&exp->exp_obd_chain);
-                        list_add(&exp->exp_obd_chain, &work_list);
-                        cnt++;
-                }
+                if (test_export(exp))
+                        continue;
+                
+                list_del(&exp->exp_obd_chain);
+                list_add(&exp->exp_obd_chain, &work_list);
+                cnt++;
+                CDEBUG(D_ERROR, "%s: disconnect stale client %s@%s\n",
+                       obd->obd_name, exp->exp_client_uuid.uuid,
+                       exp->exp_connection == NULL ? "<unknown>" :
+                       libcfs_nid2str(exp->exp_connection->c_peer.nid));
         }
         spin_unlock(&obd->obd_dev_lock);
 
         CDEBUG(D_ERROR, "%s: disconnecting %d stale clients\n",
                obd->obd_name, cnt);
         class_disconnect_export_list(&work_list, get_exp_flags_from_obd(obd));
-        EXIT;
+        RETURN(cnt);
 }
 EXPORT_SYMBOL(class_disconnect_stale_exports);
 

@@ -286,16 +286,14 @@ static void mdt_open_transno(struct mdt_thread_info* info)
         struct mdt_device *mdt = info->mti_mdt;
         struct ptlrpc_request *req = mdt_info_req(info);
 
-        if (info->mti_transno != 0) {
-                CDEBUG(D_INODE, "(open | create) | replay: transno = %llu,"
-                                " last_committed = %llu\n",
-                                info->mti_transno,
-                                req->rq_export->exp_obd->obd_last_committed);
-                return;
-        }
-
         spin_lock(&mdt->mdt_transno_lock);
-        info->mti_transno = ++ mdt->mdt_last_transno;
+        if (info->mti_transno == 0) {
+                info->mti_transno = ++ mdt->mdt_last_transno;
+        } else {
+                /* should be replay */
+                if (info->mti_transno > mdt->mdt_last_transno)
+                        mdt->mdt_last_transno = info->mti_transno;
+        }
         spin_unlock(&mdt->mdt_transno_lock);
 
         CDEBUG(D_INODE, "open only: transno = %llu, last_committed = %llu\n",
@@ -304,7 +302,6 @@ static void mdt_open_transno(struct mdt_thread_info* info)
 
         req->rq_transno = info->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, info->mti_transno);
-        target_committed_to_req(req);
         lustre_msg_set_last_xid(req->rq_repmsg, req->rq_xid);
 }
 

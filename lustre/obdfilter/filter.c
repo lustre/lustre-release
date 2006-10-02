@@ -541,7 +541,7 @@ int filter_update_last_objid(struct obd_device *obd, obd_gr group,
                        group, rc);
         RETURN(rc);
 }
-
+extern int ost_handle(struct ptlrpc_request *req);
 /* assumes caller has already in kernel ctxt */
 static int filter_init_server_data(struct obd_device *obd, struct file * filp)
 {
@@ -702,8 +702,11 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                         LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
 
                         fcd = NULL;
-                        exp->exp_replay_needed = 1;
+                        exp->exp_req_replay_needed = 1;
+                        exp->exp_lock_replay_needed = 1;
                         exp->exp_connecting = 0;
+                        atomic_inc(&obd->obd_req_replay_clients);
+                        atomic_inc(&obd->obd_lock_replay_clients);
                         obd->obd_recoverable_clients++;
                         obd->obd_max_recoverable_clients++;
                         class_export_put(exp);
@@ -728,7 +731,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                       obd->obd_recoverable_clients,
                       le64_to_cpu(fsd->lsd_last_transno));
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
-                obd->obd_recovering = 1;
+                target_start_recovery_thread(obd, ost_handle);
                 obd->obd_recovery_start = CURRENT_SECONDS;
                 /* Only used for lprocfs_status */
                 obd->obd_recovery_end = obd->obd_recovery_start +
@@ -3768,7 +3771,7 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
         switch (cmd) {
         case OBD_IOC_ABORT_RECOVERY: {
                 CERROR("aborting recovery for device %s\n", obd->obd_name);
-                target_abort_recovery(obd);
+                target_stop_recovery_thread(obd);
                 RETURN(0);
         }
 

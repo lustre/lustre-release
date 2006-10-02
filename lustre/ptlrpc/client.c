@@ -703,9 +703,15 @@ static int after_reply(struct ptlrpc_request *req)
                 }
 
                 /* Replay-enabled imports return commit-status information. */
-                if (lustre_msg_get_last_committed(req->rq_repmsg))
+                if (lustre_msg_get_last_committed(req->rq_repmsg)) {
+                        if (imp->imp_peer_committed_transno >
+                                lustre_msg_get_last_committed(req->rq_repmsg))
+                                CERROR(" Import has "LPU64", receive "LPU64" committed\n",
+                                       imp->imp_peer_committed_transno, 
+                                       lustre_msg_get_last_committed(req->rq_repmsg));
                         imp->imp_peer_committed_transno =
                                 lustre_msg_get_last_committed(req->rq_repmsg);
+                }
                 ptlrpc_free_committed(imp);
                 spin_unlock(&imp->imp_lock);
         }
@@ -1808,6 +1814,7 @@ static int ptlrpc_replay_interpret(struct ptlrpc_request *req,
         }
 
         spin_lock(&imp->imp_lock);
+        LASSERT(req->rq_transno <= imp->imp_last_replay_transno);
         imp->imp_last_replay_transno = req->rq_transno;
         spin_unlock(&imp->imp_lock);
 
