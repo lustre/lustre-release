@@ -886,7 +886,7 @@ test_42() {
     #[ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
-    sysctl -w lnet.debug=$DEBUG42
+    sysctl -w lnet.debug="$DEBUG42"
     unlinkmany $DIR/$tfile-%d 400 400
     $CHECKSTAT -t file $DIR/$tfile-* && return 2 || true
 }
