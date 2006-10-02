@@ -1575,7 +1575,7 @@ int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
         struct ptlrpc_request *req;
         struct mdt_body *body;
         struct mdt_remote_perm *perm;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int size[5] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         int rc;
         ENTRY;
 
@@ -1591,7 +1591,7 @@ int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
         mdc_pack_req_body(req, REQ_REC_OFF, OBD_MD_FLRMTPERM, fid, oc, 0, 0);
 
         size[REPLY_REC_OFF + 1] = sizeof(*perm);
-        ptlrpc_req_set_repsize(req, 3, size);
+        ptlrpc_req_set_repsize(req, 5, size);
         rc = ptlrpc_queue_wait(req);
         if (rc) {
                 ptlrpc_req_finished(req);
