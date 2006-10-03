@@ -228,6 +228,9 @@ static int mdt_squash_root(struct mdt_device *mdt, struct md_ucred *ucred,
                 } else {
                         ucred->mu_fsuid = pud->pud_fsuid;
                 }
+        } else {
+                ucred->mu_uid   = pud->pud_uid;
+                ucred->mu_fsuid = pud->pud_fsuid;
         }
 
         if (rsi->rsi_gid) {
@@ -260,6 +263,9 @@ static int mdt_squash_root(struct mdt_device *mdt, struct md_ucred *ucred,
                                 squash_count++;
                         }
                 }
+        } else {
+                ucred->mu_gid   = pud->pud_gid;
+                ucred->mu_fsgid = pud->pud_fsgid;
         }
 
         if (squash_count || ucred->mu_fsuid)
