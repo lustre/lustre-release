@@ -909,6 +909,7 @@ static int mdd_process_config(const struct lu_env *env,
                 rc = mdd_mount(env, m);
                 if (rc)
                         GOTO(out, rc);
+                rc = mdd_txn_init_credits(env, m);
                 break;
         case LCFG_CLEANUP:
                 mdd_device_shutdown(env, m);

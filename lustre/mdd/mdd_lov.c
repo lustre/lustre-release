@@ -296,7 +296,7 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
         } else  if (S_ISDIR(mode)) {
                 if (lmmp == NULL && lmm_size == 0) {
                         struct lov_mds_md *lmm = &mdd_env_info(env)->mti_lmm;
-                        int size = sizeof(lmm);
+                        int size = sizeof(*lmm);
 
                         /* Get parent dir stripe and set */
                         if (pobj != NULL)
