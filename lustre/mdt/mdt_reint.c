@@ -376,6 +376,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (strlen(rr->rr_name) == 0) {
                 /* remote partial operation */
                 rc = mo_ref_del(info->mti_env, mdt_object_child(mp), ma);
+                
+                mdt_handle_last_unlink(info, mp, ma);
                 GOTO(out_unlock_parent, rc);
         }
 
