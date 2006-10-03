@@ -720,6 +720,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
         }
 
         rec->cr_fid2 = body->fid1;
+        rec->cr_ioepoch = body->ioepoch;
         open_req->rq_replay_cb = mdc_replay_open;
         if (!fid_is_sane(&body->fid1)) {
                 DEBUG_REQ(D_ERROR, open_req, "saving replay request with "

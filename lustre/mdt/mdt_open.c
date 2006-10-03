@@ -114,11 +114,8 @@ void mdt_sizeonmds_enable(struct mdt_thread_info *info,
 }
 
 /* Open the epoch. Epoch open is allowed if @writecount is not negative.
- * The epoch and writecount handling is performed under the mdt_ioepoch_lock.
- *
- * @epoch is nonzero during recovery XXX not ready. */
-int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o,
-                    __u64 epoch)
+ * The epoch and writecount handling is performed under the mdt_ioepoch_lock. */
+int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o)
 {
         struct mdt_device *mdt = info->mti_mdt;
         int cancel = 0;
@@ -134,11 +131,12 @@ int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o,
                 CDEBUG(D_INODE, "continue epoch "LPU64" for "DFID"\n",
                        o->mot_ioepoch, PFID(mdt_object_fid(o)));
         } else {
-                if (epoch > mdt->mdt_ioepoch)
-                        mdt->mdt_ioepoch = epoch;
+                if (info->mti_replayepoch > mdt->mdt_ioepoch)
+                        mdt->mdt_ioepoch = info->mti_replayepoch;
                 else
                         mdt->mdt_ioepoch++;
-                o->mot_ioepoch = epoch ? epoch : mdt->mdt_ioepoch;
+                o->mot_ioepoch = info->mti_replayepoch ? 
+                        info->mti_replayepoch : mdt->mdt_ioepoch;
                 CDEBUG(D_INODE, "starting epoch "LPU64" for "DFID"\n",
                        mdt->mdt_ioepoch, PFID(mdt_object_fid(o)));
                 cancel = 1;
@@ -451,8 +449,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         if (flags & FMODE_WRITE) {
                 rc = mdt_write_get(info->mti_mdt, o);
                 if (rc == 0) {
-                        /* FIXME: in recovery, need to pass old epoch here */
-                        mdt_epoch_open(info, o, 0);
+                        mdt_epoch_open(info, o);
                         repbody->ioepoch = o->mot_ioepoch;
                 }
         } else if (flags & MDS_FMODE_EXEC) {

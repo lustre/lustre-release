@@ -912,6 +912,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         attr->la_valid = LA_MODE  | LA_RDEV  | LA_UID   | LA_GID |
                          LA_CTIME | LA_MTIME | LA_ATIME;
         info->mti_spec.sp_cr_flags = rec->cr_flags;
+        info->mti_replayepoch = rec->cr_ioepoch;
 
         if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
                 rr->rr_capa1 = req_capsule_client_get(pill, &RMF_CAPA1);

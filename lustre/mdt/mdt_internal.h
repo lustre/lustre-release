@@ -319,6 +319,7 @@ struct mdt_thread_info {
 
         /* IO epoch related stuff. */
         struct mdt_epoch           *mti_epoch;
+        __u64                      mti_replayepoch;
 
         /* server and client data buffers */
         struct mdt_server_data     mti_msd;
@@ -446,8 +447,7 @@ int mdt_reint_open(struct mdt_thread_info *info,
                    struct mdt_lock_handle *lhc);
 
 struct mdt_file_data *mdt_handle2mfd(const struct lustre_handle *handle);
-int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o,
-                   __u64 epoch);
+int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o);
 void mdt_sizeonmds_enable(struct mdt_thread_info *info, struct mdt_object *mo);
 int mdt_sizeonmds_enabled(struct mdt_object *mo);
 int mdt_write_get(struct mdt_device *mdt, struct mdt_object *o);

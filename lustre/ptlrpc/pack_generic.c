@@ -1817,12 +1817,11 @@ void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr)
         lustre_swab_lu_fid (&cr->cr_fid2);
         __swab64s (&cr->cr_time);
         __swab64s (&cr->cr_rdev);
+        __swab64s (&cr->cr_ioepoch);
         __swab32s (&cr->cr_suppgid);
         CLASSERT(offsetof(typeof(*cr), cr_padding_1) != 0);
         CLASSERT(offsetof(typeof(*cr), cr_padding_2) != 0);
         CLASSERT(offsetof(typeof(*cr), cr_padding_3) != 0);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_4) != 0);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_5) != 0);
 }
 
 void lustre_swab_mds_rec_link (struct mds_rec_link *lk)

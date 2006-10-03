@@ -226,8 +226,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 if (mfd == NULL)
                         GOTO(out, rc = -ENOMEM);
 
-                /* FIXME: in recovery, need to pass old epoch here */
-                mdt_epoch_open(info, mo, 0);
+                mdt_epoch_open(info, mo);
                 repbody->ioepoch = mo->mot_ioepoch;
 
                 mdt_object_get(info->mti_env, mo);

@@ -1221,12 +1221,11 @@ struct mdt_rec_create {
         struct lu_fid   cr_fid2;
         __u64           cr_time;
         __u64           cr_rdev;
+        __u64           cr_ioepoch;
         __u32           cr_suppgid;
         __u32           cr_padding_1; /* also fix lustre_swab_mds_rec_create */
         __u32           cr_padding_2; /* also fix lustre_swab_mds_rec_create */
         __u32           cr_padding_3; /* also fix lustre_swab_mds_rec_create */
-        __u32           cr_padding_4; /* also fix lustre_swab_mds_rec_create */
-        __u32           cr_padding_5; /* also fix lustre_swab_mds_rec_create */
 };
 
 extern void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr);
