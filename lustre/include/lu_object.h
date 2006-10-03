@@ -1037,6 +1037,8 @@ struct lu_buf {
 
 extern struct lu_buf LU_BUF_NULL; /* null buffer */
 
+#define DLUBUF "(%p %z)"
+#define PLUBUF(buf) (buf)->lb_buf, (buf)->lb_len
 /*
  * One-time initializers, called at obdclass module initialization, not
  * exported.
