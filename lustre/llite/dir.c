@@ -492,9 +492,9 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                 name = ent->lde_name;
                                 fid_le_to_cpu(&fid, &fid);
                                 ino  = ll_fid_build_ino(sbi, &fid);
-
+                                
                                 done = filldir(cookie, name, namelen,
-                                               hash, ino, DT_UNKNOWN);
+                                               (loff_t)hash, ino, DT_UNKNOWN);
                         }
                         next = le32_to_cpu(dp->ldp_hash_end);
                         ll_put_page(page);

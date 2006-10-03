@@ -148,5 +148,5 @@ ino_t ll_fid_build_ino(struct ll_sb_info *sbi,
         /* very stupid and having many downsides inode allocation algorithm
          * based on fid. */
         ino = (fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid);
-        RETURN(ino);
+        RETURN(ino & 0x7fffffff);
 }
