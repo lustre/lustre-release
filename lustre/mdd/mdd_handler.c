@@ -1172,9 +1172,9 @@ int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
         /* Check for setting the obj time. */
         if ((la->la_valid & (LA_MTIME | LA_ATIME | LA_CTIME)) &&
             !(la->la_valid & ~(LA_MTIME | LA_ATIME | LA_CTIME))) {
-                if ((uc->mu_fsuid != tmp_la->la_uid) &&
-                    !mdd_capable(uc, CAP_FOWNER))
-                        RETURN(-EPERM);
+                rc = __mdd_permission_internal(env, obj, MAY_WRITE, 0);
+                if (rc)
+                        RETURN(rc);
         }
 
         /* Make sure a caller can chmod. */
