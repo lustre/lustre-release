@@ -649,12 +649,36 @@ AC_MSG_RESULT([$enable_client])])
 AC_DEFUN([LC_CONFIG_GSS],
 [AC_MSG_CHECKING([whether to enable gss/krb5 support])
 AC_ARG_ENABLE([gss], 
-	AC_HELP_STRING([--enable-gss],
-			[enable gss/krb5 support]),
+	AC_HELP_STRING([--enable-gss], [enable gss/krb5 support]),
 	[],[enable_gss='no'])
 AC_MSG_RESULT([$enable_gss])
-if test x$enable_gss != xno; then
-	PKG_CHECK_MODULES([GSSAPI], [libgssapi >= 0.10])
+
+if test x$enable_gss == xyes; then
+	AC_MSG_CHECKING([whether CONFIG_SUNRPC is in kernel config file])
+	if test -f $LINUX/.config && grep -q CONFIG_SUNRPC=y $LINUX/.config; then
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+		AC_MSG_ERROR([Sunrpc is not enabled in kernel, GSS module can't build, consider --disable-gss.])
+	fi
+
+        GSSAPI_LIBS=""
+
+	OLD_LIBS="$LIBS"
+	AC_CHECK_LIB(gssapi, gss_init_sec_context, [
+		GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"
+		enable_gss='yes'
+		], [
+		enable_gss='no'
+		], 
+	)
+	LIBS="$OLD_LIBS"
+	
+	if test x$enable_gss != xyes; then
+		AC_MSG_ERROR([libgssapi is not found, consider --disable-gss.])
+	fi
+
+	AC_SUBST(GSSAPI_LIBS)
 	AC_KERBEROS_V5
 fi
 ])
