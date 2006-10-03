@@ -88,7 +88,6 @@ test_2a() {
 }
 run_test 2a "unlink cross-node file (fail mds with name)"
 
-
 test_3a() {
     replay_barrier mds2
     mkdir $DIR/dir3a1
@@ -100,14 +99,14 @@ test_3a() {
 run_test 3a "mkdir cross-node dir (fail mds with inode)"
 
 test_3b() {
-    mkdir $DIR/dir13
     replay_barrier mds1
-    $CHECKSTAT -t dir $DIR/dir13 || return 1
-    rmdir $DIR/dir13
+    mkdir $DIR/dir3b1
+    $LCTL mark "FAILOVER mds1"
     fail mds1
-    stat $DIR/dir13
+    stat $DIR
+    $CHECKSTAT -t dir $DIR/dir3b1 || return 1
 }
-run_test 3b "mkdir cross-node dir (fail mds with name)"
+run_test 3b "mkdir cross-node dir (fail mds with inode)"
 
 equals_msg test complete, cleaning up
 $CLEANUP
