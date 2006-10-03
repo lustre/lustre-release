@@ -178,6 +178,9 @@ static int mdc_process_config(const struct lu_env *env,
         case LCFG_ADD_MDC:
                 rc = mdc_add_obd(env, mc, cfg);
                 break;
+        case LCFG_CLEANUP:
+                rc = mdc_del_obd(mc);
+                break;
         default:
                 rc = -EOPNOTSUPP;
         }
@@ -198,12 +201,7 @@ static int mdc_device_init(const struct lu_env *env,
 static struct lu_device *mdc_device_fini(const struct lu_env *env,
                                          struct lu_device *ld)
 {
-	struct mdc_device *mc = lu2mdc_dev(ld);
-
         ENTRY;
-
-        mdc_del_obd(mc);
-
         RETURN (NULL);
 }
 
@@ -232,7 +230,7 @@ void mdc_device_free(const struct lu_env *env, struct lu_device *ld)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
 
-	LASSERT(atomic_read(&ld->ld_ref) == 0);
+	LASSERTF(atomic_read(&ld->ld_ref) == 0, "Refcount = %i\n", atomic_read(&ld->ld_ref));
         LASSERT(list_empty(&mc->mc_linkage));
 	md_device_fini(&mc->mc_md_dev);
         OBD_FREE_PTR(mc);
