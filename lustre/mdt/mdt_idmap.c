@@ -663,6 +663,7 @@ int mdt_remote_perm_reverse_idmap(struct ptlrpc_request *req,
         return 0;
 }
 
+/* Process remote client and rootsquash */
 int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
@@ -673,9 +674,6 @@ int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
 
         ENTRY;
 
-        if (!med->med_rmtclient)
-                RETURN(0);
-
         if ((uc->mu_valid != UCRED_OLD) && (uc->mu_valid != UCRED_NEW))
                 RETURN(-EINVAL);
 
@@ -684,7 +682,7 @@ int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
                         attr->la_uid = uc->mu_fsuid;
                 if ((attr->la_valid & LA_GID) && (attr->la_gid != -1))
                         attr->la_gid = uc->mu_fsgid;
-        } else {
+        } else if (med->med_rmtclient) {
                 /* NB: -1 case will be handled by mdt_fix_attr() later. */
                 if ((attr->la_valid & LA_UID) && (attr->la_uid != -1)) {
                         uid_t uid;
