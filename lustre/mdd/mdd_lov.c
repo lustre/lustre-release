@@ -300,7 +300,7 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
 
                         /* Get parent dir stripe and set */
                         if (pobj != NULL)
-                                rc = mdd_get_md(env, pobj, &lmm, &size,
+                                rc = mdd_get_md(env, pobj, lmm, &size,
                                                 MDS_LOV_MD_NAME);
                         if (rc > 0) {
                                 buf = mdd_buf_get(env, lmm, size);
