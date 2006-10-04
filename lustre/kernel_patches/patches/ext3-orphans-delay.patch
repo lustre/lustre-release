@@ -1,8 +1,83 @@
 Index: iam/fs/ext3/super.c
 ===================================================================
---- iam.orig/fs/ext3/super.c	2006-10-03 22:00:23.000000000 +0400
-+++ iam/fs/ext3/super.c	2006-10-03 22:00:24.000000000 +0400
-@@ -1168,8 +1168,8 @@ static int ext3_check_descriptors (struc
+--- iam.orig/fs/ext3/super.c	2006-10-04 15:07:04.000000000 +0400
++++ iam/fs/ext3/super.c	2006-10-04 15:07:05.000000000 +0400
+@@ -51,13 +51,13 @@ static void ext3_clear_journal_err(struc
+ 				   struct ext3_super_block * es);
+ static int ext3_sync_fs(struct super_block *sb, int wait);
+ 
+-/* 
++/*
+  * Wrappers for journal_start/end.
+  *
+  * The only special thing we need to do here is to make sure that all
+  * journal_end calls result in the superblock being marked dirty, so
+  * that sync() will call the filesystem's write_super callback if
+- * appropriate. 
++ * appropriate.
+  */
+ handle_t *ext3_journal_start_sb(struct super_block *sb, int nblocks)
+ {
+@@ -79,11 +79,11 @@ handle_t *ext3_journal_start_sb(struct s
+ 	return journal_start(journal, nblocks);
+ }
+ 
+-/* 
++/*
+  * The only special thing we need to do here is to make sure that all
+  * journal_stop calls result in the superblock being marked dirty, so
+  * that sync() will call the filesystem's write_super callback if
+- * appropriate. 
++ * appropriate.
+  */
+ int __ext3_journal_stop(const char *where, handle_t *handle)
+ {
+@@ -117,7 +117,7 @@ void ext3_journal_abort_handle(const cha
+ 	if (is_handle_aborted(handle))
+ 		return;
+ 	
+-	printk(KERN_ERR "%s: aborting transaction: %s in %s\n", 
++	printk(KERN_ERR "%s: aborting transaction: %s in %s\n",
+ 	       caller, errstr, err_fn);
+ 
+ 	journal_abort_handle(handle);
+@@ -147,6 +147,8 @@ static void ext3_handle_error(struct sup
+ 	EXT3_SB(sb)->s_mount_state |= EXT3_ERROR_FS;
+ 	es->s_state |= cpu_to_le16(EXT3_ERROR_FS);
+ 
++	dump_stack();
++
+ 	if (sb->s_flags & MS_RDONLY)
+ 		return;
+ 
+@@ -374,7 +376,7 @@ static void dump_orphan_list(struct supe
+ {
+ 	struct list_head *l;
+ 
+-	printk(KERN_ERR "sb orphan head is %d\n", 
++	printk(KERN_ERR "sb orphan head is %d\n",
+ 	       le32_to_cpu(sbi->s_es->s_last_orphan));
+ 
+ 	printk(KERN_ERR "sb_info orphan list:\n");
+@@ -383,7 +385,7 @@ static void dump_orphan_list(struct supe
+ 		printk(KERN_ERR "  "
+ 		       "inode %s:%ld at %p: mode %o, nlink %d, next %d\n",
+ 		       inode->i_sb->s_id, inode->i_ino, inode,
+-		       inode->i_mode, inode->i_nlink, 
++		       inode->i_mode, inode->i_nlink,
+ 		       NEXT_ORPHAN(inode));
+ 	}
+ }
+@@ -486,7 +488,7 @@ static void init_once(void * foo, kmem_c
+ 		inode_init_once(&ei->vfs_inode);
+ 	}
+ }
+- 
++
+ static int init_inodecache(void)
+ {
+ 	ext3_inode_cachep = kmem_cache_create("ext3_inode_cache",
+@@ -1168,8 +1170,8 @@ static int ext3_check_descriptors (struc
   * e2fsck was run on this filesystem, and it must have already done the orphan
   * inode cleanup for us, so we can safely abort without any further action.
   */
@@ -13,7 +88,7 @@ Index: iam/fs/ext3/super.c
  {
  	unsigned int s_flags = sb->s_flags;
  	int nr_orphans = 0, nr_truncates = 0;
-@@ -1256,7 +1256,9 @@ static void ext3_orphan_cleanup (struct 
+@@ -1256,7 +1258,9 @@ static void ext3_orphan_cleanup (struct 
  	}
  #endif
  	sb->s_flags = s_flags; /* Restore MS_RDONLY status */
@@ -23,7 +98,51 @@ Index: iam/fs/ext3/super.c
  
  #define log2(n) ffz(~(n))
  
-@@ -1682,9 +1684,8 @@ static int ext3_fill_super (struct super
+@@ -1362,7 +1366,7 @@ static int ext3_fill_super (struct super
+ 	sb->s_magic = le16_to_cpu(es->s_magic);
+ 	if (sb->s_magic != EXT3_SUPER_MAGIC) {
+ 		if (!silent)
+-			printk(KERN_ERR 
++			printk(KERN_ERR
+ 			       "VFS: Can't find ext3 filesystem on dev %s.\n",
+ 			       sb->s_id);
+ 		goto failed_mount;
+@@ -1408,7 +1412,7 @@ static int ext3_fill_super (struct super
+ 	    (EXT3_HAS_COMPAT_FEATURE(sb, ~0U) ||
+ 	     EXT3_HAS_RO_COMPAT_FEATURE(sb, ~0U) ||
+ 	     EXT3_HAS_INCOMPAT_FEATURE(sb, ~0U)))
+-		printk(KERN_WARNING 
++		printk(KERN_WARNING
+ 		       "EXT3-fs warning: feature flags set on rev 0 fs, "
+ 		       "running e2fsck is recommended\n");
+ 	/*
+@@ -1434,7 +1438,7 @@ static int ext3_fill_super (struct super
+ 
+ 	if (blocksize < EXT3_MIN_BLOCK_SIZE ||
+ 	    blocksize > EXT3_MAX_BLOCK_SIZE) {
+-		printk(KERN_ERR 
++		printk(KERN_ERR
+ 		       "EXT3-fs: Unsupported filesystem blocksize %d on %s.\n",
+ 		       blocksize, sb->s_id);
+ 		goto failed_mount;
+@@ -1458,14 +1462,14 @@ static int ext3_fill_super (struct super
+ 		offset = (sb_block * EXT3_MIN_BLOCK_SIZE) % blocksize;
+ 		bh = sb_bread(sb, logic_sb_block);
+ 		if (!bh) {
+-			printk(KERN_ERR 
++			printk(KERN_ERR
+ 			       "EXT3-fs: Can't read superblock on 2nd try.\n");
+ 			goto failed_mount;
+ 		}
+ 		es = (struct ext3_super_block *)(((char *)bh->b_data) + offset);
+ 		sbi->s_es = es;
+ 		if (es->s_magic != cpu_to_le16(EXT3_SUPER_MAGIC)) {
+-			printk (KERN_ERR 
++			printk (KERN_ERR
+ 				"EXT3-fs: Magic mismatch, very weird !\n");
+ 			goto failed_mount;
+ 		}
+@@ -1682,9 +1686,8 @@ static int ext3_fill_super (struct super
  	 * superblock lock.
  	 */
  	EXT3_SB(sb)->s_mount_state |= EXT3_ORPHAN_FS;
@@ -35,3 +154,12 @@ Index: iam/fs/ext3/super.c
  		printk (KERN_INFO "EXT3-fs: recovery complete.\n");
  	ext3_mark_recovery_complete(sb, es);
  	printk (KERN_INFO "EXT3-fs: mounted filesystem with %s data mode.\n",
+@@ -1728,7 +1731,7 @@ out_fail:
+ /*
+  * Setup any per-fs journal parameters now.  We'll do this both on
+  * initial mount, once the journal has been initialised but before we've
+- * done any recovery; and again on any subsequent remount. 
++ * done any recovery; and again on any subsequent remount.
+  */
+ static void ext3_init_journal_params(struct super_block *sb, journal_t *journal)
+ {

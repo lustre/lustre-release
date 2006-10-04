@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
---- iam.orig/fs/ext3/Makefile	2006-09-28 22:11:14.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-10-03 22:00:23.000000000 +0400
+--- iam.orig/fs/ext3/Makefile	2006-10-04 15:05:21.000000000 +0400
++++ iam/fs/ext3/Makefile	2006-10-04 15:07:04.000000000 +0400
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -14,7 +14,7 @@ Index: iam/fs/ext3/Makefile
 Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam.c	2006-10-03 21:15:25.000000000 +0400
++++ iam/fs/ext3/iam.c	2006-10-04 15:05:22.000000000 +0400
 @@ -0,0 +1,1337 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -1356,7 +1356,7 @@ Index: iam/fs/ext3/iam.c
 Index: iam/fs/ext3/iam_htree.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_htree.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_htree.c	2006-10-03 21:14:41.000000000 +0400
++++ iam/fs/ext3/iam_htree.c	2006-10-04 15:05:22.000000000 +0400
 @@ -0,0 +1,668 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2029,7 +2029,7 @@ Index: iam/fs/ext3/iam_htree.c
 Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lfix.c	2006-10-03 21:14:08.000000000 +0400
++++ iam/fs/ext3/iam_lfix.c	2006-10-04 15:05:22.000000000 +0400
 @@ -0,0 +1,675 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2709,7 +2709,7 @@ Index: iam/fs/ext3/iam_lfix.c
 Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam_lvar.c	2006-10-03 21:14:26.000000000 +0400
++++ iam/fs/ext3/iam_lvar.c	2006-10-04 15:05:22.000000000 +0400
 @@ -0,0 +1,902 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -3615,8 +3615,8 @@ Index: iam/fs/ext3/iam_lvar.c
 +
 Index: iam/fs/ext3/namei.c
 ===================================================================
---- iam.orig/fs/ext3/namei.c	2006-09-28 22:11:15.000000000 +0400
-+++ iam/fs/ext3/namei.c	2006-10-03 22:00:07.000000000 +0400
+--- iam.orig/fs/ext3/namei.c	2006-10-04 15:05:22.000000000 +0400
++++ iam/fs/ext3/namei.c	2006-10-04 15:06:20.000000000 +0400
 @@ -24,81 +24,6 @@
   * 	Theodore Ts'o, 2002
   */
@@ -4153,13 +4153,15 @@ Index: iam/fs/ext3/namei.c
  }
  
 -static inline unsigned dx_root_limit(struct iam_path *p)
--{
++int dx_index_is_compat(struct iam_path *path)
+ {
 -	struct iam_descr *param = path_descr(p);
 -	unsigned entry_space = path_obj(p)->i_sb->s_blocksize -
 -		param->id_root_gap;
 -	return entry_space / (param->id_key_size + param->id_ptr_size);
--}
--
++	return iam_path_descr(path) == &iam_htree_compat_param;
+ }
+ 
 -static inline unsigned dx_node_limit(struct iam_path *p)
 -{
 -	struct iam_descr *param = path_descr(p);
@@ -4169,12 +4171,10 @@ Index: iam/fs/ext3/namei.c
 -}
 -
 -static inline int dx_index_is_compat(struct iam_path *path)
-+int dx_index_is_compat(struct iam_path *path)
- {
+-{
 -	return path_descr(path) == &htree_compat_param;
-+	return iam_path_descr(path) == &iam_htree_compat_param;
- }
- 
+-}
+-
 -static struct iam_entry *dx_get_entries(struct iam_path *path, void *data,
 -				       int root)
 -{
@@ -4321,10 +4321,13 @@ Index: iam/fs/ext3/namei.c
  }
  
  /*
-@@ -800,598 +232,116 @@ struct stats dx_show_entries(struct dx_h
- }
- #endif /* DX_DEBUG */
- 
+@@ -797,601 +229,119 @@ struct stats dx_show_entries(struct dx_h
+ 		printk("%snames %u, fullness %u (%u%%)\n", levels?"":"   ",
+ 			names, space/bcount,(space/bcount)*100/blocksize);
+ 	return (struct stats) { names, space, bcount};
+-}
+-#endif /* DX_DEBUG */
+-
 -static int dx_lookup(struct iam_path *path)
 -{
 -	u32 ptr;
@@ -4685,8 +4688,7 @@ Index: iam/fs/ext3/namei.c
 -} 
 -
 -static int split_leaf_node(handle_t *handle, struct iam_path *path)
-+int dx_lookup(struct iam_path *path)
- {
+-{
 -	struct inode *dir = path_obj(path);
 -	unsigned continued = 0;
 -	struct buffer_head *bh2;
@@ -4754,7 +4756,11 @@ Index: iam/fs/ext3/namei.c
 - */
 -int iam_insert(handle_t *handle, struct iam_container *c, struct iam_key *k, 
 -	       struct iam_rec *r)
--{
++}
++#endif /* DX_DEBUG */
++
++int dx_lookup(struct iam_path *path)
+ {
 -	struct dx_hash_info	hinfo;
 -	struct iam_path_compat cpath;
 -	struct iam_path *path = &cpath.ipc_path;
@@ -5273,7 +5279,7 @@ Index: iam/fs/ext3/namei.c
  	err = ext3_journal_dirty_metadata (handle, bh2);
  	if (err)
  		goto journal_error;
-@@ -2175,6 +1172,67 @@ errout:
+@@ -2175,6 +1172,63 @@ errout:
  }
  #endif
  
@@ -5294,14 +5300,10 @@ Index: iam/fs/ext3/namei.c
 +	offset = 0;
 +	while ((char *) de <= top) {
 +		if (!ext3_check_dir_entry("ext3_add_entry",
-+					  dir, de, bh, offset)) {
-+			brelse(bh);
++					  dir, de, bh, offset))
 +			return ERR_PTR(-EIO);
-+		}
-+		if (ext3_match(namelen, name, de)) {
-+			brelse(bh);
++		if (ext3_match(namelen, name, de))
 +			return ERR_PTR(-EEXIST);
-+		}
 +		nlen = EXT3_DIR_REC_LEN(de->name_len);
 +		rlen = le16_to_cpu(de->rec_len);
 +		if ((de->inode? rlen - nlen: rlen) >= reclen)
@@ -5341,7 +5343,7 @@ Index: iam/fs/ext3/namei.c
  
  /*
   * Add a new entry into a directory (leaf) block.  If de is non-NULL,
-@@ -2194,34 +1252,16 @@ static int add_dirent_to_buf(handle_t *h
+@@ -2194,34 +1248,16 @@ static int add_dirent_to_buf(handle_t *h
  	struct inode	*dir = dentry->d_parent->d_inode;
  	const char	*name = dentry->d_name.name;
  	int		namelen = dentry->d_name.len;
@@ -5383,7 +5385,7 @@ Index: iam/fs/ext3/namei.c
  	}
  	BUFFER_TRACE(bh, "get_write_access");
  	err = ext3_journal_get_write_access(handle, bh);
-@@ -2232,22 +1272,9 @@ static int add_dirent_to_buf(handle_t *h
+@@ -2232,22 +1268,9 @@ static int add_dirent_to_buf(handle_t *h
  	}
  
  	/* By now the buffer is marked for journaling */
@@ -5409,7 +5411,7 @@ Index: iam/fs/ext3/namei.c
  	/*
  	 * XXX shouldn't update any times until successful
  	 * completion of syscall, but too many callers depend
-@@ -2423,19 +1450,58 @@ static int ext3_add_entry (handle_t *han
+@@ -2423,19 +1446,58 @@ static int ext3_add_entry (handle_t *han
  	return add_dirent_to_buf(handle, dentry, inode, de, bh);
  }
  
@@ -5471,7 +5473,7 @@ Index: iam/fs/ext3/namei.c
  	frame = path->ip_frame;
  	entries = frame->entries;
  
-@@ -2474,7 +1540,8 @@ static int split_index_node(handle_t *ha
+@@ -2474,7 +1536,8 @@ static int split_index_node(handle_t *ha
  	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
  		bh_new[i] = ext3_append (handle, dir, &newblock[i], &err);
  		if (!bh_new[i] ||
@@ -5481,7 +5483,7 @@ Index: iam/fs/ext3/namei.c
  			goto cleanup;
  		BUFFER_TRACE(frame->bh, "get_write_access");
  		err = ext3_journal_get_write_access(handle, frame->bh);
-@@ -2493,6 +1560,7 @@ static int split_index_node(handle_t *ha
+@@ -2493,6 +1556,7 @@ static int split_index_node(handle_t *ha
  		unsigned count;
  		int idx;
  		struct buffer_head *bh2;
@@ -5489,7 +5491,7 @@ Index: iam/fs/ext3/namei.c
  
  		entries = frame->entries;
  		count = dx_get_count(entries);
-@@ -2501,6 +1569,7 @@ static int split_index_node(handle_t *ha
+@@ -2501,6 +1565,7 @@ static int split_index_node(handle_t *ha
  		bh2 = bh_new[i];
  		entries2 = dx_get_entries(path, bh2->b_data, 0);
  
@@ -5497,7 +5499,7 @@ Index: iam/fs/ext3/namei.c
  		if (frame == path->ip_frames) {
  			/* splitting root node. Tricky point:
  			 *
-@@ -2512,22 +1581,20 @@ static int split_index_node(handle_t *ha
+@@ -2512,22 +1577,20 @@ static int split_index_node(handle_t *ha
  			 * capacity of the root node is smaller than that of
  			 * non-root one.
  			 */
@@ -5526,7 +5528,7 @@ Index: iam/fs/ext3/namei.c
  
  			/* Shift frames in the path */
  			memmove(frames + 2, frames + 1,
-@@ -2536,49 +1603,61 @@ static int split_index_node(handle_t *ha
+@@ -2536,49 +1599,61 @@ static int split_index_node(handle_t *ha
  			frames[1].at = iam_entry_shift(path, entries2, idx);
  			frames[1].entries = entries = entries2;
  			frames[1].bh = bh2;
@@ -5611,7 +5613,7 @@ Index: iam/fs/ext3/namei.c
  	}
  	goto cleanup;
  journal_error:
-@@ -2610,7 +1689,7 @@ static int ext3_dx_add_entry(handle_t *h
+@@ -2610,7 +1685,7 @@ static int ext3_dx_add_entry(handle_t *h
  	size_t isize;
  
  	iam_path_compat_init(&cpath, dir);
@@ -5620,7 +5622,7 @@ Index: iam/fs/ext3/namei.c
  
  	err = dx_probe(dentry, NULL, &hinfo, path);
  	if (err != 0)
-@@ -2620,8 +1699,9 @@ static int ext3_dx_add_entry(handle_t *h
+@@ -2620,8 +1695,9 @@ static int ext3_dx_add_entry(handle_t *h
  	/* XXX nikita: global serialization! */
  	isize = dir->i_size;
  
@@ -5632,7 +5634,7 @@ Index: iam/fs/ext3/namei.c
  	if (err != 0)
  		goto cleanup;
  
-@@ -2641,11 +1721,11 @@ static int ext3_dx_add_entry(handle_t *h
+@@ -2641,11 +1717,11 @@ static int ext3_dx_add_entry(handle_t *h
  		goto cleanup;	
  
  	/*copy split inode too*/
@@ -5646,7 +5648,7 @@ Index: iam/fs/ext3/namei.c
  	err = add_dirent_to_buf(handle, dentry, inode, de, bh);
  	goto cleanup2;
  
-@@ -2758,12 +1838,12 @@ static struct inode * ext3_new_inode_wan
+@@ -2758,12 +1834,12 @@ static struct inode * ext3_new_inode_wan
   * is so far negative - it has no inode.
   *
   * If the create succeeds, we fill in the inode information
@@ -5663,8 +5665,8 @@ Index: iam/fs/ext3/namei.c
  
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- iam.orig/include/linux/lustre_iam.h	2006-09-28 22:11:15.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-10-03 22:00:23.000000000 +0400
+--- iam.orig/include/linux/lustre_iam.h	2006-10-04 15:05:22.000000000 +0400
++++ iam/include/linux/lustre_iam.h	2006-10-04 15:07:04.000000000 +0400
 @@ -1,9 +1,68 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
