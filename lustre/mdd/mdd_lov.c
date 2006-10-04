@@ -320,9 +320,10 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
         RETURN(rc);
 }
 
-/* FIXME: this is for create lsm object id, which should identify the
- * lsm object unique in the whole mds, as I see. But it seems, we
- * still not need it now. right? so just borrow the ll_fid_build_ino
+/*
+ * XXX: this is for create lsm object id, which should identify the lsm object
+ * unique in the whole mds, as I see. But it seems, we still not need it
+ * now. Right? So just borrow the ll_fid_build_ino().
  */
 static obd_id mdd_lov_create_id(const struct lu_fid *fid)
 {
@@ -395,7 +396,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         ENTRY;
 
         if (create_flags & MDS_OPEN_DELAY_CREATE ||
-                        !(create_flags & FMODE_WRITE))
+            !(create_flags & FMODE_WRITE))
                 RETURN(0);
 
         oti_init(oti, NULL);
@@ -410,7 +411,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         }
 
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
-                        GOTO(out_ids, rc = -ENOMEM);
+                GOTO(out_ids, rc = -ENOMEM);
 
         LASSERT(lov_exp != NULL);
         oa = obdo_alloc();
@@ -439,6 +440,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                         /* get lov ea from parent and set to lov */
                         struct lov_mds_md *__lmm;
                         int __lmm_size, returned_lmm_size;
+                        
                         __lmm_size = mdd_lov_mdsize(env, mdd);
                         returned_lmm_size = __lmm_size;
 
@@ -447,7 +449,8 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                                 GOTO(out_oa, rc = -ENOMEM);
 
                         rc = mdd_get_md_locked(env, parent, __lmm,
-                                        &returned_lmm_size, MDS_LOV_MD_NAME);
+                                               &returned_lmm_size,
+                                               MDS_LOV_MD_NAME);
                         if (rc > 0)
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
                                                    lov_exp, 0, &lsm, __lmm);
@@ -458,7 +461,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 rc = obd_create(lov_exp, oa, &lsm, oti);
                 if (rc) {
                         if (rc > 0) {
-                                CERROR("create errro for "DFID": %d \n",
+                                CERROR("Create error for "DFID": %d\n",
                                        PFID(mdo2fid(child)), rc);
                                 rc = -EIO;
                         }
@@ -474,11 +477,11 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 lsm->lsm_object_id = oa->o_id;
                 lsm->lsm_object_gr = oa->o_gr;
         }
+        
         /*
-         * Sometimes, we may truncate some object(without lsm)
-         * then open (with write flags)it, so creating lsm above.
-         * The Nonzero(truncated) size should tell ost. since size
-         * attr is in charged by OST.
+         * Sometimes, we may truncate some object(without lsm) then open (with
+         * write flags)it, so creating lsm above.  The Nonzero(truncated) size
+         * should tell ost. since size attr is in charged by OST.
          */
         if (la->la_size && la->la_valid & LA_SIZE) {
                 struct obd_info *oinfo = &mdd_env_info(env)->mti_oi;
@@ -486,23 +489,26 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 memset(oinfo, 0, sizeof(*oinfo));
 
                 oa->o_size = la->la_size;
-                /* when setting attr to ost, FLBKSZ is not needed */
+                
+                /* When setting attr to ost, FLBKSZ is not needed. */
                 oa->o_valid &= ~OBD_MD_FLBLKSZ;
                 obdo_from_la(oa, la, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
+                             OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
 
-                /* FIXME:pack lustre id to OST, in OST, it will be packed
-                 * by filter_fid, but can not see what is the usages. So just
-                 * pack o_seq o_ver here, maybe fix it after this cycle*/
-                oa->o_fid = lu_object_fid(mdd2lu_obj(child))->f_seq;
-                oa->o_generation = lu_object_fid(mdd2lu_obj(child))->f_oid;
+                /*
+                 * XXX: Pack lustre id to OST, in OST, it will be packed by
+                 * filter_fid, but can not see what is the usages. So just pack
+                 * o_seq o_ver here, maybe fix it after this cycle.
+                 */
+                oa->o_fid = fid_seq(lu_object_fid(mdd2lu_obj(child)));
+                oa->o_generation = fid_oid(lu_object_fid(mdd2lu_obj(child)));
                 oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
                 oinfo->oi_oa = oa;
                 oinfo->oi_md = lsm;
 
                 rc = obd_setattr(lov_exp, oinfo, oti);
                 if (rc) {
-                        CERROR("error setting attrs for "DFID": rc %d\n",
+                        CERROR("Error setting attrs for "DFID": rc %d\n",
                                PFID(mdo2fid(child)), rc);
                         if (rc > 0) {
                                 CERROR("obd_setattr for "DFID" rc %d\n",
@@ -512,6 +518,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                         GOTO(out_oa, rc);
                 }
         }
+        
         /* blksize should be changed after create data object */
         la->la_valid |= LA_BLKSIZE;
         la->la_blksize = oa->o_blksize;
@@ -523,6 +530,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         }
         *lmm_size = rc;
         rc = 0;
+        EXIT;
 out_oa:
         oti_free_cookies(oti);
         obdo_free(oa);
@@ -531,7 +539,7 @@ out_ids:
                 obd_free_memmd(lov_exp, &lsm);
         if (rc != 0)
                 mdd_lov_objid_free(env, mdd);
-        RETURN(rc);
+        return rc;
 }
 
 int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,

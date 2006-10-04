@@ -151,7 +151,6 @@ static void mdd_txn_param_build(const struct lu_env *env, int op)
         
         /* init credits for each ops */
         num_entries = ARRAY_SIZE(mdd_txn_descrs);
-
         LASSERT(num_entries > 0);
 
         spin_lock(&mdd_txn_lock);
@@ -159,7 +158,7 @@ static void mdd_txn_param_build(const struct lu_env *env, int op)
                 if (mdd_txn_descrs[i].mod_op == op) {
                         LASSERT(mdd_txn_descrs[i].mod_credits > 0);
                         mdd_env_info(env)->mti_param.tp_credits = 
-                                        mdd_txn_descrs[i].mod_credits;
+                                mdd_txn_descrs[i].mod_credits;
                         spin_unlock(&mdd_txn_lock);
                         return;
                 }

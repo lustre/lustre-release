@@ -45,7 +45,6 @@
 #include <lustre_fsfilt.h>
 #include <lustre_disk.h>
 
-
 int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
 {
         char *name_end;
@@ -70,6 +69,7 @@ int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
         memcpy(&resname, logname, len);
 
         memset(res_id, 0, sizeof(*res_id));
+        
         /* Always use the same endianness for the resid */
         res_id->name[0] = cpu_to_le64(resname);
         CDEBUG(D_MGC, "log %s to resid "LPX64"/"LPX64" (%.8s)\n", logname,
@@ -115,7 +115,7 @@ static void config_log_put(struct config_llog_data *cld)
 
 /* Find a config log by name */
 static struct config_llog_data *config_log_find(char *logname, 
-                                               struct config_llog_instance *cfg)
+                                                struct config_llog_instance *cfg)
 {
         struct list_head *tmp;
         struct config_llog_data *cld;

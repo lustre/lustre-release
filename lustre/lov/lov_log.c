@@ -60,14 +60,14 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
         struct lov_oinfo *loi;
-        int i, rc = 0;
+        int i, rc = 0, rc1;
         ENTRY;
 
         LASSERTF(logcookies && numcookies >= lsm->lsm_stripe_count, 
                  "logcookies %p, numcookies %d lsm->lsm_stripe_count %d \n",
                  logcookies, numcookies, lsm->lsm_stripe_count);
 
-        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
+        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct obd_device *child = 
                         lov->lov_tgts[loi->loi_ost_idx]->ltd_exp->exp_obd; 
                 struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
@@ -90,8 +90,11 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
                         break;
                 }
                 LASSERT(lsm->lsm_object_gr == loi->loi_gr);
-                rc += llog_add(cctxt, rec, NULL, logcookies + rc,
-                                numcookies - rc);
+                rc1 = llog_add(cctxt, rec, NULL, logcookies + rc,
+                               numcookies - rc);
+                if (rc1 < 0)
+                        RETURN(rc);
+                rc += rc1;
         }
 
         RETURN(rc);
