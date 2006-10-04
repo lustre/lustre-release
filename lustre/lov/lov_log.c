@@ -93,7 +93,7 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
                 rc1 = llog_add(cctxt, rec, NULL, logcookies + rc,
                                numcookies - rc);
                 if (rc1 < 0)
-                        RETURN(rc);
+                        RETURN(rc1);
                 rc += rc1;
         }
 
