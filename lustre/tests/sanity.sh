@@ -2580,24 +2580,10 @@ test_66() {
 }
 run_test 66 "update inode blocks count on client ==============="
 
-test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
-	[ "$RUNAS_ID" = "$UID" ] && echo "skipping $TESTNAME" && return
-	check_kernel_version 35 || return 0
-	mkdir $DIR/d67
-	chmod 771 $DIR/d67
-	chgrp $RUNAS_ID $DIR/d67
-	$RUNAS -u $RUNAS_ID -g $(($RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/d67
-	RC=$?
-	if [ "$MDS" ]; then
-		# can't tell which is correct otherwise
-		GROUP_UPCALL=`cat $LPROC/mds/$MDS/group_upcall`
-		[ "$GROUP_UPCALL" = "NONE" -a $RC -eq 0 ] && \
-			error "no-upcall passed" || true
-		[ "$GROUP_UPCALL" != "NONE" -a $RC -ne 0 ] && \
-			error "upcall failed" || true
-	fi
+test_67() {
+	sh sanity-sec.sh
 }
-run_test 67 "supplementary group failure (should return error) ="
+run_test 67 "security test ====================================="
 
 cleanup_68() {
 	trap 0

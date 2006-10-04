@@ -83,10 +83,18 @@ run_test() {
  	return $?
 }
 
+SANITYSECLOG=${SANITYSECLOG:-/tmp/sanity-sec.log}
+
+[ "$SANITYSECLOG" ] && rm -f $SANITYSECLOG || true
+
 error() { 
 	sysctl -w lustre.fail_loc=0
 	log "FAIL: $TESTNAME $@"
-	exit 1
+	if [ "$SANITYSECLOG" ]; then
+		echo "FAIL: $TESTNAME $@" >> $SANITYSECLOG
+	else
+		exit 1
+	fi
 }
 
 pass() { 
@@ -98,7 +106,8 @@ mounted_lustre_filesystems() {
 }
 MOUNT="`mounted_lustre_filesystems`"
 if [ -z "$MOUNT" ]; then
-	sh llmount.sh
+        formatall
+        setupall
 	MOUNT="`mounted_lustre_filesystems`"
 	[ -z "$MOUNT" ] && error "NAME=$NAME not mounted"
 	I_MOUNTED=yes
@@ -109,21 +118,24 @@ fi
 DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
 
-if [ -z "`lsmod|grep mds`" ]; then
-	echo "skipping $TESTNAME (remote MDS)"
+if [ -z "`lsmod|grep mdt`" ]; then
+	echo "skipping $TESTNAME (remote MDT)"
 	exit 0
 fi
 
 LPROC=/proc/fs/lustre
+ENABLE_IDENTITY=/usr/sbin/l_getidentity
+DISABLE_IDENTITY=NONE
 LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
-MDS=$(\ls $LPROC/mds 2> /dev/null | grep -v num_refs | tail -n 1)
+MDT=$(\ls $LPROC/mdt 2> /dev/null | grep -v num_refs | tail -n 1)
 TSTDIR="$MOUNT/remote_user_dir"
 LUSTRE_CONF_DIR=/etc/lustre
 SETXID_CONF=$LUSTRE_CONF_DIR/setxid.conf
-IDENTITY_FLUSH=$LPROC/mds/$MDS/identity_flush
-ROOTSQUASH_UID=$LPROC/mds/$MDS/rootsquash_uid
-ROOTSQUASH_GID=$LPROC/mds/$MDS/rootsquash_gid
-ROOTSQUASH_SKIPS=$LPROC/mds/$MDS/rootsquash_skips
+IDENTITY_UPCALL=$LPROC/mdt/$MDT/identity_upcall
+IDENTITY_FLUSH=$LPROC/mdt/$MDT/identity_flush
+ROOTSQUASH_UID=$LPROC/mdt/$MDT/rootsquash_uid
+ROOTSQUASH_GID=$LPROC/mdt/$MDT/rootsquash_gid
+ROOTSQUASH_SKIPS=$LPROC/mdt/$MDT/rootsquash_skips
 KRB5_REALM=`cat /etc/krb5.conf |grep default_realm| awk '{ print $3 }'`
 USER1=`cat /etc/passwd|grep :500:|cut -d: -f1`
 USER2=`cat /etc/passwd|grep :501:|cut -d: -f1`
@@ -132,6 +144,7 @@ build_test_filter
 
 setup() {
 	rm -f $SETXID_CONF
+	echo $ENABLE_IDENTITY > $IDENTITY_UPCALL
 	echo 1 > $IDENTITY_FLUSH
 	$RUNAS -u 500 ls $DIR
 	$RUNAS -u 501 ls $DIR
@@ -214,51 +227,51 @@ run_test 2 "lfs getfacl/setfacl ============================="
 test_3() {
 	[ -n "$SEC" ] && echo "ignore rootsquash test for single node" && return
 
-	$LCTL conf_param $MDS security.rootsquash.skips=none
+	$LCTL conf_param $MDT security.rootsquash.skips=none
 	while grep LNET_NID_ANY $ROOTSQUASH_SKIPS > /dev/null; do sleep 1; done
-	$LCTL conf_param $MDS security.rootsquash.uid=0
+	$LCTL conf_param $MDT security.rootsquash.uid=0
 	while [ "`cat $ROOTSQUASH_UID`" -ne 0 ]; do sleep 1; done
-	$LCTL conf_param $MDS security.rootsquash.gid=0
+	$LCTL conf_param $MDT security.rootsquash.gid=0
 	while [ "`cat $ROOTSQUASH_GID`" -ne 0 ]; do sleep 1; done
 
 	rm -rf $DIR/d3
 	mkdir $DIR/d3
 	chown $USER1 $DIR/d3
 	chmod 700 $DIR/d3
-	$LCTL conf_param $MDS security.rootsquash.uid=500
+	$LCTL conf_param $MDT security.rootsquash.uid=500
 	echo "set rootsquash uid = 500"
 	while [ "`cat $ROOTSQUASH_UID`" -ne 500 ]; do sleep 1; done
 	touch $DIR/f3_0 && error
 	touch $DIR/d3/f3_1 || error
 
-	$LCTL conf_param $MDS security.rootsquash.uid=0
+	$LCTL conf_param $MDT security.rootsquash.uid=0
 	echo "disable rootsquash"
 	while [ "`cat $ROOTSQUASH_UID`" -ne 0 ]; do sleep 1; done
 	chown root $DIR/d3
 	chgrp $USER2 $DIR/d3
 	chmod 770 $DIR/d3
 
-	$LCTL conf_param $MDS security.rootsquash.uid=500
+	$LCTL conf_param $MDT security.rootsquash.uid=500
 	echo "set rootsquash uid = 500"
 	while [ "`cat $ROOTSQUASH_UID`" -ne 500 ]; do sleep 1; done
 	touch $DIR/d3/f3_2 && error
-	$LCTL conf_param $MDS security.rootsquash.gid=501
+	$LCTL conf_param $MDT security.rootsquash.gid=501
 	echo "set rootsquash gid = 501"
 	while [ "`cat $ROOTSQUASH_GID`" -ne 501 ]; do sleep 1; done
 	touch $DIR/d3/f3_3 || error
 
-	$LCTL conf_param $MDS security.rootsquash.skips=*
+	$LCTL conf_param $MDT security.rootsquash.skips=*
 	echo "add host in rootsquash skip list"
 	while ! grep LNET_NID_ANY $ROOTSQUASH_SKIPS > /dev/null;
 		do sleep 1;
 	done
 	touch $DIR/f3_4 || error
 
-	$LCTL conf_param $MDS security.rootsquash.uid=0
+	$LCTL conf_param $MDT security.rootsquash.uid=0
 	while [ "`cat $ROOTSQUASH_UID`" -ne 0 ]; do sleep 1; done
-	$LCTL conf_param $MDS security.rootsquash.gid=0
+	$LCTL conf_param $MDT security.rootsquash.gid=0
 	while [ "`cat $ROOTSQUASH_GID`" -ne 0 ]; do sleep 1; done
-	$LCTL conf_param $MDS security.rootsquash.skips=none
+	$LCTL conf_param $MDT security.rootsquash.skips=none
 	rm -rf $DIR/d3
 	rm -f $DIR/f3_?
 }
@@ -266,7 +279,7 @@ run_test 3 "rootsquash ============================="
 
 # bug 3285 - supplementary group should always succeed (see do_init_ucred),
 # NB: the supplementary groups are set for local client only, as for remote
-# client, the groups of the specified uid on MDS will be obtained by
+# client, the groups of the specified uid on MDT will be obtained by
 # upcall /sbin/l_getidentity and used.
 test_4() {
         mkdir $DIR/d4
@@ -279,7 +292,7 @@ run_test 4 "set supplementary group ==============="
 
 log "cleanup: ======================================================"
 if [ "$I_MOUNTED" = "yes" ]; then
-	llmountcleanup.sh || error "cleanup failed"
+	cleanupall -f || error "cleanup failed"
 fi
 
 echo '=========================== finished ==============================='
