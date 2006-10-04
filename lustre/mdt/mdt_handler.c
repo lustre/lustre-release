@@ -756,12 +756,13 @@ out:
  * it here and do not define more moo api anymore for
  * this.
  */
-static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
+static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
+                              int size)
 {
         struct mdt_object *object = info->mti_object;
         struct lu_dirpage *dp;
         struct lu_dirent *ent;
-        int rc = 0;
+        int rc = 0, offset = 0, is_dir;
 
         ENTRY;
 
@@ -770,26 +771,27 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page)
         info->mti_no_need_trans = 1;
         kmap(page);
         dp = page_address(page);
-        for (ent = lu_dirent_start(dp); ent != NULL;
+        for (ent = lu_dirent_start(dp); ent != NULL && offset < size;
                           ent = lu_dirent_next(ent)) {
                 struct lu_fid *lf = &ent->lde_fid;
+                char *name;
+                offset = (int)((__u32)ent - (__u32)dp);
+                
+                if (!strncmp(ent->lde_name, ".", ent->lde_namelen) || 
+                    !strncmp(ent->lde_name, "..", ent->lde_namelen))
+                        continue;
 
-                /* FIXME: multi-trans for this name insert */
-                if (strncmp(ent->lde_name, ".", ent->lde_namelen) &&
-                    strncmp(ent->lde_name, "..", ent->lde_namelen)) {
-                        char *name;
-                        int is_dir = le32_to_cpu(ent->lde_hash) & 
-                                        MAX_HASH_HIGHEST_BIT;
-                        
-                        OBD_ALLOC(name, ent->lde_namelen + 1);
-                        memcpy(name, ent->lde_name, ent->lde_namelen);
-                        rc = mdo_name_insert(info->mti_env,
-                                             md_object_next(&object->mot_obj),
-                                             name, lf, is_dir);
-                        OBD_FREE(name, ent->lde_namelen + 1);
-                        if (rc)
-                                GOTO(out, rc);
-                }
+                is_dir = le32_to_cpu(ent->lde_hash) & MAX_HASH_HIGHEST_BIT;
+                
+                OBD_ALLOC(name, ent->lde_namelen + 1);
+                memcpy(name, ent->lde_name, ent->lde_namelen);
+                CDEBUG(D_INFO, "insert name %s offset %d \n", name, offset);
+                rc = mdo_name_insert(info->mti_env,
+                                     md_object_next(&object->mot_obj),
+                                     name, lf, is_dir);
+                OBD_FREE(name, ent->lde_namelen + 1);
+                if (rc)
+                        GOTO(out, rc);
         }
 out:
         kunmap(page);
@@ -874,7 +876,7 @@ static int mdt_writepage(struct mdt_thread_info *info)
         }
         if (rc)
                 GOTO(cleanup_lwi, rc);
-        rc = mdt_write_dir_page(info, page);
+        rc = mdt_write_dir_page(info, page, reqbody->nlink);
 
 cleanup_lwi:
         OBD_FREE_PTR(lwi);

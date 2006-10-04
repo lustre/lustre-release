@@ -573,9 +573,6 @@ struct mds_obd {
                                          mds_fl_acl:1;
 
 
-        /* For CMD add mds_num */
-        int                              mds_num;
-
         struct upcall_cache             *mds_identity_cache;
         struct upcall_cache             *mds_rmtacl_cache;
 

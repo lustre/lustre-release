@@ -121,6 +121,27 @@ static struct md_device_operations cmm_md_ops = {
 
 extern struct lu_device_type mdc_device_type;
 
+static int cmm_post_init_mdc(const struct lu_env *env, 
+                             struct cmm_device *cmm)
+{
+        int max_mdsize, max_cookiesize, rc;
+        struct mdc_device *mc, *tmp;
+
+        /* get the max mdsize and cookiesize from lower layer */
+        rc = cmm_maxsize_get(env, &cmm->cmm_md_dev, &max_mdsize, 
+                                                &max_cookiesize);
+        if (rc)
+                RETURN(rc);
+
+        spin_lock(&cmm->cmm_tgt_guard);
+        list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets,
+                                 mc_linkage) {
+                mdc_init_ea_size(env, mc, max_mdsize, max_cookiesize);
+        }
+        spin_unlock(&cmm->cmm_tgt_guard); 
+        RETURN(rc);
+}
+
 /* --- cmm_lu_operations --- */
 /* add new MDC to the CMM, create MDC lu_device and connect it to mdc_obd */
 static int cmm_add_mdc(const struct lu_env *env,
@@ -163,32 +184,37 @@ static int cmm_add_mdc(const struct lu_env *env,
         }
         /* pass config to the just created MDC */
         rc = ld->ld_ops->ldo_process_config(env, ld, cfg);
-        if (rc == 0) {
-                spin_lock(&cm->cmm_tgt_guard);
-                list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
-                                         mc_linkage) {
-                        if (mc->mc_num == mdc_num) {
-                                spin_unlock(&cm->cmm_tgt_guard);
-                                ldt->ldt_ops->ldto_device_fini(env, ld);
-                                ldt->ldt_ops->ldto_device_free(env, ld);
-                                RETURN(-EEXIST);
-                        }
+        if (rc)
+                RETURN(rc);
+
+        spin_lock(&cm->cmm_tgt_guard);
+        list_for_each_entry_safe(mc, tmp, &cm->cmm_targets,
+                                 mc_linkage) {
+                if (mc->mc_num == mdc_num) {
+                        spin_unlock(&cm->cmm_tgt_guard);
+                        ldt->ldt_ops->ldto_device_fini(env, ld);
+                        ldt->ldt_ops->ldto_device_free(env, ld);
+                        RETURN(-EEXIST);
                 }
-                mc = lu2mdc_dev(ld);
-                list_add_tail(&mc->mc_linkage, &cm->cmm_targets);
-                cm->cmm_tgt_count++;
-                spin_unlock(&cm->cmm_tgt_guard);
-
-                lu_device_get(cmm2lu_dev(cm));
-
-                ls = cm->cmm_md_dev.md_lu_dev.ld_site;
-
-                target.ft_srv = NULL;
-                target.ft_idx = mc->mc_num;
-                target.ft_exp = mc->mc_desc.cl_exp;
-
-                fld_client_add_target(ls->ls_client_fld, &target);
         }
+        mc = lu2mdc_dev(ld);
+        list_add_tail(&mc->mc_linkage, &cm->cmm_targets);
+        cm->cmm_tgt_count++;
+        spin_unlock(&cm->cmm_tgt_guard);
+
+        lu_device_get(cmm2lu_dev(cm));
+
+        ls = cm->cmm_md_dev.md_lu_dev.ld_site;
+
+        target.ft_srv = NULL;
+        target.ft_idx = mc->mc_num;
+        target.ft_exp = mc->mc_desc.cl_exp;
+
+        fld_client_add_target(ls->ls_client_fld, &target);
+        
+        /* set max md size for the mdc */
+        rc = cmm_post_init_mdc(env, cm);
+        
         RETURN(rc);
 }
 
@@ -287,8 +313,15 @@ int cmm_upcall(const struct lu_env *env, struct md_device *md,
         upcall_dev = md->md_upcall.mu_upcall_dev;
 
         LASSERT(upcall_dev);
-        rc = upcall_dev->md_upcall.mu_upcall(env, md->md_upcall.mu_upcall_dev, ev);
-
+        switch (ev) {
+                case MD_LOV_SYNC:
+                        rc = cmm_post_init_mdc(env, md2cmm_dev(md)); 
+                        if (rc) 
+                                CERROR("can not init md size %d\n", rc);
+                default:
+                        rc = upcall_dev->md_upcall.mu_upcall(env, 
+                                        md->md_upcall.mu_upcall_dev, ev);
+        }
         RETURN(rc);
 }
 

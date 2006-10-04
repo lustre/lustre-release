@@ -96,6 +96,9 @@ static inline struct mdc_device *lu2mdc_dev(struct lu_device *ld)
 struct lu_object *mdc_object_alloc(const struct lu_env *,
                                    const struct lu_object_header *,
                                    struct lu_device *);
+
+void mdc_init_ea_size(const struct lu_env *env, struct mdc_device *mc, 
+                      int max_mdsize, int max_cookiesize);
 #ifdef HAVE_SPLIT_SUPPORT
 int mdc_send_page(struct cmm_device *cmm, const struct lu_env *env,
                   struct md_object *mo, struct page *page, __u32 end);

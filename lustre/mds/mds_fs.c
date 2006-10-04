@@ -716,7 +716,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
         err = fsfilt_commit(exp->exp_obd, mds->mds_objects_dir->d_inode,
                             handle, 0);
         if (!err) {
-                oa->o_gr = FILTER_GROUP_MDS0 + mds->mds_num;
+                oa->o_gr = FILTER_GROUP_MDS0 + mds->mds_id;
                 oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FLGROUP;
         } else if (!rc)
                 rc = err;
