@@ -522,14 +522,21 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(repbody != NULL);
 
-        if (ma->ma_valid & MA_INODE)
+        if (ma->ma_valid & MA_INODE) {
                 mdt_pack_attr2body(repbody, la, mdt_object_fid(mo));
                 mdt_body_reverse_idmap(info, repbody);
+        }
 
         if (ma->ma_valid & MA_LOV) {
                 __u32 mode;
 
-                mode = lu_object_attr(&mo->mot_obj.mo_lu);
+                if (lu_object_exists(&mo->mot_obj.mo_lu) < 0)
+                        /* If it is a remote object, and we do not retrieve
+                         * EA back unlink reg file*/
+                        mode = S_IFREG;
+                else 
+                        mode = lu_object_attr(&mo->mot_obj.mo_lu);
+
                 LASSERT(ma->ma_lmm_size);
                 mdt_dump_lmm(D_INFO, ma->ma_lmm);
                 repbody->eadatasize = ma->ma_lmm_size;
