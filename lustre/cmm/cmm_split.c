@@ -127,15 +127,13 @@ static int cmm_alloc_fid(const struct lu_env *env, struct cmm_device *cmm,
 
 struct cmm_object *cmm_object_find(const struct lu_env *env,
                                    struct cmm_device *d,
-                                   const struct lu_fid *f,
-                                   struct lustre_capa *capa)
+                                   const struct lu_fid *f)
 {
         struct lu_object *o;
         struct cmm_object *m;
         ENTRY;
 
-        o = lu_object_find(env, d->cmm_md_dev.md_lu_dev.ld_site, f,
-                           capa);
+        o = lu_object_find(env, d->cmm_md_dev.md_lu_dev.ld_site, f);
         if (IS_ERR(o))
                 m = (struct cmm_object *)o;
         else

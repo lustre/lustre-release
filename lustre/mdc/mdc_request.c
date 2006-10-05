@@ -1612,26 +1612,61 @@ int mdc_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(0);
 }
 
+static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
+                                    int status)
+{
+        struct obd_capa *oc = req->rq_async_args.pointer_arg[0];
+        renew_capa_cb_t *cb = req->rq_async_args.pointer_arg[1];
+        struct mds_body *body = NULL;
+        struct lustre_capa *capa;
+        ENTRY;
+
+        if (status)
+                DEBUG_CAPA(D_ERROR, &oc->c_capa, "renew failed: %d for",
+                           status);
+
+        body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
+                                  lustre_swab_mdt_body);
+        if (body == NULL)
+                GOTO(out, capa = ERR_PTR(-EFAULT));
+
+        if (body->flags)
+                GOTO(out, capa = ERR_PTR((long)body->flags));
+
+        if ((body->valid & OBD_MD_FLOSSCAPA) == 0)
+                GOTO(out, capa = ERR_PTR(-EFAULT));
+
+        capa = lustre_unpack_capa(req->rq_repmsg, REPLY_REC_OFF);
+        if (!capa)
+                capa = ERR_PTR(-EFAULT);
+
+        EXIT;
+out:
+        (*cb)(oc, capa);
+        return 0;
+}
+
 static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
                           renew_capa_cb_t cb)
 {
         struct ptlrpc_request *req;
-        int size[2] = { sizeof(struct ptlrpc_body),
+        int size[5] = { sizeof(struct ptlrpc_body),
+                        sizeof(struct mdt_body),
                         sizeof(struct lustre_capa) };
-        int repsize[3] = { sizeof(struct ptlrpc_body),
-                           sizeof(struct mdt_body),
-                           sizeof(struct lustre_capa) };
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_RENEW_CAPA, 2, size, NULL);
+                              MDS_GETATTR, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        mdc_pack_capa(req, REQ_REC_OFF, oc);
+        mdc_pack_req_body(req, REQ_REC_OFF, OBD_MD_FLOSSCAPA,
+                          &oc->c_capa.lc_fid, oc, 0, 0);
 
-        ptlrpc_req_set_repsize(req, 3, repsize);
-        req->rq_interpret_reply = cb;
+        ptlrpc_req_set_repsize(req, 5, size);
+        req->rq_async_args.pointer_arg[0] = oc;
+        req->rq_async_args.pointer_arg[1] = cb;
+        req->rq_interpret_reply = mdc_interpret_renew_capa;
         ptlrpcd_add_req(req);
 
         RETURN(0);

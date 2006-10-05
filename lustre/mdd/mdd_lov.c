@@ -193,7 +193,8 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
 
         next = mdd_object_child(obj);
         rc = next->do_ops->do_xattr_get(env, next,
-                                        mdd_buf_get(env, md, *md_size), name);
+                                        mdd_buf_get(env, md, *md_size), name,
+                                        mdd_object_capa(env, obj));
         /*
          * XXX: handling of -ENODATA, the right way is to have ->do_md_get()
          * exported by dt layer.
@@ -569,7 +570,8 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
         int rc = 0;
         ENTRY;
 
-        rc = next->do_ops->do_attr_get(env, next, tmp_la);
+        rc = next->do_ops->do_attr_get(env, next, tmp_la,
+                                       mdd_object_capa(env, obj));
         if (rc)
                 RETURN(rc);
 

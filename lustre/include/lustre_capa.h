@@ -152,7 +152,7 @@ extern spinlock_t capa_lock;
 extern int capa_count[];
 extern cfs_mem_cache_t *capa_cachep;
 
-struct obd_capa *capa_add(struct lustre_capa *capa);
+void capa_add(struct lustre_capa *capa);
 struct obd_capa *capa_lookup(struct lustre_capa *capa);
 
 int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key);
@@ -343,4 +343,11 @@ struct filter_capa_key {
 
 #define BYPASS_CAPA (struct lustre_capa *)ERR_PTR(-ENOENT)
 
+enum {
+        CAPA_CTX_ON           = 1,
+        CAPA_CTX_TIMEOUT      = 1<<1,
+        CAPA_CTX_KEY_TIMEOUT  = 1<<2,
+        CAPA_CTX_ALG          = 1<<3,
+        CAPA_CTX_KEYS         = 1<<4,
+};
 #endif /* __LINUX_CAPA_H_ */

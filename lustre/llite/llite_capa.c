@@ -292,7 +292,7 @@ static struct obd_capa *do_lookup_oss_capa(struct inode *inode, int opc)
         list_for_each_entry(ocapa, &lli->lli_oss_capas, u.cli.lli_list) {
                 if (!obd_capa_is_valid(ocapa))
                         continue;
-                if ((capa_opc(&ocapa->c_capa) & opc) == opc)
+                if ((capa_opc(&ocapa->c_capa) & opc) != opc)
                         continue;
 
                 LASSERT(lu_fid_eq(capa_fid(&ocapa->c_capa),
@@ -315,6 +315,7 @@ struct obd_capa *ll_lookup_oss_capa(struct inode *inode, __u64 opc)
         if ((ll_i2sbi(inode)->ll_flags & LL_SBI_OSS_CAPA) == 0)
                 return NULL;
         ENTRY;
+
         LASSERT(opc == CAPA_OPC_OSS_WRITE ||
                 opc == (CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ) ||
                 opc == CAPA_OPC_OSS_TRUNC);
@@ -357,11 +358,11 @@ struct obd_capa *ll_i2mdscapa(struct inode *inode)
 {
         struct obd_capa *ocapa;
         struct ll_inode_info *lli = ll_i2info(inode);
-        ENTRY;
 
         LASSERT(inode);
         if ((ll_i2sbi(inode)->ll_flags & LL_SBI_MDS_CAPA) == 0)
-                RETURN(NULL);
+                return NULL;
+        ENTRY;
 
         spin_lock(&capa_lock);
         ocapa = capa_get(lli->lli_mds_capa);
@@ -374,8 +375,8 @@ struct obd_capa *ll_i2mdscapa(struct inode *inode)
 
         if (!ocapa && atomic_read(&ll_capa_debug)) {
                 CDEBUG(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ?
-                       D_ERROR : D_SEC, "no MDS capa for (ino %lu)\n",
-                       inode->i_ino);
+                       D_ERROR : D_SEC, "no MDS capability for fid "DFID"\n",
+                       PFID(ll_inode2fid(inode)));
                 if (inode_have_md_lock(inode, MDS_INODELOCK_LOOKUP))
                         LBUG();
                 atomic_set(&ll_capa_debug, 0);
@@ -573,8 +574,8 @@ void ll_oss_capa_open(struct inode *inode, struct file *file)
         ocapa = do_lookup_oss_capa(inode, opc);
         if (!ocapa) {
                 if (atomic_read(&ll_capa_debug)) {
-                        CDEBUG(D_ERROR, "no capa for (uid %u op %d ino %lu)\n",
-                               (unsigned)current->uid, opc, inode->i_ino);
+                        CDEBUG(D_ERROR, "no opc %x capability for fid "DFID"\n",
+                               opc, PFID(ll_inode2fid(inode)));
                         atomic_set(&ll_capa_debug, 0);
                 }
                 spin_unlock(&capa_lock);

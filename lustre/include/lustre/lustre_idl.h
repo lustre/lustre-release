@@ -847,7 +847,6 @@ typedef enum {
         MDS_SETXATTR     = 50,
         MDS_WRITEPAGE    = 51,
         MDS_IS_SUBDIR    = 52,
-        MDS_RENEW_CAPA   = 53,
         MDS_LAST_OPC
 } mds_cmd_t;
 
@@ -1941,18 +1940,17 @@ enum {
 
 static inline int capa_for_mds(struct lustre_capa *c)
 {
-        return (c->lc_opc & CAPA_OPC_MDS_ONLY) != 0;
+        return (c->lc_opc & CAPA_OPC_INDEX_INSERT) != 0;
 }
 
 static inline int capa_for_oss(struct lustre_capa *c)
 {
-        return (c->lc_opc & CAPA_OPC_OSS_ONLY) != 0;
+        return (c->lc_opc & CAPA_OPC_INDEX_INSERT) == 0;
 }
 
 /* lustre_capa.lc_flags */
 enum {
         CAPA_FL_SHORT_EXPIRY = 1, /* short capa expiry */
-        CAPA_FL_ROOT         = 2, /* root fid capa, will always renew */
 };
 
 /* lustre_capa.lc_hmac_alg */

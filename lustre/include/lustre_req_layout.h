@@ -112,7 +112,6 @@ extern const struct req_format RQF_MDS_READPAGE;
 extern const struct req_format RQF_MDS_WRITEPAGE;
 extern const struct req_format RQF_MDS_IS_SUBDIR;
 extern const struct req_format RQF_MDS_DONE_WRITING;
-extern const struct req_format RQF_MDS_RENEW_CAPA;
 
 /*
  * This is format of direct (non-intent) MDS_GETATTR_NAME request.

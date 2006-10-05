@@ -89,7 +89,7 @@ int seq_store_write(struct lu_server_seq *seq,
 
                 rc = dt_obj->do_body_ops->dbo_write(env, dt_obj,
                                                     seq_record_buf(info),
-                                                    &pos, th);
+                                                    &pos, th, BYPASS_CAPA);
                 if (rc == sizeof(info->sti_record)) {
                         CDEBUG(D_INFO|D_WARNING, "%s: Store ranges: Space - "
                                DRANGE", Super - "DRANGE"\n", seq->lss_name,
@@ -122,7 +122,8 @@ int seq_store_read(struct lu_server_seq *seq,
         LASSERT(info != NULL);
 
         rc = dt_obj->do_body_ops->dbo_read(env, dt_obj,
-                                           seq_record_buf(info), &pos);
+                                           seq_record_buf(info), &pos,
+                                           BYPASS_CAPA);
 
         if (rc == sizeof(info->sti_record)) {
                 range_le_to_cpu(&seq->lss_space, &info->sti_record.ssr_space);

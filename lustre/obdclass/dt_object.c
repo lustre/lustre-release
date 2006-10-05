@@ -149,7 +149,8 @@ static int dt_lookup(const struct lu_env *env, struct dt_object *dir,
         int result;
 
         if (dt_try_as_dir(env, dir))
-                result = dir->do_index_ops->dio_lookup(env, dir, rec, key);
+                result = dir->do_index_ops->dio_lookup(env, dir, rec, key,
+                                                       BYPASS_CAPA);
         else
                 result = -ENOTDIR;
         return result;
@@ -162,7 +163,7 @@ static struct dt_object *dt_locate(const struct lu_env *env,
         struct lu_object *obj;
         struct dt_object *dt;
 
-        obj = lu_object_find(env, dev->dd_lu_dev.ld_site, fid, BYPASS_CAPA);
+        obj = lu_object_find(env, dev->dd_lu_dev.ld_site, fid);
         if (!IS_ERR(obj)) {
                 obj = lu_object_locate(obj->lo_header, dev->dd_lu_dev.ld_type);
                 LASSERT(obj != NULL);
@@ -185,7 +186,6 @@ struct dt_object *dt_store_open(const struct lu_env *env,
         if (result == 0) {
                 root = dt_locate(env, dt, fid);
                 if (!IS_ERR(root)) {
-                        lu_object_bypass_capa(&root->do_lu);
                         result = dt_lookup(env, root, name, fid);
                         if (result == 0)
                                 child = dt_locate(env, dt, fid);

@@ -434,7 +434,7 @@ struct md_object *md_object_find(const struct lu_env *env,
         struct md_object *m;
         ENTRY;
 
-        o = lu_object_find(env, md2lu_dev(md)->ld_site, f, BYPASS_CAPA);
+        o = lu_object_find(env, md2lu_dev(md)->ld_site, f);
         if (IS_ERR(o))
                 m = (struct md_object *)o;
         else {

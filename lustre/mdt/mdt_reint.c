@@ -53,13 +53,12 @@ static int mdt_md_create(struct mdt_thread_info *info)
         lh = &info->mti_lh[MDT_LH_PARENT];
         lh->mlh_mode = LCK_EX;
 
-        parent = mdt_object_find_lock(info, rr->rr_fid1,
-                                      lh, MDS_INODELOCK_UPDATE,
-                                      rr->rr_capa1);
+        parent = mdt_object_find_lock(info, rr->rr_fid1, lh,
+                                      MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
                 RETURN(PTR_ERR(parent));
 
-        child = mdt_object_find(info->mti_env, mdt, rr->rr_fid2, BYPASS_CAPA);
+        child = mdt_object_find(info->mti_env, mdt, rr->rr_fid2);
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(parent);
 
@@ -67,6 +66,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                                OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
+                mdt_set_capainfo(info, 1, rr->rr_fid2, BYPASS_CAPA);
                 rc = mdo_create(info->mti_env, next, rr->rr_name,
                                 mdt_object_child(child),
                                 &info->mti_spec, ma);
@@ -96,8 +96,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
-        o = mdt_object_find(info->mti_env, mdt, info->mti_rr.rr_fid2,
-                            BYPASS_CAPA);
+        o = mdt_object_find(info->mti_env, mdt, info->mti_rr.rr_fid2);
         if (!IS_ERR(o)) {
                 struct md_object *next = mdt_object_child(o);
 
@@ -211,8 +210,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                   (unsigned int)ma->ma_attr.la_valid);
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        mo = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1,
-                             rr->rr_capa1);
+        mo = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
         if (IS_ERR(mo))
                 RETURN(rc = PTR_ERR(mo));
 
@@ -277,7 +275,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
         mdt_pack_attr2body(repbody, &ma->ma_attr, mdt_object_fid(mo));
 
-        if (mdt->mdt_opts.mo_oss_capa) {
+        if (mdt->mdt_opts.mo_oss_capa &&
+            S_ISREG(lu_object_attr(&mo->mot_obj.mo_lu))) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
@@ -354,7 +353,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         parent_lh = &info->mti_lh[MDT_LH_PARENT];
         parent_lh->mlh_mode = LCK_EX;
         mp = mdt_object_find_lock(info, rr->rr_fid1, parent_lh,
-                                  MDS_INODELOCK_UPDATE, rr->rr_capa1);
+                                  MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
                 GOTO(out, rc = PTR_ERR(mp));
 
@@ -387,8 +386,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                  GOTO(out_unlock_parent, rc);
 
         /* we will lock the child regardless it is local or remote. No harm. */
-        mc = mdt_object_find(info->mti_env, info->mti_mdt, child_fid,
-                                  BYPASS_CAPA);
+        mc = mdt_object_find(info->mti_env, info->mti_mdt, child_fid);
         if (IS_ERR(mc))
                 GOTO(out_unlock_parent, rc = PTR_ERR(mc));
         child_lh = &info->mti_lh[MDT_LH_CHILD];
@@ -405,6 +403,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
          * whether need MA_LOV and MA_COOKIE.
          */
         ma->ma_need = MA_INODE;
+        mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
         rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
                         mdt_object_child(mc), rr->rr_name, ma);
         if (rc)
@@ -448,12 +447,13 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         lhs = &info->mti_lh[MDT_LH_PARENT];
         lhs->mlh_mode = LCK_EX;
         ms = mdt_object_find_lock(info, rr->rr_fid1, lhs,
-                                  MDS_INODELOCK_UPDATE, rr->rr_capa1);
+                                  MDS_INODELOCK_UPDATE);
         if (IS_ERR(ms))
                 RETURN(PTR_ERR(ms));
 
         if (strlen(rr->rr_name) == 0) {
                 /* remote partial operation */
+                mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
                 rc = mo_ref_add(info->mti_env, mdt_object_child(ms));
                 GOTO(out_unlock_source, rc);
         }
@@ -461,7 +461,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         lhp = &info->mti_lh[MDT_LH_CHILD];
         lhp->mlh_mode = LCK_EX;
         mp = mdt_object_find_lock(info, rr->rr_fid2, lhp,
-                                  MDS_INODELOCK_UPDATE, rr->rr_capa2);
+                                  MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
                 GOTO(out_unlock_source, rc = PTR_ERR(mp));
 
@@ -505,7 +505,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         lh_tgtdir = &info->mti_lh[MDT_LH_PARENT];
         lh_tgtdir->mlh_mode = LCK_EX;
         mtgtdir = mdt_object_find_lock(info, rr->rr_fid1, lh_tgtdir,
-                                       MDS_INODELOCK_UPDATE, rr->rr_capa1);
+                                       MDS_INODELOCK_UPDATE);
         if (IS_ERR(mtgtdir))
                 GOTO(out, rc = PTR_ERR(mtgtdir));
 
@@ -518,7 +518,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
                 lh_tgt->mlh_mode = LCK_EX;
 
                 mtgt = mdt_object_find_lock(info, tgt_fid, lh_tgt,
-                                            MDS_INODELOCK_LOOKUP, BYPASS_CAPA);
+                                            MDS_INODELOCK_LOOKUP);
                 if (IS_ERR(mtgt))
                         GOTO(out_unlock_tgtdir, rc = PTR_ERR(mtgt));
 
@@ -604,8 +604,7 @@ static int mdt_rename_check(struct mdt_thread_info *info, struct lu_fid *fid)
         ENTRY;
 
         do {
-                dst = mdt_object_find(info->mti_env, info->mti_mdt, &dst_fid,
-                                      BYPASS_CAPA);
+                dst = mdt_object_find(info->mti_env, info->mti_mdt, &dst_fid);
                 if (!IS_ERR(dst)) {
                         rc = mdo_is_subdir(info->mti_env, mdt_object_child(dst),
                                            fid, &dst_fid);
@@ -664,7 +663,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         lh_srcdirp = &info->mti_lh[MDT_LH_PARENT];
         lh_srcdirp->mlh_mode = LCK_EX;
         msrcdir = mdt_object_find_lock(info, rr->rr_fid1, lh_srcdirp,
-                                       MDS_INODELOCK_UPDATE, rr->rr_capa1);
+                                       MDS_INODELOCK_UPDATE);
         if (IS_ERR(msrcdir))
                 GOTO(out_rename_lock, rc = PTR_ERR(msrcdir));
 
@@ -676,7 +675,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 mtgtdir = msrcdir;
         } else {
                 mtgtdir = mdt_object_find(info->mti_env, info->mti_mdt,
-                                          rr->rr_fid2, rr->rr_capa2);
+                                          rr->rr_fid2);
                 if (IS_ERR(mtgtdir))
                         GOTO(out_unlock_source, rc = PTR_ERR(mtgtdir));
 
@@ -701,7 +700,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         lh_oldp = &info->mti_lh[MDT_LH_OLD];
         lh_oldp->mlh_mode = LCK_EX;
         mold = mdt_object_find_lock(info, old_fid, lh_oldp,
-                                    MDS_INODELOCK_LOOKUP, BYPASS_CAPA);
+                                    MDS_INODELOCK_LOOKUP);
         if (IS_ERR(mold))
                 GOTO(out_unlock_target, rc = PTR_ERR(mold));
 
@@ -719,8 +718,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                         GOTO(out_unlock_old, rc = -EINVAL);
 
                 lh_newp->mlh_mode = LCK_EX;
-                mnew = mdt_object_find(info->mti_env, info->mti_mdt, new_fid,
-                                       BYPASS_CAPA);
+                mnew = mdt_object_find(info->mti_env, info->mti_mdt, new_fid);
                 if (IS_ERR(mnew))
                         GOTO(out_unlock_old, rc = PTR_ERR(mnew));
 
@@ -752,6 +750,8 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_RENAME_WRITE);
 
+        mdt_set_capainfo(info, 2, old_fid, BYPASS_CAPA);
+        mdt_set_capainfo(info, 3, new_fid, BYPASS_CAPA);
         /* Check if @dst is subdir of @src. */
         rc = mdt_rename_check(info, old_fid);
         if (rc)

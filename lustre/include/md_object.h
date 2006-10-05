@@ -71,6 +71,12 @@ struct md_ucred {
 	struct mdt_identity    *mu_identity;
 };
 
+/* there are at most 4 fid in one operation, see rename */
+struct md_capainfo {
+        const struct lu_fid    *mc_fid[4];
+        struct lustre_capa     *mc_capa[4];
+};
+
 /*
  * Implemented in mdd/mdd_handler.c.
  *
@@ -78,6 +84,7 @@ struct md_ucred {
  * related definitions.
  */
 struct md_ucred *md_ucred(const struct lu_env *env);
+struct md_capainfo *md_capainfo(const struct lu_env *env);
 
 /* metadata attributes */
 enum ma_valid {
@@ -231,7 +238,8 @@ struct md_device_operations {
         int (*mdo_statfs)(const struct lu_env *env, struct md_device *m,
                           struct kstatfs *sfs);
 
-        int (*mdo_init_capa_keys)(struct md_device *m,
+        int (*mdo_init_capa_ctxt)(const struct lu_env *env, struct md_device *m,
+                                  __u32 valid, unsigned long timeout, __u32 alg,
                                   struct lustre_capa_key *keys);
 
         int (*mdo_update_capa_key)(const struct lu_env *env,

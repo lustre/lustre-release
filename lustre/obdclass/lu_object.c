@@ -107,8 +107,7 @@ EXPORT_SYMBOL(lu_object_put);
  */
 static struct lu_object *lu_object_alloc(const struct lu_env *env,
                                          struct lu_site *s,
-                                         const struct lu_fid *f,
-                                         const struct lustre_capa *capa)
+                                         const struct lu_fid *f)
 {
         struct lu_object *scan;
         struct lu_object *top;
@@ -130,11 +129,6 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
          * after this point.
          */
         top->lo_header->loh_fid  = *f;
-        if (capa == BYPASS_CAPA)
-                lu_object_bypass_capa(top);
-        else if (capa)
-                top->lo_header->loh_capa = *capa;
-
         layers = &top->lo_header->loh_layers;
         do {
                 /*
@@ -428,13 +422,11 @@ static __u32 fid_hash(const struct lu_fid *f)
  * any case, additional reference is acquired on the returned object.
  */
 struct lu_object *lu_object_find(const struct lu_env *env,
-                                 struct lu_site *s, const struct lu_fid *f,
-                                 struct lustre_capa *capa)
+                                 struct lu_site *s, const struct lu_fid *f)
 {
         struct lu_object  *o;
         struct lu_object  *shadow;
         struct hlist_head *bucket;
-        int                rc;
 
         /*
          * This uses standard index maintenance protocol:
@@ -455,25 +447,14 @@ struct lu_object *lu_object_find(const struct lu_env *env,
         o = htable_lookup(s, bucket, f);
 
         spin_unlock(&s->ls_guard);
-        if (o != NULL) {
-                if (capa == BYPASS_CAPA) {
-                        o->lo_header->loh_capa_bypass = 1;
-                } else {
-                        rc = lu_object_auth(env, o, capa,
-                                            CAPA_OPC_INDEX_LOOKUP);
-                        if (rc)
-                                return ERR_PTR(rc);
-                        if (capa)
-                                o->lo_header->loh_capa = *capa;
-                }
+        if (o != NULL)
                 return o;
-        }
 
         /*
          * Allocate new object. This may result in rather complicated
          * operations, including fld queries, inode loading, etc.
          */
-        o = lu_object_alloc(env, s, f, capa);
+        o = lu_object_alloc(env, s, f);
         if (IS_ERR(o))
                 return o;
 
@@ -495,24 +476,6 @@ struct lu_object *lu_object_find(const struct lu_env *env,
         return shadow;
 }
 EXPORT_SYMBOL(lu_object_find);
-
-int lu_object_auth(const struct lu_env *env, const struct lu_object *o,
-                   struct lustre_capa *capa, __u64 opc)
-{
-        struct lu_object_header *top = o->lo_header;
-        int rc;
-
-        list_for_each_entry(o, &top->loh_layers, lo_linkage) {
-                if (o->lo_ops->loo_object_auth) {
-                        rc = o->lo_ops->loo_object_auth(env, o, capa, opc);
-                        if (rc)
-                                return rc;
-                }
-        }
-
-        return 0;
-}
-EXPORT_SYMBOL(lu_object_auth);
 
 enum {
         LU_SITE_HTABLE_BITS = 8,

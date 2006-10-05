@@ -225,4 +225,20 @@ static inline int mdd_lov_cookiesize(const struct lu_env *env,
         return obd->u.mds.mds_max_cookiesize;
 }
 
+static inline struct lustre_capa *mdd_object_capa(const struct lu_env *env,
+                                                  const struct mdd_object *obj)
+{
+        struct md_capainfo *ci = md_capainfo(env);
+        const struct lu_fid *fid = mdo2fid(obj);
+        int i;
+
+        /* NB: in mdt_init0 */
+        if (!ci)
+                return BYPASS_CAPA;
+        for (i = 0; i < 4; i++)
+                if (ci->mc_fid[i] && lu_fid_eq(ci->mc_fid[i], fid))
+                        return ci->mc_capa[i];
+        return NULL;
+}
+
 #endif

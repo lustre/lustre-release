@@ -170,11 +170,11 @@ struct mdt_device {
         /* root squash */
         struct rootsquash_info     *mdt_rootsquash_info;
 
-        /* capability */
-        __u32                      mdt_capa_alg;
+        /* capability keys */
         unsigned long              mdt_capa_timeout;
-        unsigned long              mdt_ck_timeout;
+        __u32                      mdt_capa_alg;
         struct dt_object          *mdt_ck_obj;
+        unsigned long              mdt_ck_timeout;
         unsigned long              mdt_ck_expiry;
         struct timer_list          mdt_ck_timer;
         struct ptlrpc_thread       mdt_ck_thread;
@@ -220,8 +220,6 @@ struct mdt_reint_record {
         int                  rr_logcookielen;
         const struct llog_cookie  *rr_logcookies;
         __u32                rr_flags;
-        struct lustre_capa  *rr_capa1;
-        struct lustre_capa  *rr_capa2;
 };
 
 enum mdt_reint_flag {
@@ -326,8 +324,8 @@ struct mdt_thread_info {
         struct mdt_client_data     mti_mcd;
         loff_t                     mti_off;
         struct txn_param           mti_txn_param;
-        struct lustre_capa_key     mti_capa_key;
         struct lu_buf              mti_buf;
+        struct lustre_capa_key     mti_capa_key;
 };
 /*
  * Info allocated per-transaction.
@@ -392,13 +390,11 @@ void mdt_object_unlock(struct mdt_thread_info *,
 
 struct mdt_object *mdt_object_find(const struct lu_env *,
                                    struct mdt_device *,
-                                   const struct lu_fid *,
-                                   struct lustre_capa *);
+                                   const struct lu_fid *);
 struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *,
                                         const struct lu_fid *,
                                         struct mdt_lock_handle *,
-                                        __u64 ibits,
-                                        struct lustre_capa *);
+                                        __u64 ibits);
 void mdt_object_unlock_put(struct mdt_thread_info *,
                            struct mdt_object *,
                            struct mdt_lock_handle *,
@@ -507,6 +503,12 @@ int mdt_remote_perm_reverse_idmap(struct ptlrpc_request *,
 
 int mdt_fix_attr_ucred(struct mdt_thread_info *, __u32);
 
+static inline struct mdt_device *mdt_dev(struct lu_device *d)
+{
+//        LASSERT(lu_device_is_mdt(d));
+        return container_of0(d, struct mdt_device, mdt_md_dev.md_lu_dev);
+}
+
 /* mdt/mdt_identity.c */
 #define MDT_IDENTITY_UPCALL_PATH        "/usr/sbin/l_getidentity"
 
@@ -577,29 +579,33 @@ do {                                                                         \
 
 struct md_ucred *mdt_ucred(const struct mdt_thread_info *info);
 
+static inline int is_identity_get_disabled(struct upcall_cache *cache)
+{
+        return cache ? (strcmp(cache->uc_upcall, "NONE") == 0) : 1;
+}
+
 /*
- * fid Capability
+ * Capability
  */
 int mdt_ck_thread_start(struct mdt_device *mdt);
 void mdt_ck_thread_stop(struct mdt_device *mdt);
 void mdt_ck_timer_callback(unsigned long castmeharder);
 int mdt_capa_keys_init(const struct lu_env *env, struct mdt_device *mdt);
 
-static inline struct mdt_device *mdt_dev(struct lu_device *d)
+static inline void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
+                                    const struct lu_fid *fid,
+                                    struct lustre_capa *capa)
 {
-//        LASSERT(lu_device_is_mdt(d));
-        return container_of0(d, struct mdt_device, mdt_md_dev.md_lu_dev);
-}
+        struct mdt_device *dev = info->mti_mdt;
+        struct md_capainfo *ci;
 
-static inline struct lustre_capa_key *red_capa_key(struct mdt_device *mdt)
-{
-        return &mdt->mdt_capa_keys[1];
-}
+        if (!dev->mdt_opts.mo_mds_capa)
+                return;
 
-static inline int is_identity_get_disabled(struct upcall_cache *cache)
-{
-        return cache ? (strcmp(cache->uc_upcall, "NONE") == 0) : 1;
+        ci = md_capainfo(info->mti_env);
+        LASSERT(ci);
+        ci->mc_fid[offset]  = fid;
+        ci->mc_capa[offset] = capa;
 }
-
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

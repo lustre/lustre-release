@@ -117,7 +117,8 @@ int fld_index_create(struct lu_server_fld *fld,
         if (!IS_ERR(th)) {
                 rc = dt_obj->do_index_ops->dio_insert(env, dt_obj,
                                                       fld_rec(env, mds),
-                                                      fld_key(env, seq), th);
+                                                      fld_key(env, seq), th,
+                                                      BYPASS_CAPA);
                 dt_dev->dd_ops->dt_trans_stop(env, th);
         } else
                 rc = PTR_ERR(th);
@@ -140,7 +141,8 @@ int fld_index_delete(struct lu_server_fld *fld,
         th = dt_dev->dd_ops->dt_trans_start(env, dt_dev, &txn);
         if (!IS_ERR(th)) {
                 rc = dt_obj->do_index_ops->dio_delete(env, dt_obj,
-                                                      fld_key(env, seq), th);
+                                                      fld_key(env, seq), th,
+                                                      BYPASS_CAPA);
                 dt_dev->dd_ops->dt_trans_stop(env, th);
         } else
                 rc = PTR_ERR(th);
@@ -157,7 +159,7 @@ int fld_index_lookup(struct lu_server_fld *fld,
         ENTRY;
 
         rc = dt_obj->do_index_ops->dio_lookup(env, dt_obj, rec,
-                                              fld_key(env, seq));
+                                              fld_key(env, seq), BYPASS_CAPA);
         if (rc == 0)
                 *mds = be64_to_cpu(*(__u64 *)rec);
         RETURN(rc);

@@ -416,6 +416,66 @@ static int lprocfs_rd_rootsquash_skips(char *page, char **start, off_t off,
         return ret;
 }
 
+/* for debug only */
+static int lprocfs_rd_capa(char *page, char **start, off_t off,
+                           int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+        return snprintf(page, count, "capability on: %s %s\n",
+                        mdt->mdt_opts.mo_oss_capa ? "oss" : "",
+                        mdt->mdt_opts.mo_mds_capa ? "mds" : "");
+}
+
+static int lprocfs_wr_capa(struct file *file, const char *buffer,
+                           unsigned long count, void *data)
+{
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val & ~0x3) {
+                CERROR("invalid value %u: only 0/1/2/3 is accepted.\n", val);
+                CERROR("\t0: disable capability\n"
+                       "\t1: enable mds capability\n"
+                       "\t2: enable oss capability\n"
+                       "\t3: enable both mds and oss capability\n");
+                return -EINVAL;
+        }
+
+//        mds_capa_onoff(obd, val);
+        return count;
+}
+
+static int lprocfs_rd_capa_count(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        return snprintf(page, count, "%d %d\n",
+                        capa_count[CAPA_SITE_CLIENT],
+                        capa_count[CAPA_SITE_SERVER]);
+}
+
+static int lprocfs_rd_capa_timeout(char *page, char **start, off_t off,
+                                       int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+        return snprintf(page, count, "%lu\n", mdt->mdt_capa_timeout);
+}
+
+static int lprocfs_rd_ck_timeout(char *page, char **start, off_t off, int count,
+                                 int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+
+        return snprintf(page, count, "%lu\n", mdt->mdt_ck_timeout);
+}
+
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "uuid",                       lprocfs_rd_uuid,                 0, 0 },
         { "recovery_status",            lprocfs_obd_rd_recovery_status,  0, 0 },
@@ -438,6 +498,10 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "rootsquash_uid",             lprocfs_rd_rootsquash_uid,       0, 0 },
         { "rootsquash_gid",             lprocfs_rd_rootsquash_gid,       0, 0 },
         { "rootsquash_skips",           lprocfs_rd_rootsquash_skips,     0, 0 },
+        { "capa",                       lprocfs_rd_capa, lprocfs_wr_capa,   0 },
+        { "capa_timeout",               lprocfs_rd_capa_timeout,         0, 0 },
+        { "capa_key_timeout",           lprocfs_rd_ck_timeout,           0, 0 },
+        { "capa_count",                 lprocfs_rd_capa_count,           0, 0 },
         { 0 }
 };
 

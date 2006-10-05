@@ -86,14 +86,16 @@ static int cmm_maxsize_get(const struct lu_env *env, struct md_device *md,
         RETURN(rc);
 }
 
-static int cmm_init_capa_keys(struct md_device *md,
+static int cmm_init_capa_ctxt(const struct lu_env *env, struct md_device *md,
+                              __u32 valid, unsigned long timeout, __u32 alg,
                               struct lustre_capa_key *keys)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
         int rc;
         ENTRY;
-        LASSERT(cmm_child_ops(cmm_dev)->mdo_init_capa_keys);
-        rc = cmm_child_ops(cmm_dev)->mdo_init_capa_keys(cmm_dev->cmm_child,
+        LASSERT(cmm_child_ops(cmm_dev)->mdo_init_capa_ctxt);
+        rc = cmm_child_ops(cmm_dev)->mdo_init_capa_ctxt(env, cmm_dev->cmm_child,
+                                                        valid, timeout, alg,
                                                         keys);
         RETURN(rc);
 }
@@ -115,7 +117,7 @@ static struct md_device_operations cmm_md_ops = {
         .mdo_statfs         = cmm_statfs,
         .mdo_root_get       = cmm_root_get,
         .mdo_maxsize_get    = cmm_maxsize_get,
-        .mdo_init_capa_keys = cmm_init_capa_keys,
+        .mdo_init_capa_ctxt = cmm_init_capa_ctxt,
         .mdo_update_capa_key= cmm_update_capa_key,
 };
 

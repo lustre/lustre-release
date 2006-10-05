@@ -502,7 +502,7 @@ void mdt_shrink_reply(struct mdt_thread_info *info, int offset,
         lustre_shrink_reply(req, offset, acl_size, 1);
         offset += !!acl_size;
         if (mdscapa && !(body->valid & OBD_MD_FLMDSCAPA))
-                lustre_shrink_reply(req, offset, 0, 0);
+                lustre_shrink_reply(req, offset, 0, 1);
         offset += mdscapa;
         if (osscapa && !(body->valid & OBD_MD_FLOSSCAPA))
                 lustre_shrink_reply(req, offset, 0, 0);
@@ -635,7 +635,8 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
         ma->ma_valid = MA_INODE;
 
         if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
-                rr->rr_capa1 = req_capsule_client_get(pill, &RMF_CAPA1);
+                mdt_set_capainfo(info, 0, rr->rr_fid1,
+                                 req_capsule_client_get(pill, &RMF_CAPA1));
 
         RETURN(0);
 }
@@ -732,8 +733,11 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                          LA_CTIME | LA_MTIME | LA_ATIME;
         info->mti_spec.sp_cr_flags = rec->cr_flags;
 
-        if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
-                rr->rr_capa1 = req_capsule_client_get(pill, &RMF_CAPA1);
+        if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT)) {
+                mdt_set_capainfo(info, 0, rr->rr_fid1,
+                                 req_capsule_client_get(pill, &RMF_CAPA1));
+                mdt_set_capainfo(info, 1, rr->rr_fid2, BYPASS_CAPA);
+        }
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (S_ISDIR(attr->la_mode)) {
@@ -797,9 +801,11 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
         attr->la_valid = LA_UID | LA_GID | LA_CTIME | LA_MTIME;
 
         if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
-                rr->rr_capa1 = req_capsule_client_get(pill, &RMF_CAPA1);
+                mdt_set_capainfo(info, 0, rr->rr_fid1,
+                                 req_capsule_client_get(pill, &RMF_CAPA1));
         if (req_capsule_get_size(pill, &RMF_CAPA2, RCL_CLIENT))
-                rr->rr_capa2 = req_capsule_client_get(pill, &RMF_CAPA2);
+                mdt_set_capainfo(info, 1, rr->rr_fid2,
+                                 req_capsule_client_get(pill, &RMF_CAPA2));
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (rr->rr_name == NULL)
@@ -837,7 +843,8 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
         attr->la_valid = LA_UID | LA_GID | LA_CTIME | LA_MTIME | LA_MODE;
 
         if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
-                rr->rr_capa1 = req_capsule_client_get(pill, &RMF_CAPA1);
+                mdt_set_capainfo(info, 0, rr->rr_fid1,
+                                 req_capsule_client_get(pill, &RMF_CAPA1));
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (rr->rr_name == NULL)
@@ -876,9 +883,11 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
         attr->la_valid = LA_UID | LA_GID | LA_CTIME | LA_MTIME | LA_MODE;
 
         if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
-                rr->rr_capa1 = req_capsule_client_get(pill, &RMF_CAPA1);
+                mdt_set_capainfo(info, 0, rr->rr_fid1,
+                                 req_capsule_client_get(pill, &RMF_CAPA1));
         if (req_capsule_get_size(pill, &RMF_CAPA2, RCL_CLIENT))
-                rr->rr_capa2 = req_capsule_client_get(pill, &RMF_CAPA2);
+                mdt_set_capainfo(info, 1, rr->rr_fid2,
+                                 req_capsule_client_get(pill, &RMF_CAPA2));
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         rr->rr_tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
@@ -895,6 +904,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct req_capsule      *pill = &info->mti_pill;
         struct mdt_reint_record *rr   = &info->mti_rr;
+        struct ptlrpc_request   *req  = mdt_info_req(info);
         ENTRY;
 
         rec = req_capsule_client_get(pill, &RMF_REC_CREATE);
@@ -922,9 +932,12 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         info->mti_replayepoch = rec->cr_ioepoch;
 
         if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
-                rr->rr_capa1 = req_capsule_client_get(pill, &RMF_CAPA1);
-        if (req_capsule_get_size(pill, &RMF_CAPA2, RCL_CLIENT))
-                rr->rr_capa2 = req_capsule_client_get(pill, &RMF_CAPA2);
+                mdt_set_capainfo(info, 0, rr->rr_fid1,
+                                 req_capsule_client_get(pill, &RMF_CAPA1));
+        if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
+            (req_capsule_get_size(pill, &RMF_CAPA2, RCL_CLIENT)))
+                mdt_set_capainfo(info, 1, rr->rr_fid2,
+                                 req_capsule_client_get(pill, &RMF_CAPA2));
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (rr->rr_name == NULL)
@@ -932,7 +945,6 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 
         if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
                 struct md_create_spec *sp = &info->mti_spec;
-                struct ptlrpc_request *req = mdt_info_req(info);
                 sp->u.sp_ea.eadata = req_capsule_client_get(pill,
                                                             &RMF_EADATA);
                 sp->u.sp_ea.eadatalen = req_capsule_get_size(pill,

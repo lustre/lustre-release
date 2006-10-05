@@ -174,14 +174,14 @@ static inline void free_capa_lru(struct list_head *head)
 }
 
 /* add or update */
-struct obd_capa *capa_add(struct lustre_capa *capa)
+void capa_add(struct lustre_capa *capa)
 {
         struct hlist_head *head = capa_hash + capa_hashfn(&capa->lc_fid);
         struct obd_capa *ocapa, *old = NULL;
 
         ocapa = alloc_capa(CAPA_SITE_SERVER);
         if (!ocapa)
-                return NULL;
+                return;
 
         spin_lock(&capa_lock);
 
@@ -198,7 +198,7 @@ struct obd_capa *capa_add(struct lustre_capa *capa)
                 DEBUG_CAPA(D_SEC, &ocapa->c_capa, "new");
                                         
                 spin_unlock(&capa_lock);
-                return ocapa;
+                return;
         }
 
         spin_lock(&old->c_lock);
@@ -213,7 +213,6 @@ struct obd_capa *capa_add(struct lustre_capa *capa)
         DEBUG_CAPA(D_SEC, &old->c_capa, "update");
 
         free_capa(ocapa);
-        return old;
 }
 
 struct obd_capa *capa_lookup(struct lustre_capa *capa)

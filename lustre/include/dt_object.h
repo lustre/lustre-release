@@ -95,6 +95,13 @@ struct dt_device_operations {
          */
         int   (*dt_sync)(const struct lu_env *env, struct dt_device *dev);
         void  (*dt_ro)(const struct lu_env *env, struct dt_device *dev);
+        /*
+         * Initialize capability context.
+         */
+        int   (*dt_init_capa_ctxt)(const struct lu_env *env,
+                                   struct dt_device *dev,
+                                   __u32 valid, unsigned long timeout,
+                                   __u32 alg, struct lustre_capa_key *keys);
 
         /*
          *  dt get credits from osd 
@@ -161,7 +168,8 @@ struct dt_object_operations {
          * precondition: lu_object_exists(&dt->do_lu);
          */
         int   (*do_attr_get)(const struct lu_env *env,
-                             struct dt_object *dt, struct lu_attr *attr);
+                             struct dt_object *dt, struct lu_attr *attr,
+                             struct lustre_capa *capa);
         /*
          * Set standard attributes.
          *
@@ -170,14 +178,16 @@ struct dt_object_operations {
         int   (*do_attr_set)(const struct lu_env *env,
                              struct dt_object *dt,
                              const struct lu_attr *attr,
-                             struct thandle *handle);
+                             struct thandle *handle,
+                             struct lustre_capa *capa);
         /*
          * Return a value of an extended attribute.
          *
          * precondition: dt_object_exists(dt);
          */
         int   (*do_xattr_get)(const struct lu_env *env, struct dt_object *dt,
-                              struct lu_buf *buf, const char *name);
+                              struct lu_buf *buf, const char *name,
+                              struct lustre_capa *capa);
         /*
          * Set value of an extended attribute.
          *
@@ -187,7 +197,8 @@ struct dt_object_operations {
          */
         int   (*do_xattr_set)(const struct lu_env *env,
                               struct dt_object *dt, const struct lu_buf *buf,
-                              const char *name, int fl, struct thandle *handle);
+                              const char *name, int fl, struct thandle *handle,
+                              struct lustre_capa *capa);
         /*
          * Delete existing extended attribute.
          *
@@ -195,7 +206,8 @@ struct dt_object_operations {
          */
         int   (*do_xattr_del)(const struct lu_env *env,
                               struct dt_object *dt,
-                              const char *name, struct thandle *handle);
+                              const char *name, struct thandle *handle,
+                              struct lustre_capa *capa);
         /*
          * Place list of existing extended attributes into @buf (which has
          * length len).
@@ -203,7 +215,8 @@ struct dt_object_operations {
          * precondition: dt_object_exists(dt);
          */
         int   (*do_xattr_list)(const struct lu_env *env,
-                               struct dt_object *dt, struct lu_buf *buf);
+                               struct dt_object *dt, struct lu_buf *buf,
+                               struct lustre_capa *capa);
         /*
          * Create new object on this device.
          *
@@ -236,8 +249,11 @@ struct dt_object_operations {
         void  (*do_ref_del)(const struct lu_env *env,
                             struct dt_object *dt, struct thandle *th);
 
-        int (*do_readpage)(const struct lu_env *env,
-                           struct dt_object *dt, const struct lu_rdpg *rdpg);
+        int   (*do_readpage)(const struct lu_env *env,
+                             struct dt_object *dt, const struct lu_rdpg *rdpg,
+                             struct lustre_capa *capa);
+        int   (*do_capa_get)(const struct lu_env *env,
+                             struct dt_object *dt, struct lustre_capa *capa);
 };
 
 /*
@@ -248,13 +264,14 @@ struct dt_body_operations {
          * precondition: dt_object_exists(dt);
          */
         ssize_t (*dbo_read)(const struct lu_env *env, struct dt_object *dt,
-                            struct lu_buf *buf, loff_t *pos);
+                            struct lu_buf *buf, loff_t *pos,
+                            struct lustre_capa *capa);
         /*
          * precondition: dt_object_exists(dt);
          */
         ssize_t (*dbo_write)(const struct lu_env *env, struct dt_object *dt,
                              const struct lu_buf *buf, loff_t *pos,
-                             struct thandle *handle);
+                             struct thandle *handle, struct lustre_capa *capa);
 };
 
 /*
@@ -280,18 +297,20 @@ struct dt_index_operations {
          * precondition: dt_object_exists(dt);
          */
         int (*dio_lookup)(const struct lu_env *env, struct dt_object *dt,
-                          struct dt_rec *rec, const struct dt_key *key);
+                          struct dt_rec *rec, const struct dt_key *key,
+                          struct lustre_capa *capa);
         /*
          * precondition: dt_object_exists(dt);
          */
         int (*dio_insert)(const struct lu_env *env, struct dt_object *dt,
                           const struct dt_rec *rec, const struct dt_key *key,
-                          struct thandle *handle);
+                          struct thandle *handle, struct lustre_capa *capa);
         /*
          * precondition: dt_object_exists(dt);
          */
         int (*dio_delete)(const struct lu_env *env, struct dt_object *dt,
-                          const struct dt_key *key, struct thandle *handle);
+                          const struct dt_key *key, struct thandle *handle,
+                          struct lustre_capa *capa);
         /*
          * Iterator interface
          */

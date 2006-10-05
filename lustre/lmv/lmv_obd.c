@@ -2502,7 +2502,7 @@ static int lmv_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(rc);
 }
 
-static int lmv_renew_capa(struct obd_export *exp, struct obd_capa *ocapa,
+static int lmv_renew_capa(struct obd_export *exp, struct obd_capa *oc,
                           renew_capa_cb_t cb)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -2515,11 +2515,11 @@ static int lmv_renew_capa(struct obd_export *exp, struct obd_capa *ocapa,
         if (rc)
                 RETURN(rc);
 
-        tgt_exp = lmv_get_export(lmv, &ocapa->c_capa.lc_fid);
+        tgt_exp = lmv_get_export(lmv, &oc->c_capa.lc_fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        rc = md_renew_capa(tgt_exp, ocapa, cb);
+        rc = md_renew_capa(tgt_exp, oc, cb);
         RETURN(rc);
 }
 

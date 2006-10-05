@@ -258,7 +258,8 @@ static int client_common_fill_super(struct super_block *sb,
                 sb->s_flags |= MS_POSIXACL;
 #endif
                 sbi->ll_flags |= LL_SBI_ACL;
-        } else {
+        } else if (sbi->ll_flags & LL_SBI_ACL) {
+                LCONSOLE_INFO("client wants to enable acl, but mdt not!\n");
                 sbi->ll_flags &= ~LL_SBI_ACL;
         }
 
@@ -284,12 +285,12 @@ static int client_common_fill_super(struct super_block *sb,
         }
 
         if (data->ocd_connect_flags & OBD_CONNECT_MDS_CAPA) {
-                CDEBUG(D_SEC, "client enabled MDS capability!\n");
+                LCONSOLE_INFO("client enabled MDS capability!\n");
                 sbi->ll_flags |= LL_SBI_MDS_CAPA;
         }
 
         if (data->ocd_connect_flags & OBD_CONNECT_OSS_CAPA) {
-                CDEBUG(D_SEC, "client enabled OSS capability!\n");
+                LCONSOLE_INFO("client enabled OSS capability!\n");
                 sbi->ll_flags |= LL_SBI_OSS_CAPA;
         }
 
@@ -778,6 +779,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_open_fd_read_count = lli->lli_open_fd_write_count = 0;
         lli->lli_open_fd_exec_count = 0;
         INIT_LIST_HEAD(&lli->lli_dead_list);
+        INIT_LIST_HEAD(&lli->lli_oss_capas);
         sema_init(&lli->lli_rmtperm_sem, 1);
 }
 
@@ -1247,6 +1249,8 @@ void ll_clear_inode(struct inode *inode)
         spin_lock(&sbi->ll_deathrow_lock);
         list_del_init(&lli->lli_dead_list);
         spin_unlock(&sbi->ll_deathrow_lock);
+
+        ll_clear_inode_capas(inode);
 
         EXIT;
 }

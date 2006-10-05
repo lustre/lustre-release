@@ -147,7 +147,7 @@ int mdt_capa_keys_init(const struct lu_env *env, struct mdt_device *mdt)
 
         obj = mdt->mdt_ck_obj;
         obj->do_ops->do_read_lock(env, obj);
-        rc = obj->do_ops->do_attr_get(env, mdt->mdt_ck_obj, la);
+        rc = obj->do_ops->do_attr_get(env, mdt->mdt_ck_obj, la, BYPASS_CAPA);
         obj->do_ops->do_read_unlock(env, obj);
         if (rc)
                 RETURN(rc);
@@ -194,7 +194,7 @@ static int mdt_ck_thread_main(void *args)
 {
         struct mdt_device      *mdt = args;
         struct ptlrpc_thread   *thread = &mdt->mdt_ck_thread;
-        struct lustre_capa_key *tmp, *key = red_capa_key(mdt);
+        struct lustre_capa_key *tmp, *key = &mdt->mdt_capa_keys[1];
         struct lu_env           env;
         struct mdt_thread_info *info;
         struct md_device       *next;
@@ -295,3 +295,5 @@ void mdt_ck_thread_stop(struct mdt_device *mdt)
         cfs_waitq_signal(&thread->t_ctl_waitq);
         wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_STOPPED);
 }
+
+

@@ -157,19 +157,36 @@ void mdt_set_disposition(struct mdt_thread_info *info,
 static int mdt_getstatus(struct mdt_thread_info *info)
 {
         struct md_device *next  = info->mti_mdt->mdt_child;
-        int               rc;
         struct mdt_body  *body;
+        int               rc;
 
         ENTRY;
 
-        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK)) {
-                rc = -ENOMEM;
-        } else {
-                body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-                rc = next->md_ops->mdo_root_get(info->mti_env, next,
-                                                &body->fid1);
-                if (rc == 0)
-                        body->valid |= OBD_MD_FLID;
+        if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
+                RETURN(-ENOMEM);
+
+        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        rc = next->md_ops->mdo_root_get(info->mti_env, next, &body->fid1);
+        if (rc == 0)
+                body->valid |= OBD_MD_FLID;
+
+        if (info->mti_mdt->mdt_opts.mo_mds_capa) {
+                struct mdt_object  *root;
+                struct lustre_capa *capa;
+
+                root = mdt_object_find(info->mti_env, info->mti_mdt, &body->fid1);
+                if (IS_ERR(root))
+                        RETURN(PTR_ERR(root));
+
+                capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
+                LASSERT(capa);
+                capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
+
+                rc = mo_capa_get(info->mti_env, mdt_object_child(root), capa);
+                mdt_object_put(info->mti_env, root);
+                if (rc)
+                        RETURN(rc);
+                body->valid |= OBD_MD_FLMDSCAPA;
         }
 
         RETURN(rc);
@@ -390,10 +407,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         if ((reqbody->valid & OBD_MD_FLMDSCAPA) && mdt->mdt_opts.mo_mds_capa) {
                 struct lustre_capa *capa;
 
-                spin_lock(&capa_lock);
-                info->mti_capa_key = *red_capa_key(mdt);
-                spin_unlock(&capa_lock);
-
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
@@ -404,6 +417,32 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         }
 
         RETURN(rc);
+}
+
+static int mdt_renew_capa(struct mdt_thread_info *info)
+{
+        struct mdt_object *obj = info->mti_object;
+        struct mdt_body *body;
+        struct lustre_capa *capa, *c;
+        int rc;
+        ENTRY;
+
+        c = req_capsule_client_get(&info->mti_pill, &RMF_CAPA1);
+        LASSERT(c);
+
+        capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
+        LASSERT(capa);
+
+        *capa = *c;
+        rc = mo_capa_get(info->mti_env, mdt_object_child(obj), capa);
+
+        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        LASSERT(body);
+
+        body->valid |= OBD_MD_FLOSSCAPA;
+        body->flags = (__u32)rc;
+
+        RETURN(0);
 }
 
 static int mdt_getattr(struct mdt_thread_info *info)
@@ -419,6 +458,11 @@ static int mdt_getattr(struct mdt_thread_info *info)
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
                 GOTO(out, rc = -EFAULT);
+
+        if (reqbody->valid & OBD_MD_FLOSSCAPA) {
+                rc = mdt_renew_capa(info);
+                GOTO(out, rc);
+        }
 
         if (reqbody->valid & OBD_MD_FLRMTPERM) {
                 rc = mdt_init_ucred(info, reqbody);
@@ -541,6 +585,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 }
                 if (rc == 0) {
                         /* Finally, we can get attr for child. */
+                        mdt_set_capainfo(info, 0, mdt_object_fid(child),
+                                         BYPASS_CAPA);
                         rc = mdt_getattr_internal(info, child);
                         if (rc != 0)
                                 mdt_object_unlock(info, child, lhc, 1);
@@ -567,8 +613,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
          *step 3: find the child object by fid & lock it.
          *        regardless if it is local or remote.
          */
-        child = mdt_object_find(info->mti_env, info->mti_mdt, child_fid,
-                                BYPASS_CAPA);
+        child = mdt_object_find(info->mti_env, info->mti_mdt, child_fid);
         if (IS_ERR(child))
                 GOTO(out_parent, rc = PTR_ERR(child));
         if (is_resent) {
@@ -591,6 +636,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         }
 
         /* finally, we can get attr for child. */
+        mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
         rc = mdt_getattr_internal(info, child);
         if (rc != 0) {
                 mdt_object_unlock(info, child, lhc, 1);
@@ -1150,34 +1196,6 @@ static int mdt_quotactl_handle(struct mdt_thread_info *info)
         return -EOPNOTSUPP;
 }
 
-static int mdt_renew_capa(struct mdt_thread_info *info)
-{
-        struct mdt_device *mdt = info->mti_mdt;
-        struct mdt_object *obj = info->mti_object;
-        struct mdt_body *body;
-        struct lustre_capa *capa;
-        int rc;
-        ENTRY;
-
-        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        LASSERT(body);
-
-        capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
-        LASSERT(capa);
-
-        spin_lock(&capa_lock);
-        info->mti_capa_key = *red_capa_key(mdt);
-        spin_unlock(&capa_lock);
-
-        *capa = obj->mot_header.loh_capa;
-        /* TODO: add capa check */
-        rc = mo_capa_get(info->mti_env, mdt_object_child(obj), capa);
-        if (rc)
-                RETURN(rc);
-
-        RETURN(rc);
-}
-
 /*
  * OBD PING and other handlers.
  */
@@ -1274,17 +1292,13 @@ static struct mdt_object *mdt_obj(struct lu_object *o)
 
 struct mdt_object *mdt_object_find(const struct lu_env *env,
                                    struct mdt_device *d,
-                                   const struct lu_fid *f,
-                                   struct lustre_capa *c)
+                                   const struct lu_fid *f)
 {
         struct lu_object *o;
         struct mdt_object *m;
         ENTRY;
 
-        if (!d->mdt_opts.mo_mds_capa)
-                c = BYPASS_CAPA;
-
-        o = lu_object_find(env, d->mdt_md_dev.md_lu_dev.ld_site, f, c);
+        o = lu_object_find(env, d->mdt_md_dev.md_lu_dev.ld_site, f);
         if (IS_ERR(o))
                 m = (struct mdt_object *)o;
         else
@@ -1352,12 +1366,11 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
 struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
                                         const struct lu_fid *f,
                                         struct mdt_lock_handle *lh,
-                                        __u64 ibits,
-                                        struct lustre_capa *capa)
+                                        __u64 ibits)
 {
         struct mdt_object *o;
 
-        o = mdt_object_find(info->mti_env, info->mti_mdt, f, capa);
+        o = mdt_object_find(info->mti_env, info->mti_mdt, f);
         if (!IS_ERR(o)) {
                 int rc;
 
@@ -1436,7 +1449,6 @@ static int mdt_lock_reply_compat(struct mdt_device *m, struct ldlm_reply *rep)
  */
 static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
 {
-        struct lustre_capa       *capa = NULL;
         const struct mdt_body    *body;
         struct mdt_object        *obj;
         const struct lu_env      *env;
@@ -1461,13 +1473,11 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
          * instance MDS_IS_SUBDIR.
          */
         if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_CLIENT) && 
-                req_capsule_field_present(pill, &RMF_CAPA1, RCL_CLIENT)) {
-                int len = req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT);
-                if (len == sizeof(struct lustre_capa)) 
-                        capa = req_capsule_client_get(pill, &RMF_CAPA1);
-        }
+            req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
+                mdt_set_capainfo(info, 0, &body->fid1,
+                                 req_capsule_client_get(pill, &RMF_CAPA1));
         
-        obj = mdt_object_find(env, info->mti_mdt, &body->fid1, capa);
+        obj = mdt_object_find(env, info->mti_mdt, &body->fid1);
         if (!IS_ERR(obj)) {
                 if ((flags & HABEO_CORPUS) &&
                     !lu_object_exists(&obj->mot_obj.mo_lu)) {
@@ -3089,6 +3099,7 @@ out:
 
 static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 {
+        struct md_device *next = m->mdt_child;
         struct lu_device  *d = &m->mdt_md_dev.md_lu_dev;
         struct lu_site    *ls = d->ld_site;
 
@@ -3124,6 +3135,11 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
                 m->mdt_rootsquash_info = NULL;
         }
 
+        next->md_ops->mdo_init_capa_ctxt(env, next, CAPA_CTX_KEYS, 0, 0, NULL);
+        cleanup_capas(CAPA_SITE_SERVER);
+        del_timer(&m->mdt_ck_timer);
+        mdt_ck_thread_stop(m);
+
         /* finish the stack */
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 
@@ -3139,6 +3155,21 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 }
 
 int mdt_postrecov(const struct lu_env *, struct mdt_device *);
+
+static int mdt_init_capa_ctxt(const struct lu_env *env, struct mdt_device *m)
+{
+        struct md_device *next = m->mdt_child;
+        __u32 valid = CAPA_CTX_TIMEOUT | CAPA_CTX_ALG | CAPA_CTX_KEYS;
+        int rc;
+
+        if (m->mdt_opts.mo_mds_capa)
+                valid |= CAPA_CTX_ON;
+        rc = next->md_ops->mdo_init_capa_ctxt(env, next, valid,
+                                              m->mdt_capa_timeout,
+                                              m->mdt_capa_alg,
+                                              m->mdt_capa_keys);
+        return rc;
+}
 
 static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                      struct lu_device_type *ldt, struct lustre_cfg *cfg)
@@ -3170,8 +3201,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_opts.mo_compat_resname = 0;
         m->mdt_opts.mo_mds_capa = 0;
         m->mdt_opts.mo_oss_capa = 0;
-        m->mdt_capa_alg = CAPA_HMAC_ALG_SHA1;
         m->mdt_capa_timeout = CAPA_TIMEOUT;
+        m->mdt_capa_alg = CAPA_HMAC_ALG_SHA1;
         m->mdt_ck_timeout = CAPA_KEY_TIMEOUT;
         obd->obd_replayable = 1;
         spin_lock_init(&m->mdt_client_bitmap_lock);
@@ -3254,10 +3285,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_ck_timer.data = (unsigned long)m;
         init_timer(&m->mdt_ck_timer);
 
-        s->ls_capa_keys = m->mdt_capa_keys;
-        s->ls_capa_timeout = m->mdt_capa_timeout;
-        s->ls_capa_alg = m->mdt_capa_alg;
-
         rc = mdt_start_ptlrpc_service(m);
         if (rc)
                 GOTO(err_capa, rc);
@@ -3271,6 +3298,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (obd->obd_recovering == 0)
                 mdt_postrecov(env, m);
 
+        mdt_init_capa_ctxt(env, m);
         RETURN(0);
 
 err_stop_service:
@@ -4062,8 +4090,7 @@ DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),
 DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, IS_SUBDIR,    mdt_is_subdir),
 DEF_MDT_HNDL_0(0,                         QUOTACHECK,   mdt_quotacheck_handle),
-DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_quotactl_handle),
-DEF_MDT_HNDL_0(0           |HABEO_REFERO, RENEW_CAPA,   mdt_renew_capa)
+DEF_MDT_HNDL_0(0,                         QUOTACTL,     mdt_quotactl_handle)
 };
 
 #define DEF_OBD_HNDL(flags, name, fn)                   \

@@ -76,7 +76,8 @@ static int orph_index_insert(const struct lu_env *env,
         ENTRY;
 
         rc = dor->do_index_ops->dio_insert(env, dor, (struct dt_rec *)offset,
-                                           (struct dt_key *)key, th);
+                                           (struct dt_key *)key, th,
+                                           BYPASS_CAPA);
         RETURN(rc);
 }
 
@@ -91,7 +92,8 @@ static int orph_index_delete(const struct lu_env *env,
         ENTRY;
         LASSERT(dor);
         rc = dor->do_index_ops->dio_delete(env, dor,
-                                           (struct dt_key *)key, th);
+                                           (struct dt_key *)key, th,
+                                           BYPASS_CAPA);
         RETURN(rc);
 
 }

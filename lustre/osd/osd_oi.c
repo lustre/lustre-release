@@ -164,7 +164,8 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
         } else {
                 rc = oi->oi_dir->do_index_ops->dio_lookup
                         (info->oti_env, oi->oi_dir,
-                         (struct dt_rec *)id, oi_fid_key(info, fid));
+                         (struct dt_rec *)id, oi_fid_key(info, fid),
+                         BYPASS_CAPA);
                 osd_inode_id_init(id, id->oii_ino, id->oii_gen);
         }
         return rc;
@@ -190,7 +191,8 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         osd_inode_id_init(id, id0->oii_ino, id0->oii_gen);
         return idx->do_index_ops->dio_insert(info->oti_env, idx,
                                              (const struct dt_rec *)id,
-                                             oi_fid_key(info, fid), th);
+                                             oi_fid_key(info, fid), th,
+                                             BYPASS_CAPA);
 }
 
 /*
@@ -209,6 +211,7 @@ int osd_oi_delete(struct osd_thread_info *info,
         idx = oi->oi_dir;
         dev = lu2dt_dev(idx->do_lu.lo_dev);
         return idx->do_index_ops->dio_delete(info->oti_env, idx,
-                                             oi_fid_key(info, fid), th);
+                                             oi_fid_key(info, fid), th,
+                                             BYPASS_CAPA);
 }
 

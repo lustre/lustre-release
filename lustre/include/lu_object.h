@@ -209,13 +209,6 @@ struct lu_object_operations {
          * consistent.
          */
         int (*loo_object_invariant)(const struct lu_object *o);
-        /*
-         * Called to authorize action by capability.
-         */
-        int (*loo_object_auth)(const struct lu_env *env,
-                               const struct lu_object *o,
-                               struct lustre_capa *capa,
-                               __u64 opc);
 };
 
 /*
@@ -456,11 +449,6 @@ struct lu_object_header {
          */
         struct lu_fid     loh_fid;
         /*
-         * Fid capability.
-         */
-        unsigned int       loh_capa_bypass:1; /* bypass capability check */
-        struct lustre_capa loh_capa;          /* capability sent by client */
-        /*
          * Common object attributes, cached for efficiency. From enum
          * lu_object_header_attr.
          */
@@ -581,11 +569,6 @@ struct lu_site {
                 __u32 s_cache_race;
                 __u32 s_lru_purged;
         } ls_stats;
-
-        /* Capability */
-        struct lustre_capa_key *ls_capa_keys;
-        unsigned long           ls_capa_timeout;
-        __u32                   ls_capa_alg;
 };
 
 /*
@@ -699,14 +682,7 @@ void lu_site_purge(const struct lu_env *env,
  * any case, additional reference is acquired on the returned object.
  */
 struct lu_object *lu_object_find(const struct lu_env *env,
-                                 struct lu_site *s, const struct lu_fid *f,
-                                 struct lustre_capa *c);
-
-/*
- * Auth lu_object capability.
- */
-int lu_object_auth(const struct lu_env *env, const struct lu_object *o,
-                   struct lustre_capa *capa, __u64 opc);
+                                 struct lu_site *s, const struct lu_fid *f);
 
 /*
  * Helpers.
@@ -735,20 +711,6 @@ static inline struct lu_object *lu_object_next(const struct lu_object *o)
 static inline const struct lu_fid *lu_object_fid(const struct lu_object *o)
 {
         return &o->lo_header->loh_fid;
-}
-
-/*
- * Pointer to the fid capability of this object.
- */
-static inline struct lustre_capa *
-lu_object_capa(const struct lu_object *o)
-{
-        return &o->lo_header->loh_capa;
-}
-
-static inline int lu_object_capa_bypass(const struct lu_object *o)
-{
-        return o->lo_header->loh_capa_bypass;
 }
 
 /*
@@ -842,11 +804,6 @@ static inline const __u32 lu_object_attr(const struct lu_object *o)
 {
         LASSERT(lu_object_exists(o) > 0);
         return o->lo_header->loh_attr;
-}
-
-static inline void lu_object_bypass_capa(struct lu_object *o)
-{
-        o->lo_header->loh_capa_bypass = 1;
 }
 
 struct lu_rdpg {

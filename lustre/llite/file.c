@@ -52,7 +52,6 @@ void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
                           struct lustre_handle *fh)
 {
         op_data->fid1 = ll_i2info(inode)->lli_fid;
-        op_data->mod_capa1 = ll_i2mdscapa(inode);
         op_data->attr.ia_mode = inode->i_mode;
         op_data->attr.ia_atime = inode->i_atime;
         op_data->attr.ia_mtime = inode->i_mtime;

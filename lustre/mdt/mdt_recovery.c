@@ -70,7 +70,7 @@ int mdt_record_read(const struct lu_env *env,
 
         LASSERTF(dt != NULL, "dt is NULL when we want to read record\n");
 
-        rc = dt->do_body_ops->dbo_read(env, dt, buf, pos);
+        rc = dt->do_body_ops->dbo_read(env, dt, buf, pos, BYPASS_CAPA);
 
         if (rc == buf->lb_len)
                 rc = 0;
@@ -87,7 +87,7 @@ int mdt_record_write(const struct lu_env *env,
 
         LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
         LASSERT(th != NULL);
-        rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th);
+        rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th, BYPASS_CAPA);
         if (rc == buf->lb_len)
                 rc = 0;
         else if (rc >= 0)
@@ -435,7 +435,7 @@ static int mdt_server_data_init(const struct lu_env *env,
 
         obj = mdt->mdt_last_rcvd;
         obj->do_ops->do_read_lock(env, obj);
-        rc = obj->do_ops->do_attr_get(env, mdt->mdt_last_rcvd, la);
+        rc = obj->do_ops->do_attr_get(env, mdt->mdt_last_rcvd, la, BYPASS_CAPA);
         obj->do_ops->do_read_unlock(env, obj);
         if (rc)
                 RETURN(rc);
@@ -944,7 +944,6 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
 
         o = dt_store_open(env, mdt->mdt_bottom, CAPA_KEYS, &fid);
         if(!IS_ERR(o)) {
-                struct md_device *next = mdt->mdt_child;
                 mdt->mdt_ck_obj = o;
                 rc = mdt_capa_keys_init(env, mdt);
                 if (rc) {
@@ -952,7 +951,6 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
                         mdt->mdt_ck_obj = NULL;
                         RETURN(rc);
                 }
-                rc = next->md_ops->mdo_init_capa_keys(next, mdt->mdt_capa_keys);
         } else {
                 rc = PTR_ERR(o);
                 CERROR("cannot open %s: rc = %d\n", CAPA_KEYS, rc);
@@ -1032,8 +1030,7 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
                 return;
 
         /* if no error, so child was created with requested fid */
-        child = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid2,
-                                mti->mti_rr.rr_capa2);
+        child = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid2);
         LASSERT(!IS_ERR(child));
 
         body = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
@@ -1062,8 +1059,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
                 return;
 
         body = req_capsule_server_get(&mti->mti_pill, &RMF_MDT_BODY);
-        obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1,
-                              mti->mti_rr.rr_capa1);
+        obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1);
         LASSERT(!IS_ERR(obj));
         mo_attr_get(mti->mti_env, mdt_object_child(obj), &mti->mti_attr);
         mdt_pack_attr2body(body, &mti->mti_attr.ma_attr, mdt_object_fid(obj));

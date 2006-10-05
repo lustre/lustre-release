@@ -80,8 +80,8 @@ static int mdt_create_data(struct mdt_thread_info *info,
         int rc;
         ENTRY;
 
-        if (spec->sp_cr_flags & MDS_OPEN_DELAY_CREATE ||
-                        !(spec->sp_cr_flags & FMODE_WRITE))
+        if ((spec->sp_cr_flags & MDS_OPEN_DELAY_CREATE) ||
+            !(spec->sp_cr_flags & FMODE_WRITE))
                 RETURN(0);
 
         ma->ma_need = MA_INODE | MA_LOV;
@@ -346,10 +346,6 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 }
         }
 
-        spin_lock(&capa_lock);
-        info->mti_capa_key = *red_capa_key(mdt);
-        spin_unlock(&capa_lock);
-
         if (mdt->mdt_opts.mo_mds_capa) {
                 struct lustre_capa *capa;
 
@@ -361,12 +357,13 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                         RETURN(rc);
                 repbody->valid |= OBD_MD_FLMDSCAPA;
         }
-        if (mdt->mdt_opts.mo_oss_capa) {
+        if (mdt->mdt_opts.mo_oss_capa &&
+            S_ISREG(lu_object_attr(&o->mot_obj.mo_lu))) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA2);
                 LASSERT(capa);
-                capa->lc_opc = CAPA_OPC_OSS_DEFAULT;
+                capa->lc_opc = CAPA_OPC_OSS_DEFAULT | capa_open_opc(flags);
                 rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa);
                 if (rc)
                         RETURN(rc);
@@ -540,10 +537,10 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                  * We failed after creation, but we do not know in which step
                  * we failed. So try to check the child object.
                  */
-                parent = mdt_object_find(env, mdt, rr->rr_fid1, rr->rr_capa1);
+                parent = mdt_object_find(env, mdt, rr->rr_fid1);
                 LASSERT(!IS_ERR(parent));
 
-                child = mdt_object_find(env, mdt, rr->rr_fid2, rr->rr_capa2);
+                child = mdt_object_find(env, mdt, rr->rr_fid2);
                 LASSERT(!IS_ERR(child));
 
                 rc = lu_object_exists(&child->mot_obj.mo_lu);
@@ -591,8 +588,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         int                     rc;
         ENTRY;
 
-        o = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid2,
-                            rr->rr_capa2);
+        o = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid2);
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
@@ -637,12 +633,13 @@ static int mdt_cross_open(struct mdt_thread_info* info,
         int                rc;
         ENTRY;
 
-        o = mdt_object_find(info->mti_env, info->mti_mdt, fid, BYPASS_CAPA);
+        o = mdt_object_find(info->mti_env, info->mti_mdt, fid);
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
         rc = lu_object_exists(&o->mot_obj.mo_lu);
         if (rc > 0) {
+                mdt_set_capainfo(info, 0, fid, BYPASS_CAPA);
                 rc = mo_attr_get(info->mti_env, mdt_object_child(o), ma);
                 if (rc == 0)
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
@@ -747,7 +744,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         else
                 lh->mlh_mode = LCK_EX;
         parent = mdt_object_find_lock(info, rr->rr_fid1, lh,
-                                      MDS_INODELOCK_UPDATE, rr->rr_capa1);
+                                      MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
                 GOTO(out, result = PTR_ERR(parent));
 
@@ -778,10 +775,11 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
         }
 
-        child = mdt_object_find(info->mti_env, mdt, child_fid, BYPASS_CAPA);
+        child = mdt_object_find(info->mti_env, mdt, child_fid);
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
 
+        mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
         if (result == -ENOENT) {
                 /* Not found and with MDS_OPEN_CREAT: let's create it. */
                 mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);

@@ -73,11 +73,6 @@ static const struct req_msg_field *mdt_body_only[] = {
         &RMF_MDT_BODY
 };
 
-static const struct req_msg_field *mdt_renew_capa_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_CAPA1
-};
-
 static const struct req_msg_field *mdt_body_capa[] = {
         &RMF_PTLRPC_BODY,
         &RMF_MDT_BODY,
@@ -366,8 +361,7 @@ static const struct req_format *req_formats[] = {
         &RQF_MDS_READPAGE,
         &RQF_MDS_WRITEPAGE,
         &RQF_MDS_IS_SUBDIR,
-        &RQF_MDS_DONE_WRITING,
-        &RQF_MDS_RENEW_CAPA
+        &RQF_MDS_DONE_WRITING
 };
 
 struct req_msg_field {
@@ -724,11 +718,6 @@ const struct req_format RQF_MDS_IS_SUBDIR =
         DEFINE_REQ_FMT0("MDS_IS_SUBDIR",
                         mdt_body_only, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_IS_SUBDIR);
-
-const struct req_format RQF_MDS_RENEW_CAPA =
-        DEFINE_REQ_FMT0("MDS_RENEW_CAPA",
-                        mdt_renew_capa_client, mdt_body_capa);
-EXPORT_SYMBOL(RQF_MDS_RENEW_CAPA);
 
 #if !defined(__REQ_LAYOUT_USER__)
 
