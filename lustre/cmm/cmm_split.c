@@ -161,7 +161,7 @@ static int cmm_creat_remote_obj(const struct lu_env *env,
 
         /* XXX Since capablity will not work with split. so we
          * pass NULL capablity here */
-        obj = cmm_object_find(env, cmm, fid, NULL);
+        obj = cmm_object_find(env, cmm, fid);
         if (IS_ERR(obj))
                 RETURN(PTR_ERR(obj));
 
@@ -237,7 +237,7 @@ static int cmm_send_split_pages(const struct lu_env *env,
         int rc = 0;
         ENTRY;
 
-        obj = cmm_object_find(env, cmm, fid, NULL);
+        obj = cmm_object_find(env, cmm, fid);
         if (IS_ERR(obj))
                 RETURN(PTR_ERR(obj));
 
@@ -260,7 +260,7 @@ static int cmm_remove_dir_ent(const struct lu_env *env, struct md_object *mo,
             !strncmp(ent->lde_name, "..", ent->lde_namelen))
                 RETURN(0);
 
-        obj = cmm_object_find(env, cmm, &ent->lde_fid, NULL);
+        obj = cmm_object_find(env, cmm, &ent->lde_fid);
         if (IS_ERR(obj))
                 RETURN(PTR_ERR(obj));
 
