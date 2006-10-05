@@ -110,7 +110,7 @@ if [ -z "$MOUNT" ]; then
         setupall
 	MOUNT="`mounted_lustre_filesystems`"
 	[ -z "$MOUNT" ] && error "NAME=$NAME not mounted"
-	I_MOUNTED=yes
+	S_MOUNTED=yes
 fi
 
 [ `echo $MOUNT | wc -w` -gt 1 ] && error "NAME=$NAME mounted more than once"
@@ -131,7 +131,9 @@ MDT=$(\ls $LPROC/mdt 2> /dev/null | grep -v num_refs | tail -n 1)
 TSTDIR="$MOUNT/remote_user_dir"
 LUSTRE_CONF_DIR=/etc/lustre
 SETXID_CONF=$LUSTRE_CONF_DIR/setxid.conf
+SETXID_CONF_BAK=$LUSTRE_CONF_DIR/setxid.conf.bak
 IDENTITY_UPCALL=$LPROC/mdt/$MDT/identity_upcall
+IDENTITY_UPCALL_BAK=`more $IDENTITY_UPCALL`
 IDENTITY_FLUSH=$LPROC/mdt/$MDT/identity_flush
 ROOTSQUASH_UID=$LPROC/mdt/$MDT/rootsquash_uid
 ROOTSQUASH_GID=$LPROC/mdt/$MDT/rootsquash_gid
@@ -140,10 +142,29 @@ KRB5_REALM=`cat /etc/krb5.conf |grep default_realm| awk '{ print $3 }'`
 USER1=`cat /etc/passwd|grep :500:|cut -d: -f1`
 USER2=`cat /etc/passwd|grep :501:|cut -d: -f1`
 
+if [ ! "$USER1" ]
+then
+	echo "==========Please add user1 (uid=500)!=========="
+	error "==========Please add user1 (uid=500)!=========="
+	exit 0
+fi
+
+if [ ! "$USER2" ]
+then
+	echo "==========Please add user2 (uid=501)!=========="
+	error "==========Please add user2 (uid=501)!=========="
+	exit 0
+fi
+
 build_test_filter
 
 setup() {
-	rm -f $SETXID_CONF
+	if [ ! -z "$SETXID_CONF" ]
+	then
+		mv -f $SETXID_CONF $SETXID_CONF_BAK
+	else
+		rm -f $SETXID_CONF_BAK
+	fi
 	echo $ENABLE_IDENTITY > $IDENTITY_UPCALL
 	echo 1 > $IDENTITY_FLUSH
 	$RUNAS -u 500 ls $DIR
@@ -291,7 +312,20 @@ test_4() {
 run_test 4 "set supplementary group ==============="
 
 log "cleanup: ======================================================"
-if [ "$I_MOUNTED" = "yes" ]; then
+
+unsetup() {
+	if [ ! -z "$SETXID_CONF_BAK" ]
+	then
+		mv -f $SETXID_CONF_BAK $SETXID_CONF
+	fi
+	echo $IDENTITY_UPCALL_BAK > $IDENTITY_UPCALL
+	echo 1 > $IDENTITY_FLUSH
+	$RUNAS -u 500 ls $DIR
+	$RUNAS -u 501 ls $DIR
+}
+unsetup
+
+if [ "$S_MOUNTED" = "yes" ]; then
 	cleanupall -f || error "cleanup failed"
 fi
 
