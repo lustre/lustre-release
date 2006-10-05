@@ -362,22 +362,24 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
         op_data.attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
                                 ATTR_MTIME_SET | ATTR_CTIME_SET;
         
-        if (!S_ISREG(llu_i2stat(inode)->st_mode)) {
-                op_data.attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
-        } else {
-                /* Inode cannot be dirty. Close the epoch. */
-                op_data.flags |= MF_EPOCH_CLOSE;
-                /* XXX: Send CHANGE flag only if Size-on-MDS inode attributes
-                 * are really changed.  */
-                op_data.flags |= MF_SOM_CHANGE;
+        if (fd->fd_flags & FMODE_WRITE) {
+                if (!S_ISREG(llu_i2stat(inode)->st_mode)) {
+                        op_data.attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
+                } else {
+                        /* Inode cannot be dirty. Close the epoch. */
+                        op_data.flags |= MF_EPOCH_CLOSE;
+                        /* XXX: Send CHANGE flag only if Size-on-MDS inode attributes
+                         * are really changed.  */
+                        op_data.flags |= MF_SOM_CHANGE;
 
-                /* Pack Size-on-MDS attrinodes if valid. */
-                if ((lli->lli_flags & LLIF_MDS_SIZE_LOCK) ||
-                    !llu_local_size(inode))
-                        op_data.attr.ia_valid |= 
-                                OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+                        /* Pack Size-on-MDS attributes if we are in IO epoch and 
+                         * attributes are valid. */
+                        LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
+                        if (!llu_local_size(inode))
+                                op_data.attr.ia_valid |= 
+                                        OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+                }
         }
-        
         op_data.fid1 = lli->lli_fid;
         op_data.attr.ia_atime = st->st_atime;
         op_data.attr.ia_mtime = st->st_mtime;
@@ -392,6 +394,7 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
         if (rc == -EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
                  * the file size and any write cookies, then close again. */
+                LASSERT(fd->fd_flags & FMODE_WRITE);
                 rc = llu_sizeonmds_update(inode, &och->och_fh);
                 if (rc) {
                         CERROR("inode %llu mdc Size-on-MDS update failed: "

@@ -1312,11 +1312,11 @@ static int ll_setattr_done_writing(struct inode *inode,
         if (!S_ISREG(inode->i_mode))
                 RETURN(0);
 
-        /* XXX: pass och here for the recovery purpose. */
         CDEBUG(D_INODE, "Epoch "LPU64" closed on "DFID" for truncate\n",
                op_data->ioepoch, PFID(&lli->lli_fid));
 
         op_data->flags = MF_EPOCH_CLOSE | MF_SOM_CHANGE;
+        /* XXX: pass och here for the recovery purpose. */
         rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, NULL);
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute

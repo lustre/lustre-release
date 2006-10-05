@@ -93,6 +93,7 @@ struct obd_client_handle {
         struct llog_cookie och_cookie;
         struct mdc_open_data *och_mod;
         __u32 och_magic;
+        int och_flags;
 };
 #define OBD_CLIENT_HANDLE_MAGIC 0xd15ea5ed
 

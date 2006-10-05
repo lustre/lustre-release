@@ -63,11 +63,13 @@ int llap_write_complete(struct inode *inode, struct ll_async_page *llap)
 /* Queue DONE_WRITING if 
  * - done writing is allowed;
  * - inode has no no dirty pages; */
-void ll_queue_done_writing(struct inode *inode)
+void ll_queue_done_writing(struct inode *inode, unsigned long flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         
         spin_lock(&lli->lli_lock);
+        lli->lli_flags |= flags;
+        
         if ((lli->lli_flags & LLIF_DONE_WRITING) &&
             list_empty(&lli->lli_pending_write_llaps)) {
                 struct ll_close_queue *lcq = ll_i2sbi(inode)->ll_lcq;
@@ -85,41 +87,61 @@ void ll_queue_done_writing(struct inode *inode)
         spin_unlock(&lli->lli_lock);
 }
 
-/* CLOSE has already occured but has not closed epoch;
- * Let let DONE_WRITING to happen. */
-void ll_init_done_writing(struct inode *inode) {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        spin_lock(&lli->lli_lock);
-        if ((lli->lli_flags & LLIF_EPOCH_PENDING))
-                lli->lli_flags |= LLIF_DONE_WRITING;
-        spin_unlock(&lli->lli_lock);
-        ll_queue_done_writing(inode);
-}
-
 /* Close epoch and send Size-on-MDS attribute update if possible. 
  * Call this under @lli->lli_lock spinlock. */
-void ll_epoch_close(struct inode *inode, struct md_op_data *op_data)
+void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
+                    struct obd_client_handle **och, unsigned long flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
+
+        spin_lock(&lli->lli_lock);
+        if (!(list_empty(&lli->lli_pending_write_llaps)) && 
+            !(lli->lli_flags & LLIF_EPOCH_PENDING)) {
+                LASSERT(*och != NULL);
+                LASSERT(lli->lli_pending_och == NULL);
+                /* Inode is dirty and there is no pending write done request
+                 * yet, DONE_WRITE is to be sent later. */
+                lli->lli_flags |= LLIF_EPOCH_PENDING;
+                lli->lli_pending_och = *och;
+                spin_unlock(&lli->lli_lock);
+                
+                inode = igrab(inode);
+                LASSERT(inode);
+                goto out;
+        }
 
         CDEBUG(D_INODE, "Epoch "LPU64" closed on "DFID"\n",
                op_data->ioepoch, PFID(&lli->lli_fid));
         op_data->flags |= MF_EPOCH_CLOSE;
 
-        /* Pack Size-on-MDS inode attributes only if they has changed */
-        if (!(lli->lli_flags & LLIF_SOM_DIRTY))
-                goto out;
+        if (flags & LLIF_DONE_WRITING) {
+                LASSERT(lli->lli_flags & LLIF_SOM_DIRTY);
+                *och = lli->lli_pending_och;
+                lli->lli_pending_och = NULL;
+                lli->lli_flags &= ~(LLIF_DONE_WRITING | LLIF_EPOCH_PENDING | 
+                                    LLIF_EPOCH_PENDING);
+        } else {
+                /* Pack Size-on-MDS inode attributes only if they has changed */
+                if (!(lli->lli_flags & LLIF_SOM_DIRTY)) {
+                        spin_unlock(&lli->lli_lock);
+                        goto out;
+                }
+
+                /* There is already 1 pending DONE_WRITE, do not create another
+                 * one -- close epoch with no attribute change. */
+                if (lli->lli_flags & LLIF_EPOCH_PENDING) {
+                        spin_unlock(&lli->lli_lock);
+                        goto out;
+                }
+        }
         
-        /* There is already 1 pending DONE_WRITE, do not create another one --
-         * close epoch with no attribute change. */
-        if (lli->lli_flags & LLIF_EPOCH_PENDING)
-                goto out;
-        
+        spin_unlock(&lli->lli_lock);
         op_data->flags |= MF_SOM_CHANGE;
 
         /* Check if Size-on-MDS attributes are valid. */
-        if ((lli->lli_flags & LLIF_MDS_SIZE_LOCK) || !ll_local_size(inode)) {
+        LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
+        if (!ll_local_size(inode)) {
                 /* Send Size-on-MDS Attributes if valid. */
                 op_data->attr.ia_valid |= ATTR_MTIME_SET | ATTR_CTIME_SET |
                                           ATTR_SIZE | ATTR_BLOCKS;
@@ -172,9 +194,8 @@ out:
 /* Send a DONE_WRITING rpc, pack Size-on-MDS attributes into it, if possible */
 static void ll_done_writing(struct inode *inode)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
+        struct obd_client_handle *och = NULL;
         struct md_op_data *op_data;
-        struct obd_client_handle *och;
         int rc;
         ENTRY;
 
@@ -185,16 +206,7 @@ static void ll_done_writing(struct inode *inode)
                 return;
         }
 
-        spin_lock(&lli->lli_lock);
-        LASSERT(lli->lli_flags & LLIF_SOM_DIRTY);
-        
-        och = lli->lli_pending_och;
-        lli->lli_pending_och = NULL;
-        lli->lli_flags &= ~(LLIF_DONE_WRITING | LLIF_EPOCH_PENDING);
-        ll_epoch_close(inode, op_data);
-        lli->lli_flags &= ~LLIF_SOM_DIRTY;
-        spin_unlock(&lli->lli_lock);
-        
+        ll_epoch_close(inode, op_data, &och, LLIF_DONE_WRITING);
         ll_pack_inode2opdata(inode, op_data, &och->och_fh);
 
         rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, och);

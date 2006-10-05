@@ -892,7 +892,7 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
 
         if (cmd & OBD_BRW_WRITE) {
                 if (llap_write_complete(page->mapping->host, llap))
-                        ll_queue_done_writing(page->mapping->host);
+                        ll_queue_done_writing(page->mapping->host, 0);
         }
 
         if (PageWriteback(page)) {
@@ -943,7 +943,7 @@ void ll_removepage(struct page *page)
         }
 
         if (llap_write_complete(inode, llap))
-                ll_queue_done_writing(inode);
+                ll_queue_done_writing(inode, 0);
 
         rc = obd_teardown_async_page(exp, ll_i2info(inode)->lli_smd, NULL,
                                      llap->llap_cookie);

@@ -507,7 +507,8 @@ int ll_release_openhandle(struct dentry *, struct lookup_intent *);
 int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct file *file);
 int ll_md_real_close(struct inode *inode, int flags);
-void ll_epoch_close(struct inode *inode, struct md_op_data *op_data);
+void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
+                    struct obd_client_handle **och, unsigned long flags);
 int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh);
 int ll_inode_getattr(struct inode *inode, struct obdo *obdo);
 int ll_md_setattr(struct inode *inode, struct md_op_data *op_data);
@@ -609,9 +610,8 @@ struct ll_close_queue {
 
 void llap_write_pending(struct inode *inode, struct ll_async_page *llap);
 int llap_write_complete(struct inode *inode, struct ll_async_page *llap);
-int ll_inode_dirty(struct inode *inode);
-void ll_queue_done_writing(struct inode *inode);
-void ll_init_done_writing(struct inode *inode);
+int ll_inode_dirty(struct inode *inode, unsigned long flags);
+void ll_queue_done_writing(struct inode *inode, unsigned long flags);
 void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 

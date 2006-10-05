@@ -68,36 +68,19 @@ void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
 static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
                              struct obd_client_handle *och)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        int new_pending = 0;
         ENTRY;
         
         op_data->attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
                                  ATTR_MTIME_SET | ATTR_CTIME_SET;
 
-        if (!S_ISREG(inode->i_mode)) {
-                op_data->attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
+        if (!(och->och_flags & FMODE_WRITE))
                 goto out;
-        }
         
-        spin_lock(&lli->lli_lock);
-        if (!(list_empty(&lli->lli_pending_write_llaps)) && 
-            !(lli->lli_flags & LLIF_EPOCH_PENDING)) {
-                LASSERT(lli->lli_pending_och == NULL);
-                /* Inode is dirty and there is no pending write done request
-                 * yet, DONE_WRITE is to be sent later. */
-                lli->lli_flags |= LLIF_EPOCH_PENDING;
-                lli->lli_pending_och = och;
-                new_pending = 1;
-        } else {
-                ll_epoch_close(inode, op_data);
-        }
-        spin_unlock(&lli->lli_lock);
+        if (!S_ISREG(inode->i_mode))
+                op_data->attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
+        else
+                ll_epoch_close(inode, op_data, &och, 0);
 
-        if (new_pending) {
-                inode = igrab(inode);
-                LASSERT(inode);
-        }
 out:
         ll_pack_inode2opdata(inode, op_data, &och->och_fh);
         EXIT;
@@ -138,8 +121,9 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                 GOTO(out, rc = -ENOMEM);
 
         ll_prepare_close(inode, op_data, och);
-        epoch_close = (op_data->flags & MF_EPOCH_CLOSE) || 
-                      !S_ISREG(inode->i_mode);
+        epoch_close = (och->och_flags & FMODE_WRITE) && 
+                      ((op_data->flags & MF_EPOCH_CLOSE) || 
+                       !S_ISREG(inode->i_mode));
         rc = md_close(md_exp, op_data, och, &req);
 
         ll_finish_md_op_data(op_data);
@@ -159,8 +143,8 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                        inode->i_ino, rc);
         }
         
-        if (!epoch_close)
-                ll_init_done_writing(inode);
+        if (!epoch_close && (och->och_flags & FMODE_WRITE))
+                ll_queue_done_writing(inode, LLIF_DONE_WRITING);
 
         if (rc == 0) {
                 rc = ll_objects_destroy(req, inode);
@@ -395,6 +379,7 @@ static int ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
         memcpy(&och->och_fh, &body->handle, sizeof(body->handle));
         och->och_magic = OBD_CLIENT_HANDLE_MAGIC;
         och->och_fid = &lli->lli_fid;
+        och->och_flags = it->it_flags;
         lli->lli_ioepoch = body->ioepoch;
 
         return md_set_open_replay_data(md_exp, och, req);
