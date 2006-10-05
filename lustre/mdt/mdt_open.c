@@ -620,7 +620,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
 int mdt_pin(struct mdt_thread_info* info)
 {
         ENTRY;
-        RETURN(-EOPNOTSUPP);
+        RETURN(err_serious(-EOPNOTSUPP));
 }
 
 /* Cross-ref request. Currently it can only be a pure open (w/o create) */
@@ -696,7 +696,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         /* TODO: JOIN file */
         if (create_flags & MDS_OPEN_JOIN_FILE) {
                 CERROR("JOIN file will be supported soon\n");
-                GOTO(out, result = -EOPNOTSUPP);
+                GOTO(out, result = err_serious(-EOPNOTSUPP));
         }
 
         CDEBUG(D_INODE, "I am going to open "DFID"/("DFID":%s) "
@@ -725,7 +725,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         }
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
-                GOTO(out, result = -ENOMEM);
+                GOTO(out, result = err_serious(-ENOMEM));
 
         mdt_set_disposition(info, ldlm_rep,
                             (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
@@ -957,7 +957,7 @@ int mdt_close(struct mdt_thread_info *info)
         /* Close may come with the Size-on-MDS update. Unpack it. */
         rc = mdt_close_unpack(info);
         if (rc)
-                RETURN(rc);
+                RETURN(err_serious(rc));
 
         LASSERT(info->mti_epoch);
 
@@ -983,7 +983,8 @@ int mdt_close(struct mdt_thread_info *info)
                 ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
                 repbody->eadatasize = 0;
                 repbody->aclsize = 0;
-        }
+        } else
+                rc = err_serious(rc);
 
         med = &mdt_info_req(info)->rq_export->exp_mdt_data;
 
@@ -994,7 +995,7 @@ int mdt_close(struct mdt_thread_info *info)
                 CDEBUG(D_INODE, "no handle for file close: fid = "DFID
                        ": cookie = "LPX64"\n", PFID(info->mti_rr.rr_fid1),
                        info->mti_epoch->handle.cookie);
-                rc = -ESTALE;
+                rc = err_serious(-ESTALE);
         } else {
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);
@@ -1012,7 +1013,7 @@ int mdt_close(struct mdt_thread_info *info)
                 mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
-                RETURN(-ENOMEM);
+                RETURN(err_serious(-ENOMEM));
 
         RETURN(rc ? rc : ret);
 }
@@ -1027,7 +1028,7 @@ int mdt_done_writing(struct mdt_thread_info *info)
 
         rc = req_capsule_pack(&info->mti_pill);
         if (rc)
-                RETURN(rc);
+                RETURN(err_serious(rc));
 
         repbody = req_capsule_server_get(&info->mti_pill,
                                          &RMF_MDT_BODY);
@@ -1037,7 +1038,7 @@ int mdt_done_writing(struct mdt_thread_info *info)
         /* Done Writing may come with the Size-on-MDS update. Unpack it. */
         rc = mdt_close_unpack(info);
         if (rc)
-                RETURN(rc);
+                RETURN(err_serious(rc));
 
         med = &mdt_info_req(info)->rq_export->exp_mdt_data;
         spin_lock(&med->med_open_lock);

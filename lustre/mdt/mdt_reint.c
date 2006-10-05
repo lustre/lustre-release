@@ -302,7 +302,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         ENTRY;
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
-                RETURN(-ESTALE);
+                RETURN(err_serious(-ESTALE));
 
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFREG:
@@ -323,7 +323,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
                 break;
         }
         default:
-                rc = -EOPNOTSUPP;
+                rc = err_serious(-EOPNOTSUPP);
         }
         RETURN(rc);
 }
@@ -347,7 +347,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                   rr->rr_name);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
-                GOTO(out, rc = -ENOENT);
+                GOTO(out, rc = err_serious(-ENOENT));
 
         /* step 1: lock the parent */
         parent_lh = &info->mti_lh[MDT_LH_PARENT];
@@ -441,7 +441,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                   PFID(rr->rr_fid1), PFID(rr->rr_fid2), rr->rr_name);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
-                RETURN(-ENOENT);
+                RETURN(err_serious(-ENOENT));
 
         /* step 1: lock the source */
         lhs = &info->mti_lh[MDT_LH_PARENT];

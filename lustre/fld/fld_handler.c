@@ -174,7 +174,7 @@ static int fld_req_handle(struct ptlrpc_request *req,
         struct lu_site *site;
         struct md_fld *in;
         struct md_fld *out;
-        int rc = -EPROTO;
+        int rc;
         __u32 *opc;
         ENTRY;
 
@@ -182,23 +182,23 @@ static int fld_req_handle(struct ptlrpc_request *req,
 
         rc = req_capsule_pack(&info->fti_pill);
         if (rc)
-                RETURN(rc);
+                RETURN(err_serious(rc));
 
         opc = req_capsule_client_get(&info->fti_pill, &RMF_FLD_OPC);
         if (opc != NULL) {
                 in = req_capsule_client_get(&info->fti_pill, &RMF_FLD_MDFLD);
                 if (in == NULL)
-                        RETURN(-EPROTO);
+                        RETURN(err_serious(-EPROTO));
                 out = req_capsule_server_get(&info->fti_pill, &RMF_FLD_MDFLD);
                 if (out == NULL)
-                        RETURN(-EPROTO);
+                        RETURN(err_serious(-EPROTO));
                 *out = *in;
 
                 rc = fld_server_handle(site->ls_server_fld,
                                        req->rq_svc_thread->t_env,
                                        *opc, out, info);
         } else
-                rc = -EPROTO;
+                rc = err_serious(-EPROTO);
 
         RETURN(rc);
 }

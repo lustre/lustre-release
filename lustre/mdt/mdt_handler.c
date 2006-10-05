@@ -163,7 +163,7 @@ static int mdt_getstatus(struct mdt_thread_info *info)
         ENTRY;
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
-                RETURN(-ENOMEM);
+                RETURN(err_serious(-ENOMEM));
 
         body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         rc = next->md_ops->mdo_root_get(info->mti_env, next, &body->fid1);
@@ -206,7 +206,7 @@ static int mdt_statfs(struct mdt_thread_info *info)
 
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
-                rc = -ENOMEM;
+                rc = err_serious(-ENOMEM);
         } else {
                 osfs = req_capsule_server_get(&info->mti_pill,&RMF_OBD_STATFS);
                 /* XXX max_age optimisation is needed here. See mds_statfs */
@@ -214,7 +214,6 @@ static int mdt_statfs(struct mdt_thread_info *info)
                                               &info->mti_u.ksfs);
                 statfs_pack(osfs, &info->mti_u.ksfs);
         }
-
         RETURN(rc);
 }
 
@@ -286,7 +285,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         ENTRY;
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK))
-                RETURN(-ENOMEM);
+                RETURN(err_serious(-ENOMEM));
 
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
         repbody->eadatasize = 0;
@@ -546,7 +545,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         LASSERT(info->mti_object != NULL);
         name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
         if (name == NULL)
-                RETURN(-EFAULT);
+                RETURN(err_serious(-EFAULT));
 
         CDEBUG(D_INODE, "getattr with lock for "DFID"/%s, ldlm_rep = %p\n",
                         PFID(mdt_object_fid(parent)), name, ldlm_rep);
@@ -690,7 +689,7 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
 
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
-                GOTO(out, rc = -EFAULT);
+                GOTO(out, rc = err_serious(-EFAULT));
 
         rc = mdt_init_ucred(info, reqbody);
         if (rc)
@@ -726,13 +725,19 @@ static int mdt_connect(struct mdt_thread_info *info)
                 LASSERT(req->rq_export != NULL);
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
                 rc = mdt_init_idmap(info);
-        }
+        } else
+                rc = err_serious(rc);
         return rc;
 }
 
 static int mdt_disconnect(struct mdt_thread_info *info)
 {
-        return target_handle_disconnect(mdt_info_req(info));
+        int rc;
+        
+        rc = target_handle_disconnect(mdt_info_req(info));
+        if (rc)
+                rc = err_serious(rc);
+        return rc;
 }
 
 static int mdt_sendpage(struct mdt_thread_info *info,
@@ -867,11 +872,11 @@ static int mdt_writepage(struct mdt_thread_info *info)
 
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
-                RETURN(-EFAULT);
+                RETURN(err_serious(-EFAULT));
 
         desc = ptlrpc_prep_bulk_exp (req, 1, BULK_GET_SINK, MDS_BULK_PORTAL);
         if (!desc)
-                RETURN(-ENOMEM);
+                RETURN(err_serious(-ENOMEM));
 
         /* allocate the page for the desc */
         page = alloc_pages(GFP_KERNEL, 0);
@@ -946,12 +951,12 @@ static int mdt_readpage(struct mdt_thread_info *info)
         ENTRY;
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK))
-                RETURN(-ENOMEM);
+                RETURN(err_serious(-ENOMEM));
 
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL || repbody == NULL)
-                RETURN(-EFAULT);
+                RETURN(err_serious(-EFAULT));
 
         rc = mdt_init_ucred(info, reqbody);
         if (rc)
@@ -1028,7 +1033,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
         rc = req_capsule_pack(pill);
         if (rc != 0) {
                 CERROR("Can't pack response, rc %d\n", rc);
-                RETURN(rc);
+                RETURN(err_serious(rc));
         }
 
         /*
@@ -1037,12 +1042,12 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
          * and will get oops.
          */
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK))
-                RETURN(-EFAULT);
+                RETURN(err_serious(-EFAULT));
 
         rc = mdt_reint_unpack(info, op);
         if (rc != 0) {
                 CERROR("Can't unpack reint, rc %d\n", rc);
-                RETURN(rc);
+                RETURN(err_serious(rc));
         }
 
         rc = mdt_init_ucred_reint(info);
@@ -1079,15 +1084,17 @@ static long mdt_reint_opcode(struct mdt_thread_info *info,
         __u32 *ptr;
         long opc;
 
-        opc = -EFAULT;
+        opc = err_serious(-EFAULT);
         ptr = req_capsule_client_get(&info->mti_pill, &RMF_REINT_OPC);
         if (ptr != NULL) {
                 opc = *ptr;
                 DEBUG_REQ(D_INODE, mdt_info_req(info), "reint opt = %ld", opc);
                 if (opc < REINT_MAX && fmt[opc] != NULL)
                         req_capsule_extend(&info->mti_pill, fmt[opc]);
-                else
+                else {
                         CERROR("Unsupported opc: %ld\n", opc);
+                        opc = err_serious(opc);
+                }
         }
         return opc;
 }
@@ -1149,16 +1156,18 @@ static int mdt_sync(struct mdt_thread_info *info)
 
         body = req_capsule_client_get(pill, &RMF_MDT_BODY);
         if (body == NULL)
-                RETURN(-EINVAL);
+                RETURN(err_serious(-EINVAL));
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SYNC_PACK))
-                RETURN(-ENOMEM);
+                RETURN(err_serious(-ENOMEM));
 
         if (fid_seq(&body->fid1) == 0) {
                 /* sync the whole device */
                 rc = req_capsule_pack(pill);
                 if (rc == 0)
                         rc = mdt_device_sync(info);
+                else 
+                        rc = err_serious(rc);
         } else {
                 /* sync an object */
                 rc = mdt_unpack_req_pack_rep(info, HABEO_CORPUS|HABEO_REFERO);
@@ -1181,19 +1190,20 @@ static int mdt_sync(struct mdt_thread_info *info)
                                         mdt_body_reverse_idmap(info, body);
                                 }
                         }
-                }
+                } else
+                        rc = err_serious(rc);
         }
         RETURN(rc);
 }
 
 static int mdt_quotacheck_handle(struct mdt_thread_info *info)
 {
-        return -EOPNOTSUPP;
+        return err_serious(-EOPNOTSUPP);
 }
 
 static int mdt_quotactl_handle(struct mdt_thread_info *info)
 {
-        return -EOPNOTSUPP;
+        return err_serious(-EOPNOTSUPP);
 }
 
 /*
@@ -1204,17 +1214,19 @@ static int mdt_obd_ping(struct mdt_thread_info *info)
         int rc;
         ENTRY;
         rc = target_handle_ping(mdt_info_req(info));
+        if (rc < 0)
+                rc = err_serious(rc);
         RETURN(rc);
 }
 
 static int mdt_obd_log_cancel(struct mdt_thread_info *info)
 {
-        return -EOPNOTSUPP;
+        return err_serious(-EOPNOTSUPP);
 }
 
 static int mdt_obd_qc_callback(struct mdt_thread_info *info)
 {
-        return -EOPNOTSUPP;
+        return err_serious(-EOPNOTSUPP);
 }
 
 
@@ -1248,7 +1260,7 @@ static int mdt_enqueue(struct mdt_thread_info *info)
         rc = ldlm_handle_enqueue0(info->mti_mdt->mdt_namespace,
                                   req, info->mti_dlm_req, &cbs);
         info->mti_fail_id = OBD_FAIL_LDLM_REPLY;
-        return rc ? : req->rq_status;
+        return rc ? err_serious(rc) : req->rq_status;
 }
 
 static int mdt_convert(struct mdt_thread_info *info)
@@ -1259,21 +1271,21 @@ static int mdt_convert(struct mdt_thread_info *info)
         LASSERT(info->mti_dlm_req);
         req = mdt_info_req(info);
         rc = ldlm_handle_convert0(req, info->mti_dlm_req);
-        return rc ? : req->rq_status;
+        return rc ? err_serious(rc) : req->rq_status;
 }
 
 static int mdt_bl_callback(struct mdt_thread_info *info)
 {
         CERROR("bl callbacks should not happen on MDS\n");
         LBUG();
-        return -EOPNOTSUPP;
+        return err_serious(-EOPNOTSUPP);
 }
 
 static int mdt_cp_callback(struct mdt_thread_info *info)
 {
         CERROR("cp callbacks should not happen on MDS\n");
         LBUG();
-        return -EOPNOTSUPP;
+        return err_serious(-EOPNOTSUPP);
 }
 
 /*
@@ -1566,7 +1578,7 @@ static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
 static int mdt_req_handle(struct mdt_thread_info *info,
                           struct mdt_handler *h, struct ptlrpc_request *req)
 {
-        int   rc;
+        int   rc, serious = 0;
         __u32 flags;
 
         ENTRY;
@@ -1605,6 +1617,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
         if (rc == 0 && flags & MUTABOR &&
             req->rq_export->exp_connect_flags & OBD_CONNECT_RDONLY)
+                /* should it be rq_status? */
                 rc = -EROFS;
 
         if (rc == 0 && flags & HABEO_CLAVIS) {
@@ -1624,23 +1637,27 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 }
         }
 
-        if (rc == 0)
+        if (rc == 0) {
                 /*
-                 * Process request.
+                 * Process request, there can be two types of rc:
+                 * 1) errors with msg unpack/pack, other failures outside the
+                 * operation itself. This is counted as serious errors;
+                 * 2) errors during fs operation, should be placed in rq_status
+                 * only
                  */
                 rc = h->mh_act(info);
+                serious = is_serious(rc);
+                rc = clear_serious(rc);
+        } else
+                serious = 1;
 
         req->rq_status = rc;
 
         /*
-         * It is not correct to zero @rc out here unconditionally. First of all,
-         * for error cases, we do not need target_committed_to_req(req). Second
-         * reason is that, @rc is passed to target_send_reply() and used for
-         * figuring out what should be done about reply in capricular case. We
-         * only zero it out for ELDLM_* codes which > 0 because they do not
-         * support invariant of marking req as difficult only in case of error.
+         * ELDLM_* codes which > 0 should be in rq_status only as well as
+         * all non-serious errors.
          */
-        if (rc > 0)
+        if (rc > 0 || !serious)
                 rc = 0;
 
         LASSERT(current->journal_info == NULL);
@@ -1655,7 +1672,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         }
 
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
-        if (h->mh_opc != MDS_DISCONNECT)
+        if (rc == 0 && h->mh_opc != MDS_DISCONNECT)
                 target_committed_to_req(req);
 
         RETURN(rc);
@@ -1793,6 +1810,13 @@ static int mdt_reply(struct ptlrpc_request *req, int rc,
                      struct mdt_thread_info *info)
 {
         ENTRY;
+        
+#if 0
+        if (req->rq_reply_state == NULL && rc == 0) {
+                req->rq_status = rc;
+                lustre_pack_reply(req, 1, NULL, NULL);
+        }
+#endif
         target_send_reply(req, rc, info->mti_fail_id);
         RETURN(0);
 }
@@ -1823,12 +1847,12 @@ static int mdt_handle0(struct ptlrpc_request *req,
                                              supported);
                         if (h != NULL) {
                                 rc = mdt_req_handle(info, h, req);
+                                rc = mdt_reply(req, rc, info);
                         } else {
                                 req->rq_status = -ENOTSUPP;
                                 rc = ptlrpc_error(req);
                                 RETURN(rc);
                         }
-                        rc = mdt_reply(req, rc, info);
                 }
         } else
                 CERROR(LUSTRE_MDT_NAME" drops mal-formed request\n");
@@ -2157,7 +2181,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
-                GOTO(out, rc = -EFAULT);
+                GOTO(out, rc = err_serious(-EFAULT));
 
         rc = mdt_init_ucred(info, reqbody);
         if (rc)
@@ -2213,7 +2237,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         if (mdt_it_flavor[opcode].it_reint != opc) {
                 CERROR("Reint code %ld doesn't match intent: %d\n",
                        opc, opcode);
-                RETURN(-EPROTO);
+                RETURN(err_serious(-EPROTO));
         }
 
         /* Get lock from request for possible resent case. */
@@ -2223,13 +2247,11 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
 
         rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         if (rep == NULL)
-                RETURN(-EFAULT);
+                RETURN(err_serious(-EFAULT));
 
         /* MDC expects this in any case */
         if (rc != 0)
                 mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
-
-        rep->lock_policy_res2 = rc;
 
         /* cross-ref case, the lock should be returned to the client */
         if (rc == -EREMOTE) {
@@ -2237,7 +2259,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                 rep->lock_policy_res2 = 0;
                 RETURN(mdt_intent_lock_replace(info, lockp, NULL, lhc, flags));
         }
-        rep->lock_policy_res2 = rc;
+        rep->lock_policy_res2 = clear_serious(rc);
 
         RETURN(ELDLM_LOCK_ABORTED);
 }
@@ -2348,11 +2370,13 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                         if (rc == 0)
                                 rc = ELDLM_OK;
                 } else
-                        rc = -EFAULT;
+                        rc = err_serious(-EFAULT);
         } else {
                 /* No intent was provided */
                 LASSERT(pill->rc_fmt == &RQF_LDLM_ENQUEUE);
                 rc = req_capsule_pack(pill);
+                if (rc)
+                        rc = err_serious(rc);
         }
         RETURN(rc);
 }

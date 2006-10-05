@@ -326,7 +326,7 @@ static int seq_req_handle(struct ptlrpc_request *req, const struct lu_env *env,
 			
         rc = req_capsule_pack(&info->sti_pill);
         if (rc)
-                RETURN(rc);
+                RETURN(err_serious(rc));
 
         opc = req_capsule_client_get(&info->sti_pill,
                                      &RMF_SEQ_OPC);
@@ -334,7 +334,7 @@ static int seq_req_handle(struct ptlrpc_request *req, const struct lu_env *env,
                 out = req_capsule_server_get(&info->sti_pill,
                                              &RMF_SEQ_RANGE);
                 if (out == NULL)
-                        RETURN(-EPROTO);
+                        RETURN(err_serious(-EPROTO));
 
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                         in = req_capsule_client_get(&info->sti_pill,
@@ -345,7 +345,7 @@ static int seq_req_handle(struct ptlrpc_request *req, const struct lu_env *env,
 
                 rc = seq_server_handle(site, env, *opc, in, out);
         } else
-                rc = -EPROTO;
+                rc = err_serious(-EPROTO);
 
         RETURN(rc);
 }

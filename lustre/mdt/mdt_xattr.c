@@ -144,11 +144,11 @@ int mdt_getxattr(struct mdt_thread_info *info)
 
         rc = mdt_getxattr_pack_reply(info);
         if (rc < 0)
-                RETURN(rc);
+                RETURN(err_serious(rc));
 
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
-                RETURN(-EFAULT);
+                RETURN(err_serious(-EFAULT));
 
         rc1 = mdt_init_ucred(info, reqbody);
         if (rc1)
@@ -157,7 +157,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         /*No EA, just go back*/
         if (rc == 0)
-                GOTO(no_xattr, rc);
+                GOTO(no_xattr, err_serious(rc));
 
         buf = &info->mti_buf;
         buf->lb_buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
@@ -272,15 +272,15 @@ int mdt_setxattr(struct mdt_thread_info *info)
         CDEBUG(D_INODE, "setxattr "DFID"\n", PFID(&body->fid1));
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
-                RETURN(-ENOMEM);
+                RETURN(err_serious(-ENOMEM));
 
         rc = mdt_setxattr_pack_reply(info);
         if (rc < 0)
-                RETURN(rc);
+                RETURN(err_serious(rc));
 
         reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
-                RETURN(-EFAULT);
+                RETURN(err_serious(-EFAULT));
 
         rc = mdt_init_ucred(info, reqbody);
         if (rc)
@@ -289,7 +289,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
         /* various sanity check for xattr name */
         xattr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (!xattr_name)
-                GOTO(out, rc = -EFAULT);
+                GOTO(out, rc = err_serious(-EFAULT));
 
         CDEBUG(D_INODE, "%s xattr %s\n",
                   body->valid & OBD_MD_FLXATTR ? "set" : "remove", xattr_name);
