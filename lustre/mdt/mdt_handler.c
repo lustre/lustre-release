@@ -381,6 +381,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         } else {
                                 repbody->aclsize = rc;
                                 repbody->valid |= OBD_MD_FLACL;
+                                rc = 0;
                         }
                 }
         }
