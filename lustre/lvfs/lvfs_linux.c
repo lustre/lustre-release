@@ -551,8 +551,11 @@ EXPORT_SYMBOL(lvfs_memdbg_find);
 
 int lvfs_memdbg_check_insert(struct obd_mem_track *mt)
 {
+        struct obd_mem_track *tmp;
+        
         spin_lock(&obd_memlist_lock);
-        if (!__lvfs_memdbg_find(mt->mt_ptr)) {
+        tmp = __lvfs_memdbg_find(mt->mt_ptr);
+        if (tmp == NULL) {
                 __lvfs_memdbg_insert(mt);
                 spin_unlock(&obd_memlist_lock);
                 return 1;
@@ -610,9 +613,9 @@ void lvfs_memdbg_show(void)
                                 header = 1;
                         }
                         mt = hlist_entry(node, struct obd_mem_track, mt_hash);
-                        CWARN("  [%s] ptr: 0x%p, size: %d, src at \"%s\"\n",
+                        CWARN("  [%s] ptr: 0x%p, size: %d, src at %s\n",
                               ((mt->mt_flags & OBD_MT_WRONG_SIZE) ?
-                               "wrong ck size" : "leaked memory"),
+                               "wrong size" : "leaked memory"),
                               mt->mt_ptr, mt->mt_size, mt->mt_loc);
                 }
         }

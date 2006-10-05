@@ -636,8 +636,8 @@ static void mdc_commit_open(struct ptlrpc_request *req)
 static void mdc_replay_open(struct ptlrpc_request *req)
 {
         struct mdc_open_data *mod = req->rq_cb_data;
-        struct obd_client_handle *och;
         struct ptlrpc_request *close_req;
+        struct obd_client_handle *och;
         struct lustre_handle old;
         struct mdt_body *body;
         ENTRY;
@@ -677,7 +677,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                                        sizeof(*epoch));
                 LASSERT(epoch);
                 if (och != NULL)
-                        LASSERT(!memcmp(&old, &epoch->handle, sizeof old));
+                        LASSERT(!memcmp(&old, &epoch->handle, sizeof(old)));
                 DEBUG_REQ(D_HA, close_req, "updating close body with new fh");
                 memcpy(&epoch->handle, &body->handle,
                        sizeof(epoch->handle));

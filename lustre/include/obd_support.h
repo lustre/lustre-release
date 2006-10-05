@@ -336,6 +336,7 @@ __put_mem_track(void *ptr, int size,
                 CWARN("Ptr 0x%p is not allocated. Attempt to free "
                       "not allocated memory at %s:%d\n", ptr,
                       file, line);
+                LBUG();
                 return 0;
         } else {
                 if (mt->mt_size != size) {
