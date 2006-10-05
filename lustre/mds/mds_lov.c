@@ -636,9 +636,10 @@ static int mds_propagate_capa_keys(struct mds_obd *mds)
         struct lustre_capa_key *key;
         int i, rc = 0;
 
-        if (!mds->mds_capa_keys)
-                return 0;
         ENTRY;
+
+        if (!mds->mds_capa_keys)
+                RETURN(0);
 
         for (i = 0; i < 2; i++) {
                 key = &mds->mds_capa_keys[i];
@@ -684,7 +685,7 @@ static int __mds_lov_synchronize(void *data)
         if (rc != 0)
                 GOTO(out, rc);
         mgi.group = FILTER_GROUP_MDS0 + mds->mds_id;
-        mgi.uuid = uuid; 
+        mgi.uuid = uuid;
         rc = obd_set_info_async(mds->mds_osc_exp, strlen(KEY_MDS_CONN),
                                 KEY_MDS_CONN, sizeof(mgi), &mgi, NULL);
         if (rc != 0)
