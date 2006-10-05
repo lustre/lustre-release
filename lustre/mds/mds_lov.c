@@ -635,6 +635,9 @@ static int mds_propagate_capa_keys(struct mds_obd *mds)
 {
         struct lustre_capa_key *key;
         int i, rc = 0;
+
+        if (!mds->mds_capa_keys)
+                return 0;
         ENTRY;
 
         for (i = 0; i < 2; i++) {
