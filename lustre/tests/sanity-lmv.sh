@@ -371,17 +371,16 @@ test_4a() {
 ## this test is very time-consuming, don't run it by default
 #run_test 4a " FIDS/ nlink overflow test  ============================="
 
-
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME
 
 log "cleanup: ======================================================"
 if [ "`mount | grep ^$NAME`" ]; then
-	rm -rf $DIR/[Rdfs][1-9]*
-	if [ "$I_MOUNTED" = "yes" ]; then
-		sh llmountcleanup.sh || error
-	fi
+    rm -rf $DIR/[Rdfs][1-9]*
+fi
+if [ "$I_MOUNTED" = "yes" ]; then
+    cleanupall -f || error "cleanup failed"
 fi
 
 echo '=========================== finished ==============================='

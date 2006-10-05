@@ -3162,7 +3162,7 @@ if [ "`mount | grep ^$NAME`" ]; then
     rm -rf $DIR/[Rdfs][1-9]*
 fi
 if [ "$I_MOUNTED" = "yes" ]; then
-    cleanupall -f || error "cleanup failed"
+#    cleanupall -f || error "cleanup failed"
 fi
 
 

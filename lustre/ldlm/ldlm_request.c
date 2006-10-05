@@ -848,7 +848,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
                  * won't see this flag and call l_blocking_ast */
                 lock->l_flags |= LDLM_FL_CBPENDING;
 
-                /* We can't re-add to l_lru as it confuses the refcounting in
+                /* We can't re-add to l_lru as it confuses refcounting in
                  * ldlm_lock_remove_from_lru() if an AST arrives after we drop
                  * ns_lock below. We use l_tmp and can't use l_pending_chain as
                  * it is used both on server and client nevertheles bug 5666

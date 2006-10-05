@@ -169,7 +169,7 @@ int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
              ldlm_policy_data_t *policy,
              struct ldlm_res_id *res_id)
 {
-        int flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
+        int flags = LDLM_FL_ATOMIC_CB;
         int rc;
 
         LASSERT(ns != NULL);
