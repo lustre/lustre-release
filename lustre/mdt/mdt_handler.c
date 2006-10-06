@@ -823,21 +823,22 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
         info->mti_no_need_trans = 1;
         kmap(page);
         dp = page_address(page);
-        for (ent = lu_dirent_start(dp); ent != NULL && offset < size;
+        offset = (int)((__u32)lu_dirent_start(dp) - (__u32)dp);
+
+        for (ent = lu_dirent_start(dp); ent != NULL;
                           ent = lu_dirent_next(ent)) {
                 struct lu_fid *lf = &ent->lde_fid;
                 char *name;
-                offset = (int)((__u32)ent - (__u32)dp);
-                
-                if (!strncmp(ent->lde_name, ".", ent->lde_namelen) || 
-                    !strncmp(ent->lde_name, "..", ent->lde_namelen))
-                        continue;
 
-                is_dir = le32_to_cpu(ent->lde_hash) & MAX_HASH_HIGHEST_BIT;
+                offset += ent->lde_reclen;
+                if (ent->lde_reclen == 0 || ent->lde_namelen == 0)
+                        continue;
                 
+                if (offset > size)
+                        break;
+                is_dir = le32_to_cpu(ent->lde_hash) & MAX_HASH_HIGHEST_BIT;
                 OBD_ALLOC(name, ent->lde_namelen + 1);
                 memcpy(name, ent->lde_name, ent->lde_namelen);
-                CDEBUG(D_INFO, "insert name %s offset %d \n", name, offset);
                 rc = mdo_name_insert(info->mti_env,
                                      md_object_next(&object->mot_obj),
                                      name, lf, is_dir);
@@ -3507,6 +3508,7 @@ static int mdt_object_init(const struct lu_env *env, struct lu_object *o)
                 lu_object_add(o, below);
         } else
                 rc = -ENOMEM;
+
         RETURN(rc);
 }
 
