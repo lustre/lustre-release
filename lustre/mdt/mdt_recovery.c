@@ -976,6 +976,7 @@ void mdt_fs_cleanup(const struct lu_env *env, struct mdt_device *mdt)
         dt_txn_callback_del(mdt->mdt_bottom, &mdt->mdt_txn_cb);
 
         class_disconnect_exports(obd); /* cleans up client info too */
+        target_stop_recovery_thread(obd);
         target_cleanup_recovery(obd);
         if (mdt->mdt_last_rcvd)
                 lu_object_put(env, &mdt->mdt_last_rcvd->do_lu);

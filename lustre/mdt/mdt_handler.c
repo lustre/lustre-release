@@ -3129,7 +3129,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         struct lu_site    *ls = d->ld_site;
 
         ENTRY;
-        target_cleanup_recovery(m->mdt_md_dev.md_lu_dev.ld_obd);
 
         mdt_fs_cleanup(env, m);
 
