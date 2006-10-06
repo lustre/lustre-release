@@ -287,6 +287,20 @@ cleanup_krb5_env() {
     fi
 }
 
+mdsdevlabel() {
+    local num=$1
+    local device=`mdsdevname $num`
+    local label=`do_facet mds$num "e2label ${device}" | grep -v "CMD: "`
+    echo -n $label
+}
+
+ostdevlabel() {
+    local num=$1
+    local device=`ostdevname $num`
+    local label=`do_facet ost$num "e2label ${device}" | grep -v "CMD: "`
+    echo -n $label
+}
+
 # Facet functions
 # start facet device options 
 start() {

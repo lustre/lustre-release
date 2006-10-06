@@ -78,9 +78,8 @@ seq_get_width()
 }
 
 test_0c() {
-    local device=$(mdsdevname 1)
-    local label=`do_facet $SINGLEMDS "e2label ${device}" | grep -v "CMD: "`
-    [ -z "$label" ] && echo "No label for ${device}" && exit 1
+    local label=`mdsdevlabel 1`
+    [ -z "$label" ] && echo "No label for mds1" && exit 1
 
     replay_barrier $SINGLEMDS
     local sw=`seq_get_width $label`
