@@ -684,23 +684,6 @@ fi
 ])
 
 #
-# LC_CONFIG_CRYPTO
-# whether capa can be built (it needs crypto support)
-#
-AC_DEFUN([LC_CONFIG_CRYPTO],
-[
-	AC_MSG_CHECKING([whether CONFIG_CRYPTO and CONFIG_CRYPTO_HMAC turned on])
-	if test -f $LINUX_CONFIG && grep -q CONFIG_CRYPTO=y $LINUX_CONFIG \
-&& grep -q CONFIG_CRYPTO_HMAC=y $LINUX_CONFIG; then
-		AC_MSG_RESULT([yes])
-	else
-		AC_MSG_RESULT([no])
-		AC_MSG_ERROR([Crypto support is not enabled in kernel. \
-It is needed for capabilities support.])
-	fi
-])
-
-#
 # LC_CONFIG_LIBLUSTRE
 #
 # whether to build liblustre
