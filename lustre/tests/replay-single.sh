@@ -75,6 +75,11 @@ seq_get_width()
 }
 
 test_0c() {
+    if test $MDSCOUNT != 1; then
+            echo "Skipped, needs single mds config."
+            return 0
+    fi
+
     replay_barrier $SINGLEMDS
 
     local seq_width
@@ -84,7 +89,7 @@ test_0c() {
     seq_width=`seq_get_width`
     seq_set_width 1
     
-    # make sure that fld has created atleast one new 
+    # make sure that fld has created at least one new 
     # entry on server
     touch $DIR/$tfile || return 1
     seq_set_width $seq_width
