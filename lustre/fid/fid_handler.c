@@ -74,15 +74,19 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                "sequence client %s\n", seq->lss_name,
                cli->lcs_name);
 
-        /* asking client for new range, assign that range to ->seq_super and
-         * write seq state to backing store should be atomic. */
+        /*
+         * Asking client for new range, assign that range to ->seq_super and
+         * write seq state to backing store should be atomic.
+         */
         down(&seq->lss_sem);
 
-        /* assign controller */
+        /* Assign controller */
         seq->lss_cli = cli;
 
-        /* get new range from controller only if super-sequence is not yet
-         * initialized from backing store or something else. */
+        /*
+         * Get new range from controller only if super-sequence is not yet
+         * initialized from backing store or something else.
+         */
         if (range_is_zero(&seq->lss_super)) {
                 rc = seq_client_alloc_super(cli, env);
                 if (rc) {
@@ -110,8 +114,9 @@ int seq_server_set_cli(struct lu_server_seq *seq,
 }
 EXPORT_SYMBOL(seq_server_set_cli);
 
-/* on controller node, allocate new super sequence for regular sequence
- * server. */
+/*
+ * On controller node, allocate new super sequence for regular sequence server.
+ */
 static int __seq_server_alloc_super(struct lu_server_seq *seq,
                                     struct lu_range *in,
                                     struct lu_range *out,

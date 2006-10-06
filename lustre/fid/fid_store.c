@@ -91,14 +91,11 @@ int seq_store_write(struct lu_server_seq *seq,
                                                     seq_record_buf(info),
                                                     &pos, th, BYPASS_CAPA);
                 if (rc == sizeof(info->sti_record)) {
-                        if (seq->lss_type == LUSTRE_SEQ_SERVER) {
-                                CDEBUG(D_INFO|D_WARNING, "%s: Pool - "DRANGE"\n",
-                                       seq->lss_name, PRANGE(&seq->lss_super));
-                        } else {
-                                CDEBUG(D_INFO|D_WARNING, "%s: Space - "DRANGE
-                                       ", Pool - "DRANGE"\n", seq->lss_name,
-                                       PRANGE(&seq->lss_space), PRANGE(&seq->lss_super));
-                        }
+                        struct lu_range *r = (seq->lss_type == LUSTRE_SEQ_SERVER ?
+                                              &seq->lss_super : &seq->lss_space);
+                        
+                        CDEBUG(D_INFO|D_WARNING, "%s: Space - "DRANGE"\n",
+                               seq->lss_name, PRANGE(r));
                         rc = 0;
                 } else if (rc >= 0) {
                         rc = -EIO;
@@ -131,17 +128,14 @@ int seq_store_read(struct lu_server_seq *seq,
                                            BYPASS_CAPA);
 
         if (rc == sizeof(info->sti_record)) {
+                struct lu_range *r = (seq->lss_type == LUSTRE_SEQ_SERVER ?
+                                      &seq->lss_super : &seq->lss_space);
+                
                 range_le_to_cpu(&seq->lss_space, &info->sti_record.ssr_space);
                 range_le_to_cpu(&seq->lss_super, &info->sti_record.ssr_super);
 
-                if (seq->lss_type == LUSTRE_SEQ_SERVER) {
-                        CDEBUG(D_INFO|D_WARNING, "%s: Pool - "DRANGE"\n",
-                               seq->lss_name, PRANGE(&seq->lss_super));
-                } else {
-                        CDEBUG(D_INFO|D_WARNING, "%s: Space - "DRANGE", Pool - "
-                               DRANGE"\n", seq->lss_name, PRANGE(&seq->lss_space),
-                               PRANGE(&seq->lss_super));
-                }
+                CDEBUG(D_INFO|D_WARNING, "%s: Space - "DRANGE"\n",
+                       seq->lss_name, PRANGE(r));
                 rc = 0;
         } else if (rc == 0) {
                 rc = -ENODATA;
