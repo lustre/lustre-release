@@ -342,6 +342,10 @@ LB_LINUX_CONFIG([KMOD],[],[
 	AC_MSG_WARN([])
 ])
 
+LB_LINUX_CONFIG([CRYPTO],[],[
+	AC_MSG_ERROR([Lustre require that CONFIG_CRYPTO is enabled in your kernel.])
+])
+
 #LB_LINUX_CONFIG_BIG_STACK
 
 # LNet tests
