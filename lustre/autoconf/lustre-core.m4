@@ -680,16 +680,24 @@ if test x$enable_gss == xyes; then
 
 	AC_SUBST(GSSAPI_LIBS)
 	AC_KERBEROS_V5
+fi
+])
 
+#
+# LC_CONFIG_CRYPTO
+# whether capa can be built (it needs crypto support)
+#
+AC_DEFUN([LC_CONFIG_CRYPTO],
+[
 	AC_MSG_CHECKING([whether CONFIG_CRYPTO and CONFIG_CRYPTO_HMAC turned on])
 	if test -f $LINUX/.config && grep -q CONFIG_CRYPTO=y $LINUX/.config \
 && grep -q CONFIG_CRYPTO_HMAC=y $LINUX/.config; then
 		AC_MSG_RESULT([yes])
 	else
 		AC_MSG_RESULT([no])
-		AC_MSG_ERROR([Crypto support is not enabled in kernel, GSS module can't build, consider --disable-gss.])
+		AC_MSG_ERROR([Crypto support is not enabled in kernel. \
+It is needed for capabilities support.])
 	fi
-fi
 ])
 
 #
