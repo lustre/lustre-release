@@ -655,7 +655,7 @@ AC_MSG_RESULT([$enable_gss])
 
 if test x$enable_gss == xyes; then
 	AC_MSG_CHECKING([whether CONFIG_SUNRPC is in kernel config file])
-	if test -f $LINUX/.config && grep -q CONFIG_SUNRPC=y $LINUX/.config; then
+	if test -f $LINUX_CONFIG && grep -q CONFIG_SUNRPC=y $LINUX_CONFIG; then
 		AC_MSG_RESULT([yes])
 	else
 		AC_MSG_RESULT([no])
@@ -690,8 +690,8 @@ fi
 AC_DEFUN([LC_CONFIG_CRYPTO],
 [
 	AC_MSG_CHECKING([whether CONFIG_CRYPTO and CONFIG_CRYPTO_HMAC turned on])
-	if test -f $LINUX/.config && grep -q CONFIG_CRYPTO=y $LINUX/.config \
-&& grep -q CONFIG_CRYPTO_HMAC=y $LINUX/.config; then
+	if test -f $LINUX_CONFIG && grep -q CONFIG_CRYPTO=y $LINUX_CONFIG \
+&& grep -q CONFIG_CRYPTO_HMAC=y $LINUX_CONFIG; then
 		AC_MSG_RESULT([yes])
 	else
 		AC_MSG_RESULT([no])
