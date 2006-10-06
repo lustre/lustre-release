@@ -1239,6 +1239,9 @@ static void filter_post(struct obd_device *obd)
          * best to start a transaction with h_sync, because we removed this
          * from lastobjid */
 
+        target_stop_recovery_thread(obd);
+        target_cleanup_recovery(obd);
+        
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         rc = filter_update_server_data(obd, filter->fo_rcvd_filp,
                                        filter->fo_fsd, 0);
