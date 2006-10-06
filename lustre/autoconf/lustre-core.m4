@@ -655,7 +655,7 @@ AC_MSG_RESULT([$enable_gss])
 
 if test x$enable_gss == xyes; then
 	AC_MSG_CHECKING([whether CONFIG_SUNRPC is in kernel config file])
-	if test -f $LINUX_CONFIG && grep -q CONFIG_SUNRPC=y $LINUX_CONFIG; then
+	if test -f $LINUX_CONFIG && egrep -q "CONFIG_SUNRPC=[y|m]" $LINUX_CONFIG; then
 		AC_MSG_RESULT([yes])
 	else
 		AC_MSG_RESULT([no])
