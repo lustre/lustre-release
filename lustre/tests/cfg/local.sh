@@ -11,9 +11,9 @@ ostfailover_HOST=${ostfailover_HOST}
 
 TMP=${TMP:-/tmp}
 
-MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
+MDSDEV=${MDSDEV:-$TMP/${FSNAME}-mdt1}
 MDSCOUNT=${MDSCOUNT:-1}
-MDSDEVBASE=${MDSDEVBASE:-$TMP/${FSNAME}-mds}
+MDSDEVBASE=${MDSDEVBASE:-$TMP/${FSNAME}-mdt}
 MDSSIZE=${MDSSIZE:-100000}
 MDSOPT=${MDSOPT:-"--mountfsoptions=acl"}
 

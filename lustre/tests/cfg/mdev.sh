@@ -5,6 +5,7 @@ ost_HOST=${ost_HOST:-mdev2}
 ost2_HOST=${ost2_HOST:-mdev3}
 client_HOST=${client_HOST:-client}
 NETTYPE=${NETTYPE:-tcp}
+SINGLEMDS=${SINGLEMDS:-"mds"}
 
 MOUNT=${MOUNT:-"/mnt/lustre"}
 MOUNT1=${MOUNT1:-$MOUNT}

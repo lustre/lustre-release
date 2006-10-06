@@ -8,6 +8,7 @@ LIVE_CLIENT=${LIVE_CLIENT:-mdev6}
 # This should always be a list, not a regexp
 FAIL_CLIENTS=${FAIL_CLIENTS:-mdev8}
 #FAIL_CLIENTS=${FAIL_CLIENTS:-""}
+SINGLEMDS=${SINGLEMDS:-"mds"}
 
 NETTYPE=${NETTYPE:-tcp}
 

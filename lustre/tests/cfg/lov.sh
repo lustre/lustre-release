@@ -1,21 +1,27 @@
 FSNAME=lustre
 
+TMP=${TMP:-/tmp}
+
 # facet hosts
 mds_HOST=${mds_HOST:-`hostname`}
 mdsfailover_HOST=${mdsfailover_HOST}
+mds1_HOST=${mds1_HOST:-$mds_HOST}
+mds1failover_HOST=${mds1failover_HOST:-$mdsfailover_HOST}
 mgs_HOST=${mgs_HOST:-$mds_HOST}
 ost_HOST=${ost_HOST:-`hostname`}
 ostfailover_HOST=${ostfailover_HOST}
 
-TMP=${TMP:-/tmp}
-MDSDEV=${MDSDEV:-$TMP/${FSNAME}-mdt}
+MDSDEV=${MDSDEV:-$TMP/${FSNAME}-mdt1}
+MDSCOUNT=${MDSCOUNT:-1}
+MDSDEVBASE=${MDSDEVBASE:-$TMP/${FSNAME}-mdt}
 MDSSIZE=${MDSSIZE:-400000}
-MDSOPT=${MDSOPT:-"--mountfsoptions=user_xattr,acl,"}
+MDSOPT=${MDSOPT:-"--mountfsoptions=user_xattr,acl"}
 
 OSTCOUNT=${OSTCOUNT:-6}
 OSTDEVBASE=${OSTDEVBASE:-$TMP/${FSNAME}-ost}
 OSTSIZE=${OSTSIZE:-150000}
 
+SINGLEMDS=${SINGLEMDS:-"mds1"}
 NETTYPE=${NETTYPE:-tcp}
 MGSNID=${MGSNID:-`h2$NETTYPE $mgs_HOST`}
 FSTYPE=${FSTYPE:-ldiskfs}
@@ -51,8 +57,8 @@ MOUNTOPT=""
     MOUNTOPT=$MOUNTOPT" --failnode=`h2$NETTYPE $ostfailover_HOST`"
 OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$TIMEOUT $MKFSOPT $MOUNTOPT $OSTOPT"
 
-MDS_MOUNT_OPTS="-o loop"
-OST_MOUNT_OPTS="-o loop"
+MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop"}
+OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o loop"}
 
 #client
 MOUNT=${MOUNT:-/mnt/${FSNAME}}

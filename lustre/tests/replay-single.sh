@@ -64,35 +64,35 @@ run_test 0b "ensure object created after recover exists. (3284)"
 
 seq_set_width()
 {
-    local fn=`ls /proc/fs/lustre/seq/cli-srv*/seq_width` 
-    echo $1 > $fn
+    local mds=$1
+    local width=$2
+    local file=`ls /proc/fs/lustre/seq/cli-srv-$mds-mdc-*/seq_width` 
+    echo $width > $file
 }
 
 seq_get_width()
 {
-    local fn=`ls /proc/fs/lustre/seq/cli-srv*/seq_width` 
-    cat $fn
+    local mds=$1
+    local file=`ls /proc/fs/lustre/seq/cli-srv-$mds-mdc-*/seq_width` 
+    cat $file
 }
 
 test_0c() {
-    if test $MDSCOUNT != 1; then
-            echo "Skipped, needs single mds config."
-            return 0
-    fi
+    local device=$(mdsdevname 1)
+    local label=`do_facet $SINGLEMDS "e2label ${device}" | grep -v "CMD: "`
+    [ -z "$label" ] && echo "No label for ${device}" && exit 1
 
     replay_barrier $SINGLEMDS
-
-    local seq_width
+    local sw=`seq_get_width $label`
     
     # make seq manager switch to next sequence each 
     # time as new fid is needed.
-    seq_width=`seq_get_width`
-    seq_set_width 1
+    seq_set_width $label 1
     
     # make sure that fld has created at least one new 
     # entry on server
-    touch $DIR/$tfile || return 1
-    seq_set_width $seq_width
+    touch $DIR/$tfile || return 2
+    seq_set_width $label $sw
     
     # fail $SINGLEMDS and start recovery, replay RPCs, etc.
     fail $SINGLEMDS
@@ -109,8 +109,8 @@ test_0c() {
     # issue lookup which should call fld lookup which 
     # should fail if client did not replay fld create 
     # correctly and server has no fld entry
-    touch $DIR/$tfile || return 2
-    rm $DIR/$tfile || return 2
+    touch $DIR/$tfile || return 3
+    rm $DIR/$tfile || return 4
 }
 run_test 0c "fld create"
 

@@ -179,7 +179,7 @@ fi
 echo "Starting Test 17 at `date`"
 
 test_0() {
-    facet_failover mds
+    facet_failover $SINGLEMDS
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || { echo "df returned $?" && return 1; }
 
@@ -207,12 +207,12 @@ test_2() {
     echo "Verify Lustre filesystem is up and running"
     client_df
 
-    shutdown_facet mds
-    reboot_facet mds
+    shutdown_facet $SINGLEMDS
+    reboot_facet $SINGLEMDS
 
     # prepare for MDS failover
-    change_active mds
-    reboot_facet mds
+    change_active $SINGLEMDS
+    reboot_facet $SINGLEMDS
 
     client_df &
     DFPID=$!
@@ -225,8 +225,8 @@ test_2() {
     wait_for ost1
     start_ost 1 || return 2
 
-    wait_for mds
-    start mds $MDSDEV $MDS_MOUNT_OPTS || return $?
+    wait_for $SINGLEMDS
+    start $SINGLEMDS $MDSDEV $MDS_MOUNT_OPTS || return $?
 
     #Check FS
     wait $DFPID
@@ -245,7 +245,7 @@ test_3() {
     echo "Verify Lustre filesystem is up and running"
     
     #MDS Portion
-    facet_failover mds
+    facet_failover $SINGLEMDS
     wait $DFPID || echo df failed: $?
     #Check FS
 
@@ -283,12 +283,12 @@ test_4() {
     sleep 5
 
     #MDS Portion
-    shutdown_facet mds
-    reboot_facet mds
+    shutdown_facet $SINGLEMDS
+    reboot_facet $SINGLEMDS
 
     # prepare for MDS failover
-    change_active mds
-    reboot_facet mds
+    change_active $SINGLEMDS
+    reboot_facet $SINGLEMDS
 
     client_df &
     DFPIDB=$!
@@ -433,7 +433,7 @@ test_7() {
     client_rm testfile
 
     #MDS Portion
-    facet_failover mds
+    facet_failover $SINGLEMDS
 
     #Check FS
     echo "Test Lustre stability after MDS failover"
