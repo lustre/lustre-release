@@ -17,7 +17,7 @@ CLEANUP=${CLEANUP:-"cleanup"}
 
 build_test_filter
 
-assert_env mds_HOST MDS_MKFS_OPTS MDSDEV
+assert_env mds_HOST MDS_MKFS_OPTS
 assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
 assert_env LIVE_CLIENT FSNAME
 
@@ -226,7 +226,7 @@ test_2() {
     start_ost 1 || return 2
 
     wait_for $SINGLEMDS
-    start $SINGLEMDS $MDSDEV $MDS_MOUNT_OPTS || return $?
+    start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS || return $?
 
     #Check FS
     wait $DFPID
@@ -300,8 +300,8 @@ test_4() {
     wait_for ost1
     start_ost 1
     
-    wait_for mds
-    start mds $MDSDEV $MDS_MOUNT_OPTS
+    wait_for $SINGLEMDS
+    start $SINGLEMDS `mdsdevname 1` $MDS_MOUNT_OPTS
     #Check FS
     
     wait $DFPIDA
