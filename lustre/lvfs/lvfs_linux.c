@@ -437,8 +437,8 @@ EXPORT_SYMBOL(obd_memmax);
 
 #if defined (CONFIG_DEBUG_MEMORY) && defined(__KERNEL__)
 static spinlock_t obd_memlist_lock = SPIN_LOCK_UNLOCKED;
-static struct hlist_head *obd_memtable;
-static unsigned long obd_memtable_size;
+static struct hlist_head *obd_memtable = NULL;
+static unsigned long obd_memtable_size = 0;
 
 static int lvfs_memdbg_init(int size)
 {
@@ -451,6 +451,7 @@ static int lvfs_memdbg_init(int size)
         CWARN("Allocating %lu memdbg entries.\n",
               (unsigned long)obd_memtable_size);
 
+        LASSERT(obd_memtable == NULL);
         obd_memtable = kmalloc(size, GFP_KERNEL);
         if (!obd_memtable)
                 return -ENOMEM;

@@ -972,7 +972,7 @@ void mdt_fs_cleanup(const struct lu_env *env, struct mdt_device *mdt)
 {
         struct obd_device *obd = mdt->mdt_md_dev.md_lu_dev.ld_obd;
 
-        /* remove transaction callback */
+        /* Remove transaction callback */
         dt_txn_callback_del(mdt->mdt_bottom, &mdt->mdt_txn_cb);
 
         class_disconnect_exports(obd); /* cleans up client info too */
