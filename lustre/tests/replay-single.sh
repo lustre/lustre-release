@@ -150,9 +150,9 @@ run_test 3a "replay failed open(O_DIRECTORY)"
 test_3b() {
     replay_barrier $SINGLEMDS
 #define OBD_FAIL_MDS_OPEN_PACK | OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000114"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000114"
     touch $DIR/$tfile
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
     fail $SINGLEMDS
     $CHECKSTAT -t file $DIR/$tfile && return 2
     return 0
@@ -162,9 +162,9 @@ run_test 3b "replay failed open -ENOMEM"
 test_3c() {
     replay_barrier $SINGLEMDS
 #define OBD_FAIL_MDS_ALLOC_OBDO | OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000128"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000128"
     touch $DIR/$tfile
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
     fail $SINGLEMDS
 
     $CHECKSTAT -t file $DIR/$tfile && return 2
@@ -711,7 +711,7 @@ run_test 32 "close() notices client eviction; close() after client eviction"
 test_33() {
     replay_barrier $SINGLEMDS
     touch $DIR/$tfile
-    fail_abort mds
+    fail_abort $SINGLEMDS
     # this file should be gone, because the replay was aborted
     $CHECKSTAT -t file $DIR/$tfile && return 3
     return 0
@@ -726,7 +726,7 @@ test_34() {
     rm -f $DIR/$tfile
 
     replay_barrier $SINGLEMDS
-    fail_abort mds
+    fail_abort $SINGLEMDS
     kill -USR1 $pid
     [ -e $DIR/$tfile ] && return 1
     sync
@@ -739,13 +739,13 @@ test_35() {
     touch $DIR/$tfile
 
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000119"
     rm -f $DIR/$tfile &
     sleep 1
     sync
     sleep 1
     # give a chance to remove from MDS
-    fail_abort mds
+    fail_abort $SINGLEMDS
     $CHECKSTAT -t file $DIR/$tfile && return 1 || true
 }
 run_test 35 "test recovery from llog for unlink op"
@@ -756,7 +756,7 @@ test_36() {
     replay_barrier $SINGLEMDS
     touch $DIR/$tfile
     checkstat $DIR/$tfile
-    facet_failover mds
+    facet_failover $SINGLEMDS
     cancel_lru_locks mdc
     if dmesg | grep "unknown lock cookie"; then 
 	echo "cancel after replay failed"
@@ -778,7 +778,7 @@ test_37() {
     replay_barrier $SINGLEMDS
     # clear the dmesg buffer so we only see errors from this recovery
     dmesg -c >/dev/null
-    fail_abort mds
+    fail_abort $SINGLEMDS
     kill -USR1 $pid
     dmesg | grep  "mds_unlink_orphan.*error .* unlinking orphan" && return 1
     sync
@@ -820,9 +820,9 @@ test_40(){
     writeme -s $MOUNT/${tfile}-2 &
     WRITE_PID=$!
     sleep 1
-    facet_failover mds
+    facet_failover $SINGLEMDS
 #define OBD_FAIL_MDS_CONNECT_NET         0x117
-    do_facet mds "sysctl -w lustre.fail_loc=0x80000117"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000117"
     kill -USR1 $PID
     stat1=`count_ost_writes`
     sleep $TIMEOUT
@@ -911,11 +911,11 @@ test_44() {
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
 	#define OBD_FAIL_TGT_CONN_RACE     0x701
-	do_facet mds "sysctl -w lustre.fail_loc=0x80000701"
+	do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000701"
 	$LCTL --device $mdcdev recover
 	df $MOUNT
     done
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
     return 0
 }
 run_test 44 "race in target handle connect"
@@ -925,11 +925,11 @@ test_44b() {
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
 	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
-	do_facet mds "sysctl -w lustre.fail_loc=0x80000704"
+	do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x80000704"
 	$LCTL --device $mdcdev recover
 	df $MOUNT
     done
-    do_facet mds "sysctl -w lustre.fail_loc=0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0"
     return 0
 }
 run_test 44b "race in target handle connect"
@@ -1026,9 +1026,9 @@ test_52() {
 
     multiop $DIR/$tfile s
     replay_barrier $SINGLEMDS
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000030c"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000030c"
     fail $SINGLEMDS
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x0"
 
     $CHECKSTAT -t file $DIR/$tfile-* && return 3 || true
 }
@@ -1040,11 +1040,11 @@ run_test 52 "time out lock replay (3764)"
 #b3761 ASSERTION(hash != 0) failed
 test_55() {
 # OBD_FAIL_MDS_OPEN_CREATE | OBD_FAIL_ONCE
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000012b"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000012b"
     touch $DIR/$tfile &
     # give touch a chance to run
     sleep 5
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x0"
     rm $DIR/$tfile
     return 0
 }
@@ -1063,13 +1063,13 @@ run_test 56 "don't replay a symlink open request (3440)"
 #recovery one mds-ost setattr from llog
 test_57() {
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000012c"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000012c"
     touch $DIR/$tfile
     replay_barrier $SINGLEMDS
     fail $SINGLEMDS
     sleep 1
     $CHECKSTAT -t file $DIR/$tfile || return 1
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x0"
     rm $DIR/$tfile
 }
 run_test 57 "test recovery from llog for setattr op"
@@ -1077,14 +1077,14 @@ run_test 57 "test recovery from llog for setattr op"
 #recovery many mds-ost setattr from llog
 test_58() {
 #define OBD_FAIL_MDS_OST_SETATTR       0x12c
-    do_facet mds "sysctl -w lustre.fail_loc=0x8000012c"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x8000012c"
     mkdir $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile-%d 2500
     replay_barrier $SINGLEMDS
     fail $SINGLEMDS
     sleep 2
     $CHECKSTAT -t file $DIR/$tdir/$tfile-* || return 1
-    do_facet mds "sysctl -w lustre.fail_loc=0x0"
+    do_facet $SINGLEMDS "sysctl -w lustre.fail_loc=0x0"
     unlinkmany $DIR/$tdir/$tfile-%d 2500
     rmdir $DIR/$tdir
 }

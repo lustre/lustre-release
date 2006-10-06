@@ -196,7 +196,7 @@ test_11() {
     mcreate $MOUNT1/$tfile-5
     # drop all reint replies for a while
     sysctl -w lustre.fail_loc=0x0119
-    facet_failover mds
+    facet_failover $SINGLEMDS
     #sleep for while, let both clients reconnect and timeout
     sleep $((TIMEOUT * 2))
     sysctl -w lustre.fail_loc=0
@@ -216,7 +216,7 @@ test_12() {
 
 #define OBD_FAIL_LDLM_ENQUEUE            0x302
     sysctl -w lustre.fail_loc=0x80000302
-    facet_failover mds
+    facet_failover $SINGLEMDS
     df $MOUNT || return 1
     sysctl -w lustre.fail_loc=0
 
@@ -242,7 +242,7 @@ test_13() {
 
     # drop close 
     sysctl -w lustre.fail_loc=0x80000115
-    facet_failover mds
+    facet_failover $SINGLEMDS
     df $MOUNT || return 1
     sysctl -w lustre.fail_loc=0
 
@@ -261,7 +261,7 @@ test_14() {
     createmany -o $MOUNT1/$tfile-3- 25
     umount $MOUNT2
 
-    facet_failover mds
+    facet_failover $SINGLEMDS
     # expect failover to fail
     df $MOUNT && return 1
     sleep 1
@@ -280,7 +280,7 @@ test_15() {
     createmany -o $MOUNT2/$tfile-2- 1
     umount $MOUNT2
 
-    facet_failover mds
+    facet_failover $SINGLEMDS
     df $MOUNT || return 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
@@ -299,7 +299,7 @@ test_15a() {
     echo "data" > "$MOUNT2/${tfile}-m2"
 
     umount $MOUNT2
-    facet_failover mds
+    facet_failover $SINGLEMDS
     df $MOUNT || return 1
     
     ost_last_id=`cat /proc/fs/lustre/obdfilter/*/last_id`
@@ -346,7 +346,7 @@ test_15b() {
     umount $MOUNT2
 
     do_facet ost1 "sysctl -w lustre.fail_loc=0x80000802"
-    facet_failover mds
+    facet_failover $SINGLEMDS
 
     df $MOUNT || return 1
     do_facet ost1 "sysctl -w lustre.fail_loc=0"
@@ -363,7 +363,7 @@ test_15c() {
     done
     
     umount $MOUNT2
-    facet_failover mds
+    facet_failover $SINGLEMDS
 
     df $MOUNT || return 1
     
@@ -378,9 +378,9 @@ test_16() {
     createmany -o $MOUNT2/$tfile-2- 1
     umount $MOUNT2
 
-    facet_failover mds
+    facet_failover $SINGLEMDS
     sleep $TIMEOUT
-    facet_failover mds
+    facet_failover $SINGLEMDS
     df $MOUNT || return 1
 
     unlinkmany $MOUNT1/$tfile- 25 || return 2
@@ -423,7 +423,7 @@ test_18() { # bug 3822 - evicting client with enqueued lock
    statmany -s $MOUNT1/$tdir/f 1 500 &
    OPENPID=$!
    NOW=`date +%s`
-   do_facet mds sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
+   do_facet $SINGLEMDS sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
    sleep 1
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
    do_facet client sysctl -w lustre.fail_loc=0x80000305  # drop cb, evict
