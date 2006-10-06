@@ -719,14 +719,14 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc);
         }
         
-        if (watched->obd_upcall.onu_owner) {
+        if (obd->obd_upcall.onu_owner) {
                 /*
-                 * This is an hack for mds_notify->mdd_notify, When the mds obd
+                 * This is a hack for mds_notify->mdd_notify. When the mds obd
                  * in mdd is removed, This hack should be removed.
                  */
-                 LASSERT(watched->obd_upcall.onu_upcall != NULL);
-                 rc = watched->obd_upcall.onu_upcall(NULL, NULL, 0,
-                                                     watched->obd_upcall.onu_owner);
+                 LASSERT(obd->obd_upcall.onu_upcall != NULL);
+                 rc = obd->obd_upcall.onu_upcall(NULL, NULL, 0,
+                                                 obd->obd_upcall.onu_owner);
         }
         EXIT;
 out:
