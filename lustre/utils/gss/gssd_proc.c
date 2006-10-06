@@ -618,7 +618,7 @@ int do_negotiation(struct lustre_gss_data *lgd,
 		   struct lustre_gss_init_res *gr,
 		   int timeout)
 {
-	char *file = "/proc/fs/lustre/gss/init_channel";
+	char *file = "/proc/fs/lustre/sptlrpc/gss/init_channel";
 	struct lgssd_ioctl_param param;
 	struct passwd *pw;
 	int fd, ret;

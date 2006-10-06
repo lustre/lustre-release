@@ -74,6 +74,7 @@
 spinlock_t krb5_seq_lock = SPIN_LOCK_UNLOCKED;
 
 struct krb5_enctype {
+        char           *ke_dispname;
         int             ke_hash_size;
         char           *ke_hash_name;
         char           *ke_enc_name;
@@ -88,6 +89,7 @@ struct krb5_enctype {
  */
 static struct krb5_enctype enctypes[] = {
         [ENCTYPE_DES_CBC_RAW] = {               /* des-cbc-md5 */
+                "des-cbc-md5",
                 16,
                 "md5",
                 "des",
@@ -95,6 +97,7 @@ static struct krb5_enctype enctypes[] = {
                 0,
         },
         [ENCTYPE_DES3_CBC_RAW] = {              /* des3-hmac-sha1 */
+                "des-hmac-sha1",
                 20,
                 "sha1",
                 "des3_ede",
@@ -102,6 +105,7 @@ static struct krb5_enctype enctypes[] = {
                 1,
         },
         [ENCTYPE_AES128_CTS_HMAC_SHA1_96] = {   /* aes128-cts */
+                "aes128-cts-hmac-sha1-96",
                 12,
                 "sha1",
                 "aes",
@@ -109,6 +113,7 @@ static struct krb5_enctype enctypes[] = {
                 1,
         },
         [ENCTYPE_AES256_CTS_HMAC_SHA1_96] = {   /* aes256-cts */
+                "aes256-cts-hmac-sha1-96",
                 12,
                 "sha1",
                 "aes",
@@ -118,6 +123,14 @@ static struct krb5_enctype enctypes[] = {
 };
 
 #define MAX_ENCTYPES    sizeof(enctypes)/sizeof(struct krb5_enctype)
+
+static const char * enctype2str(__u32 enctype)
+{
+        if (enctype < MAX_ENCTYPES && enctypes[enctype].ke_dispname)
+                return enctypes[enctype].ke_dispname;
+
+        return "unknown";
+}
 
 static
 int keyblock_init(struct krb5_keyblock *kb, char *alg_name, int alg_mode)
@@ -1030,6 +1043,20 @@ __u32 gss_plain_encrypt_kerberos(struct gss_ctx  *ctx,
         return rc;
 }
 
+int gss_display_kerberos(struct gss_ctx        *ctx,
+                         char                  *buf,
+                         int                    bufsize)
+{
+        struct krb5_ctx    *kctx = ctx->internal_ctx_id;
+        int                 written;
+
+        written = snprintf(buf, bufsize,
+                        "  mech:        krb5\n"
+                        "  enctype:     %s\n",
+                        enctype2str(kctx->kc_enctype));
+        return written;
+}
+
 static struct gss_api_ops gss_kerberos_ops = {
         .gss_import_sec_context     = gss_import_sec_context_kerberos,
         .gss_copy_reverse_context   = gss_copy_reverse_context_kerberos,
@@ -1040,6 +1067,7 @@ static struct gss_api_ops gss_kerberos_ops = {
         .gss_unwrap                 = gss_unwrap_kerberos,
         .gss_plain_encrypt          = gss_plain_encrypt_kerberos,
         .gss_delete_sec_context     = gss_delete_sec_context_kerberos,
+        .gss_display                = gss_display_kerberos,
 };
 
 static struct subflavor_desc gss_kerberos_sfs[] = {

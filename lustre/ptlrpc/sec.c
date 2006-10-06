@@ -678,6 +678,16 @@ void sptlrpc_ctx_wakeup(struct ptlrpc_cli_ctx *ctx)
 }
 EXPORT_SYMBOL(sptlrpc_ctx_wakeup);
 
+int sptlrpc_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize)
+{
+        LASSERT(ctx->cc_ops);
+
+        if (ctx->cc_ops->display == NULL)
+                return 0;
+
+        return ctx->cc_ops->display(ctx, buf, bufsize);
+}
+
 void sptlrpc_req_put_ctx(struct ptlrpc_request *req)
 {
         ENTRY;
@@ -1800,403 +1810,6 @@ int sptlrpc_unpack_user_desc(struct lustre_msg *msg, int offset)
 EXPORT_SYMBOL(sptlrpc_unpack_user_desc);
 
 /****************************************
- * Helpers to assist policy modules to  *
- * implement checksum funcationality    *
- ****************************************/
-
-struct {
-        char    *name;
-        int      size;
-} csum_types[] = {
-        [BULK_CSUM_ALG_NULL]    = { "null",     0 },
-        [BULK_CSUM_ALG_CRC32]   = { "crc32",    4 },
-        [BULK_CSUM_ALG_MD5]     = { "md5",     16 },
-        [BULK_CSUM_ALG_SHA1]    = { "sha1",    20 },
-        [BULK_CSUM_ALG_SHA256]  = { "sha256",  32 },
-        [BULK_CSUM_ALG_SHA384]  = { "sha384",  48 },
-        [BULK_CSUM_ALG_SHA512]  = { "sha512",  64 },
-};
-
-int bulk_sec_desc_size(__u32 csum_alg, int request, int read)
-{
-        int size = sizeof(struct ptlrpc_bulk_sec_desc);
-
-        LASSERT(csum_alg < BULK_CSUM_ALG_MAX);
-
-        /* read request don't need extra data */
-        if (!(read && request))
-                size += csum_types[csum_alg].size;
-
-        return size;
-}
-EXPORT_SYMBOL(bulk_sec_desc_size);
-
-int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset)
-{
-        struct ptlrpc_bulk_sec_desc *bsd;
-        int    size = msg->lm_buflens[offset];
-
-        bsd = lustre_msg_buf(msg, offset, sizeof(*bsd));
-        if (bsd == NULL) {
-                CERROR("Invalid bulk sec desc: size %d\n", size);
-                return -EINVAL;
-        }
-
-        if (lustre_msg_swabbed(msg)) {
-                __swab32s(&bsd->bsd_version);
-                __swab32s(&bsd->bsd_pad);
-                __swab32s(&bsd->bsd_csum_alg);
-                __swab32s(&bsd->bsd_priv_alg);
-        }
-
-        if (bsd->bsd_version != 0) {
-                CERROR("Unexpected version %u\n", bsd->bsd_version);
-                return -EPROTO;
-        }
-
-        if (bsd->bsd_csum_alg >= BULK_CSUM_ALG_MAX) {
-                CERROR("Unsupported checksum algorithm %u\n",
-                       bsd->bsd_csum_alg);
-                return -EINVAL;
-        }
-        if (bsd->bsd_priv_alg >= BULK_PRIV_ALG_MAX) {
-                CERROR("Unsupported cipher algorithm %u\n",
-                       bsd->bsd_priv_alg);
-                return -EINVAL;
-        }
-
-        if (size > sizeof(*bsd) &&
-            size < sizeof(*bsd) + csum_types[bsd->bsd_csum_alg].size) {
-                CERROR("Mal-formed checksum data: csum alg %u, size %d\n",
-                       bsd->bsd_csum_alg, size);
-                return -EINVAL;
-        }
-
-        return 0;
-}
-EXPORT_SYMBOL(bulk_sec_desc_unpack);
-
-#ifdef __KERNEL__
-static
-int do_bulk_checksum_crc32(struct ptlrpc_bulk_desc *desc, void *buf)
-{
-        struct page *page;
-        int off;
-        char *ptr;
-        __u32 crc32 = ~0;
-        int len, i;
-
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                page = desc->bd_iov[i].kiov_page;
-                off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
-                ptr = cfs_kmap(page) + off;
-                len = desc->bd_iov[i].kiov_len;
-
-                crc32 = crc32_le(crc32, ptr, len);
-
-                cfs_kunmap(page);
-        }
-
-        *((__u32 *) buf) = crc32;
-        return 0;
-}
-
-static
-int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
-{
-        struct crypto_tfm *tfm;
-        struct scatterlist *sl;
-        int i, rc = 0;
-
-        LASSERT(alg > BULK_CSUM_ALG_NULL &&
-                alg < BULK_CSUM_ALG_MAX);
-
-        if (alg == BULK_CSUM_ALG_CRC32)
-                return do_bulk_checksum_crc32(desc, buf);
-
-        tfm = crypto_alloc_tfm(csum_types[alg].name, 0);
-        if (tfm == NULL) {
-                CERROR("Unable to allocate tfm %s\n", csum_types[alg].name);
-                return -ENOMEM;
-        }
-
-        OBD_ALLOC(sl, sizeof(*sl) * desc->bd_iov_count);
-        if (sl == NULL) {
-                rc = -ENOMEM;
-                goto out_tfm;
-        }
-
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                sl[i].page = desc->bd_iov[i].kiov_page;
-                sl[i].offset = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
-                sl[i].length = desc->bd_iov[i].kiov_len;
-        }
-
-        crypto_digest_init(tfm);
-        crypto_digest_update(tfm, sl, desc->bd_iov_count);
-        crypto_digest_final(tfm, buf);
-
-        OBD_FREE(sl, sizeof(*sl) * desc->bd_iov_count);
-
-out_tfm:
-        crypto_free_tfm(tfm);
-        return rc;
-}
-                         
-#else /* !__KERNEL__ */
-static
-int do_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u32 alg, void *buf)
-{
-        __u32 crc32 = ~0;
-        int i;
-
-        LASSERT(alg == BULK_CSUM_ALG_CRC32);
-
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                char *ptr = desc->bd_iov[i].iov_base;
-                int len = desc->bd_iov[i].iov_len;
-
-                crc32 = crc32_le(crc32, ptr, len);
-        }
-
-        *((__u32 *) buf) = crc32;
-        return 0;
-}
-#endif
-
-/*
- * perform algorithm @alg checksum on @desc, store result in @buf.
- * if anything goes wrong, leave 'alg' be BULK_CSUM_ALG_NULL.
- */
-static
-int generate_bulk_csum(struct ptlrpc_bulk_desc *desc, __u32 alg,
-                       struct ptlrpc_bulk_sec_desc *bsd, int bsdsize)
-{
-        int rc;
-
-        LASSERT(bsd);
-        LASSERT(alg < BULK_CSUM_ALG_MAX);
-
-        bsd->bsd_csum_alg = BULK_CSUM_ALG_NULL;
-
-        if (alg == BULK_CSUM_ALG_NULL)
-                return 0;
-
-        LASSERT(bsdsize >= sizeof(*bsd) + csum_types[alg].size);
-
-        rc = do_bulk_checksum(desc, alg, bsd->bsd_csum);
-        if (rc == 0)
-                bsd->bsd_csum_alg = alg;
-
-        return rc;
-}
-
-static
-int verify_bulk_csum(struct ptlrpc_bulk_desc *desc, int read,
-                     struct ptlrpc_bulk_sec_desc *bsdv, int bsdvsize,
-                     struct ptlrpc_bulk_sec_desc *bsdr, int bsdrsize)
-{
-        char *csum_p;
-        char *buf = NULL;
-        int   csum_size, rc = 0;
-
-        LASSERT(bsdv);
-        LASSERT(bsdv->bsd_csum_alg < BULK_CSUM_ALG_MAX);
-
-        if (bsdr)
-                bsdr->bsd_csum_alg = BULK_CSUM_ALG_NULL;
-
-        if (bsdv->bsd_csum_alg == BULK_CSUM_ALG_NULL)
-                return 0;
-
-        /* for all supported algorithms */
-        csum_size = csum_types[bsdv->bsd_csum_alg].size;
-
-        if (bsdvsize < sizeof(*bsdv) + csum_size) {
-                CERROR("verifier size %d too small, require %d\n",
-                       bsdvsize, sizeof(*bsdv) + csum_size);
-                return -EINVAL;
-        }
-
-        if (bsdr) {
-                LASSERT(bsdrsize >= sizeof(*bsdr) + csum_size);
-                csum_p = (char *) bsdr->bsd_csum;
-        } else {
-                OBD_ALLOC(buf, csum_size);
-                if (buf == NULL)
-                        return -EINVAL;
-                csum_p = buf;
-        }
-
-        rc = do_bulk_checksum(desc, bsdv->bsd_csum_alg, csum_p);
-
-        if (memcmp(bsdv->bsd_csum, csum_p, csum_size)) {
-                CERROR("BAD %s CHECKSUM (%s), data mutated during "
-                       "transfer!\n", read ? "READ" : "WRITE",
-                       csum_types[bsdv->bsd_csum_alg].name);
-                rc = -EINVAL;
-        } else {
-                CDEBUG(D_SEC, "bulk %s checksum (%s) verified\n",
-                      read ? "read" : "write",
-                      csum_types[bsdv->bsd_csum_alg].name);
-        }
-
-        if (bsdr) {
-                bsdr->bsd_csum_alg = bsdv->bsd_csum_alg;
-                memcpy(bsdr->bsd_csum, csum_p, csum_size);
-        } else {
-                LASSERT(buf);
-                OBD_FREE(buf, csum_size);
-        }
-
-        return rc;
-}
-
-int bulk_csum_cli_request(struct ptlrpc_bulk_desc *desc, int read,
-                          __u32 alg, struct lustre_msg *rmsg, int roff)
-{
-        struct ptlrpc_bulk_sec_desc *bsdr;
-        int    rsize, rc = 0;
-
-        rsize = rmsg->lm_buflens[roff];
-        bsdr = lustre_msg_buf(rmsg, roff, sizeof(*bsdr));
-
-        LASSERT(bsdr);
-        LASSERT(rsize >= sizeof(*bsdr));
-        LASSERT(alg < BULK_CSUM_ALG_MAX);
-
-        if (read)
-                bsdr->bsd_csum_alg = alg;
-        else {
-                rc = generate_bulk_csum(desc, alg, bsdr, rsize);
-                if (rc) {
-                        CERROR("client bulk write: failed to perform "
-                               "checksum: %d\n", rc);
-                }
-        }
-
-        return rc;
-}
-EXPORT_SYMBOL(bulk_csum_cli_request);
-
-int bulk_csum_cli_reply(struct ptlrpc_bulk_desc *desc, int read,
-                        struct lustre_msg *rmsg, int roff,
-                        struct lustre_msg *vmsg, int voff)
-{
-        struct ptlrpc_bulk_sec_desc *bsdv, *bsdr;
-        int    rsize, vsize;
-
-        rsize = rmsg->lm_buflens[roff];
-        vsize = vmsg->lm_buflens[voff];
-        bsdr = lustre_msg_buf(rmsg, roff, 0);
-        bsdv = lustre_msg_buf(vmsg, voff, 0);
-
-        if (bsdv == NULL || vsize < sizeof(*bsdv)) {
-                CERROR("Invalid checksum verifier from server: size %d\n",
-                       vsize);
-                return -EINVAL;
-        }
-
-        LASSERT(bsdr);
-        LASSERT(rsize >= sizeof(*bsdr));
-        LASSERT(vsize >= sizeof(*bsdv));
-
-        if (bsdr->bsd_csum_alg != bsdv->bsd_csum_alg) {
-                CERROR("bulk %s: checksum algorithm mismatch: client request "
-                       "%s but server reply with %s. try to use the new one "
-                       "for checksum verification\n",
-                       read ? "read" : "write",
-                       csum_types[bsdr->bsd_csum_alg].name,
-                       csum_types[bsdv->bsd_csum_alg].name);
-        }
-
-        if (read)
-                return verify_bulk_csum(desc, 1, bsdv, vsize, NULL, 0);
-        else {
-                char *cli, *srv, *new = NULL;
-                int csum_size = csum_types[bsdr->bsd_csum_alg].size;
-
-                LASSERT(bsdr->bsd_csum_alg < BULK_CSUM_ALG_MAX);
-                if (bsdr->bsd_csum_alg == BULK_CSUM_ALG_NULL)
-                        return 0;
-
-                if (vsize < sizeof(*bsdv) + csum_size) {
-                        CERROR("verifier size %d too small, require %d\n",
-                               vsize, sizeof(*bsdv) + csum_size);
-                        return -EINVAL;
-                }
-
-                cli = (char *) (bsdr + 1);
-                srv = (char *) (bsdv + 1);
-
-                if (!memcmp(cli, srv, csum_size)) {
-                        /* checksum confirmed */
-                        CDEBUG(D_SEC, "bulk write checksum (%s) confirmed\n",
-                              csum_types[bsdr->bsd_csum_alg].name);
-                        return 0;
-                }
-
-                /* checksum mismatch, re-compute a new one and compare with
-                 * others, give out proper warnings.
-                 */
-                OBD_ALLOC(new, csum_size);
-                if (new == NULL)
-                        return -ENOMEM;
-
-                do_bulk_checksum(desc, bsdr->bsd_csum_alg, new);
-
-                if (!memcmp(new, srv, csum_size)) {
-                        CERROR("BAD WRITE CHECKSUM (%s): pages were mutated "
-                               "on the client after we checksummed them\n",
-                               csum_types[bsdr->bsd_csum_alg].name);
-                } else if (!memcmp(new, cli, csum_size)) {
-                        CERROR("BAD WRITE CHECKSUM (%s): pages were mutated "
-                               "in transit\n",
-                               csum_types[bsdr->bsd_csum_alg].name);
-                } else {
-                        CERROR("BAD WRITE CHECKSUM (%s): pages were mutated "
-                               "in transit, and the current page contents "
-                               "don't match the originals and what the server "
-                               "received\n",
-                               csum_types[bsdr->bsd_csum_alg].name);
-                }
-                OBD_FREE(new, csum_size);
-
-                return -EINVAL;
-        }
-}
-EXPORT_SYMBOL(bulk_csum_cli_reply);
-
-int bulk_csum_svc(struct ptlrpc_bulk_desc *desc, int read,
-                  struct lustre_msg *vmsg, int voff,
-                  struct lustre_msg *rmsg, int roff)
-{
-        struct ptlrpc_bulk_sec_desc *bsdv, *bsdr;
-        int    vsize, rsize, rc;
-
-        vsize = vmsg->lm_buflens[voff];
-        rsize = rmsg->lm_buflens[roff];
-        bsdv = lustre_msg_buf(vmsg, voff, 0);
-        bsdr = lustre_msg_buf(rmsg, roff, 0);
-
-        LASSERT(vsize >= sizeof(*bsdv));
-        LASSERT(rsize >= sizeof(*bsdr));
-        LASSERT(bsdv && bsdr);
-
-        if (read) {
-                rc = generate_bulk_csum(desc, bsdv->bsd_csum_alg, bsdr, rsize);
-                if (rc)
-                        CERROR("bulk read: server failed to generate %s "
-                               "checksum: %d\n",
-                               csum_types[bsdv->bsd_csum_alg].name, rc);
-        } else
-                rc = verify_bulk_csum(desc, 0, bsdv, vsize, bsdr, rsize);
-
-        return rc;
-}
-EXPORT_SYMBOL(bulk_csum_svc);
-
-/****************************************
  * user supplied flavor string parsing  *
  ****************************************/
 
@@ -2368,7 +1981,7 @@ int sptlrpc_parse_flavor(enum lustre_part from_part, enum lustre_part to_part,
 
         /* checksum algorithm */
         for (i = 0; i < BULK_CSUM_ALG_MAX; i++) {
-                if (strcmp(alg, csum_types[i].name) == 0) {
+                if (strcmp(alg, sptlrpc_bulk_csum_alg2name(i)) == 0) {
                         conf->sfc_bulk_csum = i;
                         break;
                 }
@@ -2384,13 +1997,17 @@ int sptlrpc_parse_flavor(enum lustre_part from_part, enum lustre_part to_part,
         }
 
 set_flags:
-        /* set ROOTONLY flag to:
-         *  - to OST
-         *  - from MDT to MDT
+        /* * set ROOTONLY flag:
+         *   - to OST
+         *   - from MDT to MDT
+         * * set BULK flag for:
+         *   - from CLI to OST
          */
-        if ((to_part == LUSTRE_MDT && from_part == LUSTRE_MDT) ||
-            to_part == LUSTRE_OST)
+        if (to_part == LUSTRE_OST ||
+            (from_part == LUSTRE_MDT && to_part == LUSTRE_MDT))
                 conf->sfc_flags |= PTLRPC_SEC_FL_ROOTONLY;
+        if (from_part == LUSTRE_CLI && to_part == LUSTRE_OST)
+                conf->sfc_flags |= PTLRPC_SEC_FL_BULK;
 
 #ifdef __BIG_ENDIAN
         __swab32s(&conf->sfc_rpc_flavor);
@@ -2419,77 +2036,46 @@ const char * sec2target_str(struct ptlrpc_sec *sec)
 }
 EXPORT_SYMBOL(sec2target_str);
 
-int sptlrpc_lprocfs_rd(char *page, char **start, off_t off, int count,
-                       int *eof, void *data)
-{
-        struct obd_device        *obd = data;
-        struct sec_flavor_config *conf = &obd->u.cli.cl_sec_conf;
-        struct ptlrpc_sec        *sec = NULL;
-        char                      flags_str[20];
-
-        if (obd == NULL)
-                return 0;
-
-        LASSERT(strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0 ||
-                strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0 ||
-                strcmp(obd->obd_type->typ_name, LUSTRE_MGC_NAME) == 0);
-        LASSERT(conf->sfc_bulk_csum < BULK_CSUM_ALG_MAX);
-        LASSERT(conf->sfc_bulk_priv < BULK_PRIV_ALG_MAX);
-
-        if (obd->u.cli.cl_import)
-                sec = obd->u.cli.cl_import->imp_sec;
-
-        flags_str[0] = '\0';
-        if (conf->sfc_flags & PTLRPC_SEC_FL_REVERSE)
-                strncat(flags_str, "reverse,", sizeof(flags_str));
-        if (conf->sfc_flags & PTLRPC_SEC_FL_ROOTONLY)
-                strncat(flags_str, "rootonly,", sizeof(flags_str));
-        if (flags_str[0] != '\0')
-                flags_str[strlen(flags_str) - 1] = '\0';
-
-        return snprintf(page, count,
-                        "rpc_flavor:  %s\n"
-                        "bulk_flavor: %s checksum, %s encryption\n"
-                        "flags:       %s\n"
-                        "ctx_cache:   size %u, busy %d\n"
-                        "gc:          interval %lus, next %lds\n",
-                        sptlrpc_flavor2name(conf->sfc_rpc_flavor),
-                        csum_types[conf->sfc_bulk_csum].name,
-                        conf->sfc_bulk_priv == BULK_PRIV_ALG_NULL ?
-                        "null" : "arc4", // XXX
-                        flags_str,
-                        sec ? sec->ps_ccache_size : 0,
-                        sec ? atomic_read(&sec->ps_busy) : 0,
-                        sec ? sec->ps_gc_interval: 0,
-                        sec ? (sec->ps_gc_interval ?
-                               sec->ps_gc_next - cfs_time_current_sec() : 0)
-                              : 0);
-}
-EXPORT_SYMBOL(sptlrpc_lprocfs_rd);
-
+/****************************************
+ * initialize/finalize                  *
+ ****************************************/
 
 int sptlrpc_init(void)
 {
         int rc;
 
-        rc = sptlrpc_null_init();
+        rc = sptlrpc_enc_pool_init();
         if (rc)
                 goto out;
+
+        rc = sptlrpc_null_init();
+        if (rc)
+                goto out_pool;
 
         rc = sptlrpc_plain_init();
         if (rc)
                 goto out_null;
+
+        rc = sptlrpc_lproc_init();
+        if (rc)
+                goto out_plain;
+
         return 0;
 
+out_plain:
+        sptlrpc_plain_fini();
 out_null:
-        sptlrpc_null_exit();
+        sptlrpc_null_fini();
+out_pool:
+        sptlrpc_enc_pool_fini();
 out:
         return rc;
 }
 
-int sptlrpc_exit(void)
+void sptlrpc_fini(void)
 {
-        sptlrpc_plain_exit();
-        sptlrpc_null_exit();
-        return 0;
+        sptlrpc_lproc_fini();
+        sptlrpc_plain_fini();
+        sptlrpc_null_fini();
+        sptlrpc_enc_pool_fini();
 }

@@ -54,6 +54,72 @@
 
 static struct proc_dir_entry *gss_proc_root = NULL;
 
+/*
+ * statistic of "out-of-sequence-window"
+ */
+static struct {
+        spinlock_t      oos_lock;
+        atomic_t        oos_cli_count;       /* client occurrence */
+        int             oos_cli_behind;      /* client max seqs behind */
+        atomic_t        oos_svc_replay[3];   /* server replay detected */
+        atomic_t        oos_svc_pass[3];     /* server verified ok */
+} gss_stat_oos = {
+        .oos_lock       = SPIN_LOCK_UNLOCKED,
+        .oos_cli_count  = ATOMIC_INIT(0),
+        .oos_cli_behind = 0,
+        .oos_svc_replay = { ATOMIC_INIT(0), },
+        .oos_svc_pass   = { ATOMIC_INIT(0), },
+};
+
+void gss_stat_oos_record_cli(int behind)
+{
+        atomic_inc(&gss_stat_oos.oos_cli_count);
+
+        spin_lock(&gss_stat_oos.oos_lock);
+        if (behind > gss_stat_oos.oos_cli_behind)
+                gss_stat_oos.oos_cli_behind = behind;
+        spin_unlock(&gss_stat_oos.oos_lock);
+}
+
+void gss_stat_oos_record_svc(int phase, int replay)
+{
+        LASSERT(phase >= 0 && phase <= 2);
+
+        if (replay)
+                atomic_inc(&gss_stat_oos.oos_svc_replay[phase]);
+        else
+                atomic_inc(&gss_stat_oos.oos_svc_pass[phase]);
+}
+
+static int gss_proc_read_oos(char *page, char **start, off_t off, int count,
+                             int *eof, void *data)
+{
+        int written;
+
+        written = snprintf(page, count,
+                        "seqwin:                %u\n"
+                        "backwin:               %u\n"
+                        "client fall behind seqwin\n"
+                        "  occurrence:          %d\n"
+                        "  max seq behind:      %d\n"
+                        "server replay detected:\n"
+                        "  phase 0:             %d\n"
+                        "  phase 1:             %d\n"
+                        "  phase 2:             %d\n"
+                        "server verify ok:\n"
+                        "  phase 2:             %d\n",
+                        GSS_SEQ_WIN_MAIN,
+                        GSS_SEQ_WIN_BACK,
+                        atomic_read(&gss_stat_oos.oos_cli_count),
+                        gss_stat_oos.oos_cli_behind,
+                        atomic_read(&gss_stat_oos.oos_svc_replay[0]),
+                        atomic_read(&gss_stat_oos.oos_svc_replay[1]),
+                        atomic_read(&gss_stat_oos.oos_svc_replay[2]),
+                        atomic_read(&gss_stat_oos.oos_svc_pass[2]));
+
+        return written;
+}
+
 static int gss_proc_write_secinit(struct file *file, const char *buffer,
                                   unsigned long count, void *data)
 {
@@ -69,6 +135,7 @@ static int gss_proc_write_secinit(struct file *file, const char *buffer,
 }
 
 static struct lprocfs_vars gss_lprocfs_vars[] = {
+        { "replays", gss_proc_read_oos, NULL },
         { "init_channel", NULL, gss_proc_write_secinit, NULL },
         { NULL }
 };
@@ -76,7 +143,7 @@ static struct lprocfs_vars gss_lprocfs_vars[] = {
 int gss_init_lproc(void)
 {
         int rc;
-        gss_proc_root = lprocfs_register("gss", proc_lustre_root,
+        gss_proc_root = lprocfs_register("gss", sptlrpc_proc_root,
                                          gss_lprocfs_vars, NULL);
 
         if (IS_ERR(gss_proc_root)) {

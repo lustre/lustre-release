@@ -210,6 +210,8 @@ struct ptlrpc_ctx_ops {
         int     (*match)       (struct ptlrpc_cli_ctx *ctx,
                                 struct vfs_cred *vcred);
         int     (*refresh)     (struct ptlrpc_cli_ctx *ctx);
+        int     (*display)     (struct ptlrpc_cli_ctx *ctx,
+                                char *buf, int bufsize);
         /*
          * rpc data transform
          */
@@ -330,6 +332,7 @@ struct ptlrpc_sec_policy {
 
 #define PTLRPC_SEC_FL_REVERSE           0x0001 /* reverse sec */
 #define PTLRPC_SEC_FL_ROOTONLY          0x0002 /* treat everyone as root */
+#define PTLRPC_SEC_FL_BULK              0x0004 /* intensive bulk i/o expected */
 
 struct ptlrpc_sec {
         struct ptlrpc_sec_policy       *ps_policy;
@@ -394,6 +397,15 @@ struct ptlrpc_bulk_sec_desc {
         __u8            bsd_csum[0];
 };
 
+const char * sptlrpc_bulk_csum_alg2name(__u32 csum_alg);
+const char * sptlrpc_bulk_priv_alg2name(__u32 priv_alg);
+
+/*
+ * lprocfs
+ */
+struct proc_dir_entry;
+extern struct proc_dir_entry *sptlrpc_proc_root;
+
 /*
  * security type
  */
@@ -424,6 +436,7 @@ void sptlrpc_ctx_put(struct ptlrpc_cli_ctx *ctx, int sync);
 void sptlrpc_ctx_expire(struct ptlrpc_cli_ctx *ctx);
 void sptlrpc_ctx_replace(struct ptlrpc_sec *sec, struct ptlrpc_cli_ctx *new);
 void sptlrpc_ctx_wakeup(struct ptlrpc_cli_ctx *ctx);
+int sptlrpc_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize);
 
 /*
  * client wrap/buffers
@@ -482,6 +495,11 @@ int sptlrpc_cli_install_rvs_ctx(struct obd_import *imp,
                                 struct ptlrpc_cli_ctx *ctx);
 
 /* bulk security api */
+int sptlrpc_enc_pool_add_user(void);
+int sptlrpc_enc_pool_del_user(void);
+int  sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc);
+void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc);
+
 int sptlrpc_cli_wrap_bulk(struct ptlrpc_request *req,
                           struct ptlrpc_bulk_desc *desc);
 int sptlrpc_cli_unwrap_bulk_read(struct ptlrpc_request *req,

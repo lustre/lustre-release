@@ -367,6 +367,11 @@ void gss_cli_ctx_finalize(struct gss_cli_ctx *gctx)
  *  2 - check in back window. if it is high above the window or fit in the
  *      window and the bit is 0, then set the bit and accept. otherwise reject.
  *
+ * return value:
+ *   1: looks like a replay
+ *   0: is ok
+ *  -1: is a replay
+ *
  * note phase 0 is necessary, because otherwise replay attacking request of
  * sequence which between the 2 windows can't be detected.
  *
@@ -431,7 +436,7 @@ replay:
                seq_num + win_size > *max_seq ? "in" : "behind",
                phase == 2 ? "backup " : "main",
                *max_seq, win_size);
-        return 1;
+        return -1;
 }
 
 /*
@@ -447,15 +452,35 @@ int gss_check_seq_num(struct gss_svc_seq_data *ssd, __u32 seq_num, int set)
         spin_lock(&ssd->ssd_lock);
 
         if (set == 0) {
+                /*
+                 * phase 0 testing
+                 */
                 rc = gss_do_check_seq(ssd->ssd_win_main, GSS_SEQ_WIN_MAIN,
                                       &ssd->ssd_max_main, seq_num, 0);
+                if (unlikely(rc))
+                        gss_stat_oos_record_svc(0, 1);
         } else {
+                /*
+                 * phase 1 checking main window
+                 */
                 rc = gss_do_check_seq(ssd->ssd_win_main, GSS_SEQ_WIN_MAIN,
                                       &ssd->ssd_max_main, seq_num, 1);
-                if (rc == 0)
+                switch (rc) {
+                case -1:
+                        gss_stat_oos_record_svc(1, 1);
+                        /* fall through */
+                case 0:
                         goto exit;
+                }
+                /*
+                 * phase 2 checking back window
+                 */
                 rc = gss_do_check_seq(ssd->ssd_win_back, GSS_SEQ_WIN_BACK,
                                       &ssd->ssd_max_back, seq_num, 2);
+                if (rc)
+                        gss_stat_oos_record_svc(2, 1);
+                else
+                        gss_stat_oos_record_svc(2, 0);
         }
 exit:
         spin_unlock(&ssd->ssd_lock);
@@ -490,10 +515,59 @@ int gss_cli_ctx_refresh(struct ptlrpc_cli_ctx *ctx)
 }
 
 static
-int gss_cli_ctx_match(struct ptlrpc_cli_ctx *ctx,
-                      struct vfs_cred *vcred)
+int gss_cli_ctx_match(struct ptlrpc_cli_ctx *ctx, struct vfs_cred *vcred)
 {
         return (ctx->cc_vcred.vc_uid == vcred->vc_uid);
+}
+
+static
+void gss_cli_ctx_flags2str(unsigned long flags, char *buf, int bufsize)
+{
+        buf[0] = '\0';
+
+        if (flags & PTLRPC_CTX_UPTODATE)
+                strncat(buf, "uptodate,", bufsize);
+        if (flags & PTLRPC_CTX_DEAD)
+                strncat(buf, "dead,", bufsize);
+        if (flags & PTLRPC_CTX_ERROR)
+                strncat(buf, "error,", bufsize);
+        if (flags & PTLRPC_CTX_HASHED)
+                strncat(buf, "hashed,", bufsize);
+        if (flags & PTLRPC_CTX_ETERNAL)
+                strncat(buf, "eternal,", bufsize);
+        if (buf[0] == '\0')
+                strncat(buf, "-,", bufsize);
+
+        buf[strlen(buf) - 1] = '\0';
+}
+
+static
+int gss_cli_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize)
+{
+        struct gss_cli_ctx     *gctx;
+        char                    flags_str[40];
+        int                     written;
+
+        gctx = container_of(ctx, struct gss_cli_ctx, gc_base);
+
+        gss_cli_ctx_flags2str(ctx->cc_flags, flags_str, sizeof(flags_str));
+
+        written = snprintf(buf, bufsize,
+                        "UID %d:\n" 
+                        "  flags:       %s\n"
+                        "  seqwin:      %d\n"
+                        "  sequence:    %d\n",
+                        ctx->cc_vcred.vc_uid,
+                        flags_str,
+                        gctx->gc_win,
+                        atomic_read(&gctx->gc_seq));
+
+        if (gctx->gc_mechctx) {
+                written += lgss_display(gctx->gc_mechctx,
+                                        buf + written, bufsize - written);
+        }
+
+        return written;
 }
 
 static
@@ -529,8 +603,10 @@ redo:
          * be dropped. also applies to gss_cli_ctx_seal().
          */
         if (atomic_read(&gctx->gc_seq) - seq > GSS_SEQ_REPACK_THRESHOLD) {
-                CWARN("req %p: %u behind, retry signing\n",
-                      req, atomic_read(&gctx->gc_seq) - seq);
+                int behind = atomic_read(&gctx->gc_seq) - seq;
+
+                gss_stat_oos_record_cli(behind);
+                CWARN("req %p: %u behind, retry signing\n", req, behind);
                 goto redo;
         }
 
@@ -774,8 +850,11 @@ redo:
         /* see explain in gss_cli_ctx_sign() */
         if (atomic_read(&gctx->gc_seq) - ghdr->gh_seq >
             GSS_SEQ_REPACK_THRESHOLD) {
-                CWARN("req %p: %u behind, retry sealing\n",
-                      req, atomic_read(&gctx->gc_seq) - ghdr->gh_seq);
+                int behind = atomic_read(&gctx->gc_seq) - ghdr->gh_seq;
+
+                gss_stat_oos_record_cli(behind);
+                CWARN("req %p: %u behind, retry sealing\n", req, behind);
+
                 ghdr->gh_seq = atomic_inc_return(&gctx->gc_seq);
                 goto redo;
         }
@@ -878,6 +957,7 @@ int gss_cli_ctx_unseal(struct ptlrpc_cli_ctx *ctx,
 static struct ptlrpc_ctx_ops gss_ctxops = {
         .refresh        = gss_cli_ctx_refresh,
         .match          = gss_cli_ctx_match,
+        .display        = gss_cli_ctx_display,
         .sign           = gss_cli_ctx_sign,
         .verify         = gss_cli_ctx_verify,
         .seal           = gss_cli_ctx_seal,
@@ -1071,6 +1151,10 @@ struct ptlrpc_sec* gss_sec_create(struct obd_import *imp,
                 sec->ps_gc_next = 0;
         }
 
+        if (SEC_FLAVOR_SVC(flavor) == SPTLRPC_SVC_PRIV &&
+            flags & PTLRPC_SEC_FL_BULK)
+                sptlrpc_enc_pool_add_user();
+
         CWARN("create %s%s@%p\n", (ctx ? "reverse " : ""),
               gss_policy.sp_name, gsec);
         RETURN(sec);
@@ -1102,6 +1186,10 @@ void gss_sec_destroy(struct ptlrpc_sec *sec)
         lgss_mech_put(gsec->gs_mech);
 
         class_import_put(sec->ps_import);
+
+        if (SEC_FLAVOR_SVC(sec->ps_flavor) == SPTLRPC_SVC_PRIV &&
+            sec->ps_flags & PTLRPC_SEC_FL_BULK)
+                sptlrpc_enc_pool_del_user();
 
         OBD_FREE(gsec, sizeof(*gsec) +
                        sizeof(struct list_head) * sec->ps_ccache_size);
@@ -1621,7 +1709,7 @@ int gss_svc_verify_request(struct ptlrpc_request *req,
         }
 
         if (gss_check_seq_num(&gctx->gsc_seqdata, gw->gw_seq, 0)) {
-                CERROR("phase 1: discard replayed req: seq %u\n", gw->gw_seq);
+                CERROR("phase 0: discard replayed req: seq %u\n", gw->gw_seq);
                 *major = GSS_S_DUPLICATE_TOKEN;
                 RETURN(-EACCES);
         }
@@ -1631,7 +1719,7 @@ int gss_svc_verify_request(struct ptlrpc_request *req,
                 RETURN(-EACCES);
 
         if (gss_check_seq_num(&gctx->gsc_seqdata, gw->gw_seq, 1)) {
-                CERROR("phase 2: discard replayed req: seq %u\n", gw->gw_seq);
+                CERROR("phase 1+: discard replayed req: seq %u\n", gw->gw_seq);
                 *major = GSS_S_DUPLICATE_TOKEN;
                 RETURN(-EACCES);
         }
@@ -1679,7 +1767,7 @@ int gss_svc_unseal_request(struct ptlrpc_request *req,
         ENTRY;
 
         if (gss_check_seq_num(&gctx->gsc_seqdata, gw->gw_seq, 0)) {
-                CERROR("phase 1: discard replayed req: seq %u\n", gw->gw_seq);
+                CERROR("phase 0: discard replayed req: seq %u\n", gw->gw_seq);
                 *major = GSS_S_DUPLICATE_TOKEN;
                 RETURN(-EACCES);
         }
@@ -1690,7 +1778,7 @@ int gss_svc_unseal_request(struct ptlrpc_request *req,
                 RETURN(-EACCES);
 
         if (gss_check_seq_num(&gctx->gsc_seqdata, gw->gw_seq, 1)) {
-                CERROR("phase 2: discard replayed req: seq %u\n", gw->gw_seq);
+                CERROR("phase 1+: discard replayed req: seq %u\n", gw->gw_seq);
                 *major = GSS_S_DUPLICATE_TOKEN;
                 RETURN(-EACCES);
         }

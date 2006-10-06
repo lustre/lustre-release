@@ -115,7 +115,7 @@ cleanup:
 #ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
-        sptlrpc_exit();
+        sptlrpc_fini();
         ldlm_exit();
         ptlrpc_stop_pinger();
         ptlrpc_exit_portals();
@@ -289,10 +289,6 @@ EXPORT_SYMBOL(ptlrpc_deactivate_import);
 EXPORT_SYMBOL(ptlrpc_invalidate_import);
 EXPORT_SYMBOL(ptlrpc_fail_import);
 EXPORT_SYMBOL(ptlrpc_recover_import);
-
-/* pers.c */
-EXPORT_SYMBOL(ptlrpc_bulk_alloc_enc_pages);
-EXPORT_SYMBOL(ptlrpc_bulk_free_enc_pages);
 
 /* pinger.c */
 EXPORT_SYMBOL(ptlrpc_pinger_add_import);

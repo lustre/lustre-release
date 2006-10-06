@@ -293,13 +293,11 @@ int sptlrpc_null_init(void)
         return rc;
 }
 
-int sptlrpc_null_exit(void)
+void sptlrpc_null_fini(void)
 {
         int rc;
 
         rc = sptlrpc_unregister_policy(&null_policy);
         if (rc)
                 CERROR("cannot unregister sec.null: %d\n", rc);
-
-        return rc;
 }

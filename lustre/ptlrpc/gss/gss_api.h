@@ -39,39 +39,43 @@ struct gss_ctx {
 __u32 lgss_import_sec_context(
                 rawobj_t                *input_token,
                 struct gss_api_mech     *mech,
-                struct gss_ctx         **ctx_id);
+                struct gss_ctx         **ctx);
 __u32 lgss_copy_reverse_context(
-                struct gss_ctx          *ctx_id,
-                struct gss_ctx         **ctx_id_new);
+                struct gss_ctx          *ctx,
+                struct gss_ctx         **ctx_new);
 __u32 lgss_inquire_context(
-                struct gss_ctx          *ctx_id,
+                struct gss_ctx          *ctx,
                 unsigned long           *endtime);
 __u32 lgss_get_mic(
-                struct gss_ctx          *ctx_id,
+                struct gss_ctx          *ctx,
                 int                      msgcnt,
                 rawobj_t                *msgs,
                 rawobj_t                *mic_token);
 __u32 lgss_verify_mic(
-                struct gss_ctx          *ctx_id,
+                struct gss_ctx          *ctx,
                 int                      msgcnt,
                 rawobj_t                *msgs,
                 rawobj_t                *mic_token);
 __u32 lgss_wrap(
-                struct gss_ctx          *ctx_id,
+                struct gss_ctx          *ctx,
                 rawobj_t                *msg,
                 int                      msg_buflen,
                 rawobj_t                *out_token);
 __u32 lgss_unwrap(
-                struct gss_ctx          *ctx_id,
+                struct gss_ctx          *ctx,
                 rawobj_t                *token,
                 rawobj_t                *out_msg);
 __u32 lgss_plain_encrypt(
-                struct gss_ctx          *ctx_id,
+                struct gss_ctx          *ctx,
                 int                      length,
                 void                    *in_buf,
                 void                    *out_buf);
 __u32 lgss_delete_sec_context(
-                struct gss_ctx         **ctx_id);
+                struct gss_ctx         **ctx);
+int lgss_display(
+                struct gss_ctx          *ctx,
+                char                    *buf,
+                int                      bufsize);
 
 struct subflavor_desc {
         __u32           sf_subflavor;
@@ -96,20 +100,20 @@ struct gss_api_mech {
 struct gss_api_ops {
         __u32 (*gss_import_sec_context)(
                         rawobj_t               *input_token,
-                        struct gss_ctx         *ctx_id);
+                        struct gss_ctx         *ctx);
         __u32 (*gss_copy_reverse_context)(
-                        struct gss_ctx         *ctx_id,
-                        struct gss_ctx         *ctx_id_new);
+                        struct gss_ctx         *ctx,
+                        struct gss_ctx         *ctx_new);
         __u32 (*gss_inquire_context)(
-                        struct gss_ctx         *ctx_id,
+                        struct gss_ctx         *ctx,
                         unsigned long          *endtime);
         __u32 (*gss_get_mic)(
-                        struct gss_ctx         *ctx_id,
+                        struct gss_ctx         *ctx,
                         int                     msgcnt,
                         rawobj_t               *msgs,
                         rawobj_t               *mic_token);
         __u32 (*gss_verify_mic)(
-                        struct gss_ctx         *ctx_id,
+                        struct gss_ctx         *ctx,
                         int                     msgcnt,
                         rawobj_t               *msgs,
                         rawobj_t               *mic_token);
@@ -128,7 +132,11 @@ struct gss_api_ops {
                         void                   *in_buf,
                         void                   *out_buf);
         void (*gss_delete_sec_context)(
-                        void                   *ctx_id);
+                        void                   *ctx);
+        int  (*gss_display)(
+                        struct gss_ctx         *ctx,
+                        char                   *buf,
+                        int                     bufsize);
 };
 
 int lgss_mech_register(struct gss_api_mech *mech);

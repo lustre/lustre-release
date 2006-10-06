@@ -180,7 +180,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         LASSERT(!desc->bd_network_rw);         /* network hands off or */
         LASSERT((desc->bd_export != NULL) ^ (desc->bd_import != NULL));
 
-        ptlrpc_bulk_free_enc_pages(desc);
+        sptlrpc_enc_pool_put_pages(desc);
 
         if (desc->bd_export)
                 class_export_put(desc->bd_export);

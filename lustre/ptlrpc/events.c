@@ -139,7 +139,7 @@ void client_bulk_callback (lnet_event_t *ev)
                 desc->bd_nob_transferred = ev->mlength;
         }
 
-        ptlrpc_bulk_free_enc_pages(desc);
+        sptlrpc_enc_pool_put_pages(desc);
 
         /* NB don't unlock till after wakeup; desc can disappear under us
          * otherwise */

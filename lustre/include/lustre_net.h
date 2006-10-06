@@ -517,14 +517,13 @@ struct ptlrpc_bulk_desc {
         __u64                  bd_last_xid;
 
         struct ptlrpc_cb_id    bd_cbid;         /* network callback info */
-        lnet_handle_md_t        bd_md_h;         /* associated MD */
+        lnet_handle_md_t       bd_md_h;         /* associated MD */
 
+        cfs_page_t           **bd_enc_pages;
 #if defined(__KERNEL__)
-        lnet_kiov_t            *bd_enc_iov;     /* used in privacy mode */
-        lnet_kiov_t             bd_iov[0];
+        lnet_kiov_t            bd_iov[0];
 #else
-        lnet_md_iovec_t        *bd_enc_iov;
-        lnet_md_iovec_t         bd_iov[0];
+        lnet_md_iovec_t        bd_iov[0];
 #endif
 };
 
@@ -935,10 +934,6 @@ int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
                            int priority);
 int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid);
 int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
-
-/* ptlrpc/pers.c */
-int ptlrpc_bulk_alloc_enc_pages(struct ptlrpc_bulk_desc *desc);
-void ptlrpc_bulk_free_enc_pages(struct ptlrpc_bulk_desc *desc);
 
 /* ptlrpc/pinger.c */
 int ptlrpc_pinger_add_import(struct obd_import *imp);

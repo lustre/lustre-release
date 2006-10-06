@@ -330,3 +330,15 @@ __u32 lgss_delete_sec_context(struct gss_ctx **context_handle)
         *context_handle=NULL;
         return GSS_S_COMPLETE;
 }
+
+int lgss_display(struct gss_ctx *ctx,
+                 char           *buf,
+                 int             bufsize)
+{
+        LASSERT(ctx);
+        LASSERT(ctx->mech_type);
+        LASSERT(ctx->mech_type->gm_ops);
+        LASSERT(ctx->mech_type->gm_ops->gss_display);
+
+        return ctx->mech_type->gm_ops->gss_display(ctx, buf, bufsize);
+}

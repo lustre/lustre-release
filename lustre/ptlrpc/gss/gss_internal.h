@@ -316,11 +316,13 @@ struct gss_svc_ctx *gss_svc_upcall_get_ctx(struct ptlrpc_request *req,
 void gss_svc_upcall_put_ctx(struct gss_svc_ctx *ctx);
 void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx);
 
-int __init gss_svc_init_upcall(void);
+int  __init gss_svc_init_upcall(void);
 void __exit gss_svc_exit_upcall(void);
 
 /* lproc_gss.c */
-int gss_init_lproc(void);
+void gss_stat_oos_record_cli(int behind);
+void gss_stat_oos_record_svc(int phase, int replay);
+int  gss_init_lproc(void);
 void gss_exit_lproc(void);
 
 /* gss_krb5_mech.c */

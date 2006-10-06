@@ -143,15 +143,26 @@ int ping_evictor_wake(struct obd_export *exp);
 #endif
 
 /* sec_null.c */
-int sptlrpc_null_init(void);
-int sptlrpc_null_exit(void);
+int  sptlrpc_null_init(void);
+void sptlrpc_null_fini(void);
 
 /* sec_plain.c */
-int sptlrpc_plain_init(void);
-int sptlrpc_plain_exit(void);
+int  sptlrpc_plain_init(void);
+void sptlrpc_plain_fini(void);
+
+/* sec_bulk.c */
+int  sptlrpc_enc_pool_init(void);
+void sptlrpc_enc_pool_fini(void);
+int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
+                               int *eof, void *data);
+const char * sptlrpc_bulk_csum_alg2name(__u32 csum_alg);
+
+/* sec_lproc.c */
+int  sptlrpc_lproc_init(void);
+void sptlrpc_lproc_fini(void);
 
 /* sec.c */
-int sptlrpc_init(void);
-int sptlrpc_exit(void);
+int  sptlrpc_init(void);
+void sptlrpc_fini(void);
 
 #endif /* PTLRPC_INTERNAL_H */

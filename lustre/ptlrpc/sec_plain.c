@@ -486,13 +486,11 @@ int sptlrpc_plain_init(void)
         return rc;
 }
 
-int sptlrpc_plain_exit(void)
+void sptlrpc_plain_fini(void)
 {
         int rc;
 
         rc = sptlrpc_unregister_policy(&plain_policy);
         if (rc)
                 CERROR("cannot unregister sec.plain: %d\n", rc);
-
-        return rc;
 }
