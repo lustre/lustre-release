@@ -770,8 +770,8 @@ static int lmv_placement_policy(struct obd_device *obd,
                                         lmv_obj_put(obj);
                                         GOTO(exit, rc);
                                 }
-                                CDEBUG(D_INODE, "the obj "DFID" has been"
-                                       "splitted,got MDS at "LPU64" by name %s\n",
+                                CDEBUG(D_INODE, "The obj "DFID" has been"
+                                       "split, got MDS at "LPU64" by name %s\n",
                                        PFID(hint->ph_pfid), *mds,
                                        hint->ph_cname->name);
 

@@ -257,8 +257,10 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
         {
                 seqno_t seqnr;
 
-                /* allocate new sequence for case client has no sequence at all
-                 * or sequence is exhausted and should be switched. */
+                /*
+                 * Allocate new sequence for case client has no sequence at all
+                 * or sequence is exhausted and should be switched.
+                 */
                 rc = __seq_client_alloc_seq(seq, &seqnr);
                 if (rc) {
                         CERROR("%s: Can't allocate new sequence, "
@@ -271,11 +273,13 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                 seq->lcs_fid.f_seq = seqnr;
                 seq->lcs_fid.f_ver = 0;
 
-                /* inform caller that sequence switch is performed to allow it
-                 * to setup FLD for it. */
+                /*
+                 * Inform caller that sequence switch is performed to allow it
+                 * to setup FLD for it.
+                 */
                 rc = 1;
 
-                CDEBUG(D_INFO|D_WARNING, "%s: New sequence - "LPX64"\n",
+                CDEBUG(D_INFO|D_WARNING, "%s: Switch to sequence ["LPX64"]\n",
                        seq->lcs_name, seqnr);
         } else {
                 seq->lcs_fid.f_oid++;
