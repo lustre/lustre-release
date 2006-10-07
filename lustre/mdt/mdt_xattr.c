@@ -157,7 +157,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         /*No EA, just go back*/
         if (rc == 0)
-                GOTO(no_xattr, err_serious(rc));
+                GOTO(no_xattr, rc);
 
         buf = &info->mti_buf;
         buf->lb_buf = req_capsule_server_get(&info->mti_pill, &RMF_EADATA);
