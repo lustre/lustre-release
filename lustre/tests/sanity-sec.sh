@@ -137,7 +137,7 @@ IDENTITY_UPCALL_BAK=`more $IDENTITY_UPCALL`
 IDENTITY_FLUSH=$LPROC/mdt/$MDT/identity_flush
 ROOTSQUASH_UID=$LPROC/mdt/$MDT/rootsquash_uid
 ROOTSQUASH_GID=$LPROC/mdt/$MDT/rootsquash_gid
-ROOTSQUASH_SKIPS=$LPROC/mdt/$MDT/rootsquash_skips
+NOSQUASH_NIDS=$LPROC/mdt/$MDT/nosquash_nids
 KRB5_REALM=`cat /etc/krb5.conf |grep default_realm| awk '{ print $3 }'`
 USER1=`cat /etc/passwd|grep :500:|cut -d: -f1`
 USER2=`cat /etc/passwd|grep :501:|cut -d: -f1`
@@ -248,9 +248,9 @@ run_test 2 "lfs getfacl/setfacl ============================="
 test_3() {
 	[ -n "$SEC" ] && echo "ignore rootsquash test for single node" && return
 
-	#$LCTL conf_param $MDT.mdt.rootsquash_skips=none
-	echo none > $ROOTSQUASH_SKIPS
-	while grep LNET_NID_ANY $ROOTSQUASH_SKIPS > /dev/null; do sleep 1; done
+	#$LCTL conf_param $MDT.mdt.nosquash_nids=none
+	echo none > $NOSQUASH_NIDS
+	while grep LNET_NID_ANY $NOSQUASH_NIDS > /dev/null; do sleep 1; done
 	#$LCTL conf_param $MDT.mdt.rootsquash_uid=0
 	echo 0 > $ROOTSQUASH_UID
 	while [ "`cat $ROOTSQUASH_UID`" -ne 0 ]; do sleep 1; done
@@ -288,10 +288,10 @@ test_3() {
 	while [ "`cat $ROOTSQUASH_GID`" -ne 501 ]; do sleep 1; done
 	touch $DIR/d3/f3_3 || error
 
-	#$LCTL conf_param $MDT.mdt.rootsquash_skips=*
-	echo "*," > $ROOTSQUASH_SKIPS 
+	#$LCTL conf_param $MDT.mdt.nosquash_nids=*
+	echo \* > $NOSQUASH_NIDS 
 	echo "add host in rootsquash skip list"
-	while ! grep LNET_NID_ANY $ROOTSQUASH_SKIPS > /dev/null;
+	while ! grep LNET_NID_ANY $NOSQUASH_NIDS > /dev/null;
 		do sleep 1;
 	done
 	touch $DIR/f3_4 || error
@@ -302,8 +302,8 @@ test_3() {
 	#$LCTL conf_param $MDT.mdt.rootsquash_gid=0
 	echo 0 > $ROOTSQUASH_GID
 	while [ "`cat $ROOTSQUASH_GID`" -ne 0 ]; do sleep 1; done
-	#$LCTL conf_param $MDT.mdt.rootsquash_skips=none
-	echo none > $ROOTSQUASH_SKIPS
+	#$LCTL conf_param $MDT.mdt.nosquash_nids=none
+	echo none > $NOSQUASH_NIDS
 	rm -rf $DIR/d3
 	rm -f $DIR/f3_?
 }
