@@ -248,8 +248,10 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
         mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, oc, ea_size,
                           MDS_BFLAG_EXT_FLAGS/*request "new" flags(bug 9486)*/);
 
+        if (valid & OBD_MD_FLRMTPERM)
+                acl_size = sizeof(struct mdt_remote_perm);
         /* currently only root inode will call us with FLACL */
-        if (valid & OBD_MD_FLACL)
+        else if (valid & OBD_MD_FLACL)
                 acl_size = LUSTRE_POSIX_ACL_MAX_SIZE;
          
         rc = mdc_getattr_common(exp, ea_size, acl_size,
@@ -554,20 +556,20 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
         }
         rc = 0;
 
-        /* for ACL, it's possible that FLACL is set but aclsize is zero.  only
-         * when aclsize != 0 there's an actual segment for ACL in reply
-         * buffer. */
-        if ((md->body->valid & OBD_MD_FLACL) && md->body->aclsize) {
-                rc = mdc_unpack_acl(dt_exp, req, md, offset++);
-                if (rc)
-                        GOTO(out, rc);
-        }
-
         /* remote permission */
         if (md->body->valid & OBD_MD_FLRMTPERM) {
                 md->remote_perm = lustre_msg_buf(req->rq_repmsg, offset++,
                                                 sizeof(struct mdt_remote_perm));
                 LASSERT(md->remote_perm);
+        }
+
+        /* for ACL, it's possible that FLACL is set but aclsize is zero.  only
+         * when aclsize != 0 there's an actual segment for ACL in reply
+         * buffer. */
+        else if ((md->body->valid & OBD_MD_FLACL) && md->body->aclsize) {
+                rc = mdc_unpack_acl(dt_exp, req, md, offset++);
+                if (rc)
+                        GOTO(out, rc);
         }
 
         if (md->body->valid & OBD_MD_FLMDSCAPA) {
