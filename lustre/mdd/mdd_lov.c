@@ -49,13 +49,11 @@ static int mdd_lov_update(struct obd_device *host,
                           enum obd_notify_event ev, void *owner)
 {
         struct mdd_device *mdd = owner;
-        struct obd_device *obd;
         struct md_device *upcall_dev;
         int rc;
         ENTRY;
 
         LASSERT(owner != NULL);
-        obd = mdd2obd_dev(mdd);
 
         upcall_dev = mdd->mdd_md_dev.md_upcall.mu_upcall_dev;
 
