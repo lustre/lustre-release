@@ -654,13 +654,13 @@ AC_ARG_ENABLE([gss],
 AC_MSG_RESULT([$enable_gss])
 
 if test x$enable_gss == xyes; then
-	AC_MSG_CHECKING([whether CONFIG_SUNRPC is in kernel config file])
-	if test -f $LINUX_CONFIG && egrep -q "CONFIG_SUNRPC=[y|m]" $LINUX_CONFIG; then
-		AC_MSG_RESULT([yes])
-	else
-		AC_MSG_RESULT([no])
-		AC_MSG_ERROR([Sunrpc is not enabled in kernel, GSS module can't build, consider --disable-gss.])
-	fi
+        LB_LINUX_CONFIG([SUNRPC],[],[
+	        AC_MSG_ERROR([Lustre require that CONFIG_SUNRPC is enabled in your kernel to build GSS module.])
+        ])
+
+        LB_LINUX_CONFIG([SUNRPC_GSS],[],[
+	        AC_MSG_ERROR([Lustre require that CONFIG_SUNRPC_GSS is enabled in your kernel to build GSS module.])
+        ])
 
         GSSAPI_LIBS=""
 
