@@ -179,6 +179,7 @@ struct mdt_device {
         struct timer_list          mdt_ck_timer;
         struct ptlrpc_thread       mdt_ck_thread;
         struct lustre_capa_key     mdt_capa_keys[2];
+        unsigned int               mdt_capa_conf:1;
 };
 
 /*XXX copied from mds_internal.h */

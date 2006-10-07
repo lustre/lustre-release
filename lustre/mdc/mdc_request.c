@@ -1618,7 +1618,7 @@ static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
                                     int status)
 {
         struct obd_capa *oc = req->rq_async_args.pointer_arg[0];
-        renew_capa_cb_t *cb = req->rq_async_args.pointer_arg[1];
+        renew_capa_cb_t cb = req->rq_async_args.pointer_arg[1];
         struct mds_body *body = NULL;
         struct lustre_capa *capa;
         ENTRY;
@@ -1644,7 +1644,7 @@ static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
 
         EXIT;
 out:
-        (*cb)(oc, capa);
+        cb(oc, capa);
         return 0;
 }
 

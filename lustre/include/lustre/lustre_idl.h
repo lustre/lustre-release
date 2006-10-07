@@ -1940,12 +1940,12 @@ enum {
 
 static inline int capa_for_mds(struct lustre_capa *c)
 {
-        return (c->lc_opc & CAPA_OPC_INDEX_INSERT) != 0;
+        return (c->lc_opc & CAPA_OPC_INDEX_LOOKUP) != 0;
 }
 
 static inline int capa_for_oss(struct lustre_capa *c)
 {
-        return (c->lc_opc & CAPA_OPC_INDEX_INSERT) == 0;
+        return (c->lc_opc & CAPA_OPC_INDEX_LOOKUP) == 0;
 }
 
 /* lustre_capa.lc_flags */

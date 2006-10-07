@@ -1906,6 +1906,9 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         if (rc)
                                 goto invalid;
                         clear++;
+                } else if (strncmp(s1, "capa=", 5) == 0) {
+                        lmd->lmd_nllu = simple_strtoul(s1 + 5, NULL, 10);
+                        clear++;
                 }
                 /* Linux 2.4 doesn't pass the device, so we stuck it at the
                    end of the options. */

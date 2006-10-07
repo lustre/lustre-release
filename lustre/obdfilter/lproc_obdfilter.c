@@ -305,6 +305,49 @@ int lprocfs_filter_wr_fmd_max_age(struct file *file, const char *buffer,
         return count;
 }
 
+static int lprocfs_filter_rd_capa(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int rc;
+
+        rc = snprintf(page, count, "capability on: %s\n",
+                      obd->u.filter.fo_fl_oss_capa ? "oss" : "");
+        return rc;
+}
+
+static int lprocfs_filter_wr_capa(struct file *file, const char *buffer,
+                                  unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        char mode[2] = "";
+
+        if (count > 2) {
+                CERROR("invalid capability mode, only o/x are accepted.\n"
+                       " o: enable oss fid capability\n"
+                       " x: disable oss fid capability\n");
+                return -EINVAL;
+        }
+
+        if (copy_from_user(mode, buffer, min(1UL, count)))
+                return -EFAULT;
+
+        if (strchr(mode, 'o'))
+                obd->u.filter.fo_fl_oss_capa = 1;
+        else
+                obd->u.filter.fo_fl_oss_capa = 0;
+
+        return count;
+}
+
+static int lprocfs_filter_rd_capa_count(char *page, char **start, off_t off,
+                                        int count, int *eof, void *data)
+{
+        return snprintf(page, count, "%d %d\n",
+                        capa_count[CAPA_SITE_CLIENT],
+                        capa_count[CAPA_SITE_SERVER]);
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,          0, 0 },
         { "blocksize",    lprocfs_rd_blksize,       0, 0 },
@@ -340,6 +383,9 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
                           lprocfs_filter_wr_fmd_max_num, 0 },
         { "client_cache_seconds", lprocfs_filter_rd_fmd_max_age,
                           lprocfs_filter_wr_fmd_max_age, 0 },
+        { "capa",         lprocfs_filter_rd_capa,
+                          lprocfs_filter_wr_capa, 0 },
+        { "capa_count",   lprocfs_filter_rd_capa_count, 0, 0 },
         { 0 }
 };
 

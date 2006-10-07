@@ -346,8 +346,7 @@ struct filter_capa_key {
 enum {
         CAPA_CTX_ON           = 1,
         CAPA_CTX_TIMEOUT      = 1<<1,
-        CAPA_CTX_KEY_TIMEOUT  = 1<<2,
-        CAPA_CTX_ALG          = 1<<3,
-        CAPA_CTX_KEYS         = 1<<4,
+        CAPA_CTX_ALG          = 1<<2,
+        CAPA_CTX_KEYS         = 1<<3,
 };
 #endif /* __LINUX_CAPA_H_ */

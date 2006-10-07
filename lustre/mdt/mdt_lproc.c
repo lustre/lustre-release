@@ -386,6 +386,26 @@ static int lprocfs_rd_rootsquash_uid(char *page, char **start, off_t off,
                         rsi ? rsi->rsi_uid : 0);
 }
 
+static int lprocfs_wr_rootsquash_uid(struct file *file, const char *buffer,
+                                     unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (!mdt->mdt_rootsquash_info)
+                OBD_ALLOC_PTR(mdt->mdt_rootsquash_info);
+        if (!mdt->mdt_rootsquash_info)
+                RETURN(-ENOMEM);
+
+        mdt->mdt_rootsquash_info->rsi_uid = val;
+        return count;
+}
+
 static int lprocfs_rd_rootsquash_gid(char *page, char **start, off_t off,
                                  int count, int *eof, void *data)
 {
@@ -396,6 +416,26 @@ static int lprocfs_rd_rootsquash_gid(char *page, char **start, off_t off,
         *eof = 1;
         return snprintf(page, count, "%u\n",
                         rsi ? rsi->rsi_gid : 0);
+}
+
+static int lprocfs_wr_rootsquash_gid(struct file *file, const char *buffer,
+                                     unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (!mdt->mdt_rootsquash_info)
+                OBD_ALLOC_PTR(mdt->mdt_rootsquash_info);
+        if (!mdt->mdt_rootsquash_info)
+                RETURN(-ENOMEM);
+
+        mdt->mdt_rootsquash_info->rsi_gid = val;
+        return count;
 }
 
 static int lprocfs_rd_rootsquash_skips(char *page, char **start, off_t off,
@@ -416,6 +456,64 @@ static int lprocfs_rd_rootsquash_skips(char *page, char **start, off_t off,
         return ret;
 }
 
+/* FIXME: this macro is copied from lnet/libcfs/nidstring.c */
+#define LNET_NIDSTR_SIZE   32      /* size of each one (see below for usage) */
+static void do_process_nosquash_nids(struct mdt_device *m, char *buf)
+{
+        struct rootsquash_info *rsi = m->mdt_rootsquash_info;
+        char str[LNET_NIDSTR_SIZE], *end;
+        lnet_nid_t nid;
+
+        LASSERT(rsi);
+        rsi->rsi_n_nosquash_nids = 0;
+        while (rsi->rsi_n_nosquash_nids < N_NOSQUASH_NIDS) {
+                end = strchr(buf, ',');
+                memset(str, 0, sizeof(str));
+                if (end)
+                        strncpy(str, buf, min_t(int, sizeof(str), end - buf));
+                else
+                        strncpy(str, buf, min_t(int, sizeof(str), strlen(buf)));
+
+                if (!strcmp(str, "*")) {
+                        nid = LNET_NID_ANY;
+                } else {
+                        nid = libcfs_str2nid(str);
+                        if (nid == LNET_NID_ANY)
+                                goto ignore;
+                }
+                rsi->rsi_nosquash_nids[rsi->rsi_n_nosquash_nids++] = nid;
+ignore:
+                if (!end || (*(end + 1) == 0))
+                        return;
+                buf = end + 1;
+        }
+}
+
+static int lprocfs_wr_rootsquash_skips(struct file *file, const char *buffer,
+                                       unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        char skips[LNET_NIDSTR_SIZE * N_NOSQUASH_NIDS] = "";
+        unsigned long size = sizeof(skips);
+
+        if (count > size) {
+                CERROR("parameter exceeds max limit %lu\n", size);
+                return -EINVAL;
+        }
+
+        if (copy_from_user(skips, buffer, min(size, count)))
+                return -EFAULT;
+
+        if (!mdt->mdt_rootsquash_info)
+                OBD_ALLOC_PTR(mdt->mdt_rootsquash_info);
+        if (!mdt->mdt_rootsquash_info)
+                RETURN(-ENOMEM);
+
+        do_process_nosquash_nids(mdt, skips);
+        return count;
+}
+
 /* for debug only */
 static int lprocfs_rd_capa(char *page, char **start, off_t off,
                            int count, int *eof, void *data)
@@ -431,22 +529,29 @@ static int lprocfs_rd_capa(char *page, char **start, off_t off,
 static int lprocfs_wr_capa(struct file *file, const char *buffer,
                            unsigned long count, void *data)
 {
-        int val, rc;
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        char mode[3] = "";
 
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val & ~0x3) {
-                CERROR("invalid value %u: only 0/1/2/3 is accepted.\n", val);
-                CERROR("\t0: disable capability\n"
-                       "\t1: enable mds capability\n"
-                       "\t2: enable oss capability\n"
-                       "\t3: enable both mds and oss capability\n");
+        if (count > 3) {
+                CERROR("invalid capability mode, only m/o/mo/x is accepted.\n"
+                       " m:  enable MDS fid capability\n"
+                       " o:  enable OSS fid capability\n"
+                       " mo: enable both MDS and OSS fid capability\n"
+                       " x:  disable fid capability\n");
                 return -EINVAL;
         }
 
-//        mds_capa_onoff(obd, val);
+        if (copy_from_user(mode, buffer, min(2UL, count)))
+                return -EFAULT;
+
+        mdt->mdt_opts.mo_mds_capa = 0;
+        mdt->mdt_opts.mo_oss_capa = 0;
+        if (strchr(mode, 'm'))
+                mdt->mdt_opts.mo_mds_capa = 1;
+        if (strchr(mode, 'o'))
+                mdt->mdt_opts.mo_oss_capa = 1;
+        mdt->mdt_capa_conf = 1;
         return count;
 }
 
@@ -459,12 +564,28 @@ static int lprocfs_rd_capa_count(char *page, char **start, off_t off,
 }
 
 static int lprocfs_rd_capa_timeout(char *page, char **start, off_t off,
-                                       int count, int *eof, void *data)
+                                   int count, int *eof, void *data)
 {
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
         return snprintf(page, count, "%lu\n", mdt->mdt_capa_timeout);
+}
+
+static int lprocfs_wr_capa_timeout(struct file *file, const char *buffer,
+                                   unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        mdt->mdt_capa_timeout = (unsigned long)val;
+        mdt->mdt_capa_conf = 1;
+        return count;
 }
 
 static int lprocfs_rd_ck_timeout(char *page, char **start, off_t off, int count,
@@ -474,6 +595,22 @@ static int lprocfs_rd_ck_timeout(char *page, char **start, off_t off, int count,
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 
         return snprintf(page, count, "%lu\n", mdt->mdt_ck_timeout);
+}
+
+static int lprocfs_wr_ck_timeout(struct file *file, const char *buffer,
+                                 unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        mdt->mdt_ck_timeout = (unsigned long)val;
+        mdt->mdt_capa_conf = 1;
+        return count;
 }
 
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
@@ -495,12 +632,18 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "rmtacl_upcall",              lprocfs_rd_rmtacl_upcall,
                                         lprocfs_wr_rmtacl_upcall,           0 },
         { "rmtacl_info",                0, lprocfs_wr_rmtacl_info,          0 },
-        { "rootsquash_uid",             lprocfs_rd_rootsquash_uid,       0, 0 },
-        { "rootsquash_gid",             lprocfs_rd_rootsquash_gid,       0, 0 },
-        { "rootsquash_skips",           lprocfs_rd_rootsquash_skips,     0, 0 },
-        { "capa",                       lprocfs_rd_capa, lprocfs_wr_capa,   0 },
-        { "capa_timeout",               lprocfs_rd_capa_timeout,         0, 0 },
-        { "capa_key_timeout",           lprocfs_rd_ck_timeout,           0, 0 },
+        { "rootsquash_uid",             lprocfs_rd_rootsquash_uid,
+                                        lprocfs_wr_rootsquash_uid,          0 },
+        { "rootsquash_gid",             lprocfs_rd_rootsquash_gid,
+                                        lprocfs_wr_rootsquash_gid,          0 },
+        { "rootsquash_skips",           lprocfs_rd_rootsquash_skips,
+                                        lprocfs_wr_rootsquash_skips,        0 },
+        { "capa",                       lprocfs_rd_capa,
+                                        lprocfs_wr_capa,                    0 },
+        { "capa_timeout",               lprocfs_rd_capa_timeout,
+                                        lprocfs_wr_capa_timeout,            0 },
+        { "capa_key_timeout",           lprocfs_rd_ck_timeout,
+                                        lprocfs_wr_ck_timeout,              0 },
         { "capa_count",                 lprocfs_rd_capa_count,           0, 0 },
         { 0 }
 };

@@ -420,6 +420,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
 static int mdt_renew_capa(struct mdt_thread_info *info)
 {
+        struct mdt_device *mdt = info->mti_mdt;
         struct mdt_object *obj = info->mti_object;
         struct mdt_body *body;
         struct lustre_capa *capa, *c;
@@ -428,6 +429,13 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
 
         c = req_capsule_client_get(&info->mti_pill, &RMF_CAPA1);
         LASSERT(c);
+
+        if ((capa_for_mds(c) && !mdt->mdt_opts.mo_mds_capa) ||
+            (capa_for_oss(c) && !mdt->mdt_opts.mo_oss_capa)) {
+                DEBUG_CAPA(D_SEC, c,
+                           "mds has disabled capability, skip renew for");
+                GOTO(out, rc = -ENOENT);
+        }
 
         capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
         LASSERT(capa);
@@ -439,9 +447,10 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
         LASSERT(body);
 
         body->valid |= OBD_MD_FLOSSCAPA;
+        EXIT;
+out:
         body->flags = (__u32)rc;
-
-        RETURN(0);
+        return 0;
 }
 
 static int mdt_getattr(struct mdt_thread_info *info)
@@ -1564,6 +1573,21 @@ static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
 #endif
 
 
+static int mdt_init_capa_ctxt(const struct lu_env *env, struct mdt_device *m)
+{
+        struct md_device *next = m->mdt_child;
+        __u32 valid = CAPA_CTX_TIMEOUT | CAPA_CTX_ALG | CAPA_CTX_KEYS;
+        int rc;
+
+        if (m->mdt_opts.mo_mds_capa)
+                valid |= CAPA_CTX_ON;
+        rc = next->md_ops->mdo_init_capa_ctxt(env, next, valid,
+                                              m->mdt_capa_timeout,
+                                              m->mdt_capa_alg,
+                                              m->mdt_capa_keys);
+        return rc;
+}
+
 /*
  * Invoke handler for this request opc. Also do necessary preprocessing
  * (according to handler ->mh_flags), and post-processing (setting of
@@ -1629,6 +1653,12 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                         CERROR("Can't unpack dlm request\n");
                         rc = -EFAULT;
                 }
+        }
+
+        /* capability setting changed by /proc, needs reinitialize ctxt */
+        if (info->mti_mdt && info->mti_mdt->mdt_capa_conf) {
+                mdt_init_capa_ctxt(info->mti_env, info->mti_mdt);
+                info->mti_mdt->mdt_capa_conf = 0;
         }
 
         if (rc == 0) {
@@ -3173,21 +3203,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
 int mdt_postrecov(const struct lu_env *, struct mdt_device *);
 
-static int mdt_init_capa_ctxt(const struct lu_env *env, struct mdt_device *m)
-{
-        struct md_device *next = m->mdt_child;
-        __u32 valid = CAPA_CTX_TIMEOUT | CAPA_CTX_ALG | CAPA_CTX_KEYS;
-        int rc;
-
-        if (m->mdt_opts.mo_mds_capa)
-                valid |= CAPA_CTX_ON;
-        rc = next->md_ops->mdo_init_capa_ctxt(env, next, valid,
-                                              m->mdt_capa_timeout,
-                                              m->mdt_capa_alg,
-                                              m->mdt_capa_keys);
-        return rc;
-}
-
 static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                      struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
@@ -3216,8 +3231,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_opts.mo_user_xattr = 0;
         m->mdt_opts.mo_acl = 0;
         m->mdt_opts.mo_compat_resname = 0;
-        m->mdt_opts.mo_mds_capa = 0;
-        m->mdt_opts.mo_oss_capa = 0;
         m->mdt_capa_timeout = CAPA_TIMEOUT;
         m->mdt_capa_alg = CAPA_HMAC_ALG_SHA1;
         m->mdt_ck_timeout = CAPA_KEY_TIMEOUT;
@@ -3345,97 +3358,23 @@ err_free_site:
         return (rc);
 }
 
-/* FIXME: this macro is copied from lnet/libcfs/nidstring.c */
-#define LNET_NIDSTR_SIZE   32      /* size of each one (see below for usage) */
-static void do_process_nosquash_nids(struct mdt_device *m, char *buf)
-{
-        struct rootsquash_info *rsi = m->mdt_rootsquash_info;
-        char str[LNET_NIDSTR_SIZE], *end;
-        lnet_nid_t nid;
-
-        LASSERT(rsi);
-        rsi->rsi_n_nosquash_nids = 0;
-        while (rsi->rsi_n_nosquash_nids < N_NOSQUASH_NIDS) {
-                end = strchr(buf, ',');
-                memset(str, 0, sizeof(str));
-                if (end)
-                        strncpy(str, buf, min_t(int, sizeof(str), end - buf));
-                else
-                        strncpy(str, buf, min_t(int, sizeof(str), strlen(buf)));
-
-                if (!strcmp(str, "*")) {
-                        nid = LNET_NID_ANY;
-                } else {
-                        nid = libcfs_str2nid(str);
-                        if (nid == LNET_NID_ANY)
-                                goto ignore;
-                }
-                rsi->rsi_nosquash_nids[rsi->rsi_n_nosquash_nids++] = nid;
-ignore:
-                if (!end || (*(end + 1) == 0))
-                        return;
-                buf = end + 1;
-        }
-}
-
 /* used by MGS to process specific configurations */
 static int mdt_process_config(const struct lu_env *env,
                               struct lu_device *d, struct lustre_cfg *cfg)
 {
         struct mdt_device *m = mdt_dev(d);
-        struct md_device *md_next  = m->mdt_child;
+        struct md_device *md_next = m->mdt_child;
         struct lu_device *next = md2lu_dev(md_next);
         int rc = 0;
         ENTRY;
 
         switch (cfg->lcfg_command) {
         case LCFG_PARAM: {
-                int i;
+                struct lprocfs_static_vars lvars;
+                struct obd_device *obd = d->ld_obd;
 
-                for (i = 1; i < cfg->lcfg_bufcount; i++) {
-                        char *key, *val;
-
-                        key = lustre_cfg_buf(cfg, i);
-                        val = strchr(key, '=');
-                        if (!val || (*(val + 1) == 0)) {
-                                CERROR("Can't parse param %s\n", key);
-                                rc = -EINVAL;
-                                /* continue parsing other params */
-                                continue;
-                        }
-
-                        val++;
-                        if (class_match_param(key,
-                                        PARAM_ROOTSQUASH_UID, 0) == 0) {
-                                if (!m->mdt_rootsquash_info)
-                                        OBD_ALLOC_PTR(m->mdt_rootsquash_info);
-                                if (!m->mdt_rootsquash_info)
-                                        RETURN(-ENOMEM);
-
-                                m->mdt_rootsquash_info->rsi_uid =
-                                        simple_strtoul(val, NULL, 0);
-                        } else if (class_match_param(key,
-                                        PARAM_ROOTSQUASH_GID, 0) == 0) {
-                                if (!m->mdt_rootsquash_info)
-                                        OBD_ALLOC_PTR(m->mdt_rootsquash_info);
-                                if (!m->mdt_rootsquash_info)
-                                        RETURN(-ENOMEM);
-
-                                m->mdt_rootsquash_info->rsi_gid =
-                                        simple_strtoul(val, NULL, 0);
-                        } else if (class_match_param(key,
-                                        PARAM_ROOTSQUASH_SKIPS, 0) == 0) {
-                                if (!m->mdt_rootsquash_info)
-                                        OBD_ALLOC_PTR(m->mdt_rootsquash_info);
-                                if (!m->mdt_rootsquash_info)
-                                        RETURN(-ENOMEM);
-
-                                do_process_nosquash_nids(m, val);
-                        } else {
-                                rc = -EINVAL;
-                        }
-                }
-
+                lprocfs_init_vars(mdt, &lvars);
+                rc = class_process_proc_param(PARAM_MDT, lvars.obd_vars, cfg, obd);
                 if (rc)
                         /* others are passed further */
                         rc = next->ld_ops->ldo_process_config(env, next, cfg);
