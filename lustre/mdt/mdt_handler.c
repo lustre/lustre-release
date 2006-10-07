@@ -959,10 +959,6 @@ static int mdt_readpage(struct mdt_thread_info *info)
         if (reqbody == NULL || repbody == NULL)
                 RETURN(err_serious(-EFAULT));
 
-        rc = mdt_init_ucred(info, reqbody);
-        if (rc)
-                RETURN(rc);
-
         /*
          * prepare @rdpg before calling lower layers and transfer itself. Here
          * reqbody->size contains offset of where to start to read and
@@ -972,13 +968,13 @@ static int mdt_readpage(struct mdt_thread_info *info)
         if ((__u64)rdpg->rp_hash != reqbody->size) {
                 CERROR("Invalid hash: %#llx != %#llx\n",
                        (__u64)rdpg->rp_hash, reqbody->size);
-                GOTO(out, rc = -EFAULT);
+                RETURN(-EFAULT);
         }
         rdpg->rp_count  = reqbody->nlink;
         rdpg->rp_npages = (rdpg->rp_count + CFS_PAGE_SIZE - 1)>>CFS_PAGE_SHIFT;
         OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
         if (rdpg->rp_pages == NULL)
-                GOTO(out, rc = -ENOMEM);
+                RETURN(-ENOMEM);
 
         for (i = 0; i < rdpg->rp_npages; ++i) {
                 rdpg->rp_pages[i] = alloc_pages(GFP_KERNEL, 0);
@@ -1006,11 +1002,8 @@ free_rdpg:
                         __free_pages(rdpg->rp_pages[i], 0);
         OBD_FREE(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
 
-        mdt_exit_ucred(info);
         MDT_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, 0);
 
-out:
-        mdt_exit_ucred(info);
         return rc ? rc : rc1;
 }
 

@@ -615,8 +615,6 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 
         uc->mu_fsuid = rec->sa_fsuid;
         uc->mu_fsgid = rec->sa_fsgid;
-        uc->mu_uid   = rec->sa_uid;
-        uc->mu_gid   = rec->sa_gid;
         uc->mu_cap   = rec->sa_cap;
         uc->mu_suppgids[0] = rec->sa_suppgid;
         uc->mu_suppgids[1] = -1;
