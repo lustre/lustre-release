@@ -720,7 +720,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         if (target->obd_recovering) {
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECOVERING);
-                target_start_recovery_timer(target/*, handler*/);
+                target_start_recovery_timer(target);
         }
 
         /* Tell the client if we support replayable requests */
@@ -1309,7 +1309,8 @@ static int check_for_clients(struct obd_device *obd)
         if (obd->obd_abort_recovery)
                 return 1;
         LASSERT(obd->obd_connected_clients <= obd->obd_max_recoverable_clients);
-        if (obd->obd_connected_clients == obd->obd_max_recoverable_clients)
+        if (obd->obd_configured &&
+            obd->obd_connected_clients == obd->obd_max_recoverable_clients)
                 return 1;
         return 0;
 }

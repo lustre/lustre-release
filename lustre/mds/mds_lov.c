@@ -237,6 +237,12 @@ static int mds_lov_update_desc(struct obd_device *obd, struct obd_export *lov)
         CDEBUG(D_CONFIG, "updated max_mdsize/max_cookiesize: %d/%d\n",
                mds->mds_max_mdsize, mds->mds_max_cookiesize);
 
+        /*XXX this notifies the MDD until lov handling use old mds code */
+        if (obd->obd_upcall.onu_owner) {
+                 LASSERT(obd->obd_upcall.onu_upcall != NULL);
+                 rc = obd->obd_upcall.onu_upcall(NULL, NULL, 0,
+                                                 obd->obd_upcall.onu_owner);
+        }
 out:
         OBD_FREE(ld, sizeof(*ld));
         RETURN(rc);

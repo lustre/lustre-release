@@ -1057,6 +1057,23 @@ out:
         RETURN(rc);
 }
 
+void class_config_notify_end(const char *name)
+{
+        ENTRY;
+        struct obd_device *obd;
+
+        /*XXX: This is fast fix to mountconf issue when osc are set up
+         * while recovery is in progress already.
+         * The MDS should wait the end of config llog parsing before starting
+         * recovery. This is done via obd_configured flag for now
+         */
+        obd = class_name2obd(name);
+        if (obd) {
+                obd->obd_configured = 1;
+        }
+        EXIT;
+}
+
 int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
                             struct config_llog_instance *cfg)
 {
@@ -1080,6 +1097,8 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
         cd.last_idx = 0;
 
         rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
+
+        class_config_notify_end(name);
 
         CDEBUG(D_CONFIG, "Processed log %s gen %d-%d (rc=%d)\n", name, 
                cd.first_idx + 1, cd.last_idx, rc);
