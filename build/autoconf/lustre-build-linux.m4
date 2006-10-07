@@ -284,6 +284,26 @@ $3
 ])
 
 #
+# LB_LINUX_CONFIG_IM
+#
+# check if a given config option is builtin or as module
+#
+AC_DEFUN([LB_LINUX_CONFIG_IM],
+[AC_MSG_CHECKING([if Linux was built with CONFIG_$1 in or as module])
+LB_LINUX_TRY_COMPILE([#include <linux/config.h>],[
+#if !(defined(CONFIG_$1) || defined(CONFIG_$1_MODULE))
+#error CONFIG_$1 and CONFIG_$1_MODULE not #defined
+#endif
+],[
+AC_MSG_RESULT([yes])
+$2
+],[
+AC_MSG_RESULT([no])
+$3
+])
+])
+
+#
 # LB_LINUX_TRY_MAKE
 #
 # like LB_LINUX_TRY_COMPILE, but with different arguments
@@ -342,8 +362,19 @@ LB_LINUX_CONFIG([KMOD],[],[
 	AC_MSG_WARN([])
 ])
 
-LB_LINUX_CONFIG([CRYPTO],[],[
+#
+# following CRYPTO related are required by capability
+#
+LB_LINUX_CONFIG_IM([CRYPTO],[],[
 	AC_MSG_ERROR([Lustre require that CONFIG_CRYPTO is enabled in your kernel.])
+])
+
+LB_LINUX_CONFIG_IM([CRYPTO_HMAC],[],[
+	AC_MSG_ERROR([Lustre require that CONFIG_CRYPTO_HMAC is enabled in your kernel.])
+])
+
+LB_LINUX_CONFIG_IM([CRYPTO_SHA1],[],[
+	AC_MSG_ERROR([Lustre require that CONFIG_CRYPTO_SHA1 is enabled in your kernel.])
 ])
 
 #LB_LINUX_CONFIG_BIG_STACK
@@ -368,3 +399,52 @@ fi
 AC_DEFUN([LB_LINUX_CONDITIONALS],
 [AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
 ])
+
+#
+# LC_LINUX_CONFIG_GSS
+#
+# Build gss and related tools of Lustre. Currently both kernel and user space
+# parts are depend on linux platform.
+#
+AC_DEFUN([LC_LINUX_CONFIG_GSS],
+[AC_MSG_CHECKING([whether to enable gss/krb5 support])
+AC_ARG_ENABLE([gss], 
+	AC_HELP_STRING([--enable-gss], [enable gss/krb5 support]),
+	[],[enable_gss='no'])
+AC_MSG_RESULT([$enable_gss])
+
+if test x$enable_gss == xyes; then
+	LB_LINUX_CONFIG_IM([SUNRPC],[],[
+		AC_MSG_ERROR([GSS require that CONFIG_SUNRPC is enabled in your kernel.])
+	])
+	LB_LINUX_CONFIG_IM([CRYPTO_DES],[],[
+		AC_MSG_WARN([DES support is recommended by using GSS.])
+	])
+	LB_LINUX_CONFIG_IM([CRYPTO_MD5],[],[
+		AC_MSG_WARN([MD5 support is recommended by using GSS.])
+	])
+	LB_LINUX_CONFIG_IM([CRYPTO_SHA256],[],[
+		AC_MSG_WARN([SHA256 support is recommended by using GSS.])
+	])
+	LB_LINUX_CONFIG_IM([CRYPTO_SHA512],[],[
+		AC_MSG_WARN([SHA512 support is recommended by using GSS.])
+	])
+	LB_LINUX_CONFIG_IM([CRYPTO_ARC4],[],[
+		AC_MSG_WARN([ARC4 support is recommended by using GSS.])
+	])
+	#
+	# unfortunately AES symbol is depend (optimized) on arch
+	#
+
+	AC_CHECK_LIB(gssapi, gss_init_sec_context, [
+		GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"
+		], [
+		AC_MSG_ERROR([libgssapi is not found, consider --disable-gss.])
+		], 
+	)
+
+	AC_SUBST(GSSAPI_LIBS)
+	AC_KERBEROS_V5
+fi
+])
+
