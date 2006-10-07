@@ -53,6 +53,9 @@ static inline struct ll_remote_perm *alloc_ll_remote_perm(void)
 
 static inline void free_ll_remote_perm(struct ll_remote_perm *lrp)
 {
+        if (!lrp)
+                return;
+
         if (!hlist_unhashed(&lrp->lrp_list))
                 hlist_del(&lrp->lrp_list);
         OBD_SLAB_FREE(lrp, ll_remote_perm_cachep, sizeof(*lrp));
@@ -81,6 +84,9 @@ void free_rmtperm_hash(struct hlist_head *hash)
         struct ll_remote_perm *lrp;
         struct hlist_node *node, *next;
 
+        if(!hash)
+                return;
+
         for (i = 0; i < REMOTE_PERM_HASHSIZE; i++)
                 hlist_for_each_entry_safe(lrp, node, next, hash + i, lrp_list)
                         free_ll_remote_perm(lrp);
@@ -94,7 +100,7 @@ static inline int remote_perm_hashfunc(uid_t uid)
 }
 
 /* NB: setxid permission is not checked here, instead it's done on
- * MDS when client get remote permission. (lookup/mdc_get_remote_perm). */
+ * MDT when client get remote permission. (lookup/mdc_get_remote_perm). */
 static int do_check_remote_perm(struct ll_inode_info *lli, int mask)
 {
         struct hlist_head *head;
@@ -138,7 +144,7 @@ out:
 int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct ll_remote_perm *lrp, *tmp = NULL;
+        struct ll_remote_perm *lrp = NULL, *tmp = NULL;
         struct hlist_head *head, *perm_hash = NULL;
         struct hlist_node *node;
         ENTRY;
@@ -166,12 +172,6 @@ int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm)
                 }
         }
 
-        lrp = alloc_ll_remote_perm();
-        if (!lrp) {
-                CERROR("alloc memory for ll_remote_perm failed!\n");
-                RETURN(-ENOMEM);
-        }
-
         spin_lock(&lli->lli_lock);
 
         if (!lli->lli_remote_perms)
@@ -180,6 +180,8 @@ int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm)
                 free_rmtperm_hash(perm_hash);
 
         head = lli->lli_remote_perms + remote_perm_hashfunc(perm->rp_uid);
+
+again:
         hlist_for_each_entry(tmp, node, head, lrp_list) {
                 if (tmp->lrp_uid != current->uid)
                         continue;
@@ -189,9 +191,21 @@ int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm)
                         continue;
                 if (tmp->lrp_fsgid != current->fsgid)
                         continue;
-                free_ll_remote_perm(lrp);
+                if (lrp)
+                        free_ll_remote_perm(lrp);
                 lrp = tmp;
                 break;
+        }
+
+        if (!lrp) {
+                spin_unlock(&lli->lli_lock);
+                lrp = alloc_ll_remote_perm();
+                if (!lrp) {
+                        CERROR("alloc memory for ll_remote_perm failed!\n");
+                        RETURN(-ENOMEM);
+                }
+                spin_lock(&lli->lli_lock);
+                goto again;
         }
 
         lrp->lrp_uid         = perm->rp_uid;

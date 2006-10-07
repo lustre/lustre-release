@@ -163,6 +163,7 @@ static int client_common_fill_super(struct super_block *sb,
         struct lustre_handle md_conn = {0, };
         struct obd_connect_data *data = NULL;
         struct lustre_md lmd;
+        obd_valid valid;
         int size, err;
         ENTRY;
 
@@ -392,10 +393,13 @@ static int client_common_fill_super(struct super_block *sb,
 
         /* make root inode
          * XXX: move this to after cbd setup? */
-        err = md_getattr(sbi->ll_md_exp, &rootfid, oc,
-                         OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLMDSCAPA |
-                         (sbi->ll_flags & LL_SBI_ACL ? OBD_MD_FLACL : 0),
-                         0, &request);
+        valid = OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLMDSCAPA;
+        if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
+                valid |= OBD_MD_FLRMTPERM;
+        else if (sbi->ll_flags & LL_SBI_ACL)
+                valid |= OBD_MD_FLACL;
+
+        err = md_getattr(sbi->ll_md_exp, &rootfid, oc, valid, 0, &request);
         if (oc)
                 free_capa(oc);
         if (err) {
@@ -780,6 +784,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_open_fd_exec_count = 0;
         INIT_LIST_HEAD(&lli->lli_dead_list);
         INIT_LIST_HEAD(&lli->lli_oss_capas);
+        lli->lli_remote_perms = NULL;
         sema_init(&lli->lli_rmtperm_sem, 1);
 }
 
@@ -1229,21 +1234,21 @@ void ll_clear_inode(struct inode *inode)
                 lli->lli_symlink_name = NULL;
         }
 
+        if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
+                LASSERT(lli->lli_posix_acl == NULL);
+                if (lli->lli_remote_perms) {
+                        free_rmtperm_hash(lli->lli_remote_perms);
+                        lli->lli_remote_perms = NULL;
+                }
+        }
 #ifdef CONFIG_FS_POSIX_ACL
-        if (lli->lli_posix_acl) {
+        else if (lli->lli_posix_acl) {
                 LASSERT(atomic_read(&lli->lli_posix_acl->a_refcount) == 1);
                 LASSERT(lli->lli_remote_perms == NULL);
                 posix_acl_release(lli->lli_posix_acl);
                 lli->lli_posix_acl = NULL;
         }
 #endif
-        if (lli->lli_remote_perms) {
-                LASSERT(sbi->ll_flags & LL_SBI_RMT_CLIENT);
-                LASSERT(lli->lli_posix_acl == NULL);
-                free_rmtperm_hash(lli->lli_remote_perms);
-                lli->lli_remote_perms = NULL;
-        }
-
         lli->lli_inode_magic = LLI_INODE_DEAD;
 
         spin_lock(&sbi->ll_deathrow_lock);
@@ -1697,6 +1702,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct mdt_body *body = md->body;
         struct lov_stripe_md *lsm = md->lsm;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
 
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
@@ -1735,9 +1741,12 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         obd_free_memmd(ll_i2dtexp(inode), &lsm);
         }
 
+        if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
+                if (body->valid & OBD_MD_FLRMTPERM)
+                        ll_update_remote_perm(inode, md->remote_perm);
+        }
 #ifdef CONFIG_FS_POSIX_ACL
-        LASSERT(!md->posix_acl || (body->valid & OBD_MD_FLACL));
-        if (body->valid & OBD_MD_FLACL) {
+        else if (body->valid & OBD_MD_FLACL) {
                 spin_lock(&lli->lli_lock);
                 if (lli->lli_posix_acl)
                         posix_acl_release(lli->lli_posix_acl);
@@ -1745,9 +1754,6 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 spin_unlock(&lli->lli_lock);
         }
 #endif
-        if (body->valid & OBD_MD_FLRMTPERM)
-                ll_update_remote_perm(inode, md->remote_perm);
-
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(inode->i_atime))
                 LTIME_S(inode->i_atime) = body->atime;
