@@ -45,6 +45,8 @@
 #include <obd_support.h>
 #include <lustre_req_layout.h>
 #include <lustre_fid.h>
+/* mdc RPC locks */
+#include <lustre_mdc.h>
 #include "fid_internal.h"
 
 static int seq_client_rpc(struct lu_client_seq *seq,
@@ -90,7 +92,10 @@ static int seq_client_rpc(struct lu_client_seq *seq,
                         SEQ_CONTROLLER_PORTAL : SEQ_DATA_PORTAL;
         }
 
+        mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
         rc = ptlrpc_queue_wait(req);
+        mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+
         if (rc)
                 GOTO(out_req, rc);
 

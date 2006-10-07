@@ -71,39 +71,6 @@ struct mdc_open_data {
         struct ptlrpc_request    *mod_close_req;
 };
 
-struct mdc_rpc_lock {
-        struct semaphore rpcl_sem;
-        struct lookup_intent *rpcl_it;
-};
-
-static inline void mdc_init_rpc_lock(struct mdc_rpc_lock *lck)
-{
-        sema_init(&lck->rpcl_sem, 1);
-        lck->rpcl_it = NULL;
-}
-
-static inline void mdc_get_rpc_lock(struct mdc_rpc_lock *lck,
-                                    struct lookup_intent *it)
-{
-        ENTRY;
-        if (!it || (it->it_op != IT_GETATTR && it->it_op != IT_LOOKUP)) {
-                down(&lck->rpcl_sem);
-                LASSERT(lck->rpcl_it == NULL);
-                lck->rpcl_it = it;
-        }
-}
-
-static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck,
-                                    struct lookup_intent *it)
-{
-        if (!it || (it->it_op != IT_GETATTR && it->it_op != IT_LOOKUP)) {
-                LASSERT(it == lck->rpcl_it);
-                lck->rpcl_it = NULL;
-                up(&lck->rpcl_sem);
-        }
-        EXIT;
-}
-
 static inline int client_is_remote(struct obd_export *exp)
 {
         return class_exp2cliimp(exp)->imp_connect_data.ocd_connect_flags &

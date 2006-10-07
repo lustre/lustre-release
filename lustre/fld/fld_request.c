@@ -50,6 +50,7 @@
 #include <md_object.h>
 #include <lustre_req_layout.h>
 #include <lustre_fld.h>
+#include <lustre_mdc.h>
 #include "fld_internal.h"
 
 static int fld_rrb_hash(struct lu_client_fld *fld,
@@ -392,7 +393,11 @@ static int fld_client_rpc(struct obd_export *exp,
         ptlrpc_req_set_repsize(req, 2, size);
         req->rq_request_portal = FLD_REQUEST_PORTAL;
 
+        if (fld_op != FLD_LOOKUP)
+                mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
         rc = ptlrpc_queue_wait(req);
+        if (fld_op != FLD_LOOKUP)
+                mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
         if (rc)
                 GOTO(out_req, rc);
 
