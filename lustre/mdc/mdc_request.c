@@ -1619,7 +1619,7 @@ static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
 {
         struct obd_capa *oc = req->rq_async_args.pointer_arg[0];
         renew_capa_cb_t cb = req->rq_async_args.pointer_arg[1];
-        struct mds_body *body = NULL;
+        struct mdt_body *body = NULL;
         struct lustre_capa *capa;
         ENTRY;
 
@@ -1638,10 +1638,9 @@ static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
         if ((body->valid & OBD_MD_FLOSSCAPA) == 0)
                 GOTO(out, capa = ERR_PTR(-EFAULT));
 
-        capa = lustre_unpack_capa(req->rq_repmsg, REPLY_REC_OFF);
+        capa = lustre_unpack_capa(req->rq_repmsg, REPLY_REC_OFF + 1);
         if (!capa)
-                capa = ERR_PTR(-EFAULT);
-
+                GOTO(out, capa = ERR_PTR(-EFAULT));
         EXIT;
 out:
         cb(oc, capa);

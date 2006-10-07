@@ -501,7 +501,7 @@ void mdt_shrink_reply(struct mdt_thread_info *info, int offset,
         offset += !!md_size;
         lustre_shrink_reply(req, offset, acl_size, 1);
         offset += !!acl_size;
-        if (mdscapa && !(body->valid & OBD_MD_FLMDSCAPA))
+        if (mdscapa && !(body->valid & (OBD_MD_FLMDSCAPA | OBD_MD_FLOSSCAPA)))
                 lustre_shrink_reply(req, offset, 0, 1);
         offset += mdscapa;
         if (osscapa && !(body->valid & OBD_MD_FLOSSCAPA))

@@ -839,7 +839,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
 #ifdef __KERNEL__
         struct lprocfs_vars *var;
         char *key, *sval;
-        int i, vallen;
+        int i, keylen, vallen;
         int matched = 0, j = 0;
         int rc = 0;
         ENTRY;
@@ -863,6 +863,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                         /* continue parsing other params */
                         continue;
                 }
+                keylen = sval - key;
                 sval++;
                 vallen = strlen(sval);
                 matched = 0;
@@ -870,7 +871,8 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                 /* Search proc entries */
                 while (lvars[j].name) {
                         var = &lvars[j];
-                        if (class_match_param(key, (char *)var->name, 0) == 0) {
+                        if (class_match_param(key, (char *)var->name, 0) == 0 &&
+                            keylen == strlen(var->name)) {
                                 matched++;
                                 rc = -EROFS;
                                 if (var->write_fptr) {
