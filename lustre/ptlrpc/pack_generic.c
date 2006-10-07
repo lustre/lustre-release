@@ -1206,8 +1206,8 @@ __u32 lustre_msg_get_opc(struct lustre_msg *msg)
                 return pb->pb_opc;
         }
         default:
-                LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
+                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+                return 666;
         }
 }
 
