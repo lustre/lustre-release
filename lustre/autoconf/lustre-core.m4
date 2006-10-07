@@ -642,48 +642,6 @@ AC_ARG_ENABLE([client],
 AC_MSG_RESULT([$enable_client])])
 
 #
-# LC_CONFIG_GSS
-#
-# Build gss and related tools of Lustre
-#
-AC_DEFUN([LC_CONFIG_GSS],
-[AC_MSG_CHECKING([whether to enable gss/krb5 support])
-AC_ARG_ENABLE([gss], 
-	AC_HELP_STRING([--enable-gss], [enable gss/krb5 support]),
-	[],[enable_gss='no'])
-AC_MSG_RESULT([$enable_gss])
-
-if test x$enable_gss == xyes; then
-        LB_LINUX_CONFIG([SUNRPC],[],[
-	        AC_MSG_ERROR([Lustre require that CONFIG_SUNRPC is enabled in your kernel to build GSS module.])
-        ])
-
-        LB_LINUX_CONFIG([SUNRPC_GSS],[],[
-	        AC_MSG_ERROR([Lustre require that CONFIG_SUNRPC_GSS is enabled in your kernel to build GSS module.])
-        ])
-
-        GSSAPI_LIBS=""
-
-	OLD_LIBS="$LIBS"
-	AC_CHECK_LIB(gssapi, gss_init_sec_context, [
-		GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"
-		enable_gss='yes'
-		], [
-		enable_gss='no'
-		], 
-	)
-	LIBS="$OLD_LIBS"
-	
-	if test x$enable_gss != xyes; then
-		AC_MSG_ERROR([libgssapi is not found, consider --disable-gss.])
-	fi
-
-	AC_SUBST(GSSAPI_LIBS)
-	AC_KERBEROS_V5
-fi
-])
-
-#
 # LC_CONFIG_LIBLUSTRE
 #
 # whether to build liblustre
