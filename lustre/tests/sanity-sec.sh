@@ -159,7 +159,7 @@ fi
 build_test_filter
 
 setup() {
-	if [ ! -z "$SETXID_CONF" ]
+	if [ -f "$SETXID_CONF" ]
 	then
 		mv -f $SETXID_CONF $SETXID_CONF_BAK
 	else
@@ -248,51 +248,62 @@ run_test 2 "lfs getfacl/setfacl ============================="
 test_3() {
 	[ -n "$SEC" ] && echo "ignore rootsquash test for single node" && return
 
-	$LCTL conf_param $MDT security.rootsquash.skips=none
+	#$LCTL conf_param $MDT.mdt.rootsquash_skips=none
+	echo none > $ROOTSQUASH_SKIPS
 	while grep LNET_NID_ANY $ROOTSQUASH_SKIPS > /dev/null; do sleep 1; done
-	$LCTL conf_param $MDT security.rootsquash.uid=0
+	#$LCTL conf_param $MDT.mdt.rootsquash_uid=0
+	echo 0 > $ROOTSQUASH_UID
 	while [ "`cat $ROOTSQUASH_UID`" -ne 0 ]; do sleep 1; done
-	$LCTL conf_param $MDT security.rootsquash.gid=0
+	#$LCTL conf_param $MDT.mdt.rootsquash_gid=0
+	echo 0 > $ROOTSQUASH_GID
 	while [ "`cat $ROOTSQUASH_GID`" -ne 0 ]; do sleep 1; done
 
 	rm -rf $DIR/d3
 	mkdir $DIR/d3
 	chown $USER1 $DIR/d3
 	chmod 700 $DIR/d3
-	$LCTL conf_param $MDT security.rootsquash.uid=500
+	#$LCTL conf_param $MDT.mdt.rootsquash_uid=500
+	echo 500 > $ROOTSQUASH_UID
 	echo "set rootsquash uid = 500"
 	while [ "`cat $ROOTSQUASH_UID`" -ne 500 ]; do sleep 1; done
 	touch $DIR/f3_0 && error
 	touch $DIR/d3/f3_1 || error
 
-	$LCTL conf_param $MDT security.rootsquash.uid=0
+	#$LCTL conf_param $MDT.mdt.rootsquash_uid=0
+	echo 0 > $ROOTSQUASH_UID
 	echo "disable rootsquash"
 	while [ "`cat $ROOTSQUASH_UID`" -ne 0 ]; do sleep 1; done
 	chown root $DIR/d3
 	chgrp $USER2 $DIR/d3
 	chmod 770 $DIR/d3
 
-	$LCTL conf_param $MDT security.rootsquash.uid=500
+	#$LCTL conf_param $MDT.mdt.rootsquash_uid=500
+	echo 500 > $ROOTSQUASH_UID
 	echo "set rootsquash uid = 500"
 	while [ "`cat $ROOTSQUASH_UID`" -ne 500 ]; do sleep 1; done
 	touch $DIR/d3/f3_2 && error
-	$LCTL conf_param $MDT security.rootsquash.gid=501
+	#$LCTL conf_param $MDT.mdt.rootsquash_gid=501
+	echo 501 > $ROOTSQUASH_GID
 	echo "set rootsquash gid = 501"
 	while [ "`cat $ROOTSQUASH_GID`" -ne 501 ]; do sleep 1; done
 	touch $DIR/d3/f3_3 || error
 
-	$LCTL conf_param $MDT security.rootsquash.skips=*
+	#$LCTL conf_param $MDT.mdt.rootsquash_skips=*
+	echo "*," > $ROOTSQUASH_SKIPS 
 	echo "add host in rootsquash skip list"
 	while ! grep LNET_NID_ANY $ROOTSQUASH_SKIPS > /dev/null;
 		do sleep 1;
 	done
 	touch $DIR/f3_4 || error
 
-	$LCTL conf_param $MDT security.rootsquash.uid=0
+	#$LCTL conf_param $MDT.mdt.rootsquash_uid=0
+	echo 0 > $ROOTSQUASH_UID
 	while [ "`cat $ROOTSQUASH_UID`" -ne 0 ]; do sleep 1; done
-	$LCTL conf_param $MDT security.rootsquash.gid=0
+	#$LCTL conf_param $MDT.mdt.rootsquash_gid=0
+	echo 0 > $ROOTSQUASH_GID
 	while [ "`cat $ROOTSQUASH_GID`" -ne 0 ]; do sleep 1; done
-	$LCTL conf_param $MDT security.rootsquash.skips=none
+	#$LCTL conf_param $MDT.mdt.rootsquash_skips=none
+	echo none > $ROOTSQUASH_SKIPS
 	rm -rf $DIR/d3
 	rm -f $DIR/f3_?
 }
@@ -314,7 +325,7 @@ run_test 4 "set supplementary group ==============="
 log "cleanup: ======================================================"
 
 unsetup() {
-	if [ ! -z "$SETXID_CONF_BAK" ]
+	if [ -f "$SETXID_CONF_BAK" ]
 	then
 		mv -f $SETXID_CONF_BAK $SETXID_CONF
 	fi
