@@ -438,7 +438,7 @@ static int lprocfs_wr_rootsquash_gid(struct file *file, const char *buffer,
         return count;
 }
 
-static int lprocfs_rd_rootsquash_skips(char *page, char **start, off_t off,
+static int lprocfs_rd_nosquash_nids(char *page, char **start, off_t off,
                                        int count, int *eof, void *data)
 {
         struct obd_device *obd = data;
@@ -454,6 +454,14 @@ static int lprocfs_rd_rootsquash_skips(char *page, char **start, off_t off,
 
         *eof = 1;
         return ret;
+}
+
+static inline void remove_newline(char *str)
+{
+        int len = strlen(str);
+
+        if (str[len - 1] == '\n')
+                str[len - 1] = '\0';
 }
 
 /* FIXME: this macro is copied from lnet/libcfs/nidstring.c */
@@ -489,7 +497,7 @@ ignore:
         }
 }
 
-static int lprocfs_wr_rootsquash_skips(struct file *file, const char *buffer,
+static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
                                        unsigned long count, void *data)
 {
         struct obd_device *obd = data;
@@ -510,6 +518,7 @@ static int lprocfs_wr_rootsquash_skips(struct file *file, const char *buffer,
         if (!mdt->mdt_rootsquash_info)
                 RETURN(-ENOMEM);
 
+        remove_newline(skips);
         do_process_nosquash_nids(mdt, skips);
         return count;
 }
@@ -636,8 +645,8 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
                                         lprocfs_wr_rootsquash_uid,          0 },
         { "rootsquash_gid",             lprocfs_rd_rootsquash_gid,
                                         lprocfs_wr_rootsquash_gid,          0 },
-        { "rootsquash_skips",           lprocfs_rd_rootsquash_skips,
-                                        lprocfs_wr_rootsquash_skips,        0 },
+        { "nosquash_nids",              lprocfs_rd_nosquash_nids,
+                                        lprocfs_wr_nosquash_nids,           0 },
         { "capa",                       lprocfs_rd_capa,
                                         lprocfs_wr_capa,                    0 },
         { "capa_timeout",               lprocfs_rd_capa_timeout,
