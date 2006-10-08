@@ -707,7 +707,7 @@ AC_DEFUN([LC_CONFIG_SPLIT],
 AC_ARG_ENABLE([split], 
 	AC_HELP_STRING([--disable-split],
 			[enable split support]),
-	[],[enable_split='no'])
+	[],[enable_split='yes'])
 AC_MSG_RESULT([$enable_split])
 if test x$enable_split != xno; then
    AC_DEFINE(HAVE_SPLIT_SUPPORT, 1, [enable split support])
