@@ -707,7 +707,7 @@ static int lmv_fids_balanced(struct obd_device *obd)
         RETURN(1);
 }
 
-#if 0
+#if 1
 static int lmv_all_chars_policy(int count, struct qstr *name)
 {
         unsigned int c = 0;
@@ -736,7 +736,7 @@ static int lmv_placement_policy(struct obd_device *obd,
                  * balanced, that is all sequences have more or less equal
                  * number of objects created. */
                 if (hint->ph_cname && (hint->ph_opc == LUSTRE_OPC_MKDIR)) {
-#if 0
+#if 1
                         *mds = lmv_all_chars_policy(lmv->desc.ld_tgt_count,
                                                     hint->ph_cname);
                         rc = 0;
