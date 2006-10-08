@@ -127,12 +127,12 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
                __u32 cap_effective, __u64 rdev, struct ptlrpc_request **request)
 {
-        struct obd_device *obd = exp->exp_obd;
-        struct ptlrpc_request *req;
         int size[5] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mdt_rec_create),
                         0, op_data->namelen + 1 };
+        struct obd_device *obd = exp->exp_obd;
         int level, bufcount = 4, rc;
+        struct ptlrpc_request *req;
         ENTRY;
 
         if (op_data->mod_capa1)
@@ -148,8 +148,10 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        /* mdc_create_pack fills msg->bufs[1] with name
-         * and msg->bufs[2] with tgt, for symlinks or lov MD data */
+        /*
+         * mdc_create_pack() fills msg->bufs[1] with name and msg->bufs[2] with
+         * tgt, for symlinks or lov MD data.
+         */
         mdc_create_pack(req, REQ_REC_OFF, op_data, data, datalen, mode, uid,
                         gid, cap_effective, rdev);
 
@@ -159,6 +161,7 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
         level = LUSTRE_IMP_FULL;
  resend:
         rc = mdc_reint(req, obd->u.cli.cl_rpc_lock, level);
+        
         /* Resend if we were told to. */
         if (rc == -ERESTARTSYS) {
                 level = LUSTRE_IMP_RECOVER;

@@ -213,7 +213,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                         space->lr_start = in->lr_start;
 
                         space->lr_end = space->lr_start +
-                                LUSTRE_SEQ_SUPER_WIDTH;
+                                seq->lss_width;
                 } else {
                         /*
                          * Update super start by start from client's range. End

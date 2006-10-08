@@ -906,17 +906,16 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
                  const struct page *page, int offset)
 {
+        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(struct mdt_body) };
         struct obd_import *imp = class_exp2cliimp(exp);
-        struct ptlrpc_request *req = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
-        struct mdt_body *body;
-        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        struct ptlrpc_request *req = NULL;
         ENTRY;
 
         CDEBUG(D_INODE, "object: "DFID"\n", PFID(fid));
 
-        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_WRITEPAGE, 3, size,
-                              NULL);
+        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_WRITEPAGE, 3,
+                              size, NULL);
         if (req == NULL)
                 GOTO(out, rc = -ENOMEM);
 
@@ -925,16 +924,18 @@ int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
         desc = ptlrpc_prep_bulk_imp(req, 1, BULK_GET_SOURCE, MDS_BULK_PORTAL);
         if (desc == NULL)
                 GOTO(out, rc = -ENOMEM);
-        /* NB req now owns desc and will free it when it gets freed */
-        ptlrpc_prep_bulk_page(desc, (struct page*)page, 0, offset);
-
+        
+        /* NB req now owns desc and will free it when it gets freed. */
+        ptlrpc_prep_bulk_page(desc, (struct page *)page, 0, offset);
         mdc_readdir_pack(req, REQ_REC_OFF, 0, offset, fid, NULL);
 
         ptlrpc_req_set_repsize(req, 2, size);
         rc = ptlrpc_queue_wait(req);
+        EXIT;
 out:
-        ptlrpc_req_finished(req);
-        RETURN(rc);
+        if (req != NULL)
+                ptlrpc_req_finished(req);
+        return rc;
 }
 EXPORT_SYMBOL(mdc_sendpage);
 #endif
@@ -943,19 +944,20 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
                  struct obd_capa *oc, __u64 offset, struct page *page,
                  struct ptlrpc_request **request)
 {
+        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(struct mdt_body) };
         struct obd_import *imp = class_exp2cliimp(exp);
-        struct ptlrpc_request *req = NULL;
         struct ptlrpc_bulk_desc *desc = NULL;
+        struct ptlrpc_request *req = NULL;
         struct mdt_body *body;
-        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         CDEBUG(D_INODE, "object: "DFID"\n", PFID(fid));
 
-        if (oc)
+        if (oc != NULL)
                 size[REQ_REC_OFF + 1] = sizeof(struct lustre_capa);
-        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_READPAGE, 3, size,
-                              NULL);
+        
+        req = ptlrpc_prep_req(imp, LUSTRE_MDS_VERSION, MDS_READPAGE, 3,
+                              size, NULL);
         if (req == NULL)
                 GOTO(out, rc = -ENOMEM);
 
@@ -965,10 +967,9 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
         desc = ptlrpc_prep_bulk_imp(req, 1, BULK_PUT_SINK, MDS_BULK_PORTAL);
         if (desc == NULL)
                 GOTO(out, rc = -ENOMEM);
+
         /* NB req now owns desc and will free it when it gets freed */
-
         ptlrpc_prep_bulk_page(desc, page, 0, PAGE_CACHE_SIZE);
-
         mdc_readdir_pack(req, REQ_REC_OFF, offset, PAGE_CACHE_SIZE, fid, oc);
 
         ptlrpc_req_set_repsize(req, 2, size);
@@ -987,7 +988,7 @@ int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
                                 " (%ld expected)\n",
                                 req->rq_bulk->bd_nob_transferred,
                                 PAGE_CACHE_SIZE);
-                        GOTO (out, rc = -EPROTO);
+                        GOTO(out, rc = -EPROTO);
                 }
         }
 

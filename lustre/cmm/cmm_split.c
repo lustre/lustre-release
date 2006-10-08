@@ -264,11 +264,16 @@ static int cmm_remove_dir_ent(const struct lu_env *env, struct md_object *mo,
         if (IS_ERR(obj))
                 RETURN(PTR_ERR(obj));
 
-        is_dir = S_ISDIR(lu_object_attr(&obj->cmo_obj.mo_lu));
+        if (lu_object_exists(&obj->cmo_obj.mo_lu) > 0)
+                is_dir = S_ISDIR(lu_object_attr(&obj->cmo_obj.mo_lu));
+        else
+                /* XXX: is this correct? */
+                is_dir = 0;
+        
         OBD_ALLOC(name, ent->lde_namelen + 1);
         if (!name)
                 GOTO(cleanup, rc = -ENOMEM);
-                
+        
         memcpy(name, ent->lde_name, ent->lde_namelen);
         rc = mdo_name_remove(env, md_object_next(mo),
                              name, is_dir);
@@ -276,10 +281,11 @@ static int cmm_remove_dir_ent(const struct lu_env *env, struct md_object *mo,
         if (rc) 
                 GOTO(cleanup, rc);
         
-        /* Because this ent will be transferred to slave MDS and 
-         * insert it there, so in the slave MDS, we should know whether
-         * this object is dir or not, so use the highest bit of the hash
-         * to indicate that (because we do not use highest bit of hash)
+        /*
+         * This ent will be transferred to slave MDS and insert it there, so in
+         * the slave MDS, we should know whether this object is dir or not, so
+         * use the highest bit of the hash to indicate that (because we do not
+         * use highest bit of hash).
          */ 
         if (is_dir)
                 ent->lde_hash |= MAX_HASH_HIGHEST_BIT;
@@ -301,7 +307,7 @@ static int cmm_remove_entries(const struct lu_env *env,
         kmap(rdpg->rp_pages[0]);
         dp = page_address(rdpg->rp_pages[0]);
         for (ent = lu_dirent_start(dp); ent != NULL;
-                          ent = lu_dirent_next(ent)) {
+             ent = lu_dirent_next(ent)) {
                 if (ent->lde_hash < hash_end) {
                         rc = cmm_remove_dir_ent(env, mo, ent);  
                         if (rc) { 
@@ -331,8 +337,9 @@ static int cmm_split_entries(const struct lu_env *env,
         ENTRY;
 
         LASSERTF(rdpg->rp_npages == 1, "Now Only support split 1 page each time"
-                        "npages %d \n", rdpg->rp_npages);
-        /* Read splitted page and send them to the slave master */
+                 "npages %d\n", rdpg->rp_npages);
+
+        /* Read split page and send them to the slave master. */
         do {
                 struct lu_dirpage *ldp;
                 __u32  len = 0;
@@ -374,6 +381,7 @@ static int cmm_split_entries(const struct lu_env *env,
 
         RETURN(rc);
 }
+
 #define SPLIT_PAGE_COUNT 1
 static int cmm_scan_and_split(const struct lu_env *env,
                               struct md_object *mo, struct md_attr *ma)
@@ -417,7 +425,7 @@ cleanup:
                         __free_pages(rdpg->rp_pages[i], 0);
         if (rdpg->rp_pages)
                 OBD_FREE(rdpg->rp_pages, rdpg->rp_npages *
-                                         sizeof rdpg->rp_pages[0]);
+                         sizeof rdpg->rp_pages[0]);
 free_rdpg:
         if (rdpg)
                 OBD_FREE_PTR(rdpg);
@@ -481,8 +489,8 @@ int cml_try_to_split(const struct lu_env *env, struct md_object *mo)
         /* step4: set mea to the master object */
         rc = mo_xattr_set(env, md_object_next(mo), buf, MDS_LMV_MD_NAME, 0);
         if (rc == -ERESTART)
-                CWARN("Dir"DFID" has been split \n",
-                                PFID(lu_object_fid(&mo->mo_lu)));
+                CWARN("Dir "DFID" has been split\n",
+                      PFID(lu_object_fid(&mo->mo_lu)));
 cleanup:
         if (ma->ma_lmv_size && ma->ma_lmv)
                 OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);

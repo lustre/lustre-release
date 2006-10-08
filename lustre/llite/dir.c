@@ -918,10 +918,11 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 ptlrpc_req_set_repsize(req, 2, size);
 
                 rc = ptlrpc_queue_wait(req);
-                str = lustre_msg_string(req->rq_repmsg, REPLY_REC_OFF,
-                                        data->ioc_plen1);
-                if (!rc)
-                        rc = copy_to_user(data->ioc_pbuf1, str,data->ioc_plen1);
+                if (!rc) {
+                        str = lustre_msg_string(req->rq_repmsg, REPLY_REC_OFF,
+                                                data->ioc_plen1);
+                        rc = copy_to_user(data->ioc_pbuf1, str, data->ioc_plen1);
+                }
                 ptlrpc_req_finished(req);
         out_catinfo:
                 obd_ioctl_freedata(buf, len);

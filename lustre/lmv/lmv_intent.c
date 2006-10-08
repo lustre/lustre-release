@@ -139,8 +139,8 @@ out:
 int lmv_alloc_fid_for_split(struct obd_device *obd, struct lu_fid *pid,
                             struct md_op_data *op, struct lu_fid *fid)
 {
-        struct lmv_obj *obj;
         struct lmv_obd *lmv = &obd->u.lmv;
+        struct lmv_obj *obj;
         struct lu_fid *rpid;
         mdsno_t mds;
         int rc;

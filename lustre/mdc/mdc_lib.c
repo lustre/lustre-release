@@ -99,8 +99,7 @@ void mdc_pack_req_body(struct ptlrpc_request *req, int offset,
 }
 
 void mdc_readdir_pack(struct ptlrpc_request *req, int offset, __u64 pgoff,
-                      __u32 size, const struct lu_fid *fid,
-                      struct obd_capa *oc)
+                      __u32 size, const struct lu_fid *fid, struct obd_capa *oc)
 {
         struct mdt_body *b;
 
@@ -121,7 +120,8 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
 {
         struct mdt_rec_create *rec;
         char *tmp;
-        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
+        
+        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*rec));
 
         rec->cr_opcode = REINT_CREATE;
         rec->cr_fsuid = uid;
@@ -142,7 +142,7 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
 
         if (data) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, datalen);
-                memcpy (tmp, data, datalen);
+                memcpy(tmp, data, datalen);
         }
 }
 

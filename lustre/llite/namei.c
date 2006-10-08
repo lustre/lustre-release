@@ -959,6 +959,7 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
         struct md_op_data *op_data;
         int err;
         ENTRY;
+        
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
@@ -968,7 +969,7 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
         if (op_data == NULL)
                 RETURN(-ENOMEM);
 
-        /* allocate new fid */
+        /* Allocate new fid. */
         err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data->fid2, &hint);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
@@ -978,6 +979,7 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
         err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,
                         current->fsuid, current->fsgid,
                         current->cap_effective, 0, &request);
+        
         ll_finish_md_op_data(op_data);
         if (err == 0) {
                 ll_update_times(request, REPLY_REC_OFF, dir);
@@ -988,10 +990,9 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
                                 d_instantiate(dchild, inode);
                 }
         }
-        EXIT;
-out:
-        ptlrpc_req_finished(request);
-        return err;
+        if (request != NULL)
+                ptlrpc_req_finished(request);
+        RETURN(err);
 }
 
 static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,

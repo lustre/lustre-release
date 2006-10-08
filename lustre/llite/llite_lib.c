@@ -2249,9 +2249,10 @@ ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
 {
         LASSERT(i1 != NULL);
 
-        if (!op_data)
+        if (op_data == NULL)
                 OBD_ALLOC_PTR(op_data);
-        if (!op_data)
+        
+        if (op_data == NULL)
                 return NULL;
 
         ll_i2gids(op_data->suppgids, i1, i2);

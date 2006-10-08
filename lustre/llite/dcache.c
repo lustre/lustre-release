@@ -598,7 +598,7 @@ do_lookup:
                                                            DLM_REPLY_REC_OFF,
                                                            sizeof(*mdt_body));
                 /* see if we got same inode, if not - return error */
-                if(lu_fid_eq(&op_data->fid2, &mdt_body->fid1)) {
+                if (lu_fid_eq(&op_data->fid2, &mdt_body->fid1)) {
                         ll_finish_md_op_data(op_data);
                         op_data = NULL;
                         goto revalidate_finish;

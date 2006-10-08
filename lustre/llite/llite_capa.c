@@ -360,17 +360,19 @@ struct obd_capa *ll_lookup_oss_capa(struct inode *inode, __u64 opc)
 
 struct obd_capa *ll_i2mdscapa(struct inode *inode)
 {
-        struct obd_capa *ocapa;
         struct ll_inode_info *lli = ll_i2info(inode);
-
-        LASSERT(inode);
-        if ((ll_i2sbi(inode)->ll_flags & LL_SBI_MDS_CAPA) == 0)
-                return NULL;
+        struct obd_capa *ocapa;
         ENTRY;
+
+        LASSERT(inode != NULL);
+        
+        if ((ll_i2sbi(inode)->ll_flags & LL_SBI_MDS_CAPA) == 0)
+                RETURN(NULL);
 
         spin_lock(&capa_lock);
         ocapa = capa_get(lli->lli_mds_capa);
         spin_unlock(&capa_lock);
+        
         if (ocapa && !obd_capa_is_valid(ocapa)) {
                 DEBUG_CAPA(D_ERROR, &ocapa->c_capa, "invalid");
                 capa_put(ocapa);
