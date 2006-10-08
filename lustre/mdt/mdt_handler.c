@@ -843,7 +843,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
                 char *name;
 
                 offset += ent->lde_reclen;
-                if (ent->lde_reclen == 0 || ent->lde_namelen == 0)
+                if (ent->lde_namelen == 0)
                         continue;
                 
                 if (offset > size)
