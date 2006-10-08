@@ -268,7 +268,7 @@ static int cmm_remove_dir_ent(const struct lu_env *env, struct md_object *mo,
                 is_dir = S_ISDIR(lu_object_attr(&obj->cmo_obj.mo_lu));
         else
                 /* XXX: is this correct? */
-                is_dir = 0;
+                is_dir = 1;
         
         OBD_ALLOC(name, ent->lde_namelen + 1);
         if (!name)
