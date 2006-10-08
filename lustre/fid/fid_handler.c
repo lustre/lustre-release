@@ -75,7 +75,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                cli->lcs_name);
 
         /*
-         * Asking client for new range, assign that range to ->seq_super and
+         * Asking client for new range, assign that range to ->seq_space and
          * write seq state to backing store should be atomic.
          */
         down(&seq->lss_sem);
@@ -87,7 +87,7 @@ int seq_server_set_cli(struct lu_server_seq *seq,
          * Get new range from controller only if super-sequence is not yet
          * initialized from backing store or something else.
          */
-        if (range_is_zero(&seq->lss_super)) {
+        if (range_is_zero(&seq->lss_space)) {
                 rc = seq_client_alloc_super(cli, env);
                 if (rc) {
                         up(&seq->lss_sem);
@@ -97,9 +97,9 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 }
 
                 /* take super-seq from client seq mgr */
-                LASSERT(range_is_sane(&cli->lcs_range));
+                LASSERT(range_is_sane(&cli->lcs_space));
 
-                seq->lss_super = cli->lcs_range;
+                seq->lss_space = cli->lcs_space;
 
                 /* save init seq to backing store. */
                 rc = seq_store_write(seq, env);
@@ -140,7 +140,7 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
                 CDEBUG(D_INFO|D_WARNING, "%s: Recovery finished. Recovered "
                        "space: "DRANGE"\n", seq->lss_name, PRANGE(space));
         } else {
-                if (range_space(space) < seq->lss_super_width) {
+                if (range_space(space) < seq->lss_width) {
                         CWARN("%s: Sequences space to be exhausted soon. "
                               "Only "LPU64" sequences left\n", seq->lss_name,
                               range_space(space));
@@ -151,7 +151,7 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
                                seq->lss_name);
                         RETURN(-ENOSPC);
                 } else {
-                        range_alloc(out, space, seq->lss_super_width);
+                        range_alloc(out, space, seq->lss_width);
                 }
         }
 
@@ -187,11 +187,11 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                                    struct lu_range *out,
                                    const struct lu_env *env)
 {
-        struct lu_range *super = &seq->lss_super;
+        struct lu_range *space = &seq->lss_space;
         int rc = 0;
         ENTRY;
 
-        LASSERT(range_is_sane(super));
+        LASSERT(range_is_sane(space));
 
         /*
          * This is recovery case. Adjust super range if input range looks like
@@ -202,37 +202,37 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                        "(last allocated) range "DRANGE"\n", seq->lss_name,
                        PRANGE(in));
 
-                if (range_is_exhausted(super)) {
-                        LASSERT(in->lr_start > super->lr_start);
+                if (range_is_exhausted(space)) {
+                        LASSERT(in->lr_start > space->lr_start);
 
                         /*
                          * Server cannot send empty range to client, this is why
                          * we check here that range from client is "newer" than
                          * exhausted super.
                          */
-                        super->lr_start = in->lr_start;
+                        space->lr_start = in->lr_start;
 
-                        super->lr_end = super->lr_start +
+                        space->lr_end = space->lr_start +
                                 LUSTRE_SEQ_SUPER_WIDTH;
                 } else {
                         /*
                          * Update super start by start from client's range. End
                          * should not be changed if range was not exhausted.
                          */
-                        if (in->lr_start > super->lr_start)
-                                super->lr_start = in->lr_start;
+                        if (in->lr_start > space->lr_start)
+                                space->lr_start = in->lr_start;
                 }
 
                 *out = *in;
 
                 CDEBUG(D_INFO|D_WARNING, "%s: Recovery finished. Recovered "
-                       "super: "DRANGE"\n", seq->lss_name, PRANGE(super));
+                       "super: "DRANGE"\n", seq->lss_name, PRANGE(space));
         } else {
                 /*
                  * XXX: Avoid cascading RPCs using kind of async preallocation
                  * when meta-sequence is close to exhausting.
                  */
-                if (range_is_exhausted(super)) {
+                if (range_is_exhausted(space)) {
                         if (!seq->lss_cli) {
                                 CERROR("%s: No sequence controller client "
                                        "is setup\n", seq->lss_name);
@@ -247,10 +247,10 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                         }
 
                         /* Saving new range to allocation space. */
-                        *super = seq->lss_cli->lcs_range;
-                        LASSERT(range_is_sane(super));
+                        *space = seq->lss_cli->lcs_space;
+                        LASSERT(range_is_sane(space));
                 }
-                range_alloc(out, super, seq->lss_meta_width);
+                range_alloc(out, space, seq->lss_width);
         }
 
         rc = seq_store_write(seq, env);
@@ -501,14 +501,15 @@ int seq_server_init(struct lu_server_seq *seq,
         seq->lss_type = type;
         sema_init(&seq->lss_sem, 1);
 
-        seq->lss_super_width = LUSTRE_SEQ_SUPER_WIDTH;
-        seq->lss_meta_width = LUSTRE_SEQ_META_WIDTH;
+        seq->lss_width = is_srv ?
+                LUSTRE_SEQ_META_WIDTH : LUSTRE_SEQ_SUPER_WIDTH;
 
         snprintf(seq->lss_name, sizeof(seq->lss_name),
                  "%s-%s", (is_srv ? "srv" : "ctl"), prefix);
 
-        seq->lss_space = LUSTRE_SEQ_SPACE_RANGE;
-        seq->lss_super = LUSTRE_SEQ_ZERO_RANGE;
+        seq->lss_space = is_srv ?
+                LUSTRE_SEQ_ZERO_RANGE:
+                LUSTRE_SEQ_SPACE_RANGE;
 
         rc = seq_store_init(seq, env, dev);
         if (rc)

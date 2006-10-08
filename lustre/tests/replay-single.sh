@@ -66,14 +66,14 @@ seq_set_width()
 {
     local mds=$1
     local width=$2
-    local file=`ls /proc/fs/lustre/seq/cli-srv-$mds-mdc-*/seq_width` 
+    local file=`ls /proc/fs/lustre/seq/cli-srv-$mds-mdc-*/width` 
     echo $width > $file
 }
 
 seq_get_width()
 {
     local mds=$1
-    local file=`ls /proc/fs/lustre/seq/cli-srv-$mds-mdc-*/seq_width` 
+    local file=`ls /proc/fs/lustre/seq/cli-srv-$mds-mdc-*/width` 
     cat $file
 }
 

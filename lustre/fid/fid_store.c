@@ -52,17 +52,17 @@ enum {
         SEQ_TXN_STORE_CREDITS = 20
 };
 
-static struct lu_buf *seq_record_buf(struct seq_thread_info *info)
+static struct lu_buf *seq_store_buf(struct seq_thread_info *info)
 {
         struct lu_buf *buf;
 
         buf = &info->sti_buf;
-        buf->lb_buf = &info->sti_record;
-        buf->lb_len = sizeof(info->sti_record);
+        buf->lb_buf = &info->sti_space;
+        buf->lb_len = sizeof(info->sti_space);
         return buf;
 }
 
-/* this function implies that caller takes care about locking */
+/* This function implies that caller takes care about locking. */
 int seq_store_write(struct lu_server_seq *seq,
                     const struct lu_env *env)
 {
@@ -78,24 +78,20 @@ int seq_store_write(struct lu_server_seq *seq,
         info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
         LASSERT(info != NULL);
 
-        /* stub here, will fix it later */
+        /* Stub here, will fix it later. */
         info->sti_txn.tp_credits = SEQ_TXN_STORE_CREDITS;
 
         th = dt_dev->dd_ops->dt_trans_start(env, dt_dev, &info->sti_txn);
         if (!IS_ERR(th)) {
-                /* store ranges in le format */
-                range_cpu_to_le(&info->sti_record.ssr_space, &seq->lss_space);
-                range_cpu_to_le(&info->sti_record.ssr_super, &seq->lss_super);
+                /* Store ranges in le format. */
+                range_cpu_to_le(&info->sti_space, &seq->lss_space);
 
                 rc = dt_obj->do_body_ops->dbo_write(env, dt_obj,
-                                                    seq_record_buf(info),
+                                                    seq_store_buf(info),
                                                     &pos, th, BYPASS_CAPA);
-                if (rc == sizeof(info->sti_record)) {
-                        struct lu_range *r = (seq->lss_type == LUSTRE_SEQ_SERVER ?
-                                              &seq->lss_super : &seq->lss_space);
-                        
+                if (rc == sizeof(info->sti_space)) {
                         CDEBUG(D_INFO|D_WARNING, "%s: Space - "DRANGE"\n",
-                               seq->lss_name, PRANGE(r));
+                               seq->lss_name, PRANGE(&seq->lss_space));
                         rc = 0;
                 } else if (rc >= 0) {
                         rc = -EIO;
@@ -109,8 +105,10 @@ int seq_store_write(struct lu_server_seq *seq,
 	RETURN(rc);
 }
 
-/* this function implies that caller takes care about locking or locking is not
- * needed (init time). */
+/*
+ * This function implies that caller takes care about locking or locking is not
+ * needed (init time).
+ */
 int seq_store_read(struct lu_server_seq *seq,
                    const struct lu_env *env)
 {
@@ -123,25 +121,19 @@ int seq_store_read(struct lu_server_seq *seq,
         info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
         LASSERT(info != NULL);
 
-        rc = dt_obj->do_body_ops->dbo_read(env, dt_obj,
-                                           seq_record_buf(info), &pos,
-                                           BYPASS_CAPA);
+        rc = dt_obj->do_body_ops->dbo_read(env, dt_obj, seq_store_buf(info),
+                                           &pos, BYPASS_CAPA);
 
-        if (rc == sizeof(info->sti_record)) {
-                struct lu_range *r = (seq->lss_type == LUSTRE_SEQ_SERVER ?
-                                      &seq->lss_super : &seq->lss_space);
-                
-                range_le_to_cpu(&seq->lss_space, &info->sti_record.ssr_space);
-                range_le_to_cpu(&seq->lss_super, &info->sti_record.ssr_super);
-
+        if (rc == sizeof(info->sti_space)) {
+                range_le_to_cpu(&seq->lss_space, &info->sti_space);
                 CDEBUG(D_INFO|D_WARNING, "%s: Space - "DRANGE"\n",
-                       seq->lss_name, PRANGE(r));
+                       seq->lss_name, PRANGE(&seq->lss_space));
                 rc = 0;
         } else if (rc == 0) {
                 rc = -ENODATA;
         } else if (rc >= 0) {
                 CERROR("%s: Read only %d bytes of %d\n", seq->lss_name,
-                       rc, sizeof(info->sti_record));
+                       rc, sizeof(info->sti_space));
                 rc = -EIO;
         }
 	

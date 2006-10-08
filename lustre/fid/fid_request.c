@@ -50,7 +50,7 @@
 #include "fid_internal.h"
 
 static int seq_client_rpc(struct lu_client_seq *seq,
-                          struct lu_range *range,
+                          struct lu_range *space,
                           __u32 opc, const char *opcname)
 {
         int rc, size[3] = { sizeof(struct ptlrpc_body),
@@ -100,17 +100,17 @@ static int seq_client_rpc(struct lu_client_seq *seq,
                 GOTO(out_req, rc);
 
         out = req_capsule_server_get(&pill, &RMF_SEQ_RANGE);
-        *range = *out;
+        *space = *out;
 
-        if (!range_is_sane(range)) {
+        if (!range_is_sane(space)) {
                 CERROR("%s: Invalid range received from server: "
-                       DRANGE"\n", seq->lcs_name, PRANGE(range));
+                       DRANGE"\n", seq->lcs_name, PRANGE(space));
                 GOTO(out_req, rc = -EINVAL);
         }
 
-        if (range_is_exhausted(range)) {
+        if (range_is_exhausted(space)) {
                 CERROR("%s: Range received from server is exhausted: "
-                       DRANGE"]\n", seq->lcs_name, PRANGE(range));
+                       DRANGE"]\n", seq->lcs_name, PRANGE(space));
                 GOTO(out_req, rc = -EINVAL);
         }
 
@@ -118,7 +118,7 @@ static int seq_client_rpc(struct lu_client_seq *seq,
         *in = *out;
 
         CDEBUG(D_INFO, "%s: Allocated %s-sequence "DRANGE"]\n",
-               seq->lcs_name, opcname, PRANGE(range));
+               seq->lcs_name, opcname, PRANGE(space));
 
         EXIT;
 out_req:
@@ -137,11 +137,11 @@ static int __seq_client_alloc_super(struct lu_client_seq *seq,
         if (seq->lcs_srv) {
                 LASSERT(env != NULL);
                 rc = seq_server_alloc_super(seq->lcs_srv, NULL,
-                                            &seq->lcs_range,
+                                            &seq->lcs_space,
                                             env);
         } else {
 #endif
-                rc = seq_client_rpc(seq, &seq->lcs_range,
+                rc = seq_client_rpc(seq, &seq->lcs_space,
                                     SEQ_ALLOC_SUPER, "super");
 #ifdef __KERNEL__
         }
@@ -173,11 +173,11 @@ static int __seq_client_alloc_meta(struct lu_client_seq *seq,
         if (seq->lcs_srv) {
                 LASSERT(env != NULL);
                 rc = seq_server_alloc_meta(seq->lcs_srv, NULL,
-                                           &seq->lcs_range,
+                                           &seq->lcs_space,
                                            env);
         } else {
 #endif
-                rc = seq_client_rpc(seq, &seq->lcs_range,
+                rc = seq_client_rpc(seq, &seq->lcs_space,
                                     SEQ_ALLOC_META, "meta");
 #ifdef __KERNEL__
         }
@@ -205,11 +205,13 @@ static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
         int rc = 0;
         ENTRY;
 
-        LASSERT(range_is_sane(&seq->lcs_range));
+        LASSERT(range_is_sane(&seq->lcs_space));
 
-        /* if we still have free sequences in meta-sequence we allocate new seq
-         * from given range, if not - allocate new meta-sequence. */
-        if (range_space(&seq->lcs_range) == 0) {
+        /*
+         * If we still have free sequences in meta-sequence we allocate new seq
+         * from given range, if not - allocate new meta-sequence.
+         */
+        if (range_space(&seq->lcs_space) == 0) {
                 rc = __seq_client_alloc_meta(seq, NULL);
                 if (rc) {
                         CERROR("%s: Can't allocate new meta-sequence, "
@@ -217,13 +219,13 @@ static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
                         RETURN(rc);
                 } else {
                         CDEBUG(D_INFO|D_WARNING, "%s: New range - "DRANGE"\n",
-                               seq->lcs_name, PRANGE(&seq->lcs_range));
+                               seq->lcs_name, PRANGE(&seq->lcs_space));
                 }
         }
 
-        LASSERT(range_space(&seq->lcs_range) > 0);
-        *seqnr = seq->lcs_range.lr_start;
-        seq->lcs_range.lr_start++;
+        LASSERT(range_space(&seq->lcs_space) > 0);
+        *seqnr = seq->lcs_space.lr_start;
+        seq->lcs_space.lr_start++;
 
         CDEBUG(D_INFO, "%s: Allocated sequence ["LPX64"]\n",
                seq->lcs_name, *seqnr);
@@ -371,7 +373,7 @@ int seq_client_init(struct lu_client_seq *seq,
         seq->lcs_srv = srv;
         seq->lcs_type = type;
         fid_zero(&seq->lcs_fid);
-        range_zero(&seq->lcs_range);
+        range_zero(&seq->lcs_space);
         sema_init(&seq->lcs_sem, 1);
         seq->lcs_width = LUSTRE_SEQ_MAX_WIDTH;
 

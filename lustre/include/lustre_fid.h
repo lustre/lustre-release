@@ -37,21 +37,28 @@
 struct lu_site;
 struct lu_context;
 
-/* whole sequences space range and zero range definitions */
+/* Whole sequences space range and zero range definitions */
 extern const struct lu_range LUSTRE_SEQ_SPACE_RANGE;
 extern const struct lu_range LUSTRE_SEQ_ZERO_RANGE;
 extern const struct lu_fid LUSTRE_BFL_FID;
 
 enum {
-        /* this is how may FIDs may be allocated in one sequence. 16384 for now */
+        /*
+         * This is how may FIDs may be allocated in one sequence. 16384 for
+         * now.
+         */
         LUSTRE_SEQ_MAX_WIDTH = 0x0000000000004000ULL,
 
-        /* how many sequences may be allocate for meta-sequence (this is 128
-         * sequences). */
+        /*
+         * How many sequences may be allocate for meta-sequence (this is 128
+         * sequences).
+         */
         LUSTRE_SEQ_META_WIDTH = 0x0000000000000080ULL,
 
-        /* this is how many sequences may be in one super-sequence allocated to
-         * MDTs. */
+        /*
+         * This is how many sequences may be in one super-sequence allocated to
+         * MDTs.
+         */
         LUSTRE_SEQ_SUPER_WIDTH = (LUSTRE_SEQ_META_WIDTH * LUSTRE_SEQ_META_WIDTH)
 };
 
@@ -67,32 +74,38 @@ enum lu_cli_type {
 
 struct lu_server_seq;
 
-/* client sequence manager interface */
+/* Client sequence manager interface. */
 struct lu_client_seq {
         /* sequence-controller export. */
         struct obd_export      *lcs_exp;
         struct semaphore        lcs_sem;
 
-        /* range of allowed for allocation sequeces. When using lu_client_seq on
+        /*
+         * Range of allowed for allocation sequeces. When using lu_client_seq on
          * clients, this contains meta-sequence range. And for servers this
-         * contains super-sequence range. */
-        struct lu_range         lcs_range;
+         * contains super-sequence range.
+         */
+        struct lu_range         lcs_space;
 
-        /* seq related proc */
+        /* Seq related proc */
         cfs_proc_dir_entry_t   *lcs_proc_dir;
 
-        /* this holds last allocated fid in last obtained seq */
+        /* This holds last allocated fid in last obtained seq */
         struct lu_fid           lcs_fid;
 
         /* LUSTRE_SEQ_METADATA or LUSTRE_SEQ_DATA */
         enum lu_cli_type        lcs_type;
 
-        /* service uuid, passed from MDT + seq name to form unique seq name to
-         * use it with procfs. */
+        /*
+         * Service uuid, passed from MDT + seq name to form unique seq name to
+         * use it with procfs.
+         */
         char                    lcs_name[80];
 
-        /* sequence width, that is how many objects may be allocated in one
-         * sequence. Default value for it is LUSTRE_SEQ_MAX_WIDTH. */
+        /*
+         * Sequence width, that is how many objects may be allocated in one
+         * sequence. Default value for it is LUSTRE_SEQ_MAX_WIDTH.
+         */
         __u64                   lcs_width;
 
         /* seq-server for direct talking */
@@ -101,40 +114,41 @@ struct lu_client_seq {
 
 /* server sequence manager interface */
 struct lu_server_seq {
-        /* available sequence space */
+        /* Available sequences space */
         struct lu_range         lss_space;
 
-        /* super-sequence range, all super-sequences for other servers are
-         * allocated from it. */
-        struct lu_range         lss_super;
-
-        /* device for server side seq manager needs (saving sequences to backing
-         * store). */
+        /*
+         * Device for server side seq manager needs (saving sequences to backing
+         * store).
+         */
         struct dt_device       *lss_dev;
 
         /* /seq file object device */
         struct dt_object       *lss_obj;
 
-        /* seq related proc */
+        /* Seq related proc */
         cfs_proc_dir_entry_t   *lss_proc_dir;
 
         /* LUSTRE_SEQ_SERVER or LUSTRE_SEQ_CONTROLLER */
         enum lu_mgr_type       lss_type;
 
-        /* client interafce to request controller */
+        /* Client interafce to request controller */
         struct lu_client_seq   *lss_cli;
 
-        /* semaphore for protecting allocation */
+        /* Semaphore for protecting allocation */
         struct semaphore        lss_sem;
 
-        /* service uuid, passed from MDT + seq name to form unique seq name to
-         * use it with procfs. */
+        /*
+         * Service uuid, passed from MDT + seq name to form unique seq name to
+         * use it with procfs.
+         */
         char                    lss_name[80];
 
-        /* allocation chunks for super and meta sequences. Default values are
-         * LUSTRE_SEQ_SUPER_WIDTH and LUSTRE_SEQ_META_WIDTH. */
-        __u64                   lss_super_width;
-        __u64                   lss_meta_width;
+        /*
+         * Allocation chunks for super and meta sequences. Default values are
+         * LUSTRE_SEQ_SUPER_WIDTH and LUSTRE_SEQ_META_WIDTH.
+         */
+        __u64                   lss_width;
 };
 
 int seq_query(struct com_thread_info *info);
