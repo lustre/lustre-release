@@ -236,7 +236,7 @@ int lustre_check_remote_perm(struct inode *inode, int mask)
 
 check:
         rc = do_check_remote_perm(lli, mask);
-        if (rc != -ENOENT)
+        if (!rc || ((rc != -ENOENT) && i))
                 RETURN(rc);
 
         might_sleep();
@@ -244,7 +244,7 @@ check:
         down(&lli->lli_rmtperm_sem);
         /* check again */
         rc = do_check_remote_perm(lli, mask);
-        if (rc != -ENOENT) {
+        if (!rc || ((rc != -ENOENT) && i)) {
                 up(&lli->lli_rmtperm_sem);
                 RETURN(rc);
         }
