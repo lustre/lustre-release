@@ -398,6 +398,7 @@ fi
 #
 AC_DEFUN([LB_LINUX_CONDITIONALS],
 [AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
+AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 ])
 
 #
