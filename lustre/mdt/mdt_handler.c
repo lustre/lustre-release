@@ -156,9 +156,10 @@ void mdt_set_disposition(struct mdt_thread_info *info,
 
 static int mdt_getstatus(struct mdt_thread_info *info)
 {
-        struct md_device *next  = info->mti_mdt->mdt_child;
-        struct mdt_body  *body;
-        int               rc;
+        struct mdt_device *mdt  = info->mti_mdt;
+        struct md_device  *next = mdt->mdt_child;
+        struct mdt_body   *body;
+        int                rc;
 
         ENTRY;
 
@@ -167,14 +168,16 @@ static int mdt_getstatus(struct mdt_thread_info *info)
 
         body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         rc = next->md_ops->mdo_root_get(info->mti_env, next, &body->fid1);
-        if (rc == 0)
-                body->valid |= OBD_MD_FLID;
+        if (rc != 0)
+                RETURN(rc);
 
-        if (info->mti_mdt->mdt_opts.mo_mds_capa) {
+        body->valid |= OBD_MD_FLID;
+
+        if (mdt->mdt_opts.mo_mds_capa) {
                 struct mdt_object  *root;
                 struct lustre_capa *capa;
 
-                root = mdt_object_find(info->mti_env, info->mti_mdt, &body->fid1);
+                root = mdt_object_find(info->mti_env, mdt, &body->fid1);
                 if (IS_ERR(root))
                         RETURN(PTR_ERR(root));
 
@@ -184,9 +187,8 @@ static int mdt_getstatus(struct mdt_thread_info *info)
 
                 rc = mo_capa_get(info->mti_env, mdt_object_child(root), capa);
                 mdt_object_put(info->mti_env, root);
-                if (rc)
-                        RETURN(rc);
-                body->valid |= OBD_MD_FLMDSCAPA;
+                if (rc == 0)
+                        body->valid |= OBD_MD_FLMDSCAPA;
         }
 
         RETURN(rc);
@@ -340,6 +342,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 }
         } else if (S_ISLNK(la->la_mode) &&
                           reqbody->valid & OBD_MD_LINKNAME) {
+                /* FIXME: Is this buffer long enough? */
                 buffer->lb_buf = ma->ma_lmm;
                 buffer->lb_len = ma->ma_lmm_size;
                 rc = mo_readlink(env, next, buffer);
@@ -420,9 +423,9 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
 static int mdt_renew_capa(struct mdt_thread_info *info)
 {
-        struct mdt_device *mdt = info->mti_mdt;
-        struct mdt_object *obj = info->mti_object;
-        struct mdt_body *body;
+        struct mdt_device  *mdt = info->mti_mdt;
+        struct mdt_object  *obj = info->mti_object;
+        struct mdt_body    *body;
         struct lustre_capa *capa, *c;
         int rc;
         ENTRY;
