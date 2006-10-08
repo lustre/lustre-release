@@ -54,8 +54,13 @@ typedef enum {
         UCRED_NEW       = 2,
 } ucred_t;
 
+#define SQUASH_NONE     0x00
+#define SQUASH_UID      0x01
+#define SQUASH_GID      0x02
+
 struct md_ucred {
         ucred_t                 mu_valid;
+        __u32                   mu_squash;
         __u32                   mu_o_uid;
         __u32                   mu_o_gid;
         __u32                   mu_o_fsuid;

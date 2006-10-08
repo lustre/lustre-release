@@ -560,7 +560,10 @@ int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *req,
         return 0;
 }
 
-/* reverse map */
+/*
+ * Reverse map
+ * Do not ignore rootsquash.
+ */
 void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
@@ -574,8 +577,9 @@ void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
                 return;
 
         if (body->valid & OBD_MD_FLUID) {
-                if ((uc->mu_valid == UCRED_OLD) ||
-                    (uc->mu_valid == UCRED_NEW)) {
+                if (((uc->mu_valid == UCRED_OLD) ||
+                    (uc->mu_valid == UCRED_NEW)) &&
+                    !(uc->mu_squash & SQUASH_UID)) {
                         if (body->uid == uc->mu_uid)
                                 uid = uc->mu_o_uid;
                         else if (body->uid == uc->mu_fsuid)
@@ -597,8 +601,9 @@ void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
         }
 
         if (body->valid & OBD_MD_FLGID) {
-                if ((uc->mu_valid == UCRED_OLD) ||
-                    (uc->mu_valid == UCRED_NEW)) {
+                if (((uc->mu_valid == UCRED_OLD) ||
+                    (uc->mu_valid == UCRED_NEW)) &&
+                    !(uc->mu_squash & SQUASH_GID)) {
                         if (body->gid == uc->mu_gid)
                                 gid = uc->mu_o_gid;
                         else if (body->gid == uc->mu_fsgid)
@@ -676,6 +681,9 @@ int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
 
         if ((uc->mu_valid != UCRED_OLD) && (uc->mu_valid != UCRED_NEW))
                 RETURN(-EINVAL);
+
+        if (!med->med_rmtclient && (uc->mu_squash == SQUASH_NONE))
+                RETURN(0);
 
         if (op != REINT_SETATTR) {
                 if ((attr->la_valid & LA_UID) && (attr->la_uid != -1))

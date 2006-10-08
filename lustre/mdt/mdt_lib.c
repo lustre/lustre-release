@@ -138,6 +138,7 @@ static int old_init_ucred(struct mdt_thread_info *info,
         }
 
         uc->mu_valid = UCRED_OLD;
+        uc->mu_squash = SQUASH_NONE;
         uc->mu_o_uid = uc->mu_uid = body->uid;
         uc->mu_o_gid = uc->mu_gid = body->gid;
         uc->mu_o_fsuid = uc->mu_fsuid = body->fsuid;
@@ -173,6 +174,7 @@ static int old_init_ucred_reint(struct mdt_thread_info *info)
         }
 
         uc->mu_valid = UCRED_OLD;
+        uc->mu_squash = SQUASH_NONE;
         uc->mu_o_uid = uc->mu_o_fsuid = uc->mu_uid = uc->mu_fsuid;
         uc->mu_o_gid = uc->mu_o_fsgid = uc->mu_gid = uc->mu_fsgid;
         uc->mu_ginfo = NULL;
@@ -198,7 +200,6 @@ static int mdt_squash_root(struct mdt_device *mdt, struct md_ucred *ucred,
                            struct ptlrpc_user_desc *pud, lnet_nid_t peernid)
 {
         struct rootsquash_info *rsi = mdt->mdt_rootsquash_info;
-        int squash_count = 0;
 
         if (!rsi || (!rsi->rsi_uid && !rsi->rsi_gid) ||
             nid_nosquash(mdt, peernid))
@@ -217,14 +218,14 @@ static int mdt_squash_root(struct mdt_device *mdt, struct md_ucred *ucred,
         if (rsi->rsi_uid) {
                 if (!pud->pud_uid) {
                         ucred->mu_uid = rsi->rsi_uid;
-                        squash_count++;
+                        ucred->mu_squash |= SQUASH_UID;
                 } else {
                         ucred->mu_uid = pud->pud_uid;
                 }
 
                 if (!pud->pud_fsuid) {
                         ucred->mu_fsuid = rsi->rsi_uid;
-                        squash_count++;
+                        ucred->mu_squash |= SQUASH_UID;
                 } else {
                         ucred->mu_fsuid = pud->pud_fsuid;
                 }
@@ -238,14 +239,14 @@ static int mdt_squash_root(struct mdt_device *mdt, struct md_ucred *ucred,
 
                 if (!pud->pud_gid) {
                         ucred->mu_gid = rsi->rsi_gid;
-                        squash_count++;
+                        ucred->mu_squash |= SQUASH_GID;
                 } else {
                         ucred->mu_gid = pud->pud_gid;
                 }
 
                 if (!pud->pud_fsgid) {
                         ucred->mu_fsgid = rsi->rsi_gid;
-                        squash_count++;
+                        ucred->mu_squash |= SQUASH_GID;
                 } else {
                         ucred->mu_fsgid = pud->pud_fsgid;
                 }
@@ -253,14 +254,14 @@ static int mdt_squash_root(struct mdt_device *mdt, struct md_ucred *ucred,
                 for (i = 0; i < 2; i++) {
                         if (!ucred->mu_suppgids[i]) {
                                 ucred->mu_suppgids[i] = rsi->rsi_gid;
-                                squash_count++;
+                                ucred->mu_squash |= SQUASH_GID;
                         }
                 }
 
                 for (i = 0; i < pud->pud_ngroups; i++) {
                         if (!pud->pud_groups[i]) {
                                 pud->pud_groups[i] = rsi->rsi_gid;
-                                squash_count++;
+                                ucred->mu_squash |= SQUASH_GID;
                         }
                 }
         } else {
@@ -268,7 +269,7 @@ static int mdt_squash_root(struct mdt_device *mdt, struct md_ucred *ucred,
                 ucred->mu_fsgid = pud->pud_fsgid;
         }
 
-        if (squash_count || ucred->mu_fsuid)
+        if ((ucred->mu_squash & SQUASH_UID) || ucred->mu_fsuid)
                 ucred->mu_cap = (pud->pud_cap & ~CAP_FS_MASK);
         else
                 ucred->mu_cap = pud->pud_cap;
@@ -385,16 +386,18 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
 check_squash:
         /* FIXME: The exact behavior of root_squash is not defined. */
+        ucred->mu_squash = SQUASH_NONE;
         root_squashed = mdt_squash_root(mdt, ucred, pud, peernid);
         if (!root_squashed) {
                 ucred->mu_uid   = pud->pud_uid;
                 ucred->mu_gid   = pud->pud_gid;
                 ucred->mu_fsuid = pud->pud_fsuid;
                 ucred->mu_fsgid = pud->pud_fsgid;
-                ucred->mu_cap   = pud->pud_cap;
                 /* remove fs privilege for non-root user */
                 if (pud->pud_fsuid)
-                        ucred->mu_cap &= ~CAP_FS_MASK;
+                        ucred->mu_cap = (pud->pud_cap & ~CAP_FS_MASK);
+                else
+                        ucred->mu_cap = pud->pud_cap;
         }
 
         /*
