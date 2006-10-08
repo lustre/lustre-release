@@ -979,13 +979,14 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
                         current->fsuid, current->fsgid,
                         current->cap_effective, 0, &request);
         ll_finish_md_op_data(op_data);
-        ll_update_times(request, REPLY_REC_OFF, dir);
-        if (!err && dchild) {
-                err = ll_prep_inode(&inode, request, REPLY_REC_OFF,
-                                    dchild->d_sb);
-                if (err)
-                        GOTO(out, err);
-                d_instantiate(dchild, inode);
+        if (err == 0) {
+                ll_update_times(request, REPLY_REC_OFF, dir);
+                if (dchild) {
+                        err = ll_prep_inode(&inode, request, REPLY_REC_OFF,
+                                            dchild->d_sb);
+                        if (err == 0)
+                                d_instantiate(dchild, inode);
+                }
         }
         EXIT;
 out:
