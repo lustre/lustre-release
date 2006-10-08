@@ -1059,8 +1059,8 @@ out:
 
 void class_config_notify_end(const char *name)
 {
-        ENTRY;
         struct obd_device *obd;
+        ENTRY;
 
         /*XXX: This is fast fix to mountconf issue when osc are set up
          * while recovery is in progress already.
