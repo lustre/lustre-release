@@ -52,6 +52,7 @@ MEMHOG=${MEMHOG:-memhog}
 DIRECTIO=${DIRECTIO:-directio}
 ACCEPTOR_PORT=${ACCEPTOR_PORT:-988}
 UMOUNT=${UMOUNT:-"umount -d"}
+STRIPES_PER_OBJ=-1
 
 if [ $UID -ne 0 ]; then
 	echo "Warning: running as non-root uid $UID"
@@ -3162,7 +3163,7 @@ if [ "`mount | grep ^$NAME`" ]; then
     rm -rf $DIR/[Rdfs][1-9]*
 fi
 if [ "$I_MOUNTED" = "yes" ]; then
-    cleanupall -f || error "cleanup failed"
+   cleanupall -f || error "cleanup failed"
 fi
 
 
