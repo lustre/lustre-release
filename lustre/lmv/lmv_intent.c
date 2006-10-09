@@ -77,10 +77,6 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         if (!(body->valid & OBD_MD_MDS))
                 RETURN(0);
 
-        tgt_exp = lmv_get_export(lmv, &body->fid1);
-        if (IS_ERR(tgt_exp))
-                RETURN(PTR_ERR(tgt_exp));
-
         /*
          * oh, MDS reports that this is remote inode case i.e. we have to ask
          * for real attrs on another MDS.
@@ -104,6 +100,10 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         LASSERT(fid_is_sane(&body->fid1));
 
         it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
+
+        tgt_exp = lmv_get_export(lmv, &body->fid1);
+        if (IS_ERR(tgt_exp))
+                GOTO(out, PTR_ERR(tgt_exp));
 
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL)

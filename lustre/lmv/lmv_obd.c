@@ -1466,10 +1466,6 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         CDEBUG(D_OTHER, "ENQUEUE '%s' on "DFID" -> "DFID"\n",
                LL_IT2STR(it), PFID(&op_data->fid1), PFID(&body->fid1));
 
-        tgt_exp = lmv_get_export(lmv, &body->fid1);
-        if (IS_ERR(tgt_exp))
-                RETURN(PTR_ERR(tgt_exp));
-
         /* We got LOOKUP lock, but we really need attrs */
         pmode = it->d.lustre.it_lock_mode;
         LASSERT(pmode != 0);
@@ -1477,24 +1473,28 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         it->d.lustre.it_lock_mode = 0;
         it->d.lustre.it_data = NULL;
 
+        it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
+        ptlrpc_req_finished(req);
+
+        tgt_exp = lmv_get_export(lmv, &body->fid1);
+        if (IS_ERR(tgt_exp))
+                GOTO(out, PTR_ERR(tgt_exp));
+
         OBD_ALLOC_PTR(rdata);
         if (rdata == NULL)
-                RETURN(-ENOMEM);
+                GOTO(out, -ENOMEM);
+
         rdata->fid1 = body->fid1;
         rdata->name = NULL;
         rdata->namelen = 0;
 
-        it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
-        ptlrpc_req_finished(req);
-
         rc = md_enqueue(tgt_exp, lock_type, it, lock_mode, rdata,
                         lockh, lmm, lmmsize, cb_compl, cb_blocking,
                         cb_data, extra_lock_flags);
-        ldlm_lock_decref(&plock, pmode);
-
-        EXIT;
-out_free_rdata:
         OBD_FREE_PTR(rdata);
+        EXIT;
+out:
+        ldlm_lock_decref(&plock, pmode);
         return rc;
 }
 
