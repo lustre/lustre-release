@@ -125,8 +125,12 @@ void null_free_reqbuf(struct ptlrpc_sec *sec,
                       struct ptlrpc_request *req)
 {
         if (!req->rq_pool) {
+                LASSERTF(req->rq_reqmsg == req->rq_reqbuf,
+                         "reqmsg %p is not reqbuf %p in NULL sec\n",
+                         req->rq_reqmsg, req->rq_reqbuf);
+
                 OBD_FREE(req->rq_reqbuf, req->rq_reqbuf_len);
-                req->rq_reqbuf = NULL;
+                req->rq_reqmsg = req->rq_reqbuf = NULL;
                 req->rq_reqbuf_len = 0;
         }
 }

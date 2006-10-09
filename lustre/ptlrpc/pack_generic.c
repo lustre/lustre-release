@@ -480,7 +480,7 @@ void *lustre_msg_buf(struct lustre_msg *m, int n, int min_size)
         case LUSTRE_MSG_MAGIC_V2_SWABBED:
                 return lustre_msg_buf_v2(m, n, min_size);
         default:
-                LASSERTF(0, "incorrect message magic: %08x\n", m->lm_magic);
+                LASSERTF(0, "incorrect message magic: %08x(msg:%p)\n", m->lm_magic, m);
                 return NULL;
         }
 }
@@ -1206,8 +1206,8 @@ __u32 lustre_msg_get_opc(struct lustre_msg *msg)
                 return pb->pb_opc;
         }
         default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 666;
+                LASSERTF(0, "incorrect message magic: %08x(msg:%p)\n", msg->lm_magic, msg);
+                return 0;
         }
 }
 
