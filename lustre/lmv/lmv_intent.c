@@ -941,8 +941,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 LASSERT(body);
 
 update:
-                obj->lo_inodes[i].li_size = (MAX_HASH_SIZE/obj->lo_objcount) *
-                        (i + 1);
+                obj->lo_inodes[i].li_size = body->size;
 
                 CDEBUG(D_OTHER, "fresh: %lu\n",
                        (unsigned long)obj->lo_inodes[i].li_size);
