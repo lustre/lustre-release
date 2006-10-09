@@ -248,62 +248,51 @@ run_test 2 "lfs getfacl/setfacl ============================="
 test_3() {
 	[ -n "$SEC" ] && echo "ignore rootsquash test for single node" && return
 
-	#$LCTL conf_param $MDT.mdt.nosquash_nids=none
-	echo none > $NOSQUASH_NIDS
+	$LCTL conf_param $MDT.mdt.nosquash_nids=none
 	while grep LNET_NID_ANY $NOSQUASH_NIDS > /dev/null; do sleep 1; done
-	#$LCTL conf_param $MDT.mdt.rootsquash_uid=0
-	echo 0 > $ROOTSQUASH_UID
+	$LCTL conf_param $MDT.mdt.rootsquash_uid=0
 	while [ "`cat $ROOTSQUASH_UID`" -ne 0 ]; do sleep 1; done
-	#$LCTL conf_param $MDT.mdt.rootsquash_gid=0
-	echo 0 > $ROOTSQUASH_GID
+	$LCTL conf_param $MDT.mdt.rootsquash_gid=0
 	while [ "`cat $ROOTSQUASH_GID`" -ne 0 ]; do sleep 1; done
 
 	rm -rf $DIR/d3
 	mkdir $DIR/d3
 	chown $USER1 $DIR/d3
 	chmod 700 $DIR/d3
-	#$LCTL conf_param $MDT.mdt.rootsquash_uid=500
-	echo 500 > $ROOTSQUASH_UID
+	$LCTL conf_param $MDT.mdt.rootsquash_uid=500
 	echo "set rootsquash uid = 500"
 	while [ "`cat $ROOTSQUASH_UID`" -ne 500 ]; do sleep 1; done
 	touch $DIR/f3_0 && error
 	touch $DIR/d3/f3_1 || error
 
-	#$LCTL conf_param $MDT.mdt.rootsquash_uid=0
-	echo 0 > $ROOTSQUASH_UID
+	$LCTL conf_param $MDT.mdt.rootsquash_uid=0
 	echo "disable rootsquash"
 	while [ "`cat $ROOTSQUASH_UID`" -ne 0 ]; do sleep 1; done
 	chown root $DIR/d3
 	chgrp $USER2 $DIR/d3
 	chmod 770 $DIR/d3
 
-	#$LCTL conf_param $MDT.mdt.rootsquash_uid=500
-	echo 500 > $ROOTSQUASH_UID
+	$LCTL conf_param $MDT.mdt.rootsquash_uid=500
 	echo "set rootsquash uid = 500"
 	while [ "`cat $ROOTSQUASH_UID`" -ne 500 ]; do sleep 1; done
 	touch $DIR/d3/f3_2 && error
-	#$LCTL conf_param $MDT.mdt.rootsquash_gid=501
-	echo 501 > $ROOTSQUASH_GID
+	$LCTL conf_param $MDT.mdt.rootsquash_gid=501
 	echo "set rootsquash gid = 501"
 	while [ "`cat $ROOTSQUASH_GID`" -ne 501 ]; do sleep 1; done
 	touch $DIR/d3/f3_3 || error
 
-	#$LCTL conf_param $MDT.mdt.nosquash_nids=*
-	echo \* > $NOSQUASH_NIDS 
+	$LCTL conf_param $MDT.mdt.nosquash_nids=*
 	echo "add host in rootsquash skip list"
 	while ! grep LNET_NID_ANY $NOSQUASH_NIDS > /dev/null;
 		do sleep 1;
 	done
 	touch $DIR/f3_4 || error
 
-	#$LCTL conf_param $MDT.mdt.rootsquash_uid=0
-	echo 0 > $ROOTSQUASH_UID
+	$LCTL conf_param $MDT.mdt.rootsquash_uid=0
 	while [ "`cat $ROOTSQUASH_UID`" -ne 0 ]; do sleep 1; done
-	#$LCTL conf_param $MDT.mdt.rootsquash_gid=0
-	echo 0 > $ROOTSQUASH_GID
+	$LCTL conf_param $MDT.mdt.rootsquash_gid=0
 	while [ "`cat $ROOTSQUASH_GID`" -ne 0 ]; do sleep 1; done
-	#$LCTL conf_param $MDT.mdt.nosquash_nids=none
-	echo none > $NOSQUASH_NIDS
+	$LCTL conf_param $MDT.mdt.nosquash_nids=none
 	rm -rf $DIR/d3
 	rm -f $DIR/f3_?
 }
