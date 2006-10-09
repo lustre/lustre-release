@@ -296,6 +296,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
         rc = llog_handle2ops(handle, &lop);
         if (rc)
                 RETURN(rc);
+        LASSERT(lop);
         if (lop->lop_write_rec == NULL)
                 RETURN(-EOPNOTSUPP);
 

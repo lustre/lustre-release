@@ -911,7 +911,7 @@ test_43() { # bug 2530
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
 test_44() {
-    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    mdcdev=`awk '/MDT0000-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
 	#define OBD_FAIL_TGT_CONN_RACE     0x701
@@ -925,7 +925,7 @@ test_44() {
 run_test 44 "race in target handle connect"
 
 test_44b() {
-    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    mdcdev=`awk '/MDT0000-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
     for i in `seq 1 10`; do
 	#define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
@@ -940,7 +940,7 @@ run_test 44b "race in target handle connect"
 
 # Handle failed close
 test_45() {
-    mdcdev=`awk '/-mdc-/ {print $1}' $LPROC/devices`
+    mdcdev=`awk '/MDT0000-mdc-/ {print $1}' $LPROC/devices`
     [ "$mdcdev" ] || exit 2
     $LCTL --device $mdcdev recover
 
@@ -1015,7 +1015,7 @@ test_48() {
 run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
 
 test_50() {
-    local oscdev=`grep ${ost1_svc}-osc-MDT $LPROC/devices | awk '{print $1}'`
+    local oscdev=`grep ${ost1_svc}-osc-MDT0000 $LPROC/devices | awk '{print $1}'`
     [ "$oscdev" ] || return 1
     $LCTL --device $oscdev recover &&  $LCTL --device $oscdev recover
     # give the mds_lov_sync threads a chance to run

@@ -2903,10 +2903,12 @@ __mdd_ref_del(const struct lu_env *env, struct mdd_object *obj,
               struct thandle *handle)
 {
         struct dt_object *next = mdd_object_child(obj);
+        ENTRY;
 
         LASSERT(lu_object_exists(mdd2lu_obj(obj)));
 
         next->do_ops->do_ref_del(env, next, handle);
+        EXIT;
 }
 
 /* do NOT or the MAY_*'s, you'll get the weakest */

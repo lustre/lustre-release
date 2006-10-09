@@ -105,8 +105,8 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
                 if (lu_object_exists(&o->mot_obj.mo_lu) == 1) {
                         rc = mo_attr_get(info->mti_env, next, ma);
                 } else {
-                        rc = mo_object_create(info->mti_env, next, &info->mti_spec,
-                                      ma);
+                        rc = mo_object_create(info->mti_env, next, 
+                                              &info->mti_spec, ma);
                 }
                 if (rc == 0) {
                         /* return fid & attr to client. */

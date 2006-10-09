@@ -400,7 +400,12 @@ static void osd_index_fini(struct osd_object *o)
 
 static int osd_inode_unlinked(const struct inode *inode)
 {
-        return inode->i_nlink == !!S_ISDIR(inode->i_mode);
+        /*
+         * This is modified by huanghua@lusterfs.com:
+         * i_nlink of an unlinked object is zero even if it is a dir.
+         return inode->i_nlink == !!S_ISDIR(inode->i_mode);
+         */
+        return inode->i_nlink == 0;
 }
 
 enum {
@@ -430,8 +435,9 @@ static int osd_inode_remove(const struct lu_env *env,
                  * The following is added by huanghua@clusterfs.com as
                  * a temporary hack, to remove the directory entry in
                  * "*OBJ_TEMP*". We will finally do not use this hack,
-                 * and at that time we will remove these code.
+                 * and at that time we will remove these code under #if.
                  */
+#if 1
                 osd_fid_build_name(fid, oti->oti_name);
                 oti->oti_str.name = oti->oti_name;
                 oti->oti_str.len  = strlen(oti->oti_name);
@@ -442,8 +448,11 @@ static int osd_inode_remove(const struct lu_env *env,
                         obj->oo_inode->i_nlink = 1;
                         d_instantiate(dentry, obj->oo_inode);
                         result = dir->i_op->unlink(dir, dentry);
+                        obj->oo_inode->i_nlink = 0;
+                        mark_inode_dirty(obj->oo_inode);
                         dput(dentry);
                 } else
+#endif
                         iput(obj->oo_inode);
                 osd_trans_stop(env, th);
         } else

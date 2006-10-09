@@ -354,13 +354,17 @@ static inline struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
 static inline void mdt_object_get(const struct lu_env *env,
                                   struct mdt_object *o)
 {
+        ENTRY;
         lu_object_get(&o->mot_obj.mo_lu);
+        EXIT;
 }
 
 static inline void mdt_object_put(const struct lu_env *env,
                                   struct mdt_object *o)
 {
+        ENTRY;
         lu_object_put(env, &o->mot_obj.mo_lu);
+        EXIT;
 }
 
 static inline const struct lu_fid *mdt_object_fid(struct mdt_object *o)
