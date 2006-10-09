@@ -455,8 +455,8 @@ static int osd_inode_remove(const struct lu_env *env,
                         result = dir->i_op->unlink(dir, dentry);
                         if (S_ISDIR(obj->oo_inode->i_mode)) {
                                 /*
-                                 * The nlink of a dir was not decreased to 
-                                 * less than 2. see ldiskfs_unlink() and 
+                                 * The nlink of a dir was not decreased to
+                                 * less than 2. see ldiskfs_unlink() and
                                  * ldiskfs_dec_count().
                                  */
                                 obj->oo_inode->i_nlink = 0;
@@ -716,7 +716,7 @@ static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
 enum {
         /* Insert/Delete IAM
          * EXT3_INDEX_EXTRA_TRANS_BLOCKS(8) + EXT3_SINGLEDATA_TRANS_BLOCKS 8
-         * XXX Note: maybe iam need more,since iam have more level than Ext3 
+         * XXX Note: maybe iam need more,since iam have more level than Ext3
          * htree
          */
         INSERT_IAM_CREDITS  = 16,
@@ -759,11 +759,11 @@ static int osd_credit_get(const struct lu_env *env, struct dt_device *d,
                 default:
                         CERROR("Not recorgonized op %d", op);
                         LBUG();
-                        return -EINVAL; 
+                        return -EINVAL;
         }
         return (-EINVAL);
 }
-                
+
 static struct dt_device_operations osd_dt_ops = {
         .dt_root_get       = osd_root_get,
         .dt_statfs         = osd_statfs,
@@ -1234,7 +1234,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(ergo(result == 0, dt_object_exists(dt)));
         LASSERT(osd_invariant(obj));
-        return result;
+        RETURN(result);
 }
 
 static void osd_object_ref_add(const struct lu_env *env,
@@ -1412,8 +1412,8 @@ static int osd_dir_page_build(const struct lu_env *env, int first,
                 recsize = (sizeof *ent + len + 3) & ~3;
                 hash = iops->store(env, it);
                 *end = hash;
-                CDEBUG(D_INODE, "%p %p %d "DFID": %#8.8x (%d)\"%*.*s\"\n",
-                       area, ent, nob, PFID(fid), hash, len, len, len, name);
+                CDEBUG(D_INODE, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
+                       name, ent, nob, PFID(fid), hash, len, len, len, name);
                 if (nob >= recsize) {
                         ent->lde_fid = *fid;
                         ent->lde_hash = hash;
@@ -1448,7 +1448,10 @@ static int osd_readpage(const struct lu_env *env,
         struct dt_it      *it;
         struct osd_object *obj = osd_dt_obj(dt);
         struct dt_it_ops  *iops;
-        int i, rc, rc1 = 0, nob;
+        int i;
+        int rc;
+        int rc1;
+        int nob;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
@@ -1481,11 +1484,11 @@ static int osd_readpage(const struct lu_env *env,
          */
         rc = iops->load(env, it, rdpg->rp_hash);
 
-        /* When spliting, it need read entries from some offset by computing
+        /*
+         * When spliting, it need read entries from some offset by computing
          * not by some entries offset like readdir, so it might return 0 here.
          */
-        if (rc == 0)
-                rc1 = -ERANGE;
+        rc1 = rc == 0 ? -ERANGE : 0;
 
         if (rc >= 0) {
                 struct page      *pg; /* no, Richard, it _is_ initialized */

@@ -625,7 +625,7 @@ struct md_op_data {
 #endif
 #endif
         loff_t                attr_blocks;
-        
+
         /* Size-on-MDS epoch and flags. */
         __u64                 ioepoch;
         __u32                 flags;
@@ -1915,7 +1915,7 @@ extern void lustre_swab_lustre_capa(struct lustre_capa *c);
 /* lustre_capa.lc_opc */
 enum {
         /* MDS only fid capability */
-        CAPA_OPC_BODY_WRITE   = 1,     /* write fid data */
+        CAPA_OPC_BODY_WRITE   = 1<<0,  /* write fid data */
         CAPA_OPC_BODY_READ    = 1<<1,  /* read fid data */
         CAPA_OPC_INDEX_LOOKUP = 1<<2,  /* lookup fid */
         CAPA_OPC_INDEX_INSERT = 1<<3,  /* insert fid */
