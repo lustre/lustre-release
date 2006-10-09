@@ -73,9 +73,8 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 if (rc == 0) {
                         /* return fid & attr to client. */
                         if (ma->ma_valid & MA_INODE)
-                                mdt_pack_attr2body(repbody, &ma->ma_attr,
+                                mdt_pack_attr2body(info, repbody, &ma->ma_attr,
                                                    mdt_object_fid(child));
-                                mdt_body_reverse_idmap(info, repbody);
                 }
                 mdt_object_put(info->mti_env, child);
         } else
@@ -112,9 +111,8 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
                 if (rc == 0) {
                         /* return fid & attr to client. */
                         if (ma->ma_valid & MA_INODE)
-                                mdt_pack_attr2body(repbody, &ma->ma_attr,
+                                mdt_pack_attr2body(info, repbody, &ma->ma_attr,
                                                    mdt_object_fid(o));
-                                mdt_body_reverse_idmap(info, repbody);
                 }
                 mdt_object_put(info->mti_env, o);
         } else
@@ -273,7 +271,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         if (rc != 0)
                 GOTO(out, rc);
 
-        mdt_pack_attr2body(repbody, &ma->ma_attr, mdt_object_fid(mo));
+        mdt_pack_attr2body(info, repbody, &ma->ma_attr, mdt_object_fid(mo));
 
         if (mdt->mdt_opts.mo_oss_capa &&
             S_ISREG(lu_object_attr(&mo->mot_obj.mo_lu))) {
@@ -288,7 +286,6 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 repbody->valid |= OBD_MD_FLOSSCAPA;
         }
 
-        mdt_body_reverse_idmap(info, repbody);
         EXIT;
 out:
         mdt_object_put(info->mti_env, mo);

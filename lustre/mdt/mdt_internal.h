@@ -406,8 +406,8 @@ int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);
 int mdt_reint_rec(struct mdt_thread_info *, struct mdt_lock_handle *);
 void mdt_pack_size2body(struct mdt_body *b, const struct lu_attr *attr,
                         struct mdt_object *o);
-void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
-                        const struct lu_fid *fid);
+void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
+                        const struct lu_attr *attr, const struct lu_fid *fid);
 
 int mdt_getxattr(struct mdt_thread_info *info);
 int mdt_setxattr(struct mdt_thread_info *info);

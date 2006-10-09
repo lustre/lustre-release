@@ -1042,8 +1042,7 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
                 req->rq_status = rc;
                 body->valid |= OBD_MD_MDS;
         }
-        mdt_pack_attr2body(body, &mti->mti_attr.ma_attr, mdt_object_fid(child));
-        mdt_body_reverse_idmap(mti, body);
+        mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr, mdt_object_fid(child));
         mdt_object_put(mti->mti_env, child);
 }
 
@@ -1064,8 +1063,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
         obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1);
         LASSERT(!IS_ERR(obj));
         mo_attr_get(mti->mti_env, mdt_object_child(obj), &mti->mti_attr);
-        mdt_pack_attr2body(body, &mti->mti_attr.ma_attr, mdt_object_fid(obj));
-        mdt_body_reverse_idmap(mti, body);
+        mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr, mdt_object_fid(obj));
 
         /* Don't return OST-specific attributes if we didn't just set them */
 /*

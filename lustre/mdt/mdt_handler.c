@@ -230,8 +230,8 @@ void mdt_pack_size2body(struct mdt_body *b, const struct lu_attr *attr,
         }
 }
 
-void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
-                        const struct lu_fid *fid)
+void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
+                        const struct lu_attr *attr, const struct lu_fid *fid)
 {
         /*XXX should pack the reply body according to lu_valid*/
         b->valid |= OBD_MD_FLCTIME | OBD_MD_FLUID   |
@@ -260,6 +260,9 @@ void mdt_pack_attr2body(struct mdt_body *b, const struct lu_attr *attr,
                 CDEBUG(D_INODE, ""DFID": nlink=%d, mode=%o, size="LPU64"\n",
                                 PFID(fid), b->nlink, b->mode, b->size);
         }
+
+        if (info)
+                mdt_body_reverse_idmap(info, b);
 }
 
 static inline int mdt_body_has_lov(const struct lu_attr *la,
@@ -317,12 +320,10 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 RETURN(rc);
         }
 
-        if (ma->ma_valid & MA_INODE) {
-                mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
-                mdt_body_reverse_idmap(info, repbody);
-        } else {
+        if (ma->ma_valid & MA_INODE)
+                mdt_pack_attr2body(info, repbody, la, mdt_object_fid(o));
+        else
                 RETURN(-EFAULT);
-        }
 
         if (mdt_body_has_lov(la, reqbody)) {
                 if (ma->ma_valid & MA_LOV) {
@@ -1192,8 +1193,7 @@ static int mdt_sync(struct mdt_thread_info *info)
                                         body = req_capsule_server_get(pill,
                                                                 &RMF_MDT_BODY);
                                         fid = mdt_object_fid(info->mti_object);
-                                        mdt_pack_attr2body(body, la, fid);
-                                        mdt_body_reverse_idmap(info, body);
+                                        mdt_pack_attr2body(info, body, la, fid);
                                 }
                         }
                 } else

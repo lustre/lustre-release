@@ -329,8 +329,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         isreg = S_ISREG(la->la_mode);
         isdir = S_ISDIR(la->la_mode);
         islnk = S_ISLNK(la->la_mode);
-        mdt_pack_attr2body(repbody, la, mdt_object_fid(o));
-        mdt_body_reverse_idmap(info, repbody);
+        mdt_pack_attr2body(info, repbody, la, mdt_object_fid(o));
 
         if (med->med_rmtclient) {
                 void *buf = req_capsule_server_get(&info->mti_pill, &RMF_ACL);
