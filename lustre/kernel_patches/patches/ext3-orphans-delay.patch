@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/super.c
 ===================================================================
---- iam.orig/fs/ext3/super.c	2006-10-04 16:13:38.000000000 +0400
-+++ iam/fs/ext3/super.c	2006-10-04 16:13:40.000000000 +0400
+--- iam.orig/fs/ext3/super.c
++++ iam/fs/ext3/super.c
 @@ -147,6 +147,8 @@ static void ext3_handle_error(struct sup
  	EXT3_SB(sb)->s_mount_state |= EXT3_ERROR_FS;
  	es->s_state |= cpu_to_le16(EXT3_ERROR_FS);

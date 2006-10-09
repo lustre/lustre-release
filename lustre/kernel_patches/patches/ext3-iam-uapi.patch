@@ -1,7 +1,7 @@
 Index: iam/fs/ext3/Makefile
 ===================================================================
---- iam.orig/fs/ext3/Makefile	2006-10-04 15:07:04.000000000 +0400
-+++ iam/fs/ext3/Makefile	2006-10-04 15:07:05.000000000 +0400
+--- iam.orig/fs/ext3/Makefile
++++ iam/fs/ext3/Makefile
 @@ -6,7 +6,7 @@ obj-$(CONFIG_EXT3_FS) += ext3.o
  
  ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -13,8 +13,8 @@ Index: iam/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o
 Index: iam/fs/ext3/dir.c
 ===================================================================
---- iam.orig/fs/ext3/dir.c	2006-10-04 15:07:04.000000000 +0400
-+++ iam/fs/ext3/dir.c	2006-10-04 15:07:05.000000000 +0400
+--- iam.orig/fs/ext3/dir.c
++++ iam/fs/ext3/dir.c
 @@ -28,6 +28,7 @@
  #include <linux/smp_lock.h>
  #include <linux/slab.h>
@@ -23,51 +23,6 @@ Index: iam/fs/ext3/dir.c
  
  static unsigned char ext3_filetype_table[] = {
  	DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK
-@@ -59,7 +60,7 @@ static unsigned char get_dtype(struct su
- 
- 	return (ext3_filetype_table[filetype]);
- }
--			       
-+			
- 
- int ext3_check_dir_entry (const char * function, struct inode * dir,
- 			  struct ext3_dir_entry_2 * de,
-@@ -165,7 +166,7 @@ revalidate:
- 		 * to make sure. */
- 		if (filp->f_version != inode->i_version) {
- 			for (i = 0; i < sb->s_blocksize && i < offset; ) {
--				de = (struct ext3_dir_entry_2 *) 
-+				de = (struct ext3_dir_entry_2 *)
- 					(bh->b_data + i);
- 				/* It's too expensive to do a full
- 				 * dirent test each time round this
-@@ -184,7 +185,7 @@ revalidate:
- 			filp->f_version = inode->i_version;
- 		}
- 
--		while (!error && filp->f_pos < inode->i_size 
-+		while (!error && filp->f_pos < inode->i_size
- 		       && offset < sb->s_blocksize) {
- 			de = (struct ext3_dir_entry_2 *) (bh->b_data + offset);
- 			if (!ext3_check_dir_entry ("ext3_readdir", inode, de,
-@@ -232,7 +233,7 @@ out:
- /*
-  * These functions convert from the major/minor hash to an f_pos
-  * value.
-- * 
-+ *
-  * Currently we only use major hash numer.  This is unfortunate, but
-  * on 32-bit machines, the same VFS interface is used for lseek and
-  * llseek, so if we use the 64 bit offset, then the 32-bit versions of
-@@ -253,7 +254,7 @@ out:
- struct fname {
- 	__u32		hash;
- 	__u32		minor_hash;
--	struct rb_node	rb_hash; 
-+	struct rb_node	rb_hash;
- 	struct fname	*next;
- 	__u32		inode;
- 	__u8		name_len;
 @@ -305,12 +306,14 @@ static void free_rb_tree_fname(struct rb
  	root->rb_node = NULL;
  }
@@ -92,28 +47,10 @@ Index: iam/fs/ext3/dir.c
  	kfree(p);
  }
  
-@@ -413,7 +417,7 @@ static int call_filldir(struct file * fi
- 	curr_pos = hash2pos(fname->hash, fname->minor_hash);
- 	while (fname) {
- 		error = filldir(dirent, fname->name,
--				fname->name_len, curr_pos, 
-+				fname->name_len, curr_pos,
- 				fname->inode,
- 				get_dtype(sb, fname->file_type));
- 		if (error) {
-@@ -468,7 +472,7 @@ static int ext3_dx_readdir(struct file *
- 		/*
- 		 * Fill the rbtree if we have no more entries,
- 		 * or the inode has changed since we last read in the
--		 * cached entries. 
-+		 * cached entries.
- 		 */
- 		if ((!info->curr_node) ||
- 		    (filp->f_version != inode->i_version)) {
 Index: iam/fs/ext3/file.c
 ===================================================================
---- iam.orig/fs/ext3/file.c	2006-10-04 15:07:04.000000000 +0400
-+++ iam/fs/ext3/file.c	2006-10-04 15:07:05.000000000 +0400
+--- iam.orig/fs/ext3/file.c
++++ iam/fs/ext3/file.c
 @@ -23,6 +23,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -134,29 +71,19 @@ Index: iam/fs/ext3/file.c
  			(atomic_read(&inode->i_writecount) == 1))
  		ext3_discard_reservation(inode);
 -	if (is_dx(inode) && filp->private_data)
--		ext3_htree_free_dir_info(filp->private_data);
 +	if (is_dx(inode) && filp->private_data) {
 +		if (S_ISDIR(inode->i_mode))
-+			ext3_htree_free_dir_info(filp->private_data);
+ 		ext3_htree_free_dir_info(filp->private_data);
 +		else
 +			ext3_iam_release(filp, inode);
 +	}
  
  	return 0;
  }
-@@ -110,7 +115,7 @@ ext3_file_write(struct kiocb *iocb, cons
- 
- force_commit:
- 	err = ext3_force_commit(inode->i_sb);
--	if (err) 
-+	if (err)
- 		return err;
- 	return ret;
- }
 Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
---- iam.orig/fs/ext3/iam-uapi.c	2004-04-06 17:27:52.000000000 +0400
-+++ iam/fs/ext3/iam-uapi.c	2006-10-04 15:07:05.000000000 +0400
+--- iam.orig/fs/ext3/iam-uapi.c
++++ iam/fs/ext3/iam-uapi.c
 @@ -0,0 +1,368 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -528,8 +455,8 @@ Index: iam/fs/ext3/iam-uapi.c
 +}
 Index: iam/fs/ext3/ioctl.c
 ===================================================================
---- iam.orig/fs/ext3/ioctl.c	2006-10-04 15:07:04.000000000 +0400
-+++ iam/fs/ext3/ioctl.c	2006-10-04 15:07:05.000000000 +0400
+--- iam.orig/fs/ext3/ioctl.c
++++ iam/fs/ext3/ioctl.c
 @@ -250,6 +250,6 @@ flags_err:
  
  
@@ -540,8 +467,8 @@ Index: iam/fs/ext3/ioctl.c
  }
 Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- iam.orig/include/linux/lustre_iam.h	2006-10-04 15:07:04.000000000 +0400
-+++ iam/include/linux/lustre_iam.h	2006-10-04 15:07:05.000000000 +0400
+--- iam.orig/include/linux/lustre_iam.h
++++ iam/include/linux/lustre_iam.h
 @@ -30,9 +30,6 @@
  #ifndef __LINUX_LUSTRE_IAM_H__
  #define __LINUX_LUSTRE_IAM_H__
@@ -735,11 +662,11 @@ Index: iam/include/linux/lustre_iam.h
 + * nodes, yes the same struct iam_operations.
 + */
  struct iam_leaf_operations {
-         /*
-          * leaf operations.
+ 		/*
+ 		 * leaf operations.
 @@ -186,7 +279,8 @@ struct iam_leaf_operations {
          void (*start)(struct iam_leaf *l);
-         /* more leaf to the next entry. */
+ 		/* more leaf to the next entry. */
          void (*next)(struct iam_leaf *l);
 -        /* return key of current leaf record. This method may return
 +        /*
@@ -1091,13 +1018,17 @@ Index: iam/include/linux/lustre_iam.h
 +static inline struct iam_ikey *iam_get_ikey(struct iam_path *p,
 +                                            struct iam_entry *entry,
 +                                            struct iam_ikey *key)
-+{
+ {
+-	memcpy(k1, k2, c->ic_descr->id_key_size);
 +	return memcpy(key, entry, iam_path_descr(p)->id_ikey_size);
-+}
-+
+ }
+ 
+-static inline int iam_keycmp(const struct iam_container *c,
+-			     const struct iam_key *k1, const struct iam_key *k2)
 +static inline struct iam_ikey *iam_ikey_at(struct iam_path *p,
 +                                           struct iam_entry *entry)
-+{
+ {
+-	return c->ic_descr->id_ops->id_keycmp(c, k1, k2);
 +	return (struct iam_ikey *)entry;
 +}
 +
@@ -1118,19 +1049,15 @@ Index: iam/include/linux/lustre_iam.h
 + */
 +static inline void iam_ikeycpy0(const struct iam_container *c,
 +                                struct iam_ikey *k1, const struct iam_ikey *k2)
- {
--	memcpy(k1, k2, c->ic_descr->id_key_size);
++{
 +        if (k1 != k2)
 +                iam_ikeycpy(c, k1, k2);
- }
- 
--static inline int iam_keycmp(const struct iam_container *c,
--			     const struct iam_key *k1, const struct iam_key *k2)
++}
++
 +static inline int iam_ikeycmp(const struct iam_container *c,
 +                              const struct iam_ikey *k1,
 +                              const struct iam_ikey *k2)
- {
--	return c->ic_descr->id_ops->id_keycmp(c, k1, k2);
++{
 +	return c->ic_descr->id_ops->id_ikeycmp(c, k1, k2);
  }
  

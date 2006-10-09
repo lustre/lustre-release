@@ -1,7 +1,7 @@
-Index: linux-2.6.9/fs/ext3/namei.c
+Index: iam/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.9.orig/fs/ext3/namei.c	2006-04-25 15:43:37.000000000 +0800
-+++ linux-2.6.9/fs/ext3/namei.c	2006-04-25 15:44:27.000000000 +0800
+--- iam.orig/fs/ext3/namei.c
++++ iam/fs/ext3/namei.c
 @@ -82,13 +82,16 @@
   *
   * Entries in index node are sorted by their key value.
@@ -56,7 +56,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  
  static struct buffer_head *ext3_append(handle_t *handle,
  					struct inode *inode,
-@@ -205,194 +202,6 @@
+@@ -205,194 +202,6 @@ struct dx_map_entry
  	u32 offs;
  };
  
@@ -251,7 +251,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  
  static u32 htree_root_ptr(struct iam_container *c);
  static int htree_node_check(struct iam_path *path, struct iam_frame *frame);
-@@ -427,58 +236,7 @@
+@@ -427,58 +236,7 @@ struct iam_descr;
  struct iam_container;
  struct iam_path;
  
@@ -310,7 +310,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  
  /*
   * iam cursor (iterator) api.
-@@ -508,6 +266,11 @@
+@@ -508,6 +266,11 @@ enum iam_it_state {
  	IAM_IT_ATTACHED
  };
  
@@ -322,7 +322,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  /*
   * Iterator.
   *
-@@ -704,7 +467,7 @@
+@@ -704,7 +467,7 @@ static int ext3_dx_add_entry(handle_t *h
  			     struct inode *inode);
  
  static inline void iam_path_init(struct iam_path *path,
@@ -331,7 +331,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  static inline void iam_path_fini(struct iam_path *path);
  
  
-@@ -865,11 +628,6 @@
+@@ -865,11 +628,6 @@ static u32 htree_root_ptr(struct iam_con
  	return 0;
  }
  
@@ -343,7 +343,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  static int htree_node_check(struct iam_path *path, struct iam_frame *frame)
  {
  	void *data;
-@@ -1171,11 +929,13 @@
+@@ -1171,11 +929,13 @@ void iam_container_fini(struct iam_conta
  	}
  }
  
@@ -358,7 +358,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  }
  
  static inline void iam_path_fini(struct iam_path *path)
-@@ -1201,7 +961,7 @@
+@@ -1201,7 +961,7 @@ static void iam_path_compat_init(struct 
  	 * iam_path_fini().
  	 */
  	iput(inode);
@@ -367,7 +367,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  	for (i = 0; i < ARRAY_SIZE(path->ipc_path.ip_key_scratch); ++i)
  		path->ipc_path.ip_key_scratch[i] =
  			(struct iam_key *)&path->ipc_scrach[i];
-@@ -1213,6 +973,425 @@
+@@ -1213,6 +973,425 @@ static void iam_path_compat_fini(struct 
  	iam_container_fini(&path->ipc_container);
  }
  
@@ -793,7 +793,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  /*
   * This function increments the frame pointer to search the next leaf
   * block, and reads in the necessary intervening nodes if the search
-@@ -2213,59 +2392,21 @@
+@@ -2245,59 +2424,21 @@ static int ext3_add_entry (handle_t *han
  }
  
  #ifdef CONFIG_EXT3_INDEX
@@ -802,13 +802,12 @@ Index: linux-2.6.9/fs/ext3/namei.c
 - */
 -static int ext3_dx_add_entry(handle_t *handle, struct dentry *dentry,
 -			     struct inode *inode)
--{
++static int split_index_node(handle_t *handle, struct iam_path *path)
+ {
 -	struct iam_path_compat cpath;
 -	struct iam_path *path = &cpath.ipc_path;
 -	struct iam_descr *param;
 -	struct iam_frame *frame, *safe;
-+static int split_index_node(handle_t *handle, struct iam_path *path)
-+{ 
 +
  	struct iam_entry *entries;   /* old block contents */
  	struct iam_entry *entries2;  /* new block contents */
@@ -859,7 +858,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  	/*
  	 * Tall-tree handling: we might have to split multiple index blocks
  	 * all the way up to tree root. Tricky point here is error handling:
-@@ -2288,7 +2429,7 @@
+@@ -2320,7 +2461,7 @@ static int ext3_dx_add_entry(handle_t *h
  	     dx_get_count(frame->entries) == dx_get_limit(frame->entries);
  	     --frame, ++nr_splet) {
  		if (nr_splet == DX_MAX_TREE_HEIGHT) {
@@ -868,7 +867,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  				     "Directory index full!\n");
  			err = -ENOSPC;
  			goto cleanup;
-@@ -2301,7 +2442,7 @@
+@@ -2333,7 +2474,7 @@ static int ext3_dx_add_entry(handle_t *h
  	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
  		bh_new[i] = ext3_append (handle, dir, &newblock[i], &err);
  		if (!bh_new[i] ||
@@ -877,7 +876,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  			goto cleanup;
  		BUFFER_TRACE(frame->bh, "get_write_access");
  		err = ext3_journal_get_write_access(handle, frame->bh);
-@@ -2407,23 +2548,81 @@
+@@ -2439,9 +2580,71 @@ static int ext3_dx_add_entry(handle_t *h
  				goto journal_error;
  		}
  	}
@@ -949,11 +948,7 @@ Index: linux-2.6.9/fs/ext3/namei.c
  	assert(dx_node_check(path, frame));
  	err = add_dirent_to_buf(handle, dentry, inode, de, bh);
  	goto cleanup2;
- 
- journal_error:
--	ext3_std_error(dir->i_sb, err);
-+        ext3_std_error(dir->i_sb, err);
- cleanup:
+@@ -2452,10 +2655,6 @@ cleanup:
  	if (bh)
  		brelse(bh);
  cleanup2:
@@ -964,10 +959,10 @@ Index: linux-2.6.9/fs/ext3/namei.c
  	if (err)
  		inode->i_size = isize;
  	iam_path_fini(path);
-Index: linux-2.6.9/include/linux/lustre_iam.h
+Index: iam/include/linux/lustre_iam.h
 ===================================================================
---- linux-2.6.9.orig/include/linux/lustre_iam.h	2006-04-25 19:24:03.246335296 +0800
-+++ linux-2.6.9/include/linux/lustre_iam.h	2006-04-25 15:44:44.000000000 +0800
+--- iam.orig/include/linux/lustre_iam.h
++++ iam/include/linux/lustre_iam.h
 @@ -0,0 +1,212 @@
 +/*
 + * Maximal number of non-leaf levels in htree. In the stock ext3 this is 2.
