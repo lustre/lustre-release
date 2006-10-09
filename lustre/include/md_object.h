@@ -244,7 +244,7 @@ struct md_device_operations {
                           struct kstatfs *sfs);
 
         int (*mdo_init_capa_ctxt)(const struct lu_env *env, struct md_device *m,
-                                  __u32 valid, unsigned long timeout, __u32 alg,
+                                  int mode, unsigned long timeout, __u32 alg,
                                   struct lustre_capa_key *keys);
 
         int (*mdo_update_capa_key)(const struct lu_env *env,

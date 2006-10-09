@@ -88,7 +88,7 @@ int filter_verify_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
         struct filter_obd *filter = &obd->u.filter;
         struct filter_capa_key *k;
         struct lustre_capa_key key;
-        struct obd_capa *c;
+        struct obd_capa *oc;
         __u8 *hmac;
         int keys_ready = 0, key_found = 0, rc = 0;
         ENTRY;
@@ -104,24 +104,30 @@ int filter_verify_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
 
 #warning "enable fid check in filter_verify_capa when fid ready"
 
-        if (!capa_opc_supported(capa, opc)) {
+        if (opc == CAPA_OPC_OSS_READ) {
+                if (!(capa->lc_opc & (CAPA_OPC_OSS_READ | CAPA_OPC_OSS_WRITE)))
+                        rc = -EACCES;
+        } else if (!capa_opc_supported(capa, opc)) {
+                rc = -EACCES;
+        }
+        if (rc) {
                 DEBUG_CAPA(D_ERROR, capa, "opc "LPX64" not supported by", opc);
-                RETURN(-EACCES);
+                RETURN(rc);
         }
 
-        c = capa_lookup(capa);
-        if (c) {
-                spin_lock(&c->c_lock);
-                if (memcmp(&c->c_capa, capa, sizeof(*capa))) {
+        oc = capa_lookup(capa);
+        if (oc) {
+                spin_lock(&oc->c_lock);
+                if (memcmp(&oc->c_capa, capa, sizeof(*capa))) {
                         DEBUG_CAPA(D_ERROR, capa, "HMAC mismatch");
                         rc = -EACCES;
-                } else if (capa_is_expired(c)) {
+                } else if (capa_is_expired(oc)) {
                         DEBUG_CAPA(D_ERROR, capa, "expired");
                         rc = -ESTALE;
                 }
-                spin_unlock(&c->c_lock);
+                spin_unlock(&oc->c_lock);
 
-                capa_put(c);
+                capa_put(oc);
                 RETURN(rc);
         }
 
@@ -167,7 +173,8 @@ int filter_verify_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
         }
 
         /* store in capa hash */
-        capa_add(capa);
+        oc = capa_add(capa);
+        capa_put(oc);
         RETURN(0);
 }
 

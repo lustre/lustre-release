@@ -80,7 +80,6 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
                        struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
-        struct lustre_capa *capa = NULL;
         int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
@@ -98,9 +97,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
         repbody = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF,
                                  sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-        if (body->oa.o_valid & OBD_MD_FLOSSCAPA)
-                capa = lustre_unpack_capa(req->rq_reqmsg, REQ_REC_OFF + 1);
-        req->rq_status = obd_destroy(exp, &body->oa, NULL, oti, NULL, capa);
+        req->rq_status = obd_destroy(exp, &body->oa, NULL, oti, NULL);
         RETURN(0);
 }
 
@@ -126,7 +123,7 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
 
         oinfo.oi_oa = &repbody->oa;
         if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
-                oinfo.oi_capa = lustre_unpack_capa(req->rq_repmsg,
+                oinfo.oi_capa = lustre_unpack_capa(req->rq_reqmsg,
                                                    REQ_REC_OFF + 1);
         req->rq_status = obd_getattr(exp, &oinfo);
         RETURN(0);
@@ -285,7 +282,7 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                         oinfo.oi_oa->o_valid &= ~OBD_MD_FLFLAGS;
 
                 if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
-                        oinfo.oi_capa = lustre_unpack_capa(req->rq_repmsg,
+                        oinfo.oi_capa = lustre_unpack_capa(req->rq_reqmsg,
                                                            REQ_REC_OFF + 1);
                 req->rq_status = obd_punch(exp, &oinfo, oti, NULL);
                 ost_punch_lock_put(exp, oinfo.oi_oa, &lh);
@@ -343,7 +340,7 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
 
         oinfo.oi_oa = &repbody->oa;
         if (oinfo.oi_oa->o_valid & OBD_MD_FLOSSCAPA)
-                oinfo.oi_capa = lustre_unpack_capa(req->rq_repmsg,
+                oinfo.oi_capa = lustre_unpack_capa(req->rq_reqmsg,
                                                    REQ_REC_OFF + 1);
         req->rq_status = obd_setattr(exp, &oinfo, oti);
         RETURN(0);

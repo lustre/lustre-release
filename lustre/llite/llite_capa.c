@@ -325,10 +325,11 @@ struct obd_capa *ll_lookup_oss_capa(struct inode *inode, __u64 opc)
                 if (!obd_capa_is_valid(ocapa))
                         continue;
                 if ((opc & CAPA_OPC_OSS_WRITE) &&
-                    capa_opc_supported(&ocapa->c_capa, opc)) {
+                    capa_opc_supported(&ocapa->c_capa, CAPA_OPC_OSS_WRITE)) {
                         found = 1; break;
                 } else if ((opc & CAPA_OPC_OSS_READ) &&
-                           capa_opc_supported(&ocapa->c_capa, opc)) {
+                           capa_opc_supported(&ocapa->c_capa,
+                                              CAPA_OPC_OSS_READ)) {
                         found = 1; break;
                 } else if ((opc & CAPA_OPC_OSS_TRUNC) &&
                            capa_opc_supported(&ocapa->c_capa, opc)) {

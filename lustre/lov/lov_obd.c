@@ -1031,7 +1031,7 @@ do {                                                                            
 
 static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *lsm, struct obd_trans_info *oti,
-                       struct obd_export *md_exp, void *capa)
+                       struct obd_export *md_exp)
 {
         struct lov_request_set *set;
         struct obd_info oinfo;
@@ -1064,7 +1064,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                         oti->oti_logcookies = set->set_cookies + req->rq_stripe;
 
                 err = obd_destroy(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                  req->rq_oi.oi_oa, NULL, oti, NULL, capa);
+                                  req->rq_oi.oi_oa, NULL, oti, NULL);
                 err = lov_update_common_set(set, req, err);
                 if (err) {
                         CERROR("error: destroying objid "LPX64" subobj "

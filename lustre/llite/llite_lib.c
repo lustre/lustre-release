@@ -1532,9 +1532,11 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                         oinfo.oi_oa = oa;
                         oinfo.oi_md = lsm;
+                        oinfo.oi_capa = ll_i2mdscapa(inode);
 
                         /* XXX: this looks unnecessary now. */
                         rc = obd_setattr_rqset(sbi->ll_dt_exp, &oinfo, NULL);
+                        capa_put(oinfo.oi_capa);
                         if (rc)
                                 CERROR("obd_setattr_async fails: rc=%d\n", rc);
                         obdo_free(oa);

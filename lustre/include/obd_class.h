@@ -602,7 +602,7 @@ static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
 static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
                               struct lov_stripe_md *ea,
                               struct obd_trans_info *oti,
-                              struct obd_export *md_exp, void *capa)
+                              struct obd_export *md_exp)
 {
         int rc;
         ENTRY;
@@ -610,7 +610,7 @@ static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
         EXP_CHECK_DT_OP(exp, destroy);
         OBD_COUNTER_INCREMENT(exp->exp_obd, destroy);
 
-        rc = OBP(exp->exp_obd, destroy)(exp, obdo, ea, oti, md_exp, capa);
+        rc = OBP(exp->exp_obd, destroy)(exp, obdo, ea, oti, md_exp);
         RETURN(rc);
 }
 

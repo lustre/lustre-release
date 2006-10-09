@@ -223,7 +223,7 @@ int mds_obd_create(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                    struct obd_export *md_exp, void *unused);
+                    struct obd_export *md_exp);
 void mds_init_ctxt(struct obd_device *obd, struct vfsmount *mnt);
 
 /* mds/handler.c */

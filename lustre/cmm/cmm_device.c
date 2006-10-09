@@ -87,7 +87,7 @@ static int cmm_maxsize_get(const struct lu_env *env, struct md_device *md,
 }
 
 static int cmm_init_capa_ctxt(const struct lu_env *env, struct md_device *md,
-                              __u32 valid, unsigned long timeout, __u32 alg,
+                              int mode , unsigned long timeout, __u32 alg,
                               struct lustre_capa_key *keys)
 {
         struct cmm_device *cmm_dev = md2cmm_dev(md);
@@ -95,7 +95,7 @@ static int cmm_init_capa_ctxt(const struct lu_env *env, struct md_device *md,
         ENTRY;
         LASSERT(cmm_child_ops(cmm_dev)->mdo_init_capa_ctxt);
         rc = cmm_child_ops(cmm_dev)->mdo_init_capa_ctxt(env, cmm_dev->cmm_child,
-                                                        valid, timeout, alg,
+                                                        mode, timeout, alg,
                                                         keys);
         RETURN(rc);
 }

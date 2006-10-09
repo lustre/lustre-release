@@ -81,7 +81,8 @@ int mds_reint_rec(struct mds_update_record *r, int offset,
 
 int mds_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
                           struct lov_mds_md *lmm, int lmm_size,
-                          struct llog_cookie *logcookies, __u64 id, __u32 gen);
+                          struct llog_cookie *logcookies, __u64 id, __u32 gen,
+                          struct obd_capa *oc);
 
 int mds_log_op_unlink(struct obd_device *obd,
                       struct lov_mds_md *lmm, int lmm_size,

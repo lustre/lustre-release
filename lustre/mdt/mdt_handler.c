@@ -445,6 +445,7 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
         LASSERT(capa);
 
         *capa = *c;
+        capa->lc_expiry = 0;
         rc = mo_capa_get(info->mti_env, mdt_object_child(obj), capa);
 
         body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
@@ -473,7 +474,8 @@ static int mdt_getattr(struct mdt_thread_info *info)
 
         if (reqbody->valid & OBD_MD_FLOSSCAPA) {
                 rc = mdt_renew_capa(info);
-                GOTO(out, rc);
+                mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
+                RETURN(rc);
         }
 
         if (reqbody->valid & OBD_MD_FLRMTPERM) {
@@ -1579,16 +1581,12 @@ static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
 static int mdt_init_capa_ctxt(const struct lu_env *env, struct mdt_device *m)
 {
         struct md_device *next = m->mdt_child;
-        __u32 valid = CAPA_CTX_TIMEOUT | CAPA_CTX_ALG | CAPA_CTX_KEYS;
-        int rc;
 
-        if (m->mdt_opts.mo_mds_capa)
-                valid |= CAPA_CTX_ON;
-        rc = next->md_ops->mdo_init_capa_ctxt(env, next, valid,
-                                              m->mdt_capa_timeout,
-                                              m->mdt_capa_alg,
-                                              m->mdt_capa_keys);
-        return rc;
+        return next->md_ops->mdo_init_capa_ctxt(env, next,
+                                                m->mdt_opts.mo_mds_capa,
+                                                m->mdt_capa_timeout,
+                                                m->mdt_capa_alg,
+                                                m->mdt_capa_keys);
 }
 
 /*
@@ -3185,7 +3183,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
                 m->mdt_rootsquash_info = NULL;
         }
 
-        next->md_ops->mdo_init_capa_ctxt(env, next, CAPA_CTX_KEYS, 0, 0, NULL);
+        next->md_ops->mdo_init_capa_ctxt(env, next, 0, 0, 0, NULL);
         cleanup_capas(CAPA_SITE_SERVER);
         del_timer(&m->mdt_ck_timer);
         mdt_ck_thread_stop(m);

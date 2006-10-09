@@ -686,25 +686,16 @@ static void osd_ro(const struct lu_env *env, struct dt_device *d)
 }
 
 static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
-                              __u32 valid, unsigned long timeout, __u32 alg,
+                              int mode, unsigned long timeout, __u32 alg,
                               struct lustre_capa_key *keys)
 {
         struct osd_device *dev = osd_dt_dev(d);
         ENTRY;
 
-        if (valid & CAPA_CTX_ON)
-                dev->od_fl_capa = 1;
-        else
-                dev->od_fl_capa = 0;
-       
-        if (valid & CAPA_CTX_TIMEOUT)
-                dev->od_capa_timeout = timeout;
-
-        if (valid & CAPA_CTX_ALG)
-                dev->od_capa_alg = alg;
-
-        if (valid & CAPA_CTX_KEYS)
-                dev->od_capa_keys = keys;
+        dev->od_fl_capa = mode;
+        dev->od_capa_timeout = timeout;
+        dev->od_capa_alg = alg;
+        dev->od_capa_keys = keys;
         RETURN(0);
 }
 
@@ -770,7 +761,7 @@ static struct dt_device_operations osd_dt_ops = {
         .dt_sync           = osd_sync,
         .dt_ro             = osd_ro,
         .dt_credit_get     = osd_credit_get,
-        .dt_init_capa_ctxt = osd_init_capa_ctxt
+        .dt_init_capa_ctxt = osd_init_capa_ctxt,
 };
 
 static void osd_object_read_lock(const struct lu_env *env,
@@ -832,24 +823,23 @@ static int capa_is_sane(const struct lu_env *env,
                         struct lustre_capa *capa,
                         struct lustre_capa_key *keys)
 {
-        struct obd_capa *c;
-        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *oti;
+        struct obd_capa *oc;
         int i, rc = 1;
         ENTRY;
 
-        c = capa_lookup(capa);
-        if (c) {
-                spin_lock(&c->c_lock);
-                if (memcmp(&c->c_capa, capa, sizeof(*capa))) {
+        oti = lu_context_key_get(&env->le_ctx, &osd_key);
+
+        oc = capa_lookup(capa);
+        if (oc) {
+                if (memcmp(&oc->c_capa, capa, sizeof(*capa))) {
                         DEBUG_CAPA(D_ERROR, capa, "HMAC mismatch");
                         rc = -EACCES;
-                } else if (capa_is_expired(c)) {
+                } else if (capa_is_expired(oc)) {
                         DEBUG_CAPA(D_ERROR, capa, "expired");
                         rc = -ESTALE;
                 }
-                spin_unlock(&c->c_lock);
-
-                capa_put(c);
+                capa_put(oc);
                 RETURN(rc);
         }
 
@@ -875,7 +865,8 @@ static int capa_is_sane(const struct lu_env *env,
                 RETURN(-EACCES);
         }
 
-        capa_add(capa);
+        oc = capa_add(capa);
+        capa_put(oc);
 
         RETURN(1);
 }
@@ -894,7 +885,6 @@ static int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
 
         if (!capa) {
                 CERROR("no capability is provided for fid "DFID"\n", PFID(fid));
-                LBUG();
                 return -EACCES;
         }
 
@@ -1526,8 +1516,9 @@ static int osd_readpage(const struct lu_env *env,
         return rc ? rc : rc1;
 }
 
-static int osd_capa_get(const struct lu_env *env,
-                        struct dt_object *dt, struct lustre_capa *capa)
+static struct obd_capa *osd_capa_get(const struct lu_env *env,
+                                     struct dt_object *dt,
+                                     __u64 opc)
 {
         struct osd_thread_info *info = lu_context_key_get(&env->le_ctx,
                                                           &osd_key);
@@ -1535,40 +1526,44 @@ static int osd_capa_get(const struct lu_env *env,
         struct osd_object *obj = osd_dt_obj(dt);
         struct osd_device *dev = osd_obj2dev(obj);
         struct lustre_capa_key *key = &info->oti_capa_key;
+        struct lustre_capa *capa = &info->oti_capa;
         struct obd_capa *oc;
         int rc;
         ENTRY;
+
+        if (!dev->od_fl_capa)
+                RETURN(NULL);
 
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
 
         capa->lc_fid = *fid;
+        capa->lc_opc = opc;
+        capa->lc_flags |= dev->od_capa_alg << 24;
         if (dev->od_capa_timeout < CAPA_TIMEOUT)
                 capa->lc_flags |= CAPA_FL_SHORT_EXPIRY;
 
-        capa->lc_flags = dev->od_capa_alg << 24;
-
-        /* TODO: get right permission here */
         oc = capa_lookup(capa);
         if (oc) {
                 LASSERT(!capa_is_expired(oc));
-                capa_cpy(capa, oc);
-                capa_put(oc);
-                RETURN(0);
+                RETURN(oc);
         }
 
         spin_lock(&capa_lock);
         *key = dev->od_capa_keys[1];
-        capa->lc_expiry = CURRENT_SECONDS + dev->od_capa_timeout;
         spin_unlock(&capa_lock);
 
         capa->lc_keyid = key->lk_keyid;
-        rc = capa_hmac(capa->lc_hmac, capa, key->lk_key);
-        if (rc)
-                RETURN(rc);
+        capa->lc_expiry = CURRENT_SECONDS + dev->od_capa_timeout;
 
-        capa_add(capa);
-        RETURN(0);
+        rc = capa_hmac(capa->lc_hmac, capa, key->lk_key);
+        if (rc) {
+                DEBUG_CAPA(D_ERROR, capa, "HMAC failed: %d for", rc);
+                RETURN(NULL);
+        }
+
+        oc = capa_add(capa);
+        RETURN(oc);
 }
 
 static struct dt_object_operations osd_obj_ops = {

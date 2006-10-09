@@ -615,8 +615,7 @@ cleanup:
                         continue;
 
                 sub_exp = lov->lov_tgts[req->rq_idx]->ltd_exp;
-                err = obd_destroy(sub_exp, req->rq_oi.oi_oa, NULL, oti, NULL,
-                                  NULL);
+                err = obd_destroy(sub_exp, req->rq_oi.oi_oa, NULL, oti, NULL);
                 if (err)
                         CERROR("Failed to uncreate objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
@@ -905,6 +904,8 @@ int lov_prep_brw_set(struct obd_export *exp, struct obd_info *oinfo,
                 /* remember the index for sort brw_page array */
                 info[i].index = req->rq_pgaidx;
 
+                req->rq_oi.oi_capa = oinfo->oi_capa;
+
                 lov_set_add_req(req, set);
         }
         if (!set->set_count)
@@ -1002,6 +1003,7 @@ int lov_prep_getattr_set(struct obd_export *exp, struct obd_info *oinfo,
                        sizeof(*req->rq_oi.oi_oa));
                 req->rq_oi.oi_oa->o_id = loi->loi_id;
                 req->rq_oi.oi_cb_up = cb_getattr_update;
+                req->rq_oi.oi_capa = oinfo->oi_capa;
                 req->rq_rqset = set;
 
                 lov_set_add_req(req, set);
@@ -1196,6 +1198,7 @@ int lov_prep_setattr_set(struct obd_export *exp, struct obd_info *oinfo,
                                 || req->rq_oi.oi_oa->o_gr>0);
                 req->rq_oi.oi_oa->o_stripe_idx = i;
                 req->rq_oi.oi_cb_up = cb_setattr_update;
+                req->rq_oi.oi_capa = oinfo->oi_capa;
                 req->rq_rqset = set;
 
                 if (oinfo->oi_oa->o_valid & OBD_MD_FLSIZE) {
@@ -1310,6 +1313,8 @@ int lov_prep_punch_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_oi.oi_policy.l_extent.end = re;
                 req->rq_oi.oi_policy.l_extent.gid = -1;
 
+                req->rq_oi.oi_capa = oinfo->oi_capa;
+
                 lov_set_add_req(req, set);
         }
         if (!set->set_count)
@@ -1394,6 +1399,8 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_oi.oi_policy.l_extent.start = rs;
                 req->rq_oi.oi_policy.l_extent.end = re;
                 req->rq_oi.oi_policy.l_extent.gid = -1;
+
+                req->rq_oi.oi_capa = oinfo->oi_capa;
 
                 lov_set_add_req(req, set);
         }

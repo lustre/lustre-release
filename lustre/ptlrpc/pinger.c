@@ -261,7 +261,7 @@ int ptlrpc_start_pinger(void)
         if (pinger_thread != NULL)
                 RETURN(-EALREADY);
 
-        OBD_ALLOC(pinger_thread, sizeof(*pinger_thread));
+        OBD_ALLOC_PTR(pinger_thread);
         if (pinger_thread == NULL)
                 RETURN(-ENOMEM);
         cfs_waitq_init(&pinger_thread->t_ctl_waitq);
@@ -303,7 +303,7 @@ int ptlrpc_stop_pinger(void)
         l_wait_event(pinger_thread->t_ctl_waitq,
                      (pinger_thread->t_flags & SVC_STOPPED), &lwi);
 
-        OBD_FREE(pinger_thread, sizeof(*pinger_thread));
+        OBD_FREE_PTR(pinger_thread);
         pinger_thread = NULL;
         RETURN(rc);
 }

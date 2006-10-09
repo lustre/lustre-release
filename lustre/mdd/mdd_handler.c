@@ -2830,7 +2830,7 @@ static int mdd_maxsize_get(const struct lu_env *env, struct md_device *m,
 }
 
 static int mdd_init_capa_ctxt(const struct lu_env *env, struct md_device *m,
-                              __u32 valid, unsigned long timeout, __u32 alg,
+                              int mode, unsigned long timeout, __u32 alg,
                               struct lustre_capa_key *keys)
 {
 	struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
@@ -2838,10 +2838,8 @@ static int mdd_init_capa_ctxt(const struct lu_env *env, struct md_device *m,
         int rc;
         ENTRY;
 
-        if (valid & CAPA_CTX_KEYS)
-                mds->mds_capa_keys = keys;
-
-        rc = mdd_child_ops(mdd)->dt_init_capa_ctxt(env, mdd->mdd_child, valid,
+        mds->mds_capa_keys = keys;
+        rc = mdd_child_ops(mdd)->dt_init_capa_ctxt(env, mdd->mdd_child, mode,
                                                    timeout, alg, keys);
         RETURN(rc);
 }
@@ -3334,15 +3332,19 @@ static int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
 {
         struct dt_object *next;
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
-        int rc;
+        struct obd_capa *oc;
         ENTRY;
 
         LASSERT(lu_object_exists(mdd2lu_obj(mdd_obj)));
         next = mdd_object_child(mdd_obj);
 
-        rc = next->do_ops->do_capa_get(env, next, capa);
+        oc = next->do_ops->do_capa_get(env, next, capa->lc_opc);
+        if (oc) {
+                capa_cpy(capa, oc);
+                capa_put(oc);
+        }
 
-        RETURN(rc);
+        RETURN(0);
 }
 
 struct md_device_operations mdd_ops = {

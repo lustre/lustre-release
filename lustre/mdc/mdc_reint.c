@@ -81,8 +81,8 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 
         LASSERT(op_data != NULL);
 
-        if (op_data->mod_capa1)
-                size[REQ_REC_OFF + 1] = sizeof(struct lustre_capa);
+        size[REQ_REC_OFF + 1] = op_data->mod_capa1 ?
+                                        sizeof(struct lustre_capa) : 0;
 
         if (op_data->flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN))
                 size[REQ_REC_OFF + 2] = sizeof(struct mdt_epoch);
@@ -135,9 +135,8 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
         struct ptlrpc_request *req;
         ENTRY;
 
-        if (op_data->mod_capa1)
-                size[REQ_REC_OFF + 1] = sizeof(struct lustre_capa);
-
+        size[REQ_REC_OFF + 1] = op_data->mod_capa1 ?
+                                        sizeof(struct lustre_capa) : 0;
         if (data && datalen) {
                 size[bufcount] = datalen;
                 bufcount++;
@@ -185,8 +184,8 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 
         LASSERT(req == NULL);
 
-        if (op_data->mod_capa1)
-                size[REQ_REC_OFF + 1] = sizeof(struct lustre_capa);
+        size[REQ_REC_OFF + 1] = op_data->mod_capa1 ?
+                                        sizeof(struct lustre_capa) : 0;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, 4, size, NULL);
@@ -218,10 +217,10 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
         int rc;
         ENTRY;
 
-        if (op_data->mod_capa1)
-                size[REQ_REC_OFF + 1] = sizeof(struct lustre_capa);
-        if (op_data->mod_capa2)
-                size[REQ_REC_OFF + 2] = sizeof(struct lustre_capa);
+        size[REQ_REC_OFF + 1] = op_data->mod_capa1 ?
+                                        sizeof(struct lustre_capa) : 0;
+        size[REQ_REC_OFF + 2] = op_data->mod_capa2 ?
+                                        sizeof(struct lustre_capa) : 0;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, 5, size, NULL);
@@ -253,10 +252,10 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
         int rc;
         ENTRY;
 
-        if (op_data->mod_capa1)
-                size[REQ_REC_OFF + 1] = sizeof(struct lustre_capa);
-        if (op_data->mod_capa2)
-                size[REQ_REC_OFF + 2] = sizeof(struct lustre_capa);
+        size[REQ_REC_OFF + 1] = op_data->mod_capa1 ?
+                                        sizeof(struct lustre_capa) : 0;
+        size[REQ_REC_OFF + 2] = op_data->mod_capa2 ?
+                                        sizeof(struct lustre_capa) : 0;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, 6, size, NULL);

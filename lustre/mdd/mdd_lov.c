@@ -392,6 +392,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         __u32                  create_flags = spec->sp_cr_flags;
         int                    rc = 0;
         struct obd_trans_info *oti = &mdd_env_info(env)->mti_oti;
+        struct dt_object      *next;
         ENTRY;
 
         if (create_flags & MDS_OPEN_DELAY_CREATE ||
@@ -426,6 +427,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLGROUP;
         oa->o_size = 0;
 
+        next = mdd_object_child(child);
         if (!(create_flags & MDS_OPEN_HAS_OBJS)) {
                 if (create_flags & MDS_OPEN_HAS_EA) {
                         LASSERT(eadata != NULL);
@@ -457,6 +459,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                         if (rc)
                                 GOTO(out_oa, rc);
                 }
+
                 rc = obd_create(lov_exp, oa, &lsm, oti);
                 if (rc) {
                         if (rc > 0) {
@@ -504,8 +507,11 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
                 oinfo->oi_oa = oa;
                 oinfo->oi_md = lsm;
+                oinfo->oi_capa = next->do_ops->do_capa_get(env, next,
+                                                          CAPA_OPC_MDS_DEFAULT);
 
                 rc = obd_setattr(lov_exp, oinfo, oti);
+                capa_put(oinfo->oi_capa);
                 if (rc) {
                         CERROR("Error setting attrs for "DFID": rc %d\n",
                                PFID(mdo2fid(child)), rc);
@@ -565,6 +571,7 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
         struct dt_object        *next = mdd_object_child(obj);
         __u32  seq  = lu_object_fid(mdd2lu_obj(obj))->f_seq;
         __u32  oid  = lu_object_fid(mdd2lu_obj(obj))->f_oid;
+        struct obd_capa *oc;
         int rc = 0;
         ENTRY;
 
@@ -573,8 +580,10 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
         if (rc)
                 RETURN(rc);
 
+        oc = next->do_ops->do_capa_get(env, next, CAPA_OPC_MDS_DEFAULT);
         rc = mds_osc_setattr_async(obd, tmp_la->la_uid, tmp_la->la_gid, lmm,
-                                   lmm_size, NULL, seq, oid);
+                                   lmm_size, NULL, seq, oid, oc);
+        capa_put(oc);
 
         RETURN(rc);
 }

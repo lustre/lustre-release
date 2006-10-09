@@ -239,9 +239,9 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
         int try_again = 1, rc = 0;
         ENTRY;
+
         LASSERT(oa);
         LASSERT(ea);
-        
         LASSERT(oa->o_gr > 0);
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 

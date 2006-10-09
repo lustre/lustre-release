@@ -2117,14 +2117,14 @@ struct obd_llogs *filter_grab_llog_for_group(struct obd_device *obd, int group,
         if (export == NULL)
                 RETURN(NULL);
 
-        OBD_ALLOC(fglog, sizeof(*fglog));
+        OBD_ALLOC_PTR(fglog);
         if (fglog == NULL)
                 RETURN(NULL);
         fglog->group = group;
 
-        OBD_ALLOC(fglog->llogs, sizeof(struct obd_llogs));
+        OBD_ALLOC_PTR(fglog->llogs);
         if (fglog->llogs == NULL) {
-                OBD_FREE(fglog, sizeof(*fglog));
+                OBD_FREE_PTR(fglog);
                 RETURN(NULL);
         }
 
@@ -2138,8 +2138,8 @@ struct obd_llogs *filter_grab_llog_for_group(struct obd_device *obd, int group,
 
         rc = llog_cat_initialize(obd, fglog->llogs, 1, NULL);
         if (rc) {
-                OBD_FREE(fglog->llogs, sizeof(*(fglog->llogs)));
-                OBD_FREE(fglog, sizeof(*fglog));
+                OBD_FREE_PTR(fglog->llogs);
+                OBD_FREE_PTR(fglog);
                 RETURN(NULL);
         }
 
@@ -2205,8 +2205,8 @@ static int filter_llog_preclean (struct obd_device *obd)
                 if (rc)
                         CERROR("failed to cleanup llogging subsystem for %u\n",
                                 log->group);
-                OBD_FREE(log->llogs, sizeof(*(log->llogs)));
-                OBD_FREE(log, sizeof(*log));
+                OBD_FREE_PTR(log->llogs);
+                OBD_FREE_PTR(log);
                 spin_lock(&filter->fo_llog_list_lock);
         }
         spin_unlock(&filter->fo_llog_list_lock);
@@ -3068,7 +3068,7 @@ static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
                exp->exp_obd->obd_name, oa->o_id + 1, last);
         for (id = last; id > oa->o_id; id--) {
                 doa.o_id = id;
-                rc = filter_destroy(exp, &doa, NULL, NULL, NULL, NULL);
+                rc = filter_destroy(exp, &doa, NULL, NULL, NULL);
                 if (rc && rc != -ENOENT) /* this is pretty fatal... */
                         CEMERG("error destroying precreate objid "LPU64": %d\n",
                                id, rc);
@@ -3440,7 +3440,7 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
 
 int filter_destroy(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md *md, struct obd_trans_info *oti,
-                   struct obd_export *md_exp, void *capa)
+                   struct obd_export *md_exp)
 {
         unsigned int qcids[MAXQUOTAS] = {0, 0};
         struct obd_device *obd;
@@ -3454,14 +3454,6 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
         ENTRY;
 
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
-
-#if 0   /* some places don't support capability yet */
-        rc = filter_verify_capa(exp, NULL, obdo_mdsno(oa),
-                                (struct lustre_capa *)capa,
-                                CAPA_OPC_INDEX_LOOKUP);
-        if (rc)
-                RETURN(rc);
-#endif
 
 #if 0
         if (!(oa->o_valid & OBD_MD_FLGROUP))

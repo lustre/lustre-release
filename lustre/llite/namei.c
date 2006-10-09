@@ -1037,7 +1037,6 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
         struct obdo *oa;
-        struct obd_capa *oc;
         int rc;
         ENTRY;
 
@@ -1096,10 +1095,7 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 }
         }
 
-        /* FIXME: parent mds capability is the only one can find! */
-        oc = ll_i2mdscapa(dir);
-        rc = obd_destroy(ll_i2dtexp(dir), oa, lsm, &oti, ll_i2mdexp(dir), oc);
-        capa_put(oc);
+        rc = obd_destroy(ll_i2dtexp(dir), oa, lsm, &oti, ll_i2mdexp(dir));
         obdo_free(oa);
         if (rc)
                 CERROR("obd destroy objid "LPX64" error %d\n",

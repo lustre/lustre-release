@@ -412,7 +412,8 @@ static void reconstruct_reint_setattr(struct mds_update_record *rec,
 
 int mds_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
                           struct lov_mds_md *lmm, int lmm_size,
-                          struct llog_cookie *logcookies, __u64 id, __u32 gen)
+                          struct llog_cookie *logcookies, __u64 id, __u32 gen,
+                          struct obd_capa *oc)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_trans_info oti = { 0 };
@@ -455,6 +456,7 @@ int mds_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
         oinfo.oi_oa->o_fid = id;
         oinfo.oi_oa->o_generation = gen;
         oinfo.oi_oa->o_valid |= OBD_MD_FLFID | OBD_MD_FLGENER;
+        oinfo.oi_capa = oc;
 
         /* do async setattr from mds to ost not waiting for responses. */
         rc = obd_setattr_async(mds->mds_osc_exp, &oinfo, &oti, NULL);
@@ -669,7 +671,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (!rc && !err && lmm_size)
                 mds_osc_setattr_async(obd, inode->i_ino, inode->i_generation, lmm, 
                                       lmm_size, logcookies, rec->ur_fid1->id,
-                                      rec->ur_fid1->generation);
+                                      rec->ur_fid1->generation, NULL);
 
         switch (cleanup_phase) {
         case 2:

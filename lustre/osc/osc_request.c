@@ -209,7 +209,7 @@ static int osc_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
         struct osc_async_args *aa;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(*oinfo->oi_capa) : 0;
+        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(struct lustre_capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
                               OST_GETATTR, 3, size,NULL);
         if (!req)
@@ -235,7 +235,7 @@ static int osc_getattr(struct obd_export *exp, struct obd_info *oinfo)
         int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(*oinfo->oi_capa) : 0;
+        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(struct lustre_capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
                               OST_GETATTR, 3, size, NULL);
         if (!req)
@@ -281,7 +281,7 @@ static int osc_setattr(struct obd_export *exp, struct obd_info *oinfo,
 
         LASSERT(!(oinfo->oi_oa->o_valid & OBD_MD_FLGROUP) || 
                                         oinfo->oi_oa->o_gr > 0);
-        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(*oinfo->oi_capa) : 0;
+        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(struct lustre_capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
                               OST_SETATTR, 3, size, NULL);
         if (!req)
@@ -340,7 +340,7 @@ static int osc_setattr_async(struct obd_export *exp, struct obd_info *oinfo,
         struct osc_async_args *aa;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(*oinfo->oi_capa) : 0;
+        size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(struct lustre_capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
                               OST_SETATTR, 3, size, NULL);
         if (!req)
@@ -379,7 +379,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
         struct ptlrpc_request *req;
         struct ost_body *body;
         struct lov_stripe_md *lsm;
-        int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int rc, size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         LASSERT(oa);
@@ -392,9 +392,8 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                         RETURN(rc);
         }
 
-        /* FIXME: how to find one OSS WRITE capability? */
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_CREATE, 3, size, NULL);
+                              OST_CREATE, 2, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -487,7 +486,6 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
         struct ptlrpc_request *req;
         struct osc_async_args *aa;
         struct ost_body *body;
-        struct lustre_capa *capa = oinfo->oi_capa;
         int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
@@ -496,7 +494,7 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
                 RETURN(-EINVAL);
         }
 
-        size[REQ_REC_OFF + 1] = capa ? sizeof(*capa) : 0;
+        size[REQ_REC_OFF + 1] = oinfo->oi_capa? sizeof(struct lustre_capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
                               OST_PUNCH, 3, size, NULL);
         if (!req)
@@ -513,15 +511,6 @@ static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
         body->oa.o_size = oinfo->oi_policy.l_extent.start;
         body->oa.o_blocks = oinfo->oi_policy.l_extent.end;
         body->oa.o_valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
-
-        if (capa) {
-                struct lustre_capa *c;
-
-                c = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 1, sizeof(*c));
-                /* setattr_raw is protected by i_sem, no need to lock here */
-                *c = *capa;
-                body->oa.o_valid |= OBD_MD_FLOSSCAPA;
-        }
 
         ptlrpc_req_set_repsize(req, 2, size);
 
@@ -598,11 +587,11 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
  * cookies to the MDS after committing destroy transactions. */
 static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                        struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                       struct obd_export *md_export, void *capa)
+                       struct obd_export *md_export)
 {
         struct ptlrpc_request *req;
         struct ost_body *body;
-        int size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
+        int size[2] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
         if (!oa) {
@@ -610,10 +599,8 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        if (capa)
-                size[REQ_REC_OFF + 1] = sizeof(struct lustre_capa);
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
-                              OST_DESTROY, 3, size, NULL);
+                              OST_DESTROY, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -627,8 +614,6 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
                 memcpy(obdo_logcookie(oa), oti->oti_logcookies,
                        sizeof(*oti->oti_logcookies));
         body->oa = *oa;
-
-        osc_pack_capa(req, REQ_REC_OFF + 1, body, capa);
 
         ptlrpc_req_set_repsize(req, 2, size);
 

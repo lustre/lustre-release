@@ -72,7 +72,7 @@ ptlrpc_alloc_rqbd (struct ptlrpc_service *svc)
 {
         struct ptlrpc_request_buffer_desc *rqbd;
 
-        OBD_ALLOC(rqbd, sizeof (*rqbd));
+        OBD_ALLOC_PTR(rqbd);
         if (rqbd == NULL)
                 return (NULL);
 
@@ -84,7 +84,7 @@ ptlrpc_alloc_rqbd (struct ptlrpc_service *svc)
         rqbd->rqbd_buffer = ptlrpc_alloc_request_buffer(svc->srv_buf_size);
 
         if (rqbd->rqbd_buffer == NULL) {
-                OBD_FREE(rqbd, sizeof (*rqbd));
+                OBD_FREE_PTR(rqbd);
                 return (NULL);
         }
 
@@ -110,7 +110,7 @@ ptlrpc_free_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         spin_unlock(&svc->srv_lock);
 
         ptlrpc_free_request_buffer (rqbd->rqbd_buffer, svc->srv_buf_size);
-        OBD_FREE (rqbd, sizeof (*rqbd));
+        OBD_FREE_PTR(rqbd);
 }
 
 int
@@ -282,7 +282,7 @@ ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size, int max_reply_size,
         LASSERT (bufsize >= max_req_size + SPTLRPC_MAX_PAYLOAD);
         LASSERT (ctx_tags != 0);
 
-        OBD_ALLOC(service, sizeof(*service));
+        OBD_ALLOC_PTR(service);
         if (service == NULL)
                 RETURN(NULL);
 
@@ -1111,7 +1111,7 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
         list_del(&thread->t_link);
         spin_unlock(&svc->srv_lock);
 
-        OBD_FREE(thread, sizeof(*thread));
+        OBD_FREE_PTR(thread);
 }
 
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
@@ -1161,7 +1161,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         int rc;
         ENTRY;
 
-        OBD_ALLOC(thread, sizeof(*thread));
+        OBD_ALLOC_PTR(thread);
         if (thread == NULL)
                 RETURN(-ENOMEM);
         cfs_waitq_init(&thread->t_ctl_waitq);
@@ -1317,7 +1317,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                 OBD_FREE(rs, service->srv_max_reply_size);
         }
 
-        OBD_FREE(service, sizeof(*service));
+        OBD_FREE_PTR(service);
         return 0;
 }
 

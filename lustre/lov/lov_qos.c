@@ -822,7 +822,6 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                         CDEBUG(D_INODE, "stripe %d has size "LPU64"/"LPU64"\n",
                                i, req->rq_oi.oi_oa->o_size, src_oa->o_size);
                 }
-
         }
         LASSERT(set->set_count == stripes);
 

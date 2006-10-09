@@ -86,8 +86,7 @@ static int mds_osc_destroy_orphan(struct obd_device *obd,
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies = logcookies;
         }
-        rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti, obd->obd_self_export,
-                         NULL);
+        rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti, obd->obd_self_export);
         obdo_free(oa);
         if (rc)
                 CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
