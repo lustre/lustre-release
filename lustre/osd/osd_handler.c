@@ -445,11 +445,23 @@ static int osd_inode_remove(const struct lu_env *env,
                 dentry = d_alloc(osd->od_obj_area, &oti->oti_str);
                 if (dentry != NULL) {
                         struct inode *dir = osd->od_obj_area->d_inode;
+
+                        /*
+                         * The nlink is 0 now. But to avoid warning message,
+                         * I set it to 1, and unlink() will decrease it to 0.
+                         */
                         obj->oo_inode->i_nlink = 1;
                         d_instantiate(dentry, obj->oo_inode);
                         result = dir->i_op->unlink(dir, dentry);
-                        obj->oo_inode->i_nlink = 0;
-                        mark_inode_dirty(obj->oo_inode);
+                        if (S_ISDIR(obj->oo_inode->i_mode)) {
+                                /*
+                                 * The nlink of a dir was not decreased to 
+                                 * less than 2. see ldiskfs_unlink() and 
+                                 * ldiskfs_dec_count().
+                                 */
+                                obj->oo_inode->i_nlink = 0;
+                                mark_inode_dirty(obj->oo_inode);
+                        }
                         dput(dentry);
                 } else
 #endif
