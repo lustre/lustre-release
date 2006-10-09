@@ -293,12 +293,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         rc = filter_verify_capa(exp, NULL, obdo_mdsno(oa), capa,
                                 CAPA_OPC_OSS_READ);
-        if (rc) {
-                rc = filter_verify_capa(exp, NULL, obdo_mdsno(oa), capa,
-                                        CAPA_OPC_OSS_READ);
-                if (rc)
-                        RETURN(rc);
-        }
+        if (rc)
+                RETURN(rc);
 
         if (oa && oa->o_valid & OBD_MD_FLGRANT) {
                 spin_lock(&obd->obd_osfs_lock);
