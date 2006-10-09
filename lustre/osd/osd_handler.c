@@ -1201,14 +1201,6 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
         LASSERT(th != NULL);
 
         /*
-         * XXX missing: permission checks.
-         */
-
-        /*
-         * XXX missing: sanity checks (valid ->la_mode, etc.)
-         */
-
-        /*
          * XXX missing: Quote handling.
          */
 
