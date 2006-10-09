@@ -369,9 +369,18 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 GOTO(out_unlock_parent, rc = -EINVAL);
 
         if (strlen(rr->rr_name) == 0) {
-                /* MDT holding directory name ask to remove local inode. */
-                rc = mo_ref_del(info->mti_env, mdt_object_child(mp), ma);
-                mdt_handle_last_unlink(info, mp, ma);
+                /* remote partial operation
+                 * It is possible that replay can happen on parent MDS
+                 * and this operation will be repeated. 
+                 * Therefore the object absense is allowed case
+                 * and nothing should be done
+                 */
+                if (lu_object_exists(&mp->mot_obj.mo_lu) > 0) {
+                        rc = mo_ref_del(info->mti_env,
+                                        mdt_object_child(mp), ma);
+                        mdt_handle_last_unlink(info, mp, ma);
+                } else
+                        rc = 0;
                 GOTO(out_unlock_parent, rc);
         }
 
@@ -510,6 +519,11 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         if (rc != 0 && rc != -ENOENT) {
                 GOTO(out_unlock_tgtdir, rc);
         } else if (rc == 0) {
+                /* in case of replay that name can be already inserted,
+                 * check that and do nothing if so */
+                if (lu_fid_eq(tgt_fid, rr->rr_fid2))
+                        GOTO(out_unlock_tgtdir, rc);
+
                 lh_tgt->mlh_mode = LCK_EX;
 
                 mtgt = mdt_object_find_lock(info, tgt_fid, lh_tgt,
