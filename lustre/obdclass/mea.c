@@ -27,7 +27,7 @@
 #include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
-#else 
+#else
 #include <liblustre.h>
 #include <obd_class.h>
 #include <obd.h>
@@ -43,7 +43,7 @@
 static int mea_last_char_hash(int count, char *name, int namelen)
 {
         unsigned int c;
-        
+
         c = name[namelen - 1];
         if (c == 0)
                 CWARN("looks like wrong len is passed\n");
@@ -69,13 +69,13 @@ static int mea_hash_segment(int count, char *name, int namelen)
         int result;
         __u64 hash;
         __u32 hash_segment = MAX_HASH_SIZE;
-        
+
         if (namelen == 0)
                 return 0;
-        if (strncmp(name, ".", 1) == 0 && namelen == 1) 
-                return 1;
-        if (strncmp(name, "..", 2) == 0 && namelen == 2) 
+        if (strncmp(name, ".", 1) == 0 && namelen == 1)
                 return 2;
+        if (strncmp(name, "..", 2) == 0 && namelen == 2)
+                return 4;
 
         hinfo.hash_version = LDISKFS_DX_HASH_TEA;
         hinfo.seed = 0;
@@ -85,8 +85,8 @@ static int mea_hash_segment(int count, char *name, int namelen)
         do_div(hash_segment, count);
         do_div(hash, hash_segment);
         LASSERT(hash <= count);
-        
-        return hash; 
+
+        return hash;
 }
 #else
 static int mea_hash_segment(int count, char *name, int namelen)
@@ -123,7 +123,7 @@ int raw_name2idx(int hashtype, int count, const char *name, int namelen)
 int mea_name2idx(struct lmv_stripe_md *mea, char *name, int namelen)
 {
         unsigned int c;
-        
+
         LASSERT(mea && mea->mea_count);
 
 	c = raw_name2idx(mea->mea_magic, mea->mea_count, name, namelen);
