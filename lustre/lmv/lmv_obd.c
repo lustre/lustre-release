@@ -1315,7 +1315,7 @@ repeat:
 
                 mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                    op_data->name, op_data->namelen);
-                op_data->fid1      = obj->lo_inodes[mds].li_fid;
+                op_data->fid1 = obj->lo_inodes[mds].li_fid;
                 lmv_obj_put(obj);
         }
 
@@ -1466,7 +1466,11 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         CDEBUG(D_OTHER, "ENQUEUE '%s' on "DFID" -> "DFID"\n",
                LL_IT2STR(it), PFID(&op_data->fid1), PFID(&body->fid1));
 
-        /* we got LOOKUP lock, but we really need attrs */
+        tgt_exp = lmv_get_export(lmv, &body->fid1);
+        if (IS_ERR(tgt_exp))
+                RETURN(PTR_ERR(tgt_exp));
+
+        /* We got LOOKUP lock, but we really need attrs */
         pmode = it->d.lustre.it_lock_mode;
         LASSERT(pmode != 0);
         memcpy(&plock, lockh, sizeof(plock));
@@ -1482,10 +1486,6 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
 
         it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
         ptlrpc_req_finished(req);
-
-        tgt_exp = lmv_get_export(lmv, &rdata->fid1);
-        if (IS_ERR(tgt_exp))
-                GOTO(out_free_rdata, rc = PTR_ERR(tgt_exp));
 
         rc = md_enqueue(tgt_exp, lock_type, it, lock_mode, rdata,
                         lockh, lmm, lmmsize, cb_compl, cb_blocking,

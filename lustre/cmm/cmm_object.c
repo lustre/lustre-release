@@ -764,7 +764,6 @@ static int cmr_lookup(const struct lu_env *env, struct md_object *mo_p,
  * MDS involved and to avoid the RPC inside transaction.
  * 2) only one RPC can be sent - also due to epoch negotiation.
  * For more details see rollback HLD/DLD.
- *
  */
 static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
                       const char *child_name, struct md_object *mo_c,

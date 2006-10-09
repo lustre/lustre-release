@@ -532,7 +532,7 @@ int mdc_enqueue(struct obd_export *exp,
                 if ((body->valid & OBD_MD_FLDIREA) != 0) {
                         if (body->eadatasize) {
                                 eadata = lustre_swab_repbuf(req, reply_off++,
-                                                body->eadatasize, NULL);
+                                                            body->eadatasize, NULL);
                                 if (eadata == NULL) {
                                         CERROR ("Missing/short eadata\n");
                                         RETURN (-EPROTO);
@@ -669,9 +669,10 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         LASSERT(it);
 
         CDEBUG(D_DLMTRACE, "(name: %.*s,"DFID") in obj "DFID
-                           ", intent: %s flags %#o\n",
-               op_data->namelen, op_data->name, PFID(&op_data->fid2), 
-               PFID(&op_data->fid1), ldlm_it2str(it->it_op), it->it_flags);
+               ", intent: %s flags %#o\n", op_data->namelen,
+               op_data->name, PFID(&op_data->fid2), 
+               PFID(&op_data->fid1), ldlm_it2str(it->it_op),
+               it->it_flags);
 
         if (fid_is_sane((struct lu_fid *)&op_data->fid2) &&
             (it->it_op & (IT_LOOKUP | IT_GETATTR))) {
@@ -703,13 +704,13 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                         mode = LCK_CW;
                         rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                              LDLM_FL_BLOCK_GRANTED, &res_id,
-                                             LDLM_IBITS, &policy,LCK_CW,&lockh);
+                                             LDLM_IBITS, &policy, LCK_CW, &lockh);
                 }
                 if (!rc) {
                         mode = LCK_PR;
                         rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                              LDLM_FL_BLOCK_GRANTED, &res_id,
-                                             LDLM_IBITS, &policy,LCK_PR,&lockh);
+                                             LDLM_IBITS, &policy, LCK_PR, &lockh);
                 }
                 if (rc) {
                         memcpy(&it->d.lustre.it_lock_handle, &lockh,

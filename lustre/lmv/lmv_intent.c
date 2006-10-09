@@ -77,6 +77,10 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         if (!(body->valid & OBD_MD_MDS))
                 RETURN(0);
 
+        tgt_exp = lmv_get_export(lmv, &body->fid1);
+        if (IS_ERR(tgt_exp))
+                RETURN(PTR_ERR(tgt_exp));
+
         /*
          * oh, MDS reports that this is remote inode case i.e. we have to ask
          * for real attrs on another MDS.
@@ -106,10 +110,6 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
                 GOTO(out, rc = -ENOMEM);
 
         op_data->fid1 = body->fid1;
-
-        tgt_exp = lmv_get_export(lmv, &body->fid1);
-        if (IS_ERR(tgt_exp))
-                RETURN(PTR_ERR(tgt_exp));
 
         rc = md_intent_lock(tgt_exp, op_data, lmm, lmmsize, it, flags,
                             &req, cb_blocking, extra_lock_flags);
@@ -242,12 +242,19 @@ repeat:
                 rc = lmv_handle_split(exp, &rpid);
                 if (rc == 0) {
                         ptlrpc_req_finished(*reqp);
+
+                        /* 
+                         * Zero out reqp to not confuse client. In many cases it
+                         * tries to free req even if error is returned.
+                         */
+                        it->d.lustre.it_data = 0;
+                        *reqp = NULL;
+
                        /* We shoudld reallocate the FID for the object */
                         rc = lmv_alloc_fid_for_split(obd, &rpid, op_data,
                                                      &sop_data->fid2);
                         if (rc)
                                 GOTO(out_free_sop_data, rc);
-                        /* client switches to new sequence, setup fld */
                         goto repeat;
                 }
         }
@@ -306,7 +313,7 @@ repeat:
         }
 
         if (obj) {
-                /* this is split dir and we'd want to get attrs */
+                /* This is split dir and we'd want to get attrs. */
                 CDEBUG(D_OTHER, "attrs from slaves for "DFID"\n",
                        PFID(&body->fid1));
 
@@ -711,7 +718,7 @@ repeat:
                  * reason llite calls lookup, not revalidate.
                  */
                 CDEBUG(D_OTHER, "lookup for "DFID" and data should be uptodate\n",
-                      PFID(&rpid));
+                       PFID(&rpid));
                 LASSERT(*reqp == NULL);
                 GOTO(out_free_sop_data, rc);
         }
@@ -719,7 +726,7 @@ repeat:
         if (rc == 0 && *reqp == NULL) {
                 /* once again, we're asked for lookup, not revalidate */
                 CDEBUG(D_OTHER, "lookup for "DFID" and data should be uptodate\n",
-                      PFID(&rpid));
+                       PFID(&rpid));
                 GOTO(out_free_sop_data, rc);
         }
 
@@ -838,11 +845,13 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
         if (op_data == NULL)
                 RETURN(-ENOMEM);
 
-        /* we have to loop over the subobjects, check validity and update them
+        /*
+         * We have to loop over the subobjects, check validity and update them
          * from MDSs if needed. it's very useful that we need not to update all
          * the fields. say, common fields (that are equal on all the subojects
          * need not to be update, another fields (i_size, for example) are
-         * cached all the time */
+         * cached all the time.
+         */
         obj = lmv_obj_grab(obd, mid);
         LASSERT(obj != NULL);
 
@@ -900,7 +909,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 rc = md_intent_lock(tgt_exp, op_data, NULL, 0, &it, 0, &req, cb,
                                     extra_lock_flags);
 
-                lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
+                lockh = (struct lustre_handle *)&it.d.lustre.it_lock_handle;
                 if (rc > 0 && req == NULL) {
                         /* nice, this slave is valid */
                         LASSERT(req == NULL);
@@ -908,10 +917,9 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                         goto release_lock;
                 }
 
-                if (rc < 0) {
-                        /* error during revalidation */
+                if (rc < 0)
                         GOTO(cleanup, rc);
-                }
+                
                 if (master) {
                         LASSERT(master_valid == 0);
                         /* save lock on master to be returned to the caller */
@@ -971,7 +979,7 @@ release_lock:
 
                 if (mreq == NULL) {
                         /*
-                         * very important to maintain mds num the same because
+                         * Very important to maintain mds num the same because
                          * of revalidation. mreq == NULL means that caller has
                          * no reply and the only attr we can return is size.
                          */

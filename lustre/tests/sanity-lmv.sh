@@ -230,7 +230,7 @@ umask 077
 
 test_1a() {
 	mkdir $DIR/1a0 || error 
-	createmany -o $DIR/1a0/f 4000
+	createmany -o $DIR/1a0/f 4000 || error
 	rmdir $DIR/1a0 && error
 	rm -rf $DIR/1a0 || error
 }
@@ -238,16 +238,16 @@ run_test 1a " remove splitted dir ============================="
 
 test_1b() {
 	mkdir $DIR/1b0 || error
-	createmany -o $DIR/1b0/f 4000
+	createmany -o $DIR/1b0/f 4000 || error
 	for file in $DIR/1b0/*; do rm -f $file; done
 	NUM=`ls $DIR/1b0 | wc -l`
 	if [ $NUM -ne 0 ] ; then
 		echo "dir must be empty"
 		error
 	fi
-	touch $DIR/1b0/file0
-	touch $DIR/1b0/file1
-	touch $DIR/1b0/file2
+	touch $DIR/1b0/file0 || error
+	touch $DIR/1b0/file1 || error
+	touch $DIR/1b0/file2 || error
 
 	echo "3 files left"
 	rmdir $DIR/1b0 && error
@@ -268,16 +268,16 @@ run_test 1b " remove splitted dir ============================="
 
 test_1c() {
 	mkdir $DIR/1b1 || error
-	createmany -o $DIR/1b1/f 4000
+	createmany -o $DIR/1b1/f 4000 || error
 	for file in $DIR/1b1/*; do rm -f $file; done
 	NUM=`ls $DIR/1b1 | wc -l`
 	if [ $NUM -ne 0 ] ; then
 		echo "dir must be empty"
 		error
 	fi
-	touch $DIR/1b1/file0
-	touch $DIR/1b1/file1
-	touch $DIR/1b1/file2
+	touch $DIR/1b1/file0 || error
+	touch $DIR/1b1/file1 || error
+	touch $DIR/1b1/file2 || error
 
 	ls $DIR/1b1/
 	log "3 files left"
@@ -302,7 +302,7 @@ run_test 1c " remove splitted cross-node dir ============================="
 
 test_2a() {
 	mkdir $DIR/2a0 || error 
-	createmany -o $DIR/2a0/f 5000
+	createmany -o $DIR/2a0/f 5000 || error
 	NUM=`ls $DIR/2a0 | wc -l`
 	echo "found $NUM files"
 	if [ $NUM -ne 5000 ]; then
@@ -315,7 +315,7 @@ run_test 2a " list splitted dir ============================="
 
 test_2b() {
 	mkdir $DIR/2b1 || error 
-	createmany -o $DIR/2b1/f 5000
+	createmany -o $DIR/2b1/f 5000 || error
 	$CLEAN
 	$START
 	statmany -l $DIR/2b1/f 5000 5000 || error

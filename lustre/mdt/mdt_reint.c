@@ -369,9 +369,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 GOTO(out_unlock_parent, rc = -EINVAL);
 
         if (strlen(rr->rr_name) == 0) {
-                /* remote partial operation */
+                /* MDT holding directory name ask to remove local inode. */
                 rc = mo_ref_del(info->mti_env, mdt_object_child(mp), ma);
-                
                 mdt_handle_last_unlink(info, mp, ma);
                 GOTO(out_unlock_parent, rc);
         }
@@ -408,7 +407,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         mdt_handle_last_unlink(info, mc, ma);
 
-        GOTO(out_unlock_child, rc);
+        EXIT;
 out_unlock_child:
         mdt_object_unlock(info, mc, child_lh, rc);
 out_put_child:
@@ -431,7 +430,6 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         struct mdt_lock_handle  *lhs;
         struct mdt_lock_handle  *lhp;
         int rc;
-
         ENTRY;
 
         DEBUG_REQ(D_INODE, req, "link original "DFID" to "DFID" %s",
@@ -449,11 +447,12 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                 RETURN(PTR_ERR(ms));
 
         if (strlen(rr->rr_name) == 0) {
-                /* remote partial operation */
+                /* MDT holding name ask to add ref. */
                 mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
                 rc = mo_ref_add(info->mti_env, mdt_object_child(ms));
                 GOTO(out_unlock_source, rc);
         }
+        
         /*step 2: find & lock the target parent dir*/
         lhp = &info->mti_lh[MDT_LH_CHILD];
         lhp->mlh_mode = LCK_EX;
@@ -463,14 +462,13 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                 GOTO(out_unlock_source, rc = PTR_ERR(mp));
 
         /* step 4: link it */
-
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_LINK_WRITE);
 
         rc = mdo_link(info->mti_env, mdt_object_child(mp),
                       mdt_object_child(ms), rr->rr_name, ma);
-        GOTO(out_unlock_target, rc);
 
+        EXIT;
 out_unlock_target:
         mdt_object_unlock_put(info, mp, lhp, rc);
 out_unlock_source:
