@@ -886,12 +886,21 @@ existing_lock:
                 rc = -ENOTCONN;
         } else if (lock->l_flags & LDLM_FL_AST_SENT) {
                 dlm_rep->lock_flags |= LDLM_FL_AST_SENT;
-                if (dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK) {
-                        unlock_res_and_lock(lock);
-                        ldlm_lock_cancel(lock);
-                        lock_res_and_lock(lock);
-                } else if (lock->l_granted_mode == lock->l_req_mode)
-                        ldlm_add_waiting_lock(lock);
+                if (lock->l_granted_mode == lock->l_req_mode) {
+                        /*
+                         * Only cancel lock if it was granted, because it would
+                         * be destroyed immediatelly and would never be granted
+                         * in the future, causing timeouts on client.  Not
+                         * granted lock will be cancelled immediatelly after
+                         * sending completion AST.
+                         */
+                        if (dlm_rep->lock_flags & LDLM_FL_CANCEL_ON_BLOCK) {
+                                unlock_res_and_lock(lock);
+                                ldlm_lock_cancel(lock);
+                                lock_res_and_lock(lock);
+                        } else if (lock->l_granted_mode == lock->l_req_mode)
+                                ldlm_add_waiting_lock(lock);
+                }
         }
         /* Make sure we never ever grant usual metadata locks to liblustre
            clients */

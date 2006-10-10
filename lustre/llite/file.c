@@ -1368,8 +1368,10 @@ repeat:
                  * short read (B) or some zeroes at the end of the buffer (C) */
                 ll_inode_size_unlock(inode, 1);
                 retval = ll_glimpse_size(inode, LDLM_FL_BLOCK_GRANTED);
-                if (retval)
+                if (retval) {
+                        ll_tree_unlock(&tree);
                         goto out;
+                }
         } else {
                 /* region is within kms and, hence, within real file size (A) */
                 inode->i_size = kms;
