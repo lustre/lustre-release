@@ -79,12 +79,13 @@ fld_rrb_scan(struct lu_client_fld *fld, seqno_t seq)
                fld->lcf_count);
 
         list_for_each_entry(target, &fld->lcf_targets, ft_chain) {
-                const char *srv_name = target->ft_srv ?
+                const char *srv_name = target->ft_srv != NULL  ?
                         target->ft_srv->lsf_name : "<null>";
-                const char *exp_name = target->ft_exp ?
-                        target->ft_exp->exp_obd->obd_uuid->uuid : "<null>";
+                const char *exp_name = target->ft_exp != NULL ?
+                        (char *)target->ft_exp->exp_obd->obd_uuid.uuid :
+                        "<null>";
                 
-                CERROR("  exp: 0x%p (%s), srv: 0x%p (%s), idx: %d\n",
+                CERROR("  exp: 0x%p (%s), srv: 0x%p (%s), idx: "LPU64"\n",
                        target->ft_exp, exp_name, target->ft_srv,
                        srv_name, target->ft_idx);
         }
@@ -158,7 +159,7 @@ int fld_client_add_target(struct lu_client_fld *fld,
         LASSERT(name != NULL);
         LASSERT(tar->ft_srv != NULL || tar->ft_exp != NULL);
 
-        CDEBUG(D_INFO|D_WARNING, "%s: Adding target %s (idx %d)\n",
+        CDEBUG(D_INFO|D_WARNING, "%s: Adding target %s (idx "LPU64")\n",
 	       fld->lcf_name, name, tar->ft_idx);
 
         OBD_ALLOC_PTR(target);
