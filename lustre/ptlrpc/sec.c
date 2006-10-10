@@ -1822,7 +1822,7 @@ int get_default_flavor(enum lustre_part to_part, struct sec_flavor_config *conf)
 
         switch (to_part) {
         case LUSTRE_MDT:
-                conf->sfc_rpc_flavor = SPTLRPC_FLVR_PLAIN;
+                conf->sfc_rpc_flavor = SPTLRPC_FLVR_NULL;//XXX SPTLRPC_FLVR_PLAIN;
                 return 0;
         case LUSTRE_OST:
                 conf->sfc_rpc_flavor = SPTLRPC_FLVR_NULL;
