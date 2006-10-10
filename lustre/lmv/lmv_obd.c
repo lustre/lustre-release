@@ -1941,8 +1941,6 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
         if (!page)
                 GOTO(cleanup, rc = -ENOMEM);
 
-        CDEBUG(D_INFO,"readpage %lu:%x for reset split"DFID" \n",
-               seg_end, seg_end, PFID(&rid));
         rc = md_readpage(tgt_exp, &rid, NULL, seg_end, page, &tmp_req);
         if (rc) {
                 /* E2BIG means it already reached the end of the dir,
