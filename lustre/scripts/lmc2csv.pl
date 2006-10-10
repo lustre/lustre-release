@@ -199,13 +199,14 @@ foreach my $mds (@{$objs{"mds"}}) {
         push(@mgses, $net->{"nid"});
     } else {
         # mdt
-        printf "%s,%s,%s,$MOUNTPT/%s,mdt,,\"%s\",,--device-size=%s --noformat,,noauto\n",
+        printf "%s,%s,%s,$MOUNTPT/%s,mdt,,\"%s\",,--device-size=%s --noformat%s,,noauto\n",
         $mds->{"node"},
         lnet_options($net),
         $mds->{"dev"},
         $mds->{"mds"},
         join(",", @mgses),
-        $mds->{"size"};
+        $mds->{"size"},
+        $mkfs_options;
     }
     $COUNT++;
 }
