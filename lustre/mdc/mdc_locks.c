@@ -408,7 +408,7 @@ int mdc_enqueue(struct obd_export *exp,
                                                  OBD_MD_FLACL;
                 size[DLM_INTENT_REC_OFF] = sizeof(struct mdt_body);
                 size[DLM_INTENT_REC_OFF + 1] = op_data->mod_capa1 ?
-                                               sizeof(struct lustre_capa) : 0;
+                        sizeof(struct lustre_capa) : 0;
                 if (op_data->mod_capa1)
                         valid |= OBD_MD_FLMDSCAPA;
                 size[DLM_INTENT_REC_OFF + 2] = op_data->namelen + 1;
@@ -431,8 +431,8 @@ int mdc_enqueue(struct obd_export *exp,
                                  it->it_flags, op_data);
 
                 repsize[repbufcnt++] = client_is_remote(exp) ?
-                                                sizeof(struct mdt_remote_perm) :
-                                                LUSTRE_POSIX_ACL_MAX_SIZE;
+                        sizeof(struct mdt_remote_perm) :
+                        LUSTRE_POSIX_ACL_MAX_SIZE;
                 repsize[repbufcnt++] = sizeof(struct lustre_capa);
         } else if (it->it_op == IT_READDIR) {
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;

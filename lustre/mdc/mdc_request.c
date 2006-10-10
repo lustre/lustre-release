@@ -713,8 +713,8 @@ int mdc_set_open_replay_data(struct obd_export *exp,
                 och->och_mod = mod;
                 mod->mod_och = och;
                 open_req->rq_cb_data = mod;
+                mod->mod_open_req = open_req;
                 open_req->rq_commit_cb = mdc_commit_open;
-                mod->mod_open_req = ptlrpc_request_addref(open_req);
                 
         }
 
@@ -744,11 +744,8 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
          * be freed.
          */
         LASSERT(mod != LP_POISON);
-        if (mod != NULL) {
-                if (mod->mod_open_req != NULL)
-                        ptlrpc_req_finished(mod->mod_open_req);
+        if (mod != NULL)
                 mod->mod_och = NULL;
-        }
         
         och->och_mod = NULL;
         RETURN(0);
