@@ -399,9 +399,11 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         }
 
         if (isreg && !(ma->ma_valid & MA_LOV)) {
-                /*No EA, check whether it is will set regEA and dirEA
-                 *since in above attr get, these size might be zero,
-                 *so reset it, to retrieve the MD after create obj*/
+                /*
+                 * No EA, check whether it is will set regEA and dirEA since in
+                 * above attr get, these size might be zero, so reset it, to
+                 * retrieve the MD after create obj.
+                 */
                 ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                        &RMF_MDT_MD,
                                                        RCL_SERVER);
@@ -412,10 +414,10 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         }
 
         CDEBUG(D_INODE, "after open, ma_valid bit = "LPX64" lmm_size = %d\n",
-                        ma->ma_valid, ma->ma_lmm_size);
+               ma->ma_valid, ma->ma_lmm_size);
 
         if (ma->ma_valid & MA_LOV) {
-                LASSERT(ma->ma_lmm_size);
+                LASSERT(ma->ma_lmm_size != 0);
                 repbody->eadatasize = ma->ma_lmm_size;
                 if (isdir)
                         repbody->valid |= OBD_MD_FLDIREA;
@@ -512,8 +514,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         repbody->aclsize = 0;
 
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
-                                               &RMF_MDT_MD,
+        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill, &RMF_MDT_MD,
                                                RCL_SERVER);
         ma->ma_need = MA_INODE | MA_LOV;
 
@@ -683,8 +684,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         repbody->aclsize = 0;
 
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
-                                               &RMF_MDT_MD,
+        ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill, &RMF_MDT_MD,
                                                RCL_SERVER);
         ma->ma_need = MA_INODE | MA_LOV;
 

@@ -146,6 +146,9 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_ops, rc = -ENOMEM);
         }
 
+        /* MGS is always configured. */
+        obd->obd_configured = 1;
+
         /* ldlm setup */
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "mgs_ldlm_client", &obd->obd_ldlm_client);

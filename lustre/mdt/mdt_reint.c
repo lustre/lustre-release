@@ -497,7 +497,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                       mdt_object_child(ms), rr->rr_name, ma);
 
         EXIT;
-out_unlock_target:
+
         mdt_object_unlock_put(info, mp, lhp, rc);
 out_unlock_source:
         mdt_object_unlock_put(info, ms, lhs, rc);

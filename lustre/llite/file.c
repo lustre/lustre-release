@@ -156,7 +156,7 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         EXIT;
 out:
         md_clear_open_replay_data(md_exp, och);
-        if (epoch_close)
+        if (epoch_close || !(och->och_flags & FMODE_WRITE))
                 och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         return rc;
 }

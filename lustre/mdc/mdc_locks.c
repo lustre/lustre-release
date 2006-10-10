@@ -247,8 +247,12 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
         if (new_msg != NULL) {
                 struct lustre_msg *old_msg = req->rq_reqmsg;
 
-                DEBUG_REQ(D_INFO, req, "replace reqmsg for larger EA %u\n",
+                DEBUG_REQ(D_INFO, req, "Replace reqmsg for larger EA %u\n",
                           body->eadatasize);
+
+                CDEBUG(D_INFO, "Copy old msg of size %d to new allocated msg "
+                       "of size %d\n", old_size, new_size);
+                
                 memcpy(new_msg, old_msg, old_size);
                 lustre_msg_set_buflen(new_msg, DLM_INTENT_REC_OFF + 4,
                                       body->eadatasize);
@@ -260,6 +264,8 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
 
                 OBD_FREE(old_msg, old_size);
         } else {
+                CERROR("Can't allocate new msg, size %d\n",
+                       new_size);
                 body->valid &= ~OBD_MD_FLEASIZE;
                 body->eadatasize = 0;
         }
@@ -299,7 +305,6 @@ int mdc_enqueue(struct obd_export *exp,
                                                    cl_max_mds_easize };
         int flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
         int repbufcnt = 4, ea_off, rc;
-        void *eadata;
         ENTRY;
 
         LASSERTF(lock_type == LDLM_IBITS, "lock type %d\n", lock_type);
@@ -511,8 +516,8 @@ int mdc_enqueue(struct obd_export *exp,
         /* We know what to expect, so we do any byte flipping required here */
         LASSERT(repbufcnt == 7 || repbufcnt == 6 || repbufcnt == 2);
         if (repbufcnt >= 6) {
-                struct mdt_body *body;
                 int reply_off = DLM_REPLY_REC_OFF;
+                struct mdt_body *body;
 
                 body = lustre_swab_repbuf(req, reply_off++, sizeof(*body),
                                          lustre_swab_mdt_body);
@@ -521,54 +526,57 @@ int mdc_enqueue(struct obd_export *exp,
                         RETURN (-EPROTO);
                 }
 
-                /* If this is a successful OPEN request, we need to set
-                   replay handler and data early, so that if replay happens
-                   immediately after swabbing below, new reply is swabbed
-                   by that handler correctly */
-                if (it_disposition(it, DISP_OPEN_OPEN) &&
-                    !it_open_error(DISP_OPEN_OPEN, it))
+                if (req->rq_replay && it_disposition(it, DISP_OPEN_OPEN) &&
+                    !it_open_error(DISP_OPEN_OPEN, it)) {
+                        /*
+                         * If this is a successful OPEN request, we need to set
+                         * replay handler and data early, so that if replay
+                         * happens immediately after swabbing below, new reply
+                         * is swabbed by that handler correctly.
+                         */
                         mdc_set_open_replay_data(NULL, NULL, req);
-
-                if ((body->valid & OBD_MD_FLDIREA) != 0) {
-                        if (body->eadatasize) {
-                                eadata = lustre_swab_repbuf(req, reply_off++,
-                                                            body->eadatasize, NULL);
-                                if (eadata == NULL) {
-                                        CERROR ("Missing/short eadata\n");
-                                        RETURN (-EPROTO);
-                                }
-                        }
                 }
-                if ((body->valid & OBD_MD_FLEASIZE)) {
-                        /* The eadata is opaque; just check that it is there.
-                         * Eventually, obd_unpackmd() will check the contents */
+
+                if ((body->valid & (OBD_MD_FLDIREA | OBD_MD_FLEASIZE)) != 0) {
+                        void *eadata;
+                        
+                        /*
+                         * The eadata is opaque; just check that it is there.
+                         * Eventually, obd_unpackmd() will check the contents.
+                         */
                         eadata = lustre_swab_repbuf(req, reply_off++,
                                                     body->eadatasize, NULL);
                         if (eadata == NULL) {
-                                CERROR ("Missing/short eadata\n");
-                                RETURN (-EPROTO);
+                                CERROR("Missing/short eadata\n");
+                                RETURN(-EPROTO);
                         }
                         if (body->valid & OBD_MD_FLMODEASIZE) {
                                 if (obddev->u.cli.cl_max_mds_easize < 
-                                                        body->max_mdsize) {
+                                    body->max_mdsize) {
                                         obddev->u.cli.cl_max_mds_easize = 
                                                 body->max_mdsize;
                                         CDEBUG(D_INFO, "maxeasize become %d\n",
                                                body->max_mdsize);
                                 }
                                 if (obddev->u.cli.cl_max_mds_cookiesize <
-                                                        body->max_cookiesize) {
+                                    body->max_cookiesize) {
                                         obddev->u.cli.cl_max_mds_cookiesize =
                                                 body->max_cookiesize;
                                         CDEBUG(D_INFO, "cookiesize become %d\n",
                                                body->max_cookiesize);
                                 }
                         }
-                        /* We save the reply LOV EA in case we have to replay
-                         * a create for recovery.  If we didn't allocate a
-                         * large enough request buffer above we need to
-                         * reallocate it here to hold the actual LOV EA. */
-                        if (it->it_op & IT_OPEN) {
+                        
+                        /*
+                         * We save the reply LOV EA in case we have to replay a
+                         * create for recovery.  If we didn't allocate a large
+                         * enough request buffer above we need to reallocate it
+                         * here to hold the actual LOV EA.
+                         *
+                         * To not save LOV EA if request is not going to replay
+                         * (for example error one).
+                         */
+                        if ((it->it_op & IT_OPEN) && req->rq_replay) {
                                 if (lustre_msg_buflen(req->rq_reqmsg,
                                                       DLM_INTENT_REC_OFF + 4) <
                                     body->eadatasize)

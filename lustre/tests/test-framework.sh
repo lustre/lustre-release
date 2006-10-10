@@ -502,8 +502,8 @@ replay_barrier_nodf() {
 }
 
 mds_evict_client() {
-    UUID=`cat /proc/fs/lustre/mdc/${mds_svc}-mdc-*/uuid`
-    do_facet mds "echo $UUID > /proc/fs/lustre/mds/${mds_svc}/evict_client"
+    UUID=`cat /proc/fs/lustre/mdc/${mds1_svc}-mdc-*/uuid`
+    do_facet mds1 "echo $UUID > /proc/fs/lustre/mdd/${mds1_svc}/evict_client"
 }
 
 ost_evict_client() {

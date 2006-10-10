@@ -64,23 +64,23 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 RETURN(0);
         }
 
-        if (seq->lss_cli) {
+        /*
+         * Ask client for new range, assign that range to ->seq_space and write
+         * seq state to backing store should be atomic.
+         */
+        down(&seq->lss_sem);
+
+        if (seq->lss_cli != NULL) {
                 CERROR("%s: Sequence-controller is already "
                        "assigned\n", seq->lss_name);
-                RETURN(-EINVAL);
+                GOTO(out_up, rc = -EINVAL);
         }
 
         CDEBUG(D_INFO|D_WARNING, "%s: Attached "
                "sequence client %s\n", seq->lss_name,
                cli->lcs_name);
 
-        /*
-         * Asking client for new range, assign that range to ->seq_space and
-         * write seq state to backing store should be atomic.
-         */
-        down(&seq->lss_sem);
-
-        /* Assign controller */
+        /* Assign controller. */
         seq->lss_cli = cli;
 
         /*
@@ -90,10 +90,9 @@ int seq_server_set_cli(struct lu_server_seq *seq,
         if (range_is_zero(&seq->lss_space)) {
                 rc = seq_client_alloc_super(cli, env);
                 if (rc) {
-                        up(&seq->lss_sem);
                         CERROR("%s: Can't allocate super-sequence, "
                                "rc %d\n", seq->lss_name, rc);
-                        RETURN(rc);
+                        GOTO(out_up, rc);
                 }
 
                 /* take super-seq from client seq mgr */
@@ -109,8 +108,10 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 }
         }
 
+        EXIT;
+out_up:
         up(&seq->lss_sem);
-        RETURN(rc);
+        return rc;
 }
 EXPORT_SYMBOL(seq_server_set_cli);
 
@@ -235,8 +236,8 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                 if (range_is_exhausted(space)) {
                         if (!seq->lss_cli) {
                                 CERROR("%s: No sequence controller client "
-                                       "is setup\n", seq->lss_name);
-                                RETURN(-EOPNOTSUPP);
+                                       "is setup.\n", seq->lss_name);
+                                RETURN(-ENODEV);
                         }
 
                         rc = seq_client_alloc_super(seq->lss_cli, env);

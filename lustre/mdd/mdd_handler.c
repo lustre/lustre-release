@@ -3011,7 +3011,7 @@ static int mdd_open(const struct lu_env *env, struct md_object *obj,
 
         rc = mdd_open_sanity_check(env, mdd_obj, flags);
         if (rc == 0)
-                mdd_obj->mod_count ++;
+                mdd_obj->mod_count++;
 
         mdd_write_unlock(env, mdd_obj);
         return rc;

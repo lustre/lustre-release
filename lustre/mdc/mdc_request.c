@@ -675,8 +675,7 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                 if (och != NULL)
                         LASSERT(!memcmp(&old, &epoch->handle, sizeof(old)));
                 DEBUG_REQ(D_HA, close_req, "updating close body with new fh");
-                memcpy(&epoch->handle, &body->handle,
-                       sizeof(epoch->handle));
+                memcpy(&epoch->handle, &body->handle, sizeof(epoch->handle));
         }
 
         EXIT;
@@ -695,36 +694,40 @@ int mdc_set_open_replay_data(struct obd_export *exp,
                                                sizeof(*body));
         ENTRY;
 
-        /* incoming message in my byte order (it's been swabbed) */
         LASSERT(rec != NULL);
+
+        /* Incoming message in my byte order (it's been swabbed). */
         LASSERT_REPSWABBED(open_req, DLM_REPLY_REC_OFF);
-        /* outgoing messages always in my byte order */
+
+        /* Outgoing messages always in my byte order. */
         LASSERT(body != NULL);
 
         if (och) {
                 OBD_ALLOC(mod, sizeof(*mod));
                 if (mod == NULL) {
-                        DEBUG_REQ(D_ERROR, open_req, "can't allocate mdc_open_data");
+                        DEBUG_REQ(D_ERROR, open_req,
+                                  "Can't allocate mdc_open_data");
                         RETURN(0);
                 }
 
                 och->och_mod = mod;
                 mod->mod_och = och;
-                mod->mod_open_req = open_req;
                 open_req->rq_cb_data = mod;
                 open_req->rq_commit_cb = mdc_commit_open;
+                mod->mod_open_req = ptlrpc_request_addref(open_req);
+                
         }
 
         rec->cr_fid2 = body->fid1;
         rec->cr_ioepoch = body->ioepoch;
         open_req->rq_replay_cb = mdc_replay_open;
         if (!fid_is_sane(&body->fid1)) {
-                DEBUG_REQ(D_ERROR, open_req, "saving replay request with "
+                DEBUG_REQ(D_ERROR, open_req, "Saving replay request with "
                           "insane fid");
                 LBUG();
         }
 
-        DEBUG_REQ(D_HA, open_req, "set up replay data");
+        DEBUG_REQ(D_HA, open_req, "Set up open replay data");
         RETURN(0);
 }
 
@@ -734,13 +737,18 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
         struct mdc_open_data *mod = och->och_mod;
         ENTRY;
 
-        /* Don't free the structure now (it happens in mdc_commit_open, after
+        /*
+         * Don't free the structure now (it happens in mdc_commit_open(), after
          * we're sure we won't need to fix up the close request in the future),
          * but make sure that replay doesn't poke at the och, which is about to
-         * be freed. */
+         * be freed.
+         */
         LASSERT(mod != LP_POISON);
         if (mod != NULL)
+                if (mod->mod_open_req != NULL)
+                        ptlrpc_req_finished(mod->mod_open_req);
                 mod->mod_och = NULL;
+
         och->och_mod = NULL;
         RETURN(0);
 }
@@ -768,8 +776,10 @@ static void mdc_commit_close(struct ptlrpc_request *req)
         LASSERT(open_req->rq_transno != 0);
         LASSERT(open_req->rq_import == imp);
 
-        /* We no longer want to preserve this for transno-unconditional
-         * replay. */
+        /*
+         * We no longer want to preserve this for transno-unconditional
+         * replay. Decref open req here as well.
+         */
         spin_lock(&open_req->rq_lock);
         open_req->rq_replay = 0;
         spin_unlock(&open_req->rq_lock);
@@ -1369,7 +1379,7 @@ static int mdc_fid_init(struct obd_export *exp)
         /* pre-allocate meta-sequence */
         rc = seq_client_alloc_meta(cli->cl_seq, NULL);
         if (rc) {
-                CERROR("can't allocate new mata-sequence, "
+                CERROR("Can't allocate new meta-sequence, "
                        "rc %d\n", rc);
                 GOTO(out_free_seq, rc);
         }

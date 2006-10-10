@@ -568,11 +568,15 @@ int target_handle_connect(struct ptlrpc_request *req)
         target = class_uuid2obd(&tgtuuid);
         if (!target)
                 target = class_name2obd(str);
-        
-        if (!target || target->obd_stopping || !target->obd_set_up) {
+
+        /*
+         * Do not accept connections if obd is not set up, or not configured
+         * yet.
+         */
+        if (!target || target->obd_stopping || !target->obd_set_up ||
+            !target->obd_configured) {
                 DEBUG_REQ(D_ERROR, req, "UUID '%s' is not available "
-                          " for connect (%s)", str,
-                          !target ? "no target" :
+                          " for connect (%s)", str, !target ? "no target" :
                           (target->obd_stopping ? "stopping" : "not set up"));
                 GOTO(out, rc = -ENODEV);
         }
