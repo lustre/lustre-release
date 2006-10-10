@@ -493,6 +493,12 @@ void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
 
         page_pools.epp_free_pages += desc->bd_max_iov;
 
+        if (unlikely(page_pools.epp_waitqlen)) {
+                LASSERT(page_pools.epp_waitqlen > 0);
+                LASSERT(cfs_waitq_active(&page_pools.epp_waitq));
+                cfs_waitq_broadcast(&page_pools.epp_waitq);
+        }
+
         spin_unlock(&page_pools.epp_lock);
 
         OBD_FREE(desc->bd_enc_pages,
