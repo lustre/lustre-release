@@ -608,6 +608,15 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 GOTO(out, rc);
         }
 
+        rc = mdt_object_exists(parent);
+        if (rc == 0)
+                RETURN(-ESTALE);
+        else if (rc < 0) {
+                CERROR("Object "DFID" locates on remote server\n",
+                        PFID(mdt_object_fid(parent)));
+                LBUG();
+        }
+
         /*step 1: lock parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
         lhp->mlh_mode = LCK_CR;
@@ -1337,7 +1346,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
 
         LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
         LASSERT(lh->mlh_mode != LCK_MINMODE);
-        if (lu_object_exists(&o->mot_obj.mo_lu) < 0) {
+        if (mdt_object_exists(o) < 0) {
                 LASSERT(!(ibits & MDS_INODELOCK_UPDATE));
                 LASSERT(ibits & MDS_INODELOCK_LOOKUP);
         }
@@ -1352,7 +1361,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
 int mdt_object_cr_lock(struct mdt_thread_info *info, struct mdt_object *o,
                        struct mdt_lock_handle *lh, __u64 ibits)
 {
-        if (lu_object_exists(&o->mot_obj.mo_lu) < 0) {
+        if (mdt_object_exists(o) < 0) {
                 /* cross-ref object fix */
                 ibits &= ~MDS_INODELOCK_UPDATE;
                 ibits |= MDS_INODELOCK_LOOKUP;
@@ -1500,7 +1509,7 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
         obj = mdt_object_find(env, info->mti_mdt, &body->fid1);
         if (!IS_ERR(obj)) {
                 if ((flags & HABEO_CORPUS) &&
-                    !lu_object_exists(&obj->mot_obj.mo_lu)) {
+                    !mdt_object_exists(obj)) {
                         mdt_object_put(env, obj);
                         rc = -ENOENT;
                 } else {

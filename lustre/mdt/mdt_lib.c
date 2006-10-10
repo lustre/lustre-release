@@ -531,7 +531,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
         if (ma->ma_valid & MA_LOV) {
                 __u32 mode;
 
-                if (lu_object_exists(&mo->mot_obj.mo_lu) < 0)
+                if (mdt_object_exists(mo) < 0)
                         /* If it is a remote object, and we do not retrieve
                          * EA back unlink reg file*/
                         mode = S_IFREG;

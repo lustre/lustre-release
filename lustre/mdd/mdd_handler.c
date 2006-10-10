@@ -1646,6 +1646,7 @@ static int mdd_dir_is_empty(const struct lu_env *env,
         struct dt_object *obj;
         struct dt_it_ops *iops;
         int result;
+        ENTRY;
 
         obj = mdd_object_child(dir);
         iops = &obj->do_index_ops->dio_it;
@@ -1670,7 +1671,7 @@ static int mdd_dir_is_empty(const struct lu_env *env,
                 iops->fini(env, it);
         } else
                 result = -ENOMEM;
-        return result;
+        RETURN(result);
 }
 
 /* return md_attr back,
@@ -2096,6 +2097,15 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 
         if (mdd_is_dead_obj(mdd_obj))
                 RETURN(-ESTALE);
+
+        rc = lu_object_exists(mdd2lu_obj(mdd_obj));
+        if (rc == 0)
+                RETURN(-ESTALE);
+        else if (rc < 0) {
+                CERROR("Object "DFID" locates on remote server\n",
+                        PFID(mdo2fid(mdd_obj)));
+                LBUG();
+        }
 
         if (mask == MAY_EXEC)
                 rc = mdd_exec_permission_lite(env, mdd_obj);

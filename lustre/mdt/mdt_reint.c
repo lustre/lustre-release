@@ -58,6 +58,15 @@ static int mdt_md_create(struct mdt_thread_info *info)
         if (IS_ERR(parent))
                 RETURN(PTR_ERR(parent));
 
+        rc = mdt_object_exists(parent);
+        if (rc == 0)
+                GOTO(out, rc = -ESTALE);
+        else if (rc < 0) {
+                CERROR("Object "DFID" locates on remote server\n",
+                        PFID(mdt_object_fid(parent)));
+                LBUG();
+        }
+
         child = mdt_object_find(info->mti_env, mdt, rr->rr_fid2);
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(parent);
@@ -79,6 +88,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 mdt_object_put(info->mti_env, child);
         } else
                 rc = PTR_ERR(child);
+out:
         mdt_object_unlock_put(info, parent, lh, rc);
         RETURN(rc);
 }
@@ -102,7 +112,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
                 ma->ma_need = MA_INODE;
                 /* Cross-ref create can encounter already created obj in case
                  * of recovery, just get attr in that case */
-                if (lu_object_exists(&o->mot_obj.mo_lu) == 1) {
+                if (mdt_object_exists(o) == 1) {
                         rc = mo_attr_get(info->mti_env, next, ma);
                 } else {
                         rc = mo_object_create(info->mti_env, next, 
@@ -354,6 +364,15 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (IS_ERR(mp))
                 GOTO(out, rc = PTR_ERR(mp));
 
+        rc = mdt_object_exists(mp);
+        if (rc == 0)
+                GOTO(out_unlock_parent, rc = -ESTALE);
+        else if (rc < 0) {
+                CERROR("Object "DFID" locates on remote server\n",
+                        PFID(mdt_object_fid(mp)));
+                LBUG();
+        }
+
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                &RMF_MDT_MD, RCL_SERVER);
@@ -375,7 +394,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                  * Therefore the object absense is allowed case
                  * and nothing should be done
                  */
-                if (lu_object_exists(&mp->mot_obj.mo_lu) > 0) {
+                if (mdt_object_exists(mp) > 0) {
                         rc = mo_ref_del(info->mti_env,
                                         mdt_object_child(mp), ma);
                         mdt_handle_last_unlink(info, mp, ma);

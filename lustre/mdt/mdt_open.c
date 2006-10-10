@@ -541,7 +541,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                 child = mdt_object_find(env, mdt, rr->rr_fid2);
                 LASSERT(!IS_ERR(child));
 
-                rc = lu_object_exists(&child->mot_obj.mo_lu);
+                rc = mdt_object_exists(child);
                 if (rc > 0) {
                         struct md_object *next;
                         next = mdt_object_child(child);
@@ -590,7 +590,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
-        rc = lu_object_exists(&o->mot_obj.mo_lu);
+        rc = mdt_object_exists(o);
         if (rc > 0) {
                 const struct lu_env *env = info->mti_env;
 
@@ -635,7 +635,7 @@ static int mdt_cross_open(struct mdt_thread_info* info,
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
-        rc = lu_object_exists(&o->mot_obj.mo_lu);
+        rc = mdt_object_exists(o);
         if (rc > 0) {
                 mdt_set_capainfo(info, 0, fid, BYPASS_CAPA);
                 rc = mo_attr_get(info->mti_env, mdt_object_child(o), ma);
@@ -745,6 +745,15 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                                       MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
                 GOTO(out, result = PTR_ERR(parent));
+
+        result = mdt_object_exists(parent);
+        if (result == 0)
+                GOTO(out_parent, result = -ESTALE);
+        else if (result < 0) {
+                CERROR("Object "DFID" locates on remote server\n",
+                        PFID(mdt_object_fid(parent)));
+                LBUG();
+        }
 
         result = mdo_lookup(info->mti_env, mdt_object_child(parent),
                             rr->rr_name, child_fid);
