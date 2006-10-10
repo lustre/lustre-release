@@ -1850,10 +1850,9 @@ test_44a() {
                          awk '{print $2}'`
     local stride=`$LCTL lov_getconfig $DIR | grep default_stripe_size: | \
                       awk '{print $2}'`
-    if [ $nstripe -eq 0 ] ; then
+    if [ $nstripe -eq 0 -o $nstripe -gt 1024 ] ; then
         nstripe=`$LCTL lov_getconfig $DIR | grep obd_count: | awk '{print $2}'`
     fi
-
     OFFSETS="0 $((stride/2)) $((stride-1))"
     for offset in $OFFSETS ; do
       for i in `seq 0 $((nstripe-1))`; do
