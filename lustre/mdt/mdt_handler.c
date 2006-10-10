@@ -431,6 +431,9 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
+        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        LASSERT(body);
+
         c = req_capsule_client_get(&info->mti_pill, &RMF_CAPA1);
         LASSERT(c);
 
@@ -447,9 +450,6 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
         *capa = *c;
         capa->lc_expiry = 0;
         rc = mo_capa_get(info->mti_env, mdt_object_child(obj), capa);
-
-        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        LASSERT(body);
 
         body->valid |= OBD_MD_FLOSSCAPA;
         EXIT;
