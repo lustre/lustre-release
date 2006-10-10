@@ -1941,6 +1941,8 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
         if (!page)
                 GOTO(cleanup, rc = -ENOMEM);
 
+        CDEBUG(D_INFO,"readpage %lu:%x for reset split"DFID" \n",
+               seg_end, seg_end, PFID(&rid));
         rc = md_readpage(tgt_exp, &rid, NULL, seg_end, page, &tmp_req);
         if (rc) {
                 /* E2BIG means it already reached the end of the dir,
@@ -2018,14 +2020,20 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                 kmap(page);
                 dp = cfs_page_address(page);
                 end = le32_to_cpu(dp->ldp_hash_end);
-                if (end == ~0ul)
-                        rc = lmv_reset_hash_seg_end(lmv, obj, fid,
-                                                    i + 1, dp);
+                CDEBUG(D_INFO, "get "DFID" with end %lu i %d\n",
+                       PFID(&rid), (unsigned long)end, i);
+                if (end == ~0ul) {
+                        do {
+                                rc = lmv_reset_hash_seg_end(lmv, obj, fid,
+                                                            ++i, dp);
+                                if (i >= obj->lo_objcount - 1)
+                                        break;
+                                /* if there are no entries in this segment 
+                                 * and it is not the last hash segment */
+                        } while (rc != -E2BIG);
+                }
                 kunmap(page);
-        } else
-                if (rc == -ERANGE)
-                        rc = -EIO;
-
+        }
         /*
          * Here we could remove "." and ".." from all pages which at not from
          * master. But MDS has only "." and ".." for master dir.

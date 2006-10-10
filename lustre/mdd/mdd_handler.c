@@ -372,7 +372,7 @@ static struct lu_object *mdd_object_alloc(const struct lu_env *env,
         OBD_ALLOC_PTR(mdd_obj);
         if (mdd_obj != NULL) {
                 struct lu_object *o;
-		
+
                 o = mdd2lu_obj(mdd_obj);
                 lu_object_init(o, NULL, d);
                 mdd_obj->mod_obj.mo_ops = &mdd_obj_ops;
@@ -2574,22 +2574,29 @@ static int mdd_object_create(const struct lu_env *env,
 
         mdd_write_lock(env, mdd_obj);
         rc = __mdd_object_create(env, mdd_obj, ma, handle);
-        if (rc == 0 && spec->sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
+        if (rc)
+                GOTO (unlock, rc);
+
+        if (spec->sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
                 /* if creating the slave object, set slave EA here */
+                int lmv_size = spec->u.sp_ea.eadatalen;
+                struct lmv_stripe_md *lmv;
+
+                lmv = (struct lmv_stripe_md *)spec->u.sp_ea.eadata;
+                LASSERT(lmv != NULL && lmv_size > 0);
                 rc = __mdd_xattr_set(env, mdd_obj,
-                                     mdd_buf_get_const(env,
-                                                       spec->u.sp_ea.eadata,
-                                                       spec->u.sp_ea.eadatalen),
+                                     mdd_buf_get_const(env, lmv, lmv_size),
                                      MDS_LMV_MD_NAME, 0, handle);
+                if (rc)
+                        GOTO(unlock, rc);
                 pfid = spec->u.sp_ea.fid;
-                CWARN("set slave ea "DFID" eadatalen %d rc %d \n",
+                CWARN("set slave ea "DFID" eadatalen %d rc %d\n",
                        PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
-        }
-
-        if (rc == 0)
+                rc = mdd_attr_set_internal(env, mdd_obj, &ma->ma_attr, handle);
+        } else
                 rc = __mdd_object_initialize(env, pfid, mdd_obj, ma, handle);
+unlock:
         mdd_write_unlock(env, mdd_obj);
-
         if (rc == 0)
                 rc = mdd_attr_get_internal_locked(env, mdd_obj, ma);
 
