@@ -1408,6 +1408,15 @@ void sptlrpc_import_flush_my_ctx(struct obd_import *imp)
 }
 EXPORT_SYMBOL(sptlrpc_import_flush_my_ctx);
 
+void sptlrpc_import_flush_all_ctx(struct obd_import *imp)
+{
+        if (imp == NULL || imp->imp_sec == NULL)
+                return;
+
+        ctx_cache_flush(imp->imp_sec, -1, 0, 1);
+}
+EXPORT_SYMBOL(sptlrpc_import_flush_all_ctx);
+
 int sptlrpc_cli_install_rvs_ctx(struct obd_import *imp,
                                 struct ptlrpc_cli_ctx *ctx)
 {

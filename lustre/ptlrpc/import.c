@@ -203,6 +203,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
                        atomic_read(&imp->imp_inflight));
 
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
+        sptlrpc_import_flush_all_ctx(imp);
 }
 
 /* unset imp_invalid */

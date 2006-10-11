@@ -583,6 +583,10 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                                     svc->srv_n_active_reqs);
         }
 
+        /* go through security check/transform */
+        request->rq_auth_uid = INVALID_UID;
+        request->rq_auth_mapped_uid = INVALID_UID;
+
         rc = sptlrpc_svc_unwrap_request(request);
         switch (rc) {
         case SECSVC_OK:

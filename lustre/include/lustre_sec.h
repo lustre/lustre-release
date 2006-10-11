@@ -458,6 +458,7 @@ void sptlrpc_import_put_sec(struct obd_import *imp);
 int sptlrpc_import_check_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_root_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_my_ctx(struct obd_import *imp);
+void sptlrpc_import_flush_all_ctx(struct obd_import *imp);
 int  sptlrpc_req_get_ctx(struct ptlrpc_request *req);
 void sptlrpc_req_put_ctx(struct ptlrpc_request *req);
 int  sptlrpc_req_refresh_ctx(struct ptlrpc_request *req, long timeout);
