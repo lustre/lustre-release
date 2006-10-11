@@ -1949,17 +1949,16 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
                        GOTO(cleanup, rc = 0);
                 if (rc != -ERANGE)
                        GOTO(cleanup, rc);
-                if (rc == -ERANGE)
-                        rc = 0;
         }
         kmap(page);
         next_dp = cfs_page_address(page);
         LASSERT(le32_to_cpu(next_dp->ldp_hash_start) >= seg_end);
         dp->ldp_hash_end = next_dp->ldp_hash_start;
         kunmap(page);
-        CDEBUG(D_INFO,"reset h_end %x for split obj"DFID"o_count %d index %d\n",
+        CDEBUG(D_INFO,"reset h_end %x split obj"DFID"o_count %d index %d\n",
                le32_to_cpu(dp->ldp_hash_end), PFID(&rid), obj->lo_objcount,
                index);
+        rc = 1;
 cleanup:
         if (tmp_req)
                 ptlrpc_req_finished(tmp_req);
@@ -2024,11 +2023,14 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                         do {
                                 rc = lmv_reset_hash_seg_end(lmv, obj, fid,
                                                             ++i, dp);
-                                if (i >= obj->lo_objcount - 1)
+                                if (i >= obj->lo_objcount - 1 || rc) {
+                                        if (rc == 1)
+                                                rc = 0;
                                         break;
+                                }
                                 /* if there are no entries in this segment 
                                  * and it is not the last hash segment */
-                        } while (rc != -E2BIG);
+                        } while (1);
                 }
                 kunmap(page);
         }
