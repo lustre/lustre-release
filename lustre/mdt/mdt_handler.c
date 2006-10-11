@@ -566,6 +566,16 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                PFID(mdt_object_fid(parent)), name, ldlm_rep);
 
         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
+
+        rc = mdt_object_exists(parent);
+        if (rc == 0)
+                RETURN(-ESTALE);
+        else if (rc < 0) {
+                CERROR("Object "DFID" locates on remote server\n",
+                        PFID(mdt_object_fid(parent)));
+                LBUG();
+        }
+
         if (strlen(name) == 0) {
                 /* Only getattr on the child. Parent is on another node. */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
@@ -606,15 +616,6 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                                 mdt_object_unlock(info, child, lhc, 1);
                 }
                 GOTO(out, rc);
-        }
-
-        rc = mdt_object_exists(parent);
-        if (rc == 0)
-                RETURN(-ESTALE);
-        else if (rc < 0) {
-                CERROR("Object "DFID" locates on remote server\n",
-                        PFID(mdt_object_fid(parent)));
-                LBUG();
         }
 
         /*step 1: lock parent */
