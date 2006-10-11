@@ -518,8 +518,8 @@ test_17a() {
 	ls -l $DIR/d17
 	$CHECKSTAT -l $DIR/d17/f $DIR/d17/l-exist || error
 	$CHECKSTAT -f -t f $DIR/d17/l-exist || error
-	rm -f $DIR/l-exist
-	$CHECKSTAT -a $DIR/l-exist || error
+	rm -f $DIR/d17/l-exist
+	$CHECKSTAT -a $DIR/d17/l-exist || error
 }
 run_test 17a "symlinks: create, remove (real) =================="
 
@@ -529,8 +529,8 @@ test_17b() {
 	ls -l $DIR/d17
 	$CHECKSTAT -l no-such-file $DIR/d17/l-dangle || error
 	$CHECKSTAT -fa $DIR/d17/l-dangle || error
-	rm -f $DIR/l-dangle
-	$CHECKSTAT -a $DIR/l-dangle || error
+	rm -f $DIR/d17/l-dangle
+	$CHECKSTAT -a $DIR/d17/l-dangle || error
 }
 run_test 17b "symlinks: create, remove (dangling) =============="
 
