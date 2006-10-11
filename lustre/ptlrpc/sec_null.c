@@ -158,6 +158,43 @@ void null_free_repbuf(struct ptlrpc_sec *sec,
 }
 
 static
+int null_enlarge_reqbuf(struct ptlrpc_sec *sec,
+                        struct ptlrpc_request *req,
+                        int segment, int newsize, int move_data)
+{
+        struct lustre_msg      *oldmsg = req->rq_reqbuf, *newmsg;
+        int                     oldsize, new_msgsize;
+
+        LASSERT(req->rq_reqbuf);
+        LASSERT(req->rq_reqbuf == req->rq_reqmsg);
+        LASSERT(!move_data); // XXX
+
+        oldsize = oldmsg->lm_buflens[segment];
+        oldmsg->lm_buflens[segment] = newsize;
+
+        new_msgsize = lustre_msg_size(oldmsg->lm_magic,
+                                      oldmsg->lm_bufcount, oldmsg->lm_buflens);
+
+        /* FIXME need move data!!! */
+        if (req->rq_pool) {
+                req->rq_reqlen = new_msgsize;
+        } else {
+                OBD_ALLOC(newmsg, new_msgsize);
+                if (newmsg == NULL) {
+                        oldmsg->lm_buflens[segment] = oldsize;
+                        return -ENOMEM;
+                }
+                memcpy(newmsg, oldmsg, req->rq_reqlen);
+
+                OBD_FREE(req->rq_reqbuf, req->rq_reqbuf_len);
+                req->rq_reqbuf = req->rq_reqmsg = newmsg;
+                req->rq_reqbuf_len = req->rq_reqlen = new_msgsize;
+        }
+
+        return 0;
+}
+
+static
 int null_accept(struct ptlrpc_request *req)
 {
         LASSERT(SEC_FLAVOR_POLICY(req->rq_sec_flavor) == SPTLRPC_POLICY_NULL);
@@ -238,6 +275,7 @@ static struct ptlrpc_sec_cops null_sec_cops = {
         .alloc_repbuf           = null_alloc_repbuf,
         .free_reqbuf            = null_free_reqbuf,
         .free_repbuf            = null_free_repbuf,
+        .enlarge_reqbuf         = null_enlarge_reqbuf,
 };
 
 static struct ptlrpc_sec_sops null_sec_sops = {

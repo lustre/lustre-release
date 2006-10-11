@@ -235,38 +235,13 @@ static int round_up(int val)
 static void mdc_realloc_openmsg(struct ptlrpc_request *req,
                                 struct mdt_body *body, int size[9])
 {
-        int new_size, old_size;
-        struct lustre_msg *new_msg;
+        int     rc;
 
-        LBUG(); // ericm
-        /* save old size */
-        old_size = lustre_msg_size(lustre_request_magic(req), 9, size);
-
-        size[DLM_INTENT_REC_OFF + 4] = body->eadatasize;
-        new_size = lustre_msg_size(lustre_request_magic(req), 9, size);
-        OBD_ALLOC(new_msg, new_size);
-        if (new_msg != NULL) {
-                struct lustre_msg *old_msg = req->rq_reqmsg;
-
-                DEBUG_REQ(D_INFO, req, "Replace reqmsg for larger EA %u\n",
-                          body->eadatasize);
-
-                CDEBUG(D_INFO, "Copy old msg of size %d to new allocated msg "
-                       "of size %d\n", old_size, new_size);
-                
-                memcpy(new_msg, old_msg, old_size);
-                lustre_msg_set_buflen(new_msg, DLM_INTENT_REC_OFF + 4,
-                                      body->eadatasize);
-
-                spin_lock(&req->rq_lock);
-                req->rq_reqmsg = new_msg;
-                req->rq_reqlen = new_size;
-                spin_unlock(&req->rq_lock);
-
-                OBD_FREE(old_msg, old_size);
-        } else {
-                CERROR("Can't allocate new msg, size %d\n",
-                       new_size);
+        rc = sptlrpc_cli_enlarge_reqbuf(req, DLM_INTENT_REC_OFF + 4,
+                                        body->eadatasize, 0);
+        if (rc) {
+                CERROR("Can't enlarge segment %d size to %d\n",
+                       DLM_INTENT_REC_OFF + 4, body->eadatasize);
                 body->valid &= ~OBD_MD_FLEASIZE;
                 body->eadatasize = 0;
         }

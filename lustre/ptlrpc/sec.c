@@ -1322,6 +1322,28 @@ void sptlrpc_cli_free_reqbuf(struct ptlrpc_request *req)
         policy->sp_cops->free_reqbuf(ctx->cc_sec, req);
 }
 
+int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
+                               int segment, int newsize, int movedata)
+{
+        struct ptlrpc_cli_ctx    *ctx = req->rq_cli_ctx;
+        struct ptlrpc_sec_policy *policy;
+        struct lustre_msg        *msg = req->rq_reqmsg;
+
+        LASSERT(ctx);
+        LASSERT(msg);
+        LASSERT(msg->lm_bufcount > segment);
+        LASSERT(msg->lm_buflens[segment] <= newsize);
+
+        if (msg->lm_buflens[segment] == newsize)
+                return 0;
+
+        policy = ctx->cc_sec->ps_policy;
+        LASSERT(policy->sp_cops->enlarge_reqbuf);
+        return policy->sp_cops->enlarge_reqbuf(ctx->cc_sec, req,
+                                               segment, newsize, movedata);
+}
+EXPORT_SYMBOL(sptlrpc_cli_enlarge_reqbuf);
+
 int sptlrpc_cli_alloc_repbuf(struct ptlrpc_request *req, int msgsize)
 {
         struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;

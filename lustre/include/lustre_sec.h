@@ -302,6 +302,11 @@ struct ptlrpc_sec_cops {
                                                 int lustre_msg_size);
         void                    (*free_repbuf) (struct ptlrpc_sec *sec,
                                                 struct ptlrpc_request *req);
+        int                     (*enlarge_reqbuf)
+                                               (struct ptlrpc_sec *sec,
+                                                struct ptlrpc_request *req,
+                                                int segment, int newsize,
+                                                int move_data);
 };
 
 struct ptlrpc_sec_sops {
@@ -444,9 +449,11 @@ int sptlrpc_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize);
 int sptlrpc_cli_wrap_request(struct ptlrpc_request *req);
 int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req);
 int sptlrpc_cli_alloc_reqbuf(struct ptlrpc_request *req, int msgsize);
-int sptlrpc_cli_alloc_repbuf(struct ptlrpc_request *req, int msgsize);
 void sptlrpc_cli_free_reqbuf(struct ptlrpc_request *req);
+int sptlrpc_cli_alloc_repbuf(struct ptlrpc_request *req, int msgsize);
 void sptlrpc_cli_free_repbuf(struct ptlrpc_request *req);
+int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
+                               int segment, int newsize, int movedata);
 void sptlrpc_request_out_callback(struct ptlrpc_request *req);
 
 /*

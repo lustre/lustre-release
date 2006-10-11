@@ -258,6 +258,15 @@ void plain_free_repbuf(struct ptlrpc_sec *sec,
 }
 
 static
+int plain_enlarge_reqbuf(struct ptlrpc_sec *sec,
+                         struct ptlrpc_request *req,
+                         int segment, int newsize, int move_data)
+{
+        LBUG();
+        return 0;
+}
+
+static
 int plain_accept(struct ptlrpc_request *req)
 {
         struct lustre_msg *msg = req->rq_reqbuf;
@@ -425,6 +434,7 @@ static struct ptlrpc_sec_cops plain_sec_cops = {
         .alloc_repbuf           = plain_alloc_repbuf,
         .free_reqbuf            = plain_free_reqbuf,
         .free_repbuf            = plain_free_repbuf,
+        .enlarge_reqbuf         = plain_enlarge_reqbuf,
 };
 
 static struct ptlrpc_sec_sops plain_sec_sops = {
