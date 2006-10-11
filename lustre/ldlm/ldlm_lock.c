@@ -131,7 +131,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 struct ldlm_resource *res;
 
                 LDLM_DEBUG(lock,
-                           "final lock_put on destroyed lock, freeing it.\n");
+                           "final lock_put on destroyed lock, freeing it.");
 
                 lock_res_and_lock(lock);
                 res = lock->l_resource;
