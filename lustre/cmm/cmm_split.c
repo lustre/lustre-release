@@ -447,17 +447,14 @@ static struct lu_buf *cmm_buf_get(const struct lu_env *env, void *area,
 int cml_try_to_split(const struct lu_env *env, struct md_object *mo)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
-        struct md_attr *ma;
+        struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
         struct lu_buf *buf;
         int rc = 0;
         ENTRY;
 
         LASSERT(S_ISDIR(lu_object_attr(&mo->mo_lu)));
-
-        OBD_ALLOC_PTR(ma);
-        if (ma == NULL)
-                RETURN(-ENOMEM);
-
+        
+        memset(ma, 0, sizeof(*ma));
         ma->ma_need = MA_INODE|MA_LMV;
         rc = mo_attr_get(env, mo, ma);
         if (rc)
@@ -494,7 +491,7 @@ int cml_try_to_split(const struct lu_env *env, struct md_object *mo)
 cleanup:
         if (ma->ma_lmv_size && ma->ma_lmv)
                 OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);
-
-        OBD_FREE_PTR(ma);
+        
         RETURN(rc);
 }
+
