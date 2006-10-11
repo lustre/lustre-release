@@ -849,7 +849,7 @@ static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
 
         rc = lmv_placement_policy(obd, hint, &mds);
         if (rc) {
-                CERROR("can't get target for allocating fid, "
+                CERROR("Can't get target for allocating fid, "
                        "rc %d\n", rc);
                 RETURN(rc);
         }
@@ -864,7 +864,7 @@ static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
                 rc = fld_client_create(&lmv->lmv_fld, fid_seq(fid),
                                        mds, NULL);
                 if (rc) {
-                        CERROR("can't create fld entry, rc %d\n", rc);
+                        CERROR("Can't create fld entry, rc %d\n", rc);
                         RETURN(rc);
                 }
         }

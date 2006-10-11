@@ -44,7 +44,7 @@ static int ll_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
 
         rc = obd_fid_alloc(exp, fid, hint);
         if (rc) {
-                CERROR("cannot allocate new fid, rc %d\n", rc);
+                CERROR("Can't allocate new fid, rc %d\n", rc);
                 RETURN(rc);
         }
 

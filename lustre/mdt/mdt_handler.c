@@ -2075,8 +2075,10 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
         if (new_lock == NULL)
                 new_lock = ldlm_handle2lock(&lh->mlh_lh);
 
-        if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY))
+        if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY)) {
+                lh->mlh_lh.cookie = 0;
                 RETURN(0);
+        }
 
         LASSERTF(new_lock != NULL,
                  "lockh "LPX64"\n", lh->mlh_lh.cookie);
@@ -2103,6 +2105,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
                  */
                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
                         MSG_RESENT);
+                lh->mlh_lh.cookie = 0;
                 RETURN(ELDLM_LOCK_REPLACED);
         }
 
@@ -2550,6 +2553,7 @@ static int mdt_md_connect(const struct lu_env *env,
 
         RETURN(rc);
 }
+
 /*
  * Init client sequence manager which is used by local MDS to talk to sequence
  * controller on remote node.
@@ -2562,8 +2566,8 @@ static int mdt_seq_init_cli(const struct lu_env *env,
         struct obd_device *mdc;
         struct obd_uuid   *uuidp, *mdcuuidp;
         char              *uuid_str, *mdc_uuid_str;
-        int               rc;
-        int               index;
+        int                rc;
+        int                index;
         struct mdt_thread_info *info;
         char *p, *index_string = lustre_cfg_string(cfg, 2);
         ENTRY;

@@ -248,6 +248,8 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC, "obd %p obd_magic %08x != %08x\n", 
                  obd, obd->obd_magic, OBD_DEVICE_MAGIC);
 
+        obd->obd_configured = 0;
+        
         /* have we attached a type to this device? */
         if (!obd->obd_attached) {
                 CERROR("Device %d not attached\n", obd->obd_minor);
@@ -285,6 +287,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 GOTO(err_exp, err);
 
         obd->obd_set_up = 1;
+        
         spin_lock(&obd->obd_dev_lock);
         /* cleanup drops this */
         class_incref(obd);
@@ -972,7 +975,9 @@ static int class_config_llog_handler(struct llog_handle * handle,
                 if (!(clli->cfg_flags & CFG_F_COMPAT146) &&
                     !(clli->cfg_flags & CFG_F_MARKER) && 
                     (lcfg->lcfg_command != LCFG_MARKER)) {
-                        CWARN("Config not inside markers, ignoring! (%#x)\n", 
+                        CWARN("Config not inside markers, ignoring! "
+                              "(inst: %s, uuid: %s, flags: %#x)\n",
+                              clli->cfg_instance, clli->cfg_uuid,
                               clli->cfg_flags);
                         clli->cfg_flags |= CFG_F_SKIP;
                 }
@@ -1062,14 +1067,17 @@ void class_config_notify_end(const char *name)
         struct obd_device *obd;
         ENTRY;
 
-        /*XXX: This is fast fix to mountconf issue when osc are set up
-         * while recovery is in progress already.
-         * The MDS should wait the end of config llog parsing before starting
-         * recovery. This is done via obd_configured flag for now
+        /*
+         * XXX: This is fast fix to mountconf issue when osc are set up while
+         * recovery is in progress already.  The MDS should wait the end of
+         * config llog parsing before starting recovery. This is done via
+         * obd_configured flag for now.
          */
         obd = class_name2obd(name);
-        if (obd) {
+        if (obd)
                 obd->obd_configured = 1;
+        else {
+                CWARN("OBD \"%s\" is not found - skipped.\n", name);
         }
         EXIT;
 }
@@ -1098,10 +1106,17 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
 
         rc = llog_process(llh, class_config_llog_handler, cfg, &cd);
 
-        class_config_notify_end(name);
-
         CDEBUG(D_CONFIG, "Processed log %s gen %d-%d (rc=%d)\n", name, 
                cd.first_idx + 1, cd.last_idx, rc);
+
+        if (rc == 0) {
+                class_config_notify_end(name);
+                CDEBUG(D_CONFIG, "Notify config log %s parse finish\n", 
+                       name);
+        } else {
+                CDEBUG(D_CONFIG, "Log %s did not parse, obd is not "
+                       "configured.\n", name);
+        }
         if (cfg)
                 cfg->cfg_last_idx = cd.last_idx;
 

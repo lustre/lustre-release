@@ -1472,6 +1472,7 @@ static int target_recovery_thread(void *arg)
                 CWARN("too long recovery - read logs\n");
                 libcfs_debug_dumplog();
         }
+
         target_finish_recovery(obd);
 
         lu_env_fini(&env);

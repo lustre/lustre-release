@@ -1374,13 +1374,6 @@ static int mdc_fid_init(struct obd_export *exp)
         if (rc)
                 GOTO(out_free_seq, rc);
 
-        /* pre-allocate meta-sequence */
-        rc = seq_client_alloc_meta(cli->cl_seq, NULL);
-        if (rc) {
-                CERROR("Can't allocate new meta-sequence, "
-                       "rc %d\n", rc);
-                GOTO(out_free_seq, rc);
-        }
         RETURN(rc);
 
 out_free_seq:

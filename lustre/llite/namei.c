@@ -489,10 +489,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                                   .ph_opc = LUSTRE_OPC_CREATE };
 
                 rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2, &hint);
-                if (rc) {
-                        CERROR("can't allocate new fid, rc %d\n", rc);
+                if (rc)
                         LBUG();
-                }
         }
 
         it->it_create_mode &= ~current->fs->umask;

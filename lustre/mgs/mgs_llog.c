@@ -928,8 +928,8 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
         if (lcfg->lcfg_command == LCFG_MARKER) {
                 struct cfg_marker *marker;
                 marker = lustre_cfg_buf(lcfg, 1);
-                if(!strncmp(marker->cm_comment,"add osc",7) &&
-                        (marker->cm_flags & CM_START)){
+                if (!strncmp(marker->cm_comment,"add osc",7) &&
+                    (marker->cm_flags & CM_START)){
                         got_an_osc_or_mdc = 1;
                         rc = record_start_log(obd, &mdt_llh, mti->mti_svname);
                         rc = record_marker(obd, mdt_llh, fsdb, CM_START,
@@ -938,8 +938,8 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
                         last_step = marker->cm_step;
                         RETURN(rc);
                 }
-                if(!strncmp(marker->cm_comment,"add osc",7) &&
-                        (marker->cm_flags & CM_END)){
+                if (!strncmp(marker->cm_comment,"add osc",7) &&
+                    (marker->cm_flags & CM_END)){
                         LASSERT(last_step == marker->cm_step);
                         last_step = -1;
                         got_an_osc_or_mdc = 0;
@@ -949,8 +949,8 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
                         rc = record_end_log(obd, &mdt_llh);
                         RETURN(rc);
                 }
-                if(!strncmp(marker->cm_comment,"add mdc",7) &&
-                        (marker->cm_flags & CM_START)){
+                if (!strncmp(marker->cm_comment,"add mdc",7) &&
+                    (marker->cm_flags & CM_START)){
                         got_an_osc_or_mdc = 2;
                         last_step = marker->cm_step;
                         memcpy(tmti->mti_svname, marker->cm_svname,
@@ -958,8 +958,8 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
 
                         RETURN(rc);
                 }
-                if(!strncmp(marker->cm_comment,"add mdc",7) &&
-                        (marker->cm_flags & CM_END)){
+                if (!strncmp(marker->cm_comment,"add mdc",7) &&
+                    (marker->cm_flags & CM_END)){
                         LASSERT(last_step == marker->cm_step);
                         last_step = -1;
                         got_an_osc_or_mdc = 0;
@@ -985,13 +985,11 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
 
                 target = lustre_cfg_string(lcfg, 1);
                 memcpy(tmti->mti_uuid, target, strlen(target));
-
                 RETURN(rc);
         }
 
         if (lcfg->lcfg_command == LCFG_SEC_FLAVOR) {
                 memcpy(sec_conf, lustre_cfg_buf(lcfg, 1), sizeof(*sec_conf));
-
                 RETURN(rc);
         }
 
@@ -1330,12 +1328,12 @@ static int mgs_write_log_mdt0(struct obd_device *obd, struct fs_db *fsdb,
                 RETURN(-ENOMEM);
 
         name_create(&lovname, log, "-mdtlov");
-        if (mgs_log_is_empty(obd, log)) {
+        if (mgs_log_is_empty(obd, log))
                 rc = mgs_write_log_lov(obd, fsdb, mti, log, lovname);
-        } 
 
         sprintf(uuid, "%s_UUID", log);
         sprintf(mdt_index,"%d",mti->mti_stripe_index);        
+
         /* add MDT itself */
         rc = record_start_log(obd, &llh, log);
         if (rc) 

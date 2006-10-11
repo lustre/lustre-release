@@ -1646,7 +1646,8 @@ int gss_svc_handle_init(struct ptlrpc_request *req,
 
         uuid = (struct obd_uuid *) uuid_obj.data;
         target = class_uuid2obd(uuid);
-        if (!target || target->obd_stopping || !target->obd_set_up) {
+        if (!target || target->obd_stopping || !target->obd_set_up || 
+            !target->obd_configured) {
                 CERROR("target '%s' is not available for context init (%s)",
                        uuid->uuid, target == NULL ? "no target" :
                        (target->obd_stopping ? "stopping" : "not set up"));

@@ -78,8 +78,12 @@ seq_get_width()
 }
 
 test_0c() {
+    if test $MDSCOUNT != 0; then
+            echo "Skipped for LMV config"
+            return 0;
+    fi
     local label=`mdsdevlabel 1`
-    [ -z "$label" ] && echo "No label for mds1" && exit 1
+    [ -z "$label" ] && echo "No label for mds1" && return 1
 
     replay_barrier $SINGLEMDS
     local sw=`seq_get_width $label`
