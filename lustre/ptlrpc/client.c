@@ -1409,6 +1409,15 @@ void ptlrpc_free_committed(struct obd_import *imp)
                 /* XXX ok to remove when 1357 resolved - rread 05/29/03  */
                 LASSERT(req != last_req);
                 last_req = req;
+                /*XXX: Debug to see the corrupted request due to 11012 */
+                CDEBUG(D_HA, "Next request: req@%p x"LPD64"/t"LPD64" o?->%s@%s:%d lens %d/%d ref %d, status %d\n",
+                       req, req->rq_xid, req->rq_transno, req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
+                       req->rq_export ? (char*)req->rq_export->exp_client_uuid.uuid : "<?>",
+                       req->rq_import ? (char *)req->rq_import->imp_connection->c_remote_uuid.uuid :
+                       req->rq_export ? (char *)req->rq_export->exp_connection->c_remote_uuid.uuid : "<?>",
+                       (req->rq_import && req->rq_import->imp_client) ?
+                       req->rq_import->imp_client->cli_request_portal : -1,
+                       req->rq_reqlen, req->rq_replen, atomic_read(&req->rq_refcount), req->rq_status);
 
                 if (req->rq_import_generation < imp->imp_generation) {
                         DEBUG_REQ(D_HA, req, "freeing request with old gen");
