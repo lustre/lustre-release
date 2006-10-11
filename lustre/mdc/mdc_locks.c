@@ -238,6 +238,7 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
         int new_size, old_size;
         struct lustre_msg *new_msg;
 
+        LBUG(); // ericm
         /* save old size */
         old_size = lustre_msg_size(lustre_request_magic(req), 9, size);
 
