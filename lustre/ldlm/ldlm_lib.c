@@ -573,8 +573,7 @@ int target_handle_connect(struct ptlrpc_request *req)
          * Do not accept connections if obd is not set up, or not configured
          * yet.
          */
-        if (!target || target->obd_stopping || !target->obd_set_up ||
-            !target->obd_configured) {
+        if (!target || target->obd_stopping || !target->obd_set_up) {
                 DEBUG_REQ(D_ERROR, req, "UUID '%s' is not available "
                           " for connect (%s)", str, !target ? "no target" :
                           (target->obd_stopping ? "stopping" : "not set up"));
