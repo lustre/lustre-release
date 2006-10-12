@@ -450,14 +450,14 @@ void *lustre_msg_buf_v2(struct lustre_msg_v2 *m, int n, int min_size)
         LASSERT(n >= 0);
 
         bufcount = m->lm_bufcount;
-        if (n >= bufcount) {
+        if (unlikely(n >= bufcount)) {
                 CDEBUG(D_INFO, "msg %p buffer[%d] not present (count %d)\n",
                        m, n, bufcount);
                 return NULL;
         }
 
         buflen = m->lm_buflens[n];
-        if (buflen < min_size) {
+        if (unlikely(buflen < min_size)) {
                 CERROR("msg %p buffer[%d] size %d too small (required %d)\n",
                        m, n, buflen, min_size);
                 return NULL;
@@ -565,7 +565,7 @@ out:
 /*
  * for @msg, shrink @segment to size @newlen. if @move_data is non-zero,
  * we also move data forward from @segment + 1.
- * 
+ *
  * if @newlen == 0, we remove the segment completely, but we still keep the
  * totally bufcount the same to save possible data moving. this will leave a
  * unused segment with size 0 at the tail, but that's ok.
@@ -1678,7 +1678,7 @@ void lustre_swab_mgs_target_info(struct mgs_target_info *mti)
         __swab32s(&mti->mti_flags);
         __swab32s(&mti->mti_nid_count);
         LASSERT(sizeof(lnet_nid_t) == sizeof(__u64));
-        for (i = 0; i < MTI_NIDS_MAX; i++) 
+        for (i = 0; i < MTI_NIDS_MAX; i++)
                 __swab64s(&mti->mti_nids[i]);
 }
 
@@ -2202,7 +2202,7 @@ void debug_req(cfs_debug_limit_state_t *cdls,
                const char *fmt, ...)
 {
         va_list args;
-        
+
         va_start(args, fmt);
         cdebug_va(cdls, level, file, func, line, fmt, args);
         va_end(args);
