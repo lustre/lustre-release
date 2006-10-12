@@ -243,8 +243,11 @@ int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key)
         alg = &capa_hmac_algs[capa_alg(capa)];
 
         tfm = crypto_alloc_tfm(alg->ha_name, 0);
-        if (!tfm)
+        if (!tfm) {
+                CERROR("crypto_alloc_tfm failed, check whether your kernel"
+                       "has crypto support!\n");
                 return -ENOMEM;
+        }
         keylen = alg->ha_keylen;
 
         crypto_hmac(tfm, key, &keylen, &sl, 1, hmac);
