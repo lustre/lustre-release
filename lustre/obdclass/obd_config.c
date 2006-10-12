@@ -977,7 +977,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                     (lcfg->lcfg_command != LCFG_MARKER)) {
                         CWARN("Config not inside markers, ignoring! "
                               "(inst: %s, uuid: %s, flags: %#x)\n",
-                              clli->cfg_instance, clli->cfg_uuid,
+                              clli->cfg_instance, clli->cfg_uuid.uuid,
                               clli->cfg_flags);
                         clli->cfg_flags |= CFG_F_SKIP;
                 }
