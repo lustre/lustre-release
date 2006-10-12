@@ -524,9 +524,8 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
         repbody->mode = rc;
         repbody->valid = OBD_MD_FLMODE;
 
-        if (rc == EREMOTE)
+        if (rc == -EREMOTE)
                 repbody->valid |= OBD_MD_FLID;
-
 
         RETURN(0);
 }
@@ -692,8 +691,6 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                                 mdt_pack_size2body(repbody, ma, child);
                         LDLM_LOCK_PUT(lock);
                 }
-
-
         }
         EXIT;
 out_child:

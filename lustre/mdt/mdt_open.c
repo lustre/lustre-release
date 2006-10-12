@@ -150,7 +150,8 @@ int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o)
                 struct mdt_lock_handle  *lh = &info->mti_lh[MDT_LH_CHILD];
                 lh->mlh_mode = LCK_EX;
                 rc = mdt_object_lock(info, o, lh, MDS_INODELOCK_UPDATE);
-                mdt_object_unlock(info, o, lh, 1);
+                if (rc == 0)
+                        mdt_object_unlock(info, o, lh, 1);
         }
         RETURN(rc);
 }
