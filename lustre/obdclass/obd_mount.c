@@ -158,6 +158,25 @@ struct lustre_mount_info *server_get_mount(const char *name)
         RETURN(lmi);
 }
 
+/*
+ * Used by mdt to get mount_info from obdname.
+ * There are no blocking when using the mount_info.
+ * Do not use server_get_mount for this purpose.
+ */
+struct lustre_mount_info *server_get_mount_2(const char *name)
+{
+        struct lustre_mount_info *lmi;
+        ENTRY;
+
+        down(&lustre_mount_info_lock);
+        lmi = server_find_mount(name);
+        up(&lustre_mount_info_lock);
+        if (!lmi)
+                CERROR("Can't find mount for %s\n", name);
+
+        RETURN(lmi);
+}
+
 static void unlock_mntput(struct vfsmount *mnt)
 {
         if (kernel_locked()) {
@@ -201,14 +220,20 @@ int server_put_mount(const char *name, struct vfsmount *mnt)
                 if (atomic_read(&lmi->lmi_mnt->mnt_count) > 1)
                         CERROR("%s: mount busy, vfscount=%d!\n", name,
                                atomic_read(&lmi->lmi_mnt->mnt_count));
-
-                /* this obd should never need the mount again */
-                server_deregister_mount(name);
         }
+
+        /* this obd should never need the mount again */
+        server_deregister_mount(name);
 
         RETURN(0);
 }
 
+/* Corresponding to server_get_mount_2 */
+int server_put_mount_2(const char *name, struct vfsmount *mnt)
+{
+        ENTRY;
+        RETURN(0);
+}
 
 /******* mount helper utilities *********/
 
@@ -2112,7 +2137,9 @@ EXPORT_SYMBOL(lustre_common_put_super);
 EXPORT_SYMBOL(lustre_process_log);
 EXPORT_SYMBOL(lustre_end_log);
 EXPORT_SYMBOL(server_get_mount);
+EXPORT_SYMBOL(server_get_mount_2);
 EXPORT_SYMBOL(server_put_mount);
+EXPORT_SYMBOL(server_put_mount_2);
 EXPORT_SYMBOL(server_register_target);
 EXPORT_SYMBOL(server_name2index);
 EXPORT_SYMBOL(server_mti_print);

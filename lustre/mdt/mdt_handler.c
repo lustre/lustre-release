@@ -3251,7 +3251,9 @@ static void fsoptions_to_mdt_flags(struct mdt_device *m, char *options)
                         m->mdt_opts.mo_acl = 1;
                         LCONSOLE_INFO("Enabling ACL\n");
 #else
+                        m->mdt_opts.mo_acl = 0;
                         CWARN("ignoring unsupported acl mount option\n");
+                        LCONSOLE_INFO("Disabling ACL\n");
 #endif
                 } else if ((len == sizeof("noacl") - 1) &&
                            (memcmp(options, "noacl", len) == 0)) {
@@ -3292,15 +3294,17 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
 
-        lmi = server_get_mount(dev);
+        m->mdt_opts.mo_user_xattr = 0;
+        m->mdt_opts.mo_acl = 0;
+        lmi = server_get_mount_2(dev);
         if (lmi == NULL) {
-                CERROR("Cannot get mount info for %s!\n", dev);
-                RETURN(-EFAULT);
+                CERROR("Cannot get mount info for %s! "
+                       "set mdt_opts by default!\n", dev);
+        } else {
+                lsi = s2lsi(lmi->lmi_sb);
+                fsoptions_to_mdt_flags(m, lsi->lsi_lmd->lmd_opts);
+                server_put_mount_2(dev, lmi->lmi_mnt);
         }
-
-        lsi = s2lsi(lmi->lmi_sb);
-        fsoptions_to_mdt_flags(m, lsi->lsi_lmd->lmd_opts);
-        server_put_mount(dev, lmi->lmi_mnt);
 
         spin_lock_init(&m->mdt_ioepoch_lock);
         m->mdt_opts.mo_compat_resname = 0;
