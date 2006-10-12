@@ -704,11 +704,6 @@ static int after_reply(struct ptlrpc_request *req)
 
                 /* Replay-enabled imports return commit-status information. */
                 if (lustre_msg_get_last_committed(req->rq_repmsg)) {
-                        if (imp->imp_peer_committed_transno >
-                                lustre_msg_get_last_committed(req->rq_repmsg))
-                                CERROR(" Import has "LPU64", receive "LPU64" committed\n",
-                                       imp->imp_peer_committed_transno, 
-                                       lustre_msg_get_last_committed(req->rq_repmsg));
                         imp->imp_peer_committed_transno =
                                 lustre_msg_get_last_committed(req->rq_repmsg);
                 }

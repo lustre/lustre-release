@@ -1175,7 +1175,7 @@ static int check_for_next_transno(struct obd_device *obd)
                 CDEBUG(D_HA, "waking for next ("LPD64")\n", next_transno);
                 wake_up = 1;
         } else if (queue_len + completed == max) {
-                LASSERT(lustre_msg_get_transno(req->rq_reqmsg) >= next_transno);
+                LASSERT(req_transno >= next_transno);
                 CDEBUG(req_transno > obd->obd_last_committed ? D_ERROR : D_HA,
                        "waking for skipped transno (skip: "LPD64
                        ", ql: %d, comp: %d, conn: %d, next: "LPD64")\n",
@@ -1370,6 +1370,7 @@ static int target_recovery_thread(void *arg)
                        obd->obd_max_recoverable_clients);
                 obd->obd_abort_recovery = 0;
                 stale = class_disconnect_stale_exports(obd, connect_done);
+                LASSERT(atomic_read(&obd->obd_req_replay_clients) >= stale);
                 atomic_sub(stale, &obd->obd_req_replay_clients);
                 atomic_sub(stale, &obd->obd_lock_replay_clients);
         }
