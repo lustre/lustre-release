@@ -77,6 +77,24 @@ seq_get_width()
     cat $file
 }
 
+# This test should pass for single-mds and multi-mds configs.
+# But for different configurations it tests different things.
+#
+# single-mds
+# ----------
+# (1) fld_create replay should happen;
+#
+# (2) fld_create replay should not return -EEXISTS, if it does
+# this means sequence manager recovery code is buggy and allocated 
+# same sequence two times after recovery.
+#
+# multi-mds
+# ---------
+# (1) fld_create replay may not happen, because its home MDS is 
+# MDS2 which is not involved to revovery;
+#
+# (2) as fld_create does not happen on MDS1, it does not may any 
+# problem.
 test_0c() {
     local label=`mdsdevlabel 1`
     [ -z "$label" ] && echo "No label for mds1" && return 1

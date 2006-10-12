@@ -182,7 +182,7 @@ static inline int range_is_exhausted(struct lu_range *r)
         return range_space(r) == 0;
 }
 
-#define DRANGE "[%16.16"LPF64"x-%16.16"LPF64"x]"
+#define DRANGE "[0x%16.16"LPF64"x-0x%16.16"LPF64"x]"
 
 #define PRANGE(range)      \
         (range)->lr_start, \
@@ -201,7 +201,6 @@ struct lu_fid {
  */
 enum {
         LUSTRE_ROOT_FID_SEQ  = 1ULL, /* XXX: should go into mkfs. */
-        LUSTRE_ROOT_FID_OID  = 2UL,  /* XXX: should go into mkfs. */
 
         /* initial fid id value */
         LUSTRE_FID_INIT_OID  = 1UL
@@ -242,7 +241,7 @@ static inline int fid_is_sane(const struct lu_fid *fid)
                 fid_seq_is_sane(fid_seq(fid)) && fid_oid(fid) != 0;
 }
 
-#define DFID "[%16.16"LPF64"x/%8.8x:%8.8x]"
+#define DFID "[0x%16.16"LPF64"x/0x%8.8x:0x%8.8x]"
 
 #define PFID(fid)     \
         fid_seq(fid), \

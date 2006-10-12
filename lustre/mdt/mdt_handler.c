@@ -2128,10 +2128,10 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
         RETURN(ELDLM_LOCK_REPLACED);
 }
 
-static void mdt_fixup_resent(struct req_capsule *pill,
-                             struct ldlm_lock *new_lock,
-                             struct ldlm_lock **old_lock,
-                             struct mdt_lock_handle *lh)
+static void mdt_intent_fixup_resent(struct req_capsule *pill,
+                                    struct ldlm_lock *new_lock,
+                                    struct ldlm_lock **old_lock,
+                                    struct mdt_lock_handle *lh)
 {
         struct ptlrpc_request  *req = pill->rc_req;
         struct obd_export      *exp = req->rq_export;
@@ -2227,7 +2227,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         mdt_set_disposition(info, ldlm_rep, DISP_IT_EXECD);
 
         /* Get lock from request for possible resent case. */
-        mdt_fixup_resent(&info->mti_pill, *lockp, &new_lock, lhc);
+        mdt_intent_fixup_resent(&info->mti_pill, *lockp, &new_lock, lhc);
 
         ldlm_rep->lock_policy_res2 =
                 mdt_getattr_name_lock(info, lhc, child_bits, ldlm_rep);
@@ -2235,7 +2235,8 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         if (mdt_get_disposition(ldlm_rep, DISP_LOOKUP_NEG))
                 ldlm_rep->lock_policy_res2 = 0;
         if (!mdt_get_disposition(ldlm_rep, DISP_LOOKUP_POS) ||
-                    ldlm_rep->lock_policy_res2) {
+            ldlm_rep->lock_policy_res2) {
+                lhc->mlh_lh.cookie = 0ull;
                 GOTO(out_ucred, rc = ELDLM_LOCK_ABORTED);
         }
 
@@ -2276,7 +2277,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         }
 
         /* Get lock from request for possible resent case. */
-        mdt_fixup_resent(&info->mti_pill, *lockp, NULL, lhc);
+        mdt_intent_fixup_resent(&info->mti_pill, *lockp, NULL, lhc);
 
         rc = mdt_reint_internal(info, lhc, opc);
 
@@ -2296,6 +2297,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         }
         rep->lock_policy_res2 = clear_serious(rc);
 
+        lhc->mlh_lh.cookie = 0ull;
         RETURN(ELDLM_LOCK_ABORTED);
 }
 

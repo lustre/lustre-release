@@ -977,8 +977,8 @@ static int class_config_llog_handler(struct llog_handle * handle,
                     (lcfg->lcfg_command != LCFG_MARKER)) {
                         CWARN("Config not inside markers, ignoring! "
                               "(inst: %s, uuid: %s, flags: %#x)\n",
-                              clli->cfg_instance, clli->cfg_uuid.uuid,
-                              clli->cfg_flags);
+                              clli->cfg_instance ? clli->cfg_instance : "<null>",
+                              clli->cfg_uuid.uuid, clli->cfg_flags);
                         clli->cfg_flags |= CFG_F_SKIP;
                 }
                 if (clli->cfg_flags & CFG_F_SKIP) {
@@ -1062,7 +1062,7 @@ out:
         RETURN(rc);
 }
 
-void class_config_notify_end(const char *name)
+static void class_config_notify_end(const char *name)
 {
         struct obd_device *obd;
         ENTRY;
@@ -1077,7 +1077,14 @@ void class_config_notify_end(const char *name)
         if (obd)
                 obd->obd_configured = 1;
         else {
-                CWARN("OBD \"%s\" is not found - skipped.\n", name);
+                /* 
+                 * XXX: @name is actually not OBD name, rather log name and it
+                 * may not be the same as OBD name for clients. For servers it
+                 * is true currently but anyway not reliable. This is why this
+                 * it is dirty hack.
+                 */
+                CDEBUG(D_CONFIG, "OBD \"%s\" is not found - skipped.\n",
+                       name);
         }
         EXIT;
 }
@@ -1114,9 +1121,10 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
                 CDEBUG(D_CONFIG, "Notify config log %s parse finish\n", 
                        name);
         } else {
-                CDEBUG(D_CONFIG, "Log %s did not parse, obd is not "
-                       "configured.\n", name);
+                CDEBUG(D_CONFIG, "Log %s did not parse successfully, "
+                       "OBD is not configured.\n", name);
         }
+
         if (cfg)
                 cfg->cfg_last_idx = cd.last_idx;
 

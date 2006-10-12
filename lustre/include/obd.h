@@ -879,7 +879,7 @@ struct obd_device {
                      obd_force:1,         /* cleanup with > 0 obd refcount */
                      obd_fail:1,          /* cleanup with failover */
                      obd_async_recov:1,   /* allow asyncronous orphan cleanup */
-                     obd_configured:1;    /* config llog parsed completely */
+                     obd_configured:1;    /* llog configuration finished successfully */
         atomic_t obd_refcount;
         cfs_waitq_t             obd_refcount_waitq;
         cfs_proc_dir_entry_t   *obd_proc_entry;

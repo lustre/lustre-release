@@ -130,16 +130,15 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
         LASSERT(range_is_sane(space));
 
         if (in != NULL) {
-                CDEBUG(D_INFO|D_WARNING, "%s: Recovery started. Use input "
-                       "(last allocated) range "DRANGE"\n", seq->lss_name,
-                       PRANGE(in));
+                CDEBUG(D_INFO|D_WARNING, "%s: Input seq range: "
+                       DRANGE"\n", seq->lss_name, PRANGE(in));
 
-                if (in->lr_start > space->lr_start)
-                        space->lr_start = in->lr_start;
+                if (in->lr_end > space->lr_start)
+                        space->lr_start = in->lr_end;
                 *out = *in;
 
-                CDEBUG(D_INFO|D_WARNING, "%s: Recovery finished. Recovered "
-                       "space: "DRANGE"\n", seq->lss_name, PRANGE(space));
+                CDEBUG(D_INFO|D_WARNING, "%s: Recovered space: "DRANGE"\n",
+                       seq->lss_name, PRANGE(space));
         } else {
                 if (range_space(space) < seq->lss_width) {
                         CWARN("%s: Sequences space to be exhausted soon. "
@@ -158,7 +157,8 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
 
         rc = seq_store_write(seq, env);
         if (rc) {
-                CERROR("%s: Can't save state, rc %d\n", seq->lss_name, rc);
+                CERROR("%s: Can't save state, rc %d\n",
+                       seq->lss_name, rc);
                 RETURN(rc);
         }
 
@@ -199,35 +199,44 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
          * it is allocated from new super.
          */
         if (in != NULL) {
-                CDEBUG(D_INFO|D_WARNING, "%s: Recovery started. Use input "
-                       "(last allocated) range "DRANGE"\n", seq->lss_name,
-                       PRANGE(in));
+                CDEBUG(D_INFO|D_WARNING, "%s: Input seq range: "
+                       DRANGE"\n", seq->lss_name, PRANGE(in));
 
                 if (range_is_exhausted(space)) {
-                        LASSERT(in->lr_start > space->lr_start);
-
                         /*
                          * Server cannot send empty range to client, this is why
                          * we check here that range from client is "newer" than
                          * exhausted super.
                          */
-                        space->lr_start = in->lr_start;
+                        LASSERT(in->lr_end > space->lr_start);
 
-                        space->lr_end = space->lr_start +
-                                seq->lss_width;
+                        /* 
+                         * Start is set to end of last allocated, because it
+                         * *is* already allocated so we take that into account
+                         * and do not use for other allocations.
+                         */
+                        space->lr_start = in->lr_end;
+
+                        /* 
+                         * End is set to in->lr_start + super sequence
+                         * allocation unit. That is because in->lr_start is
+                         * first seq in new allocated range from controller
+                         * before failure.
+                         */
+                        space->lr_end = in->lr_start + LUSTRE_SEQ_SUPER_WIDTH;
                 } else {
                         /*
-                         * Update super start by start from client's range. End
-                         * should not be changed if range was not exhausted.
+                         * Update super start by end from client's range. Super
+                         * end should not be changed if range was not exhausted.
                          */
-                        if (in->lr_start > space->lr_start)
-                                space->lr_start = in->lr_start;
+                        if (in->lr_end > space->lr_start)
+                                space->lr_start = in->lr_end;
                 }
 
                 *out = *in;
 
-                CDEBUG(D_INFO|D_WARNING, "%s: Recovery finished. Recovered "
-                       "super: "DRANGE"\n", seq->lss_name, PRANGE(space));
+                CDEBUG(D_INFO|D_WARNING, "%s: Recovered space: "DRANGE"\n",
+                       seq->lss_name, PRANGE(space));
         } else {
                 /*
                  * XXX: Avoid cascading RPCs using kind of async preallocation
@@ -251,6 +260,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                         *space = seq->lss_cli->lcs_space;
                         LASSERT(range_is_sane(space));
                 }
+                
                 range_alloc(out, space, seq->lss_width);
         }
 
