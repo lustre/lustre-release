@@ -177,7 +177,8 @@ static int mdc_req2attr_update(const struct lu_env *env,
         }
 
         LASSERT(ma->ma_lmm != NULL);
-        LASSERT(ma->ma_lmm_size == body->eadatasize);
+        LASSERT(ma->ma_lmm_size >= body->eadatasize); 
+        ma->ma_lmm_size = body->eadatasize;
         memcpy(ma->ma_lmm, lov, ma->ma_lmm_size);
         ma->ma_valid |= MA_LOV;
         if (!(body->valid & OBD_MD_FLCOOKIE))
