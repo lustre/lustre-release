@@ -48,7 +48,7 @@
 #include "fid_internal.h"
 
 #ifdef __KERNEL__
-/* assigns client to sequence controller node */
+/* Assigns client to sequence controller node. */
 int seq_server_set_cli(struct lu_server_seq *seq,
                        struct lu_client_seq *cli,
                        const struct lu_env *env)
@@ -56,58 +56,30 @@ int seq_server_set_cli(struct lu_server_seq *seq,
         int rc = 0;
         ENTRY;
 
-        if (cli == NULL) {
-                CDEBUG(D_INFO|D_WARNING, "%s: Detached "
-                       "sequence client %s\n", seq->lss_name,
-                       cli->lcs_name);
-                seq->lss_cli = cli;
-                RETURN(0);
-        }
-
         /*
          * Ask client for new range, assign that range to ->seq_space and write
          * seq state to backing store should be atomic.
          */
         down(&seq->lss_sem);
 
+        if (cli == NULL) {
+                CDEBUG(D_INFO|D_WARNING, "%s: Detached "
+                       "sequence client %s\n", seq->lss_name,
+                       cli->lcs_name);
+                seq->lss_cli = cli;
+                GOTO(out_up, rc = 0);
+        }
+
         if (seq->lss_cli != NULL) {
-                CERROR("%s: Sequence-controller is already "
+                CERROR("%s: Sequence controller is already "
                        "assigned\n", seq->lss_name);
                 GOTO(out_up, rc = -EINVAL);
         }
 
-        CDEBUG(D_INFO|D_WARNING, "%s: Attached "
-               "sequence client %s\n", seq->lss_name,
-               cli->lcs_name);
+        CDEBUG(D_INFO|D_WARNING, "%s: Attached sequence "
+               "controller %s\n", seq->lss_name, cli->lcs_name);
 
-        /* Assign controller. */
         seq->lss_cli = cli;
-
-        /*
-         * Get new range from controller only if super-sequence is not yet
-         * initialized from backing store or something else.
-         */
-        if (range_is_zero(&seq->lss_space)) {
-                rc = seq_client_alloc_super(cli, env);
-                if (rc) {
-                        CERROR("%s: Can't allocate super-sequence, "
-                               "rc %d\n", seq->lss_name, rc);
-                        GOTO(out_up, rc);
-                }
-
-                /* take super-seq from client seq mgr */
-                LASSERT(range_is_sane(&cli->lcs_space));
-
-                seq->lss_space = cli->lcs_space;
-
-                /* save init seq to backing store. */
-                rc = seq_store_write(seq, env);
-                if (rc) {
-                        CERROR("%s: Can't write sequence state, "
-                               "rc = %d\n", seq->lss_name, rc);
-                }
-        }
-
         EXIT;
 out_up:
         up(&seq->lss_sem);
@@ -157,7 +129,7 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
 
         rc = seq_store_write(seq, env);
         if (rc) {
-                CERROR("%s: Can't save state, rc %d\n",
+                CERROR("%s: Can't write space data, rc %d\n",
                        seq->lss_name, rc);
                 RETURN(rc);
         }
@@ -244,8 +216,8 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                  */
                 if (range_is_exhausted(space)) {
                         if (!seq->lss_cli) {
-                                CERROR("%s: No sequence controller client "
-                                       "is setup.\n", seq->lss_name);
+                                CERROR("%s: No sequence controller "
+                                       "is attached.\n", seq->lss_name);
                                 RETURN(-ENODEV);
                         }
 
@@ -266,7 +238,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 
         rc = seq_store_write(seq, env);
         if (rc) {
-                CERROR("%s: Can't save state, rc = %d\n",
+                CERROR("%s: Can't write space data, rc %d\n",
 		       seq->lss_name, rc);
         }
 
@@ -313,7 +285,7 @@ static int seq_server_handle(struct lu_site *site,
                 break;
         case SEQ_ALLOC_SUPER:
                 if (!site->ls_control_seq) {
-                        CERROR("Sequence-controller is not "
+                        CERROR("Sequence controller is not "
                                "initialized\n");
                         RETURN(-EINVAL);
                 }
@@ -328,7 +300,8 @@ static int seq_server_handle(struct lu_site *site,
         RETURN(rc);
 }
 
-static int seq_req_handle(struct ptlrpc_request *req, const struct lu_env *env,
+static int seq_req_handle(struct ptlrpc_request *req,
+                          const struct lu_env *env,
                           struct seq_thread_info *info)
 {
         struct lu_range *out, *in = NULL;
@@ -399,11 +372,11 @@ static void seq_thread_info_init(struct ptlrpc_request *req,
 {
         int i;
 
-        /* mark rep buffer as req-layout stuff expects */
+        /* Mark rep buffer as req-layout stuff expects */
         for (i = 0; i < ARRAY_SIZE(info->sti_rep_buf_size); i++)
                 info->sti_rep_buf_size[i] = -1;
 
-        /* init request capsule */
+        /* Init request capsule */
         req_capsule_init(&info->sti_pill, req, RCL_SERVER,
                          info->sti_rep_buf_size);
 
@@ -510,6 +483,7 @@ int seq_server_init(struct lu_server_seq *seq,
 
         seq->lss_cli = NULL;
         seq->lss_type = type;
+        range_zero(&seq->lss_space);
         sema_init(&seq->lss_sem, 1);
 
         seq->lss_width = is_srv ?
@@ -518,26 +492,41 @@ int seq_server_init(struct lu_server_seq *seq,
         snprintf(seq->lss_name, sizeof(seq->lss_name),
                  "%s-%s", (is_srv ? "srv" : "ctl"), prefix);
 
-        seq->lss_space = is_srv ?
-                LUSTRE_SEQ_ZERO_RANGE:
-                LUSTRE_SEQ_SPACE_RANGE;
-
         rc = seq_store_init(seq, env, dev);
         if (rc)
                 GOTO(out, rc);
 
-        /* request backing store for saved sequence info */
+        /* Request backing store for saved sequence info. */
         rc = seq_store_read(seq, env);
         if (rc == -ENODATA) {
                 CDEBUG(D_INFO|D_WARNING, "%s: No data found "
-                       "on storage, %s\n", seq->lss_name,
-                       is_srv ? "wait for controller attach" :
-                       "this is first controller run");
+                       "on storage\n", seq->lss_name);
+
+                /* Nothing is read, init by default value. */
+                seq->lss_space = is_srv ?
+                        LUSTRE_SEQ_ZERO_RANGE:
+                        LUSTRE_SEQ_SPACE_RANGE;
+
+                if (!is_srv) {
+                        /* Save default controller value to store. */
+                        rc = seq_store_write(seq, env);
+                        if (rc) {
+                                CERROR("%s: Can't write space data, "
+                                       "rc %d\n", seq->lss_name, rc);
+                        }
+                }
         } else if (rc) {
-		CERROR("%s: Can't read sequence state, rc %d\n",
+		CERROR("%s: Can't read space data, rc %d\n",
 		       seq->lss_name, rc);
 		GOTO(out, rc);
 	}
+
+        if (is_srv) {
+                LASSERT(range_is_sane(&seq->lss_space));
+        } else {
+                LASSERT(!range_is_zero(&seq->lss_space) &&
+                        range_is_sane(&seq->lss_space));
+        }
 
         rc  = seq_server_proc_init(seq);
         if (rc)

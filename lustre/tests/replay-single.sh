@@ -93,7 +93,7 @@ seq_get_width()
 # (1) fld_create replay may not happen, because its home MDS is 
 # MDS2 which is not involved to revovery;
 #
-# (2) as fld_create does not happen on MDS1, it does not may any 
+# (2) as fld_create does not happen on MDS1, it does not make any 
 # problem.
 test_0c() {
     local label=`mdsdevlabel 1`
