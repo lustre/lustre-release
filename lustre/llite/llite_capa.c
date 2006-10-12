@@ -392,8 +392,8 @@ struct obd_capa *ll_mdscapa_get(struct inode *inode)
         }
 
         if (!ocapa && atomic_read(&ll_capa_debug)) {
-                CDEBUG(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode) ?
-                       D_ERROR : D_SEC, "no MDS capability for fid "DFID"\n",
+                CDEBUG(D_ERROR,
+                       "no MDS capability for fid "DFID", this might be ok;)\n",
                        PFID(ll_inode2fid(inode)));
 #if 0
                 LASSERT(!S_ISDIR(inode->i_mode));
