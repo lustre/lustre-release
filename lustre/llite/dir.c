@@ -239,9 +239,9 @@ static struct page *ll_dir_page_locate(struct inode *dir, unsigned long hash,
                         LASSERT(*start <= hash);
                         if (hash > *end || (*end != *start && hash == *end)) {
                                 kunmap(page);
-                                lock_page(page); 
+                                lock_page(page);
                                 ll_truncate_complete_page(page);
-                                unlock_page(page); 
+                                unlock_page(page);
                                 page_cache_release(page);
                                 page = NULL;
                         }
@@ -344,9 +344,9 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
                          */
                         CWARN("Stale readpage page %p: %#lx != %#lx\n", page,
                               (unsigned long)hash, (unsigned long)start);
-                        lock_page(page); 
+                        lock_page(page);
                         ll_truncate_complete_page(page);
-                        unlock_page(page); 
+                        unlock_page(page);
                         page_cache_release(page);
                 } else
                         GOTO(hash_collision, page);
@@ -444,7 +444,8 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                 struct lu_dirent  *ent;
 
                 if (!IS_ERR(page)) {
-                        __u32 hash; /* no, Richard, it _is_ initialized */
+                        __u32 hash = ~0; /* if page is empty (end of directory
+                                          * is reached) use this value. */
                         __u32 next;
 
                         dp = page_address(page);
@@ -492,7 +493,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                 name = ent->lde_name;
                                 fid_le_to_cpu(&fid, &fid);
                                 ino  = ll_fid_build_ino(sbi, &fid);
-                                
+
                                 done = filldir(cookie, name, namelen,
                                                (loff_t)hash, ino, DT_UNKNOWN);
                         }

@@ -1907,9 +1907,9 @@ int lmv_blocking_ast(struct ldlm_lock *lock,
         RETURN(0);
 }
 
-static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
-                                   const struct lu_fid *fid, int index,
-                                   struct lu_dirpage *dp)
+static int lmv_reset_hash_seg_end(struct lmv_obd *lmv, struct lmv_obj *obj,
+                                  const struct lu_fid *fid, int index,
+                                  struct lu_dirpage *dp)
 {
         struct ptlrpc_request *tmp_req = NULL;
         struct page *page = NULL;
@@ -1920,7 +1920,7 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
         __u32 seg_end;
         int rc = 0;
         ENTRY;
-        
+
         /*
          * We have reached the end of this hash segment, and the start offset of
          * next segment need to be gotten out from the next segment, set it to
@@ -1942,16 +1942,15 @@ static int lmv_reset_hash_seg_end (struct lmv_obd *lmv, struct lmv_obj *obj,
                 GOTO(cleanup, rc = -ENOMEM);
 
         rc = md_readpage(tgt_exp, &rid, NULL, seg_end, page, &tmp_req);
-        if (rc) {
-                /* E2BIG means it already reached the end of the dir,
-                 * no need reset the hash segment end */
-                if (rc == -E2BIG)
-                       GOTO(cleanup, rc = 0);
-                if (rc != -ERANGE)
-                       GOTO(cleanup, rc);
-        }
+        if (rc)
+                GOTO(cleanup, rc);
         kmap(page);
         next_dp = cfs_page_address(page);
+        if (lu_dirent_start(next_dp) == NULL)
+                /*
+                 * End of hash-segment reached.
+                 */
+                GOTO(cleanup, rc);
         LASSERT(le32_to_cpu(next_dp->ldp_hash_start) >= seg_end);
         dp->ldp_hash_end = next_dp->ldp_hash_start;
         kunmap(page);
@@ -2028,7 +2027,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                                                 rc = 0;
                                         break;
                                 }
-                                /* if there are no entries in this segment 
+                                /* if there are no entries in this segment
                                  * and it is not the last hash segment */
                         } while (1);
                 }

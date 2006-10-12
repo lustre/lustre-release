@@ -256,7 +256,7 @@ static int cmm_remove_dir_ent(const struct lu_env *env, struct md_object *mo,
         int is_dir, rc;
         ENTRY;
 
-        if (!strncmp(ent->lde_name, ".", ent->lde_namelen) || 
+        if (!strncmp(ent->lde_name, ".", ent->lde_namelen) ||
             !strncmp(ent->lde_name, "..", ent->lde_namelen))
                 RETURN(0);
 
@@ -269,29 +269,29 @@ static int cmm_remove_dir_ent(const struct lu_env *env, struct md_object *mo,
         else
                 /* XXX: is this correct? */
                 is_dir = 1;
-        
+
         OBD_ALLOC(name, ent->lde_namelen + 1);
         if (!name)
                 GOTO(cleanup, rc = -ENOMEM);
-        
+
         memcpy(name, ent->lde_name, ent->lde_namelen);
         rc = mdo_name_remove(env, md_object_next(mo),
                              name, is_dir);
         OBD_FREE(name, ent->lde_namelen + 1);
-        if (rc) 
+        if (rc)
                 GOTO(cleanup, rc);
-        
+
         /*
          * This ent will be transferred to slave MDS and insert it there, so in
          * the slave MDS, we should know whether this object is dir or not, so
          * use the highest bit of the hash to indicate that (because we do not
          * use highest bit of hash).
-         */ 
+         */
         if (is_dir)
                 ent->lde_hash |= MAX_HASH_HIGHEST_BIT;
 cleanup:
         cmm_object_put(env, obj);
-        
+
         RETURN(rc);
 }
 
@@ -309,9 +309,9 @@ static int cmm_remove_entries(const struct lu_env *env,
         for (ent = lu_dirent_start(dp); ent != NULL;
              ent = lu_dirent_next(ent)) {
                 if (ent->lde_hash < hash_end) {
-                        rc = cmm_remove_dir_ent(env, mo, ent);  
-                        if (rc) { 
-                                CERROR("Can not del %s rc %d\n", ent->lde_name, 
+                        rc = cmm_remove_dir_ent(env, mo, ent);
+                        if (rc) {
+                                CERROR("Can not del %s rc %d\n", ent->lde_name,
                                                                  rc);
                                 GOTO(unmap, rc);
                         }
@@ -349,14 +349,8 @@ static int cmm_split_entries(const struct lu_env *env,
                 kunmap(rdpg->rp_pages[0]);
 
                 rc = mo_readpage(env, md_object_next(mo), rdpg);
-                /* -E2BIG means it already reach the end of the dir */
-                if (rc) {
-                        if (rc != -ERANGE) {
-                                if (rc == -E2BIG)
-                                        rc = 0;
-                                RETURN(rc);
-                        }
-                }
+                if (rc)
+                        RETURN(rc);
 
                 /* Remove the old entries */
                 rc = cmm_remove_entries(env, mo, rdpg, end, &len);
@@ -437,7 +431,7 @@ static struct lu_buf *cmm_buf_get(const struct lu_env *env, void *area,
                                   ssize_t len)
 {
         struct lu_buf *buf;
-        
+
         buf = &cmm_env_info(env)->cmi_buf;
         buf->lb_buf = area;
         buf->lb_len = len;

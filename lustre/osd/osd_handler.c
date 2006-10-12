@@ -1381,6 +1381,7 @@ static int osd_dir_page_build(const struct lu_env *env, int first,
         struct lu_dirent       *ent;
 
         if (first) {
+                memset(area, 0, sizeof (struct lu_dirpage));
                 area += sizeof (struct lu_dirpage);
                 nob  -= sizeof (struct lu_dirpage);
         }
@@ -1440,10 +1441,13 @@ static int osd_readpage(const struct lu_env *env,
         struct dt_it      *it;
         struct osd_object *obj = osd_dt_obj(dt);
         struct dt_it_ops  *iops;
+        struct page       *pg;
+        struct lu_dirent  *last;
         int i;
         int rc;
-        int rc1;
         int nob;
+        __u32 hash_start;
+        __u32 hash_end;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
@@ -1465,62 +1469,74 @@ static int osd_readpage(const struct lu_env *env,
         }
 
         /*
-         * iterating through directory and fill pages from @rdpg
+         * iterate through directory and fill pages from @rdpg
          */
         iops = &dt->do_index_ops->dio_it;
         it = iops->init(env, dt, 0);
         if (it == NULL)
                 return -ENOMEM;
-        /*
-         * XXX position iterator at rdpg->rp_hash
-         */
+
         rc = iops->load(env, it, rdpg->rp_hash);
 
+        if (rc == 0)
+                /*
+                 * Iterator didn't find record with exactly the key requested.
+                 *
+                 * It is currently either
+                 *
+                 *     - positioned above record with key less than
+                 *     requested---skip it.
+                 *
+                 *     - or not positioned at all (is in IAM_IT_SKEWED
+                 *     state)---position it on the next item.
+                 */
+                rc = iops->next(env, it);
+        else if (rc > 0)
+                rc = 0;
+
         /*
-         * When spliting, it need read entries from some offset by computing
-         * not by some entries offset like readdir, so it might return 0 here.
+         * At this point and across for-loop:
+         *
+         *  rc == 0 -> ok, proceed.
+         *  rc >  0 -> end of directory.
+         *  rc <  0 -> error.
          */
-        rc1 = rc == 0 ? -ERANGE : 0;
+        for (i = 0, nob = rdpg->rp_count; rc == 0 && nob > 0;
+             i++, nob -= CFS_PAGE_SIZE) {
+                LASSERT(i < rdpg->rp_npages);
+                pg = rdpg->rp_pages[i];
+                rc = osd_dir_page_build(env, !i, kmap(pg),
+                                        min_t(int, nob, CFS_PAGE_SIZE), iops,
+                                        it, &hash_start, &hash_end, &last);
+                if (rc != 0 || i == rdpg->rp_npages - 1)
+                        last->lde_reclen = 0;
+                kunmap(pg);
+        }
+        if (rc > 0) {
+                /*
+                 * end of directory.
+                 */
+                hash_end = ~0ul;
+                rc = 0;
+        }
+        if (rc == 0) {
+                struct lu_dirpage *dp;
 
-        if (rc >= 0) {
-                struct page      *pg; /* no, Richard, it _is_ initialized */
-                struct lu_dirent *last;
-                __u32             hash_start;
-                __u32             hash_end;
-
-                for (i = 0, rc = 0, nob = rdpg->rp_count;
-                     rc == 0 && nob > 0; i++, nob -= CFS_PAGE_SIZE) {
-                        LASSERT(i < rdpg->rp_npages);
-                        pg = rdpg->rp_pages[i];
-                        rc = osd_dir_page_build(env, !i, kmap(pg),
-                                                min_t(int, nob, CFS_PAGE_SIZE),
-                                                iops, it,
-                                                &hash_start, &hash_end, &last);
-                        if (rc != 0 || i == rdpg->rp_npages - 1)
-                                last->lde_reclen = 0;
-                        kunmap(pg);
-                }
-                iops->put(env, it);
-                if (rc > 0) {
+                dp = kmap(rdpg->rp_pages[0]);
+                dp->ldp_hash_start = hash_start;
+                dp->ldp_hash_end   = hash_end;
+                if (i == 0)
                         /*
-                         * end of directory.
+                         * No pages were processed, mark this.
                          */
-                        hash_end = ~0ul;
-                        rc = 0;
-                }
-                if (rc == 0) {
-                        struct lu_dirpage *dp;
-
-                        dp = kmap(rdpg->rp_pages[0]);
-                        dp->ldp_hash_start = hash_start;
-                        dp->ldp_hash_end   = hash_end;
-                        kunmap(rdpg->rp_pages[0]);
-                }
+                        dp->ldp_flags |= LDF_EMPTY;
+                dp->ldp_flags = cpu_to_le16(dp->ldp_flags);
+                kunmap(rdpg->rp_pages[0]);
         }
         iops->put(env, it);
         iops->fini(env, it);
 
-        return rc ? rc : rc1;
+        return rc;
 }
 
 static struct obd_capa *osd_capa_get(const struct lu_env *env,

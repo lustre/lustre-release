@@ -755,7 +755,7 @@ static int mdt_connect(struct mdt_thread_info *info)
 static int mdt_disconnect(struct mdt_thread_info *info)
 {
         int rc;
-        
+
         rc = target_handle_disconnect(mdt_info_req(info));
         if (rc)
                 rc = err_serious(rc);
@@ -855,7 +855,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
                 offset += ent->lde_reclen;
                 if (ent->lde_namelen == 0)
                         continue;
-                
+
                 if (offset > size)
                         break;
                 is_dir = le32_to_cpu(ent->lde_hash) & MAX_HASH_HIGHEST_BIT;
@@ -969,7 +969,7 @@ static int mdt_readpage(struct mdt_thread_info *info)
         struct lu_rdpg    *rdpg = &info->mti_u.rdpg.mti_rdpg;
         struct mdt_body   *reqbody;
         struct mdt_body   *repbody;
-        int                rc, rc1 = 0;
+        int                rc;
         int                i;
         ENTRY;
 
@@ -1006,12 +1006,8 @@ static int mdt_readpage(struct mdt_thread_info *info)
 
         /* call lower layers to fill allocated pages with directory data */
         rc = mo_readpage(info->mti_env, mdt_object_child(object), rdpg);
-        if (rc) {
-                if (rc == -ERANGE)
-                        rc1 = rc;
-               else
-                        GOTO(free_rdpg, rc);
-        }
+        if (rc)
+                GOTO(free_rdpg, rc);
 
         /* send pages to client */
         rc = mdt_sendpage(info, rdpg);
@@ -1026,7 +1022,7 @@ free_rdpg:
 
         MDT_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, 0);
 
-        return rc ? rc : rc1;
+        return rc;
 }
 
 static int mdt_reint_internal(struct mdt_thread_info *info,
@@ -1182,7 +1178,7 @@ static int mdt_sync(struct mdt_thread_info *info)
                 rc = req_capsule_pack(pill);
                 if (rc == 0)
                         rc = mdt_device_sync(info);
-                else 
+                else
                         rc = err_serious(rc);
         } else {
                 /* sync an object */
@@ -1499,11 +1495,11 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
          * contains capa actually. There are some requests which do not, for
          * instance MDS_IS_SUBDIR.
          */
-        if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_CLIENT) && 
+        if (req_capsule_has_field(pill, &RMF_CAPA1, RCL_CLIENT) &&
             req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
                 mdt_set_capainfo(info, 0, &body->fid1,
                                  req_capsule_client_get(pill, &RMF_CAPA1));
-        
+
         obj = mdt_object_find(env, info->mti_mdt, &body->fid1);
         if (!IS_ERR(obj)) {
                 if ((flags & HABEO_CORPUS) &&
@@ -1842,7 +1838,7 @@ static int mdt_reply(struct ptlrpc_request *req, int rc,
                      struct mdt_thread_info *info)
 {
         ENTRY;
-        
+
 #if 0
         if (req->rq_reply_state == NULL && rc == 0) {
                 req->rq_status = rc;

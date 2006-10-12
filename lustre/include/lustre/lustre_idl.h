@@ -274,14 +274,21 @@ struct lu_dirent {
 struct lu_dirpage {
         __u32            ldp_hash_start;
         __u32            ldp_hash_end;
-        __u16            ldp_pad0;
-        __u32            ldp_pad1;
+        __u16            ldp_flags;
+        __u32            ldp_pad0;
         struct lu_dirent ldp_entries[0];
+};
+
+enum lu_dirpage_flags {
+        LDF_EMPTY = 1 << 0
 };
 
 static inline struct lu_dirent *lu_dirent_start(struct lu_dirpage *dp)
 {
-        return dp->ldp_entries;
+        if (le16_to_cpu(dp->ldp_flags) & LDF_EMPTY)
+                return NULL;
+        else
+                return dp->ldp_entries;
 }
 
 static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)

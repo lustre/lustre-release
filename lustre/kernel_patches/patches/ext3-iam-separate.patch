@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1337 @@
+@@ -0,0 +1,1339 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -868,6 +868,8 @@ Index: iam/fs/ext3/iam.c
 +                        if (result != 0)
 +                                iam_it_put(it);
 +                }
++                if (result == 0)
++                        it->ii_state = IAM_IT_ATTACHED;
 +        }
 +        assert_corr(ergo(result == 0, it_state(it) == IAM_IT_ATTACHED));
 +        assert_corr(ergo(result >  0, it_state(it) == IAM_IT_DETACHED));
@@ -2710,7 +2712,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,960 @@
+@@ -0,0 +1,966 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2981,8 +2983,8 @@ Index: iam/fs/ext3/iam_lvar.c
 +                nexthash = e_hash(scan);
 +                if (nexthash != get_hash(iam_leaf_container(leaf),
 +                                         e_char(scan), e_keysize(scan))) {
-+                        return 0;
 +                        BREAKPOINT();
++                        return 0;
 +                }
 +                if (nexthash < hash) {
 +                        BREAKPOINT();
@@ -3138,18 +3140,24 @@ Index: iam/fs/ext3/iam_lvar.c
 +        end  = n_end(leaf);
 +        hash = *(const lvar_hash_t *)ik;
 +
++        lvar_start(leaf);
 +        for (scan = n_start(leaf); scan < end; scan = e_next(leaf, scan)) {
 +                lvar_hash_t scan_hash;
 +
 +                scan_hash = e_hash(scan);
-+                if (scan_hash >= hash) {
-+                        leaf->il_at = lvar_lentry(scan);
-+                        return scan_hash == hash ?
-+                                IAM_LOOKUP_EXACT : IAM_LOOKUP_OK;
-+                }
++                if (scan_hash > hash)
++                        return scan == n_start(leaf) ?
++                                IAM_LOOKUP_BEFORE : IAM_LOOKUP_OK;
++                leaf->il_at = lvar_lentry(scan);
++                if (scan_hash == hash)
++                        return IAM_LOOKUP_EXACT;
 +        }
 +        assert_inv(n_invariant(leaf));
-+        return -E2BIG;
++        /*
++         * @ik is greater than any key in the node. Return last record in the
++         * node.
++         */
++        return IAM_LOOKUP_OK;
 +}
 +
 +static void lvar_key_set(struct iam_leaf *l, const struct iam_key *k)
