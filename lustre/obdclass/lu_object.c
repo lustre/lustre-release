@@ -478,7 +478,10 @@ struct lu_object *lu_object_find(const struct lu_env *env,
 EXPORT_SYMBOL(lu_object_find);
 
 enum {
-        LU_SITE_HTABLE_BITS = 8,
+        /*
+         * XXX: make this depending on available physical memory.
+         */
+        LU_SITE_HTABLE_BITS = 10,
         LU_SITE_HTABLE_SIZE = (1 << LU_SITE_HTABLE_BITS),
         LU_SITE_HTABLE_MASK = LU_SITE_HTABLE_SIZE - 1
 };
