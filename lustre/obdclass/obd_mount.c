@@ -201,10 +201,10 @@ int server_put_mount(const char *name, struct vfsmount *mnt)
                 if (atomic_read(&lmi->lmi_mnt->mnt_count) > 1)
                         CERROR("%s: mount busy, vfscount=%d!\n", name,
                                atomic_read(&lmi->lmi_mnt->mnt_count));
-        }
 
-        /* this obd should never need the mount again */
-        server_deregister_mount(name);
+                /* this obd should never need the mount again */
+                server_deregister_mount(name);
+        }
 
         RETURN(0);
 }

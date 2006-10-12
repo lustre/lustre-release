@@ -3213,6 +3213,48 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         EXIT;
 }
 
+static void fsoptions_to_mdt_flags(struct mdt_device *m, char *options)
+{
+        char *p = options;
+
+        if (!options)
+                return;
+
+        while (*options) {
+                int len;
+
+                while (*p && *p != ',')
+                        p++;
+
+                len = p - options;
+                if ((len == sizeof("user_xattr") - 1) &&
+                    (memcmp(options, "user_xattr", len) == 0)) {
+                        m->mdt_opts.mo_user_xattr = 1;
+                        LCONSOLE_INFO("Enabling user_xattr\n");
+                } else if ((len == sizeof("nouser_xattr") - 1) &&
+                           (memcmp(options, "nouser_xattr", len) == 0)) {
+                        m->mdt_opts.mo_user_xattr = 0;
+                        LCONSOLE_INFO("Disabling user_xattr\n");
+                } else if ((len == sizeof("acl") - 1) &&
+                           (memcmp(options, "acl", len) == 0)) {
+#ifdef CONFIG_FS_POSIX_ACL
+                        m->mdt_opts.mo_acl = 1;
+                        LCONSOLE_INFO("Enabling ACL\n");
+#else
+                        CWARN("ignoring unsupported acl mount option\n");
+#endif
+                } else if ((len == sizeof("noacl") - 1) &&
+                           (memcmp(options, "noacl", len) == 0)) {
+#ifdef CONFIG_FS_POSIX_ACL
+                        m->mdt_opts.mo_acl = 0;
+                        LCONSOLE_INFO("Disabling ACL\n");
+#endif
+                }
+
+                options = ++p;
+        }
+}
+
 int mdt_postrecov(const struct lu_env *, struct mdt_device *);
 
 static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
@@ -3223,6 +3265,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         struct obd_device         *obd;
         const char                *dev = lustre_cfg_string(cfg, 0);
         const char                *num = lustre_cfg_string(cfg, 2);
+        struct lustre_mount_info  *lmi;
+        struct lustre_sb_info     *lsi;
         struct lu_site            *s;
         int                        rc;
         ENTRY;
@@ -3238,10 +3282,17 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_max_mdsize = MAX_MD_SIZE;
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
 
+        lmi = server_get_mount(dev);
+        if (lmi == NULL) {
+                CERROR("Cannot get mount info for %s!\n", dev);
+                RETURN(-EFAULT);
+        }
+
+        lsi = s2lsi(lmi->lmi_sb);
+        fsoptions_to_mdt_flags(m, lsi->lsi_lmd->lmd_opts);
+        server_put_mount(dev, lmi->lmi_mnt);
+
         spin_lock_init(&m->mdt_ioepoch_lock);
-        /* Temporary. should parse mount option. */
-        m->mdt_opts.mo_user_xattr = 0;
-        m->mdt_opts.mo_acl = 0;
         m->mdt_opts.mo_compat_resname = 0;
         m->mdt_capa_timeout = CAPA_TIMEOUT;
         m->mdt_capa_alg = CAPA_HMAC_ALG_SHA1;
@@ -3523,12 +3574,14 @@ static int mdt_connect_internal(struct obd_export *exp,
                 exp->exp_mdt_data.med_ibits_known = data->ocd_ibits_known;
         }
 
+#if 0
         if (mdt->mdt_opts.mo_acl &&
             ((exp->exp_connect_flags & OBD_CONNECT_ACL) == 0)) {
                 CWARN("%s: MDS requires ACL support but client does not\n",
                       mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
                 return -EBADE;
         }
+#endif
 
         flags = OBD_CONNECT_LCL_CLIENT | OBD_CONNECT_RMT_CLIENT;
         if ((exp->exp_connect_flags & flags) == flags) {
