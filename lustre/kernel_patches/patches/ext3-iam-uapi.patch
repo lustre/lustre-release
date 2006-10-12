@@ -23,7 +23,23 @@ Index: iam/fs/ext3/dir.c
  
  static unsigned char ext3_filetype_table[] = {
  	DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK
-@@ -305,12 +306,14 @@ static void free_rb_tree_fname(struct rb
+@@ -61,6 +62,7 @@ static unsigned char get_dtype(struct su
+ }
+ 			       
+ 
++#if EXT3_INVARIANT
+ int ext3_check_dir_entry (const char * function, struct inode * dir,
+ 			  struct ext3_dir_entry_2 * de,
+ 			  struct buffer_head * bh,
+@@ -90,6 +92,7 @@ int ext3_check_dir_entry (const char * f
+ 			rlen, de->name_len);
+ 	return error_msg == NULL ? 1 : 0;
+ }
++#endif
+ 
+ static int ext3_readdir(struct file * filp,
+ 			 void * dirent, filldir_t filldir)
+@@ -305,12 +308,14 @@ static void free_rb_tree_fname(struct rb
  	root->rb_node = NULL;
  }
  
@@ -39,7 +55,7 @@ Index: iam/fs/ext3/dir.c
  	if (!p)
  		return NULL;
  	p->root.rb_node = NULL;
-@@ -326,6 +329,7 @@ struct dir_private_info *create_dir_info
+@@ -326,6 +331,7 @@ struct dir_private_info *create_dir_info
  void ext3_htree_free_dir_info(struct dir_private_info *p)
  {
  	free_rb_tree_fname(&p->root);
@@ -1216,7 +1232,7 @@ Index: iam/include/linux/lustre_iam.h
  
  struct iam_path *iam_leaf_path(const struct iam_leaf *leaf);
  struct iam_container *iam_leaf_container(const struct iam_leaf *leaf);
-@@ -709,14 +844,79 @@ struct iam_descr *iam_leaf_descr(const s
+@@ -709,14 +844,95 @@ struct iam_descr *iam_leaf_descr(const s
  struct iam_leaf_operations *iam_leaf_ops(const struct iam_leaf *leaf);
  
  
@@ -1255,6 +1271,22 @@ Index: iam/include/linux/lustre_iam.h
 +
 +int iam_uapi_ioctl(struct inode * inode, struct file * filp, unsigned int cmd,
 +                   unsigned long arg);
++
++/* dir.c */
++#if EXT3_INVARIANT
++extern int ext3_check_dir_entry(const char *, struct inode *,
++				struct ext3_dir_entry_2 *,
++				struct buffer_head *, unsigned long);
++#else
++static inline int ext3_check_dir_entry(const char * function,
++				       struct inode * dir,
++				       struct ldiskfs_dir_entry_2 * de,
++				       struct buffer_head * bh,
++				       unsigned long offset)
++{
++	return 1;
++}
++#endif
 +
 +/* __KERNEL__ */
 +#endif
