@@ -589,6 +589,10 @@ struct lu_site {
                 __u32 s_cache_race;
                 __u32 s_lru_purged;
         } ls_stats;
+        /*
+         * Linkage into global list of sites.
+         */
+        struct list_head      ls_linkage;
 };
 
 /*
@@ -603,6 +607,11 @@ int  lu_site_init(struct lu_site *s, struct lu_device *d);
  * Finalize @s and release its resources.
  */
 void lu_site_fini(struct lu_site *s);
+
+/*
+ * Called when initialization of stack for this site is completed.
+ */
+int lu_site_init_finish(struct lu_site *s);
 
 /*
  * Acquire additional reference on device @d
@@ -693,8 +702,7 @@ void lu_object_put(const struct lu_env *env,
 /*
  * Free @nr objects from the cold end of the site LRU list.
  */
-void lu_site_purge(const struct lu_env *env,
-                   struct lu_site *s, int nr);
+int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr);
 
 /*
  * Search cache for an object with the fid @f. If such object is found, return

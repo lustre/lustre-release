@@ -3402,12 +3402,18 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (rc)
                 GOTO(err_stop_service, rc);
 
+        rc = lu_site_init_finish(s);
+        if (rc)
+                GOTO(err_fs_cleanup, rc);
+
         if (obd->obd_recovering == 0)
                 mdt_postrecov(env, m);
 
         mdt_init_capa_ctxt(env, m);
         RETURN(0);
 
+err_fs_cleanup:
+        mdt_fs_cleanup(env, m);
 err_stop_service:
         mdt_stop_ptlrpc_service(m);
 err_capa:

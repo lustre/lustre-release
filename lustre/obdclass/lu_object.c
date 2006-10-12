@@ -200,7 +200,7 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o)
 /*
  * Free @nr objects from the cold end of the site LRU list.
  */
-void lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
+int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
 {
         struct list_head         dispose;
         struct lu_object_header *h;
@@ -232,6 +232,7 @@ void lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
                 lu_object_free(env, lu_object_top(h));
                 s->ls_stats.s_lru_purged ++;
         }
+        return nr;
 }
 EXPORT_SYMBOL(lu_site_purge);
 
@@ -477,6 +478,18 @@ struct lu_object *lu_object_find(const struct lu_env *env,
 }
 EXPORT_SYMBOL(lu_object_find);
 
+/*
+ * Global list of all sites on this node
+ */
+static LIST_HEAD(lu_sites);
+static DECLARE_MUTEX(lu_sites_guard);
+
+/*
+ * Global environment used by site shrinker.
+ */
+static struct lu_env lu_shrink_env;
+static int lu_shrink_env_initialized = 0;
+
 enum {
         /*
          * XXX: make this depending on available physical memory.
@@ -497,6 +510,7 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
         memset(s, 0, sizeof *s);
         spin_lock_init(&s->ls_guard);
         CFS_INIT_LIST_HEAD(&s->ls_lru);
+        CFS_INIT_LIST_HEAD(&s->ls_linkage);
         s->ls_top_dev = top;
         top->ld_site = s;
         lu_device_get(top);
@@ -509,8 +523,12 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
                 int i;
                 for (i = 0; i < LU_SITE_HTABLE_SIZE; i++)
                         INIT_HLIST_HEAD(&s->ls_hash[i]);
+                down(&lu_sites_guard);
+                list_add(&s->ls_linkage, &lu_sites);
+                up(&lu_sites_guard);
                 result = 0;
         } else {
+                CFS_INIT_LIST_HEAD(&s->ls_linkage);
                 result = -ENOMEM;
         }
 
@@ -527,6 +545,10 @@ void lu_site_fini(struct lu_site *s)
         LASSERT(s->ls_total == 0);
         LASSERT(s->ls_busy == 0);
 
+        down(&lu_sites_guard);
+        list_del_init(&s->ls_linkage);
+        up(&lu_sites_guard);
+
         if (s->ls_hash != NULL) {
                 int i;
                 for (i = 0; i < LU_SITE_HTABLE_SIZE; i++)
@@ -534,14 +556,38 @@ void lu_site_fini(struct lu_site *s)
                 OBD_FREE(s->ls_hash,
                          LU_SITE_HTABLE_SIZE * sizeof s->ls_hash[0]);
                 s->ls_hash = NULL;
-       }
-       if (s->ls_top_dev != NULL) {
-               s->ls_top_dev->ld_site = NULL;
-               lu_device_put(s->ls_top_dev);
-               s->ls_top_dev = NULL;
-       }
- }
+        }
+        if (s->ls_top_dev != NULL) {
+                s->ls_top_dev->ld_site = NULL;
+                lu_device_put(s->ls_top_dev);
+                s->ls_top_dev = NULL;
+        }
+}
 EXPORT_SYMBOL(lu_site_fini);
+
+/*
+ * Called when initialization of stack for this site is completed.
+ */
+int lu_site_init_finish(struct lu_site *s)
+{
+        int result;
+        down(&lu_sites_guard);
+        if (!lu_shrink_env_initialized) {
+                /*
+                 * At this level, we don't know what tags are needed, so
+                 * allocate all of them. This should not be too bad, because
+                 * this environment is global.
+                 */
+                result = lu_env_init(&lu_shrink_env, NULL, ~0);
+                lu_shrink_env_initialized = 1;
+        } else
+                result = 0;
+        if (result == 0)
+                result = lu_context_refill(&lu_shrink_env.le_ctx);
+        up(&lu_sites_guard);
+        return result;
+}
+EXPORT_SYMBOL(lu_site_init_finish);
 
 /*
  * Acquire additional reference on device @d
@@ -896,6 +942,39 @@ void lu_env_fini(struct lu_env *env)
 }
 EXPORT_SYMBOL(lu_env_fini);
 
+static int lu_cache_shrink(int nr, unsigned int gfp_mask)
+{
+        struct lu_site *s;
+        struct lu_site *tmp;
+        int cached = 0;
+        int remain = nr;
+        LIST_HEAD(splice);
+
+        if (nr != 0 && !(gfp_mask & __GFP_FS))
+                return -1;
+
+        down(&lu_sites_guard);
+        list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage) {
+                if (nr != 0) {
+                        remain = lu_site_purge(&lu_shrink_env, s, remain);
+                        /*
+                         * Move just shrunk site to the tail of site list to
+                         * assure shrinking fairness.
+                         */
+                        list_move_tail(&s->ls_linkage, &splice);
+                }
+                cached += s->ls_total - s->ls_busy;
+                if (remain <= 0)
+                        break;
+        }
+        list_splice(&splice, lu_sites.prev);
+        up(&lu_sites_guard);
+        return max(cached, 0); /* max() to avoid spurious underflow due to
+                                * lock-less access */
+}
+
+static struct shrinker *lu_site_shrinker = NULL;
+
 /*
  * Initialization of global lu_* data.
  */
@@ -904,6 +983,8 @@ int lu_global_init(void)
         int result;
 
         result = lu_context_key_register(&lu_cdebug_key);
+        if (result == 0)
+                lu_site_shrinker = set_shrinker(DEFAULT_SEEKS, lu_cache_shrink);
         return result;
 }
 
@@ -912,6 +993,18 @@ int lu_global_init(void)
  */
 void lu_global_fini(void)
 {
+        if (lu_site_shrinker != NULL) {
+                remove_shrinker(lu_site_shrinker);
+                lu_site_shrinker = NULL;
+        }
+
+        down(&lu_sites_guard);
+        if (lu_shrink_env_initialized) {
+                lu_env_fini(&lu_shrink_env);
+                lu_shrink_env_initialized = 0;
+        }
+        up(&lu_sites_guard);
+
         lu_context_key_degister(&lu_cdebug_key);
 }
 
