@@ -527,10 +527,8 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
                 list_add(&s->ls_linkage, &lu_sites);
                 up(&lu_sites_guard);
                 result = 0;
-        } else {
-                CFS_INIT_LIST_HEAD(&s->ls_linkage);
+        } else
                 result = -ENOMEM;
-        }
 
         RETURN(result);
 }
