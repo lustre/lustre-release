@@ -68,7 +68,7 @@ static int mea_hash_segment(int count, char *name, int namelen)
         struct ldiskfs_dx_hash_info hinfo;
         int result;
         __u64 hash;
-        __u32 hash_segment = MAX_HASH_SIZE;
+        __u64 hash_segment = MAX_HASH_SIZE;
 
         if (namelen == 0)
                 return 0;
@@ -84,7 +84,7 @@ static int mea_hash_segment(int count, char *name, int namelen)
         hash = (hinfo.hash << 1) & 0x7fffffff;
         do_div(hash_segment, count);
         do_div(hash, hash_segment);
-        LASSERT(hash <= count);
+        LASSERTF(hash <= count, "hash "LPU64" count "LPU64" \n");
 
         return hash;
 }
