@@ -55,11 +55,10 @@ struct capa_hmac_alg {
 struct client_capa {
         struct inode             *inode;      
         struct list_head          lli_list;     /* link to lli_oss_capas */
-        atomic_t                  open_count;   /* open count */
 };
 
 struct target_capa {
-        struct hlist_node         c_hash;         /* link to capa hash */
+        struct hlist_node         c_hash;       /* link to capa hash */
 };
 
 struct obd_capa {
@@ -300,7 +299,7 @@ static inline unsigned long capa_renewal_time(struct obd_capa *ocapa)
          * to OSS before capability expires.
          */
         return ocapa->c_expiry -
-               ((ocapa->c_capa.lc_flags & CAPA_FL_SHORT_EXPIRY) ? 40:1200) * HZ;
+               ((ocapa->c_capa.lc_flags & CAPA_FL_SHORT_EXPIRY) ? 300:1200) * HZ;
 }
 
 #ifdef __KERNEL__

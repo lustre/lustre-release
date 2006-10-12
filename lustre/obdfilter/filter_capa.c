@@ -39,31 +39,45 @@ static inline __u32 filter_ck_keyid(struct filter_capa_key *key)
         return key->k_key.lk_keyid;
 }
 
-int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key)
+int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *new)
 {
         struct filter_obd *filter = &obd->u.filter;
-        struct filter_capa_key *k, *rkey = NULL, *bkey = NULL;
+        struct filter_capa_key *k, *keys[2] = { NULL, NULL };
+        int i;
 
         spin_lock(&capa_lock);
         list_for_each_entry(k, &filter->fo_capa_keys, k_list) {
-                if (k->k_key.lk_mdsid != key->lk_mdsid)
+                if (k->k_key.lk_mdsid != new->lk_mdsid)
                         continue;
 
-                if (rkey)
-                        bkey = k;
-                else
-                        rkey = k;
+                if (keys[0]) {
+                        keys[1] = k;
+                        if (filter_ck_keyid(keys[1]) > filter_ck_keyid(keys[0]))
+                                keys[1] = keys[0], keys[0] = k;
+                } else {
+                        keys[0] = k;
+                }
         }
         spin_unlock(&capa_lock);
 
-        if (rkey && bkey && filter_ck_keyid(rkey) < filter_ck_keyid(bkey)) {
-                k = rkey;
-                rkey = bkey;
-                bkey = k;
+        for (i = 0; i < 2; i++) {
+                if (!keys[i])
+                        continue;
+                if (filter_ck_keyid(keys[i]) != new->lk_keyid)
+                        continue;
+                /* maybe because of recovery or other reasons, MDS sent the
+                 * the old capability key again.
+                 */
+                spin_lock(&capa_lock);
+                keys[i]->k_key = *new;
+                spin_unlock(&capa_lock);
+
+                RETURN(0);
         }
 
-        if (bkey) {
-                k = bkey;
+        if (keys[1]) {
+                /* if OSS already have two keys, update the old one */
+                k = keys[1];
         } else {
                 OBD_ALLOC_PTR(k);
                 if (!k)
@@ -72,12 +86,12 @@ int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key)
         }
 
         spin_lock(&capa_lock);
-        k->k_key = *key;
+        k->k_key = *new;
         if (list_empty(&k->k_list))
                 list_add(&k->k_list, &filter->fo_capa_keys);
         spin_unlock(&capa_lock);
 
-        DEBUG_CAPA_KEY(D_SEC, key, "new");
+        DEBUG_CAPA_KEY(D_SEC, new, "new");
         RETURN(0);
 }
 

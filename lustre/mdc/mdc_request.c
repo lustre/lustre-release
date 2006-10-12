@@ -1616,9 +1616,11 @@ static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
         struct lustre_capa *capa;
         ENTRY;
 
-        if (status)
-                DEBUG_CAPA(D_ERROR, &oc->c_capa, "renew failed: %d for",
-                           status);
+        if (status) {
+                DEBUG_CAPA(status == -ENOENT ? D_SEC : D_ERROR, &oc->c_capa,
+                           "renew failed: %d for", status);
+                GOTO(out, capa = ERR_PTR(status));
+        }
 
         body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),
                                   lustre_swab_mdt_body);

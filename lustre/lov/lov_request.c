@@ -1400,8 +1400,6 @@ int lov_prep_sync_set(struct obd_export *exp, struct obd_info *oinfo,
                 req->rq_oi.oi_policy.l_extent.end = re;
                 req->rq_oi.oi_policy.l_extent.gid = -1;
 
-                req->rq_oi.oi_capa = oinfo->oi_capa;
-
                 lov_set_add_req(req, set);
         }
         if (!set->set_count)

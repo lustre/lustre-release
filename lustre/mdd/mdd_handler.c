@@ -3345,23 +3345,27 @@ static int mdd_permission(const struct lu_env *env, struct md_object *obj,
 }
 
 static int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
-                        struct lustre_capa *capa)
+                        struct lustre_capa *capa, int renewal)
 {
         struct dt_object *next;
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct obd_capa *oc;
+        int rc = 0;
         ENTRY;
 
         LASSERT(lu_object_exists(mdd2lu_obj(mdd_obj)));
         next = mdd_object_child(mdd_obj);
 
-        oc = next->do_ops->do_capa_get(env, next, capa->lc_opc);
-        if (oc) {
+        oc = next->do_ops->do_capa_get(env, next, renewal ? capa : NULL,
+                                       capa->lc_opc);
+        if (IS_ERR(oc)) {
+                rc = PTR_ERR(oc);
+        } else {
                 capa_cpy(capa, oc);
                 capa_put(oc);
         }
 
-        RETURN(0);
+        RETURN(rc);
 }
 
 struct md_device_operations mdd_ops = {

@@ -254,7 +254,7 @@ check:
                 LBUG();
         }
 
-        oc = ll_i2mdscapa(inode);
+        oc = ll_mdscapa_get(inode);
         rc = md_get_remote_perm(sbi->ll_md_exp, ll_inode2fid(inode), oc, &req);
         capa_put(oc);
         if (rc) {

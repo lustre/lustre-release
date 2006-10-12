@@ -185,7 +185,8 @@ static int mdt_getstatus(struct mdt_thread_info *info)
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
 
-                rc = mo_capa_get(info->mti_env, mdt_object_child(root), capa);
+                rc = mo_capa_get(info->mti_env, mdt_object_child(root), capa,
+                                 0);
                 mdt_object_put(info->mti_env, root);
                 if (rc == 0)
                         body->valid |= OBD_MD_FLMDSCAPA;
@@ -413,7 +414,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
-                rc = mo_capa_get(env, next, capa);
+                rc = mo_capa_get(env, next, capa, 0);
                 if (rc)
                         RETURN(rc);
                 repbody->valid |= OBD_MD_FLMDSCAPA;
@@ -431,14 +432,17 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
+        /* NB: see mdt_unpack_req_pack_rep */
+        if (!obj)
+                GOTO(out, rc = -ENOENT);
+
         body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(body);
 
         c = req_capsule_client_get(&info->mti_pill, &RMF_CAPA1);
         LASSERT(c);
 
-        if ((capa_for_mds(c) && !mdt->mdt_opts.mo_mds_capa) ||
-            (capa_for_oss(c) && !mdt->mdt_opts.mo_oss_capa)) {
+        if (!mdt->mdt_opts.mo_mds_capa) {
                 DEBUG_CAPA(D_SEC, c,
                            "mds has disabled capability, skip renew for");
                 GOTO(out, rc = -ENOENT);
@@ -448,8 +452,9 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
         LASSERT(capa);
 
         *capa = *c;
-        capa->lc_expiry = 0;
-        rc = mo_capa_get(info->mti_env, mdt_object_child(obj), capa);
+        rc = mo_capa_get(info->mti_env, mdt_object_child(obj), capa, 1);
+        if (rc)
+                GOTO(out, rc);
 
         body->valid |= OBD_MD_FLOSSCAPA;
         EXIT;
@@ -465,9 +470,6 @@ static int mdt_getattr(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
-        LASSERT(obj != NULL);
-        LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
-
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
                 GOTO(out, rc = -EFAULT);
@@ -477,6 +479,9 @@ static int mdt_getattr(struct mdt_thread_info *info)
                 mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
                 RETURN(rc);
         }
+
+        LASSERT(obj != NULL);
+        LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
 
         if (reqbody->valid & OBD_MD_FLRMTPERM) {
                 rc = mdt_init_ucred(info, reqbody);
@@ -1505,7 +1510,14 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
                 if ((flags & HABEO_CORPUS) &&
                     !mdt_object_exists(obj)) {
                         mdt_object_put(env, obj);
-                        rc = -ENOENT;
+#if 0
+                        /* for capability renew ENOENT will be handled in 
+                         * mdt_renew_capa */
+                        if (body->valid & OBD_MD_FLOSSCAPA)
+                                rc = 0;
+                        else
+#endif
+                                rc = -ENOENT;
                 } else {
                         info->mti_object = obj;
                         rc = 0;
@@ -1659,7 +1671,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
                 }
         }
 
-        /* capability setting changed by /proc, needs reinitialize ctxt */
+        /* capability setting changed via /proc, needs reinitialize ctxt */
         if (info->mti_mdt && info->mti_mdt->mdt_capa_conf) {
                 mdt_init_capa_ctxt(info->mti_env, info->mti_mdt);
                 info->mti_mdt->mdt_capa_conf = 0;
@@ -3292,7 +3304,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         spin_lock_init(&m->mdt_ioepoch_lock);
         m->mdt_opts.mo_compat_resname = 0;
-        m->mdt_capa_timeout = CAPA_TIMEOUT;
+        m->mdt_capa_timeout = 320; // CAPA_TIMEOUT;
         m->mdt_capa_alg = CAPA_HMAC_ALG_SHA1;
         m->mdt_ck_timeout = CAPA_KEY_TIMEOUT;
         obd->obd_replayable = 1;
@@ -3369,12 +3381,12 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 GOTO(err_free_ns, rc);
         }
 
-        rc = mdt_ck_thread_start(m);
-        if (rc)
-                GOTO(err_free_ns, rc);
         m->mdt_ck_timer.function = mdt_ck_timer_callback;
         m->mdt_ck_timer.data = (unsigned long)m;
         init_timer(&m->mdt_ck_timer);
+        rc = mdt_ck_thread_start(m);
+        if (rc)
+                GOTO(err_free_ns, rc);
 
         rc = mdt_start_ptlrpc_service(m);
         if (rc)

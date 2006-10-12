@@ -351,7 +351,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_MDS_DEFAULT;
-                rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa);
+                rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa, 0);
                 if (rc)
                         RETURN(rc);
                 repbody->valid |= OBD_MD_FLMDSCAPA;
@@ -363,7 +363,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA2);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_OSS_DEFAULT | capa_open_opc(flags);
-                rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa);
+                rc = mo_capa_get(info->mti_env, mdt_object_child(o), capa, 0);
                 if (rc)
                         RETURN(rc);
                 repbody->valid |= OBD_MD_FLOSSCAPA;

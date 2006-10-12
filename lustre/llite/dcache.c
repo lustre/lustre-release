@@ -639,7 +639,7 @@ do_lookup:
         unlock_kernel();
 
         handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
-        oc = ll_i2mdscapa(inode);
+        oc = ll_mdscapa_get(inode);
         rc = obd_pin(sbi->ll_md_exp, ll_inode2fid(inode), oc, handle, flag);
         capa_put(oc);
         if (rc) {

@@ -333,11 +333,11 @@ static int cml_readpage(const struct lu_env *env, struct md_object *mo,
 }
 
 static int cml_capa_get(const struct lu_env *env, struct md_object *mo,
-                        struct lustre_capa *capa)
+                        struct lustre_capa *capa, int renewal)
 {
         int rc;
         ENTRY;
-        rc = mo_capa_get(env, md_object_next(mo), capa);
+        rc = mo_capa_get(env, md_object_next(mo), capa, renewal);
         RETURN(rc);
 }
 
@@ -721,7 +721,7 @@ static int cmr_readpage(const struct lu_env *env, struct md_object *mo,
 }
 
 static int cmr_capa_get(const struct lu_env *env, struct md_object *mo,
-                        struct lustre_capa *capa)
+                        struct lustre_capa *capa, int renewal)
 {
         RETURN(-EFAULT);
 }

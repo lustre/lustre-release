@@ -80,7 +80,6 @@ struct osd_thread_info {
         /*
          *XXX temporary: for capa operations.
          */
-        char                   oti_capa_hmac[CAPA_HMAC_KEY_MAX_LEN];
         struct lustre_capa_key oti_capa_key;
         struct lustre_capa     oti_capa;
 };

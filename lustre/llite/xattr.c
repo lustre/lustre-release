@@ -125,7 +125,7 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         if (xattr_type == XATTR_TRUSTED_T && strcmp(name, "trusted.lov") == 0)
                 RETURN(0);
 
-        oc = ll_i2mdscapa(inode);
+        oc = ll_mdscapa_get(inode);
         rc = md_setxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc, valid, name,
                          value, size, 0, flags, &req);
         capa_put(oc);
@@ -225,7 +225,7 @@ int ll_getxattr_common(struct inode *inode, const char *name,
 #endif
 
 do_getxattr:
-        oc = ll_i2mdscapa(inode);
+        oc = ll_mdscapa_get(inode);
         rc = md_getxattr(sbi->ll_md_exp, ll_inode2fid(inode), oc, valid, name,
                          NULL, 0, size, 0, &req);
         capa_put(oc);

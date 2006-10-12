@@ -253,7 +253,8 @@ struct dt_object_operations {
                              struct dt_object *dt, const struct lu_rdpg *rdpg,
                              struct lustre_capa *capa);
         struct obd_capa *(*do_capa_get)(const struct lu_env *env,
-                                        struct dt_object *dt, __u64 opc);
+                                        struct dt_object *dt,
+                                        struct lustre_capa *old, __u64 opc);
 };
 
 /*

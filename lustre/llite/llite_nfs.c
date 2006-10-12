@@ -282,7 +282,7 @@ int ll_encode_fh(struct dentry *de, __u32 *fh, int *plen, int connectable)
 {
         struct inode *inode = de->d_inode;
         struct lu_fid *fid = ll_inode2fid(inode);
-        struct obd_capa *ocapa = ll_i2mdscapa(inode);
+        struct obd_capa *ocapa = ll_mdscapa_get(inode);
         int len = (sizeof(*fid) + sizeof(struct lustre_capa) + 3)/4;
         char *p = (char *)fh;
 
@@ -328,7 +328,7 @@ struct dentry *ll_get_parent(struct dentry *dchild)
         
         sbi = ll_s2sbi(dir->i_sb);
  
-        oc = ll_i2mdscapa(dir);
+        oc = ll_mdscapa_get(dir);
         rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(dir), oc,
                              dotdot, strlen(dotdot) + 1, 0, 0, &req);
         if (rc) {

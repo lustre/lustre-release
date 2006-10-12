@@ -151,7 +151,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) off %lu\n",
                inode->i_ino, inode->i_generation, inode, (unsigned long)hash);
 
-        oc = ll_i2mdscapa(inode);
+        oc = ll_mdscapa_get(inode);
         rc = md_readpage(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode),
                          oc, hash, page, &request);
         capa_put(oc);
@@ -596,7 +596,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         GOTO(out, rc = -EINVAL);
                 }
 
-                oc = ll_i2mdscapa(inode);
+                oc = ll_mdscapa_get(inode);
                 rc = md_getattr_name(sbi->ll_md_exp, ll_inode2fid(inode), oc,
                                      filename, namelen, OBD_MD_FLID, 0,
                                      &request);
@@ -675,7 +675,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         if (IS_ERR(filename))
                                 RETURN(PTR_ERR(filename));
 
-                        oc = ll_i2mdscapa(inode);
+                        oc = ll_mdscapa_get(inode);
                         rc = md_getattr_name(sbi->ll_md_exp,
                                              ll_inode2fid(inode), oc,
                                              filename, strlen(filename) + 1,
@@ -688,7 +688,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                                 GOTO(out_name, rc);
                         }
                 } else {
-                        oc = ll_i2mdscapa(inode);
+                        oc = ll_mdscapa_get(inode);
                         rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
                                         OBD_MD_FLEASIZE | OBD_MD_FLDIREA,
                                         lmmsize, &request);

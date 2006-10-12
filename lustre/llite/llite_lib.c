@@ -783,9 +783,9 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_open_fd_read_count = lli->lli_open_fd_write_count = 0;
         lli->lli_open_fd_exec_count = 0;
         INIT_LIST_HEAD(&lli->lli_dead_list);
-        INIT_LIST_HEAD(&lli->lli_oss_capas);
         lli->lli_remote_perms = NULL;
         sema_init(&lli->lli_rmtperm_sem, 1);
+        INIT_LIST_HEAD(&lli->lli_oss_capas);
 }
 
 /* COMPAT_146 */
@@ -1532,7 +1532,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                         oinfo.oi_oa = oa;
                         oinfo.oi_md = lsm;
-                        oinfo.oi_capa = ll_i2mdscapa(inode);
+                        oinfo.oi_capa = ll_mdscapa_get(inode);
 
                         /* XXX: this looks unnecessary now. */
                         rc = obd_setattr_rqset(sbi->ll_dt_exp, &oinfo, NULL);
@@ -1923,7 +1923,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 struct mdt_body *body;
                 struct obd_capa *oc;
 
-                oc = ll_i2mdscapa(inode);
+                oc = ll_mdscapa_get(inode);
                 rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
                                 OBD_MD_FLFLAGS, 0, &req);
                 capa_put(oc);
@@ -2259,13 +2259,13 @@ ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
 
         ll_i2gids(op_data->suppgids, i1, i2);
         op_data->fid1 = ll_i2info(i1)->lli_fid;
-        op_data->mod_capa1 = ll_i2mdscapa(i1);
+        op_data->mod_capa1 = ll_mdscapa_get(i1);
 
         /* @i2 may be NULL. In this case caller itself has to initialize ->fid2
          * if needed. */
         if (i2) {
                 op_data->fid2 = *ll_inode2fid(i2);
-                op_data->mod_capa2 = ll_i2mdscapa(i2);
+                op_data->mod_capa2 = ll_mdscapa_get(i2);
         }
 
         op_data->name = name;
@@ -2303,7 +2303,7 @@ int ll_ioctl_getfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)
         if (copy_from_user(cmd, ioc->cmd, ioc->cmd_len))
                 GOTO(out, rc = -EFAULT);
 
-        oc = ll_i2mdscapa(inode);
+        oc = ll_mdscapa_get(inode);
         rc = md_getxattr(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
                          OBD_MD_FLXATTR, XATTR_NAME_LUSTRE_ACL, cmd,
                          ioc->cmd_len, ioc->res_len, 0, &req);
@@ -2347,7 +2347,7 @@ int ll_ioctl_setfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)
         if (copy_from_user(cmd, ioc->cmd, ioc->cmd_len))
                 GOTO(out, rc = -EFAULT);
 
-        oc = ll_i2mdscapa(inode);
+        oc = ll_mdscapa_get(inode);
         rc = md_setxattr(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
                          OBD_MD_FLXATTR, XATTR_NAME_LUSTRE_ACL, cmd,
                          ioc->cmd_len, ioc->res_len, 0, &req);

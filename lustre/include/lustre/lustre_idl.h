@@ -1920,26 +1920,23 @@ extern void lustre_swab_lustre_capa(struct lustre_capa *c);
 
 /* lustre_capa.lc_opc */
 enum {
-        /* MDS only fid capability */
         CAPA_OPC_BODY_WRITE   = 1<<0,  /* write fid data */
         CAPA_OPC_BODY_READ    = 1<<1,  /* read fid data */
         CAPA_OPC_INDEX_LOOKUP = 1<<2,  /* lookup fid */
         CAPA_OPC_INDEX_INSERT = 1<<3,  /* insert fid */
         CAPA_OPC_INDEX_DELETE = 1<<4,  /* delete fid */
-        /* OSS only fid capability */
         CAPA_OPC_OSS_WRITE    = 1<<5,  /* write oss object data */
         CAPA_OPC_OSS_READ     = 1<<6,  /* read oss object data */
         CAPA_OPC_OSS_TRUNC    = 1<<7,  /* truncate oss object */
-        /* MDS & OSS both might have */
         CAPA_OPC_META_WRITE   = 1<<8,  /* write fid meta data */
         CAPA_OPC_META_READ    = 1<<9,  /* read fid meta data */
 
 };
 
-#define CAPA_OPC_MDS_ONLY                                                      \
-        (CAPA_OPC_BODY_WRITE | CAPA_OPC_BODY_READ |                            \
-         CAPA_OPC_INDEX_LOOKUP | CAPA_OPC_INDEX_INSERT | CAPA_OPC_INDEX_DELETE)
-#define CAPA_OPC_OSS_ONLY                                                      \
+#define CAPA_OPC_MDS_ONLY                                                   \
+        (CAPA_OPC_BODY_WRITE | CAPA_OPC_BODY_READ | CAPA_OPC_INDEX_LOOKUP | \
+         CAPA_OPC_INDEX_INSERT | CAPA_OPC_INDEX_DELETE)
+#define CAPA_OPC_OSS_ONLY                                                   \
         (CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ | CAPA_OPC_OSS_TRUNC)
 #define CAPA_OPC_MDS_DEFAULT ~CAPA_OPC_OSS_ONLY
 #define CAPA_OPC_OSS_DEFAULT ~(CAPA_OPC_MDS_ONLY | CAPA_OPC_OSS_ONLY)

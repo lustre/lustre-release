@@ -837,17 +837,14 @@ static int capa_is_sane(const struct lu_env *env,
 {
         struct osd_thread_info *oti;
         struct obd_capa *oc;
-        int i, rc = 1;
+        int i, rc = 0;
         ENTRY;
 
         oti = lu_context_key_get(&env->le_ctx, &osd_key);
 
         oc = capa_lookup(capa);
         if (oc) {
-                if (memcmp(&oc->c_capa, capa, sizeof(*capa))) {
-                        DEBUG_CAPA(D_ERROR, capa, "HMAC mismatch");
-                        rc = -EACCES;
-                } else if (capa_is_expired(oc)) {
+                if (capa_is_expired(oc)) {
                         DEBUG_CAPA(D_ERROR, capa, "expired");
                         rc = -ESTALE;
                 }
@@ -869,10 +866,11 @@ static int capa_is_sane(const struct lu_env *env,
                 RETURN(-ESTALE);
         }
 
-        rc = capa_hmac(oti->oti_capa_hmac, capa, oti->oti_capa_key.lk_key);
+        rc = capa_hmac(oti->oti_capa.lc_hmac, capa, oti->oti_capa_key.lk_key);
         if (rc)
                 RETURN(rc);
-        if (memcmp(oti->oti_capa_hmac, capa->lc_hmac, sizeof(capa->lc_hmac))) {
+        if (memcmp(oti->oti_capa.lc_hmac, capa->lc_hmac, sizeof(capa->lc_hmac)))
+        {
                 DEBUG_CAPA(D_ERROR, capa, "HMAC mismatch");
                 RETURN(-EACCES);
         }
@@ -880,7 +878,7 @@ static int capa_is_sane(const struct lu_env *env,
         oc = capa_add(capa);
         capa_put(oc);
 
-        RETURN(1);
+        RETURN(0);
 }
 
 static int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
@@ -888,6 +886,7 @@ static int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
 {
         const struct lu_fid *fid = lu_object_fid(&dt->do_lu);
         struct osd_device *dev = osd_dev(dt->do_lu.lo_dev);
+        int rc;
 
         if (!dev->od_fl_capa)
                 return 0;
@@ -911,8 +910,8 @@ static int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
                 return -EACCES;
         }
 
-        if (!capa_is_sane(env, capa, dev->od_capa_keys)) {
-                DEBUG_CAPA(D_ERROR, capa, "insane");
+        if ((rc = capa_is_sane(env, capa, dev->od_capa_keys))) {
+                DEBUG_CAPA(D_ERROR, capa, "insane (rc %d)", rc);
                 return -EACCES;
         }
 
@@ -1541,6 +1540,7 @@ static int osd_readpage(const struct lu_env *env,
 
 static struct obd_capa *osd_capa_get(const struct lu_env *env,
                                      struct dt_object *dt,
+                                     struct lustre_capa *old,
                                      __u64 opc)
 {
         struct osd_thread_info *info = lu_context_key_get(&env->le_ctx,
@@ -1555,16 +1555,21 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
         ENTRY;
 
         if (!dev->od_fl_capa)
-                RETURN(NULL);
+                RETURN(ERR_PTR(-ENOENT));
 
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
+
+        /* renewal sanity check */
+        if (old && osd_object_auth(env, dt, old, opc))
+                RETURN(ERR_PTR(-EACCES));
 
         capa->lc_fid = *fid;
         capa->lc_opc = opc;
         capa->lc_flags |= dev->od_capa_alg << 24;
         if (dev->od_capa_timeout < CAPA_TIMEOUT)
                 capa->lc_flags |= CAPA_FL_SHORT_EXPIRY;
+        capa->lc_expiry = 0; /* this is flag to get a not-expired one */
 
         oc = capa_lookup(capa);
         if (oc) {
@@ -1582,7 +1587,7 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
         rc = capa_hmac(capa->lc_hmac, capa, key->lk_key);
         if (rc) {
                 DEBUG_CAPA(D_ERROR, capa, "HMAC failed: %d for", rc);
-                RETURN(NULL);
+                RETURN(ERR_PTR(rc));
         }
 
         oc = capa_add(capa);

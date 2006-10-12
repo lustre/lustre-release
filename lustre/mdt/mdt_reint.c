@@ -285,12 +285,14 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
         if (mdt->mdt_opts.mo_oss_capa &&
             S_ISREG(lu_object_attr(&mo->mot_obj.mo_lu))) {
+                /* FIXME: only sent truncate capability back in size change
+                 * case */
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
                 LASSERT(capa);
                 capa->lc_opc = CAPA_OPC_OSS_DEFAULT | CAPA_OPC_OSS_TRUNC;
-                rc = mo_capa_get(info->mti_env, mdt_object_child(mo), capa);
+                rc = mo_capa_get(info->mti_env, mdt_object_child(mo), capa, 0);
                 if (rc)
                         RETURN(rc);
                 repbody->valid |= OBD_MD_FLOSSCAPA;

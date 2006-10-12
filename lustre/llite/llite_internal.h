@@ -137,8 +137,10 @@ struct ll_inode_info {
         struct lov_stripe_md   *lli_smd;
 
         /* fid capability */
+        /* open count currently used by capability only, indicate whether
+         * capability needs renewal */
+        atomic_t                lli_open_count;
         struct obd_capa        *lli_mds_capa;
-        /* oss capability list */
         struct list_head        lli_oss_capas;
 };
 
@@ -746,13 +748,17 @@ extern cfs_timer_t ll_capa_timer;
 int ll_capa_thread_start(void);
 void ll_capa_thread_stop(void);
 void ll_capa_timer_callback(unsigned long unused);
-struct obd_capa *ll_lookup_oss_capa(struct inode *inode, __u64 opc);
+
 struct obd_capa *ll_add_capa(struct inode *inode, struct obd_capa *ocapa);
-void ll_oss_capa_open(struct inode *inode, struct file *file);
-void ll_oss_capa_close(struct inode *inode, struct file *file);
 int ll_update_capa(struct obd_capa *ocapa, struct lustre_capa *capa);
+
+void ll_capa_open(struct inode *inode);
+void ll_capa_close(struct inode *inode);
+
+struct obd_capa *ll_mdscapa_get(struct inode *inode);
+struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc);
+
 void ll_truncate_free_capa(struct obd_capa *ocapa);
 void ll_clear_inode_capas(struct inode *inode);
-struct obd_capa *ll_i2mdscapa(struct inode *inode);
 
 #endif /* LLITE_INTERNAL_H */

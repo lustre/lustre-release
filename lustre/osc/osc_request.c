@@ -537,8 +537,7 @@ static int osc_sync(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
-        if (capa)
-                size[REQ_REC_OFF + 1] = sizeof(struct lustre_capa);
+        size[REQ_REC_OFF + 1] = capa ? sizeof(struct lustre_capa) : 0;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
                               OST_SYNC, 3, size, NULL);

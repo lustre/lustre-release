@@ -47,7 +47,7 @@ static int ll_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        oc = ll_i2mdscapa(inode);
+        oc = ll_mdscapa_get(inode);
         rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), oc,
                         OBD_MD_LINKNAME, symlen, request);
         capa_put(oc);

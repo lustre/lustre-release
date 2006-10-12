@@ -194,7 +194,9 @@ static int mdt_ck_thread_main(void *args)
 {
         struct mdt_device      *mdt = args;
         struct ptlrpc_thread   *thread = &mdt->mdt_ck_thread;
-        struct lustre_capa_key *tmp, *key = &mdt->mdt_capa_keys[1];
+        struct lustre_capa_key *bkey = &mdt->mdt_capa_keys[0],
+                               *rkey = &mdt->mdt_capa_keys[1];
+        struct lustre_capa_key *tmp;
         struct lu_env           env;
         struct mdt_thread_info *info;
         struct md_device       *next;
@@ -233,26 +235,30 @@ static int mdt_ck_thread_main(void *args)
                 if (time_after(mdt->mdt_ck_expiry, jiffies))
                         break;
 
-                *tmp = *key;
-                make_capa_key(tmp, mdsnum, key->lk_keyid);
+                *tmp = *rkey;
+                make_capa_key(tmp, mdsnum, rkey->lk_keyid);
 
                 next = mdt->mdt_child;
                 rc = next->md_ops->mdo_update_capa_key(&env, next, tmp);
                 if (!rc) {
+                        spin_lock(&capa_lock);
+                        *bkey = *rkey;
+                        *rkey = *tmp;
+                        spin_unlock(&capa_lock);
+
                         rc = write_capa_keys(&env, mdt, mdt->mdt_capa_keys);
-                        if (!rc) {
+                        if (rc) {
                                 spin_lock(&capa_lock);
-                                mdt->mdt_capa_keys[0] = *key;
-                                *key = *tmp;
+                                *rkey = *bkey;
+                                memset(bkey, 0, sizeof(*bkey));
                                 spin_unlock(&capa_lock);
-
+                        } else {
                                 set_capa_key_expiry(mdt);
-
-                                DEBUG_CAPA_KEY(D_SEC, key, "new");
+                                DEBUG_CAPA_KEY(D_SEC, rkey, "new");
                         }
                 }
                 if (rc) {
-                        DEBUG_CAPA_KEY(D_ERROR, key, "update failed for");
+                        DEBUG_CAPA_KEY(D_ERROR, rkey, "update failed for");
                         /* next retry is in 300 sec */
                         mdt->mdt_ck_expiry = jiffies + 300 * HZ;
                 }

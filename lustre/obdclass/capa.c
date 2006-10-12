@@ -122,11 +122,8 @@ static struct obd_capa *find_capa(struct lustre_capa *capa,
 {
         struct hlist_node *pos;
         struct obd_capa *ocapa;
-        int len = offsetof(struct lustre_capa, lc_hmac);
-
-        /* MDS get capa case */
-        if (capa->lc_expiry == 0)
-                len = offsetof(struct lustre_capa, lc_keyid);
+        int len = capa->lc_expiry ? sizeof(*capa) :
+                                    offsetof(struct lustre_capa, lc_keyid);
 
         hlist_for_each_entry(ocapa, pos, head, u.tgt.c_hash) {
                 if (memcmp(&ocapa->c_capa, capa, len))

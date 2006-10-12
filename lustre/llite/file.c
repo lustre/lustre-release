@@ -61,7 +61,7 @@ void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
         ((struct ll_iattr *)&op_data->attr)->ia_attr_flags = inode->i_flags;
         op_data->ioepoch = ll_i2info(inode)->lli_ioepoch;
         memcpy(&op_data->handle, fh, sizeof(op_data->handle));
-        op_data->mod_capa1 = ll_i2mdscapa(inode);
+        op_data->mod_capa1 = ll_mdscapa_get(inode);
 }
 
 static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
@@ -268,7 +268,7 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
         
         LUSTRE_FPRIVATE(file) = NULL;
         ll_file_data_put(fd);
-        ll_oss_capa_close(inode, file);
+        ll_capa_close(inode);
 
         RETURN(rc);
 }
@@ -577,7 +577,7 @@ int ll_file_open(struct inode *inode, struct file *file)
         if (!S_ISREG(inode->i_mode))
                 GOTO(out, rc);
 
-        ll_oss_capa_open(inode, file);
+        ll_capa_open(inode);
 
         lsm = lli->lli_smd;
         if (lsm == NULL) {
@@ -628,7 +628,7 @@ int ll_inode_getattr(struct inode *inode, struct obdo *obdo)
                                OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
                                OBD_MD_FLCTIME | OBD_MD_FLGROUP;
-        oinfo.oi_capa = ll_i2mdscapa(inode);
+        oinfo.oi_capa = ll_mdscapa_get(inode);
 
         set = ptlrpc_prep_set();
         if (set == NULL) {
@@ -2229,7 +2229,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                         rc = err;
         }
 
-        oc = ll_i2mdscapa(inode);
+        oc = ll_mdscapa_get(inode);
         err = md_sync(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
                       &req);
         capa_put(oc);
@@ -2251,7 +2251,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                            OBD_MD_FLGROUP);
 
-                ocapa = ll_lookup_oss_capa(inode, CAPA_OPC_OSS_WRITE);
+                ocapa = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
                 err = obd_sync(ll_i2sbi(inode)->ll_dt_exp, oa, lsm,
                                0, OBD_OBJECT_EOF, ocapa);
                 capa_put(ocapa);
@@ -2466,7 +2466,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                                 RETURN(rc); 
                         valid |= OBD_MD_FLEASIZE | OBD_MD_FLMODEASIZE;
                 }
-                oc = ll_i2mdscapa(inode);
+                oc = ll_mdscapa_get(inode);
                 rc = md_getattr(sbi->ll_md_exp, ll_inode2fid(inode), oc, valid,
                                 ealen, &req);
                 capa_put(oc);

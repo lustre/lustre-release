@@ -182,7 +182,7 @@ struct md_object_operations {
         int (*moo_close)(const struct lu_env *env, struct md_object *obj,
                          struct md_attr *ma);
         int (*moo_capa_get)(const struct lu_env *, struct md_object *,
-                            struct lustre_capa *);
+                            struct lustre_capa *, int renewal);
 };
 
 /*
@@ -437,10 +437,11 @@ static inline int mo_ref_del(const struct lu_env *env,
 
 static inline int mo_capa_get(const struct lu_env *env,
                               struct md_object *m,
-                              struct lustre_capa *c)
+                              struct lustre_capa *c,
+                              int renewal)
 {
         LASSERT(m->mo_ops->moo_capa_get);
-        return m->mo_ops->moo_capa_get(env, m, c);
+        return m->mo_ops->moo_capa_get(env, m, c, renewal);
 }
 
 static inline int mdo_lookup(const struct lu_env *env,
