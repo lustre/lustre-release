@@ -706,11 +706,49 @@ AC_DEFUN([LC_CONFIG_SPLIT],
 [AC_MSG_CHECKING([whether to disable split support])
 AC_ARG_ENABLE([split], 
 	AC_HELP_STRING([--disable-split],
-			[enable split support]),
+			[disable split support]),
 	[],[enable_split='yes'])
 AC_MSG_RESULT([$enable_split])
 if test x$enable_split != xno; then
    AC_DEFINE(HAVE_SPLIT_SUPPORT, 1, [enable split support])
+fi
+])
+ 
+#
+# LC_CONFIG_LDISKFS
+#
+# whether to enable various ldiskfs debugs
+#
+AC_DEFUN([LC_CONFIG_LDISKFS],
+[
+AC_MSG_CHECKING([whether to disable ldiskfs asserts])
+AC_ARG_ENABLE([ldiskfs_asserts], 
+	AC_HELP_STRING([--disable-ldiskfs-asserts],
+			[disable ldiskfs asserts]),
+	[],[enable_ldiskfs_asserts='yes'])
+AC_MSG_RESULT([$enable_ldiskfs_asserts])
+if test x$enable_ldiskfs_asserts != xno; then
+   AC_DEFINE(LDISKFS_ASSERT, 1, [enable ldiskfs asserts])
+fi
+
+AC_MSG_CHECKING([whether to enable ldiskfs correctness checks])
+AC_ARG_ENABLE([ldiskfs_correctness], 
+	AC_HELP_STRING([--enable-ldiskfs-correctness],
+			[enable ldiskfs correctness checks]),
+	[],[enable_ldiskfs_correctness='no'])
+AC_MSG_RESULT([$enable_ldiskfs_correctness])
+if test x$enable_ldiskfs_correctness != xno; then
+   AC_DEFINE(LDISKFS_CORRECTNESS, 1, [enable ldiskfs correctness checks])
+fi
+
+AC_MSG_CHECKING([whether to enable ldiskfs invariants checks])
+AC_ARG_ENABLE([ldiskfs_invariants], 
+	AC_HELP_STRING([--enable-ldiskfs-invariants],
+			[enable ldiskfs invariants checks]),
+	[],[enable_ldiskfs_invariants='no'])
+AC_MSG_RESULT([$enable_ldiskfs_invariants])
+if test x$enable_ldiskfs_invariants != xno; then
+   AC_DEFINE(LDISKFS_INVARIANT, 1, [enable ldiskfs invariants checks])
 fi
 ])
  
