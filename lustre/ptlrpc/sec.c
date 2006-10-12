@@ -1322,11 +1322,60 @@ void sptlrpc_cli_free_reqbuf(struct ptlrpc_request *req)
         policy->sp_cops->free_reqbuf(ctx->cc_sec, req);
 }
 
+/*
+ * NOTE caller must guarantee the buffer size is enough for the enlargement
+ */
+void _sptlrpc_enlarge_msg_inplace(struct lustre_msg *msg,
+                                  int segment, int newsize)
+{
+        void   *src, *dst;
+        int     oldsize, oldmsg_size, movesize;
+
+        LASSERT(segment < msg->lm_bufcount);
+        LASSERT(msg->lm_buflens[segment] < newsize);
+
+        /* nothing to do if we are enlarging the last segment */
+        if (segment == msg->lm_bufcount - 1) {
+                msg->lm_buflens[segment] = newsize;
+                return;
+        }
+
+        oldsize = msg->lm_buflens[segment];
+
+        src = lustre_msg_buf(msg, segment + 1, 0);
+        msg->lm_buflens[segment] = newsize;
+        dst = lustre_msg_buf(msg, segment + 1, 0);
+        msg->lm_buflens[segment] = oldsize;
+
+        /* move from segment + 1 to end segment */
+        LASSERT(msg->lm_magic == LUSTRE_MSG_MAGIC_V2);
+        oldmsg_size = lustre_msg_size_v2(msg->lm_bufcount, msg->lm_buflens);
+        movesize = oldmsg_size - ((unsigned long) src - (unsigned long) msg);
+        LASSERT(movesize >= 0);
+
+        if (movesize)
+                memmove(dst, src, movesize);
+
+        /* note we don't clear the ares where old data live, not secret */
+
+        /* finally set new segment size */
+        msg->lm_buflens[segment] = newsize;
+}
+EXPORT_SYMBOL(_sptlrpc_enlarge_msg_inplace);
+
+/*
+ * enlarge @segment of upper message req->rq_reqmsg to @newsize, all data
+ * will be preserved after enlargement. this must be called after rq_reqmsg has
+ * been intialized at least.
+ *
+ * caller's attention: upon return, rq_reqmsg and rq_reqlen might have
+ * been changed.
+ */
 int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
-                               int segment, int newsize, int movedata)
+                               int segment, int newsize)
 {
         struct ptlrpc_cli_ctx    *ctx = req->rq_cli_ctx;
-        struct ptlrpc_sec_policy *policy;
+        struct ptlrpc_sec_cops   *cops;
         struct lustre_msg        *msg = req->rq_reqmsg;
 
         LASSERT(ctx);
@@ -1337,10 +1386,9 @@ int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
         if (msg->lm_buflens[segment] == newsize)
                 return 0;
 
-        policy = ctx->cc_sec->ps_policy;
-        LASSERT(policy->sp_cops->enlarge_reqbuf);
-        return policy->sp_cops->enlarge_reqbuf(ctx->cc_sec, req,
-                                               segment, newsize, movedata);
+        cops = ctx->cc_sec->ps_policy->sp_cops;
+        LASSERT(cops->enlarge_reqbuf);
+        return cops->enlarge_reqbuf(ctx->cc_sec, req, segment, newsize);
 }
 EXPORT_SYMBOL(sptlrpc_cli_enlarge_reqbuf);
 
@@ -1853,7 +1901,7 @@ int get_default_flavor(enum lustre_part to_part, struct sec_flavor_config *conf)
 
         switch (to_part) {
         case LUSTRE_MDT:
-                conf->sfc_rpc_flavor = SPTLRPC_FLVR_NULL;//XXX SPTLRPC_FLVR_PLAIN;
+                conf->sfc_rpc_flavor = SPTLRPC_FLVR_PLAIN;
                 return 0;
         case LUSTRE_OST:
                 conf->sfc_rpc_flavor = SPTLRPC_FLVR_NULL;

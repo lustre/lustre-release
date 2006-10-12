@@ -305,8 +305,7 @@ struct ptlrpc_sec_cops {
         int                     (*enlarge_reqbuf)
                                                (struct ptlrpc_sec *sec,
                                                 struct ptlrpc_request *req,
-                                                int segment, int newsize,
-                                                int move_data);
+                                                int segment, int newsize);
 };
 
 struct ptlrpc_sec_sops {
@@ -412,6 +411,28 @@ struct proc_dir_entry;
 extern struct proc_dir_entry *sptlrpc_proc_root;
 
 /*
+ * round size up to next power of 2, for slab allocation.
+ * @size must be sane (can't overflow after round up)
+ */
+static inline int size_roundup_power2(int size)
+{
+        int rc;
+
+        LASSERT(size > 0);
+        rc = 1 << (fls(size) - 1);
+        if ((rc - 1) & size)
+                rc <<= 1;
+        LASSERT(rc > 0);
+        return rc;
+}
+
+/*
+ * internal support libraries
+ */
+void _sptlrpc_enlarge_msg_inplace(struct lustre_msg *msg,
+                                  int segment, int newsize);
+
+/*
  * security type
  */
 int sptlrpc_register_policy(struct ptlrpc_sec_policy *policy);
@@ -453,7 +474,7 @@ void sptlrpc_cli_free_reqbuf(struct ptlrpc_request *req);
 int sptlrpc_cli_alloc_repbuf(struct ptlrpc_request *req, int msgsize);
 void sptlrpc_cli_free_repbuf(struct ptlrpc_request *req);
 int sptlrpc_cli_enlarge_reqbuf(struct ptlrpc_request *req,
-                               int segment, int newsize, int movedata);
+                               int segment, int newsize);
 void sptlrpc_request_out_callback(struct ptlrpc_request *req);
 
 /*

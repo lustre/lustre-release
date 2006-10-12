@@ -181,9 +181,10 @@ int plain_alloc_reqbuf(struct ptlrpc_sec *sec,
 
         alloc_len = lustre_msg_size_v2(bufcnt, buflens);
 
-
         if (!req->rq_reqbuf) {
                 LASSERT(!req->rq_pool);
+
+                alloc_len = size_roundup_power2(alloc_len);
                 OBD_ALLOC(req->rq_reqbuf, alloc_len);
                 if (!req->rq_reqbuf)
                         RETURN(-ENOMEM);
@@ -237,6 +238,7 @@ int plain_alloc_repbuf(struct ptlrpc_sec *sec,
         }
 
         alloc_len = lustre_msg_size_v2(bufcnt, buflens);
+        alloc_len = size_roundup_power2(alloc_len);
 
         OBD_ALLOC(req->rq_repbuf, alloc_len);
         if (!req->rq_repbuf)
@@ -260,10 +262,55 @@ void plain_free_repbuf(struct ptlrpc_sec *sec,
 static
 int plain_enlarge_reqbuf(struct ptlrpc_sec *sec,
                          struct ptlrpc_request *req,
-                         int segment, int newsize, int move_data)
+                         int segment, int newsize)
 {
-        LBUG();
-        return 0;
+        struct lustre_msg      *newbuf;
+        int                     oldsize;
+        int                     newmsg_size, newbuf_size;
+        ENTRY;
+
+        /* embedded msg always at seg 0 */
+        LASSERT(req->rq_reqbuf);
+        LASSERT(req->rq_reqbuf_len >= req->rq_reqlen);
+        LASSERT(lustre_msg_buf(req->rq_reqbuf, 0, 0) == req->rq_reqmsg);
+
+        /* compute new embedded msg size.  */
+        oldsize = req->rq_reqmsg->lm_buflens[segment];
+        req->rq_reqmsg->lm_buflens[segment] = newsize;
+        newmsg_size = lustre_msg_size_v2(req->rq_reqmsg->lm_bufcount,
+                                         req->rq_reqmsg->lm_buflens);
+        req->rq_reqmsg->lm_buflens[segment] = oldsize;
+
+        /* compute new wrapper msg size.  */
+        oldsize = req->rq_reqbuf->lm_buflens[0];
+        req->rq_reqbuf->lm_buflens[0] = newmsg_size;
+        newbuf_size = lustre_msg_size_v2(req->rq_reqbuf->lm_bufcount,
+                                         req->rq_reqbuf->lm_buflens);
+        req->rq_reqbuf->lm_buflens[0] = oldsize;
+
+        /* request from pool should always have enough buffer */
+        LASSERT(!req->rq_pool || req->rq_reqbuf_len >= newbuf_size);
+
+        if (req->rq_reqbuf_len < newbuf_size) {
+                newbuf_size = size_roundup_power2(newbuf_size);
+
+                OBD_ALLOC(newbuf, newbuf_size);
+                if (newbuf == NULL)
+                        RETURN(-ENOMEM);
+
+                memcpy(newbuf, req->rq_reqbuf, req->rq_reqbuf_len);
+
+                OBD_FREE(req->rq_reqbuf, req->rq_reqbuf_len);
+                req->rq_reqbuf = newbuf;
+                req->rq_reqbuf_len = newbuf_size;
+                req->rq_reqmsg = lustre_msg_buf(req->rq_reqbuf, 0, 0);
+        }
+
+        _sptlrpc_enlarge_msg_inplace(req->rq_reqbuf, 0, newmsg_size);
+        _sptlrpc_enlarge_msg_inplace(req->rq_reqmsg, segment, newsize);
+
+        req->rq_reqlen = newmsg_size;
+        RETURN(0);
 }
 
 static

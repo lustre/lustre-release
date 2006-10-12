@@ -211,16 +211,6 @@ static inline void mdc_clear_replay_flag(struct ptlrpc_request *req, int rc)
         }
 }
 
-static int round_up(int val)
-{
-        int ret = 1;
-        while (val) {
-                val >>= 1;
-                ret <<= 1;
-        }
-        return ret;
-}
-
 /* Save a large LOV EA into the request buffer so that it is available
  * for replay.  We don't do this in the initial request because the
  * original request doesn't need this buffer (at most it sends just the
@@ -238,7 +228,7 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
         int     rc;
 
         rc = sptlrpc_cli_enlarge_reqbuf(req, DLM_INTENT_REC_OFF + 4,
-                                        body->eadatasize, 0);
+                                        body->eadatasize);
         if (rc) {
                 CERROR("Can't enlarge segment %d size to %d\n",
                        DLM_INTENT_REC_OFF + 4, body->eadatasize);
@@ -312,11 +302,6 @@ int mdc_enqueue(struct obd_export *exp,
                 if (do_join)
                         size[DLM_INTENT_REC_OFF + 5] =
                                                 sizeof(struct mdt_rec_join);
-                rc = lustre_msg_size(class_exp2cliimp(exp)->imp_msg_magic,
-                                     8 + do_join, size);
-                if (rc & (rc - 1))
-                        size[ea_off] = min(size[ea_off] + round_up(rc) - rc,
-                                           obddev->u.cli.cl_max_mds_easize);
 
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_DLM_VERSION,
                                       LDLM_ENQUEUE, 8 + do_join, size, NULL);
