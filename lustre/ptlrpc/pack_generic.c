@@ -421,14 +421,14 @@ void *lustre_msg_buf_v1(void *msg, int n, int min_size)
         LASSERT(n >= 0);
 
         bufcount = m->lm_bufcount;
-        if (n >= bufcount) {
+        if (unlikely(n >= bufcount)) {
                 CDEBUG(D_INFO, "msg %p buffer[%d] not present (count %d)\n",
                        m, n, bufcount);
                 return NULL;
         }
 
         buflen = m->lm_buflens[n];
-        if (buflen < min_size) {
+        if (unlikely(buflen < min_size)) {
                 CERROR("msg %p buffer[%d] size %d too small (required %d)\n",
                        m, n, buflen, min_size);
                 LBUG();
