@@ -878,6 +878,7 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
 int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
                      struct obd_client_handle *och)
 {
+        struct obd_device *obd = class_exp2obd(exp);
         struct ptlrpc_request *req;
         int size[4] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mdt_epoch),
@@ -899,7 +900,9 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
         mdc_close_pack(req, REQ_REC_OFF, op_data);
         
         ptlrpc_req_set_repsize(req, 2, repsize);
+        mdc_get_rpc_lock(obd->u.cli.cl_close_lock, NULL);
         rc = ptlrpc_queue_wait(req);
+        mdc_put_rpc_lock(obd->u.cli.cl_close_lock, NULL);
         ptlrpc_req_finished(req);
         RETURN(rc);
 }

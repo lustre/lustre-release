@@ -784,7 +784,8 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
 
         off = med->med_lr_off;
         mutex_down(&med->med_mcd_lock);
-        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
+        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
+            lustre_msg_get_opc(req->rq_reqmsg) == MDS_DONE_WRITING) {
                 mcd->mcd_last_close_transno = mti->mti_transno;
                 mcd->mcd_last_close_xid = req->rq_xid;
                 mcd->mcd_last_close_result = rc;
