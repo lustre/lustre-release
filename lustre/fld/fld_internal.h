@@ -91,7 +91,7 @@ fld_target_name(struct lu_fld_target *tar)
         if (tar->ft_srv != NULL)
                 return tar->ft_srv->lsf_name;
 
-        return tar->ft_exp->exp_client_uuid.uuid;
+        return (const char *)tar->ft_exp->exp_obd->obd_name;
 }
 
 extern cfs_proc_dir_entry_t *fld_type_proc_dir;

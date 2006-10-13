@@ -138,27 +138,30 @@ static int mdc_del_obd(struct mdc_device *mc)
 {
         struct mdc_cli_desc *desc = &mc->mc_desc;
         struct obd_device *mdc_obd = class_exp2obd(desc->cl_exp);
+        struct obd_device *mdt_obd;
         int rc;
 
         ENTRY;
 
-        CDEBUG(D_CONFIG, "disconnect from %s\n",
+        CDEBUG(D_CONFIG, "Disconnect from %s\n",
                mdc_obd->obd_name);
+
+        /* Set mdt_obd flags in shutdown. */
+        if (mdc_obd) {
+                mdt_obd = mc->mc_md_dev.md_lu_dev.ld_obd;
+                mdc_obd->obd_no_recov = mdt_obd->obd_no_recov;
+                mdc_obd->obd_force = mdt_obd->obd_force;
+                mdc_obd->obd_fail = mdt_obd->obd_fail;
+        }
 
         rc = obd_fid_fini(desc->cl_exp);
         if (rc)
-                CERROR("fid init error %d \n", rc);
+                CERROR("Fid fini error %d\n", rc);
 
         obd_register_observer(mdc_obd, NULL);
-
-        /*TODO: Give the same shutdown flags as we have */
-        /*
-        desc->cl_exp->exp_obd->obd_force = mdt_obd->obd_force;
-        desc->cl_exp->exp_obd->obd_fail = mdt_obd->obd_fail;
-        */
         rc = obd_disconnect(desc->cl_exp);
         if (rc) {
-                CERROR("target %s disconnect error %d\n",
+                CERROR("Target %s disconnect error %d\n",
                        mdc_obd->obd_name, rc);
         }
         class_manual_cleanup(mdc_obd);
@@ -168,7 +171,8 @@ static int mdc_del_obd(struct mdc_device *mc)
 }
 
 static int mdc_process_config(const struct lu_env *env,
-                              struct lu_device *ld, struct lustre_cfg *cfg)
+                              struct lu_device *ld,
+                              struct lustre_cfg *cfg)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
         int rc;
@@ -218,17 +222,29 @@ struct lu_device *mdc_device_alloc(const struct lu_env *env,
                                    struct lu_device_type *ldt,
                                    struct lustre_cfg *cfg)
 {
+        const char        *dev = lustre_cfg_string(cfg, 0);
+        struct obd_device *mdt_obd;
         struct lu_device  *ld;
         struct mdc_device *mc;
-
         ENTRY;
 
+        mdt_obd = class_name2obd(dev);
+        LASSERT(mdt_obd != NULL);
+        
         OBD_ALLOC_PTR(mc);
         if (mc == NULL) {
                 ld = ERR_PTR(-ENOMEM);
         } else {
                 md_device_init(&mc->mc_md_dev, ldt);
-                mc->mc_md_dev.md_ops =  &mdc_md_ops;
+                mc->mc_md_dev.md_ops = &mdc_md_ops;
+
+                /* 
+                 * ld_obd is not used for MDC obd in cmm as it has own
+                 * descriptor for each device. So we use it for saving mdt_obd
+                 * to access it later in shutdown to set odb_fail,
+                 * obd_no_recover, etc., flags.  --umka
+                 */
+                mc->mc_md_dev.md_lu_dev.ld_obd = mdt_obd;
 	        ld = mdc2lu_dev(mc);
                 ld->ld_ops = &mdc_lu_ops;
         }
@@ -239,7 +255,8 @@ void mdc_device_free(const struct lu_env *env, struct lu_device *ld)
 {
         struct mdc_device *mc = lu2mdc_dev(ld);
 
-	LASSERTF(atomic_read(&ld->ld_ref) == 0, "Refcount = %i\n", atomic_read(&ld->ld_ref));
+	LASSERTF(atomic_read(&ld->ld_ref) == 0,
+                 "Refcount = %i\n", atomic_read(&ld->ld_ref));
         LASSERT(list_empty(&mc->mc_linkage));
 	md_device_fini(&mc->mc_md_dev);
         OBD_FREE_PTR(mc);

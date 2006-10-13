@@ -254,7 +254,7 @@ repeat:
                         it->d.lustre.it_data = 0;
                         *reqp = NULL;
 
-                       /* We shoudld reallocate the FID for the object */
+                        /* We shoudld reallocate the FID for the object */
                         rc = lmv_alloc_fid_for_split(obd, &rpid, op_data,
                                                      &sop_data->fid2);
                         if (rc)

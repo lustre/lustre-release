@@ -218,7 +218,7 @@ static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
                                "rc %d\n", seq->lcs_name, rc);
                         RETURN(rc);
                 } else {
-                        CDEBUG(D_INFO|D_WARNING, "%s: New range - "DRANGE"\n",
+                        CDEBUG(D_INFO, "%s: New range - "DRANGE"\n",
                                seq->lcs_name, PRANGE(&seq->lcs_space));
                 }
         }

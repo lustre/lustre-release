@@ -854,10 +854,10 @@ static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
                 RETURN(rc);
         }
 
-        /* asking underlaying tgt layer to allocate new fid */
+        /* Asking underlaying tgt layer to allocate new fid. */
         rc = obd_fid_alloc(lmv->tgts[mds].ltd_exp, fid, hint);
 
-        /* client switches to new sequence, setup fld */
+        /* Client switches to new sequence, setup fld. */
         if (rc > 0) {
                 LASSERT(fid_is_sane(fid));
 

@@ -51,7 +51,7 @@ static int cmm_fld_lookup(struct cmm_device *cm,
         rc = fld_client_lookup(ls->ls_client_fld,
                                fid_seq(fid), mds, env);
         if (rc) {
-                CERROR("can't find mds by seq "LPX64", rc %d\n",
+                CERROR("Can't find mds by seq "LPX64", rc %d\n",
                        fid_seq(fid), rc);
                 RETURN(rc);
         }

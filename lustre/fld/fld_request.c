@@ -141,6 +141,12 @@ fld_client_get_target(struct lu_client_fld *fld,
         target = fld->lcf_hash->fh_scan_func(fld, seq);
         spin_unlock(&fld->lcf_lock);
 
+        if (target != NULL) {
+                CDEBUG(D_INFO, "%s: Found target (idx "LPU64
+                       ") by seq "LPX64"\n", fld->lcf_name,
+                       target->ft_idx, seq);
+        }
+
         RETURN(target);
 }
 

@@ -80,10 +80,11 @@ static int cmm_expect_splitting(const struct lu_env *env,
         if (lu_fid_eq(fid, cmm2_fid(md2cmm_obj(mo))))
                 GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
 
+        EXIT;
 cleanup:
         if (fid)
                 OBD_FREE_PTR(fid);
-        RETURN(rc);
+        return rc;
 }
 
 #define cmm_md_size(stripes) \
