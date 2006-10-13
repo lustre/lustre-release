@@ -1332,7 +1332,10 @@ void _sptlrpc_enlarge_msg_inplace(struct lustre_msg *msg,
         int     oldsize, oldmsg_size, movesize;
 
         LASSERT(segment < msg->lm_bufcount);
-        LASSERT(msg->lm_buflens[segment] < newsize);
+        LASSERT(msg->lm_buflens[segment] <= newsize);
+
+        if (msg->lm_buflens[segment] == newsize)
+                return;
 
         /* nothing to do if we are enlarging the last segment */
         if (segment == msg->lm_bufcount - 1) {
