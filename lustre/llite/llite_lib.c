@@ -368,7 +368,7 @@ static int client_common_fill_super(struct super_block *sb,
                                                        ll_async_page_slab_size,
                                                        0, 0, NULL, NULL);
                 if (!ll_async_page_slab)
-                        GOTO(out_dt, -ENOMEM);
+                        GOTO(out_dt, err = -ENOMEM);
         }
 
         /* init FIDs framework */

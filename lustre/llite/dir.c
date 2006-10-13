@@ -1031,7 +1031,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         break;
                 default:
                         CERROR("unsupported quotactl op: %#x\n", cmd);
-                        GOTO(out_quotactl, -ENOTTY);
+                        GOTO(out_quotactl, rc = -ENOTTY);
                 }
 
                 QCTL_COPY(oqctl, qctl);

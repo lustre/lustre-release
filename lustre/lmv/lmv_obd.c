@@ -1935,7 +1935,7 @@ static int lmv_reset_hash_seg_end(struct lmv_obd *lmv, struct lmv_obj *obj,
         rid = obj->lo_inodes[index].li_fid;
         tgt_exp = lmv_get_export(lmv, &rid);
         if (IS_ERR(tgt_exp))
-                GOTO(cleanup, PTR_ERR(tgt_exp));
+                GOTO(cleanup, rc = PTR_ERR(tgt_exp));
 
         /* Alloc a page to get next segment hash,
          * FIXME: should we try to page from cache first */
@@ -2006,7 +2006,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
 
         tgt_exp = lmv_get_export(lmv, &rid);
         if (IS_ERR(tgt_exp))
-                GOTO(cleanup, PTR_ERR(tgt_exp));
+                GOTO(cleanup, rc = PTR_ERR(tgt_exp));
 
         rc = md_readpage(tgt_exp, &rid, oc, offset, page, request);
         if (rc)

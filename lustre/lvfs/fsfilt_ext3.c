@@ -1828,7 +1828,7 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                 bitmap_bh = read_inode_bitmap(sb, group);
                 if (!bitmap_bh) {
                         CERROR("read_inode_bitmap group %d failed", group);
-                        GOTO(out, -EIO);
+                        GOTO(out, rc = -EIO);
                 }
 
                 for (i = 0; i < sbi->s_inodes_per_group; i++, ino++) {
