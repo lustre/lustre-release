@@ -1629,8 +1629,8 @@ static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
         if (body == NULL)
                 GOTO(out, capa = ERR_PTR(-EFAULT));
 
-        if (body->size)
-                GOTO(out, capa = ERR_PTR((long)body->size));
+        if (body->flags)
+                GOTO(out, capa = ERR_PTR(-(long)body->flags));
 
         if ((body->valid & OBD_MD_FLOSSCAPA) == 0)
                 GOTO(out, capa = ERR_PTR(-EFAULT));

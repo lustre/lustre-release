@@ -464,7 +464,7 @@ out:
          * will handle this internally, see mdc_interpret_renew_capa.
          * body->size is borrowed to store errno.
          */
-        body->size = (__u64)rc;
+        body->flags = (__u32)-rc;
         return 0;
 }
 
