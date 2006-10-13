@@ -1510,13 +1510,11 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
                 if ((flags & HABEO_CORPUS) &&
                     !mdt_object_exists(obj)) {
                         mdt_object_put(env, obj);
-#if 0
                         /* for capability renew ENOENT will be handled in 
                          * mdt_renew_capa */
                         if (body->valid & OBD_MD_FLOSSCAPA)
                                 rc = 0;
                         else
-#endif
                                 rc = -ENOENT;
                 } else {
                         info->mti_object = obj;
@@ -3308,7 +3306,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         spin_lock_init(&m->mdt_ioepoch_lock);
         m->mdt_opts.mo_compat_resname = 0;
-        m->mdt_capa_timeout = 320; // CAPA_TIMEOUT;
+        m->mdt_capa_timeout = 320; //CAPA_TIMEOUT;
         m->mdt_capa_alg = CAPA_HMAC_ALG_SHA1;
         m->mdt_ck_timeout = CAPA_KEY_TIMEOUT;
         obd->obd_replayable = 1;
