@@ -354,7 +354,7 @@ Index: iam/fs/ext3/iam.c
 +	return iam_leaf_ops(leaf)->key_cmp(leaf, key);
 +}
 +
-+#if EXT3_INVARIANT
++#if EXT3_INVARIANT_ON
 +static int iam_leaf_check(struct iam_leaf *leaf);
 +extern int dx_node_check(struct iam_path *p, struct iam_frame *f);
 +
@@ -457,7 +457,7 @@ Index: iam/fs/ext3/iam.c
 +        return iam_leaf_ops(l)->can_add(l, k, r);
 +}
 +
-+#if EXT3_INVARIANT
++#if EXT3_INVARIANT_ON
 +static int iam_leaf_check(struct iam_leaf *leaf)
 +{
 +        return 1;
@@ -1514,7 +1514,7 @@ Index: iam/fs/ext3/iam_htree.c
 +                return 0;
 +}
 +
-+#if EXT3_CORRECTNESS || EXT3_INVARIANT
++#if EXT3_CORRECTNESS_ON || EXT3_INVARIANT_ON
 +static int iam_leaf_at_rec(const struct iam_leaf *folio)
 +{
 +        struct ext3_dir_entry_2 *ent;
@@ -2147,7 +2147,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +
 +static struct iam_lentry *iam_lfix_get_end(const struct iam_leaf *l);
 +
-+#if EXT3_CORRECTNESS || EXT3_INVARIANT
++#if EXT3_CORRECTNESS_ON || EXT3_INVARIANT_ON
 +static int iam_leaf_at_rec(const struct iam_leaf *folio)
 +{
 +        return
@@ -2958,7 +2958,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +        return lentry_lvar(l->il_at);
 +}
 +
-+#if EXT3_CORRECTNESS || EXT3_INVARIANT
++#if EXT3_CORRECTNESS_ON || EXT3_INVARIANT_ON
 +static int n_at_rec(const struct iam_leaf *folio)
 +{
 +        return
@@ -4946,7 +4946,7 @@ Index: iam/fs/ext3/namei.c
 -	err = iam_leaf_init(path, &leaf);
 -	if (err)
 -		goto errout;
-+		if (EXT3_INVARIANT) {
++		if (EXT3_INVARIANT_ON) {
 +			err = param->id_ops->id_node_check(path, frame);
 +			if (err != 0)
 +				break;
@@ -4985,7 +4985,7 @@ Index: iam/fs/ext3/namei.c
 +		}
 +
 +		frame->at = iam_entry_shift(path, p, -1);
-+		if (EXT3_INVARIANT) { // linear search cross check
++		if (EXT3_INVARIANT_ON) { // linear search cross check
 +			unsigned n = count - 1;
 +			struct iam_entry *at;
 +
