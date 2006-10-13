@@ -284,9 +284,11 @@ int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
         mdc_pack_req_body(req, REQ_REC_OFF, valid, fid, oc, ea_size,
                           MDS_BFLAG_EXT_FLAGS/*request "new" flags(bug 9486)*/);
 
-        LASSERT(strnlen(filename, namelen) == namelen - 1);
-        memcpy(lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2, namelen),
-               filename, namelen);
+        if (filename) {
+                LASSERT(strnlen(filename, namelen) == namelen - 1);
+                memcpy(lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF + 2, namelen),
+                       filename, namelen);
+        }
 
         rc = mdc_getattr_common(exp, ea_size, 0, !!(valid & OBD_MD_FLMDSCAPA),
                                 req);
