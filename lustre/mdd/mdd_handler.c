@@ -1841,8 +1841,7 @@ static int mdd_parent_fid(const struct lu_env *env,
                           struct mdd_object *obj,
                           struct lu_fid *fid)
 {
-        return __mdd_lookup_locked(env, &obj->mod_obj,
-                                   dotdot, fid, 0);
+        return __mdd_lookup(env, &obj->mod_obj, dotdot, fid, 0);
 }
 
 /*
@@ -2575,7 +2574,7 @@ static int mdd_object_create(const struct lu_env *env,
         mdd_write_lock(env, mdd_obj);
         rc = __mdd_object_create(env, mdd_obj, ma, handle);
         if (rc)
-                GOTO (unlock, rc);
+                GOTO(unlock, rc);
 
         if (spec->sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
                 /* if creating the slave object, set slave EA here */
