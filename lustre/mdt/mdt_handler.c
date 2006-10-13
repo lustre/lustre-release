@@ -462,7 +462,7 @@ out:
         /* NB: capability renewal might fail because object has been removed,
          * or server has disabled capability, but this is not error, llite
          * will handle this internally, see mdc_interpret_renew_capa.
-         * body->size is borrowed to store errno.
+         * body->flags is borrowed to store errno.
          */
         body->flags = (__u32)-rc;
         return 0;
