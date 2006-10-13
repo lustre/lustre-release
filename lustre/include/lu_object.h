@@ -892,7 +892,12 @@ enum lu_context_tag {
         /*
          * Per-request session on server
          */
-        LCT_SESSION   = 1 << 4
+        LCT_SESSION   = 1 << 4,
+
+        /*
+         * Contexts usable in cache shrinker thread.
+         */
+        LCT_SHRINKER  = LCT_MD_THREAD|LCT_DT_THREAD|LCT_CL_THREAD
 };
 
 /*

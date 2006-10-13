@@ -213,6 +213,16 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
          */
         spin_lock(&s->ls_guard);
         list_for_each_entry_safe(h, temp, &s->ls_lru, loh_lru) {
+                /*
+                 * Objects are sorted in lru order, and "busy" objects (ones
+                 * with h->loh_ref > 0) naturally tend to live near hot end
+                 * that we scan last. Unfortunately, sites usually have small
+                 * (less then ten) number of busy yet rarely accessed objects
+                 * (some global objects, accessed directly through pointers,
+                 * bypassing hash table). Currently algorithm scans them over
+                 * and over again. Probably we should move busy objects out of
+                 * LRU, or we can live with that.
+                 */
                 if (nr-- == 0)
                         break;
                 if (h->loh_ref > 0)
@@ -488,7 +498,6 @@ static DECLARE_MUTEX(lu_sites_guard);
  * Global environment used by site shrinker.
  */
 static struct lu_env lu_shrink_env;
-static int lu_shrink_env_initialized = 0;
 
 enum {
         /*
@@ -523,9 +532,6 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
                 int i;
                 for (i = 0; i < LU_SITE_HTABLE_SIZE; i++)
                         INIT_HLIST_HEAD(&s->ls_hash[i]);
-                down(&lu_sites_guard);
-                list_add(&s->ls_linkage, &lu_sites);
-                up(&lu_sites_guard);
                 result = 0;
         } else
                 result = -ENOMEM;
@@ -570,18 +576,9 @@ int lu_site_init_finish(struct lu_site *s)
 {
         int result;
         down(&lu_sites_guard);
-        if (!lu_shrink_env_initialized) {
-                /*
-                 * At this level, we don't know what tags are needed, so
-                 * allocate all of them. This should not be too bad, because
-                 * this environment is global.
-                 */
-                result = lu_env_init(&lu_shrink_env, NULL, ~0);
-                lu_shrink_env_initialized = 1;
-        } else
-                result = 0;
+        result = lu_context_refill(&lu_shrink_env.le_ctx);
         if (result == 0)
-                result = lu_context_refill(&lu_shrink_env.le_ctx);
+                list_add(&s->ls_linkage, &lu_sites);
         up(&lu_sites_guard);
         return result;
 }
@@ -766,6 +763,22 @@ int lu_context_key_register(struct lu_context_key *key)
 }
 EXPORT_SYMBOL(lu_context_key_register);
 
+static void key_fini(struct lu_context *ctx, int index)
+{
+        if (ctx->lc_value[index] != NULL) {
+                struct lu_context_key *key;
+
+                key = lu_keys[index];
+                LASSERT(key != NULL);
+                LASSERT(key->lct_fini != NULL);
+                LASSERT(atomic_read(&key->lct_used) > 1);
+
+                key->lct_fini(ctx, key, ctx->lc_value[index]);
+                atomic_dec(&key->lct_used);
+                ctx->lc_value[index] = NULL;
+        }
+}
+
 /*
  * Deregister key.
  */
@@ -773,6 +786,8 @@ void lu_context_key_degister(struct lu_context_key *key)
 {
         LASSERT(atomic_read(&key->lct_used) >= 1);
         LASSERT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
+
+        key_fini(&lu_shrink_env.le_ctx, key->lct_index);
 
         if (atomic_read(&key->lct_used) > 1)
                 CERROR("key has instances.\n");
@@ -798,20 +813,8 @@ static void keys_fini(struct lu_context *ctx)
         int i;
 
         if (ctx->lc_value != NULL) {
-                for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
-                        if (ctx->lc_value[i] != NULL) {
-                                struct lu_context_key *key;
-
-                                key = lu_keys[i];
-                                LASSERT(key != NULL);
-                                LASSERT(key->lct_fini != NULL);
-                                LASSERT(atomic_read(&key->lct_used) > 1);
-
-                                key->lct_fini(ctx, key, ctx->lc_value[i]);
-                                atomic_dec(&key->lct_used);
-                                ctx->lc_value[i] = NULL;
-                        }
-                }
+                for (i = 0; i < ARRAY_SIZE(lu_keys); ++i)
+                        key_fini(ctx, i);
                 OBD_FREE(ctx->lc_value,
                          ARRAY_SIZE(lu_keys) * sizeof ctx->lc_value[0]);
                 ctx->lc_value = NULL;
@@ -981,8 +984,19 @@ int lu_global_init(void)
         int result;
 
         result = lu_context_key_register(&lu_cdebug_key);
-        if (result == 0)
-                lu_site_shrinker = set_shrinker(DEFAULT_SEEKS, lu_cache_shrink);
+        if (result == 0) {
+                /*
+                 * At this level, we don't know what tags are needed, so
+                 * allocate them conservatively. This should not be too bad,
+                 * because this environment is global.
+                 */
+                down(&lu_sites_guard);
+                result = lu_env_init(&lu_shrink_env, NULL, LCT_SHRINKER);
+                up(&lu_sites_guard);
+                if (result == 0)
+                        lu_site_shrinker = set_shrinker(DEFAULT_SEEKS,
+                                                        lu_cache_shrink);
+        }
         return result;
 }
 
@@ -996,14 +1010,15 @@ void lu_global_fini(void)
                 lu_site_shrinker = NULL;
         }
 
-        down(&lu_sites_guard);
-        if (lu_shrink_env_initialized) {
-                lu_env_fini(&lu_shrink_env);
-                lu_shrink_env_initialized = 0;
-        }
-        up(&lu_sites_guard);
-
         lu_context_key_degister(&lu_cdebug_key);
+
+        /*
+         * Tear shrinker environment down _after_ de-registering
+         * lu_cdebug_key, because the latter has a value in the former.
+         */
+        down(&lu_sites_guard);
+        lu_env_fini(&lu_shrink_env);
+        up(&lu_sites_guard);
 }
 
 struct lu_buf LU_BUF_NULL = {
