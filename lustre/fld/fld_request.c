@@ -446,6 +446,10 @@ int fld_client_create(struct lu_client_fld *fld,
         target = fld_client_get_target(fld, seq);
         LASSERT(target != NULL);
 
+        CDEBUG(D_INFO, "%s: Create fld entry (seq: "LPX64"; mds: "
+               LPX64") on target %s (idx "LPU64")\n", fld->lcf_name,
+               seq, mds, fld_target_name(target), target->ft_idx);
+        
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
                 LASSERT(env != NULL);
@@ -488,6 +492,10 @@ int fld_client_delete(struct lu_client_fld *fld, seqno_t seq,
         target = fld_client_get_target(fld, seq);
         LASSERT(target != NULL);
 
+        CDEBUG(D_INFO, "%s: Delete fld entry (seq: "LPX64") on "
+               "target %s (idx "LPU64")\n", fld->lcf_name, seq,
+               fld_target_name(target), target->ft_idx);
+        
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
                 LASSERT(env != NULL);
@@ -514,14 +522,18 @@ int fld_client_lookup(struct lu_client_fld *fld,
         int rc;
         ENTRY;
 
-        /* lookup it in the cache */
+        /* Lookup it in the cache */
         rc = fld_cache_lookup(fld->lcf_cache, seq, mds);
         if (rc == 0)
                 RETURN(0);
 
-        /* can not find it in the cache */
+        /* Can not find it in the cache */
         target = fld_client_get_target(fld, seq);
         LASSERT(target != NULL);
+
+        CDEBUG(D_INFO, "%s: Lookup fld entry (seq: "LPX64") on "
+               "target %s (idx "LPU64")\n", fld->lcf_name, seq,
+               fld_target_name(target), target->ft_idx);
 
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {

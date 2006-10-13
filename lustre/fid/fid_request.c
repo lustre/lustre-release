@@ -291,8 +291,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
         *fid = seq->lcs_fid;
         LASSERT(fid_is_sane(fid));
 
-        CDEBUG(D_INFO, "%s: Allocated FID "DFID"\n",
-               seq->lcs_name, PFID(fid));
+        CDEBUG(D_INFO, "%s: Allocated FID "DFID"\n", seq->lcs_name, PFID(fid));
 
         EXIT;
 out:
