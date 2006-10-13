@@ -432,12 +432,12 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
+        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        LASSERT(body != NULL);
+
         /* NB: see mdt_unpack_req_pack_rep */
         if (!obj)
                 GOTO(out, rc = -ENOENT);
-
-        body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        LASSERT(body);
 
         c = req_capsule_client_get(&info->mti_pill, &RMF_CAPA1);
         LASSERT(c);

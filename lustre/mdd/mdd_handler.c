@@ -1841,7 +1841,8 @@ static int mdd_parent_fid(const struct lu_env *env,
                           struct mdd_object *obj,
                           struct lu_fid *fid)
 {
-        return __mdd_lookup(env, &obj->mod_obj, dotdot, fid, 0);
+        return __mdd_lookup_locked(env, &obj->mod_obj,
+                                   dotdot, fid, 0);
 }
 
 /*
@@ -1931,7 +1932,6 @@ static int mdd_rename_lock(const struct lu_env *env,
         }
 
         mdd_lock2(env, src_pobj, tgt_pobj);
-
         RETURN(0);
 }
 
@@ -2010,7 +2010,7 @@ static int mdd_rename(const struct lu_env *env,
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
-        /*FIXME: Should consider tobj and sobj too in rename_lock*/
+        /* FIXME: Should consider tobj and sobj too in rename_lock. */
         rc = mdd_rename_lock(env, mdd, mdd_spobj, mdd_tpobj);
         if (rc)
                 GOTO(cleanup_unlocked, rc);
@@ -2025,8 +2025,10 @@ static int mdd_rename(const struct lu_env *env,
         if (rc)
                 GOTO(cleanup, rc);
 
-        /* tobj can be remote one,
-         * so we do index_delete unconditionally and -ENOENT is allowed */
+        /*
+         * Here tobj can be remote one, so we do index_delete unconditionally
+         * and -ENOENT is allowed.
+         */
         rc = __mdd_index_delete(env, mdd_tpobj, tname, is_dir, handle,
                                 mdd_object_capa(env, mdd_tpobj));
         if (rc != 0 && rc != -ENOENT)
@@ -2115,7 +2117,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 
         if (S_ISDIR(mdd_object_type(mdd_obj)) && dt_try_as_dir(env, dir))
                 rc = dir->do_index_ops->dio_lookup(env, dir, rec, key,
-                                                 mdd_object_capa(env, mdd_obj));
+                                                   mdd_object_capa(env, mdd_obj));
         else
                 rc = -ENOTDIR;
 
