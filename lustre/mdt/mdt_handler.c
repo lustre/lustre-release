@@ -432,40 +432,28 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
+        /* if object doesn't exist, or server has disabled capability,
+         * return directly, client will find body->valid OBD_MD_FLOSSCAPA
+         * flag not set.
+         */
+        if (!obj || !mdt->mdt_opts.mo_mds_capa)
+                RETURN(0);
+
         body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(body != NULL);
 
-        /* NB: see mdt_unpack_req_pack_rep */
-        if (!obj)
-                GOTO(out, rc = -ENOENT);
-
         c = req_capsule_client_get(&info->mti_pill, &RMF_CAPA1);
         LASSERT(c);
-
-        if (!mdt->mdt_opts.mo_mds_capa) {
-                DEBUG_CAPA(D_SEC, c,
-                           "mds has disabled capability, skip renew for");
-                GOTO(out, rc = -ENOENT);
-        }
 
         capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
         LASSERT(capa);
 
         *capa = *c;
         rc = mo_capa_get(info->mti_env, mdt_object_child(obj), capa, 1);
-        if (rc)
-                GOTO(out, rc);
+        if (rc == 0)
+                body->valid |= OBD_MD_FLOSSCAPA;
 
-        body->valid |= OBD_MD_FLOSSCAPA;
-        EXIT;
-out:
-        /* NB: capability renewal might fail because object has been removed,
-         * or server has disabled capability, but this is not error, llite
-         * will handle this internally, see mdc_interpret_renew_capa.
-         * body->flags is borrowed to store errno.
-         */
-        body->flags = (__u32)-rc;
-        return 0;
+        RETURN(rc);
 }
 
 static int mdt_getattr(struct mdt_thread_info *info)

@@ -1619,8 +1619,7 @@ static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
         ENTRY;
 
         if (status) {
-                DEBUG_CAPA(status == -ENOENT ? D_SEC : D_ERROR, &oc->c_capa,
-                           "renew failed: %d for", status);
+                DEBUG_CAPA(D_ERROR, &oc->c_capa, "renew failed: %d", status);
                 GOTO(out, capa = ERR_PTR(status));
         }
 
@@ -1629,11 +1628,8 @@ static int mdc_interpret_renew_capa(struct ptlrpc_request *req, void *unused,
         if (body == NULL)
                 GOTO(out, capa = ERR_PTR(-EFAULT));
 
-        if (body->flags)
-                GOTO(out, capa = ERR_PTR(-(long)body->flags));
-
         if ((body->valid & OBD_MD_FLOSSCAPA) == 0)
-                GOTO(out, capa = ERR_PTR(-EFAULT));
+                GOTO(out, capa = ERR_PTR(-ENOENT));
 
         capa = lustre_unpack_capa(req->rq_repmsg, REPLY_REC_OFF + 1);
         if (!capa)
