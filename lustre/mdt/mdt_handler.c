@@ -459,7 +459,12 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
         body->valid |= OBD_MD_FLOSSCAPA;
         EXIT;
 out:
-        body->flags = (__u32)rc;
+        /* NB: capability renewal might fail because object has been removed,
+         * or server has disabled capability, but this is not error, llite
+         * will handle this internally, see mdc_interpret_renew_capa.
+         * body->size is borrowed to store errno.
+         */
+        body->size = (__u64)rc;
         return 0;
 }
 
