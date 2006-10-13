@@ -468,33 +468,41 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
                 RETURN(err_serious(-ENOENT));
 
-        /* step 1: lock the source */
-        lhs = &info->mti_lh[MDT_LH_PARENT];
+        if (rr->rr_name[0] == 0) {
+                /* MDT holding name ask us to add ref. */
+                lhs = &info->mti_lh[MDT_LH_CHILD];
+                lhs->mlh_mode = LCK_EX;
+                ms = mdt_object_find_lock(info, rr->rr_fid2, lhs,
+                                          MDS_INODELOCK_UPDATE);
+                if (IS_ERR(ms))
+                        RETURN(PTR_ERR(ms));
+
+                mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
+                rc = mo_ref_add(info->mti_env, mdt_object_child(ms));
+                mdt_object_unlock_put(info, ms, lhs, rc);
+                RETURN(rc);
+        }
+
+        /* step 1: find & lock the target parent dir */
+        lhp = &info->mti_lh[MDT_LH_PARENT];
+        lhp->mlh_mode = LCK_EX;
+        mp = mdt_object_find_lock(info, rr->rr_fid2, lhp,
+                                  MDS_INODELOCK_UPDATE);
+        if (IS_ERR(mp))
+                RETURN(PTR_ERR(mp));
+
+        /* step 2: find & lock the source */
+        lhs = &info->mti_lh[MDT_LH_CHILD];
         lhs->mlh_mode = LCK_EX;
         ms = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
         if (IS_ERR(ms))
-                RETURN(PTR_ERR(ms));
+                GOTO(out_unlock_parent, rc = PTR_ERR(ms));
 
         rc = mdt_object_cr_lock(info, ms, lhs, MDS_INODELOCK_UPDATE);
         if (rc != 0)
                 GOTO(out_unlock_source, rc);
 
-        if (strlen(rr->rr_name) == 0) {
-                /* MDT holding name ask to add ref. */
-                mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
-                rc = mo_ref_add(info->mti_env, mdt_object_child(ms));
-                GOTO(out_unlock_source, rc);
-        }
-        
-        /*step 2: find & lock the target parent dir*/
-        lhp = &info->mti_lh[MDT_LH_CHILD];
-        lhp->mlh_mode = LCK_EX;
-        mp = mdt_object_find_lock(info, rr->rr_fid2, lhp,
-                                  MDS_INODELOCK_UPDATE);
-        if (IS_ERR(mp))
-                GOTO(out_unlock_source, rc = PTR_ERR(mp));
-
-        /* step 4: link it */
+        /* step 3: link it */
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_LINK_WRITE);
 
@@ -502,10 +510,10 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                       mdt_object_child(ms), rr->rr_name, ma);
 
         EXIT;
-
-        mdt_object_unlock_put(info, mp, lhp, rc);
 out_unlock_source:
         mdt_object_unlock_put(info, ms, lhs, rc);
+out_unlock_parent:
+        mdt_object_unlock_put(info, mp, lhp, rc);
         return rc;
 }
 
