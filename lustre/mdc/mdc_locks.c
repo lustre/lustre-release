@@ -226,6 +226,7 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
                                 struct mdt_body *body, int size[9])
 {
         int     rc;
+        ENTRY;
 
         rc = sptlrpc_cli_enlarge_reqbuf(req, DLM_INTENT_REC_OFF + 4,
                                         body->eadatasize);
@@ -235,6 +236,7 @@ static void mdc_realloc_openmsg(struct ptlrpc_request *req,
                 body->valid &= ~OBD_MD_FLEASIZE;
                 body->eadatasize = 0;
         }
+        EXIT;
 }
 
 /* We always reserve enough space in the reply packet for a stripe MD, because
