@@ -258,7 +258,10 @@ static int mdc_object_create(const struct lu_env *env,
         if (uc &&
             ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))) {
                 uid = uc->mu_fsuid;
-                gid = uc->mu_fsgid;
+                if (la->la_mode & S_ISGID)
+                        gid = la->la_gid;
+                else
+                        gid = uc->mu_fsgid;
                 cap = uc->mu_cap;
                 if (uc->mu_ginfo || (uc->mu_valid == UCRED_OLD))
                         mci->mci_opdata.suppgids[0] = uc->mu_suppgids[0];

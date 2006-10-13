@@ -688,8 +688,13 @@ int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
         if (op != REINT_SETATTR) {
                 if ((attr->la_valid & LA_UID) && (attr->la_uid != -1))
                         attr->la_uid = uc->mu_fsuid;
-                if ((attr->la_valid & LA_GID) && (attr->la_gid != -1))
-                        attr->la_gid = uc->mu_fsgid;
+                if (op != REINT_CREATE) {
+                        if ((attr->la_valid & LA_GID) && (attr->la_gid != -1))
+                                attr->la_gid = uc->mu_fsgid;
+                } else {
+                        if (!(attr->la_mode & S_ISGID) && (attr->la_gid != -1))
+                                attr->la_gid = uc->mu_fsgid;
+                }
         } else if (med->med_rmtclient) {
                 /* NB: -1 case will be handled by mdt_fix_attr() later. */
                 if ((attr->la_valid & LA_UID) && (attr->la_uid != -1)) {
