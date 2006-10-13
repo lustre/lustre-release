@@ -760,36 +760,6 @@ int test_and_clear_bit(int nr, unsigned long *addr)
         return oldbit;
 }
 
-static inline
-int fls(int x)
-{
-        int r = 32;
-
-        if (!x)
-                return 0;
-        if (!(x & 0xffff0000u)) {
-                x <<= 16;
-                r -= 16;
-        }
-        if (!(x & 0xff000000u)) {
-                x <<= 8;
-                r -= 8;
-        }
-        if (!(x & 0xf0000000u)) {
-                x <<= 4;
-                r -= 4;
-        }
-        if (!(x & 0xc0000000u)) {
-                x <<= 2;
-                r -= 2;
-        }
-        if (!(x & 0x80000000u)) {
-                x <<= 1;
-                r -= 1;
-        }
-        return r;
-}
-
 /* FIXME sys/capability will finally included linux/fs.h thus
  * cause numerous trouble on x86-64. as temporary solution for
  * build broken at Cray, we copy definition we need from capability.h

@@ -416,14 +416,14 @@ extern struct proc_dir_entry *sptlrpc_proc_root;
  */
 static inline int size_roundup_power2(int size)
 {
-        int rc;
-
-        LASSERT(size > 0);
-        rc = 1 << (fls(size) - 1);
-        if ((rc - 1) & size)
-                rc <<= 1;
-        LASSERT(rc > 0);
-        return rc;
+        size--;
+        size |= size >> 1;
+        size |= size >> 2;
+        size |= size >> 4;
+        size |= size >> 8;
+        size |= size >> 16;
+        size++;
+        return size;
 }
 
 /*
