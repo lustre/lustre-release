@@ -774,7 +774,7 @@ static int lmv_placement_policy(struct obd_device *obd,
                                        "split, got MDS at "LPU64" by name %s\n",
                                        PFID(hint->ph_pfid), *mds,
                                        hint->ph_cname->name);
-
+                                lmv_obj_put(obj);
                                 rc = 0;
                         } else {
                                 /* default policy is to use parent MDS */
