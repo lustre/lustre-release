@@ -157,6 +157,7 @@ static inline void osc_pack_capa(struct ptlrpc_request *req, int offset,
                 return;
 
         c = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*c));
+        LASSERT(c);
         capa_cpy(c, oc);
         body->oa.o_valid |= OBD_MD_FLOSSCAPA;
         DEBUG_CAPA(D_SEC, c, "pack");
