@@ -471,10 +471,13 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         /* step 1: lock the source */
         lhs = &info->mti_lh[MDT_LH_PARENT];
         lhs->mlh_mode = LCK_EX;
-        ms = mdt_object_find_lock(info, rr->rr_fid1, lhs,
-                                  MDS_INODELOCK_UPDATE);
+        ms = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
         if (IS_ERR(ms))
                 RETURN(PTR_ERR(ms));
+
+        rc = mdt_object_cr_lock(info, ms, lhs, MDS_INODELOCK_UPDATE);
+        if (rc != 0)
+                GOTO(out_unlock_source, rc);
 
         if (strlen(rr->rr_name) == 0) {
                 /* MDT holding name ask to add ref. */
