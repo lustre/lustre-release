@@ -25,8 +25,8 @@
 
 #include <lustre/lustre_idl.h>
 #include <lustre_req_layout.h>
-#include <md_object.h> 
-#include <dt_object.h> 
+#include <md_object.h>
+#include <dt_object.h>
 #include <libcfs/list.h>
 #include <libcfs/kp30.h>
 
@@ -57,5 +57,29 @@ struct mdt_idmap_table {
         struct list_head mit_idmaps[MDT_IDMAP_N_HASHES]
                                    [MDT_IDMAP_HASHSIZE];
 };
+
+enum {
+        ESERIOUS = 0x0001000
+};
+
+static inline int err_serious(int rc)
+{
+        LASSERT(rc < 0);
+        LASSERT(-rc < ESERIOUS);
+        return -(-rc | ESERIOUS);
+}
+
+static inline int clear_serious(int rc)
+{
+        if (rc < 0)
+                rc = -(-rc & ~ESERIOUS);
+        return rc;
+}
+
+static inline int is_serious(int rc)
+{
+        return (rc < 0 && -rc & ESERIOUS);
+}
+
 
 #endif

@@ -31,30 +31,9 @@
 #include <libcfs/list.h>
 #include <libcfs/kp30.h>
 
-#define ESERIOUS 0x0001000
-static inline int err_serious(int rc)
-{
-        LASSERT(rc < 0);
-        LASSERT(-rc < ESERIOUS);
-        return -(-rc | ESERIOUS);
-}
-
-static inline int clear_serious(int rc)
-{
-        if (rc < 0)
-                rc = -(-rc & ~ESERIOUS);
-        return rc;
-}
-
-static inline int is_serious(int rc)
-{
-        return (rc < 0 && -rc & ESERIOUS);
-}
-
 /*
  * Layered objects support for CMD3/C5.
  */
-
 
 struct seq_file;
 struct proc_dir_entry;
