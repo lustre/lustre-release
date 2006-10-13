@@ -1,3 +1,5 @@
+m4_pattern_allow(AC_KERBEROS_V5)
+
 #
 # LB_LINUX_VERSION
 #
