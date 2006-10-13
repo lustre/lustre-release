@@ -18,9 +18,6 @@ void gssd_exit_unique(int type);
  * copied from lustre source
  */
 
-typedef uint64_t ptl_nid_t;
-typedef uint32_t ptl_netid_t;
-
 #define LUSTRE_GSS_SVC_MDS      0
 #define LUSTRE_GSS_SVC_OSS      1
 
@@ -52,9 +49,32 @@ struct lgssd_ioctl_param {
 #define GSSD_DEFAULT_GETHOSTNAME_EX     "/etc/lustre/nid2hostname"
 #define MAPPING_DATABASE_FILE           "/etc/lustre/idmap.conf"
 
-int ptl_nid2hostname(uint64_t nid, char *buf, int buflen);
-int lookup_mapping(char *princ, uint32_t nal, ptl_netid_t netid,
-                   ptl_nid_t nid, uid_t *uid);
+typedef uint64_t lnet_nid_t;
+typedef uint32_t lnet_netid_t;
+
+#define LNET_NID_ANY      ((lnet_nid_t) -1)
+#define LNET_PID_ANY      ((lnet_pid_t) -1)
+
+enum {
+        /* Only add to these values (i.e. don't ever change or redefine them):
+         * network addresses depend on them... */
+        QSWLND    = 1,
+        SOCKLND   = 2,
+        GMLND     = 3,
+        PTLLND    = 4,
+        O2IBLND   = 5,
+        CIBLND    = 6,
+        OPENIBLND = 7,
+        IIBLND    = 8,
+        LOLND     = 9,
+        RALND     = 10,
+        VIBLND    = 11,
+        LND_ENUM_END_MARKER
+};
+
+int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen);
+int lookup_mapping(char *princ, uint64_t nid, uid_t *uid);
+lnet_nid_t libcfs_str2nid(char *str);
 
 /* how an LNET NID encodes net:address */
 #define LNET_NIDADDR(nid)      ((uint32_t)((nid) & 0xffffffff))

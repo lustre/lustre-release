@@ -43,8 +43,10 @@
 #include <signal.h>
 #include <unistd.h>
 #include <errno.h>
-#include <netdb.h>
 #include <assert.h>
+#ifdef HAVE_GETHOSTBYNAME
+# include <netdb.h>
+#endif
 
 #include "err_util.h"
 #include "gssd.h"
@@ -131,17 +133,17 @@ void gssd_exit_unique(int type)
 
 /****************************************
  * client side resolvation:             *
- *    nal/netid/nid => hostname         *
+ *    lnd/netid/nid => hostname         *
  ****************************************/
 
 char gethostname_ex[PATH_MAX] = GSSD_DEFAULT_GETHOSTNAME_EX;
 
-typedef int ptl_nid2hostname_t(char *nal, uint32_t net, uint32_t addr,
+typedef int lnd_nid2hostname_t(char *lnd, uint32_t net, uint32_t addr,
                                char *buf, int buflen);
 
 /* FIXME what about IPv6? */
 static
-int socknal_nid2hostname(char *nal, uint32_t net, uint32_t addr,
+int socklnd_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
                          char *buf, int buflen)
 {
         struct hostent  *ent;
@@ -149,51 +151,51 @@ int socknal_nid2hostname(char *nal, uint32_t net, uint32_t addr,
         addr = htonl(addr);
         ent = gethostbyaddr(&addr, sizeof(addr), AF_INET);
         if (!ent) {
-                printerr(0, "%s: can't resolve 0x%x\n", nal, addr);
+                printerr(0, "%s: can't resolve 0x%x\n", lnd, addr);
                 return -1;
         }
         if (strlen(ent->h_name) >= buflen) {
-                printerr(0, "%s: name too long: %s\n", nal, ent->h_name);
+                printerr(0, "%s: name too long: %s\n", lnd, ent->h_name);
                 return -1;
         }
         strcpy(buf, ent->h_name);
 
         printerr(2, "%s: net 0x%x, addr 0x%x => %s\n",
-                 nal, net, addr, buf);
+                 lnd, net, addr, buf);
         return 0;
 }
 
 static
-int lonal_nid2hostname(char *nal, uint32_t net, uint32_t addr,
+int lolnd_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
                        char *buf, int buflen)
 {
         struct utsname   uts;
         struct hostent  *ent;
 
         if (addr) {
-                printerr(0, "%s: addr is 0x%x, we expect 0\n", nal, addr);
+                printerr(0, "%s: addr is 0x%x, we expect 0\n", lnd, addr);
                 return -1;
         }
 
         if (uname(&uts)) {
-                printerr(0, "%s: failed obtain local machine name\n", nal);
+                printerr(0, "%s: failed obtain local machine name\n", lnd);
                 return -1;
         }
 
         ent = gethostbyname(uts.nodename);
         if (!ent) {
                 printerr(0, "%s: failed obtain canonical name of %s\n",
-                         nal, uts.nodename);
+                         lnd, uts.nodename);
                 return -1;
         }
 
         if (strlen(ent->h_name) >= buflen) {
-                printerr(0, "%s: name too long: %s\n", nal, ent->h_name);
+                printerr(0, "%s: name too long: %s\n", lnd, ent->h_name);
                 return -1;
         }
         strcpy(buf, ent->h_name);
 
-        printerr(2, "%s: addr 0x%x => %s\n", nal, addr, buf);
+        printerr(2, "%s: addr 0x%x => %s\n", lnd, addr, buf);
         return 0;
 }
 
@@ -203,14 +205,14 @@ static int is_space(char c)
 }
 
 static
-int external_nid2hostname(char *nal, uint32_t net, uint32_t addr,
-                           char *namebuf, int namebuflen)
+int external_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
+                          char *namebuf, int namebuflen)
 {
         const int bufsize = PATH_MAX + 256;
         char buf[bufsize], *head, *tail;
         FILE *fghn;
 
-        sprintf(buf, "%s %s 0x%x 0x%x", gethostname_ex, nal, net, addr);
+        sprintf(buf, "%s %s 0x%x 0x%x", gethostname_ex, lnd, net, addr);
         printerr(2, "cmd: %s\n", buf);
 
         fghn = popen(buf, "r");
@@ -221,7 +223,7 @@ int external_nid2hostname(char *nal, uint32_t net, uint32_t addr,
 
         head = fgets(buf, bufsize, fghn);
         if (head == NULL) {
-                printerr(0, "can't read\n");
+                printerr(0, "can't read from %s\n", gethostname_ex);
                 return -1;
         }
         if (pclose(fghn) == -1)
@@ -233,187 +235,337 @@ int external_nid2hostname(char *nal, uint32_t net, uint32_t addr,
 
         tail = head + strlen(head);
         if (tail <= head) {
-                printerr(0, "no output\n");
+                printerr(0, "no output from %s\n", gethostname_ex);
                 return -1;
         }
         while (is_space(*(tail - 1)))
                 tail--;
         if (tail <= head) {
-                printerr(0, "output are all space\n");
+                printerr(0, "output are all space from %s\n", gethostname_ex);
                 return -1;
         }
         *tail = '\0';
 
         /* start with '@' means error msg */
         if (head[0] == '@') {
-                printerr(0, "%s\n", &head[1]);
+                printerr(0, "error from %s: %s\n", gethostname_ex, &head[1]);
                 return -1;
         }
 
         if (tail - head > namebuflen) {
-                printerr(0, "hostname too long: %s\n", head);
+                printerr(0, "external hostname too long: %s\n", head);
                 return -1;
         }
 
         printerr(2, "%s: net 0x%x, addr 0x%x => %s\n",
-                 nal, net, addr, head);
+                 lnd, net, addr, head);
         strcpy(namebuf, head);
         return 0;
 }
 
-enum {
-        QSWNAL    = 1,
-        SOCKNAL   = 2,
-        GMNAL     = 3,
-        /*          4 unused */
-        TCPNAL    = 5,
-        ROUTER    = 6,
-        OPENIBNAL = 7,
-        IIBNAL    = 8,
-        LONAL     = 9,
-        RANAL     = 10,
-        VIBNAL    = 11,
-        NAL_ENUM_END_MARKER
-};
-
 static struct {
         char                    *name;
-        ptl_nid2hostname_t      *nid2name;
-} converter[NAL_ENUM_END_MARKER] = {
+        lnd_nid2hostname_t      *nid2name;
+} converter[LND_ENUM_END_MARKER] = {
         {"UNUSED0",     NULL},
-        {"QSWNAL",      external_nid2hostname},
-        {"SOCKNAL",     socknal_nid2hostname},
-        {"GMNAL",       external_nid2hostname},
-        {"UNUSED4",     NULL},
-        {"TCPNAL",      NULL},
-        {"ROUTER",      NULL},
-        {"OPENIBNAL",   external_nid2hostname},
-        {"IIBNAL",      external_nid2hostname},
-        {"LONAL",       lonal_nid2hostname},
-        {"RANAL",       NULL},
-        {"VIBNAL",      external_nid2hostname},
+        [QSWLND]        = { "QSWLND",   external_nid2hostname},
+        [SOCKLND]       = { "SOCKLND",  socklnd_nid2hostname},
+        [GMLND]         = { "GMLND",    external_nid2hostname},
+        [PTLLND]        = { "PTLLND",   external_nid2hostname },
+        [O2IBLND]       = { "O2IBLND",  external_nid2hostname },
+        [CIBLND]        = { "CIBLND",   external_nid2hostname },
+        [OPENIBLND]     = { "OPENIBLND",external_nid2hostname },
+        [IIBLND]        = { "IIBLND",   external_nid2hostname },
+        [LOLND]         = { "LOLND",    lolnd_nid2hostname },
+        [RALND]         = { "RALND",    external_nid2hostname },
+        [VIBLND]        = { "VIBLND",   external_nid2hostname },
 };
 
-int ptl_nid2hostname(uint64_t nid, char *buf, int buflen)
+int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen)
 {
-        uint32_t nal, net, addr;
+        uint32_t lnd, net, addr;
 
         addr = LNET_NIDADDR(nid);
         net = LNET_NIDNET(nid);
-        nal = LNET_NETTYP(net);
+        lnd = LNET_NETTYP(net);
 
-        if (nal >= NAL_ENUM_END_MARKER) {
-                printerr(0, "ERROR: Unrecognized NAL %u\n", nal);
+        if (lnd >= LND_ENUM_END_MARKER) {
+                printerr(0, "ERROR: Unrecognized LND %u\n", lnd);
                 return -1;
         }
 
-        if (converter[nal].nid2name == NULL) {
-                printerr(0, "ERROR: NAL %s converter not ready\n",
-                        converter[nal].name);
+        if (converter[lnd].nid2name == NULL) {
+                printerr(0, "ERROR: %s converter not ready\n",
+                        converter[lnd].name);
                 return -1;
         }
 
-        return converter[nal].nid2name(converter[nal].name, net, addr,
+        return converter[lnd].nid2name(converter[lnd].name, net, addr,
                                        buf, buflen);
 }
 
 
 /****************************************
- * portals support routine              *
+ * lnet support routine                 *
+ * (from lnet/libcfs/nidstrings.c       *
  ****************************************/
 
-static struct hostent *
-ptl_gethostbyname(char * hname) {
-        struct hostent *he;
+#define LNET_NIDSTR_SIZE   32      /* size of each one (see below for usage) */
 
-        he = gethostbyname(hname);
-        if (!he) {
-                switch(h_errno) {
-                case HOST_NOT_FOUND:
-                case NO_ADDRESS:
-                        printerr(0, "Unable to resolve hostname: %s\n",
-                                 hname);
-                        break;
-                default:
-                        printerr(0, "gethostbyname %s: %s\n",
-                                 hname, strerror(h_errno));
-                        break;
-                }
-                return NULL;
-        }
-        return he;
+static int  libcfs_lo_str2addr(char *str, int nob, uint32_t *addr);
+static void libcfs_ip_addr2str(uint32_t addr, char *str);
+static int  libcfs_ip_str2addr(char *str, int nob, uint32_t *addr);
+static void libcfs_decnum_addr2str(uint32_t addr, char *str);
+static void libcfs_hexnum_addr2str(uint32_t addr, char *str);
+static int  libcfs_num_str2addr(char *str, int nob, uint32_t *addr);
+
+struct netstrfns {
+        int          nf_type;
+        char        *nf_name;
+        char        *nf_modname;
+        void       (*nf_addr2str)(uint32_t addr, char *str);
+        int        (*nf_str2addr)(char *str, int nob, uint32_t *addr);
+};
+
+static struct netstrfns  libcfs_netstrfns[] = {
+        {/* .nf_type      */  LOLND,
+         /* .nf_name      */  "lo",
+         /* .nf_modname   */  "klolnd",
+         /* .nf_addr2str  */  libcfs_decnum_addr2str,
+         /* .nf_str2addr  */  libcfs_lo_str2addr},
+        {/* .nf_type      */  SOCKLND,
+         /* .nf_name      */  "tcp",
+         /* .nf_modname   */  "ksocklnd",
+         /* .nf_addr2str  */  libcfs_ip_addr2str,
+         /* .nf_str2addr  */  libcfs_ip_str2addr},
+        {/* .nf_type      */  O2IBLND,
+         /* .nf_name      */  "o2ib",
+         /* .nf_modname   */  "ko2iblnd",
+         /* .nf_addr2str  */  libcfs_ip_addr2str,
+         /* .nf_str2addr  */  libcfs_ip_str2addr},
+        {/* .nf_type      */  CIBLND,
+         /* .nf_name      */  "cib",
+         /* .nf_modname   */  "kciblnd",
+         /* .nf_addr2str  */  libcfs_ip_addr2str,
+         /* .nf_str2addr  */  libcfs_ip_str2addr},
+        {/* .nf_type      */  OPENIBLND,
+         /* .nf_name      */  "openib",
+         /* .nf_modname   */  "kopeniblnd",
+         /* .nf_addr2str  */  libcfs_ip_addr2str,
+         /* .nf_str2addr  */  libcfs_ip_str2addr},
+        {/* .nf_type      */  IIBLND,
+         /* .nf_name      */  "iib",
+         /* .nf_modname   */  "kiiblnd",
+         /* .nf_addr2str  */  libcfs_ip_addr2str,
+         /* .nf_str2addr  */  libcfs_ip_str2addr},
+        {/* .nf_type      */  VIBLND,
+         /* .nf_name      */  "vib",
+         /* .nf_modname   */  "kviblnd",
+         /* .nf_addr2str  */  libcfs_ip_addr2str,
+         /* .nf_str2addr  */  libcfs_ip_str2addr},
+        {/* .nf_type      */  RALND,
+         /* .nf_name      */  "ra",
+         /* .nf_modname   */  "kralnd",
+         /* .nf_addr2str  */  libcfs_ip_addr2str,
+         /* .nf_str2addr  */  libcfs_ip_str2addr},
+        {/* .nf_type      */  QSWLND,
+         /* .nf_name      */  "elan",
+         /* .nf_modname   */  "kqswlnd",
+         /* .nf_addr2str  */  libcfs_decnum_addr2str,
+         /* .nf_str2addr  */  libcfs_num_str2addr},
+        {/* .nf_type      */  GMLND,
+         /* .nf_name      */  "gm",
+         /* .nf_modname   */  "kgmlnd",
+         /* .nf_addr2str  */  libcfs_hexnum_addr2str,
+         /* .nf_str2addr  */  libcfs_num_str2addr},
+        {/* .nf_type      */  PTLLND,
+         /* .nf_name      */  "ptl",
+         /* .nf_modname   */  "kptllnd",
+         /* .nf_addr2str  */  libcfs_decnum_addr2str,
+         /* .nf_str2addr  */  libcfs_num_str2addr},
+        /* placeholder for net0 alias.  It MUST BE THE LAST ENTRY */
+        {/* .nf_type      */  -1},
+};
+
+const int libcfs_nnetstrfns = sizeof(libcfs_netstrfns)/sizeof(libcfs_netstrfns[0]);
+
+static int
+libcfs_lo_str2addr(char *str, int nob, uint32_t *addr)
+{
+        *addr = 0;
+        return 1;
 }
 
-int
-ptl_parse_ipquad (uint32_t *ipaddrp, char *str)
+static void
+libcfs_ip_addr2str(uint32_t addr, char *str)
 {
-        int             a;
-        int             b;
-        int             c;
-        int             d;
+        snprintf(str, LNET_NIDSTR_SIZE, "%u.%u.%u.%u",
+                 (addr >> 24) & 0xff, (addr >> 16) & 0xff,
+                 (addr >> 8) & 0xff, addr & 0xff);
+}
 
-        if (sscanf(str, "%d.%d.%d.%d", &a, &b, &c, &d) == 4 &&
+/* CAVEAT EMPTOR XscanfX
+ * I use "%n" at the end of a sscanf format to detect trailing junk.  However
+ * sscanf may return immediately if it sees the terminating '0' in a string, so
+ * I initialise the %n variable to the expected length.  If sscanf sets it;
+ * fine, if it doesn't, then the scan ended at the end of the string, which is
+ * fine too :) */
+
+static int
+libcfs_ip_str2addr(char *str, int nob, uint32_t *addr)
+{
+        int   a;
+        int   b;
+        int   c;
+        int   d;
+        int   n = nob;                          /* XscanfX */
+
+        /* numeric IP? */
+        if (sscanf(str, "%u.%u.%u.%u%n", &a, &b, &c, &d, &n) >= 4 &&
+            n == nob &&
             (a & ~0xff) == 0 && (b & ~0xff) == 0 &&
-            (c & ~0xff) == 0 && (d & ~0xff) == 0)
-        {
-                *ipaddrp = (a<<24)|(b<<16)|(c<<8)|d;
-                return (0);
+            (c & ~0xff) == 0 && (d & ~0xff) == 0) {
+                *addr = ((a<<24)|(b<<16)|(c<<8)|d);
+                return 1;
         }
 
-        return (-1);
-}
+#ifdef HAVE_GETHOSTBYNAME
+        /* known hostname? */
+        if (('a' <= str[0] && str[0] <= 'z') ||
+            ('A' <= str[0] && str[0] <= 'Z')) {
+                char *tmp;
 
-int
-ptl_parse_ipaddr (uint32_t *ipaddrp, char *str)
-{
-        struct hostent *he;
+                tmp = malloc(nob + 1);
+                if (tmp != NULL) {
+                        struct hostent *he;
 
-        if (!strcmp (str, "_all_")) {
-                *ipaddrp = 0;
-                return (0);
+                        memcpy(tmp, str, nob);
+                        tmp[nob] = 0;
+
+                        he = gethostbyname(tmp);
+
+                        free(tmp);
+                        tmp = NULL;
+
+                        if (he != NULL) {
+                                uint32_t ip = *(uint32_t *)he->h_addr;
+
+                                *addr = ntohl(ip);
+                                return 1;
+                        }
+                }
         }
-
-        if (ptl_parse_ipquad(ipaddrp, str) == 0)
-                return (0);
-
-        if ((('a' <= str[0] && str[0] <= 'z') ||
-             ('A' <= str[0] && str[0] <= 'Z')) &&
-             (he = ptl_gethostbyname (str)) != NULL) {
-                uint32_t addr = *(uint32_t *)he->h_addr;
-
-                *ipaddrp = ntohl(addr);         /* HOST byte order */
-                return (0);
-        }
-
-        return (-1);
-}
-
-int
-ptl_parse_nid (ptl_nid_t *nidp, char *str)
-{
-        uint32_t            ipaddr;
-        char               *end;
-        unsigned long long  ullval;
-
-        if (ptl_parse_ipaddr (&ipaddr, str) == 0) {
-#if !CRAY_PORTALS
-                *nidp = (ptl_nid_t)ipaddr;
-#else
-                *nidp = (((ptl_nid_t)ipaddr & PNAL_HOSTID_MASK) << PNAL_VNODE_SHIFT);
 #endif
-                return (0);
-        }
-
-        ullval = strtoull(str, &end, 0);
-        if (end != str && *end == 0) {
-                /* parsed whole non-empty string */
-                *nidp = (ptl_nid_t)ullval;
-                return (0);
-        }
-
-        return (-1);
+        return 0;
 }
 
+static void
+libcfs_decnum_addr2str(uint32_t addr, char *str)
+{
+        snprintf(str, LNET_NIDSTR_SIZE, "%u", addr);
+}
+
+static void
+libcfs_hexnum_addr2str(uint32_t addr, char *str)
+{
+        snprintf(str, LNET_NIDSTR_SIZE, "0x%x", addr);
+}
+
+static int
+libcfs_num_str2addr(char *str, int nob, uint32_t *addr)
+{
+        int     n;
+
+        n = nob;
+        if (sscanf(str, "0x%x%n", addr, &n) >= 1 && n == nob)
+                return 1;
+
+        n = nob;
+        if (sscanf(str, "0X%x%n", addr, &n) >= 1 && n == nob)
+                return 1;
+
+        n = nob;
+        if (sscanf(str, "%u%n", addr, &n) >= 1 && n == nob)
+                return 1;
+        
+        return 0;
+}
+
+static struct netstrfns *
+libcfs_lnd2netstrfns(int lnd)
+{
+        int    i;
+
+        if (lnd >= 0)
+                for (i = 0; i < libcfs_nnetstrfns; i++)
+                        if (lnd == libcfs_netstrfns[i].nf_type)
+                                return &libcfs_netstrfns[i];
+
+        return NULL;
+}
+
+static struct netstrfns *
+libcfs_str2net_internal(char *str, uint32_t *net)
+{
+        struct netstrfns *nf;
+        int               nob;
+        int               netnum;
+        int               i;
+
+        for (i = 0; i < libcfs_nnetstrfns; i++) {
+                nf = &libcfs_netstrfns[i];
+                if (nf->nf_type >= 0 &&
+                    !strncmp(str, nf->nf_name, strlen(nf->nf_name)))
+                        break;
+        }
+
+        if (i == libcfs_nnetstrfns)
+                return NULL;
+
+        nob = strlen(nf->nf_name);
+
+        if (strlen(str) == (unsigned int)nob) {
+                netnum = 0;
+        } else {
+                if (nf->nf_type == LOLND) /* net number not allowed */
+                        return NULL;
+
+                str += nob;
+                i = strlen(str);
+                if (sscanf(str, "%u%n", &netnum, &i) < 1 ||
+                    i != (int)strlen(str))
+                        return NULL;
+        }
+
+        *net = LNET_MKNET(nf->nf_type, netnum);
+        return nf;
+}
+
+lnet_nid_t
+libcfs_str2nid(char *str)
+{
+        char             *sep = strchr(str, '@');
+        struct netstrfns *nf;
+        uint32_t             net;
+        uint32_t             addr;
+
+        if (sep != NULL) {
+                nf = libcfs_str2net_internal(sep + 1, &net);
+                if (nf == NULL)
+                        return LNET_NID_ANY;
+        } else {
+                sep = str + strlen(str);
+                net = LNET_MKNET(SOCKLND, 0);
+                nf = libcfs_lnd2netstrfns(SOCKLND);
+                if (!nf)
+                        return LNET_NID_ANY;
+        }
+
+        if (!nf->nf_str2addr(str, sep - str, &addr))
+                return LNET_NID_ANY;
+
+        return LNET_MKNID(net, addr);
+}
 
 /****************************************
  * user mapping database handling       *
@@ -425,8 +577,7 @@ ptl_parse_nid (ptl_nid_t *nidp, char *str)
 
 struct user_map_item {
         char        *principal; /* NULL means match all */
-        ptl_netid_t  netid;
-        ptl_nid_t    nid;
+        lnet_nid_t   nid;
         uid_t        uid;
 };
 
@@ -438,7 +589,7 @@ struct user_mapping {
 
 static struct user_mapping mapping = {0, 0, NULL};
 /* FIXME to be finished: monitor change of mapping database */
-static int mapping_changed = 1;
+static int mapping_mtime = 0;
 
 static
 void cleanup_mapping(void)
@@ -446,8 +597,8 @@ void cleanup_mapping(void)
         int n;
 
         for (n = 0; n < mapping.nitems; n++) {
-                assert(mapping.items[n].principal);
-                free(mapping.items[n].principal);
+                if (mapping.items[n].principal)
+                        free(mapping.items[n].principal);
         }
         mapping.nitems = 0;
 }
@@ -500,7 +651,7 @@ int read_mapping_db(void)
         char princ[MAX_LINE_LEN];
         char nid_str[MAX_LINE_LEN];
         char dest[MAX_LINE_LEN];
-        ptl_nid_t ptl_nid;
+        lnet_nid_t nid;
         uid_t dest_uid;
         FILE *f;
         char *line, linebuf[MAX_LINE_LEN];
@@ -547,10 +698,15 @@ int read_mapping_db(void)
                                 return -1;
                         }
                 }
-                if (ptl_parse_nid(&ptl_nid, nid_str)) {
-                        printerr(0, "fail to parse nid %s\n", nid_str);
-                        fclose(f);
-                        return -1;
+                if (!strcmp(nid_str, "*")) {
+                        nid = LNET_NID_ANY;
+                } else {
+                        nid = libcfs_str2nid(nid_str);
+                        if (nid == LNET_NID_ANY) {
+                                printerr(0, "fail to parse nid %s\n", nid_str);
+                                fclose(f);
+                                return -1;
+                        }
                 }
                 dest_uid = parse_uid(dest);
                 if (dest_uid == -1) {
@@ -561,33 +717,47 @@ int read_mapping_db(void)
                 }
 
                 mapping.items[mapping.nitems].principal = name;
-                mapping.items[mapping.nitems].netid = 0;
-                mapping.items[mapping.nitems].nid = ptl_nid;
+                mapping.items[mapping.nitems].nid = nid;
                 mapping.items[mapping.nitems].uid = dest_uid;
                 mapping.nitems++;
                 printerr(1, "add mapping: %s(%s/0x%llx) ==> %d\n",
-                         name ? name : "*", nid_str, ptl_nid, dest_uid);
+                         name ? name : "*", nid_str, nid, dest_uid);
         }
 
         return 0;
 }
 
-int lookup_mapping(char *princ, uint32_t nal, ptl_netid_t netid,
-                   ptl_nid_t nid, uid_t *uid)
+static inline int mapping_changed(void)
+{
+        struct stat st;
+
+        if (stat(MAPPING_DATABASE_FILE, &st) == -1) {
+                printerr(0, "stat %s failed\n");
+                return 1;
+        }
+
+        if (st.st_mtime != mapping_mtime) {
+                mapping_mtime = st.st_mtime;
+                return 1;
+        }
+
+        return 0;
+}
+
+int lookup_mapping(char *princ, lnet_nid_t nid, uid_t *uid)
 {
         int n;
 
         /* FIXME race condition here */
-        if (mapping_changed) {
+        if (mapping_changed()) {
                 if (read_mapping_db())
                         printerr(0, "all remote users will be denied\n");
-                mapping_changed = 0;
         }
 
         for (n = 0; n < mapping.nitems; n++) {
                 struct user_map_item *entry = &mapping.items[n];
 
-                if (entry->netid != netid || entry->nid != nid)
+                if (entry->nid != LNET_NID_ANY && entry->nid != nid)
                         continue;
                 if (!entry->principal ||
                     !strcasecmp(entry->principal, princ)) {
@@ -597,7 +767,7 @@ int lookup_mapping(char *princ, uint32_t nal, ptl_netid_t netid,
                         return 0;
                 }
         }
-        printerr(1, "no mapping for %s\n", princ);
+        printerr(1, "no mapping for %s/%#Lx\n", princ, nid);
         *uid = -1;
         return -1;
 }

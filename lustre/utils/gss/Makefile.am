@@ -8,7 +8,7 @@ AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
 LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a
 
-sbin_PROGRAMS = lgssd lsvcgssd
+sbin_PROGRAMS = lgssd lsvcgssd l_idmap
 
 COMMON_SRCS = \
         context.c \
@@ -55,5 +55,12 @@ lsvcgssd_SOURCES = \
 lsvcgssd_LDADD = $(GSSAPI_LIBS) $(KRBLIBS)
 lsvcgssd_LDFLAGS = $(KRBLDFLAGS)
 lsvcgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS)
+
+l_idmap_SOURCES = \
+	l_idmap.c \
+	lsupport.c \
+	err_util.c \
+	\
+	lsupport.h
 
 EXTRA_DIST =

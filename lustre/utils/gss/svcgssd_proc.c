@@ -296,7 +296,7 @@ print_hexl(int pri, unsigned char *cp, int length)
 
 static int
 get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
-	ptl_nid_t ptl_nid)
+	lnet_nid_t nid)
 {
 	u_int32_t	maj_stat, min_stat;
 	gss_buffer_desc	name;
@@ -324,11 +324,7 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 	printerr(1, "authenticate user %s\n", sname);
 	gss_release_buffer(&min_stat, &name);
 
-#if 0
-	lookup_mapping(sname, ptl_nal, ptl_netid, ptl_nid, &cred->cr_mapped_uid);
-#else
-	cred->cr_mapped_uid = -1;
-#endif
+	lookup_mapping(sname, nid, &cred->cr_mapped_uid);
 
         realm = strchr(sname, '@');
         if (!realm) {
@@ -412,7 +408,7 @@ handle_nullreq(FILE *f) {
 	/* XXX isn't there a define for this?: */
 				null_token = {.value = NULL};
 	uint32_t		lustre_svc;
-	uint64_t		ptl_nid;
+	lnet_nid_t		nid;
 	u_int32_t		ret_flags;
 	gss_ctx_id_t		ctx = GSS_C_NO_CONTEXT;
 	gss_name_t		client_name;
@@ -436,10 +432,10 @@ handle_nullreq(FILE *f) {
 	cp = lbuf;
 
 	qword_get(&cp, (char *) &lustre_svc, sizeof(lustre_svc));
-	qword_get(&cp, (char *) &ptl_nid, sizeof(ptl_nid));
+	qword_get(&cp, (char *) &nid, sizeof(nid));
 	qword_get(&cp, (char *) &handle_seq, sizeof(handle_seq));
 	printerr(1, "handling req: svc %u, nid %016llx, idx %llx\n",
-		 lustre_svc, ptl_nid, handle_seq);
+		 lustre_svc, nid, handle_seq);
 
 	in_handle.length = (size_t) qword_get(&cp, in_handle.value,
 					      sizeof(in_handle_buf));
@@ -493,7 +489,7 @@ handle_nullreq(FILE *f) {
 			maj_stat, min_stat, mech);
 		goto out_err;
 	}
-	if (get_ids(client_name, mech, &cred, ptl_nid)) {
+	if (get_ids(client_name, mech, &cred, nid)) {
 		/* get_ids() prints error msg */
 		maj_stat = GSS_S_BAD_NAME; /* XXX ? */
 		gss_release_name(&ignore_min_stat, &client_name);

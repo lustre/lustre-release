@@ -876,7 +876,7 @@ int construct_service_name(struct clnt_info *clp,
                 clp->servicename = NULL;
         }
 
-        if (ptl_nid2hostname(ud->nid, name, buflen))
+        if (lnet_nid2hostname(ud->nid, name, buflen))
                 return -1;
 
         clp->servicename = malloc(32 + strlen(name));

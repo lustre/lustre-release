@@ -1,341 +1,5 @@
---- nfs-utils-1.0.10/utils/gssd/context.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/context.c	2006-08-14 10:32:30.000000000 -0600
-@@ -33,8 +33,6 @@
- #include <syslog.h>
- #include <string.h>
- #include <gssapi/gssapi.h>
--#include <rpc/rpc.h>
--#include <rpc/auth_gss.h>
- #include "gss_util.h"
- #include "gss_oids.h"
- #include "err_util.h"
---- nfs-utils-1.0.10/utils/gssd/context.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/context.h	2006-08-14 10:32:30.000000000 -0600
-@@ -31,8 +31,6 @@
- #ifndef _CONTEXT_H_
- #define _CONTEXT_H_
- 
--#include <rpc/rpc.h>
--
- int serialize_context_for_kernel(gss_ctx_id_t ctx, gss_buffer_desc *buf,
- 				 gss_OID mech);
- int serialize_spkm3_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf);
---- nfs-utils-1.0.10/utils/gssd/context_mit.c.lustre	2006-08-14 10:32:04.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/context_mit.c	2006-08-14 10:32:30.000000000 -0600
-@@ -34,8 +34,6 @@
- #include <string.h>
- #include <errno.h>
- #include <gssapi/gssapi.h>
--#include <rpc/rpc.h>
--#include <rpc/auth_gss.h>
- #include "gss_util.h"
- #include "gss_oids.h"
- #include "err_util.h"
-@@ -468,6 +466,7 @@
- 		else
- 			keyptr = &lctx->cfx_kd.ctx_key;
- 
-+#if 0
- 		if (lctx->initiate == 1) {
- 			sign_usage = KG_USAGE_INITIATOR_SIGN;
- 			seal_usage = KG_USAGE_INITIATOR_SEAL;
-@@ -475,6 +474,19 @@
- 			sign_usage = KG_USAGE_ACCEPTOR_SIGN;
- 			seal_usage = KG_USAGE_ACCEPTOR_SEAL;
- 		}
-+#else
-+		/* FIXME
-+		 * These are from rfc4142, but I don't understand: if we supply
-+		 * different 'usage' value for client & server, then the peers
-+		 * will have different derived keys. How could this work?
-+		 *
-+		 * Here we simply use old SIGN/SEAL values until we find the
-+		 * answer.  --ericm
-+		 * FIXME
-+		 */
-+		sign_usage = KG_USAGE_SIGN;
-+		seal_usage = KG_USAGE_SEAL;
-+#endif
- 
- 		/* derive and send down: Ke, Ki, and Kc */
- 
-@@ -793,7 +805,10 @@
- 
- out_err:
- 	printerr(0, "ERROR: failed serializing krb5 context for kernel\n");
--	if (buf->value) free(buf->value);
-+	if (buf->value) {
-+		free(buf->value);
-+		buf->value = NULL;
-+	}
- 	buf->length = 0;
- 	return -1;
- }
---- nfs-utils-1.0.10/utils/gssd/context_spkm3.c.lustre	2006-08-14 10:32:04.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/context_spkm3.c	2006-08-14 10:32:30.000000000 -0600
-@@ -33,8 +33,6 @@
- #include <syslog.h>
- #include <string.h>
- #include <gssapi/gssapi.h>
--#include <rpc/rpc.h>
--#include <rpc/auth_gss.h>
- #include "gss_util.h"
- #include "gss_oids.h"
- #include "err_util.h"
---- nfs-utils-1.0.10/utils/gssd/err_util.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/err_util.c	2006-08-14 10:32:30.000000000 -0600
-@@ -32,6 +32,8 @@
- #include <stdarg.h>
- #include <syslog.h>
- #include <string.h>
-+#include <fcntl.h>
-+#include <ctype.h>
- #include "err_util.h"
- 
- static int verbosity = 0;
-@@ -91,3 +93,40 @@
- 	/* reset the buffer */
- 	memset(message_buf, 0, sizeof(message_buf));
- }
-+
-+void print_hexl(int pri, unsigned char *cp, int length)
-+{
-+	int i, j, jm;
-+	unsigned char c;
-+
-+	printerr(pri, "length %d\n",length);
-+	printerr(pri, "\n");
-+
-+	for (i = 0; i < length; i += 0x10) {
-+		printerr(pri, "  %04x: ", (u_int)i);
-+		jm = length - i;
-+		jm = jm > 16 ? 16 : jm;
-+
-+		for (j = 0; j < jm; j++) {
-+			if ((j % 2) == 1)
-+				printerr(pri,"%02x ", (u_int)cp[i+j]);
-+			else
-+				printerr(pri,"%02x", (u_int)cp[i+j]);
-+		}
-+		for (; j < 16; j++) {
-+			if ((j % 2) == 1)
-+				printerr(pri,"   ");
-+			else
-+				printerr(pri,"  ");
-+		}
-+		printerr(pri," ");
-+
-+		for (j = 0; j < jm; j++) {
-+			c = cp[i+j];
-+			c = isprint(c) ? c : '.';
-+			printerr(pri,"%c", c);
-+		}
-+		printerr(pri,"\n");
-+	}
-+}
-+
---- nfs-utils-1.0.10/utils/gssd/err_util.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/err_util.h	2006-08-14 10:32:30.000000000 -0600
-@@ -33,5 +33,6 @@
- 
- void initerr(char *progname, int verbosity, int fg);
- void printerr(int priority, char *format, ...);
-+void print_hexl(int pri, unsigned char *cp, int length);
- 
- #endif /* _ERR_UTIL_H_ */
---- nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c	2006-08-14 10:32:30.000000000 -0600
-@@ -47,6 +47,7 @@
- #include "gssd.h"
- #include "write_bytes.h"
- 
-+#if 0
- char pipefsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
- 
- static void
-@@ -102,3 +103,4 @@
- 	}
- 	exit(0);
- }
-+#endif
---- nfs-utils-1.0.10/utils/gssd/gssd.c.lustre	2006-08-14 10:32:04.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd.c	2006-08-14 10:32:30.000000000 -0600
-@@ -40,7 +40,6 @@
- 
- #include <sys/param.h>
- #include <sys/socket.h>
--#include <rpc/rpc.h>
- 
- #include <unistd.h>
- #include <err.h>
-@@ -52,6 +51,7 @@
- #include "err_util.h"
- #include "gss_util.h"
- #include "krb5_util.h"
-+#include "lsupport.h"
- 
- char pipefsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
- char keytabfile[PATH_MAX] = GSSD_DEFAULT_KEYTAB_FILE;
-@@ -77,7 +77,7 @@
- static void
- usage(char *progname)
- {
--	fprintf(stderr, "usage: %s [-f] [-v] [-r] [-p pipefsdir] [-k keytab] [-d ccachedir]\n",
-+	fprintf(stderr, "usage: %s [-f] [-v] [-p pipefsdir] [-k keytab] [-d ccachedir]\n",
- 		progname);
- 	exit(1);
- }
-@@ -87,7 +87,6 @@
- {
- 	int fg = 0;
- 	int verbosity = 0;
--	int rpc_verbosity = 0;
- 	int opt;
- 	extern char *optarg;
- 	char *progname;
-@@ -97,15 +96,9 @@
- 			case 'f':
- 				fg = 1;
- 				break;
--			case 'm':
--				/* Accept but ignore this. Now the default. */
--				break;
- 			case 'v':
- 				verbosity++;
- 				break;
--			case 'r':
--				rpc_verbosity++;
--				break;
- 			case 'p':
- 				strncpy(pipefsdir, optarg, sizeof(pipefsdir));
- 				if (pipefsdir[sizeof(pipefsdir)-1] != '\0')
-@@ -126,10 +119,6 @@
- 				break;
- 		}
- 	}
--	strncat(pipefsdir + strlen(pipefsdir), "/" GSSD_SERVICE_NAME,
--		sizeof(pipefsdir)-strlen(pipefsdir));
--	if (pipefsdir[sizeof(pipefsdir)-1] != '\0')
--		errx(1, "pipefs path name too long");
- 
- 	if ((progname = strrchr(argv[0], '/')))
- 		progname++;
-@@ -137,30 +126,34 @@
- 		progname = argv[0];
- 
- 	initerr(progname, verbosity, fg);
--#ifdef HAVE_AUTHGSS_SET_DEBUG_LEVEL
--	authgss_set_debug_level(rpc_verbosity);
--#else
--        if (rpc_verbosity > 0)
--		printerr(0, "Warning: rpcsec_gss library does not "
--			    "support setting debug level\n");
--#endif
- 
- 	if (gssd_check_mechs() != 0)
- 		errx(1, "Problem with gssapi library");
- 
-+#if 0
-+	/* Determine Kerberos information from the kernel */
-+	gssd_obtain_kernel_krb5_info();
-+#endif
-+
- 	if (!fg && daemon(0, 0) < 0)
- 		errx(1, "fork");
- 
-+	/* This should be checked _after_ daemon(), because we need to own
-+	 * the undo-able semaphore by this process
-+	 */
-+	gssd_init_unique(GSSD_CLI);
-+
-+	/* Process keytab file and get machine credentials. This will modify
-+	 * disk status so do it after we are sure we are the only instance
-+	 */
-+	if (gssd_refresh_krb5_machine_creds())
-+		return -1;
-+
- 	signal(SIGINT, sig_die);
- 	signal(SIGTERM, sig_die);
- 	signal(SIGHUP, sig_hup);
- 
--	/* Process keytab file and get machine credentials */
--	gssd_refresh_krb5_machine_creds();
--	/* Determine Kerberos information from the kernel */
--	gssd_obtain_kernel_krb5_info();
--
--	gssd_run();
-+	lgssd_run();
- 	printerr(0, "gssd_run returned!\n");
- 	abort();
- }
---- nfs-utils-1.0.10/utils/gssd/gssd.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd.h	2006-08-14 10:32:30.000000000 -0600
-@@ -48,8 +48,13 @@
- #define GSSD_DEFAULT_CRED_PREFIX		"krb5cc_"
- #define GSSD_DEFAULT_MACHINE_CRED_SUFFIX	"machine"
- #define GSSD_DEFAULT_KEYTAB_FILE		"/etc/krb5.keytab"
--#define GSSD_SERVICE_NAME			"nfs"
--#define GSSD_SERVICE_NAME_LEN			3
-+#define GSSD_SERVICE_MDS			"lustre_mds"
-+#define GSSD_SERVICE_OSS			"lustre_oss"
-+#define GSSD_SERVICE_MDS_NAMELEN		10
-+#define GSSD_SERVICE_OSS_NAMELEN		10
-+
-+#define LUSTRE_ROOT_NAME			"lustre_root"
-+#define LUSTRE_ROOT_NAMELEN			11
- 
- /*
-  * The gss mechanisms that we can handle
-@@ -61,6 +66,7 @@
- extern char			pipefsdir[PATH_MAX];
- extern char			keytabfile[PATH_MAX];
- extern char			ccachedir[PATH_MAX];
-+extern char			gethostname_ex[PATH_MAX];
- 
- TAILQ_HEAD(clnt_list_head, clnt_info) clnt_list;
- 
-@@ -69,10 +75,6 @@
- 	char			*dirname;
- 	int			dir_fd;
- 	char			*servicename;
--	char			*servername;
--	int			prog;
--	int			vers;
--	char			*protocol;
- 	int			krb5_fd;
- 	int			krb5_poll_index;
- 	int			spkm3_fd;
-@@ -83,8 +85,7 @@
- int update_client_list(void);
- void handle_krb5_upcall(struct clnt_info *clp);
- void handle_spkm3_upcall(struct clnt_info *clp);
--int gssd_acquire_cred(char *server_name);
--void gssd_run(void);
-+void lgssd_run(void);
- 
- 
- #endif /* _RPC_GSSD_H_ */
---- nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c	2006-08-14 10:32:30.000000000 -0600
-@@ -94,7 +94,7 @@
- };
- 
- void
--gssd_run()
-+lgssd_run()
- {
- 	int			ret;
- 	struct sigaction	dn_act;
-@@ -118,6 +118,7 @@
- 
- 	while (1) {
- 		while (dir_changed) {
-+			printerr(2, "pipefs root dir changed\n");
- 			dir_changed = 0;
- 			if (update_client_list()) {
- 				printerr(0, "ERROR: couldn't update "
 --- nfs-utils-1.0.10/utils/gssd/gssd_proc.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd_proc.c	2006-08-14 10:32:30.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gssd_proc.c	2006-10-13 17:25:01.000000000 -0600
 @@ -43,7 +43,6 @@
  #endif
  #include "config.h"
@@ -892,7 +556,7 @@
 +                clp->servicename = NULL;
 +        }
 +
-+        if (ptl_nid2hostname(ud->nid, name, buflen))
++        if (lnet_nid2hostname(ud->nid, name, buflen))
 +                return -1;
 +
 +        clp->servicename = malloc(32 + strlen(name));
@@ -1076,8 +740,526 @@
  	goto out;
 +#endif
  }
+--- nfs-utils-1.0.10/utils/gssd/context_mit.c.lustre	2006-10-13 16:02:38.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/context_mit.c	2006-10-13 16:03:33.000000000 -0600
+@@ -34,8 +34,6 @@
+ #include <string.h>
+ #include <errno.h>
+ #include <gssapi/gssapi.h>
+-#include <rpc/rpc.h>
+-#include <rpc/auth_gss.h>
+ #include "gss_util.h"
+ #include "gss_oids.h"
+ #include "err_util.h"
+@@ -468,6 +466,7 @@
+ 		else
+ 			keyptr = &lctx->cfx_kd.ctx_key;
+ 
++#if 0
+ 		if (lctx->initiate == 1) {
+ 			sign_usage = KG_USAGE_INITIATOR_SIGN;
+ 			seal_usage = KG_USAGE_INITIATOR_SEAL;
+@@ -475,6 +474,19 @@
+ 			sign_usage = KG_USAGE_ACCEPTOR_SIGN;
+ 			seal_usage = KG_USAGE_ACCEPTOR_SEAL;
+ 		}
++#else
++		/* FIXME
++		 * These are from rfc4142, but I don't understand: if we supply
++		 * different 'usage' value for client & server, then the peers
++		 * will have different derived keys. How could this work?
++		 *
++		 * Here we simply use old SIGN/SEAL values until we find the
++		 * answer.  --ericm
++		 * FIXME
++		 */
++		sign_usage = KG_USAGE_SIGN;
++		seal_usage = KG_USAGE_SEAL;
++#endif
+ 
+ 		/* derive and send down: Ke, Ki, and Kc */
+ 
+@@ -793,7 +805,10 @@
+ 
+ out_err:
+ 	printerr(0, "ERROR: failed serializing krb5 context for kernel\n");
+-	if (buf->value) free(buf->value);
++	if (buf->value) {
++		free(buf->value);
++		buf->value = NULL;
++	}
+ 	buf->length = 0;
+ 	return -1;
+ }
+--- nfs-utils-1.0.10/utils/gssd/context.h.lustre	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/context.h	2006-10-13 16:03:33.000000000 -0600
+@@ -31,8 +31,6 @@
+ #ifndef _CONTEXT_H_
+ #define _CONTEXT_H_
+ 
+-#include <rpc/rpc.h>
+-
+ int serialize_context_for_kernel(gss_ctx_id_t ctx, gss_buffer_desc *buf,
+ 				 gss_OID mech);
+ int serialize_spkm3_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf);
+--- nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c.lustre	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c	2006-10-13 16:03:33.000000000 -0600
+@@ -94,7 +94,7 @@
+ };
+ 
+ void
+-gssd_run()
++lgssd_run()
+ {
+ 	int			ret;
+ 	struct sigaction	dn_act;
+@@ -118,6 +118,7 @@
+ 
+ 	while (1) {
+ 		while (dir_changed) {
++			printerr(2, "pipefs root dir changed\n");
+ 			dir_changed = 0;
+ 			if (update_client_list()) {
+ 				printerr(0, "ERROR: couldn't update "
+--- nfs-utils-1.0.10/utils/gssd/svcgssd.c.lustre	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd.c	2006-10-13 16:03:33.000000000 -0600
+@@ -43,7 +43,6 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <sys/socket.h>
+-#include <rpc/rpc.h>
+ #include <fcntl.h>
+ #include <errno.h>
+ 
+@@ -54,11 +53,33 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <signal.h>
+-#include "nfslib.h"
++#include <dirent.h>
+ #include "svcgssd.h"
+ #include "gss_util.h"
+ #include "err_util.h"
++#include "lsupport.h"
+ 
++void
++closeall(int min)
++{
++	DIR *dir = opendir("/proc/self/fd");
++	if (dir != NULL) {
++		int dfd = dirfd(dir);
++		struct dirent *d;
++
++		while ((d = readdir(dir)) != NULL) {
++			char *endp;
++			long n = strtol(d->d_name, &endp, 10);
++			if (*endp != '\0' && n >= min && n != dfd)
++				(void) close(n);
++		}
++		closedir(dir);
++	} else {
++		int fd = sysconf(_SC_OPEN_MAX);
++		while (--fd >= min)
++			(void) close(fd);
++	}
++}
+ /*
+  * mydaemon creates a pipe between the partent and child
+  * process. The parent process will wait until the
+@@ -165,8 +186,8 @@
+ 	int get_creds = 1;
+ 	int fg = 0;
+ 	int verbosity = 0;
+-	int rpc_verbosity = 0;
+ 	int opt;
++	int must_srv_mds = 0, must_srv_oss = 0;
+ 	extern char *optarg;
+ 	char *progname;
+ 
+@@ -181,8 +202,13 @@
+ 			case 'v':
+ 				verbosity++;
+ 				break;
+-			case 'r':
+-				rpc_verbosity++;
++			case 'm':
++				get_creds = 1;
++				must_srv_mds = 1;
++				break;
++			case 'o':
++				get_creds = 1;
++				must_srv_oss = 1;
+ 				break;
+ 			default:
+ 				usage(argv[0]);
+@@ -196,27 +222,13 @@
+ 		progname = argv[0];
+ 
+ 	initerr(progname, verbosity, fg);
+-#ifdef HAVE_AUTHGSS_SET_DEBUG_LEVEL
+-	authgss_set_debug_level(rpc_verbosity);
+-#else
+-	if (rpc_verbosity > 0)
+-		printerr(0, "Warning: rpcsec_gss library does not "
+-			    "support setting debug level\n");
+-#endif
+ 
+ 	if (gssd_check_mechs() != 0) {
+ 		printerr(0, "ERROR: Problem with gssapi library\n");
+ 		exit(1);
+ 	}
+ 
+-	if (!fg)
+-		mydaemon(0, 0);
+-
+-	signal(SIGINT, sig_die);
+-	signal(SIGTERM, sig_die);
+-	signal(SIGHUP, sig_hup);
+-
+-	if (get_creds && !gssd_acquire_cred(GSSD_SERVICE_NAME)) {
++	if (get_creds && gssd_prepare_creds(must_srv_mds, must_srv_oss)) {
+                 printerr(0, "unable to obtain root (machine) credentials\n");
+                 printerr(0, "do you have a keytab entry for "
+ 			    "nfs/<your.host>@<YOUR.REALM> in "
+@@ -225,9 +237,18 @@
+ 	}
+ 
+ 	if (!fg)
++		mydaemon(0, 0);
++
++	signal(SIGINT, sig_die);
++	signal(SIGTERM, sig_die);
++	signal(SIGHUP, sig_hup);
++
++	if (!fg)
+ 		release_parent();
+ 
+-	gssd_run();
++	gssd_init_unique(GSSD_SVC);
++
++	svcgssd_run();
+ 	printerr(0, "gssd_run returned!\n");
+ 	abort();
+ }
+--- nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c.lustre	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c	2006-10-13 16:48:03.000000000 -0600
+@@ -35,7 +35,6 @@
+ 
+ #include <sys/param.h>
+ #include <sys/stat.h>
+-#include <rpc/rpc.h>
+ 
+ #include <pwd.h>
+ #include <stdio.h>
+@@ -44,25 +43,28 @@
+ #include <string.h>
+ #include <fcntl.h>
+ #include <errno.h>
+-#include <nfsidmap.h>
++#include <netdb.h>
+ 
+ #include "svcgssd.h"
+ #include "gss_util.h"
+ #include "err_util.h"
+ #include "context.h"
+ #include "cacheio.h"
++#include "lsupport.h"
+ 
+ extern char * mech2file(gss_OID mech);
+-#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.rpcsec.context/channel"
+-#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.rpcsec.init/channel"
++#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.ptlrpcs.context/channel"
++#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.ptlrpcs.init/channel"
+ 
+ #define TOKEN_BUF_SIZE		8192
+ 
+ struct svc_cred {
+-	uid_t	cr_uid;
+-	gid_t	cr_gid;
+-	int	cr_ngroups;
+-	gid_t	cr_groups[NGROUPS];
++	uint32_t cr_remote;
++	uint32_t cr_usr_root;
++	uint32_t cr_usr_mds;
++	uid_t    cr_uid;
++	uid_t    cr_mapped_uid;
++	uid_t    cr_gid;
+ };
+ 
+ static int
+@@ -70,10 +72,9 @@
+ 		gss_OID mech, gss_buffer_desc *context_token)
+ {
+ 	FILE *f;
+-	int i;
+ 	char *fname = NULL;
+ 
+-	printerr(1, "doing downcall\n");
++	printerr(2, "doing downcall\n");
+ 	if ((fname = mech2file(mech)) == NULL)
+ 		goto out_err;
+ 	f = fopen(SVCGSSD_CONTEXT_CHANNEL, "w");
+@@ -86,11 +87,12 @@
+ 	qword_printhex(f, out_handle->value, out_handle->length);
+ 	/* XXX are types OK for the rest of this? */
+ 	qword_printint(f, 0x7fffffff); /*XXX need a better timeout */
++	qword_printint(f, cred->cr_remote);
++	qword_printint(f, cred->cr_usr_root);
++	qword_printint(f, cred->cr_usr_mds);
++	qword_printint(f, cred->cr_mapped_uid);
+ 	qword_printint(f, cred->cr_uid);
+ 	qword_printint(f, cred->cr_gid);
+-	qword_printint(f, cred->cr_ngroups);
+-	for (i=0; i < cred->cr_ngroups; i++)
+-		qword_printint(f, cred->cr_groups[i]);
+ 	qword_print(f, fname);
+ 	qword_printhex(f, context_token->value, context_token->length);
+ 	qword_eol(f);
+@@ -119,7 +121,7 @@
+ 	/* XXXARG: */
+ 	int g;
+ 
+-	printerr(1, "sending null reply\n");
++	printerr(2, "sending null reply\n");
+ 
+ 	qword_addhex(&bp, &blen, in_handle->value, in_handle->length);
+ 	qword_addhex(&bp, &blen, in_token->value, in_token->length);
+@@ -159,6 +161,7 @@
+ #define rpcsec_gsserr_credproblem	13
+ #define rpcsec_gsserr_ctxproblem	14
+ 
++#if 0
+ static void
+ add_supplementary_groups(char *secname, char *name, struct svc_cred *cred)
+ {
+@@ -182,7 +185,9 @@
+ 		}
+ 	}
+ }
++#endif
+ 
++#if 0
+ static int
+ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred)
+ {
+@@ -248,7 +253,9 @@
+ out:
+ 	return res;
+ }
++#endif
+ 
++#if 0
+ void
+ print_hexl(int pri, unsigned char *cp, int length)
+ {
+@@ -285,12 +292,110 @@
+ 		printerr(pri,"\n");
+ 	}
+ }
++#endif
++
++static int
++get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
++	lnet_nid_t nid)
++{
++	u_int32_t	maj_stat, min_stat;
++	gss_buffer_desc	name;
++	char		*sname, *realm, *slash;
++	int		res = -1;
++	gss_OID		name_type = GSS_C_NO_OID;
++	struct passwd	*pw;
++
++	memset(cred, 0, sizeof(*cred));
++
++	maj_stat = gss_display_name(&min_stat, client_name, &name, &name_type);
++	if (maj_stat != GSS_S_COMPLETE) {
++		pgsserr("get_ids: gss_display_name",
++			maj_stat, min_stat, mech);
++		return -1;
++	}
++	if (name.length >= 0xffff || /* be certain name.length+1 doesn't overflow */
++	    !(sname = calloc(name.length + 1, 1))) {
++		printerr(0, "WARNING: get_ids: error allocating %d bytes "
++			"for sname\n", name.length + 1);
++		gss_release_buffer(&min_stat, &name);
++		return -1;
++	}
++	memcpy(sname, name.value, name.length);
++	printerr(1, "authenticate user %s\n", sname);
++	gss_release_buffer(&min_stat, &name);
++
++	lookup_mapping(sname, nid, &cred->cr_mapped_uid);
++
++        realm = strchr(sname, '@');
++        if (!realm) {
++                printerr(0, "WARNNING: principal %s contains no realm name\n",
++			 sname);
++                cred->cr_remote = (mds_local_realm != NULL);
++        } else {
++                *realm++ = '\0';
++                if (!mds_local_realm)
++                        cred->cr_remote = 1;
++                else
++                        cred->cr_remote =
++                                (strcasecmp(mds_local_realm, realm) != 0);
++        }
++
++        if (cred->cr_remote) {
++                if (cred->cr_mapped_uid != -1)
++                        res = 0;
++                else
++                        printerr(0, "principal %s is remote without mapping\n",
++                                 sname);
++		goto out_free;
++        }
++
++        slash = strchr(sname, '/');
++        if (slash)
++                *slash = '\0';
++
++        if (!(pw = getpwnam(sname))) {
++                /* If client use machine credential, we map it to root, which
++                 * will subject to further mapping by root-squash in kernel.
++                 *
++                 * MDS service keytab is treated as special user, also mapped
++                 * to root. OSS service keytab can't be used as a user.
++                 */
++                if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
++                        printerr(2, "lustre_root principal, resolve to uid 0\n");
++                        cred->cr_uid = 0;
++                        cred->cr_usr_root = 1;
++                } else if (!strcmp(sname, GSSD_SERVICE_MDS)) {
++                        printerr(2, "mds service principal, resolve to uid 0\n");
++                        cred->cr_uid = 0;
++                        cred->cr_usr_mds = 1;
++                } else {
++                        cred->cr_uid = -1;
++                        if (cred->cr_mapped_uid == -1) {
++                                printerr(0, "invalid user %s\n", sname);
++                                goto out_free;
++                        }
++                        printerr(2, "user %s mapped to %u\n",
++                                 sname, cred->cr_mapped_uid);
++                }
++        } else {
++                cred->cr_uid = pw->pw_uid;
++                printerr(2, "%s resolve to uid %u\n", sname, cred->cr_uid);
++        }
++
++        res = 0;
++out_free:
++        free(sname);
++        return res;
++}
++
++typedef struct gss_union_ctx_id_t {
++	gss_OID         mech_type;
++	gss_ctx_id_t    internal_ctx_id;
++} gss_union_ctx_id_desc, *gss_union_ctx_id_t;
+ 
+ void
+ handle_nullreq(FILE *f) {
+-	/* XXX initialize to a random integer to reduce chances of unnecessary
+-	 * invalidation of existing ctx's on restarting svcgssd. */
+-	static u_int32_t	handle_seq = 0;
++	uint64_t		handle_seq;
+ 	char			in_tok_buf[TOKEN_BUF_SIZE];
+ 	char			in_handle_buf[15];
+ 	char			out_handle_buf[15];
+@@ -302,10 +407,13 @@
+ 				ignore_out_tok = {.value = NULL},
+ 	/* XXX isn't there a define for this?: */
+ 				null_token = {.value = NULL};
++	uint32_t		lustre_svc;
++	lnet_nid_t		nid;
+ 	u_int32_t		ret_flags;
+ 	gss_ctx_id_t		ctx = GSS_C_NO_CONTEXT;
+ 	gss_name_t		client_name;
+ 	gss_OID			mech = GSS_C_NO_OID;
++	gss_cred_id_t		svc_cred;
+ 	u_int32_t		maj_stat = GSS_S_FAILURE, min_stat = 0;
+ 	u_int32_t		ignore_min_stat;
+ 	struct svc_cred		cred;
+@@ -313,7 +421,7 @@
+ 	static int		lbuflen = 0;
+ 	static char		*cp;
+ 
+-	printerr(1, "handling null request\n");
++	printerr(2, "handling null request\n");
+ 
+ 	if (readline(fileno(f), &lbuf, &lbuflen) != 1) {
+ 		printerr(0, "WARNING: handle_nullreq: "
+@@ -323,15 +431,21 @@
+ 
+ 	cp = lbuf;
+ 
++	qword_get(&cp, (char *) &lustre_svc, sizeof(lustre_svc));
++	qword_get(&cp, (char *) &nid, sizeof(nid));
++	qword_get(&cp, (char *) &handle_seq, sizeof(handle_seq));
++	printerr(1, "handling req: svc %u, nid %016llx, idx %llx\n",
++		 lustre_svc, nid, handle_seq);
++
+ 	in_handle.length = (size_t) qword_get(&cp, in_handle.value,
+ 					      sizeof(in_handle_buf));
+-	printerr(2, "in_handle: \n");
+-	print_hexl(2, in_handle.value, in_handle.length);
++	printerr(3, "in_handle: \n");
++	print_hexl(3, in_handle.value, in_handle.length);
+ 
+ 	in_tok.length = (size_t) qword_get(&cp, in_tok.value,
+ 					   sizeof(in_tok_buf));
+-	printerr(2, "in_tok: \n");
+-	print_hexl(2, in_tok.value, in_tok.length);
++	printerr(3, "in_tok: \n");
++	print_hexl(3, in_tok.value, in_tok.length);
+ 
+ 	if (in_tok.length < 0) {
+ 		printerr(0, "WARNING: handle_nullreq: "
+@@ -351,7 +465,13 @@
+ 		memcpy(&ctx, in_handle.value, in_handle.length);
+ 	}
+ 
+-	maj_stat = gss_accept_sec_context(&min_stat, &ctx, gssd_creds,
++	svc_cred = gssd_select_svc_cred(lustre_svc);
++	if (!svc_cred) {
++		printerr(0, "no service credential for svc %u\n", lustre_svc);
++		goto out_err;
++	}
++
++	maj_stat = gss_accept_sec_context(&min_stat, &ctx, svc_cred,
+ 			&in_tok, GSS_C_NO_CHANNEL_BINDINGS, &client_name,
+ 			&mech, &out_tok, &ret_flags, NULL, NULL);
+ 
+@@ -369,7 +489,7 @@
+ 			maj_stat, min_stat, mech);
+ 		goto out_err;
+ 	}
+-	if (get_ids(client_name, mech, &cred)) {
++	if (get_ids(client_name, mech, &cred, nid)) {
+ 		/* get_ids() prints error msg */
+ 		maj_stat = GSS_S_BAD_NAME; /* XXX ? */
+ 		gss_release_name(&ignore_min_stat, &client_name);
+@@ -377,10 +497,8 @@
+ 	}
+ 	gss_release_name(&ignore_min_stat, &client_name);
+ 
+-
+ 	/* Context complete. Pass handle_seq in out_handle to use
+ 	 * for context lookup in the kernel. */
+-	handle_seq++;
+ 	out_handle.length = sizeof(handle_seq);
+ 	memcpy(out_handle.value, &handle_seq, sizeof(handle_seq));
+ 
+@@ -404,7 +522,6 @@
+ 		free(ctx_token.value);
+ 	if (out_tok.value != NULL)
+ 		gss_release_buffer(&ignore_min_stat, &out_tok);
+-	printerr(1, "finished handling null request\n");
+ 	return;
+ 
+ out_err:
 --- nfs-utils-1.0.10/utils/gssd/gss_util.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_util.c	2006-08-14 10:32:30.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gss_util.c	2006-10-13 16:03:33.000000000 -0600
 @@ -87,9 +87,16 @@
  #ifdef HAVE_COM_ERR_H
  #include <com_err.h>
@@ -1242,7 +1424,7 @@
  
  int gssd_check_mechs(void)
 --- nfs-utils-1.0.10/utils/gssd/gss_util.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_util.h	2006-08-14 10:32:30.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gss_util.h	2006-10-13 16:03:33.000000000 -0600
 @@ -32,12 +32,10 @@
  #define _GSS_UTIL_H_
  
@@ -1256,8 +1438,55 @@
  void pgsserr(char *msg, u_int32_t maj_stat, u_int32_t min_stat,
  	const gss_OID mech);
  int gssd_check_mechs(void);
---- nfs-utils-1.0.10/utils/gssd/krb5_util.c.lustre	2006-08-14 10:32:04.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/krb5_util.c	2006-08-14 10:32:30.000000000 -0600
+--- nfs-utils-1.0.10/utils/gssd/krb5_util.h.lustre	2006-10-13 16:02:38.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/krb5_util.h	2006-10-13 16:03:33.000000000 -0600
+@@ -10,6 +10,8 @@
+ struct gssd_k5_kt_princ {
+ 	struct gssd_k5_kt_princ *next;
+ 	krb5_principal princ;
++	unsigned int	fl_root:1,
++			fl_mds:1;
+ 	char *ccname;
+ 	char *realm;
+ 	krb5_timestamp endtime;
+@@ -25,8 +27,32 @@
+ void gssd_obtain_kernel_krb5_info(void);
+ 
+ 
+-#ifdef HAVE_SET_ALLOWABLE_ENCTYPES
+-int limit_krb5_enctypes(struct rpc_gss_sec *sec, uid_t uid);
+-#endif
++#endif /* KRB5_UTIL_H */
++#ifndef KRB5_UTIL_H
++#define KRB5_UTIL_H
++
++#include <krb5.h>
++
++/*
++ * List of principals from our keytab that we
++ * may try to get credentials for
++ */
++struct gssd_k5_kt_princ {
++	struct gssd_k5_kt_princ *next;
++	krb5_principal princ;
++	char *ccname;
++	char *realm;
++	krb5_timestamp endtime;
++};
++
++
++void gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername);
++int  gssd_get_krb5_machine_cred_list(char ***list);
++int  gssd_refresh_krb5_machine_creds(void);
++void gssd_free_krb5_machine_cred_list(char **list);
++void gssd_setup_krb5_machine_gss_ccache(char *servername);
++void gssd_destroy_krb5_machine_creds(void);
++void gssd_obtain_kernel_krb5_info(void);
++
+ 
+ #endif /* KRB5_UTIL_H */
+--- nfs-utils-1.0.10/utils/gssd/krb5_util.c.lustre	2006-10-13 16:02:38.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/krb5_util.c	2006-10-13 16:03:33.000000000 -0600
 @@ -99,12 +99,14 @@
  #include <rpc/rpc.h>
  #include <sys/types.h>
@@ -1705,55 +1934,1151 @@
  
  /*
   * Obtain supported enctypes from kernel.
---- nfs-utils-1.0.10/utils/gssd/krb5_util.h.lustre	2006-08-14 10:32:04.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/krb5_util.h	2006-08-14 10:32:30.000000000 -0600
-@@ -10,6 +10,8 @@
- struct gssd_k5_kt_princ {
- 	struct gssd_k5_kt_princ *next;
- 	krb5_principal princ;
-+	unsigned int	fl_root:1,
-+			fl_mds:1;
- 	char *ccname;
- 	char *realm;
- 	krb5_timestamp endtime;
-@@ -25,8 +27,32 @@
- void gssd_obtain_kernel_krb5_info(void);
+--- nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c.lustre	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c	2006-10-13 16:03:33.000000000 -0600
+@@ -47,6 +47,7 @@
+ #include "gssd.h"
+ #include "write_bytes.h"
  
++#if 0
+ char pipefsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
  
--#ifdef HAVE_SET_ALLOWABLE_ENCTYPES
--int limit_krb5_enctypes(struct rpc_gss_sec *sec, uid_t uid);
--#endif
-+#endif /* KRB5_UTIL_H */
-+#ifndef KRB5_UTIL_H
-+#define KRB5_UTIL_H
+ static void
+@@ -102,3 +103,4 @@
+ 	}
+ 	exit(0);
+ }
++#endif
+--- nfs-utils-1.0.10/utils/gssd/context.c.lustre	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/context.c	2006-10-13 16:03:33.000000000 -0600
+@@ -33,8 +33,6 @@
+ #include <syslog.h>
+ #include <string.h>
+ #include <gssapi/gssapi.h>
+-#include <rpc/rpc.h>
+-#include <rpc/auth_gss.h>
+ #include "gss_util.h"
+ #include "gss_oids.h"
+ #include "err_util.h"
+--- nfs-utils-1.0.10/utils/gssd/lsupport.h.lustre	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/lsupport.h	2006-10-13 17:24:45.000000000 -0600
+@@ -0,0 +1,88 @@
++/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
++ * vim:expandtab:shiftwidth=8:tabstop=8:
++ */
 +
-+#include <krb5.h>
++#ifndef __LIBCFS_H__
++#define __LIBCFS_H__
++
++#include <unistd.h>
++#include <stdint.h>
++
++#define GSSD_CLI        (0)
++#define GSSD_SVC        (1)
++
++void gssd_init_unique(int type);
++void gssd_exit_unique(int type);
 +
 +/*
-+ * List of principals from our keytab that we
-+ * may try to get credentials for
++ * copied from lustre source
 + */
-+struct gssd_k5_kt_princ {
-+	struct gssd_k5_kt_princ *next;
-+	krb5_principal princ;
-+	char *ccname;
-+	char *realm;
-+	krb5_timestamp endtime;
++
++#define LUSTRE_GSS_SVC_MDS      0
++#define LUSTRE_GSS_SVC_OSS      1
++
++struct lgssd_upcall_data {
++        uint32_t        seq;
++        uint32_t        uid;
++        uint32_t        gid;
++        uint32_t        svc;
++        uint64_t        nid;
++        char            obd[64];
 +};
 +
++#define GSSD_INTERFACE_VERSION        (1)
 +
-+void gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername);
-+int  gssd_get_krb5_machine_cred_list(char ***list);
-+int  gssd_refresh_krb5_machine_creds(void);
-+void gssd_free_krb5_machine_cred_list(char **list);
-+void gssd_setup_krb5_machine_gss_ccache(char *servername);
-+void gssd_destroy_krb5_machine_creds(void);
-+void gssd_obtain_kernel_krb5_info(void);
++struct lgssd_ioctl_param {
++        int             version;        /* in   */
++        char           *uuid;           /* in   */
++        int             lustre_svc;     /* in   */
++        uid_t           uid;            /* in   */
++        gid_t           gid;            /* in   */
++        long            send_token_size;/* in   */
++        char           *send_token;     /* in   */
++        long            reply_buf_size; /* in   */
++        char           *reply_buf;      /* in   */
++        long            status;         /* out  */
++        long            reply_length;   /* out  */
++};
 +
++#define GSSD_DEFAULT_GETHOSTNAME_EX     "/etc/lustre/nid2hostname"
++#define MAPPING_DATABASE_FILE           "/etc/lustre/idmap.conf"
++
++typedef uint64_t lnet_nid_t;
++typedef uint32_t lnet_netid_t;
++
++#define LNET_NID_ANY      ((lnet_nid_t) -1)
++#define LNET_PID_ANY      ((lnet_pid_t) -1)
++
++enum {
++        /* Only add to these values (i.e. don't ever change or redefine them):
++         * network addresses depend on them... */
++        QSWLND    = 1,
++        SOCKLND   = 2,
++        GMLND     = 3,
++        PTLLND    = 4,
++        O2IBLND   = 5,
++        CIBLND    = 6,
++        OPENIBLND = 7,
++        IIBLND    = 8,
++        LOLND     = 9,
++        RALND     = 10,
++        VIBLND    = 11,
++        LND_ENUM_END_MARKER
++};
++
++int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen);
++int lookup_mapping(char *princ, uint64_t nid, uid_t *uid);
++lnet_nid_t libcfs_str2nid(char *str);
++
++/* how an LNET NID encodes net:address */
++#define LNET_NIDADDR(nid)      ((uint32_t)((nid) & 0xffffffff))
++#define LNET_NIDNET(nid)       ((uint32_t)(((nid) >> 32)) & 0xffffffff)
++#define LNET_MKNID(net,addr)   ((((uint64_t)(net))<<32)|((uint64_t)(addr)))
++/* how net encodes type:number */
++#define LNET_NETNUM(net)       ((net) & 0xffff)
++#define LNET_NETTYP(net)       (((net) >> 16) & 0xffff)
++#define LNET_MKNET(typ,num)    ((((uint32_t)(typ))<<16)|((uint32_t)(num)))
++
++#endif /* __LIBCFS_H__ */
+--- nfs-utils-1.0.10/utils/gssd/err_util.c.lustre	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/err_util.c	2006-10-13 16:03:33.000000000 -0600
+@@ -32,6 +32,8 @@
+ #include <stdarg.h>
+ #include <syslog.h>
+ #include <string.h>
++#include <fcntl.h>
++#include <ctype.h>
+ #include "err_util.h"
  
- #endif /* KRB5_UTIL_H */
+ static int verbosity = 0;
+@@ -91,3 +93,40 @@
+ 	/* reset the buffer */
+ 	memset(message_buf, 0, sizeof(message_buf));
+ }
++
++void print_hexl(int pri, unsigned char *cp, int length)
++{
++	int i, j, jm;
++	unsigned char c;
++
++	printerr(pri, "length %d\n",length);
++	printerr(pri, "\n");
++
++	for (i = 0; i < length; i += 0x10) {
++		printerr(pri, "  %04x: ", (u_int)i);
++		jm = length - i;
++		jm = jm > 16 ? 16 : jm;
++
++		for (j = 0; j < jm; j++) {
++			if ((j % 2) == 1)
++				printerr(pri,"%02x ", (u_int)cp[i+j]);
++			else
++				printerr(pri,"%02x", (u_int)cp[i+j]);
++		}
++		for (; j < 16; j++) {
++			if ((j % 2) == 1)
++				printerr(pri,"   ");
++			else
++				printerr(pri,"  ");
++		}
++		printerr(pri," ");
++
++		for (j = 0; j < jm; j++) {
++			c = cp[i+j];
++			c = isprint(c) ? c : '.';
++			printerr(pri,"%c", c);
++		}
++		printerr(pri,"\n");
++	}
++}
++
+--- nfs-utils-1.0.10/utils/gssd/context_spkm3.c.lustre	2006-10-13 16:02:38.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/context_spkm3.c	2006-10-13 16:03:33.000000000 -0600
+@@ -33,8 +33,6 @@
+ #include <syslog.h>
+ #include <string.h>
+ #include <gssapi/gssapi.h>
+-#include <rpc/rpc.h>
+-#include <rpc/auth_gss.h>
+ #include "gss_util.h"
+ #include "gss_oids.h"
+ #include "err_util.h"
+--- nfs-utils-1.0.10/utils/gssd/gssd.c.lustre	2006-10-13 16:02:38.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gssd.c	2006-10-13 16:03:33.000000000 -0600
+@@ -40,7 +40,6 @@
+ 
+ #include <sys/param.h>
+ #include <sys/socket.h>
+-#include <rpc/rpc.h>
+ 
+ #include <unistd.h>
+ #include <err.h>
+@@ -52,6 +51,7 @@
+ #include "err_util.h"
+ #include "gss_util.h"
+ #include "krb5_util.h"
++#include "lsupport.h"
+ 
+ char pipefsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
+ char keytabfile[PATH_MAX] = GSSD_DEFAULT_KEYTAB_FILE;
+@@ -77,7 +77,7 @@
+ static void
+ usage(char *progname)
+ {
+-	fprintf(stderr, "usage: %s [-f] [-v] [-r] [-p pipefsdir] [-k keytab] [-d ccachedir]\n",
++	fprintf(stderr, "usage: %s [-f] [-v] [-p pipefsdir] [-k keytab] [-d ccachedir]\n",
+ 		progname);
+ 	exit(1);
+ }
+@@ -87,7 +87,6 @@
+ {
+ 	int fg = 0;
+ 	int verbosity = 0;
+-	int rpc_verbosity = 0;
+ 	int opt;
+ 	extern char *optarg;
+ 	char *progname;
+@@ -97,15 +96,9 @@
+ 			case 'f':
+ 				fg = 1;
+ 				break;
+-			case 'm':
+-				/* Accept but ignore this. Now the default. */
+-				break;
+ 			case 'v':
+ 				verbosity++;
+ 				break;
+-			case 'r':
+-				rpc_verbosity++;
+-				break;
+ 			case 'p':
+ 				strncpy(pipefsdir, optarg, sizeof(pipefsdir));
+ 				if (pipefsdir[sizeof(pipefsdir)-1] != '\0')
+@@ -126,10 +119,6 @@
+ 				break;
+ 		}
+ 	}
+-	strncat(pipefsdir + strlen(pipefsdir), "/" GSSD_SERVICE_NAME,
+-		sizeof(pipefsdir)-strlen(pipefsdir));
+-	if (pipefsdir[sizeof(pipefsdir)-1] != '\0')
+-		errx(1, "pipefs path name too long");
+ 
+ 	if ((progname = strrchr(argv[0], '/')))
+ 		progname++;
+@@ -137,30 +126,34 @@
+ 		progname = argv[0];
+ 
+ 	initerr(progname, verbosity, fg);
+-#ifdef HAVE_AUTHGSS_SET_DEBUG_LEVEL
+-	authgss_set_debug_level(rpc_verbosity);
+-#else
+-        if (rpc_verbosity > 0)
+-		printerr(0, "Warning: rpcsec_gss library does not "
+-			    "support setting debug level\n");
+-#endif
+ 
+ 	if (gssd_check_mechs() != 0)
+ 		errx(1, "Problem with gssapi library");
+ 
++#if 0
++	/* Determine Kerberos information from the kernel */
++	gssd_obtain_kernel_krb5_info();
++#endif
++
+ 	if (!fg && daemon(0, 0) < 0)
+ 		errx(1, "fork");
+ 
++	/* This should be checked _after_ daemon(), because we need to own
++	 * the undo-able semaphore by this process
++	 */
++	gssd_init_unique(GSSD_CLI);
++
++	/* Process keytab file and get machine credentials. This will modify
++	 * disk status so do it after we are sure we are the only instance
++	 */
++	if (gssd_refresh_krb5_machine_creds())
++		return -1;
++
+ 	signal(SIGINT, sig_die);
+ 	signal(SIGTERM, sig_die);
+ 	signal(SIGHUP, sig_hup);
+ 
+-	/* Process keytab file and get machine credentials */
+-	gssd_refresh_krb5_machine_creds();
+-	/* Determine Kerberos information from the kernel */
+-	gssd_obtain_kernel_krb5_info();
+-
+-	gssd_run();
++	lgssd_run();
+ 	printerr(0, "gssd_run returned!\n");
+ 	abort();
+ }
+--- nfs-utils-1.0.10/utils/gssd/cacheio.c.lustre	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/cacheio.c	2006-10-13 16:03:33.000000000 -0600
+@@ -227,7 +227,8 @@
+ 		return -1;
+ 	while (*bp == ' ') bp++;
+ 	*bpp = bp;
+-	*dest = '\0';
++// why should we clear *dest???
++//	*dest = '\0';
+ 	return len;
+ }
+ 
+--- nfs-utils-1.0.10/utils/gssd/lsupport.c.lustre	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/lsupport.c	2006-10-13 17:40:51.000000000 -0600
+@@ -0,0 +1,774 @@
++/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
++ * vim:expandtab:shiftwidth=8:tabstop=8:
++ *
++ *  Copyright (c) 2005 Cluster File Systems, Inc.
++ *
++ *   This file is part of Lustre, http://www.lustre.org.
++ *
++ *   Lustre is free software; you can redistribute it and/or
++ *   modify it under the terms of version 2 of the GNU General Public
++ *   License as published by the Free Software Foundation.
++ *
++ *   Lustre is distributed in the hope that it will be useful,
++ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *   GNU General Public License for more details.
++ *
++ *   You should have received a copy of the GNU General Public License
++ *   along with Lustre; if not, write to the Free Software
++ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
++ */
++
++#ifndef _GNU_SOURCE
++#define _GNU_SOURCE
++#endif
++#include "config.h"
++#include <sys/param.h>
++#include <sys/utsname.h>
++#include <sys/stat.h>
++#include <sys/socket.h>
++#include <arpa/inet.h>
++#include <sys/types.h>
++#include <sys/ipc.h>
++#include <sys/sem.h>
++
++#include <stdio.h>
++#include <stdlib.h>
++#include <pwd.h>
++#include <grp.h>
++#include <string.h>
++#include <dirent.h>
++#include <poll.h>
++#include <fcntl.h>
++#include <signal.h>
++#include <unistd.h>
++#include <errno.h>
++#include <assert.h>
++#ifdef HAVE_GETHOSTBYNAME
++# include <netdb.h>
++#endif
++
++#include "err_util.h"
++#include "gssd.h"
++#include "lsupport.h"
++
++/****************************************
++ * exclusive startup                    *
++ ****************************************/
++
++static struct __sem_s {
++        char           *name;
++        key_t           sem_key;
++        int             sem_id;
++} sems[2] = {
++        [GSSD_CLI] = { "client",  0x3a92d473, 0 },
++        [GSSD_SVC] = { "server",  0x3b92d473, 0 },
++};
++
++void gssd_init_unique(int type)
++{
++        struct __sem_s *sem = &sems[type];
++        struct sembuf   sembuf;
++
++        assert(type == GSSD_CLI || type == GSSD_SVC);
++
++again:
++        sem->sem_id = semget(sem->sem_key, 1, IPC_CREAT | IPC_EXCL | 0700);
++        if (sem->sem_id == -1) {
++                if (errno != EEXIST) {
++                        printerr(0, "Create sem: %s\n", strerror(errno));
++                        exit(-1);
++                }
++
++                /* already exist. Note there's still a small window racing
++                 * with other processes, due to the stupid semaphore semantics.
++                 */
++                sem->sem_id = semget(sem->sem_key, 0, 0700);
++                if (sem->sem_id == -1) {
++                        if (errno == ENOENT) {
++                                printerr(0, "another instance just exit, "
++                                         "try again\n");
++                                goto again;
++                        }
++
++                        printerr(0, "Obtain sem: %s\n", strerror(errno));
++                        exit(-1);
++                }
++        } else {
++                int val = 1;
++
++                if (semctl(sem->sem_id, 0, SETVAL, val) == -1) {
++                        printerr(0, "Initialize sem: %s\n",
++                                 strerror(errno));
++                        exit(-1);
++                }
++        }
++
++        sembuf.sem_num = 0;
++        sembuf.sem_op = -1;
++        sembuf.sem_flg = IPC_NOWAIT | SEM_UNDO;
++
++        if (semop(sem->sem_id, &sembuf, 1) != 0) {
++                if (errno == EAGAIN) {
++                        printerr(0, "Another instance is running, exit\n");
++                        exit(0);
++                }
++                printerr(0, "Grab sem: %s\n", strerror(errno));
++                exit(0);
++        }
++
++        printerr(2, "Successfully created %s global identity\n", sem->name);
++}
++
++void gssd_exit_unique(int type)
++{
++        assert(type == GSSD_CLI || type == GSSD_SVC);
++
++        /*
++         * do nothing. we can't remove the sem here, otherwise the race
++         * window would be much bigger. So it's sad we have to leave the
++         * sem in the system forever.
++         */
++}
++
++/****************************************
++ * client side resolvation:             *
++ *    lnd/netid/nid => hostname         *
++ ****************************************/
++
++char gethostname_ex[PATH_MAX] = GSSD_DEFAULT_GETHOSTNAME_EX;
++
++typedef int lnd_nid2hostname_t(char *lnd, uint32_t net, uint32_t addr,
++                               char *buf, int buflen);
++
++/* FIXME what about IPv6? */
++static
++int socklnd_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
++                         char *buf, int buflen)
++{
++        struct hostent  *ent;
++
++        addr = htonl(addr);
++        ent = gethostbyaddr(&addr, sizeof(addr), AF_INET);
++        if (!ent) {
++                printerr(0, "%s: can't resolve 0x%x\n", lnd, addr);
++                return -1;
++        }
++        if (strlen(ent->h_name) >= buflen) {
++                printerr(0, "%s: name too long: %s\n", lnd, ent->h_name);
++                return -1;
++        }
++        strcpy(buf, ent->h_name);
++
++        printerr(2, "%s: net 0x%x, addr 0x%x => %s\n",
++                 lnd, net, addr, buf);
++        return 0;
++}
++
++static
++int lolnd_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
++                       char *buf, int buflen)
++{
++        struct utsname   uts;
++        struct hostent  *ent;
++
++        if (addr) {
++                printerr(0, "%s: addr is 0x%x, we expect 0\n", lnd, addr);
++                return -1;
++        }
++
++        if (uname(&uts)) {
++                printerr(0, "%s: failed obtain local machine name\n", lnd);
++                return -1;
++        }
++
++        ent = gethostbyname(uts.nodename);
++        if (!ent) {
++                printerr(0, "%s: failed obtain canonical name of %s\n",
++                         lnd, uts.nodename);
++                return -1;
++        }
++
++        if (strlen(ent->h_name) >= buflen) {
++                printerr(0, "%s: name too long: %s\n", lnd, ent->h_name);
++                return -1;
++        }
++        strcpy(buf, ent->h_name);
++
++        printerr(2, "%s: addr 0x%x => %s\n", lnd, addr, buf);
++        return 0;
++}
++
++static int is_space(char c)
++{
++        return (c == ' ' || c == '\t' || c == '\n');
++}
++
++static
++int external_nid2hostname(char *lnd, uint32_t net, uint32_t addr,
++                          char *namebuf, int namebuflen)
++{
++        const int bufsize = PATH_MAX + 256;
++        char buf[bufsize], *head, *tail;
++        FILE *fghn;
++
++        sprintf(buf, "%s %s 0x%x 0x%x", gethostname_ex, lnd, net, addr);
++        printerr(2, "cmd: %s\n", buf);
++
++        fghn = popen(buf, "r");
++        if (fghn == NULL) {
++                printerr(0, "failed to call %s\n", gethostname_ex);
++                return -1;
++        }
++
++        head = fgets(buf, bufsize, fghn);
++        if (head == NULL) {
++                printerr(0, "can't read from %s\n", gethostname_ex);
++                return -1;
++        }
++        if (pclose(fghn) == -1)
++                printerr(1, "pclose failed, continue\n");
++
++        /* trim head/tail space */
++        while (is_space(*head))
++                head++;
++
++        tail = head + strlen(head);
++        if (tail <= head) {
++                printerr(0, "no output from %s\n", gethostname_ex);
++                return -1;
++        }
++        while (is_space(*(tail - 1)))
++                tail--;
++        if (tail <= head) {
++                printerr(0, "output are all space from %s\n", gethostname_ex);
++                return -1;
++        }
++        *tail = '\0';
++
++        /* start with '@' means error msg */
++        if (head[0] == '@') {
++                printerr(0, "error from %s: %s\n", gethostname_ex, &head[1]);
++                return -1;
++        }
++
++        if (tail - head > namebuflen) {
++                printerr(0, "external hostname too long: %s\n", head);
++                return -1;
++        }
++
++        printerr(2, "%s: net 0x%x, addr 0x%x => %s\n",
++                 lnd, net, addr, head);
++        strcpy(namebuf, head);
++        return 0;
++}
++
++static struct {
++        char                    *name;
++        lnd_nid2hostname_t      *nid2name;
++} converter[LND_ENUM_END_MARKER] = {
++        {"UNUSED0",     NULL},
++        [QSWLND]        = { "QSWLND",   external_nid2hostname},
++        [SOCKLND]       = { "SOCKLND",  socklnd_nid2hostname},
++        [GMLND]         = { "GMLND",    external_nid2hostname},
++        [PTLLND]        = { "PTLLND",   external_nid2hostname },
++        [O2IBLND]       = { "O2IBLND",  external_nid2hostname },
++        [CIBLND]        = { "CIBLND",   external_nid2hostname },
++        [OPENIBLND]     = { "OPENIBLND",external_nid2hostname },
++        [IIBLND]        = { "IIBLND",   external_nid2hostname },
++        [LOLND]         = { "LOLND",    lolnd_nid2hostname },
++        [RALND]         = { "RALND",    external_nid2hostname },
++        [VIBLND]        = { "VIBLND",   external_nid2hostname },
++};
++
++int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen)
++{
++        uint32_t lnd, net, addr;
++
++        addr = LNET_NIDADDR(nid);
++        net = LNET_NIDNET(nid);
++        lnd = LNET_NETTYP(net);
++
++        if (lnd >= LND_ENUM_END_MARKER) {
++                printerr(0, "ERROR: Unrecognized LND %u\n", lnd);
++                return -1;
++        }
++
++        if (converter[lnd].nid2name == NULL) {
++                printerr(0, "ERROR: %s converter not ready\n",
++                        converter[lnd].name);
++                return -1;
++        }
++
++        return converter[lnd].nid2name(converter[lnd].name, net, addr,
++                                       buf, buflen);
++}
++
++
++/****************************************
++ * lnet support routine                 *
++ * (from lnet/libcfs/nidstrings.c       *
++ ****************************************/
++
++#define LNET_NIDSTR_SIZE   32      /* size of each one (see below for usage) */
++
++static int  libcfs_lo_str2addr(char *str, int nob, uint32_t *addr);
++static void libcfs_ip_addr2str(uint32_t addr, char *str);
++static int  libcfs_ip_str2addr(char *str, int nob, uint32_t *addr);
++static void libcfs_decnum_addr2str(uint32_t addr, char *str);
++static void libcfs_hexnum_addr2str(uint32_t addr, char *str);
++static int  libcfs_num_str2addr(char *str, int nob, uint32_t *addr);
++
++struct netstrfns {
++        int          nf_type;
++        char        *nf_name;
++        char        *nf_modname;
++        void       (*nf_addr2str)(uint32_t addr, char *str);
++        int        (*nf_str2addr)(char *str, int nob, uint32_t *addr);
++};
++
++static struct netstrfns  libcfs_netstrfns[] = {
++        {/* .nf_type      */  LOLND,
++         /* .nf_name      */  "lo",
++         /* .nf_modname   */  "klolnd",
++         /* .nf_addr2str  */  libcfs_decnum_addr2str,
++         /* .nf_str2addr  */  libcfs_lo_str2addr},
++        {/* .nf_type      */  SOCKLND,
++         /* .nf_name      */  "tcp",
++         /* .nf_modname   */  "ksocklnd",
++         /* .nf_addr2str  */  libcfs_ip_addr2str,
++         /* .nf_str2addr  */  libcfs_ip_str2addr},
++        {/* .nf_type      */  O2IBLND,
++         /* .nf_name      */  "o2ib",
++         /* .nf_modname   */  "ko2iblnd",
++         /* .nf_addr2str  */  libcfs_ip_addr2str,
++         /* .nf_str2addr  */  libcfs_ip_str2addr},
++        {/* .nf_type      */  CIBLND,
++         /* .nf_name      */  "cib",
++         /* .nf_modname   */  "kciblnd",
++         /* .nf_addr2str  */  libcfs_ip_addr2str,
++         /* .nf_str2addr  */  libcfs_ip_str2addr},
++        {/* .nf_type      */  OPENIBLND,
++         /* .nf_name      */  "openib",
++         /* .nf_modname   */  "kopeniblnd",
++         /* .nf_addr2str  */  libcfs_ip_addr2str,
++         /* .nf_str2addr  */  libcfs_ip_str2addr},
++        {/* .nf_type      */  IIBLND,
++         /* .nf_name      */  "iib",
++         /* .nf_modname   */  "kiiblnd",
++         /* .nf_addr2str  */  libcfs_ip_addr2str,
++         /* .nf_str2addr  */  libcfs_ip_str2addr},
++        {/* .nf_type      */  VIBLND,
++         /* .nf_name      */  "vib",
++         /* .nf_modname   */  "kviblnd",
++         /* .nf_addr2str  */  libcfs_ip_addr2str,
++         /* .nf_str2addr  */  libcfs_ip_str2addr},
++        {/* .nf_type      */  RALND,
++         /* .nf_name      */  "ra",
++         /* .nf_modname   */  "kralnd",
++         /* .nf_addr2str  */  libcfs_ip_addr2str,
++         /* .nf_str2addr  */  libcfs_ip_str2addr},
++        {/* .nf_type      */  QSWLND,
++         /* .nf_name      */  "elan",
++         /* .nf_modname   */  "kqswlnd",
++         /* .nf_addr2str  */  libcfs_decnum_addr2str,
++         /* .nf_str2addr  */  libcfs_num_str2addr},
++        {/* .nf_type      */  GMLND,
++         /* .nf_name      */  "gm",
++         /* .nf_modname   */  "kgmlnd",
++         /* .nf_addr2str  */  libcfs_hexnum_addr2str,
++         /* .nf_str2addr  */  libcfs_num_str2addr},
++        {/* .nf_type      */  PTLLND,
++         /* .nf_name      */  "ptl",
++         /* .nf_modname   */  "kptllnd",
++         /* .nf_addr2str  */  libcfs_decnum_addr2str,
++         /* .nf_str2addr  */  libcfs_num_str2addr},
++        /* placeholder for net0 alias.  It MUST BE THE LAST ENTRY */
++        {/* .nf_type      */  -1},
++};
++
++const int libcfs_nnetstrfns = sizeof(libcfs_netstrfns)/sizeof(libcfs_netstrfns[0]);
++
++static int
++libcfs_lo_str2addr(char *str, int nob, uint32_t *addr)
++{
++        *addr = 0;
++        return 1;
++}
++
++static void
++libcfs_ip_addr2str(uint32_t addr, char *str)
++{
++        snprintf(str, LNET_NIDSTR_SIZE, "%u.%u.%u.%u",
++                 (addr >> 24) & 0xff, (addr >> 16) & 0xff,
++                 (addr >> 8) & 0xff, addr & 0xff);
++}
++
++/* CAVEAT EMPTOR XscanfX
++ * I use "%n" at the end of a sscanf format to detect trailing junk.  However
++ * sscanf may return immediately if it sees the terminating '0' in a string, so
++ * I initialise the %n variable to the expected length.  If sscanf sets it;
++ * fine, if it doesn't, then the scan ended at the end of the string, which is
++ * fine too :) */
++
++static int
++libcfs_ip_str2addr(char *str, int nob, uint32_t *addr)
++{
++        int   a;
++        int   b;
++        int   c;
++        int   d;
++        int   n = nob;                          /* XscanfX */
++
++        /* numeric IP? */
++        if (sscanf(str, "%u.%u.%u.%u%n", &a, &b, &c, &d, &n) >= 4 &&
++            n == nob &&
++            (a & ~0xff) == 0 && (b & ~0xff) == 0 &&
++            (c & ~0xff) == 0 && (d & ~0xff) == 0) {
++                *addr = ((a<<24)|(b<<16)|(c<<8)|d);
++                return 1;
++        }
++
++#ifdef HAVE_GETHOSTBYNAME
++        /* known hostname? */
++        if (('a' <= str[0] && str[0] <= 'z') ||
++            ('A' <= str[0] && str[0] <= 'Z')) {
++                char *tmp;
++
++                tmp = malloc(nob + 1);
++                if (tmp != NULL) {
++                        struct hostent *he;
++
++                        memcpy(tmp, str, nob);
++                        tmp[nob] = 0;
++
++                        he = gethostbyname(tmp);
++
++                        free(tmp);
++                        tmp = NULL;
++
++                        if (he != NULL) {
++                                uint32_t ip = *(uint32_t *)he->h_addr;
++
++                                *addr = ntohl(ip);
++                                return 1;
++                        }
++                }
++        }
++#endif
++        return 0;
++}
++
++static void
++libcfs_decnum_addr2str(uint32_t addr, char *str)
++{
++        snprintf(str, LNET_NIDSTR_SIZE, "%u", addr);
++}
++
++static void
++libcfs_hexnum_addr2str(uint32_t addr, char *str)
++{
++        snprintf(str, LNET_NIDSTR_SIZE, "0x%x", addr);
++}
++
++static int
++libcfs_num_str2addr(char *str, int nob, uint32_t *addr)
++{
++        int     n;
++
++        n = nob;
++        if (sscanf(str, "0x%x%n", addr, &n) >= 1 && n == nob)
++                return 1;
++
++        n = nob;
++        if (sscanf(str, "0X%x%n", addr, &n) >= 1 && n == nob)
++                return 1;
++
++        n = nob;
++        if (sscanf(str, "%u%n", addr, &n) >= 1 && n == nob)
++                return 1;
++        
++        return 0;
++}
++
++static struct netstrfns *
++libcfs_lnd2netstrfns(int lnd)
++{
++        int    i;
++
++        if (lnd >= 0)
++                for (i = 0; i < libcfs_nnetstrfns; i++)
++                        if (lnd == libcfs_netstrfns[i].nf_type)
++                                return &libcfs_netstrfns[i];
++
++        return NULL;
++}
++
++static struct netstrfns *
++libcfs_str2net_internal(char *str, uint32_t *net)
++{
++        struct netstrfns *nf;
++        int               nob;
++        int               netnum;
++        int               i;
++
++        for (i = 0; i < libcfs_nnetstrfns; i++) {
++                nf = &libcfs_netstrfns[i];
++                if (nf->nf_type >= 0 &&
++                    !strncmp(str, nf->nf_name, strlen(nf->nf_name)))
++                        break;
++        }
++
++        if (i == libcfs_nnetstrfns)
++                return NULL;
++
++        nob = strlen(nf->nf_name);
++
++        if (strlen(str) == (unsigned int)nob) {
++                netnum = 0;
++        } else {
++                if (nf->nf_type == LOLND) /* net number not allowed */
++                        return NULL;
++
++                str += nob;
++                i = strlen(str);
++                if (sscanf(str, "%u%n", &netnum, &i) < 1 ||
++                    i != (int)strlen(str))
++                        return NULL;
++        }
++
++        *net = LNET_MKNET(nf->nf_type, netnum);
++        return nf;
++}
++
++lnet_nid_t
++libcfs_str2nid(char *str)
++{
++        char             *sep = strchr(str, '@');
++        struct netstrfns *nf;
++        uint32_t             net;
++        uint32_t             addr;
++
++        if (sep != NULL) {
++                nf = libcfs_str2net_internal(sep + 1, &net);
++                if (nf == NULL)
++                        return LNET_NID_ANY;
++        } else {
++                sep = str + strlen(str);
++                net = LNET_MKNET(SOCKLND, 0);
++                nf = libcfs_lnd2netstrfns(SOCKLND);
++                if (!nf)
++                        return LNET_NID_ANY;
++        }
++
++        if (!nf->nf_str2addr(str, sep - str, &addr))
++                return LNET_NID_ANY;
++
++        return LNET_MKNID(net, addr);
++}
++
++/****************************************
++ * user mapping database handling       *
++ * (very rudiment)                      *
++ ****************************************/
++
++#define MAPPING_GROW_SIZE       512
++#define MAX_LINE_LEN            1024
++
++struct user_map_item {
++        char        *principal; /* NULL means match all */
++        lnet_nid_t   nid;
++        uid_t        uid;
++};
++
++struct user_mapping {
++        int                   size;
++        int                   nitems;
++        struct user_map_item *items;
++};
++
++static struct user_mapping mapping = {0, 0, NULL};
++/* FIXME to be finished: monitor change of mapping database */
++static int mapping_mtime = 0;
++
++static
++void cleanup_mapping(void)
++{
++        int n;
++
++        for (n = 0; n < mapping.nitems; n++) {
++                if (mapping.items[n].principal)
++                        free(mapping.items[n].principal);
++        }
++        mapping.nitems = 0;
++}
++
++static
++int grow_mapping(int size)
++{
++        struct user_map_item *new;
++        int newsize;
++
++        if (size <= mapping.size)
++                return 0;
++
++        newsize = mapping.size + MAPPING_GROW_SIZE;
++        while (newsize < size)
++                newsize += MAPPING_GROW_SIZE;
++
++        new = malloc(newsize * sizeof(struct user_map_item));
++        if (!new) {
++                printerr(0, "can't alloc mapping size %d\n", newsize);
++                return -1;
++        }
++        memcpy(new, mapping.items, mapping.nitems * sizeof(void*));
++        free(mapping.items);
++        mapping.items = new;
++        mapping.size = newsize;
++        return 0;
++}
++
++uid_t parse_uid(char *uidstr)
++{
++        struct passwd *pw;
++        char *p = NULL;
++        long uid;
++
++        pw = getpwnam(uidstr);
++        if (pw)
++                return pw->pw_uid;
++
++        uid = strtol(uidstr, &p, 0);
++        if (*p == '\0')
++                return (uid_t) uid;
++
++        return -1;
++}
++
++static
++int read_mapping_db(void)
++{
++        char princ[MAX_LINE_LEN];
++        char nid_str[MAX_LINE_LEN];
++        char dest[MAX_LINE_LEN];
++        lnet_nid_t nid;
++        uid_t dest_uid;
++        FILE *f;
++        char *line, linebuf[MAX_LINE_LEN];
++
++        /* cleanup old mappings */
++        cleanup_mapping();
++
++        f = fopen(MAPPING_DATABASE_FILE, "r");
++        if (!f) {
++                printerr(0, "can't open mapping database: %s\n",
++                         MAPPING_DATABASE_FILE);
++                return -1;
++        }
++
++        while ((line = fgets(linebuf, MAX_LINE_LEN, f))) {
++                char *name;
++
++                if (strlen(line) >= MAX_LINE_LEN) {
++                        printerr(0, "invalid mapping db: line too long (%d)\n",
++                                 strlen(line));
++                        cleanup_mapping();
++                        fclose(f);
++                        return -1;
++                }
++                if (sscanf(line, "%s %s %s", princ, nid_str, dest) != 3) {
++                        printerr(0, "mapping db: syntax error\n");
++                        cleanup_mapping();
++                        fclose(f);
++                        return -1;
++                }
++                if (grow_mapping(mapping.nitems + 1)) {
++                        printerr(0, "fail to grow mapping to %d\n",
++                                 mapping.nitems + 1);
++                        fclose(f);
++                        return -1;
++                }
++                if (!strcmp(princ, "*")) {
++                        name = NULL;
++                } else {
++                        name = strdup(princ);
++                        if (!name) {
++                                printerr(0, "fail to dup str %s\n", princ);
++                                fclose(f);
++                                return -1;
++                        }
++                }
++                if (!strcmp(nid_str, "*")) {
++                        nid = LNET_NID_ANY;
++                } else {
++                        nid = libcfs_str2nid(nid_str);
++                        if (nid == LNET_NID_ANY) {
++                                printerr(0, "fail to parse nid %s\n", nid_str);
++                                fclose(f);
++                                return -1;
++                        }
++                }
++                dest_uid = parse_uid(dest);
++                if (dest_uid == -1) {
++                        printerr(0, "no valid user: %s\n", dest);
++                        free(name);
++                        fclose(f);
++                        return -1;
++                }
++
++                mapping.items[mapping.nitems].principal = name;
++                mapping.items[mapping.nitems].nid = nid;
++                mapping.items[mapping.nitems].uid = dest_uid;
++                mapping.nitems++;
++                printerr(1, "add mapping: %s(%s/0x%llx) ==> %d\n",
++                         name ? name : "*", nid_str, nid, dest_uid);
++        }
++
++        return 0;
++}
++
++static inline int mapping_changed(void)
++{
++        struct stat st;
++
++        if (stat(MAPPING_DATABASE_FILE, &st) == -1) {
++                printerr(0, "stat %s failed\n");
++                return 1;
++        }
++
++        if (st.st_mtime != mapping_mtime) {
++                mapping_mtime = st.st_mtime;
++                return 1;
++        }
++
++        return 0;
++}
++
++int lookup_mapping(char *princ, lnet_nid_t nid, uid_t *uid)
++{
++        int n;
++
++        /* FIXME race condition here */
++        if (mapping_changed()) {
++                if (read_mapping_db())
++                        printerr(0, "all remote users will be denied\n");
++        }
++
++        for (n = 0; n < mapping.nitems; n++) {
++                struct user_map_item *entry = &mapping.items[n];
++
++                if (entry->nid != LNET_NID_ANY && entry->nid != nid)
++                        continue;
++                if (!entry->principal ||
++                    !strcasecmp(entry->principal, princ)) {
++                        printerr(1, "found mapping: %s ==> %d\n",
++                                 princ, entry->uid);
++                        *uid = entry->uid;
++                        return 0;
++                }
++        }
++        printerr(1, "no mapping for %s/%#Lx\n", princ, nid);
++        *uid = -1;
++        return -1;
++}
++
+--- nfs-utils-1.0.10/utils/gssd/err_util.h.lustre	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/err_util.h	2006-10-13 16:03:33.000000000 -0600
+@@ -33,5 +33,6 @@
+ 
+ void initerr(char *progname, int verbosity, int fg);
+ void printerr(int priority, char *format, ...);
++void print_hexl(int pri, unsigned char *cp, int length);
+ 
+ #endif /* _ERR_UTIL_H_ */
+--- nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c.lustre	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c	2006-10-13 16:03:33.000000000 -0600
+@@ -47,31 +47,31 @@
+ #include "err_util.h"
+ 
+ void
+-gssd_run()
++svcgssd_run()
+ {
+ 	int			ret;
+ 	FILE			*f;
+ 	struct pollfd		pollfd;
+ 
+-#define NULLRPC_FILE "/proc/net/rpc/auth.rpcsec.init/channel"
++#define NULLRPC_FILE "/proc/net/rpc/auth.ptlrpcs.init/channel"
+ 
+-	f = fopen(NULLRPC_FILE, "rw");
+-
+-	if (!f) {
+-		printerr(0, "failed to open %s: %s\n",
+-			 NULLRPC_FILE, strerror(errno));
+-		exit(1);
+-	}
+-	pollfd.fd = fileno(f);
+-	pollfd.events = POLLIN;
+ 	while (1) {
+ 		int save_err;
+ 
++		while ((f = fopen(NULLRPC_FILE, "rw")) == NULL) {
++			printerr(3, "failed to open %s: %s\n",
++				 NULLRPC_FILE, strerror(errno));
++			sleep(1);
++		}
++		pollfd.fd = fileno(f);
++		pollfd.events = POLLIN;
++
+ 		pollfd.revents = 0;
+-		printerr(1, "entering poll\n");
+-		ret = poll(&pollfd, 1, -1);
++		printerr(3, "entering poll\n");
++		ret = poll(&pollfd, 1, 1000);
+ 		save_err = errno;
+-		printerr(1, "leaving poll\n");
++		printerr(3, "leaving poll\n");
++
+ 		if (ret < 0) {
+ 			if (save_err != EINTR)
+ 				printerr(0, "error return from poll: %s\n",
+@@ -87,5 +87,6 @@
+ 			if (pollfd.revents & POLLIN)
+ 				handle_nullreq(f);
+ 		}
++		fclose(f);
+ 	}
+ }
 --- nfs-utils-1.0.10/utils/gssd/Makefile.am.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/Makefile.am	2006-08-14 10:32:30.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/Makefile.am	2006-10-13 16:03:33.000000000 -0600
 @@ -1,17 +1,11 @@
  ## Process this file with automake to produce Makefile.in
  
@@ -1859,128 +3184,55 @@
 -	    rm -f $(RPCPREFIX)$$inst ; \
 -	  done)
 -
---- nfs-utils-1.0.10/utils/gssd/svcgssd.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd.c	2006-08-14 10:32:45.000000000 -0600
-@@ -43,7 +43,6 @@
- #include <sys/types.h>
- #include <sys/stat.h>
- #include <sys/socket.h>
--#include <rpc/rpc.h>
- #include <fcntl.h>
- #include <errno.h>
- 
-@@ -54,11 +53,33 @@
- #include <stdlib.h>
- #include <string.h>
- #include <signal.h>
--#include "nfslib.h"
-+#include <dirent.h>
- #include "svcgssd.h"
- #include "gss_util.h"
- #include "err_util.h"
-+#include "lsupport.h"
- 
-+void
-+closeall(int min)
-+{
-+	DIR *dir = opendir("/proc/self/fd");
-+	if (dir != NULL) {
-+		int dfd = dirfd(dir);
-+		struct dirent *d;
+--- nfs-utils-1.0.10/utils/gssd/gssd.h.lustre	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gssd.h	2006-10-13 16:03:33.000000000 -0600
+@@ -48,8 +48,13 @@
+ #define GSSD_DEFAULT_CRED_PREFIX		"krb5cc_"
+ #define GSSD_DEFAULT_MACHINE_CRED_SUFFIX	"machine"
+ #define GSSD_DEFAULT_KEYTAB_FILE		"/etc/krb5.keytab"
+-#define GSSD_SERVICE_NAME			"nfs"
+-#define GSSD_SERVICE_NAME_LEN			3
++#define GSSD_SERVICE_MDS			"lustre_mds"
++#define GSSD_SERVICE_OSS			"lustre_oss"
++#define GSSD_SERVICE_MDS_NAMELEN		10
++#define GSSD_SERVICE_OSS_NAMELEN		10
 +
-+		while ((d = readdir(dir)) != NULL) {
-+			char *endp;
-+			long n = strtol(d->d_name, &endp, 10);
-+			if (*endp != '\0' && n >= min && n != dfd)
-+				(void) close(n);
-+		}
-+		closedir(dir);
-+	} else {
-+		int fd = sysconf(_SC_OPEN_MAX);
-+		while (--fd >= min)
-+			(void) close(fd);
-+	}
-+}
++#define LUSTRE_ROOT_NAME			"lustre_root"
++#define LUSTRE_ROOT_NAMELEN			11
+ 
  /*
-  * mydaemon creates a pipe between the partent and child
-  * process. The parent process will wait until the
-@@ -165,8 +186,8 @@
- 	int get_creds = 1;
- 	int fg = 0;
- 	int verbosity = 0;
--	int rpc_verbosity = 0;
- 	int opt;
-+	int must_srv_mds = 0, must_srv_oss = 0;
- 	extern char *optarg;
- 	char *progname;
+  * The gss mechanisms that we can handle
+@@ -61,6 +66,7 @@
+ extern char			pipefsdir[PATH_MAX];
+ extern char			keytabfile[PATH_MAX];
+ extern char			ccachedir[PATH_MAX];
++extern char			gethostname_ex[PATH_MAX];
  
-@@ -181,8 +202,13 @@
- 			case 'v':
- 				verbosity++;
- 				break;
--			case 'r':
--				rpc_verbosity++;
-+			case 'm':
-+				get_creds = 1;
-+				must_srv_mds = 1;
-+				break;
-+			case 'o':
-+				get_creds = 1;
-+				must_srv_oss = 1;
- 				break;
- 			default:
- 				usage(argv[0]);
-@@ -196,27 +222,13 @@
- 		progname = argv[0];
+ TAILQ_HEAD(clnt_list_head, clnt_info) clnt_list;
  
- 	initerr(progname, verbosity, fg);
--#ifdef HAVE_AUTHGSS_SET_DEBUG_LEVEL
--	authgss_set_debug_level(rpc_verbosity);
--#else
--	if (rpc_verbosity > 0)
--		printerr(0, "Warning: rpcsec_gss library does not "
--			    "support setting debug level\n");
--#endif
+@@ -69,10 +75,6 @@
+ 	char			*dirname;
+ 	int			dir_fd;
+ 	char			*servicename;
+-	char			*servername;
+-	int			prog;
+-	int			vers;
+-	char			*protocol;
+ 	int			krb5_fd;
+ 	int			krb5_poll_index;
+ 	int			spkm3_fd;
+@@ -83,8 +85,7 @@
+ int update_client_list(void);
+ void handle_krb5_upcall(struct clnt_info *clp);
+ void handle_spkm3_upcall(struct clnt_info *clp);
+-int gssd_acquire_cred(char *server_name);
+-void gssd_run(void);
++void lgssd_run(void);
  
- 	if (gssd_check_mechs() != 0) {
- 		printerr(0, "ERROR: Problem with gssapi library\n");
- 		exit(1);
- 	}
  
--	if (!fg)
--		mydaemon(0, 0);
--
--	signal(SIGINT, sig_die);
--	signal(SIGTERM, sig_die);
--	signal(SIGHUP, sig_hup);
--
--	if (get_creds && !gssd_acquire_cred(GSSD_SERVICE_NAME)) {
-+	if (get_creds && gssd_prepare_creds(must_srv_mds, must_srv_oss)) {
-                 printerr(0, "unable to obtain root (machine) credentials\n");
-                 printerr(0, "do you have a keytab entry for "
- 			    "nfs/<your.host>@<YOUR.REALM> in "
-@@ -225,9 +237,18 @@
- 	}
- 
- 	if (!fg)
-+		mydaemon(0, 0);
-+
-+	signal(SIGINT, sig_die);
-+	signal(SIGTERM, sig_die);
-+	signal(SIGHUP, sig_hup);
-+
-+	if (!fg)
- 		release_parent();
- 
--	gssd_run();
-+	gssd_init_unique(GSSD_SVC);
-+
-+	svcgssd_run();
- 	printerr(0, "gssd_run returned!\n");
- 	abort();
- }
+ #endif /* _RPC_GSSD_H_ */
 --- nfs-utils-1.0.10/utils/gssd/svcgssd.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd.h	2006-08-14 10:32:30.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd.h	2006-10-13 16:03:33.000000000 -0600
 @@ -36,8 +36,19 @@
  #include <gssapi/gssapi.h>
  
@@ -2003,1074 +3255,8 @@
 +#define LUSTRE_ROOT_NAMELEN			11
  
  #endif /* _RPC_SVCGSSD_H_ */
---- nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c	2006-08-14 10:32:30.000000000 -0600
-@@ -47,31 +47,31 @@
- #include "err_util.h"
- 
- void
--gssd_run()
-+svcgssd_run()
- {
- 	int			ret;
- 	FILE			*f;
- 	struct pollfd		pollfd;
- 
--#define NULLRPC_FILE "/proc/net/rpc/auth.rpcsec.init/channel"
-+#define NULLRPC_FILE "/proc/net/rpc/auth.ptlrpcs.init/channel"
- 
--	f = fopen(NULLRPC_FILE, "rw");
--
--	if (!f) {
--		printerr(0, "failed to open %s: %s\n",
--			 NULLRPC_FILE, strerror(errno));
--		exit(1);
--	}
--	pollfd.fd = fileno(f);
--	pollfd.events = POLLIN;
- 	while (1) {
- 		int save_err;
- 
-+		while ((f = fopen(NULLRPC_FILE, "rw")) == NULL) {
-+			printerr(3, "failed to open %s: %s\n",
-+				 NULLRPC_FILE, strerror(errno));
-+			sleep(1);
-+		}
-+		pollfd.fd = fileno(f);
-+		pollfd.events = POLLIN;
-+
- 		pollfd.revents = 0;
--		printerr(1, "entering poll\n");
--		ret = poll(&pollfd, 1, -1);
-+		printerr(3, "entering poll\n");
-+		ret = poll(&pollfd, 1, 1000);
- 		save_err = errno;
--		printerr(1, "leaving poll\n");
-+		printerr(3, "leaving poll\n");
-+
- 		if (ret < 0) {
- 			if (save_err != EINTR)
- 				printerr(0, "error return from poll: %s\n",
-@@ -87,5 +87,6 @@
- 			if (pollfd.revents & POLLIN)
- 				handle_nullreq(f);
- 		}
-+		fclose(f);
- 	}
- }
---- nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c	2006-08-14 10:32:30.000000000 -0600
-@@ -35,7 +35,6 @@
- 
- #include <sys/param.h>
- #include <sys/stat.h>
--#include <rpc/rpc.h>
- 
- #include <pwd.h>
- #include <stdio.h>
-@@ -44,25 +43,28 @@
- #include <string.h>
- #include <fcntl.h>
- #include <errno.h>
--#include <nfsidmap.h>
-+#include <netdb.h>
- 
- #include "svcgssd.h"
- #include "gss_util.h"
- #include "err_util.h"
- #include "context.h"
- #include "cacheio.h"
-+#include "lsupport.h"
- 
- extern char * mech2file(gss_OID mech);
--#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.rpcsec.context/channel"
--#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.rpcsec.init/channel"
-+#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.ptlrpcs.context/channel"
-+#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.ptlrpcs.init/channel"
- 
- #define TOKEN_BUF_SIZE		8192
- 
- struct svc_cred {
--	uid_t	cr_uid;
--	gid_t	cr_gid;
--	int	cr_ngroups;
--	gid_t	cr_groups[NGROUPS];
-+	uint32_t cr_remote;
-+	uint32_t cr_usr_root;
-+	uint32_t cr_usr_mds;
-+	uid_t    cr_uid;
-+	uid_t    cr_mapped_uid;
-+	uid_t    cr_gid;
- };
- 
- static int
-@@ -70,10 +72,9 @@
- 		gss_OID mech, gss_buffer_desc *context_token)
- {
- 	FILE *f;
--	int i;
- 	char *fname = NULL;
- 
--	printerr(1, "doing downcall\n");
-+	printerr(2, "doing downcall\n");
- 	if ((fname = mech2file(mech)) == NULL)
- 		goto out_err;
- 	f = fopen(SVCGSSD_CONTEXT_CHANNEL, "w");
-@@ -86,11 +87,12 @@
- 	qword_printhex(f, out_handle->value, out_handle->length);
- 	/* XXX are types OK for the rest of this? */
- 	qword_printint(f, 0x7fffffff); /*XXX need a better timeout */
-+	qword_printint(f, cred->cr_remote);
-+	qword_printint(f, cred->cr_usr_root);
-+	qword_printint(f, cred->cr_usr_mds);
-+	qword_printint(f, cred->cr_mapped_uid);
- 	qword_printint(f, cred->cr_uid);
- 	qword_printint(f, cred->cr_gid);
--	qword_printint(f, cred->cr_ngroups);
--	for (i=0; i < cred->cr_ngroups; i++)
--		qword_printint(f, cred->cr_groups[i]);
- 	qword_print(f, fname);
- 	qword_printhex(f, context_token->value, context_token->length);
- 	qword_eol(f);
-@@ -119,7 +121,7 @@
- 	/* XXXARG: */
- 	int g;
- 
--	printerr(1, "sending null reply\n");
-+	printerr(2, "sending null reply\n");
- 
- 	qword_addhex(&bp, &blen, in_handle->value, in_handle->length);
- 	qword_addhex(&bp, &blen, in_token->value, in_token->length);
-@@ -159,6 +161,7 @@
- #define rpcsec_gsserr_credproblem	13
- #define rpcsec_gsserr_ctxproblem	14
- 
-+#if 0
- static void
- add_supplementary_groups(char *secname, char *name, struct svc_cred *cred)
- {
-@@ -182,7 +185,9 @@
- 		}
- 	}
- }
-+#endif
- 
-+#if 0
- static int
- get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred)
- {
-@@ -248,7 +253,9 @@
- out:
- 	return res;
- }
-+#endif
- 
-+#if 0
- void
- print_hexl(int pri, unsigned char *cp, int length)
- {
-@@ -285,12 +292,114 @@
- 		printerr(pri,"\n");
- 	}
- }
-+#endif
-+
-+static int
-+get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
-+	ptl_nid_t ptl_nid)
-+{
-+	u_int32_t	maj_stat, min_stat;
-+	gss_buffer_desc	name;
-+	char		*sname, *realm, *slash;
-+	int		res = -1;
-+	gss_OID		name_type = GSS_C_NO_OID;
-+	struct passwd	*pw;
-+
-+	memset(cred, 0, sizeof(*cred));
-+
-+	maj_stat = gss_display_name(&min_stat, client_name, &name, &name_type);
-+	if (maj_stat != GSS_S_COMPLETE) {
-+		pgsserr("get_ids: gss_display_name",
-+			maj_stat, min_stat, mech);
-+		return -1;
-+	}
-+	if (name.length >= 0xffff || /* be certain name.length+1 doesn't overflow */
-+	    !(sname = calloc(name.length + 1, 1))) {
-+		printerr(0, "WARNING: get_ids: error allocating %d bytes "
-+			"for sname\n", name.length + 1);
-+		gss_release_buffer(&min_stat, &name);
-+		return -1;
-+	}
-+	memcpy(sname, name.value, name.length);
-+	printerr(1, "authenticate user %s\n", sname);
-+	gss_release_buffer(&min_stat, &name);
-+
-+#if 0
-+	lookup_mapping(sname, ptl_nal, ptl_netid, ptl_nid, &cred->cr_mapped_uid);
-+#else
-+	cred->cr_mapped_uid = -1;
-+#endif
-+
-+        realm = strchr(sname, '@');
-+        if (!realm) {
-+                printerr(0, "WARNNING: principal %s contains no realm name\n",
-+			 sname);
-+                cred->cr_remote = (mds_local_realm != NULL);
-+        } else {
-+                *realm++ = '\0';
-+                if (!mds_local_realm)
-+                        cred->cr_remote = 1;
-+                else
-+                        cred->cr_remote =
-+                                (strcasecmp(mds_local_realm, realm) != 0);
-+        }
-+
-+        if (cred->cr_remote) {
-+                if (cred->cr_mapped_uid != -1)
-+                        res = 0;
-+                else
-+                        printerr(0, "principal %s is remote without mapping\n",
-+                                 sname);
-+		goto out_free;
-+        }
-+
-+        slash = strchr(sname, '/');
-+        if (slash)
-+                *slash = '\0';
-+
-+        if (!(pw = getpwnam(sname))) {
-+                /* If client use machine credential, we map it to root, which
-+                 * will subject to further mapping by root-squash in kernel.
-+                 *
-+                 * MDS service keytab is treated as special user, also mapped
-+                 * to root. OSS service keytab can't be used as a user.
-+                 */
-+                if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
-+                        printerr(2, "lustre_root principal, resolve to uid 0\n");
-+                        cred->cr_uid = 0;
-+                        cred->cr_usr_root = 1;
-+                } else if (!strcmp(sname, GSSD_SERVICE_MDS)) {
-+                        printerr(2, "mds service principal, resolve to uid 0\n");
-+                        cred->cr_uid = 0;
-+                        cred->cr_usr_mds = 1;
-+                } else {
-+                        cred->cr_uid = -1;
-+                        if (cred->cr_mapped_uid == -1) {
-+                                printerr(0, "invalid user %s\n", sname);
-+                                goto out_free;
-+                        }
-+                        printerr(2, "user %s mapped to %u\n",
-+                                 sname, cred->cr_mapped_uid);
-+                }
-+        } else {
-+                cred->cr_uid = pw->pw_uid;
-+                printerr(2, "%s resolve to uid %u\n", sname, cred->cr_uid);
-+        }
-+
-+        res = 0;
-+out_free:
-+        free(sname);
-+        return res;
-+}
-+
-+typedef struct gss_union_ctx_id_t {
-+	gss_OID         mech_type;
-+	gss_ctx_id_t    internal_ctx_id;
-+} gss_union_ctx_id_desc, *gss_union_ctx_id_t;
- 
- void
- handle_nullreq(FILE *f) {
--	/* XXX initialize to a random integer to reduce chances of unnecessary
--	 * invalidation of existing ctx's on restarting svcgssd. */
--	static u_int32_t	handle_seq = 0;
-+	uint64_t		handle_seq;
- 	char			in_tok_buf[TOKEN_BUF_SIZE];
- 	char			in_handle_buf[15];
- 	char			out_handle_buf[15];
-@@ -302,10 +411,13 @@
- 				ignore_out_tok = {.value = NULL},
- 	/* XXX isn't there a define for this?: */
- 				null_token = {.value = NULL};
-+	uint32_t		lustre_svc;
-+	uint64_t		ptl_nid;
- 	u_int32_t		ret_flags;
- 	gss_ctx_id_t		ctx = GSS_C_NO_CONTEXT;
- 	gss_name_t		client_name;
- 	gss_OID			mech = GSS_C_NO_OID;
-+	gss_cred_id_t		svc_cred;
- 	u_int32_t		maj_stat = GSS_S_FAILURE, min_stat = 0;
- 	u_int32_t		ignore_min_stat;
- 	struct svc_cred		cred;
-@@ -313,7 +425,7 @@
- 	static int		lbuflen = 0;
- 	static char		*cp;
- 
--	printerr(1, "handling null request\n");
-+	printerr(2, "handling null request\n");
- 
- 	if (readline(fileno(f), &lbuf, &lbuflen) != 1) {
- 		printerr(0, "WARNING: handle_nullreq: "
-@@ -323,15 +435,21 @@
- 
- 	cp = lbuf;
- 
-+	qword_get(&cp, (char *) &lustre_svc, sizeof(lustre_svc));
-+	qword_get(&cp, (char *) &ptl_nid, sizeof(ptl_nid));
-+	qword_get(&cp, (char *) &handle_seq, sizeof(handle_seq));
-+	printerr(1, "handling req: svc %u, nid %016llx, idx %llx\n",
-+		 lustre_svc, ptl_nid, handle_seq);
-+
- 	in_handle.length = (size_t) qword_get(&cp, in_handle.value,
- 					      sizeof(in_handle_buf));
--	printerr(2, "in_handle: \n");
--	print_hexl(2, in_handle.value, in_handle.length);
-+	printerr(3, "in_handle: \n");
-+	print_hexl(3, in_handle.value, in_handle.length);
- 
- 	in_tok.length = (size_t) qword_get(&cp, in_tok.value,
- 					   sizeof(in_tok_buf));
--	printerr(2, "in_tok: \n");
--	print_hexl(2, in_tok.value, in_tok.length);
-+	printerr(3, "in_tok: \n");
-+	print_hexl(3, in_tok.value, in_tok.length);
- 
- 	if (in_tok.length < 0) {
- 		printerr(0, "WARNING: handle_nullreq: "
-@@ -351,7 +469,13 @@
- 		memcpy(&ctx, in_handle.value, in_handle.length);
- 	}
- 
--	maj_stat = gss_accept_sec_context(&min_stat, &ctx, gssd_creds,
-+	svc_cred = gssd_select_svc_cred(lustre_svc);
-+	if (!svc_cred) {
-+		printerr(0, "no service credential for svc %u\n", lustre_svc);
-+		goto out_err;
-+	}
-+
-+	maj_stat = gss_accept_sec_context(&min_stat, &ctx, svc_cred,
- 			&in_tok, GSS_C_NO_CHANNEL_BINDINGS, &client_name,
- 			&mech, &out_tok, &ret_flags, NULL, NULL);
- 
-@@ -369,7 +493,7 @@
- 			maj_stat, min_stat, mech);
- 		goto out_err;
- 	}
--	if (get_ids(client_name, mech, &cred)) {
-+	if (get_ids(client_name, mech, &cred, ptl_nid)) {
- 		/* get_ids() prints error msg */
- 		maj_stat = GSS_S_BAD_NAME; /* XXX ? */
- 		gss_release_name(&ignore_min_stat, &client_name);
-@@ -377,10 +501,8 @@
- 	}
- 	gss_release_name(&ignore_min_stat, &client_name);
- 
--
- 	/* Context complete. Pass handle_seq in out_handle to use
- 	 * for context lookup in the kernel. */
--	handle_seq++;
- 	out_handle.length = sizeof(handle_seq);
- 	memcpy(out_handle.value, &handle_seq, sizeof(handle_seq));
- 
-@@ -404,7 +526,6 @@
- 		free(ctx_token.value);
- 	if (out_tok.value != NULL)
- 		gss_release_buffer(&ignore_min_stat, &out_tok);
--	printerr(1, "finished handling null request\n");
- 	return;
- 
- out_err:
---- nfs-utils-1.0.10/utils/gssd/lsupport.c.lustre	2006-08-14 10:32:30.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/lsupport.c	2006-08-14 10:32:30.000000000 -0600
-@@ -0,0 +1,604 @@
-+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
-+ * vim:expandtab:shiftwidth=8:tabstop=8:
-+ *
-+ *  Copyright (c) 2005 Cluster File Systems, Inc.
-+ *
-+ *   This file is part of Lustre, http://www.lustre.org.
-+ *
-+ *   Lustre is free software; you can redistribute it and/or
-+ *   modify it under the terms of version 2 of the GNU General Public
-+ *   License as published by the Free Software Foundation.
-+ *
-+ *   Lustre is distributed in the hope that it will be useful,
-+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
-+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+ *   GNU General Public License for more details.
-+ *
-+ *   You should have received a copy of the GNU General Public License
-+ *   along with Lustre; if not, write to the Free Software
-+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
-+ */
-+
-+#ifndef _GNU_SOURCE
-+#define _GNU_SOURCE
-+#endif
-+#include "config.h"
-+#include <sys/param.h>
-+#include <sys/utsname.h>
-+#include <sys/stat.h>
-+#include <sys/socket.h>
-+#include <arpa/inet.h>
-+#include <sys/types.h>
-+#include <sys/ipc.h>
-+#include <sys/sem.h>
-+
-+#include <stdio.h>
-+#include <stdlib.h>
-+#include <pwd.h>
-+#include <grp.h>
-+#include <string.h>
-+#include <dirent.h>
-+#include <poll.h>
-+#include <fcntl.h>
-+#include <signal.h>
-+#include <unistd.h>
-+#include <errno.h>
-+#include <netdb.h>
-+#include <assert.h>
-+
-+#include "err_util.h"
-+#include "gssd.h"
-+#include "lsupport.h"
-+
-+/****************************************
-+ * exclusive startup                    *
-+ ****************************************/
-+
-+static struct __sem_s {
-+        char           *name;
-+        key_t           sem_key;
-+        int             sem_id;
-+} sems[2] = {
-+        [GSSD_CLI] = { "client",  0x3a92d473, 0 },
-+        [GSSD_SVC] = { "server",  0x3b92d473, 0 },
-+};
-+
-+void gssd_init_unique(int type)
-+{
-+        struct __sem_s *sem = &sems[type];
-+        struct sembuf   sembuf;
-+
-+        assert(type == GSSD_CLI || type == GSSD_SVC);
-+
-+again:
-+        sem->sem_id = semget(sem->sem_key, 1, IPC_CREAT | IPC_EXCL | 0700);
-+        if (sem->sem_id == -1) {
-+                if (errno != EEXIST) {
-+                        printerr(0, "Create sem: %s\n", strerror(errno));
-+                        exit(-1);
-+                }
-+
-+                /* already exist. Note there's still a small window racing
-+                 * with other processes, due to the stupid semaphore semantics.
-+                 */
-+                sem->sem_id = semget(sem->sem_key, 0, 0700);
-+                if (sem->sem_id == -1) {
-+                        if (errno == ENOENT) {
-+                                printerr(0, "another instance just exit, "
-+                                         "try again\n");
-+                                goto again;
-+                        }
-+
-+                        printerr(0, "Obtain sem: %s\n", strerror(errno));
-+                        exit(-1);
-+                }
-+        } else {
-+                int val = 1;
-+
-+                if (semctl(sem->sem_id, 0, SETVAL, val) == -1) {
-+                        printerr(0, "Initialize sem: %s\n",
-+                                 strerror(errno));
-+                        exit(-1);
-+                }
-+        }
-+
-+        sembuf.sem_num = 0;
-+        sembuf.sem_op = -1;
-+        sembuf.sem_flg = IPC_NOWAIT | SEM_UNDO;
-+
-+        if (semop(sem->sem_id, &sembuf, 1) != 0) {
-+                if (errno == EAGAIN) {
-+                        printerr(0, "Another instance is running, exit\n");
-+                        exit(0);
-+                }
-+                printerr(0, "Grab sem: %s\n", strerror(errno));
-+                exit(0);
-+        }
-+
-+        printerr(2, "Successfully created %s global identity\n", sem->name);
-+}
-+
-+void gssd_exit_unique(int type)
-+{
-+        assert(type == GSSD_CLI || type == GSSD_SVC);
-+
-+        /*
-+         * do nothing. we can't remove the sem here, otherwise the race
-+         * window would be much bigger. So it's sad we have to leave the
-+         * sem in the system forever.
-+         */
-+}
-+
-+/****************************************
-+ * client side resolvation:             *
-+ *    nal/netid/nid => hostname         *
-+ ****************************************/
-+
-+char gethostname_ex[PATH_MAX] = GSSD_DEFAULT_GETHOSTNAME_EX;
-+
-+typedef int ptl_nid2hostname_t(char *nal, uint32_t net, uint32_t addr,
-+                               char *buf, int buflen);
-+
-+/* FIXME what about IPv6? */
-+static
-+int socknal_nid2hostname(char *nal, uint32_t net, uint32_t addr,
-+                         char *buf, int buflen)
-+{
-+        struct hostent  *ent;
-+
-+        addr = htonl(addr);
-+        ent = gethostbyaddr(&addr, sizeof(addr), AF_INET);
-+        if (!ent) {
-+                printerr(0, "%s: can't resolve 0x%x\n", nal, addr);
-+                return -1;
-+        }
-+        if (strlen(ent->h_name) >= buflen) {
-+                printerr(0, "%s: name too long: %s\n", nal, ent->h_name);
-+                return -1;
-+        }
-+        strcpy(buf, ent->h_name);
-+
-+        printerr(2, "%s: net 0x%x, addr 0x%x => %s\n",
-+                 nal, net, addr, buf);
-+        return 0;
-+}
-+
-+static
-+int lonal_nid2hostname(char *nal, uint32_t net, uint32_t addr,
-+                       char *buf, int buflen)
-+{
-+        struct utsname   uts;
-+        struct hostent  *ent;
-+
-+        if (addr) {
-+                printerr(0, "%s: addr is 0x%x, we expect 0\n", nal, addr);
-+                return -1;
-+        }
-+
-+        if (uname(&uts)) {
-+                printerr(0, "%s: failed obtain local machine name\n", nal);
-+                return -1;
-+        }
-+
-+        ent = gethostbyname(uts.nodename);
-+        if (!ent) {
-+                printerr(0, "%s: failed obtain canonical name of %s\n",
-+                         nal, uts.nodename);
-+                return -1;
-+        }
-+
-+        if (strlen(ent->h_name) >= buflen) {
-+                printerr(0, "%s: name too long: %s\n", nal, ent->h_name);
-+                return -1;
-+        }
-+        strcpy(buf, ent->h_name);
-+
-+        printerr(2, "%s: addr 0x%x => %s\n", nal, addr, buf);
-+        return 0;
-+}
-+
-+static int is_space(char c)
-+{
-+        return (c == ' ' || c == '\t' || c == '\n');
-+}
-+
-+static
-+int external_nid2hostname(char *nal, uint32_t net, uint32_t addr,
-+                           char *namebuf, int namebuflen)
-+{
-+        const int bufsize = PATH_MAX + 256;
-+        char buf[bufsize], *head, *tail;
-+        FILE *fghn;
-+
-+        sprintf(buf, "%s %s 0x%x 0x%x", gethostname_ex, nal, net, addr);
-+        printerr(2, "cmd: %s\n", buf);
-+
-+        fghn = popen(buf, "r");
-+        if (fghn == NULL) {
-+                printerr(0, "failed to call %s\n", gethostname_ex);
-+                return -1;
-+        }
-+
-+        head = fgets(buf, bufsize, fghn);
-+        if (head == NULL) {
-+                printerr(0, "can't read\n");
-+                return -1;
-+        }
-+        if (pclose(fghn) == -1)
-+                printerr(1, "pclose failed, continue\n");
-+
-+        /* trim head/tail space */
-+        while (is_space(*head))
-+                head++;
-+
-+        tail = head + strlen(head);
-+        if (tail <= head) {
-+                printerr(0, "no output\n");
-+                return -1;
-+        }
-+        while (is_space(*(tail - 1)))
-+                tail--;
-+        if (tail <= head) {
-+                printerr(0, "output are all space\n");
-+                return -1;
-+        }
-+        *tail = '\0';
-+
-+        /* start with '@' means error msg */
-+        if (head[0] == '@') {
-+                printerr(0, "%s\n", &head[1]);
-+                return -1;
-+        }
-+
-+        if (tail - head > namebuflen) {
-+                printerr(0, "hostname too long: %s\n", head);
-+                return -1;
-+        }
-+
-+        printerr(2, "%s: net 0x%x, addr 0x%x => %s\n",
-+                 nal, net, addr, head);
-+        strcpy(namebuf, head);
-+        return 0;
-+}
-+
-+enum {
-+        QSWNAL    = 1,
-+        SOCKNAL   = 2,
-+        GMNAL     = 3,
-+        /*          4 unused */
-+        TCPNAL    = 5,
-+        ROUTER    = 6,
-+        OPENIBNAL = 7,
-+        IIBNAL    = 8,
-+        LONAL     = 9,
-+        RANAL     = 10,
-+        VIBNAL    = 11,
-+        NAL_ENUM_END_MARKER
-+};
-+
-+static struct {
-+        char                    *name;
-+        ptl_nid2hostname_t      *nid2name;
-+} converter[NAL_ENUM_END_MARKER] = {
-+        {"UNUSED0",     NULL},
-+        {"QSWNAL",      external_nid2hostname},
-+        {"SOCKNAL",     socknal_nid2hostname},
-+        {"GMNAL",       external_nid2hostname},
-+        {"UNUSED4",     NULL},
-+        {"TCPNAL",      NULL},
-+        {"ROUTER",      NULL},
-+        {"OPENIBNAL",   external_nid2hostname},
-+        {"IIBNAL",      external_nid2hostname},
-+        {"LONAL",       lonal_nid2hostname},
-+        {"RANAL",       NULL},
-+        {"VIBNAL",      external_nid2hostname},
-+};
-+
-+int ptl_nid2hostname(uint64_t nid, char *buf, int buflen)
-+{
-+        uint32_t nal, net, addr;
-+
-+        addr = LNET_NIDADDR(nid);
-+        net = LNET_NIDNET(nid);
-+        nal = LNET_NETTYP(net);
-+
-+        if (nal >= NAL_ENUM_END_MARKER) {
-+                printerr(0, "ERROR: Unrecognized NAL %u\n", nal);
-+                return -1;
-+        }
-+
-+        if (converter[nal].nid2name == NULL) {
-+                printerr(0, "ERROR: NAL %s converter not ready\n",
-+                        converter[nal].name);
-+                return -1;
-+        }
-+
-+        return converter[nal].nid2name(converter[nal].name, net, addr,
-+                                       buf, buflen);
-+}
-+
-+
-+/****************************************
-+ * portals support routine              *
-+ ****************************************/
-+
-+static struct hostent *
-+ptl_gethostbyname(char * hname) {
-+        struct hostent *he;
-+
-+        he = gethostbyname(hname);
-+        if (!he) {
-+                switch(h_errno) {
-+                case HOST_NOT_FOUND:
-+                case NO_ADDRESS:
-+                        printerr(0, "Unable to resolve hostname: %s\n",
-+                                 hname);
-+                        break;
-+                default:
-+                        printerr(0, "gethostbyname %s: %s\n",
-+                                 hname, strerror(h_errno));
-+                        break;
-+                }
-+                return NULL;
-+        }
-+        return he;
-+}
-+
-+int
-+ptl_parse_ipquad (uint32_t *ipaddrp, char *str)
-+{
-+        int             a;
-+        int             b;
-+        int             c;
-+        int             d;
-+
-+        if (sscanf(str, "%d.%d.%d.%d", &a, &b, &c, &d) == 4 &&
-+            (a & ~0xff) == 0 && (b & ~0xff) == 0 &&
-+            (c & ~0xff) == 0 && (d & ~0xff) == 0)
-+        {
-+                *ipaddrp = (a<<24)|(b<<16)|(c<<8)|d;
-+                return (0);
-+        }
-+
-+        return (-1);
-+}
-+
-+int
-+ptl_parse_ipaddr (uint32_t *ipaddrp, char *str)
-+{
-+        struct hostent *he;
-+
-+        if (!strcmp (str, "_all_")) {
-+                *ipaddrp = 0;
-+                return (0);
-+        }
-+
-+        if (ptl_parse_ipquad(ipaddrp, str) == 0)
-+                return (0);
-+
-+        if ((('a' <= str[0] && str[0] <= 'z') ||
-+             ('A' <= str[0] && str[0] <= 'Z')) &&
-+             (he = ptl_gethostbyname (str)) != NULL) {
-+                uint32_t addr = *(uint32_t *)he->h_addr;
-+
-+                *ipaddrp = ntohl(addr);         /* HOST byte order */
-+                return (0);
-+        }
-+
-+        return (-1);
-+}
-+
-+int
-+ptl_parse_nid (ptl_nid_t *nidp, char *str)
-+{
-+        uint32_t            ipaddr;
-+        char               *end;
-+        unsigned long long  ullval;
-+
-+        if (ptl_parse_ipaddr (&ipaddr, str) == 0) {
-+#if !CRAY_PORTALS
-+                *nidp = (ptl_nid_t)ipaddr;
-+#else
-+                *nidp = (((ptl_nid_t)ipaddr & PNAL_HOSTID_MASK) << PNAL_VNODE_SHIFT);
-+#endif
-+                return (0);
-+        }
-+
-+        ullval = strtoull(str, &end, 0);
-+        if (end != str && *end == 0) {
-+                /* parsed whole non-empty string */
-+                *nidp = (ptl_nid_t)ullval;
-+                return (0);
-+        }
-+
-+        return (-1);
-+}
-+
-+
-+/****************************************
-+ * user mapping database handling       *
-+ * (very rudiment)                      *
-+ ****************************************/
-+
-+#define MAPPING_GROW_SIZE       512
-+#define MAX_LINE_LEN            1024
-+
-+struct user_map_item {
-+        char        *principal; /* NULL means match all */
-+        ptl_netid_t  netid;
-+        ptl_nid_t    nid;
-+        uid_t        uid;
-+};
-+
-+struct user_mapping {
-+        int                   size;
-+        int                   nitems;
-+        struct user_map_item *items;
-+};
-+
-+static struct user_mapping mapping = {0, 0, NULL};
-+/* FIXME to be finished: monitor change of mapping database */
-+static int mapping_changed = 1;
-+
-+static
-+void cleanup_mapping(void)
-+{
-+        int n;
-+
-+        for (n = 0; n < mapping.nitems; n++) {
-+                assert(mapping.items[n].principal);
-+                free(mapping.items[n].principal);
-+        }
-+        mapping.nitems = 0;
-+}
-+
-+static
-+int grow_mapping(int size)
-+{
-+        struct user_map_item *new;
-+        int newsize;
-+
-+        if (size <= mapping.size)
-+                return 0;
-+
-+        newsize = mapping.size + MAPPING_GROW_SIZE;
-+        while (newsize < size)
-+                newsize += MAPPING_GROW_SIZE;
-+
-+        new = malloc(newsize * sizeof(struct user_map_item));
-+        if (!new) {
-+                printerr(0, "can't alloc mapping size %d\n", newsize);
-+                return -1;
-+        }
-+        memcpy(new, mapping.items, mapping.nitems * sizeof(void*));
-+        free(mapping.items);
-+        mapping.items = new;
-+        mapping.size = newsize;
-+        return 0;
-+}
-+
-+uid_t parse_uid(char *uidstr)
-+{
-+        struct passwd *pw;
-+        char *p = NULL;
-+        long uid;
-+
-+        pw = getpwnam(uidstr);
-+        if (pw)
-+                return pw->pw_uid;
-+
-+        uid = strtol(uidstr, &p, 0);
-+        if (*p == '\0')
-+                return (uid_t) uid;
-+
-+        return -1;
-+}
-+
-+static
-+int read_mapping_db(void)
-+{
-+        char princ[MAX_LINE_LEN];
-+        char nid_str[MAX_LINE_LEN];
-+        char dest[MAX_LINE_LEN];
-+        ptl_nid_t ptl_nid;
-+        uid_t dest_uid;
-+        FILE *f;
-+        char *line, linebuf[MAX_LINE_LEN];
-+
-+        /* cleanup old mappings */
-+        cleanup_mapping();
-+
-+        f = fopen(MAPPING_DATABASE_FILE, "r");
-+        if (!f) {
-+                printerr(0, "can't open mapping database: %s\n",
-+                         MAPPING_DATABASE_FILE);
-+                return -1;
-+        }
-+
-+        while ((line = fgets(linebuf, MAX_LINE_LEN, f))) {
-+                char *name;
-+
-+                if (strlen(line) >= MAX_LINE_LEN) {
-+                        printerr(0, "invalid mapping db: line too long (%d)\n",
-+                                 strlen(line));
-+                        cleanup_mapping();
-+                        fclose(f);
-+                        return -1;
-+                }
-+                if (sscanf(line, "%s %s %s", princ, nid_str, dest) != 3) {
-+                        printerr(0, "mapping db: syntax error\n");
-+                        cleanup_mapping();
-+                        fclose(f);
-+                        return -1;
-+                }
-+                if (grow_mapping(mapping.nitems + 1)) {
-+                        printerr(0, "fail to grow mapping to %d\n",
-+                                 mapping.nitems + 1);
-+                        fclose(f);
-+                        return -1;
-+                }
-+                if (!strcmp(princ, "*")) {
-+                        name = NULL;
-+                } else {
-+                        name = strdup(princ);
-+                        if (!name) {
-+                                printerr(0, "fail to dup str %s\n", princ);
-+                                fclose(f);
-+                                return -1;
-+                        }
-+                }
-+                if (ptl_parse_nid(&ptl_nid, nid_str)) {
-+                        printerr(0, "fail to parse nid %s\n", nid_str);
-+                        fclose(f);
-+                        return -1;
-+                }
-+                dest_uid = parse_uid(dest);
-+                if (dest_uid == -1) {
-+                        printerr(0, "no valid user: %s\n", dest);
-+                        free(name);
-+                        fclose(f);
-+                        return -1;
-+                }
-+
-+                mapping.items[mapping.nitems].principal = name;
-+                mapping.items[mapping.nitems].netid = 0;
-+                mapping.items[mapping.nitems].nid = ptl_nid;
-+                mapping.items[mapping.nitems].uid = dest_uid;
-+                mapping.nitems++;
-+                printerr(1, "add mapping: %s(%s/0x%llx) ==> %d\n",
-+                         name ? name : "*", nid_str, ptl_nid, dest_uid);
-+        }
-+
-+        return 0;
-+}
-+
-+int lookup_mapping(char *princ, uint32_t nal, ptl_netid_t netid,
-+                   ptl_nid_t nid, uid_t *uid)
-+{
-+        int n;
-+
-+        /* FIXME race condition here */
-+        if (mapping_changed) {
-+                if (read_mapping_db())
-+                        printerr(0, "all remote users will be denied\n");
-+                mapping_changed = 0;
-+        }
-+
-+        for (n = 0; n < mapping.nitems; n++) {
-+                struct user_map_item *entry = &mapping.items[n];
-+
-+                if (entry->netid != netid || entry->nid != nid)
-+                        continue;
-+                if (!entry->principal ||
-+                    !strcasecmp(entry->principal, princ)) {
-+                        printerr(1, "found mapping: %s ==> %d\n",
-+                                 princ, entry->uid);
-+                        *uid = entry->uid;
-+                        return 0;
-+                }
-+        }
-+        printerr(1, "no mapping for %s\n", princ);
-+        *uid = -1;
-+        return -1;
-+}
-+
---- nfs-utils-1.0.10/utils/gssd/lsupport.h.lustre	2006-08-14 10:32:30.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/lsupport.h	2006-08-14 10:32:30.000000000 -0600
-@@ -0,0 +1,68 @@
-+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
-+ * vim:expandtab:shiftwidth=8:tabstop=8:
-+ */
-+
-+#ifndef __LIBCFS_H__
-+#define __LIBCFS_H__
-+
-+#include <unistd.h>
-+#include <stdint.h>
-+
-+#define GSSD_CLI        (0)
-+#define GSSD_SVC        (1)
-+
-+void gssd_init_unique(int type);
-+void gssd_exit_unique(int type);
-+
-+/*
-+ * copied from lustre source
-+ */
-+
-+typedef uint64_t ptl_nid_t;
-+typedef uint32_t ptl_netid_t;
-+
-+#define LUSTRE_GSS_SVC_MDS      0
-+#define LUSTRE_GSS_SVC_OSS      1
-+
-+struct lgssd_upcall_data {
-+        uint32_t        seq;
-+        uint32_t        uid;
-+        uint32_t        gid;
-+        uint32_t        svc;
-+        uint64_t        nid;
-+        char            obd[64];
-+};
-+
-+#define GSSD_INTERFACE_VERSION        (1)
-+
-+struct lgssd_ioctl_param {
-+        int             version;        /* in   */
-+        char           *uuid;           /* in   */
-+        int             lustre_svc;     /* in   */
-+        uid_t           uid;            /* in   */
-+        gid_t           gid;            /* in   */
-+        long            send_token_size;/* in   */
-+        char           *send_token;     /* in   */
-+        long            reply_buf_size; /* in   */
-+        char           *reply_buf;      /* in   */
-+        long            status;         /* out  */
-+        long            reply_length;   /* out  */
-+};
-+
-+#define GSSD_DEFAULT_GETHOSTNAME_EX     "/etc/lustre/nid2hostname"
-+#define MAPPING_DATABASE_FILE           "/etc/lustre/idmap.conf"
-+
-+int ptl_nid2hostname(uint64_t nid, char *buf, int buflen);
-+int lookup_mapping(char *princ, uint32_t nal, ptl_netid_t netid,
-+                   ptl_nid_t nid, uid_t *uid);
-+
-+/* how an LNET NID encodes net:address */
-+#define LNET_NIDADDR(nid)      ((uint32_t)((nid) & 0xffffffff))
-+#define LNET_NIDNET(nid)       ((uint32_t)(((nid) >> 32)) & 0xffffffff)
-+#define LNET_MKNID(net,addr)   ((((uint64_t)(net))<<32)|((uint64_t)(addr)))
-+/* how net encodes type:number */
-+#define LNET_NETNUM(net)       ((net) & 0xffff)
-+#define LNET_NETTYP(net)       (((net) >> 16) & 0xffff)
-+#define LNET_MKNET(typ,num)    ((((uint32_t)(typ))<<16)|((uint32_t)(num)))
-+
-+#endif /* __LIBCFS_H__ */
---- nfs-utils-1.0.10/utils/gssd/cacheio.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/cacheio.c	2006-08-14 10:32:30.000000000 -0600
-@@ -227,7 +227,8 @@
- 		return -1;
- 	while (*bp == ' ') bp++;
- 	*bpp = bp;
--	*dest = '\0';
-+// why should we clear *dest???
-+//	*dest = '\0';
- 	return len;
- }
- 
 --- nfs-utils-1.0.10/utils/Makefile.am.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/Makefile.am	2006-08-14 10:32:30.000000000 -0600
++++ nfs-utils-1.0.10/utils/Makefile.am	2006-10-13 16:03:33.000000000 -0600
 @@ -2,31 +2,6 @@
  
  OPTDIRS =
@@ -3105,7 +3291,7 @@
  
  MAINTAINERCLEANFILES = Makefile.in
 --- nfs-utils-1.0.10/configure.in.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/configure.in	2006-08-14 10:32:30.000000000 -0600
++++ nfs-utils-1.0.10/configure.in	2006-10-13 16:03:33.000000000 -0600
 @@ -17,61 +17,14 @@
  	RELEASE=$withval,
  	RELEASE=1)
@@ -3298,7 +3484,7 @@
  AC_OUTPUT
  
 --- nfs-utils-1.0.10/Makefile.am.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/Makefile.am	2006-08-14 10:32:30.000000000 -0600
++++ nfs-utils-1.0.10/Makefile.am	2006-10-13 16:03:33.000000000 -0600
 @@ -1,6 +1,6 @@
  ## Process this file with automake to produce Makefile.in
  
