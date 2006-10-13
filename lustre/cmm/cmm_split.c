@@ -86,21 +86,25 @@ cleanup:
         RETURN(rc);
 }
 
-#define cmm_md_size(stripes)                            \
+#define cmm_md_size(stripes) \
        (sizeof(struct lmv_stripe_md) + (stripes) * sizeof(struct lu_fid))
 
-static int cmm_alloc_fid(const struct lu_env *env, struct cmm_device *cmm,
+static int cmm_fid_alloc(const struct lu_env *env, struct cmm_device *cmm,
                          struct lu_fid *fid, int count)
 {
         struct  mdc_device *mc, *tmp;
         int rc = 0, i = 0;
 
         LASSERT(count == cmm->cmm_tgt_count);
-        /* FIXME: this spin_lock maybe not proper,
-         * because fid_alloc may need RPC */
-        spin_lock(&cmm->cmm_tgt_guard);
-        list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets,
-                                 mc_linkage) {
+
+        /* 
+         * XXX: in fact here would be nice to protect cmm->cmm_targets but we
+         * can't use spinlock here and do something complex is no time for that,
+         * especially taking into account that split will be removed after
+         * acceptance. So we suppose no changes to targets should happen this
+         * time.
+         */
+        list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets, mc_linkage) {
                 LASSERT(cmm->cmm_local_num != mc->mc_num);
 
                 rc = obd_fid_alloc(mc->mc_desc.cl_exp, &fid[i], NULL);
@@ -111,14 +115,16 @@ static int cmm_alloc_fid(const struct lu_env *env, struct cmm_device *cmm,
                         rc = fld_client_create(ls->ls_client_fld,
                                                fid_seq(&fid[i]),
                                                mc->mc_num, env);
+                        if (rc) {
+                                CERROR("Can't create fld entry, "
+                                       "rc %d\n", rc);
+                        }
                 }
-                if (rc < 0) {
-                        spin_unlock(&cmm->cmm_tgt_guard);
+                
+                if (rc < 0)
                         RETURN(rc);
-                }
                 i++;
         }
-        spin_unlock(&cmm->cmm_tgt_guard);
         LASSERT(i == count);
         if (rc == 1)
                 rc = 0;
@@ -201,7 +207,7 @@ static int cmm_create_slave_objects(const struct lu_env *env,
 
         lmv->mea_ids[0] = *lf;
 
-        rc = cmm_alloc_fid(env, cmm, &lmv->mea_ids[1],
+        rc = cmm_fid_alloc(env, cmm, &lmv->mea_ids[1],
                            cmm->cmm_tgt_count);
         if (rc)
                 GOTO(cleanup, rc);

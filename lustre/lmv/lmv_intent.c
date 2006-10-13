@@ -148,7 +148,8 @@ int lmv_alloc_fid_for_split(struct obd_device *obd, struct lu_fid *pid,
 
         obj = lmv_obj_grab(obd, pid);
         if (!obj)
-               RETURN(0);
+                RETURN(0);
+        
         mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                            (char *)op->name, op->namelen);
         rpid = &obj->lo_inodes[mds].li_fid;
@@ -157,21 +158,24 @@ int lmv_alloc_fid_for_split(struct obd_device *obd, struct lu_fid *pid,
                 GOTO(cleanup, rc);
 
         rc = obd_fid_alloc(lmv->tgts[mds].ltd_exp, fid, NULL);
-        if (rc < 0)
-                GOTO(cleanup, rc);
         if (rc > 0) {
                 LASSERT(fid_is_sane(fid));
                 rc = fld_client_create(&lmv->lmv_fld,
                                        fid_seq(fid), mds, NULL);
                 if (rc) {
-                        CERROR("can't create fld rc%d\n", rc);
+                        CERROR("Can't create fld entry, rc %d\n", rc);
                         GOTO(cleanup, rc);
                 }
         }
-        CDEBUG(D_INFO, "Allocate new fid"DFID"for split obj\n",PFID(fid));
+        if (rc >= 0) {
+                CDEBUG(D_INFO, "Allocate new fid "DFID" for split "
+                       "obj\n", PFID(fid));
+        }
+        
+        EXIT;
 cleanup:
         lmv_obj_put(obj);
-        RETURN(rc);
+        return rc;
 }
 
 /*

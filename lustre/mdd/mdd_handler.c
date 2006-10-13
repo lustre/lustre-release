@@ -2591,8 +2591,9 @@ static int mdd_object_create(const struct lu_env *env,
                 if (rc)
                         GOTO(unlock, rc);
                 pfid = spec->u.sp_ea.fid;
-                CWARN("set slave ea "DFID" eadatalen %d rc %d\n",
-                       PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
+                
+                CWARN("Set slave ea "DFID", eadatalen %d, rc %d\n",
+                      PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
                 rc = mdd_attr_set_internal(env, mdd_obj, &ma->ma_attr, handle);
         } else
                 rc = __mdd_object_initialize(env, pfid, mdd_obj, ma, handle);
