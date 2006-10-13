@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1339 @@
+@@ -0,0 +1,1340 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -188,6 +188,7 @@ Index: iam/fs/ext3/iam.c
 +	memset(c, 0, sizeof *c);
 +	c->ic_descr  = descr;
 +	c->ic_object = inode;
++        init_rwsem(&c->ic_sem);
 +        return 0;
 +}
 +EXPORT_SYMBOL(iam_container_init);
@@ -578,22 +579,22 @@ Index: iam/fs/ext3/iam.c
 +
 +void iam_container_write_lock(struct iam_container *ic)
 +{
-+	down(&ic->ic_object->i_sem);
++        down_write(&ic->ic_sem);
 +}
 +
 +void iam_container_write_unlock(struct iam_container *ic)
 +{
-+	up(&ic->ic_object->i_sem);
++        up_write(&ic->ic_sem);
 +}
 +
 +void iam_container_read_lock(struct iam_container *ic)
 +{
-+	down(&ic->ic_object->i_sem);
++        down_read(&ic->ic_sem);
 +}
 +
 +void iam_container_read_unlock(struct iam_container *ic)
 +{
-+	up(&ic->ic_object->i_sem);
++        up_read(&ic->ic_sem);
 +}
 +
 +static void iam_it_lock(struct iam_iterator *it)
