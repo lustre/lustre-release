@@ -2728,7 +2728,6 @@ static int mdd_rt_sanity_check(const struct lu_env *env,
                                const struct lu_fid *sfid,
                                const char *name, struct md_attr *ma)
 {
-        struct mdd_device *mdd = mdo2mdd(&tgt_pobj->mod_obj);
         int rc, src_is_dir;
         ENTRY;
 
@@ -2745,10 +2744,6 @@ static int mdd_rt_sanity_check(const struct lu_env *env,
         } else {
                 rc = mdd_may_create(env, tgt_pobj, NULL, 1);
         }
-
-        /* source should not be ancestor of target dir */
-        if (rc == 0 && src_is_dir && mdd_is_parent(env, mdd, tgt_pobj, sfid, NULL))
-                RETURN(-EINVAL);
 
         RETURN(rc);
 }
