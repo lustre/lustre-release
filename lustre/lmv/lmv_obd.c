@@ -1478,11 +1478,11 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
 
         tgt_exp = lmv_get_export(lmv, &body->fid1);
         if (IS_ERR(tgt_exp))
-                GOTO(out, PTR_ERR(tgt_exp));
+                GOTO(out, rc = PTR_ERR(tgt_exp));
 
         OBD_ALLOC_PTR(rdata);
         if (rdata == NULL)
-                GOTO(out, -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         rdata->fid1 = body->fid1;
         rdata->name = NULL;
