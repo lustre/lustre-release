@@ -4387,7 +4387,7 @@ Index: iam/fs/ext3/namei.c
  }
  
  /*
-@@ -800,598 +232,118 @@ struct stats dx_show_entries(struct dx_h
+@@ -800,7 +232,7 @@ struct stats dx_show_entries(struct dx_h
  }
  #endif /* DX_DEBUG */
  
@@ -4396,21 +4396,21 @@ Index: iam/fs/ext3/namei.c
  {
  	u32 ptr;
  	int err = 0;
- 	int i;
+@@ -810,588 +242,108 @@ static int dx_lookup(struct iam_path *pa
+ 	struct iam_frame *frame;
+ 	struct iam_container *c;
  
--	struct iam_descr *param;
--	struct iam_frame *frame;
--	struct iam_container *c;
--
 -	param = path_descr(path);
--	c = path->ip_container;
--	
--	for (frame = path->ip_frames, i = 0,
++	param = iam_path_descr(path);
+ 	c = path->ip_container;
+ 	
+ 	for (frame = path->ip_frames, i = 0,
 -		     ptr = param->id_root_ptr(path->ip_container);
--	     i <= path->ip_indirect;
--	     ptr = dx_get_block(path, frame->at), ++frame, ++i) {
--		struct iam_entry *entries;
--		struct iam_entry *p;
++		     ptr = param->id_ops->id_root_ptr(c);
+ 	     i <= path->ip_indirect;
+ 	     ptr = dx_get_block(path, frame->at), ++frame, ++i) {
+ 		struct iam_entry *entries;
+ 		struct iam_entry *p;
 -		struct iam_entry *q;
 -		struct iam_entry *m;
 -		unsigned count;
@@ -4915,64 +4915,44 @@ Index: iam/fs/ext3/namei.c
 -	err = dx_lookup(path);
 -	if (err)
 -		goto errout; 
-+	struct iam_descr *param;
-+	struct iam_frame *frame;
-+	struct iam_container *c;
++		struct iam_entry *q;
++		struct iam_entry *m;
++		unsigned count;
  
 -	err = iam_leaf_delete(h, path, k);
 -errout:
 -	iam_path_fini(path);
 -	return err;
 -}
-+	param = iam_path_descr(path);
-+	c = path->ip_container;
++		err = param->id_ops->id_node_read(c, (iam_ptr_t)ptr, NULL,
++						  &frame->bh);
++		if (err != 0)
++			break;
  
 -EXPORT_SYMBOL(iam_delete);
-+	for (frame = path->ip_frames, i = 0,
-+		     ptr = param->id_ops->id_root_ptr(c);
-+	     i <= path->ip_indirect;
-+	     ptr = dx_get_block(path, frame->at), ++frame, ++i) {
-+		struct iam_entry *entries;
-+		struct iam_entry *p;
-+		struct iam_entry *q;
-+		struct iam_entry *m;
-+		unsigned count;
++		if (EXT3_INVARIANT_ON) {
++			err = param->id_ops->id_node_check(path, frame);
++			if (err != 0)
++				break;
++		}
  
 -static int iam_leaf_update(handle_t *handle, struct iam_path *path, 
 -			   struct iam_key *k, struct iam_rec *r)
 -{
 -	struct iam_leaf leaf;
 -	int err;
-+		err = param->id_ops->id_node_read(c, (iam_ptr_t)ptr, NULL,
-+						  &frame->bh);
++		err = param->id_ops->id_node_load(path, frame);
 +		if (err != 0)
 +			break;
  
 -	err = iam_leaf_init(path, &leaf);
 -	if (err)
 -		goto errout;
-+		if (EXT3_INVARIANT_ON) {
-+			err = param->id_ops->id_node_check(path, frame);
-+			if (err != 0)
-+				break;
-+		}
++		assert_inv(dx_node_check(path, frame));
  	
 -	err = iam_leaf_lookup(path, &leaf, k);
 -	if (err)
 -		goto errout;
-+		err = param->id_ops->id_node_load(path, frame);
-+		if (err != 0)
-+			break;
- 
--	memcpy(iam_leaf_entry_at(path, leaf.at), r, path_descr(path)->id_rec_size);
--	memcpy(iam_leaf_key_at(path, leaf.at), k, path_descr(path)->id_key_size);
-+		assert_inv(dx_node_check(path, frame));
- 
--	err = ext3_journal_dirty_metadata(handle, leaf.bh);
--	if (err)
--		ext3_std_error(path_obj(path)->i_sb, err);
--errout:	
--	iam_leaf_fini(&leaf);
 +		entries = frame->entries;
 +		count = dx_get_count(entries);
 +		assert_corr(count && count <= dx_get_limit(entries));
@@ -4988,12 +4968,19 @@ Index: iam/fs/ext3/namei.c
 +			else
 +				p = iam_entry_shift(path, m, +1);
 +		}
-+
+ 
+-	memcpy(iam_leaf_entry_at(path, leaf.at), r, path_descr(path)->id_rec_size);
+-	memcpy(iam_leaf_key_at(path, leaf.at), k, path_descr(path)->id_key_size);
 +		frame->at = iam_entry_shift(path, p, -1);
 +		if (EXT3_INVARIANT_ON) { // linear search cross check
 +			unsigned n = count - 1;
 +			struct iam_entry *at;
-+
+ 
+-	err = ext3_journal_dirty_metadata(handle, leaf.bh);
+-	if (err)
+-		ext3_std_error(path_obj(path)->i_sb, err);
+-errout:	
+-	iam_leaf_fini(&leaf);
 +			at = entries;
 +			while (n--) {
 +				dxtrace(printk(","));
@@ -5631,7 +5618,7 @@ Index: iam/fs/ext3/namei.c
 +			err = ext3_journal_dirty_metadata(handle, parent->bh);
 +			if (err)
 +				goto journal_error;
-+		}
+ 		}
 +		err = ext3_journal_dirty_metadata(handle, bh);
 +		if (err)
 +			goto journal_error;
@@ -5641,7 +5628,7 @@ Index: iam/fs/ext3/namei.c
 +		 */
 +		assert_corr(dx_get_count(path->ip_frame->entries) <
 +			    dx_get_limit(path->ip_frame->entries));
- 		}
++		}
 +	if (nr_splet > 0) {
 +		/*
 +		 * Log ->i_size modification.
@@ -5685,6 +5672,33 @@ Index: iam/fs/ext3/namei.c
  	err = add_dirent_to_buf(handle, dentry, inode, de, bh);
  	goto cleanup2;
  
+@@ -2752,6 +1830,26 @@ static struct inode * ext3_new_inode_wan
+ 	return ext3_new_inode(handle, dir, mode, inum);
+ }
+ 
++struct inode *ext3_create_inode(handle_t *handle, struct inode * dir, int mode)
++{
++	struct inode *inode;
++
++	inode = ext3_new_inode(handle, dir, mode, 0);
++	if (!IS_ERR(inode)) {
++		if (S_ISCHR(mode) || S_ISBLK(mode) || S_ISFIFO(mode)) {
++#ifdef CONFIG_LDISKFS_FS_XATTR
++			inode->i_op = &ext3_special_inode_operations;
++#endif
++		} else {
++			inode->i_op = &ext3_file_inode_operations;
++			inode->i_fop = &ext3_file_operations;
++			ext3_set_aops(inode);
++		}
++	}
++	return inode;
++}
++EXPORT_SYMBOL(ext3_create_inode);
++
+ /*
+  * By the time this is called, we already have created
+  * the directory cache entry for the new file, but it
 Index: iam/include/linux/ext3_fs.h
 ===================================================================
 --- iam.orig/include/linux/ext3_fs.h

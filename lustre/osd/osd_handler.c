@@ -283,13 +283,6 @@ static int osd_write_locked(const struct lu_env *env, struct osd_object *o)
         return oti->oti_w_locks > 0 && o->oo_owner == env;
 }
 
-static void osd_fid_build_name(const struct lu_fid *fid, char *name)
-{
-        static const char *qfmt = LPX64":%lx:%lx";
-
-        sprintf(name, qfmt, fid_seq(fid), fid_oid(fid), fid_ver(fid));
-}
-
 /* helper to push us into KERNEL_DS context */
 static struct file *osd_rw_init(const struct lu_env *env,
                                 struct inode *inode, mm_segment_t *seg)
@@ -409,8 +402,8 @@ static int osd_inode_unlinked(const struct inode *inode)
 }
 
 enum {
-        OSD_TXN_OI_DELETE_CREDITS = 20,
-        OSD_TXN_RMENTRY_CREDITS = 20
+        OSD_TXN_OI_DELETE_CREDITS    = 20,
+        OSD_TXN_INODE_DELETE_CREDITS = 20
 };
 
 static int osd_inode_remove(const struct lu_env *env,
@@ -421,51 +414,15 @@ static int osd_inode_remove(const struct lu_env *env,
         struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
         struct txn_param       *prm = &oti->oti_txn;
         struct thandle         *th;
-        struct dentry          *dentry;
         int result;
 
-        prm->tp_credits = OSD_TXN_OI_DELETE_CREDITS + OSD_TXN_RMENTRY_CREDITS;
+        prm->tp_credits = OSD_TXN_OI_DELETE_CREDITS +
+                OSD_TXN_INODE_DELETE_CREDITS;
         th = osd_trans_start(env, &osd->od_dt_dev, prm);
         if (!IS_ERR(th)) {
                 osd_oi_write_lock(&osd->od_oi);
                 result = osd_oi_delete(oti, &osd->od_oi, fid, th);
                 osd_oi_write_unlock(&osd->od_oi);
-
-                /*
-                 * The following is added by huanghua@clusterfs.com as
-                 * a temporary hack, to remove the directory entry in
-                 * "*OBJ_TEMP*". We will finally do not use this hack,
-                 * and at that time we will remove these code under #if.
-                 */
-#if 1
-                osd_fid_build_name(fid, oti->oti_name);
-                oti->oti_str.name = oti->oti_name;
-                oti->oti_str.len  = strlen(oti->oti_name);
-
-                dentry = d_alloc(osd->od_obj_area, &oti->oti_str);
-                if (dentry != NULL) {
-                        struct inode *dir = osd->od_obj_area->d_inode;
-
-                        /*
-                         * The nlink is 0 now. But to avoid warning message,
-                         * I set it to 1, and unlink() will decrease it to 0.
-                         */
-                        obj->oo_inode->i_nlink = 1;
-                        d_instantiate(dentry, obj->oo_inode);
-                        result = dir->i_op->unlink(dir, dentry);
-                        if (S_ISDIR(obj->oo_inode->i_mode)) {
-                                /*
-                                 * The nlink of a dir was not decreased to
-                                 * less than 2. see ldiskfs_unlink() and
-                                 * ldiskfs_dec_count().
-                                 */
-                                obj->oo_inode->i_nlink = 0;
-                                mark_inode_dirty(obj->oo_inode);
-                        }
-                        dput(dentry);
-                } else
-#endif
-                        iput(obj->oo_inode);
                 osd_trans_stop(env, th);
         } else
                 result = PTR_ERR(th);
@@ -487,10 +444,6 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
          * If object is unlinked remove fid->ino mapping from object index.
          *
          * File body will be deleted by iput().
-         *
-         * NOTE: currently objects are created in ->od_obj_area directory
-         * ("*OBJ-TEMP*"), but name in that directory is _not_ counted in
-         * inode ->i_nlink.
          */
 
         osd_index_fini(obj);
@@ -503,8 +456,8 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
                                 LU_OBJECT_DEBUG(D_ERROR, env, l,
                                                 "Failed to cleanup: %d\n",
                                                 result);
-                } else
-                        iput(inode);
+                }
+                iput(inode);
                 obj->oo_inode = NULL;
         }
 }
@@ -1030,40 +983,32 @@ static int osd_create_post(struct osd_thread_info *info, struct osd_object *obj,
         return 0;
 }
 
+extern struct inode *ldiskfs_create_inode(handle_t *handle,
+                                          struct inode * dir, int mode);
+
 static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
                       umode_t mode, struct thandle *th)
 {
         int result;
-        struct osd_device *osd = osd_obj2dev(obj);
-        struct inode      *dir;
-
-        /*
-         * XXX temporary solution.
-         */
-        struct dentry     *dentry;
+        struct osd_device  *osd = osd_obj2dev(obj);
+        struct osd_thandle *oth;
+        struct inode       *dir;
+        struct inode       *inode;
 
         LASSERT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
         LASSERT(osd->od_obj_area != NULL);
 
+        oth = container_of(th, struct osd_thandle, ot_super);
         dir = osd->od_obj_area->d_inode;
-        LASSERT(dir->i_op != NULL && dir->i_op->create != NULL);
+        LASSERT(dir->i_op != NULL);
 
-        osd_fid_build_name(lu_object_fid(&obj->oo_dt.do_lu), info->oti_name);
-        info->oti_str.name = info->oti_name;
-        info->oti_str.len  = strlen(info->oti_name);
-
-        dentry = d_alloc(osd->od_obj_area, &info->oti_str);
-        if (dentry != NULL) {
-               result = dir->i_op->create(dir, dentry, mode, NULL);
-               if (result == 0) {
-                        LASSERT(dentry->d_inode != NULL);
-                        obj->oo_inode = dentry->d_inode;
-                        igrab(obj->oo_inode);
-                }
-                dput(dentry);
+        inode = ldiskfs_create_inode(oth->ot_handle, dir, mode);
+        if (!IS_ERR(inode)) {
+                obj->oo_inode = inode;
+                result = 0;
         } else
-                result = -ENOMEM;
+                result = PTR_ERR(inode);
         LASSERT(osd_invariant(obj));
         return result;
 }
@@ -1082,11 +1027,11 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
         int result;
         struct osd_thandle *oth;
 
-        oth = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(S_ISDIR(attr->la_mode));
         result = osd_mkfile(info, obj, (attr->la_mode &
                             (S_IFMT | S_IRWXUGO | S_ISVTX)), th);
         if (result == 0) {
+                oth = container_of(th, struct osd_thandle, ot_super);
                 LASSERT(obj->oo_inode != NULL);
                 /*
                  * XXX uh-oh... call low-level iam function directly.
@@ -1122,33 +1067,20 @@ static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
         struct inode      *dir;
         umode_t mode = attr->la_mode & (S_IFMT | S_IRWXUGO | S_ISVTX);
 
-        /*
-         * XXX temporary solution.
-         */
-        struct dentry     *dentry;
-
         LASSERT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
         LASSERT(osd->od_obj_area != NULL);
+        LASSERT(S_ISCHR(mode) || S_ISBLK(mode) ||
+                S_ISFIFO(mode) || S_ISSOCK(mode));
 
         dir = osd->od_obj_area->d_inode;
-        LASSERT(dir->i_op != NULL && dir->i_op->create != NULL);
+        LASSERT(dir->i_op != NULL);
 
-        osd_fid_build_name(lu_object_fid(&obj->oo_dt.do_lu), info->oti_name);
-        info->oti_str.name = info->oti_name;
-        info->oti_str.len  = strlen(info->oti_name);
-
-        dentry = d_alloc(osd->od_obj_area, &info->oti_str);
-        if (dentry != NULL) {
-                result = dir->i_op->mknod(dir, dentry, mode, attr->la_rdev);
-                if (result == 0) {
-                        LASSERT(dentry->d_inode != NULL);
-                        obj->oo_inode = dentry->d_inode;
-                        igrab(obj->oo_inode);
-                }
-                dput(dentry);
-        } else
-                result = -ENOMEM;
+        result = osd_mkfile(info, obj, mode, th);
+        if (result == 0) {
+                LASSERT(obj->oo_inode != NULL);
+                init_special_inode(obj->oo_inode, mode, attr->la_rdev);
+        }
         LASSERT(osd_invariant(obj));
         return result;
 }
