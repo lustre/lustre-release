@@ -2747,7 +2747,7 @@ static int mdd_rt_sanity_check(const struct lu_env *env,
         }
 
         /* source should not be ancestor of target dir */
-        if (!rc &&& src_is_dir && mdd_is_parent(env, mdd, tgt_pobj, sfid, NULL))
+        if (rc == 0 && src_is_dir && mdd_is_parent(env, mdd, tgt_pobj, sfid, NULL))
                 RETURN(-EINVAL);
 
         RETURN(rc);
