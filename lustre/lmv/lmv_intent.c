@@ -103,7 +103,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
 
         tgt_exp = lmv_get_export(lmv, &body->fid1);
         if (IS_ERR(tgt_exp))
-                GOTO(out, PTR_ERR(tgt_exp));
+                GOTO(out, rc = PTR_ERR(tgt_exp));
 
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL)
@@ -710,9 +710,6 @@ repeat:
                             it, flags, reqp, cb_blocking, extra_lock_flags);
         if (rc > 0) {
                 LASSERT(fid_is_sane(&op_data->fid2));
-                GOTO(out_free_sop_data, rc);
-        }
-        if (rc > 0) {
                 /*
                  * Very interesting. it seems object is still valid but for some
                  * reason llite calls lookup, not revalidate.
@@ -743,6 +740,7 @@ repeat:
                 if (IS_ERR(obj))
                         RETURN((int)PTR_ERR(obj));
                 lmv_obj_put(obj);
+                /* XXX: what about reqp? */
                 goto repeat;
         }
 
