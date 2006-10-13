@@ -2712,7 +2712,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,966 @@
+@@ -0,0 +1,970 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2958,7 +2958,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +        return lentry_lvar(l->il_at);
 +}
 +
-+#if EXT3_CORRECTNESS_ON || EXT3_INVARIANT_ON
++#if EXT3_CORRECTNESS_ON
 +static int n_at_rec(const struct iam_leaf *folio)
 +{
 +        return
@@ -2966,6 +2966,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +                lentry_lvar(folio->il_at) < n_end(folio);
 +}
 +
++#if EXT3_INVARIANT_ON
 +static int n_invariant(const struct iam_leaf *leaf)
 +{
 +        struct lvar_leaf_entry *scan;
@@ -2998,7 +2999,10 @@ Index: iam/fs/ext3/iam_lvar.c
 +        }
 +        return 1;
 +}
++/* EXT3_INVARIANT_ON */
++#endif
 +
++/* EXT3_CORRECTNESS_ON */
 +#endif
 +
 +static struct iam_ikey *lvar_ikey(const struct iam_leaf *l,
