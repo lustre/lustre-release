@@ -1535,7 +1535,7 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
                          * name */
                         mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                            (char *)op_data->name, op_data->namelen);
-                        op_data->fid1      = obj->lo_inodes[mds].li_fid;
+                        op_data->fid1 = obj->lo_inodes[mds].li_fid;
                         lmv_obj_put(obj);
                 }
         }
@@ -1729,9 +1729,9 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                 if (obj) {
                         mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                            (char *)new, newlen);
-                        op_data->fid2      = obj->lo_inodes[mds].li_fid;
-                        CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n", mds,
-                               PFID(&op_data->fid2));
+                        op_data->fid2 = obj->lo_inodes[mds].li_fid;
+                        CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n",
+                               mds, PFID(&op_data->fid2));
                         lmv_obj_put(obj);
                 }
                 goto request;
@@ -1745,7 +1745,7 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                  */
                 mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                    (char *)old, oldlen);
-                op_data->fid1      = obj->lo_inodes[mds].li_fid;
+                op_data->fid1 = obj->lo_inodes[mds].li_fid;
                 CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n", mds,
                        PFID(&op_data->fid1));
                 lmv_obj_put(obj);
@@ -2120,7 +2120,7 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                 if (obj) {
                         i = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                          op_data->name, op_data->namelen);
-                        op_data->fid1      = obj->lo_inodes[i].li_fid;
+                        op_data->fid1 = obj->lo_inodes[i].li_fid;
                         lmv_obj_put(obj);
                         CDEBUG(D_OTHER, "unlink '%*s' in "DFID" -> %u\n",
                                op_data->namelen, op_data->name,

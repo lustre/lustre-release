@@ -304,7 +304,6 @@ repeat:
 
         obj = lmv_obj_grab(obd, &body->fid1);
         if (!obj && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
-
                 /* FIXME: capability for remote! */
                 /* wow! this is split dir, we'd like to handle it */
                 obj = lmv_obj_create(exp, &body->fid1, mea);
@@ -530,6 +529,10 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
          * last case possible only if all the objs (master and all slaves aren't
          * valid */
 
+        OBD_ALLOC_PTR(op_data);
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+
         body = lustre_msg_buf((*reqp)->rq_repmsg,
                               DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
@@ -540,10 +543,6 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
         CDEBUG(D_OTHER, "lookup slaves for "DFID"\n",
                PFID(&body->fid1));
-
-        OBD_ALLOC_PTR(op_data);
-        if (op_data == NULL)
-                RETURN(-ENOMEM);
 
         lmv_obj_lock(obj);
 
@@ -571,8 +570,8 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 if (IS_ERR(tgt_exp))
                         GOTO(cleanup, rc = PTR_ERR(tgt_exp));
 
-                rc = md_intent_lock(tgt_exp, op_data, NULL, 0, &it, 0, &req,
-                                    lmv_blocking_ast, 0);
+                rc = md_intent_lock(tgt_exp, op_data, NULL, 0, &it, 0,
+                                    &req, lmv_blocking_ast, 0);
 
                 lockh = (struct lustre_handle *)&it.d.lustre.it_lock_handle;
                 if (rc > 0 && req == NULL) {
@@ -615,9 +614,9 @@ release_lock:
 
         EXIT;
 cleanup:
-        OBD_FREE_PTR(op_data);
         lmv_obj_unlock(obj);
         lmv_obj_put(obj);
+        OBD_FREE_PTR(op_data);
         return rc;
 }
 
@@ -902,7 +901,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 /* is obj valid? */
                 tgt_exp = lmv_get_export(lmv, &fid);
                 if (IS_ERR(tgt_exp))
-                        GOTO(out_free_op_data, rc = PTR_ERR(tgt_exp));
+                        GOTO(cleanup, rc = PTR_ERR(tgt_exp));
 
                 rc = md_intent_lock(tgt_exp, op_data, NULL, 0, &it, 0, &req, cb,
                                     extra_lock_flags);
@@ -964,8 +963,10 @@ release_lock:
         }
 
         if (*reqp) {
-                /* some attrs got refreshed, we have reply and it's time to put
-                 * fresh attrs to it */
+                /*
+                 * Some attrs got refreshed, we have reply and it's time to put
+                 * fresh attrs to it.
+                 */
                 CDEBUG(D_OTHER, "return refreshed attrs: size = %lu\n",
                        (unsigned long)size);
 
@@ -1005,9 +1006,8 @@ release_lock:
 
         EXIT;
 cleanup:
+        OBD_FREE_PTR(op_data);
         lmv_obj_unlock(obj);
         lmv_obj_put(obj);
-out_free_op_data:
-        OBD_FREE_PTR(op_data);
         return rc;
 }
