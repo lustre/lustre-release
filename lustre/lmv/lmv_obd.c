@@ -1454,6 +1454,7 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         struct obd_export *tgt_exp;
         struct md_op_data *rdata;
         int rc = 0, pmode;
+        struct lu_fid fid_copy;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_repmsg,
@@ -1472,11 +1473,12 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         memcpy(&plock, lockh, sizeof(plock));
         it->d.lustre.it_lock_mode = 0;
         it->d.lustre.it_data = NULL;
+        fid_copy = body->fid1;
 
         it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
         ptlrpc_req_finished(req);
 
-        tgt_exp = lmv_get_export(lmv, &body->fid1);
+        tgt_exp = lmv_get_export(lmv, &fid_copy);
         if (IS_ERR(tgt_exp))
                 GOTO(out, rc = PTR_ERR(tgt_exp));
 
@@ -1484,7 +1486,7 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         if (rdata == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-        rdata->fid1 = body->fid1;
+        rdata->fid1 = fid_copy;
         rdata->name = NULL;
         rdata->namelen = 0;
 
