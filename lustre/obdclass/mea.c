@@ -63,12 +63,14 @@ static int mea_all_chars_hash(int count, char *name, int namelen)
 
 #ifdef __KERNEL__
 /* This hash calculate method must be same as the lvar hash method */
-static int mea_hash_segment(int count, char *name, int namelen)
+
+#define LVAR_HASH_TEA    (0)
+#define LVAR_HASH_R5     (1)
+#define LVAR_HASH_PREFIX (0)
+
+static __u32 hash_build(char *name, int namelen)
 {
-        struct ldiskfs_dx_hash_info hinfo;
-        int result;
-        __u64 hash;
-        __u64 hash_segment = MAX_HASH_SIZE;
+        __u32 result;
 
         if (namelen == 0)
                 return 0;
@@ -77,11 +79,31 @@ static int mea_hash_segment(int count, char *name, int namelen)
         if (strncmp(name, "..", 2) == 0 && namelen == 2)
                 return 4;
 
-        hinfo.hash_version = LDISKFS_DX_HASH_TEA;
-        hinfo.seed = 0;
-        result = ldiskfsfs_dirhash(name, namelen, &hinfo);
-        LASSERT(result == 0);
-        hash = (hinfo.hash << 1) & 0x7fffffff;
+        if (LVAR_HASH_PREFIX) {
+                result = 0;
+                strncpy((void *)&result,
+                        name, min(namelen, (int)sizeof result));
+        } else {
+                struct ldiskfs_dx_hash_info hinfo;
+
+                if (LVAR_HASH_TEA)
+                        hinfo.hash_version = LDISKFS_DX_HASH_TEA;
+                else
+                        hinfo.hash_version = LDISKFS_DX_HASH_R5;
+                hinfo.seed = 0;
+                ldiskfsfs_dirhash(name, namelen, &hinfo);
+                result = hinfo.hash;
+        }
+
+        return (result << 1) & 0x7fffffff;
+}
+
+static int mea_hash_segment(int count, char *name, int namelen)
+{
+        __u64 hash;
+        __u64 hash_segment = MAX_HASH_SIZE;
+
+        hash = hash_build(name, namelen);
         do_div(hash_segment, count);
         do_div(hash, hash_segment);
         LASSERTF(hash <= count, "hash "LPU64" count %d \n", hash, count);

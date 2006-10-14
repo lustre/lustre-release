@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1340 @@
+@@ -0,0 +1,1316 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -291,30 +291,6 @@ Index: iam/fs/ext3/iam.c
 +	if (*bh == NULL)
 +		result = -EIO;
 +	return result;
-+}
-+
-+/*
-+ * Leaf helpers.
-+ */
-+
-+struct iam_path *iam_leaf_path(const struct iam_leaf *leaf)
-+{
-+        return leaf->il_path;
-+}
-+
-+struct iam_container *iam_leaf_container(const struct iam_leaf *leaf)
-+{
-+        return iam_leaf_path(leaf)->ip_container;
-+}
-+
-+struct iam_descr *iam_leaf_descr(const struct iam_leaf *leaf)
-+{
-+        return iam_leaf_container(leaf)->ic_descr;
-+}
-+
-+struct iam_leaf_operations *iam_leaf_ops(const struct iam_leaf *leaf)
-+{
-+        return iam_leaf_descr(leaf)->id_leaf_ops;
 +}
 +
 +/*
@@ -2713,7 +2689,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,970 @@
+@@ -0,0 +1,976 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2880,13 +2856,14 @@ Index: iam/fs/ext3/iam_lvar.c
 +        return ((void *)ent) + e_size(leaf, ent);
 +}
 +
++#define LVAR_HASH_TEA    (0)
++#define LVAR_HASH_R5     (1)
++#define LVAR_HASH_PREFIX (0)
++
 +static inline lvar_hash_t get_hash(const struct iam_container *bag,
 +                                   const char *name, int namelen)
 +{
-+#if 1
-+        struct dx_hash_info hinfo;
-+        struct super_block *sb = bag->ic_object->i_sb;
-+        int result;
++        lvar_hash_t result;
 +
 +        if (namelen == 0)
 +                return 0;
@@ -2895,18 +2872,23 @@ Index: iam/fs/ext3/iam_lvar.c
 +        if (strncmp(name, "..", 2) == 0 && namelen == 2)
 +                return 4;
 +
-+        hinfo.hash_version = EXT3_SB(sb)->s_def_hash_version ;
-+        hinfo.seed = 0;
-+        result = ext3fs_dirhash(name, namelen, &hinfo);
-+        assert(result == 0);
-+        return (hinfo.hash << 1) & 0x7fffffff;
-+#else
-+        lvar_hash_t result;
++        if (LVAR_HASH_PREFIX) {
++                result = 0;
++                strncpy((void *)&result,
++                        name, min(namelen, (int)sizeof result));
++        } else {
++                struct dx_hash_info hinfo;
 +
-+        result = 0;
-+        strncpy((void *)&result, name, min(namelen, (int)sizeof result));
++                if (LVAR_HASH_TEA)
++                        hinfo.hash_version = DX_HASH_TEA;
++                else if (LVAR_HASH_R5)
++                        hinfo.hash_version = DX_HASH_R5;
++                hinfo.seed = 0;
++                ext3fs_dirhash(name, namelen, &hinfo);
++                result = hinfo.hash;
++        }
++
 +        return (result << 1) & 0x7fffffff;
-+#endif
 +}
 +
 +static inline int e_eq(const struct lvar_leaf_entry *ent,
