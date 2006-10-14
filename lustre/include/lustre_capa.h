@@ -299,7 +299,7 @@ static inline unsigned long capa_renewal_time(struct obd_capa *ocapa)
          * to OSS before capability expires.
          */
         return ocapa->c_expiry -
-               ((ocapa->c_capa.lc_flags & CAPA_FL_SHORT_EXPIRY) ? 300:1200) * HZ;
+               ((ocapa->c_capa.lc_flags & CAPA_FL_SHORT_EXPIRY) ? 40:1200) * HZ;
 }
 
 #ifdef __KERNEL__

@@ -55,7 +55,7 @@ static inline void update_capa_timer(struct obd_capa *ocapa, cfs_time_t expiry)
                 cfs_timer_arm(&ll_capa_timer, expiry);
                 DEBUG_CAPA(D_SEC, &ocapa->c_capa,
                            "ll_capa_timer update: %lu/%lu by",
-                           expiry, cfs_time_current());
+                           expiry, jiffies);
         }
 }
 
@@ -130,19 +130,6 @@ static void ll_delete_capa(struct obd_capa *ocapa)
         free_capa(ocapa);
 }
 
-static void inline assert_expired_capa(struct obd_capa *oc)
-{
-        if (S_ISDIR(oc->u.cli.inode->i_mode))
-                DEBUG_CAPA(D_ERROR, &oc->c_capa, "shouldn't release dir");
-        else if (obd_capa_open_count(oc))
-                DEBUG_CAPA(D_ERROR, &oc->c_capa, "shouldn't release opened");
-        else if (obd_capa_is_root(oc))
-                DEBUG_CAPA(D_ERROR, &oc->c_capa, "shouldn't release root");
-        else
-                return;
-        LBUG();
-}
-
 /* three places where client capa is deleted:
  * 1. capa_thread_main(), main place to delete expired capa.
  * 2. ll_clear_inode_capas() in ll_clear_inode().
@@ -185,7 +172,6 @@ static int capa_thread_main(void *unused)
                             !obd_capa_is_root(ocapa) &&
                             !ll_have_md_lock(ocapa->u.cli.inode,
                                              MDS_INODELOCK_LOOKUP)) {
-                                assert_expired_capa(ocapa);
                                 /* MDS capa without LOOKUP lock, and the related
                                  * inode is not opened, it won't renew,
                                  * move to idle list (except root fid) */
@@ -198,7 +184,6 @@ static int capa_thread_main(void *unused)
 
                         if (capa_for_oss(&ocapa->c_capa) &&
                             obd_capa_open_count(ocapa) == 0) {
-                                assert_expired_capa(ocapa);
                                 /* oss capa with open count == 0 won't renew,
                                  * move to idle list */
                                 list_del_init(&ocapa->c_list);
@@ -392,15 +377,10 @@ struct obd_capa *ll_mdscapa_get(struct inode *inode)
         }
 
         if (!ocapa && atomic_read(&ll_capa_debug)) {
-                CDEBUG(D_ERROR,
-                       "no MDS capability for fid "DFID", this might be ok;)\n",
-                       PFID(ll_inode2fid(inode)));
-#if 0
                 LASSERT(!S_ISDIR(inode->i_mode));
                 LASSERT(!obd_capa_open_count(ocapa));
                 LASSERT(!ll_have_md_lock(ocapa->u.cli.inode,
                                          MDS_INODELOCK_LOOKUP));
-#endif
                 atomic_set(&ll_capa_debug, 0);
         }
 
@@ -422,7 +402,8 @@ static inline int do_add_mds_capa(struct inode *inode, struct obd_capa **pcapa)
 
                 DEBUG_CAPA(D_SEC, &ocapa->c_capa, "add MDS");
         } else {
-                if (ocapa->c_capa.lc_expiry == old->c_capa.lc_expiry) {
+                if (!memcmp(&old->c_capa, &ocapa->c_capa, sizeof(old->c_capa)))
+                {
                         rc = -EEXIST;
                 } else {
                         spin_lock(&old->c_lock);
@@ -510,12 +491,13 @@ struct obd_capa *ll_add_capa(struct inode *inode, struct obd_capa *ocapa)
         /* truncate capa won't renew, or no existed capa changed, don't update
          * capa timer. */
         if (!rc && ocapa->c_capa.lc_opc != CAPA_OPC_OSS_TRUNC) {
-                list_del_init(&ocapa->c_list);
-                sort_add_capa(ocapa, ll_capa_list);
-
                 spin_lock(&ocapa->c_lock);
                 set_capa_expiry(ocapa);
                 spin_unlock(&ocapa->c_lock);
+
+                list_del_init(&ocapa->c_list);
+                sort_add_capa(ocapa, ll_capa_list);
+
                 update_capa_timer(ocapa, capa_renewal_time(ocapa));
         }
 
@@ -546,7 +528,15 @@ int ll_update_capa(struct obd_capa *ocapa, struct lustre_capa *capa)
                                    "renewal failed: -EIO, retry in 1 min");
                         goto retry;
                 } else {
-                        sort_add_capa(ocapa, &ll_idle_capas);
+                        if (rc == -ENOENT && !capa_is_to_expire(ocapa)) {
+                                /* NB: in period of renewal, inode might be 
+                                 * deleted and then created, so actually ocapa
+                                 * is a completely new one! */
+                                LASSERT(!list_empty(&ocapa->c_list));
+                        } else {
+                                LASSERT(list_empty(&ocapa->c_list));
+                                sort_add_capa(ocapa, &ll_idle_capas);
+                        }
                 }
                 spin_unlock(&capa_lock);
 

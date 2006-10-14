@@ -59,6 +59,8 @@ MOUNTOPT=""
     MKFSOPT=$MKFSOPT" -i $MDSISIZE"
 [ "x$MKFSOPT" != "x" ] &&
     MKFSOPT="--mkfsoptions=\"$MKFSOPT\""
+[ "x$MDSCAPA" != "x" ] &&
+    MKFSOPT="--param mdt.capa=$MDSCAPA"
 [ "x$mdsfailover_HOST" != "x" ] &&
     MOUNTOPT=$MOUNTOPT" --failnode=`h2$NETTYPE $mdsfailover_HOST`"
 [ "x$STRIPE_BYTES" != "x" ] &&
@@ -74,6 +76,8 @@ MOUNTOPT=""
     MKFSOPT=$MKFSOPT" -J size=$OSTJOURNALSIZE"
 [ "x$MKFSOPT" != "x" ] &&
     MKFSOPT="--mkfsoptions=\"$MKFSOPT\""
+[ "x$OSSCAPA" != "x" ] &&
+    MKFSOPT="--param ost.capa=$OSSCAPA"
 [ "x$ostfailover_HOST" != "x" ] &&
     MOUNTOPT=$MOUNTOPT" --failnode=`h2$NETTYPE $ostfailover_HOST`"
 OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$TIMEOUT $MKFSOPT $MOUNTOPT $OSTOPT"

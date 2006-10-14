@@ -363,8 +363,8 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
                         (char *)&imp->imp_dlm_handle,
                         (char *)&imp->imp_connect_data };
         struct ptlrpc_connect_async_args *aa;
-
         ENTRY;
+
         spin_lock(&imp->imp_lock);
         if (imp->imp_state == LUSTRE_IMP_CLOSED) {
                 spin_unlock(&imp->imp_lock);

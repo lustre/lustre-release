@@ -107,7 +107,9 @@ static int mdc_add_obd(const struct lu_env *env,
                 if (!ocd)
                         RETURN(-ENOMEM);
                 /* The connection between MDS must be local */
-                ocd->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
+                ocd->ocd_connect_flags = OBD_CONNECT_LCL_CLIENT | 
+                                         OBD_CONNECT_MDS_CAPA |
+                                         OBD_CONNECT_OSS_CAPA;
                 rc = obd_connect(env, conn, mdc, &mdc->obd_uuid, ocd);
                 OBD_FREE_PTR(ocd);
                 if (rc) {
