@@ -35,6 +35,8 @@
 
 #include <linux/seq_file.h>
 #include <linux/module.h>
+/* nr_free_pages() */
+#include <linux/swap.h>
 #include <obd_support.h>
 #include <lustre_disk.h>
 #include <lustre_fid.h>
@@ -499,14 +501,13 @@ static DECLARE_MUTEX(lu_sites_guard);
  */
 static struct lu_env lu_shrink_env;
 
-enum {
-        /*
-         * XXX: make this depending on available physical memory.
-         */
-        LU_SITE_HTABLE_BITS = 10,
-        LU_SITE_HTABLE_SIZE = (1 << LU_SITE_HTABLE_BITS),
-        LU_SITE_HTABLE_MASK = LU_SITE_HTABLE_SIZE - 1
-};
+/*
+ * Hash-table parameters. Initialized in lu_global_init(). This assumes single
+ * site per node.
+ */
+static int lu_site_htable_bits;
+static int lu_site_htable_size;
+static int lu_site_htable_mask;
 
 /*
  * Initialize site @s, with @d as the top level device.
@@ -526,11 +527,11 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
         /*
          * XXX nikita: fixed size hash-table.
          */
-        s->ls_hash_mask = LU_SITE_HTABLE_MASK;
-        OBD_ALLOC(s->ls_hash, LU_SITE_HTABLE_SIZE * sizeof s->ls_hash[0]);
+        s->ls_hash_mask = lu_site_htable_mask;
+        OBD_ALLOC(s->ls_hash, lu_site_htable_size * sizeof s->ls_hash[0]);
         if (s->ls_hash != NULL) {
                 int i;
-                for (i = 0; i < LU_SITE_HTABLE_SIZE; i++)
+                for (i = 0; i < lu_site_htable_size; i++)
                         INIT_HLIST_HEAD(&s->ls_hash[i]);
                 result = 0;
         } else
@@ -555,10 +556,10 @@ void lu_site_fini(struct lu_site *s)
 
         if (s->ls_hash != NULL) {
                 int i;
-                for (i = 0; i < LU_SITE_HTABLE_SIZE; i++)
+                for (i = 0; i < lu_site_htable_size; i++)
                         LASSERT(hlist_empty(&s->ls_hash[i]));
                 OBD_FREE(s->ls_hash,
-                         LU_SITE_HTABLE_SIZE * sizeof s->ls_hash[0]);
+                         lu_site_htable_size * sizeof s->ls_hash[0]);
                 s->ls_hash = NULL;
         }
         if (s->ls_top_dev != NULL) {
@@ -976,12 +977,41 @@ static int lu_cache_shrink(int nr, unsigned int gfp_mask)
 
 static struct shrinker *lu_site_shrinker = NULL;
 
+enum {
+        LU_CACHE_PERCENT   = 30,
+        LU_CACHE_CAP_PAGES = 8
+};
+
 /*
  * Initialization of global lu_* data.
  */
 int lu_global_init(void)
 {
         int result;
+        unsigned long cache_size;
+
+        /*
+         * Calculate hash table size, assuming that we want reasonable
+         * performance when 30% of available memory is occupied by cache of
+         * lu_objects.
+         *
+         * Size of lu_object is (arbitrary) taken as 1K (together with inode).
+         */
+        cache_size = min(nr_free_pages() / 100 *
+                         LU_CACHE_PERCENT * (CFS_PAGE_SIZE / 1024),
+                         /*
+                          * And cap it at some reasonable upper bound (total
+                          * hash table size is 8 pages) as to avoid high order
+                          * allocations, that are unlikely to ever succeed.
+                          */
+                         LU_CACHE_CAP_PAGES * CFS_PAGE_SIZE /
+                         sizeof(struct hlist_head));
+
+        for (lu_site_htable_bits = 1;
+             (1 << lu_site_htable_bits) <= cache_size; ++lu_site_htable_bits);
+
+        lu_site_htable_size = 1 << lu_site_htable_bits;
+        lu_site_htable_mask = lu_site_htable_size - 1;
 
         result = lu_context_key_register(&lu_cdebug_key);
         if (result == 0) {
