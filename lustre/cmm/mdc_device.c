@@ -64,7 +64,7 @@ static int mdc_obd_update(struct obd_device *host,
  * mdc_add_obd() find that obd by uuid and connects to it.
  * Local MDT uuid is used for connection
  * */
-static int mdc_add_obd(const struct lu_env *env,
+static int mdc_obd_add(const struct lu_env *env,
                        struct mdc_device *mc, struct lustre_cfg *cfg)
 {
         struct mdc_cli_desc *desc = &mc->mc_desc;
@@ -136,9 +136,11 @@ static int mdc_add_obd(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int mdc_del_obd(struct mdc_device *mc)
+static int mdc_obd_del(const struct lu_env *env, struct mdc_device *mc,
+                       struct lustre_cfg *cfg)
 {
         struct mdc_cli_desc *desc = &mc->mc_desc;
+        const char *dev = lustre_cfg_string(cfg, 0);
         struct obd_device *mdc_obd = class_exp2obd(desc->cl_exp);
         struct obd_device *mdt_obd;
         int rc;
@@ -149,8 +151,9 @@ static int mdc_del_obd(struct mdc_device *mc)
                mdc_obd->obd_name);
 
         /* Set mdt_obd flags in shutdown. */
+        mdt_obd = class_name2obd(dev);
+        LASSERT(mdt_obd != NULL);
         if (mdc_obd) {
-                mdt_obd = mc->mc_md_dev.md_lu_dev.ld_obd;
                 mdc_obd->obd_no_recov = mdt_obd->obd_no_recov;
                 mdc_obd->obd_force = mdt_obd->obd_force;
                 mdc_obd->obd_fail = mdt_obd->obd_fail;
@@ -182,10 +185,10 @@ static int mdc_process_config(const struct lu_env *env,
         ENTRY;
         switch (cfg->lcfg_command) {
         case LCFG_ADD_MDC:
-                rc = mdc_add_obd(env, mc, cfg);
+                rc = mdc_obd_add(env, mc, cfg);
                 break;
         case LCFG_CLEANUP:
-                rc = mdc_del_obd(mc);
+                rc = mdc_obd_del(env, mc, cfg);
                 break;
         default:
                 rc = -EOPNOTSUPP;
@@ -224,29 +227,16 @@ struct lu_device *mdc_device_alloc(const struct lu_env *env,
                                    struct lu_device_type *ldt,
                                    struct lustre_cfg *cfg)
 {
-        const char        *dev = lustre_cfg_string(cfg, 0);
-        struct obd_device *mdt_obd;
         struct lu_device  *ld;
         struct mdc_device *mc;
         ENTRY;
 
-        mdt_obd = class_name2obd(dev);
-        LASSERT(mdt_obd != NULL);
-        
         OBD_ALLOC_PTR(mc);
         if (mc == NULL) {
                 ld = ERR_PTR(-ENOMEM);
         } else {
                 md_device_init(&mc->mc_md_dev, ldt);
                 mc->mc_md_dev.md_ops = &mdc_md_ops;
-
-                /* 
-                 * ld_obd is not used for MDC obd in cmm as it has own
-                 * descriptor for each device. So we use it for saving mdt_obd
-                 * to access it later in shutdown to set odb_fail,
-                 * obd_no_recover, etc., flags.  --umka
-                 */
-                mc->mc_md_dev.md_lu_dev.ld_obd = mdt_obd;
 	        ld = mdc2lu_dev(mc);
                 ld->ld_ops = &mdc_lu_ops;
         }

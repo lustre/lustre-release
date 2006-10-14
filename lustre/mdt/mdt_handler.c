@@ -3011,8 +3011,8 @@ static void mdt_stack_fini(const struct lu_env *env,
         LASSERT(info != NULL);
 
         bufs = &info->mti_u.bufs;
-        /* process cleanup */
-        lustre_cfg_bufs_reset(bufs, NULL);
+        /* process cleanup, pass mdt obd name to get obd umount flags */
+        lustre_cfg_bufs_reset(bufs, m->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
         lcfg = lustre_cfg_new(LCFG_CLEANUP, bufs);
         if (!lcfg) {
                 CERROR("Cannot alloc lcfg!\n");
