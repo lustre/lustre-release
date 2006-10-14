@@ -75,7 +75,9 @@ endif # DARWIN
 
 endif # MODULES
 
+if GSS
 SUBDIRS = gss
+endif
 
 install-data-hook: $(install_data_hook)
 DIST_SOURCES = $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
