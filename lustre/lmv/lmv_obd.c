@@ -1909,65 +1909,6 @@ int lmv_blocking_ast(struct ldlm_lock *lock,
         RETURN(0);
 }
 
-static int lmv_reset_hash_seg_end(struct lmv_obd *lmv, struct lmv_obj *obj,
-                                  const struct lu_fid *fid, int index,
-                                  struct lu_dirpage *dp)
-{
-        struct ptlrpc_request *tmp_req = NULL;
-        struct page *page = NULL;
-        struct lu_dirpage *next_dp;
-        struct obd_export *tgt_exp;
-        struct lu_fid rid;
-        __u64 max_hash = MAX_HASH_SIZE;
-        __u32 seg_end;
-        int rc = 0;
-        ENTRY;
-
-        /*
-         * We have reached the end of this hash segment, and the start offset of
-         * next segment need to be gotten out from the next segment, set it to
-         * the end of this segment. */
-
-        do_div(max_hash, obj->lo_objcount);
-        seg_end = (__u32)max_hash * index;
-
-        /* Get start offset from next segment */
-        rid = obj->lo_inodes[index].li_fid;
-        tgt_exp = lmv_get_export(lmv, &rid);
-        if (IS_ERR(tgt_exp))
-                GOTO(cleanup, rc = PTR_ERR(tgt_exp));
-
-        /* Alloc a page to get next segment hash,
-         * FIXME: should we try to page from cache first */
-        page = alloc_pages(GFP_KERNEL, 0);
-        if (!page)
-                GOTO(cleanup, rc = -ENOMEM);
-
-        rc = md_readpage(tgt_exp, &rid, NULL, seg_end, page, &tmp_req);
-        if (rc)
-                GOTO(cleanup, rc);
-        kmap(page);
-        next_dp = cfs_page_address(page);
-        if (lu_dirent_start(next_dp) == NULL)
-                /*
-                 * End of hash-segment reached.
-                 */
-                GOTO(cleanup, rc);
-        LASSERT(le32_to_cpu(next_dp->ldp_hash_start) >= seg_end);
-        dp->ldp_hash_end = next_dp->ldp_hash_start;
-        kunmap(page);
-        CDEBUG(D_INFO,"reset h_end %x split obj"DFID"o_count %d index %d\n",
-               le32_to_cpu(dp->ldp_hash_end), PFID(&rid), obj->lo_objcount,
-               index);
-        rc = 1;
-cleanup:
-        if (tmp_req)
-                ptlrpc_req_finished(tmp_req);
-        if (page)
-                __free_pages(page, 0);
-        RETURN(rc);
-}
-
 static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                         struct obd_capa *oc, __u64 offset, struct page *page,
                         struct ptlrpc_request **request)
@@ -2011,29 +1952,20 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
         rc = md_readpage(tgt_exp, &rid, oc, offset, page, request);
         if (rc)
                 GOTO(cleanup, rc);
-
         if (obj && i < obj->lo_objcount - 1) {
                 struct lu_dirpage *dp;
                 __u32 end;
                 kmap(page);
                 dp = cfs_page_address(page);
                 end = le32_to_cpu(dp->ldp_hash_end);
-                CDEBUG(D_INFO, "get "DFID" with end %lu i %d\n",
-                       PFID(&rid), (unsigned long)end, i);
                 if (end == ~0ul) {
-                        do {
-                                rc = lmv_reset_hash_seg_end(lmv, obj, fid,
-                                                            ++i, dp);
-                                if (i >= obj->lo_objcount - 1 || rc) {
-                                        if (rc == 1)
-                                                rc = 0;
-                                        break;
-                                }
-                                /* if there are no entries in this segment
-                                 * and it is not the last hash segment */
-                        } while (1);
+                        __u64 max_hash = MAX_HASH_SIZE;
+     
+                        do_div(max_hash, obj->lo_objcount);
+                        dp->ldp_hash_end = (__u32)max_hash * (i + 1);
+                        CDEBUG(D_INFO, ""DFID" reset end %lu i %d\n", PFID(&rid),
+                                        (unsigned long)dp->ldp_hash_end, i);
                 }
-                kunmap(page);
         }
         /*
          * Here we could remove "." and ".." from all pages which at not from

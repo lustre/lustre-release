@@ -1336,7 +1336,7 @@ static int osd_dir_page_build(const struct lu_env *env, int first,
                 recsize = (sizeof *ent + len + 3) & ~3;
                 hash = iops->store(env, it);
                 *end = hash;
-                CDEBUG(D_INODE, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
+                CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
                        name, ent, nob, PFID(fid), hash, len, len, len, name);
                 if (nob >= recsize) {
                         ent->lde_fid = *fid;
@@ -1361,6 +1361,7 @@ static int osd_dir_page_build(const struct lu_env *env, int first,
                         break;
                 }
         } while (result == 0);
+        
         return result;
 }
 
@@ -1409,7 +1410,7 @@ static int osd_readpage(const struct lu_env *env,
 
         rc = iops->load(env, it, rdpg->rp_hash);
 
-        if (rc == 0)
+        if (rc == 0) {
                 /*
                  * Iterator didn't find record with exactly the key requested.
                  *
@@ -1422,7 +1423,8 @@ static int osd_readpage(const struct lu_env *env,
                  *     state)---position it on the next item.
                  */
                 rc = iops->next(env, it);
-        else if (rc > 0)
+                CWARN("read page for reset hash %#lx\n", rdpg->rp_hash);
+        } else if (rc > 0)
                 rc = 0;
 
         /*
@@ -1454,7 +1456,7 @@ static int osd_readpage(const struct lu_env *env,
                 struct lu_dirpage *dp;
 
                 dp = kmap(rdpg->rp_pages[0]);
-                dp->ldp_hash_start = hash_start;
+                dp->ldp_hash_start = rdpg->rp_hash;
                 dp->ldp_hash_end   = hash_end;
                 if (i == 0)
                         /*
