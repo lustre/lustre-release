@@ -118,6 +118,11 @@ static inline struct md_object *cmm2child_obj(struct cmm_object *o)
         return (o ? lu2md(lu_object_next(&o->cmo_obj.mo_lu)) : NULL);
 }
 
+static inline struct lu_fid* cmm2fid(struct cmm_object *obj)
+{
+       return &(obj->cmo_obj.mo_lu.lo_header->loh_fid);
+}
+
 struct cmm_thread_info *cmm_env_info(const struct lu_env *env);
 /* cmm_object.c */
 struct lu_object *cmm_object_alloc(const struct lu_env *env,
