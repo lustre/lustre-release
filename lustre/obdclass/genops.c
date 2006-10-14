@@ -960,6 +960,11 @@ int class_disconnect_stale_exports(struct obd_device *obd,
                 
                 list_del(&exp->exp_obd_chain);
                 list_add(&exp->exp_obd_chain, &work_list);
+                /* don't count self-export as client */
+                if (obd_uuid_equals(&exp->exp_client_uuid,
+                                     &exp->exp_obd->obd_uuid))
+                        continue;
+
                 cnt++;
                 CDEBUG(D_ERROR, "%s: disconnect stale client %s@%s\n",
                        obd->obd_name, exp->exp_client_uuid.uuid,
