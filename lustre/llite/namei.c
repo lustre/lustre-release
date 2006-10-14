@@ -970,7 +970,7 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
         /* Allocate new fid. */
         err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data->fid2, &hint);
         if (err) {
-                CERROR("can't allocate new fid, rc %d\n", err);
+                CERROR("Can't allocate new fid, rc %d\n", err);
                 LBUG();
         }
 

@@ -189,6 +189,10 @@ void seq_client_fini(struct lu_client_seq *seq);
 int seq_client_alloc_super(struct lu_client_seq *seq,
                            const struct lu_env *env);
 
+int seq_client_replay_super(struct lu_client_seq *seq,
+                            struct lu_range *range,
+                            const struct lu_env *env);
+
 int seq_client_alloc_meta(struct lu_client_seq *seq,
                           const struct lu_env *env);
 

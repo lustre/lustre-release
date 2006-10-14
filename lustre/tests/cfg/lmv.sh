@@ -10,6 +10,7 @@ ostfailover_HOST=${ostfailover_HOST}
 mds1_HOST=${mds1_HOST:-$mds_HOST}
 mds2_HOST=$mds1_HOST
 mds3_HOST=$mds1_HOST
+mds4_HOST=$mds1_HOST
 ost2_HOST=${ost2_HOST:-$ost_HOST}
 gks_HOST=${gks_HOST:-$mds_HOST}
 
@@ -26,6 +27,7 @@ TMP=${TMP:-/tmp}
 
 MDSDEV=${MDSDEV:-$TMP/${FSNAME}-mdt1}
 MDSCOUNT=${MDSCOUNT:-3}
+test $MDSCOUNT -gt 4 && MDSCOUNT=4
 MDSDEVBASE=${MDSDEVBASE:-$TMP/${FSNAME}-mdt}
 MDSSIZE=${MDSSIZE:-100000}
 

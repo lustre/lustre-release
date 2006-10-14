@@ -196,6 +196,23 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                          * before failure.
                          */
                         space->lr_end = in->lr_start + LUSTRE_SEQ_SUPER_WIDTH;
+
+                        if (!seq->lss_cli) {
+                                CERROR("%s: No sequence controller "
+                                       "is attached.\n", seq->lss_name);
+                                RETURN(-ENODEV);
+                        }
+
+                        /* 
+                         * Let controller know that this is recovery and last
+                         * obtained range from it was @space.
+                         */
+                        rc = seq_client_replay_super(seq->lss_cli, space, env);
+                        if (rc) {
+                                CERROR("%s: Can't replay super-sequence, "
+                                       "rc %d\n", seq->lss_name, rc);
+                                RETURN(rc);
+                        }
                 } else {
                         /*
                          * Update super start by end from client's range. Super
@@ -499,21 +516,21 @@ int seq_server_init(struct lu_server_seq *seq,
         /* Request backing store for saved sequence info. */
         rc = seq_store_read(seq, env);
         if (rc == -ENODATA) {
-                CDEBUG(D_INFO|D_WARNING, "%s: No data found "
-                       "on storage\n", seq->lss_name);
-
+                
                 /* Nothing is read, init by default value. */
                 seq->lss_space = is_srv ?
                         LUSTRE_SEQ_ZERO_RANGE:
                         LUSTRE_SEQ_SPACE_RANGE;
 
-                if (!is_srv) {
-                        /* Save default controller value to store. */
-                        rc = seq_store_write(seq, env);
-                        if (rc) {
-                                CERROR("%s: Can't write space data, "
-                                       "rc %d\n", seq->lss_name, rc);
-                        }
+                CDEBUG(D_INFO|D_WARNING, "%s: No data found "
+                       "on store. Initialize space\n",
+                       seq->lss_name);
+
+                /* Save default controller value to store. */
+                rc = seq_store_write(seq, env);
+                if (rc) {
+                        CERROR("%s: Can't write space data, "
+                               "rc %d\n", seq->lss_name, rc);
                 }
         } else if (rc) {
 		CERROR("%s: Can't read space data, rc %d\n",
