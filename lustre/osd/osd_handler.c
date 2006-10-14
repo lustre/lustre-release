@@ -1423,7 +1423,6 @@ static int osd_readpage(const struct lu_env *env,
                  *     state)---position it on the next item.
                  */
                 rc = iops->next(env, it);
-                CWARN("read page for reset hash %#x\n", rdpg->rp_hash);
         } else if (rc > 0)
                 rc = 0;
 
