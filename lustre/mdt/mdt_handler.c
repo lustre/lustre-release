@@ -1732,11 +1732,6 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
 
         LASSERT(info->mti_env != req->rq_svc_thread->t_env);
 
-        /*
-         * XXX Leave zeroing here, unless everything is fixed.
-         */
-        memset(info, 0, sizeof *info);
-
         info->mti_rep_buf_nr = ARRAY_SIZE(info->mti_rep_buf_size);
         for (i = 0; i < ARRAY_SIZE(info->mti_rep_buf_size); i++)
                 info->mti_rep_buf_size[i] = -1;
@@ -1754,6 +1749,9 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
         req_capsule_init(&info->mti_pill, req, RCL_SERVER,
                          info->mti_rep_buf_size);
         memset(&info->mti_attr, 0, sizeof info->mti_attr);
+        info->mti_transno = 0;
+        info->mti_has_trans = 0;
+        info->mti_no_need_trans = 0;
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)

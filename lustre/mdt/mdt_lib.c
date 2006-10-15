@@ -535,7 +535,7 @@ int mdt_handle_last_unlink(struct mdt_thread_info *info, struct mdt_object *mo,
                         /* If it is a remote object, and we do not retrieve
                          * EA back unlink reg file*/
                         mode = S_IFREG;
-                else 
+                else
                         mode = lu_object_attr(&mo->mot_obj.mo_lu);
 
                 LASSERT(ma->ma_lmm_size);
@@ -648,10 +648,7 @@ static int mdt_epoch_unpack(struct mdt_thread_info *info)
         if (req_capsule_get_size(pill, &RMF_MDT_EPOCH, RCL_CLIENT))
                 info->mti_epoch = req_capsule_client_get(pill, &RMF_MDT_EPOCH);
         else
-                /* it is set to NULL already.
                 info->mti_epoch = NULL;
-                */
-                ;
         RETURN(info->mti_epoch == NULL ? -EFAULT : 0);
 }
 
