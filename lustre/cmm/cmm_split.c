@@ -86,7 +86,7 @@ cleanup:
        (sizeof(struct lmv_stripe_md) + (stripes) * sizeof(struct lu_fid))
 #if 0
 /* Under discussion, disabled for now */
-static int cmm_slave_fids_alloc(const struct lu_env *env,
+static int cmm_fids_slave_alloc(const struct lu_env *env,
                                 struct cmm_device *cmm,
                                 struct lu_fid *fids)
 {
@@ -119,7 +119,7 @@ static int cmm_slave_fids_alloc(const struct lu_env *env,
         RETURN(rc);
 }
 #else
-static int cmm_slave_fids_alloc(const struct lu_env *env,
+static int cmm_fids_slave_alloc(const struct lu_env *env,
                                 struct cmm_device *cmm,
                                 struct lu_fid *fids)
 {
@@ -212,9 +212,9 @@ static int cmm_create_remote_obj(const struct lu_env *env,
         RETURN(rc);
 }
 #if 0
-static int cmm_create_slave_objects(const struct lu_env *env,
-                                    struct md_object *mo,
-                                    struct md_attr *ma)
+static int cmm_objs_slave_create(const struct lu_env *env,
+                                 struct md_object *mo,
+                                 struct md_attr *ma)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct lmv_stripe_md *lmv = NULL, *slave_lmv = NULL;
@@ -237,7 +237,7 @@ static int cmm_create_slave_objects(const struct lu_env *env,
         lmv->mea_ids[cmm->cmm_local_num] = *lf;
 
         /* Allocate slave fids and setup FLD for them. */
-        rc = cmm_alloc_slave_fids(env, cmm, lmv->mea_ids);
+        rc = cmm_fids_slave_alloc(env, cmm, lmv->mea_ids);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -270,9 +270,9 @@ cleanup:
         return rc;
 }
 #else
-static int cmm_create_slave_objects(const struct lu_env *env,
-                                    struct md_object *mo,
-                                    struct md_attr *ma)
+static int cmm_objs_slave_create(const struct lu_env *env,
+                                 struct md_object *mo,
+                                 struct md_attr *ma)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct lmv_stripe_md *lmv = NULL, *slave_lmv = NULL;
@@ -295,7 +295,7 @@ static int cmm_create_slave_objects(const struct lu_env *env,
         lmv->mea_ids[0] = *lf;
 
         /* Allocate slave fids and setup FLD for them. */
-        rc = cmm_slave_fids_alloc(env, cmm, lmv->mea_ids);
+        rc = cmm_fids_slave_alloc(env, cmm, lmv->mea_ids);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -426,9 +426,10 @@ static int cmm_remove_entries(const struct lu_env *env,
                 }
         }
         *len = CFS_PAGE_SIZE;
+        EXIT;
 unmap:
         kunmap(rdpg->rp_pages[0]);
-        RETURN(rc);
+        return rc;
 }
 
 static int cmm_split_entries(const struct lu_env *env,
@@ -507,13 +508,10 @@ static int cmm_scan_and_split(const struct lu_env *env,
         }
 
         hash_segement = MAX_HASH_SIZE / (cmm->cmm_tgt_count + 1);
-        for (i = 0; i < cmm->cmm_tgt_count + 1; i++) {
+        for (i = 1; i < cmm->cmm_tgt_count + 1; i++) {
                 struct lu_fid *lf;
                 __u32 hash_end;
 
-                if (i == cmm->cmm_local_num)
-                        continue;
-                
                 lf = &ma->ma_lmv->mea_ids[i];
 
                 rdpg->rp_hash = i * hash_segement;
@@ -578,7 +576,7 @@ int cml_try_to_split(const struct lu_env *env, struct md_object *mo)
                 GOTO(cleanup, rc = 0);
 
         /* step2: create slave objects */
-        rc = cmm_create_slave_objects(env, mo, ma);
+        rc = cmm_objs_slave_create(env, mo, ma);
         if (rc)
                 GOTO(cleanup, ma);
 

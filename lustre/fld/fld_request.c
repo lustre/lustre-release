@@ -447,7 +447,7 @@ int fld_client_create(struct lu_client_fld *fld,
         LASSERT(target != NULL);
 
         CDEBUG(D_INFO|D_WARNING, "%s: Create fld entry (seq: "LPX64"; mds: "
-               LPX64") on target %s (idx "LPU64")\n", fld->lcf_name,
+               LPU64") on target %s (idx "LPU64")\n", fld->lcf_name,
                seq, mds, fld_target_name(target), target->ft_idx);
         
 #ifdef __KERNEL__
