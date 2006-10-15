@@ -957,15 +957,7 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
                 CERROR("cannot open %s: rc = %d\n", CAPA_KEYS, rc);
         }
 
-        if (rc)
-                RETURN(rc);
-
-        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
-        obd->obd_lvfs_ctxt.pwdmnt = current->fs->pwdmnt;
-        obd->obd_lvfs_ctxt.pwd = current->fs->pwd;
-        obd->obd_lvfs_ctxt.fs = get_ds();
-
-        RETURN(0);
+        RETURN(rc);
 }
 
 

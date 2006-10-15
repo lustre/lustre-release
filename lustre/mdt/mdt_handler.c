@@ -3280,6 +3280,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         const char                *num = lustre_cfg_string(cfg, 2);
         struct lustre_mount_info  *lmi;
         struct lustre_sb_info     *lsi;
+        struct vfsmount           *mnt;
         struct lu_site            *s;
         int                        rc;
         ENTRY;
@@ -3299,11 +3300,18 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_opts.mo_acl = 0;
         lmi = server_get_mount_2(dev);
         if (lmi == NULL) {
-                CERROR("Cannot get mount info for %s! "
-                       "set mdt_opts by default!\n", dev);
+                CERROR("Cannot get mount info for %s!\n", dev);
+                RETURN(-EFAULT);
         } else {
                 lsi = s2lsi(lmi->lmi_sb);
                 fsoptions_to_mdt_flags(m, lsi->lsi_lmd->lmd_opts);
+
+                mnt = lmi->lmi_mnt;
+                OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+                obd->obd_lvfs_ctxt.pwdmnt = mnt;
+                obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
+                obd->obd_lvfs_ctxt.fs = get_ds();
+
                 server_put_mount_2(dev, lmi->lmi_mnt);
         }
 
