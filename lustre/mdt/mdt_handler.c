@@ -1746,6 +1746,8 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
         /* it can be NULL while CONNECT */
         if (req->rq_export)
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
+        else
+                info->mti_mdt = NULL;
         req_capsule_init(&info->mti_pill, req, RCL_SERVER,
                          info->mti_rep_buf_size);
         memset(&info->mti_attr, 0, sizeof info->mti_attr);
