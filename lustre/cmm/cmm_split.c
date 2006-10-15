@@ -559,7 +559,7 @@ int cml_try_to_split(const struct lu_env *env, struct md_object *mo)
         LASSERT(S_ISDIR(lu_object_attr(&mo->mo_lu)));
         
         memset(ma, 0, sizeof(*ma));
-        ma->ma_need = MA_INODE|MA_LMV;
+        ma->ma_need = MA_INODE | MA_LMV;
         rc = mo_attr_get(env, mo, ma);
         if (rc)
                 GOTO(cleanup, ma);

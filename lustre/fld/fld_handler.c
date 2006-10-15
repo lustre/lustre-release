@@ -164,11 +164,9 @@ static int fld_server_handle(struct lu_server_fld *fld,
                 rc = -EINVAL;
                 break;
         }
-        if (rc) {
-                CERROR("%s: FLD req handle error %d (opc: %d, seq: "
-                       LPX64", mds: "LPU64")\n", fld->lsf_name, rc,
-                       opc, mf->mf_seq, mf->mf_mds);
-        }
+        CDEBUG(D_INFO|D_WARNING, "%s: FLD req handle error %d (opc: %d, seq: "
+               LPX64", mds: "LPU64")\n", fld->lsf_name, rc,
+               opc, mf->mf_seq, mf->mf_mds);
         RETURN(rc);
 
 }

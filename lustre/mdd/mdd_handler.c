@@ -1450,14 +1450,15 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
                                fl, handle);
 #ifdef HAVE_SPLIT_SUPPORT
         if (rc == 0) {
-                /* very ugly hack, if setting lmv, it means splitting
-                 * sucess, we should return -ERESTART to notify the
-                 * client, so transno for this splitting should be
-                 * zero according to the replay rules. so return -ERESTART
-                 * here let mdt trans stop callback know this.
+                /*
+                 * XXX: Very ugly hack, if setting lmv, it means splitting
+                 * sucess, we should return -ERESTART to notify the client, so
+                 * transno for this splitting should be zero according to the
+                 * replay rules. so return -ERESTART here let mdt trans stop
+                 * callback know this.
                  */
                  if (strncmp(name, MDS_LMV_MD_NAME, strlen(name)) == 0)
-                        rc = -ERESTART;
+                         rc = -ERESTART;
         }
 #endif
         mdd_trans_stop(env, mdd, rc, handle);
@@ -2289,10 +2290,11 @@ static int mdd_create_data(const struct lu_env *env,
         if (IS_ERR(handle))
                 RETURN(rc = PTR_ERR(handle));
 
-        /*XXX: setting the lov ea is not locked
-         * but setting the attr is locked? */
+        /*
+         * XXX: Setting the lov ea is not locked but setting the attr is locked?
+         */
 
-        /* replay creates has objects already */
+        /* Replay creates has objects already */
         if (spec->u.sp_ea.no_lov_create) {
                 CDEBUG(D_INFO, "we already have lov ea\n");
                 rc = mdd_lov_set_md(env, mdd_pobj, son,
@@ -2305,7 +2307,7 @@ static int mdd_create_data(const struct lu_env *env,
         if (rc == 0)
                rc = mdd_attr_get_internal_locked(env, son, ma);
 
-        /* finish mdd_lov_create() stuff */
+        /* Finish mdd_lov_create() stuff. */
         mdd_lov_create_finish(env, mdd, rc);
         mdd_trans_stop(env, mdd, rc, handle);
         if (lmm)
@@ -2574,8 +2576,8 @@ static int mdd_object_create(const struct lu_env *env,
 
         struct mdd_device *mdd = mdo2mdd(obj);
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
-        struct thandle *handle;
         const struct lu_fid *pfid = spec->u.sp_pfid;
+        struct thandle *handle;
         int rc;
         ENTRY;
 
@@ -2594,31 +2596,33 @@ static int mdd_object_create(const struct lu_env *env,
                 GOTO(unlock, rc);
 
         if (spec->sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
-                /* if creating the slave object, set slave EA here */
+                /* If creating the slave object, set slave EA here. */
                 int lmv_size = spec->u.sp_ea.eadatalen;
                 struct lmv_stripe_md *lmv;
 
                 lmv = (struct lmv_stripe_md *)spec->u.sp_ea.eadata;
                 LASSERT(lmv != NULL && lmv_size > 0);
+                
                 rc = __mdd_xattr_set(env, mdd_obj,
                                      mdd_buf_get_const(env, lmv, lmv_size),
                                      MDS_LMV_MD_NAME, 0, handle);
                 if (rc)
                         GOTO(unlock, rc);
                 pfid = spec->u.sp_ea.fid;
-
-                CWARN("Set slave ea "DFID", eadatalen %d, rc %d\n",
-                      PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
+                
+                CDEBUG(D_INFO, "Set slave ea "DFID", eadatalen %d, rc %d\n",
+                       PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
                 rc = mdd_attr_set_internal(env, mdd_obj, &ma->ma_attr, handle);
         } else
                 rc = __mdd_object_initialize(env, pfid, mdd_obj, ma, handle);
+        EXIT;
 unlock:
         mdd_write_unlock(env, mdd_obj);
         if (rc == 0)
                 rc = mdd_attr_get_internal_locked(env, mdd_obj, ma);
 
         mdd_trans_stop(env, mdd, rc, handle);
-        RETURN(rc);
+        return rc;
 }
 
 /*

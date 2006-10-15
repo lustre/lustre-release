@@ -167,7 +167,7 @@ int lmv_alloc_fid_for_split(struct obd_device *obd, struct lu_fid *pid,
                         GOTO(cleanup, rc);
                 }
         }
-        if (rc >= 0) {
+        if (rc == 0) {
                 CDEBUG(D_INFO, "Allocate new fid "DFID" for split "
                        "obj\n", PFID(fid));
         }

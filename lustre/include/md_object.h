@@ -93,11 +93,11 @@ struct md_capainfo *md_capainfo(const struct lu_env *env);
 
 /* metadata attributes */
 enum ma_valid {
-        MA_INODE = (1 << 0),
-        MA_LOV   = (1 << 1),
+        MA_INODE  = (1 << 0),
+        MA_LOV    = (1 << 1),
         MA_COOKIE = (1 << 2),
-        MA_FLAGS = (1 << 3),
-        MA_LMV   = (1 << 4)
+        MA_FLAGS  = (1 << 3),
+        MA_LMV    = (1 << 4)
 };
 
 struct md_attr {
