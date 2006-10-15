@@ -124,7 +124,8 @@ static int cmm_slave_fids_alloc(const struct lu_env *env,
                                 struct lu_fid *fids)
 {
         struct  mdc_device *mc, *tmp;
-        int rc = 0, i = 0;
+        int rc = 0;
+        int i = 1; /* skip master slot */
 
         /* 
          * XXX: In fact here would be nice to protect cmm->cmm_targets but we
