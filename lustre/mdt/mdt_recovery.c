@@ -392,7 +392,7 @@ static int mdt_clients_data_init(const struct lu_env *env,
                 exp->exp_req_replay_needed = 1;
                 atomic_inc(&obd->obd_lock_replay_clients);
                 exp->exp_lock_replay_needed = 1;
-                
+
                 class_export_put(exp);
 
                 CDEBUG(D_OTHER, "client at idx %d has last_transno = "LPU64"\n",
@@ -593,7 +593,7 @@ int mdt_client_new(const struct lu_env *env,
         struct mdt_thread_info *mti;
         struct thandle *th;
         loff_t off;
-        int rc = 0;
+        int rc;
         int cl_idx;
         ENTRY;
 
