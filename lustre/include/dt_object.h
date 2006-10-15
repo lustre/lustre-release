@@ -60,6 +60,22 @@ struct dt_device_param {
 };
 
 /*
+ * Basic transaction credit op
+ */
+enum dt_txn_op {
+        DTO_INDEX_INSERT,
+        DTO_INDEX_DELETE,
+        DTO_IDNEX_UPDATE,
+        DTO_OBJECT_CREATE,
+        DTO_OBJECT_DELETE,
+        DTO_ATTR_SET,
+        DTO_XATTR_SET,
+        DTO_LOG_REC, /* XXX temporary: dt layer knows nothing about llog. */
+
+        DTO_NR
+};
+
+/*
  * Operations on dt device.
  */
 struct dt_device_operations {
@@ -104,10 +120,10 @@ struct dt_device_operations {
                                    __u32 alg, struct lustre_capa_key *keys);
 
         /*
-         *  dt get credits from osd 
+         *  get transaction credits for given @op.
          */
         int (*dt_credit_get)(const struct lu_env *env, struct dt_device *dev,
-                             int op);
+                             enum dt_txn_op);
 };
 
 struct dt_index_features {

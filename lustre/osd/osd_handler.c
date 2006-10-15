@@ -666,55 +666,39 @@ static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
 
 /* Note: we did not count into QUOTA here, If we mount with --data_journal
  * we may need more*/
-enum {
-        /* Insert/Delete IAM
-         * EXT3_INDEX_EXTRA_TRANS_BLOCKS(8) + EXT3_SINGLEDATA_TRANS_BLOCKS 8
-         * XXX Note: maybe iam need more,since iam have more level than Ext3
-         * htree
+static const int osd_dto_credits[DTO_NR] = {
+        /*
+         * Insert/Delete. IAM EXT3_INDEX_EXTRA_TRANS_BLOCKS(8) +
+         * EXT3_SINGLEDATA_TRANS_BLOCKS 8 XXX Note: maybe iam need more,since
+         * iam have more level than Ext3 htree
          */
-        INSERT_IAM_CREDITS  = 16,
-
-        /* Create a object
-         * Same as create object in Ext3 filesystem, but did not count QUOTA i
-         * EXT3_DATA_TRANS_BLOCKS(12) + INDEX_EXTRA_BLOCKS(8) +
-         * 3(inode bits,groups, GDT)*/
-         CREATE_OBJECT_CREDITS = 23,
-
-        /* XATTR_SET
-         * SAME AS XATTR of EXT3 EXT3_DATA_TRANS_BLOCKS
-         * XXX Note: in original MDS implmentation EXT3_INDEX_EXTRA_TRANS_BLOCKS are
-         * also counted in. Do not know why? */
-         XATTR_SET_CREDITS = 12,
-
-        /* A log rec need EXT3_INDEX_EXTRA_TRANS_BLOCKS(8) +
-         *                EXT3_SINGLEDATA_TRANS_BLOCKS(8))
+        [DTO_INDEX_INSERT]  = 16,
+        [DTO_INDEX_DELETE]  = 16,
+        [DTO_IDNEX_UPDATE]  = 16,
+        /*
+         * Create a object. Same as create object in Ext3 filesystem, but did
+         * not count QUOTA i EXT3_DATA_TRANS_BLOCKS(12) +
+         * INDEX_EXTRA_BLOCKS(8) + 3(inode bits,groups, GDT)
          */
-        LOG_REC_CREDIT = 16,
-
-        /* Attr set credits 3 inode, group, GDT */
-        ATTR_SET_CREDITS = 3
+        [DTO_OBJECT_CREATE] = 23,
+        [DTO_OBJECT_DELETE] = 23,
+        /*
+         * Attr set credits 3 inode, group, GDT
+         */
+        [DTO_ATTR_SET]      = 3,
+        /*
+         * XATTR_SET. SAME AS XATTR of EXT3 EXT3_DATA_TRANS_BLOCKS XXX Note:
+         * in original MDS implmentation EXT3_INDEX_EXTRA_TRANS_BLOCKS are
+         * also counted in. Do not know why?
+         */
+        [DTO_XATTR_SET]     = 16,
+        [DTO_LOG_REC]       = 16
 };
-
 static int osd_credit_get(const struct lu_env *env, struct dt_device *d,
-                          int op)
+                          enum dt_txn_op op)
 {
-        switch(op) {
-                case INSERT_IAM:
-                        return INSERT_IAM_CREDITS;
-                case CREATE_OBJECT:
-                        return CREATE_OBJECT_CREDITS;
-                case XATTR_SET:
-                        return XATTR_SET_CREDITS;
-                case LOG_REC:
-                        return LOG_REC_CREDIT;
-                case ATTR_SET:
-                        return ATTR_SET_CREDITS;
-                default:
-                        CERROR("Not recorgonized op %d", op);
-                        LBUG();
-                        return -EINVAL;
-        }
-        return (-EINVAL);
+        LASSERT(0 <= op && op < ARRAY_SIZE(osd_dto_credits));
+        return osd_dto_credits[op];
 }
 
 static struct dt_device_operations osd_dt_ops = {
@@ -1361,7 +1345,7 @@ static int osd_dir_page_build(const struct lu_env *env, int first,
                         break;
                 }
         } while (result == 0);
-        
+
         return result;
 }
 

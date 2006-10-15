@@ -148,7 +148,7 @@ spinlock_t mdd_txn_lock;
 static void mdd_txn_param_build(const struct lu_env *env, int op)
 {
         int num_entries, i;
-        
+
         /* init credits for each ops */
         num_entries = ARRAY_SIZE(mdd_txn_descrs);
         LASSERT(num_entries > 0);
@@ -157,7 +157,7 @@ static void mdd_txn_param_build(const struct lu_env *env, int op)
         for (i = 0; i < num_entries; i++) {
                 if (mdd_txn_descrs[i].mod_op == op) {
                         LASSERT(mdd_txn_descrs[i].mod_credits > 0);
-                        mdd_env_info(env)->mti_param.tp_credits = 
+                        mdd_env_info(env)->mti_param.tp_credits =
                                 mdd_txn_descrs[i].mod_credits;
                         spin_unlock(&mdd_txn_lock);
                         return;
@@ -183,20 +183,31 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
 {
         struct mds_obd *mds = &mdd->mdd_obd_dev->u.mds;
         int ost_count = mds->mds_lov_desc.ld_tgt_count;
-        int iam_credits, xattr_credits, log_credits, create_credits;
-        int num_entries, i, attr_credits;
+
+        int index_create_credits;
+        int index_delete_credits;
+
+        int xattr_credits;
+        int log_credits;
+        int create_credits;
+        int destroy_credits;
+        int attr_credits;
+        int num_entries;
+        int i;
 
         /* Init credits for each ops. */
         num_entries = ARRAY_SIZE(mdd_txn_descrs);
         LASSERT(num_entries > 0);
 
         /* Init the basic credits from osd layer. */
-        iam_credits = mdd_credit_get(env, mdd, INSERT_IAM);
-        log_credits = mdd_credit_get(env, mdd, LOG_REC);
-        attr_credits = mdd_credit_get(env, mdd, ATTR_SET);
-        xattr_credits = mdd_credit_get(env, mdd, XATTR_SET);
-        create_credits = mdd_credit_get(env, mdd, CREATE_OBJECT);
-        
+        index_create_credits = mdd_credit_get(env, mdd, DTO_INDEX_INSERT);
+        index_delete_credits = mdd_credit_get(env, mdd, DTO_INDEX_DELETE);
+        log_credits = mdd_credit_get(env, mdd, DTO_LOG_REC);
+        attr_credits = mdd_credit_get(env, mdd, DTO_ATTR_SET);
+        xattr_credits = mdd_credit_get(env, mdd, DTO_XATTR_SET);
+        create_credits = mdd_credit_get(env, mdd, DTO_OBJECT_CREATE);
+        destroy_credits = mdd_credit_get(env, mdd, DTO_OBJECT_DELETE);
+
         /* Calculate the mdd credits. */
         spin_lock(&mdd_txn_lock);
         for (i = 0; i < num_entries; i++) {
@@ -204,11 +215,11 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
                 int *c = &mdd_txn_descrs[i].mod_credits;
                 switch(opcode) {
                         case MDD_TXN_OBJECT_DESTROY_OP:
-                                *c = 20;
+                                *c = destroy_credits;
                                 break;
                         case MDD_TXN_OBJECT_CREATE_OP:
                                 /* OI_INSERT + CREATE OBJECT */
-                                *c = iam_credits + create_credits; 
+                                *c = index_create_credits + create_credits;
                                 break;
                         case MDD_TXN_ATTR_SET_OP:
                                 /* ATTR set + XATTR(lsm, lmv) set */
@@ -218,36 +229,40 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
                                 *c = xattr_credits;
                                 break;
                         case MDD_TXN_INDEX_INSERT_OP:
-                                *c = iam_credits;
+                                *c = index_create_credits;
                                 break;
                         case MDD_TXN_INDEX_DELETE_OP:
-                                *c = iam_credits;
+                                *c = index_delete_credits;
                                 break;
                         case MDD_TXN_LINK_OP:
-                                *c = iam_credits;
+                                *c = index_create_credits;
                                 break;
                         case MDD_TXN_UNLINK_OP:
-                                /* delete IAM + Unlink log */
-                                *c = iam_credits + log_credits * ost_count;
+                                /* delete index + Unlink log */
+                                *c = index_delete_credits +
+                                        log_credits * ost_count;
                                 break;
                         case MDD_TXN_RENAME_OP:
-                                /* 2 delete IAM + 1 insert + Unlink log */
-                                *c = 3 * iam_credits + log_credits * ost_count;
+                                /* 2 delete index + 1 insert + Unlink log */
+                                *c = 2 * index_delete_credits +
+                                        index_create_credits +
+                                        log_credits * ost_count;
                                 break;
                         case MDD_TXN_RENAME_TGT_OP:
-                                /* iam insert + iam delete */
-                                *c = 2 * iam_credits;
+                                /* index insert + index delete */
+                                *c = index_delete_credits +
+                                        index_create_credits;
                                 break;
                         case MDD_TXN_CREATE_DATA_OP:
                                 /* same as set xattr(lsm) */
                                 *c = xattr_credits;
                                 break;
                         case MDD_TXN_MKDIR_OP:
-                                /* IAM_INSERT + OI_INSERT + CREATE_OBJECT_CREDITS
-                                 * SET_MD CREDITS is already counted in 
-                                 * CREATE_OBJECT CREDITS 
+                                /* INDEX INSERT + OI INSERT + CREATE_OBJECT_CREDITS
+                                 * SET_MD CREDITS is already counted in
+                                 * CREATE_OBJECT CREDITS
                                  */
-                                 *c = 2 * iam_credits + create_credits;
+                                 *c = 2 * index_create_credits + create_credits;
                                 break;
                         default:
                                 spin_unlock(&mdd_txn_lock);
@@ -257,7 +272,7 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
                 }
         }
         spin_unlock(&mdd_txn_lock);
-        RETURN(0);        
+        RETURN(0);
 }
 
 struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len)
@@ -955,7 +970,7 @@ static int mdd_recovery_complete(const struct lu_env *env,
         struct obd_device *obd = mdd2obd_dev(mdd);
         int rc;
         ENTRY;
-        
+
         LASSERT(mdd != NULL);
         LASSERT(obd != NULL);
 #if 0
@@ -982,7 +997,7 @@ static int mdd_recovery_complete(const struct lu_env *env,
 
         obd->obd_recovering = 0;
         obd->obd_type->typ_dt_ops->o_postrecov(obd);
-        
+
         /* XXX: orphans handling. */
         __mdd_orphan_cleanup(env, mdd);
         rc = next->ld_ops->ldo_recovery_complete(env, next);
@@ -1975,7 +1990,7 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
                                 rc = -ENOTEMPTY;
                 mdd_read_unlock(env, tobj);
         }
-        
+
         RETURN(rc);
 }
 /* src object can be remote that is why we use only fid and type of object */
@@ -2038,7 +2053,7 @@ static int mdd_rename(const struct lu_env *env,
                                 mdd_object_capa(env, mdd_tpobj));
         if (rc)
                 GOTO(cleanup, rc);
-        
+
         mdd_sobj = mdd_object_find(env, mdd, lf);
         *la_copy = ma->ma_attr;
         la_copy->la_valid = LA_CTIME;
@@ -2591,7 +2606,7 @@ static int mdd_object_create(const struct lu_env *env,
                 if (rc)
                         GOTO(unlock, rc);
                 pfid = spec->u.sp_ea.fid;
-                
+
                 CWARN("Set slave ea "DFID", eadatalen %d, rc %d\n",
                       PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
                 rc = mdd_attr_set_internal(env, mdd_obj, &ma->ma_attr, handle);
