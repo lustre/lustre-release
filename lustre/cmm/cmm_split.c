@@ -149,16 +149,20 @@ static int cmm_fid_alloc(const struct lu_env *env,
         LASSERT(cmm != NULL);
         LASSERT(mc != NULL);
         LASSERT(fid != NULL);
-        
+
+        down(&mc->mc_fid_sem);
+
+        /* Alloc new fid on @mc. */
         rc = obd_fid_alloc(mc->mc_desc.cl_exp, fid, NULL);
         if (rc > 0) {
-                /* Setup FLD for new sequence. */
-                rc = fld_client_create(cmm->cmm_fld,
-                                       fid_seq(fid),
+                /* Setup FLD for new sequenceif needed. */
+                rc = fld_client_create(cmm->cmm_fld, fid_seq(fid),
                                        mc->mc_num, env);
                 if (rc)
                         CERROR("Can't create fld entry, rc %d\n", rc);
         }
+        up(&mc->mc_fid_sem);
+        
         RETURN(rc);
 }
 

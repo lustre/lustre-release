@@ -239,6 +239,8 @@ struct lu_device *mdc_device_alloc(const struct lu_env *env,
                 mc->mc_md_dev.md_ops = &mdc_md_ops;
 	        ld = mdc2lu_dev(mc);
                 ld->ld_ops = &mdc_lu_ops;
+                sema_init(&mc->mc_fid_sem, 1);
+
         }
 
         RETURN (ld);

@@ -147,35 +147,31 @@ int lmv_alloc_fid_for_split(struct obd_device *obd, struct lu_fid *pid,
         ENTRY;
 
         obj = lmv_obj_grab(obd, pid);
-        if (!obj)
+        if (!obj) {
+                CERROR("Object "DFID" should be split\n",
+                       PFID(pid));
                 RETURN(0);
+        }
         
         mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                            (char *)op->name, op->namelen);
         rpid = &obj->lo_inodes[mds].li_fid;
         rc = lmv_fld_lookup(lmv, rpid, &mds);
+        lmv_obj_put(obj);
         if (rc)
-                GOTO(cleanup, rc);
+                RETURN(rc);
 
-        rc = obd_fid_alloc(lmv->tgts[mds].ltd_exp, fid, NULL);
-        if (rc > 0) {
-                LASSERT(fid_is_sane(fid));
-                rc = fld_client_create(&lmv->lmv_fld,
-                                       fid_seq(fid), mds, NULL);
-                if (rc) {
-                        CERROR("Can't create fld entry, rc %d\n", rc);
-                        GOTO(cleanup, rc);
-                }
-        }
-        if (rc == 0) {
-                CDEBUG(D_INFO, "Allocate new fid "DFID" for split "
-                       "obj\n", PFID(fid));
+        rc = __lmv_fid_alloc(lmv, fid, mds);
+        if (rc) {
+                CERROR("Can't allocate new fid, rc %d\n",
+                       rc);
+                RETURN(rc);
         }
         
-        EXIT;
-cleanup:
-        lmv_obj_put(obj);
-        return rc;
+        CDEBUG(D_INFO, "Allocate new fid "DFID" for split "
+               "obj\n", PFID(fid));
+        
+        RETURN(rc);
 }
 
 /*

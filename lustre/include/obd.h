@@ -670,6 +670,7 @@ struct lmv_tgt_desc {
         struct obd_export       *ltd_exp;
         int                     active;   /* is this target up for requests */
         int                     idx;
+        struct semaphore        fid_sem;
 };
 
 struct lmv_obd {

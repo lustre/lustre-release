@@ -52,6 +52,7 @@ struct mdc_device {
         struct list_head        mc_linkage;
         mdsno_t                 mc_num;
         struct mdc_cli_desc     mc_desc;
+        struct semaphore        mc_fid_sem;
 };
 
 struct mdc_thread_info {
