@@ -1503,7 +1503,7 @@ static int mdt_body_unpack(struct mdt_thread_info *info, __u32 flags)
                 if ((flags & HABEO_CORPUS) &&
                     !mdt_object_exists(obj)) {
                         mdt_object_put(env, obj);
-                        /* for capability renew ENOENT will be handled in 
+                        /* for capability renew ENOENT will be handled in
                          * mdt_renew_capa */
                         if (body->valid & OBD_MD_FLOSSCAPA)
                                 rc = 0;
@@ -1720,13 +1720,17 @@ void mdt_lock_handle_fini(struct mdt_lock_handle *lh)
         LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
 }
 
+/*
+ * Initialize fields of struct mdt_thread_info. Other fields are left in
+ * uninitialized state, because it's too expensive to zero out whole
+ * mdt_thread_info (> 1K) on each request arrival.
+ */
 static void mdt_thread_info_init(struct ptlrpc_request *req,
                                  struct mdt_thread_info *info)
 {
         int i;
 
         LASSERT(info->mti_env != req->rq_svc_thread->t_env);
-        memset(info, 0, sizeof(*info));
 
         info->mti_rep_buf_nr = ARRAY_SIZE(info->mti_rep_buf_size);
         for (i = 0; i < ARRAY_SIZE(info->mti_rep_buf_size); i++)
@@ -1744,6 +1748,7 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
         req_capsule_init(&info->mti_pill, req, RCL_SERVER,
                          info->mti_rep_buf_size);
+        memset(&info->mti_attr, 0, sizeof info->mti_attr);
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)
