@@ -143,29 +143,12 @@ static struct mdd_txn_op_descr mdd_txn_descrs[] = {
         DEFINE_MDD_TXN_OP_DESC(MDD_TXN_MKDIR)
 };
 
-spinlock_t mdd_txn_lock;
-
-static void mdd_txn_param_build(const struct lu_env *env, int op)
+static void mdd_txn_param_build(const struct lu_env *env, enum mdd_txn_op op)
 {
-        int num_entries, i;
+        LASSERT(0 <= op && op < ARRAY_SIZE(mdd_txn_descrs));
 
-        /* init credits for each ops */
-        num_entries = ARRAY_SIZE(mdd_txn_descrs);
-        LASSERT(num_entries > 0);
-
-        spin_lock(&mdd_txn_lock);
-        for (i = 0; i < num_entries; i++) {
-                if (mdd_txn_descrs[i].mod_op == op) {
-                        LASSERT(mdd_txn_descrs[i].mod_credits > 0);
-                        mdd_env_info(env)->mti_param.tp_credits =
-                                mdd_txn_descrs[i].mod_credits;
-                        spin_unlock(&mdd_txn_lock);
-                        return;
-                }
-        }
-        spin_unlock(&mdd_txn_lock);
-        CERROR("Wrong txn operation %d\n", op);
-        LBUG();
+        mdd_env_info(env)->mti_param.tp_credits =
+                mdd_txn_descrs[op].mod_credits;
 }
 
 static int mdd_credit_get(const struct lu_env *env, struct mdd_device *mdd,
@@ -209,7 +192,6 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
         destroy_credits = mdd_credit_get(env, mdd, DTO_OBJECT_DELETE);
 
         /* Calculate the mdd credits. */
-        spin_lock(&mdd_txn_lock);
         for (i = 0; i < num_entries; i++) {
                 int opcode = mdd_txn_descrs[i].mod_op;
                 int *c = &mdd_txn_descrs[i].mod_credits;
@@ -265,13 +247,11 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
                                  *c = 2 * index_create_credits + create_credits;
                                 break;
                         default:
-                                spin_unlock(&mdd_txn_lock);
                                 CERROR("Invalid op %d init its credit\n",
                                        opcode);
                                 LBUG();
                 }
         }
-        spin_unlock(&mdd_txn_lock);
         RETURN(0);
 }
 
@@ -860,9 +840,6 @@ static int mdd_device_init(const struct lu_env *env,
         mdd->mdd_txn_cb.dtc_txn_stop = mdd_txn_stop_cb;
         mdd->mdd_txn_cb.dtc_txn_commit = mdd_txn_commit_cb;
         mdd->mdd_txn_cb.dtc_cookie = mdd;
-
-        /* init txn credits */
-        spin_lock_init(&mdd_txn_lock);
         RETURN(rc);
 }
 
@@ -2602,14 +2579,14 @@ static int mdd_object_create(const struct lu_env *env,
 
                 lmv = (struct lmv_stripe_md *)spec->u.sp_ea.eadata;
                 LASSERT(lmv != NULL && lmv_size > 0);
-                
+
                 rc = __mdd_xattr_set(env, mdd_obj,
                                      mdd_buf_get_const(env, lmv, lmv_size),
                                      MDS_LMV_MD_NAME, 0, handle);
                 if (rc)
                         GOTO(unlock, rc);
                 pfid = spec->u.sp_ea.fid;
-                
+
                 CDEBUG(D_INFO, "Set slave ea "DFID", eadatalen %d, rc %d\n",
                        PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
                 rc = mdd_attr_set_internal(env, mdd_obj, &ma->ma_attr, handle);
