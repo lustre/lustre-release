@@ -715,7 +715,7 @@ struct lu_placement_hint {
         struct qstr   *ph_pname;
         struct lu_fid *ph_pfid;
         struct qstr   *ph_cname;
-        int           ph_opc;
+        int            ph_opc;
 };
 
 #define LUSTRE_FLD_NAME         "fld"

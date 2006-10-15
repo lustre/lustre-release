@@ -730,18 +730,20 @@ static int lmv_placement_policy(struct obd_device *obd,
 
         LASSERT(mds != NULL);
 
-        /* here are some policies to allocate new fid */
+        /* Here are some policies to allocate new fid */
         if (lmv_fids_balanced(obd)) {
-                /* allocate new fid basing on its name in the case fids are
+                /*
+                 * Allocate new fid basing on its name in the case fids are
                  * balanced, that is all sequences have more or less equal
-                 * number of objects created. */
+                 * number of objects created.
+                 */
                 if (hint->ph_cname && (hint->ph_opc == LUSTRE_OPC_MKDIR)) {
 #if 1
                         *mds = lmv_all_chars_policy(lmv->desc.ld_tgt_count,
                                                     hint->ph_cname);
                         rc = 0;
 #else
-                        /* stress policy for tests - to use non-parent MDS */
+                        /* Stress policy for tests - to use non-parent MDS */
                         LASSERT(fid_is_sane(hint->ph_pfid));
                         rc = lmv_fld_lookup(lmv, hint->ph_pfid, mds);
                         if (rc)
@@ -755,8 +757,9 @@ static int lmv_placement_policy(struct obd_device *obd,
 
                         obj = lmv_obj_grab(obd, hint->ph_pfid);
                         if (obj) {
-                                /* If the dir got split, alloc fid according
-                                 * to its hash
+                                /*
+                                 * If the dir got split, alloc fid according to
+                                 * its hash
                                  */
                                 struct lu_fid *rpid;
 
@@ -765,33 +768,35 @@ static int lmv_placement_policy(struct obd_device *obd,
                                                     hint->ph_cname->name,
                                                     hint->ph_cname->len);
                                 rpid = &obj->lo_inodes[*mds].li_fid;
+                                lmv_obj_put(obj);
+                                
                                 rc = lmv_fld_lookup(lmv, rpid, mds);
-                                if (rc) {
-                                        lmv_obj_put(obj);
+                                if (rc)
                                         GOTO(exit, rc);
-                                }
+
                                 CDEBUG(D_INODE, "The obj "DFID" has been"
                                        "split, got MDS at "LPU64" by name %s\n",
                                        PFID(hint->ph_pfid), *mds,
                                        hint->ph_cname->name);
-                                lmv_obj_put(obj);
                                 rc = 0;
                         } else {
-                                /* default policy is to use parent MDS */
+                                /* Default policy is to use parent MDS */
                                 rc = lmv_fld_lookup(lmv, hint->ph_pfid, mds);
                         }
 
                 }
         } else {
-                /* sequences among all tgts are not well balanced, allocate new
+                /*
+                 * Sequences among all tgts are not well balanced, allocate new
                  * fid taking this into account to balance them. Not implemented
-                 * yet! */
+                 * yet!
+                 */
                 *mds = 0;
                 rc = -EINVAL;
         }
 exit:
         if (rc) {
-                CERROR("cannot choose MDS, err = %d\n", rc);
+                CERROR("Can't choose MDS, err = %d\n", rc);
         } else {
                 LASSERT(*mds < lmv->desc.ld_tgt_count);
         }

@@ -356,7 +356,7 @@ test_3c() {
 	rm -rf $DIR/3c1 || error
 }
 
-run_test 3c " dir splitting via lfs stripe ============================="
+#run_test 3c " dir splitting via lfs stripe ============================="
 
 test_4a() {
 	let rr=0

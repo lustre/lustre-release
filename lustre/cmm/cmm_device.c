@@ -114,11 +114,11 @@ static int cmm_update_capa_key(const struct lu_env *env,
 }
 
 static struct md_device_operations cmm_md_ops = {
-        .mdo_statfs         = cmm_statfs,
-        .mdo_root_get       = cmm_root_get,
-        .mdo_maxsize_get    = cmm_maxsize_get,
-        .mdo_init_capa_ctxt = cmm_init_capa_ctxt,
-        .mdo_update_capa_key= cmm_update_capa_key,
+        .mdo_statfs          = cmm_statfs,
+        .mdo_root_get        = cmm_root_get,
+        .mdo_maxsize_get     = cmm_maxsize_get,
+        .mdo_init_capa_ctxt  = cmm_init_capa_ctxt,
+        .mdo_update_capa_key = cmm_update_capa_key,
 };
 
 extern struct lu_device_type mdc_device_type;
@@ -154,7 +154,6 @@ static int cmm_add_mdc(const struct lu_env *env,
         struct mdc_device *mc, *tmp;
         struct lu_fld_target target;
         struct lu_device *ld;
-        struct lu_site *ls;
         mdsno_t mdc_num;
         int rc;
         ENTRY;
@@ -179,7 +178,7 @@ static int cmm_add_mdc(const struct lu_env *env,
         ld = ldt->ldt_ops->ldto_device_alloc(env, ldt, cfg);
         ld->ld_site = cmm2lu_dev(cm)->ld_site;
 
-        rc = ldt->ldt_ops->ldto_device_init(env, ld, NULL);
+        rc = ldt->ldt_ops->ldto_device_init(env, ld, NULL, NULL);
         if (rc) {
                 ldt->ldt_ops->ldto_device_free(env, ld);
                 RETURN (rc);
@@ -206,17 +205,13 @@ static int cmm_add_mdc(const struct lu_env *env,
 
         lu_device_get(cmm2lu_dev(cm));
 
-        ls = cm->cmm_md_dev.md_lu_dev.ld_site;
-
         target.ft_srv = NULL;
         target.ft_idx = mc->mc_num;
         target.ft_exp = mc->mc_desc.cl_exp;
-
-        fld_client_add_target(ls->ls_client_fld, &target);
+        fld_client_add_target(cm->cmm_fld, &target);
         
-        /* set max md size for the mdc */
+        /* Set max md size for the mdc. */
         rc = cmm_post_init_mdc(env, cm);
-        
         RETURN(rc);
 }
 
@@ -227,7 +222,10 @@ static void cmm_device_shutdown(const struct lu_env *env,
         struct mdc_device *mc, *tmp;
         ENTRY;
 
-        /* finish all mdc devices */
+        /* Remove local target from FLD. */
+        fld_client_del_target(cm->cmm_fld, cm->cmm_local_num);
+
+        /* Finish all mdc devices. */
         spin_lock(&cm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
                 struct lu_device *ld_m = mdc2lu_dev(mc);
@@ -237,6 +235,7 @@ static void cmm_device_shutdown(const struct lu_env *env,
 
         EXIT;
 }
+
 static int cmm_device_mount(const struct lu_env *env,
                             struct cmm_device *m, struct lustre_cfg *cfg)
 {
@@ -264,10 +263,23 @@ static int cmm_process_config(const struct lu_env *env,
 
         switch(cfg->lcfg_command) {
         case LCFG_ADD_MDC:
+                /* On first ADD_MDC add also local target. */
+                if (!(m->cmm_flags & CMM_INITIALIZED)) {
+                        struct lu_site *ls = cmm2lu_dev(m)->ld_site;
+                        struct lu_fld_target target;
+
+                        target.ft_srv = ls->ls_server_fld;
+                        target.ft_idx = m->cmm_local_num;
+                        target.ft_exp = NULL;
+
+                        fld_client_add_target(m->cmm_fld, &target);
+                }
                 err = cmm_add_mdc(env, m, cfg);
-                /* the first ADD_MDC can be counted as setup is finished */
-                if ((m->cmm_flags & CMM_INITIALIZED) == 0)
+                
+                /* The first ADD_MDC can be counted as setup is finished. */
+                if (!(m->cmm_flags & CMM_INITIALIZED))
                         m->cmm_flags |= CMM_INITIALIZED;
+                
                 break;
         case LCFG_SETUP:
         {
@@ -333,7 +345,6 @@ static struct lu_device *cmm_device_alloc(const struct lu_env *env,
 {
         struct lu_device  *l;
         struct cmm_device *m;
-
         ENTRY;
 
         OBD_ALLOC_PTR(m);
@@ -345,9 +356,16 @@ static struct lu_device *cmm_device_alloc(const struct lu_env *env,
                 m->cmm_md_dev.md_upcall.mu_upcall = cmm_upcall;
 	        l = cmm2lu_dev(m);
                 l->ld_ops = &cmm_lu_ops;
+
+                OBD_ALLOC_PTR(m->cmm_fld);
+                if (!m->cmm_fld)
+                        GOTO(out_free_cmm, l = ERR_PTR(-ENOMEM));
         }
 
-        RETURN (l);
+        RETURN(l);
+out_free_cmm:
+        OBD_FREE_PTR(m);
+        return l;
 }
 
 static void cmm_device_free(const struct lu_env *env, struct lu_device *d)
@@ -356,6 +374,10 @@ static void cmm_device_free(const struct lu_env *env, struct lu_device *d)
 
         LASSERT(m->cmm_tgt_count == 0);
         LASSERT(list_empty(&m->cmm_targets));
+        if (m->cmm_fld != NULL) {
+                OBD_FREE_PTR(m->cmm_fld);
+                m->cmm_fld = NULL;
+        }
 	md_device_fini(&m->cmm_md_dev);
         OBD_FREE_PTR(m);
 }
@@ -405,10 +427,11 @@ static void cmm_type_fini(struct lu_device_type *t)
         lu_context_key_degister(&cmm_thread_key);
 }
 
-static int cmm_device_init(const struct lu_env *env,
-                           struct lu_device *d, struct lu_device *next)
+static int cmm_device_init(const struct lu_env *env, struct lu_device *d, 
+                           const char *name, struct lu_device *next)
 {
         struct cmm_device *m = lu2cmm_dev(d);
+        struct lu_site *ls;
         int err = 0;
         ENTRY;
 
@@ -417,6 +440,17 @@ static int cmm_device_init(const struct lu_env *env,
         m->cmm_tgt_count = 0;
         m->cmm_child = lu2md_dev(next);
 
+        err = fld_client_init(m->cmm_fld, name,
+                              LUSTRE_CLI_FLD_HASH_DHT);
+        if (err) {
+                CERROR("Can't init FLD, err %d\n", err);
+                RETURN(err);
+        }
+
+        /* Assign site's fld client ref, needed for asserts in osd. */
+        ls = cmm2lu_dev(m)->ld_site;
+        ls->ls_client_fld = m->cmm_fld;
+        
         RETURN(err);
 }
 
@@ -425,8 +459,10 @@ static struct lu_device *cmm_device_fini(const struct lu_env *env,
 {
 	struct cmm_device *cm = lu2cmm_dev(ld);
         struct mdc_device *mc, *tmp;
+        struct lu_site *ls;
         ENTRY;
-        /* finish all mdc devices */
+
+        /* Finish all mdc devices */
         spin_lock(&cm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
                 struct lu_device *ld_m = mdc2lu_dev(mc);
@@ -439,6 +475,10 @@ static struct lu_device *cmm_device_fini(const struct lu_env *env,
         }
         spin_unlock(&cm->cmm_tgt_guard);
 
+        fld_client_fini(cm->cmm_fld);
+        ls = cmm2lu_dev(cm)->ld_site;
+        ls->ls_client_fld = NULL;
+        
         RETURN (md2lu_dev(cm->cmm_child));
 }
 

@@ -824,8 +824,8 @@ static int mdd_txn_commit_cb(const struct lu_env *env,
         return 0;
 }
 
-static int mdd_device_init(const struct lu_env *env,
-                           struct lu_device *d, struct lu_device *next)
+static int mdd_device_init(const struct lu_env *env, struct lu_device *d, 
+                           const char *name, struct lu_device *next)
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
         struct dt_device  *dt;

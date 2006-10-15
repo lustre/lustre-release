@@ -305,7 +305,7 @@ int fld_client_init(struct lu_client_fld *fld,
         LASSERT(fld != NULL);
 
         snprintf(fld->lcf_name, sizeof(fld->lcf_name),
-                 "cli-%s", prefix);
+                 "cli-srv-%s", prefix);
 
         if (!hash_is_sane(hash)) {
                 CERROR("%s: Wrong hash function %#x\n",
@@ -315,6 +315,7 @@ int fld_client_init(struct lu_client_fld *fld,
 
         fld->lcf_count = 0;
         spin_lock_init(&fld->lcf_lock);
+        sema_init(&fld->lcf_sem, 1);
         fld->lcf_hash = &fld_hash[hash];
         INIT_LIST_HEAD(&fld->lcf_targets);
 
@@ -443,6 +444,8 @@ int fld_client_create(struct lu_client_fld *fld,
         int rc;
         ENTRY;
 
+        down(&fld->lcf_sem);
+        
         target = fld_client_get_target(fld, seq);
         LASSERT(target != NULL);
 
@@ -475,6 +478,8 @@ int fld_client_create(struct lu_client_fld *fld,
                 CERROR("%s: Can't create FLD entry, rc %d\n",
                        fld->lcf_name, rc);
         }
+        up(&fld->lcf_sem);
+        
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_create);
@@ -487,6 +492,8 @@ int fld_client_delete(struct lu_client_fld *fld, seqno_t seq,
         int rc;
         ENTRY;
 
+        down(&fld->lcf_sem);
+        
         fld_cache_delete(fld->lcf_cache, seq);
 
         target = fld_client_get_target(fld, seq);
@@ -509,6 +516,7 @@ int fld_client_delete(struct lu_client_fld *fld, seqno_t seq,
         }
 #endif
 
+        up(&fld->lcf_sem);
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_delete);
@@ -522,10 +530,14 @@ int fld_client_lookup(struct lu_client_fld *fld,
         int rc;
         ENTRY;
 
+        down(&fld->lcf_sem);
+        
         /* Lookup it in the cache */
         rc = fld_cache_lookup(fld->lcf_cache, seq, mds);
-        if (rc == 0)
+        if (rc == 0) {
+                up(&fld->lcf_sem);
                 RETURN(0);
+        }
 
         /* Can not find it in the cache */
         target = fld_client_get_target(fld, seq);
@@ -556,6 +568,7 @@ int fld_client_lookup(struct lu_client_fld *fld,
                  */
                 fld_cache_insert(fld->lcf_cache, seq, *mds);
         }
+        up(&fld->lcf_sem);
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_lookup);

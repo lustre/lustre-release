@@ -210,8 +210,8 @@ void mdc_init_ea_size(const struct lu_env *env, struct mdc_device *mc,
         obd->u.cli.cl_max_mds_cookiesize = max_cookiesize;
 }
 
-static int mdc_device_init(const struct lu_env *env,
-                           struct lu_device *ld, struct lu_device *next)
+static int mdc_device_init(const struct lu_env *env, struct lu_device *ld, 
+                           const char *name, struct lu_device *next)
 {
         return 0;
 }

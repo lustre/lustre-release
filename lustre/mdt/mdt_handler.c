@@ -2695,12 +2695,6 @@ static int mdt_fld_fini(const struct lu_env *env,
                 ls->ls_server_fld = NULL;
         }
 
-        if (ls && ls->ls_client_fld != NULL) {
-                fld_client_fini(ls->ls_client_fld);
-                OBD_FREE_PTR(ls->ls_client_fld);
-                ls->ls_client_fld = NULL;
-        }
-
         RETURN(0);
 }
 
@@ -2708,7 +2702,6 @@ static int mdt_fld_init(const struct lu_env *env,
                         const char *uuid,
                         struct mdt_device *m)
 {
-        struct lu_fld_target target;
         struct lu_site *ls;
         int rc;
         ENTRY;
@@ -2724,30 +2717,10 @@ static int mdt_fld_init(const struct lu_env *env,
         if (rc) {
                 OBD_FREE_PTR(ls->ls_server_fld);
                 ls->ls_server_fld = NULL;
+                RETURN(rc);
         }
 
-        OBD_ALLOC_PTR(ls->ls_client_fld);
-        if (!ls->ls_client_fld)
-                GOTO(out_fld_fini, rc = -ENOMEM);
-
-        rc = fld_client_init(ls->ls_client_fld, uuid,
-                             LUSTRE_CLI_FLD_HASH_DHT);
-        if (rc) {
-                CERROR("can't init FLD, err %d\n",  rc);
-                OBD_FREE_PTR(ls->ls_client_fld);
-                GOTO(out_fld_fini, rc);
-        }
-
-        target.ft_srv = ls->ls_server_fld;
-        target.ft_idx = ls->ls_node_id;
-        target.ft_exp = NULL;
-
-        fld_client_add_target(ls->ls_client_fld, &target);
-        EXIT;
-out_fld_fini:
-        if (rc)
-                mdt_fld_fini(env, m);
-        return rc;
+        RETURN(0);
 }
 
 /* device init/fini methods */
@@ -3055,6 +3028,7 @@ static struct lu_device *mdt_layer_setup(const struct lu_env *env,
                                          struct lu_device *child,
                                          struct lustre_cfg *cfg)
 {
+        const char            *dev = lustre_cfg_string(cfg, 0);
         struct obd_type       *type;
         struct lu_device_type *ldt;
         struct lu_device      *d;
@@ -3099,7 +3073,7 @@ static struct lu_device *mdt_layer_setup(const struct lu_env *env,
         d->ld_site = child->ld_site;
 
         type->typ_refcnt++;
-        rc = ldt->ldt_ops->ldto_device_init(env, d, child);
+        rc = ldt->ldt_ops->ldto_device_init(env, d, dev, child);
         if (rc) {
                 CERROR("can't init device '%s', rc %d\n", typename, rc);
                 GOTO(out_alloc, rc);
@@ -3197,6 +3171,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         mdt_seq_fini(env, m);
         mdt_seq_fini_cli(m);
         mdt_fld_fini(env, m);
+        lprocfs_obd_cleanup(d->ld_obd);
 
         if (m->mdt_rootsquash_info) {
                 OBD_FREE_PTR(m->mdt_rootsquash_info);
@@ -3287,7 +3262,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         LASSERT(info != NULL);
 
         obd = class_name2obd(dev);
-        LASSERT(obd);
+        LASSERT(obd != NULL);
 
         spin_lock_init(&m->mdt_transno_lock);
 
@@ -3344,16 +3319,16 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 GOTO(err_fini_site, rc);
         }
 
+        /* set server index */
+        LASSERT(num);
+        s->ls_node_id = simple_strtol(num, NULL, 10);
+
         /* init the stack */
         rc = mdt_stack_init(env, m, cfg);
         if (rc) {
                 CERROR("can't init device stack, rc %d\n", rc);
-                GOTO(err_fini_site, rc);
+                GOTO(err_fini_proc, rc);
         }
-
-        /* set server index */
-        LASSERT(num);
-        s->ls_node_id = simple_strtol(num, NULL, 10);
 
         rc = mdt_fld_init(env, obd->obd_name, m);
         if (rc)
@@ -3439,6 +3414,8 @@ err_fini_fld:
         mdt_fld_fini(env, m);
 err_fini_stack:
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
+err_fini_proc:
+        lprocfs_obd_cleanup(obd);
 err_fini_site:
         lu_site_fini(s);
 err_free_site:

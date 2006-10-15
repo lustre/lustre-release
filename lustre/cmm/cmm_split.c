@@ -138,6 +138,30 @@ static int cmm_object_create(const struct lu_env *env,
         RETURN(rc);
 }
 
+static int cmm_fid_alloc(const struct lu_env *env,
+                         struct cmm_device *cmm,
+                         struct mdc_device *mc,
+                         struct lu_fid *fid)
+{
+        int rc;
+        ENTRY;
+
+        LASSERT(cmm != NULL);
+        LASSERT(mc != NULL);
+        LASSERT(fid != NULL);
+        
+        rc = obd_fid_alloc(mc->mc_desc.cl_exp, fid, NULL);
+        if (rc > 0) {
+                /* Setup FLD for new sequence. */
+                rc = fld_client_create(cmm->cmm_fld,
+                                       fid_seq(fid),
+                                       mc->mc_num, env);
+                if (rc)
+                        CERROR("Can't create fld entry, rc %d\n", rc);
+        }
+        RETURN(rc);
+}
+
 static int cmm_slaves_create(const struct lu_env *env,
                              struct md_object *mo,
                              struct md_attr *ma)
@@ -145,13 +169,13 @@ static int cmm_slaves_create(const struct lu_env *env,
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct lmv_stripe_md *lmv = NULL, *slave_lmv = NULL;
         struct lu_fid *lf = cmm2fid(md2cmm_obj(mo));
-        struct  mdc_device *mc, *tmp;
+        struct mdc_device *mc, *tmp;
         int lmv_size, i = 1, rc;
         ENTRY;
 
         lmv_size = cmm_md_size(cmm->cmm_tgt_count + 1);
 
-        /* This lmv will be free after finish splitting. */
+        /* This lmv will free after finish splitting. */
         OBD_ALLOC(lmv, lmv_size);
         if (!lmv)
                 RETURN(-ENOMEM);
@@ -173,19 +197,11 @@ static int cmm_slaves_create(const struct lu_env *env,
 
         list_for_each_entry_safe(mc, tmp, &cmm->cmm_targets, mc_linkage) {
                 /* Alloc fid for slave object. */
-                rc = obd_fid_alloc(mc->mc_desc.cl_exp, &lmv->mea_ids[i], NULL);
-                if (rc > 0) {
-                        struct lu_site *ls;
-
-                        /* Setup FLD for new sequence. */
-                        ls = cmm->cmm_md_dev.md_lu_dev.ld_site;
-                        rc = fld_client_create(ls->ls_client_fld,
-                                               fid_seq(&lmv->mea_ids[i]),
-                                               mc->mc_num, env);
-                        if (rc) {
-                                CERROR("Can't create fld entry, rc %d\n", rc);
-                                GOTO(cleanup, rc);
-                        }
+                rc = cmm_fid_alloc(env, cmm, mc, &lmv->mea_ids[i]);
+                if (rc) {
+                        CERROR("Can't alloc fid for slave "LPU64", rc %d\n",
+                               mc->mc_num, rc);
+                        GOTO(cleanup, rc);
                 }
 
                 /* Create slave on remote MDT. */

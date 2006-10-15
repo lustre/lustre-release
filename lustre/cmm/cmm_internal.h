@@ -41,6 +41,8 @@ struct cmm_device {
         __u32                 cmm_flags;
         /* underlaying device in MDS stack, usually MDD */
         struct md_device      *cmm_child;
+        /* FLD client to talk to FLD */
+        struct lu_client_fld *cmm_fld;
         /* other MD servers in cluster */
         mdsno_t               cmm_local_num;
         __u32                 cmm_tgt_count;

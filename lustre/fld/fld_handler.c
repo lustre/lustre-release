@@ -140,19 +140,21 @@ static int fld_server_handle(struct lu_server_fld *fld,
         int rc;
         ENTRY;
 
+        down(&fld->lsf_sem);
+        
         switch (opc) {
         case FLD_CREATE:
                 rc = fld_server_create(fld, env,
                                        mf->mf_seq, mf->mf_mds);
 
-                /* do not return -EEXIST error for resent case */
+                /* Do not return -EEXIST error for resent case */
                 if ((info->fti_flags & MSG_RESENT) && rc == -EEXIST)
                         rc = 0;
                 break;
         case FLD_DELETE:
                 rc = fld_server_delete(fld, env, mf->mf_seq);
 
-                /* do not return -ENOENT error for resent case */
+                /* Do not return -ENOENT error for resent case */
                 if ((info->fti_flags & MSG_RESENT) && rc == -ENOENT)
                         rc = 0;
                 break;
@@ -164,9 +166,13 @@ static int fld_server_handle(struct lu_server_fld *fld,
                 rc = -EINVAL;
                 break;
         }
+
+        up(&fld->lsf_sem);
+        
         CDEBUG(D_INFO|D_WARNING, "%s: FLD req handle: error %d (opc: %d, seq: "
-               LPX64", mds: "LPU64")\n", fld->lsf_name, rc,
-               opc, mf->mf_seq, mf->mf_mds);
+               LPX64", mds: "LPU64")\n", fld->lsf_name, rc, opc, mf->mf_seq,
+               mf->mf_mds);
+        
         RETURN(rc);
 
 }
@@ -231,8 +237,8 @@ static void fld_thread_info_fini(struct fld_thread_info *info)
 
 static int fld_handle(struct ptlrpc_request *req)
 {
-        const struct lu_env *env;
         struct fld_thread_info *info;
+        const struct lu_env *env;
         int rc;
 
         env = req->rq_svc_thread->t_env;
@@ -333,6 +339,8 @@ int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
         snprintf(fld->lsf_name, sizeof(fld->lsf_name),
                  "srv-%s", prefix);
 
+        sema_init(&fld->lsf_sem, 1);
+        
         rc = fld_index_init(fld, env, dt);
         if (rc)
                 GOTO(out, rc);

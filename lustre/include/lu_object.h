@@ -303,7 +303,8 @@ struct lu_device_type_operations {
          * Initialize the devices after allocation
          */
         int  (*ldto_device_init)(const struct lu_env *env,
-                                 struct lu_device *, struct lu_device *);
+                                 struct lu_device *, const char *,
+                                 struct lu_device *);
         /*
          * Finalize device. Dual to ->ldto_device_init(). Returns pointer to
          * the next device in the stack.

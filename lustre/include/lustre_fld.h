@@ -69,6 +69,9 @@ struct lu_server_fld {
         /* /fld file object device */
         struct dt_object        *lsf_obj;
 
+        /* Protect index modifications */
+        struct semaphore         lsf_sem;
+        
         /* fld service name in form "fld-MDTXXX" */
         char                     lsf_name[80];
 };
@@ -125,13 +128,16 @@ struct lu_client_fld {
         /* lock protecting exports list and fld_hash */
         spinlock_t               lcf_lock;
 
+        /* protect fld req + cache modification */
+        struct semaphore         lcf_sem;
+
         /* client FLD cache */
         struct fld_cache_info   *lcf_cache;
 
         /* client fld proc entry name */
         char                     lcf_name[80];
 
-        const struct lu_context       *lcf_ctx;
+        const struct lu_context *lcf_ctx;
 };
 
 int fld_query(struct com_thread_info *info);

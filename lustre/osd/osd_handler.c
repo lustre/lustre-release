@@ -146,7 +146,8 @@ static void  osd_key_exit      (const struct lu_context *ctx,
 static int   osd_has_index     (const struct osd_object *obj);
 static void  osd_object_init0  (struct osd_object *obj);
 static int   osd_device_init   (const struct lu_env *env,
-                                struct lu_device *d, struct lu_device *);
+                                struct lu_device *d, const char *, 
+                                struct lu_device *);
 static int   osd_fid_lookup    (const struct lu_env *env,
                                 struct osd_object *obj,
                                 const struct lu_fid *fid);
@@ -2141,8 +2142,8 @@ static void osd_key_exit(const struct lu_context *ctx,
         LASSERT(info->oti_txns    == 0);
 }
 
-static int osd_device_init(const struct lu_env *env,
-                           struct lu_device *d, struct lu_device *next)
+static int osd_device_init(const struct lu_env *env, struct lu_device *d, 
+                           const char *name, struct lu_device *next)
 {
         return lu_env_init(&osd_dev(d)->od_env_for_commit, NULL, LCT_MD_THREAD);
 }

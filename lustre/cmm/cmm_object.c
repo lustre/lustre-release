@@ -40,16 +40,12 @@ static int cmm_fld_lookup(struct cmm_device *cm,
                           const struct lu_fid *fid, mdsno_t *mds,
                           const struct lu_env *env)
 {
-        struct lu_site *ls;
         int rc = 0;
         ENTRY;
 
         LASSERT(fid_is_sane(fid));
 
-        ls = cm->cmm_md_dev.md_lu_dev.ld_site;
-
-        rc = fld_client_lookup(ls->ls_client_fld,
-                               fid_seq(fid), mds, env);
+        rc = fld_client_lookup(cm->cmm_fld, fid_seq(fid), mds, env);
         if (rc) {
                 CERROR("Can't find mds by seq "LPX64", rc %d\n",
                        fid_seq(fid), rc);
@@ -61,8 +57,8 @@ static int cmm_fld_lookup(struct cmm_device *cm,
                        *mds, cm->cmm_tgt_count);
                 rc = -EINVAL;
         } else {
-                CDEBUG(D_INFO, "CMM: got MDS "LPU64" for sequence: "LPU64"\n",
-                       *mds, fid_seq(fid));
+                CDEBUG(D_INFO, "CMM: got MDS "LPU64" for sequence: "
+                       LPU64"\n", *mds, fid_seq(fid));
         }
 
         RETURN (rc);
