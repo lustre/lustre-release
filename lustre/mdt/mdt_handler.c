@@ -3312,7 +3312,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
                 obd->obd_lvfs_ctxt.fs = get_ds();
 
-                server_put_mount_2(dev, lmi->lmi_mnt);
+                server_put_mount_2(dev, mnt);
         }
 
         spin_lock_init(&m->mdt_ioepoch_lock);
