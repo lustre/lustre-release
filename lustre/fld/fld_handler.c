@@ -421,8 +421,12 @@ void fld_server_fini(struct lu_server_fld *fld,
         __u64 pct;
         ENTRY;
 
-        pct = fld->lsf_stat.fst_cache * 100;
-        do_div(pct, fld->lsf_stat.fst_count);
+        if (fld->lsf_stat.fst_count > 0) {
+                pct = fld->lsf_stat.fst_cache * 100;
+                do_div(pct, fld->lsf_stat.fst_count);
+        } else {
+                pct = 0;
+        }
 
         printk("FLD cache statistics (%s):\n", fld->lsf_name);
         printk("  Total reqs: "LPU64"\n", fld->lsf_stat.fst_count);
