@@ -1731,15 +1731,13 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
 {
         int i;
 
-        LASSERT(info->mti_env != req->rq_svc_thread->t_env);
-
         /* req capsule */
         info->mti_rep_buf_nr = ARRAY_SIZE(info->mti_rep_buf_size);
         for (i = 0; i < ARRAY_SIZE(info->mti_rep_buf_size); i++)
                 info->mti_rep_buf_size[i] = -1;
         req_capsule_init(&info->mti_pill, req, RCL_SERVER,
                          info->mti_rep_buf_size);
-        
+
         /* lock handle */
         for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
                 mdt_lock_handle_init(&info->mti_lh[i]);
@@ -3196,6 +3194,16 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 
         if (ls) {
+                if (!list_empty(&ls->ls_lru) ||
+                    ls->ls_total != 0 || ls->ls_busy != 0) {
+                        /*
+                         * Uh-oh, objects still exist.
+                         */
+                        static DECLARE_LU_CDEBUG_PRINT_INFO(cookie, D_ERROR);
+
+                        lu_site_print(env, ls, &cookie, lu_cdebug_printer);
+                }
+
                 lu_site_fini(ls);
                 OBD_FREE_PTR(ls);
                 d->ld_site = NULL;
