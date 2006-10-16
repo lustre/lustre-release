@@ -1504,7 +1504,7 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
         int i, rc;
 
         ENTRY;
-        CERROR("adding osc for %s to log %s\n",
+        CWARN("adding osc for %s to log %s\n",
                mti->mti_svname, logname);
         
         if (mgs_log_is_empty(obd, logname)) {
