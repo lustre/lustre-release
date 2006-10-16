@@ -210,6 +210,7 @@ static int mdt_last_rcvd_header_write(const struct lu_env *env,
         struct thandle *th;
         loff_t *off;
         int rc;
+        ENTRY;
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
 
@@ -230,12 +231,10 @@ static int mdt_last_rcvd_header_write(const struct lu_env *env,
         mdt_trans_stop(env, mdt, th);
 
         CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
-                       "uuid = %s\n"
-                       "last_transno = "LPU64"\n",
-                        rc,
-                        msd->msd_uuid,
-                        msd->msd_last_transno);
-        return rc;
+               "uuid = %s\nlast_transno = "LPU64"\n",
+               rc, msd->msd_uuid, msd->msd_last_transno);
+        
+        RETURN(rc);
 }
 
 static int mdt_last_rcvd_read(const struct lu_env *env,
@@ -568,17 +567,22 @@ static int mdt_server_data_update(const struct lu_env *env,
                                   struct mdt_device *mdt)
 {
         struct mdt_server_data *msd = &mdt->mdt_msd;
-        int rc;
+        int rc = 0;
         ENTRY;
 
         CDEBUG(D_SUPER, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
-                mdt->mdt_mount_count, mdt->mdt_last_transno);
+               mdt->mdt_mount_count, mdt->mdt_last_transno);
 
         spin_lock(&mdt->mdt_transno_lock);
         msd->msd_last_transno = mdt->mdt_last_transno;
         spin_unlock(&mdt->mdt_transno_lock);
 
-        rc = mdt_last_rcvd_header_write(env, mdt, msd);
+        /*
+         * This may be called from difficult reply handler and
+         * mdt->mdt_last_rcvd may be NULL that time.
+         */
+        if (mdt->mdt_last_rcvd != NULL)
+                rc = mdt_last_rcvd_header_write(env, mdt, msd);
         RETURN(rc);
 }
 
@@ -697,7 +701,7 @@ int mdt_client_del(const struct lu_env *env,
         if (!mcd)
                 RETURN(0);
 
-        /* XXX if mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
+        /* XXX: If mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
         if (!strcmp(med->med_mcd->mcd_uuid, obd->obd_uuid.uuid))
                 GOTO(free, 0);
 
@@ -706,45 +710,56 @@ int mdt_client_del(const struct lu_env *env,
 
         off = med->med_lr_off;
 
-        /* Don't clear med_lr_idx here as it is likely also unset.  At worst
-         * we leak a client slot that will be cleaned on the next recovery. */
+        /*
+         * Don't clear med_lr_idx here as it is likely also unset.  At worst we
+         * leak a client slot that will be cleaned on the next recovery.
+         */
         if (off <= 0) {
                 CERROR("client idx %d has offset %lld\n",
                         med->med_lr_idx, off);
                 GOTO(free, rc = -EINVAL);
         }
 
-        /* Clear the bit _after_ zeroing out the client so we don't
-           race with mdt_client_add and zero out new clients.*/
+        /*
+         * Clear the bit _after_ zeroing out the client so we don't race with
+         * mdt_client_add and zero out new clients.
+         */
         if (!test_bit(med->med_lr_idx, mdt->mdt_client_bitmap)) {
                 CERROR("MDT client %u: bit already clear in bitmap!!\n",
                        med->med_lr_idx);
                 LBUG();
         }
 
-        th = mdt_trans_start(env, mdt, MDT_TXN_LAST_RCVD_WRITE_CREDITS);
-        if (IS_ERR(th))
-                GOTO(free, rc = PTR_ERR(th));
+        /*
+         * This may be called from difficult reply handler path and
+         * mdt->mdt_last_rcvd may be NULL that time.
+         */
+        if (mdt->mdt_last_rcvd != NULL) {
+                th = mdt_trans_start(env, mdt, MDT_TXN_LAST_RCVD_WRITE_CREDITS);
+                if (IS_ERR(th))
+                        GOTO(free, rc = PTR_ERR(th));
 
-        mutex_down(&med->med_mcd_lock);
-        memset(mcd, 0, sizeof *mcd);
+                mutex_down(&med->med_mcd_lock);
+                memset(mcd, 0, sizeof *mcd);
 
-        rc = mdt_last_rcvd_write(env, mdt, mcd, &off, th);
-        mutex_up(&med->med_mcd_lock);
-        mdt_trans_stop(env, mdt, th);
+                rc = mdt_last_rcvd_write(env, mdt, mcd, &off, th);
+                mutex_up(&med->med_mcd_lock);
+                mdt_trans_stop(env, mdt, th);
+        }
 
-        CDEBUG(rc == 0 ? D_INFO : D_ERROR,
-                        "zeroing out client idx %u in %s rc %d\n",
-                        med->med_lr_idx, LAST_RCVD, rc);
+        CDEBUG(rc == 0 ? D_INFO : D_ERROR, "Zeroing out client idx %u in "
+               "%s rc %d\n",  med->med_lr_idx, LAST_RCVD, rc);
 
         spin_lock(&mdt->mdt_client_bitmap_lock);
         clear_bit(med->med_lr_idx, mdt->mdt_client_bitmap);
         spin_unlock(&mdt->mdt_client_bitmap_lock);
-        /* Make sure the server's last_transno is up to date. Do this
-         * after the client is freed so we know all the client's
-         * transactions have been committed. */
+        
+        /*
+         * Make sure the server's last_transno is up to date. Do this after the
+         * client is freed so we know all the client's transactions have been
+         * committed.
+         */
         mdt_server_data_update(env, mdt);
-
         EXIT;
 free:
         OBD_FREE_PTR(mcd);

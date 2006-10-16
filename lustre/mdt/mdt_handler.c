@@ -3801,14 +3801,19 @@ static int mdt_destroy_export(struct obd_export *export)
         info->mti_mdt = NULL;
         mdt_client_del(&env, mdt, med);
 
+        EXIT;
 out:
-        if (lmm_size)
+        if (lmm_size) {
                 OBD_FREE(ma->ma_lmm, lmm_size);
-        if (cookie_size)
+                ma->ma_lmm = NULL;
+        }
+        if (cookie_size) {
                 OBD_FREE(ma->ma_cookie, cookie_size);
+                ma->ma_cookie = NULL;
+        }
         lu_env_fini(&env);
 
-        RETURN(rc);
+        return rc;
 }
 
 static int mdt_upcall(const struct lu_env *env, struct md_device *md,
