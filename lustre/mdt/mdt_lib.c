@@ -704,6 +704,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule      *pill = &info->mti_pill;
+        struct md_create_spec   *sp = &info->mti_spec;
         ENTRY;
 
         rec = req_capsule_client_get(pill, &RMF_REC_CREATE);
@@ -727,7 +728,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
         attr->la_atime = rec->cr_time;
         attr->la_valid = LA_MODE | LA_RDEV | LA_UID | LA_GID |
                          LA_CTIME | LA_MTIME | LA_ATIME;
-        info->mti_spec.sp_cr_flags = rec->cr_flags;
+        memset(&sp->u, 0, sizeof sp->u);
+        sp->sp_cr_flags = rec->cr_flags;
 
         if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT)) {
                 mdt_set_capainfo(info, 0, rr->rr_fid1,
@@ -737,11 +739,9 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (S_ISDIR(attr->la_mode)) {
-                struct md_create_spec *sp = &info->mti_spec;
-
                 /* pass parent fid for cross-ref cases */
                 sp->u.sp_pfid = rr->rr_fid1;
-                if (info->mti_spec.sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
+                if (sp->sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
                         /* create salve object req, need
                          * unpack split ea here
                          */
@@ -761,7 +761,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_SYM);
                 if (req_capsule_field_present(pill, &RMF_SYMTGT, RCL_CLIENT)) {
                         tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
-                        info->mti_spec.u.sp_symname = tgt;
+                        sp->u.sp_symname = tgt;
                 }
                 if (tgt == NULL)
                         RETURN(-EFAULT);
@@ -924,6 +924,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         attr->la_atime = rec->cr_time;
         attr->la_valid = LA_MODE  | LA_RDEV  | LA_UID   | LA_GID |
                          LA_CTIME | LA_MTIME | LA_ATIME;
+        memset(&info->mti_spec.u, 0, sizeof(info->mti_spec.u));
         info->mti_spec.sp_cr_flags = rec->cr_flags;
         info->mti_replayepoch = rec->cr_ioepoch;
 
