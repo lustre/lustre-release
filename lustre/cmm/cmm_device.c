@@ -229,6 +229,7 @@ static void cmm_device_shutdown(const struct lu_env *env,
         spin_lock(&cm->cmm_tgt_guard);
         list_for_each_entry_safe(mc, tmp, &cm->cmm_targets, mc_linkage) {
                 struct lu_device *ld_m = mdc2lu_dev(mc);
+                fld_client_del_target(cm->cmm_fld, mc->mc_num);
                 ld_m->ld_ops->ldo_process_config(env, ld_m, cfg);
         }
         spin_unlock(&cm->cmm_tgt_guard);
