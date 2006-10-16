@@ -261,8 +261,8 @@ seq_client_proc_write_width(struct file *file, const char *buffer,
                 seq->lcs_width = val;
                 
                 if (rc == 0) {
-                        CDEBUG(D_WARNING, "%s: Allocation unit has changed to "
-                               ""LPU64"\n", seq->lcs_name, seq->lcs_width);
+                        CDEBUG(D_WARNING, "%s: Sequence size: "LPU64"\n",
+                               seq->lcs_name, seq->lcs_width);
                 }
         }
 	
