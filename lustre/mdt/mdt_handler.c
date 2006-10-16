@@ -1342,6 +1342,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                 LASSERT(!(ibits & MDS_INODELOCK_UPDATE));
                 LASSERT(ibits & MDS_INODELOCK_LOOKUP);
         }
+        memset(policy, 0, sizeof *policy);
         policy->l_inodebits.bits = ibits;
 
         rc = fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode,
@@ -1732,35 +1733,34 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
 
         LASSERT(info->mti_env != req->rq_svc_thread->t_env);
 
+        /* req capsule */
         info->mti_rep_buf_nr = ARRAY_SIZE(info->mti_rep_buf_size);
         for (i = 0; i < ARRAY_SIZE(info->mti_rep_buf_size); i++)
                 info->mti_rep_buf_size[i] = -1;
-
+        req_capsule_init(&info->mti_pill, req, RCL_SERVER,
+                         info->mti_rep_buf_size);
+        
+        /* lock handle */
         for (i = 0; i < ARRAY_SIZE(info->mti_lh); i++)
                 mdt_lock_handle_init(&info->mti_lh[i]);
 
-        info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
-        info->mti_env = req->rq_svc_thread->t_env;
-        info->mti_transno = lustre_msg_get_transno(req->rq_reqmsg);
-
-        /* it can be NULL while CONNECT */
+        /* mdt device: it can be NULL while CONNECT */
         if (req->rq_export)
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
         else
                 info->mti_mdt = NULL;
-        req_capsule_init(&info->mti_pill, req, RCL_SERVER,
-                         info->mti_rep_buf_size);
+        info->mti_env = req->rq_svc_thread->t_env;
+
+        info->mti_fail_id = OBD_FAIL_MDS_ALL_REPLY_NET;
+        info->mti_transno = lustre_msg_get_transno(req->rq_reqmsg);
+
         memset(&info->mti_attr, 0, sizeof(info->mti_attr));
-        memset(&info->mti_policy, 0, sizeof(info->mti_policy));
-        memset(&info->mti_capa_key, 0, sizeof(info->mti_capa_key));
-
-        info->mti_has_trans = 0;
-        info->mti_opdata = 0;
-        info->mti_no_need_trans = 0;
-
+        info->mti_body = NULL;
         info->mti_object = NULL;
         info->mti_dlm_req = NULL;
-        info->mti_body = NULL;
+        info->mti_has_trans = 0;
+        info->mti_no_need_trans = 0;
+        info->mti_opdata = 0;
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)

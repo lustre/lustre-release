@@ -236,14 +236,17 @@ enum {
  * reduce stack consumption.
  */
 struct mdt_thread_info {
+        /* 
+         * XXX: Part One:
+         * The following members will be filled expilictly
+         * with specific data in mdt_thread_info_init().
+         */
+
         /*
-         * for req-layout interface. This field should be first to compatibility
-         * with seq and fld suff.
+         * for req-layout interface. This field should be first to be compatible
+         * with "struct com_thread_info" in seq and fld.
          */
         struct req_capsule         mti_pill;
-
-        const struct lu_env       *mti_env;
-        struct mdt_device         *mti_mdt;
         /*
          * number of buffers in reply message.
          */
@@ -253,41 +256,47 @@ struct mdt_thread_info {
          */
         int                        mti_rep_buf_size[REQ_MAX_FIELD_NR];
         /*
-         * Body for "habeo corpus" operations.
+         * A couple of lock handles.
          */
-        const struct mdt_body     *mti_body;
-        /*
-         * Lock request for "habeo clavis" operations.
-         */
-        const struct ldlm_request *mti_dlm_req;
-        /*
-         * Host object. This is released at the end of mdt_handler().
-         */
-        struct mdt_object         *mti_object;
-        /*
-         * Object attributes.
-         */
-        struct md_attr             mti_attr;
-        /*
-         * Create specification
-         */
-        struct md_create_spec      mti_spec;
-        /*
-         * reint record. contains information for reint operations.
-         */
-        struct mdt_reint_record    mti_rr;
+        struct mdt_lock_handle     mti_lh[MDT_LH_NR];
+
+        struct mdt_device         *mti_mdt;
+        const struct lu_env       *mti_env;
+
         /*
          * Additional fail id that can be set by handler. Passed to
          * target_send_reply().
          */
         int                        mti_fail_id;
-        /*
-         * A couple of lock handles.
-         */
-        struct mdt_lock_handle     mti_lh[MDT_LH_NR];
 
         /* transaction number of current request */
         __u64                      mti_transno;
+
+
+        /* 
+         * XXX: Part Two:
+         * The following members will be filled expilictly
+         * with zero in mdt_thread_info_init(). These members may be used
+         * by all requests.
+         */
+
+        /*
+         * Object attributes.
+         */
+        struct md_attr             mti_attr;
+        /*
+         * Body for "habeo corpus" operations.
+         */
+        const struct mdt_body     *mti_body;
+        /*
+         * Host object. This is released at the end of mdt_handler().
+         */
+        struct mdt_object         *mti_object;
+        /*
+         * Lock request for "habeo clavis" operations.
+         */
+        const struct ldlm_request *mti_dlm_req;
+
         __u32                      mti_has_trans:1, /* has txn already? */
                                    mti_no_need_trans:1;
 
@@ -297,8 +306,31 @@ struct mdt_thread_info {
          */
         __u64                      mti_opdata;
 
-        /* temporary stuff used by thread to save stack consumption.  if
-         * something is in a union, make sure they do not conflict */
+        /* 
+         * XXX: Part Three:
+         * The following members will be filled expilictly
+         * with zero in mdt_reint_unpack(), because they are only used 
+         * by reint requests (including mdt_reint_open()).
+         */
+
+        /*
+         * reint record. contains information for reint operations.
+         */
+        struct mdt_reint_record    mti_rr;
+        /*
+         * Create specification
+         */
+        struct md_create_spec      mti_spec;
+
+
+        /* 
+         * XXX: Part Four:
+         * The following members will _NOT_ be initialized at all.
+         * DO NOT expect them to contain any valid value.
+         * They should be initialized explicitly by the user themselves.
+         */
+
+         /* XXX: If something is in a union, make sure they do not conflict */
 
         struct lu_fid              mti_tmp_fid1;
         struct lu_fid              mti_tmp_fid2;
