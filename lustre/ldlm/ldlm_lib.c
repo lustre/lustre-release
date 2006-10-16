@@ -1025,7 +1025,7 @@ static void abort_lock_replay_queue(struct obd_device *obd)
                 DEBUG_REQ(D_ERROR, req, "aborted:");
                 req->rq_status = -ENOTCONN;
                 req->rq_type = PTL_RPC_MSG_ERR;
-                rc = lustre_pack_reply(req, 0, NULL, NULL);
+                rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc == 0) {
                         ptlrpc_reply(req);
                 } else {
