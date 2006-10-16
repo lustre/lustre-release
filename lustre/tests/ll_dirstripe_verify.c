@@ -94,7 +94,7 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
                 if (read_proc_entry(tmp_path, buf, sizeof(buf)) < 0)
                         return 5;
 
-                stripe_count = atoi(buf);
+                stripe_count = (int)strtoul(buf, NULL, 10);;
         } else {
                 stripe_count = (int)lum_dir->lmm_stripe_count;
         }
