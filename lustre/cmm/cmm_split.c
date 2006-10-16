@@ -174,7 +174,7 @@ static int cmm_slaves_create(const struct lu_env *env,
         struct lmv_stripe_md *lmv = NULL, *slave_lmv = NULL;
         struct lu_fid *lf = cmm2fid(md2cmm_obj(mo));
         struct mdc_device *mc, *tmp;
-        int lmv_size, i = 1, rc;
+        int lmv_size, i = 1, rc = 0;
         ENTRY;
 
         lmv_size = cmm_md_size(cmm->cmm_tgt_count + 1);

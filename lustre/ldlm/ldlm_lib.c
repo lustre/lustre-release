@@ -1711,7 +1711,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         LASSERT (list_empty(&rs->rs_obd_list));
         LASSERT (list_empty(&rs->rs_exp_list));
 
-        exp = class_export_get (req->rq_export);
+        exp = class_export_get(req->rq_export);
         obd = exp->exp_obd;
 
         /* disable reply scheduling onto srv_reply_queue while I'm setting up */

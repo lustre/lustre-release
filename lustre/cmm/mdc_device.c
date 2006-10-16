@@ -156,7 +156,7 @@ static int mdc_obd_del(const struct lu_env *env, struct mdc_device *mc,
         if (mdc_obd) {
                 mdc_obd->obd_no_recov = mdt_obd->obd_no_recov;
                 mdc_obd->obd_force = mdt_obd->obd_force;
-                mdc_obd->obd_fail = mdt_obd->obd_fail;
+                mdc_obd->obd_fail = 0;
         }
 
         rc = obd_fid_fini(desc->cl_exp);
