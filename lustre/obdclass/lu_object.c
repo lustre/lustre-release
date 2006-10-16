@@ -510,6 +510,34 @@ static int lu_site_htable_size;
 static int lu_site_htable_mask;
 
 /*
+ * Print all objects in @s.
+ */
+void lu_site_print(const struct lu_env *env, struct lu_site *s, void *cookie,
+                   lu_printer_t printer)
+{
+        int i;
+
+        for (i = 0; i < lu_site_htable_size; ++i) {
+                struct lu_object_header *h;
+                struct hlist_node       *scan;
+
+                spin_lock(&s->ls_guard);
+                hlist_for_each_entry(h, scan, &s->ls_hash[i], loh_hash) {
+
+                        if (!list_empty(&h->loh_layers)) {
+                                const struct lu_object *obj;
+
+                                obj = lu_object_top(h);
+                                lu_object_print(env, cookie, printer, obj);
+                        } else
+                                lu_object_header_print(env, cookie, printer, h);
+                }
+                spin_unlock(&s->ls_guard);
+        }
+}
+EXPORT_SYMBOL(lu_site_print);
+
+/*
  * Initialize site @s, with @d as the top level device.
  */
 int lu_site_init(struct lu_site *s, struct lu_device *top)

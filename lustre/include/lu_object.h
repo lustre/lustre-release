@@ -685,6 +685,11 @@ void lu_object_put(const struct lu_env *env,
 int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr);
 
 /*
+ * Print all objects in @s.
+ */
+void lu_site_print(const struct lu_env *env, struct lu_site *s, void *cookie,
+                   lu_printer_t printer);
+/*
  * Search cache for an object with the fid @f. If such object is found, return
  * it. Otherwise, create new object, insert it into cache and return it. In
  * any case, additional reference is acquired on the returned object.
@@ -751,18 +756,22 @@ struct lu_cdebug_print_info {
 int lu_cdebug_printer(const struct lu_env *env,
                       void *cookie, const char *format, ...);
 
+#define DECLARE_LU_CDEBUG_PRINT_INFO(var, mask) \
+        struct lu_cdebug_print_info var = {     \
+                .lpi_subsys = DEBUG_SUBSYSTEM,  \
+                .lpi_mask   = (mask),           \
+                .lpi_file   = __FILE__,         \
+                .lpi_fn     = __FUNCTION__,     \
+                .lpi_line   = __LINE__          \
+        };
+
 /*
  * Print object description followed by user-supplied message.
  */
 #define LU_OBJECT_DEBUG(mask, env, object, format, ...)                 \
 ({                                                                      \
-        static struct lu_cdebug_print_info __info = {                   \
-                .lpi_subsys = DEBUG_SUBSYSTEM,                          \
-                .lpi_mask   = (mask),                                   \
-                .lpi_file   = __FILE__,                                 \
-                .lpi_fn     = __FUNCTION__,                             \
-                .lpi_line   = __LINE__                                  \
-        };                                                              \
+        static DECLARE_LU_CDEBUG_PRINT_INFO(__info, mask);              \
+                                                                        \
         lu_object_print(env, &__info, lu_cdebug_printer, object);       \
         CDEBUG(mask, format , ## __VA_ARGS__);                          \
 })
