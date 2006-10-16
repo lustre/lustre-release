@@ -968,9 +968,9 @@ static reint_unpacker mdt_reint_unpackers[REINT_MAX] = {
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op)
 {
         int rc;
-
         ENTRY;
 
+        memset(&info->mti_rr, 0, sizeof(info->mti_rr));
         if (op < REINT_MAX && mdt_reint_unpackers[op] != NULL) {
                 info->mti_rr.rr_opcode = op;
                 rc = mdt_reint_unpackers[op](info);

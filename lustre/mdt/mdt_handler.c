@@ -1750,8 +1750,10 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
                 info->mti_mdt = NULL;
         req_capsule_init(&info->mti_pill, req, RCL_SERVER,
                          info->mti_rep_buf_size);
-        memset(&info->mti_attr, 0, sizeof info->mti_attr);
+        memset(&info->mti_attr, 0, sizeof(info->mti_attr));
+        memset(&info->mti_policy, 0, sizeof(info->mti_policy));
         info->mti_has_trans = 0;
+        info->mti_opdata = 0;
         info->mti_no_need_trans = 0;
 
         info->mti_object = NULL;

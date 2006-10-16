@@ -237,7 +237,8 @@ enum {
  */
 struct mdt_thread_info {
         /*
-         * for req-layout interface.
+         * for req-layout interface. This field should be first to compatibility
+         * with seq and fld suff.
          */
         struct req_capsule         mti_pill;
 
@@ -317,7 +318,7 @@ struct mdt_thread_info {
         } mti_u;
 
         /* IO epoch related stuff. */
-        struct mdt_epoch           *mti_epoch;
+        struct mdt_epoch          *mti_epoch;
         __u64                      mti_replayepoch;
 
         /* server and client data buffers */
