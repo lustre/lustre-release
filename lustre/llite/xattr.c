@@ -92,10 +92,10 @@ int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
             (xattr_type == XATTR_ACL_DEFAULT_T)) {
                 if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
                         CWARN("For remote client, "
-                              "repalce \"xetfacl\" with \"lfs xetfacl\"");
+                              "please use \"lfs getfacl\" / \"lfs setfacl\"");
                         return -EOPNOTSUPP;
                 } else if (!(sbi->ll_flags & LL_SBI_ACL)) {
-                        CWARN("Server not support xetfacl\n");
+                        CWARN("Server not support ACL!\n");
                         return -EOPNOTSUPP;
                 }
         }
