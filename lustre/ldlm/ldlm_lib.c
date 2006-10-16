@@ -1002,7 +1002,7 @@ static void abort_req_replay_queue(struct obd_device *obd)
                 DEBUG_REQ(D_ERROR, req, "aborted:");
                 req->rq_status = -ENOTCONN;
                 req->rq_type = PTL_RPC_MSG_ERR;
-                rc = lustre_pack_reply(req, 0, NULL, NULL);
+                rc = lustre_pack_reply(req, 1, NULL, NULL);
                 if (rc == 0) {
                         ptlrpc_reply(req);
                 } else {
@@ -1414,6 +1414,7 @@ static int target_recovery_thread(void *arg)
         spin_lock_bh(&obd->obd_processing_task_lock);
         target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
+        
         /* If some clients haven't replayed requests in time, evict them */
         if (obd->obd_abort_recovery) {
                 int stale;

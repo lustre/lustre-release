@@ -300,7 +300,7 @@ int fld_client_init(struct lu_client_fld *fld,
 
         memset(&fld->lcf_stat, 0, sizeof(fld->lcf_stat));
         snprintf(fld->lcf_name, sizeof(fld->lcf_name),
-                 "cli-srv-%s", prefix);
+                 "cli-%s", prefix);
 
         if (!hash_is_sane(hash)) {
                 CERROR("%s: Wrong hash function %#x\n",
