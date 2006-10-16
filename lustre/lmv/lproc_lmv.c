@@ -100,8 +100,8 @@ static int lmv_tgt_seq_show(struct seq_file *p, void *v)
         struct lmv_obd *lmv = &dev->u.lmv;
         int idx = tgt - &(lmv->tgts[0]);
         
-        return seq_printf(p, "%d: %s %sACTIVE\n", idx, tgt->uuid.uuid,
-                          tgt->active ? "" : "IN");
+        return seq_printf(p, "%d: %s %sACTIVE\n", idx, tgt->ltd_uuid.uuid,
+                          tgt->ltd_active ? "" : "IN");
 }
 
 struct seq_operations lmv_tgt_sops = {

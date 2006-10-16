@@ -33,6 +33,11 @@
 struct lu_client_fld;
 struct lu_server_fld;
 
+struct fld_stats {
+        __u64   fst_count;
+        __u64   fst_cache;
+};
+
 /*
  * FLD (Fid Location Database) interface.
  */
@@ -62,20 +67,6 @@ struct lu_fld_hash {
         fld_scan_func_t          fh_scan_func;
 };
 
-struct lu_server_fld {
-        /* fld dir proc entry */
-        cfs_proc_dir_entry_t    *lsf_proc_dir;
-
-        /* /fld file object device */
-        struct dt_object        *lsf_obj;
-
-        /* Protect index modifications */
-        struct semaphore         lsf_sem;
-        
-        /* fld service name in form "fld-MDTXXX" */
-        char                     lsf_name[80];
-};
-
 struct fld_cache_entry {
         struct hlist_node        fce_list;
         struct list_head         fce_lru;
@@ -83,58 +74,84 @@ struct fld_cache_entry {
         seqno_t                  fce_seq;
 };
 
-struct fld_cache_info {
+struct fld_cache {
         /*
-         * cache guard, protects fci_hash mostly because others immutable after
+         * Cache guard, protects fci_hash mostly because others immutable after
          * init is finished.
          */
         spinlock_t               fci_lock;
 
-        /* cache shrink threshold */
+        /* Cache shrink threshold */
         int                      fci_threshold;
 
-        /* prefered number of cached entries */
+        /* Prefered number of cached entries */
         int                      fci_cache_size;
 
-        /* current number of cached entries. Protected by @fci_lock */
+        /* Current number of cached entries. Protected by @fci_lock */
         int                      fci_cache_count;
 
-        /* hash table size (number of collision lists) */
+        /* Hash table size (number of collision lists) */
         int                      fci_hash_size;
 
-        /* hash table mask */
+        /* Hash table mask */
         int                      fci_hash_mask;
 
-        /* hash table for all collision lists */
+        /* Hash table for all collision lists */
         struct hlist_head       *fci_hash_table;
 
-        /* lru list */
+        /* Lru list */
         struct list_head         fci_lru;
+
+        /* Cache name used for debug and messages. */
+        char                     fci_name[80];
+};
+
+struct lu_server_fld {
+        /* Fld dir proc entry. */
+        cfs_proc_dir_entry_t    *lsf_proc_dir;
+
+        /* /fld file object device */
+        struct dt_object        *lsf_obj;
+
+        /* Client FLD cache. */
+        struct fld_cache        *lsf_cache;
+
+        /* Protect index modifications */
+        struct semaphore         lsf_sem;
+
+        /* Server cache statistics. */
+        struct fld_stats         lsf_stat;
+        
+        /* Fld service name in form "fld-srv-lustre-MDTXXX" */
+        char                     lsf_name[80];
 };
 
 struct lu_client_fld {
-        /* client side proc entry */
+        /* Client side proc entry. */
         cfs_proc_dir_entry_t    *lcf_proc_dir;
 
-        /* list of exports client FLD knows about */
+        /* List of exports client FLD knows about. */
         struct list_head         lcf_targets;
 
-        /* current hash to be used to chose an export */
+        /* Current hash to be used to chose an export. */
         struct lu_fld_hash      *lcf_hash;
 
-        /* exports count */
+        /* Exports count. */
         int                      lcf_count;
 
-        /* lock protecting exports list and fld_hash */
+        /* Lock protecting exports list and fld_hash. */
         spinlock_t               lcf_lock;
 
-        /* protect fld req + cache modification */
+        /* Client cache statistics. */
+        struct fld_stats         lcf_stat;
+        
+        /* Protect fld req + cache modification. */
         struct semaphore         lcf_sem;
 
-        /* client FLD cache */
-        struct fld_cache_info   *lcf_cache;
+        /* Client FLD cache. */
+        struct fld_cache        *lcf_cache;
 
-        /* client fld proc entry name */
+        /* Client fld proc entry name. */
         char                     lcf_name[80];
 
         const struct lu_context *lcf_ctx;
@@ -188,22 +205,23 @@ int fld_client_del_target(struct lu_client_fld *fld,
                           __u64 idx);
 
 /* Cache methods */
-struct fld_cache_info *fld_cache_init(int hash_size,
-                                      int cache_size,
-                                      int cache_threshold);
+struct fld_cache *fld_cache_init(const char *name,
+                                 int hash_size,
+                                 int cache_size,
+                                 int cache_threshold);
 
-void fld_cache_fini(struct fld_cache_info *cache);
+void fld_cache_fini(struct fld_cache *cache);
 
-void fld_cache_flush(struct fld_cache_info *cache);
+void fld_cache_flush(struct fld_cache *cache);
 
-int fld_cache_insert(struct fld_cache_info *cache,
+int fld_cache_insert(struct fld_cache *cache,
                      seqno_t seq, mdsno_t mds);
 
-void fld_cache_delete(struct fld_cache_info *cache,
+void fld_cache_delete(struct fld_cache *cache,
                       seqno_t seq);
 
 int
-fld_cache_lookup(struct fld_cache_info *cache,
+fld_cache_lookup(struct fld_cache *cache,
                  seqno_t seq, mdsno_t *mds);
 
 #endif

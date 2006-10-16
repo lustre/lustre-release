@@ -45,7 +45,33 @@ enum fld_op {
 };
 
 enum {
-        FLD_HTABLE_SIZE = 256
+        /* 4M of FLD cache will not hurt client a lot. */
+        FLD_SERVER_CACHE_SIZE      = (4 * 0x100000),
+
+        /* 1M of FLD cache will not hurt client a lot. */
+        FLD_CLIENT_CACHE_SIZE      = (1 * 0x100000)
+};
+
+enum {
+        /* Cache threshold is 10 percent of size. */
+        FLD_SERVER_CACHE_THRESHOLD = 10,
+
+        /* Cache threshold is 10 percent of size. */
+        FLD_CLIENT_CACHE_THRESHOLD = 10
+};
+
+enum {
+        /*
+         * One page is used for hashtable. That is sizeof(struct hlist_head) *
+         * 1024.
+         */
+        FLD_CLIENT_HTABLE_SIZE     = (1024 * 1),
+
+        /* 
+         * Here 4 pages are used for hashtable of server cache. This is is
+         * because cache it self is 4 times bugger.
+         */
+        FLD_SERVER_HTABLE_SIZE     = (1024 * 4)
 };
 
 extern struct lu_fld_hash fld_hash[];

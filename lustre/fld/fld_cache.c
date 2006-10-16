@@ -58,7 +58,7 @@ static inline __u32 fld_cache_hash(seqno_t seq)
         return (__u32)seq;
 }
 
-void fld_cache_flush(struct fld_cache_info *cache)
+void fld_cache_flush(struct fld_cache *cache)
 {
         struct fld_cache_entry *flde;
         struct hlist_head *bucket;
@@ -82,16 +82,15 @@ void fld_cache_flush(struct fld_cache_info *cache)
         EXIT;
 }
 
-struct fld_cache_info *fld_cache_init(int hash_size, int cache_size,
-                                      int cache_threshold)
+struct fld_cache *fld_cache_init(const char *name, int hash_size,
+                                 int cache_size, int cache_threshold)
 {
-	struct fld_cache_info *cache;
+	struct fld_cache *cache;
         int i;
         ENTRY;
 
-        /* check if size is power of two */
+        LASSERT(name != NULL);
         LASSERT(IS_PO2(hash_size));
-
         LASSERT(cache_threshold < cache_size);
         
         OBD_ALLOC_PTR(cache);
@@ -102,11 +101,15 @@ struct fld_cache_info *fld_cache_init(int hash_size, int cache_size,
 
 	cache->fci_cache_count = 0;
         spin_lock_init(&cache->fci_lock);
+
+        strncpy(cache->fci_name, name,
+                sizeof(cache->fci_name));
+
 	cache->fci_hash_size = hash_size;
 	cache->fci_cache_size = cache_size;
         cache->fci_threshold = cache_threshold;
 
-        /* init fld cache info */
+        /* Init fld cache info. */
         cache->fci_hash_mask = hash_size - 1;
         OBD_ALLOC(cache->fci_hash_table,
                   hash_size * sizeof(*cache->fci_hash_table));
@@ -118,14 +121,14 @@ struct fld_cache_info *fld_cache_init(int hash_size, int cache_size,
         for (i = 0; i < hash_size; i++)
                 INIT_HLIST_HEAD(&cache->fci_hash_table[i]);
 
-        CDEBUG(D_INFO|D_WARNING, "FLD cache - Size: %d, Threshold: %d\n", 
-               cache_size, cache_threshold);
+        CDEBUG(D_INFO|D_WARNING, "%s: FLD cache - Size: %d, Threshold: %d\n", 
+               cache->fci_name, cache_size, cache_threshold);
 
         RETURN(cache);
 }
 EXPORT_SYMBOL(fld_cache_init);
 
-void fld_cache_fini(struct fld_cache_info *cache)
+void fld_cache_fini(struct fld_cache *cache)
 {
         ENTRY;
 
@@ -141,7 +144,7 @@ void fld_cache_fini(struct fld_cache_info *cache)
 EXPORT_SYMBOL(fld_cache_fini);
 
 static inline struct hlist_head *
-fld_cache_bucket(struct fld_cache_info *cache, seqno_t seq)
+fld_cache_bucket(struct fld_cache *cache, seqno_t seq)
 {
         return cache->fci_hash_table + (fld_cache_hash(seq) &
                                         cache->fci_hash_mask);
@@ -152,7 +155,7 @@ fld_cache_bucket(struct fld_cache_info *cache, seqno_t seq)
  * collision lists well balanced. That is, checks all of them and removes one
  * entry in list and so on.
  */
-static int fld_cache_shrink(struct fld_cache_info *cache)
+static int fld_cache_shrink(struct fld_cache *cache)
 {
         struct fld_cache_entry *flde;
         struct list_head *curr;
@@ -179,13 +182,13 @@ static int fld_cache_shrink(struct fld_cache_info *cache)
                 num++;
         }
 
-        CDEBUG(D_INFO|D_WARNING, "FLD cache - Shrinked by "
-               "%d entries\n", num);
+        CDEBUG(D_INFO|D_WARNING, "%s: FLD cache - Shrinked by "
+               "%d entries\n", cache->fci_name, num);
 
         RETURN(0);
 }
 
-int fld_cache_insert(struct fld_cache_info *cache,
+int fld_cache_insert(struct fld_cache *cache,
                      seqno_t seq, mdsno_t mds)
 {
         struct fld_cache_entry *flde, *fldt;
@@ -196,14 +199,14 @@ int fld_cache_insert(struct fld_cache_info *cache,
 
         spin_lock(&cache->fci_lock);
 
-        /* check if need to shrink cache */
+        /* Check if need to shrink cache. */
         rc = fld_cache_shrink(cache);
         if (rc) {
                 spin_unlock(&cache->fci_lock);
                 RETURN(rc);
         }
 
-        /* check if cache already has the entry with such a seq */
+        /* Check if cache already has the entry with such a seq. */
         bucket = fld_cache_bucket(cache, seq);
         hlist_for_each_entry(fldt, scan, bucket, fce_list) {
                 if (fldt->fce_seq == seq) {
@@ -213,13 +216,13 @@ int fld_cache_insert(struct fld_cache_info *cache,
         }
         spin_unlock(&cache->fci_lock);
 
-        /* allocate new entry */
+        /* Allocate new entry. */
         OBD_ALLOC_PTR(flde);
         if (!flde)
                 RETURN(-ENOMEM);
 
         /* 
-         * check if cache has the entry with such a seq again. It could be added
+         * Check if cache has the entry with such a seq again. It could be added
          * while we were allocating new entry.
          */
         spin_lock(&cache->fci_lock);
@@ -231,7 +234,7 @@ int fld_cache_insert(struct fld_cache_info *cache,
                 }
         }
 
-        /* add new entry to cache and lru list */
+        /* Add new entry to cache and lru list. */
         INIT_HLIST_NODE(&flde->fce_list);
         flde->fce_mds = mds;
         flde->fce_seq = seq;
@@ -246,7 +249,7 @@ int fld_cache_insert(struct fld_cache_info *cache,
 }
 EXPORT_SYMBOL(fld_cache_insert);
 
-void fld_cache_delete(struct fld_cache_info *cache, seqno_t seq)
+void fld_cache_delete(struct fld_cache *cache, seqno_t seq)
 {
         struct fld_cache_entry *flde;
         struct hlist_node *scan, *n;
@@ -272,7 +275,7 @@ out_unlock:
 }
 EXPORT_SYMBOL(fld_cache_delete);
 
-int fld_cache_lookup(struct fld_cache_info *cache,
+int fld_cache_lookup(struct fld_cache *cache,
                      seqno_t seq, mdsno_t *mds)
 {
         struct fld_cache_entry *flde;
@@ -286,11 +289,8 @@ int fld_cache_lookup(struct fld_cache_info *cache,
         hlist_for_each_entry_safe(flde, scan, n, bucket, fce_list) {
                 if (flde->fce_seq == seq) {
                         *mds = flde->fce_mds;
-
-                        /* Move found entry to the head of lru list. */
                         list_del(&flde->fce_lru);
                         list_add(&flde->fce_lru, &cache->fci_lru);
-                        
                         spin_unlock(&cache->fci_lock);
                         RETURN(0);
                 }
@@ -300,21 +300,21 @@ int fld_cache_lookup(struct fld_cache_info *cache,
 }
 EXPORT_SYMBOL(fld_cache_lookup);
 #else
-int fld_cache_insert(struct fld_cache_info *cache,
+int fld_cache_insert(struct fld_cache *cache,
                      seqno_t seq, mdsno_t mds)
 {
         return -ENOTSUPP;
 }
 EXPORT_SYMBOL(fld_cache_insert);
 
-void fld_cache_delete(struct fld_cache_info *cache,
+void fld_cache_delete(struct fld_cache *cache,
                       seqno_t seq)
 {
         return;
 }
 EXPORT_SYMBOL(fld_cache_delete);
 
-int fld_cache_lookup(struct fld_cache_info *cache,
+int fld_cache_lookup(struct fld_cache *cache,
                      seqno_t seq, mdsno_t *mds)
 {
         return -ENOTSUPP;

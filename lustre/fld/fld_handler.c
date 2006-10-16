@@ -105,30 +105,71 @@ static void __exit fld_mod_exit(void)
         }
 }
 
-/* insert index entry and update cache */
+/* Insert index entry and update cache. */
 int fld_server_create(struct lu_server_fld *fld,
                       const struct lu_env *env,
                       seqno_t seq, mdsno_t mds)
 {
-        return fld_index_create(fld, env, seq, mds);
+        int rc;
+        ENTRY;
+        
+        rc = fld_index_create(fld, env, seq, mds);
+        
+        if (rc == 0) {
+                /*
+                 * Do not return result of calling fld_cache_insert()
+                 * here. First of all because it may return -EEXISTS. Another
+                 * reason is that, we do not want to stop proceeding even after
+                 * cache errors.
+                 */
+                fld_cache_insert(fld->lsf_cache, seq, mds);
+        }
+
+        RETURN(rc);
 }
 EXPORT_SYMBOL(fld_server_create);
 
-/* delete index entry */
+/* Delete index entry. */
 int fld_server_delete(struct lu_server_fld *fld,
                       const struct lu_env *env,
                       seqno_t seq)
 {
-        return fld_index_delete(fld, env, seq);
+        int rc;
+        ENTRY;
+
+        fld_cache_delete(fld->lsf_cache, seq);
+        rc = fld_index_delete(fld, env, seq);
+        
+        RETURN(rc);
 }
 EXPORT_SYMBOL(fld_server_delete);
 
-/* issue on-disk index lookup */
+/* Lookup mds by seq. */
 int fld_server_lookup(struct lu_server_fld *fld,
                       const struct lu_env *env,
                       seqno_t seq, mdsno_t *mds)
 {
-        return fld_index_lookup(fld, env, seq, mds);
+        int rc;
+        ENTRY;
+        
+        fld->lsf_stat.fst_count++;
+        
+        /* Lookup it in the cache. */
+        rc = fld_cache_lookup(fld->lsf_cache, seq, mds);
+        if (rc == 0) {
+                fld->lsf_stat.fst_cache++;
+                RETURN(0);
+        }
+
+        rc = fld_index_lookup(fld, env, seq, mds);
+        if (rc == 0) {
+                /*
+                 * Do not return error here as well. See previous comment in
+                 * same situation in function fld_server_create().
+                 */
+                fld_cache_insert(fld->lsf_cache, seq, *mds);
+        }
+        RETURN(rc);
 }
 EXPORT_SYMBOL(fld_server_lookup);
 
@@ -219,11 +260,11 @@ static void fld_thread_info_init(struct ptlrpc_request *req,
 
         info->fti_flags = lustre_msg_get_flags(req->rq_reqmsg);
 
-        /* mark rep buffer as req-layout stuff expects */
+        /* Mark rep buffer as req-layout stuff expects. */
         for (i = 0; i < ARRAY_SIZE(info->fti_rep_buf_size); i++)
                 info->fti_rep_buf_size[i] = -1;
 
-        /* init request capsule */
+        /* Init request capsule. */
         req_capsule_init(&info->fti_pill, req, RCL_SERVER,
                          info->fti_rep_buf_size);
 
@@ -333,14 +374,31 @@ static void fld_server_proc_fini(struct lu_server_fld *fld)
 int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
                     const char *prefix, const struct lu_env *env)
 {
+        int cache_size, cache_threshold;
         int rc;
         ENTRY;
 
+        memset(&fld->lsf_stat, 0, sizeof(fld->lsf_stat));
         snprintf(fld->lsf_name, sizeof(fld->lsf_name),
                  "srv-%s", prefix);
 
         sema_init(&fld->lsf_sem, 1);
         
+        cache_size = FLD_SERVER_CACHE_SIZE /
+                sizeof(struct fld_cache_entry);
+
+        cache_threshold = cache_size *
+                FLD_SERVER_CACHE_THRESHOLD / 100;
+
+        fld->lsf_cache = fld_cache_init(fld->lsf_name,
+                                        FLD_SERVER_HTABLE_SIZE,
+                                        cache_size, cache_threshold);
+        if (IS_ERR(fld->lsf_cache)) {
+                rc = PTR_ERR(fld->lsf_cache);
+                fld->lsf_cache = NULL;
+                GOTO(out, rc);
+        }
+
         rc = fld_index_init(fld, env, dt);
         if (rc)
                 GOTO(out, rc);
@@ -360,10 +418,25 @@ EXPORT_SYMBOL(fld_server_init);
 void fld_server_fini(struct lu_server_fld *fld,
                      const struct lu_env *env)
 {
+        __u64 pct;
         ENTRY;
+
+        pct = fld->lsf_stat.fst_cache * 100;
+        do_div(pct, fld->lsf_stat.fst_count);
+
+        printk("FLD cache statistics (%s):\n", fld->lsf_name);
+        printk("  Total reqs: "LPU64"\n", fld->lsf_stat.fst_count);
+        printk("  Cache reqs: "LPU64"\n", fld->lsf_stat.fst_cache);
+        printk("  Cache hits: "LPU64"%%\n", pct);
 
         fld_server_proc_fini(fld);
         fld_index_fini(fld, env);
+
+        if (fld->lsf_cache != NULL) {
+                if (!IS_ERR(fld->lsf_cache))
+                        fld_cache_fini(fld->lsf_cache);
+                fld->lsf_cache = NULL;
+        }
 
         EXIT;
 }

@@ -62,10 +62,10 @@ static void lmv_activate_target(struct lmv_obd *lmv,
                                 struct lmv_tgt_desc *tgt,
                                 int activate)
 {
-        if (tgt->active == activate)
+        if (tgt->ltd_active == activate)
                 return;
 
-        tgt->active = activate;
+        tgt->ltd_active = activate;
         lmv->desc.ld_active_tgt_count += (activate ? 1 : -1);
 }
 
@@ -92,9 +92,9 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
                         continue;
 
                 CDEBUG(D_INFO, "lmv idx %d is %s conn "LPX64"\n",
-                       i, tgt->uuid.uuid, tgt->ltd_exp->exp_handle.h_cookie);
+                       i, tgt->ltd_uuid.uuid, tgt->ltd_exp->exp_handle.h_cookie);
 
-                if (obd_uuid_equals(uuid, &tgt->uuid))
+                if (obd_uuid_equals(uuid, &tgt->ltd_uuid))
                         break;
         }
 
@@ -110,7 +110,7 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
                obd->obd_type->typ_name, i);
         LASSERT(strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0);
 
-        if (tgt->active == activate) {
+        if (tgt->ltd_active == activate) {
                 CDEBUG(D_INFO, "OBD %p already %sactive!\n", obd,
                        activate ? "" : "in");
                 GOTO(out_lmv_lock, rc);
@@ -142,8 +142,8 @@ static int lmv_set_mdc_data(struct lmv_obd *lmv, struct obd_uuid *uuid,
                 if (tgt->ltd_exp == NULL)
                         continue;
 
-                if (obd_uuid_equals(uuid, &tgt->uuid)) {
-                        lmv->datas[tgt->idx] = *data;
+                if (obd_uuid_equals(uuid, &tgt->ltd_uuid)) {
+                        lmv->datas[tgt->ltd_idx] = *data;
                         break;
                 }
         }
@@ -359,34 +359,34 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         ENTRY;
 
         /* for MDS: don't connect to yourself */
-        if (obd_uuid_equals(&tgt->uuid, cluuid)) {
+        if (obd_uuid_equals(&tgt->ltd_uuid, cluuid)) {
                 CDEBUG(D_CONFIG, "don't connect back to %s\n", cluuid->uuid);
                 /* XXX - the old code didn't increment active tgt count.
                  *       should we ? */
                 RETURN(0);
         }
 
-        mdc_obd = class_find_client_obd(&tgt->uuid, LUSTRE_MDC_NAME,
+        mdc_obd = class_find_client_obd(&tgt->ltd_uuid, LUSTRE_MDC_NAME,
                                         &obd->obd_uuid);
         if (!mdc_obd) {
-                CERROR("target %s not attached\n", tgt->uuid.uuid);
+                CERROR("target %s not attached\n", tgt->ltd_uuid.uuid);
                 RETURN(-EINVAL);
         }
 
         CDEBUG(D_CONFIG, "connect to %s(%s) - %s, %s FOR %s\n",
                 mdc_obd->obd_name, mdc_obd->obd_uuid.uuid,
-                tgt->uuid.uuid, obd->obd_uuid.uuid,
+                tgt->ltd_uuid.uuid, obd->obd_uuid.uuid,
                 cluuid->uuid);
 
         if (!mdc_obd->obd_set_up) {
-                CERROR("target %s is not set up\n", tgt->uuid.uuid);
+                CERROR("target %s is not set up\n", tgt->ltd_uuid.uuid);
                 RETURN(-EINVAL);
         }
 
         rc = obd_connect(NULL, &conn, mdc_obd, &lmv_mdc_uuid,
                          &lmv->conn_data);
         if (rc) {
-                CERROR("target %s connect error %d\n", tgt->uuid.uuid, rc);
+                CERROR("target %s connect error %d\n", tgt->ltd_uuid.uuid, rc);
                 RETURN(rc);
         }
 
@@ -394,7 +394,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 
         target.ft_srv = NULL;
         target.ft_exp = mdc_exp;
-        target.ft_idx = tgt->idx;
+        target.ft_idx = tgt->ltd_idx;
 
         fld_client_add_target(&lmv->lmv_fld, &target);
 
@@ -404,7 +404,7 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         if (rc) {
                 obd_disconnect(mdc_exp);
                 CERROR("target %s register_observer error %d\n",
-                       tgt->uuid.uuid, rc);
+                       tgt->ltd_uuid.uuid, rc);
                 RETURN(rc);
         }
 
@@ -418,12 +418,12 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
                 }
         }
 
-        tgt->active = 1;
+        tgt->ltd_active = 1;
         tgt->ltd_exp = mdc_exp;
         lmv->desc.ld_active_tgt_count++;
 
         /* copy connect data, it may be used later */
-        lmv->datas[tgt->idx] = *mdc_data;
+        lmv->datas[tgt->ltd_idx] = *mdc_data;
 
         md_init_ea_size(tgt->ltd_exp, lmv->max_easize,
                         lmv->max_def_easize, lmv->max_cookiesize);
@@ -496,7 +496,7 @@ int lmv_add_target(struct obd_device *obd, struct obd_uuid *tgt_uuid)
         }
         spin_lock(&lmv->lmv_lock);
         tgt = lmv->tgts + lmv->desc.ld_tgt_count++;
-        tgt->uuid = *tgt_uuid;
+        tgt->ltd_uuid = *tgt_uuid;
         spin_unlock(&lmv->lmv_lock);
 
         if (lmv->connected) {
@@ -563,14 +563,14 @@ int lmv_check_connect(struct obd_device *obd)
         while (i-- > 0) {
                 int rc2;
                 --tgt;
-                tgt->active = 0;
+                tgt->ltd_active = 0;
                 if (tgt->ltd_exp) {
                         --lmv->desc.ld_active_tgt_count;
                         rc2 = obd_disconnect(tgt->ltd_exp);
                         if (rc2) {
                                 CERROR("error: LMV target %s disconnect on "
                                        "MDC idx %d: error %d\n",
-                                       tgt->uuid.uuid, i, rc2);
+                                       tgt->ltd_uuid.uuid, i, rc2);
                         }
                 }
         }
@@ -634,9 +634,9 @@ static int lmv_disconnect(struct obd_export *exp)
                 obd_register_observer(lmv->tgts[i].ltd_exp->exp_obd, NULL);
                 rc = obd_disconnect(lmv->tgts[i].ltd_exp);
                 if (rc) {
-                        if (lmv->tgts[i].active) {
+                        if (lmv->tgts[i].ltd_active) {
                                 CERROR("Target %s disconnect error %d\n",
-                                       lmv->tgts[i].uuid.uuid, rc);
+                                       lmv->tgts[i].ltd_uuid.uuid, rc);
                         }
                         rc = 0;
                 }
@@ -684,10 +684,10 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 
                 err = obd_iocontrol(cmd, lmv->tgts[i].ltd_exp, len, karg, uarg);
                 if (err) {
-                        if (lmv->tgts[i].active) {
+                        if (lmv->tgts[i].ltd_active) {
                                 CERROR("error: iocontrol MDC %s on MDT"
                                        "idx %d: err = %d\n",
-                                       lmv->tgts[i].uuid.uuid, i, err);
+                                       lmv->tgts[i].ltd_uuid.uuid, i, err);
                                 if (!rc)
                                         rc = err;
                         }
@@ -838,7 +838,7 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
         ENTRY;
 
         /* New seq alloc and FLD setup should be atomic. */
-        down(&tgt->fid_sem);
+        down(&tgt->ltd_fid_sem);
 
         /* Asking underlaying tgt layer to allocate new fid. */
         rc = obd_fid_alloc(tgt->ltd_exp, fid, NULL);
@@ -854,7 +854,7 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
                 }
         }
 
-        up(&tgt->fid_sem);
+        up(&tgt->ltd_fid_sem);
         RETURN(rc);
 }
 
@@ -926,8 +926,8 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-ENOMEM);
 
         for (i = 0; i < LMV_MAX_TGT_COUNT; i++) {
-                sema_init(&lmv->tgts[i].fid_sem, 1);
-                lmv->tgts[i].idx = i;
+                sema_init(&lmv->tgts[i].ltd_fid_sem, 1);
+                lmv->tgts[i].ltd_idx = i;
         }
 
         lmv->datas_size = LMV_MAX_TGT_COUNT * sizeof(struct obd_connect_data);
@@ -2339,7 +2339,7 @@ static int lmv_cancel_unused(struct obd_export *exp,
         LASSERT(fid != NULL);
 
         for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
-                if (!lmv->tgts[i].ltd_exp || !lmv->tgts[i].active)
+                if (!lmv->tgts[i].ltd_exp || !lmv->tgts[i].ltd_active)
                         continue;
 
                 err = md_cancel_unused(lmv->tgts[i].ltd_exp,

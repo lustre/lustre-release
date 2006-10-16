@@ -287,12 +287,6 @@ static inline int hash_is_sane(int hash)
         return (hash >= 0 && hash < ARRAY_SIZE(fld_hash));
 }
 
-/* 1M of FLD cache will not hurt client a lot */
-#define FLD_CACHE_SIZE 1024000
-
-/* cache threshold is 10 percent of size */
-#define FLD_CACHE_THRESHOLD 10
-
 int fld_client_init(struct lu_client_fld *fld,
                     const char *prefix, int hash)
 {
@@ -304,6 +298,7 @@ int fld_client_init(struct lu_client_fld *fld,
 
         LASSERT(fld != NULL);
 
+        memset(&fld->lcf_stat, 0, sizeof(fld->lcf_stat));
         snprintf(fld->lcf_name, sizeof(fld->lcf_name),
                  "cli-srv-%s", prefix);
 
@@ -320,15 +315,15 @@ int fld_client_init(struct lu_client_fld *fld,
         INIT_LIST_HEAD(&fld->lcf_targets);
 
 #ifdef __KERNEL__
-        cache_size = FLD_CACHE_SIZE /
+        cache_size = FLD_CLIENT_CACHE_SIZE /
                 sizeof(struct fld_cache_entry);
 
         cache_threshold = cache_size *
-                FLD_CACHE_THRESHOLD / 100;
+                FLD_CLIENT_CACHE_THRESHOLD / 100;
 
-        fld->lcf_cache = fld_cache_init(FLD_HTABLE_SIZE,
-                                        cache_size,
-                                        cache_threshold);
+        fld->lcf_cache = fld_cache_init(fld->lcf_name,
+                                        FLD_CLIENT_HTABLE_SIZE,
+                                        cache_size, cache_threshold);
         if (IS_ERR(fld->lcf_cache)) {
                 rc = PTR_ERR(fld->lcf_cache);
                 fld->lcf_cache = NULL;
@@ -354,8 +349,17 @@ EXPORT_SYMBOL(fld_client_init);
 void fld_client_fini(struct lu_client_fld *fld)
 {
         struct lu_fld_target *target, *tmp;
+        __u64 pct;
         ENTRY;
 
+        pct = fld->lcf_stat.fst_cache * 100;
+        do_div(pct, fld->lcf_stat.fst_count);
+
+        printk("FLD cache statistics (%s):\n", fld->lcf_name);
+        printk("  Total reqs: "LPU64"\n", fld->lcf_stat.fst_count);
+        printk("  Cache reqs: "LPU64"\n", fld->lcf_stat.fst_cache);
+        printk("  Cache hits: "LPU64"%%\n", pct);
+        
         fld_client_proc_fini(fld);
 
         spin_lock(&fld->lcf_lock);
@@ -471,7 +475,7 @@ int fld_client_create(struct lu_client_fld *fld,
                  * Do not return result of calling fld_cache_insert()
                  * here. First of all because it may return -EEXISTS. Another
                  * reason is that, we do not want to stop proceeding because of
-                 * cache errors. --umka
+                 * cache errors.
                  */
                 fld_cache_insert(fld->lcf_cache, seq, mds);
         } else {
@@ -531,10 +535,13 @@ int fld_client_lookup(struct lu_client_fld *fld,
         ENTRY;
 
         down(&fld->lcf_sem);
-        
+
+        fld->lcf_stat.fst_count++;
+                
         /* Lookup it in the cache */
         rc = fld_cache_lookup(fld->lcf_cache, seq, mds);
         if (rc == 0) {
+                fld->lcf_stat.fst_cache++;
                 up(&fld->lcf_sem);
                 RETURN(0);
         }
@@ -564,7 +571,7 @@ int fld_client_lookup(struct lu_client_fld *fld,
 
                 /*
                  * Do not return error here as well. See previous comment in
-                 * same situation in function fld_client_create(). --umka
+                 * same situation in function fld_client_create().
                  */
                 fld_cache_insert(fld->lcf_cache, seq, *mds);
         }

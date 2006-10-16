@@ -666,11 +666,11 @@ struct lov_obd {
 };
 
 struct lmv_tgt_desc {
-        struct obd_uuid         uuid;
-        struct obd_export       *ltd_exp;
-        int                     active;   /* is this target up for requests */
-        int                     idx;
-        struct semaphore        fid_sem;
+        struct obd_uuid         ltd_uuid;
+        struct obd_export      *ltd_exp;
+        int                     ltd_active;   /* is this target up for requests */
+        int                     ltd_idx;
+        struct semaphore        ltd_fid_sem;
 };
 
 struct lmv_obd {
