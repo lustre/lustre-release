@@ -88,6 +88,7 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
                          */
                         hlist_del_init(&top->loh_hash);
                         list_del_init(&top->loh_lru);
+                        -- site->ls_total;
                         kill_it = 1;
                 }
         }
@@ -125,7 +126,6 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
                                                       NULL, s->ls_top_dev);
         if (IS_ERR(top))
                 RETURN(top);
-        s->ls_total ++;
         /*
          * This is the only place where object fid is assigned. It's constant
          * after this point.
@@ -182,7 +182,7 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o)
                 if (scan->lo_ops->loo_object_delete != NULL)
                         scan->lo_ops->loo_object_delete(env, scan);
         }
-        -- o->lo_dev->ld_site->ls_total;
+
         /*
          * Then, splice object layers into stand-alone list, and call
          * ->loo_object_free() on all layers to free memory. Splice is
@@ -231,6 +231,7 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
                         continue;
                 hlist_del_init(&h->loh_hash);
                 list_move(&h->loh_lru, &dispose);
+                s->ls_total --;
         }
         spin_unlock(&s->ls_guard);
         /*
@@ -479,6 +480,7 @@ struct lu_object *lu_object_find(const struct lu_env *env,
                 hlist_add_head(&o->lo_header->loh_hash, bucket);
                 list_add_tail(&o->lo_header->loh_lru, &s->ls_lru);
                 ++ s->ls_busy;
+                ++ s->ls_total;
                 shadow = o;
                 o = NULL;
         } else
@@ -993,14 +995,15 @@ static int lu_cache_shrink(int nr, unsigned int gfp_mask)
                          */
                         list_move_tail(&s->ls_linkage, &splice);
                 }
+                spin_lock(&s->ls_guard);
                 cached += s->ls_total - s->ls_busy;
+                spin_unlock(&s->ls_guard);
                 if (remain <= 0)
                         break;
         }
         list_splice(&splice, lu_sites.prev);
         up(&lu_sites_guard);
-        return max(cached, 0); /* max() to avoid spurious underflow due to
-                                * lock-less access */
+        return cached;
 }
 
 static struct shrinker *lu_site_shrinker = NULL;
