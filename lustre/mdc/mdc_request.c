@@ -564,8 +564,8 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
                         rc = mdc_unpack_acl(dt_exp, req, md, offset++);
                         if (rc)
                                 GOTO(out, rc);
-                } else {
 #ifdef CONFIG_FS_POSIX_ACL
+                } else {
                         md->posix_acl = NULL;
 #endif
                 }
