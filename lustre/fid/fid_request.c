@@ -49,10 +49,9 @@
 #include <lustre_mdc.h>
 #include "fid_internal.h"
 
-static int seq_client_rpc(struct lu_client_seq *seq,
-                          struct lu_range *input,
-                          struct lu_range *output,
-                          __u32 opc, const char *opcname)
+static int seq_client_rpc(struct lu_client_seq *seq, struct lu_range *input,
+                          struct lu_range *output, __u32 opc,
+                          const char *opcname)
 {
         int rc, size[3] = { sizeof(struct ptlrpc_body),
                             sizeof(__u32),
@@ -64,10 +63,8 @@ static int seq_client_rpc(struct lu_client_seq *seq,
         __u32 *op;
         ENTRY;
 
-        req = ptlrpc_prep_req(class_exp2cliimp(exp),
-			      LUSTRE_MDS_VERSION,
-                              SEQ_QUERY, 3, size,
-                              NULL);
+        req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
+                              SEQ_QUERY, 3, size, NULL);
         if (req == NULL)
                 RETURN(-ENOMEM);
 
@@ -117,11 +114,6 @@ static int seq_client_rpc(struct lu_client_seq *seq,
                        DRANGE"]\n", seq->lcs_name, PRANGE(output));
                 GOTO(out_req, rc = -EINVAL);
         }
-
-        /* 
-         * Save server response to request for recovery case, it will be sent to
-         * server later if needed.
-         */
         *in = *out;
 
         CDEBUG(D_INFO, "%s: Allocated %s-sequence "DRANGE"]\n",
@@ -135,69 +127,6 @@ out_req:
 }
 
 /* Request sequence-controller node to allocate new super-sequence. */
-static int __seq_client_alloc_super(struct lu_client_seq *seq,
-                                    const struct lu_env *env)
-{
-        int rc;
-
-#ifdef __KERNEL__
-        if (seq->lcs_srv) {
-                LASSERT(env != NULL);
-                rc = seq_server_alloc_super(seq->lcs_srv, NULL,
-                                            &seq->lcs_space, env);
-        } else {
-#endif
-                rc = seq_client_rpc(seq, NULL, &seq->lcs_space,
-                                    SEQ_ALLOC_SUPER, "super");
-#ifdef __KERNEL__
-        }
-#endif
-        return rc;
-}
-
-int seq_client_alloc_super(struct lu_client_seq *seq,
-                           const struct lu_env *env)
-{
-        int rc;
-        ENTRY;
-
-        down(&seq->lcs_sem);
-        rc = __seq_client_alloc_super(seq, env);
-        up(&seq->lcs_sem);
-
-        RETURN(rc);
-}
-EXPORT_SYMBOL(seq_client_alloc_super);
-
-/* Request sequence-controller node to allocate new super-sequence. */
-static int __seq_client_replay_super(struct lu_client_seq *seq,
-                                     struct lu_range *range,
-                                     const struct lu_env *env)
-{
-        int rc = 0;
-
-#ifdef __KERNEL__
-        if (seq->lcs_srv) {
-                LASSERT(env != NULL);
-                rc = seq_server_alloc_super(seq->lcs_srv, range,
-                                            &seq->lcs_space, env);
-        } else {
-#endif
-#if 0
-                /* 
-                 * XXX: Seems we do not need to replay in case of remote
-                 * controller. Lustre anyway supports onlu signle failure
-                 * recovery.
-                 */
-                rc = seq_client_rpc(seq, range, &seq->lcs_space,
-                                    SEQ_ALLOC_SUPER, "super");
-#endif
-#ifdef __KERNEL__
-        }
-#endif
-        return rc;
-}
-
 int seq_client_replay_super(struct lu_client_seq *seq,
                             struct lu_range *range,
                             const struct lu_env *env)
@@ -206,24 +135,43 @@ int seq_client_replay_super(struct lu_client_seq *seq,
         ENTRY;
 
         down(&seq->lcs_sem);
-        rc = __seq_client_replay_super(seq, range, env);
+        
+#ifdef __KERNEL__
+        if (seq->lcs_srv) {
+                LASSERT(env != NULL);
+                rc = seq_server_alloc_super(seq->lcs_srv, range,
+                                            &seq->lcs_space, env);
+        } else {
+#endif
+                rc = seq_client_rpc(seq, range, &seq->lcs_space,
+                                    SEQ_ALLOC_SUPER, "super");
+#ifdef __KERNEL__
+        }
+#endif
         up(&seq->lcs_sem);
-
         RETURN(rc);
 }
 
+/* Request sequence-controller node to allocate new super-sequence. */
+int seq_client_alloc_super(struct lu_client_seq *seq,
+                           const struct lu_env *env)
+{
+        ENTRY;
+        RETURN(seq_client_replay_super(seq, NULL, env));
+}
+
 /* Request sequence-controller node to allocate new meta-sequence. */
-static int __seq_client_alloc_meta(struct lu_client_seq *seq,
-                                   const struct lu_env *env)
+static int seq_client_alloc_meta(struct lu_client_seq *seq,
+                                 const struct lu_env *env)
 {
         int rc;
+        ENTRY;
 
 #ifdef __KERNEL__
         if (seq->lcs_srv) {
                 LASSERT(env != NULL);
                 rc = seq_server_alloc_meta(seq->lcs_srv, NULL,
-                                           &seq->lcs_space,
-                                           env);
+                                           &seq->lcs_space, env);
         } else {
 #endif
                 rc = seq_client_rpc(seq, NULL, &seq->lcs_space,
@@ -231,37 +179,19 @@ static int __seq_client_alloc_meta(struct lu_client_seq *seq,
 #ifdef __KERNEL__
         }
 #endif
-        return rc;
+        RETURN(rc);
 }
 
-int seq_client_alloc_meta(struct lu_client_seq *seq,
-                          const struct lu_env *env)
+/* Allocate new sequence for client. */
+static int seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
 {
         int rc;
         ENTRY;
 
-        down(&seq->lcs_sem);
-        rc = __seq_client_alloc_meta(seq, env);
-        up(&seq->lcs_sem);
-
-        RETURN(rc);
-}
-EXPORT_SYMBOL(seq_client_alloc_meta);
-
-/* allocate new sequence for client (llite or MDC are expected to use this) */
-static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
-{
-        int rc = 0;
-        ENTRY;
-
         LASSERT(range_is_sane(&seq->lcs_space));
 
-        /*
-         * If we still have free sequences in meta-sequence we allocate new seq
-         * from given range, if not - allocate new meta-sequence.
-         */
-        if (range_space(&seq->lcs_space) == 0) {
-                rc = __seq_client_alloc_meta(seq, NULL);
+        if (range_is_exhausted(&seq->lcs_space)) {
+                rc = seq_client_alloc_meta(seq, NULL);
                 if (rc) {
                         CERROR("%s: Can't allocate new meta-sequence, "
                                "rc %d\n", seq->lcs_name, rc);
@@ -270,54 +200,46 @@ static int __seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
                         CDEBUG(D_INFO, "%s: New range - "DRANGE"\n",
                                seq->lcs_name, PRANGE(&seq->lcs_space));
                 }
+        } else {
+                rc = 0;
         }
 
-        LASSERT(range_space(&seq->lcs_space) > 0);
+        LASSERT(!range_is_exhausted(&seq->lcs_space));
         *seqnr = seq->lcs_space.lr_start;
-        seq->lcs_space.lr_start++;
+        seq->lcs_space.lr_start += 1;
 
-        CDEBUG(D_INFO, "%s: Allocated sequence ["LPX64"]\n",
-               seq->lcs_name, *seqnr);
+        CDEBUG(D_INFO, "%s: Allocated sequence ["LPX64"]\n", seq->lcs_name,
+               *seqnr);
+        
         RETURN(rc);
 }
 
-int seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
-{
-        int rc = 0;
-        ENTRY;
-
-        down(&seq->lcs_sem);
-        rc = __seq_client_alloc_seq(seq, seqnr);
-        up(&seq->lcs_sem);
-
-        RETURN(rc);
-}
-EXPORT_SYMBOL(seq_client_alloc_seq);
-
+/* Allocate new fid on passed client @seq and save it to @fid. */
 int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
 {
         int rc;
         ENTRY;
 
+        LASSERT(seq != NULL);
         LASSERT(fid != NULL);
 
         down(&seq->lcs_sem);
 
-        if (!fid_is_sane(&seq->lcs_fid) ||
+        if (fid_is_zero(&seq->lcs_fid) ||
             fid_oid(&seq->lcs_fid) >= seq->lcs_width)
         {
                 seqno_t seqnr;
 
-                /*
-                 * Allocate new sequence for case client has no sequence at all
-                 * or sequence is exhausted and should be switched.
-                 */
-                rc = __seq_client_alloc_seq(seq, &seqnr);
+                rc = seq_client_alloc_seq(seq, &seqnr);
                 if (rc) {
                         CERROR("%s: Can't allocate new sequence, "
                                "rc %d\n", seq->lcs_name, rc);
-                        GOTO(out, rc);
+                        up(&seq->lcs_sem);
+                        RETURN(rc);
                 }
+
+                CDEBUG(D_INFO|D_WARNING, "%s: Switch to sequence "
+                       "[0x%16.16"LPF64"x]\n", seq->lcs_name, seqnr);
 
                 seq->lcs_fid.f_oid = LUSTRE_FID_INIT_OID;
                 seq->lcs_fid.f_seq = seqnr;
@@ -328,24 +250,17 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                  * to setup FLD for it.
                  */
                 rc = 1;
-
-                CDEBUG(D_INFO|D_WARNING, "%s: Switch to sequence "
-                       "[0x%16.16"LPF64"x]\n", seq->lcs_name, seqnr);
         } else {
-                seq->lcs_fid.f_oid++;
+                /* Just bump last allocated fid and return to caller. */
+                seq->lcs_fid.f_oid += 1;
                 rc = 0;
         }
-
+        
         *fid = seq->lcs_fid;
-        LASSERT(fid_is_sane(fid));
-
-        CDEBUG(D_INFO, "%s: Allocated FID "DFID"\n", seq->lcs_name,
-               PFID(fid));
-
-        EXIT;
-out:
         up(&seq->lcs_sem);
-        return rc;
+
+        CDEBUG(D_INFO, "%s: Allocated FID "DFID"\n", seq->lcs_name,  PFID(fid));
+        RETURN(rc);
 }
 EXPORT_SYMBOL(seq_client_alloc_fid);
 

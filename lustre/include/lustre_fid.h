@@ -76,7 +76,7 @@ struct lu_server_seq;
 
 /* Client sequence manager interface. */
 struct lu_client_seq {
-        /* sequence-controller export. */
+        /* Sequence-controller export. */
         struct obd_export      *lcs_exp;
         struct semaphore        lcs_sem;
 
@@ -108,7 +108,7 @@ struct lu_client_seq {
          */
         __u64                   lcs_width;
 
-        /* seq-server for direct talking */
+        /* Seq-server for direct talking */
         struct lu_server_seq   *lcs_srv;
 };
 
@@ -186,25 +186,11 @@ int seq_client_init(struct lu_client_seq *seq,
 
 void seq_client_fini(struct lu_client_seq *seq);
 
-int seq_client_alloc_super(struct lu_client_seq *seq,
-                           const struct lu_env *env);
-
-int seq_client_replay_super(struct lu_client_seq *seq,
-                            struct lu_range *range,
-                            const struct lu_env *env);
-
-int seq_client_alloc_meta(struct lu_client_seq *seq,
-                          const struct lu_env *env);
-
-int seq_client_alloc_seq(struct lu_client_seq *seq,
-                         seqno_t *seqnr);
-
 int seq_client_alloc_fid(struct lu_client_seq *seq,
                          struct lu_fid *fid);
 
 /* Fids common stuff */
 int fid_is_local(struct lu_site *site, const struct lu_fid *fid);
-
 void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src);
 void fid_cpu_to_be(struct lu_fid *dst, const struct lu_fid *src);
 void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src);

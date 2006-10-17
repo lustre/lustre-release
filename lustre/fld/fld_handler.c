@@ -152,14 +152,10 @@ int fld_server_lookup(struct lu_server_fld *fld,
         int rc;
         ENTRY;
         
-        fld->lsf_stat.fst_count++;
-        
         /* Lookup it in the cache. */
         rc = fld_cache_lookup(fld->lsf_cache, seq, mds);
-        if (rc == 0) {
-                fld->lsf_stat.fst_cache++;
+        if (rc == 0)
                 RETURN(0);
-        }
 
         rc = fld_index_lookup(fld, env, seq, mds);
         if (rc == 0) {
@@ -181,8 +177,6 @@ static int fld_server_handle(struct lu_server_fld *fld,
         int rc;
         ENTRY;
 
-        down(&fld->lsf_sem);
-        
         switch (opc) {
         case FLD_CREATE:
                 rc = fld_server_create(fld, env,
@@ -207,8 +201,6 @@ static int fld_server_handle(struct lu_server_fld *fld,
                 rc = -EINVAL;
                 break;
         }
-
-        up(&fld->lsf_sem);
 
         CDEBUG(D_INFO, "%s: FLD req handle: error %d (opc: %d, seq: "
                LPX64", mds: "LPU64")\n", fld->lsf_name, rc, opc,
@@ -378,12 +370,9 @@ int fld_server_init(struct lu_server_fld *fld, struct dt_device *dt,
         int rc;
         ENTRY;
 
-        memset(&fld->lsf_stat, 0, sizeof(fld->lsf_stat));
         snprintf(fld->lsf_name, sizeof(fld->lsf_name),
                  "srv-%s", prefix);
 
-        sema_init(&fld->lsf_sem, 1);
-        
         cache_size = FLD_SERVER_CACHE_SIZE /
                 sizeof(struct fld_cache_entry);
 
@@ -418,20 +407,7 @@ EXPORT_SYMBOL(fld_server_init);
 void fld_server_fini(struct lu_server_fld *fld,
                      const struct lu_env *env)
 {
-        __u64 pct;
         ENTRY;
-
-        if (fld->lsf_stat.fst_count > 0) {
-                pct = fld->lsf_stat.fst_cache * 100;
-                do_div(pct, fld->lsf_stat.fst_count);
-        } else {
-                pct = 0;
-        }
-
-        printk("FLD cache statistics (%s):\n", fld->lsf_name);
-        printk("  Total reqs: "LPU64"\n", fld->lsf_stat.fst_count);
-        printk("  Cache reqs: "LPU64"\n", fld->lsf_stat.fst_cache);
-        printk("  Cache hits: "LPU64"%%\n", pct);
 
         fld_server_proc_fini(fld);
         fld_index_fini(fld, env);

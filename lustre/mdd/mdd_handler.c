@@ -2397,8 +2397,8 @@ static int mdd_create_sanity_check(const struct lu_env *env,
         struct lu_fid     *fid       = &info->mti_fid;
         struct mdd_object *obj       = md2mdd_obj(pobj);
         int rc;
-
         ENTRY;
+
         /* EEXIST check */
         if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);

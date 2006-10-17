@@ -120,7 +120,8 @@ struct fld_cache *fld_cache_init(const char *name, int hash_size,
 
         for (i = 0; i < hash_size; i++)
                 INIT_HLIST_HEAD(&cache->fci_hash_table[i]);
-
+        memset(&cache->fci_stat, 0, sizeof(cache->fci_stat));
+        
         CDEBUG(D_INFO|D_WARNING, "%s: FLD cache - Size: %d, Threshold: %d\n", 
                cache->fci_name, cache_size, cache_threshold);
 
@@ -130,11 +131,24 @@ EXPORT_SYMBOL(fld_cache_init);
 
 void fld_cache_fini(struct fld_cache *cache)
 {
+        __u64 pct;
         ENTRY;
 
         LASSERT(cache != NULL);
         fld_cache_flush(cache);
 
+        if (cache->fci_stat.fst_count > 0) {
+                pct = cache->fci_stat.fst_cache * 100;
+                do_div(pct, cache->fci_stat.fst_count);
+        } else {
+                pct = 0;
+        }
+
+        printk("FLD cache statistics (%s):\n", cache->fci_name);
+        printk("  Total reqs: "LPU64"\n", cache->fci_stat.fst_count);
+        printk("  Cache reqs: "LPU64"\n", cache->fci_stat.fst_cache);
+        printk("  Cache hits: "LPU64"%%\n", pct);
+        
 	OBD_FREE(cache->fci_hash_table, cache->fci_hash_size *
 		 sizeof(*cache->fci_hash_table));
 	OBD_FREE_PTR(cache);
@@ -286,11 +300,13 @@ int fld_cache_lookup(struct fld_cache *cache,
         bucket = fld_cache_bucket(cache, seq);
 
         spin_lock(&cache->fci_lock);
+        cache->fci_stat.fst_count++;
         hlist_for_each_entry_safe(flde, scan, n, bucket, fce_list) {
                 if (flde->fce_seq == seq) {
                         *mds = flde->fce_mds;
                         list_del(&flde->fce_lru);
                         list_add(&flde->fce_lru, &cache->fci_lru);
+                        cache->fci_stat.fst_cache++;
                         spin_unlock(&cache->fci_lock);
                         RETURN(0);
                 }

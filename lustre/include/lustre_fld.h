@@ -102,6 +102,9 @@ struct fld_cache {
         /* Lru list */
         struct list_head         fci_lru;
 
+        /* Cache statistics. */
+        struct fld_stats         fci_stat;
+        
         /* Cache name used for debug and messages. */
         char                     fci_name[80];
 };
@@ -119,9 +122,6 @@ struct lu_server_fld {
         /* Protect index modifications */
         struct semaphore         lsf_sem;
 
-        /* Server cache statistics. */
-        struct fld_stats         lsf_stat;
-        
         /* Fld service name in form "fld-srv-lustre-MDTXXX" */
         char                     lsf_name[80];
 };
@@ -142,9 +142,6 @@ struct lu_client_fld {
         /* Lock protecting exports list and fld_hash. */
         spinlock_t               lcf_lock;
 
-        /* Client cache statistics. */
-        struct fld_stats         lcf_stat;
-        
         /* Protect fld req + cache modification. */
         struct semaphore         lcf_sem;
 

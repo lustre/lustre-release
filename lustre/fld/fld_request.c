@@ -298,7 +298,6 @@ int fld_client_init(struct lu_client_fld *fld,
 
         LASSERT(fld != NULL);
 
-        memset(&fld->lcf_stat, 0, sizeof(fld->lcf_stat));
         snprintf(fld->lcf_name, sizeof(fld->lcf_name),
                  "cli-%s", prefix);
 
@@ -310,7 +309,6 @@ int fld_client_init(struct lu_client_fld *fld,
 
         fld->lcf_count = 0;
         spin_lock_init(&fld->lcf_lock);
-        sema_init(&fld->lcf_sem, 1);
         fld->lcf_hash = &fld_hash[hash];
         INIT_LIST_HEAD(&fld->lcf_targets);
 
@@ -349,21 +347,8 @@ EXPORT_SYMBOL(fld_client_init);
 void fld_client_fini(struct lu_client_fld *fld)
 {
         struct lu_fld_target *target, *tmp;
-        __u64 pct;
         ENTRY;
 
-        if (fld->lcf_stat.fst_count > 0) {
-                pct = fld->lcf_stat.fst_cache * 100;
-                do_div(pct, fld->lcf_stat.fst_count);
-        } else {
-                pct = 0;
-        }
-
-        printk("FLD cache statistics (%s):\n", fld->lcf_name);
-        printk("  Total reqs: "LPU64"\n", fld->lcf_stat.fst_count);
-        printk("  Cache reqs: "LPU64"\n", fld->lcf_stat.fst_cache);
-        printk("  Cache hits: "LPU64"%%\n", pct);
-        
         fld_client_proc_fini(fld);
 
         spin_lock(&fld->lcf_lock);
@@ -452,8 +437,6 @@ int fld_client_create(struct lu_client_fld *fld,
         int rc;
         ENTRY;
 
-        down(&fld->lcf_sem);
-        
         target = fld_client_get_target(fld, seq);
         LASSERT(target != NULL);
 
@@ -486,7 +469,6 @@ int fld_client_create(struct lu_client_fld *fld,
                 CERROR("%s: Can't create FLD entry, rc %d\n",
                        fld->lcf_name, rc);
         }
-        up(&fld->lcf_sem);
         
         RETURN(rc);
 }
@@ -500,8 +482,6 @@ int fld_client_delete(struct lu_client_fld *fld, seqno_t seq,
         int rc;
         ENTRY;
 
-        down(&fld->lcf_sem);
-        
         fld_cache_delete(fld->lcf_cache, seq);
 
         target = fld_client_get_target(fld, seq);
@@ -524,7 +504,6 @@ int fld_client_delete(struct lu_client_fld *fld, seqno_t seq,
         }
 #endif
 
-        up(&fld->lcf_sem);
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_delete);
@@ -538,17 +517,10 @@ int fld_client_lookup(struct lu_client_fld *fld,
         int rc;
         ENTRY;
 
-        down(&fld->lcf_sem);
-
-        fld->lcf_stat.fst_count++;
-                
         /* Lookup it in the cache */
         rc = fld_cache_lookup(fld->lcf_cache, seq, mds);
-        if (rc == 0) {
-                fld->lcf_stat.fst_cache++;
-                up(&fld->lcf_sem);
+        if (rc == 0)
                 RETURN(0);
-        }
 
         /* Can not find it in the cache */
         target = fld_client_get_target(fld, seq);
@@ -579,7 +551,6 @@ int fld_client_lookup(struct lu_client_fld *fld,
                  */
                 fld_cache_insert(fld->lcf_cache, seq, *mds);
         }
-        up(&fld->lcf_sem);
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_lookup);
