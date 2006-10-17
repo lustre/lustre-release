@@ -763,16 +763,24 @@ static int lmv_placement_policy(struct obd_device *obd,
                                *mds, hint->ph_cname->name);
                 } else {
                         if (hint->ph_cname && (hint->ph_opc == LUSTRE_OPC_MKDIR)) {
-                                /* Default policy for directories. */
+                                /* 
+                                 * Default policy for directories is to use
+                                 * lmv_all_chars_policy() hash function, which
+                                 * allows to distribute objects by MDSes quite
+                                 * smoothly.
+                                 */
                                 *mds = lmv_all_chars_policy(lmv->desc.ld_tgt_count,
                                                             hint->ph_cname);
                                 rc = 0;
                         } else {
                                 /*
-                                 * Default policy for others is to use parent
-                                 * MDS.
+                                 * Default policy for others is the same as for
+                                 * dirs currently. May be later we will want to
+                                 * change it. 
                                  */
-                                rc = lmv_fld_lookup(lmv, hint->ph_pfid, mds);
+                                *mds = lmv_all_chars_policy(lmv->desc.ld_tgt_count,
+                                                            hint->ph_cname);
+                                rc = 0;
                         }
                 }
         } else {

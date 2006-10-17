@@ -943,7 +943,7 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
         dt_txn_callback_add(mdt->mdt_bottom, &mdt->mdt_txn_cb);
 
         o = dt_store_open(env, mdt->mdt_bottom, LAST_RCVD, &fid);
-        if(!IS_ERR(o)) {
+        if (!IS_ERR(o)) {
                 mdt->mdt_last_rcvd = o;
                 rc = mdt_server_data_init(env, mdt);
                 if (rc) {
@@ -959,7 +959,7 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
                 RETURN(rc);
 
         o = dt_store_open(env, mdt->mdt_bottom, CAPA_KEYS, &fid);
-        if(!IS_ERR(o)) {
+        if (!IS_ERR(o)) {
                 mdt->mdt_ck_obj = o;
                 rc = mdt_capa_keys_init(env, mdt);
                 if (rc) {
