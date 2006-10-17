@@ -1066,15 +1066,111 @@ static int __mdd_object_create(const struct lu_env *env,
         RETURN(rc);
 }
 
+#ifdef CONFIG_FS_POSIX_ACL
+#include <linux/posix_acl_xattr.h>
+#include <linux/posix_acl.h>
+
+/*
+ * Modify the ACL for the chmod.
+ */
+static int mdd_posix_acl_chmod_masq(posix_acl_xattr_entry *entry,
+                                    __u32 mode, int count)
+{
+	posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL, *pa, *pe;
+
+        pa = &entry[0];
+        pe = &entry[count - 1];
+        for (; pa <= pe; pa++) {
+		switch(pa->e_tag) {
+			case ACL_USER_OBJ:
+				pa->e_perm = (mode & S_IRWXU) >> 6;
+				break;
+
+			case ACL_USER:
+			case ACL_GROUP:
+				break;
+
+			case ACL_GROUP_OBJ:
+				group_obj = pa;
+				break;
+
+			case ACL_MASK:
+				mask_obj = pa;
+				break;
+
+			case ACL_OTHER:
+				pa->e_perm = (mode & S_IRWXO);
+				break;
+
+			default:
+				return -EIO;
+		}
+	}
+
+	if (mask_obj) {
+		mask_obj->e_perm = (mode & S_IRWXG) >> 3;
+	} else {
+		if (!group_obj)
+			return -EIO;
+		group_obj->e_perm = (mode & S_IRWXG) >> 3;
+	}
+
+	return 0;
+}
+
+static int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o,
+                         __u32 mode, struct thandle *handle)
+{
+        struct dt_object        *next;
+        struct lu_buf           *buf;
+        posix_acl_xattr_entry   *entry;
+        int                      entry_count;
+        int                      rc;
+
+        ENTRY;
+
+        next = mdd_object_child(o);
+        buf = &mdd_env_info(env)->mti_buf;
+        buf->lb_buf = mdd_env_info(env)->mti_xattr_buf;
+        buf->lb_len = sizeof(mdd_env_info(env)->mti_xattr_buf);
+        rc = next->do_ops->do_xattr_get(env, next, buf,
+                                        XATTR_NAME_ACL_ACCESS, BYPASS_CAPA);
+        if ((rc == -EOPNOTSUPP) || (rc == -ENODATA))
+                RETURN(0);
+        else if (rc <= 0)
+                RETURN(rc);
+
+        buf->lb_len = rc;
+        entry = ((posix_acl_xattr_header *)(buf->lb_buf))->a_entries;
+        entry_count = (rc - 4) / sizeof(posix_acl_xattr_entry);
+        if (entry_count <= 0)
+                RETURN(0);
+       
+        rc = mdd_posix_acl_chmod_masq(entry, mode, entry_count);
+        if (rc)
+                RETURN(rc);
+
+        rc = next->do_ops->do_xattr_set(env, next, buf, XATTR_NAME_ACL_ACCESS,
+                                        0, handle, BYPASS_CAPA);
+        RETURN(rc);
+}
+#endif
+
 int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
                           const struct lu_attr *attr, struct thandle *handle)
 {
         struct dt_object *next;
+        int rc;
 
         LASSERT(lu_object_exists(mdd2lu_obj(o)));
         next = mdd_object_child(o);
-        return next->do_ops->do_attr_set(env, next, attr, handle,
-                                         mdd_object_capa(env, o));
+        rc = next->do_ops->do_attr_set(env, next, attr, handle,
+                                       mdd_object_capa(env, o));
+#ifdef CONFIG_FS_POSIX_ACL
+        if (!rc && (attr->la_valid & LA_MODE))
+                rc = mdd_acl_chmod(env, o, attr->la_mode, handle);
+#endif
+        return rc;
 }
 
 int mdd_attr_set_internal_locked(const struct lu_env *env,
@@ -3088,9 +3184,6 @@ out_unlock:
 }
 
 #ifdef CONFIG_FS_POSIX_ACL
-#include <linux/posix_acl_xattr.h>
-#include <linux/posix_acl.h>
-
 static int mdd_posix_acl_permission(struct md_ucred *uc, struct lu_attr *la,
                                     int want, posix_acl_xattr_entry *entry,
                                     int count)
