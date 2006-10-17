@@ -767,7 +767,6 @@ repeat:
 
                 obj = lmv_obj_grab(obd, &body->fid1);
                 if (!obj) {
-                        /* FIXME: remote capability */
                         obj = lmv_obj_create(exp, &body->fid1, mea);
                         if (IS_ERR(obj))
                                 GOTO(out_free_sop_data, rc = (int)PTR_ERR(obj));

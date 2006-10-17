@@ -1202,7 +1202,6 @@ struct md_ops {
                         struct ptlrpc_request **);
         int (*m_is_subdir)(struct obd_export *, const struct lu_fid *,
                            const struct lu_fid *,
-                           struct obd_capa *, struct obd_capa *,
                            struct ptlrpc_request **);
         int (*m_setattr)(struct obd_export *, struct md_op_data *, void *,
                          int , void *, int, struct ptlrpc_request **);

@@ -64,20 +64,14 @@ void mdc_pack_capa(struct ptlrpc_request *req, int offset, struct obd_capa *oc)
 
 void mdc_is_subdir_pack(struct ptlrpc_request *req, int offset,
                         const struct lu_fid *pfid,
-                        const struct lu_fid *cfid,
-                        struct obd_capa *pc,
-                        struct obd_capa *cc, int flags)
+                        const struct lu_fid *cfid, int flags)
 {
         struct mdt_body *b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*b));
 
-        if (pfid) {
+        if (pfid)
                 b->fid1 = *pfid;
-                mdc_pack_capa(req, offset + 1, pc);
-        }
-        if (cfid) {
+        if (cfid)
                 b->fid2 = *cfid;
-                mdc_pack_capa(req, offset + 2, cc);
-        }
         b->valid = OBD_MD_FLID;
         b->flags = flags;
 }

@@ -34,7 +34,6 @@ void mdc_pack_capa(struct ptlrpc_request *req, int offset, struct obd_capa *oc);
 void mdc_pack_rep_body(struct ptlrpc_request *);
 void mdc_is_subdir_pack(struct ptlrpc_request *req, int offset,
                         const struct lu_fid *pfid, const struct lu_fid *cfid,
-                        struct obd_capa *pc, struct obd_capa *cc,
                         int flags);
 void mdc_readdir_pack(struct ptlrpc_request *req, int pos, __u64 offset,
 		      __u32 size, const struct lu_fid *fid,

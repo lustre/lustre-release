@@ -289,8 +289,7 @@ int mdc_enqueue(struct obd_export *exp,
                 size[DLM_INTENT_REC_OFF + 1] = op_data->mod_capa1 ?
                                                sizeof(struct lustre_capa) : 0;
                 /* child capability, used for replay only */
-                size[DLM_INTENT_REC_OFF + 2] = op_data->mod_capa1 ?
-                                               sizeof(struct lustre_capa) : 0;
+                size[DLM_INTENT_REC_OFF + 2] = sizeof(struct lustre_capa);
                 size[DLM_INTENT_REC_OFF + 3] = op_data->namelen + 1;
                 /* As an optimization, we allocate an RPC request buffer for
                  * at least a default-sized LOV EA even if we aren't sending
@@ -366,14 +365,13 @@ int mdc_enqueue(struct obd_export *exp,
                 repsize[repbufcnt++] = obddev->u.cli.cl_max_mds_cookiesize;
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
                 obd_valid valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE |
-                                  OBD_MD_FLMODEASIZE | OBD_MD_FLDIREA;
+                                  OBD_MD_FLMODEASIZE | OBD_MD_FLDIREA |
+                                  OBD_MD_FLMDSCAPA;
                 valid |= client_is_remote(exp) ? OBD_MD_FLRMTPERM :
                                                  OBD_MD_FLACL;
                 size[DLM_INTENT_REC_OFF] = sizeof(struct mdt_body);
                 size[DLM_INTENT_REC_OFF + 1] = op_data->mod_capa1 ?
                         sizeof(struct lustre_capa) : 0;
-                if (op_data->mod_capa1)
-                        valid |= OBD_MD_FLMDSCAPA;
                 size[DLM_INTENT_REC_OFF + 2] = op_data->namelen + 1;
 
                 if (it->it_op & IT_GETATTR)

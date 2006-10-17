@@ -735,11 +735,10 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
         memset(&sp->u, 0, sizeof sp->u);
         sp->sp_cr_flags = rec->cr_flags;
 
-        if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT)) {
+        if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
                 mdt_set_capainfo(info, 0, rr->rr_fid1,
                                  req_capsule_client_get(pill, &RMF_CAPA1));
-                mdt_set_capainfo(info, 1, rr->rr_fid2, BYPASS_CAPA);
-        }
+        mdt_set_capainfo(info, 1, rr->rr_fid2, BYPASS_CAPA);
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (S_ISDIR(attr->la_mode)) {

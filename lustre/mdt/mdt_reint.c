@@ -75,7 +75,6 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                                OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
-                mdt_set_capainfo(info, 1, rr->rr_fid2, BYPASS_CAPA);
                 rc = mdo_create(info->mti_env, next, rr->rr_name,
                                 mdt_object_child(child),
                                 &info->mti_spec, ma);
@@ -397,6 +396,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                  * and nothing should be done
                  */
                 if (mdt_object_exists(mp) > 0) {
+                        mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
                         rc = mo_ref_del(info->mti_env,
                                         mdt_object_child(mp), ma);
                         mdt_handle_last_unlink(info, mp, ma);
@@ -546,6 +546,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
                 GOTO(out, rc = PTR_ERR(mtgtdir));
 
         /*step 2: find & lock the target object if exists*/
+        mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
         rc = mdo_lookup(info->mti_env, mdt_object_child(mtgtdir),
                         rr->rr_tgt, tgt_fid);
         if (rc != 0 && rc != -ENOENT) {

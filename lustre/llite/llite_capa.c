@@ -377,10 +377,12 @@ struct obd_capa *ll_mdscapa_get(struct inode *inode)
         }
 
         if (!ocapa && atomic_read(&ll_capa_debug)) {
+#if 0
                 LASSERT(!S_ISDIR(inode->i_mode));
                 LASSERT(!obd_capa_open_count(ocapa));
                 LASSERT(!ll_have_md_lock(ocapa->u.cli.inode,
                                          MDS_INODELOCK_LOOKUP));
+#endif
                 atomic_set(&ll_capa_debug, 0);
         }
 

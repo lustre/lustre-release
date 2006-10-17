@@ -303,25 +303,21 @@ int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
 
 int mdc_is_subdir(struct obd_export *exp, const struct lu_fid *pfid,
                   const struct lu_fid *cfid,
-                  struct obd_capa *pc, struct obd_capa *cc,
                   struct ptlrpc_request **request)
 {
-        int size[4] = { sizeof(struct ptlrpc_body),
+        int size[2] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mdt_body) };
         struct ptlrpc_request *req;
         struct mdt_body *body;
         int rc;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = pc ? sizeof(struct lustre_capa) : 0;
-        size[REQ_REC_OFF + 2] = cc ? sizeof(struct lustre_capa) : 0;
-
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_IS_SUBDIR, 4, size, NULL);
+                              MDS_IS_SUBDIR, 2, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
-        mdc_is_subdir_pack(req, REQ_REC_OFF, pfid, cfid, pc, cc, 0);
+        mdc_is_subdir_pack(req, REQ_REC_OFF, pfid, cfid, 0);
 
         ptlrpc_req_set_repsize(req, 2, size);
         rc = ptlrpc_queue_wait(req);

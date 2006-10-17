@@ -277,7 +277,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                                 struct mdt_object *o)
 {
         struct md_object        *next = mdt_object_child(o);
-        struct mdt_device       *mdt = info->mti_mdt;
         const struct mdt_body   *reqbody = info->mti_body;
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
@@ -406,7 +405,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         }
 #endif
 
-        if ((reqbody->valid & OBD_MD_FLMDSCAPA) && mdt->mdt_opts.mo_mds_capa) {
+        if ((reqbody->valid & OBD_MD_FLMDSCAPA) &&
+             info->mti_mdt->mdt_opts.mo_mds_capa) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
@@ -417,7 +417,6 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         RETURN(rc);
                 repbody->valid |= OBD_MD_FLMDSCAPA;
         }
-
         RETURN(rc);
 }
 
@@ -464,21 +463,31 @@ static int mdt_getattr(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
-        LASSERT(obj != NULL);
-        LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
-
         reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
         LASSERT(reqbody);
 
+        if (reqbody->valid & OBD_MD_FLOSSCAPA) {
+                rc = req_capsule_pack(pill);
+                if (rc)
+                        RETURN(err_serious(rc));
+                rc = mdt_renew_capa(info);
+                mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
+                RETURN(rc);
+        }
+
+        LASSERT(obj != NULL);
+        LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
+
         mode = lu_object_attr(&obj->mot_obj.mo_lu);
         if (S_ISLNK(mode) && (reqbody->valid & OBD_MD_LINKNAME) &&
-                (reqbody->eadatasize > info->mti_mdt->mdt_max_mdsize)) {
+            (reqbody->eadatasize > info->mti_mdt->mdt_max_mdsize)) {
                 req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
                                      reqbody->eadatasize);
         } else {
                 req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
                                      info->mti_mdt->mdt_max_mdsize);
         }
+
         rc = req_capsule_pack(pill);
         if (rc != 0)
                 RETURN(err_serious(rc));
@@ -488,18 +497,16 @@ static int mdt_getattr(struct mdt_thread_info *info)
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
 
-        if (reqbody->valid & OBD_MD_FLOSSCAPA) {
-                rc = mdt_renew_capa(info);
-                mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
-                RETURN(rc);
-        }
-
         if (reqbody->valid & OBD_MD_FLRMTPERM) {
                 rc = mdt_init_ucred(info, reqbody);
                 if (rc)
                         GOTO(out, rc);
         }
 
+        /* don't check capability at all, because rename might
+         * getattr for remote obj, and at that time no capability
+         * is available. */
+        mdt_set_capainfo(info, 1, &reqbody->fid1, BYPASS_CAPA);
         rc = mdt_getattr_internal(info, obj);
         if (reqbody->valid & OBD_MD_FLRMTPERM)
                 mdt_exit_ucred(info);
@@ -513,6 +520,7 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
 {
         struct mdt_object   *obj = info->mti_object;
         struct req_capsule  *pill = &info->mti_pill;
+        const struct mdt_body *body = info->mti_body;
         struct mdt_body     *repbody;
         int                  rc;
 
@@ -527,9 +535,11 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
          * We save last checked parent fid to @repbody->fid1 for remote
          * directory case.
          */
-        LASSERT(fid_is_sane(&info->mti_body->fid2));
+        LASSERT(fid_is_sane(&body->fid2));
+        mdt_set_capainfo(info, 0, &body->fid1, BYPASS_CAPA);
+        mdt_set_capainfo(info, 1, &body->fid2, BYPASS_CAPA);
         rc = mdo_is_subdir(info->mti_env, mdt_object_child(obj),
-                           &info->mti_body->fid2, &repbody->fid1);
+                           &body->fid2, &repbody->fid1);
         if (rc < 0)
                 RETURN(rc);
 
@@ -2592,7 +2602,9 @@ static int mdt_md_connect(const struct lu_env *env,
         if (!ocd)
                 RETURN(-ENOMEM);
         /* The connection between MDS must be local */
-        ocd->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
+        ocd->ocd_connect_flags = OBD_CONNECT_LCL_CLIENT |
+                                 OBD_CONNECT_MDS_CAPA |
+                                 OBD_CONNECT_OSS_CAPA;
         rc = obd_connect(env, conn, mdc, &mdc->obd_uuid, ocd);
 
         OBD_FREE_PTR(ocd);

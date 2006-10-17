@@ -1711,14 +1711,13 @@ static inline int md_rename(struct obd_export *exp, struct md_op_data *op_data,
 static inline int md_is_subdir(struct obd_export *exp,
                                const struct lu_fid *pfid,
                                const struct lu_fid *cfid,
-                               struct obd_capa *pc, struct obd_capa *cc,
                                struct ptlrpc_request **request)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, is_subdir);
         MD_COUNTER_INCREMENT(exp->exp_obd, is_subdir);
-        rc = MDP(exp->exp_obd, is_subdir)(exp, pfid, cfid, pc, cc, request);
+        rc = MDP(exp->exp_obd, is_subdir)(exp, pfid, cfid, request);
         RETURN(rc);
 }
 

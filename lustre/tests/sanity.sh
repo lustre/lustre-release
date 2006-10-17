@@ -698,7 +698,7 @@ test_24g() {
 	$CHECKSTAT -a $DIR/R7a/d || error
 	$CHECKSTAT -t dir $DIR/R7b/e || error
 }
-run_test 24g "mkdir .../R7{a,b}/d; mv .../R7a/d .../R5b/e ======"
+run_test 24g "mkdir .../R7{a,b}/d; mv .../R7a/d .../R7b/e ======"
 
 test_24h() {
 	mkdir $DIR/R8{a,b}
