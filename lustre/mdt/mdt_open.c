@@ -509,10 +509,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
 
         LASSERT(pill->rc_fmt == &RQF_LDLM_INTENT_OPEN);
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
-
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        repbody->eadatasize = 0;
-        repbody->aclsize = 0;
 
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill, &RMF_MDT_MD,
@@ -681,8 +678,6 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                          (obd_timeout + 1) / 4);
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        repbody->eadatasize = 0;
-        repbody->aclsize = 0;
 
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill, &RMF_MDT_MD,
