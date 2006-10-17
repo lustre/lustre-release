@@ -824,7 +824,7 @@ static int mdd_txn_commit_cb(const struct lu_env *env,
         return 0;
 }
 
-static int mdd_device_init(const struct lu_env *env, struct lu_device *d, 
+static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
@@ -2464,31 +2464,6 @@ static int mdd_create(const struct lu_env *env,
         int rc, created = 0, inserted = 0, lmm_size = 0;
         ENTRY;
 
-        /* sanity checks before big job */
-        rc = mdd_create_sanity_check(env, pobj, name, ma);
-        if (rc)
-                RETURN(rc);
-
-        /* no RPC inside the transaction, so OST objects should be created at
-         * first */
-        if (S_ISREG(attr->la_mode)) {
-                rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size,
-                                    spec, attr);
-                if (rc)
-                        RETURN(rc);
-        }
-
-        mdd_txn_param_build(env, MDD_TXN_MKDIR_OP);
-        handle = mdd_trans_start(env, mdd);
-        if (IS_ERR(handle))
-                RETURN(PTR_ERR(handle));
-
-        mdd_write_lock(env, mdd_pobj);
-
-        /*
-         * XXX check that link can be added to the parent in mkdir case.
-         */
-
         /*
          * Two operations have to be performed:
          *
@@ -2516,15 +2491,38 @@ static int mdd_create(const struct lu_env *env,
          * case, because second mkdir is bound to create object, only to
          * destroy it immediately.
          *
-         * Note that local file systems do
+         * To avoid this follow local file systems that do double lookup:
          *
-         *     0. lookup -> -EEXIST
+         *     0. lookup -> -EEXIST (mdd_create_sanity_check())
          *
-         *     1. create
+         *     1. create            (__mdd_object_create())
          *
-         *     2. insert
-         *
-         * Maybe we should do the same. For now: creation-first.
+         *     2. insert            (__mdd_index_insert(), lookup again)
+         */
+
+        /* sanity checks before big job */
+        rc = mdd_create_sanity_check(env, pobj, name, ma);
+        if (rc)
+                RETURN(rc);
+
+        /* no RPC inside the transaction, so OST objects should be created at
+         * first */
+        if (S_ISREG(attr->la_mode)) {
+                rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size,
+                                    spec, attr);
+                if (rc)
+                        RETURN(rc);
+        }
+
+        mdd_txn_param_build(env, MDD_TXN_MKDIR_OP);
+        handle = mdd_trans_start(env, mdd);
+        if (IS_ERR(handle))
+                RETURN(PTR_ERR(handle));
+
+        mdd_write_lock(env, mdd_pobj);
+
+        /*
+         * XXX check that link can be added to the parent in mkdir case.
          */
 
         mdd_write_lock(env, son);
