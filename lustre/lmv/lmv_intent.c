@@ -143,6 +143,7 @@ int lmv_alloc_fid_for_split(struct obd_device *obd, struct lu_fid *pid,
         struct lmv_obj *obj;
         struct lu_fid *rpid;
         mdsno_t mds;
+        int mea_idx;
         int rc;
         ENTRY;
 
@@ -153,9 +154,9 @@ int lmv_alloc_fid_for_split(struct obd_device *obd, struct lu_fid *pid,
                 RETURN(0);
         }
         
-        mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
-                           (char *)op->name, op->namelen);
-        rpid = &obj->lo_inodes[mds].li_fid;
+        mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
+                               (char *)op->name, op->namelen);
+        rpid = &obj->lo_inodes[mea_idx].li_fid;
         rc = lmv_fld_lookup(lmv, rpid, &mds);
         lmv_obj_put(obj);
         if (rc)
@@ -210,14 +211,16 @@ repeat:
 
         obj = lmv_obj_grab(obd, &rpid);
         if (obj) {
+                int mea_idx;
                 /*
                  * Directory is already split, so we have to forward request to
                  * the right MDS.
                  */
-                mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
-                                   (char *)op_data->name, op_data->namelen);
+                mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
+                                       (char *)op_data->name,
+                                       op_data->namelen);
 
-                rpid = obj->lo_inodes[mds].li_fid;
+                rpid = obj->lo_inodes[mea_idx].li_fid;
                 rc = lmv_fld_lookup(lmv, &rpid, &mds);
                 lmv_obj_put(obj);
                 if (rc)
@@ -395,12 +398,12 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
                         GOTO(out_free_sop_data, rc);
                 obj = lmv_obj_grab(obd, &op_data->fid1);
                 if (obj && op_data->namelen) {
+                        int mea_idx;
                         /* directory is already split. calculate mds */
-                        mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
-                                           (char *)op_data->name,
-                                           op_data->namelen);
-
-                        rpid = obj->lo_inodes[mds].li_fid;
+                        mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
+                                               (char *)op_data->name,
+                                               op_data->namelen);
+                        rpid = obj->lo_inodes[mea_idx].li_fid;
                         rc = lmv_fld_lookup(lmv, &rpid, &mds);
                         if (rc) {
                                 lmv_obj_put(obj);
@@ -634,6 +637,7 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
         struct lmv_stripe_md *mea;
         struct lmv_obj *obj;
         int rc, loop = 0;
+        int mea_idx;
         mdsno_t mds;
         ENTRY;
 
@@ -659,10 +663,11 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
                 rpid = op_data->fid1;
                 obj = lmv_obj_grab(obd, &rpid);
                 if (obj) {
-                        mds = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
-                                           (char *)op_data->name,
-                                           op_data->namelen);
-                        rpid = obj->lo_inodes[mds].li_fid;
+                        mea_idx = raw_name2idx(obj->lo_hashtype,
+                                               obj->lo_objcount,
+                                               (char *)op_data->name,
+                                               op_data->namelen);
+                        rpid = obj->lo_inodes[mea_idx].li_fid;
                         lmv_obj_put(obj);
                 }
                 rc = lmv_fld_lookup(lmv, &rpid, &mds);
@@ -687,11 +692,11 @@ repeat:
                 if (obj) {
                         if (op_data->namelen) {
                                 /* directory is already split. calculate mds */
-                                mds = raw_name2idx(obj->lo_hashtype,
-                                                   obj->lo_objcount,
-                                                   (char *)op_data->name,
-                                                   op_data->namelen);
-                                rpid = obj->lo_inodes[mds].li_fid;
+                                mea_idx = raw_name2idx(obj->lo_hashtype,
+                                                       obj->lo_objcount,
+                                                       (char *)op_data->name,
+                                                       op_data->namelen);
+                                rpid = obj->lo_inodes[mea_idx].li_fid;
                                 rc = lmv_fld_lookup(lmv, &rpid, &mds);
                                 if (rc) {
                                         lmv_obj_put(obj);
