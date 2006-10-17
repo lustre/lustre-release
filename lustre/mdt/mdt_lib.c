@@ -494,7 +494,7 @@ void mdt_shrink_reply(struct mdt_thread_info *info, int offset,
         body = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(body != NULL);
 
-        if (body->valid & (OBD_MD_FLDIREA|OBD_MD_FLEASIZE))
+        if (body->valid & (OBD_MD_FLDIREA | OBD_MD_FLEASIZE | OBD_MD_LINKNAME))
                 md_size = body->eadatasize;
         else
                 md_size = 0;
