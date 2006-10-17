@@ -392,10 +392,15 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         rc = mo_xattr_get(env, next, buffer,
                                           XATTR_NAME_ACL_ACCESS);
                         if (rc < 0) {
-                                if (rc == -ENODATA || rc == -EOPNOTSUPP)
+                                if (rc == -ENODATA) {
+                                        repbody->aclsize = 0;
+                                        repbody->valid |= OBD_MD_FLACL;
                                         rc = 0;
-                                else
+                                } else if (rc == -EOPNOTSUPP) {
+                                        rc = 0;
+                                } else {
                                         CERROR("got acl size: %d\n", rc);
+                                }
                         } else {
                                 repbody->aclsize = rc;
                                 repbody->valid |= OBD_MD_FLACL;

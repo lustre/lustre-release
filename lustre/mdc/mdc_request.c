@@ -559,10 +559,14 @@ int mdc_get_lustre_md(struct obd_export *exp, struct ptlrpc_request *req,
         /* for ACL, it's possible that FLACL is set but aclsize is zero.  only
          * when aclsize != 0 there's an actual segment for ACL in reply
          * buffer. */
-        else if ((md->body->valid & OBD_MD_FLACL) && md->body->aclsize) {
-                rc = mdc_unpack_acl(dt_exp, req, md, offset++);
-                if (rc)
-                        GOTO(out, rc);
+        else if (md->body->valid & OBD_MD_FLACL) {
+                if (md->body->aclsize) {
+                        rc = mdc_unpack_acl(dt_exp, req, md, offset++);
+                        if (rc)
+                                GOTO(out, rc);
+                } else {
+                        md->posix_acl = NULL;
+                }
         }
 
         if (md->body->valid & OBD_MD_FLMDSCAPA) {
