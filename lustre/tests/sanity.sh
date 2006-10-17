@@ -2511,7 +2511,7 @@ test_65c() {
 }
 run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
 
-[ $STRIPECOUNT -eq 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
+[ $STRIPECOUNT -eq 0 ] && sc=1 || sc=$STRIPECOUNT
 
 test_65d() {
 	mkdir -p $DIR/d65

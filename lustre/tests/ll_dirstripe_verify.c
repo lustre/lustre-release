@@ -96,7 +96,7 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
 
                 stripe_count = (int)strtoul(buf, NULL, 10);;
         } else {
-                stripe_count = (int)lum_dir->lmm_stripe_count;
+                stripe_count = (signed short)lum_dir->lmm_stripe_count;
         }
         if (stripe_count == 0)
                 stripe_count = 1;
