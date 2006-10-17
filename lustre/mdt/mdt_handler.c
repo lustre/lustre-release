@@ -456,15 +456,34 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
 
 static int mdt_getattr(struct mdt_thread_info *info)
 {
-        struct mdt_object *obj = info->mti_object;
-        struct mdt_body   *reqbody;
-        struct mdt_body   *repbody;
+        struct mdt_object       *obj = info->mti_object;
+        struct req_capsule      *pill = &info->mti_pill;
+        struct mdt_body         *reqbody;
+        struct mdt_body         *repbody;
+        mode_t                  mode;
         int rc;
         ENTRY;
 
-        reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
+        LASSERT(obj != NULL);
+        LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
+
+        reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
         LASSERT(reqbody);
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+
+        mode = lu_object_attr(&obj->mot_obj.mo_lu);
+        if (S_ISLNK(mode) && (reqbody->valid & OBD_MD_LINKNAME) &&
+                (reqbody->eadatasize > info->mti_mdt->mdt_max_mdsize)) {
+                req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
+                                     reqbody->eadatasize);
+        } else {
+                req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
+                                     info->mti_mdt->mdt_max_mdsize);
+        }
+        rc = req_capsule_pack(pill);
+        if (rc != 0)
+                RETURN(err_serious(rc));
+
+        repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
         LASSERT(repbody);
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
@@ -474,9 +493,6 @@ static int mdt_getattr(struct mdt_thread_info *info)
                 mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
                 RETURN(rc);
         }
-
-        LASSERT(obj != NULL);
-        LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
 
         if (reqbody->valid & OBD_MD_FLRMTPERM) {
                 rc = mdt_init_ucred(info, reqbody);
@@ -4141,7 +4157,7 @@ static struct mdt_handler mdt_mds_ops[] = {
 DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
 DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
-DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR,      mdt_getattr),
+DEF_MDT_HNDL_F(HABEO_CORPUS             , GETATTR,      mdt_getattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR_NAME, mdt_getattr_name),
 DEF_MDT_HNDL_F(HABEO_CORPUS|MUTABOR,      SETXATTR,     mdt_setxattr),
 DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),

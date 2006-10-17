@@ -17,9 +17,6 @@ init_test_env $@
 # bug number: 2766 4176
 ALWAYS_EXCEPT="0b  39   $REPLAY_SINGLE_EXCEPT"
 
-# failed in our b_new_cmd due to orphan handling.
-#ALWAYS_EXCEPT=" 20b 25 30 31 $ALWAYS_EXCEPT"
-
 # failed in our b_new_cmd due to MGS
 ALWAYS_EXCEPT=" 52 $ALWAYS_EXCEPT"
 

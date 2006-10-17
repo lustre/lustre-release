@@ -1504,8 +1504,8 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
         int i, rc;
 
         ENTRY;
-        CWARN("adding osc for %s to log %s\n",
-               mti->mti_svname, logname);
+        CDEBUG(D_INFO, "adding osc for %s to log %s\n",
+                        mti->mti_svname, logname);
         
         if (mgs_log_is_empty(obd, logname)) {
                 /* The first item in the log must be the lov, so we have
