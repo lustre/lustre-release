@@ -1618,7 +1618,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
          */
         CWARN("Next recovery transno: "LPU64", current: "LPU64", replaying: %i\n",
               obd->obd_next_recovery_transno, transno, obd->obd_req_replaying);
-        if (transno <= obd->obd_next_recovery_transno && obd->obd_req_replaying) {
+        if (transno < obd->obd_next_recovery_transno && obd->obd_req_replaying) {
                 /* Processing the queue right now, don't re-add. */
                 LASSERT(list_empty(&req->rq_list));
                 spin_unlock_bh(&obd->obd_processing_task_lock);
