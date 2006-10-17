@@ -3134,7 +3134,7 @@ static int filter_handle_precreate(struct obd_export *exp, struct obdo *oa,
                         GOTO(out, rc = 0);
                 }
                 /* only precreate if group == 0 and o_id is specfied */
-                if (group != 0 || oa->o_id == 0)
+                if (group < FILTER_GROUP_MDS0 || oa->o_id == 0)
                         diff = 1;
                 else
                         diff = oa->o_id - filter_last_id(filter, group);
