@@ -4087,7 +4087,7 @@ Index: iam/fs/ext3/namei.c
  static unsigned dx_get_limit(struct iam_entry *entries);
  static void dx_set_count(struct iam_entry *entries, unsigned value);
  static void dx_set_limit(struct iam_entry *entries, unsigned value);
-@@ -457,264 +100,53 @@ static void dx_sort_map(struct dx_map_en
+@@ -457,264 +100,62 @@ static void dx_sort_map(struct dx_map_en
  static struct ext3_dir_entry_2 *dx_move_dirents (char *from, char *to,
  		struct dx_map_entry *offsets, int count);
  static struct ext3_dir_entry_2* dx_pack_dirents (char *base, int size);
@@ -4246,13 +4246,15 @@ Index: iam/fs/ext3/namei.c
  	struct iam_container *c;
  	unsigned count;
  	unsigned  i;
-+	unsigned  blk;
++	iam_ptr_t  blk;
++	iam_ptr_t  root;
 +	struct inode *inode;
  
  	c = p->ip_container;
  	e = dx_node_get_entries(p, f);
  	count = dx_get_count(e);
  	e = iam_entry_shift(p, e, 1);
++	root = iam_path_descr(p)->id_ops->id_root_ptr(c);
 +
 +	inode = iam_path_obj(p);
  	for (i = 0; i < count - 1; ++i, e = iam_entry_shift(p, e, 1)) {
@@ -4305,7 +4307,7 @@ Index: iam/fs/ext3/namei.c
 -				     "Unimplemented inode hash flags: %#06x",
 -				     root->info.unused_flags);
 -			return ERR_BAD_DX_DIR;
--		}
+ 		}
 -
 -		path->ip_indirect = root->info.indirect_levels;
 -		if (path->ip_indirect > DX_MAX_TREE_HEIGHT - 1) {
@@ -4313,6 +4315,12 @@ Index: iam/fs/ext3/namei.c
 -				     "Unimplemented inode hash depth: %#06x",
 -				     root->info.indirect_levels);
 -			return ERR_BAD_DX_DIR;
++		/*
++		 * By definition of a tree, no node points to the root.
++		 */
++		if (blk == root) {
++			BREAKPOINT();
++			return 0;
  		}
 -
 -		assert((char *)entries == (((char *)&root->info) +
@@ -4369,7 +4377,7 @@ Index: iam/fs/ext3/namei.c
  }
  
  /*
-@@ -800,7 +232,7 @@ struct stats dx_show_entries(struct dx_h
+@@ -800,598 +241,121 @@ struct stats dx_show_entries(struct dx_h
  }
  #endif /* DX_DEBUG */
  
@@ -4378,7 +4386,10 @@ Index: iam/fs/ext3/namei.c
  {
  	u32 ptr;
  	int err = 0;
-@@ -810,588 +242,108 @@ static int dx_lookup(struct iam_path *pa
+ 	int i;
++	int delta;
+ 
+ 	struct iam_descr *param;
  	struct iam_frame *frame;
  	struct iam_container *c;
  
@@ -4386,13 +4397,15 @@ Index: iam/fs/ext3/namei.c
 +	param = iam_path_descr(path);
  	c = path->ip_container;
  	
++	delta = dx_index_is_compat(path) ? 1 : 2;
++
  	for (frame = path->ip_frames, i = 0,
 -		     ptr = param->id_root_ptr(path->ip_container);
 +		     ptr = param->id_ops->id_root_ptr(c);
  	     i <= path->ip_indirect;
  	     ptr = dx_get_block(path, frame->at), ++frame, ++i) {
  		struct iam_entry *entries;
- 		struct iam_entry *p;
+-		struct iam_entry *p;
 -		struct iam_entry *q;
 -		struct iam_entry *m;
 -		unsigned count;
@@ -4897,6 +4910,7 @@ Index: iam/fs/ext3/namei.c
 -	err = dx_lookup(path);
 -	if (err)
 -		goto errout; 
++		struct iam_entry *p;
 +		struct iam_entry *q;
 +		struct iam_entry *m;
 +		unsigned count;
@@ -4938,7 +4952,7 @@ Index: iam/fs/ext3/namei.c
 +		entries = frame->entries;
 +		count = dx_get_count(entries);
 +		assert_corr(count && count <= dx_get_limit(entries));
-+		p = iam_entry_shift(path, entries, 1);
++		p = iam_entry_shift(path, entries, delta);
 +		q = iam_entry_shift(path, entries, count - 1);
 +		while (p <= q) {
 +			m = iam_entry_shift(path,
@@ -5044,7 +5058,7 @@ Index: iam/fs/ext3/namei.c
  /*
   * This function increments the frame pointer to search the next leaf
   * block, and reads in the necessary intervening nodes if the search
-@@ -1409,16 +361,15 @@ EXPORT_SYMBOL(iam_update);
+@@ -1409,16 +373,15 @@ EXPORT_SYMBOL(iam_update);
   * If start_hash is non-null, it will be filled in with the starting
   * hash of the next page.
   */
@@ -5064,7 +5078,7 @@ Index: iam/fs/ext3/namei.c
  	p = path->ip_frame;
  	/*
  	 * Find the next leaf page by incrementing the frame pointer.
-@@ -1438,6 +389,10 @@ static int ext3_htree_next_block(struct 
+@@ -1438,6 +401,10 @@ static int ext3_htree_next_block(struct 
  		--p;
  	}
  
@@ -5075,7 +5089,7 @@ Index: iam/fs/ext3/namei.c
  	/*
  	 * If the hash is 1, then continue only if the next page has a
  	 * continuation hash of any value.  This is used for readdir
-@@ -1445,19 +400,21 @@ static int ext3_htree_next_block(struct 
+@@ -1445,19 +412,21 @@ static int ext3_htree_next_block(struct 
  	 * desired contiuation hash.  If it doesn't, return since
  	 * there's no point to read in the successive index pages.
  	 */
@@ -5099,7 +5113,7 @@ Index: iam/fs/ext3/namei.c
  						     (iam_ptr_t)dx_get_block(path, p->at),
  						     NULL, &bh);
  		if (err != 0)
-@@ -1465,12 +422,23 @@ static int ext3_htree_next_block(struct 
+@@ -1465,12 +434,23 @@ static int ext3_htree_next_block(struct 
  		++p;
  		brelse (p->bh);
  		p->bh = bh;
@@ -5125,7 +5139,7 @@ Index: iam/fs/ext3/namei.c
  
  /*
   * p is at least 6 bytes before the end of page
-@@ -1662,21 +630,30 @@ static void dx_sort_map (struct dx_map_e
+@@ -1662,21 +642,30 @@ static void dx_sort_map (struct dx_map_e
  	} while(more);
  }
  
@@ -5163,7 +5177,7 @@ Index: iam/fs/ext3/namei.c
  #endif
  
  
-@@ -1903,7 +880,8 @@ static struct buffer_head * ext3_dx_find
+@@ -1903,7 +892,8 @@ static struct buffer_head * ext3_dx_find
  	hash = hinfo.hash;
  	do {
  		block = dx_get_block(path, path->ip_frame->at);
@@ -5173,7 +5187,7 @@ Index: iam/fs/ext3/namei.c
  						     NULL, &bh);
  		if (*err != 0)
  			goto errout;
-@@ -2093,22 +1071,69 @@ static struct ext3_dir_entry_2* dx_pack_
+@@ -2093,22 +1083,69 @@ static struct ext3_dir_entry_2* dx_pack_
  	return prev;
  }
  
@@ -5250,7 +5264,7 @@ Index: iam/fs/ext3/namei.c
  	int	err;
  
  	bh2 = ext3_append (handle, dir, &newblock, error);
-@@ -2133,35 +1158,9 @@ static struct ext3_dir_entry_2 *do_split
+@@ -2133,35 +1170,9 @@ static struct ext3_dir_entry_2 *do_split
  	if (err)
  		goto journal_error;
  
@@ -5288,7 +5302,7 @@ Index: iam/fs/ext3/namei.c
  	err = ext3_journal_dirty_metadata (handle, bh2);
  	if (err)
  		goto journal_error;
-@@ -2175,6 +1174,63 @@ errout:
+@@ -2175,6 +1186,63 @@ errout:
  }
  #endif
  
@@ -5352,7 +5366,7 @@ Index: iam/fs/ext3/namei.c
  
  /*
   * Add a new entry into a directory (leaf) block.  If de is non-NULL,
-@@ -2194,34 +1250,16 @@ static int add_dirent_to_buf(handle_t *h
+@@ -2194,34 +1262,16 @@ static int add_dirent_to_buf(handle_t *h
  	struct inode	*dir = dentry->d_parent->d_inode;
  	const char	*name = dentry->d_name.name;
  	int		namelen = dentry->d_name.len;
@@ -5394,7 +5408,7 @@ Index: iam/fs/ext3/namei.c
  	}
  	BUFFER_TRACE(bh, "get_write_access");
  	err = ext3_journal_get_write_access(handle, bh);
-@@ -2232,22 +1270,9 @@ static int add_dirent_to_buf(handle_t *h
+@@ -2232,22 +1282,9 @@ static int add_dirent_to_buf(handle_t *h
  	}
  
  	/* By now the buffer is marked for journaling */
@@ -5420,7 +5434,7 @@ Index: iam/fs/ext3/namei.c
  	/*
  	 * XXX shouldn't update any times until successful
  	 * completion of syscall, but too many callers depend
-@@ -2423,8 +1448,40 @@ static int ext3_add_entry (handle_t *han
+@@ -2423,8 +1460,40 @@ static int ext3_add_entry (handle_t *han
  	return add_dirent_to_buf(handle, dentry, inode, de, bh);
  }
  
@@ -5462,7 +5476,7 @@ Index: iam/fs/ext3/namei.c
  {
  
  	struct iam_entry *entries;   /* old block contents */
-@@ -2432,10 +1489,17 @@ static int split_index_node(handle_t *ha
+@@ -2432,10 +1501,17 @@ static int split_index_node(handle_t *ha
   	struct iam_frame *frame, *safe;
  	struct buffer_head *bh_new[DX_MAX_TREE_HEIGHT] = {0};
  	u32 newblock[DX_MAX_TREE_HEIGHT] = {0};
@@ -5481,7 +5495,7 @@ Index: iam/fs/ext3/namei.c
  	frame = path->ip_frame;
  	entries = frame->entries;
  
-@@ -2474,7 +1538,8 @@ static int split_index_node(handle_t *ha
+@@ -2474,7 +1550,8 @@ static int split_index_node(handle_t *ha
  	for (frame = safe + 1, i = 0; i < nr_splet; ++i, ++frame) {
  		bh_new[i] = ext3_append (handle, dir, &newblock[i], &err);
  		if (!bh_new[i] ||
@@ -5491,7 +5505,7 @@ Index: iam/fs/ext3/namei.c
  			goto cleanup;
  		BUFFER_TRACE(frame->bh, "get_write_access");
  		err = ext3_journal_get_write_access(handle, frame->bh);
-@@ -2493,6 +1558,7 @@ static int split_index_node(handle_t *ha
+@@ -2493,6 +1570,7 @@ static int split_index_node(handle_t *ha
  		unsigned count;
  		int idx;
  		struct buffer_head *bh2;
@@ -5499,7 +5513,7 @@ Index: iam/fs/ext3/namei.c
  
  		entries = frame->entries;
  		count = dx_get_count(entries);
-@@ -2501,6 +1567,7 @@ static int split_index_node(handle_t *ha
+@@ -2501,6 +1579,7 @@ static int split_index_node(handle_t *ha
  		bh2 = bh_new[i];
  		entries2 = dx_get_entries(path, bh2->b_data, 0);
  
@@ -5507,7 +5521,7 @@ Index: iam/fs/ext3/namei.c
  		if (frame == path->ip_frames) {
  			/* splitting root node. Tricky point:
  			 *
-@@ -2512,22 +1579,20 @@ static int split_index_node(handle_t *ha
+@@ -2512,22 +1591,20 @@ static int split_index_node(handle_t *ha
  			 * capacity of the root node is smaller than that of
  			 * non-root one.
  			 */
@@ -5536,7 +5550,7 @@ Index: iam/fs/ext3/namei.c
  
  			/* Shift frames in the path */
  			memmove(frames + 2, frames + 1,
-@@ -2536,49 +1601,61 @@ static int split_index_node(handle_t *ha
+@@ -2536,49 +1613,61 @@ static int split_index_node(handle_t *ha
  			frames[1].at = iam_entry_shift(path, entries2, idx);
  			frames[1].entries = entries = entries2;
  			frames[1].bh = bh2;
@@ -5621,7 +5635,7 @@ Index: iam/fs/ext3/namei.c
  	}
  	goto cleanup;
  journal_error:
-@@ -2610,7 +1687,7 @@ static int ext3_dx_add_entry(handle_t *h
+@@ -2610,7 +1699,7 @@ static int ext3_dx_add_entry(handle_t *h
  	size_t isize;
  
  	iam_path_compat_init(&cpath, dir);
@@ -5630,7 +5644,7 @@ Index: iam/fs/ext3/namei.c
  
  	err = dx_probe(dentry, NULL, &hinfo, path);
  	if (err != 0)
-@@ -2620,7 +1697,8 @@ static int ext3_dx_add_entry(handle_t *h
+@@ -2620,7 +1709,8 @@ static int ext3_dx_add_entry(handle_t *h
  	/* XXX nikita: global serialization! */
  	isize = dir->i_size;
  
@@ -5640,7 +5654,7 @@ Index: iam/fs/ext3/namei.c
  				  handle, &bh);
  	if (err != 0)
  		goto cleanup;
-@@ -2641,11 +1719,11 @@ static int ext3_dx_add_entry(handle_t *h
+@@ -2641,11 +1731,11 @@ static int ext3_dx_add_entry(handle_t *h
  		goto cleanup;	
  
  	/*copy split inode too*/
@@ -5654,7 +5668,7 @@ Index: iam/fs/ext3/namei.c
  	err = add_dirent_to_buf(handle, dentry, inode, de, bh);
  	goto cleanup2;
  
-@@ -2752,6 +1830,26 @@ static struct inode * ext3_new_inode_wan
+@@ -2752,6 +1842,26 @@ static struct inode * ext3_new_inode_wan
  	return ext3_new_inode(handle, dir, mode, inum);
  }
  
