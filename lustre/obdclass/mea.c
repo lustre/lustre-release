@@ -142,7 +142,7 @@ int raw_name2idx(int hashtype, int count, const char *name, int namelen)
         return c;
 }
 
-int mea_name2idx(struct lmv_stripe_md *mea, char *name, int namelen)
+int mea_name2idx(struct lmv_stripe_md *mea, const char *name, int namelen)
 {
         unsigned int c;
 
