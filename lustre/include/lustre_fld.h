@@ -142,9 +142,6 @@ struct lu_client_fld {
         /* Lock protecting exports list and fld_hash. */
         spinlock_t               lcf_lock;
 
-        /* Protect fld req + cache modification. */
-        struct semaphore         lcf_sem;
-
         /* Client FLD cache. */
         struct fld_cache        *lcf_cache;
 
