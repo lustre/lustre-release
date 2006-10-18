@@ -377,7 +377,7 @@ static int ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
 
         memcpy(&och->och_fh, &body->handle, sizeof(body->handle));
         och->och_magic = OBD_CLIENT_HANDLE_MAGIC;
-        och->och_fid = &lli->lli_fid;
+        och->och_fid = lli->lli_fid;
         och->och_flags = it->it_flags;
         lli->lli_ioepoch = body->ioepoch;
 
