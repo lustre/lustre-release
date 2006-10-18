@@ -2422,7 +2422,7 @@ int lmv_set_open_replay_data(struct obd_export *exp,
 
         ENTRY;
 
-        tgt_exp = lmv_get_export(lmv, och->och_fid);
+        tgt_exp = lmv_get_export(lmv, &och->och_fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
