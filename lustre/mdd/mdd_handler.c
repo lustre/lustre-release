@@ -2606,8 +2606,11 @@ cleanup:
                                 CERROR("error can not cleanup destroy %d\n",
                                        rc2);
                 }
-                if (rc2 == 0)
+                if (rc2 == 0) {
+                        mdd_write_lock(env, son);
                         __mdd_ref_del(env, son, handle);
+                        mdd_write_unlock(env, son);
+                }
         }
         /* finish mdd_lov_create() stuff */
         mdd_lov_create_finish(env, mdd, rc);
