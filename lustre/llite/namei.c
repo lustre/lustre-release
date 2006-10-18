@@ -489,8 +489,10 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                                   .ph_opc = LUSTRE_OPC_CREATE };
 
                 rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2, &hint);
-                if (rc)
-                        LBUG();
+                if (rc) {
+                        ll_finish_md_op_data(op_data);
+                        RETURN(rc);
+                }
         }
 
         it->it_create_mode &= ~current->fs->umask;
@@ -893,8 +895,8 @@ static int ll_symlink_generic(struct inode *dir, struct dentry *dchild,
         /* allocate new fid */
         err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data->fid2, &hint);
         if (err) {
-                CERROR("can't allocate new fid, rc %d\n", err);
-                LBUG();
+                ll_finish_md_op_data(op_data);
+                RETURN(err);
         }
 
         err = md_create(sbi->ll_md_exp, op_data,
@@ -970,8 +972,8 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
         /* Allocate new fid. */
         err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data->fid2, &hint);
         if (err) {
-                CERROR("Can't allocate new fid, rc %d\n", err);
-                LBUG();
+                ll_finish_md_op_data(op_data);
+                RETURN(err);
         }
 
         err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,

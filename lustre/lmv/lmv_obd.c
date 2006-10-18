@@ -707,7 +707,6 @@ static int lmv_fids_balanced(struct obd_device *obd)
         RETURN(1);
 }
 
-#if 1
 static int lmv_all_chars_policy(int count, struct qstr *name)
 {
         unsigned int c = 0;
@@ -718,7 +717,6 @@ static int lmv_all_chars_policy(int count, struct qstr *name)
         c = c % count;
         return c;
 }
-#endif
 
 static int lmv_placement_policy(struct obd_device *obd,
                                 struct lu_placement_hint *hint,
@@ -846,8 +844,7 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
                 rc = fld_client_create(&lmv->lmv_fld, fid_seq(fid),
                                        mds, NULL);
                 if (rc) {
-                        CERROR("Can't create fld entry, "
-                               "rc %d\n", rc);
+                        CERROR("Can't create fld entry, rc %d\n", rc);
                 }
         }
 
@@ -869,15 +866,13 @@ static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
 
         rc = lmv_placement_policy(obd, hint, &mds);
         if (rc) {
-                CERROR("Can't get target for allocating fid, "
-                       "rc %d\n", rc);
+                CERROR("Can't get target for allocating fid, rc %d\n", rc);
                 RETURN(rc);
         }
 
         rc = __lmv_fid_alloc(lmv, fid, mds);
         if (rc) {
-                CERROR("Can't alloc new fid, rc %d\n",
-                       rc);
+                CERROR("Can't alloc new fid, rc %d\n", rc);
                 RETURN(rc);
         }
 

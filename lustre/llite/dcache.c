@@ -406,15 +406,14 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                                             de->d_name.name, de->d_name.len, 0);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
-                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2,
-                                     &hint);
+                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2, &hint);
                 if (rc) {
-                        CERROR("can't allocate new fid, rc %d\n", rc);
-                        LBUG();
+                        ll_finish_md_op_data(op_data);
+                        RETURN(rc);
                 }
         } else {
                 op_data = ll_prep_md_op_data(NULL, parent, de->d_inode,
-                                            de->d_name.name, de->d_name.len, 0);
+                                             de->d_name.name, de->d_name.len, 0);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
         }
@@ -583,11 +582,10 @@ do_lookup:
                                                   .ph_cname = &de->d_name,
                                                   .ph_opc = LUSTRE_OPC_CREATE };
 
-                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2,
-                                     &hint);
+                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2, &hint);
                 if (rc) {
-                        CERROR("can't allocate new fid, rc %d\n", rc);
-                        LBUG();
+                        ll_finish_md_op_data(op_data);
+                        RETURN(rc);
                 }
         }
         
