@@ -48,6 +48,34 @@ enum {
         SPLIT_SIZE =  64*1024
 };
 
+int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
+                   const char *name)
+{
+        struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
+        struct lmv_stripe_md *lmv;
+        int rc = 0;
+        ENTRY;
+        memset(ma, 0, sizeof(*ma));
+        ma->ma_need = MA_INODE | MA_LMV;
+        rc = mo_attr_get(env, mp, ma);
+        if (rc)
+                RETURN(rc);
+
+        if (ma->ma_valid & MA_LMV) {
+                int stripe;
+                lmv = ma->ma_lmv = lmv;
+                /* 
+                 * Get stripe by name to check the name belongs to master
+                 * otherwise return the -ERESTART
+                 * Master stripe is always 0
+                 */
+                stripe = mea_name2idx(lmv, name, strlen(name));
+                if (stripe != 0)
+                        rc = -ERESTART;
+        }
+        RETURN(rc);
+}
+
 static int cmm_expect_splitting(const struct lu_env *env,
                                 struct md_object *mo,
                                 struct md_attr *ma)
