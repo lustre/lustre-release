@@ -97,7 +97,7 @@ static struct krb5_enctype enctypes[] = {
                 0,
         },
         [ENCTYPE_DES3_CBC_RAW] = {              /* des3-hmac-sha1 */
-                "des-hmac-sha1",
+                "des3-hmac-sha1",
                 20,
                 "sha1",
                 "des3_ede",
