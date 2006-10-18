@@ -404,6 +404,19 @@ AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 ])
 
 #
+# LB_LINUX_CONFIG_PAG
+#
+AC_DEFUN([LB_LINUX_CONFIG_PAG],
+[AC_MSG_CHECKING([if Linux is patched with basic PAG support])
+LB_LINUX_TRY_COMPILE([#include <linux/sched.h>],[
+unsigned long pag = current->pag;
+],[AC_MSG_RESULT([yes])
+AC_DEFINE(HAVE_LINUX_PAG, 1, [linux has basic PAG support for Lustre])],[
+AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_LINUX_CONFIG_GSS
 #
 # Build gss and related tools of Lustre. Currently both kernel and user space
