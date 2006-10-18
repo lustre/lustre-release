@@ -561,6 +561,37 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
         RETURN(0);
 }
 
+static int mdt_raw_lookup(struct mdt_thread_info *info,
+                          struct mdt_object *parent,
+                          const char* name, 
+                          struct ldlm_reply *ldlm_rep)
+{
+        const struct mdt_body   *reqbody = info->mti_body;
+        struct md_object  *next = mdt_object_child(info->mti_object);
+        struct lu_fid     *child_fid = &info->mti_tmp_fid1;
+        struct mdt_body   *repbody;
+        int rc;
+        ENTRY;
+        
+        if (reqbody->valid != OBD_MD_FLID) 
+                RETURN(0);
+        
+        /* Only got the fid of this obj by name */
+        rc = mdo_lookup(info->mti_env, next, name, child_fid);
+        if (rc != 0) {
+                if (rc == -ENOENT)
+                        mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
+                RETURN(rc);
+        } else
+                mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
+
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        repbody->fid1 = *child_fid;
+        repbody->valid = OBD_MD_FLID;
+        
+        RETURN(1);
+}
+
 /*
  * UPDATE lock should be taken against parent, and be release before exit;
  * child_bits lock should be taken against child, and be returned back:
@@ -604,6 +635,12 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 CERROR("Object "DFID" locates on remote server\n",
                         PFID(mdt_object_fid(parent)));
                 LBUG();
+        }
+
+        rc = mdt_raw_lookup(info, parent, name, ldlm_rep);
+        if (rc > 0) {
+                CDEBUG(D_INFO, "Do raw lookup return \n"); 
+                RETURN(rc);
         }
 
         if (strlen(name) == 0) {
