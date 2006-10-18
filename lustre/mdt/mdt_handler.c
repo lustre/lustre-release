@@ -638,8 +638,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         }
 
         rc = mdt_raw_lookup(info, parent, name, ldlm_rep);
-        if (rc > 0) {
-                CDEBUG(D_INFO, "Do raw lookup return \n"); 
+        if (rc != 0) {
+                if (rc > 0)
+                        rc = 0;
                 RETURN(rc);
         }
 
