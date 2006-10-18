@@ -315,7 +315,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFREG:
         case S_IFDIR:{
-                if (strlen(info->mti_rr.rr_name) == 0) {
+                if (info->mti_rr.rr_name[0] == 0) {
                         rc = mdt_md_mkobj(info);
                         break;
                 }
@@ -388,7 +388,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (!ma->ma_lmm || !ma->ma_cookie)
                 GOTO(out_unlock_parent, rc = -EINVAL);
 
-        if (strlen(rr->rr_name) == 0) {
+        if (rr->rr_name[0] == 0) {
                 /* remote partial operation
                  * It is possible that replay can happen on parent MDS
                  * and this operation will be repeated. 

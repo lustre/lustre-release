@@ -644,7 +644,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 RETURN(rc);
         }
 
-        if (strlen(name) == 0) {
+        if (name[0] == 0) { /* strlen(name) == 0 */
                 /* Only getattr on the child. Parent is on another node. */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 child = parent;
