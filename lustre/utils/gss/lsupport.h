@@ -27,6 +27,7 @@ struct lgssd_upcall_data {
         uint32_t        gid;
         uint32_t        svc;
         uint64_t        nid;
+        uint64_t        pag;
         char            obd[64];
 };
 

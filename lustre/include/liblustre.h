@@ -585,6 +585,7 @@ struct task_struct {
         int state;
         struct signal pending;
         char comm[32];
+        unsigned long pag;
         int uid;
         int gid;
         int pid;

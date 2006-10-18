@@ -19,7 +19,7 @@ noinst_PROGRAMS = llog_reader lr_reader wirecheck wiretest lload obdio obdbarrie
 rootsbin_PROGRAMS = mount.lustre
 sbin_PROGRAMS = mkfs.lustre tunefs.lustre lctl \
 	l_getidentity l_facl llverfs llverdev
-bin_PROGRAMS = lfs req_layout
+bin_PROGRAMS = lfs req_layout lkinit
 sbin_SCRIPTS = $(sbin_scripts)
 endif # UTILS
 
@@ -32,6 +32,8 @@ lctl_DEPENDENCIES := $(LIBPTLCTL)
 lfs_SOURCES = lfs.c parser.c obd.c
 lfs_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL)
 lfs_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a 
+
+lkinit_SOURCES = lkinit.c
 
 lload_SOURCES = lload.c 
 lload_LDADD := $(LIBREADLINE) $(LIBPTLCTL)

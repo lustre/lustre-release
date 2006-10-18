@@ -62,6 +62,7 @@ struct gss_upcall_msg_data {
         __u32                           gum_gid;
         __u32                           gum_svc;        /* MDS/OSS... */
         __u64                           gum_nid;        /* peer NID */
+        __u64                           gum_pag;
         __u8                            gum_obd[64];    /* client obd name */
 };
 
@@ -525,6 +526,7 @@ int gss_ctx_refresh_pipefs(struct ptlrpc_cli_ctx *ctx)
         gmsg->gum_data.gum_gid = 0; /* not used for now */
         gmsg->gum_data.gum_svc = import_to_gss_svc(imp);
         gmsg->gum_data.gum_nid = imp->imp_connection->c_peer.nid;
+        gmsg->gum_data.gum_pag = ctx->cc_vcred.vc_pag;
         strncpy(gmsg->gum_data.gum_obd, imp->imp_obd->obd_name,
                 sizeof(gmsg->gum_data.gum_obd));
 

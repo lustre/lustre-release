@@ -141,6 +141,7 @@ struct lustre_mount_data {
         char      *lmd_profile;       /* client only */
         char      *lmd_sec_mdt;       /* sec from mdt (to ost/mdt) */
         char      *lmd_sec_cli;       /* sec from client (to ost/mdt) */
+        __u32      lmd_pag:1;         /* enable PAG */
         uid_t      lmd_nllu;          /* non-lustre-local-user id */
         gid_t      lmd_nllg;          /* non-lustre-local-group id */
         char      *lmd_opts;          /* lustre mount options (as opposed to 

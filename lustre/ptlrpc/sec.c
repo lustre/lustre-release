@@ -373,7 +373,8 @@ void ctx_cache_gc(struct ptlrpc_sec *sec, struct hlist_head *freelist)
  * In any cases, never touch "eternal" contexts.
  */
 static
-int ctx_cache_flush(struct ptlrpc_sec *sec, uid_t uid, int grace, int force)
+int ctx_cache_flush(struct ptlrpc_sec *sec, uint64_t pag, uid_t uid,
+                    int grace, int force)
 {
         struct ptlrpc_cli_ctx *ctx;
         struct hlist_node *pos, *next;
@@ -391,8 +392,14 @@ int ctx_cache_flush(struct ptlrpc_sec *sec, uid_t uid, int grace, int force)
 
                         if (ctx_is_eternal(ctx))
                                 continue;
-                        if (uid != -1 && uid != ctx->cc_vcred.vc_uid)
-                                continue;
+
+                        if (sec->ps_flags & PTLRPC_SEC_FL_PAG) {
+                                if (pag != -1 && pag != ctx->cc_vcred.vc_pag)
+                                        continue;
+                        } else {
+                                if (uid != -1 && uid != ctx->cc_vcred.vc_uid)
+                                        continue;
+                        }
 
                         if (atomic_read(&ctx->cc_refcount) > 1) {
                                 busy++;
@@ -443,7 +450,7 @@ struct ptlrpc_cli_ctx * ctx_cache_lookup(struct ptlrpc_sec *sec,
 
         might_sleep();
 
-        hash = ctx_hash_index(sec, (__u64) vcred->vc_uid);
+        hash = ctx_hash_index(sec, vcred->vc_pag);
         LASSERT(hash < sec->ps_ccache_size);
         hash_head = &sec->ps_ccache[hash];
 
@@ -520,15 +527,26 @@ retry:
 static inline
 struct ptlrpc_cli_ctx *get_my_ctx(struct ptlrpc_sec *sec)
 {
-        struct vfs_cred vcred = { cfs_current()->uid, cfs_current()->gid };
+        struct vfs_cred vcred;
         int create = 1, remove_dead = 1;
 
-        if (sec->ps_flags & PTLRPC_SEC_FL_REVERSE) {
+        if (sec->ps_flags & (PTLRPC_SEC_FL_REVERSE | PTLRPC_SEC_FL_ROOTONLY)) {
+                vcred.vc_pag = 0;
                 vcred.vc_uid = 0;
-                create = 0;
-                remove_dead = 0;
-        } else if (sec->ps_flags & PTLRPC_SEC_FL_ROOTONLY)
-                vcred.vc_uid = 0;
+                vcred.vc_gid = 0;
+                if (sec->ps_flags & PTLRPC_SEC_FL_REVERSE) {
+                        create = 0;
+                        remove_dead = 0;
+                }
+        } else {
+                vcred.vc_pag = sec->ps_flags & PTLRPC_SEC_FL_PAG ?
+                               CURRENT_PAG : current->uid;
+                vcred.vc_uid = current->uid;
+                vcred.vc_gid = current->gid;
+                /* don't distinguash root from others in pag mode */
+                if (vcred.vc_uid == 0)
+                        vcred.vc_pag = 0;
+        }
 
         if (sec->ps_policy->sp_cops->lookup_ctx)
                 return sec->ps_policy->sp_cops->lookup_ctx(sec, &vcred);
@@ -622,7 +640,7 @@ void sptlrpc_ctx_replace(struct ptlrpc_sec *sec, struct ptlrpc_cli_ctx *new)
         unsigned int hash;
         ENTRY;
 
-        hash = ctx_hash_index(sec, (__u64) new->cc_vcred.vc_uid);
+        hash = ctx_hash_index(sec, new->cc_vcred.vc_pag);
         LASSERT(hash < sec->ps_ccache_size);
 
         spin_lock(&sec->ps_lock);
@@ -1243,7 +1261,7 @@ void sptlrpc_sec_put(struct ptlrpc_sec *sec)
                 return;
         }
 
-        ctx_cache_flush(sec, -1, 1, 1);
+        ctx_cache_flush(sec, -1, -1, 1, 1);
 
         if (atomic_dec_and_test(&sec->ps_busy))
                 sptlrpc_sec_destroy(sec);
@@ -1469,15 +1487,17 @@ void sptlrpc_import_flush_root_ctx(struct obd_import *imp)
         /* use 'grace' mode, it's crutial see explain in
          * sptlrpc_req_refresh_ctx()
          */
-        ctx_cache_flush(imp->imp_sec, 0, 1, 1);
+        ctx_cache_flush(imp->imp_sec, 0, 0, 1, 1);
 }
 
 void sptlrpc_import_flush_my_ctx(struct obd_import *imp)
 {
+        uint64_t pag = cfs_current()->uid == 0 ? 0 : CURRENT_PAG;
+
         if (imp == NULL || imp->imp_sec == NULL)
                 return;
 
-        ctx_cache_flush(imp->imp_sec, cfs_current()->uid, 1, 1);
+        ctx_cache_flush(imp->imp_sec, pag, cfs_current()->uid, 1, 1);
 }
 EXPORT_SYMBOL(sptlrpc_import_flush_my_ctx);
 
@@ -1486,7 +1506,7 @@ void sptlrpc_import_flush_all_ctx(struct obd_import *imp)
         if (imp == NULL || imp->imp_sec == NULL)
                 return;
 
-        ctx_cache_flush(imp->imp_sec, -1, 0, 1);
+        ctx_cache_flush(imp->imp_sec, -1, -1, 0, 1);
 }
 EXPORT_SYMBOL(sptlrpc_import_flush_all_ctx);
 

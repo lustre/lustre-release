@@ -748,14 +748,21 @@ parse_enctypes(char *enctypes)
  *	void
  */
 void
-gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername)
+gssd_setup_krb5_user_gss_ccache(uint64_t pag, uid_t uid, char *servername)
 {
 	char			buf[MAX_NETOBJ_SZ];
 	struct dirent		*d;
 
-	printerr(2, "getting credentials for client with uid %u for "
-		    "server %s\n", uid, servername);
+	printerr(2, "getting credentials for client with pag %llx/uid %u for "
+		    "server %s\n", pag, uid, servername);
 	memset(buf, 0, sizeof(buf));
+
+	if (pag != uid) {
+		snprintf(buf, sizeof(buf), "FILE:%s/%spag_%llx",
+			 ccachedir, GSSD_DEFAULT_CRED_PREFIX, pag);
+		goto set_ccname;
+	}
+
 	if (gssd_find_existing_krb5_ccache(uid, &d)) {
 		snprintf(buf, sizeof(buf), "FILE:%s/%s",
 			ccachedir, d->d_name);
@@ -766,6 +773,7 @@ gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername)
 			ccachedir, GSSD_DEFAULT_CRED_PREFIX, uid);
 	printerr(2, "using %s as credentials cache for client with "
 		    "uid %u for server %s\n", buf, uid, servername);
+set_ccname:
 	gssd_set_krb5_ccache_name(buf);
 }
 

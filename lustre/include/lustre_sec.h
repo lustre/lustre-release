@@ -202,6 +202,7 @@ enum lustre_part {
 
 
 struct vfs_cred {
+        uint64_t        vc_pag;
         uint32_t        vc_uid;
         uint32_t        vc_gid;
 };
@@ -337,6 +338,7 @@ struct ptlrpc_sec_policy {
 #define PTLRPC_SEC_FL_REVERSE           0x0001 /* reverse sec */
 #define PTLRPC_SEC_FL_ROOTONLY          0x0002 /* treat everyone as root */
 #define PTLRPC_SEC_FL_BULK              0x0004 /* intensive bulk i/o expected */
+#define PTLRPC_SEC_FL_PAG               0x0008 /* PAG enabled */
 
 struct ptlrpc_sec {
         struct ptlrpc_sec_policy       *ps_policy;
@@ -356,6 +358,15 @@ struct ptlrpc_svc_ctx {
         atomic_t                        sc_refcount;
         struct ptlrpc_sec_policy       *sc_policy;
 };
+
+/*
+ * PAG
+ */
+#ifdef HAVE_LINUX_PAG
+#define CURRENT_PAG     ((uint64_t) current->pag)
+#else
+#define CURRENT_PAG     ((uint64_t) current->uid)
+#endif
 
 /*
  * user identity descriptor

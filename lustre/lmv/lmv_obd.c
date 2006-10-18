@@ -2225,6 +2225,36 @@ int lmv_set_info_async(struct obd_export *exp, obd_count keylen,
 
                 RETURN(rc);
         }
+        if (KEY_IS("pag")) {
+                struct obd_export *exp;
+                int i, err = 0;
+
+                for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                        exp = lmv->tgts[i].ltd_exp;
+
+                        if (exp == NULL) {
+                                struct obd_device *tgt_obd;
+
+                                tgt_obd = class_find_client_obd(
+                                                        &lmv->tgts[i].ltd_uuid,
+                                                        LUSTRE_MDC_NAME,
+                                                        &obd->obd_uuid);
+                                if (tgt_obd == NULL) {
+                                        CERROR("can't find obd %s\n",
+                                               lmv->tgts[i].ltd_uuid.uuid);
+                                        continue;
+                                }
+                                exp = tgt_obd->obd_self_export;
+                        }
+
+                        err = obd_set_info_async(exp, keylen, key, vallen,
+                                                 val, set);
+                        if (err && rc == 0)
+                                rc = err;
+                }
+
+                RETURN(rc);
+        }
 
         RETURN(-EINVAL);
 }

@@ -150,6 +150,7 @@ static int ll_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
 
 static int client_common_fill_super(struct super_block *sb, 
                                     char *md, char *dt,
+                                    int mdt_pag,
                                     uid_t nllu, gid_t nllg)
 {
         struct inode *root = 0;
@@ -213,6 +214,10 @@ static int client_common_fill_super(struct super_block *sb,
                 data->ocd_connect_flags &= ~OBD_CONNECT_RMT_CLIENT;
                 data->ocd_connect_flags |= OBD_CONNECT_LCL_CLIENT;
         }
+
+        if (mdt_pag)
+                obd_set_info_async(obd->obd_self_export, 3, "pag",
+                                   0, NULL, NULL);
 
         err = obd_connect(NULL, &md_conn, obd, &sbi->ll_sb_uuid, data);
         if (err == -EBUSY) {
@@ -1060,6 +1065,7 @@ int ll_fill_super(struct super_block *sb)
 
         /* connections, registrations, sb setup */
         err = client_common_fill_super(sb, md, dt,
+                                       lsi->lsi_lmd->lmd_pag,
                                        lsi->lsi_lmd->lmd_nllu,
                                        lsi->lsi_lmd->lmd_nllg);
 

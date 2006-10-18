@@ -1,0 +1,74 @@
+--- linux-2.6.10-pag/arch/i386/kernel/entry.S.pag	2005-07-15 13:47:12.000000000 -0600
++++ linux-2.6.10-pag/arch/i386/kernel/entry.S	2005-07-18 11:18:45.000000000 -0600
+@@ -907,5 +907,7 @@
+ 	.long sys_add_key
+ 	.long sys_request_key
+ 	.long sys_keyctl
++	.long sys_newpag
++	.long sys_getpag		/* 289,290 temporay added for lustre */
+ 
+ syscall_table_size=(.-sys_call_table)
+--- linux-2.6.10-pag/fs/fcntl.c.pag	2005-07-15 14:23:32.000000000 -0600
++++ linux-2.6.10-pag/fs/fcntl.c	2005-07-18 11:41:21.000000000 -0600
+@@ -421,6 +421,17 @@
+ }
+ #endif
+ 
++asmlinkage long sys_newpag(void)
++{
++	get_random_bytes(&current->pag, sizeof(current->pag));
++	return 0;
++}
++
++asmlinkage long sys_getpag(void)
++{
++	return current->pag;
++}
++
+ /* Table to convert sigio signal codes into poll band bitmaps */
+ 
+ static long band_table[NSIGPOLL] = {
+--- linux-2.6.10-pag/include/linux/sched.h.pag	2005-07-15 13:35:27.000000000 -0600
++++ linux-2.6.10-pag/include/linux/sched.h	2005-07-15 13:38:02.000000000 -0600
+@@ -600,6 +600,7 @@
+ /* mm fault and swap info: this can arguably be seen as either mm-specific or thread-specific */
+ 	unsigned long min_flt, maj_flt;
+ /* process credentials */
++	unsigned long pag;
+ 	uid_t uid,euid,suid,fsuid;
+ 	gid_t gid,egid,sgid,fsgid;
+ 	struct group_info *group_info;
+--- linux-2.6.10-pag/include/linux/syscalls.h.pag	2005-07-15 14:09:42.000000000 -0600
++++ linux-2.6.10-pag/include/linux/syscalls.h	2005-07-18 11:42:01.000000000 -0600
+@@ -506,4 +506,7 @@
+ asmlinkage long sys_keyctl(int cmd, unsigned long arg2, unsigned long arg3,
+ 			   unsigned long arg4, unsigned long arg5);
+ 
++asmlinkage long sys_newpag(void);
++asmlinkage long sys_getpag(void);
++
+ #endif
+--- linux-2.6.10-pag/include/linux/init_task.h.pag	2005-07-15 14:39:07.000000000 -0600
++++ linux-2.6.10-pag/include/linux/init_task.h	2005-07-15 14:41:45.000000000 -0600
+@@ -92,6 +92,7 @@
+ 	.real_timer	= {						\
+ 		.function	= it_real_fn				\
+ 	},								\
++	.pag		= -1,						\
+ 	.group_info	= &init_groups,					\
+ 	.cap_effective	= CAP_INIT_EFF_SET,				\
+ 	.cap_inheritable = CAP_INIT_INH_SET,				\
+--- linux-2.6.10-pag/include/asm-i386/unistd.h.pag	2005-07-15 13:55:46.000000000 -0600
++++ linux-2.6.10-pag/include/asm-i386/unistd.h	2005-07-18 11:43:10.000000000 -0600
+@@ -294,8 +294,10 @@
+ #define __NR_add_key		286
+ #define __NR_request_key	287
+ #define __NR_keyctl		288
++#define __NR_newpag		289
++#define __NR_getpag		290
+ 
+-#define NR_syscalls 289
++#define NR_syscalls 291
+ 
+ #ifndef __KERNEL_SYSCALLS_NO_ERRNO__
+ /*

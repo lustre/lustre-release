@@ -1,5 +1,5 @@
 --- nfs-utils-1.0.10/utils/gssd/gssd_proc.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd_proc.c	2006-10-13 17:25:01.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gssd_proc.c	2006-10-18 16:14:14.000000000 -0600
 @@ -43,7 +43,6 @@
  #endif
  #include "config.h"
@@ -374,7 +374,7 @@
 +	close(fd);
 +	return 0;
 +}
- 
++
 +static
 +int gssd_refresh_lgd(struct lustre_gss_data *lgd)
 +{
@@ -449,7 +449,7 @@
 +				recv_tokenp = &gr.gr_token;
 +			}
 +		}
-+
+ 
 +		/* GSS_S_COMPLETE => check gss header verifier,
 +		 * usually checked in gss_validate
 +		 */
@@ -574,7 +574,7 @@
  
  /*
   * this code uses the userland rpcsec gss library to create a krb5
-@@ -667,27 +899,42 @@
+@@ -667,27 +899,53 @@
  void
  handle_krb5_upcall(struct clnt_info *clp)
  {
@@ -582,7 +582,8 @@
 -	CLIENT			*rpc_clnt = NULL;
 -	AUTH			*auth = NULL;
 -	struct authgss_private_data pd;
- 	gss_buffer_desc		token;
+-	gss_buffer_desc		token;
++	gss_buffer_desc		token = { 0, NULL };
 +	struct lgssd_upcall_data updata;
 +	struct lustre_gss_data	lgd;
  	char			**credlist = NULL;
@@ -590,12 +591,12 @@
  
 -	printerr(1, "handling krb5 upcall\n");
 +	printerr(2, "handling krb5 upcall\n");
-+
-+	lgd.lgd_rpc_err = -EPERM; /* default error code */
  
- 	token.length = 0;
- 	token.value = NULL;
+-	token.length = 0;
+-	token.value = NULL;
 -	memset(&pd, 0, sizeof(struct authgss_private_data));
++	memset(&lgd, 0, sizeof(lgd));
++	lgd.lgd_rpc_err = -EPERM; /* default error code */
  
 -	if (read(clp->krb5_fd, &uid, sizeof(uid)) < sizeof(uid)) {
 -		printerr(0, "WARNING: failed reading uid from krb5 "
@@ -606,8 +607,21 @@
  	}
  
 -	if (uid == 0) {
-+	printerr(1, "krb5 upcall: seq %u, uid %u, svc %u, nid 0x%llx, obd %s\n",
-+		 updata.seq, updata.uid, updata.svc, updata.nid, updata.obd);
++	printerr(1, "krb5 upcall: seq %u, uid %u, svc %u, nid 0x%llx, "
++		 "pag %llx, obd %s\n", updata.seq, updata.uid, updata.svc,
++		 updata.nid, updata.pag, updata.obd);
++
++	/* XXX in kernel pag is defined as "unsigned long", which might
++	 * not keep original signed value after converted to u64.
++	 */
++	if (updata.pag != updata.uid &&
++	    ((updata.pag == 0xffffffffffffffffULL) ||
++	     (updata.pag == 0xffffffff))) {
++		printerr(0, "uid %u: pag %llx not allowed\n",
++			 updata.uid, updata.pag);
++		lgd.lgd_rpc_err = -EPROTO;
++		goto out_return_error;
++	}
 +
 +	if (updata.svc != LUSTRE_GSS_SVC_MDS &&
 +	    updata.svc != LUSTRE_GSS_SVC_OSS) {
@@ -626,7 +640,7 @@
  		int success = 0;
  
  		/*
-@@ -695,75 +942,65 @@
+@@ -695,75 +953,66 @@
  		 * of them until one works or we've tried them all
  		 */
  		if (gssd_get_krb5_machine_cred_list(&credlist)) {
@@ -670,7 +684,8 @@
  	else {
  		/* Tell krb5 gss which credentials cache to use */
 -		gssd_setup_krb5_user_gss_ccache(uid, clp->servername);
-+		gssd_setup_krb5_user_gss_ccache(updata.uid, clp->servicename);
++		gssd_setup_krb5_user_gss_ccache(updata.pag, updata.uid,
++						clp->servicename);
  
 -		if ((create_auth_rpc_client(clp, &rpc_clnt, &auth, uid,
 -							AUTHTYPE_KRB5)) != 0) {
@@ -726,7 +741,7 @@
  	goto out;
  }
  
-@@ -774,6 +1011,7 @@
+@@ -774,6 +1023,7 @@
  void
  handle_spkm3_upcall(struct clnt_info *clp)
  {
@@ -734,7 +749,7 @@
  	uid_t			uid;
  	CLIENT			*rpc_clnt = NULL;
  	AUTH			*auth = NULL;
-@@ -825,4 +1063,5 @@
+@@ -825,4 +1075,5 @@
  out_return_error:
  	do_error_downcall(clp->spkm3_fd, uid, -1);
  	goto out;
@@ -1439,8 +1454,8 @@
  	const gss_OID mech);
  int gssd_check_mechs(void);
 --- nfs-utils-1.0.10/utils/gssd/krb5_util.h.lustre	2006-10-13 16:02:38.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/krb5_util.h	2006-10-13 16:03:33.000000000 -0600
-@@ -10,6 +10,8 @@
++++ nfs-utils-1.0.10/utils/gssd/krb5_util.h	2006-10-17 20:13:38.000000000 -0600
+@@ -10,13 +10,15 @@
  struct gssd_k5_kt_princ {
  	struct gssd_k5_kt_princ *next;
  	krb5_principal princ;
@@ -1449,6 +1464,14 @@
  	char *ccname;
  	char *realm;
  	krb5_timestamp endtime;
+ };
+ 
+ 
+-void gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername);
++void gssd_setup_krb5_user_gss_ccache(uint64_t pag, uid_t uid, char *servername);
+ int  gssd_get_krb5_machine_cred_list(char ***list);
+ int  gssd_refresh_krb5_machine_creds(void);
+ void gssd_free_krb5_machine_cred_list(char **list);
 @@ -25,8 +27,32 @@
  void gssd_obtain_kernel_krb5_info(void);
  
@@ -1486,7 +1509,7 @@
  
  #endif /* KRB5_UTIL_H */
 --- nfs-utils-1.0.10/utils/gssd/krb5_util.c.lustre	2006-10-13 16:02:38.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/krb5_util.c	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/krb5_util.c	2006-10-18 11:56:30.000000000 -0600
 @@ -99,12 +99,14 @@
  #include <rpc/rpc.h>
  #include <sys/types.h>
@@ -1880,7 +1903,40 @@
  	}
  
  	if ((code = krb5_kt_end_seq_get(context, kt, &cursor))) {
-@@ -695,7 +816,18 @@
+@@ -627,14 +748,21 @@
+  *	void
+  */
+ void
+-gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername)
++gssd_setup_krb5_user_gss_ccache(uint64_t pag, uid_t uid, char *servername)
+ {
+ 	char			buf[MAX_NETOBJ_SZ];
+ 	struct dirent		*d;
+ 
+-	printerr(2, "getting credentials for client with uid %u for "
+-		    "server %s\n", uid, servername);
++	printerr(2, "getting credentials for client with pag %llx/uid %u for "
++		    "server %s\n", pag, uid, servername);
+ 	memset(buf, 0, sizeof(buf));
++
++	if (pag != uid) {
++		snprintf(buf, sizeof(buf), "FILE:%s/%spag_%llx",
++			 ccachedir, GSSD_DEFAULT_CRED_PREFIX, pag);
++		goto set_ccname;
++	}
++
+ 	if (gssd_find_existing_krb5_ccache(uid, &d)) {
+ 		snprintf(buf, sizeof(buf), "FILE:%s/%s",
+ 			ccachedir, d->d_name);
+@@ -645,6 +773,7 @@
+ 			ccachedir, GSSD_DEFAULT_CRED_PREFIX, uid);
+ 	printerr(2, "using %s as credentials cache for client with "
+ 		    "uid %u for server %s\n", buf, uid, servername);
++set_ccname:
+ 	gssd_set_krb5_ccache_name(buf);
+ }
+ 
+@@ -695,7 +824,18 @@
  		goto out;
  	}
  
@@ -1900,7 +1956,7 @@
  
  	if ((code = krb5_kt_resolve(context, keytabfile, &kt))) {
  		printerr(0, "ERROR: %s while resolving keytab '%s'\n",
-@@ -710,12 +842,12 @@
+@@ -710,12 +850,12 @@
  		if (gssd_k5_kt_princ_list == NULL) {
  			printerr(0, "ERROR: No usable keytab entries found in "
  				    "keytab '%s'\n", keytabfile);
@@ -1918,7 +1974,7 @@
  		}
  	}
  
-@@ -865,6 +997,7 @@
+@@ -865,6 +1005,7 @@
  	krb5_free_context(context);
  }
  
@@ -1926,7 +1982,7 @@
  #ifdef HAVE_SET_ALLOWABLE_ENCTYPES
  /*
   * this routine obtains a credentials handle via gss_acquire_cred()
-@@ -920,6 +1053,7 @@
+@@ -920,6 +1061,7 @@
  	return 0;
  }
  #endif	/* HAVE_SET_ALLOWABLE_ENCTYPES */
@@ -1961,8 +2017,8 @@
  #include "gss_oids.h"
  #include "err_util.h"
 --- nfs-utils-1.0.10/utils/gssd/lsupport.h.lustre	2006-10-13 16:03:33.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/lsupport.h	2006-10-13 17:24:45.000000000 -0600
-@@ -0,0 +1,88 @@
++++ nfs-utils-1.0.10/utils/gssd/lsupport.h	2006-10-17 19:46:49.000000000 -0600
+@@ -0,0 +1,89 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + */
@@ -1992,6 +2048,7 @@
 +        uint32_t        gid;
 +        uint32_t        svc;
 +        uint64_t        nid;
++        uint64_t        pag;
 +        char            obd[64];
 +};
 +

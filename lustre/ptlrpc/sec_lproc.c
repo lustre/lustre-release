@@ -57,6 +57,8 @@ void sec_flags2str(unsigned long flags, char *buf, int bufsize)
                 strncat(buf, "rootonly,", bufsize);
         if (flags & PTLRPC_SEC_FL_BULK)
                 strncat(buf, "bulk,", bufsize);
+        if (flags & PTLRPC_SEC_FL_PAG)
+                strncat(buf, "pag,", bufsize);
         if (buf[0] == '\0')
                 strncat(buf, "-,", bufsize);
 

@@ -517,7 +517,7 @@ int gss_cli_ctx_refresh(struct ptlrpc_cli_ctx *ctx)
 static
 int gss_cli_ctx_match(struct ptlrpc_cli_ctx *ctx, struct vfs_cred *vcred)
 {
-        return (ctx->cc_vcred.vc_uid == vcred->vc_uid);
+        return (ctx->cc_vcred.vc_pag == vcred->vc_pag);
 }
 
 static
@@ -982,7 +982,9 @@ int gss_install_rvs_cli_ctx(struct gss_sec *gsec,
         int                      rc;
         ENTRY;
 
+        vcred.vc_pag = 0;
         vcred.vc_uid = 0;
+        vcred.vc_gid = 0;
 
         cli_ctx = gss_sec_create_ctx(&gsec->gs_base, &vcred);
         if (!cli_ctx)

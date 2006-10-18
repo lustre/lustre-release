@@ -1132,6 +1132,13 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
+        if (KEY_IS("pag")) {
+                struct client_obd *cliobd = &class_exp2obd(exp)->u.cli;
+
+                cliobd->cl_sec_conf.sfc_flags |= PTLRPC_SEC_FL_PAG;
+                RETURN(0);
+        }
+
         RETURN(rc);
 }
 

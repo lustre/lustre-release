@@ -899,7 +899,7 @@ int construct_service_name(struct clnt_info *clp,
 void
 handle_krb5_upcall(struct clnt_info *clp)
 {
-	gss_buffer_desc		token;
+	gss_buffer_desc		token = { 0, NULL };
 	struct lgssd_upcall_data updata;
 	struct lustre_gss_data	lgd;
 	char			**credlist = NULL;
@@ -907,10 +907,8 @@ handle_krb5_upcall(struct clnt_info *clp)
 
 	printerr(2, "handling krb5 upcall\n");
 
+	memset(&lgd, 0, sizeof(lgd));
 	lgd.lgd_rpc_err = -EPERM; /* default error code */
-
-	token.length = 0;
-	token.value = NULL;
 
 	if (read(clp->krb5_fd, &updata, sizeof(updata)) != sizeof(updata)) {
 		printerr(0, "WARNING: failed reading from krb5 "
@@ -918,8 +916,21 @@ handle_krb5_upcall(struct clnt_info *clp)
 		goto out;
 	}
 
-	printerr(1, "krb5 upcall: seq %u, uid %u, svc %u, nid 0x%llx, obd %s\n",
-		 updata.seq, updata.uid, updata.svc, updata.nid, updata.obd);
+	printerr(1, "krb5 upcall: seq %u, uid %u, svc %u, nid 0x%llx, "
+		 "pag %llx, obd %s\n", updata.seq, updata.uid, updata.svc,
+		 updata.nid, updata.pag, updata.obd);
+
+	/* XXX in kernel pag is defined as "unsigned long", which might
+	 * not keep original signed value after converted to u64.
+	 */
+	if (updata.pag != updata.uid &&
+	    ((updata.pag == 0xffffffffffffffffULL) ||
+	     (updata.pag == 0xffffffff))) {
+		printerr(0, "uid %u: pag %llx not allowed\n",
+			 updata.uid, updata.pag);
+		lgd.lgd_rpc_err = -EPROTO;
+		goto out_return_error;
+	}
 
 	if (updata.svc != LUSTRE_GSS_SVC_MDS &&
 	    updata.svc != LUSTRE_GSS_SVC_OSS) {
@@ -970,7 +981,8 @@ handle_krb5_upcall(struct clnt_info *clp)
 	}
 	else {
 		/* Tell krb5 gss which credentials cache to use */
-		gssd_setup_krb5_user_gss_ccache(updata.uid, clp->servicename);
+		gssd_setup_krb5_user_gss_ccache(updata.pag, updata.uid,
+						clp->servicename);
 
 		if ((gssd_create_lgd(clp, &lgd, &updata, AUTHTYPE_KRB5)) != 0) {
 			printerr(0, "WARNING: Failed to create krb5 context "
