@@ -2819,6 +2819,7 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
 
         if (ia_valid & ATTR_SIZE || ia_valid & (ATTR_UID | ATTR_GID)) {
+                DQUOT_INIT(inode);
                 LOCK_INODE_MUTEX(inode);
                 locked = 1;
         }
@@ -3492,6 +3493,7 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 if (fcc != NULL)
                         memcpy(fcc, obdo_logcookie(oa), sizeof(*fcc));
         }
+        DQUOT_INIT(dchild->d_inode);
 
         /* we're gonna truncate it first in order to avoid possible deadlock:
          *      P1                      P2

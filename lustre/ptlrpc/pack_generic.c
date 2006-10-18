@@ -671,11 +671,11 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
 {
         int flipped, required_len, i;
 
-        required_len = lustre_msg_hdr_size_v2(m->lm_bufcount);
+        /* Now we know the sender speaks my language. */
+        required_len = lustre_msg_hdr_size_v2(0);
         if (len < required_len) {
-                /* didn't receive all the buffer lengths */
-                CERROR ("message length %d too small for %d buflens\n",
-                        len, m->lm_bufcount);
+                /* can't even look inside the message */
+                CERROR("message length %d too small for lustre_msg\n", len);
                 return -EINVAL;
         }
 
@@ -687,6 +687,14 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
                 __swab32s(&m->lm_repsize);
         }
 
+        required_len = lustre_msg_hdr_size_v2(m->lm_bufcount);
+        if (len < required_len) {
+                /* didn't receive all the buffer lengths */
+                CERROR ("message length %d too small for %d buflens\n",
+                        len, m->lm_bufcount);
+                return -EINVAL;
+        }
+        
         for (i = 0; i < m->lm_bufcount; i++) {
                 if (flipped)
                         __swab32s(&m->lm_buflens[i]);

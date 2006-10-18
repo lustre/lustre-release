@@ -1388,8 +1388,7 @@ int main(int argc, char *argv[])
 
         if ((argc < 2) || (argv[argc - 1][0] == '-')) {
                 usage(stderr);
-                ret = EINVAL;
-                goto out;
+                return(EINVAL);
         }
 
         memset(&mop, 0, sizeof(mop));

@@ -510,8 +510,7 @@ int ll_file_open(struct inode *inode, struct file *file)
         }
         down(&lli->lli_och_sem);
         if (*och_p) { /* Open handle is present */
-                if (it_disposition(it, DISP_LOOKUP_POS) && /* Positive lookup */
-                    it_disposition(it, DISP_OPEN_OPEN)) { /* & OPEN happened */
+                if (it_disposition(it, DISP_OPEN_OPEN)) {
                         /* Well, there's extra open request that we do not need,
                            let's close it somehow. This will decref request. */
                         ll_release_openhandle(file->f_dentry, it);

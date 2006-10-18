@@ -159,12 +159,13 @@ int lcfg_mgs_ioctl(char *func, int dev_id, struct lustre_cfg *lcfg)
 {
         struct obd_ioctl_data data;
         static int mgs_device = -1;
+        char mgs[] = "$MGS";
         int rc;
 
         /* Always operates on MGS dev */
         if (mgs_device == -1) {
                 do_disconnect(NULL, 1);
-                rc = do_device("mgsioc", "MGS");
+                rc = do_device("mgsioc", mgs);
                 if (rc) {
                         errno = ENODEV;
                         return -1;
@@ -248,7 +249,7 @@ int parse_devname(char *func, char *name)
                 rc = do_name2dev(func, name);
                 if (rc >= N2D_OFF) {
                         ret = rc - N2D_OFF;
-                        printf("Name %s is device %d\n", name, ret);
+                        // printf("Name %s is device %d\n", name, ret);
                 } else {
                         printf("No device found for name %s: %s\n",
                                name, strerror(rc));
@@ -593,10 +594,7 @@ extern command_t cmdlist[];
 
 static int do_device(char *func, char *devname)
 {
-        struct obd_ioctl_data data;
         int dev;
-
-        memset(&data, 0, sizeof(data));
 
         dev = parse_devname(func, devname);
         if (dev < 0)
