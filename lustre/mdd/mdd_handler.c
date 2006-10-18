@@ -63,8 +63,10 @@ static int __mdd_lookup_locked(const struct lu_env *env,
                                struct md_object *pobj,
                                const char *name, const struct lu_fid* fid,
                                int mask);
+#if 0
 static int mdd_exec_permission_lite(const struct lu_env *env,
                                     struct mdd_object *obj);
+#endif
 static int __mdd_permission_internal(const struct lu_env *env,
                                      struct mdd_object *obj,
                                      int mask, int getattr);
@@ -2197,10 +2199,12 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                 LBUG();
         }
 
+#if 0
         if (mask == MAY_EXEC)
                 rc = mdd_exec_permission_lite(env, mdd_obj);
         else
-                rc = mdd_permission_internal(env, mdd_obj, mask);
+#endif
+        rc = mdd_permission_internal(env, mdd_obj, mask);
         if (rc)
                 RETURN(rc);
 
@@ -3284,6 +3288,7 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 #endif
 }
 
+#if 0
 static int mdd_exec_permission_lite(const struct lu_env *env,
                                     struct mdd_object *obj)
 {
@@ -3323,6 +3328,7 @@ static int mdd_exec_permission_lite(const struct lu_env *env,
 
         RETURN(-EACCES);
 }
+#endif
 
 static int __mdd_permission_internal(const struct lu_env *env,
                                      struct mdd_object *obj,
