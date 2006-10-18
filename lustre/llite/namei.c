@@ -491,7 +491,8 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                 rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2, &hint);
                 if (rc) {
                         ll_finish_md_op_data(op_data);
-                        RETURN(rc);
+                        LASSERT(rc < 0);
+                        RETURN(ERR_PTR(rc));
                 }
         }
 
