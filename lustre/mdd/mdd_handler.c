@@ -1159,7 +1159,8 @@ static int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o,
 #endif
 
 int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
-                          const struct lu_attr *attr, struct thandle *handle)
+                          const struct lu_attr *attr, struct thandle *handle,
+                          const int needacl)
 {
         struct dt_object *next;
         int rc;
@@ -1169,7 +1170,7 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
         rc = next->do_ops->do_attr_set(env, next, attr, handle,
                                        mdd_object_capa(env, o));
 #ifdef CONFIG_FS_POSIX_ACL
-        if (!rc && (attr->la_valid & LA_MODE))
+        if (!rc && (attr->la_valid & LA_MODE) && needacl)
                 rc = mdd_acl_chmod(env, o, attr->la_mode, handle);
 #endif
         return rc;
@@ -1182,7 +1183,7 @@ int mdd_attr_set_internal_locked(const struct lu_env *env,
 {
         int rc;
         mdd_write_lock(env, o);
-        rc = mdd_attr_set_internal(env, o, attr, handle);
+        rc = mdd_attr_set_internal(env, o, attr, handle, 1);
         mdd_write_unlock(env, o);
         return rc;
 }
@@ -1628,7 +1629,7 @@ static int __mdd_index_insert(const struct lu_env *env,
                 la->la_valid = LA_MTIME|LA_CTIME;
                 la->la_atime = ma->ma_attr.la_atime;
                 la->la_ctime = ma->ma_attr.la_ctime;
-                rc = mdd_attr_set_internal(env, mdd_obj, la, handle);
+                rc = mdd_attr_set_internal(env, mdd_obj, la, handle, 0);
 #endif
         }
         return rc;
@@ -1707,12 +1708,12 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 
         *la_copy = ma->ma_attr;
         la_copy->la_valid = LA_CTIME;
-        rc = mdd_attr_set_internal(env, mdd_sobj, la_copy, handle);
+        rc = mdd_attr_set_internal(env, mdd_sobj, la_copy, handle, 0);
         if (rc)
                 GOTO(out, rc);
 
         la_copy->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal(env, mdd_tobj, la_copy, handle);
+        rc = mdd_attr_set_internal(env, mdd_tobj, la_copy, handle, 0);
 
 out:
         mdd_unlock2(env, mdd_tobj, mdd_sobj);
@@ -1868,13 +1869,13 @@ static int mdd_unlink(const struct lu_env *env,
                 __mdd_ref_del(env, mdd_cobj, handle);
         } else {
                 la_copy->la_valid = LA_CTIME;
-                rc = mdd_attr_set_internal(env, mdd_cobj, la_copy, handle);
+                rc = mdd_attr_set_internal(env, mdd_cobj, la_copy, handle, 0);
                 if (rc)
                         GOTO(cleanup, rc);
         }
 
         la_copy->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal(env, mdd_pobj, la_copy, handle);
+        rc = mdd_attr_set_internal(env, mdd_pobj, la_copy, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -2147,7 +2148,7 @@ static int mdd_rename(const struct lu_env *env,
                         __mdd_ref_del(env, mdd_tobj, handle);
 
                 la_copy->la_valid = LA_CTIME;
-                rc = mdd_attr_set_internal(env, mdd_tobj, la_copy, handle);
+                rc = mdd_attr_set_internal(env, mdd_tobj, la_copy, handle, 0);
                 if (rc)
                         GOTO(cleanup, rc);
 
@@ -2158,13 +2159,13 @@ static int mdd_rename(const struct lu_env *env,
         }
 
         la_copy->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal(env, mdd_spobj, la_copy, handle);
+        rc = mdd_attr_set_internal(env, mdd_spobj, la_copy, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
         if (mdd_spobj != mdd_tpobj) {
                 la_copy->la_valid = LA_CTIME | LA_MTIME;
-                rc = mdd_attr_set_internal(env, mdd_tpobj, la_copy, handle);
+                rc = mdd_attr_set_internal(env, mdd_tpobj, la_copy, handle, 0);
         }
 
 cleanup:
@@ -2282,7 +2283,7 @@ static int __mdd_object_initialize(const struct lu_env *env,
          *  (2) maybe, the child attributes should be set in OSD when creation.
          */
 
-        rc = mdd_attr_set_internal(env, child, &ma->ma_attr, handle);
+        rc = mdd_attr_set_internal(env, child, &ma->ma_attr, handle, 0);
         if (rc != 0)
                 RETURN(rc);
 
@@ -2391,6 +2392,121 @@ static int mdd_create_data(const struct lu_env *env,
                 OBD_FREE(lmm, lmm_size);
         RETURN(rc);
 }
+
+#ifdef CONFIG_FS_POSIX_ACL
+/*
+ * Modify acl when creating a new obj.
+ *
+ * mode_p initially must contain the mode parameter to the open() / creat()
+ * system calls. All permissions that are not granted by the acl are removed.
+ * The permissions in the acl are changed to reflect the mode_p parameter.
+ */
+static int mdd_posix_acl_create_masq(posix_acl_xattr_entry *entry,
+                                     __u32 *mode_p, int count)
+{
+        posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL, *pa, *pe;
+	__u32 mode = *mode_p;
+	int not_equiv = 0;
+
+        pa = &entry[0];
+        pe = &entry[count - 1];
+        for (; pa <= pe; pa++) {
+                switch(pa->e_tag) {
+                        case ACL_USER_OBJ:
+				pa->e_perm &= (mode >> 6) | ~S_IRWXO;
+				mode &= (pa->e_perm << 6) | ~S_IRWXU;
+				break;
+
+			case ACL_USER:
+			case ACL_GROUP:
+				not_equiv = 1;
+				break;
+
+                        case ACL_GROUP_OBJ:
+				group_obj = pa;
+                                break;
+
+                        case ACL_OTHER:
+				pa->e_perm &= mode | ~S_IRWXO;
+				mode &= pa->e_perm | ~S_IRWXO;
+                                break;
+
+                        case ACL_MASK:
+				mask_obj = pa;
+				not_equiv = 1;
+                                break;
+
+			default:
+				return -EIO;
+                }
+        }
+
+	if (mask_obj) {
+		mask_obj->e_perm &= (mode >> 3) | ~S_IRWXO;
+		mode &= (mask_obj->e_perm << 3) | ~S_IRWXG;
+	} else {
+		if (!group_obj)
+			return -EIO;
+		group_obj->e_perm &= (mode >> 3) | ~S_IRWXO;
+		mode &= (group_obj->e_perm << 3) | ~S_IRWXG;
+	}
+
+	*mode_p = (*mode_p & ~S_IRWXUGO) | mode;
+        return not_equiv;
+}
+
+static int mdd_init_acl(const struct lu_env *env, struct mdd_object *pobj,
+                        struct mdd_object *cobj, __u32 *mode,
+                        struct thandle *handle)
+{
+        struct dt_object        *pnext;
+        struct dt_object        *cnext;
+        struct lu_buf           *buf;
+        posix_acl_xattr_entry   *entry;
+        int                      entry_count;
+        int                      rc;
+
+        ENTRY;
+
+	if (S_ISLNK(*mode))
+                RETURN(0);
+
+        buf = &mdd_env_info(env)->mti_buf;
+        buf->lb_buf = mdd_env_info(env)->mti_xattr_buf;
+        buf->lb_len = sizeof(mdd_env_info(env)->mti_xattr_buf);
+        pnext = mdd_object_child(pobj);
+        rc = pnext->do_ops->do_xattr_get(env, pnext, buf,
+                                         XATTR_NAME_ACL_DEFAULT, BYPASS_CAPA);
+        if ((rc == -EOPNOTSUPP) || (rc == -ENODATA))
+                RETURN(0);
+        else if (rc <= 0)
+                RETURN(rc);
+
+        buf->lb_len = rc;
+        entry = ((posix_acl_xattr_header *)(buf->lb_buf))->a_entries;
+        entry_count = (rc - 4) / sizeof(posix_acl_xattr_entry);
+        if (entry_count <= 0)
+                RETURN(0);
+       
+        cnext = mdd_object_child(cobj);
+	if (S_ISDIR(*mode)) {
+                rc = cnext->do_ops->do_xattr_set(env, cnext, buf,
+                                                 XATTR_NAME_ACL_DEFAULT,
+                                                 0, handle, BYPASS_CAPA);
+                if (rc)
+                        RETURN(rc);
+	}
+
+        rc = mdd_posix_acl_create_masq(entry, mode, entry_count);
+        if (rc < 0)
+                RETURN(rc);
+        else if (rc > 0)
+                rc = cnext->do_ops->do_xattr_set(env, cnext, buf,
+                                                 XATTR_NAME_ACL_ACCESS,
+                                                 0, handle, BYPASS_CAPA);
+        RETURN(rc);
+}
+#endif
 
 static int mdd_create_sanity_check(const struct lu_env *env,
                                    struct md_object *pobj,
@@ -2538,6 +2654,14 @@ static int mdd_create(const struct lu_env *env,
 
         created = 1;
 
+#ifdef CONFIG_FS_POSIX_ACL
+        rc = mdd_init_acl(env, mdd_pobj, son, &ma->ma_attr.la_mode, handle);
+        if (rc) {
+                mdd_write_unlock(env, son);
+                GOTO(cleanup, rc);
+        }
+#endif
+
         rc = __mdd_object_initialize(env, mdo2fid(mdd_pobj),
                                      son, ma, handle);
         mdd_write_unlock(env, son);
@@ -2588,7 +2712,7 @@ static int mdd_create(const struct lu_env *env,
 
         *la_copy = ma->ma_attr;
         la_copy->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal(env, mdd_pobj, la_copy, handle);
+        rc = mdd_attr_set_internal(env, mdd_pobj, la_copy, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -2690,7 +2814,7 @@ static int mdd_object_create(const struct lu_env *env,
 
                 CDEBUG(D_INFO, "Set slave ea "DFID", eadatalen %d, rc %d\n",
                        PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
-                rc = mdd_attr_set_internal(env, mdd_obj, &ma->ma_attr, handle);
+                rc = mdd_attr_set_internal(env, mdd_obj, &ma->ma_attr, handle, 1);
         } else
                 rc = __mdd_object_initialize(env, pfid, mdd_obj, ma, handle);
         EXIT;

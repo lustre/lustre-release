@@ -110,7 +110,8 @@ int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma);
 
 int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
-                          const struct lu_attr *attr, struct thandle *handle);
+                          const struct lu_attr *attr, struct thandle *handle,
+                          const int needacl);
 int mdd_get_cookie_size(const struct lu_env *env, struct mdd_device *mdd,
                         struct lov_mds_md *lmm);
 
