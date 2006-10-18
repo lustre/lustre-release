@@ -48,13 +48,24 @@ enum {
         SPLIT_SIZE =  64*1024
 };
 
+static struct lu_buf *cmm_buf_get(const struct lu_env *env, void *area,
+                                  ssize_t len)
+{
+        struct lu_buf *buf;
+
+        buf = &cmm_env_info(env)->cmi_buf;
+        buf->lb_buf = area;
+        buf->lb_len = len;
+        return buf;
+}
+
 int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
                    const char *name)
 {
         struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
-        struct lmv_stripe_md *lmv;
-        int rc = 0;
+        int rc;
         ENTRY;
+        /* try to get the LMV EA size */
         memset(ma, 0, sizeof(*ma));
         ma->ma_need = MA_INODE | MA_LMV;
         rc = mo_attr_get(env, mp, ma);
@@ -62,16 +73,33 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
                 RETURN(rc);
 
         if (ma->ma_valid & MA_LMV) {
+                struct lu_buf *buf;
                 int stripe;
-                lmv = ma->ma_lmv = lmv;
+
+                OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
+                if (ma->ma_lmv == NULL)
+                        RETURN(-ENOMEM);
+
+                /* get LMV EA */
+                buf = cmm_buf_get(env, ma->ma_lmv, ma->ma_lmv_size);
+                rc = mo_xattr_get(env, md_object_next(mp), buf,
+                                  MDS_LMV_MD_NAME);
+                if (rc)
+                        RETURN(rc);
+                
+                /* skip checking the slave dirs (mea_count == 0) */
+                if (ma->ma_lmv->mea_count != 0)
+                        RETURN(0);
                 /* 
-                 * Get stripe by name to check the name belongs to master
-                 * otherwise return the -ERESTART
-                 * Master stripe is always 0
+                 * Get stripe by name to check the name belongs
+                 * to master dir, otherwise return the -ERESTART
                  */
-                stripe = mea_name2idx(lmv, name, strlen(name));
+                stripe = mea_name2idx(ma->ma_lmv, name, strlen(name));
+                /* Master stripe is always 0 */
                 if (stripe != 0)
                         rc = -ERESTART;
+                
+                OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);
         }
         RETURN(rc);
 }
@@ -463,17 +491,6 @@ free_rdpg:
                 OBD_FREE_PTR(rdpg);
 
         return rc;
-}
-
-static struct lu_buf *cmm_buf_get(const struct lu_env *env, void *area,
-                                  ssize_t len)
-{
-        struct lu_buf *buf;
-
-        buf = &cmm_env_info(env)->cmi_buf;
-        buf->lb_buf = area;
-        buf->lb_len = len;
-        return buf;
 }
 
 int cml_try_to_split(const struct lu_env *env, struct md_object *mo)

@@ -361,7 +361,8 @@ static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
 {
         int rc;
         ENTRY;
-#ifdef HAVE_SPLIT_SUPPORT
+#if 0
+        //#ifdef HAVE_SPLIT_SUPPORT
         rc = cmm_mdsnum_check(env, mo_p, name);
         if (rc)
                 RETURN(rc);
