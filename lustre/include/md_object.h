@@ -93,11 +93,12 @@ struct md_capainfo *md_capainfo(const struct lu_env *env);
 
 /* metadata attributes */
 enum ma_valid {
-        MA_INODE  = (1 << 0),
-        MA_LOV    = (1 << 1),
-        MA_COOKIE = (1 << 2),
-        MA_FLAGS  = (1 << 3),
-        MA_LMV    = (1 << 4)
+        MA_INODE   = (1 << 0),
+        MA_LOV     = (1 << 1),
+        MA_COOKIE  = (1 << 2),
+        MA_FLAGS   = (1 << 3),
+        MA_LMV     = (1 << 4),
+        MA_ACL_DEF = (1 << 5)
 };
 
 struct md_attr {
@@ -197,7 +198,7 @@ struct md_dir_operations {
 
         int (*mdo_create)(const struct lu_env *env, struct md_object *pobj,
                           const char *name, struct md_object *child,
-                          const struct md_create_spec *spec,
+                          struct md_create_spec *spec,
                           struct md_attr *ma);
 
         /* This method is used for creating data object for this meta object*/
@@ -457,7 +458,7 @@ static inline int mdo_create(const struct lu_env *env,
                              struct md_object *p,
                              const char *child_name,
                              struct md_object *c,
-                             const struct md_create_spec *spc,
+                             struct md_create_spec *spc,
                              struct md_attr *at)
 {
         LASSERT(c->mo_dir_ops->mdo_create);

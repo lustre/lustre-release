@@ -34,6 +34,7 @@
 #include <obd.h>
 #include <lustre_fld.h>
 #include <md_object.h>
+#include <linux/lustre_acl.h>
 
 struct cmm_device {
         struct md_device       cmm_md_dev;
@@ -96,6 +97,7 @@ struct cmr_object {
 struct cmm_thread_info {
         struct md_attr  cmi_ma;
         struct lu_buf   cmi_buf;
+        char            cmi_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
 };
 
 static inline struct cmm_device *cmm_obj2dev(struct cmm_object *c)

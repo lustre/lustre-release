@@ -278,6 +278,12 @@ static int mdc_object_create(const struct lu_env *env,
                 symlen = spec->u.sp_ea.eadatalen;
                 mci->mci_opdata.fid1 = *(spec->u.sp_ea.fid);
                 mci->mci_opdata.flags |= MDS_CREATE_SLAVE_OBJ;
+#ifdef CONFIG_FS_POSIX_ACL
+        } else if (spec->sp_cr_flags & MDS_CREATE_RMT_ACL) {
+                symname = spec->u.sp_ea.eadata;
+                symlen = spec->u.sp_ea.eadatalen;
+                mci->mci_opdata.flags |= MDS_CREATE_RMT_ACL;
+#endif
         } else {
                 symname = spec->u.sp_symname;
                 symlen = symname ? strlen(symname) + 1 : 0;

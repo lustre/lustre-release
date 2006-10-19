@@ -1179,6 +1179,8 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
 #define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
 #define MDS_OPEN_JOIN_FILE     0400000000 /* open for join file*/
+#define MDS_CREATE_RMT_ACL    01000000000 /* indicate create on remote server
+                                           * with default ACL */
 #define MDS_CREATE_SLAVE_OBJ  02000000000 /* indicate create slave object
                                            * actually, this is for create, not
                                            * conflict with other open flags */

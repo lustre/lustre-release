@@ -741,6 +741,19 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
         mdt_set_capainfo(info, 1, rr->rr_fid2, BYPASS_CAPA);
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
+#ifdef CONFIG_FS_POSIX_ACL
+        if (sp->sp_cr_flags & MDS_CREATE_RMT_ACL) {
+                if (S_ISDIR(attr->la_mode))
+                        sp->u.sp_pfid = rr->rr_fid1;
+                req_capsule_extend(pill, &RQF_MDS_REINT_CREATE_RMT_ACL);
+                LASSERT(req_capsule_field_present(pill, &RMF_EADATA,
+                                                  RCL_CLIENT));
+                sp->u.sp_ea.eadata = req_capsule_client_get(pill, &RMF_EADATA);
+                sp->u.sp_ea.eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
+                                                             RCL_CLIENT);
+                RETURN(0);
+        }
+#endif
         if (S_ISDIR(attr->la_mode)) {
                 /* pass parent fid for cross-ref cases */
                 sp->u.sp_pfid = rr->rr_fid1;

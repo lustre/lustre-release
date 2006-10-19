@@ -373,7 +373,7 @@ static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
 
 static int cml_create(const struct lu_env *env,
                       struct md_object *mo_p, const char *child_name,
-                      struct md_object *mo_c, const struct md_create_spec *spec,
+                      struct md_object *mo_c, struct md_create_spec *spec,
                       struct md_attr *ma)
 {
         int rc;
@@ -768,7 +768,7 @@ static int cmr_lookup(const struct lu_env *env, struct md_object *mo_p,
  */
 static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
                       const char *child_name, struct md_object *mo_c,
-                      const struct md_create_spec *spec,
+                      struct md_create_spec *spec,
                       struct md_attr *ma)
 {
         struct cmm_thread_info *cmi;
@@ -781,6 +781,15 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
         LASSERT(cmi);
         tmp_ma = &cmi->cmi_ma;
         tmp_ma->ma_need = MA_INODE;
+
+#ifdef CONFIG_FS_POSIX_ACL
+        if (!S_ISLNK(ma->ma_attr.la_mode)) {
+                tmp_ma->ma_lmv = (struct lmv_stripe_md *)cmi->cmi_xattr_buf;
+                tmp_ma->ma_lmv_size = sizeof(cmi->cmi_xattr_buf);
+                tmp_ma->ma_need |= MA_ACL_DEF;
+        }
+#endif
+
         rc = mo_attr_get(env, md_object_next(mo_p), tmp_ma);
         if (rc)
                 RETURN(rc);
@@ -792,6 +801,15 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
                         ma->ma_attr.la_valid |= LA_MODE;
                 }
         }
+
+#ifdef CONFIG_FS_POSIX_ACL
+        if (tmp_ma->ma_valid & MA_ACL_DEF) {
+                spec->u.sp_ea.eadata = tmp_ma->ma_lmv;
+                spec->u.sp_ea.eadatalen = tmp_ma->ma_lmv_size;
+                spec->sp_cr_flags |= MDS_CREATE_RMT_ACL;
+        }
+#endif
+
         /* remote object creation and local name insert */
         rc = mo_object_create(env, md_object_next(mo_c), spec, ma);
         if (rc == 0) {
