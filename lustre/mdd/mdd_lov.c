@@ -138,6 +138,7 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
         obd->obd_upcall.onu_owner = mdd;
         obd->obd_upcall.onu_upcall = mdd_lov_update;
         mdd->mdd_obd_dev = obd;
+        /* update lov info if this mdd is setup for recoverying */
 class_detach:
         if (rc)
                 class_detach(obd, lcfg);

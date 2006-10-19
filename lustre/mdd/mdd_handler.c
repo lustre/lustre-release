@@ -45,58 +45,89 @@
 #include "mdd_internal.h"
 
 
-static struct thandle* mdd_trans_start(const struct lu_env *env,
-                                       struct mdd_device *);
-static void mdd_trans_stop(const struct lu_env *env,
-                           struct mdd_device *mdd, int rc,
-                           struct thandle *handle);
-static struct dt_object* mdd_object_child(struct mdd_object *o);
-static void __mdd_ref_add(const struct lu_env *env, struct mdd_object *obj,
-                          struct thandle *handle);
-static void __mdd_ref_del(const struct lu_env *env, struct mdd_object *obj,
-                          struct thandle *handle);
-static int __mdd_lookup(const struct lu_env *env,
-                        struct md_object *pobj,
-                        const char *name, const struct lu_fid* fid,
-                        int mask);
-static int __mdd_lookup_locked(const struct lu_env *env,
-                               struct md_object *pobj,
-                               const char *name, const struct lu_fid* fid,
-                               int mask);
 #if 0
 static int mdd_exec_permission_lite(const struct lu_env *env,
                                     struct mdd_object *obj);
 #endif
-static int __mdd_permission_internal(const struct lu_env *env,
-                                     struct mdd_object *obj,
-                                     int mask, int getattr);
-
-static struct md_object_operations mdd_obj_ops;
-static struct md_dir_operations    mdd_dir_ops;
-static struct lu_object_operations mdd_lu_obj_ops;
 
 static const char dot[] = ".";
 static const char dotdot[] = "..";
 
-struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len)
+static inline int mdd_is_immutable(struct mdd_object *obj)
 {
-        struct lu_buf *buf;
-
-        buf = &mdd_env_info(env)->mti_buf;
-        buf->lb_buf = area;
-        buf->lb_len = len;
-        return buf;
+        return obj->mod_flags & IMMUTE_OBJ;
 }
 
-const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
-                                       const void *area, ssize_t len)
+static inline int mdd_is_append(struct mdd_object *obj)
 {
-        struct lu_buf *buf;
+        return obj->mod_flags & APPEND_OBJ;
+}
 
-        buf = &mdd_env_info(env)->mti_buf;
-        buf->lb_buf = (void *)area;
-        buf->lb_len = len;
-        return buf;
+static inline void mdd_set_dead_obj(struct mdd_object *obj)
+{
+        if (obj)
+                obj->mod_flags |= DEAD_OBJ;
+}
+
+static inline int mdd_is_dead_obj(struct mdd_object *obj)
+{
+        return obj && obj->mod_flags & DEAD_OBJ;
+}
+
+static inline int __mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
+                               struct lu_attr *la, struct lustre_capa *capa)
+{
+        struct dt_object *next = mdd_object_child(obj);
+        LASSERT(lu_object_exists(mdd2lu_obj(obj)));
+        return next->do_ops->do_attr_get(env, next, la, capa);
+}
+
+static void mdd_flags_xlate(struct mdd_object *obj, __u32 flags)
+{
+        obj->mod_flags &= ~(APPEND_OBJ|IMMUTE_OBJ);
+
+        if (flags & LUSTRE_APPEND_FL)
+                obj->mod_flags |= APPEND_OBJ;
+
+        if (flags & LUSTRE_IMMUTABLE_FL)
+                obj->mod_flags |= IMMUTE_OBJ;
+}
+
+int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj)
+{
+        struct lu_attr *la = &mdd_env_info(env)->mti_la;
+        int rc;
+
+        ENTRY;
+        mdd_read_lock(env, obj);
+        rc = __mdd_la_get(env, obj, la, BYPASS_CAPA);
+        mdd_read_unlock(env, obj);
+        if (rc == 0)
+                mdd_flags_xlate(obj, la->la_flags);
+        RETURN(rc);
+}
+
+static void __mdd_ref_add(const struct lu_env *env, struct mdd_object *obj,
+                         struct thandle *handle)
+{
+        struct dt_object *next;
+
+        LASSERT(lu_object_exists(mdd2lu_obj(obj)));
+        next = mdd_object_child(obj);
+        next->do_ops->do_ref_add(env, next, handle);
+}
+
+static void
+__mdd_ref_del(const struct lu_env *env, struct mdd_object *obj,
+              struct thandle *handle)
+{
+        struct dt_object *next = mdd_object_child(obj);
+        ENTRY;
+
+        LASSERT(lu_object_exists(mdd2lu_obj(obj)));
+
+        next->do_ops->do_ref_del(env, next, handle);
+        EXIT;
 }
 
 #define mdd_get_group_info(group_info) do {             \
@@ -166,159 +197,206 @@ static int mdd_in_group_p(struct md_ucred *uc, gid_t grp)
         return rc;
 }
 
+#ifdef CONFIG_FS_POSIX_ACL
+static int mdd_posix_acl_permission(struct md_ucred *uc, struct lu_attr *la,
+                                    int want, posix_acl_xattr_entry *entry,
+                                    int count)
+{
+        posix_acl_xattr_entry *pa, *pe, *mask_obj;
+        int found = 0;
+        ENTRY;
+
+        if (count <= 0)
+                RETURN(-EACCES);
+
+        pa = &entry[0];
+        pe = &entry[count - 1];
+        for (; pa <= pe; pa++) {
+                switch(pa->e_tag) {
+                        case ACL_USER_OBJ:
+                                /* (May have been checked already) */
+                                if (la->la_uid == uc->mu_fsuid)
+                                        goto check_perm;
+                                break;
+                        case ACL_USER:
+                                if (pa->e_id == uc->mu_fsuid)
+                                        goto mask;
+                                break;
+                        case ACL_GROUP_OBJ:
+                                if (mdd_in_group_p(uc, la->la_gid)) {
+                                        found = 1;
+                                        if ((pa->e_perm & want) == want)
+                                                goto mask;
+                                }
+                                break;
+                        case ACL_GROUP:
+                                if (mdd_in_group_p(uc, pa->e_id)) {
+                                        found = 1;
+                                        if ((pa->e_perm & want) == want)
+                                                goto mask;
+                                }
+                                break;
+                        case ACL_MASK:
+                                break;
+                        case ACL_OTHER:
+                                if (found)
+                                        RETURN(-EACCES);
+                                else
+                                        goto check_perm;
+                        default:
+                                RETURN(-EIO);
+                }
+        }
+        RETURN(-EIO);
+
+mask:
+        for (mask_obj = pa + 1; mask_obj <= pe; mask_obj++) {
+                if (mask_obj->e_tag == ACL_MASK) {
+                        if ((pa->e_perm & mask_obj->e_perm & want) == want)
+                                RETURN(0);
+
+                        RETURN(-EACCES);
+                }
+        }
+
+check_perm:
+        if ((pa->e_perm & want) == want)
+                RETURN(0);
+
+        RETURN(-EACCES);
+}
+#endif
+
+static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
+                         struct lu_attr* la, int mask)
+{
+#ifdef CONFIG_FS_POSIX_ACL
+        struct dt_object *next;
+        struct lu_buf    *buf = &mdd_env_info(env)->mti_buf;
+        struct md_ucred  *uc  = md_ucred(env);
+        posix_acl_xattr_entry *entry;
+        int entry_count;
+        int rc;
+        ENTRY;
+
+        next = mdd_object_child(obj);
+
+        buf->lb_buf = mdd_env_info(env)->mti_xattr_buf;
+        buf->lb_len = sizeof(mdd_env_info(env)->mti_xattr_buf);
+        rc = next->do_ops->do_xattr_get(env, next, buf,
+                                        XATTR_NAME_ACL_ACCESS,
+                                        mdd_object_capa(env, obj));
+        if (rc <= 0)
+                RETURN(rc ? : -EACCES);
+
+        entry = ((posix_acl_xattr_header *)(buf->lb_buf))->a_entries;
+        entry_count = (rc - 4) / sizeof(posix_acl_xattr_entry);
+
+        rc = mdd_posix_acl_permission(uc, la, mask, entry, entry_count);
+        RETURN(rc);
+#else
+        ENTRY;
+        RETURN(-EAGAIN);
+#endif
+}
+
+#define mdd_cap_t(x) (x)
+
+#define MDD_CAP_TO_MASK(x) (1 << (x))
+
+#define mdd_cap_raised(c, flag) (mdd_cap_t(c) & MDD_CAP_TO_MASK(flag))
+
+/* capable() is copied from linux kernel! */
+static inline int mdd_capable(struct md_ucred *uc, int cap)
+{
+        if (mdd_cap_raised(uc->mu_cap, cap))
+                return 1;
+        return 0;
+}
+
+static int __mdd_permission_internal(const struct lu_env *env,
+                                     struct mdd_object *obj,
+                                     int mask, int getattr)
+{
+        struct lu_attr  *la = &mdd_env_info(env)->mti_la;
+        struct md_ucred *uc = md_ucred(env);
+        __u32 mode;
+        int rc;
+
+        ENTRY;
+
+        if (mask == 0)
+                RETURN(0);
+
+        /* These means unnecessary for permission check */
+        if ((uc == NULL) || (uc->mu_valid == UCRED_INIT))
+                RETURN(0);
+
+        /* Invalid user credit */
+        if (uc->mu_valid == UCRED_INVALID)
+                RETURN(-EACCES);
+
+        /*
+         * Nobody gets write access to an immutable file.
+         */
+        if ((mask & MAY_WRITE) && mdd_is_immutable(obj))
+                RETURN(-EACCES);
+
+        if (getattr) {
+                rc = __mdd_la_get(env, obj, la, BYPASS_CAPA);
+                if (rc)
+                        RETURN(rc);
+        }
+
+        mode = la->la_mode;
+        if (uc->mu_fsuid == la->la_uid) {
+                mode >>= 6;
+        } else {
+                if (mode & S_IRWXG) {
+                        rc = mdd_check_acl(env, obj, la, mask);
+                        if (rc == -EACCES)
+                                goto check_capabilities;
+                        else if ((rc != -EAGAIN) && (rc != -EOPNOTSUPP) &&
+                                 (rc != -ENODATA))
+                                RETURN(rc);
+                }
+                if (mdd_in_group_p(uc, la->la_gid))
+                        mode >>= 3;
+        }
+
+        /*
+         * If the DACs are ok we don't need any capability check.
+         */
+        if (((mode & mask & S_IRWXO) == mask))
+                RETURN(0);
+
+check_capabilities:
+
+        /*
+         * Read/write DACs are always overridable.
+         * Executable DACs are overridable if at least one exec bit is set.
+         * Dir's DACs are always overridable.
+         */
+        if (!(mask & MAY_EXEC) ||
+            (la->la_mode & S_IXUGO) || S_ISDIR(la->la_mode))
+                if (mdd_capable(uc, CAP_DAC_OVERRIDE))
+                        RETURN(0);
+
+        /*
+         * Searching includes executable on directories, else just read.
+         */
+        if ((mask == MAY_READ) ||
+            (S_ISDIR(la->la_mode) && !(mask & MAY_WRITE)))
+                if (mdd_capable(uc, CAP_DAC_READ_SEARCH))
+                        RETURN(0);
+
+        RETURN(-EACCES);
+}
+
 static inline int mdd_permission_internal(const struct lu_env *env,
                                           struct mdd_object *obj, int mask)
 {
         return __mdd_permission_internal(env, obj, mask, 1);
-}
-
-struct mdd_thread_info *mdd_env_info(const struct lu_env *env)
-{
-        struct mdd_thread_info *info;
-
-        info = lu_context_key_get(&env->le_ctx, &mdd_thread_key);
-        LASSERT(info != NULL);
-        return info;
-}
-
-struct lu_object *mdd_object_alloc(const struct lu_env *env,
-                                   const struct lu_object_header *hdr,
-                                   struct lu_device *d)
-{
-        struct mdd_object *mdd_obj;
-
-        OBD_ALLOC_PTR(mdd_obj);
-        if (mdd_obj != NULL) {
-                struct lu_object *o;
-
-                o = mdd2lu_obj(mdd_obj);
-                lu_object_init(o, NULL, d);
-                mdd_obj->mod_obj.mo_ops = &mdd_obj_ops;
-                mdd_obj->mod_obj.mo_dir_ops = &mdd_dir_ops;
-                mdd_obj->mod_count = 0;
-                o->lo_ops = &mdd_lu_obj_ops;
-                return o;
-        } else {
-                return NULL;
-        }
-}
-
-static int mdd_object_init(const struct lu_env *env, struct lu_object *o)
-{
-	struct mdd_device *d = lu2mdd_dev(o->lo_dev);
-	struct lu_object  *below;
-        struct lu_device  *under;
-        ENTRY;
-
-	under = &d->mdd_child->dd_lu_dev;
-	below = under->ld_ops->ldo_object_alloc(env, o->lo_header, under);
-
-        if (below == NULL)
-		RETURN(-ENOMEM);
-
-        lu_object_add(o, below);
-        RETURN(0);
-}
-
-static int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj);
-
-static int mdd_object_start(const struct lu_env *env, struct lu_object *o)
-{
-        if (lu_object_exists(o))
-                return mdd_get_flags(env, lu2mdd_obj(o));
-        else
-                return 0;
-}
-
-static void mdd_object_free(const struct lu_env *env, struct lu_object *o)
-{
-        struct mdd_object *mdd = lu2mdd_obj(o);
-	
-        lu_object_fini(o);
-        OBD_FREE_PTR(mdd);
-}
-
-static int mdd_object_print(const struct lu_env *env, void *cookie,
-                            lu_printer_t p, const struct lu_object *o)
-{
-        return (*p)(env, cookie, LUSTRE_MDD_NAME"-object@%p", o);
-}
-
-/* orphan handling is here */
-static void mdd_object_delete(const struct lu_env *env,
-                               struct lu_object *o)
-{
-        struct mdd_object *mdd_obj = lu2mdd_obj(o);
-        struct thandle *handle = NULL;
-        ENTRY;
-
-        if (lu2mdd_dev(o->lo_dev)->mdd_orphans == NULL)
-                return;
-
-        if (test_bit(LU_OBJECT_ORPHAN, &o->lo_header->loh_flags)) {
-                mdd_txn_param_build(env, MDD_TXN_INDEX_DELETE_OP);
-                handle = mdd_trans_start(env, lu2mdd_dev(o->lo_dev));
-                if (IS_ERR(handle))
-                        CERROR("Cannot get thandle\n");
-                else {
-                        mdd_write_lock(env, mdd_obj);
-                        /* let's remove obj from the orphan list */
-                        __mdd_orphan_del(env, mdd_obj, handle);
-                        mdd_write_unlock(env, mdd_obj);
-                        mdd_trans_stop(env, lu2mdd_dev(o->lo_dev),
-                                       0, handle);
-                }
-        }
-}
-
-static struct lu_object_operations mdd_lu_obj_ops = {
-	.loo_object_init    = mdd_object_init,
-	.loo_object_start   = mdd_object_start,
-	.loo_object_free    = mdd_object_free,
-	.loo_object_print   = mdd_object_print,
-        .loo_object_delete  = mdd_object_delete
-};
-
-struct mdd_object *mdd_object_find(const struct lu_env *env,
-                                   struct mdd_device *d,
-                                   const struct lu_fid *f)
-{
-        struct lu_object *o, *lo;
-        struct mdd_object *m;
-        ENTRY;
-
-        o = lu_object_find(env, mdd2lu_dev(d)->ld_site, f);
-        if (IS_ERR(o))
-                m = (struct mdd_object *)o;
-        else {
-                lo = lu_object_locate(o->lo_header, mdd2lu_dev(d)->ld_type);
-                /* remote object can't be located and should be put then */
-                if (lo == NULL)
-                        lu_object_put(env, o);
-                m = lu2mdd_obj(lo);
-        }
-        RETURN(m);
-}
-
-static inline int mdd_is_immutable(struct mdd_object *obj)
-{
-        return obj->mod_flags & IMMUTE_OBJ;
-}
-
-static inline int mdd_is_append(struct mdd_object *obj)
-{
-        return obj->mod_flags & APPEND_OBJ;
-}
-
-static inline void mdd_set_dead_obj(struct mdd_object *obj)
-{
-        if (obj)
-                obj->mod_flags |= DEAD_OBJ;
-}
-
-static inline int mdd_is_dead_obj(struct mdd_object *obj)
-{
-        return obj && obj->mod_flags & DEAD_OBJ;
 }
 
 /*Check whether it may create the cobj under the pobj*/
@@ -341,53 +419,6 @@ static int mdd_may_create(const struct lu_env *env,
                                              MAY_WRITE | MAY_EXEC);
 
         RETURN(rc);
-}
-
-static inline int __mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
-                               struct lu_attr *la, struct lustre_capa *capa)
-{
-        struct dt_object *next = mdd_object_child(obj);
-        LASSERT(lu_object_exists(mdd2lu_obj(obj)));
-        return next->do_ops->do_attr_get(env, next, la, capa);
-}
-
-static void mdd_flags_xlate(struct mdd_object *obj, __u32 flags)
-{
-        obj->mod_flags &= ~(APPEND_OBJ|IMMUTE_OBJ);
-
-        if (flags & LUSTRE_APPEND_FL)
-                obj->mod_flags |= APPEND_OBJ;
-
-        if (flags & LUSTRE_IMMUTABLE_FL)
-                obj->mod_flags |= IMMUTE_OBJ;
-}
-
-static int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj)
-{
-        struct lu_attr *la = &mdd_env_info(env)->mti_la;
-        int rc;
-
-        ENTRY;
-        mdd_read_lock(env, obj);
-        rc = __mdd_la_get(env, obj, la, BYPASS_CAPA);
-        mdd_read_unlock(env, obj);
-        if (rc == 0)
-                mdd_flags_xlate(obj, la->la_flags);
-        RETURN(rc);
-}
-
-#define mdd_cap_t(x) (x)
-
-#define MDD_CAP_TO_MASK(x) (1 << (x))
-
-#define mdd_cap_raised(c, flag) (mdd_cap_t(c) & MDD_CAP_TO_MASK(flag))
-
-/* capable() is copied from linux kernel! */
-static inline int mdd_capable(struct md_ucred *uc, int cap)
-{
-        if (mdd_cap_raised(uc->mu_cap, cap))
-                return 1;
-        return 0;
 }
 
 /*
@@ -694,22 +725,6 @@ static void mdd_unlock2(const struct lu_env *env,
 {
         mdd_write_unlock(env, o1);
         mdd_write_unlock(env, o0);
-}
-
-static struct thandle* mdd_trans_start(const struct lu_env *env,
-                                       struct mdd_device *mdd)
-{
-        struct txn_param *p = &mdd_env_info(env)->mti_param;
-
-        return mdd_child_ops(mdd)->dt_trans_start(env, mdd->mdd_child, p);
-}
-
-static void mdd_trans_stop(const struct lu_env *env,
-                           struct mdd_device *mdd, int result,
-                           struct thandle *handle)
-{
-        handle->th_result = result;
-        mdd_child_ops(mdd)->dt_trans_stop(env, handle);
 }
 
 static int __mdd_object_create(const struct lu_env *env,
@@ -1593,12 +1608,37 @@ cleanup:
         return rc;
 }
 
-static int mdd_parent_fid(const struct lu_env *env,
-                          struct mdd_object *obj,
+static int __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
+                        const char *name, const struct lu_fid* fid, int mask);
+
+static int
+__mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
+                    const char *name, const struct lu_fid* fid, int mask)
+{
+        struct mdd_object *mdd_obj = md2mdd_obj(pobj);
+        int rc;
+
+        mdd_read_lock(env, mdd_obj);
+        rc = __mdd_lookup(env, pobj, name, fid, mask);
+        mdd_read_unlock(env, mdd_obj);
+
+       return rc;
+}
+
+static int mdd_lookup(const struct lu_env *env,
+                      struct md_object *pobj, const char *name,
+                      struct lu_fid* fid)
+{
+        int rc;
+        ENTRY;
+        rc = __mdd_lookup_locked(env, pobj, name, fid, MAY_EXEC);
+        RETURN(rc);
+}
+
+static int mdd_parent_fid(const struct lu_env *env, struct mdd_object *obj,
                           struct lu_fid *fid)
 {
-        return __mdd_lookup_locked(env, &obj->mod_obj,
-                                   dotdot, fid, 0);
+        return __mdd_lookup_locked(env, &obj->mod_obj, dotdot, fid, 0);
 }
 
 /*
@@ -1879,30 +1919,6 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         else
                 rc = -ENOTDIR;
 
-        RETURN(rc);
-}
-
-static int
-__mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
-                    const char *name, const struct lu_fid* fid, int mask)
-{
-        struct mdd_object *mdd_obj = md2mdd_obj(pobj);
-        int rc;
-
-        mdd_read_lock(env, mdd_obj);
-        rc = __mdd_lookup(env, pobj, name, fid, mask);
-        mdd_read_unlock(env, mdd_obj);
-
-       return rc;
-}
-
-static int mdd_lookup(const struct lu_env *env,
-                      struct md_object *pobj, const char *name,
-                      struct lu_fid* fid)
-{
-        int rc;
-        ENTRY;
-        rc = __mdd_lookup_locked(env, pobj, name, fid, MAY_EXEC);
         RETURN(rc);
 }
 
@@ -2717,16 +2733,6 @@ cleanup:
         RETURN(rc);
 }
 
-static void __mdd_ref_add(const struct lu_env *env, struct mdd_object *obj,
-                         struct thandle *handle)
-{
-        struct dt_object *next;
-
-        LASSERT(lu_object_exists(mdd2lu_obj(obj)));
-        next = mdd_object_child(obj);
-        next->do_ops->do_ref_add(env, next, handle);
-}
-
 /*
  * XXX: if permission check is needed here?
  */
@@ -2753,19 +2759,6 @@ static int mdd_ref_add(const struct lu_env *env,
         mdd_trans_stop(env, mdd, 0, handle);
 
         RETURN(0);
-}
-
-static void
-__mdd_ref_del(const struct lu_env *env, struct mdd_object *obj,
-              struct thandle *handle)
-{
-        struct dt_object *next = mdd_object_child(obj);
-        ENTRY;
-
-        LASSERT(lu_object_exists(mdd2lu_obj(obj)));
-
-        next->do_ops->do_ref_del(env, next, handle);
-        EXIT;
 }
 
 /* do NOT or the MAY_*'s, you'll get the weakest */
@@ -2936,109 +2929,6 @@ out_unlock:
         RETURN(rc);
 }
 
-#ifdef CONFIG_FS_POSIX_ACL
-static int mdd_posix_acl_permission(struct md_ucred *uc, struct lu_attr *la,
-                                    int want, posix_acl_xattr_entry *entry,
-                                    int count)
-{
-        posix_acl_xattr_entry *pa, *pe, *mask_obj;
-        int found = 0;
-        ENTRY;
-
-        if (count <= 0)
-                RETURN(-EACCES);
-
-        pa = &entry[0];
-        pe = &entry[count - 1];
-        for (; pa <= pe; pa++) {
-                switch(pa->e_tag) {
-                        case ACL_USER_OBJ:
-                                /* (May have been checked already) */
-                                if (la->la_uid == uc->mu_fsuid)
-                                        goto check_perm;
-                                break;
-                        case ACL_USER:
-                                if (pa->e_id == uc->mu_fsuid)
-                                        goto mask;
-                                break;
-                        case ACL_GROUP_OBJ:
-                                if (mdd_in_group_p(uc, la->la_gid)) {
-                                        found = 1;
-                                        if ((pa->e_perm & want) == want)
-                                                goto mask;
-                                }
-                                break;
-                        case ACL_GROUP:
-                                if (mdd_in_group_p(uc, pa->e_id)) {
-                                        found = 1;
-                                        if ((pa->e_perm & want) == want)
-                                                goto mask;
-                                }
-                                break;
-                        case ACL_MASK:
-                                break;
-                        case ACL_OTHER:
-                                if (found)
-                                        RETURN(-EACCES);
-                                else
-                                        goto check_perm;
-                        default:
-                                RETURN(-EIO);
-                }
-        }
-        RETURN(-EIO);
-
-mask:
-        for (mask_obj = pa + 1; mask_obj <= pe; mask_obj++) {
-                if (mask_obj->e_tag == ACL_MASK) {
-                        if ((pa->e_perm & mask_obj->e_perm & want) == want)
-                                RETURN(0);
-
-                        RETURN(-EACCES);
-                }
-        }
-
-check_perm:
-        if ((pa->e_perm & want) == want)
-                RETURN(0);
-
-        RETURN(-EACCES);
-}
-#endif
-
-static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
-                         struct lu_attr* la, int mask)
-{
-#ifdef CONFIG_FS_POSIX_ACL
-        struct dt_object *next;
-        struct lu_buf    *buf = &mdd_env_info(env)->mti_buf;
-        struct md_ucred  *uc  = md_ucred(env);
-        posix_acl_xattr_entry *entry;
-        int entry_count;
-        int rc;
-        ENTRY;
-
-        next = mdd_object_child(obj);
-
-        buf->lb_buf = mdd_env_info(env)->mti_xattr_buf;
-        buf->lb_len = sizeof(mdd_env_info(env)->mti_xattr_buf);
-        rc = next->do_ops->do_xattr_get(env, next, buf,
-                                        XATTR_NAME_ACL_ACCESS,
-                                        mdd_object_capa(env, obj));
-        if (rc <= 0)
-                RETURN(rc ? : -EACCES);
-
-        entry = ((posix_acl_xattr_header *)(buf->lb_buf))->a_entries;
-        entry_count = (rc - 4) / sizeof(posix_acl_xattr_entry);
-
-        rc = mdd_posix_acl_permission(uc, la, mask, entry, entry_count);
-        RETURN(rc);
-#else
-        ENTRY;
-        RETURN(-EAGAIN);
-#endif
-}
-
 #if 0
 static int mdd_exec_permission_lite(const struct lu_env *env,
                                     struct mdd_object *obj)
@@ -3080,85 +2970,6 @@ static int mdd_exec_permission_lite(const struct lu_env *env,
         RETURN(-EACCES);
 }
 #endif
-
-static int __mdd_permission_internal(const struct lu_env *env,
-                                     struct mdd_object *obj,
-                                     int mask, int getattr)
-{
-        struct lu_attr  *la = &mdd_env_info(env)->mti_la;
-        struct md_ucred *uc = md_ucred(env);
-        __u32 mode;
-        int rc;
-
-        ENTRY;
-
-        if (mask == 0)
-                RETURN(0);
-
-        /* These means unnecessary for permission check */
-        if ((uc == NULL) || (uc->mu_valid == UCRED_INIT))
-                RETURN(0);
-
-        /* Invalid user credit */
-        if (uc->mu_valid == UCRED_INVALID)
-                RETURN(-EACCES);
-
-        /*
-         * Nobody gets write access to an immutable file.
-         */
-        if ((mask & MAY_WRITE) && mdd_is_immutable(obj))
-                RETURN(-EACCES);
-
-        if (getattr) {
-                rc = __mdd_la_get(env, obj, la, BYPASS_CAPA);
-                if (rc)
-                        RETURN(rc);
-        }
-
-        mode = la->la_mode;
-        if (uc->mu_fsuid == la->la_uid) {
-                mode >>= 6;
-        } else {
-                if (mode & S_IRWXG) {
-                        rc = mdd_check_acl(env, obj, la, mask);
-                        if (rc == -EACCES)
-                                goto check_capabilities;
-                        else if ((rc != -EAGAIN) && (rc != -EOPNOTSUPP) &&
-                                 (rc != -ENODATA))
-                                RETURN(rc);
-                }
-                if (mdd_in_group_p(uc, la->la_gid))
-                        mode >>= 3;
-        }
-
-        /*
-         * If the DACs are ok we don't need any capability check.
-         */
-        if (((mode & mask & S_IRWXO) == mask))
-                RETURN(0);
-
-check_capabilities:
-
-        /*
-         * Read/write DACs are always overridable.
-         * Executable DACs are overridable if at least one exec bit is set.
-         * Dir's DACs are always overridable.
-         */
-        if (!(mask & MAY_EXEC) ||
-            (la->la_mode & S_IXUGO) || S_ISDIR(la->la_mode))
-                if (mdd_capable(uc, CAP_DAC_OVERRIDE))
-                        RETURN(0);
-
-        /*
-         * Searching includes executable on directories, else just read.
-         */
-        if ((mask == MAY_READ) ||
-            (S_ISDIR(la->la_mode) && !(mask & MAY_WRITE)))
-                if (mdd_capable(uc, CAP_DAC_READ_SEARCH))
-                        RETURN(0);
-
-        RETURN(-EACCES);
-}
 
 static inline int mdd_permission_internal_locked(const struct lu_env *env,
                                                  struct mdd_object *obj,
@@ -3209,7 +3020,7 @@ static int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
         RETURN(rc);
 }
 
-static struct md_dir_operations mdd_dir_ops = {
+struct md_dir_operations mdd_dir_ops = {
         .mdo_is_subdir     = mdd_is_subdir,
         .mdo_lookup        = mdd_lookup,
         .mdo_create        = mdd_create,
@@ -3222,7 +3033,7 @@ static struct md_dir_operations mdd_dir_ops = {
         .mdo_create_data   = mdd_create_data
 };
 
-static struct md_object_operations mdd_obj_ops = {
+struct md_object_operations mdd_obj_ops = {
         .moo_permission    = mdd_permission,
         .moo_attr_get      = mdd_attr_get,
         .moo_attr_set      = mdd_attr_set,

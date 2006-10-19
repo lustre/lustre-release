@@ -228,4 +228,19 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd)
         RETURN(0);
 }
 
+struct thandle* mdd_trans_start(const struct lu_env *env, 
+                                struct mdd_device *mdd)
+{
+        struct txn_param *p = &mdd_env_info(env)->mti_param;
+
+        return mdd_child_ops(mdd)->dt_trans_start(env, mdd->mdd_child, p);
+}
+
+void mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd,
+                    int result, struct thandle *handle)
+{
+        handle->th_result = result;
+        mdd_child_ops(mdd)->dt_trans_stop(env, handle);
+}
+
 

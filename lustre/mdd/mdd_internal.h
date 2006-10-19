@@ -140,23 +140,69 @@ int orph_index_init(const struct lu_env *env, struct mdd_device *mdd);
 void orph_index_fini(const struct lu_env *env, struct mdd_device *mdd);
 int __mdd_object_kill(const struct lu_env *, struct mdd_object *,
                       struct md_attr *);
-struct mdd_object *mdd_object_find(const struct lu_env *,
-                                   struct mdd_device *,
-                                   const struct lu_fid *);
 int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd);
 
 int mdd_procfs_init(struct mdd_device *mdd);
 int mdd_procfs_fini(struct mdd_device *mdd);
-void mdd_lproc_time_start(struct mdd_device *mdd, struct timeval *start, int op);
+void mdd_lproc_time_start(struct mdd_device *mdd, struct timeval *start, 
+                          int op);
 void mdd_lproc_time_end(struct mdd_device *mdd, struct timeval *start, int op);
 
+int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj);
+
+extern struct md_dir_operations    mdd_dir_ops;
+extern struct md_object_operations mdd_obj_ops;
+
+/* mdd_trans.c */
+enum mdd_txn_op {
+        MDD_TXN_OBJECT_DESTROY_OP,
+        MDD_TXN_OBJECT_CREATE_OP,
+        MDD_TXN_ATTR_SET_OP,
+        MDD_TXN_XATTR_SET_OP,
+        MDD_TXN_INDEX_INSERT_OP,
+        MDD_TXN_INDEX_DELETE_OP,
+        MDD_TXN_LINK_OP,
+        MDD_TXN_UNLINK_OP,
+        MDD_TXN_RENAME_OP,
+        MDD_TXN_RENAME_TGT_OP,
+        MDD_TXN_CREATE_DATA_OP,
+        MDD_TXN_MKDIR_OP
+};
+
+void mdd_txn_param_build(const struct lu_env *env, enum mdd_txn_op op);
+        
 static inline void mdd_object_put(const struct lu_env *env,
                                   struct mdd_object *o)
 {
         lu_object_put(env, &o->mod_obj.mo_lu);
 }
 
+struct thandle* mdd_trans_start(const struct lu_env *env,
+                                       struct mdd_device *);
+void mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd, 
+                    int rc, struct thandle *handle);
+int mdd_txn_start_cb(const struct lu_env *env, struct txn_param *param, 
+                     void *cookie);
+
+int mdd_txn_stop_cb(const struct lu_env *env, struct thandle *txn, 
+                    void *cookie);
+
+int mdd_txn_commit_cb(const struct lu_env *env, struct thandle *txn, 
+                      void *cookie);
+
+/* mdd_device.c */
+struct lu_object *mdd_object_alloc(const struct lu_env *env,
+                                   const struct lu_object_header *hdr,
+                                   struct lu_device *d);
+
+/* mdd_object.c */
+extern struct lu_context_key mdd_thread_key;
 extern struct lu_device_operations mdd_lu_ops;
+
+struct mdd_object *mdd_object_find(const struct lu_env *env,
+                                   struct mdd_device *d,
+                                   const struct lu_fid *f);
+
 static inline int lu_device_is_mdd(struct lu_device *d)
 {
 	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mdd_lu_ops);
