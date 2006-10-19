@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1316 @@
+@@ -0,0 +1,1321 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -385,8 +385,18 @@ Index: iam/fs/ext3/iam.c
 +	return err;
 +}
 +
++static void iam_leaf_unlock(struct iam_leaf *leaf)
++{
++        if (leaf->il_lock != NULL) {
++                dx_unlock_htree(iam_leaf_container(leaf)->ic_object,
++                                leaf->il_lock);
++                leaf->il_lock = NULL;
++        }
++}
++
 +static void iam_leaf_fini(struct iam_leaf *leaf)
 +{
++        iam_leaf_unlock(leaf);
 +        if (leaf->il_path != NULL) {
 +                assert_inv(ergo(leaf->il_bh != NULL, iam_leaf_check(leaf)));
 +                iam_leaf_ops(leaf)->fini(leaf);
@@ -573,22 +583,6 @@ Index: iam/fs/ext3/iam.c
 +        up_read(&ic->ic_sem);
 +}
 +
-+static void iam_it_lock(struct iam_iterator *it)
-+{
-+        if (it->ii_flags&IAM_IT_WRITE)
-+                iam_container_write_lock(iam_it_container(it));
-+        else
-+                iam_container_read_lock(iam_it_container(it));
-+}
-+
-+static void iam_it_unlock(struct iam_iterator *it)
-+{
-+	if (it->ii_flags&IAM_IT_WRITE)
-+		iam_container_write_unlock(iam_it_container(it));
-+	else
-+		iam_container_read_unlock(iam_it_container(it));
-+}
-+
 +/*
 + * Initialize iterator to IAM_IT_DETACHED state.
 + *
@@ -631,7 +625,7 @@ Index: iam/fs/ext3/iam.c
 +	c = path->ip_container;
 +	leaf = &path->ip_leaf;
 +	descr = iam_path_descr(path);
-+	result = dx_lookup(path);
++	result = dx_lookup_lock(path, &leaf->il_lock, DLT_WRITE);
 +        assert_inv(iam_path_check(path));
 +	if (result == 0) {
 +		result = iam_leaf_load(path);
@@ -644,6 +638,8 @@ Index: iam/fs/ext3/iam.c
 +                                result = iam_leaf_ops(leaf)->
 +                                        lookup(leaf, path->ip_key_target);
 +                }
++                if (result < 0)
++                        iam_leaf_unlock(leaf);
 +	}
 +	return result;
 +}
@@ -656,7 +652,6 @@ Index: iam/fs/ext3/iam.c
 +        int result;
 +        assert_corr(it_state(it) == IAM_IT_DETACHED);
 +
-+        iam_it_lock(it);
 +        result = iam_path_lookup(&it->ii_path, index);
 +        if (result >= 0) {
 +                switch (result) {
@@ -676,8 +671,7 @@ Index: iam/fs/ext3/iam.c
 +                default:
 +                        assert(0);
 +                }
-+        } else
-+                iam_it_unlock(it);
++        }
 +        /*
 +         * See iam_it_get_exact() for explanation.
 +         */
@@ -790,7 +784,6 @@ Index: iam/fs/ext3/iam.c
 +        if (it->ii_state != IAM_IT_DETACHED) {
 +                it->ii_state = IAM_IT_DETACHED;
 +		iam_leaf_fini(&it->ii_path.ip_leaf);
-+                iam_it_unlock(it);
 +        }
 +}
 +EXPORT_SYMBOL(iam_it_put);
@@ -835,7 +828,16 @@ Index: iam/fs/ext3/iam.c
 +                        /* advance index portion of the path */
 +                        result = iam_index_next(iam_it_container(it), path);
 +                        if (result == 1) {
++                                struct dynlock_handle *lh;
++                                /*
++                                 * Lock next leaf, then release lock on the
++                                 * current one.
++                                 */
++                                lh = dx_lock_htree(iam_path_obj(path),
++                                                   path->ip_frame->leaf,
++                                                   DLT_WRITE);
 +                                iam_leaf_fini(leaf);
++                                leaf->il_lock = lh;
 +                                result = iam_leaf_load(path);
 +                                if (result == 0)
 +                                        iam_leaf_start(leaf);
@@ -1017,7 +1019,9 @@ Index: iam/fs/ext3/iam.c
 +        err = iam_txn_add(handle, path, leaf->il_bh);
 +        if (err == 0) {
 +                if (!iam_leaf_can_add(leaf, k, r)) {
-+                        err = split_index_node(handle, path);
++                        struct dynlock_handle *lh = NULL;
++
++                        err = split_index_node(handle, path, &lh);
 +                        assert_inv(iam_path_check(path));
 +                        if (err == 0) {
 +                                err = iam_new_leaf(handle, leaf);
@@ -1030,6 +1034,7 @@ Index: iam/fs/ext3/iam.c
 +                                        err = iam_txn_dirty(handle, path,
 +                                                            path->ip_frame->bh);
 +                        }
++                        dx_unlock_htree(iam_path_obj(path), lh);
 +                }
 +                if (err == 0) {
 +                        iam_leaf_rec_add(leaf, k, r);
@@ -1863,9 +1868,9 @@ Index: iam/fs/ext3/iam_htree.c
 +		ipc->ipc_hinfo->hash_version = root->info.hash_version;
 +		ipc->ipc_hinfo->seed = EXT3_SB(sb)->s_hash_seed;
 +                name = NULL;
-+		if (ipc->ipc_dentry) {
-+                        name = ipc->ipc_dentry->d_name.name;
-+                        namelen = ipc->ipc_dentry->d_name.len;
++		if (ipc->ipc_qstr) {
++                        name = ipc->ipc_qstr->name;
++                        namelen = ipc->ipc_qstr->len;
 +                } else if (ipc->ipc_hinfo == &ipc->ipc_hinfo_area){
 +                        name = (const char *)path->ip_key_target;
 +                        namelen = strlen(name);
