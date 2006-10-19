@@ -107,6 +107,8 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                void *md, int *md_size, const char *name);
 int mdd_get_md_locked(const struct lu_env *env, struct mdd_object *obj,
                       void *md, int *md_size, const char *name);
+int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
+               struct lu_attr *la, struct lustre_capa *capa);
 
 int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma);
@@ -202,6 +204,37 @@ extern struct lu_device_operations mdd_lu_ops;
 struct mdd_object *mdd_object_find(const struct lu_env *env,
                                    struct mdd_device *d,
                                    const struct lu_fid *f);
+/* mdd_permission.c */
+#define mdd_cap_t(x) (x)
+
+#define MDD_CAP_TO_MASK(x) (1 << (x))
+
+#define mdd_cap_raised(c, flag) (mdd_cap_t(c) & MDD_CAP_TO_MASK(flag))
+
+/* capable() is copied from linux kernel! */
+static inline int mdd_capable(struct md_ucred *uc, int cap)
+{
+        if (mdd_cap_raised(uc->mu_cap, cap))
+                return 1;
+        return 0;
+}
+
+int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj, 
+                            int mask);
+int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
+                              int mask, int getattr);
+int mdd_in_group_p(struct md_ucred *uc, gid_t grp);
+int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode, 
+                  struct thandle *handle);
+int mdd_acl_def_get(const struct lu_env *env, struct mdd_object *mdd_obj, 
+                    struct md_attr *ma);
+int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
+                 struct mdd_object *cobj, __u32 *mode, struct thandle *handle);
+int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
+                   struct lu_buf *buf, __u32 *mode, struct thandle *handle);
+int mdd_permission(const struct lu_env *env, struct md_object *obj, int mask);
+int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
+                 struct lustre_capa *capa, int renewal);
 
 static inline int lu_device_is_mdd(struct lu_device *d)
 {
@@ -277,6 +310,11 @@ static inline int mdd_lov_cookiesize(const struct lu_env *env,
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
         return obd->u.mds.mds_max_cookiesize;
+}
+
+static inline int mdd_is_immutable(struct mdd_object *obj)
+{
+        return obj->mod_flags & IMMUTE_OBJ;
 }
 
 static inline struct lustre_capa *mdd_object_capa(const struct lu_env *env,

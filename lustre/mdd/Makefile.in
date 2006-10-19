@@ -1,6 +1,6 @@
 MODULES := mdd
 mdd-objs := mdd_handler.o mdd_lov.o mdd_orphans.o mdd_lproc.o
-mdd-objs += mdd_device.o mdd_trans.o mdd_object.o
+mdd-objs += mdd_device.o mdd_trans.o mdd_object.o mdd_permission.o
 
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LUSTRE@ -I@LUSTRE@/ldiskfs
 
