@@ -377,21 +377,28 @@ static lu_mode_t cml_lock_mode(const struct lu_env *env,
 {
         ENTRY;
 #ifdef HAVE_SPLIT_SUPPORT
-        if (lm == LU_EX) {
-                RETURN(LU_EX);
-        } else if (lm == LU_PR) {
-                RETURN(LU_CR);
-        } else if (lm == LU_PW) {
+        {
                 struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
                 int split;
-
+        
                 memset(ma, 0, sizeof(*ma));
                 split = cmm_expect_splitting(env, mo, ma);
 
-                if (split == CMM_EXPECT_SPLIT) {
-                        RETURN(LU_EX);
+                if (split == CMM_NOT_SPLITTABLE) {
+                        if (lm == LU_PW)
+                                RETURN(LU_CW);
                 } else {
-                        RETURN(LU_CW);
+                        if (lm == LU_EX) {
+                                RETURN(LU_EX);
+                        } else if (lm == LU_PR) {
+                                RETURN(LU_CR);
+                        } else if (lm == LU_PW) {
+                                if (split == CMM_EXPECT_SPLIT) {
+                                        RETURN(LU_EX);
+                                } else {
+                                        RETURN(LU_CW);
+                                }
+                        }
                 }
         }
 #endif

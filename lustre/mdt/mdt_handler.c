@@ -1504,10 +1504,16 @@ int mdt_object_lock_mode(struct mdt_thread_info *info,
                          * our selves. No special protection is needed, just flush
                          * client's cache on modification.
                          */
-                        if (lm == LCK_PW)
+                        if (lm == LCK_EX) {
+                                lh->mlh_pdo_mode = LCK_EX;
+                        } else if (lm == LCK_PR) {
+                                lh->mlh_pdo_mode = LCK_CR;
+                        } else if (lm == LCK_PW) {
                                 lh->mlh_pdo_mode = LCK_CW;
-                        else
+                        } else {
+                                CWARN("Not expected lock type (0x%x)\n", (int)lm);
                                 lh->mlh_pdo_mode = LCK_MINMODE;
+                        }
                 }
         }
 #endif
@@ -1771,7 +1777,6 @@ static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
         //lustre_msg_set_last_xid(req->rq_repmsg, req->rq_xid);
 }
 #endif
-
 
 static int mdt_init_capa_ctxt(const struct lu_env *env, struct mdt_device *m)
 {
