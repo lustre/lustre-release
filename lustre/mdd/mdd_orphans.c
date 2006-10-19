@@ -125,7 +125,7 @@ static void orph_key_test_and_del(const struct lu_env *env,
                         /* non-opened orphan, let's delete it */
                         struct md_attr *ma = &mdd_env_info(env)->mti_ma;
                         CWARN("Found orphan!\n");
-                        __mdd_object_kill(env, mdo, ma);
+                        mdd_object_kill(env, mdo, ma);
                         /* TODO: now handle OST objects */
                         //mdd_ost_objects_destroy(env, ma);
                         /* TODO: destroy index entry */
