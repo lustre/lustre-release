@@ -635,6 +635,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
+        DQUOT_INIT(inode);
         LOCK_INODE_MUTEX(inode);
         fsfilt_check_slow(obd, now, obd_timeout, "i_mutex");
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,

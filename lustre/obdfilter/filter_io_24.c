@@ -455,8 +455,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
-        DQUOT_INIT(inode);
-        
         down(&inode->i_sem);
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
                                            oti);
