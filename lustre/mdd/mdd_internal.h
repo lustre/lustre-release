@@ -45,6 +45,8 @@ struct mdd_device {
         struct dt_device_param           mdd_dt_conf;
         struct dt_object                *mdd_orphans;
         struct dt_txn_callback           mdd_txn_cb;
+        cfs_proc_dir_entry_t            *mdd_proc_entry;
+        struct lprocfs_stats            *mdd_stats;
 };
 
 enum mod_flags {
@@ -142,6 +144,11 @@ struct mdd_object *mdd_object_find(const struct lu_env *,
                                    struct mdd_device *,
                                    const struct lu_fid *);
 int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd);
+
+int mdd_procfs_init(struct mdd_device *mdd);
+int mdd_procfs_fini(struct mdd_device *mdd);
+void mdd_lproc_time_start(struct mdd_device *mdd, struct timeval *start, int op);
+void mdd_lproc_time_end(struct mdd_device *mdd, struct timeval *start, int op);
 
 static inline void mdd_object_put(const struct lu_env *env,
                                   struct mdd_object *o)
@@ -242,4 +249,9 @@ static inline struct lustre_capa *mdd_object_capa(const struct lu_env *env,
         return NULL;
 }
 
+enum {
+        LPROC_MDD_OPEN = 0,
+        LPROC_MDD_CREATE,
+        LPROC_MDD_LAST
+};
 #endif

@@ -871,6 +871,7 @@ static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
         mdd->mdd_txn_cb.dtc_txn_stop = mdd_txn_stop_cb;
         mdd->mdd_txn_cb.dtc_txn_commit = mdd_txn_commit_cb;
         mdd->mdd_txn_cb.dtc_cookie = mdd;
+        rc = mdd_procfs_init(mdd);
         RETURN(rc);
 }
 
@@ -879,7 +880,13 @@ static struct lu_device *mdd_device_fini(const struct lu_env *env,
 {
 	struct mdd_device *mdd = lu2mdd_dev(d);
         struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
-
+        int rc;
+        
+        rc = mdd_procfs_fini(mdd);
+        if (rc) {
+                CERROR("proc fini error %d \n", rc);
+                return ERR_PTR(rc);
+        }
         return next;
 }
 
@@ -2621,8 +2628,10 @@ static int mdd_create(const struct lu_env *env,
         struct lov_mds_md *lmm = NULL;
         struct thandle    *handle;
         int rc, created = 0, inserted = 0, lmm_size = 0;
+        struct timeval  start;
         ENTRY;
 
+        mdd_lproc_time_start(mdd, &start, LPROC_MDD_CREATE);
         /*
          * Two operations have to be performed:
          *
@@ -2783,6 +2792,7 @@ cleanup:
                 OBD_FREE(lmm, lmm_size);
         mdd_write_unlock(env, mdd_pobj);
         mdd_trans_stop(env, mdd, rc, handle);
+        mdd_lproc_time_end(mdd, &start, LPROC_MDD_CREATE);
         RETURN(rc);
 }
 
