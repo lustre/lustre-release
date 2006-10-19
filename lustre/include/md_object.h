@@ -110,6 +110,8 @@ struct md_attr {
         int                     ma_lmm_size;
         struct lmv_stripe_md   *ma_lmv;
         int                     ma_lmv_size;
+        void                   *ma_acl;
+        int                     ma_acl_size;
         struct llog_cookie     *ma_cookie;
         int                     ma_cookie_size;
 };

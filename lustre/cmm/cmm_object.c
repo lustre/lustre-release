@@ -812,8 +812,8 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
 
 #ifdef CONFIG_FS_POSIX_ACL
         if (!S_ISLNK(ma->ma_attr.la_mode)) {
-                tmp_ma->ma_lmv = (struct lmv_stripe_md *)cmi->cmi_xattr_buf;
-                tmp_ma->ma_lmv_size = sizeof(cmi->cmi_xattr_buf);
+                tmp_ma->ma_acl = cmi->cmi_xattr_buf;
+                tmp_ma->ma_acl_size = sizeof(cmi->cmi_xattr_buf);
                 tmp_ma->ma_need |= MA_ACL_DEF;
         }
 #endif
@@ -832,8 +832,8 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
 
 #ifdef CONFIG_FS_POSIX_ACL
         if (tmp_ma->ma_valid & MA_ACL_DEF) {
-                spec->u.sp_ea.eadata = tmp_ma->ma_lmv;
-                spec->u.sp_ea.eadatalen = tmp_ma->ma_lmv_size;
+                spec->u.sp_ea.eadata = tmp_ma->ma_acl;
+                spec->u.sp_ea.eadatalen = tmp_ma->ma_acl_size;
                 spec->sp_cr_flags |= MDS_CREATE_RMT_ACL;
         }
 #endif

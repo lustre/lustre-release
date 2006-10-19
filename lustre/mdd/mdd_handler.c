@@ -282,7 +282,7 @@ static int mdd_attr_get_internal(const struct lu_env *env,
                         rc = __mdd_lmv_get(env, mdd_obj, ma);
         }
 #ifdef CONFIG_FS_POSIX_ACL
-        else if (rc == 0 && ma->ma_need & MA_ACL_DEF) {
+        if (rc == 0 && ma->ma_need & MA_ACL_DEF) {
                 if (S_ISDIR(mdd_object_type(mdd_obj)))
                         rc = mdd_acl_def_get(env, mdd_obj, ma);
         }

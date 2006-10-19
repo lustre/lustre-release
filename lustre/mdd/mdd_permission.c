@@ -308,11 +308,11 @@ int mdd_acl_def_get(const struct lu_env *env, struct mdd_object *mdd_obj,
         int rc;
 
         rc = next->do_ops->do_xattr_get(env, next,
-                                        mdd_buf_get(env, ma->ma_lmv,
-                                                    ma->ma_lmv_size),
+                                        mdd_buf_get(env, ma->ma_acl,
+                                                    ma->ma_acl_size),
                                         XATTR_NAME_ACL_DEFAULT, BYPASS_CAPA);
         if (rc > 0) {
-                ma->ma_lmv_size = rc;
+                ma->ma_acl_size = rc;
                 ma->ma_valid |= MA_ACL_DEF;
                 rc = 0;
         } else if ((rc == -EOPNOTSUPP) || (rc == -ENODATA)) {
