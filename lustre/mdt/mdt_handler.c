@@ -1409,54 +1409,6 @@ struct mdt_object *mdt_object_find(const struct lu_env *env,
         RETURN(m);
 }
 
-static inline lu_mode_t mdt_ldlm_mode2lu_mode(ldlm_mode_t mode)
-{
-        switch (mode) {
-        case LCK_MINMODE:
-                return LU_MINMODE;
-        case LCK_EX:
-                return LU_EX;
-        case LCK_PW:
-                return LU_PW;
-        case LCK_PR:
-                return LU_PR;
-        case LCK_CW:
-                return LU_CW;
-        case LCK_CR:
-                return LU_CR;
-        case LCK_NL:
-                return LU_NL;
-        case LCK_GROUP:
-                return LU_GROUP;
-        default:
-                return 0;
-        }
-}
-
-static inline ldlm_mode_t mdt_lu_mode2ldlm_mode(lu_mode_t mode)
-{
-        switch (mode) {
-        case LU_MINMODE:
-                return LCK_MINMODE;
-        case LU_EX:
-                return LCK_EX;
-        case LU_PW:
-                return LCK_PW;
-        case LU_PR:
-                return LCK_PR;
-        case LU_CW:
-                return LCK_CW;
-        case LU_CR:
-                return LCK_CR;
-        case LU_NL:
-                return LCK_NL;
-        case LU_GROUP:
-                return LCK_GROUP;
-        default:
-                return 0;
-        }
-}
-
 int mdt_object_lock_mode(struct mdt_thread_info *info,
                          struct mdt_object *o,
                          struct mdt_lock_handle *lh,
