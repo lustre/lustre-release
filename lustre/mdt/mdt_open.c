@@ -344,6 +344,36 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                         repbody->aclsize = sizeof(struct mdt_remote_perm);
                 }
         }
+#ifdef CONFIG_FS_POSIX_ACL
+        else if (req->rq_export->exp_connect_flags & OBD_CONNECT_ACL) {
+                const struct lu_env *env = info->mti_env;
+                struct md_object *next = mdt_object_child(o);
+                struct lu_buf *buf = &info->mti_buf;
+
+                buf->lb_buf = req_capsule_server_get(&info->mti_pill, &RMF_ACL);
+                buf->lb_len = req_capsule_get_size(&info->mti_pill, &RMF_ACL,
+                                                   RCL_SERVER);
+                if (buf->lb_len > 0) {
+                        rc = mo_xattr_get(env, next, buf,
+                                          XATTR_NAME_ACL_ACCESS);
+                        if (rc < 0) {
+                                if (rc == -ENODATA) {
+                                        repbody->aclsize = 0;
+                                        repbody->valid |= OBD_MD_FLACL;
+                                        rc = 0;
+                                } else if (rc == -EOPNOTSUPP) {
+                                        rc = 0;
+                                } else {
+                                        CERROR("got acl size: %d\n", rc);
+                                }
+                        } else {
+                                repbody->aclsize = rc;
+                                repbody->valid |= OBD_MD_FLACL;
+                                rc = 0;
+                        }
+                }
+        }
+#endif
 
         if (mdt->mdt_opts.mo_mds_capa) {
                 struct lustre_capa *capa;
