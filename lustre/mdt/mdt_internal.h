@@ -197,8 +197,13 @@ struct mdt_object {
 };
 
 struct mdt_lock_handle {
-        struct lustre_handle    mlh_lh;
-        ldlm_mode_t             mlh_mode;
+        /* Regular lock */
+        struct lustre_handle    mlh_reg_lh;
+        ldlm_mode_t             mlh_reg_mode;
+
+        /* Pdirops lock */
+        struct lustre_handle    mlh_pdo_lh;
+        ldlm_mode_t             mlh_pdo_mode;
 };
 
 enum {

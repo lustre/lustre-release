@@ -196,6 +196,9 @@ struct md_dir_operations {
         int (*mdo_lookup)(const struct lu_env *env, struct md_object *obj,
                           const char *name, struct lu_fid *fid);
 
+        lu_mode_t (*mdo_lock_mode)(const struct lu_env *env, struct md_object *obj,
+                                   lu_mode_t mode);
+
         int (*mdo_create)(const struct lu_env *env, struct md_object *pobj,
                           const char *name, struct md_object *child,
                           struct md_create_spec *spec,
@@ -452,6 +455,15 @@ static inline int mdo_lookup(const struct lu_env *env,
 {
         LASSERT(p->mo_dir_ops->mdo_lookup);
         return p->mo_dir_ops->mdo_lookup(env, p, name, f);
+}
+
+static inline lu_mode_t mdo_lock_mode(const struct lu_env *env,
+                                      struct md_object *mo,
+                                      lu_mode_t lm)
+{
+        if (mo->mo_dir_ops->mdo_lock_mode == NULL)
+                return LU_MINMODE;
+        return mo->mo_dir_ops->mdo_lock_mode(env, mo, lm);
 }
 
 static inline int mdo_create(const struct lu_env *env,

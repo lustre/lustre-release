@@ -566,10 +566,10 @@ static int mdt_raw_lookup(struct mdt_thread_info *info,
                           const char* name, 
                           struct ldlm_reply *ldlm_rep)
 {
-        const struct mdt_body   *reqbody = info->mti_body;
-        struct md_object  *next = mdt_object_child(info->mti_object);
-        struct lu_fid     *child_fid = &info->mti_tmp_fid1;
-        struct mdt_body   *repbody;
+        struct md_object *next = mdt_object_child(info->mti_object);
+        const struct mdt_body *reqbody = info->mti_body;
+        struct lu_fid *child_fid = &info->mti_tmp_fid1;
+        struct mdt_body *repbody;
         int rc;
         ENTRY;
         
@@ -614,7 +614,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         struct ldlm_lock      *lock;
         ENTRY;
 
-        is_resent = lustre_handle_is_used(&lhc->mlh_lh);
+        is_resent = lustre_handle_is_used(&lhc->mlh_reg_lh);
         if (is_resent)
                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT);
 
@@ -653,10 +653,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
                 if (is_resent) {
                         /* Do not take lock for resent case. */
-                        lock = ldlm_handle2lock(&lhc->mlh_lh);
+                        lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
                         if (!lock) {
                                 CERROR("Invalid lock handle "LPX64"\n",
-                                       lhc->mlh_lh.cookie);
+                                       lhc->mlh_reg_lh.cookie);
                                 LBUG();
                         }
                         LASSERT(fid_res_name_eq(mdt_object_fid(child),
@@ -665,7 +665,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                         rc = 0;
                 } else {
                         mdt_lock_handle_init(lhc);
-                        lhc->mlh_mode = LCK_CR;
+                        lhc->mlh_reg_mode = LCK_CR;
 
                         /*
                          * Object's name is on another MDS, no lookup lock is
@@ -688,7 +688,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         /*step 1: lock parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
-        lhp->mlh_mode = LCK_CR;
+        lhp->mlh_reg_mode = LCK_CR;
         rc = mdt_object_lock(info, parent, lhp, MDS_INODELOCK_UPDATE);
         if (rc != 0)
                 RETURN(rc);
@@ -710,10 +710,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 GOTO(out_parent, rc = PTR_ERR(child));
         if (is_resent) {
                 /* Do not take lock for resent case. */
-                lock = ldlm_handle2lock(&lhc->mlh_lh);
+                lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
                 if (!lock) {
                         CERROR("Invalid lock handle "LPX64"\n",
-                               lhc->mlh_lh.cookie);
+                               lhc->mlh_reg_lh.cookie);
                         LBUG();
                 }
                 LASSERT(fid_res_name_eq(child_fid,
@@ -721,7 +721,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 LDLM_LOCK_PUT(lock);
         } else {
                 mdt_lock_handle_init(lhc);
-                lhc->mlh_mode = LCK_CR;
+                lhc->mlh_reg_mode = LCK_CR;
                 rc = mdt_object_cr_lock(info, child, lhc, child_bits);
                 if (rc != 0)
                         GOTO(out_child, rc);
@@ -733,7 +733,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         if (rc != 0) {
                 mdt_object_unlock(info, child, lhc, 1);
         } else {
-                struct ldlm_lock *lock = ldlm_handle2lock(&lhc->mlh_lh);
+                struct ldlm_lock *lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
                 if (lock) {
                         struct ldlm_res_id *res_id;
                         struct mdt_body *repbody;
@@ -791,9 +791,9 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
                 GOTO(out, rc);
 
         rc = mdt_getattr_name_lock(info, lhc, MDS_INODELOCK_UPDATE, NULL);
-        if (lustre_handle_is_used(&lhc->mlh_lh)) {
-                ldlm_lock_decref(&lhc->mlh_lh, lhc->mlh_mode);
-                lhc->mlh_lh.cookie = 0;
+        if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
+                ldlm_lock_decref(&lhc->mlh_reg_lh, lhc->mlh_reg_mode);
+                lhc->mlh_reg_lh.cookie = 0;
         }
         mdt_exit_ucred(info);
         EXIT;
@@ -1409,6 +1409,112 @@ struct mdt_object *mdt_object_find(const struct lu_env *env,
         RETURN(m);
 }
 
+static inline lu_mode_t mdt_ldlm_mode2lu_mode(ldlm_mode_t mode)
+{
+        switch (mode) {
+        case LCK_MINMODE:
+                return LU_MINMODE;
+        case LCK_EX:
+                return LU_EX;
+        case LCK_PW:
+                return LU_PW;
+        case LCK_PR:
+                return LU_PR;
+        case LCK_CW:
+                return LU_CW;
+        case LCK_CR:
+                return LU_CR;
+        case LCK_NL:
+                return LU_NL;
+        case LCK_GROUP:
+                return LU_GROUP;
+        default:
+                return 0;
+        }
+}
+
+static inline ldlm_mode_t mdt_lu_mode2ldlm_mode(lu_mode_t mode)
+{
+        switch (mode) {
+        case LU_MINMODE:
+                return LCK_MINMODE;
+        case LU_EX:
+                return LCK_EX;
+        case LU_PW:
+                return LCK_PW;
+        case LU_PR:
+                return LCK_PR;
+        case LU_CW:
+                return LCK_CW;
+        case LU_CR:
+                return LCK_CR;
+        case LU_NL:
+                return LCK_NL;
+        case LU_GROUP:
+                return LCK_GROUP;
+        default:
+                return 0;
+        }
+}
+
+int mdt_object_lock_mode(struct mdt_thread_info *info,
+                         struct mdt_object *o,
+                         struct mdt_lock_handle *lh,
+                         ldlm_mode_t lm)
+{
+        ENTRY;
+
+        lh->mlh_reg_mode = lm;
+        
+#ifdef CONFIG_PDIROPS
+        {
+                lu_mode_t mode;
+                
+                /*
+                 * Any dir access needs couple of locks:
+                 *
+                 * 1) on part of dir we gonna take lookup/modify;
+                 *
+                 * 2) on whole dir to protect it from concurrent splitting
+                 * and/or to flush client's cache for readdir().
+                 *
+                 * so, for a given mode and object this routine decides what
+                 * lock mode to use for lock #2:
+                 *
+                 * 1) if caller's gonna lookup in dir then we need to protect
+                 * dir from being splitted only - LCK_CR
+                 *
+                 * 2) if caller's gonna modify dir then we need to protect dir
+                 * from being splitted and to flush cache - LCK_CW
+                 *
+                 * 3) if caller's gonna modify dir and that dir seems ready for
+                 * splitting then we need to protect it from any type of access
+                 * (lookup/modify/split) - LCK_EX  --bzzz
+                 */
+
+                /* Ask underlaying level its opinion about possible locks. */
+                mode = mdo_lock_mode(info->mti_env, mdt_object_child(o),
+                                     mdt_ldlm_mode2lu_mode(lm));
+                if (mode != LU_MINMODE) {
+                        /* Lower layer said what lock mode it likes to be, use it. */
+                        lh->mlh_pdo_mode = mdt_lu_mode2ldlm_mode(mode);
+                } else {
+                        /* 
+                         * Lower layer does not want to specify locking mode. We od it
+                         * our selves. No special protection is needed, just flush
+                         * client's cache on modification.
+                         */
+                        if (lm == LCK_PW)
+                                lh->mlh_pdo_mode = LCK_CW;
+                        else
+                                lh->mlh_pdo_mode = LCK_MINMODE;
+                }
+        }
+#endif
+
+        RETURN(0);
+}
+
 int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                     struct mdt_lock_handle *lh, __u64 ibits)
 {
@@ -1418,8 +1524,8 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         int rc;
         ENTRY;
 
-        LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
-        LASSERT(lh->mlh_mode != LCK_MINMODE);
+        LASSERT(!lustre_handle_is_used(&lh->mlh_reg_lh));
+        LASSERT(lh->mlh_reg_mode != LCK_MINMODE);
         if (mdt_object_exists(o) < 0) {
                 LASSERT(!(ibits & MDS_INODELOCK_UPDATE));
                 LASSERT(ibits & MDS_INODELOCK_LOOKUP);
@@ -1427,8 +1533,8 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         memset(policy, 0, sizeof *policy);
         policy->l_inodebits.bits = ibits;
 
-        rc = fid_lock(ns, mdt_object_fid(o), &lh->mlh_lh, lh->mlh_mode,
-                      policy, res_id);
+        rc = fid_lock(ns, mdt_object_fid(o), &lh->mlh_reg_lh,
+                      lh->mlh_reg_mode, policy, res_id);
         RETURN(rc);
 }
 
@@ -1453,8 +1559,8 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
                        struct mdt_lock_handle *lh, int decref)
 {
         struct ptlrpc_request *req    = mdt_info_req(info);
-        struct lustre_handle  *handle = &lh->mlh_lh;
-        ldlm_mode_t            mode   = lh->mlh_mode;
+        struct lustre_handle  *handle = &lh->mlh_reg_lh;
+        ldlm_mode_t            mode   = lh->mlh_reg_mode;
         ENTRY;
 
         if (lustre_handle_is_used(handle)) {
@@ -1794,13 +1900,15 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
 void mdt_lock_handle_init(struct mdt_lock_handle *lh)
 {
-        lh->mlh_lh.cookie = 0ull;
-        lh->mlh_mode = LCK_MINMODE;
+        lh->mlh_reg_lh.cookie = 0ull;
+        lh->mlh_reg_mode = LCK_MINMODE;
+        lh->mlh_pdo_lh.cookie = 0ull;
+        lh->mlh_pdo_mode = LCK_MINMODE;
 }
 
 void mdt_lock_handle_fini(struct mdt_lock_handle *lh)
 {
-        LASSERT(!lustre_handle_is_used(&lh->mlh_lh));
+        LASSERT(!lustre_handle_is_used(&lh->mlh_reg_lh));
 }
 
 /*
@@ -1898,8 +2006,8 @@ static int mdt_recovery(struct mdt_thread_info *info)
             req->rq_xid == req_exp_last_close_xid(req)) {
                 if (!(lustre_msg_get_flags(req->rq_reqmsg) &
                       (MSG_RESENT | MSG_REPLAY))) {
-                        CERROR("rq_xid "LPU64" matches last_xid, "
-                                "expected RESENT flag\n", req->rq_xid);
+                        DEBUG_REQ(D_WARNING, req, "rq_xid "LPU64" matches last_xid, "
+                                  "expected RESENT flag\n", req->rq_xid);
                         LBUG();
                         req->rq_status = -ENOTCONN;
                         RETURN(-ENOTCONN);
@@ -2167,15 +2275,15 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
          * lock.
          */
         if (new_lock == NULL)
-                new_lock = ldlm_handle2lock(&lh->mlh_lh);
+                new_lock = ldlm_handle2lock(&lh->mlh_reg_lh);
 
         if (new_lock == NULL && (flags & LDLM_FL_INTENT_ONLY)) {
-                lh->mlh_lh.cookie = 0;
+                lh->mlh_reg_lh.cookie = 0;
                 RETURN(0);
         }
 
         LASSERTF(new_lock != NULL,
-                 "lockh "LPX64"\n", lh->mlh_lh.cookie);
+                 "lockh "LPX64"\n", lh->mlh_reg_lh.cookie);
 
         /*
          * If we've already given this lock to a client once, then we should
@@ -2199,7 +2307,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
                  */
                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
                         MSG_RESENT);
-                lh->mlh_lh.cookie = 0;
+                lh->mlh_reg_lh.cookie = 0;
                 RETURN(ELDLM_LOCK_REPLACED);
         }
 
@@ -2219,7 +2327,7 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
 
         unlock_res_and_lock(new_lock);
         LDLM_LOCK_PUT(new_lock);
-        lh->mlh_lh.cookie = 0;
+        lh->mlh_reg_lh.cookie = 0;
 
         RETURN(ELDLM_LOCK_REPLACED);
 }
@@ -2248,12 +2356,12 @@ static void mdt_intent_fixup_resent(struct req_capsule *pill,
                 if (lock == new_lock)
                         continue;
                 if (lock->l_remote_handle.cookie == remote_hdl.cookie) {
-                        lh->mlh_lh.cookie = lock->l_handle.h_cookie;
-                        lh->mlh_mode = lock->l_granted_mode;
+                        lh->mlh_reg_lh.cookie = lock->l_handle.h_cookie;
+                        lh->mlh_reg_mode = lock->l_granted_mode;
 
                         LDLM_DEBUG(lock, "restoring lock cookie");
                         DEBUG_REQ(D_HA, req, "restoring lock cookie "LPX64,
-                                  lh->mlh_lh.cookie);
+                                  lh->mlh_reg_lh.cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
                         spin_unlock(&exp->exp_ldlm_data.led_lock);
@@ -2335,7 +2443,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
                 ldlm_rep->lock_policy_res2 = 0;
         if (!mdt_get_disposition(ldlm_rep, DISP_LOOKUP_POS) ||
             ldlm_rep->lock_policy_res2) {
-                lhc->mlh_lh.cookie = 0ull;
+                lhc->mlh_reg_lh.cookie = 0ull;
                 GOTO(out_ucred, rc = ELDLM_LOCK_ABORTED);
         }
 
@@ -2390,13 +2498,13 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
 
         /* cross-ref case, the lock should be returned to the client */
         if (rc == -EREMOTE) {
-                LASSERT(lustre_handle_is_used(&lhc->mlh_lh));
+                LASSERT(lustre_handle_is_used(&lhc->mlh_reg_lh));
                 rep->lock_policy_res2 = 0;
                 RETURN(mdt_intent_lock_replace(info, lockp, NULL, lhc, flags));
         }
         rep->lock_policy_res2 = clear_serious(rc);
 
-        lhc->mlh_lh.cookie = 0ull;
+        lhc->mlh_reg_lh.cookie = 0ull;
         RETURN(ELDLM_LOCK_ABORTED);
 }
 

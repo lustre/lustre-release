@@ -361,6 +361,7 @@ static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
 {
         int rc;
         ENTRY;
+
 #ifdef HAVE_SPLIT_SUPPORT
         rc = cmm_mdsnum_check(env, mo_p, name);
         if (rc)
@@ -369,6 +370,32 @@ static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
         rc = mdo_lookup(env, md_object_next(mo_p), name, lf);
         RETURN(rc);
 
+}
+
+static lu_mode_t cml_lock_mode(const struct lu_env *env,
+                               struct md_object *mo, lu_mode_t lm)
+{
+        ENTRY;
+#ifdef HAVE_SPLIT_SUPPORT
+        if (lm == LU_EX) {
+                RETURN(LU_EX);
+        } else if (lm == LU_PR) {
+                RETURN(LU_CR);
+        } else if (lm == LU_PW) {
+                struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
+                int split;
+
+                memset(ma, 0, sizeof(*ma));
+                split = cmm_expect_splitting(env, mo, ma);
+
+                if (split == CMM_EXPECT_SPLIT) {
+                        RETURN(LU_EX);
+                } else {
+                        RETURN(LU_CW);
+                }
+        }
+#endif
+        RETURN(LU_MINMODE);
 }
 
 static int cml_create(const struct lu_env *env,
@@ -380,7 +407,7 @@ static int cml_create(const struct lu_env *env,
         ENTRY;
 
 #ifdef HAVE_SPLIT_SUPPORT
-        rc = cml_try_to_split(env, mo_p);
+        rc = cmm_try_to_split(env, mo_p);
         if (rc)
                 RETURN(rc);
 #endif
@@ -546,6 +573,7 @@ static int cmm_is_subdir(const struct lu_env *env, struct md_object *mo,
 static struct md_dir_operations cml_dir_ops = {
         .mdo_is_subdir   = cmm_is_subdir,
         .mdo_lookup      = cml_lookup,
+        .mdo_lock_mode   = cml_lock_mode,
         .mdo_create      = cml_create,
         .mdo_link        = cml_link,
         .mdo_unlink      = cml_unlink,
@@ -757,6 +785,12 @@ static int cmr_lookup(const struct lu_env *env, struct md_object *mo_p,
         RETURN(-EREMOTE);
 }
 
+static lu_mode_t cmr_lock_mode(const struct lu_env *env,
+                               struct md_object *mo, lu_mode_t lm)
+{
+        RETURN(LU_MINMODE);
+}
+
 /*
  * All methods below are cross-ref by nature. They consist of remote call and
  * local operation. Due to future rollback functionality there are several
@@ -904,6 +938,7 @@ static int cmr_rename_tgt(const struct lu_env *env,
 static struct md_dir_operations cmr_dir_ops = {
         .mdo_is_subdir   = cmm_is_subdir,
         .mdo_lookup      = cmr_lookup,
+        .mdo_lock_mode   = cmr_lock_mode,
         .mdo_create      = cmr_create,
         .mdo_link        = cmr_link,
         .mdo_unlink      = cmr_unlink,

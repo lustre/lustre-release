@@ -315,7 +315,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
                 lockpart |= MDS_INODELOCK_LOOKUP;
 
         lh = &info->mti_lh[MDT_LH_PARENT];
-        lh->mlh_mode = LCK_EX;
+        lh->mlh_reg_mode = LCK_EX;
         rc = mdt_object_lock(info, obj, lh, lockpart);
         if (rc != 0)
                 GOTO(out, rc);

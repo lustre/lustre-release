@@ -148,7 +148,7 @@ int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o)
          * In the later case, mdt_reint_setattr will do it. */
         if (cancel && (info->mti_rr.rr_fid1 != NULL)) {
                 struct mdt_lock_handle  *lh = &info->mti_lh[MDT_LH_CHILD];
-                lh->mlh_mode = LCK_EX;
+                lh->mlh_reg_mode = LCK_EX;
                 rc = mdt_object_lock(info, o, lh, MDS_INODELOCK_UPDATE);
                 if (rc == 0)
                         mdt_object_unlock(info, o, lh, 1);
@@ -734,9 +734,9 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         if (!(create_flags & MDS_OPEN_CREAT))
-                lh->mlh_mode = LCK_CR;
+                lh->mlh_reg_mode = LCK_CR;
         else
-                lh->mlh_mode = LCK_EX;
+                lh->mlh_reg_mode = LCK_EX;
         parent = mdt_object_find_lock(info, rr->rr_fid1, lh,
                                       MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
@@ -819,16 +819,16 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                          */
                         LASSERT(lhc != NULL);
 
-                        if (lustre_handle_is_used(&lhc->mlh_lh)) {
+                        if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
                                 struct ldlm_lock *lock;
 
                                 LASSERT(lustre_msg_get_flags(req->rq_reqmsg) &
                                         MSG_RESENT);
 
-                                lock = ldlm_handle2lock(&lhc->mlh_lh);
+                                lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
                                 if (!lock) {
                                         CERROR("Invalid lock handle "LPX64"\n",
-                                               lhc->mlh_lh.cookie);
+                                               lhc->mlh_reg_lh.cookie);
                                         LBUG();
                                 }
                                 LASSERT(fid_res_name_eq(mdt_object_fid(child),
@@ -837,7 +837,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                                 rc = 0;
                         } else {
                                 mdt_lock_handle_init(lhc);
-                                lhc->mlh_mode = LCK_CR;
+                                lhc->mlh_reg_mode = LCK_CR;
 
                                 rc = mdt_object_lock(info, child, lhc,
                                                      MDS_INODELOCK_LOOKUP);
