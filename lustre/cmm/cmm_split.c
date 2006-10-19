@@ -73,7 +73,6 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
                 RETURN(rc);
 
         if (ma->ma_valid & MA_LMV) {
-                struct lu_buf *buf;
                 int stripe;
 
                 OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
@@ -81,9 +80,8 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
                         RETURN(-ENOMEM);
 
                 /* get LMV EA */
-                buf = cmm_buf_get(env, ma->ma_lmv, ma->ma_lmv_size);
-                rc = mo_xattr_get(env, md_object_next(mp), buf,
-                                  MDS_LMV_MD_NAME);
+                ma->ma_need = MA_INODE | MA_LMV;
+                rc = mo_attr_get(env, mp, ma);
                 if (rc)
                         RETURN(rc);
                 

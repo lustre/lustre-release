@@ -186,6 +186,7 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
                     int extra_lock_flags)
 {
         struct obd_device *obd = exp->exp_obd;
+        struct obd_export *tgt_exp;
         struct lu_fid rpid = op_data->fid1;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mdt_body *body = NULL;
@@ -193,7 +194,6 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
         struct lmv_stripe_md *mea;
         struct lmv_obj *obj;
         int rc, loop = 0;
-        mdsno_t mds;
         ENTRY;
 
         OBD_ALLOC_PTR(sop_data);
@@ -205,10 +205,6 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 
 repeat:
         LASSERT(++loop <= 2);
-        rc = lmv_fld_lookup(lmv, &rpid, &mds);
-        if (rc)
-                GOTO(out_free_sop_data, rc);
-
         obj = lmv_obj_grab(obd, &rpid);
         if (obj) {
                 int mea_idx;
@@ -221,20 +217,18 @@ repeat:
                                        op_data->namelen);
 
                 rpid = obj->lo_inodes[mea_idx].li_fid;
-                rc = lmv_fld_lookup(lmv, &rpid, &mds);
                 lmv_obj_put(obj);
-                if (rc)
-                        GOTO(out_free_sop_data, rc);
-
-                CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n",
-                       mds, PFID(&rpid));
+                CDEBUG(D_OTHER, "Choose slave dir ("DFID")\n", PFID(&rpid));
         }
 
+        tgt_exp = lmv_get_export(lmv, &rpid);
+        if (IS_ERR(tgt_exp))
+                GOTO(out_free_sop_data, rc = PTR_ERR(tgt_exp));
+        
         sop_data->fid1 = rpid;
 
-        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, sop_data,
-                            lmm, lmmsize, it, flags, reqp,
-                            cb_blocking, extra_lock_flags);
+        rc = md_intent_lock(tgt_exp, sop_data, lmm, lmmsize, it, flags,
+                            reqp, cb_blocking, extra_lock_flags);
 
         if (rc == -ERESTART) {
                 /*
