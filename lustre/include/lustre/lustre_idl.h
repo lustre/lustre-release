@@ -182,7 +182,7 @@ static inline int range_is_exhausted(struct lu_range *r)
         return range_space(r) == 0;
 }
 
-#define DRANGE "[0x%16.16"LPF64"x-0x%16.16"LPF64"x]"
+#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x]"
 
 #define PRANGE(range)      \
         (range)->lr_start, \
