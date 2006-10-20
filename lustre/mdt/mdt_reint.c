@@ -48,6 +48,9 @@ static int mdt_md_create(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
+        DEBUG_REQ(D_INODE, mdt_info_req(info), "create  (%s->"DFID") in "DFID,
+                  rr->rr_name, PFID(rr->rr_fid2), PFID(rr->rr_fid1));
+
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
         lh = &info->mti_lh[MDT_LH_PARENT];
@@ -101,6 +104,9 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         struct md_attr         *ma = &info->mti_attr;
         int rc;
         ENTRY;
+
+        DEBUG_REQ(D_INODE, mdt_info_req(info), "partial create "DFID"\n", 
+                           PFID(info->mti_rr.rr_fid2));
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
@@ -462,7 +468,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         int rc;
         ENTRY;
 
-        DEBUG_REQ(D_INODE, req, "link original "DFID" to "DFID" %s",
+        DEBUG_REQ(D_INODE, req, "link "DFID" to "DFID"/%s",
                   PFID(rr->rr_fid1), PFID(rr->rr_fid2), rr->rr_name);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
@@ -472,7 +478,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                 /* MDT holding name ask us to add ref. */
                 lhs = &info->mti_lh[MDT_LH_CHILD];
                 lhs->mlh_reg_mode = LCK_EX;
-                ms = mdt_object_find_lock(info, rr->rr_fid2, lhs,
+                ms = mdt_object_find_lock(info, rr->rr_fid1, lhs,
                                           MDS_INODELOCK_UPDATE);
                 if (IS_ERR(ms))
                         RETURN(PTR_ERR(ms));
@@ -529,15 +535,12 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         struct mdt_lock_handle  *lh_tgt;
         struct lu_fid           *tgt_fid = &info->mti_tmp_fid1;
         int                      rc;
-
         ENTRY;
 
-        DEBUG_REQ(D_INODE, req, "rename_tgt "DFID" to "DFID" %s",
-                  PFID(rr->rr_fid2),
-                  PFID(rr->rr_fid1), rr->rr_tgt);
+        DEBUG_REQ(D_INODE, req, "rename_tgt: insert (%s->"DFID") in "DFID,
+                  rr->rr_tgt, PFID(rr->rr_fid2), PFID(rr->rr_fid1));
 
         /* step 1: lookup & lock the tgt dir */
-        lh_tgt = &info->mti_lh[MDT_LH_CHILD];
         lh_tgtdir = &info->mti_lh[MDT_LH_PARENT];
         lh_tgtdir->mlh_reg_mode = LCK_EX;
         mtgtdir = mdt_object_find_lock(info, rr->rr_fid1, lh_tgtdir,
@@ -557,6 +560,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
                 if (lu_fid_eq(tgt_fid, rr->rr_fid2))
                         GOTO(out_unlock_tgtdir, rc);
 
+                lh_tgt = &info->mti_lh[MDT_LH_CHILD];
                 lh_tgt->mlh_reg_mode = LCK_EX;
 
                 mtgt = mdt_object_find_lock(info, tgt_fid, lh_tgt,
@@ -671,6 +675,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         struct mdt_reint_record *rr = &info->mti_rr;
         struct req_capsule      *pill = &info->mti_pill;
         struct md_attr          *ma = &info->mti_attr;
+        struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_object       *msrcdir;
         struct mdt_object       *mtgtdir;
         struct mdt_object       *mold;
@@ -683,7 +688,6 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         struct lu_fid           *new_fid = &info->mti_tmp_fid2;
         struct lustre_handle     rename_lh = { 0 };
         int                      rc;
-
         ENTRY;
 
         rc = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
@@ -692,6 +696,10 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 rc = mdt_reint_rename_tgt(info);
                 RETURN(rc);
         }
+
+        DEBUG_REQ(D_INODE, req, "rename "DFID"/%s to "DFID"/%s",
+                  PFID(rr->rr_fid1), rr->rr_name,
+                  PFID(rr->rr_fid2), rr->rr_tgt);
 
         rc = mdt_rename_lock(info, &rename_lh);
         if (rc) {
@@ -721,13 +729,16 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 if (IS_ERR(mtgtdir))
                         GOTO(out_unlock_source, rc = PTR_ERR(mtgtdir));
 
-                rc = mdt_object_cr_lock(info, mtgtdir, lh_tgtdirp,
-                                        MDS_INODELOCK_UPDATE);
-                if (rc != 0) {
-                        mdt_object_put(info->mti_env, mtgtdir);
-                        GOTO(out_unlock_source, rc);
+                rc = mdt_object_exists(mtgtdir);
+                if (rc == 0)
+                        GOTO(out_unlock_target, rc = -ESTALE);
+                else if (rc > 0) {
+                        /* we lock the target dir iff it is local */
+                        rc = mdt_object_lock(info, mtgtdir, lh_tgtdirp,
+                                             MDS_INODELOCK_UPDATE);
+                        if (rc != 0)
+                                GOTO(out_unlock_target, rc);
                 }
-
         }
 
         /*step 3: find & lock the old object*/
@@ -773,8 +784,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         } else if (rc != -EREMOTE && rc != -ENOENT)
                 GOTO(out_unlock_old, rc);
 
-        /* step 5: dome some checking ...*/
-        /* step 6: rename it */
+        /* step 5: rename it */
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,
                                                &RMF_MDT_MD, RCL_SERVER);

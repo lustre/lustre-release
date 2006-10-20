@@ -624,7 +624,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 RETURN(err_serious(-EFAULT));
 
         CDEBUG(D_INODE, "getattr with lock for "DFID"/%s, ldlm_rep = %p\n",
-               PFID(mdt_object_fid(parent)), name, ldlm_rep);
+                        PFID(mdt_object_fid(parent)), name, ldlm_rep);
 
         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
 
@@ -648,8 +648,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 /* Only getattr on the child. Parent is on another node. */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 child = parent;
-                CDEBUG(D_INODE, "partial getattr_name child_fid = "DFID
-                       ", ldlm_rep=%p\n", PFID(mdt_object_fid(child)), ldlm_rep);
+                CDEBUG(D_INODE, "partial getattr_name child_fid = "DFID", "
+                       "ldlm_rep=%p\n", PFID(mdt_object_fid(child)), ldlm_rep);
 
                 if (is_resent) {
                         /* Do not take lock for resent case. */

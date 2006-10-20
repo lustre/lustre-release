@@ -15,17 +15,13 @@ modprobe obdecho
 modprobe lustre
 modprobe mgc
 modprobe ldiskfs
-modprobe quotafmt_test
 modprobe osc
 modprobe mdt
 modprobe lquota
-modprobe quotactl_test
-modprobe quotacheck_test
 modprobe cmm
 modprobe mdc
 modprobe fsfilt_ldiskfs
 modprobe lvfs
-modprobe llog_test
 modprobe obdclass
 modprobe mdd
 modprobe fld

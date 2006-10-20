@@ -1254,6 +1254,38 @@ test_31f() { # bug 4554
 }
 run_test 31f "remove of open directory with open-unlink file ==="
 
+test_31g() {
+        echo "-- cross directory link --"
+        mkdir $DIR/d31g{a,b}
+        touch $DIR/d31ga/f
+        ln $DIR/d31ga/f $DIR/d31gb/g
+        $CHECKSTAT -t file $DIR/d31ga/f || error "source"
+        $CHECKSTAT -t file $DIR/d31gb/g || error "target"
+}
+run_test 31g "cross directory link==============="
+
+test_31h() {
+        echo "-- cross directory link --"
+        mkdir $DIR/d31h
+        mkdir $DIR/d31h/dir
+        touch $DIR/d31h/f
+        ln $DIR/d31h/f $DIR/d31h/dir/g
+        $CHECKSTAT -t file $DIR/d31h/f || error "source"
+        $CHECKSTAT -t file $DIR/d31h/dir/g || error "target"
+}
+run_test 31h "cross directory link under child==============="
+
+test_31i() {
+        echo "-- cross directory link --"
+        mkdir $DIR/d31i
+        mkdir $DIR/d31i/dir
+        touch $DIR/d31i/dir/f
+        ln $DIR/d31i/dir/f $DIR/d31i/g
+        $CHECKSTAT -t file $DIR/d31i/dir/f || error "source"
+        $CHECKSTAT -t file $DIR/d31i/g || error "target"
+}
+run_test 31i "cross directory link under parent==============="
+
 test_32a() {
 	echo "== more mountpoints and symlinks ================="
 	[ -e $DIR/d32a ] && rm -fr $DIR/d32a

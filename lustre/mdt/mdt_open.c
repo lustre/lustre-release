@@ -739,11 +739,11 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 GOTO(out, result = err_serious(-EOPNOTSUPP));
         }
 
-        CDEBUG(D_INODE, "I am going to open "DFID"/("DFID":%s) "
+        CDEBUG(D_INODE, "I am going to open "DFID"/(%s->"DFID") "
                "cr_flag=0%o mode=0%06o msg_flag=0x%x\n",
-               PFID(rr->rr_fid1), PFID(rr->rr_fid2),
-               rr->rr_name, create_flags, la->la_mode,
-               lustre_msg_get_flags(req->rq_reqmsg));
+               PFID(rr->rr_fid1), rr->rr_name, 
+               PFID(rr->rr_fid2), create_flags, 
+               la->la_mode, lustre_msg_get_flags(req->rq_reqmsg));
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
                 /* This is a replay request. */
