@@ -825,22 +825,22 @@ Index: iam/fs/ext3/iam.c
 +                 * multiple iterations may be necessary due to empty leaves.
 +                 */
 +                while (result == 0 && iam_leaf_at_end(leaf)) {
++                        iam_leaf_unlock(leaf);
 +                        /* advance index portion of the path */
 +                        result = iam_index_next(iam_it_container(it), path);
 +                        if (result == 1) {
 +                                struct dynlock_handle *lh;
-+                                /*
-+                                 * Lock next leaf, then release lock on the
-+                                 * current one.
-+                                 */
 +                                lh = dx_lock_htree(iam_path_obj(path),
 +                                                   path->ip_frame->leaf,
 +                                                   DLT_WRITE);
-+                                iam_leaf_fini(leaf);
-+                                leaf->il_lock = lh;
-+                                result = iam_leaf_load(path);
-+                                if (result == 0)
-+                                        iam_leaf_start(leaf);
++                                if (lh != NULL) {
++                                        iam_leaf_fini(leaf);
++                                        leaf->il_lock = lh;
++                                        result = iam_leaf_load(path);
++                                        if (result == 0)
++                                                iam_leaf_start(leaf);
++                                } else
++                                        result = -ENOMEM;
 +                        } else if (result == 0)
 +                                /* end of container reached */
 +                                result = +1;
@@ -2694,7 +2694,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,976 @@
+@@ -0,0 +1,990 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2843,6 +2843,11 @@ Index: iam/fs/ext3/iam_lvar.c
 +                offsetof(struct lvar_leaf_entry, vle_key) + e_keysize(ent);
 +}
 +
++static void e_print(const struct lvar_leaf_entry *ent)
++{
++        printk("        %p %8.8x \"%*.*s\"\n", ent, e_hash(ent),
++               e_keysize(ent), e_keysize(ent), e_char(ent));
++}
 +#if 0
 +static int e_check(const struct iam_leaf *leaf,
 +                   const struct lvar_leaf_entry *ent)
@@ -2944,6 +2949,15 @@ Index: iam/fs/ext3/iam_lvar.c
 +static struct lvar_leaf_entry *n_cur(const struct iam_leaf *l)
 +{
 +        return lentry_lvar(l->il_at);
++}
++
++static void n_print(const struct iam_leaf *l)
++{
++        struct lvar_leaf_entry *scan;
++
++        printk("used: %d\n", h_used(n_head(l)));
++        for (scan = n_start(l); scan < n_end(l); scan = e_next(l, scan))
++                e_print(scan);
 +}
 +
 +#if EXT3_CORRECTNESS_ON
