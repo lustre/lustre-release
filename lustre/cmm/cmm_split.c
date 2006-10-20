@@ -78,19 +78,18 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
                 if (rc)
                         RETURN(rc);
                 
-                /* Skip checking the slave dirs (mea_count == 0) */
-                if (ma->ma_lmv->mea_count == 0)
-                        RETURN(0);
-                /* 
-                 * Get stripe by name to check the name belongs to master dir,
-                 * otherwise return the -ERESTART
-                 */
-                stripe = mea_name2idx(ma->ma_lmv, name, strlen(name));
+                /* Skip checking the slave dirs (mea_count is 0) */
+                if (ma->ma_lmv->mea_count != 0) {
+                        /* 
+                         * Get stripe by name to check the name belongs to master dir,
+                         * otherwise return the -ERESTART
+                         */
+                        stripe = mea_name2idx(ma->ma_lmv, name, strlen(name));
                 
-                /* Master stripe is always 0 */
-                if (stripe != 0)
-                        rc = -ERESTART;
-                
+                        /* Master stripe is always 0 */
+                        if (stripe != 0)
+                                rc = -ERESTART;
+                }
                 OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);
         }
         RETURN(rc);
