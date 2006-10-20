@@ -75,11 +75,8 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
                 /* Get LMV EA */
                 ma->ma_need = MA_INODE | MA_LMV;
                 rc = mo_attr_get(env, mp, ma);
-                if (rc)
-                        RETURN(rc);
-                
                 /* Skip checking the slave dirs (mea_count is 0) */
-                if (ma->ma_lmv->mea_count != 0) {
+                if (rc == 0 && ma->ma_lmv->mea_count != 0) {
                         /* 
                          * Get stripe by name to check the name belongs to master dir,
                          * otherwise return the -ERESTART
