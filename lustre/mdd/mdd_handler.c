@@ -118,7 +118,7 @@ int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj,
         rc = mdd_la_get(env, mdd_obj, &ma->ma_attr,
                           mdd_object_capa(env, mdd_obj));
         if (rc == 0)
-                ma->ma_valid = MA_INODE;
+                ma->ma_valid |= MA_INODE;
         RETURN(rc);
 }
 
