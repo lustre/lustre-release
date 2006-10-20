@@ -58,7 +58,7 @@ static int mdd_lov_update(struct obd_device *host,
         upcall_dev = mdd->mdd_md_dev.md_upcall.mu_upcall_dev;
 
         rc = upcall_dev->md_upcall.mu_upcall(NULL, upcall_dev, MD_LOV_SYNC);
-        
+
         RETURN(rc);
 }
 
@@ -187,7 +187,7 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
         struct timeval    start;
         int rc;
         ENTRY;
-        
+
         mdd_lproc_time_start(mdd, &start, LPROC_MDD_GET_MD);
         next = mdd_object_child(obj);
         rc = next->do_ops->do_xattr_get(env, next,
@@ -206,7 +206,7 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                 /* FIXME convert lov EA but fixed after verification test */
                 *md_size = rc;
         }
-        
+
         mdd_lproc_time_end(mdd, &start, LPROC_MDD_GET_MD);
         RETURN (rc);
 }
@@ -279,13 +279,13 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
                    struct mdd_object *child, struct lov_mds_md *lmmp,
                    int lmm_size, struct thandle *handle, int set_stripe)
 {
-        struct mdd_device *mdd = mdo2mdd(&child->mod_obj); 
+        struct mdd_device *mdd = mdo2mdd(&child->mod_obj);
         struct timeval    start;
         struct lu_buf *buf;
         umode_t mode;
         int rc = 0;
         ENTRY;
-        
+
         mdd_lproc_time_start(mdd, &start, LPROC_MDD_SET_MD);
         buf = mdd_buf_get(env, lmmp, lmm_size);
         mode = mdd_object_type(child);
@@ -404,7 +404,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         if (create_flags & MDS_OPEN_DELAY_CREATE ||
             !(create_flags & FMODE_WRITE))
                 RETURN(0);
-        
+
         mdd_lproc_time_start(mdd, &start, LPROC_MDD_LOV_CREATE);
 
         oti_init(oti, NULL);
@@ -422,9 +422,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 GOTO(out_ids, rc = -ENOMEM);
 
         LASSERT(lov_exp != NULL);
-        oa = obdo_alloc();
-        if (oa == NULL)
-                GOTO(out_ids, rc = -ENOMEM);
+        oa = &mdd_env_info(env)->mti_oa;
 
         oa->o_uid = 0; /* must have 0 uid / gid on OST */
         oa->o_gid = 0;
@@ -442,20 +440,20 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, lov_exp,
                                            0, &lsm, (void*)eadata);
                         if (rc)
-                                GOTO(out_oa, rc);
+                                GOTO(out_oti, rc);
                         lsm->lsm_object_id = oa->o_id;
                         lsm->lsm_object_gr = oa->o_gr;
                 } else if (parent != NULL) {
                         /* get lov ea from parent and set to lov */
                         struct lov_mds_md *__lmm;
                         int __lmm_size, returned_lmm_size;
-                        
+
                         __lmm_size = mdd_lov_mdsize(env, mdd);
                         returned_lmm_size = __lmm_size;
 
                         OBD_ALLOC(__lmm, __lmm_size);
                         if (__lmm == NULL)
-                                GOTO(out_oa, rc = -ENOMEM);
+                                GOTO(out_oti, rc = -ENOMEM);
 
                         rc = mdd_get_md_locked(env, parent, __lmm,
                                                &returned_lmm_size,
@@ -465,7 +463,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                                                    lov_exp, 0, &lsm, __lmm);
                         OBD_FREE(__lmm, __lmm_size);
                         if (rc)
-                                GOTO(out_oa, rc);
+                                GOTO(out_oti, rc);
                 }
 
                 rc = obd_create(lov_exp, oa, &lsm, oti);
@@ -475,7 +473,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                                        PFID(mdo2fid(child)), rc);
                                 rc = -EIO;
                         }
-                        GOTO(out_oa, rc);
+                        GOTO(out_oti, rc);
                 }
                 LASSERT(lsm->lsm_object_gr >= FILTER_GROUP_MDS0);
         } else {
@@ -483,11 +481,11 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 rc = obd_iocontrol(OBD_IOC_LOV_SETEA, lov_exp, 0, &lsm,
                                    (void*)eadata);
                 if (rc)
-                        GOTO(out_oa, rc);
+                        GOTO(out_oti, rc);
                 lsm->lsm_object_id = oa->o_id;
                 lsm->lsm_object_gr = oa->o_gr;
         }
-        
+
         /*
          * Sometimes, we may truncate some object(without lsm) then open (with
          * write flags)it, so creating lsm above.  The Nonzero(truncated) size
@@ -499,7 +497,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 memset(oinfo, 0, sizeof(*oinfo));
 
                 oa->o_size = la->la_size;
-                
+
                 /* When setting attr to ost, FLBKSZ is not needed. */
                 oa->o_valid &= ~OBD_MD_FLBLKSZ;
                 obdo_from_la(oa, la, OBD_MD_FLTYPE | OBD_MD_FLATIME |
@@ -530,10 +528,10 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                                         PFID(mdo2fid(child)), rc);
                                 rc = -EIO;
                         }
-                        GOTO(out_oa, rc);
+                        GOTO(out_oti, rc);
                 }
         }
-        
+
         /* blksize should be changed after create data object */
         la->la_valid |= LA_BLKSIZE;
         la->la_blksize = oa->o_blksize;
@@ -541,20 +539,19 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         rc = obd_packmd(lov_exp, lmm, lsm);
         if (rc < 0) {
                 CERROR("cannot pack lsm, err = %d\n", rc);
-                GOTO(out_oa, rc);
+                GOTO(out_oti, rc);
         }
         *lmm_size = rc;
         rc = 0;
         EXIT;
-out_oa:
+out_oti:
         oti_free_cookies(oti);
-        obdo_free(oa);
 out_ids:
         if (lsm)
                 obd_free_memmd(lov_exp, &lsm);
         if (rc != 0)
                 mdd_lov_objid_free(env, mdd);
-        
+
         mdd_lproc_time_end(mdd, &start, LPROC_MDD_LOV_CREATE);
         return rc;
 }
@@ -564,7 +561,7 @@ int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
         struct timeval    start;
-        
+
         mdd_lproc_time_start(mdd, &start, LPROC_MDD_UNLINK_LOG);
         LASSERT(ma->ma_valid & MA_LOV);
 

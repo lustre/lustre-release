@@ -249,7 +249,7 @@ int mdd_objects_destroy(struct mds_obd *mds, struct inode *inode,
                 rc = 0;
         }
 
-        oa = obdo_alloc();
+        oa = obdo_alloc(); // XXX use mdd_thread_info.mti_oa instead.
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
         oa->o_id = lsm->lsm_object_id;

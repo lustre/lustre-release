@@ -105,6 +105,7 @@ struct mdd_thread_info {
         struct orph_key       mti_orph_key;
         struct obd_trans_info mti_oti;
         struct lu_buf         mti_buf;
+        struct obdo           mti_oa;
         char                  mti_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
 };
 
@@ -134,10 +135,10 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
                           const int needacl);
 int mdd_object_kill(const struct lu_env *env, struct mdd_object *obj,
                     struct md_attr *ma);
-int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj, 
+int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj,
                   struct md_attr *ma);
 int mdd_attr_get_internal_locked(const struct lu_env *env,
-                                 struct mdd_object *mdd_obj, 
+                                 struct mdd_object *mdd_obj,
                                  struct md_attr *ma);
 int mdd_object_create_internal(const struct lu_env *env,
                                struct mdd_object *obj, struct md_attr *ma,
@@ -151,10 +152,10 @@ int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
 /* mdd_dir.c */
 int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
                             struct mdd_object *cobj, struct md_attr *ma);
-int mdd_finish_unlink(const struct lu_env *env, struct mdd_object *obj, 
+int mdd_finish_unlink(const struct lu_env *env, struct mdd_object *obj,
                       struct md_attr *ma, struct thandle *th);
 int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
-                          struct mdd_object *child, struct md_attr *ma, 
+                          struct mdd_object *child, struct md_attr *ma,
                           struct thandle *handle);
 int mdd_link_sanity_check(const struct lu_env *env, struct mdd_object *tgt_obj,
                           struct mdd_object *src_obj);
@@ -194,7 +195,7 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd);
 
 int mdd_procfs_init(struct mdd_device *mdd);
 int mdd_procfs_fini(struct mdd_device *mdd);
-void mdd_lproc_time_start(struct mdd_device *mdd, struct timeval *start, 
+void mdd_lproc_time_start(struct mdd_device *mdd, struct timeval *start,
                           int op);
 void mdd_lproc_time_end(struct mdd_device *mdd, struct timeval *start, int op);
 
@@ -257,9 +258,9 @@ static inline int mdd_capable(struct md_ucred *uc, int cap)
 }
 
 int mdd_in_group_p(struct md_ucred *uc, gid_t grp);
-int mdd_acl_def_get(const struct lu_env *env, struct mdd_object *mdd_obj, 
+int mdd_acl_def_get(const struct lu_env *env, struct mdd_object *mdd_obj,
                     struct md_attr *ma);
-int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode, 
+int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
                   struct thandle *handle);
 int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
                    struct lu_buf *buf, __u32 *mode, struct thandle *handle);
@@ -267,7 +268,7 @@ int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
                  struct mdd_object *cobj, __u32 *mode, struct thandle *handle);
 int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
                               int mask, int getattr);
-int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj, 
+int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
                             int mask);
 int mdd_permission(const struct lu_env *env, struct md_object *obj, int mask);
 int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
