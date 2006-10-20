@@ -182,10 +182,13 @@ lcfg_cleanup:
 int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                void *md, int *md_size, const char *name)
 {
-        struct dt_object *next;
+        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+        struct dt_object  *next;
+        struct timeval    start;
         int rc;
         ENTRY;
-
+        
+        mdd_lproc_time_start(mdd, &start, LPROC_MDD_GET_MD);
         next = mdd_object_child(obj);
         rc = next->do_ops->do_xattr_get(env, next,
                                         mdd_buf_get(env, md, *md_size), name,
@@ -203,7 +206,8 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                 /* FIXME convert lov EA but fixed after verification test */
                 *md_size = rc;
         }
-
+        
+        mdd_lproc_time_end(mdd, &start, LPROC_MDD_GET_MD);
         RETURN (rc);
 }
 
@@ -275,11 +279,14 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
                    struct mdd_object *child, struct lov_mds_md *lmmp,
                    int lmm_size, struct thandle *handle, int set_stripe)
 {
-        int rc = 0;
-        umode_t mode;
+        struct mdd_device *mdd = mdo2mdd(&child->mod_obj); 
+        struct timeval    start;
         struct lu_buf *buf;
+        umode_t mode;
+        int rc = 0;
         ENTRY;
-
+        
+        mdd_lproc_time_start(mdd, &start, LPROC_MDD_SET_MD);
         buf = mdd_buf_get(env, lmmp, lmm_size);
         mode = mdd_object_type(child);
         if (S_ISREG(mode) && lmm_size > 0) {
@@ -313,6 +320,7 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
         }
         CDEBUG(D_INFO, "Set lov md %p size %d for fid "DFID" rc %d\n",
                         lmmp, lmm_size, PFID(mdo2fid(child)), rc);
+        mdd_lproc_time_end(mdd, &start, LPROC_MDD_SET_MD);
         RETURN(rc);
 }
 
@@ -387,14 +395,17 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         struct lov_stripe_md  *lsm = NULL;
         const void            *eadata = spec->u.sp_ea.eadata;
         __u32                  create_flags = spec->sp_cr_flags;
-        int                    rc = 0;
         struct obd_trans_info *oti = &mdd_env_info(env)->mti_oti;
         struct dt_object      *next;
+        struct timeval         start;
+        int                    rc = 0;
         ENTRY;
 
         if (create_flags & MDS_OPEN_DELAY_CREATE ||
             !(create_flags & FMODE_WRITE))
                 RETURN(0);
+        
+        mdd_lproc_time_start(mdd, &start, LPROC_MDD_LOV_CREATE);
 
         oti_init(oti, NULL);
         rc = mdd_lov_objid_alloc(env, mdd);
@@ -543,6 +554,8 @@ out_ids:
                 obd_free_memmd(lov_exp, &lsm);
         if (rc != 0)
                 mdd_lov_objid_free(env, mdd);
+        
+        mdd_lproc_time_end(mdd, &start, LPROC_MDD_LOV_CREATE);
         return rc;
 }
 
@@ -550,7 +563,9 @@ int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *mdd_cobj, struct md_attr *ma)
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
-
+        struct timeval    start;
+        
+        mdd_lproc_time_start(mdd, &start, LPROC_MDD_UNLINK_LOG);
         LASSERT(ma->ma_valid & MA_LOV);
 
         if ((ma->ma_cookie_size > 0) &&
@@ -558,6 +573,7 @@ int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
                               ma->ma_cookie, ma->ma_cookie_size) > 0)) {
                 ma->ma_valid |= MA_COOKIE;
         }
+        mdd_lproc_time_end(mdd, &start, LPROC_MDD_UNLINK_LOG);
         return 0;
 }
 

@@ -59,9 +59,24 @@ static int mdd_procfs_init_stats(struct mdd_device *mdd, int num_stats)
 
         lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_OPEN,
                              LPROCFS_CNTR_AVGMINMAX, "open", "time");
-        
         lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_CREATE,
                              LPROCFS_CNTR_AVGMINMAX, "create", "time");
+        lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_INDEX_INSERT,
+                             LPROCFS_CNTR_AVGMINMAX, "index_insert", "time");
+        lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_INDEX_DELETE,
+                             LPROCFS_CNTR_AVGMINMAX, "index_delete", "time");
+        lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_UNLINK,
+                             LPROCFS_CNTR_AVGMINMAX, "unlink", "time");
+        lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_UNLINK_LOG,
+                             LPROCFS_CNTR_AVGMINMAX, "unlink_log", "time");
+        lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_LOV_CREATE,
+                             LPROCFS_CNTR_AVGMINMAX, "lov_create", "time");
+        lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_SET_MD,
+                             LPROCFS_CNTR_AVGMINMAX, "set_md", "time");
+        lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_GET_MD,
+                             LPROCFS_CNTR_AVGMINMAX, "get_md", "time");
+        lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_LOOKUP,
+                             LPROCFS_CNTR_AVGMINMAX, "lookup", "lookup");
 cleanup:
         if (rc) {
                 lprocfs_free_stats(stats);

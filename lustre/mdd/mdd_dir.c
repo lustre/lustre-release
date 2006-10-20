@@ -298,10 +298,13 @@ static int __mdd_index_insert(const struct lu_env *env,
                              const char *name, int isdir, struct thandle *th,
                              struct lustre_capa *capa)
 {
-        int rc;
         struct dt_object *next = mdd_object_child(pobj);
+        struct timeval start;
+        int rc;
         ENTRY;
-
+        
+        mdd_lproc_time_start(mdo2mdd(&pobj->mod_obj), &start, 
+                             LPROC_MDD_INDEX_INSERT);
 #if 0
         struct lu_attr   *la = &mdd_env_info(env)->mti_la;
 #endif
@@ -324,6 +327,8 @@ static int __mdd_index_insert(const struct lu_env *env,
                 rc = mdd_attr_set_internal(env, mdd_obj, la, handle, 0);
 #endif
         }
+        mdd_lproc_time_end(mdo2mdd(&pobj->mod_obj), &start,
+                           LPROC_MDD_INDEX_INSERT);
         return rc;
 }
 
@@ -332,10 +337,13 @@ static int __mdd_index_delete(const struct lu_env *env,
                               int is_dir, struct thandle *handle,
                               struct lustre_capa *capa)
 {
-        int rc;
         struct dt_object *next = mdd_object_child(pobj);
+        struct timeval start;
+        int rc;
         ENTRY;
 
+        mdd_lproc_time_start(mdo2mdd(&pobj->mod_obj), &start, 
+                             LPROC_MDD_INDEX_DELETE);
         if (dt_try_as_dir(env, next)) {
                 rc = next->do_index_ops->dio_delete(env, next,
                                                     (struct dt_key *)name,
@@ -344,9 +352,10 @@ static int __mdd_index_delete(const struct lu_env *env,
                         mdd_ref_del_internal(env, pobj, handle);
         } else
                 rc = -ENOTDIR;
+        mdd_lproc_time_end(mdo2mdd(&pobj->mod_obj), &start, 
+                           LPROC_MDD_INDEX_DELETE);
         RETURN(rc);
 }
-
 
 static int __mdd_index_insert_only(const struct lu_env *env,
                                    struct mdd_object *pobj,
@@ -555,7 +564,6 @@ static int mdd_unlink(const struct lu_env *env,
                 obd_set_info_async(mdd2obd_dev(mdd)->u.mds.mds_osc_exp,
                                    strlen("unlinked"), "unlinked", 0,
                                    NULL, NULL);
-
 cleanup:
         mdd_unlock2(env, mdd_pobj, mdd_cobj);
         mdd_trans_stop(env, mdd, rc, handle);
@@ -844,9 +852,11 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         struct dt_object    *dir = mdd_object_child(mdd_obj);
         struct dt_rec       *rec = (struct dt_rec *)fid;
         const struct dt_key *key = (const struct dt_key *)name;
+        struct timeval      start;
         int rc;
         ENTRY;
 
+        mdd_lproc_time_start(mdo2mdd(pobj), &start, LPROC_MDD_LOOKUP);
         if (mdd_is_dead_obj(mdd_obj))
                 RETURN(-ESTALE);
 
@@ -874,6 +884,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         else
                 rc = -ENOTDIR;
 
+        mdd_lproc_time_end(mdo2mdd(pobj), &start, LPROC_MDD_LOOKUP);
         RETURN(rc);
 }
 
