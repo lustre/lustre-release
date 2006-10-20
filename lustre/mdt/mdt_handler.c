@@ -1620,16 +1620,6 @@ static struct mdt_handler *mdt_handler_find(__u32 opc,
         return h;
 }
 
-static inline __u64 req_exp_last_xid(struct ptlrpc_request *req)
-{
-        return le64_to_cpu(req->rq_export->exp_mdt_data.med_mcd->mcd_last_xid);
-}
-
-static inline __u64 req_exp_last_close_xid(struct ptlrpc_request *req)
-{
-        return le64_to_cpu(req->rq_export->exp_mdt_data.med_mcd->mcd_last_close_xid);
-}
-
 static int mdt_lock_resname_compat(struct mdt_device *m,
                                    struct ldlm_request *req)
 {
@@ -1733,42 +1723,6 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
         }
         RETURN(rc);
 }
-
-#if 0
-struct lu_context_key mdt_txn_key;
-static inline void mdt_finish_reply(struct mdt_thread_info *info, int rc)
-{
-        struct mdt_device     *mdt = info->mti_mdt;
-        struct ptlrpc_request *req = mdt_info_req(info);
-        struct obd_export     *exp = req->rq_export;
-
-        /* sometimes the reply message has not been successfully packed */
-        if (mdt == NULL || req == NULL || req->rq_repmsg == NULL)
-                return;
-
-        if (info->mti_trans_flags & MDT_NONEED_TRANSNO)
-                return;
-
-        /*XXX: assert on this when all code will be finished */
-        if (rc != 0 && info->mti_transno != 0) {
-                info->mti_transno = 0;
-                CERROR("Transno is not 0 while rc is %i!\n", rc);
-        }
-
-        CDEBUG(D_INODE, "transno = %llu, last_committed = %llu\n",
-               info->mti_transno, exp->exp_obd->obd_last_committed);
-
-        spin_lock(&mdt->mdt_transno_lock);
-        req->rq_transno = info->mti_transno;
-        lustre_msg_set_transno(req->rq_repmsg, info->mti_transno);
-
-        target_committed_to_req(req);
-
-        spin_unlock(&mdt->mdt_transno_lock);
-        lustre_msg_set_last_xid(req->rq_repmsg, req_exp_last_xid(req));
-        //lustre_msg_set_last_xid(req->rq_repmsg, req->rq_xid);
-}
-#endif
 
 static int mdt_init_capa_ctxt(const struct lu_env *env, struct mdt_device *m)
 {
@@ -1918,7 +1872,6 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
 {
         int i;
 
-        /* req capsule */
         info->mti_rep_buf_nr = ARRAY_SIZE(info->mti_rep_buf_size);
         for (i = 0; i < ARRAY_SIZE(info->mti_rep_buf_size); i++)
                 info->mti_rep_buf_size[i] = -1;
@@ -1999,12 +1952,11 @@ static int mdt_recovery(struct mdt_thread_info *info)
 
         /* sanity check: if the xid matches, the request must be marked as a
          * resent or replayed */
-        if (req->rq_xid == req_exp_last_xid(req) ||
-            req->rq_xid == req_exp_last_close_xid(req)) {
+        if (req_xid_is_last(req)) {
                 if (!(lustre_msg_get_flags(req->rq_reqmsg) &
                       (MSG_RESENT | MSG_REPLAY))) {
                         DEBUG_REQ(D_WARNING, req, "rq_xid "LPU64" matches last_xid, "
-                                  "expected RESENT flag\n", req->rq_xid);
+                                  "expected REPLAY or RESENT flag\n", req->rq_xid);
                         LBUG();
                         req->rq_status = -ENOTCONN;
                         RETURN(-ENOTCONN);
@@ -2371,10 +2323,7 @@ static void mdt_intent_fixup_resent(struct req_capsule *pill,
          * If the xid matches, then we know this is a resent request, and allow
          * it. (It's probably an OPEN, for which we don't send a lock.
          */
-        if (req->rq_xid == req_exp_last_xid(req))
-                return;
-
-        if (req->rq_xid == req_exp_last_close_xid(req))
+        if (req_xid_is_last(req))
                 return;
 
         /*

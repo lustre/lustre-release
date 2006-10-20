@@ -834,11 +834,6 @@ static int mdt_txn_start_cb(const struct lu_env *env,
         return 0;
 }
 
-static inline __u64 req_exp_last_xid(struct ptlrpc_request *req)
-{
-        return req->rq_export->exp_mdt_data.med_mcd->mcd_last_xid;
-}
-
 /* Update last_rcvd records with latests transaction data */
 static int mdt_txn_stop_cb(const struct lu_env *env,
                            struct thandle *txn, void *cookie)
@@ -892,7 +887,8 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
         req->rq_transno = mti->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, mti->mti_transno);
         //target_committed_to_req(req);
-        lustre_msg_set_last_xid(req->rq_repmsg, req_exp_last_xid(req));
+        lustre_msg_set_last_xid(req->rq_repmsg,
+                         mcd_last_xid(req->rq_export->exp_mdt_data.med_mcd));
         /* save transno for the commit callback */
         txi->txi_transno = mti->mti_transno;
         spin_unlock(&mdt->mdt_transno_lock);

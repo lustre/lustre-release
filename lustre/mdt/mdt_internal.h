@@ -81,6 +81,14 @@ static inline __u64 mcd_last_xid(struct mdt_client_data *mcd)
         return max(mcd->mcd_last_xid, mcd->mcd_last_close_xid);
 }
 
+/* check if request's xid is equal to last one or not*/
+static inline int req_xid_is_last(struct ptlrpc_request *req)
+{
+        struct mdt_client_data *mcd = req->rq_export->exp_mdt_data.med_mcd;
+        return (req->rq_xid == mcd->mcd_last_xid || 
+                req->rq_xid == mcd->mcd_last_close_xid);
+}
+
 /* copied from lr_server_data.
  * mds data stored at the head of last_rcvd file. In le32 order. */
 struct mdt_server_data {
