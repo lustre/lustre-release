@@ -487,6 +487,8 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                  */
                                 if (hash == prevhash)
                                         dup++;
+                                else
+                                        dup = 0;
                                 prevhash = hash;
 
                                 if (hash == fd->fd_dir.lfd_duppos &&
