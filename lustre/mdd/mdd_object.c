@@ -276,17 +276,19 @@ int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj,
 static int __mdd_lmm_get(const struct lu_env *env,
                          struct mdd_object *mdd_obj, struct md_attr *ma)
 {
-        int rc;
+        int rc, lmm_size;
         ENTRY;
 
         if (ma->ma_valid & MA_LOV)
                 RETURN(0);
 
         LASSERT(ma->ma_lmm != NULL && ma->ma_lmm_size > 0);
-        rc = mdd_get_md(env, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size,
+        lmm_size = ma->ma_lmm_size;
+        rc = mdd_get_md(env, mdd_obj, ma->ma_lmm, &lmm_size,
                         MDS_LOV_MD_NAME);
         if (rc > 0) {
                 ma->ma_valid |= MA_LOV;
+                ma->ma_lmm_size = lmm_size;
                 rc = 0;
         }
         RETURN(rc);
