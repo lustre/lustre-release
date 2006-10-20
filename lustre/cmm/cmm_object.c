@@ -404,6 +404,10 @@ static int cml_create(const struct lu_env *env,
         rc = cmm_try_to_split(env, mo_p);
         if (rc)
                 RETURN(rc);
+
+        rc = cmm_mdsnum_check(env, mo_p, child_name);
+        if (rc)
+                RETURN(rc);
 #endif
 
         rc = mdo_create(env, md_object_next(mo_p), child_name,
