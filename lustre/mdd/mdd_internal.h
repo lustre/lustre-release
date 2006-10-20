@@ -35,7 +35,26 @@
 #include <linux/sched.h>
 #include <linux/capability.h>
 
-struct dt_device;
+enum mdd_txn_op {
+        MDD_TXN_OBJECT_DESTROY_OP = 0,
+        MDD_TXN_OBJECT_CREATE_OP,
+        MDD_TXN_ATTR_SET_OP,
+        MDD_TXN_XATTR_SET_OP,
+        MDD_TXN_INDEX_INSERT_OP,
+        MDD_TXN_INDEX_DELETE_OP,
+        MDD_TXN_LINK_OP,
+        MDD_TXN_UNLINK_OP,
+        MDD_TXN_RENAME_OP,
+        MDD_TXN_RENAME_TGT_OP,
+        MDD_TXN_CREATE_DATA_OP,
+        MDD_TXN_MKDIR_OP,
+        MDD_TXN_LAST_OP
+};
+
+struct mdd_txn_op_descr {
+        enum mdd_txn_op mod_op;
+        unsigned int    mod_credits;
+};
 
 struct mdd_device {
         struct md_device                 mdd_md_dev;
@@ -47,6 +66,7 @@ struct mdd_device {
         struct dt_txn_callback           mdd_txn_cb;
         cfs_proc_dir_entry_t            *mdd_proc_entry;
         struct lprocfs_stats            *mdd_stats;
+        struct mdd_txn_op_descr          mdd_tod[MDD_TXN_LAST_OP];
 };
 
 enum mod_flags {
@@ -126,6 +146,8 @@ int mdd_attr_set_internal_locked(const struct lu_env *env,
                                  struct mdd_object *o,
                                  const struct lu_attr *attr,
                                  struct thandle *handle);
+int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
+                       struct md_attr *ma);
 /* mdd_dir.c */
 int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
                             struct mdd_object *cobj, struct md_attr *ma);
@@ -182,23 +204,11 @@ extern struct md_dir_operations    mdd_dir_ops;
 extern struct md_object_operations mdd_obj_ops;
 
 /* mdd_trans.c */
-enum mdd_txn_op {
-        MDD_TXN_OBJECT_DESTROY_OP,
-        MDD_TXN_OBJECT_CREATE_OP,
-        MDD_TXN_ATTR_SET_OP,
-        MDD_TXN_XATTR_SET_OP,
-        MDD_TXN_INDEX_INSERT_OP,
-        MDD_TXN_INDEX_DELETE_OP,
-        MDD_TXN_LINK_OP,
-        MDD_TXN_UNLINK_OP,
-        MDD_TXN_RENAME_OP,
-        MDD_TXN_RENAME_TGT_OP,
-        MDD_TXN_CREATE_DATA_OP,
-        MDD_TXN_MKDIR_OP
-};
+void mdd_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
+                         enum mdd_txn_op);
+int mdd_log_txn_param_build(const struct lu_env *env, struct mdd_object *obj,
+                            struct md_attr *ma, enum mdd_txn_op);
 
-void mdd_txn_param_build(const struct lu_env *env, enum mdd_txn_op op);
-        
 static inline void mdd_object_put(const struct lu_env *env,
                                   struct mdd_object *o)
 {
@@ -207,17 +217,18 @@ static inline void mdd_object_put(const struct lu_env *env,
 
 struct thandle* mdd_trans_start(const struct lu_env *env,
                                        struct mdd_device *);
-void mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd, 
+
+void mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd,
                     int rc, struct thandle *handle);
-int mdd_txn_start_cb(const struct lu_env *env, struct txn_param *param, 
+
+int mdd_txn_start_cb(const struct lu_env *env, struct txn_param *param,
                      void *cookie);
 
-int mdd_txn_stop_cb(const struct lu_env *env, struct thandle *txn, 
+int mdd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
                     void *cookie);
 
-int mdd_txn_commit_cb(const struct lu_env *env, struct thandle *txn, 
+int mdd_txn_commit_cb(const struct lu_env *env, struct thandle *txn,
                       void *cookie);
-
 /* mdd_device.c */
 struct lu_object *mdd_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,

@@ -134,5 +134,3 @@ void mdd_lproc_time_end(struct mdd_device *mdd, struct timeval *start, int op)
                 lprocfs_counter_add(mdd->mdd_stats, op, timediff);
         return;
 }
-
-

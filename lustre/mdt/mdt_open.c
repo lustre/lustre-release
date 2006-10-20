@@ -85,6 +85,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
                 RETURN(0);
 
         ma->ma_need = MA_INODE | MA_LOV;
+        ma->ma_valid = 0;
         rc = mdo_create_data(info->mti_env,
                              p ? mdt_object_child(p) : NULL,
                              mdt_object_child(o), spec, ma);
@@ -545,6 +546,7 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill, &RMF_MDT_MD,
                                                RCL_SERVER);
         ma->ma_need = MA_INODE | MA_LOV;
+        ma->ma_valid = 0;
 
         mdt_req_from_mcd(req, med->med_mcd);
         mdt_set_disposition(info, ldlm_rep, mcd->mcd_last_data);
@@ -729,6 +731,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill, &RMF_MDT_MD,
                                                RCL_SERVER);
         ma->ma_need = MA_INODE | MA_LOV;
+        ma->ma_valid = 0;
 
         LASSERT(info->mti_pill.rc_fmt == &RQF_LDLM_INTENT_OPEN);
         ldlm_rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
@@ -905,6 +908,7 @@ finish_open:
         if (result != 0 && created) {
                 int rc2;
                 ma->ma_need = 0;
+                ma->ma_valid = 0;
                 ma->ma_cookie_size = 0;
                 rc2 = mdo_unlink(info->mti_env,
                                  mdt_object_child(parent),
@@ -1031,6 +1035,7 @@ int mdt_close(struct mdt_thread_info *info)
                                                           &RMF_LOGCOOKIES,
                                                           RCL_SERVER);
                 ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
+                ma->ma_valid = 0;
                 repbody->eadatasize = 0;
                 repbody->aclsize = 0;
         } else
@@ -1108,6 +1113,7 @@ int mdt_done_writing(struct mdt_thread_info *info)
 
                 /* Set EPOCH CLOSE flag if not set by client. */
                 info->mti_epoch->flags |= MF_EPOCH_CLOSE;
+                info->mti_attr.ma_valid = 0;
                 rc = mdt_mfd_close(info, mfd);
         }
         RETURN(rc);

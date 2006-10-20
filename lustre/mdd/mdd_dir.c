@@ -379,7 +379,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         int rc;
         ENTRY;
 
-        mdd_txn_param_build(env, MDD_TXN_LINK_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_LINK_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -512,7 +512,10 @@ static int mdd_unlink(const struct lu_env *env,
         int rc, is_dir;
         ENTRY;
 
-        mdd_txn_param_build(env, MDD_TXN_UNLINK_OP);
+        rc = mdd_log_txn_param_build(env, mdd_cobj, ma, MDD_TXN_UNLINK_OP);
+        if (rc)
+                RETURN(rc);
+        
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -595,11 +598,12 @@ static int mdd_name_insert(const struct lu_env *env,
                            int isdir)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
+        struct mdd_device *mdd = mdo2mdd(pobj);
         struct thandle *handle;
         int rc;
         ENTRY;
 
-        mdd_txn_param_build(env, MDD_TXN_INDEX_INSERT_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_INDEX_INSERT_OP);
         handle = mdd_trans_start(env, mdo2mdd(pobj));
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -657,7 +661,7 @@ static int mdd_name_remove(const struct lu_env *env,
         int rc;
         ENTRY;
 
-        mdd_txn_param_build(env, MDD_TXN_INDEX_DELETE_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_INDEX_DELETE_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -714,7 +718,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
         int rc;
         ENTRY;
 
-        mdd_txn_param_build(env, MDD_TXN_RENAME_TGT_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_RENAME_TGT_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -802,7 +806,7 @@ static int mdd_create_data(const struct lu_env *env,
         if (rc)
                 RETURN(rc);
 
-        mdd_txn_param_build(env, MDD_TXN_CREATE_DATA_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_CREATE_DATA_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(rc = PTR_ERR(handle));
@@ -1043,7 +1047,7 @@ static int mdd_create(const struct lu_env *env,
                         RETURN(rc);
         }
 
-        mdd_txn_param_build(env, MDD_TXN_MKDIR_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_MKDIR_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -1263,7 +1267,7 @@ static int mdd_rename(const struct lu_env *env,
         if (tobj)
                 mdd_tobj = md2mdd_obj(tobj);
 
-        mdd_txn_param_build(env, MDD_TXN_RENAME_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_RENAME_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));

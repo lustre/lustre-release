@@ -75,6 +75,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 struct md_object *next = mdt_object_child(parent);
 
                 ma->ma_need = MA_INODE;
+                ma->ma_valid = 0;
                 mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                                OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
@@ -115,6 +116,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
                 struct md_object *next = mdt_object_child(o);
 
                 ma->ma_need = MA_INODE;
+                ma->ma_valid = 0;
                 /* Cross-ref create can encounter already created obj in case
                  * of recovery, just get attr in that case */
                 if (mdt_object_exists(o) == 1) {
@@ -281,6 +283,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         }
 
         ma->ma_need = MA_INODE;
+        ma->ma_valid = 0;
         next = mdt_object_child(mo);
         rc = mo_attr_get(info->mti_env, next, ma);
         if (rc != 0)
@@ -342,7 +345,6 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         RETURN(rc);
 }
 
-
 static int mdt_reint_unlink(struct mdt_thread_info *info,
                             struct mdt_lock_handle *lhc)
 {
@@ -390,7 +392,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                                                   &RMF_LOGCOOKIES,
                                                   RCL_SERVER);
         ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
-
+        ma->ma_valid = 0;
         if (!ma->ma_lmm || !ma->ma_cookie)
                 GOTO(out_unlock_parent, rc = -EINVAL);
 
@@ -435,6 +437,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
          * whether need MA_LOV and MA_COOKIE.
          */
         ma->ma_need = MA_INODE;
+        ma->ma_valid = 0;
         mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
         rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
                         mdt_object_child(mc), rr->rr_name, ma);
@@ -798,6 +801,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 GOTO(out_unlock_new, rc = -EINVAL);
 
         ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
+        ma->ma_valid = 0;
 
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_RENAME_WRITE);

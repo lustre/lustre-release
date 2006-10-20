@@ -112,6 +112,9 @@ int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj,
         int rc = 0;
         ENTRY;
 
+        if (ma->ma_valid & MA_INODE)
+                RETURN(0);
+
         rc = mdd_la_get(env, mdd_obj, &ma->ma_attr,
                           mdd_object_capa(env, mdd_obj));
         if (rc == 0)
@@ -126,6 +129,9 @@ static int __mdd_lmm_get(const struct lu_env *env,
         int rc;
         ENTRY;
 
+        if (ma->ma_valid & MA_LOV)
+                RETURN(0);
+
         LASSERT(ma->ma_lmm != NULL && ma->ma_lmm_size > 0);
         rc = mdd_get_md(env, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size,
                         MDS_LOV_MD_NAME);
@@ -136,12 +142,26 @@ static int __mdd_lmm_get(const struct lu_env *env,
         RETURN(rc);
 }
 
+int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
+                       struct md_attr *ma)
+{
+        int rc;
+        ENTRY;
+
+        mdd_read_lock(env, mdd_obj);
+        rc = __mdd_lmm_get(env, mdd_obj, ma);
+        mdd_read_unlock(env, mdd_obj);
+        RETURN(rc);
+}
+
 /* get lmv EA only*/
 static int __mdd_lmv_get(const struct lu_env *env,
                          struct mdd_object *mdd_obj, struct md_attr *ma)
 {
         int rc;
 
+        if (ma->ma_valid & MA_LMV)
+                RETURN(0);
         rc = mdd_get_md(env, mdd_obj, ma->ma_lmv, &ma->ma_lmv_size,
                         MDS_LMV_MD_NAME);
         if (rc > 0) {
@@ -562,7 +582,7 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         ENTRY;
 
-        mdd_txn_param_build(env, MDD_TXN_ATTR_SET_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_ATTR_SET_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -681,7 +701,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
         if (rc)
                 RETURN(rc);
 
-        mdd_txn_param_build(env, MDD_TXN_XATTR_SET_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_XATTR_SET_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -731,7 +751,7 @@ int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
         if (rc)
                 RETURN(rc);
 
-        mdd_txn_param_build(env, MDD_TXN_XATTR_SET_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_XATTR_SET_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -755,7 +775,10 @@ static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
         int rc;
         ENTRY;
 
-        mdd_txn_param_build(env, MDD_TXN_UNLINK_OP);
+        rc = mdd_log_txn_param_build(env, mdd_obj, ma, MDD_TXN_UNLINK_OP);
+        if (rc)
+                RETURN(rc);
+
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(-ENOMEM);
@@ -824,7 +847,7 @@ static int mdd_object_create(const struct lu_env *env,
         if (rc)
                 RETURN(rc);
 
-        mdd_txn_param_build(env, MDD_TXN_OBJECT_CREATE_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_OBJECT_CREATE_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -894,7 +917,7 @@ static int mdd_ref_add(const struct lu_env *env,
         int rc;
         ENTRY;
 
-        mdd_txn_param_build(env, MDD_TXN_XATTR_SET_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_XATTR_SET_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(-ENOMEM);

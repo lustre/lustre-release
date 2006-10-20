@@ -306,6 +306,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD,
                                                              RCL_SERVER);
         }
+        ma->ma_valid = 0;
         rc = mo_attr_get(env, next, ma);
         if (rc == -EREMOTE) {
                 /* This object is located on remote node.*/
@@ -1272,6 +1273,7 @@ static int mdt_sync(struct mdt_thread_info *info)
 
                                 next = mdt_object_child(info->mti_object);
                                 info->mti_attr.ma_need = MA_INODE;
+                                info->mti_attr.ma_valid = 0;
                                 rc = mo_attr_get(info->mti_env, next,
                                                  &info->mti_attr);
                                 if (rc == 0) {
@@ -3935,7 +3937,7 @@ static int mdt_destroy_export(struct obd_export *export)
         if (ma->ma_lmm == NULL || ma->ma_cookie == NULL)
                 GOTO(out, rc = -ENOMEM);
         ma->ma_need = MA_LOV | MA_COOKIE;
-
+        ma->ma_valid = 0;
         /* Close any open files (which may also cause orphan unlinking). */
         spin_lock(&med->med_open_lock);
         while (!list_empty(&med->med_open_head)) {
@@ -3956,6 +3958,7 @@ static int mdt_destroy_export(struct obd_export *export)
                 ma->ma_lmm_size = lmm_size;
                 ma->ma_cookie_size = cookie_size;
                 ma->ma_need = MA_LOV | MA_COOKIE;
+                ma->ma_valid = 0;
         }
         spin_unlock(&med->med_open_lock);
         info->mti_mdt = NULL;
