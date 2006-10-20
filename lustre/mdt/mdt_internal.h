@@ -632,54 +632,6 @@ static inline int is_identity_get_disabled(struct upcall_cache *cache)
         return cache ? (strcmp(cache->uc_upcall, "NONE") == 0) : 1;
 }
 
-static inline lu_mode_t mdt_ldlm_mode2lu_mode(ldlm_mode_t mode)
-{
-        switch (mode) {
-        case LCK_MINMODE:
-                return LU_MINMODE;
-        case LCK_EX:
-                return LU_EX;
-        case LCK_PW:
-                return LU_PW;
-        case LCK_PR:
-                return LU_PR;
-        case LCK_CW:
-                return LU_CW;
-        case LCK_CR:
-                return LU_CR;
-        case LCK_NL:
-                return LU_NL;
-        case LCK_GROUP:
-                return LU_GROUP;
-        default:
-                return 0;
-        }
-}
-
-static inline ldlm_mode_t mdt_lu_mode2ldlm_mode(lu_mode_t mode)
-{
-        switch (mode) {
-        case LU_MINMODE:
-                return LCK_MINMODE;
-        case LU_EX:
-                return LCK_EX;
-        case LU_PW:
-                return LCK_PW;
-        case LU_PR:
-                return LCK_PR;
-        case LU_CW:
-                return LCK_CW;
-        case LU_CR:
-                return LCK_CR;
-        case LU_NL:
-                return LCK_NL;
-        case LU_GROUP:
-                return LCK_GROUP;
-        default:
-                return 0;
-        }
-}
-
 /*
  * Capability
  */

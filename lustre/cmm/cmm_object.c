@@ -372,8 +372,8 @@ static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
 
 }
 
-static lu_mode_t cml_lock_mode(const struct lu_env *env,
-                               struct md_object *mo, lu_mode_t lm)
+static mdl_mode_t cml_lock_mode(const struct lu_env *env,
+                                struct md_object *mo, mdl_mode_t lm)
 {
         ENTRY;
 #ifdef HAVE_SPLIT_SUPPORT
@@ -381,15 +381,15 @@ static lu_mode_t cml_lock_mode(const struct lu_env *env,
                 struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
 
                 /* 
-                 * Check only if need protection from split. If not mdt handles
-                 * other cases.
+                 * Check only if we need protection from split. If not - mdt
+                 * handles other cases.
                  */
-                if (lm == LU_PW &&
+                if (lm == MDL_PW &&
                     cmm_expect_splitting(env, mo, ma) == CMM_EXPECT_SPLIT)
-                        RETURN(LU_EX);
+                        RETURN(MDL_EX);
         }
 #endif
-        RETURN(LU_MINMODE);
+        RETURN(MDL_MINMODE);
 }
 
 static int cml_create(const struct lu_env *env,
@@ -779,10 +779,10 @@ static int cmr_lookup(const struct lu_env *env, struct md_object *mo_p,
         RETURN(-EREMOTE);
 }
 
-static lu_mode_t cmr_lock_mode(const struct lu_env *env,
-                               struct md_object *mo, lu_mode_t lm)
+static mdl_mode_t cmr_lock_mode(const struct lu_env *env,
+                                struct md_object *mo, mdl_mode_t lm)
 {
-        RETURN(LU_MINMODE);
+        RETURN(MDL_MINMODE);
 }
 
 /*

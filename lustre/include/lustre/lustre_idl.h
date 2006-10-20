@@ -1454,18 +1454,6 @@ typedef enum {
 } ldlm_mode_t;
 
 typedef enum {
-        LU_MINMODE  = 0,
-        LU_EX       = 1,
-        LU_PW       = 2,
-        LU_PR       = 4,
-        LU_CW       = 8,
-        LU_CR       = 16,
-        LU_NL       = 32,
-        LU_GROUP    = 64,
-        LU_MAXMODE
-} lu_mode_t;
-
-typedef enum {
         LDLM_PLAIN     = 10,
         LDLM_EXTENT    = 11,
         LDLM_FLOCK     = 12,

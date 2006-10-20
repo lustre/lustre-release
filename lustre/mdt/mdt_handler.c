@@ -1411,10 +1411,48 @@ struct mdt_object *mdt_object_find(const struct lu_env *env,
         RETURN(m);
 }
 
-int mdt_object_lock_mode(struct mdt_thread_info *info,
-                         struct mdt_object *o,
-                         struct mdt_lock_handle *lh,
-                         ldlm_mode_t lm)
+static mdl_mode_t mdt_mdl_lock_modes[] = {
+        [0] = MDL_MINMODE,
+        [1] = MDL_EX,
+        [2] = MDL_PW,
+        [3] = MDL_PR,
+        [4] = MDL_CW,
+        [5] = MDL_CR,
+        [6] = MDL_NL,
+        [7] = MDL_GROUP
+};
+
+static ldlm_mode_t mdt_ldlm_lock_modes[] = {
+        [0] = LCK_MINMODE,
+        [1] = LCK_EX,
+        [2] = LCK_PW,
+        [3] = LCK_PR,
+        [4] = LCK_CW,
+        [5] = LCK_CR,
+        [6] = LCK_NL,
+        [7] = LCK_GROUP
+};
+
+static inline mdl_mode_t mdt_ldlm_mode2mdl_mode(ldlm_mode_t mode)
+{
+        int idx = ffs((int)mode) - 1;
+        LASSERT(idx >= 0);
+        LASSERT(IS_PO2(mode));
+        LASSERT(idx < ARRAY_SIZE(mdt_mdl_lock_modes));
+        return mdt_mdl_lock_modes[idx];
+}
+
+static inline ldlm_mode_t mdt_mdl_mode2ldlm_mode(mdl_mode_t mode)
+{
+        int idx = ffs((int)mode) - 1;
+        LASSERT(idx >= 0);
+        LASSERT(IS_PO2(mode));
+        LASSERT(idx < ARRAY_SIZE(mdt_ldlm_lock_modes));
+        return mdt_ldlm_lock_modes[idx];
+}
+
+int mdt_lock_init_mode(struct mdt_thread_info *info, struct mdt_object *o,
+                       struct mdt_lock_handle *lh, ldlm_mode_t lm)
 {
         ENTRY;
 
@@ -1422,7 +1460,7 @@ int mdt_object_lock_mode(struct mdt_thread_info *info,
         
 #ifdef CONFIG_PDIROPS
         {
-                lu_mode_t mode;
+                mdl_mode_t mode;
                 
                 /*
                  * Any dir access needs couple of locks:
@@ -1448,10 +1486,10 @@ int mdt_object_lock_mode(struct mdt_thread_info *info,
 
                 /* Ask underlaying level its opinion about possible locks. */
                 mode = mdo_lock_mode(info->mti_env, mdt_object_child(o),
-                                     mdt_ldlm_mode2lu_mode(lm));
-                if (mode != LU_MINMODE) {
+                                     mdt_ldlm_mode2mdl_mode(lm));
+                if (mode != MDL_MINMODE) {
                         /* Lower layer said what lock mode it likes to be, use it. */
-                        lh->mlh_pdo_mode = mdt_lu_mode2ldlm_mode(mode);
+                        lh->mlh_pdo_mode = mdt_mdl_mode2ldlm_mode(mode);
                 } else {
                         /* 
                          * Lower layer does not want to specify locking mode. We od it

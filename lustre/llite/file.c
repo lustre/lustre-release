@@ -342,7 +342,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         if (op_data == NULL)
                 RETURN(-ENOMEM);
 
-        rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, itp, LCK_PW, op_data,
+        rc = md_enqueue(sbi->ll_md_exp, LDLM_IBITS, itp, LCK_CW, op_data,
                         &lockh, lmm, lmmsize, ldlm_completion_ast,
                         ll_md_blocking_ast, NULL, 0);
 
@@ -372,7 +372,7 @@ static int ll_och_fill(struct obd_export *md_exp, struct ll_inode_info *lli,
         LASSERT(och);
 
         body = lustre_msg_buf(req->rq_repmsg, DLM_REPLY_REC_OFF, sizeof(*body));
-        LASSERT(body != NULL);                  /* reply already checked out */
+        LASSERT(body != NULL);                      /* reply already checked out */
         LASSERT_REPSWABBED(req, DLM_REPLY_REC_OFF); /* and swabbed in md_enqueue */
 
         memcpy(&och->och_fh, &body->handle, sizeof(body->handle));
@@ -1890,7 +1890,7 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
         if (op_data == NULL)
                 RETURN(-ENOMEM);
 
-        rc = md_enqueue(ll_i2mdexp(head_inode), LDLM_IBITS, &oit, LCK_PW,
+        rc = md_enqueue(ll_i2mdexp(head_inode), LDLM_IBITS, &oit, LCK_CW,
                         op_data, &lockh, &tsize, 0, ldlm_completion_ast,
                         ll_md_blocking_ast, &hsize, 0);
 

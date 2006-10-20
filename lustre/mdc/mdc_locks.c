@@ -62,11 +62,21 @@ EXPORT_SYMBOL(it_clear_disposition);
 
 static int it_to_lock_mode(struct lookup_intent *it)
 {
+        ENTRY;
+        
+#ifdef CONFIG_PDIROPS
+        /* CREAT needs to be tested before open (both could be set) */
+        if (it->it_op & IT_CREAT)
+                return LCK_PW;
+        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
+                return LCK_PR;
+#else
         /* CREAT needs to be tested before open (both could be set) */
         if (it->it_op & IT_CREAT)
                 return LCK_CW;
         else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
                 return LCK_CR;
+#endif
 
         LBUG();
         RETURN(-EINVAL);
@@ -653,7 +663,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                                                         fid_ver(&op_data->fid2) } };
                 struct lustre_handle lockh;
                 ldlm_policy_data_t policy;
-                int mode = LCK_CR;
+                ldlm_mode_t mode = LCK_CR;
 
                 /* As not all attributes are kept under update lock, e.g. 
                    owner/group/acls are under lookup lock, we need both 
@@ -668,19 +678,20 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
                 rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                      LDLM_FL_BLOCK_GRANTED, &res_id,
-                                     LDLM_IBITS, &policy, LCK_CR, &lockh);
+                                     LDLM_IBITS, &policy, mode, &lockh);
                 if (!rc) {
                         mode = LCK_CW;
                         rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                              LDLM_FL_BLOCK_GRANTED, &res_id,
-                                             LDLM_IBITS, &policy, LCK_CW, &lockh);
+                                             LDLM_IBITS, &policy, mode, &lockh);
                 }
                 if (!rc) {
                         mode = LCK_PR;
                         rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                              LDLM_FL_BLOCK_GRANTED, &res_id,
-                                             LDLM_IBITS, &policy, LCK_PR, &lockh);
+                                             LDLM_IBITS, &policy, mode, &lockh);
                 }
+
                 if (rc) {
                         memcpy(&it->d.lustre.it_lock_handle, &lockh,
                                sizeof(lockh));

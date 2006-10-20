@@ -278,14 +278,20 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
         ldlm_policy_data_t policy = {.l_inodebits = {MDS_INODELOCK_UPDATE} };
         struct address_space *mapping = dir->i_mapping;
         struct lustre_handle lockh;
-        struct page *page;
         struct lu_dirpage *dp;
+        struct page *page;
+        ldlm_mode_t mode;
         int rc;
         __u32 start;
         __u32 end;
 
+#ifdef CONFIG_PDIROPS
+        mode = LCK_PR;
+#else
+        mode = LCK_CR;
+#endif
         rc = md_lock_match(ll_i2sbi(dir)->ll_md_exp, LDLM_FL_BLOCK_GRANTED,
-                           ll_inode2fid(dir), LDLM_IBITS, &policy, LCK_CR, &lockh);
+                           ll_inode2fid(dir), LDLM_IBITS, &policy, mode, &lockh);
         if (!rc) {
                 struct lookup_intent it = { .it_op = IT_READDIR };
                 struct ptlrpc_request *request;
@@ -296,7 +302,7 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
                         return ERR_PTR(-ENOMEM);
 
                 rc = md_enqueue(ll_i2sbi(dir)->ll_md_exp, LDLM_IBITS, &it,
-                                LCK_CR, op_data, &lockh, NULL, 0,
+                                mode, op_data, &lockh, NULL, 0,
                                 ldlm_completion_ast, ll_md_blocking_ast, dir,
                                 0);
 
@@ -381,7 +387,7 @@ hash_collision:
                 goto fail;
         }
 out_unlock:
-        ldlm_lock_decref(&lockh, LCK_CR);
+        ldlm_lock_decref(&lockh, mode);
         return page;
 
 fail:
