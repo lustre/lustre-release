@@ -78,8 +78,9 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
                 /* Skip checking the slave dirs (mea_count is 0) */
                 if (rc == 0 && ma->ma_lmv->mea_count != 0) {
                         /* 
-                         * Get stripe by name to check the name belongs to master dir,
-                         * otherwise return the -ERESTART
+                         * Get stripe by name to check the name
+                         * belongs to master dir, otherwise
+                         * return the -ERESTART
                          */
                         stripe = mea_name2idx(ma->ma_lmv, name, strlen(name));
                 
