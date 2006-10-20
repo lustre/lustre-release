@@ -540,26 +540,28 @@ static int lprocfs_wr_capa(struct file *file, const char *buffer,
 {
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        char mode[3] = "";
+        int val, rc;
 
-        if (count > 3) {
-                CERROR("invalid capability mode, only m/o/mo/x is accepted.\n"
-                       " m:  enable MDS fid capability\n"
-                       " o:  enable OSS fid capability\n"
-                       " mo: enable both MDS and OSS fid capability\n"
-                       " x:  disable fid capability\n");
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 0 || val > 3) {
+                CERROR("invalid capability mode, only 0/1/2/3 is accepted.\n"
+                       " 0:  disable fid capability\n"
+                       " 1:  enable OSS fid capability\n"
+                       " 2:  enable MDS fid capability\n"
+                       " 3:  enable both MDS and OSS fid capability\n");
                 return -EINVAL;
         }
 
-        if (copy_from_user(mode, buffer, min(2UL, count)))
-                return -EFAULT;
+        /* OSS fid capability needs enable both MDS and OSS fid capability on 
+         * MDS */
+        if (val == 1)
+                val = 3;
 
-        mdt->mdt_opts.mo_mds_capa = 0;
-        mdt->mdt_opts.mo_oss_capa = 0;
-        if (strchr(mode, 'm'))
-                mdt->mdt_opts.mo_mds_capa = 1;
-        if (strchr(mode, 'o'))
-                mdt->mdt_opts.mo_oss_capa = 1;
+        mdt->mdt_opts.mo_oss_capa = (val & 0x1);
+        mdt->mdt_opts.mo_mds_capa = !!(val & 0x2);
         mdt->mdt_capa_conf = 1;
         return count;
 }

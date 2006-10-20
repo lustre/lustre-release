@@ -320,23 +320,20 @@ static int lprocfs_filter_wr_capa(struct file *file, const char *buffer,
                                   unsigned long count, void *data)
 {
         struct obd_device *obd = data;
-        char mode[2] = "";
+        int val, rc;
 
-        if (count > 2) {
-                CERROR("invalid capability mode, only o/x are accepted.\n"
-                       " o: enable oss fid capability\n"
-                       " x: disable oss fid capability\n");
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val & ~0x1) {
+                CERROR("invalid capability mode, only 0/1 are accepted.\n"
+                       " 1: enable oss fid capability\n"
+                       " 0: disable oss fid capability\n");
                 return -EINVAL;
         }
 
-        if (copy_from_user(mode, buffer, min(1UL, count)))
-                return -EFAULT;
-
-        if (strchr(mode, 'o'))
-                obd->u.filter.fo_fl_oss_capa = 1;
-        else
-                obd->u.filter.fo_fl_oss_capa = 0;
-
+        obd->u.filter.fo_fl_oss_capa = val;
         return count;
 }
 
