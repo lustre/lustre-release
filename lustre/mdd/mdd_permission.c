@@ -42,6 +42,11 @@
 #include <lustre_mds.h>
 #include <lustre/lustre_idl.h>
 
+#ifdef CONFIG_FS_POSIX_ACL
+#include <linux/posix_acl_xattr.h>
+#include <linux/posix_acl.h>
+#endif
+
 #include "mdd_internal.h"
 
 #define mdd_get_group_info(group_info) do {             \
@@ -58,8 +63,10 @@
 #define MDD_GROUP_AT(gi, i) \
     ((gi)->blocks[(i) / MDD_NGROUPS_PER_BLOCK][(i) % MDD_NGROUPS_PER_BLOCK])
 
-/* groups_search() is copied from linux kernel! */
-/* a simple bsearch */
+/*
+ * groups_search() is copied from linux kernel!
+ * A simple bsearch.
+ */
 static int mdd_groups_search(struct group_info *group_info, gid_t grp)
 {
         int left, right;
@@ -179,127 +186,7 @@ check_perm:
 
         RETURN(-EACCES);
 }
-#endif
 
-static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
-                         struct lu_attr* la, int mask)
-{
-#ifdef CONFIG_FS_POSIX_ACL
-        struct dt_object *next;
-        struct lu_buf    *buf = &mdd_env_info(env)->mti_buf;
-        struct md_ucred  *uc  = md_ucred(env);
-        posix_acl_xattr_entry *entry;
-        int entry_count;
-        int rc;
-        ENTRY;
-
-        next = mdd_object_child(obj);
-
-        buf->lb_buf = mdd_env_info(env)->mti_xattr_buf;
-        buf->lb_len = sizeof(mdd_env_info(env)->mti_xattr_buf);
-        rc = next->do_ops->do_xattr_get(env, next, buf,
-                                        XATTR_NAME_ACL_ACCESS,
-                                        mdd_object_capa(env, obj));
-        if (rc <= 0)
-                RETURN(rc ? : -EACCES);
-
-        entry = ((posix_acl_xattr_header *)(buf->lb_buf))->a_entries;
-        entry_count = (rc - 4) / sizeof(posix_acl_xattr_entry);
-
-        rc = mdd_posix_acl_permission(uc, la, mask, entry, entry_count);
-        RETURN(rc);
-#else
-        ENTRY;
-        RETURN(-EAGAIN);
-#endif
-}
-
-int __mdd_permission_internal(const struct lu_env *env,
-                              struct mdd_object *obj,
-                              int mask, int getattr)
-{
-        struct lu_attr  *la = &mdd_env_info(env)->mti_la;
-        struct md_ucred *uc = md_ucred(env);
-        __u32 mode;
-        int rc;
-
-        ENTRY;
-
-        if (mask == 0)
-                RETURN(0);
-
-        /* These means unnecessary for permission check */
-        if ((uc == NULL) || (uc->mu_valid == UCRED_INIT))
-                RETURN(0);
-
-        /* Invalid user credit */
-        if (uc->mu_valid == UCRED_INVALID)
-                RETURN(-EACCES);
-
-        /*
-         * Nobody gets write access to an immutable file.
-         */
-        if ((mask & MAY_WRITE) && mdd_is_immutable(obj))
-                RETURN(-EACCES);
-
-        if (getattr) {
-                rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
-                if (rc)
-                        RETURN(rc);
-        }
-
-        mode = la->la_mode;
-        if (uc->mu_fsuid == la->la_uid) {
-                mode >>= 6;
-        } else {
-                if (mode & S_IRWXG) {
-                        rc = mdd_check_acl(env, obj, la, mask);
-                        if (rc == -EACCES)
-                                goto check_capabilities;
-                        else if ((rc != -EAGAIN) && (rc != -EOPNOTSUPP) &&
-                                 (rc != -ENODATA))
-                                RETURN(rc);
-                }
-                if (mdd_in_group_p(uc, la->la_gid))
-                        mode >>= 3;
-        }
-
-        /*
-         * If the DACs are ok we don't need any capability check.
-         */
-        if (((mode & mask & S_IRWXO) == mask))
-                RETURN(0);
-
-check_capabilities:
-
-        /*
-         * Read/write DACs are always overridable.
-         * Executable DACs are overridable if at least one exec bit is set.
-         * Dir's DACs are always overridable.
-         */
-        if (!(mask & MAY_EXEC) ||
-            (la->la_mode & S_IXUGO) || S_ISDIR(la->la_mode))
-                if (mdd_capable(uc, CAP_DAC_OVERRIDE))
-                        RETURN(0);
-
-        /*
-         * Searching includes executable on directories, else just read.
-         */
-        if ((mask == MAY_READ) ||
-            (S_ISDIR(la->la_mode) && !(mask & MAY_WRITE)))
-                if (mdd_capable(uc, CAP_DAC_READ_SEARCH))
-                        RETURN(0);
-
-        RETURN(-EACCES);
-}
-
-int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj, 
-                            int mask)
-{
-        return __mdd_permission_internal(env, obj, mask, 1);
-}
-
-#ifdef CONFIG_FS_POSIX_ACL
 /* get default acl EA only */
 int mdd_acl_def_get(const struct lu_env *env, struct mdd_object *mdd_obj, 
                     struct md_attr *ma)
@@ -320,11 +207,6 @@ int mdd_acl_def_get(const struct lu_env *env, struct mdd_object *mdd_obj,
         }
         RETURN(rc);
 }
-#endif
-
-#ifdef CONFIG_FS_POSIX_ACL
-#include <linux/posix_acl_xattr.h>
-#include <linux/posix_acl.h>
 
 /*
  * Modify the ACL for the chmod.
@@ -410,9 +292,7 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
                                         0, handle, BYPASS_CAPA);
         RETURN(rc);
 }
-#endif
 
-#ifdef CONFIG_FS_POSIX_ACL
 /*
  * Modify acl when creating a new obj.
  *
@@ -577,6 +457,124 @@ static int mdd_exec_permission_lite(const struct lu_env *env,
         RETURN(-EACCES);
 }
 #endif
+
+static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
+                         struct lu_attr* la, int mask)
+{
+#ifdef CONFIG_FS_POSIX_ACL
+        struct dt_object *next;
+        struct lu_buf    *buf = &mdd_env_info(env)->mti_buf;
+        struct md_ucred  *uc  = md_ucred(env);
+        posix_acl_xattr_entry *entry;
+        int entry_count;
+        int rc;
+        ENTRY;
+
+        next = mdd_object_child(obj);
+
+        buf->lb_buf = mdd_env_info(env)->mti_xattr_buf;
+        buf->lb_len = sizeof(mdd_env_info(env)->mti_xattr_buf);
+        rc = next->do_ops->do_xattr_get(env, next, buf,
+                                        XATTR_NAME_ACL_ACCESS,
+                                        mdd_object_capa(env, obj));
+        if (rc <= 0)
+                RETURN(rc ? : -EACCES);
+
+        entry = ((posix_acl_xattr_header *)(buf->lb_buf))->a_entries;
+        entry_count = (rc - 4) / sizeof(posix_acl_xattr_entry);
+
+        rc = mdd_posix_acl_permission(uc, la, mask, entry, entry_count);
+        RETURN(rc);
+#else
+        ENTRY;
+        RETURN(-EAGAIN);
+#endif
+}
+
+int __mdd_permission_internal(const struct lu_env *env,
+                              struct mdd_object *obj,
+                              int mask, int getattr)
+{
+        struct lu_attr  *la = &mdd_env_info(env)->mti_la;
+        struct md_ucred *uc = md_ucred(env);
+        __u32 mode;
+        int rc;
+
+        ENTRY;
+
+        if (mask == 0)
+                RETURN(0);
+
+        /* These means unnecessary for permission check */
+        if ((uc == NULL) || (uc->mu_valid == UCRED_INIT))
+                RETURN(0);
+
+        /* Invalid user credit */
+        if (uc->mu_valid == UCRED_INVALID)
+                RETURN(-EACCES);
+
+        /*
+         * Nobody gets write access to an immutable file.
+         */
+        if ((mask & MAY_WRITE) && mdd_is_immutable(obj))
+                RETURN(-EACCES);
+
+        if (getattr) {
+                rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
+                if (rc)
+                        RETURN(rc);
+        }
+
+        mode = la->la_mode;
+        if (uc->mu_fsuid == la->la_uid) {
+                mode >>= 6;
+        } else {
+                if (mode & S_IRWXG) {
+                        rc = mdd_check_acl(env, obj, la, mask);
+                        if (rc == -EACCES)
+                                goto check_capabilities;
+                        else if ((rc != -EAGAIN) && (rc != -EOPNOTSUPP) &&
+                                 (rc != -ENODATA))
+                                RETURN(rc);
+                }
+                if (mdd_in_group_p(uc, la->la_gid))
+                        mode >>= 3;
+        }
+
+        /*
+         * If the DACs are ok we don't need any capability check.
+         */
+        if (((mode & mask & S_IRWXO) == mask))
+                RETURN(0);
+
+check_capabilities:
+
+        /*
+         * Read/write DACs are always overridable.
+         * Executable DACs are overridable if at least one exec bit is set.
+         * Dir's DACs are always overridable.
+         */
+        if (!(mask & MAY_EXEC) ||
+            (la->la_mode & S_IXUGO) || S_ISDIR(la->la_mode))
+                if (mdd_capable(uc, CAP_DAC_OVERRIDE))
+                        RETURN(0);
+
+        /*
+         * Searching includes executable on directories, else just read.
+         */
+        if ((mask == MAY_READ) ||
+            (S_ISDIR(la->la_mode) && !(mask & MAY_WRITE)))
+                if (mdd_capable(uc, CAP_DAC_READ_SEARCH))
+                        RETURN(0);
+
+        RETURN(-EACCES);
+}
+
+int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj, 
+                            int mask)
+{
+        return __mdd_permission_internal(env, obj, mask, 1);
+}
 
 static inline int mdd_permission_internal_locked(const struct lu_env *env,
                                                  struct mdd_object *obj,
