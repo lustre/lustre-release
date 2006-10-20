@@ -608,6 +608,9 @@ out:
 static int mdt_open_by_fid(struct mdt_thread_info* info,
                            struct ldlm_reply *rep)
 {
+        const struct lu_env     *env = info->mti_env;
+        struct mdt_device       *mdt = info->mti_mdt;
+        struct md_device        *next = mdt->mdt_child;
         __u32                    flags = info->mti_spec.sp_cr_flags;
         struct mdt_reint_record *rr = &info->mti_rr;
         struct md_attr          *ma = &info->mti_attr;
@@ -619,10 +622,15 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
+        /* FIXME: capability in replay open request might have expired, disable
+         * capability check for this kind of request. security hole?
+         */
+        if (mdt->mdt_opts.mo_mds_capa)
+                mdt->mdt_child->md_ops->mdo_init_capa_ctxt(env, next, 0, 0, 0,
+                                                           0);
+
         rc = mdt_object_exists(o);
         if (rc > 0) {
-                const struct lu_env *env = info->mti_env;
-
                 mdt_set_disposition(info, rep, (DISP_IT_EXECD |
                                                 DISP_LOOKUP_EXECD |
                                                 DISP_LOOKUP_POS));
@@ -640,6 +648,14 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
                 repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
                 rc = 0;
         }
+
+        if (mdt->mdt_opts.mo_mds_capa)
+                mdt->mdt_child->md_ops->mdo_init_capa_ctxt(env, next,
+                                                mdt->mdt_opts.mo_mds_capa,
+                                                mdt->mdt_capa_timeout,
+                                                mdt->mdt_capa_alg,
+                                                mdt->mdt_capa_keys);
+
         mdt_object_put(info->mti_env, o);
         RETURN(rc);
 }
