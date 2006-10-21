@@ -1134,7 +1134,7 @@ static int mdd_create(const struct lu_env *env,
         /* replay creates has objects already */
         if (spec->u.sp_ea.no_lov_create) {
                 CDEBUG(D_INFO, "we already have lov ea\n");
-                LASSERT(lmm != NULL);
+                LASSERT(lmm == NULL);
                 lmm = (struct lov_mds_md *)spec->u.sp_ea.eadata;
                 lmm_size = spec->u.sp_ea.eadatalen;
         }
@@ -1194,7 +1194,7 @@ cleanup:
         }
         /* finish mdd_lov_create() stuff */
         mdd_lov_create_finish(env, mdd, rc);
-        if (lmm)
+        if (lmm && !spec->u.sp_ea.no_lov_create)
                 OBD_FREE(lmm, lmm_size);
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
 out_trans:
