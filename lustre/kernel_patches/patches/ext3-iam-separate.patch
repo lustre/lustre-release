@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1321 @@
+@@ -0,0 +1,1375 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -331,6 +331,12 @@ Index: iam/fs/ext3/iam.c
 +	return iam_leaf_ops(leaf)->key_cmp(leaf, key);
 +}
 +
++static int iam_leaf_keyeq(const struct iam_leaf *leaf,
++                          const struct iam_key *key)
++{
++	return iam_leaf_ops(leaf)->key_eq(leaf, key);
++}
++
 +#if EXT3_INVARIANT_ON
 +static int iam_leaf_check(struct iam_leaf *leaf);
 +extern int dx_node_check(struct iam_path *p, struct iam_frame *f);
@@ -530,6 +536,19 @@ Index: iam/fs/ext3/iam.c
 +	return iam_leaf_keycmp(&it->ii_path.ip_leaf, k);
 +}
 +
++static inline int it_keyeq(const struct iam_iterator *it,
++                           const struct iam_key *k)
++{
++	return iam_leaf_keyeq(&it->ii_path.ip_leaf, k);
++}
++
++static int it_ikeycmp(const struct iam_iterator *it, const struct iam_ikey *ik)
++{
++        return iam_ikeycmp(it->ii_path.ip_container,
++                           iam_leaf_ikey(&it->ii_path.ip_leaf,
++                                         iam_path_ikey(&it->ii_path, 0)), ik);
++}
++
 +static inline int it_at_rec(const struct iam_iterator *it)
 +{
 +        return !iam_leaf_at_end(&it->ii_path.ip_leaf);
@@ -654,7 +673,10 @@ Index: iam/fs/ext3/iam.c
 +
 +        result = iam_path_lookup(&it->ii_path, index);
 +        if (result >= 0) {
-+                switch (result) {
++                int collision;
++
++                collision = result & IAM_LOOKUP_LAST;
++                switch (result & ~IAM_LOOKUP_LAST) {
 +                case IAM_LOOKUP_EXACT:
 +                        result = +1;
 +                        it->ii_state = IAM_IT_ATTACHED;
@@ -671,11 +693,31 @@ Index: iam/fs/ext3/iam.c
 +                default:
 +                        assert(0);
 +                }
++                result |= collision;
 +        }
 +        /*
 +         * See iam_it_get_exact() for explanation.
 +         */
 +        assert_corr(result != -ENOENT);
++        return result;
++}
++
++/*
++ * Correct hash, but not the same key was found, iterate through hash
++ * collision chain, looking for correct record.
++ */
++static int iam_it_collision(struct iam_iterator *it)
++{
++        int result;
++
++        assert(ergo(it_at_rec(it), !it_keyeq(it, it->ii_path.ip_key_target)));
++
++        while ((result = iam_it_next(it)) == 0) {
++                if (it_ikeycmp(it, it->ii_path.ip_ikey_target) != 0)
++                        return -ENOENT;
++                if (it_keyeq(it, it->ii_path.ip_key_target))
++                        return 0;
++        }
 +        return result;
 +}
 +
@@ -701,6 +743,18 @@ Index: iam/fs/ext3/iam.c
 +
 +        result = __iam_it_get(it, 0);
 +
++        if (result == IAM_LOOKUP_LAST) {
++                result = iam_it_collision(it);
++                if (result != 0) {
++                        iam_it_put(it);
++                        iam_it_fini(it);
++                        result = __iam_it_get(it, 0);
++                } else
++                        result = +1;
++        }
++        if (result > 0)
++                result &= ~IAM_LOOKUP_LAST;
++
 +        assert_corr(ergo(result > 0, it_keycmp(it, k) == 0));
 +	assert_corr(ergo(result == 0 && it_state(it) == IAM_IT_ATTACHED,
 +                         it_keycmp(it, k) <= 0));
@@ -716,7 +770,7 @@ Index: iam/fs/ext3/iam.c
 +        assert_corr(it_state(it) == IAM_IT_DETACHED);
 +
 +        it->ii_path.ip_ikey_target = k;
-+        return __iam_it_get(it, 1);
++        return __iam_it_get(it, 1) & ~IAM_LOOKUP_LAST;
 +}
 +
 +/*
@@ -806,7 +860,7 @@ Index: iam/fs/ext3/iam.c
 +        struct iam_path      *path;
 +        struct iam_leaf      *leaf;
 +
-+        assert_corr(it->ii_flags&IAM_IT_MOVE);
++        /* assert_corr(it->ii_flags&IAM_IT_MOVE); */
 +        assert_corr(it_state(it) == IAM_IT_ATTACHED ||
 +                    it_state(it) == IAM_IT_SKEWED);
 +
@@ -1341,7 +1395,7 @@ Index: iam/fs/ext3/iam_htree.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_htree.c
 +++ iam/fs/ext3/iam_htree.c
-@@ -0,0 +1,668 @@
+@@ -0,0 +1,683 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1602,6 +1656,7 @@ Index: iam/fs/ext3/iam_htree.c
 +        __u32 hash;
 +        int result;
 +        int namelen;
++        int last = 1;
 +        const char *name;
 +
 +        c = iam_leaf_container(l);
@@ -1616,8 +1671,12 @@ Index: iam/fs/ext3/iam_htree.c
 +                        found = scan;
 +                        result = IAM_LOOKUP_EXACT;
 +                        break;
-+                } else if (ent_is_live(scan) && gethash(l, scan) <= hash)
-+                        found = scan;
++                } else if (ent_is_live(scan)) {
++                        if (gethash(l, scan) <= hash)
++                                found = scan;
++                        else
++                                last = 0;
++                }
 +        }
 +        if (found == NULL) {
 +                /*
@@ -1629,6 +1688,8 @@ Index: iam/fs/ext3/iam_htree.c
 +                l->il_at = (void *)found;
 +                assert_corr(iam_leaf_at_rec(l));
 +        }
++        if (last)
++                result |= IAM_LOOKUP_LAST;
 +        return result;
 +}
 +
@@ -1644,8 +1705,7 @@ Index: iam/fs/ext3/iam_htree.c
 +        assert(0);
 +}
 +
-+static int iam_htree_key_cmp(const struct iam_leaf *l,
-+                             const struct iam_key *k)
++static int iam_htree_key_cmp(const struct iam_leaf *l, const struct iam_key *k)
 +{
 +        const char *name;
 +        __u32 h0;
@@ -1659,6 +1719,14 @@ Index: iam/fs/ext3/iam_htree.c
 +        h1 = hashname(l, name, strlen(name));
 +
 +        return h0 < h1 ? -1 : (h0 == h1 ? 0 : +1);
++}
++
++static int iam_htree_key_eq(const struct iam_leaf *l, const struct iam_key *k)
++{
++        const char *name;
++
++        name = (const char *)k;
++        return match(strlen(name), name, getent(l));
 +}
 +
 +static void iam_htree_rec_set(struct iam_leaf *l, const struct iam_rec *r)
@@ -1779,6 +1847,7 @@ Index: iam/fs/ext3/iam_htree.c
 +        .rec            = iam_htree_rec,
 +        .key_set        = iam_htree_key_set,
 +        .key_cmp        = iam_htree_key_cmp,
++        .key_eq         = iam_htree_key_eq,
 +        .key_size       = iam_htree_key_size,
 +        .rec_set        = iam_htree_rec_set,
 +        .lookup         = iam_htree_lookup,
@@ -2014,7 +2083,7 @@ Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c
 +++ iam/fs/ext3/iam_lfix.c
-@@ -0,0 +1,675 @@
+@@ -0,0 +1,682 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2304,6 +2373,12 @@ Index: iam/fs/ext3/iam_lfix.c
 +        return lfix_keycmp(iam_leaf_container(l), iam_leaf_key_at(l->il_at), k);
 +}
 +
++static int iam_lfix_key_eq(const struct iam_leaf *l, const struct iam_key *k)
++{
++        return !lfix_keycmp(iam_leaf_container(l),
++                            iam_leaf_key_at(l->il_at), k);
++}
++
 +static void iam_lfix_rec_set(struct iam_leaf *l, const struct iam_rec *r)
 +{
 +        assert_corr(iam_leaf_at_rec(l));
@@ -2456,6 +2531,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +        .rec            = iam_lfix_rec,
 +        .key_set        = iam_lfix_key_set,
 +        .key_cmp        = iam_lfix_key_cmp,
++        .key_eq         = iam_lfix_key_eq,
 +        .key_size       = iam_lfix_key_size,
 +        .rec_set        = iam_lfix_rec_set,
 +        .lookup         = iam_lfix_lookup,
@@ -2694,7 +2770,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,990 @@
+@@ -0,0 +1,1005 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3091,6 +3167,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +        int                     namelen;
 +        int                     found_equal;
 +        lvar_hash_t             hash;
++        int                     last;
 +
 +        assert_inv(n_invariant(leaf));
 +        end = n_end(leaf);
@@ -3100,6 +3177,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +        hash = get_hash(iam_leaf_container(leaf), name, namelen);
 +        found = NULL;
 +        found_equal = 0;
++        last = 1;
 +
 +        for (scan = n_start(leaf); scan < end; scan = e_next(leaf, scan)) {
 +                lvar_hash_t scan_hash;
@@ -3118,8 +3196,10 @@ Index: iam/fs/ext3/iam_lvar.c
 +                                found = scan;
 +                                found_equal = 1;
 +                        }
-+                } else
++                } else {
++                        last = 0;
 +                        break;
++                }
 +        }
 +        if (found == NULL) {
 +                /*
@@ -3132,6 +3212,8 @@ Index: iam/fs/ext3/iam_lvar.c
 +                result = IAM_LOOKUP_OK;
 +                assert_corr(n_at_rec(leaf));
 +        }
++        if (last)
++                result |= IAM_LOOKUP_LAST;
 +        assert_inv(n_invariant(leaf));
 +        return result;
 +}
@@ -3183,6 +3265,14 @@ Index: iam/fs/ext3/iam_lvar.c
 +
 +        hash = get_hash(iam_leaf_container(l), name, strlen(name));
 +        return e_cmp(l, n_cur(l), hash);
++}
++
++static int lvar_key_eq(const struct iam_leaf *l, const struct iam_key *k)
++{
++        const char *name;
++
++        name = kchar(k);
++        return e_eq(n_cur(l), name, strlen(name));
 +}
 +
 +static void lvar_rec_set(struct iam_leaf *l, const struct iam_rec *r)
@@ -3365,6 +3455,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +        .rec            = lvar_rec,
 +        .key_set        = lvar_key_set,
 +        .key_cmp        = lvar_key_cmp,
++        .key_eq         = lvar_key_eq,
 +        .key_size       = lvar_key_size,
 +        .rec_set        = lvar_rec_set,
 +        .lookup         = lvar_lookup,
