@@ -66,7 +66,7 @@ MOUNTOPT=""
     MOUNTOPT=$MOUNTOPT" --failnode=`h2$NETTYPE $ostfailover_HOST`"
 OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$TIMEOUT $MKFSOPT $MOUNTOPT $OSTOPT"
 
-MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop"}
+MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop,user_xattr,acl"}
 OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o loop"}
 
 #client
