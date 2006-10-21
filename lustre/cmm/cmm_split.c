@@ -54,13 +54,17 @@ static struct lu_buf *cmm_buf_get(const struct lu_env *env, void *area,
 int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
                      const char *name)
 {
+        struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mp));
         struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
         int rc;
         ENTRY;
         
+        if (cmm->cmm_tgt_count == 0)
+                RETURN(0);
+
         /* Try to get the LMV EA size */
         memset(ma, 0, sizeof(*ma));
-        ma->ma_need = MA_INODE | MA_LMV;
+        ma->ma_need = MA_LMV;
         rc = mo_attr_get(env, mp, ma);
         if (rc)
                 RETURN(rc);
@@ -73,7 +77,7 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
                         RETURN(-ENOMEM);
 
                 /* Get LMV EA */
-                ma->ma_need = MA_INODE | MA_LMV;
+                ma->ma_need = MA_LMV;
                 rc = mo_attr_get(env, mp, ma);
                 /* Skip checking the slave dirs (mea_count is 0) */
                 if (rc == 0 && ma->ma_lmv->mea_count != 0) {
@@ -101,13 +105,13 @@ int cmm_expect_splitting(const struct lu_env *env, struct md_object *mo,
         int rc = CMM_EXPECT_SPLIT;
         ENTRY;
 
+        if (cmm->cmm_tgt_count == 0)
+                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
+
         ma->ma_need = MA_INODE | MA_LMV;
         rc = mo_attr_get(env, mo, ma);
         if (rc)
                 GOTO(cleanup, rc = CMM_NOT_SPLITTABLE);
-
-        if (cmm->cmm_tgt_count == 0)
-                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
 
         if (ma->ma_attr.la_size < CMM_SPLIT_SIZE)
                 GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
