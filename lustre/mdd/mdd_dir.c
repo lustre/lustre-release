@@ -58,6 +58,8 @@ __mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
         int rc;
 
         dlh = mdd_pdo_read_lock(env, mdd_obj, name);
+        if (dlh == NULL)
+                return -ENOMEM;
         rc = __mdd_lookup(env, pobj, name, fid, mask);
         mdd_pdo_read_unlock(env, mdd_obj, dlh);
 
@@ -391,6 +393,8 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
                 RETURN(PTR_ERR(handle));
 
         dlh = mdd_pdo_write_lock(env, mdd_tobj, name);
+        if (dlh == NULL)
+                GOTO(out_trans, rc = -ENOMEM);
         mdd_write_lock(env, mdd_sobj);
 
         rc = mdd_link_sanity_check(env, mdd_tobj, mdd_sobj);
@@ -415,6 +419,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
 out:
         mdd_write_unlock(env, mdd_sobj);
         mdd_pdo_write_unlock(env, mdd_tobj, dlh);
+out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
         RETURN(rc);
 }
@@ -530,6 +535,8 @@ static int mdd_unlink(const struct lu_env *env,
                 RETURN(PTR_ERR(handle));
 
         dlh = mdd_pdo_write_lock(env, mdd_pobj, name);
+        if (dlh == NULL)
+                GOTO(out_trans, rc = -ENOMEM);
         mdd_write_lock(env, mdd_cobj);
 
         rc = mdd_unlink_sanity_check(env, mdd_pobj, mdd_cobj, ma);
@@ -568,6 +575,7 @@ static int mdd_unlink(const struct lu_env *env,
 cleanup:
         mdd_write_unlock(env, mdd_cobj);
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
+out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
         RETURN(rc);
 }
@@ -621,6 +629,8 @@ static int mdd_name_insert(const struct lu_env *env,
                 RETURN(PTR_ERR(handle));
 
         dlh = mdd_pdo_write_lock(env, mdd_obj, name);
+        if (dlh == NULL)
+                GOTO(out_trans, rc = -ENOMEM);
         rc = mdd_ni_sanity_check(env, pobj, name, fid);
         if (rc)
                 GOTO(out_unlock, rc);
@@ -630,6 +640,7 @@ static int mdd_name_insert(const struct lu_env *env,
 
 out_unlock:
         mdd_pdo_write_unlock(env, mdd_obj, dlh);
+out_trans:
         mdd_trans_stop(env, mdo2mdd(pobj), rc, handle);
         RETURN(rc);
 }
@@ -680,6 +691,8 @@ static int mdd_name_remove(const struct lu_env *env,
                 RETURN(PTR_ERR(handle));
 
         dlh = mdd_pdo_write_lock(env, mdd_obj, name);
+        if (dlh == NULL)
+                GOTO(out_trans, rc = -ENOMEM);
         rc = mdd_nr_sanity_check(env, pobj, name);
         if (rc)
                 GOTO(out_unlock, rc);
@@ -689,6 +702,7 @@ static int mdd_name_remove(const struct lu_env *env,
 
 out_unlock:
         mdd_pdo_write_unlock(env, mdd_obj, dlh);
+out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
         RETURN(rc);
 }
@@ -737,6 +751,8 @@ static int mdd_rename_tgt(const struct lu_env *env,
                 RETURN(PTR_ERR(handle));
 
         dlh = mdd_pdo_write_lock(env, mdd_tpobj, name);
+        if (dlh == NULL)
+                GOTO(out_trans, rc = -ENOMEM);
         if (mdd_tobj)
                 mdd_write_lock(env, mdd_tobj);
 
@@ -762,6 +778,7 @@ cleanup:
         if (tobj)
                 mdd_write_unlock(env, mdd_tobj);
         mdd_pdo_write_unlock(env, mdd_tpobj, dlh);
+out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
         RETURN(rc);
 }
@@ -1068,6 +1085,8 @@ static int mdd_create(const struct lu_env *env,
                 RETURN(PTR_ERR(handle));
 
         dlh = mdd_pdo_write_lock(env, mdd_pobj, name);
+        if (dlh == NULL)
+                GOTO(out_trans, rc = -ENOMEM);
 
         /*
          * XXX check that link can be added to the parent in mkdir case.
@@ -1178,6 +1197,7 @@ cleanup:
         if (lmm)
                 OBD_FREE(lmm, lmm_size);
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
+out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
         mdd_lproc_time_end(mdd, &start, LPROC_MDD_CREATE);
         RETURN(rc);
@@ -1311,6 +1331,8 @@ static int mdd_rename(const struct lu_env *env,
                 tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname);
                 sdlh = mdd_pdo_write_lock(env, mdd_spobj, sname);
         }
+        if (sdlh == NULL || tdlh == NULL)
+                GOTO(cleanup, rc = -ENOMEM);
 
         rc = mdd_rename_sanity_check(env, mdd_spobj, mdd_tpobj,
                                      lf, is_dir, mdd_tobj);
@@ -1376,7 +1398,8 @@ static int mdd_rename(const struct lu_env *env,
         }
 
 cleanup:
-        mdd_pdo_write_unlock(env, mdd_spobj, sdlh);
+        if (likely(sdlh))
+                mdd_pdo_write_unlock(env, mdd_spobj, sdlh);
         if (tdlh)
                 mdd_pdo_write_unlock(env, mdd_tpobj, tdlh);
 cleanup_unlocked:

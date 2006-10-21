@@ -76,6 +76,8 @@ unsigned long mdd_name2hash(const char *name)
         unsigned long value = 0;
         int namelen = strlen(name);
         int i = 0;
+        /*XXX the hash should be simple, fast but differ from split one
+         * Current one is just fast solution to see how dynlocks will help */
         while (namelen > i) {
                 value += name[i] * (i << 7);
                 i++;
