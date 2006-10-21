@@ -1109,15 +1109,20 @@ static int mdd_create(const struct lu_env *env,
         /* replay creates has objects already */
         if (spec->u.sp_ea.no_lov_create) {
                 CDEBUG(D_INFO, "we already have lov ea\n");
-                rc = mdd_lov_set_md(env, mdd_pobj, son,
-                                    (struct lov_mds_md *)spec->u.sp_ea.eadata,
-                                    spec->u.sp_ea.eadatalen, handle, 0);
-        } else
-                rc = mdd_lov_set_md(env, mdd_pobj, son, lmm,
-                                    lmm_size, handle, 0);
+                LASSERT(lmm != NULL);
+                lmm = (struct lov_mds_md *)spec->u.sp_ea.eadata;
+                lmm_size = spec->u.sp_ea.eadatalen;
+        }
+        rc = mdd_lov_set_md(env, mdd_pobj, son, lmm, lmm_size, handle, 0);
         if (rc) {
                 CERROR("error on stripe info copy %d \n", rc);
                 GOTO(cleanup, rc);
+        }
+        if (lmm && lmm_size > 0) {
+                /* set Lov here, do not get lmm again later */
+                memcpy(ma->ma_lmm, lmm, lmm_size); 
+                ma->ma_lmm_size = lmm_size;
+                ma->ma_valid |= MA_LOV; 
         }
 
         if (S_ISLNK(attr->la_mode)) {
@@ -1171,7 +1176,6 @@ cleanup:
         mdd_lproc_time_end(mdd, &start, LPROC_MDD_CREATE);
         RETURN(rc);
 }
-
 
 static int mdd_rename_lock(const struct lu_env *env,
                            struct mdd_device *mdd,
