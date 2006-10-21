@@ -303,8 +303,8 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
 
                         /* Get parent dir stripe and set */
                         if (pobj != NULL)
-                                rc = mdd_get_md(env, pobj, lmm, &size,
-                                                MDS_LOV_MD_NAME);
+                                rc = mdd_get_md_locked(env, pobj, lmm, &size,
+                                                       MDS_LOV_MD_NAME);
                         if (rc > 0) {
                                 buf = mdd_buf_get(env, lmm, size);
                                 rc = mdd_xattr_set_txn(env, child, buf,

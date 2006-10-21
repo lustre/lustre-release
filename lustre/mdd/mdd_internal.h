@@ -30,10 +30,12 @@
 #include <asm/semaphore.h>
 
 #include <linux/lustre_acl.h>
+#include <obd.h>
 #include <md_object.h>
 #include <dt_object.h>
 #include <linux/sched.h>
 #include <linux/capability.h>
+#include <linux/dynlocks.h>
 
 enum mdd_txn_op {
         MDD_TXN_OBJECT_DESTROY_OP = 0,
@@ -85,6 +87,7 @@ struct mdd_object {
         __u32             mod_count;
         __u32             mod_valid;
         unsigned long     mod_flags;
+        struct dynlock    mod_pdlock;
 };
 
 struct orph_key {
@@ -146,9 +149,27 @@ int mdd_object_create_internal(const struct lu_env *env,
 int mdd_attr_set_internal_locked(const struct lu_env *env,
                                  struct mdd_object *o,
                                  const struct lu_attr *attr,
-                                 struct thandle *handle);
+                                 struct thandle *handle, const int needacl);
 int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
                        struct md_attr *ma);
+/* mdd_lock.c */
+void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj);
+void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj);
+void mdd_write_unlock(const struct lu_env *env, struct mdd_object *obj);
+void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj);
+
+void mdd_pdlock_init(struct mdd_object *obj);
+unsigned long mdd_name2hash(const char *name);
+struct dynlock_handle *mdd_pdo_write_lock(const struct lu_env *env,
+                                          struct mdd_object *obj,
+                                          const char *name);
+struct dynlock_handle *mdd_pdo_read_lock(const struct lu_env *env,
+                                         struct mdd_object *obj,
+                                         const char *name);
+void mdd_pdo_write_unlock(const struct lu_env *env, struct mdd_object *obj,
+                          struct dynlock_handle *dlh);
+void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
+                         struct dynlock_handle *dlh);
 /* mdd_dir.c */
 int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
                             struct mdd_object *cobj, struct md_attr *ma);
@@ -178,11 +199,6 @@ struct mdd_thread_info *mdd_env_info(const struct lu_env *env);
 struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len);
 const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
                                        const void *area, ssize_t len);
-
-void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj);
-void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj);
-void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj);
-void mdd_write_unlock(const struct lu_env *env, struct mdd_object *obj);
 
 int __mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d);
 int __mdd_orphan_add(const struct lu_env *, struct mdd_object *,
@@ -270,6 +286,9 @@ int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
                               int mask, int getattr);
 int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
                             int mask);
+int mdd_permission_internal_locked(const struct lu_env *env,
+                                   struct mdd_object *obj, int mask);
+
 int mdd_permission(const struct lu_env *env, struct md_object *obj, int mask);
 int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
                  struct lustre_capa *capa, int renewal);

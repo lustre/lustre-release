@@ -322,13 +322,13 @@ static int mdt_reint_create(struct mdt_thread_info *info,
                 RETURN(err_serious(-ESTALE));
 
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
-        case S_IFREG:
         case S_IFDIR:{
                 if (info->mti_rr.rr_name[0] == 0) {
                         rc = mdt_md_mkobj(info);
                         break;
                 }
         }
+        case S_IFREG:
         case S_IFLNK:
         case S_IFCHR:
         case S_IFBLK:
@@ -658,16 +658,15 @@ static int mdt_rename_check(struct mdt_thread_info *info, struct lu_fid *fid)
                         rc = mdo_is_subdir(info->mti_env, mdt_object_child(dst),
                                            fid, &dst_fid);
                         mdt_object_put(info->mti_env, dst);
-                        if (rc < 0) {
-                                CERROR("Error while doing mdo_is_subdir(), rc %d\n",
-                                       rc);
+                        if (rc < 0 && rc != -EREMOTE) {
+                                CERROR("Failed mdo_is_subdir(), rc %d\n", rc);
                         } else if (rc == 1) {
                                 rc = -EINVAL;
                         }
                 } else {
                         rc = PTR_ERR(dst);
                 }
-        } while (rc == EREMOTE);
+        } while (rc == -EREMOTE);
 
         RETURN(rc);
 }
@@ -802,7 +801,6 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
         ma->ma_valid = 0;
-
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_RENAME_WRITE);
 

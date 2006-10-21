@@ -576,7 +576,7 @@ int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
         return __mdd_permission_internal(env, obj, mask, 1);
 }
 
-static inline int mdd_permission_internal_locked(const struct lu_env *env,
+inline int mdd_permission_internal_locked(const struct lu_env *env,
                                                  struct mdd_object *obj,
                                                  int mask)
 {
