@@ -61,7 +61,7 @@ __mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
         rc = __mdd_lookup(env, pobj, name, fid, mask);
         mdd_pdo_read_unlock(env, mdd_obj, dlh);
 
-       return rc;
+        return rc;
 }
 
 static int mdd_lookup(const struct lu_env *env,
@@ -292,8 +292,8 @@ static int __mdd_index_insert(const struct lu_env *env,
         struct timeval start;
         int rc;
         ENTRY;
-        
-        mdd_lproc_time_start(mdo2mdd(&pobj->mod_obj), &start, 
+
+        mdd_lproc_time_start(mdo2mdd(&pobj->mod_obj), &start,
                              LPROC_MDD_INDEX_INSERT);
 #if 0
         struct lu_attr   *la = &mdd_env_info(env)->mti_la;
@@ -311,7 +311,7 @@ static int __mdd_index_insert(const struct lu_env *env,
                 if (isdir) {
                         mdd_write_lock(env, pobj);
                         mdd_ref_add_internal(env, pobj, th);
-                        mdd_write_unlock(env, pobj);                
+                        mdd_write_unlock(env, pobj);
                 }
 #if 0
                 la->la_valid = LA_MTIME|LA_CTIME;
@@ -335,7 +335,7 @@ static int __mdd_index_delete(const struct lu_env *env,
         int rc;
         ENTRY;
 
-        mdd_lproc_time_start(mdo2mdd(&pobj->mod_obj), &start, 
+        mdd_lproc_time_start(mdo2mdd(&pobj->mod_obj), &start,
                              LPROC_MDD_INDEX_DELETE);
         if (dt_try_as_dir(env, next)) {
                 rc = next->do_index_ops->dio_delete(env, next,
@@ -348,7 +348,7 @@ static int __mdd_index_delete(const struct lu_env *env,
                 }
         } else
                 rc = -ENOTDIR;
-        mdd_lproc_time_end(mdo2mdd(&pobj->mod_obj), &start, 
+        mdd_lproc_time_end(mdo2mdd(&pobj->mod_obj), &start,
                            LPROC_MDD_INDEX_DELETE);
         RETURN(rc);
 }
@@ -524,7 +524,7 @@ static int mdd_unlink(const struct lu_env *env,
         rc = mdd_log_txn_param_build(env, mdd_cobj, ma, MDD_TXN_UNLINK_OP);
         if (rc)
                 RETURN(rc);
-        
+
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
@@ -892,7 +892,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 }
 
 int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
-                          struct mdd_object *child, struct md_attr *ma, 
+                          struct mdd_object *child, struct md_attr *ma,
                           struct thandle *handle)
 {
         int rc;
@@ -1126,9 +1126,9 @@ static int mdd_create(const struct lu_env *env,
         }
         if (lmm && lmm_size > 0) {
                 /* set Lov here, do not get lmm again later */
-                memcpy(ma->ma_lmm, lmm, lmm_size); 
+                memcpy(ma->ma_lmm, lmm, lmm_size);
                 ma->ma_lmm_size = lmm_size;
-                ma->ma_valid |= MA_LOV; 
+                ma->ma_valid |= MA_LOV;
         }
 
         if (S_ISLNK(attr->la_mode)) {
@@ -1183,9 +1183,9 @@ cleanup:
         RETURN(rc);
 }
 
-/* 
+/*
  * Get locks on parents in proper order
- * RETURN: < 0 - error, rename_order if successful 
+ * RETURN: < 0 - error, rename_order if successful
  */
 enum rename_order {
         MDD_RN_SAME,
@@ -1212,7 +1212,7 @@ static int mdd_rename_order(const struct lu_env *env, struct mdd_device *mdd,
         } else {
                 rc = mdd_is_parent(env, mdd, src_pobj, mdo2fid(tgt_pobj), NULL);
                 if (rc == -EREMOTE)
-                        rc == 0;
+                        rc = 0;
 
                 if (rc == 1)
                         rc = MDD_RN_TGTSRC;
@@ -1274,7 +1274,7 @@ static int mdd_rename(const struct lu_env *env,
         struct dynlock_handle *sdlh, *tdlh;
         struct thandle *handle;
         int is_dir;
-        int rc, one_lock;
+        int rc;
         ENTRY;
 
         LASSERT(ma->ma_attr.la_mode & S_IFMT);
@@ -1311,7 +1311,7 @@ static int mdd_rename(const struct lu_env *env,
                 tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname);
                 sdlh = mdd_pdo_write_lock(env, mdd_spobj, sname);
         }
-        
+
         rc = mdd_rename_sanity_check(env, mdd_spobj, mdd_tpobj,
                                      lf, is_dir, mdd_tobj);
         if (rc)
