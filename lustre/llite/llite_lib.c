@@ -789,6 +789,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_open_fd_exec_count = 0;
         INIT_LIST_HEAD(&lli->lli_dead_list);
         lli->lli_remote_perms = NULL;
+        lli->lli_rmtperm_utime = 0;
         sema_init(&lli->lli_rmtperm_sem, 1);
         INIT_LIST_HEAD(&lli->lli_oss_capas);
 }

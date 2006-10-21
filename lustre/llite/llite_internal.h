@@ -113,6 +113,7 @@ struct ll_inode_info {
 
         /* remote permission hash */
         struct hlist_head      *lli_remote_perms;
+        unsigned long           lli_rmtperm_utime;
         struct semaphore        lli_rmtperm_sem;
 
         struct list_head        lli_dead_list;
