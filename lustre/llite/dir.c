@@ -396,32 +396,15 @@ fail:
         goto out_unlock;
 }
 
-static loff_t ll_llseek(struct file *filp, loff_t off, int whence)
-{
-        if (off != 0 || whence != 1 /* SEEK_CUR */) {
-                /*
-                 * Except when telldir() is going on, reset readdir to the
-                 * beginning of hash collision chain.
-                 */
-                struct ll_file_data *fd = LUSTRE_FPRIVATE(filp);
-
-                fd->fd_dir.lfd_dup = 0;
-        }
-        return default_llseek(filp, off, whence);
-}
-
 int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 {
         struct inode         *inode = filp->f_dentry->d_inode;
         struct ll_inode_info *info  = ll_i2info(inode);
-        struct ll_file_data  *fd    = LUSTRE_FPRIVATE(filp);
         struct ll_sb_info    *sbi   = ll_i2sbi(inode);
         __u32                 pos   = filp->f_pos;
         struct page          *page;
         struct ll_dir_chain   chain;
-        __u32 prevhash;
         int rc;
-        int dup;
         int done;
         int shift;
         ENTRY;
@@ -437,10 +420,8 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                 RETURN(0);
 
         rc    = 0;
-        dup   = 0;
         done  = 0;
         shift = 0;
-        prevhash = ~0; /* impossible hash value */
         ll_dir_chain_init(&chain);
 
         page = ll_get_dir_page(inode, pos, 0, &chain);
@@ -481,21 +462,6 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                                          * Skip dummy record.
                                          */
                                         continue;
-                                /*
-                                 * Keep track of how far we get into duplicate
-                                 * hash segment.
-                                 */
-                                if (hash == prevhash)
-                                        dup++;
-                                else
-                                        dup = 0;
-                                prevhash = hash;
-
-                                if (hash == fd->fd_dir.lfd_duppos &&
-                                    fd->fd_dir.lfd_dup > 0) {
-                                        fd->fd_dir.lfd_dup--;
-                                        continue;
-                                }
 
                                 fid  = ent->lde_fid;
                                 name = ent->lde_name;
@@ -537,8 +503,6 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 
         filp->f_pos = pos;
         filp->f_version = inode->i_version;
-        fd->fd_dir.lfd_dup    = dup;
-        fd->fd_dir.lfd_duppos = prevhash;
         touch_atime(filp->f_vfsmnt, filp->f_dentry);
 
         ll_dir_chain_fini(&chain);
@@ -1154,7 +1118,6 @@ struct file_operations ll_dir_operations = {
         .release  = ll_dir_release,
         .read     = generic_read_dir,
         .readdir  = ll_readdir,
-        .llseek   = ll_llseek,
         .ioctl    = ll_dir_ioctl
 };
 

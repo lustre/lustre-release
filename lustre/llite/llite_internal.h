@@ -100,10 +100,10 @@ struct ll_inode_info {
         struct list_head        lli_pending_write_llaps;
         struct list_head        lli_close_list;
         /* handle is to be sent to MDS later on done_writing and setattr.
-         * Open handle data are needed for the recovery to reconstruct 
+         * Open handle data are needed for the recovery to reconstruct
          * the inode state on the MDS. XXX: recovery is not ready yet. */
         struct obd_client_handle *lli_pending_och;
-        
+
         atomic_t                lli_mmap_cnt;
 
         /* for writepage() only to communicate to fsync */
@@ -353,8 +353,6 @@ struct ll_readahead_state {
 };
 
 struct ll_file_dir {
-        int           lfd_dup;
-        loff_t        lfd_duppos;
 };
 
 extern kmem_cache_t *ll_file_data_slab;
