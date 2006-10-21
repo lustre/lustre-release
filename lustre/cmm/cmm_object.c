@@ -812,7 +812,7 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
         cmi = cmm_env_info(env);
         LASSERT(cmi);
         tmp_ma = &cmi->cmi_ma;
-        tmp_ma->valid = 0;
+        tmp_ma->ma_valid = 0;
         tmp_ma->ma_need = MA_INODE;
 
 #ifdef CONFIG_FS_POSIX_ACL
