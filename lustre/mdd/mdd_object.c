@@ -132,7 +132,7 @@ static int mdd_object_init(const struct lu_env *env, struct lu_object *o)
 
 	under = &d->mdd_child->dd_lu_dev;
 	below = under->ld_ops->ldo_object_alloc(env, o->lo_header, under);
-
+        mdd_pdlock_init(lu2mdd_obj(o));
         if (below == NULL)
 		RETURN(-ENOMEM);
 
@@ -444,35 +444,6 @@ static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
         RETURN(rc);
 }
 
-void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj)
-{
-        struct dt_object  *next = mdd_object_child(obj);
-
-        next->do_ops->do_write_lock(env, next);
-}
-
-void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj)
-{
-        struct dt_object  *next = mdd_object_child(obj);
-
-        next->do_ops->do_read_lock(env, next);
-}
-
-void mdd_write_unlock(const struct lu_env *env, struct mdd_object *obj)
-{
-        struct dt_object  *next = mdd_object_child(obj);
-
-        next->do_ops->do_write_unlock(env, next);
-}
-
-void mdd_read_unlock(const struct lu_env *env, struct mdd_object *obj)
-{
-        struct dt_object  *next = mdd_object_child(obj);
-
-        next->do_ops->do_read_unlock(env, next);
-}
-
-
 int mdd_object_create_internal(const struct lu_env *env,
                                struct mdd_object *obj, struct md_attr *ma,
                                struct thandle *handle)
@@ -515,11 +486,11 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
 int mdd_attr_set_internal_locked(const struct lu_env *env,
                                  struct mdd_object *o,
                                  const struct lu_attr *attr,
-                                 struct thandle *handle)
+                                 struct thandle *handle, int needacl)
 {
         int rc;
         mdd_write_lock(env, o);
-        rc = mdd_attr_set_internal(env, o, attr, handle, 1);
+        rc = mdd_attr_set_internal(env, o, attr, handle, needacl);
         mdd_write_unlock(env, o);
         return rc;
 }
@@ -767,12 +738,12 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 
         if (la_copy->la_valid & LA_FLAGS) {
                 rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy,
-                                                  handle);
+                                                  handle, 1);
                 if (rc == 0)
                         mdd_flags_xlate(mdd_obj, la_copy->la_flags);
         } else if (la_copy->la_valid) {            /* setattr */
                 rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy,
-                                                  handle);
+                                                  handle, 1);
                 /* journal chown/chgrp in llog, just like unlink */
                 if (rc == 0 && lmm_size){
                         /*TODO set_attr llog */
