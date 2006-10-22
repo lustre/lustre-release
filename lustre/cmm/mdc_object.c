@@ -487,6 +487,7 @@ static int mdc_is_subdir(const struct lu_env *env, struct md_object *mo,
                 CDEBUG(D_INFO, "Remote mdo_is_subdir(), new src "
                        DFID"\n", PFID(&body->fid1));
                 *sfid = body->fid1;
+                rc = -EREMOTE;
         }
         EXIT;
 out:

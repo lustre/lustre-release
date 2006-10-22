@@ -692,6 +692,13 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                                              LDLM_IBITS, &policy, mode, &lockh);
                 }
 
+                if (!rc) {
+                        mode = LCK_PW;
+                        rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
+                                             LDLM_FL_BLOCK_GRANTED, &res_id,
+                                             LDLM_IBITS, &policy, mode, &lockh);
+                }
+
                 if (rc) {
                         memcpy(&it->d.lustre.it_lock_handle, &lockh,
                                sizeof(lockh));

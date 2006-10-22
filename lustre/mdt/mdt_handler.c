@@ -11,6 +11,7 @@
  *   Author: Mike Shaver <shaver@clusterfs.com>
  *   Author: Nikita Danilov <nikita@clusterfs.com>
  *   Author: Huang Hua <huanghua@clusterfs.com>
+ *   Author: Yury Umanets <umka@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -153,6 +154,133 @@ void mdt_set_disposition(struct mdt_thread_info *info,
         if (rep)
                 rep->lock_policy_res1 |= flag;
 }
+
+#ifdef CONFIG_PDIROPS
+static mdl_mode_t mdt_mdl_lock_modes[] = {
+        [0] = MDL_MINMODE,
+        [1] = MDL_EX,
+        [2] = MDL_PW,
+        [3] = MDL_PR,
+        [4] = MDL_CW,
+        [5] = MDL_CR,
+        [6] = MDL_NL,
+        [7] = MDL_GROUP
+};
+
+static ldlm_mode_t mdt_ldlm_lock_modes[] = {
+        [0] = LCK_MINMODE,
+        [1] = LCK_EX,
+        [2] = LCK_PW,
+        [3] = LCK_PR,
+        [4] = LCK_CW,
+        [5] = LCK_CR,
+        [6] = LCK_NL,
+        [7] = LCK_GROUP
+};
+
+static inline mdl_mode_t mdt_ldlm_mode2mdl_mode(ldlm_mode_t mode)
+{
+        int idx = ffs((int)mode);
+        
+        LASSERT(idx >= 0);
+        LASSERT(IS_PO2(mode));
+        LASSERT(idx < ARRAY_SIZE(mdt_mdl_lock_modes));
+        return mdt_mdl_lock_modes[idx];
+}
+
+static inline ldlm_mode_t mdt_mdl_mode2ldlm_mode(mdl_mode_t mode)
+{
+        int idx = ffs((int)mode);
+        
+        LASSERT(idx >= 0);
+        LASSERT(IS_PO2(mode));
+        LASSERT(idx < ARRAY_SIZE(mdt_ldlm_lock_modes));
+        return mdt_ldlm_lock_modes[idx];
+}
+#endif
+
+void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm)
+{
+        lh->mlh_pdo_hash = 0;
+        lh->mlh_reg_mode = lm;
+        lh->mlh_type = MDT_REG_LOCK;
+}
+
+void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lm,
+                       const char *name, int namelen)
+{
+        lh->mlh_reg_mode = lm;
+        lh->mlh_type = MDT_PDO_LOCK;
+        lh->mlh_pdo_hash = (name != NULL && namelen > 0 ?
+                            full_name_hash(name, namelen) : 0);
+}
+
+#ifdef CONFIG_PDIROPS
+static ldlm_mode_t mdt_lock_pdo_mode(struct mdt_thread_info *info,
+                                     struct mdt_object *o,
+                                     ldlm_mode_t lm)
+{
+        mdl_mode_t mode;
+
+        /*
+         * Any dir access needs couple of locks:
+         *
+         * 1) on part of dir we gonna take lookup/modify;
+         *
+         * 2) on whole dir to protect it from concurrent splitting and/or to
+         * flush client's cache for readdir().
+         *
+         * so, for a given mode and object this routine decides what lock mode
+         * to use for lock #2:
+         *
+         * 1) if caller's gonna lookup in dir then we need to protect dir from
+         * being splitted only - LCK_CR
+         *
+         * 2) if caller's gonna modify dir then we need to protect dir from
+         * being splitted and to flush cache - LCK_CW
+         *
+         * 3) if caller's gonna modify dir and that dir seems ready for
+         * splitting then we need to protect it from any type of access
+         * (lookup/modify/split) - LCK_EX --bzzz
+         */
+
+        LASSERT(lm != LCK_MINMODE);
+        
+        if (mdt_object_exists(o) > 0) {
+                /*
+                 * Ask underlaying level its opinion about possible locks.
+                 */
+                mode = mdo_lock_mode(info->mti_env, mdt_object_child(o),
+                                     mdt_ldlm_mode2mdl_mode(lm));
+        } else {
+                /* Default locks for non-existing objects. */
+                mode = MDL_MINMODE;
+        }
+                
+        if (mode != MDL_MINMODE) {
+                /* Lower layer said what lock mode it likes to be, use it. */
+                return mdt_mdl_mode2ldlm_mode(mode);
+        } else {
+                /* 
+                 * Lower layer does not want to specify locking mode. We od it
+                 * our selves. No special protection is needed, just flush
+                 * client's cache on modification.
+                 */
+                if (lm == LCK_EX) {
+                        return LCK_EX;
+                } else if (lm == LCK_PR) {
+                        return LCK_CR;
+                } else if (lm == LCK_PW) {
+                        return LCK_CW;
+                } else {
+                        CWARN("Not expected lock type (0x%x)\n",
+                              (int)mode);
+                }
+        }
+        
+        return LCK_MINMODE;
+}
+#endif
 
 static int mdt_getstatus(struct mdt_thread_info *info)
 {
@@ -553,7 +681,7 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
          * Save error code to ->mode. Later it it is used for detecting the case
          * of remote subdir.
          */
-        repbody->mode = rc;
+        repbody->mode = rc < 0 ? -rc : rc;
         repbody->valid = OBD_MD_FLMODE;
 
         if (rc == -EREMOTE)
@@ -609,7 +737,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         struct mdt_object     *child;
         struct md_object      *next = mdt_object_child(info->mti_object);
         struct lu_fid         *child_fid = &info->mti_tmp_fid1;
-        int                    is_resent, rc;
+        int                    is_resent, rc, namelen = 0;
         const char            *name;
         struct mdt_lock_handle *lhp;
         struct ldlm_lock      *lock;
@@ -623,6 +751,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         name = req_capsule_client_get(&info->mti_pill, &RMF_NAME);
         if (name == NULL)
                 RETURN(err_serious(-EFAULT));
+
+        namelen = req_capsule_get_size(&info->mti_pill, &RMF_NAME,
+                                       RCL_CLIENT);
 
         CDEBUG(D_INODE, "getattr with lock for "DFID"/%s, ldlm_rep = %p\n",
                         PFID(mdt_object_fid(parent)), name, ldlm_rep);
@@ -666,7 +797,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                         rc = 0;
                 } else {
                         mdt_lock_handle_init(lhc);
-                        lhc->mlh_reg_mode = LCK_CR;
+                        mdt_lock_reg_init(lhc, MDT_RD_LOCK);
 
                         /*
                          * Object's name is on another MDS, no lookup lock is
@@ -674,7 +805,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                          */
                         child_bits &= ~MDS_INODELOCK_LOOKUP;
                         child_bits |= MDS_INODELOCK_UPDATE;
-                        rc = mdt_object_lock(info, child, lhc, child_bits);
+                        
+                        rc = mdt_object_lock(info, child, lhc, child_bits,
+                                             MDT_LOCAL_LOCK);
                 }
                 if (rc == 0) {
                         /* Finally, we can get attr for child. */
@@ -689,8 +822,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         /*step 1: lock parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
-        lhp->mlh_reg_mode = LCK_CR;
-        rc = mdt_object_lock(info, parent, lhp, MDS_INODELOCK_UPDATE);
+        mdt_lock_pdo_init(lhp, MDT_RD_LOCK, name, namelen);
+        rc = mdt_object_lock(info, parent, lhp, MDS_INODELOCK_UPDATE,
+                             MDT_LOCAL_LOCK);
         if (rc != 0)
                 RETURN(rc);
 
@@ -722,8 +856,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 LDLM_LOCK_PUT(lock);
         } else {
                 mdt_lock_handle_init(lhc);
-                lhc->mlh_reg_mode = LCK_CR;
-                rc = mdt_object_cr_lock(info, child, lhc, child_bits);
+                mdt_lock_reg_init(lhc, MDT_RD_LOCK);
+
+                rc = mdt_object_lock(info, child, lhc, child_bits,
+                                     MDT_CROSS_LOCK);
                 if (rc != 0)
                         GOTO(out_child, rc);
         }
@@ -1411,141 +1547,66 @@ struct mdt_object *mdt_object_find(const struct lu_env *env,
         RETURN(m);
 }
 
-static mdl_mode_t mdt_mdl_lock_modes[] = {
-        [0] = MDL_MINMODE,
-        [1] = MDL_EX,
-        [2] = MDL_PW,
-        [3] = MDL_PR,
-        [4] = MDL_CW,
-        [5] = MDL_CR,
-        [6] = MDL_NL,
-        [7] = MDL_GROUP
-};
-
-static ldlm_mode_t mdt_ldlm_lock_modes[] = {
-        [0] = LCK_MINMODE,
-        [1] = LCK_EX,
-        [2] = LCK_PW,
-        [3] = LCK_PR,
-        [4] = LCK_CW,
-        [5] = LCK_CR,
-        [6] = LCK_NL,
-        [7] = LCK_GROUP
-};
-
-static inline mdl_mode_t mdt_ldlm_mode2mdl_mode(ldlm_mode_t mode)
-{
-        int idx = ffs((int)mode) - 1;
-        LASSERT(idx >= 0);
-        LASSERT(IS_PO2(mode));
-        LASSERT(idx < ARRAY_SIZE(mdt_mdl_lock_modes));
-        return mdt_mdl_lock_modes[idx];
-}
-
-static inline ldlm_mode_t mdt_mdl_mode2ldlm_mode(mdl_mode_t mode)
-{
-        int idx = ffs((int)mode) - 1;
-        LASSERT(idx >= 0);
-        LASSERT(IS_PO2(mode));
-        LASSERT(idx < ARRAY_SIZE(mdt_ldlm_lock_modes));
-        return mdt_ldlm_lock_modes[idx];
-}
-
-int mdt_lock_init_mode(struct mdt_thread_info *info, struct mdt_object *o,
-                       struct mdt_lock_handle *lh, ldlm_mode_t lm)
-{
-        ENTRY;
-
-        lh->mlh_reg_mode = lm;
-        
-#ifdef CONFIG_PDIROPS
-        {
-                mdl_mode_t mode;
-                
-                /*
-                 * Any dir access needs couple of locks:
-                 *
-                 * 1) on part of dir we gonna take lookup/modify;
-                 *
-                 * 2) on whole dir to protect it from concurrent splitting
-                 * and/or to flush client's cache for readdir().
-                 *
-                 * so, for a given mode and object this routine decides what
-                 * lock mode to use for lock #2:
-                 *
-                 * 1) if caller's gonna lookup in dir then we need to protect
-                 * dir from being splitted only - LCK_CR
-                 *
-                 * 2) if caller's gonna modify dir then we need to protect dir
-                 * from being splitted and to flush cache - LCK_CW
-                 *
-                 * 3) if caller's gonna modify dir and that dir seems ready for
-                 * splitting then we need to protect it from any type of access
-                 * (lookup/modify/split) - LCK_EX  --bzzz
-                 */
-
-                /* Ask underlaying level its opinion about possible locks. */
-                mode = mdo_lock_mode(info->mti_env, mdt_object_child(o),
-                                     mdt_ldlm_mode2mdl_mode(lm));
-                if (mode != MDL_MINMODE) {
-                        /* Lower layer said what lock mode it likes to be, use it. */
-                        lh->mlh_pdo_mode = mdt_mdl_mode2ldlm_mode(mode);
-                } else {
-                        /* 
-                         * Lower layer does not want to specify locking mode. We od it
-                         * our selves. No special protection is needed, just flush
-                         * client's cache on modification.
-                         */
-                        if (lm == LCK_EX) {
-                                lh->mlh_pdo_mode = LCK_EX;
-                        } else if (lm == LCK_PR) {
-                                lh->mlh_pdo_mode = LCK_CR;
-                        } else if (lm == LCK_PW) {
-                                lh->mlh_pdo_mode = LCK_CW;
-                        } else {
-                                CWARN("Not expected lock type (0x%x)\n", (int)lm);
-                                lh->mlh_pdo_mode = LCK_MINMODE;
-                        }
-                }
-        }
-#endif
-
-        RETURN(0);
-}
-
 int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
-                    struct mdt_lock_handle *lh, __u64 ibits)
+                    struct mdt_lock_handle *lh, __u64 ibits, int locality)
 {
+        struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
         ldlm_policy_data_t *policy = &info->mti_policy;
         struct ldlm_res_id *res_id = &info->mti_res_id;
-        struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
         int rc;
         ENTRY;
 
         LASSERT(!lustre_handle_is_used(&lh->mlh_reg_lh));
+        LASSERT(!lustre_handle_is_used(&lh->mlh_pdo_lh));
         LASSERT(lh->mlh_reg_mode != LCK_MINMODE);
+
         if (mdt_object_exists(o) < 0) {
-                LASSERT(!(ibits & MDS_INODELOCK_UPDATE));
-                LASSERT(ibits & MDS_INODELOCK_LOOKUP);
+                if (locality == MDT_CROSS_LOCK) {
+                        /* cross-ref object fix */
+                        ibits &= ~MDS_INODELOCK_UPDATE;
+                        ibits |= MDS_INODELOCK_LOOKUP;
+                } else {
+                        LASSERT(!(ibits & MDS_INODELOCK_UPDATE));
+                        LASSERT(ibits & MDS_INODELOCK_LOOKUP);
+                }
         }
+
         memset(policy, 0, sizeof *policy);
-        policy->l_inodebits.bits = ibits;
+        fid_build_reg_res_name(mdt_object_fid(o), res_id);
+        
+#ifdef CONFIG_PDIROPS
+        /* 
+         * Take PDO lock on whole directory and build correct @res_id for lock
+         * on part of directrory.
+         */
+        if (lh->mlh_type == MDT_PDO_LOCK && lh->mlh_pdo_hash != 0) {
+                lh->mlh_pdo_mode = mdt_lock_pdo_mode(info, o, lh->mlh_reg_mode);
+                if (lh->mlh_pdo_mode != LCK_MINMODE) {
+                        policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
+                        rc = mdt_fid_lock(ns, &lh->mlh_pdo_lh, lh->mlh_pdo_mode,
+                                          policy, res_id, LDLM_FL_ATOMIC_CB);
+                        if (rc)
+                                RETURN(rc);
+                }
 
-        rc = fid_lock(ns, mdt_object_fid(o), &lh->mlh_reg_lh,
-                      lh->mlh_reg_mode, policy, res_id);
-        RETURN(rc);
-}
-
-/* lock with cross-ref fixes */
-int mdt_object_cr_lock(struct mdt_thread_info *info, struct mdt_object *o,
-                       struct mdt_lock_handle *lh, __u64 ibits)
-{
-        if (mdt_object_exists(o) < 0) {
-                /* cross-ref object fix */
-                ibits &= ~MDS_INODELOCK_UPDATE;
-                ibits |= MDS_INODELOCK_LOOKUP;
+                fid_build_pdo_res_name(mdt_object_fid(o), lh->mlh_pdo_hash,
+                                       res_id);
         }
-        return mdt_object_lock(info, o, lh, ibits);
+#endif
+        
+        policy->l_inodebits.bits = ibits;
+        rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
+                          res_id, LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB);
+#ifdef CONFIG_PDIROPS
+        if (rc) {
+                if (lh->mlh_type == MDT_PDO_LOCK) {
+                        mdt_fid_unlock(&lh->mlh_pdo_lh, lh->mlh_pdo_mode);
+                        lh->mlh_pdo_lh.cookie = 0ull;
+                }
+        }
+#endif
+        
+        RETURN(rc);
 }
 
 /*
@@ -1556,17 +1617,25 @@ int mdt_object_cr_lock(struct mdt_thread_info *info, struct mdt_object *o,
 void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
                        struct mdt_lock_handle *lh, int decref)
 {
-        struct ptlrpc_request *req    = mdt_info_req(info);
-        struct lustre_handle  *handle = &lh->mlh_reg_lh;
-        ldlm_mode_t            mode   = lh->mlh_reg_mode;
+        struct ptlrpc_request *req = mdt_info_req(info);
         ENTRY;
 
-        if (lustre_handle_is_used(handle)) {
-                if (decref)
-                        fid_unlock(mdt_object_fid(o), handle, mode);
-                else
-                        ptlrpc_save_lock(req, handle, mode);
-                handle->cookie = 0;
+        /* Do not save PDO locks to request. */
+        if (lustre_handle_is_used(&lh->mlh_pdo_lh)) {
+                mdt_fid_unlock(&lh->mlh_pdo_lh,
+                               lh->mlh_pdo_mode);
+                lh->mlh_pdo_lh.cookie = 0;
+        }
+        
+        if (lustre_handle_is_used(&lh->mlh_reg_lh)) {
+                if (decref) {
+                        mdt_fid_unlock(&lh->mlh_reg_lh,
+                                       lh->mlh_reg_mode);
+                } else {
+                        ptlrpc_save_lock(req, &lh->mlh_reg_lh,
+                                         lh->mlh_reg_mode);
+                }
+                lh->mlh_reg_lh.cookie = 0;
         }
         EXIT;
 }
@@ -1582,7 +1651,8 @@ struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *info,
         if (!IS_ERR(o)) {
                 int rc;
 
-                rc = mdt_object_lock(info, o, lh, ibits);
+                rc = mdt_object_lock(info, o, lh, ibits,
+                                     MDT_LOCAL_LOCK);
                 if (rc != 0) {
                         mdt_object_put(info->mti_env, o);
                         o = ERR_PTR(rc);
@@ -1851,6 +1921,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
 void mdt_lock_handle_init(struct mdt_lock_handle *lh)
 {
+        lh->mlh_type = MDT_PDO_LOCK;
         lh->mlh_reg_lh.cookie = 0ull;
         lh->mlh_reg_mode = LCK_MINMODE;
         lh->mlh_pdo_lh.cookie = 0ull;
@@ -1860,6 +1931,7 @@ void mdt_lock_handle_init(struct mdt_lock_handle *lh)
 void mdt_lock_handle_fini(struct mdt_lock_handle *lh)
 {
         LASSERT(!lustre_handle_is_used(&lh->mlh_reg_lh));
+        LASSERT(!lustre_handle_is_used(&lh->mlh_pdo_lh));
 }
 
 /*
@@ -4212,7 +4284,7 @@ static int __init mdt_mod_init(void)
         int rc;
 
         printk(KERN_INFO "Lustre: MetaData Target; info@clusterfs.com\n");
-
+        
         mdt_num_threads = MDT_NUM_THREADS;
         lprocfs_init_vars(mdt, &lvars);
         rc = class_register_type(&mdt_obd_device_ops, NULL,

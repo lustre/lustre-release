@@ -205,6 +205,9 @@ struct mdt_object {
 };
 
 struct mdt_lock_handle {
+        /* Lock type, reg for cross-ref use or pdo lock. */
+        mdl_type_t              mlh_type;
+        
         /* Regular lock */
         struct lustre_handle    mlh_reg_lh;
         ldlm_mode_t             mlh_reg_mode;
@@ -212,6 +215,7 @@ struct mdt_lock_handle {
         /* Pdirops lock */
         struct lustre_handle    mlh_pdo_lh;
         ldlm_mode_t             mlh_pdo_mode;
+        unsigned int            mlh_pdo_hash;
 };
 
 enum {
@@ -223,14 +227,21 @@ enum {
         MDT_LH_NR
 };
 
+enum {
+        MDT_LOCAL_LOCK,
+        MDT_CROSS_LOCK
+};
+
 struct mdt_reint_record {
         mdt_reint_t          rr_opcode;
         const struct lu_fid *rr_fid1;
         const struct lu_fid *rr_fid2;
         const char          *rr_name;
+        int                  rr_namelen;
         const char          *rr_tgt;
-        int                  rr_eadatalen;
+        int                  rr_tgtlen;
         const void          *rr_eadata;
+        int                  rr_eadatalen;
         int                  rr_logcookielen;
         const struct llog_cookie  *rr_logcookies;
         __u32                rr_flags;
@@ -429,15 +440,21 @@ void mdt_set_disposition(struct mdt_thread_info *info,
 void mdt_clear_disposition(struct mdt_thread_info *info,
                         struct ldlm_reply *rep, int flag);
 
+void mdt_lock_pdo_init(struct mdt_lock_handle *lh,
+                       ldlm_mode_t lm, const char *name,
+                       int namelen);
+
+void mdt_lock_reg_init(struct mdt_lock_handle *lh,
+                       ldlm_mode_t lm);
+
+int mdt_lock_setup(struct mdt_thread_info *info,
+                   struct mdt_object *o,
+                   struct mdt_lock_handle *lh);
+
 int mdt_object_lock(struct mdt_thread_info *,
                     struct mdt_object *,
                     struct mdt_lock_handle *,
-                    __u64);
-
-int mdt_object_cr_lock(struct mdt_thread_info *,
-                       struct mdt_object *,
-                       struct mdt_lock_handle *,
-                       __u64);
+                    __u64, int);
 
 void mdt_object_unlock(struct mdt_thread_info *,
                        struct mdt_object *,
@@ -450,7 +467,7 @@ struct mdt_object *mdt_object_find(const struct lu_env *,
 struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *,
                                         const struct lu_fid *,
                                         struct mdt_lock_handle *,
-                                        __u64 ibits);
+                                        __u64);
 void mdt_object_unlock_put(struct mdt_thread_info *,
                            struct mdt_object *,
                            struct mdt_lock_handle *,
@@ -640,6 +657,32 @@ static inline int is_identity_get_disabled(struct upcall_cache *cache)
         return cache ? (strcmp(cache->uc_upcall, "NONE") == 0) : 1;
 }
 
+/* Issues dlm lock on passed @ns, @f stores it lock handle into @lh. */
+static inline int mdt_fid_lock(struct ldlm_namespace *ns,
+                               struct lustre_handle *lh,
+                               ldlm_mode_t mode,
+                               ldlm_policy_data_t *policy,
+                               struct ldlm_res_id *res_id,
+                               int flags)
+{
+        int rc;
+
+        LASSERT(ns != NULL);
+        LASSERT(lh != NULL);
+
+        rc = ldlm_cli_enqueue_local(ns, *res_id, LDLM_IBITS, policy,
+                                    mode, &flags, ldlm_blocking_ast,
+                                    ldlm_completion_ast, NULL, NULL,
+                                    0, NULL, lh);
+        return rc == ELDLM_OK ? 0 : -EIO;
+}
+
+static inline void mdt_fid_unlock(struct lustre_handle *lh,
+                                  ldlm_mode_t mode)
+{
+        ldlm_lock_decref(lh, mode);
+}
+
 /*
  * Capability
  */
@@ -663,5 +706,16 @@ static inline void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
         ci->mc_fid[offset]  = fid;
         ci->mc_capa[offset] = capa;
 }
+
+#ifdef CONFIG_PDIROPS
+#define MDT_RD_LOCK LCK_PR
+#define MDT_WR_LOCK LCK_PW
+#define MDT_EX_LOCK LCK_EX
+#else
+#define MDT_RD_LOCK LCK_CR
+#define MDT_WR_LOCK LCK_EX
+#define MDT_EX_LOCK LCK_EX
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

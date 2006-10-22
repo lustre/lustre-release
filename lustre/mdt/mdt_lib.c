@@ -741,6 +741,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
         mdt_set_capainfo(info, 1, rr->rr_fid2, BYPASS_CAPA);
 
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
+        rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
+        
 #ifdef CONFIG_FS_POSIX_ACL
         if (sp->sp_cr_flags & MDS_CREATE_RMT_ACL) {
                 if (S_ISDIR(attr->la_mode))
@@ -822,6 +824,7 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (rr->rr_name == NULL)
                 RETURN(-EFAULT);
+        rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
 
         RETURN(0);
 }
@@ -861,6 +864,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (rr->rr_name == NULL)
                 RETURN(-EFAULT);
+        rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
 
         RETURN(0);
 }
@@ -905,6 +909,8 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
         rr->rr_tgt = req_capsule_client_get(pill, &RMF_SYMTGT);
         if (rr->rr_name == NULL || rr->rr_tgt == NULL)
                 RETURN(-EFAULT);
+        rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
+        rr->rr_tgtlen = req_capsule_get_size(pill, &RMF_SYMTGT, RCL_CLIENT);
 
         RETURN(0);
 }
@@ -955,6 +961,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         rr->rr_name = req_capsule_client_get(pill, &RMF_NAME);
         if (rr->rr_name == NULL)
                 RETURN(-EFAULT);
+        rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
 
         if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
                 struct md_create_spec *sp = &info->mti_spec;

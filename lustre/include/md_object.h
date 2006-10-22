@@ -93,25 +93,31 @@ struct md_capainfo *md_capainfo(const struct lu_env *env);
 
 /* metadata attributes */
 enum ma_valid {
-        MA_INODE    = (1 << 0),
-        MA_LOV      = (1 << 1),
-        MA_COOKIE   = (1 << 2),
-        MA_FLAGS    = (1 << 3),
-        MA_LMV      = (1 << 4),
-        MA_ACL_DEF  = (1 << 5)
+        MA_INODE     = (1 << 0),
+        MA_LOV       = (1 << 1),
+        MA_COOKIE    = (1 << 2),
+        MA_FLAGS     = (1 << 3),
+        MA_LMV       = (1 << 4),
+        MA_ACL_DEF   = (1 << 5)
 };
 
 typedef enum {
-        MDL_MINMODE = 0,
-        MDL_EX      = 1,
-        MDL_PW      = 2,
-        MDL_PR      = 4,
-        MDL_CW      = 8,
-        MDL_CR      = 16,
-        MDL_NL      = 32,
-        MDL_GROUP   = 64,
+        MDL_MINMODE  = 0,
+        MDL_EX       = 1,
+        MDL_PW       = 2,
+        MDL_PR       = 4,
+        MDL_CW       = 8,
+        MDL_CR       = 16,
+        MDL_NL       = 32,
+        MDL_GROUP    = 64,
         MDL_MAXMODE
 } mdl_mode_t;
+
+typedef enum {
+        MDT_NUL_LOCK = 0,
+        MDT_REG_LOCK = (1 << 0),
+        MDT_PDO_LOCK = (1 << 1)
+} mdl_type_t;
 
 struct md_attr {
         __u64                   ma_valid;

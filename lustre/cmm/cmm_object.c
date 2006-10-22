@@ -379,13 +379,22 @@ static mdl_mode_t cml_lock_mode(const struct lu_env *env,
 #ifdef HAVE_SPLIT_SUPPORT
         {
                 struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
-
+                int rc, split;
+                
+                memset(ma, 0, sizeof(*ma));
+                
                 /* 
                  * Check only if we need protection from split. If not - mdt
                  * handles other cases.
                  */
-                if (lm == MDL_PW &&
-                    cmm_expect_splitting(env, mo, ma) == CMM_EXPECT_SPLIT)
+                rc = cmm_expect_splitting(env, mo, ma, &split);
+                if (rc) {
+                        CERROR("Can't check for possible split, error %d\n",
+                               rc);
+                        RETURN(MDL_MINMODE);
+                }
+                
+                if (lm == MDL_PW && split == CMM_EXPECT_SPLIT)
                         RETURN(MDL_EX);
         }
 #endif

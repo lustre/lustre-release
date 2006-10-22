@@ -703,7 +703,7 @@ fi
 # whether to enable quota support
 #
 AC_DEFUN([LC_CONFIG_SPLIT],
-[AC_MSG_CHECKING([whether to disable split support])
+[AC_MSG_CHECKING([whether to enable split support])
 AC_ARG_ENABLE([split], 
 	AC_HELP_STRING([--disable-split],
 			[disable split support]),
@@ -715,13 +715,31 @@ fi
 ])
  
 #
+# LC_CONFIG_PDIROPS
+#
+# whether to enable PDIROPS
+#
+AC_DEFUN([LC_CONFIG_PDIROPS],
+[
+AC_MSG_CHECKING([whether to enable PDIROPS])
+AC_ARG_ENABLE([pdirops], 
+	AC_HELP_STRING([--disable-pdirops],
+			[disable PDIROPS]),
+	[],[enable_pdirops='yes'])
+AC_MSG_RESULT([$enable_pdirops])
+if test x$enable_pdirops != xno; then
+   AC_DEFINE(CONFIG_PDIROPS, 1, [enable PDIROPS])
+fi
+])
+
+#
 # LC_CONFIG_LDISKFS
 #
 # whether to enable various ldiskfs debugs
 #
 AC_DEFUN([LC_CONFIG_LDISKFS],
 [
-AC_MSG_CHECKING([whether to disable ldiskfs asserts])
+AC_MSG_CHECKING([whether to enable ldiskfs asserts])
 AC_ARG_ENABLE([ldiskfs_asserts], 
 	AC_HELP_STRING([--disable-ldiskfs-asserts],
 			[disable ldiskfs asserts]),

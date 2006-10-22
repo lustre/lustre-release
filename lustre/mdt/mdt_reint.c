@@ -38,12 +38,12 @@
 
 static int mdt_md_create(struct mdt_thread_info *info)
 {
-        struct mdt_device      *mdt = info->mti_mdt;
-        struct mdt_object      *parent;
-        struct mdt_object      *child;
-        struct mdt_lock_handle *lh;
-        struct mdt_body        *repbody;
-        struct md_attr         *ma = &info->mti_attr;
+        struct mdt_device       *mdt = info->mti_mdt;
+        struct mdt_object       *parent;
+        struct mdt_object       *child;
+        struct mdt_lock_handle  *lh;
+        struct mdt_body         *repbody;
+        struct md_attr          *ma = &info->mti_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
         int rc;
         ENTRY;
@@ -54,7 +54,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
         lh = &info->mti_lh[MDT_LH_PARENT];
-        lh->mlh_reg_mode = LCK_EX;
+        mdt_lock_pdo_init(lh, MDT_WR_LOCK, rr->rr_name, rr->rr_namelen);
 
         parent = mdt_object_find_lock(info, rr->rr_fid1, lh,
                                       MDS_INODELOCK_UPDATE);
@@ -160,14 +160,14 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
                 RETURN(0);
 
         lh = &info->mti_lh[MDT_LH_PARENT];
-        lh->mlh_reg_mode = LCK_EX;
+        mdt_lock_pdo_init(lh, MDT_WR_LOCK, NULL, 0);
 
         if (!(flags & MRF_SETATTR_LOCKED)) {
                 __u64 lockpart = MDS_INODELOCK_UPDATE;
                 if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID))
                         lockpart |= MDS_INODELOCK_LOOKUP;
 
-                rc = mdt_object_lock(info, mo, lh, lockpart);
+                rc = mdt_object_lock(info, mo, lh, lockpart, MDT_LOCAL_LOCK);
                 if (rc != 0)
                         GOTO(out, rc);
         }
@@ -334,8 +334,8 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         case S_IFBLK:
         case S_IFIFO:
         case S_IFSOCK:{
-                /* special file should stay on the same node as parent */
-                LASSERT(strlen(info->mti_rr.rr_name) > 0);
+                /* Special file should stay on the same node as parent. */
+                LASSERT(info->mti_rr.rr_namelen > 0);
                 rc = mdt_md_create(info);
                 break;
         }
@@ -367,7 +367,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         /* step 1: lock the parent */
         parent_lh = &info->mti_lh[MDT_LH_PARENT];
-        parent_lh->mlh_reg_mode = LCK_EX;
+        mdt_lock_pdo_init(parent_lh, MDT_WR_LOCK, rr->rr_name,
+                          rr->rr_namelen);
+        
         mp = mdt_object_find_lock(info, rr->rr_fid1, parent_lh,
                                   MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
@@ -424,8 +426,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (IS_ERR(mc))
                 GOTO(out_unlock_parent, rc = PTR_ERR(mc));
         child_lh = &info->mti_lh[MDT_LH_CHILD];
-        child_lh->mlh_reg_mode = LCK_EX;
-        rc = mdt_object_cr_lock(info, mc, child_lh, MDS_INODELOCK_FULL);
+        mdt_lock_reg_init(child_lh, MDT_EX_LOCK);
+        rc = mdt_object_lock(info, mc, child_lh, MDS_INODELOCK_FULL,
+                             MDT_CROSS_LOCK);
         if (rc != 0)
                 GOTO(out_put_child, rc);
 
@@ -480,7 +483,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         if (rr->rr_name[0] == 0) {
                 /* MDT holding name ask us to add ref. */
                 lhs = &info->mti_lh[MDT_LH_CHILD];
-                lhs->mlh_reg_mode = LCK_EX;
+                mdt_lock_reg_init(lhs, MDT_EX_LOCK);
                 ms = mdt_object_find_lock(info, rr->rr_fid1, lhs,
                                           MDS_INODELOCK_UPDATE);
                 if (IS_ERR(ms))
@@ -494,7 +497,8 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
         /* step 1: find & lock the target parent dir */
         lhp = &info->mti_lh[MDT_LH_PARENT];
-        lhp->mlh_reg_mode = LCK_EX;
+        mdt_lock_pdo_init(lhp, MDT_WR_LOCK, rr->rr_name,
+                          rr->rr_namelen);
         mp = mdt_object_find_lock(info, rr->rr_fid2, lhp,
                                   MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
@@ -502,12 +506,13 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
         /* step 2: find & lock the source */
         lhs = &info->mti_lh[MDT_LH_CHILD];
-        lhs->mlh_reg_mode = LCK_EX;
+        mdt_lock_reg_init(lhs, MDT_EX_LOCK);
         ms = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
         if (IS_ERR(ms))
                 GOTO(out_unlock_parent, rc = PTR_ERR(ms));
 
-        rc = mdt_object_cr_lock(info, ms, lhs, MDS_INODELOCK_UPDATE);
+        rc = mdt_object_lock(info, ms, lhs, MDS_INODELOCK_UPDATE,
+                             MDT_CROSS_LOCK);
         if (rc != 0)
                 GOTO(out_unlock_source, rc);
 
@@ -545,7 +550,8 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
 
         /* step 1: lookup & lock the tgt dir */
         lh_tgtdir = &info->mti_lh[MDT_LH_PARENT];
-        lh_tgtdir->mlh_reg_mode = LCK_EX;
+        mdt_lock_pdo_init(lh_tgtdir, MDT_WR_LOCK, rr->rr_tgt,
+                          rr->rr_tgtlen);
         mtgtdir = mdt_object_find_lock(info, rr->rr_fid1, lh_tgtdir,
                                        MDS_INODELOCK_UPDATE);
         if (IS_ERR(mtgtdir))
@@ -558,13 +564,15 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         if (rc != 0 && rc != -ENOENT) {
                 GOTO(out_unlock_tgtdir, rc);
         } else if (rc == 0) {
-                /* in case of replay that name can be already inserted,
-                 * check that and do nothing if so */
+                /*
+                 * In case of replay that name can be already inserted, check
+                 * that and do nothing if so.
+                 */
                 if (lu_fid_eq(tgt_fid, rr->rr_fid2))
                         GOTO(out_unlock_tgtdir, rc);
 
                 lh_tgt = &info->mti_lh[MDT_LH_CHILD];
-                lh_tgt->mlh_reg_mode = LCK_EX;
+                mdt_lock_reg_init(lh_tgt, MDT_EX_LOCK);
 
                 mtgt = mdt_object_find_lock(info, tgt_fid, lh_tgt,
                                             MDS_INODELOCK_LOOKUP);
@@ -584,10 +592,9 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         if (rc == 0 && mtgt)
                 mdt_handle_last_unlink(info, mtgt, ma);
 
-        EXIT;
-        if (mtgt) {
+        if (mtgt != NULL)
                 mdt_object_unlock_put(info, mtgt, lh_tgt, rc);
-        }
+        EXIT;
 out_unlock_tgtdir:
         mdt_object_unlock_put(info, mtgtdir, lh_tgtdir, rc);
 out:
@@ -607,7 +614,7 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
         ENTRY;
 
         ls = info->mti_mdt->mdt_md_dev.md_lu_dev.ld_site;
-        fid_build_res_name(&LUSTRE_BFL_FID, &res_id);
+        fid_build_reg_res_name(&LUSTRE_BFL_FID, &res_id);
 
         if (ls->ls_control_exp == NULL) {
                 /*
@@ -640,11 +647,11 @@ static void mdt_rename_unlock(struct lustre_handle *lh)
 }
 
 /*
- * This is is_subdir() variant, it is CMD is cmm forwards it to correct
+ * This is is_subdir() variant, it is CMD if cmm forwards it to correct
  * target. Source should not be ancestor of target dir. May be other rename
  * checks can be moved here later.
  */
-static int mdt_rename_check(struct mdt_thread_info *info, struct lu_fid *fid)
+static int mdt_rename_sanity(struct mdt_thread_info *info, struct lu_fid *fid)
 {
         struct mdt_reint_record *rr = &info->mti_rr;
         struct lu_fid dst_fid = *rr->rr_fid2;
@@ -711,17 +718,19 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         lh_newp = &info->mti_lh[MDT_LH_NEW];
 
-        /* step 1: lock the source dir */
+        /* step 1: lock the source dir. */
         lh_srcdirp = &info->mti_lh[MDT_LH_PARENT];
-        lh_srcdirp->mlh_reg_mode = LCK_EX;
+        mdt_lock_pdo_init(lh_srcdirp, MDT_WR_LOCK, rr->rr_name,
+                          rr->rr_namelen);
         msrcdir = mdt_object_find_lock(info, rr->rr_fid1, lh_srcdirp,
                                        MDS_INODELOCK_UPDATE);
         if (IS_ERR(msrcdir))
                 GOTO(out_rename_lock, rc = PTR_ERR(msrcdir));
 
-        /*step 2: find & lock the target dir*/
+        /* step 2: find & lock the target dir. */
         lh_tgtdirp = &info->mti_lh[MDT_LH_CHILD];
-        lh_tgtdirp->mlh_reg_mode = LCK_EX;
+        mdt_lock_pdo_init(lh_tgtdirp, MDT_WR_LOCK, rr->rr_tgt,
+                          rr->rr_tgtlen);
         if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
                 mdt_object_get(info->mti_env, msrcdir);
                 mtgtdir = msrcdir;
@@ -735,15 +744,16 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 if (rc == 0)
                         GOTO(out_unlock_target, rc = -ESTALE);
                 else if (rc > 0) {
-                        /* we lock the target dir iff it is local */
+                        /* we lock the target dir if it is local */
                         rc = mdt_object_lock(info, mtgtdir, lh_tgtdirp,
-                                             MDS_INODELOCK_UPDATE);
+                                             MDS_INODELOCK_UPDATE,
+                                             MDT_LOCAL_LOCK);
                         if (rc != 0)
                                 GOTO(out_unlock_target, rc);
                 }
         }
 
-        /*step 3: find & lock the old object*/
+        /* step 3: find & lock the old object. */
         rc = mdo_lookup(info->mti_env, mdt_object_child(msrcdir),
                         rr->rr_name, old_fid);
         if (rc != 0)
@@ -753,18 +763,18 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 GOTO(out_unlock_target, rc = -EINVAL);
 
         lh_oldp = &info->mti_lh[MDT_LH_OLD];
-        lh_oldp->mlh_reg_mode = LCK_EX;
+        mdt_lock_reg_init(lh_oldp, MDT_EX_LOCK);
         mold = mdt_object_find_lock(info, old_fid, lh_oldp,
                                     MDS_INODELOCK_LOOKUP);
         if (IS_ERR(mold))
                 GOTO(out_unlock_target, rc = PTR_ERR(mold));
 
-        /*step 4: find & lock the new object*/
+        /* step 4: find & lock the new object. */
         /* new target object may not exist now */
         rc = mdo_lookup(info->mti_env, mdt_object_child(mtgtdir),
                         rr->rr_tgt, new_fid);
         if (rc == 0) {
-                /* the new_fid should have been filled at this moment*/
+                /* the new_fid should have been filled at this moment */
                 if (lu_fid_eq(old_fid, new_fid))
                        GOTO(out_unlock_old, rc);
 
@@ -772,13 +782,13 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                     lu_fid_eq(new_fid, rr->rr_fid2))
                         GOTO(out_unlock_old, rc = -EINVAL);
 
-                lh_newp->mlh_reg_mode = LCK_EX;
+                mdt_lock_reg_init(lh_newp, MDT_EX_LOCK);
                 mnew = mdt_object_find(info->mti_env, info->mti_mdt, new_fid);
                 if (IS_ERR(mnew))
                         GOTO(out_unlock_old, rc = PTR_ERR(mnew));
 
-                rc = mdt_object_cr_lock(info, mnew, lh_newp,
-                                        MDS_INODELOCK_FULL);
+                rc = mdt_object_lock(info, mnew, lh_newp,
+                                     MDS_INODELOCK_FULL, MDT_CROSS_LOCK);
                 if (rc != 0) {
                         mdt_object_put(info->mti_env, mnew);
                         GOTO(out_unlock_old, rc);
@@ -806,8 +816,9 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         mdt_set_capainfo(info, 2, old_fid, BYPASS_CAPA);
         mdt_set_capainfo(info, 3, new_fid, BYPASS_CAPA);
+        
         /* Check if @dst is subdir of @src. */
-        rc = mdt_rename_check(info, old_fid);
+        rc = mdt_rename_sanity(info, old_fid);
         if (rc)
                 GOTO(out_unlock_new, rc);
 

@@ -151,9 +151,10 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
                      const char *name);
 
 int cmm_expect_splitting(const struct lu_env *env, struct md_object *mo,
-                         struct md_attr *ma);
+                         struct md_attr *ma, int *split);
 
 int cmm_try_to_split(const struct lu_env *env, struct md_object *mo);
+
 #endif
 
 #endif /* __KERNEL__ */

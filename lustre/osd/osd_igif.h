@@ -34,7 +34,6 @@
 struct lu_fid;
 struct osd_inode_id;
 
-int lu_fid_is_igif(const struct lu_fid *fid);
 void lu_igif_to_id(const struct lu_fid *fid, struct osd_inode_id *id);
 __u32 lu_igif_ino(const struct lu_fid *fid);
 __u32 lu_igif_gen(const struct lu_fid *fid);

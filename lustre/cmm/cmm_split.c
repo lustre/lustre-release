@@ -79,12 +79,12 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
                 /* Get LMV EA */
                 ma->ma_need = MA_LMV;
                 rc = mo_attr_get(env, mp, ma);
+                
                 /* Skip checking the slave dirs (mea_count is 0) */
                 if (rc == 0 && ma->ma_lmv->mea_count != 0) {
                         /* 
-                         * Get stripe by name to check the name
-                         * belongs to master dir, otherwise
-                         * return the -ERESTART
+                         * Get stripe by name to check the name belongs to
+                         * master dir, otherwise return the -ERESTART
                          */
                         stripe = mea_name2idx(ma->ma_lmv, name, strlen(name));
                 
@@ -98,42 +98,50 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
 }
 
 int cmm_expect_splitting(const struct lu_env *env, struct md_object *mo,
-                         struct md_attr *ma)
+                         struct md_attr *ma, int *split)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
-        struct lu_fid *fid = NULL;
-        int rc = CMM_EXPECT_SPLIT;
+        struct lu_fid root_fid;
+        int rc;
         ENTRY;
 
-        if (cmm->cmm_tgt_count == 0)
-                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
+        /* 
+         * Check first most light things like tgt count and root fid. For some
+         * case this style should yeild better performance.
+         */
+        if (cmm->cmm_tgt_count == 0) {
+                *split = CMM_NO_SPLIT_EXPECTED;
+                RETURN(0);
+        }
 
+        rc = cmm_child_ops(cmm)->mdo_root_get(env, cmm->cmm_child,
+                                              &root_fid);
+        if (rc)
+                RETURN(rc);
+
+        if (lu_fid_eq(&root_fid, cmm2fid(md2cmm_obj(mo)))) {
+                *split = CMM_NOT_SPLITTABLE;
+                RETURN(0);
+        }
+
+        /* MA_INODE is needed to check inode size. */
         ma->ma_need = MA_INODE | MA_LMV;
         rc = mo_attr_get(env, mo, ma);
         if (rc)
-                GOTO(cleanup, rc = CMM_NOT_SPLITTABLE);
-
-        if (ma->ma_attr.la_size < CMM_SPLIT_SIZE)
-                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
-
-        if (ma->ma_lmv_size)
-                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
+                RETURN(rc);
         
-        OBD_ALLOC_PTR(fid);
-        rc = cmm_child_ops(cmm)->mdo_root_get(env, cmm->cmm_child, fid);
-        if (rc)
-                GOTO(cleanup, rc);
-
-        rc = CMM_EXPECT_SPLIT;
-
-        if (lu_fid_eq(fid, cmm2fid(md2cmm_obj(mo))))
-                GOTO(cleanup, rc = CMM_NO_SPLIT_EXPECTED);
-
-        EXIT;
-cleanup:
-        if (fid)
-                OBD_FREE_PTR(fid);
-        return rc;
+        if (ma->ma_valid & MA_LMV) {
+                *split = CMM_NOT_SPLITTABLE;
+                RETURN(0);
+        }
+                
+        if (ma->ma_attr.la_size < CMM_SPLIT_SIZE) {
+                *split = CMM_NO_SPLIT_EXPECTED;
+                RETURN(0);
+        }
+        
+        *split = CMM_EXPECT_SPLIT;
+        RETURN(0);
 }
 
 #define cmm_md_size(stripes) \
@@ -496,17 +504,20 @@ int cmm_try_to_split(const struct lu_env *env, struct md_object *mo)
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
         struct lu_buf *buf;
-        int rc = 0;
+        int rc = 0, split;
         ENTRY;
 
         LASSERT(S_ISDIR(lu_object_attr(&mo->mo_lu)));
         memset(ma, 0, sizeof(*ma));
 
         /* Step1: Checking whether the dir needs to be split. */
-        rc = cmm_expect_splitting(env, mo, ma);
-        if (rc != CMM_EXPECT_SPLIT)
+        rc = cmm_expect_splitting(env, mo, ma, &split);
+        if (rc)
+                GOTO(cleanup, rc);
+        
+        if (split != CMM_EXPECT_SPLIT)
                 GOTO(cleanup, rc = 0);
-
+        
         /*
          * Disable trans for splitting, since there will be so many trans in
          * this one ops, confilct with current recovery design.

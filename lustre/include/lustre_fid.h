@@ -200,24 +200,28 @@ void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src);
 
 struct ldlm_namespace;
 
-int fid_lock(struct ldlm_namespace *ns, const struct lu_fid *f,
-             struct lustre_handle *lh, ldlm_mode_t mode,
-             ldlm_policy_data_t *policy,
-             struct ldlm_res_id *res_id);
-void fid_unlock(const struct lu_fid *f,
-                struct lustre_handle *lh, ldlm_mode_t mode);
-
 /*
  * Build (DLM) resource name from fid.
  */
 static inline struct ldlm_res_id *
-fid_build_res_name(const struct lu_fid *f,
-                   struct ldlm_res_id *name)
+fid_build_reg_res_name(const struct lu_fid *f,
+                       struct ldlm_res_id *name)
 {
         memset(name, 0, sizeof *name);
         name->name[0] = fid_seq(f);
         name->name[1] = fid_oid(f);
         name->name[2] = fid_ver(f);
+        name->name[3] = 0ull;
+        return name;
+}
+
+static inline struct ldlm_res_id *
+fid_build_pdo_res_name(const struct lu_fid *f,
+                       unsigned int hash,
+                       struct ldlm_res_id *name)
+{
+        fid_build_reg_res_name(f, name);
+        name->name[3] = hash;
         return name;
 }
 

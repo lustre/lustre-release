@@ -56,7 +56,6 @@
 #include "osd_oi.h"
 /* osd_lookup(), struct osd_thread_info */
 #include "osd_internal.h"
-/* lu_fid_is_igif() */
 #include "osd_igif.h"
 #include "dt_object.h"
 
@@ -158,7 +157,7 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
 {
         int rc;
 
-        if (lu_fid_is_igif(fid)) {
+        if (fid_is_igif(fid)) {
                 lu_igif_to_id(fid, id);
                 rc = 0;
         } else {
@@ -182,7 +181,7 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         struct dt_device    *dev;
         struct osd_inode_id *id;
 
-        if (lu_fid_is_igif(fid))
+        if (fid_is_igif(fid))
                 return 0;
 
         idx = oi->oi_dir;
@@ -205,7 +204,7 @@ int osd_oi_delete(struct osd_thread_info *info,
         struct dt_object *idx;
         struct dt_device *dev;
 
-        if (lu_fid_is_igif(fid))
+        if (fid_is_igif(fid))
                 return 0;
 
         idx = oi->oi_dir;

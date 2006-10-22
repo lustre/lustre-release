@@ -1119,7 +1119,7 @@ static int mdd_create(const struct lu_env *env,
 #endif
 
         rc = mdd_object_initialize(env, mdo2fid(mdd_pobj),
-                                     son, ma, handle);
+                                   son, ma, handle);
         mdd_write_unlock(env, son);
         if (rc)
                 /*

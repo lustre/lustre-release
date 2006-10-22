@@ -246,6 +246,11 @@ static inline int fid_is_zero(const struct lu_fid *fid)
         return fid_seq(fid) == 0 && fid_oid(fid) == 0;
 }
 
+static inline int fid_is_igif(const struct lu_fid *fid)
+{
+        return fid_seq(fid) == LUSTRE_ROOT_FID_SEQ;
+}
+
 #define DFID "[0x%16.16"LPF64"x/0x%8.8x:0x%8.8x]"
 
 #define PFID(fid)     \
@@ -259,9 +264,11 @@ extern void lustre_swab_lu_range(struct lu_range *range);
 static inline int lu_fid_eq(const struct lu_fid *f0,
                             const struct lu_fid *f1)
 {
-	/* check that there is no alignment padding */
+	/* Check that there is no alignment padding. */
 	CLASSERT(sizeof *f0 ==
                  sizeof f0->f_seq + sizeof f0->f_oid + sizeof f0->f_ver);
+        LASSERT(fid_is_igif(f0) || fid_ver(f0) == 0);
+        LASSERT(fid_is_igif(f1) || fid_ver(f1) == 0);
 	return memcmp(f0, f1, sizeof *f0) == 0;
 }
 
