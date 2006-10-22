@@ -442,6 +442,11 @@ int mdd_finish_unlink(const struct lu_env *env,
 
                 if (obj->mod_count == 0)
                         rc = mdd_object_kill(env, obj, ma);
+                else
+                        /* clear MA_LOV | MA_COOKIE, if we do not 
+                         * unlink it in case we get it somewhere */
+                        ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
+
         }
         RETURN(rc);
 }
