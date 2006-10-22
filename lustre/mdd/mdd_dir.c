@@ -1323,7 +1323,7 @@ static int mdd_rename(const struct lu_env *env,
                 if (mdd_name2hash(sname) != mdd_name2hash(tname))
                         tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname);
                 else
-                        tdlh = NULL;
+                        tdlh = sdlh;
         } else if (rc == MDD_RN_SRCTGT) {
                 sdlh = mdd_pdo_write_lock(env, mdd_spobj, sname);
                 tdlh = mdd_pdo_write_lock(env, mdd_tpobj, tname);
@@ -1398,10 +1398,10 @@ static int mdd_rename(const struct lu_env *env,
         }
 
 cleanup:
+        if (likely(tdlh) && sdlh != tdlh)
+                mdd_pdo_write_unlock(env, mdd_tpobj, tdlh);
         if (likely(sdlh))
                 mdd_pdo_write_unlock(env, mdd_spobj, sdlh);
-        if (tdlh)
-                mdd_pdo_write_unlock(env, mdd_tpobj, tdlh);
 cleanup_unlocked:
         mdd_trans_stop(env, mdd, rc, handle);
         if (mdd_sobj)
