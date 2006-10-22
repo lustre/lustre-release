@@ -79,7 +79,7 @@ int mdd_log_txn_param_build(const struct lu_env *env, struct mdd_object *obj,
                             struct md_attr *ma, enum mdd_txn_op op)
 {
         struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
-        int rc, log_credits;
+        int rc, log_credits, stripe;
         
         mdd_txn_param_build(env, mdd, op);
         
@@ -87,12 +87,15 @@ int mdd_log_txn_param_build(const struct lu_env *env, struct mdd_object *obj,
         rc = mdd_lmm_get_locked(env, obj, ma);
         if (rc || !(ma->ma_valid & MA_LOV))
                 RETURN(rc);
-        
-        log_credits = le32_to_cpu(ma->ma_lmm->lmm_stripe_count) * 
-                      dto_txn_credits[DTO_LOG_REC];
+      
+        LASSERT(le32_to_cpu(ma->ma_lmm->lmm_magic) == LOV_MAGIC);
+        if ((int)le32_to_cpu(ma->ma_lmm->lmm_stripe_count) < 0)
+                stripe = mdd2obd_dev(mdd)->u.mds.mds_lov_desc.ld_tgt_count;
+        else
+                stripe = le32_to_cpu(ma->ma_lmm->lmm_stripe_count);
 
-        mdd_env_info(env)->mti_param.tp_credits += log_credits; 
-        
+        log_credits = stripe * dto_txn_credits[DTO_LOG_REC];
+        mdd_env_info(env)->mti_param.tp_credits += log_credits;
         RETURN(rc);
 }
 
