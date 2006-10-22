@@ -1559,6 +1559,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         LASSERT(!lustre_handle_is_used(&lh->mlh_reg_lh));
         LASSERT(!lustre_handle_is_used(&lh->mlh_pdo_lh));
         LASSERT(lh->mlh_reg_mode != LCK_MINMODE);
+        LASSERT(lh->mlh_type != MDT_NUL_LOCK);
 
         if (mdt_object_exists(o) < 0) {
                 if (locality == MDT_CROSS_LOCK) {
@@ -1921,7 +1922,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
 
 void mdt_lock_handle_init(struct mdt_lock_handle *lh)
 {
-        lh->mlh_type = MDT_PDO_LOCK;
+        lh->mlh_type = MDT_NUL_LOCK;
         lh->mlh_reg_lh.cookie = 0ull;
         lh->mlh_reg_mode = LCK_MINMODE;
         lh->mlh_pdo_lh.cookie = 0ull;
