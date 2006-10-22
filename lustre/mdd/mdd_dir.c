@@ -446,8 +446,9 @@ int mdd_finish_unlink(const struct lu_env *env,
                         /* clear MA_LOV | MA_COOKIE, if we do not 
                          * unlink it in case we get it somewhere */
                         ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
+        } else 
+                ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
 
-        }
         RETURN(rc);
 }
 
