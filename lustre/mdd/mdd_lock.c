@@ -73,16 +73,7 @@ void mdd_pdlock_init(struct mdd_object *obj)
 
 unsigned long mdd_name2hash(const char *name)
 {
-        unsigned long value = 0;
-        int namelen = strlen(name);
-        int i = 0;
-        /*XXX the hash should be simple, fast but differ from split one
-         * Current one is just fast solution to see how dynlocks will help */
-        while (namelen > i) {
-                value += name[i] * (i << 7);
-                i++;
-        }
-        return value;
+        return full_name_hash((unsigned char*)name, strlen(name));
 }
 
 struct dynlock_handle *mdd_pdo_write_lock(const struct lu_env *env,
