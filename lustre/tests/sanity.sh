@@ -1260,9 +1260,9 @@ test_31g() {
         touch $DIR/d31ga/f
         ln $DIR/d31ga/f $DIR/d31gb/g
         $CHECKSTAT -t file $DIR/d31ga/f || error "source"
-        [ `./stat -c%h $DIR/d31ga/f` == '2' ] || error "source nlink"
+        [ `stat -c%h $DIR/d31ga/f` == '2' ] || error "source nlink"
         $CHECKSTAT -t file $DIR/d31gb/g || error "target"
-        [ `./stat -c%h $DIR/d31gb/g` == '2' ] || error "target nlink"
+        [ `stat -c%h $DIR/d31gb/g` == '2' ] || error "target nlink"
 }
 run_test 31g "cross directory link==============="
 
@@ -1273,9 +1273,9 @@ test_31h() {
         touch $DIR/d31h/f
         ln $DIR/d31h/f $DIR/d31h/dir/g
         $CHECKSTAT -t file $DIR/d31h/f || error "source"
-        [ `./stat -c%h $DIR/d31h/f` == '2' ] || error "source nlink"
+        [ `stat -c%h $DIR/d31h/f` == '2' ] || error "source nlink"
         $CHECKSTAT -t file $DIR/d31h/dir/g || error "target"
-        [ `./stat -c%h $DIR/d31h/dir/g` == '2' ] || error "target nlink"
+        [ `stat -c%h $DIR/d31h/dir/g` == '2' ] || error "target nlink"
 }
 run_test 31h "cross directory link under child==============="
 
@@ -1286,9 +1286,9 @@ test_31i() {
         touch $DIR/d31i/dir/f
         ln $DIR/d31i/dir/f $DIR/d31i/g
         $CHECKSTAT -t file $DIR/d31i/dir/f || error "source"
-        [ `./stat -c%h $DIR/d31i/dir/f` == '2' ] || error "source nlink"
+        [ `stat -c%h $DIR/d31i/dir/f` == '2' ] || error "source nlink"
         $CHECKSTAT -t file $DIR/d31i/g || error "target"
-        [ `./stat -c%h $DIR/d31i/g` == '2' ] || error "target nlink"
+        [ `stat -c%h $DIR/d31i/g` == '2' ] || error "target nlink"
 }
 run_test 31i "cross directory link under parent==============="
 
