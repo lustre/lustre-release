@@ -255,7 +255,7 @@ Index: linux/lib/dynlocks.c
 +	BUG_ON(hl == NULL);
 +	BUG_ON(dl->dl_magic != DYNLOCK_LIST_MAGIC);
 +	BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
-+	BUG_ON(current->pid != hl->dl_pid);
++	BUG_ON(hl->dl_writers != 0 && current->pid != hl->dl_pid);
 +
 +	spin_lock(&dl->dl_list_lock);
 +	if (hl->dl_writers) {
