@@ -107,7 +107,7 @@ static int mdd_is_parent(const struct lu_env *env,
         LASSERT(!lu_fid_eq(mdo2fid(p1), lf));
         pfid = &mdd_env_info(env)->mti_fid;
 
-        /* Do not lookup ".." in root, they do not exist there. */
+        /* Check for root first. */
         if (lu_fid_eq(mdo2fid(p1), &mdd->mdd_root_fid))
                 RETURN(0);
 
@@ -1232,7 +1232,8 @@ enum rename_order {
         MDD_RN_TGTSRC
 };
 
-static int mdd_rename_order(const struct lu_env *env, struct mdd_device *mdd,
+static int mdd_rename_order(const struct lu_env *env,
+                            struct mdd_device *mdd,
                             struct mdd_object *src_pobj,
                             struct mdd_object *tgt_pobj)
 {

@@ -1322,6 +1322,7 @@ static int osd_dir_page_build(const struct lu_env *env, int first,
                 *end = hash;
                 CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
                        name, ent, nob, PFID(fid), hash, len, len, len, name);
+
                 if (nob >= recsize) {
                         fid_be_to_cpu(&ent->lde_fid, fid);
                         fid_cpu_to_le(&ent->lde_fid, &ent->lde_fid);

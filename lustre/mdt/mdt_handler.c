@@ -212,7 +212,7 @@ void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lm,
         lh->mlh_reg_mode = lm;
         lh->mlh_type = MDT_PDO_LOCK;
         lh->mlh_pdo_hash = (name != NULL && namelen > 0 ?
-                            full_name_hash(name, namelen) : 0);
+                            full_name_hash(name, namelen - 1) : 0);
 }
 
 #ifdef CONFIG_PDIROPS
@@ -1583,6 +1583,11 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         if (lh->mlh_type == MDT_PDO_LOCK && lh->mlh_pdo_hash != 0) {
                 lh->mlh_pdo_mode = mdt_lock_pdo_mode(info, o, lh->mlh_reg_mode);
                 if (lh->mlh_pdo_mode != LCK_MINMODE) {
+                        /* 
+                         * Do not use LDLM_FL_LOCAL_ONLY for paralell lock, it
+                         * is never going to be sent to client and we do not
+                         * want it slowed down due to possible cancels.
+                         */
                         policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
                         rc = mdt_fid_lock(ns, &lh->mlh_pdo_lh, lh->mlh_pdo_mode,
                                           policy, res_id, LDLM_FL_ATOMIC_CB);
@@ -1590,12 +1595,21 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                                 RETURN(rc);
                 }
 
-                fid_build_pdo_res_name(mdt_object_fid(o), lh->mlh_pdo_hash,
-                                       res_id);
+                /* 
+                 * Finish rs_id initializing by name hash marking patr of
+                 * directory which is taking modification.
+                 */
+                res_id->name[LUSTRE_RES_ID_HSH_OFF] = lh->mlh_pdo_hash;
         }
 #endif
         
         policy->l_inodebits.bits = ibits;
+
+        /* 
+         * Use LDLM_FL_LOCAL_ONLY for this lock. We do not know yet if it is
+         * going to be sent to client. If it is - mdt_intent_policy() path will
+         * fix it up and turns FL_LOCAL flag off.
+         */
         rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
                           res_id, LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB);
 #ifdef CONFIG_PDIROPS

@@ -200,6 +200,13 @@ void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src);
 
 struct ldlm_namespace;
 
+enum {
+        LUSTRE_RES_ID_SEQ_OFF = 0,
+        LUSTRE_RES_ID_OID_OFF = 1,
+        LUSTRE_RES_ID_VER_OFF = 2,
+        LUSTRE_RES_ID_HSH_OFF = 3
+};
+
 /*
  * Build (DLM) resource name from fid.
  */
@@ -208,10 +215,9 @@ fid_build_reg_res_name(const struct lu_fid *f,
                        struct ldlm_res_id *name)
 {
         memset(name, 0, sizeof *name);
-        name->name[0] = fid_seq(f);
-        name->name[1] = fid_oid(f);
-        name->name[2] = fid_ver(f);
-        name->name[3] = 0ull;
+        name->name[LUSTRE_RES_ID_SEQ_OFF] = fid_seq(f);
+        name->name[LUSTRE_RES_ID_OID_OFF] = fid_oid(f);
+        name->name[LUSTRE_RES_ID_VER_OFF] = fid_ver(f);
         return name;
 }
 
@@ -221,7 +227,7 @@ fid_build_pdo_res_name(const struct lu_fid *f,
                        struct ldlm_res_id *name)
 {
         fid_build_reg_res_name(f, name);
-        name->name[3] = hash;
+        name->name[LUSTRE_RES_ID_HSH_OFF] = hash;
         return name;
 }
 

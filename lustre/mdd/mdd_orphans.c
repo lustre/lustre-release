@@ -35,7 +35,7 @@
 #include <obd_class.h>
 #include <lustre_ver.h>
 #include <obd_support.h>
-
+#include <lustre_fid.h>
 #include "mdd_internal.h"
 
 const char orph_index_name[] = "orphans";
