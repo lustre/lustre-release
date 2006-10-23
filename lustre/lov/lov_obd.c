@@ -665,6 +665,9 @@ void lov_fix_desc(struct lov_desc *desc)
                 LCONSOLE_WARN("Unknown stripe pattern: %#x\n",desc->ld_pattern);
                 desc->ld_pattern = 0;
         }
+
+        if (desc->ld_qos_maxage == 0)
+                desc->ld_qos_maxage = QOS_DEFAULT_MAXAGE;
 }
 
 static int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)

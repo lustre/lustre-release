@@ -36,6 +36,7 @@
 #endif
 
 #include <obd.h>
+#include <obd_lov.h>
 #include <obd_class.h>
 #include <lustre_log.h>
 #include <obd_ost.h>
@@ -1117,6 +1118,7 @@ static int mgs_write_log_lov(struct obd_device *obd, struct fs_db *fsdb,
         lovdesc->ld_pattern = LOV_PATTERN_RAID0;
         lovdesc->ld_default_stripe_size = 1024 * 1024;
         lovdesc->ld_default_stripe_offset = 0;
+        lovdesc->ld_qos_maxage = QOS_DEFAULT_MAXAGE;
         sprintf((char*)lovdesc->ld_uuid.uuid, "%s_UUID", lovname);
         /* can these be the same? */
         uuid = (char *)lovdesc->ld_uuid.uuid;
