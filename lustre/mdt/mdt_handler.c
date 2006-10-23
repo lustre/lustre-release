@@ -1596,7 +1596,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                 }
 
                 /* 
-                 * Finish rs_id initializing by name hash marking patr of
+                 * Finish res_id initializing by name hash marking patr of
                  * directory which is taking modification.
                  */
                 res_id->name[LUSTRE_RES_ID_HSH_OFF] = lh->mlh_pdo_hash;
@@ -1612,12 +1612,11 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
          */
         rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
                           res_id, LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB);
+        
 #ifdef CONFIG_PDIROPS
-        if (rc) {
-                if (lh->mlh_type == MDT_PDO_LOCK) {
-                        mdt_fid_unlock(&lh->mlh_pdo_lh, lh->mlh_pdo_mode);
-                        lh->mlh_pdo_lh.cookie = 0ull;
-                }
+        if (rc && lh->mlh_type == MDT_PDO_LOCK) {
+                mdt_fid_unlock(&lh->mlh_pdo_lh, lh->mlh_pdo_mode);
+                lh->mlh_pdo_lh.cookie = 0ull;
         }
 #endif
         
@@ -1635,12 +1634,14 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
         struct ptlrpc_request *req = mdt_info_req(info);
         ENTRY;
 
-        /* Do not save PDO locks to request. */
+#ifdef CONFIG_PDIROPS
         if (lustre_handle_is_used(&lh->mlh_pdo_lh)) {
+                /* Do not save PDO locks to request, just decref. */
                 mdt_fid_unlock(&lh->mlh_pdo_lh,
                                lh->mlh_pdo_mode);
                 lh->mlh_pdo_lh.cookie = 0;
         }
+#endif
         
         if (lustre_handle_is_used(&lh->mlh_reg_lh)) {
                 if (decref) {
