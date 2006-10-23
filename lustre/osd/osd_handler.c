@@ -565,7 +565,7 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
         hook_res = dt_txn_hook_start(env, d, p);
         if (hook_res != 0)
                 RETURN(ERR_PTR(hook_res));
-
+        
         if (osd_param_is_sane(dev, p)) {
                 OBD_ALLOC_GFP(oh, sizeof *oh, GFP_NOFS);
                 if (oh != NULL) {
@@ -1316,13 +1316,16 @@ static int osd_dir_page_build(const struct lu_env *env, int first,
                 len  = iops->key_size(env, it);
 
                 *fid  = *(struct lu_fid *)iops->rec(env, it);
-                fid_cpu_to_le(fid, fid);
+                /* convert from disk data to cpu */
+                fid_be_to_cpu(fid, fid);
 
                 recsize = (sizeof *ent + len + 3) & ~3;
                 hash = iops->store(env, it);
                 *end = hash;
                 CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
                        name, ent, nob, PFID(fid), hash, len, len, len, name);
+                /* convert from cpu data to network */
+                fid_cpu_to_le(fid, fid);
                 if (nob >= recsize) {
                         ent->lde_fid = *fid;
                         ent->lde_hash = hash;

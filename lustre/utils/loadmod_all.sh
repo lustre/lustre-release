@@ -36,11 +36,12 @@ modprobe lnet
 modprobe ksocklnd
 
 
-HOST=`hostname`
-echo -1 >/proc/sys/lnet/debug
-echo "/r/tmp/$HOST.debug" >/proc/sys/lnet/daemon_file
-
 #  To generate gdb debug file:
 rm -f /r/tmp/ogdb-`hostname`
 ./lctl modules > /r/tmp/ogdb-`hostname`
+
+
+HOST=`hostname`
+echo -1 >/proc/sys/lnet/debug
+echo "/r/tmp/$HOST.debug" >/proc/sys/lnet/daemon_file
 

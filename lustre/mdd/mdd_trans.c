@@ -80,6 +80,7 @@ int mdd_log_txn_param_build(const struct lu_env *env, struct mdd_object *obj,
 {
         struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
         int rc, log_credits, stripe;
+        ENTRY;
         
         mdd_txn_param_build(env, mdd, op);
         

@@ -110,6 +110,7 @@ struct mdd_thread_info {
         struct lu_buf         mti_buf;
         struct obdo           mti_oa;
         char                  mti_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
+        struct lu_fid         mti_fid2; /* used for be & cpu converting */
 };
 
 int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,

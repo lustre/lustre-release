@@ -41,6 +41,7 @@
 #include <linux/ldiskfs_fs.h>
 #include <lustre_mds.h>
 #include <lustre/lustre_idl.h>
+#include <lustre_fid.h>
 
 #include "mdd_internal.h"
 
@@ -48,10 +49,10 @@ static const char dot[] = ".";
 static const char dotdot[] = "..";
 
 static int __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
-                        const char *name, const struct lu_fid* fid, int mask);
+                        const char *name, struct lu_fid* fid, int mask);
 static int
 __mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
-                    const char *name, const struct lu_fid* fid, int mask)
+                    const char *name, struct lu_fid* fid, int mask)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
         struct dynlock_handle *dlh;
@@ -284,6 +285,16 @@ int mdd_link_sanity_check(const struct lu_env *env, struct mdd_object *tgt_obj,
         RETURN(rc);
 }
 
+const struct dt_rec *index_fid_key(const struct lu_env *env,
+                                   const struct lu_fid *fid)
+{
+        struct mdd_thread_info *info = mdd_env_info(env);
+
+        fid_cpu_to_be(&info->mti_fid2, fid);
+        return (const struct dt_rec *)&info->mti_fid2;
+}
+
+
 /* insert new index, add reference if isdir, update times */
 static int __mdd_index_insert(const struct lu_env *env,
                              struct mdd_object *pobj, const struct lu_fid *lf,
@@ -303,8 +314,8 @@ static int __mdd_index_insert(const struct lu_env *env,
 
         if (dt_try_as_dir(env, next))
                 rc = next->do_index_ops->dio_insert(env, next,
-                                                    (struct dt_rec *)lf,
-                                                    (struct dt_key *)name,
+                                                    index_fid_key(env, lf),
+                                                    (const struct dt_key *)name,
                                                     th, capa);
         else
                 rc = -ENOTDIR;
@@ -367,8 +378,8 @@ static int __mdd_index_insert_only(const struct lu_env *env,
 
         if (dt_try_as_dir(env, next))
                 rc = next->do_index_ops->dio_insert(env, next,
-                                         (struct dt_rec *)lf,
-                                         (struct dt_key *)name, th, capa);
+                                         index_fid_key(env, lf),
+                                         (const struct dt_key *)name, th, capa);
         else
                 rc = -ENOTDIR;
         RETURN(rc);
@@ -872,7 +883,7 @@ static int mdd_create_data(const struct lu_env *env,
 
 static int
 __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
-             const char *name, const struct lu_fid* fid, int mask)
+             const char *name, struct lu_fid* fid, int mask)
 {
         struct mdd_object   *mdd_obj = md2mdd_obj(pobj);
         struct dt_object    *dir = mdd_object_child(mdd_obj);
@@ -904,10 +915,12 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         if (rc)
                 RETURN(rc);
 
-        if (S_ISDIR(mdd_object_type(mdd_obj)) && dt_try_as_dir(env, dir))
+        if (S_ISDIR(mdd_object_type(mdd_obj)) && dt_try_as_dir(env, dir)) {
                 rc = dir->do_index_ops->dio_lookup(env, dir, rec, key,
                                                    mdd_object_capa(env, mdd_obj));
-        else
+                if (rc == 0)
+                        fid_be_to_cpu(fid, fid);
+        } else
                 rc = -ENOTDIR;
 
         mdd_lproc_time_end(mdo2mdd(pobj), &start, LPROC_MDD_LOOKUP);

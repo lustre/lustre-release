@@ -1354,7 +1354,7 @@ static int mkfs_mdt(struct mkfs_opts *mop)
         }
 
         snprintf(recbuf, sizeof(recbuf) - 1, "0000000000000001%8.8x%8.8x",
-                 (unsigned int)generation, (unsigned int)st.st_ino);
+                 (unsigned int)st.st_ino, (unsigned int)generation);
         ret = mkfs_iam_insert(0, ".", 1, recbuf, filepnm);
         if (ret) {
                 goto out_umount;

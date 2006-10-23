@@ -73,7 +73,7 @@ void fid_cpu_to_le(struct lu_fid *dst, const struct lu_fid *src)
         CLASSERT(sizeof *src ==
                  sizeof fid_seq(src) +
                  sizeof fid_oid(src) + sizeof fid_ver(src));
-        LASSERT(fid_is_igif(src) || fid_ver(src) == 0);
+        LASSERTF(fid_is_igif(src) || fid_ver(src) == 0, DFID"\n", PFID(src));
         dst->f_seq = cpu_to_le64(fid_seq(src));
         dst->f_oid = cpu_to_le32(fid_oid(src));
         dst->f_ver = cpu_to_le32(fid_ver(src));
@@ -89,7 +89,7 @@ void fid_le_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
         dst->f_seq = le64_to_cpu(fid_seq(src));
         dst->f_oid = le32_to_cpu(fid_oid(src));
         dst->f_ver = le32_to_cpu(fid_ver(src));
-        LASSERT(fid_is_igif(dst) || fid_ver(dst) == 0);
+        LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0, DFID"\n", PFID(dst));
 }
 EXPORT_SYMBOL(fid_le_to_cpu);
 
@@ -100,7 +100,7 @@ void fid_cpu_to_be(struct lu_fid *dst, const struct lu_fid *src)
         CLASSERT(sizeof *src ==
                  sizeof fid_seq(src) +
                  sizeof fid_oid(src) + sizeof fid_ver(src));
-        LASSERT(fid_is_igif(src) || fid_ver(src) == 0);
+        LASSERTF(fid_is_igif(src) || fid_ver(src) == 0, DFID"\n", PFID(src));
         dst->f_seq = cpu_to_be64(fid_seq(src));
         dst->f_oid = cpu_to_be32(fid_oid(src));
         dst->f_ver = cpu_to_be32(fid_ver(src));
@@ -116,7 +116,7 @@ void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
         dst->f_seq = be64_to_cpu(fid_seq(src));
         dst->f_oid = be32_to_cpu(fid_oid(src));
         dst->f_ver = be32_to_cpu(fid_ver(src));
-        LASSERT(fid_is_igif(dst) || fid_ver(dst) == 0);
+        LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0i, DFID"\n", PFID(dst));
 }
 EXPORT_SYMBOL(fid_be_to_cpu);
 #endif
