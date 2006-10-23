@@ -58,9 +58,7 @@ static struct orph_key *orph_key_fill(const struct lu_env *env,
 {
         struct orph_key *key = &mdd_env_info(env)->mti_orph_key;
         LASSERT(key);
-        key->ok_fid.f_seq = cpu_to_be64(fid_seq(lf));
-        key->ok_fid.f_oid = cpu_to_be32(fid_oid(lf));
-        key->ok_fid.f_ver = cpu_to_be32(fid_ver(lf));
+        fid_cpu_to_be(&key->ok_fid, lf);
         key->ok_op = cpu_to_be32(op);
         return key;
 }
@@ -103,9 +101,7 @@ static inline struct orph_key *orph_key_empty(const struct lu_env *env,
 {
         struct orph_key *key = &mdd_env_info(env)->mti_orph_key;
         LASSERT(key);
-        key->ok_fid.f_seq = 0;
-        key->ok_fid.f_oid = 0;
-        key->ok_fid.f_ver = 0;
+        fid_zero(&key->ok_fid);
         key->ok_op = cpu_to_be32(op);
         return key;
 }
@@ -154,6 +150,7 @@ static int orph_index_iterate(const struct lu_env *env,
                         /* main cycle */
                         for (result = 0, i = 0; result == +1; ++i) {
                                 key = (void *)iops->key(env, it);
+                                fid_be_to_cpu(&key->ok_fid, &key->ok_fid);
                                 orph_key_test_and_del(env, mdd, key);
                                 result = iops->next(env, it);
                         }
