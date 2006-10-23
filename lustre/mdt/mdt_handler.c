@@ -211,8 +211,14 @@ void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lm,
 {
         lh->mlh_reg_mode = lm;
         lh->mlh_type = MDT_PDO_LOCK;
-        lh->mlh_pdo_hash = (name != NULL && namelen > 0 ?
-                            full_name_hash(name, namelen - 1) : 0);
+
+        if (name != NULL) {
+                LASSERT(namelen > 0);
+                lh->mlh_pdo_hash = full_name_hash(name, namelen - 1);
+        } else {
+                LASSERT(namelen == 0);
+                lh->mlh_pdo_hash = 0ull;
+        }
 }
 
 #ifdef CONFIG_PDIROPS
