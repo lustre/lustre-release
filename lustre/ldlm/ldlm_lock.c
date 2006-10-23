@@ -1417,10 +1417,19 @@ ldlm_lock_debug(cfs_debug_limit_state_t *cdls,
                 char *fmt, ...)
 {
         va_list args;
+        cfs_debug_limit_state_t savecdls;
 
+        if (cdls)
+                savecdls = *cdls;
         va_start(args, fmt);
         cdebug_va(cdls, level, file, func, line, fmt, args);
         va_end(args);
+        /* Don't ratelimit on the above, or we never print the below.
+           This isn't a complete solution, because we still print the
+           ratelimit warning twice.  But that's better than never
+           printing the info below. */
+        if (cdls)
+                *cdls = savecdls;
 
         if (lock->l_resource == NULL) {
                 cdebug(cdls, level, file, func, line,
