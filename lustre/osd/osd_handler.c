@@ -146,7 +146,7 @@ static void  osd_key_exit      (const struct lu_context *ctx,
 static int   osd_has_index     (const struct osd_object *obj);
 static void  osd_object_init0  (struct osd_object *obj);
 static int   osd_device_init   (const struct lu_env *env,
-                                struct lu_device *d, const char *, 
+                                struct lu_device *d, const char *,
                                 struct lu_device *);
 static int   osd_fid_lookup    (const struct lu_env *env,
                                 struct osd_object *obj,
@@ -565,7 +565,7 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
         hook_res = dt_txn_hook_start(env, d, p);
         if (hook_res != 0)
                 RETURN(ERR_PTR(hook_res));
-        
+
         if (osd_param_is_sane(dev, p)) {
                 OBD_ALLOC_GFP(oh, sizeof *oh, GFP_NOFS);
                 if (oh != NULL) {
@@ -1316,18 +1316,15 @@ static int osd_dir_page_build(const struct lu_env *env, int first,
                 len  = iops->key_size(env, it);
 
                 *fid  = *(struct lu_fid *)iops->rec(env, it);
-                /* convert from disk data to cpu */
-                fid_be_to_cpu(fid, fid);
 
                 recsize = (sizeof *ent + len + 3) & ~3;
                 hash = iops->store(env, it);
                 *end = hash;
                 CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
                        name, ent, nob, PFID(fid), hash, len, len, len, name);
-                /* convert from cpu data to network */
-                fid_cpu_to_le(fid, fid);
                 if (nob >= recsize) {
-                        ent->lde_fid = *fid;
+                        fid_be_to_cpu(&ent->lde_fid, fid);
+                        fid_cpu_to_le(&ent->lde_fid, &ent->lde_fid);
                         ent->lde_hash = hash;
                         ent->lde_namelen = cpu_to_le16(len);
                         ent->lde_reclen  = cpu_to_le16(recsize);
@@ -2145,7 +2142,7 @@ static void osd_key_exit(const struct lu_context *ctx,
         LASSERT(info->oti_txns    == 0);
 }
 
-static int osd_device_init(const struct lu_env *env, struct lu_device *d, 
+static int osd_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
 {
         return lu_env_init(&osd_dev(d)->od_env_for_commit, NULL, LCT_MD_THREAD);
