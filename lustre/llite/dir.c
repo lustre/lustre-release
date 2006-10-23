@@ -285,7 +285,7 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
         __u32 start;
         __u32 end;
 
-#ifdef CONFIG_PDIROPS
+#if 1
         mode = LCK_PR;
 #else
         mode = LCK_CR;

@@ -63,8 +63,8 @@ EXPORT_SYMBOL(it_clear_disposition);
 static int it_to_lock_mode(struct lookup_intent *it)
 {
         ENTRY;
-        
-#ifdef CONFIG_PDIROPS
+
+#if 1
         /* CREAT needs to be tested before open (both could be set) */
         if (it->it_op & IT_CREAT)
                 return LCK_PW;
@@ -158,7 +158,7 @@ int mdc_lock_match(struct obd_export *exp, int flags,
                    struct lustre_handle *lockh)
 {
         struct ldlm_res_id res_id =
-                { .name = {fid_seq(fid), 
+                { .name = {fid_seq(fid),
                            fid_oid(fid),
                            fid_ver(fid)} };
         struct obd_device *obd = class_exp2obd(exp);
@@ -176,21 +176,21 @@ int mdc_cancel_unused(struct obd_export *exp,
                       int flags, void *opaque)
 {
         struct ldlm_res_id res_id =
-                { .name = {fid_seq(fid), 
-                           fid_oid(fid), 
+                { .name = {fid_seq(fid),
+                           fid_oid(fid),
                            fid_ver(fid)} };
         struct obd_device *obd = class_exp2obd(exp);
         int rc;
-        
+
         ENTRY;
-        
+
         rc = ldlm_cli_cancel_unused(obd->obd_namespace, &res_id,
                                     flags, opaque);
         RETURN(rc);
 }
 
 int mdc_change_cbdata(struct obd_export *exp,
-                      const struct lu_fid *fid, 
+                      const struct lu_fid *fid,
                       ldlm_iterator_t it, void *data)
 {
         struct ldlm_res_id res_id = { .name = {0} };
@@ -200,7 +200,7 @@ int mdc_change_cbdata(struct obd_export *exp,
         res_id.name[1] = fid_oid(fid);
         res_id.name[2] = fid_ver(fid);
 
-        ldlm_resource_iterate(class_exp2obd(exp)->obd_namespace, 
+        ldlm_resource_iterate(class_exp2obd(exp)->obd_namespace,
                               &res_id, it, data);
 
         EXIT;
@@ -266,7 +266,7 @@ int mdc_enqueue(struct obd_export *exp,
         struct ptlrpc_request *req;
         struct obd_device *obddev = class_exp2obd(exp);
         struct ldlm_res_id res_id =
-                { .name = {fid_seq(&op_data->fid1), 
+                { .name = {fid_seq(&op_data->fid1),
                            fid_oid(&op_data->fid1),
                            fid_ver(&op_data->fid1)} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
@@ -343,8 +343,8 @@ int mdc_enqueue(struct obd_export *exp,
                 lit->opc = (__u64)it->it_op;
 
                 /* pack the intended request */
-                mdc_open_pack(req, DLM_INTENT_REC_OFF, op_data, 
-                              it->it_create_mode, 0, it->it_flags, 
+                mdc_open_pack(req, DLM_INTENT_REC_OFF, op_data,
+                              it->it_create_mode, 0, it->it_flags,
                               lmm, lmmsize);
 
                 /* for remote client, fetch remote perm for current user */
@@ -510,7 +510,7 @@ int mdc_enqueue(struct obd_export *exp,
 
                 if ((body->valid & (OBD_MD_FLDIREA | OBD_MD_FLEASIZE)) != 0) {
                         void *eadata;
-                        
+
                         /*
                          * The eadata is opaque; just check that it is there.
                          * Eventually, obd_unpackmd() will check the contents.
@@ -522,9 +522,9 @@ int mdc_enqueue(struct obd_export *exp,
                                 RETURN(-EPROTO);
                         }
                         if (body->valid & OBD_MD_FLMODEASIZE) {
-                                if (obddev->u.cli.cl_max_mds_easize < 
+                                if (obddev->u.cli.cl_max_mds_easize <
                                     body->max_mdsize) {
-                                        obddev->u.cli.cl_max_mds_easize = 
+                                        obddev->u.cli.cl_max_mds_easize =
                                                 body->max_mdsize;
                                         CDEBUG(D_INFO, "maxeasize become %d\n",
                                                body->max_mdsize);
@@ -537,7 +537,7 @@ int mdc_enqueue(struct obd_export *exp,
                                                body->max_cookiesize);
                                 }
                         }
-                        
+
                         /*
                          * We save the reply LOV EA in case we have to replay a
                          * create for recovery.  If we didn't allocate a large
@@ -605,7 +605,7 @@ int mdc_enqueue(struct obd_export *exp,
 
         RETURN(rc);
 }
-/* 
+/*
  * This long block is all about fixing up the lock and request state
  * so that it is correct as of the moment _before_ the operation was
  * applied; that way, the VFS will think that everything is normal and
@@ -649,7 +649,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
         CDEBUG(D_DLMTRACE, "(name: %.*s,"DFID") in obj "DFID
                ", intent: %s flags %#o\n", op_data->namelen,
-               op_data->name, PFID(&op_data->fid2), 
+               op_data->name, PFID(&op_data->fid2),
                PFID(&op_data->fid1), ldlm_it2str(it->it_op),
                it->it_flags);
 
@@ -665,13 +665,13 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 ldlm_policy_data_t policy;
                 ldlm_mode_t mode = LCK_CR;
 
-                /* As not all attributes are kept under update lock, e.g. 
-                   owner/group/acls are under lookup lock, we need both 
+                /* As not all attributes are kept under update lock, e.g.
+                   owner/group/acls are under lookup lock, we need both
                    ibits for GETATTR. */
 
-                /* For CMD, UPDATE lock and LOOKUP lock can not be got 
-                 * at the same for cross-object, so we can not match 
-                 * the 2 lock at the same time FIXME: but how to handle 
+                /* For CMD, UPDATE lock and LOOKUP lock can not be got
+                 * at the same for cross-object, so we can not match
+                 * the 2 lock at the same time FIXME: but how to handle
                  * the above situation */
                 policy.l_inodebits.bits = (it->it_op == IT_GETATTR) ?
                         MDS_INODELOCK_UPDATE : MDS_INODELOCK_LOOKUP;
@@ -727,7 +727,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 if (rc < 0)
                         RETURN(rc);
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
-        } else if (!fid_is_sane(&op_data->fid2) || 
+        } else if (!fid_is_sane(&op_data->fid2) ||
                         !(it->it_flags & O_CHECK_STALE)) {
                 /* DISP_ENQ_COMPLETE set means there is extra reference on
                  * request referenced from this intent, saved for subsequent
@@ -768,10 +768,10 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
         /* If we were revalidating a fid/name pair, mark the intent in
          * case we fail and get called again from lookup */
-        if (fid_is_sane(&op_data->fid2) && it->it_flags & O_CHECK_STALE 
+        if (fid_is_sane(&op_data->fid2) && it->it_flags & O_CHECK_STALE
                         && it->it_op != IT_GETATTR) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
-                
+
                 /* Also: did we find the same inode? */
                 if (!lu_fid_eq(&op_data->fid2, &mdt_body->fid1))
                         RETURN(-ESTALE);
@@ -815,7 +815,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 ldlm_policy_data_t policy = lock->l_policy_data;
                 LDLM_DEBUG(lock, "matching against this");
 
-                LASSERTF(fid_res_name_eq(&mdt_body->fid1, 
+                LASSERTF(fid_res_name_eq(&mdt_body->fid1,
                                          &lock->l_resource->lr_name),
                          "Lock res_id: %lu/%lu/%lu, fid: %lu/%lu/%lu.\n",
                          (unsigned long)lock->l_resource->lr_name.name[0],

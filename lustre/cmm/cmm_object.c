@@ -375,14 +375,13 @@ static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
 static mdl_mode_t cml_lock_mode(const struct lu_env *env,
                                 struct md_object *mo, mdl_mode_t lm)
 {
-#if defined(HAVE_SPLIT_SUPPORT) && defined(CONFIG_PDIROPS)
+#if defined(HAVE_SPLIT_SUPPORT)
         struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
         int rc, split;
         ENTRY;
-                
         memset(ma, 0, sizeof(*ma));
-                
-        /* 
+
+        /*
          * Check only if we need protection from split. If not - mdt
          * handles other cases.
          */
@@ -392,7 +391,7 @@ static mdl_mode_t cml_lock_mode(const struct lu_env *env,
                        rc);
                 RETURN(MDL_MINMODE);
         }
-                
+
         if (lm == MDL_PW && split == CMM_EXPECT_SPLIT)
                 RETURN(MDL_EX);
         RETURN(MDL_MINMODE);

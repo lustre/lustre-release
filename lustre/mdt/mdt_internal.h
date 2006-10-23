@@ -85,7 +85,7 @@ static inline __u64 mcd_last_xid(struct mdt_client_data *mcd)
 static inline int req_xid_is_last(struct ptlrpc_request *req)
 {
         struct mdt_client_data *mcd = req->rq_export->exp_mdt_data.med_mcd;
-        return (req->rq_xid == mcd->mcd_last_xid || 
+        return (req->rq_xid == mcd->mcd_last_xid ||
                 req->rq_xid == mcd->mcd_last_close_xid);
 }
 
@@ -207,7 +207,7 @@ struct mdt_object {
 struct mdt_lock_handle {
         /* Lock type, reg for cross-ref use or pdo lock. */
         mdl_type_t              mlh_type;
-        
+
         /* Regular lock */
         struct lustre_handle    mlh_reg_lh;
         ldlm_mode_t             mlh_reg_mode;
@@ -260,7 +260,7 @@ enum {
  * reduce stack consumption.
  */
 struct mdt_thread_info {
-        /* 
+        /*
          * XXX: Part One:
          * The following members will be filled expilictly
          * with specific data in mdt_thread_info_init().
@@ -297,7 +297,7 @@ struct mdt_thread_info {
         __u64                      mti_transno;
 
 
-        /* 
+        /*
          * XXX: Part Two:
          * The following members will be filled expilictly
          * with zero in mdt_thread_info_init(). These members may be used
@@ -330,10 +330,10 @@ struct mdt_thread_info {
          */
         __u64                      mti_opdata;
 
-        /* 
+        /*
          * XXX: Part Three:
          * The following members will be filled expilictly
-         * with zero in mdt_reint_unpack(), because they are only used 
+         * with zero in mdt_reint_unpack(), because they are only used
          * by reint requests (including mdt_reint_open()).
          */
 
@@ -347,7 +347,7 @@ struct mdt_thread_info {
         struct md_create_spec      mti_spec;
 
 
-        /* 
+        /*
          * XXX: Part Four:
          * The following members will _NOT_ be initialized at all.
          * DO NOT expect them to contain any valid value.
@@ -707,7 +707,7 @@ static inline void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
         ci->mc_capa[offset] = capa;
 }
 
-#ifdef CONFIG_PDIROPS
+#if 1
 #define MDT_RD_LOCK LCK_PR
 #define MDT_WR_LOCK LCK_PW
 #define MDT_EX_LOCK LCK_EX
