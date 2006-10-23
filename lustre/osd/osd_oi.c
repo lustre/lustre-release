@@ -142,13 +142,19 @@ enum {
         OI_TXN_DELETE_CREDITS = 20
 };
 
-static inline void osd_inode_id_init(struct osd_inode_id *id,
-                                     __u64 ino, __u32 gen)
+static inline void oid_lookup_init(struct osd_inode_id *id, 
+                                   __u64 ino, __u32 gen)
+{
+        id->oii_ino = be64_to_cpu(ino);
+        id->oii_gen = be32_to_cpu(gen);
+}
+
+static inline void oid_insert_init(struct osd_inode_id *id, 
+                                   __u64 ino, __u32 gen)
 {
         id->oii_ino = cpu_to_be64(ino);
         id->oii_gen = cpu_to_be32(gen);
 }
-
 /*
  * Locking: requires at least read lock on oi.
  */
@@ -165,7 +171,7 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                         (info->oti_env, oi->oi_dir,
                          (struct dt_rec *)id, oi_fid_key(info, fid),
                          BYPASS_CAPA);
-                osd_inode_id_init(id, id->oii_ino, id->oii_gen);
+                oid_lookup_init(id, id->oii_ino, id->oii_gen);
         }
         return rc;
 }
@@ -187,7 +193,7 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         idx = oi->oi_dir;
         dev = lu2dt_dev(idx->do_lu.lo_dev);
         id = &info->oti_id;
-        osd_inode_id_init(id, id0->oii_ino, id0->oii_gen);
+        oid_insert_init(id, id0->oii_ino, id0->oii_gen);
         return idx->do_index_ops->dio_insert(info->oti_env, idx,
                                              (const struct dt_rec *)id,
                                              oi_fid_key(info, fid), th,
