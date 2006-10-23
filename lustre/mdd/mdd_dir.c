@@ -285,7 +285,7 @@ int mdd_link_sanity_check(const struct lu_env *env, struct mdd_object *tgt_obj,
         RETURN(rc);
 }
 
-const struct dt_rec *index_fid_key(const struct lu_env *env,
+const struct dt_rec *__mdd_fid_rec(const struct lu_env *env,
                                    const struct lu_fid *fid)
 {
         struct mdd_thread_info *info = mdd_env_info(env);
@@ -314,7 +314,7 @@ static int __mdd_index_insert(const struct lu_env *env,
 
         if (dt_try_as_dir(env, next))
                 rc = next->do_index_ops->dio_insert(env, next,
-                                                    index_fid_key(env, lf),
+                                                    __mdd_fid_rec(env, lf),
                                                     (const struct dt_key *)name,
                                                     th, capa);
         else
@@ -378,7 +378,7 @@ static int __mdd_index_insert_only(const struct lu_env *env,
 
         if (dt_try_as_dir(env, next))
                 rc = next->do_index_ops->dio_insert(env, next,
-                                         index_fid_key(env, lf),
+                                         __mdd_fid_rec(env, lf),
                                          (const struct dt_key *)name, th, capa);
         else
                 rc = -ENOTDIR;
@@ -454,10 +454,10 @@ int mdd_finish_unlink(const struct lu_env *env,
                 if (obj->mod_count == 0)
                         rc = mdd_object_kill(env, obj, ma);
                 else
-                        /* clear MA_LOV | MA_COOKIE, if we do not 
+                        /* clear MA_LOV | MA_COOKIE, if we do not
                          * unlink it in case we get it somewhere */
                         ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
-        } else 
+        } else
                 ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
 
         RETURN(rc);
