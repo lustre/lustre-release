@@ -1461,9 +1461,9 @@ int main(int argc, char *argv[])
                 goto out;
         }
 #if 0
-        /* 
+        /*
          * Comment out these 2 checks temporarily, since for multi-MDSes
-         * in single node only 1 mds node could have mgs service 
+         * in single node only 1 mds node could have mgs service
          */
         if (IS_MDT(ldd) && !IS_MGS(ldd) && (mop.mo_mgs_failnodes == 0)) {
                 verrprint("No management node specified, adding MGS to this "
@@ -1486,8 +1486,6 @@ int main(int argc, char *argv[])
                 if (IS_MDT(ldd) || IS_MGS(ldd))
                         strcat(always_mountopts,
                                ",iopen_nopriv,user_xattr");
-                if (IS_MDT(ldd))
-                        strcat(always_mountopts, ",data=journal");
                 if ((get_os_version() == 24) && IS_OST(ldd))
                         strcat(always_mountopts, ",asyncdel");
                 /* NB: Files created while extents are enabled cannot be read

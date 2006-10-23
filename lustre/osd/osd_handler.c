@@ -284,31 +284,6 @@ static int osd_write_locked(const struct lu_env *env, struct osd_object *o)
         return oti->oti_w_locks > 0 && o->oo_owner == env;
 }
 
-/* helper to push us into KERNEL_DS context */
-static struct file *osd_rw_init(const struct lu_env *env,
-                                struct inode *inode, mm_segment_t *seg)
-{
-        struct osd_thread_info *info   = lu_context_key_get(&env->le_ctx, &osd_key);
-        struct dentry          *dentry = &info->oti_dentry;
-        struct file            *file   = &info->oti_file;
-
-        file->f_dentry = dentry;
-        file->f_mapping = inode->i_mapping;
-        file->f_op      = inode->i_fop;
-        file->f_mode    = FMODE_WRITE|FMODE_READ;
-        dentry->d_inode = inode;
-
-        *seg = get_fs();
-        set_fs(KERNEL_DS);
-        return file;
-}
-
-/* helper to pop us from KERNEL_DS context */
-static void osd_rw_fini(mm_segment_t *seg)
-{
-        set_fs(*seg);
-}
-
 static int osd_root_get(const struct lu_env *env,
                         struct dt_device *dev, struct lu_fid *f)
 {
@@ -1536,56 +1511,51 @@ static struct dt_object_operations osd_obj_ops = {
  * Body operations.
  */
 
+/*
+ * XXX: Another layering violation for now.
+ *
+ * We don't want to use ->f_op->read methods, because generic file write
+ *
+ *         - serializes on ->i_sem, and
+ *
+ *         - does a lot of extra work like balance_dirty_pages(),
+ *
+ * which doesn't work for globally shared files like /last-received.
+ */
+int fsfilt_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs);
+int fsfilt_ldiskfs_write_handle(struct inode *inode, void *buf, int bufsize,
+                                loff_t *offs, handle_t *handle);
+
 static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
                         struct lu_buf *buf, loff_t *pos,
                         struct lustre_capa *capa)
 {
         struct inode *inode = osd_dt_obj(dt)->oo_inode;
-        struct file  *file;
-        mm_segment_t  seg;
-        ssize_t       result;
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_BODY_READ))
                 RETURN(-EACCES);
 
-        file = osd_rw_init(env, inode, &seg);
-        /*
-         * We'd like to use vfs_read() here, but it messes with
-         * dnotify_parent() and locks.
-         */
-        if (file->f_op->read)
-                result = file->f_op->read(file, buf->lb_buf, buf->lb_len, pos);
-        else {
-                /* TODO: how to serve symlink readlink()? */
-                CERROR("read not implemented currently\n");
-                result = -ENOSYS;
-        }
-        osd_rw_fini(&seg);
-        return result;
+        return fsfilt_ldiskfs_read(inode, buf->lb_buf, buf->lb_len, pos);
 }
 
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
                          const struct lu_buf *buf, loff_t *pos,
                          struct thandle *handle, struct lustre_capa *capa)
 {
-        struct inode *inode = osd_dt_obj(dt)->oo_inode;
-        struct file  *file;
-        mm_segment_t  seg;
-        ssize_t       result;
+        struct inode       *inode = osd_dt_obj(dt)->oo_inode;
+        struct osd_thandle *oh;
+        ssize_t             result;
 
         LASSERT(handle != NULL);
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_BODY_WRITE))
                 RETURN(-EACCES);
 
-        file = osd_rw_init(env, inode, &seg);
-        if (file->f_op->write)
-                result = file->f_op->write(file, buf->lb_buf, buf->lb_len, pos);
-        else {
-                CERROR("write not implemented currently\n");
-                result = -ENOSYS;
-        }
-        osd_rw_fini(&seg);
+        oh = container_of(handle, struct osd_thandle, ot_super);
+        result = fsfilt_ldiskfs_write_handle(inode, buf->lb_buf, buf->lb_len,
+                                             pos, oh->ot_handle);
+        if (result == 0)
+                result = buf->lb_len;
         return result;
 }
 

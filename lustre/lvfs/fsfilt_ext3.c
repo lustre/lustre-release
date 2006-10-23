@@ -207,11 +207,11 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                         FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb) * logs;
                 break;
         case FSFILT_OP_JOIN:
-                /* delete 2 file(file + array id) + create 1 file (array id) 
+                /* delete 2 file(file + array id) + create 1 file (array id)
                  * create/update logs for each stripe */
                 nblocks += 2 * FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb);
-               
-                /*create array log for head file*/ 
+
+                /*create array log for head file*/
                 nblocks += 3;
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                             EXT3_SINGLEDATA_TRANS_BLOCKS);
@@ -1119,10 +1119,8 @@ static int fsfilt_ext3_prep_san_write(struct inode *inode, long *blocks,
         return ext3_prep_san_write(inode, blocks, nblocks, newsize);
 }
 
-static int fsfilt_ext3_read_record(struct file * file, void *buf,
-                                   int size, loff_t *offs)
+int fsfilt_ext3_read(struct inode *inode, void *buf, int size, loff_t *offs)
 {
-        struct inode *inode = file->f_dentry->d_inode;
         unsigned long block;
         struct buffer_head *bh;
         int err, blocksize, csize, boffs;
@@ -1164,18 +1162,84 @@ static int fsfilt_ext3_read_record(struct file * file, void *buf,
         }
         return 0;
 }
+EXPORT_SYMBOL(fsfilt_ext3_read);
+
+static int fsfilt_ext3_read_record(struct file * file, void *buf,
+                                   int size, loff_t *offs)
+{
+        return fsfilt_ext3_read(file->f_dentry->d_inode, buf, size, offs);
+}
+
+int fsfilt_ext3_write_handle(struct inode *inode, void *buf, int bufsize,
+                                loff_t *offs, handle_t *handle)
+{
+        struct buffer_head *bh = NULL;
+        loff_t old_size = inode->i_size, offset = *offs;
+        loff_t new_size = inode->i_size;
+        unsigned long block;
+        int err = 0, blocksize = 1 << inode->i_blkbits, size, boffs;
+
+        while (bufsize > 0) {
+                if (bh != NULL)
+                        brelse(bh);
+
+                block = offset >> inode->i_blkbits;
+                boffs = offset & (blocksize - 1);
+                size = min(blocksize - boffs, bufsize);
+                bh = ext3_bread(handle, inode, block, 1, &err);
+                if (!bh) {
+                        CERROR("can't read/create block: %d\n", err);
+                        break;
+                }
+
+                err = ext3_journal_get_write_access(handle, bh);
+                if (err) {
+                        CERROR("journal_get_write_access() returned error %d\n",
+                               err);
+                        break;
+                }
+                LASSERT(bh->b_data + boffs + size <= bh->b_data + bh->b_size);
+                memcpy(bh->b_data + boffs, buf, size);
+                err = ext3_journal_dirty_metadata(handle, bh);
+                if (err) {
+                        CERROR("journal_dirty_metadata() returned error %d\n",
+                               err);
+                        break;
+                }
+                if (offset + size > new_size)
+                        new_size = offset + size;
+                offset += size;
+                bufsize -= size;
+                buf += size;
+        }
+        if (bh)
+                brelse(bh);
+
+        /* correct in-core and on-disk sizes */
+        if (new_size > inode->i_size) {
+                lock_kernel();
+                if (new_size > inode->i_size)
+                        inode->i_size = new_size;
+                if (inode->i_size > EXT3_I(inode)->i_disksize)
+                        EXT3_I(inode)->i_disksize = inode->i_size;
+                if (inode->i_size > old_size)
+                        mark_inode_dirty(inode);
+                unlock_kernel();
+        }
+
+        if (err == 0)
+                *offs = offset;
+        return err;
+}
+EXPORT_SYMBOL(fsfilt_ext3_write_handle);
 
 static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
                                     loff_t *offs, int force_sync)
 {
-        struct buffer_head *bh = NULL;
-        unsigned long block;
         struct inode *inode = file->f_dentry->d_inode;
-        loff_t old_size = inode->i_size, offset = *offs;
-        loff_t new_size = inode->i_size;
         journal_t *journal;
         handle_t *handle;
-        int err, block_count = 0, blocksize, size, boffs;
+        int err, block_count = 0, blocksize;
 
         /* Determine how many transaction credits are needed */
         blocksize = 1 << inode->i_blkbits;
@@ -1193,64 +1257,15 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
                 return PTR_ERR(handle);
         }
 
-        while (bufsize > 0) {
-                if (bh != NULL)
-                        brelse(bh);
+        err = fsfilt_ext3_write_handle(inode, buf, bufsize, offs, handle);
 
-                block = offset >> inode->i_blkbits;
-                boffs = offset & (blocksize - 1);
-                size = min(blocksize - boffs, bufsize);
-                bh = ext3_bread(handle, inode, block, 1, &err);
-                if (!bh) {
-                        CERROR("can't read/create block: %d\n", err);
-                        goto out;
-                }
-
-                err = ext3_journal_get_write_access(handle, bh);
-                if (err) {
-                        CERROR("journal_get_write_access() returned error %d\n",
-                               err);
-                        goto out;
-                }
-                LASSERT(bh->b_data + boffs + size <= bh->b_data + bh->b_size);
-                memcpy(bh->b_data + boffs, buf, size);
-                err = ext3_journal_dirty_metadata(handle, bh);
-                if (err) {
-                        CERROR("journal_dirty_metadata() returned error %d\n",
-                               err);
-                        goto out;
-                }
-                if (offset + size > new_size)
-                        new_size = offset + size;
-                offset += size;
-                bufsize -= size;
-                buf += size;
-        }
-
-        if (force_sync)
+        if (!err && force_sync)
                 handle->h_sync = 1; /* recovery likes this */
-out:
-        if (bh)
-                brelse(bh);
-
-        /* correct in-core and on-disk sizes */
-        if (new_size > inode->i_size) {
-                lock_kernel();
-                if (new_size > inode->i_size)
-                        inode->i_size = new_size;
-                if (inode->i_size > EXT3_I(inode)->i_disksize)
-                        EXT3_I(inode)->i_disksize = inode->i_size;
-                if (inode->i_size > old_size)
-                        mark_inode_dirty(inode);
-                unlock_kernel();
-        }
 
         lock_24kernel();
         journal_stop(handle);
         unlock_24kernel();
 
-        if (err == 0)
-                *offs = offset;
         return err;
 }
 
@@ -1324,7 +1339,7 @@ do {                                            \
         Q_COPY(out, in, dqb_valid);             \
 } while (0)
 
-      
+
 
 static int fsfilt_ext3_quotactl(struct super_block *sb,
                                 struct obd_quotactl *oqc)
@@ -1908,7 +1923,7 @@ out:
 }
 
 #ifdef HAVE_QUOTA_SUPPORT
-static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type, 
+static int fsfilt_ext3_quotainfo(struct lustre_quota_info *lqi, int type,
                                  int cmd)
 {
         int rc = 0;
