@@ -402,8 +402,8 @@ Index: iam/fs/ext3/iam.c
 +
 +static void iam_leaf_fini(struct iam_leaf *leaf)
 +{
-+        iam_leaf_unlock(leaf);
 +        if (leaf->il_path != NULL) {
++                iam_leaf_unlock(leaf);
 +                assert_inv(ergo(leaf->il_bh != NULL, iam_leaf_check(leaf)));
 +                iam_leaf_ops(leaf)->fini(leaf);
 +                if (leaf->il_bh) {
