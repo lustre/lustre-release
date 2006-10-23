@@ -584,6 +584,84 @@ have_show_task=0
         fi
 ])
 
+#
+# LC_CAPA_CRYPTO
+#
+AC_DEFUN([LC_CAPA_CRYPTO],
+[LB_LINUX_CONFIG_IM([CRYPTO],[],[
+	AC_MSG_ERROR([Lustre capability require that CONFIG_CRYPTO is enabled in your kernel.])
+])
+LB_LINUX_CONFIG_IM([CRYPTO_HMAC],[],[
+	AC_MSG_ERROR([Lustre capability require that CONFIG_CRYPTO_HMAC is enabled in your kernel.])
+])
+LB_LINUX_CONFIG_IM([CRYPTO_SHA1],[],[
+	AC_MSG_ERROR([Lustre capability require that CONFIG_CRYPTO_SHA1 is enabled in your kernel.])
+])
+])
+
+#
+# LC_CONFIG_PAG
+#
+AC_DEFUN([LC_CONFIG_PAG],
+[AC_MSG_CHECKING([if Linux is patched with basic PAG support])
+LB_LINUX_TRY_COMPILE([#include <linux/sched.h>],[
+unsigned long pag = current->pag;
+],[AC_MSG_RESULT([yes])
+AC_DEFINE(HAVE_LINUX_PAG, 1, [linux has basic PAG support for Lustre])],[
+AC_MSG_RESULT([no])
+])
+])
+
+m4_pattern_allow(AC_KERBEROS_V5)
+
+#
+# LC_CONFIG_GSS
+#
+# Build gss and related tools of Lustre. Currently both kernel and user space
+# parts are depend on linux platform.
+#
+AC_DEFUN([LC_CONFIG_GSS],
+[AC_MSG_CHECKING([whether to enable gss/krb5 support])
+AC_ARG_ENABLE([gss], 
+	AC_HELP_STRING([--enable-gss], [enable gss/krb5 support]),
+	[],[enable_gss='no'])
+AC_MSG_RESULT([$enable_gss])
+
+if test x$enable_gss == xyes; then
+	LB_LINUX_CONFIG_IM([SUNRPC],[],[
+		AC_MSG_ERROR([GSS require that CONFIG_SUNRPC is enabled in your kernel.])
+	])
+	LB_LINUX_CONFIG_IM([CRYPTO_DES],[],[
+		AC_MSG_WARN([DES support is recommended by using GSS.])
+	])
+	LB_LINUX_CONFIG_IM([CRYPTO_MD5],[],[
+		AC_MSG_WARN([MD5 support is recommended by using GSS.])
+	])
+	LB_LINUX_CONFIG_IM([CRYPTO_SHA256],[],[
+		AC_MSG_WARN([SHA256 support is recommended by using GSS.])
+	])
+	LB_LINUX_CONFIG_IM([CRYPTO_SHA512],[],[
+		AC_MSG_WARN([SHA512 support is recommended by using GSS.])
+	])
+	LB_LINUX_CONFIG_IM([CRYPTO_ARC4],[],[
+		AC_MSG_WARN([ARC4 support is recommended by using GSS.])
+	])
+	#
+	# AES symbol is uncertain (optimized & depend on arch)
+	#
+
+	AC_CHECK_LIB(gssapi, gss_init_sec_context, [
+		GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"
+		], [
+		AC_MSG_ERROR([libgssapi is not found, consider --disable-gss.])
+		], 
+	)
+
+	AC_SUBST(GSSAPI_LIBS)
+	AC_KERBEROS_V5
+fi
+])
+
 
 #
 # LC_PROG_LINUX
@@ -619,6 +697,9 @@ LC_XATTR_ACL
 LC_STRUCT_INTENT_FILE
 LC_POSIX_ACL_XATTR_H
 LC_FUNC_SET_FS_PWD
+LC_CAPA_CRYPTO
+LC_CONFIG_PAG
+LC_CONFIG_GSS
 ])
 
 #
@@ -826,6 +907,7 @@ AM_CONDITIONAL(QUOTA, test x$enable_quota = xyes)
 AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)
+AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
 ])
 
 #
