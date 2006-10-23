@@ -1,5 +1,3 @@
-m4_pattern_allow(AC_KERBEROS_V5)
-
 #
 # LB_LINUX_VERSION
 #
@@ -385,67 +383,5 @@ fi
 #
 AC_DEFUN([LB_LINUX_CONDITIONALS],
 [AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
-AM_CONDITIONAL(GSS, test x$enable_gss = xyes)
-])
-
-#
-# LB_LINUX_CONFIG_PAG
-#
-AC_DEFUN([LB_LINUX_CONFIG_PAG],
-[AC_MSG_CHECKING([if Linux is patched with basic PAG support])
-LB_LINUX_TRY_COMPILE([#include <linux/sched.h>],[
-unsigned long pag = current->pag;
-],[AC_MSG_RESULT([yes])
-AC_DEFINE(HAVE_LINUX_PAG, 1, [linux has basic PAG support for Lustre])],[
-AC_MSG_RESULT([no])
-])
-])
-
-#
-# LC_LINUX_CONFIG_GSS
-#
-# Build gss and related tools of Lustre. Currently both kernel and user space
-# parts are depend on linux platform.
-#
-AC_DEFUN([LC_LINUX_CONFIG_GSS],
-[AC_MSG_CHECKING([whether to enable gss/krb5 support])
-AC_ARG_ENABLE([gss], 
-	AC_HELP_STRING([--enable-gss], [enable gss/krb5 support]),
-	[],[enable_gss='no'])
-AC_MSG_RESULT([$enable_gss])
-
-if test x$enable_gss == xyes; then
-	LB_LINUX_CONFIG_IM([SUNRPC],[],[
-		AC_MSG_ERROR([GSS require that CONFIG_SUNRPC is enabled in your kernel.])
-	])
-	LB_LINUX_CONFIG_IM([CRYPTO_DES],[],[
-		AC_MSG_WARN([DES support is recommended by using GSS.])
-	])
-	LB_LINUX_CONFIG_IM([CRYPTO_MD5],[],[
-		AC_MSG_WARN([MD5 support is recommended by using GSS.])
-	])
-	LB_LINUX_CONFIG_IM([CRYPTO_SHA256],[],[
-		AC_MSG_WARN([SHA256 support is recommended by using GSS.])
-	])
-	LB_LINUX_CONFIG_IM([CRYPTO_SHA512],[],[
-		AC_MSG_WARN([SHA512 support is recommended by using GSS.])
-	])
-	LB_LINUX_CONFIG_IM([CRYPTO_ARC4],[],[
-		AC_MSG_WARN([ARC4 support is recommended by using GSS.])
-	])
-	#
-	# unfortunately AES symbol is depend (optimized) on arch
-	#
-
-	AC_CHECK_LIB(gssapi, gss_init_sec_context, [
-		GSSAPI_LIBS="$GSSAPI_LDFLAGS -lgssapi"
-		], [
-		AC_MSG_ERROR([libgssapi is not found, consider --disable-gss.])
-		], 
-	)
-
-	AC_SUBST(GSSAPI_LIBS)
-	AC_KERBEROS_V5
-fi
 ])
 
