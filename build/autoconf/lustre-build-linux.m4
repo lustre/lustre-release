@@ -364,21 +364,6 @@ LB_LINUX_CONFIG([KMOD],[],[
 	AC_MSG_WARN([])
 ])
 
-#
-# following CRYPTO related are required by capability
-#
-LB_LINUX_CONFIG_IM([CRYPTO],[],[
-	AC_MSG_ERROR([Lustre require that CONFIG_CRYPTO is enabled in your kernel.])
-])
-
-LB_LINUX_CONFIG_IM([CRYPTO_HMAC],[],[
-	AC_MSG_ERROR([Lustre require that CONFIG_CRYPTO_HMAC is enabled in your kernel.])
-])
-
-LB_LINUX_CONFIG_IM([CRYPTO_SHA1],[],[
-	AC_MSG_ERROR([Lustre require that CONFIG_CRYPTO_SHA1 is enabled in your kernel.])
-])
-
 #LB_LINUX_CONFIG_BIG_STACK
 
 # LNet tests
