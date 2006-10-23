@@ -145,8 +145,8 @@ enum {
 static inline void osd_inode_id_init(struct osd_inode_id *id,
                                      __u64 ino, __u32 gen)
 {
-        id->oii_ino = be64_to_cpu(ino);
-        id->oii_gen = be32_to_cpu(gen);
+        id->oii_ino = cpu_to_be64(ino);
+        id->oii_gen = cpu_to_be32(gen);
 }
 
 /*
