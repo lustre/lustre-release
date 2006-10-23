@@ -259,7 +259,7 @@ Index: linux/lib/dynlocks.c
 +
 +	spin_lock(&dl->dl_list_lock);
 +	if (hl->dl_writers) {
-+		BUG_ON(hl->dl_readers > 0 || hl->dl_readers < 0);
++		BUG_ON(hl->dl_readers != 0);
 +		hl->dl_writers--;
 +		if (hl->dl_writers == 0)
 +			wakeup = 1;
@@ -268,7 +268,7 @@ Index: linux/lib/dynlocks.c
 +		if (hl->dl_readers == 0)
 +			wakeup = 1;
 +	} else {
-+		BUG_ON(1);
++		BUG();
 +	}
 +	if (wakeup) {
 +		hl->dl_pid = 0;
