@@ -541,9 +541,10 @@ int cmm_try_to_split(const struct lu_env *env, struct md_object *mo)
         /* Step4: Set mea to the master object. */
         rc = mo_xattr_set(env, md_object_next(mo), buf,
                           MDS_LMV_MD_NAME, 0);
-        if (rc == -ERESTART) {
+        if (rc == 0) {
                 CWARN("Dir "DFID" has been split\n",
                       PFID(lu_object_fid(&mo->mo_lu)));
+                rc = -ERESTART;
         }
         EXIT;
 cleanup:

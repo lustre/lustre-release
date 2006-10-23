@@ -831,19 +831,7 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 
         rc = mdd_xattr_set_txn(env, md2mdd_obj(obj), buf, name,
                                fl, handle);
-#ifdef HAVE_SPLIT_SUPPORT
-        if (rc == 0) {
-                /*
-                 * XXX: Very ugly hack, if setting lmv, it means splitting
-                 * sucess, we should return -ERESTART to notify the client, so
-                 * transno for this splitting should be zero according to the
-                 * replay rules. so return -ERESTART here let mdt trans stop
-                 * callback know this.
-                 */
-                 if (strncmp(name, MDS_LMV_MD_NAME, strlen(name)) == 0)
-                         rc = -ERESTART;
-        }
-#endif
+
         mdd_trans_stop(env, mdd, rc, handle);
 
         RETURN(rc);
