@@ -116,7 +116,7 @@ void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
         dst->f_seq = be64_to_cpu(fid_seq(src));
         dst->f_oid = be32_to_cpu(fid_oid(src));
         dst->f_ver = be32_to_cpu(fid_ver(src));
-        LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0i, DFID"\n", PFID(dst));
+        LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0, DFID"\n", PFID(dst));
 }
 EXPORT_SYMBOL(fid_be_to_cpu);
 #endif

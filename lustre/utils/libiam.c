@@ -300,7 +300,6 @@ static unsigned char *packdigit(unsigned char *number)
         return area;
 }
 
-
 static char *iam_convert(int size, int need_convert, char *source)
 {
         char *ptr;

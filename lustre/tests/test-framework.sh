@@ -7,7 +7,7 @@ trap 'echo "test-framework exiting on error"' ERR
 
 
 export REFORMAT=""
-export VERBOSE=false
+export VERBOSE=${VERBOSE:-false}
 export GMNALNID=${GMNALNID:-/usr/sbin/gmlndnid}
 export CATASTROPHE=${CATASTROPHE:-/proc/sys/lnet/catastrophe}
 
