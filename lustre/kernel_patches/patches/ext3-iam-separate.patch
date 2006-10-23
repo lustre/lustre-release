@@ -2770,7 +2770,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,1005 @@
+@@ -0,0 +1,1006 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3685,6 +3685,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +                .vle_hash    = 0,
 +                .vle_keysize = 0
 +        };
++        memset(e_rec(entry), 0, recsize);
 +}
 +
 +#include <linux/jbd.h>
