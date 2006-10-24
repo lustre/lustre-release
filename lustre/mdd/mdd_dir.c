@@ -553,7 +553,7 @@ static int mdd_unlink(const struct lu_env *env,
         int rc, is_dir;
         ENTRY;
 
-        rc = mdd_log_txn_param_build(env, mdd_cobj, ma, MDD_TXN_UNLINK_OP);
+        rc = mdd_log_txn_param_build(env, cobj, ma, MDD_TXN_UNLINK_OP);
         if (rc)
                 RETURN(rc);
 

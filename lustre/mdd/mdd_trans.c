@@ -75,17 +75,20 @@ void mdd_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
         mdd_env_info(env)->mti_param.tp_credits = mdd->mdd_tod[op].mod_credits;
 }
 
-int mdd_log_txn_param_build(const struct lu_env *env, struct mdd_object *obj,
+int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
                             struct md_attr *ma, enum mdd_txn_op op)
 {
-        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+        struct mdd_device *mdd = mdo2mdd(&md2mdd_obj(obj)->mod_obj);
         int rc, log_credits, stripe;
         ENTRY;
         
+        if (S_ISDIR(lu_object_attr(&obj->mo_lu)))
+                RETURN(0);
+
         mdd_txn_param_build(env, mdd, op);
         
         LASSERT(op == MDD_TXN_UNLINK_OP || op == MDD_TXN_RENAME_OP);
-        rc = mdd_lmm_get_locked(env, obj, ma);
+        rc = mdd_lmm_get_locked(env, md2mdd_obj(obj), ma);
         if (rc || !(ma->ma_valid & MA_LOV))
                 RETURN(rc);
       

@@ -888,7 +888,7 @@ static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
         int rc;
         ENTRY;
 
-        rc = mdd_log_txn_param_build(env, mdd_obj, ma, MDD_TXN_UNLINK_OP);
+        rc = mdd_log_txn_param_build(env, obj, ma, MDD_TXN_UNLINK_OP);
         if (rc)
                 RETURN(rc);
 

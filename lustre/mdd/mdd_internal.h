@@ -224,7 +224,7 @@ extern struct md_object_operations mdd_obj_ops;
 /* mdd_trans.c */
 void mdd_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
                          enum mdd_txn_op);
-int mdd_log_txn_param_build(const struct lu_env *env, struct mdd_object *obj,
+int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
                             struct md_attr *ma, enum mdd_txn_op);
 
 static inline void mdd_object_put(const struct lu_env *env,
