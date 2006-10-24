@@ -126,6 +126,11 @@ struct lu_server_fld {
         char                     lsf_name[80];
 };
 
+enum {
+        LUSTRE_FLD_INIT = 1 << 0,
+        LUSTRE_FLD_RUN  = 1 << 1
+};
+
 struct lu_client_fld {
         /* Client side proc entry. */
         cfs_proc_dir_entry_t    *lcf_proc_dir;
@@ -149,6 +154,8 @@ struct lu_client_fld {
         char                     lcf_name[80];
 
         const struct lu_context *lcf_ctx;
+        
+        int                      lcf_flags;
 };
 
 int fld_query(struct com_thread_info *info);

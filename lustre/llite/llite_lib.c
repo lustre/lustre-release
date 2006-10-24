@@ -312,17 +312,10 @@ static int client_common_fill_super(struct super_block *sb,
                                  strlen(sbi2mdc(sbi)->cl_target_uuid.uuid));
 #endif
 
-        /* init FIDs framework */
-        err = ll_fid_md_init(sbi);
-        if (err) {
-                CERROR("can't init FIDs framework, rc %d\n", err);
-                GOTO(out_md, err);
-        }
-
         obd = class_name2obd(dt);
         if (!obd) {
                 CERROR("DT %s: not setup or attached\n", dt);
-                GOTO(out_md_fid, err = -ENODEV);
+                GOTO(out_md, err = -ENODEV);
         }
 
         data->ocd_connect_flags = OBD_CONNECT_GRANT | OBD_CONNECT_VERSION |
@@ -376,17 +369,10 @@ static int client_common_fill_super(struct super_block *sb,
                         GOTO(out_dt, err = -ENOMEM);
         }
 
-        /* init FIDs framework */
-        err = ll_fid_dt_init(sbi);
-        if (err) {
-                CERROR("can't init FIDs framework, rc %d\n", err);
-                GOTO(out_dt, err);
-        }
-
         err = md_getstatus(sbi->ll_md_exp, &rootfid, &oc);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_dt_fid, err);
+                GOTO(out_dt, err);
         }
         CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&rootfid));
         sbi->ll_root_fid = rootfid;
@@ -457,13 +443,9 @@ static int client_common_fill_super(struct super_block *sb,
 out_root:
         if (root)
                 iput(root);
-out_dt_fid:
-        obd_fid_fini(sbi->ll_dt_exp);
 out_dt:
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
-out_md_fid:
-        obd_fid_fini(sbi->ll_md_exp);
 out_md:
         obd_disconnect(sbi->ll_md_exp);
         sbi->ll_md_exp = NULL;
@@ -656,13 +638,11 @@ void client_common_put_super(struct super_block *sb)
         prune_deathrow(sbi, 0);
 
         list_del(&sbi->ll_conn_chain);
-        ll_fid_dt_fini(sbi);
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
 
         lprocfs_unregister_mountpoint(sbi);
 
-        ll_fid_md_fini(sbi);
         obd_disconnect(sbi->ll_md_exp);
         sbi->ll_md_exp = NULL;
 

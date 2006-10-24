@@ -2083,11 +2083,7 @@ llu_fsswop_mount(const char *source,
 
         err = obd_statfs(obd, &osfs, 100000000);
         if (err)
-                GOTO(out_mdc, err);
-
-        err = llu_fid_md_init(sbi);
-        if (err)
-                GOTO(out_mdc, err);
+                GOTO(out_md, err);
 
         /*
          * FIXME fill fs stat data into sbi here!!! FIXME
@@ -2097,7 +2093,7 @@ llu_fsswop_mount(const char *source,
         obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
-                GOTO(out_md_fid, err = -EINVAL);
+                GOTO(out_md, err = -EINVAL);
         }
         obd_set_info_async(obd->obd_self_export, strlen("async"), "async",
                            sizeof(async), &async, NULL);
@@ -2111,21 +2107,17 @@ llu_fsswop_mount(const char *source,
         err = obd_connect(NULL, &dt_conn, obd, &sbi->ll_sb_uuid, &ocd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
-                GOTO(out_mdc, err);
+                GOTO(out_md, err);
         }
         sbi->ll_dt_exp = class_conn2export(&dt_conn);
         sbi->ll_lco.lco_flags = ocd.ocd_connect_flags;
-
-        err = llu_fid_dt_init(sbi);
-        if (err)
-                GOTO(out_osc, err);
 
         llu_init_ea_size(sbi->ll_md_exp, sbi->ll_dt_exp);
 
         err = md_getstatus(sbi->ll_md_exp, &rootfid, NULL);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_dt_fid, err);
+                GOTO(out_dt, err);
         }
         CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&rootfid));
         sbi->ll_root_fid = rootfid;
@@ -2135,7 +2127,7 @@ llu_fsswop_mount(const char *source,
                          OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
-                GOTO(out_osc, err);
+                GOTO(out_dt, err);
         }
 
         err = md_get_lustre_md(sbi->ll_md_exp, request, REPLY_REC_OFF,
@@ -2179,13 +2171,9 @@ out_inode:
         _sysio_i_gone(root);
 out_request:
         ptlrpc_req_finished(request);
-out_dt_fid:
-        llu_fid_dt_fini(sbi);
-out_osc:
+out_dt:
         obd_disconnect(sbi->ll_dt_exp);
-out_md_fid:
-        llu_fid_md_fini(sbi);
-out_mdc:
+out_md:
         obd_disconnect(sbi->ll_md_exp);
 out_free:
         if (osc)

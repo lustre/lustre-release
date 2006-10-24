@@ -165,8 +165,15 @@ int fld_client_add_target(struct lu_client_fld *fld,
         LASSERT(name != NULL);
         LASSERT(tar->ft_srv != NULL || tar->ft_exp != NULL);
 
-        CDEBUG(D_INFO|D_WARNING, "%s: Adding target %s (idx "LPU64")\n",
-	       fld->lcf_name, name, tar->ft_idx);
+        if (fld->lcf_flags != LUSTRE_FLD_INIT) {
+                CERROR("%s: Attempt to add target %s (idx "LPU64") "
+                       "on fly - skip it\n", fld->lcf_name, name,
+                       tar->ft_idx);
+                RETURN(0);
+        } else {
+                CDEBUG(D_INFO|D_WARNING, "%s: Adding target %s (idx "
+                       LPU64")\n", fld->lcf_name, name, tar->ft_idx);
+        }
 
         OBD_ALLOC_PTR(target);
         if (target == NULL)
@@ -310,6 +317,7 @@ int fld_client_init(struct lu_client_fld *fld,
         fld->lcf_count = 0;
         spin_lock_init(&fld->lcf_lock);
         fld->lcf_hash = &fld_hash[hash];
+        fld->lcf_flags = LUSTRE_FLD_INIT;
         INIT_LIST_HEAD(&fld->lcf_targets);
 
 #ifdef __KERNEL__
@@ -437,6 +445,7 @@ int fld_client_create(struct lu_client_fld *fld,
         int rc;
         ENTRY;
 
+        fld->lcf_flags |= LUSTRE_FLD_RUN;
         target = fld_client_get_target(fld, seq);
         LASSERT(target != NULL);
 
@@ -482,6 +491,7 @@ int fld_client_delete(struct lu_client_fld *fld, seqno_t seq,
         int rc;
         ENTRY;
 
+        fld->lcf_flags |= LUSTRE_FLD_RUN;
         fld_cache_delete(fld->lcf_cache, seq);
 
         target = fld_client_get_target(fld, seq);
@@ -517,7 +527,8 @@ int fld_client_lookup(struct lu_client_fld *fld,
         int rc;
         ENTRY;
 
-        /* Lookup it in the cache */
+        fld->lcf_flags |= LUSTRE_FLD_RUN;
+
         rc = fld_cache_lookup(fld->lcf_cache, seq, mds);
         if (rc == 0)
                 RETURN(0);

@@ -85,6 +85,16 @@ static int mdd_parent_fid(const struct lu_env *env, struct mdd_object *obj,
 }
 
 /*
+ * For root fid use special function, whcih does not compare version component
+ * of fid. Vresion component is different for root fids on all MDTs.
+ */
+static int mdd_is_root(struct mdd_device *mdd, const struct lu_fid *fid)
+{
+        return fid_seq(&mdd->mdd_root_fid) == fid_seq(fid) &&
+                fid_oid(&mdd->mdd_root_fid) == fid_oid(fid);
+}
+
+/*
  * return 1: if lf is the fid of the ancestor of p1;
  * return 0: if not;
  *
@@ -108,14 +118,14 @@ static int mdd_is_parent(const struct lu_env *env,
         pfid = &mdd_env_info(env)->mti_fid;
 
         /* Check for root first. */
-        if (lu_fid_eq(mdo2fid(p1), &mdd->mdd_root_fid))
+        if (mdd_is_root(mdd, mdo2fid(p1)))
                 RETURN(0);
 
         for(;;) {
                 rc = mdd_parent_fid(env, p1, pfid);
                 if (rc)
                         GOTO(out, rc);
-                if (lu_fid_eq(pfid, &mdd->mdd_root_fid))
+                if (mdd_is_root(mdd, pfid))
                         GOTO(out, rc = 0);
                 if (lu_fid_eq(pfid, lf))
                         GOTO(out, rc = 1);

@@ -244,12 +244,6 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                                char *buf, size_t nbytes);
 
 /* liblustre/llite_fid.c*/
-int llu_fid_md_init(struct llu_sb_info *sbi);
-int llu_fid_dt_init(struct llu_sb_info *sbi);
-
-int llu_fid_md_fini(struct llu_sb_info *sbi);
-int llu_fid_dt_fini(struct llu_sb_info *sbi);
-
 int llu_fid_md_alloc(struct llu_sb_info *sbi, struct lu_fid *fid, 
                      struct lu_placement_hint *hint);
 

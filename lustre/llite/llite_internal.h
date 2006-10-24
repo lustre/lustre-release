@@ -726,13 +726,7 @@ void free_rmtperm_hash(struct hlist_head *hash);
 int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm);
 int lustre_check_remote_perm(struct inode *inode, int mask);
 
-/* llite/llite_fid.c*/
-int ll_fid_md_init(struct ll_sb_info *sbi);
-int ll_fid_dt_init(struct ll_sb_info *sbi);
-
-int ll_fid_md_fini(struct ll_sb_info *sbi);
-int ll_fid_dt_fini(struct ll_sb_info *sbi);
-
+/* llite/llite_fid.c */
 int ll_fid_md_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
                     struct lu_placement_hint *hint);
 

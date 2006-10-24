@@ -392,6 +392,12 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 
         mdc_exp = class_conn2export(&conn);
 
+        /* Init fid sequence client for this mdc. */
+        rc = obd_fid_init(mdc_exp);
+        if (rc)
+                RETURN(rc);
+
+        /* Add new FLD target. */
         target.ft_srv = NULL;
         target.ft_exp = mdc_exp;
         target.ft_idx = tgt->ltd_idx;
@@ -579,14 +585,68 @@ int lmv_check_connect(struct obd_device *obd)
         RETURN(rc);
 }
 
-static int lmv_disconnect(struct obd_export *exp)
+static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 {
-        struct obd_device *obd = class_exp2obd(exp);
-        struct lmv_obd *lmv = &obd->u.lmv;
-
 #ifdef __KERNEL__
         struct proc_dir_entry *lmv_proc_dir;
 #endif
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct obd_device *mdc_obd;
+        int rc;
+        ENTRY;
+
+        LASSERT(tgt != NULL);
+        LASSERT(obd != NULL);
+        
+        mdc_obd = class_exp2obd(tgt->ltd_exp);
+
+        if (mdc_obd)
+                mdc_obd->obd_no_recov = obd->obd_no_recov;
+
+#ifdef __KERNEL__
+        lmv_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
+        if (lmv_proc_dir) {
+                struct proc_dir_entry *mdc_symlink;
+
+                mdc_symlink = lprocfs_srch(lmv_proc_dir, mdc_obd->obd_name);
+                if (mdc_symlink) {
+                        lprocfs_remove(mdc_symlink);
+                } else {
+                        CERROR("/proc/fs/lustre/%s/%s/target_obds/%s missing\n",
+                               obd->obd_type->typ_name, obd->obd_name,
+                               mdc_obd->obd_name);
+                }
+        }
+#endif
+        rc = obd_fid_fini(tgt->ltd_exp);
+        if (rc)
+                CERROR("Can't finanize fids factory\n");
+                
+        CDEBUG(D_OTHER, "Disconnected from %s(%s) successfully\n",
+               tgt->ltd_exp->exp_obd->obd_name,
+               tgt->ltd_exp->exp_obd->obd_uuid.uuid);
+
+        obd_register_observer(tgt->ltd_exp->exp_obd, NULL);
+        rc = obd_disconnect(tgt->ltd_exp);
+        if (rc) {
+                if (tgt->ltd_active) {
+                        CERROR("Target %s disconnect error %d\n",
+                               tgt->ltd_uuid.uuid, rc);
+                }
+        }
+
+        lmv_activate_target(lmv, tgt, 0);
+        tgt->ltd_exp = NULL;
+        RETURN(0);
+}
+
+static int lmv_disconnect(struct obd_export *exp)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+#ifdef __KERNEL__
+        struct proc_dir_entry *lmv_proc_dir;
+#endif
+        struct lmv_obd *lmv = &obd->u.lmv;
         int rc, i;
         ENTRY;
 
@@ -598,54 +658,14 @@ static int lmv_disconnect(struct obd_export *exp)
         if (lmv->refcount != 0)
                 goto out_local;
 
-#ifdef __KERNEL__
-        lmv_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
-#endif
-
         for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
-                struct obd_device *mdc_obd;
-
                 if (lmv->tgts[i].ltd_exp == NULL)
                         continue;
-
-                mdc_obd = class_exp2obd(lmv->tgts[i].ltd_exp);
-
-                if (mdc_obd)
-                        mdc_obd->obd_no_recov = obd->obd_no_recov;
-
-#ifdef __KERNEL__
-                if (lmv_proc_dir) {
-                        struct proc_dir_entry *mdc_symlink;
-
-                        mdc_symlink = lprocfs_srch(lmv_proc_dir, mdc_obd->obd_name);
-                        if (mdc_symlink) {
-                                lprocfs_remove(mdc_symlink);
-                        } else {
-                                CERROR("/proc/fs/lustre/%s/%s/target_obds/%s missing\n",
-                                       obd->obd_type->typ_name, obd->obd_name,
-                                       mdc_obd->obd_name);
-                        }
-                }
-#endif
-                CDEBUG(D_OTHER, "disconnected from %s(%s) successfully\n",
-                        lmv->tgts[i].ltd_exp->exp_obd->obd_name,
-                        lmv->tgts[i].ltd_exp->exp_obd->obd_uuid.uuid);
-
-                obd_register_observer(lmv->tgts[i].ltd_exp->exp_obd, NULL);
-                rc = obd_disconnect(lmv->tgts[i].ltd_exp);
-                if (rc) {
-                        if (lmv->tgts[i].ltd_active) {
-                                CERROR("Target %s disconnect error %d\n",
-                                       lmv->tgts[i].ltd_uuid.uuid, rc);
-                        }
-                        rc = 0;
-                }
-
-                lmv_activate_target(lmv, &lmv->tgts[i], 0);
-                lmv->tgts[i].ltd_exp = NULL;
+                lmv_disconnect_mdc(obd, &lmv->tgts[i]);
         }
 
 #ifdef __KERNEL__
+        lmv_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lmv_proc_dir) {
                 lprocfs_remove(lmv_proc_dir);
         } else {
@@ -655,8 +675,10 @@ static int lmv_disconnect(struct obd_export *exp)
 #endif
 
 out_local:
-        /* this is the case when no real connection is established by
-         * lmv_check_connect(). */
+        /*
+         * This is the case when no real connection is established by
+         * lmv_check_connect().
+         */
         if (!lmv->connected)
                 class_export_put(exp);
         rc = class_disconnect(exp);
@@ -786,42 +808,6 @@ exit:
                 LASSERT(*mds < lmv->desc.ld_tgt_count);
         }
 
-        RETURN(rc);
-}
-
-static int lmv_fid_init(struct obd_export *exp)
-{
-        struct obd_device *obd = class_exp2obd(exp);
-        struct lmv_obd *lmv = &obd->u.lmv;
-        int i, rc = 0;
-        ENTRY;
-
-        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
-                if (lmv->tgts[i].ltd_exp == NULL)
-                        continue;
-
-                rc = obd_fid_init(lmv->tgts[i].ltd_exp);
-                if (rc)
-                        RETURN(rc);
-        }
-        RETURN(rc);
-}
-
-static int lmv_fid_fini(struct obd_export *exp)
-{
-        struct obd_device *obd = class_exp2obd(exp);
-        struct lmv_obd *lmv = &obd->u.lmv;
-        int i, rc = 0;
-        ENTRY;
-
-        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
-                if (lmv->tgts[i].ltd_exp == NULL)
-                        continue;
-
-                rc = obd_fid_fini(lmv->tgts[i].ltd_exp);
-                if (rc)
-                        break;
-        }
         RETURN(rc);
 }
 
@@ -2530,8 +2516,6 @@ struct obd_ops lmv_obd_ops = {
         .o_packmd               = lmv_packmd,
         .o_unpackmd             = lmv_unpackmd,
         .o_notify               = lmv_notify,
-        .o_fid_init             = lmv_fid_init,
-        .o_fid_fini             = lmv_fid_fini,
         .o_fid_alloc            = lmv_fid_alloc,
         .o_fid_delete           = lmv_fid_delete,
         .o_iocontrol            = lmv_iocontrol

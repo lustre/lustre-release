@@ -76,69 +76,12 @@ int llu_fid_dt_alloc(struct llu_sb_info *sbi, struct lu_fid *fid,
         RETURN(llu_fid_alloc(sbi->ll_dt_exp, fid, hint));
 }
 
-static int llu_fid_init(struct obd_export *exp)
-{
-        int rc;
-        ENTRY;
-
-        rc = obd_fid_init(exp);
-        if (rc) {
-                CERROR("cannot initialize FIDs framework, "
-                       "rc %d\n", rc);
-                RETURN(rc);
-        }
-
-        RETURN(rc);
-}
-
-int llu_fid_md_init(struct llu_sb_info *sbi)
-{
-        ENTRY;
-        RETURN(llu_fid_init(sbi->ll_md_exp));
-}
-
-int llu_fid_dt_init(struct llu_sb_info *sbi)
-{
-        ENTRY;
-        RETURN(llu_fid_init(sbi->ll_dt_exp));
-}
-
-static int llu_fid_fini(struct obd_export *exp)
-{
-        int rc;
-        ENTRY;
-
-        rc = obd_fid_fini(exp);
-        if (rc) {
-                CERROR("cannot finalize FIDs framework, "
-                       "rc %d\n", rc);
-                RETURN(rc);
-        }
-
-        RETURN(rc);
-}
-
-int llu_fid_md_fini(struct llu_sb_info *sbi)
-{
-        ENTRY;
-        RETURN(llu_fid_fini(sbi->ll_md_exp));
-}
-
-int llu_fid_dt_fini(struct llu_sb_info *sbi)
-{
-        ENTRY;
-        RETURN(llu_fid_fini(sbi->ll_dt_exp));
-}
-
 /* build inode number on passed @fid */
 unsigned long llu_fid_build_ino(struct llu_sb_info *sbi,
                                 struct lu_fid *fid)
 {
         unsigned long ino;
         ENTRY;
-
-        /* very stupid and having many downsides inode allocation algorithm
-         * based on fid. */
         ino = (fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid);
-        RETURN(ino);
+        RETURN(ino & 0x7fffffff);
 }
