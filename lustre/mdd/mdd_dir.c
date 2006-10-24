@@ -484,7 +484,7 @@ static int mdd_dir_is_empty(const struct lu_env *env,
 
         obj = mdd_object_child(dir);
         iops = &obj->do_index_ops->dio_it;
-        it = iops->init(env, obj, 0);
+        it = iops->init(env, obj, 0, BYPASS_CAPA);
         if (it != NULL) {
                 result = iops->get(env, it, (const void *)"");
                 if (result > 0) {

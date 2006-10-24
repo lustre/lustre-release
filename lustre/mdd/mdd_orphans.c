@@ -142,7 +142,7 @@ static int orph_index_iterate(const struct lu_env *env,
         ENTRY;
 
         iops = &dt_obj->do_index_ops->dio_it;
-        it = iops->init(env, dt_obj, 1);
+        it = iops->init(env, dt_obj, 1, BYPASS_CAPA);
         if (it != NULL) {
                 result = iops->get(env, it, (const void *)key);
                 if (result > 0) {

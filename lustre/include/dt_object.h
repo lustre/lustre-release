@@ -265,9 +265,6 @@ struct dt_object_operations {
         void  (*do_ref_del)(const struct lu_env *env,
                             struct dt_object *dt, struct thandle *th);
 
-        int   (*do_readpage)(const struct lu_env *env,
-                             struct dt_object *dt, const struct lu_rdpg *rdpg,
-                             struct lustre_capa *capa);
         struct obd_capa *(*do_capa_get)(const struct lu_env *env,
                                         struct dt_object *dt,
                                         struct lustre_capa *old, __u64 opc);
@@ -338,7 +335,8 @@ struct dt_index_operations {
                  * precondition: dt_object_exists(dt);
                  */
                 struct dt_it *(*init)(const struct lu_env *env,
-                                      struct dt_object *dt, int writable);
+                                      struct dt_object *dt, int writable,
+                                      struct lustre_capa *capa);
                 void          (*fini)(const struct lu_env *env,
                                       struct dt_it *di);
                 int            (*get)(const struct lu_env *env,
