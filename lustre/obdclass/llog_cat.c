@@ -65,21 +65,10 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         if (llh->llh_cat_idx == index) {
                 CERROR("no free catalog slots for log...\n");
                 RETURN(ERR_PTR(-ENOSPC));
-        } else {
-                if (index == 0)
-                        index = 1;
-                if (ext2_set_bit(index, llh->llh_bitmap)) {
-                        CERROR("argh, index %u already set in log bitmap?\n",
-                               index);
-                        LBUG(); /* should never happen */
-                }
-                cathandle->lgh_last_idx = index;
-                llh->llh_count++;
-                llh->llh_tail.lrt_index = index;
         }
-
+ 
         rc = llog_create(cathandle->lgh_ctxt, &loghandle, NULL, NULL);
-        if (rc)
+        if (rc) 
                 RETURN(ERR_PTR(rc));
 
         rc = llog_init_handle(loghandle,
@@ -88,6 +77,16 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         if (rc)
                 GOTO(out_destroy, rc);
 
+        if (index == 0)
+                index = 1;
+        if (ext2_set_bit(index, llh->llh_bitmap)) {
+                CERROR("argh, index %u already set in log bitmap?\n",
+                       index);
+                LBUG(); /* should never happen */
+        }
+        cathandle->lgh_last_idx = index;
+        llh->llh_count++;
+        llh->llh_tail.lrt_index = index;
         CDEBUG(D_HA, "new recovery log "LPX64":%x for index %u of catalog "
                LPX64"\n", loghandle->lgh_id.lgl_oid, loghandle->lgh_id.lgl_ogen,
                index, cathandle->lgh_id.lgl_oid);
