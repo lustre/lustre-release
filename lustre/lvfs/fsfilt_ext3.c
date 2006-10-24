@@ -1123,7 +1123,7 @@ int fsfilt_ext3_read(struct inode *inode, void *buf, int size, loff_t *offs)
 {
         unsigned long block;
         struct buffer_head *bh;
-        int err, blocksize, csize, boffs;
+        int err, blocksize, csize, boffs, osize = size;
 
         /* prevent reading after eof */
         lock_kernel();
@@ -1160,14 +1160,18 @@ int fsfilt_ext3_read(struct inode *inode, void *buf, int size, loff_t *offs)
                 buf += csize;
                 size -= csize;
         }
-        return 0;
+        return osize;
 }
 EXPORT_SYMBOL(fsfilt_ext3_read);
 
 static int fsfilt_ext3_read_record(struct file * file, void *buf,
                                    int size, loff_t *offs)
 {
-        return fsfilt_ext3_read(file->f_dentry->d_inode, buf, size, offs);
+        int rc;
+        rc = fsfilt_ext3_read(file->f_dentry->d_inode, buf, size, offs);
+        if (rc > 0)
+                rc = 0;
+        return rc;
 }
 
 int fsfilt_ext3_write_handle(struct inode *inode, void *buf, int bufsize,
