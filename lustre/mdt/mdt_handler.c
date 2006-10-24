@@ -476,17 +476,16 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 }
         } else if (S_ISLNK(la->la_mode) &&
                           reqbody->valid & OBD_MD_LINKNAME) {
-                /* FIXME: Is this buffer long enough? */
                 buffer->lb_buf = ma->ma_lmm;
-                buffer->lb_len = ma->ma_lmm_size;
+                buffer->lb_len = reqbody->eadatasize;
                 rc = mo_readlink(env, next, buffer);
                 if (rc <= 0) {
                         CERROR("readlink failed: %d\n", rc);
                         rc = -EFAULT;
                 } else {
                         repbody->valid |= OBD_MD_LINKNAME;
-                        repbody->eadatasize = rc + 1;
-                        ((char*)ma->ma_lmm)[rc] = 0; /* NULL terminate */
+                        repbody->eadatasize = rc;
+                        ((char*)ma->ma_lmm)[rc - 1] = 0; /* NULL terminate */
                         CDEBUG(D_INODE, "symlink dest %s, len = %d\n",
                                         (char*)ma->ma_lmm, rc);
                         rc = 0;

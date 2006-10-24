@@ -234,21 +234,23 @@ static inline void fid_zero(struct lu_fid *fid)
         memset(fid, 0, sizeof(*fid));
 }
 
+static inline int fid_is_igif(const struct lu_fid *fid)
+{
+        return fid_seq(fid) == LUSTRE_ROOT_FID_SEQ;
+}
+
 static inline int fid_is_sane(const struct lu_fid *fid)
 {
         return
                 fid != NULL &&
-                fid_seq_is_sane(fid_seq(fid)) && fid_oid(fid) != 0;
+                ((fid_seq_is_sane(fid_seq(fid)) && fid_oid(fid) != 0 
+                                                && fid_ver(fid) == 0) ||
+                fid_is_igif(fid));
 }
 
 static inline int fid_is_zero(const struct lu_fid *fid)
 {
         return fid_seq(fid) == 0 && fid_oid(fid) == 0;
-}
-
-static inline int fid_is_igif(const struct lu_fid *fid)
-{
-        return fid_seq(fid) == LUSTRE_ROOT_FID_SEQ;
 }
 
 #define DFID "[0x%16.16"LPF64"x/0x%8.8x:0x%8.8x]"
