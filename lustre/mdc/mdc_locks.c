@@ -64,19 +64,11 @@ static int it_to_lock_mode(struct lookup_intent *it)
 {
         ENTRY;
 
-#if 1
         /* CREAT needs to be tested before open (both could be set) */
         if (it->it_op & IT_CREAT)
                 return LCK_PW;
         else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
                 return LCK_PR;
-#else
-        /* CREAT needs to be tested before open (both could be set) */
-        if (it->it_op & IT_CREAT)
-                return LCK_CW;
-        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
-                return LCK_CR;
-#endif
 
         LBUG();
         RETURN(-EINVAL);

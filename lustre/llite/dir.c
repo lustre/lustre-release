@@ -285,11 +285,7 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
         __u32 start;
         __u32 end;
 
-#if 1
         mode = LCK_PR;
-#else
-        mode = LCK_CR;
-#endif
         rc = md_lock_match(ll_i2sbi(dir)->ll_md_exp, LDLM_FL_BLOCK_GRANTED,
                            ll_inode2fid(dir), LDLM_IBITS, &policy, mode, &lockh);
         if (!rc) {

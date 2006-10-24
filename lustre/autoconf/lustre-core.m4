@@ -796,24 +796,6 @@ fi
 ])
  
 #
-# LC_CONFIG_PDIROPS
-#
-# whether to enable PDIROPS
-#
-AC_DEFUN([LC_CONFIG_PDIROPS],
-[
-AC_MSG_CHECKING([whether to enable PDIROPS])
-AC_ARG_ENABLE([pdirops], 
-	AC_HELP_STRING([--disable-pdirops],
-			[disable PDIROPS]),
-	[],[enable_pdirops='yes'])
-AC_MSG_RESULT([$enable_pdirops])
-if test x$enable_pdirops != xno; then
-   AC_DEFINE(CONFIG_PDIROPS, 1, [enable PDIROPS])
-fi
-])
-
-#
 # LC_CONFIG_LDISKFS
 #
 # whether to enable various ldiskfs debugs

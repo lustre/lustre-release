@@ -155,7 +155,6 @@ void mdt_set_disposition(struct mdt_thread_info *info,
                 rep->lock_policy_res1 |= flag;
 }
 
-#if 1
 static mdl_mode_t mdt_mdl_lock_modes[] = {
         [0] = MDL_MINMODE,
         [1] = MDL_EX,
@@ -197,7 +196,6 @@ static inline ldlm_mode_t mdt_mdl_mode2ldlm_mode(mdl_mode_t mode)
         LASSERT(idx < ARRAY_SIZE(mdt_ldlm_lock_modes));
         return mdt_ldlm_lock_modes[idx];
 }
-#endif
 
 void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm)
 {
@@ -221,7 +219,6 @@ void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lm,
         }
 }
 
-#if 1
 static ldlm_mode_t mdt_lock_pdo_mode(struct mdt_thread_info *info,
                                      struct mdt_object *o,
                                      ldlm_mode_t lm)
@@ -286,7 +283,6 @@ static ldlm_mode_t mdt_lock_pdo_mode(struct mdt_thread_info *info,
 
         return LCK_MINMODE;
 }
-#endif
 
 static int mdt_getstatus(struct mdt_thread_info *info)
 {
@@ -1580,7 +1576,6 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         memset(policy, 0, sizeof *policy);
         fid_build_reg_res_name(mdt_object_fid(o), res_id);
 
-#if 1
         /*
          * Take PDO lock on whole directory and build correct @res_id for lock
          * on part of directory.
@@ -1606,7 +1601,6 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                  */
                 res_id->name[LUSTRE_RES_ID_HSH_OFF] = lh->mlh_pdo_hash;
         }
-#endif
 
         policy->l_inodebits.bits = ibits;
 
@@ -1618,12 +1612,10 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
                           res_id, LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB);
 
-#if 1
         if (rc && lh->mlh_type == MDT_PDO_LOCK) {
                 mdt_fid_unlock(&lh->mlh_pdo_lh, lh->mlh_pdo_mode);
                 lh->mlh_pdo_lh.cookie = 0ull;
         }
-#endif
 
         RETURN(rc);
 }
@@ -1639,14 +1631,12 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
         struct ptlrpc_request *req = mdt_info_req(info);
         ENTRY;
 
-#if 1
         if (lustre_handle_is_used(&lh->mlh_pdo_lh)) {
                 /* Do not save PDO locks to request, just decref. */
                 mdt_fid_unlock(&lh->mlh_pdo_lh,
                                lh->mlh_pdo_mode);
                 lh->mlh_pdo_lh.cookie = 0;
         }
-#endif
 
         if (lustre_handle_is_used(&lh->mlh_reg_lh)) {
                 if (decref) {
