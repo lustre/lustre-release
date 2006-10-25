@@ -123,14 +123,14 @@ static struct md_device_operations cmm_md_ops = {
 
 extern struct lu_device_type mdc_device_type;
 
-static int cmm_post_init_mdc(const struct lu_env *env, 
+static int cmm_post_init_mdc(const struct lu_env *env,
                              struct cmm_device *cmm)
 {
         int max_mdsize, max_cookiesize, rc;
         struct mdc_device *mc, *tmp;
 
         /* get the max mdsize and cookiesize from lower layer */
-        rc = cmm_maxsize_get(env, &cmm->cmm_md_dev, &max_mdsize, 
+        rc = cmm_maxsize_get(env, &cmm->cmm_md_dev, &max_mdsize,
                                                 &max_cookiesize);
         if (rc)
                 RETURN(rc);
@@ -140,7 +140,7 @@ static int cmm_post_init_mdc(const struct lu_env *env,
                                  mc_linkage) {
                 mdc_init_ea_size(env, mc, max_mdsize, max_cookiesize);
         }
-        spin_unlock(&cmm->cmm_tgt_guard); 
+        spin_unlock(&cmm->cmm_tgt_guard);
         RETURN(rc);
 }
 
@@ -209,7 +209,7 @@ static int cmm_add_mdc(const struct lu_env *env,
         target.ft_idx = mc->mc_num;
         target.ft_exp = mc->mc_desc.cl_exp;
         fld_client_add_target(cm->cmm_fld, &target);
-        
+
         /* Set max md size for the mdc. */
         rc = cmm_post_init_mdc(env, cm);
         RETURN(rc);
@@ -276,11 +276,11 @@ static int cmm_process_config(const struct lu_env *env,
                         fld_client_add_target(m->cmm_fld, &target);
                 }
                 err = cmm_add_mdc(env, m, cfg);
-                
+
                 /* The first ADD_MDC can be counted as setup is finished. */
                 if (!(m->cmm_flags & CMM_INITIALIZED))
                         m->cmm_flags |= CMM_INITIALIZED;
-                
+
                 break;
         case LCFG_SETUP:
         {
@@ -330,11 +330,11 @@ int cmm_upcall(const struct lu_env *env, struct md_device *md,
         LASSERT(upcall_dev);
         switch (ev) {
                 case MD_LOV_SYNC:
-                        rc = cmm_post_init_mdc(env, md2cmm_dev(md)); 
-                        if (rc) 
+                        rc = cmm_post_init_mdc(env, md2cmm_dev(md));
+                        if (rc)
                                 CERROR("can not init md size %d\n", rc);
                 default:
-                        rc = upcall_dev->md_upcall.mu_upcall(env, 
+                        rc = upcall_dev->md_upcall.mu_upcall(env,
                                         md->md_upcall.mu_upcall_dev, ev);
         }
         RETURN(rc);
@@ -428,7 +428,7 @@ static void cmm_type_fini(struct lu_device_type *t)
         lu_context_key_degister(&cmm_thread_key);
 }
 
-static int cmm_device_init(const struct lu_env *env, struct lu_device *d, 
+static int cmm_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
 {
         struct cmm_device *m = lu2cmm_dev(d);
@@ -451,7 +451,7 @@ static int cmm_device_init(const struct lu_env *env, struct lu_device *d,
         /* Assign site's fld client ref, needed for asserts in osd. */
         ls = cmm2lu_dev(m)->ld_site;
         ls->ls_client_fld = m->cmm_fld;
-        
+
         RETURN(err);
 }
 
@@ -479,7 +479,7 @@ static struct lu_device *cmm_device_fini(const struct lu_env *env,
         fld_client_fini(cm->cmm_fld);
         ls = cmm2lu_dev(cm)->ld_site;
         ls->ls_client_fld = NULL;
-        
+
         RETURN (md2lu_dev(cm->cmm_child));
 }
 
@@ -514,8 +514,6 @@ LPROCFS_INIT_VARS(cmm, lprocfs_cmm_module_vars, lprocfs_cmm_obd_vars);
 static int __init cmm_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
-
-        printk(KERN_INFO "Lustre: Clustered Metadata Manager; info@clusterfs.com\n");
 
         lprocfs_init_vars(cmm, &lvars);
         return class_register_type(&cmm_obd_device_ops, NULL, lvars.module_vars,

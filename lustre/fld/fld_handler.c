@@ -83,9 +83,6 @@ cfs_proc_dir_entry_t *fld_type_proc_dir = NULL;
 
 static int __init fld_mod_init(void)
 {
-        printk(KERN_INFO "Lustre: Fid Location Database; "
-               "info@clusterfs.com\n");
-
         fld_type_proc_dir = lprocfs_register(LUSTRE_FLD_NAME,
                                              proc_lustre_root,
                                              NULL, NULL);

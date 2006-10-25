@@ -92,7 +92,7 @@ struct fld_cache *fld_cache_init(const char *name, int hash_size,
         LASSERT(name != NULL);
         LASSERT(IS_PO2(hash_size));
         LASSERT(cache_threshold < cache_size);
-        
+
         OBD_ALLOC_PTR(cache);
         if (cache == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
@@ -121,8 +121,8 @@ struct fld_cache *fld_cache_init(const char *name, int hash_size,
         for (i = 0; i < hash_size; i++)
                 INIT_HLIST_HEAD(&cache->fci_hash_table[i]);
         memset(&cache->fci_stat, 0, sizeof(cache->fci_stat));
-        
-        CDEBUG(D_INFO|D_WARNING, "%s: FLD cache - Size: %d, Threshold: %d\n", 
+
+        CDEBUG(D_INFO, "%s: FLD cache - Size: %d, Threshold: %d\n",
                cache->fci_name, cache_size, cache_threshold);
 
         RETURN(cache);
@@ -148,7 +148,7 @@ void fld_cache_fini(struct fld_cache *cache)
         printk("  Total reqs: "LPU64"\n", cache->fci_stat.fst_count);
         printk("  Cache reqs: "LPU64"\n", cache->fci_stat.fst_cache);
         printk("  Cache hits: "LPU64"%%\n", pct);
-        
+
 	OBD_FREE(cache->fci_hash_table, cache->fci_hash_size *
 		 sizeof(*cache->fci_hash_table));
 	OBD_FREE_PTR(cache);
@@ -175,14 +175,14 @@ static int fld_cache_shrink(struct fld_cache *cache)
         struct list_head *curr;
         int num = 0;
         ENTRY;
-        
+
         LASSERT(cache != NULL);
 
         if (cache->fci_cache_count < cache->fci_cache_size)
                 RETURN(0);
 
         curr = cache->fci_lru.prev;
-        
+
         while (cache->fci_cache_count + cache->fci_threshold >
                cache->fci_cache_size && curr != &cache->fci_lru)
         {
@@ -196,7 +196,7 @@ static int fld_cache_shrink(struct fld_cache *cache)
                 num++;
         }
 
-        CDEBUG(D_INFO|D_WARNING, "%s: FLD cache - Shrinked by "
+        CDEBUG(D_INFO, "%s: FLD cache - Shrinked by "
                "%d entries\n", cache->fci_name, num);
 
         RETURN(0);
@@ -235,7 +235,7 @@ int fld_cache_insert(struct fld_cache *cache,
         if (!flde)
                 RETURN(-ENOMEM);
 
-        /* 
+        /*
          * Check if cache has the entry with such a seq again. It could be added
          * while we were allocating new entry.
          */
@@ -256,7 +256,7 @@ int fld_cache_insert(struct fld_cache *cache,
         hlist_add_head(&flde->fce_list, bucket);
         list_add(&flde->fce_lru, &cache->fci_lru);
         cache->fci_cache_count++;
-        
+
         spin_unlock(&cache->fci_lock);
 
         RETURN(0);

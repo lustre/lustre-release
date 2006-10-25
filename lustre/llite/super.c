@@ -63,8 +63,6 @@ static int __init init_lustre_lite(void)
 {
         int rc, seed[2];
 
-        printk(KERN_INFO "Lustre: Lustre Client File System; "
-               "info@clusterfs.com\n");
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
                                               SLAB_HWCACHE_ALIGN, NULL, NULL);

@@ -135,7 +135,7 @@ int seq_client_replay_super(struct lu_client_seq *seq,
         ENTRY;
 
         down(&seq->lcs_sem);
-        
+
 #ifdef __KERNEL__
         if (seq->lcs_srv) {
                 LASSERT(env != NULL);
@@ -210,7 +210,7 @@ static int seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
 
         CDEBUG(D_INFO, "%s: Allocated sequence ["LPX64"]\n", seq->lcs_name,
                *seqnr);
-        
+
         RETURN(rc);
 }
 
@@ -238,7 +238,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                         RETURN(rc);
                 }
 
-                CDEBUG(D_INFO|D_WARNING, "%s: Switch to sequence "
+                CDEBUG(D_INFO, "%s: Switch to sequence "
                        "[0x%16.16"LPF64"x]\n", seq->lcs_name, seqnr);
 
                 seq->lcs_fid.f_oid = LUSTRE_FID_INIT_OID;
@@ -255,7 +255,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                 seq->lcs_fid.f_oid += 1;
                 rc = 0;
         }
-        
+
         *fid = seq->lcs_fid;
         up(&seq->lcs_sem);
 

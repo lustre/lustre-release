@@ -73,7 +73,7 @@ static struct lu_device *mdd_device_fini(const struct lu_env *env,
 	struct mdd_device *mdd = lu2mdd_dev(d);
         struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
         int rc;
-        
+
         rc = mdd_procfs_fini(mdd);
         if (rc) {
                 CERROR("proc fini error %d \n", rc);
@@ -471,7 +471,6 @@ LPROCFS_INIT_VARS(mdd, lprocfs_mdd_module_vars, lprocfs_mdd_obd_vars);
 static int __init mdd_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
-        printk(KERN_INFO "Lustre: MetaData Device; info@clusterfs.com\n");
         lprocfs_init_vars(mdd, &lvars);
         return class_register_type(&mdd_obd_device_ops, NULL, lvars.module_vars,
                                    LUSTRE_MDD_NAME, &mdd_device_type);

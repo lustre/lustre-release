@@ -84,12 +84,12 @@ fld_rrb_scan(struct lu_client_fld *fld, seqno_t seq)
                 const char *exp_name = target->ft_exp != NULL ?
                         (char *)target->ft_exp->exp_obd->obd_uuid.uuid :
                         "<null>";
-                
+
                 CERROR("  exp: 0x%p (%s), srv: 0x%p (%s), idx: "LPU64"\n",
                        target->ft_exp, exp_name, target->ft_srv,
                        srv_name, target->ft_idx);
         }
-        
+
         /*
          * If target is not found, there is logical error anyway, so here is
          * LBUG() to catch this situation.
@@ -171,7 +171,7 @@ int fld_client_add_target(struct lu_client_fld *fld,
                        tar->ft_idx);
                 RETURN(0);
         } else {
-                CDEBUG(D_INFO|D_WARNING, "%s: Adding target %s (idx "
+                CDEBUG(D_INFO, "%s: Adding target %s (idx "
                        LPU64")\n", fld->lcf_name, name, tar->ft_idx);
         }
 
@@ -345,8 +345,7 @@ out:
         if (rc)
                 fld_client_fini(fld);
         else
-                CDEBUG(D_INFO|D_WARNING,
-                       "%s: Using \"%s\" hash\n",
+                CDEBUG(D_INFO, "%s: Using \"%s\" hash\n",
                        fld->lcf_name, fld->lcf_hash->fh_name);
         return rc;
 }
@@ -452,7 +451,7 @@ int fld_client_create(struct lu_client_fld *fld,
         CDEBUG(D_INFO, "%s: Create fld entry (seq: "LPX64"; mds: "
                LPU64") on target %s (idx "LPU64")\n", fld->lcf_name,
                seq, mds, fld_target_name(target), target->ft_idx);
-        
+
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
                 LASSERT(env != NULL);
@@ -478,7 +477,7 @@ int fld_client_create(struct lu_client_fld *fld,
                 CERROR("%s: Can't create FLD entry, rc %d\n",
                        fld->lcf_name, rc);
         }
-        
+
         RETURN(rc);
 }
 EXPORT_SYMBOL(fld_client_create);
@@ -500,7 +499,7 @@ int fld_client_delete(struct lu_client_fld *fld, seqno_t seq,
         CDEBUG(D_INFO, "%s: Delete fld entry (seq: "LPX64") on "
                "target %s (idx "LPU64")\n", fld->lcf_name, seq,
                fld_target_name(target), target->ft_idx);
-        
+
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
                 LASSERT(env != NULL);

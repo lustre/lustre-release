@@ -101,7 +101,7 @@ seq_server_proc_write_space(struct file *file, const char *buffer,
 	rc = seq_proc_write_common(file, buffer, count,
                                    data, &seq->lss_space);
 	if (rc == 0) {
-		CDEBUG(D_WARNING, "%s: Sequences space has "
+		CDEBUG(D_INFO, "%s: Sequences space has "
                        "changed to "DRANGE"\n", seq->lss_name,
                        PRANGE(&seq->lss_space));
 	}
@@ -169,9 +169,9 @@ seq_server_proc_write_width(struct file *file, const char *buffer,
                 RETURN(rc);
 
         seq->lss_width = val;
-        
+
 	if (rc == 0) {
-		CDEBUG(D_WARNING, "%s: Allocation unit has changed to "
+		CDEBUG(D_INFO, "%s: Allocation unit has changed to "
                        LPU64"\n", seq->lss_name, seq->lss_width);
 	}
 	
@@ -213,7 +213,7 @@ seq_client_proc_write_space(struct file *file, const char *buffer,
                                    data, &seq->lcs_space);
 
 	if (rc == 0) {
-		CDEBUG(D_WARNING, "%s: Sequences space has "
+		CDEBUG(D_INFO, "%s: Sequences space has "
                        "changed to "DRANGE"\n", seq->lcs_name,
                        PRANGE(&seq->lcs_space));
 	}
@@ -259,9 +259,9 @@ seq_client_proc_write_width(struct file *file, const char *buffer,
 
         if (val <= LUSTRE_SEQ_MAX_WIDTH && val > 0) {
                 seq->lcs_width = val;
-                
+
                 if (rc == 0) {
-                        CDEBUG(D_WARNING, "%s: Sequence size: "LPU64"\n",
+                        CDEBUG(D_INFO, "%s: Sequence size: "LPU64"\n",
                                seq->lcs_name, seq->lcs_width);
                 }
         }

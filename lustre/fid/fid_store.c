@@ -90,7 +90,7 @@ int seq_store_write(struct lu_server_seq *seq,
                                                     seq_store_buf(info),
                                                     &pos, th, BYPASS_CAPA);
                 if (rc == sizeof(info->sti_space)) {
-                        CDEBUG(D_INFO|D_WARNING, "%s: Space - "DRANGE"\n",
+                        CDEBUG(D_INFO, "%s: Space - "DRANGE"\n",
                                seq->lss_name, PRANGE(&seq->lss_space));
                         rc = 0;
                 } else if (rc >= 0) {
@@ -126,7 +126,7 @@ int seq_store_read(struct lu_server_seq *seq,
 
         if (rc == sizeof(info->sti_space)) {
                 range_le_to_cpu(&seq->lss_space, &info->sti_space);
-                CDEBUG(D_INFO|D_WARNING, "%s: Space - "DRANGE"\n",
+                CDEBUG(D_INFO, "%s: Space - "DRANGE"\n",
                        seq->lss_name, PRANGE(&seq->lss_space));
                 rc = 0;
         } else if (rc == 0) {

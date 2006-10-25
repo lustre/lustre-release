@@ -63,9 +63,8 @@ int seq_server_set_cli(struct lu_server_seq *seq,
         down(&seq->lss_sem);
 
         if (cli == NULL) {
-                CDEBUG(D_INFO|D_WARNING, "%s: Detached "
-                       "sequence client %s\n", seq->lss_name,
-                       cli->lcs_name);
+                CDEBUG(D_INFO, "%s: Detached sequence client %s\n",
+                       seq->lss_name, cli->lcs_name);
                 seq->lss_cli = cli;
                 GOTO(out_up, rc = 0);
         }
@@ -76,8 +75,8 @@ int seq_server_set_cli(struct lu_server_seq *seq,
                 GOTO(out_up, rc = -EINVAL);
         }
 
-        CDEBUG(D_INFO|D_WARNING, "%s: Attached sequence "
-               "controller %s\n", seq->lss_name, cli->lcs_name);
+        CDEBUG(D_INFO, "%s: Attached sequence controller %s\n",
+               seq->lss_name, cli->lcs_name);
 
         seq->lss_cli = cli;
         EXIT;
@@ -102,14 +101,14 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
         LASSERT(range_is_sane(space));
 
         if (in != NULL) {
-                CDEBUG(D_INFO|D_WARNING, "%s: Input seq range: "
+                CDEBUG(D_INFO, "%s: Input seq range: "
                        DRANGE"\n", seq->lss_name, PRANGE(in));
 
                 if (in->lr_end > space->lr_start)
                         space->lr_start = in->lr_end;
                 *out = *in;
 
-                CDEBUG(D_INFO|D_WARNING, "%s: Recovered space: "DRANGE"\n",
+                CDEBUG(D_INFO, "%s: Recovered space: "DRANGE"\n",
                        seq->lss_name, PRANGE(space));
         } else {
                 if (range_space(space) < seq->lss_width) {
@@ -171,7 +170,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
          * it is allocated from new super.
          */
         if (in != NULL) {
-                CDEBUG(D_INFO|D_WARNING, "%s: Input seq range: "
+                CDEBUG(D_INFO, "%s: Input seq range: "
                        DRANGE"\n", seq->lss_name, PRANGE(in));
 
                 if (range_is_exhausted(space)) {
@@ -182,14 +181,14 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                          */
                         LASSERT(in->lr_end > space->lr_start);
 
-                        /* 
+                        /*
                          * Start is set to end of last allocated, because it
                          * *is* already allocated so we take that into account
                          * and do not use for other allocations.
                          */
                         space->lr_start = in->lr_end;
 
-                        /* 
+                        /*
                          * End is set to in->lr_start + super sequence
                          * allocation unit. That is because in->lr_start is
                          * first seq in new allocated range from controller
@@ -203,7 +202,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                                 RETURN(-ENODEV);
                         }
 
-                        /* 
+                        /*
                          * Let controller know that this is recovery and last
                          * obtained range from it was @space.
                          */
@@ -224,7 +223,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
 
                 *out = *in;
 
-                CDEBUG(D_INFO|D_WARNING, "%s: Recovered space: "DRANGE"\n",
+                CDEBUG(D_INFO, "%s: Recovered space: "DRANGE"\n",
                        seq->lss_name, PRANGE(space));
         } else {
                 /*
@@ -249,7 +248,7 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                         *space = seq->lss_cli->lcs_space;
                         LASSERT(range_is_sane(space));
                 }
-                
+
                 range_alloc(out, space, seq->lss_width);
         }
 
@@ -516,13 +515,13 @@ int seq_server_init(struct lu_server_seq *seq,
         /* Request backing store for saved sequence info. */
         rc = seq_store_read(seq, env);
         if (rc == -ENODATA) {
-                
+
                 /* Nothing is read, init by default value. */
                 seq->lss_space = is_srv ?
                         LUSTRE_SEQ_ZERO_RANGE:
                         LUSTRE_SEQ_SPACE_RANGE;
 
-                CDEBUG(D_INFO|D_WARNING, "%s: No data found "
+                CDEBUG(D_INFO, "%s: No data found "
                        "on store. Initialize space\n",
                        seq->lss_name);
 
@@ -573,9 +572,6 @@ cfs_proc_dir_entry_t *seq_type_proc_dir = NULL;
 
 static int __init fid_mod_init(void)
 {
-        printk(KERN_INFO "Lustre: Sequence Manager; "
-               "info@clusterfs.com\n");
-
         seq_type_proc_dir = lprocfs_register(LUSTRE_SEQ_NAME,
                                              proc_lustre_root,
                                              NULL, NULL);

@@ -2261,7 +2261,7 @@ static int filter_cleanup(struct obd_device *obd)
         /* Stop recovery before namespace cleanup. */
         target_stop_recovery_thread(obd);
         target_cleanup_recovery(obd);
-        
+
         ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
 
         if (obd->u.obt.obt_sb == NULL)
@@ -3906,8 +3906,6 @@ static int __init obdfilter_init(void)
 {
         struct lprocfs_static_vars lvars;
         int rc;
-
-        printk(KERN_INFO "Lustre: Filtering OBD driver; info@clusterfs.com\n");
 
         lprocfs_init_vars(filter, &lvars);
 

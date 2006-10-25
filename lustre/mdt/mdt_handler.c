@@ -2069,7 +2069,7 @@ static int mdt_recovery(struct mdt_thread_info *info)
         if (recovering) {
                 int rc;
                 int should_process;
-                DEBUG_REQ(D_WARNING, req, "Got new replay");
+                DEBUG_REQ(D_INFO, req, "Got new replay");
                 rc = mds_filter_recovery_request(req, obd, &should_process);
                 if (rc != 0 || !should_process)
                         RETURN(rc);
@@ -4315,8 +4315,6 @@ static int __init mdt_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
         int rc;
-
-        printk(KERN_INFO "Lustre: MetaData Target; info@clusterfs.com\n");
 
         mdt_num_threads = MDT_NUM_THREADS;
         lprocfs_init_vars(mdt, &lvars);

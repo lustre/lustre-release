@@ -104,8 +104,6 @@ static int __init init_lustre_lite(void)
 {
         int rc, seed[2];
 
-        printk(KERN_INFO "Lustre: Lustre Client File System; "
-               "info@clusterfs.com\n");
         rc = ll_init_inodecache();
         if (rc)
                 return -ENOMEM;
@@ -144,13 +142,13 @@ static int __init init_lustre_lite(void)
                               proc_mkdir("llite", proc_lustre_root) : NULL;
 
         ll_register_cache(&ll_cache_definition);
-        
+
         lustre_register_client_fill_super(ll_fill_super);
         lustre_register_client_process_config(ll_process_config);
-        
+
         get_random_bytes(seed, sizeof(seed));
         ll_srand(seed[0], seed[1]);
-        
+
         init_timer(&ll_capa_timer);
         ll_capa_timer.function = ll_capa_timer_callback;
         rc = ll_capa_thread_start();
