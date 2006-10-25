@@ -2192,7 +2192,12 @@ static int osd_fid_lookup(const struct lu_env *env,
         LASSERT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
         LASSERT(fid_is_sane(fid));
-        LASSERT(fid_is_local(ldev->ld_site, fid));
+        /*
+         * This assertion checks that osd layer sees only local
+         * fids. Unfortunately it is somewhat expensive (does a
+         * cache-lookup). Disabling it for production/acceptance-testing.
+         */
+        LASSERT(1 || fid_is_local(ldev->ld_site, fid));
 
         ENTRY;
 
