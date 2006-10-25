@@ -1479,7 +1479,7 @@ static int mdt_enqueue(struct mdt_thread_info *info)
          * converted dlm request.
          */
         LASSERT(info->mti_dlm_req != NULL);
-        
+
         if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE)) {
                 info->mti_fail_id = OBD_FAIL_LDLM_ENQUEUE;
                 return 0;
@@ -1609,7 +1609,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                  */
                 res_id->name[LUSTRE_RES_ID_HSH_OFF] = lh->mlh_pdo_hash;
         }
-        
+
         policy->l_inodebits.bits = ibits;
 
         /*
@@ -2644,9 +2644,9 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                 req_capsule_extend(pill, &RQF_LDLM_INTENT);
                 it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
                 if (it != NULL) {
-                        struct ldlm_request *dlmreq;
+                        const struct ldlm_request *dlmreq;
                         __u64 req_bits;
-                        
+
                         LDLM_DEBUG(lock, "intent policy opc: %s\n",
                                    ldlm_it2str(it->opc));
 
