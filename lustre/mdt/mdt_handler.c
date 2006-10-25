@@ -1293,8 +1293,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 struct mdt_client_data *mcd;
 
                 mcd = req->rq_export->exp_mdt_data.med_mcd;
-                if (mcd->mcd_last_xid == req->rq_xid ||
-                    mcd->mcd_last_close_xid == req->rq_xid) {
+                if (req_xid_is_last(req)) {
                         mdt_reconstruct(info, lhc);
                         rc = lustre_msg_get_status(req->rq_repmsg);
                         GOTO(out, rc);
@@ -1593,7 +1592,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                 lh->mlh_pdo_mode = mdt_lock_pdo_mode(info, o, lh->mlh_reg_mode);
                 if (lh->mlh_pdo_mode != LCK_MINMODE) {
                         /*
-                         * Do not use LDLM_FL_LOCAL_ONLY for paralell lock, it
+                         * Do not use LDLM_FL_LOCAL_ONLY for parallel lock, it
                          * is never going to be sent to client and we do not
                          * want it slowed down due to possible cancels.
                          */
@@ -1610,7 +1609,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                  */
                 res_id->name[LUSTRE_RES_ID_HSH_OFF] = lh->mlh_pdo_hash;
         }
-
+        
         policy->l_inodebits.bits = ibits;
 
         /*

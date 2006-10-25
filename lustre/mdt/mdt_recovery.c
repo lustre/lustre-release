@@ -998,7 +998,8 @@ void mdt_req_from_mcd(struct ptlrpc_request *req,
         DEBUG_REQ(D_HA, req, "restoring transno "LPD64"/status %d",
                   mcd->mcd_last_transno, mcd->mcd_last_result);
 
-        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE) {
+        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
+            lustre_msg_get_opc(req->rq_repmsg) == MDS_DONE_WRITING) {
                 req->rq_transno = mcd->mcd_last_close_transno;
                 req->rq_status = mcd->mcd_last_close_result;
                 lustre_msg_set_transno(req->rq_repmsg, req->rq_transno);
