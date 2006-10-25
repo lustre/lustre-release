@@ -607,7 +607,7 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 {
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
-        int flags = LDLM_FL_ATOMIC_CB;
+        int flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
         struct ldlm_res_id res_id;
         struct lu_site *ls;
         int rc;
@@ -618,8 +618,8 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 
         if (ls->ls_control_exp == NULL) {
                 /*
-                 * Current node is controller, that is mdt0 where we should take
-                 * BFL lock.
+                 * Current node is controller, that is mdt0, where we should
+                 * take BFL lock.
                  */
                 rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, &policy,
                                             LCK_EX, &flags, ldlm_blocking_ast,
