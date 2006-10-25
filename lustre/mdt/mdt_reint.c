@@ -607,7 +607,6 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 {
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
-        int flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
         struct ldlm_res_id res_id;
         struct lu_site *ls;
         int rc;
@@ -617,6 +616,8 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
         fid_build_reg_res_name(&LUSTRE_BFL_FID, &res_id);
 
         if (ls->ls_control_exp == NULL) {
+                int flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
+                
                 /*
                  * Current node is controller, that is mdt0, where we should
                  * take BFL lock.
@@ -626,6 +627,8 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
                                             ldlm_completion_ast, NULL, NULL, 0,
                                             NULL, lh);
         } else {
+                int flags = 0;
+                
                 /*
                  * This is the case mdt0 is remote node, issue DLM lock like
                  * other clients.
