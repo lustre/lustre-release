@@ -219,7 +219,7 @@ void mdt_cleanup_idmap(struct mdt_export_data *med)
         med->med_idmap = NULL;
 }
 
-static inline void mdd_revoke_export_locks(struct obd_export *exp)
+static inline void mdt_revoke_export_locks(struct obd_export *exp)
 {
         if (!exp->exp_mdt_data.med_rmtclient)
                 return;
@@ -449,7 +449,7 @@ int mdt_handle_idmap(struct mdt_thread_info *info)
         case SEC_CTX_INIT:
         case SEC_CTX_INIT_CONT:
         case SEC_CTX_FINI:
-                mdd_revoke_export_locks(req->rq_export);
+                mdt_revoke_export_locks(req->rq_export);
                 break;
         }
         RETURN(0);
