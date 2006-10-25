@@ -50,7 +50,7 @@
 #include <obd.h>
 #include <obd_support.h>
 
-/* fid_is_local() */
+/* fid_cpu_to_be() */
 #include <lustre_fid.h>
 
 #include "osd_oi.h"
@@ -142,14 +142,14 @@ enum {
         OI_TXN_DELETE_CREDITS = 20
 };
 
-static inline void oid_lookup_init(struct osd_inode_id *id, 
+static inline void oid_lookup_init(struct osd_inode_id *id,
                                    __u64 ino, __u32 gen)
 {
         id->oii_ino = be64_to_cpu(ino);
         id->oii_gen = be32_to_cpu(gen);
 }
 
-static inline void oid_insert_init(struct osd_inode_id *id, 
+static inline void oid_insert_init(struct osd_inode_id *id,
                                    __u64 ino, __u32 gen)
 {
         id->oii_ino = cpu_to_be64(ino);
