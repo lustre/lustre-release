@@ -184,7 +184,7 @@ static int ost_punch_lock_get(struct obd_export *exp, struct obdo *oa,
                               struct lustre_handle *lh)
 {
         int flags;
-        struct ldlm_res_id res_id = { .name = { oa->o_id } };
+        struct ldlm_res_id res_id = { .name = { oa->o_id, 0, oa->o_gr, 0} };
         ldlm_policy_data_t policy;
         __u64 start;
         __u64 finis;
@@ -520,7 +520,8 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
 {
         int flags                 = 0;
         int nrbufs                = obj->ioo_bufcnt;
-        struct ldlm_res_id res_id = { .name = { obj->ioo_id } };
+        struct ldlm_res_id res_id = { .name = { obj->ioo_id, 0,
+                                                obj->ioo_gr, 0} };
         ldlm_policy_data_t policy;
         int i;
 
@@ -608,7 +609,8 @@ static int ost_prolong_locks_iter(struct ldlm_lock *lock, void *data)
 static void ost_prolong_locks(struct obd_export *exp, struct obd_ioobj *obj,
                               struct niobuf_remote *nb, ldlm_mode_t mode)
 {
-        struct ldlm_res_id res_id = { .name = { obj->ioo_id } };
+        struct ldlm_res_id res_id = { .name = { obj->ioo_id, 0, 
+                                                obj->ioo_gr, 0} };
         int nrbufs = obj->ioo_bufcnt;
         struct ost_prolong_data opd;
 

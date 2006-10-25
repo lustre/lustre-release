@@ -1608,6 +1608,8 @@ static void lov_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         lap->lap_caller_ops->ap_fill_obdo(lap->lap_caller_data, cmd, oa);
         /* XXX woah, shouldn't we be altering more here?  size? */
         oa->o_id = lap->lap_loi_id;
+        oa->o_gr = lap->lap_loi_gr;
+        oa->o_valid |= OBD_MD_FLGROUP;
         oa->o_stripe_idx = lap->lap_stripe;
 }
 
@@ -1687,7 +1689,9 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* so the callback doesn't need the lsm */
         lap->lap_loi_id = loi->loi_id;
-
+        lap->lap_loi_gr = lsm->lsm_object_gr;
+        LASSERT(lsm->lsm_object_gr > 0);
+        
         lap->lap_sub_cookie = (void *)lap + size_round(sizeof(*lap));
 
         rc = obd_prep_async_page(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,

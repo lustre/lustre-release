@@ -179,6 +179,7 @@ void ll_truncate(struct inode *inode)
         oinfo.oi_policy.l_extent.end = OBD_OBJECT_EOF;
         oinfo.oi_oa = &oa;
         oa.o_id = lli->lli_smd->lsm_object_id;
+        oa.o_gr = lli->lli_smd->lsm_object_gr;
         oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
         obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |

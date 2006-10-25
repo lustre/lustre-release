@@ -62,6 +62,7 @@ struct lov_async_page {
         int                             lap_stripe;
         obd_off                         lap_sub_offset;
         obd_id                          lap_loi_id;
+        obd_gr                          lap_loi_gr;
         void                            *lap_sub_cookie;
         struct obd_async_page_ops       *lap_caller_ops;
         void                            *lap_caller_data;
