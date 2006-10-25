@@ -58,6 +58,18 @@ static int mdc_obd_update(struct obd_device *host,
 
         LASSERT(mc != NULL);
         CDEBUG(D_CONFIG, "notify %s ev=%d\n", watched->obd_name, ev);
+        if (ev == OBD_NOTIFY_OCD) {
+                struct obd_connect_data *conn_data =
+                                  &watched->u.cli.cl_import->imp_connect_data;
+                /*
+                 * Update exp_connect_flags.
+                 */
+                mc->mc_desc.cl_exp->exp_connect_flags =
+                                                conn_data->ocd_connect_flags;
+                CDEBUG(D_INFO, "Update connect_flags: "LPX64"\n",
+                       conn_data->ocd_connect_flags);
+        }
+        
         RETURN(rc);
 }
 /* MDC OBD is set up already and connected to the proper MDS
@@ -72,6 +84,7 @@ static int mdc_obd_add(const struct lu_env *env,
         const char *uuid_str = lustre_cfg_string(cfg, 1);
         const char *index = lustre_cfg_string(cfg, 2);
         const char *mdc_uuid_str = lustre_cfg_string(cfg, 4);
+        struct lu_site *ls = mdc2lu_dev(mc)->ld_site;
         char *p;
         int rc = 0;
 
@@ -106,10 +119,17 @@ static int mdc_obd_add(const struct lu_env *env,
                 OBD_ALLOC_PTR(ocd);
                 if (!ocd)
                         RETURN(-ENOMEM);
-                /* The connection between MDS must be local */
-                ocd->ocd_connect_flags = OBD_CONNECT_LCL_CLIENT | 
+                /*
+                 * The connection between MDS must be local,
+                 * IBITS are needed for rename_lock (INODELOCK_UPDATE)
+                 */
+                ocd->ocd_ibits_known = MDS_INODELOCK_UPDATE;
+                ocd->ocd_connect_flags = OBD_CONNECT_VERSION |
+                                         OBD_CONNECT_ACL |
+                                         OBD_CONNECT_LCL_CLIENT | 
                                          OBD_CONNECT_MDS_CAPA |
-                                         OBD_CONNECT_OSS_CAPA;
+                                         OBD_CONNECT_OSS_CAPA | 
+                                         OBD_CONNECT_IBITS;
                 rc = obd_connect(env, conn, mdc, &mdc->obd_uuid, ocd);
                 OBD_FREE_PTR(ocd);
                 if (rc) {
@@ -117,7 +137,10 @@ static int mdc_obd_add(const struct lu_env *env,
                                mdc->obd_name, rc);
                 } else {
                         desc->cl_exp = class_conn2export(conn);
-
+                        /* set seq controller export for MDC0 if exists */
+                        if (mc->mc_num == 0)
+                                ls->ls_control_exp = 
+                                        class_export_get(desc->cl_exp);
                         rc = obd_fid_init(desc->cl_exp);
                         if (rc)
                                 CERROR("fid init error %d \n", rc);
@@ -127,6 +150,7 @@ static int mdc_obd_add(const struct lu_env *env,
                                 mdc->obd_upcall.onu_upcall = mdc_obd_update;
                         }
                 }
+                
                 if (rc) {
                         obd_disconnect(desc->cl_exp);
                         desc->cl_exp = NULL;
@@ -158,7 +182,7 @@ static int mdc_obd_del(const struct lu_env *env, struct mdc_device *mc,
                 mdc_obd->obd_force = mdt_obd->obd_force;
                 mdc_obd->obd_fail = 0;
         }
-
+        
         rc = obd_fid_fini(desc->cl_exp);
         if (rc)
                 CERROR("Fid fini error %d\n", rc);

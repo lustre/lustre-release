@@ -2792,28 +2792,6 @@ out_seq_fini:
 
         return rc;
 }
-
-static int mdt_md_connect(const struct lu_env *env,
-                          struct lustre_handle *conn,
-                          struct obd_device *mdc)
-{
-        struct obd_connect_data *ocd;
-        int rc;
-
-        OBD_ALLOC_PTR(ocd);
-        if (!ocd)
-                RETURN(-ENOMEM);
-        /* The connection between MDS must be local */
-        ocd->ocd_connect_flags = OBD_CONNECT_LCL_CLIENT |
-                                 OBD_CONNECT_MDS_CAPA |
-                                 OBD_CONNECT_OSS_CAPA;
-        rc = obd_connect(env, conn, mdc, &mdc->obd_uuid, ocd);
-
-        OBD_FREE_PTR(ocd);
-
-        RETURN(rc);
-}
-
 /*
  * Init client sequence manager which is used by local MDS to talk to sequence
  * controller on remote node.
@@ -2863,20 +2841,8 @@ static int mdt_seq_init_cli(const struct lu_env *env,
                 CERROR("target %s not set up\n", mdc->obd_name);
                 rc = -EINVAL;
         } else {
-                struct lustre_handle conn = {0, };
-
-                CDEBUG(D_CONFIG, "connect to controller %s(%s)\n",
-                       mdc->obd_name, mdc->obd_uuid.uuid);
-
-                rc = mdt_md_connect(env, &conn, mdc);
-                if (rc) {
-                        CERROR("target %s connect error %d\n",
-                               mdc->obd_name, rc);
-                } else {
-                        ls->ls_control_exp = class_conn2export(&conn);
-
+                        LASSERT(ls->ls_control_exp);
                         OBD_ALLOC_PTR(ls->ls_client_seq);
-
                         if (ls->ls_client_seq != NULL) {
                                 char *prefix;
 
@@ -2903,7 +2869,6 @@ static int mdt_seq_init_cli(const struct lu_env *env,
                         rc = seq_server_set_cli(ls->ls_server_seq,
                                                 ls->ls_client_seq,
                                                 env);
-                }
         }
 
         RETURN(rc);
@@ -2912,7 +2877,6 @@ static int mdt_seq_init_cli(const struct lu_env *env,
 static void mdt_seq_fini_cli(struct mdt_device *m)
 {
         struct lu_site *ls;
-        int rc;
 
         ENTRY;
 
@@ -2923,11 +2887,7 @@ static void mdt_seq_fini_cli(struct mdt_device *m)
                                    NULL, NULL);
 
         if (ls && ls->ls_control_exp) {
-                rc = obd_disconnect(ls->ls_control_exp);
-                if (rc) {
-                        CERROR("failure to disconnect "
-                               "obd: %d\n", rc);
-                }
+                class_export_put(ls->ls_control_exp);
                 ls->ls_control_exp = NULL;
         }
         EXIT;
@@ -3715,11 +3675,12 @@ static int mdt_process_config(const struct lu_env *env,
                  * Add mdc hook to get first MDT uuid and connect it to
                  * ls->controller to use for seq manager.
                  */
-                rc = mdt_seq_init_cli(env, mdt_dev(d), cfg);
-                if (rc) {
-                        CERROR("can't initialize controller export, "
-                               "rc %d\n", rc);
-                }
+                rc = next->ld_ops->ldo_process_config(env, next, cfg);
+                if (rc)
+                        CERROR("Can't add mdc, rc %d\n", rc);
+                else                
+                        rc = mdt_seq_init_cli(env, mdt_dev(d), cfg);
+                break;
         default:
                 /* others are passed further */
                 rc = next->ld_ops->ldo_process_config(env, next, cfg);
