@@ -82,7 +82,7 @@ Index: linux/lib/dynlocks.c
 ===================================================================
 --- linux.orig/lib/dynlocks.c
 +++ linux/lib/dynlocks.c
-@@ -0,0 +1,203 @@
+@@ -0,0 +1,207 @@
 +/*
 + * Dynamic Locks
 + *
@@ -254,6 +254,10 @@ Index: linux/lib/dynlocks.c
 +	BUG_ON(dl == NULL);
 +	BUG_ON(hl == NULL);
 +	BUG_ON(dl->dl_magic != DYNLOCK_LIST_MAGIC);
++
++	if (hl->dl_magic != DYNLOCK_MAGIC)
++		printk(KERN_EMERG "wrong lock magic: %#x\n", hl->dl_magic);
++
 +	BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
 +	BUG_ON(hl->dl_writers != 0 && current->pid != hl->dl_pid);
 +
