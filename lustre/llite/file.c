@@ -1378,7 +1378,7 @@ repeat:
         }
 
         chunk = end - *ppos + 1;
-        CDEBUG(D_INFO, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
+        CDEBUG(D_VFSTRACE, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
                inode->i_ino, chunk, *ppos, inode->i_size);
 
         /* turn off the kernel's read-ahead */
