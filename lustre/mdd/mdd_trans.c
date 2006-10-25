@@ -82,11 +82,11 @@ int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
         int rc, log_credits, stripe;
         ENTRY;
         
+        mdd_txn_param_build(env, mdd, op);
+ 
         if (S_ISDIR(lu_object_attr(&obj->mo_lu)))
                 RETURN(0);
-
-        mdd_txn_param_build(env, mdd, op);
-        
+       
         LASSERT(op == MDD_TXN_UNLINK_OP || op == MDD_TXN_RENAME_OP);
         rc = mdd_lmm_get_locked(env, md2mdd_obj(obj), ma);
         if (rc || !(ma->ma_valid & MA_LOV))
