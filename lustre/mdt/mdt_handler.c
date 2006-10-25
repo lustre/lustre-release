@@ -1463,7 +1463,6 @@ static int mdt_obd_qc_callback(struct mdt_thread_info *info)
 /*
  * DLM handlers.
  */
-
 static struct ldlm_callback_suite cbs = {
         .lcs_completion = ldlm_server_completion_ast,
         .lcs_blocking   = ldlm_server_blocking_ast,
@@ -1473,6 +1472,7 @@ static struct ldlm_callback_suite cbs = {
 static int mdt_enqueue(struct mdt_thread_info *info)
 {
         struct ptlrpc_request *req;
+        __u64 req_bits;
         int rc;
 
         /*
@@ -1480,13 +1480,22 @@ static int mdt_enqueue(struct mdt_thread_info *info)
          * converted dlm request.
          */
         LASSERT(info->mti_dlm_req != NULL);
-
+        
         if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE)) {
                 info->mti_fail_id = OBD_FAIL_LDLM_ENQUEUE;
                 return 0;
         }
 
         req = mdt_info_req(info);
+
+        /*
+         * Lock without inodebits makes no sense and will oops later in
+         * ldlm. Let's check it now to see if we have wrong lock from client or
+         * bits get corrupted somewhere in mdt_intent_policy().
+         */
+        req_bits = info->mti_dlm_req->lock_desc.l_policy_data.l_inodebits.bits;
+        LASSERT(req_bits != 0);
+
         rc = ldlm_handle_enqueue0(info->mti_mdt->mdt_namespace,
                                   req, info->mti_dlm_req, &cbs);
         info->mti_fail_id = OBD_FAIL_LDLM_REPLY;
@@ -2636,12 +2645,26 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
                 req_capsule_extend(pill, &RQF_LDLM_INTENT);
                 it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
                 if (it != NULL) {
+                        struct ldlm_request *dlmreq;
+                        __u64 req_bits;
+                        
                         LDLM_DEBUG(lock, "intent policy opc: %s\n",
                                    ldlm_it2str(it->opc));
 
                         rc = mdt_intent_opc(it->opc, info, lockp, flags);
                         if (rc == 0)
                                 rc = ELDLM_OK;
+
+                        /*
+                         * Lock without inodebits makes no sense and will oops
+                         * later in ldlm. Let's check it now to see if we have
+                         * wrong lock from client or bits get corrupted
+                         * somewhere in mdt_intent_opc().
+                         */
+                        dlmreq = info->mti_dlm_req;
+                        req_bits = dlmreq->lock_desc.l_policy_data.l_inodebits.bits;
+                        LASSERT(req_bits != 0);
+
                 } else
                         rc = err_serious(-EFAULT);
         } else {
