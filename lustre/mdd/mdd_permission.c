@@ -261,6 +261,7 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
 {
         struct dt_object        *next;
         struct lu_buf           *buf;
+        posix_acl_xattr_header  *head;
         posix_acl_xattr_entry   *entry;
         int                      entry_count;
         int                      rc;
@@ -279,8 +280,10 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
                 RETURN(rc);
 
         buf->lb_len = rc;
-        entry = ((posix_acl_xattr_header *)(buf->lb_buf))->a_entries;
-        entry_count = (rc - 4) / sizeof(posix_acl_xattr_entry);
+        head = (posix_acl_xattr_header *)(buf->lb_buf);
+        entry = head->a_entries;
+        entry_count = (buf->lb_len - sizeof(head->a_version)) /
+                      sizeof(posix_acl_xattr_entry);
         if (entry_count <= 0)
                 RETURN(0);
        
@@ -358,14 +361,17 @@ int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
                    struct lu_buf *buf, __u32 *mode, struct thandle *handle)
 {
         struct dt_object        *next;
+        posix_acl_xattr_header  *head;
         posix_acl_xattr_entry   *entry;
         int                      entry_count;
         int                      rc;
 
         ENTRY;
 
-        entry = ((posix_acl_xattr_header *)(buf->lb_buf))->a_entries;
-        entry_count = (buf->lb_len - 4) / sizeof(posix_acl_xattr_entry);
+        head = (posix_acl_xattr_header *)(buf->lb_buf);
+        entry = head->a_entries;
+        entry_count = (buf->lb_len - sizeof(head->a_version)) /
+                      sizeof(posix_acl_xattr_entry);
         if (entry_count <= 0)
                 RETURN(0);
        
@@ -465,6 +471,7 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
         struct dt_object *next;
         struct lu_buf    *buf = &mdd_env_info(env)->mti_buf;
         struct md_ucred  *uc  = md_ucred(env);
+        posix_acl_xattr_header *head;
         posix_acl_xattr_entry *entry;
         int entry_count;
         int rc;
@@ -480,8 +487,11 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
         if (rc <= 0)
                 RETURN(rc ? : -EACCES);
 
-        entry = ((posix_acl_xattr_header *)(buf->lb_buf))->a_entries;
-        entry_count = (rc - 4) / sizeof(posix_acl_xattr_entry);
+        buf->lb_len = rc;
+        head = (posix_acl_xattr_header *)(buf->lb_buf);
+        entry = head->a_entries;
+        entry_count = (buf->lb_len - sizeof(head->a_version)) /
+                      sizeof(posix_acl_xattr_entry);
 
         rc = mdd_posix_acl_permission(uc, la, mask, entry, entry_count);
         RETURN(rc);
