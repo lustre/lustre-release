@@ -217,6 +217,7 @@ Index: iam/fs/ext3/iam.c
 +	path->ip_container = c;
 +	path->ip_frame = path->ip_frames;
 +	path->ip_data = pd;
++        path->ip_leaf.il_path = path;
 +}
 +
 +static void iam_leaf_fini(struct iam_leaf *leaf);
@@ -384,7 +385,6 @@ Index: iam/fs/ext3/iam.c
 +	err   = descr->id_ops->id_node_read(c, block, NULL, &bh);
 +	if (err == 0) {
 +		leaf->il_bh = bh;
-+                leaf->il_path = path;
 +		err = iam_leaf_ops(leaf)->init(leaf);
 +                assert_inv(ergo(err == 0, iam_leaf_check(leaf)));
 +	}
