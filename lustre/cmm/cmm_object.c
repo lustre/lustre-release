@@ -375,10 +375,11 @@ static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
 static mdl_mode_t cml_lock_mode(const struct lu_env *env,
                                 struct md_object *mo, mdl_mode_t lm)
 {
-#if defined(HAVE_SPLIT_SUPPORT)
+#ifdef HAVE_SPLIT_SUPPORT
         struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
         int rc, split;
         ENTRY;
+        
         memset(ma, 0, sizeof(*ma));
 
         /*
@@ -392,8 +393,11 @@ static mdl_mode_t cml_lock_mode(const struct lu_env *env,
                 RETURN(MDL_MINMODE);
         }
 
-        if (lm == MDL_PW && split == CMM_EXPECT_SPLIT)
+        if (lm == MDL_PW && split == CMM_EXPECT_SPLIT) {
+                CDEBUG(D_INFO|D_WARNING, "Going to split "DFID"\n",
+                       PFID(lu_object_fid(&mo->mo_lu)));
                 RETURN(MDL_EX);
+        }
         RETURN(MDL_MINMODE);
 #endif
         return MDL_MINMODE;

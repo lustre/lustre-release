@@ -156,45 +156,37 @@ void mdt_set_disposition(struct mdt_thread_info *info,
 }
 
 static mdl_mode_t mdt_mdl_lock_modes[] = {
-        [0] = MDL_MINMODE,
-        [1] = MDL_EX,
-        [2] = MDL_PW,
-        [3] = MDL_PR,
-        [4] = MDL_CW,
-        [5] = MDL_CR,
-        [6] = MDL_NL,
-        [7] = MDL_GROUP
+        [LCK_MINMODE] = MDL_MINMODE,
+        [LCK_EX]      = MDL_EX,
+        [LCK_PW]      = MDL_PW,
+        [LCK_PR]      = MDL_PR,
+        [LCK_CW]      = MDL_CW,
+        [LCK_CR]      = MDL_CR,
+        [LCK_NL]      = MDL_NL,
+        [LCK_GROUP]   = MDL_GROUP
 };
 
 static ldlm_mode_t mdt_ldlm_lock_modes[] = {
-        [0] = LCK_MINMODE,
-        [1] = LCK_EX,
-        [2] = LCK_PW,
-        [3] = LCK_PR,
-        [4] = LCK_CW,
-        [5] = LCK_CR,
-        [6] = LCK_NL,
-        [7] = LCK_GROUP
+        [MDL_MINMODE] = LCK_MINMODE,
+        [MDL_EX]      = LCK_EX,
+        [MDL_PW]      = LCK_PW,
+        [MDL_PR]      = LCK_PR,
+        [MDL_CW]      = LCK_CW,
+        [MDL_CR]      = LCK_CR,
+        [MDL_NL]      = LCK_NL,
+        [MDL_GROUP]   = LCK_GROUP
 };
 
 static inline mdl_mode_t mdt_ldlm_mode2mdl_mode(ldlm_mode_t mode)
 {
-        int idx = ffs((int)mode);
-
-        LASSERT(idx >= 0);
         LASSERT(IS_PO2(mode));
-        LASSERT(idx < ARRAY_SIZE(mdt_mdl_lock_modes));
-        return mdt_mdl_lock_modes[idx];
+        return mdt_mdl_lock_modes[mode];
 }
 
 static inline ldlm_mode_t mdt_mdl_mode2ldlm_mode(mdl_mode_t mode)
 {
-        int idx = ffs((int)mode);
-
-        LASSERT(idx >= 0);
         LASSERT(IS_PO2(mode));
-        LASSERT(idx < ARRAY_SIZE(mdt_ldlm_lock_modes));
-        return mdt_ldlm_lock_modes[idx];
+        return mdt_ldlm_lock_modes[mode];
 }
 
 void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm)
@@ -256,8 +248,11 @@ static ldlm_mode_t mdt_lock_pdo_mode(struct mdt_thread_info *info,
                 mode = mdo_lock_mode(info->mti_env, mdt_object_child(o),
                                      mdt_ldlm_mode2mdl_mode(lm));
         } else {
-                /* Default locks for non-existing objects. */
-                mode = MDL_MINMODE;
+                /* 
+                 * No pdo locks possible on not existing objects, because pdo
+                 * lock is taken on parent dir and it can't absent.
+                 */
+                LBUG();
         }
 
         if (mode != MDL_MINMODE) {
