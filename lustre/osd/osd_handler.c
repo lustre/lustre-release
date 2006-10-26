@@ -74,16 +74,26 @@
 #include "osd_igif.h"
 
 struct osd_object {
+        /*
+         * Mutable fields (like ->do_index_ops) are protected by ->oo_guard.
+         */
         struct dt_object       oo_dt;
         /*
          * Inode for file system object represented by this osd_object. This
          * inode is pinned for the whole duration of lu_object life.
+         *
+         * Not modified concurrently (either setup early during object
+         * creation, or assigned by osd_object_create() under write lock).
          */
         struct inode          *oo_inode;
         struct rw_semaphore    oo_sem;
         struct iam_container   oo_container;
         struct iam_descr       oo_descr;
+        /*
+         * Protected by ->oo_guard.
+         */
         struct iam_path_descr *oo_ipd;
+        spinlock_t             oo_guard;
         const struct lu_env   *oo_owner;
 };
 
@@ -254,6 +264,10 @@ struct osd_thandle {
  * Invariants, assertions.
  */
 
+/*
+ * XXX: do not enable this, until invariant checking code is made thread safe
+ * in the face of pdirops locking.
+ */
 #define OSD_INVARIANT_CHECKS (0)
 
 #if OSD_INVARIANT_CHECKS
@@ -271,20 +285,31 @@ static int osd_invariant(const struct osd_object *obj)
 #define osd_invariant(obj) (1)
 #endif
 
-static int osd_read_locked(const struct lu_env *env, struct osd_object *o)
+static inline struct osd_thread_info *osd_oti_get(const struct lu_env *env)
 {
-        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
-
-        return oti->oti_r_locks > 0;
+        return lu_context_key_get(&env->le_ctx, &osd_key);
 }
 
+/*
+ * Concurrency: doesn't matter
+ */
+static int osd_read_locked(const struct lu_env *env, struct osd_object *o)
+{
+        return osd_oti_get(env)->oti_r_locks > 0;
+}
+
+/*
+ * Concurrency: doesn't matter
+ */
 static int osd_write_locked(const struct lu_env *env, struct osd_object *o)
 {
-        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
-
+        struct osd_thread_info *oti = osd_oti_get(env);
         return oti->oti_w_locks > 0 && o->oo_owner == env;
 }
 
+/*
+ * Concurrency: doesn't access mutable data
+ */
 static int osd_root_get(const struct lu_env *env,
                         struct dt_device *dev, struct lu_fid *f)
 {
@@ -299,6 +324,10 @@ static int osd_root_get(const struct lu_env *env,
  * OSD object methods.
  */
 
+/*
+ * Concurrency: no concurrent access is possible that early in object
+ * life-cycle.
+ */
 static struct lu_object *osd_object_alloc(const struct lu_env *env,
                                           const struct lu_object_header *hdr,
                                           struct lu_device *d)
@@ -314,11 +343,15 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
                 mo->oo_dt.do_ops = &osd_obj_ops;
                 l->lo_ops = &osd_lu_obj_ops;
                 init_rwsem(&mo->oo_sem);
+                spin_lock_init(&mo->oo_guard);
                 return l;
         } else
                 return NULL;
 }
 
+/*
+ * Concurrency: shouldn't matter.
+ */
 static void osd_object_init0(struct osd_object *obj)
 {
         LASSERT(obj->oo_inode != NULL);
@@ -327,6 +360,10 @@ static void osd_object_init0(struct osd_object *obj)
                 (LOHA_EXISTS | (obj->oo_inode->i_mode & S_IFMT));
 }
 
+/*
+ * Concurrency: no concurrent access is possible that early in object
+ * life-cycle.
+ */
 static int osd_object_init(const struct lu_env *env, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
@@ -343,6 +380,10 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l)
         return result;
 }
 
+/*
+ * Concurrency: no concurrent access is possible that late in object
+ * life-cycle.
+ */
 static void osd_object_free(const struct lu_env *env, struct lu_object *l)
 {
         struct osd_object *obj = osd_obj(l);
@@ -353,6 +394,10 @@ static void osd_object_free(const struct lu_env *env, struct lu_object *l)
         OBD_FREE_PTR(obj);
 }
 
+/*
+ * Concurrency: no concurrent access is possible that late in object
+ * life-cycle.
+ */
 static void osd_index_fini(struct osd_object *o)
 {
         struct iam_container *bag;
@@ -361,6 +406,7 @@ static void osd_index_fini(struct osd_object *o)
         if (o->oo_ipd != NULL) {
                 LASSERT(bag->ic_descr->id_ops->id_ipd_free != NULL);
                 bag->ic_descr->id_ops->id_ipd_free(&o->oo_container, o->oo_ipd);
+                o->oo_ipd = NULL;
         }
         if (o->oo_inode != NULL) {
                 if (o->oo_container.ic_object == o->oo_inode)
@@ -368,6 +414,11 @@ static void osd_index_fini(struct osd_object *o)
         }
 }
 
+/*
+ * Concurrency: no concurrent access is possible that late in object
+ * life-cycle (for all existing callers, that is. New callers have to provide
+ * their own locking.)
+ */
 static int osd_inode_unlinked(const struct inode *inode)
 {
         /*
@@ -383,12 +434,15 @@ enum {
         OSD_TXN_INODE_DELETE_CREDITS = 20
 };
 
-static int osd_inode_remove(const struct lu_env *env,
-                            struct osd_object *obj)
+/*
+ * Concurrency: no concurrent access is possible that late in object
+ * life-cycle.
+ */
+static int osd_inode_remove(const struct lu_env *env, struct osd_object *obj)
 {
         const struct lu_fid    *fid = lu_object_fid(&obj->oo_dt.do_lu);
         struct osd_device      *osd = osd_obj2dev(obj);
-        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *oti = osd_oti_get(env);
         struct txn_param       *prm = &oti->oti_txn;
         struct thandle         *th;
         int result;
@@ -409,6 +463,9 @@ static int osd_inode_remove(const struct lu_env *env,
 /*
  * Called just before object is freed. Releases all resources except for
  * object itself (that is released by osd_object_free()).
+ *
+ * Concurrency: no concurrent access is possible that late in object
+ * life-cycle.
  */
 static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 {
@@ -439,6 +496,9 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
         }
 }
 
+/*
+ * Concurrency: ->loo_object_release() is called under site spin-lock.
+ */
 static void osd_object_release(const struct lu_env *env,
                                struct lu_object *l)
 {
@@ -449,6 +509,9 @@ static void osd_object_release(const struct lu_env *env,
                 set_bit(LU_OBJECT_HEARD_BANSHEE, &l->lo_header->loh_flags);
 }
 
+/*
+ * Concurrency: shouldn't matter.
+ */
 static int osd_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *l)
 {
@@ -463,6 +526,9 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
                     d ? d->id_ops->id_name : "plain");
 }
 
+/*
+ * Concurrency: shouldn't matter.
+ */
 static int osd_statfs(const struct lu_env *env,
                       struct dt_device *d, struct kstatfs *sfs)
 {
@@ -478,6 +544,9 @@ static int osd_statfs(const struct lu_env *env,
         RETURN (result);
 }
 
+/*
+ * Concurrency: doesn't access mutable data.
+ */
 static void osd_conf_get(const struct lu_env *env,
                          const struct dt_device *dev,
                          struct dt_device_param *param)
@@ -494,12 +563,18 @@ static void osd_conf_get(const struct lu_env *env,
  * Journal
  */
 
+/*
+ * Concurrency: doesn't access mutable data.
+ */
 static int osd_param_is_sane(const struct osd_device *dev,
                              const struct txn_param *param)
 {
         return param->tp_credits <= osd_journal(dev)->j_max_transaction_buffers;
 }
 
+/*
+ * Concurrency: shouldn't matter.
+ */
 static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
 {
         struct osd_thandle *oh = container_of0(jcb, struct osd_thandle, ot_jcb);
@@ -511,8 +586,9 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
         if (error) {
                 CERROR("transaction @0x%p commit error: %d\n", th, error);
         } else {
-                /* This dd_ctx_for_commit is only for commit usage.
-                 * see "struct dt_device"
+                /*
+                 * This od_env_for_commit is only for commit usage.  see
+                 * "struct dt_device"
                  */
                 dt_txn_hook_commit(&osd_dt_dev(dev)->od_env_for_commit, th);
         }
@@ -525,6 +601,9 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
         OBD_FREE_PTR(oh);
 }
 
+/*
+ * Concurrency: shouldn't matter.
+ */
 static struct thandle *osd_trans_start(const struct lu_env *env,
                                        struct dt_device *d,
                                        struct txn_param *p)
@@ -533,7 +612,7 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
         handle_t               *jh;
         struct osd_thandle     *oh;
         struct thandle         *th;
-        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *oti = osd_oti_get(env);
         int hook_res;
 
         ENTRY;
@@ -579,11 +658,14 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
         RETURN(th);
 }
 
+/*
+ * Concurrency: shouldn't matter.
+ */
 static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
 {
         int result;
         struct osd_thandle     *oh;
-        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *oti = osd_oti_get(env);
 
         ENTRY;
 
@@ -611,12 +693,18 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
         EXIT;
 }
 
+/*
+ * Concurrency: shouldn't matter.
+ */
 static int osd_sync(const struct lu_env *env, struct dt_device *d)
 {
         CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_OSD_NAME);
         return ldiskfs_force_commit(osd_sb(osd_dt_dev(d)));
 }
 
+/*
+ * Concurrency: shouldn't matter.
+ */
 static void osd_ro(const struct lu_env *env, struct dt_device *d)
 {
         ENTRY;
@@ -627,6 +715,9 @@ static void osd_ro(const struct lu_env *env, struct dt_device *d)
         EXIT;
 }
 
+/*
+ * Concurrency: serialization provided by callers.
+ */
 static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
                               int mode, unsigned long timeout, __u32 alg,
                               struct lustre_capa_key *keys)
@@ -671,6 +762,7 @@ static const int osd_dto_credits[DTO_NR] = {
         [DTO_XATTR_SET]     = 16,
         [DTO_LOG_REC]       = 16
 };
+
 static int osd_credit_get(const struct lu_env *env, struct dt_device *d,
                           enum dt_txn_op op)
 {
@@ -694,7 +786,7 @@ static void osd_object_read_lock(const struct lu_env *env,
                                  struct dt_object *dt)
 {
         struct osd_object      *obj = osd_dt_obj(dt);
-        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *oti = osd_oti_get(env);
 
         LASSERT(osd_invariant(obj));
 
@@ -708,7 +800,7 @@ static void osd_object_write_lock(const struct lu_env *env,
                                   struct dt_object *dt)
 {
         struct osd_object      *obj = osd_dt_obj(dt);
-        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *oti = osd_oti_get(env);
 
         LASSERT(osd_invariant(obj));
 
@@ -723,7 +815,7 @@ static void osd_object_read_unlock(const struct lu_env *env,
                                    struct dt_object *dt)
 {
         struct osd_object      *obj = osd_dt_obj(dt);
-        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *oti = osd_oti_get(env);
 
         LASSERT(osd_invariant(obj));
         LASSERT(oti->oti_r_locks > 0);
@@ -735,7 +827,7 @@ static void osd_object_write_unlock(const struct lu_env *env,
                                     struct dt_object *dt)
 {
         struct osd_object      *obj = osd_dt_obj(dt);
-        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *oti = osd_oti_get(env);
 
         LASSERT(osd_invariant(obj));
         LASSERT(obj->oo_owner == env);
@@ -749,12 +841,10 @@ static int capa_is_sane(const struct lu_env *env,
                         struct lustre_capa *capa,
                         struct lustre_capa_key *keys)
 {
-        struct osd_thread_info *oti;
+        struct osd_thread_info *oti = osd_oti_get(env);
         struct obd_capa *oc;
         int i, rc = 0;
         ENTRY;
-
-        oti = lu_context_key_get(&env->le_ctx, &osd_key);
 
         oc = capa_lookup(capa);
         if (oc) {
@@ -856,6 +946,7 @@ static int osd_attr_set(const struct lu_env *env,
                         struct lustre_capa *capa)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+
         LASSERT(handle != NULL);
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
@@ -870,7 +961,7 @@ static int osd_attr_set(const struct lu_env *env,
 static struct timespec *osd_inode_time(const struct lu_env *env,
                                        struct inode *inode, __u64 seconds)
 {
-        struct osd_thread_info *oti = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *oti = osd_oti_get(env);
         struct timespec        *t   = &oti->oti_time;
 
         t->tv_sec  = seconds;
@@ -883,7 +974,6 @@ static int osd_inode_setattr(const struct lu_env *env,
                              struct inode *inode, const struct lu_attr *attr)
 {
         __u64 bits;
-        int rc = 0;
 
         bits = attr->la_valid;
 
@@ -920,7 +1010,7 @@ static int osd_inode_setattr(const struct lu_env *env,
                         (attr->la_flags & LDISKFS_FL_USER_MODIFIABLE);
         }
         mark_inode_dirty(inode);
-        return rc;
+        return 0;
 }
 
 /*
@@ -1076,13 +1166,16 @@ static osd_obj_type_f osd_create_type_f(__u32 mode)
         return result;
 }
 
+/*
+ * Concurrency: @dt is write locked.
+ */
 static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
                              struct lu_attr *attr, struct thandle *th)
 {
         const struct lu_fid    *fid  = lu_object_fid(&dt->do_lu);
         struct osd_object      *obj  = osd_dt_obj(dt);
         struct osd_device      *osd  = osd_obj2dev(obj);
-        struct osd_thread_info *info = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *info = osd_oti_get(env);
         int result;
 
         ENTRY;
@@ -1121,6 +1214,9 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
         RETURN(result);
 }
 
+/*
+ * Concurrency: @dt is write locked.
+ */
 static void osd_object_ref_add(const struct lu_env *env,
                                struct dt_object *dt,
                                struct thandle *th)
@@ -1142,6 +1238,9 @@ static void osd_object_ref_add(const struct lu_env *env,
         LASSERT(osd_invariant(obj));
 }
 
+/*
+ * Concurrency: @dt is write locked.
+ */
 static void osd_object_ref_del(const struct lu_env *env,
                                struct dt_object *dt,
                                struct thandle *th)
@@ -1163,6 +1262,9 @@ static void osd_object_ref_del(const struct lu_env *env,
         LASSERT(osd_invariant(obj));
 }
 
+/*
+ * Concurrency: @dt is read locked.
+ */
 static int osd_xattr_get(const struct lu_env *env,
                          struct dt_object *dt,
                          struct lu_buf *buf,
@@ -1171,7 +1273,7 @@ static int osd_xattr_get(const struct lu_env *env,
 {
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
-        struct osd_thread_info *info   = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *info   = osd_oti_get(env);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
@@ -1185,6 +1287,9 @@ static int osd_xattr_get(const struct lu_env *env,
         return inode->i_op->getxattr(dentry, name, buf->lb_buf, buf->lb_len);
 }
 
+/*
+ * Concurrency: @dt is write locked.
+ */
 static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
                          const struct lu_buf *buf, const char *name, int fl,
                          struct thandle *handle, struct lustre_capa *capa)
@@ -1193,7 +1298,7 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
-        struct osd_thread_info *info   = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *info   = osd_oti_get(env);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
@@ -1217,6 +1322,9 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
                                      buf->lb_buf, buf->lb_len, fs_flags);
 }
 
+/*
+ * Concurrency: @dt is read locked.
+ */
 static int osd_xattr_list(const struct lu_env *env,
                           struct dt_object *dt,
                           struct lu_buf *buf,
@@ -1224,7 +1332,7 @@ static int osd_xattr_list(const struct lu_env *env,
 {
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
-        struct osd_thread_info *info   = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *info   = osd_oti_get(env);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
@@ -1238,6 +1346,9 @@ static int osd_xattr_list(const struct lu_env *env,
         return inode->i_op->listxattr(dentry, buf->lb_buf, buf->lb_len);
 }
 
+/*
+ * Concurrency: @dt is write locked.
+ */
 static int osd_xattr_del(const struct lu_env *env,
                          struct dt_object *dt,
                          const char *name,
@@ -1246,7 +1357,7 @@ static int osd_xattr_del(const struct lu_env *env,
 {
         struct osd_object      *obj    = osd_dt_obj(dt);
         struct inode           *inode  = obj->oo_inode;
-        struct osd_thread_info *info   = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *info   = osd_oti_get(env);
         struct dentry          *dentry = &info->oti_dentry;
 
         LASSERT(dt_object_exists(dt));
@@ -1266,8 +1377,7 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
                                      struct lustre_capa *old,
                                      __u64 opc)
 {
-        struct osd_thread_info *info = lu_context_key_get(&env->le_ctx,
-                                                          &osd_key);
+        struct osd_thread_info *info = osd_oti_get(env);
         const struct lu_fid *fid = lu_object_fid(&dt->do_lu);
         struct osd_object *obj = osd_dt_obj(dt);
         struct osd_device *dev = osd_obj2dev(obj);
@@ -1424,6 +1534,36 @@ static int osd_index_probe(const struct lu_env *env, struct osd_object *o,
                                 * writable */);
 }
 
+static int osd_index_setup(const struct lu_env *env, struct osd_object *obj,
+                           struct iam_container *bag)
+{
+        struct iam_path_descr *ipd;
+        int result;
+
+        ipd = bag->ic_descr->id_ops->id_ipd_alloc(bag);
+        if (ipd != NULL) {
+                spin_lock(&obj->oo_guard);
+                if (obj->oo_ipd == NULL) {
+                        obj->oo_ipd = ipd;
+                        obj->oo_dt.do_index_ops = &osd_index_ops;
+                } else {
+                        /*
+                         * Oops, index was setup concurrently.
+                         */
+                        LASSERT(obj->oo_dt.do_index_ops == &osd_index_ops);
+                        LASSERT(bag->ic_descr->id_ops->id_ipd_free != NULL);
+                        bag->ic_descr->id_ops->id_ipd_free(bag, obj->oo_ipd);
+                }
+                spin_unlock(&obj->oo_guard);
+                result = 0;
+        } else
+                result = -ENOMEM;
+        return result;
+}
+
+/*
+ * Concurrency: no external locking is necessary.
+ */
 static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
                          const struct dt_index_features *feat)
 {
@@ -1443,17 +1583,8 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
                 result = iam_container_init(bag, &obj->oo_descr, obj->oo_inode);
                 if (result == 0) {
                         result = iam_container_setup(bag);
-                        if (result == 0) {
-                                struct iam_path_descr *ipd;
-
-                                LASSERT(obj->oo_ipd == NULL);
-                                ipd = bag->ic_descr->id_ops->id_ipd_alloc(bag);
-                                if (ipd != NULL) {
-                                        obj->oo_ipd = ipd;
-                                        dt->do_index_ops = &osd_index_ops;
-                                } else
-                                        result = -ENOMEM;
-                        }
+                        if (result == 0)
+                                result = osd_index_setup(env, obj, bag);
                 }
         } else
                 result = 0;
@@ -1731,7 +1862,7 @@ static int osd_index_compat_lookup(const struct lu_env *env,
         struct osd_object *obj = osd_dt_obj(dt);
 
         struct osd_device      *osd  = osd_obj2dev(obj);
-        struct osd_thread_info *info = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *info = osd_oti_get(env);
         struct inode           *dir;
 
         int result;
@@ -1851,7 +1982,7 @@ static int osd_index_compat_insert(const struct lu_env *env,
         struct lu_device    *ludev = dt->do_lu.lo_dev;
         struct lu_object    *luch;
 
-        struct osd_thread_info *info = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *info = osd_oti_get(env);
 
         int result;
 
@@ -1954,7 +2085,7 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
 
 static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 {
-        struct osd_thread_info *info = lu_context_key_get(&env->le_ctx, &osd_key);
+        struct osd_thread_info *info = osd_oti_get(env);
         ENTRY;
         if (o->od_obj_area != NULL) {
                 dput(o->od_obj_area);
@@ -1969,8 +2100,8 @@ static int osd_mount(const struct lu_env *env,
                      struct osd_device *o, struct lustre_cfg *cfg)
 {
         struct lustre_mount_info *lmi;
-        const char               *dev = lustre_cfg_string(cfg, 0);
-        struct osd_thread_info   *info = lu_context_key_get(&env->le_ctx, &osd_key);
+        const char               *dev  = lustre_cfg_string(cfg, 0);
+        struct osd_thread_info   *info = osd_oti_get(env);
         int result;
 
         ENTRY;
@@ -2087,73 +2218,6 @@ static int osd_recovery_complete(const struct lu_env *env,
         RETURN(0);
 }
 
-/*
- * fid<->inode<->object functions.
- */
-
-static struct inode *osd_open(struct dentry *parent,
-                              const char *name, mode_t mode)
-{
-        struct dentry *dentry;
-        struct inode *result;
-
-        dentry = osd_lookup(parent, name);
-        if (IS_ERR(dentry)) {
-                CERROR("Error opening %s: %ld\n", name, PTR_ERR(dentry));
-                result = NULL; /* dput(NULL) below is OK */
-        } else if (dentry->d_inode == NULL) {
-                CERROR("Not found: %s\n", name);
-                result = ERR_PTR(-ENOENT);
-        } else if ((dentry->d_inode->i_mode & S_IFMT) != mode) {
-                CERROR("Wrong mode: %s: %o != %o\n", name,
-                       dentry->d_inode->i_mode, mode);
-                result = ERR_PTR(mode == S_IFDIR ? -ENOTDIR : -EISDIR);
-        } else {
-                result = dentry->d_inode;
-                igrab(result);
-        }
-        dput(dentry);
-        return result;
-}
-
-struct dentry *osd_lookup(struct dentry *parent, const char *name)
-{
-        struct dentry *dentry;
-
-        CDEBUG(D_INODE, "looking up object %s\n", name);
-        down(&parent->d_inode->i_sem);
-        dentry = lookup_one_len(name, parent, strlen(name));
-        up(&parent->d_inode->i_sem);
-
-        if (IS_ERR(dentry)) {
-                CERROR("error getting %s: %ld\n", name, PTR_ERR(dentry));
-        } else if (dentry->d_inode != NULL && is_bad_inode(dentry->d_inode)) {
-                CERROR("got bad object %s inode %lu\n",
-                       name, dentry->d_inode->i_ino);
-                dput(dentry);
-                dentry = ERR_PTR(-ENOENT);
-        }
-        return dentry;
-}
-
-int osd_lookup_id(struct dt_device *dev, const char *name, mode_t mode,
-                  struct osd_inode_id *id)
-{
-        struct inode *inode;
-        struct osd_device *osd = osd_dt_dev(dev);
-        int result;
-
-        inode = osd_open(osd_sb(osd)->s_root, name, mode);
-        if (!IS_ERR(inode)) {
-                LASSERT(inode != NULL);
-                id->oii_ino = inode->i_ino;
-                id->oii_gen = inode->i_generation;
-                result = 0;
-        } else
-                result = PTR_ERR(inode);
-        return result;
-}
-
 static struct inode *osd_iget(struct osd_thread_info *info,
                               struct osd_device *dev,
                               const struct osd_inode_id *id)
@@ -2201,7 +2265,7 @@ static int osd_fid_lookup(const struct lu_env *env,
 
         ENTRY;
 
-        info = lu_context_key_get(&env->le_ctx, &osd_key);
+        info = osd_oti_get(env);
         dev  = osd_dev(ldev);
         id   = &info->oti_id;
         oi   = &dev->od_oi;
