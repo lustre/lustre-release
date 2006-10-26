@@ -421,11 +421,6 @@ static void osd_index_fini(struct osd_object *o)
  */
 static int osd_inode_unlinked(const struct inode *inode)
 {
-        /*
-         * This is modified by huanghua@lusterfs.com:
-         * i_nlink of an unlinked object is zero even if it is a dir.
-         return inode->i_nlink == !!S_ISDIR(inode->i_mode);
-         */
         return inode->i_nlink == 0;
 }
 
