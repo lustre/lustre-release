@@ -517,6 +517,10 @@ int cmm_try_to_split(const struct lu_env *env, struct md_object *mo)
         
         if (split != CMM_EXPECT_SPLIT)
                 GOTO(cleanup, rc = 0);
+
+        LASSERTF(mo->mo_pdo_mode == MDL_EX, "Split is only valid if "
+                 "dir is protected by MDL_EX lock. Lock mode 0x%x\n",
+                 (int)mo->mo_pdo_mode);
         
         /*
          * Disable trans for splitting, since there will be so many trans in

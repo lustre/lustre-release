@@ -393,11 +393,21 @@ static mdl_mode_t cml_lock_mode(const struct lu_env *env,
                 RETURN(MDL_MINMODE);
         }
 
-        if (lm == MDL_PW && split == CMM_EXPECT_SPLIT) {
+        /*
+         * Do not take PDO lock on non-splittable objects if this is not PW,
+         * this should speed things up a bit.
+         */
+        if (split == CMM_NOT_SPLITTABLE && lm != MDL_PW)
+                RETURN(MDL_NL);
+
+        /* Protect splitting by exclusive lock. */
+        if (split == CMM_EXPECT_SPLIT && lm == MDL_PW) {
                 CDEBUG(D_INFO|D_WARNING, "Going to split "DFID"\n",
                        PFID(lu_object_fid(&mo->mo_lu)));
                 RETURN(MDL_EX);
         }
+
+        /* Have no idea about lock mode, let it be what higher layer wants. */
         RETURN(MDL_MINMODE);
 #endif
         return MDL_MINMODE;

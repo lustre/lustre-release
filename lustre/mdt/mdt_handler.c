@@ -166,7 +166,7 @@ static mdl_mode_t mdt_mdl_lock_modes[] = {
         [LCK_GROUP]   = MDL_GROUP
 };
 
-static ldlm_mode_t mdt_ldlm_lock_modes[] = {
+static ldlm_mode_t mdt_dlm_lock_modes[] = {
         [MDL_MINMODE] = LCK_MINMODE,
         [MDL_EX]      = LCK_EX,
         [MDL_PW]      = LCK_PW,
@@ -177,16 +177,16 @@ static ldlm_mode_t mdt_ldlm_lock_modes[] = {
         [MDL_GROUP]   = LCK_GROUP
 };
 
-static inline mdl_mode_t mdt_ldlm_mode2mdl_mode(ldlm_mode_t mode)
+static inline mdl_mode_t mdt_dlm_mode2mdl_mode(ldlm_mode_t mode)
 {
         LASSERT(IS_PO2(mode));
         return mdt_mdl_lock_modes[mode];
 }
 
-static inline ldlm_mode_t mdt_mdl_mode2ldlm_mode(mdl_mode_t mode)
+static inline ldlm_mode_t mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
 {
         LASSERT(IS_PO2(mode));
-        return mdt_ldlm_lock_modes[mode];
+        return mdt_dlm_lock_modes[mode];
 }
 
 void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm)
@@ -246,7 +246,7 @@ static ldlm_mode_t mdt_lock_pdo_mode(struct mdt_thread_info *info,
                  * Ask underlaying level its opinion about possible locks.
                  */
                 mode = mdo_lock_mode(info->mti_env, mdt_object_child(o),
-                                     mdt_ldlm_mode2mdl_mode(lm));
+                                     mdt_dlm_mode2mdl_mode(lm));
         } else {
                 /* 
                  * No pdo locks possible on not existing objects, because pdo
@@ -257,7 +257,7 @@ static ldlm_mode_t mdt_lock_pdo_mode(struct mdt_thread_info *info,
 
         if (mode != MDL_MINMODE) {
                 /* Lower layer said what lock mode it likes to be, use it. */
-                return mdt_mdl_mode2ldlm_mode(mode);
+                return mdt_mdl_mode2dlm_mode(mode);
         } else {
                 /*
                  * Lower layer does not want to specify locking mode. We od it
@@ -273,6 +273,7 @@ static ldlm_mode_t mdt_lock_pdo_mode(struct mdt_thread_info *info,
                 } else {
                         CWARN("Not expected lock type (0x%x)\n",
                               (int)mode);
+                        LBUG();
                 }
         }
 
@@ -1551,6 +1552,26 @@ struct mdt_object *mdt_object_find(const struct lu_env *env,
         RETURN(m);
 }
 
+/* XXX: This is for debug only. */
+static void mdt_object_set_mode(struct mdt_object *o,
+                                struct mdt_lock_handle *lh)
+{
+        struct md_object *n = mdt_object_child(o);
+
+        if (lh->mlh_pdo_lh.cookie != 0)
+                o->mot_obj.mo_pdo_mode = mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
+        else
+                o->mot_obj.mo_pdo_mode = MDL_MINMODE;
+        
+        if (lh->mlh_reg_lh.cookie != 0)
+                o->mot_obj.mo_reg_mode = mdt_dlm_mode2mdl_mode(lh->mlh_reg_mode);
+        else
+                o->mot_obj.mo_reg_mode = MDL_MINMODE;
+        
+        n->mo_pdo_mode = o->mot_obj.mo_pdo_mode;
+        n->mo_reg_mode = o->mot_obj.mo_reg_mode;
+}
+
 int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                     struct mdt_lock_handle *lh, __u64 ibits, int locality)
 {
@@ -1576,7 +1597,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                 }
         }
 
-        memset(policy, 0, sizeof *policy);
+        memset(policy, 0, sizeof(*policy));
         fid_build_reg_res_name(mdt_object_fid(o), res_id);
 
         /*
@@ -1585,7 +1606,8 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
          */
         if (lh->mlh_type == MDT_PDO_LOCK && lh->mlh_pdo_hash != 0) {
                 lh->mlh_pdo_mode = mdt_lock_pdo_mode(info, o, lh->mlh_reg_mode);
-                if (lh->mlh_pdo_mode != LCK_MINMODE) {
+                LASSERT(lh->mlh_pdo_mode != LCK_MINMODE);
+                if (lh->mlh_pdo_mode != LCK_NL) {
                         /*
                          * Do not use LDLM_FL_LOCAL_ONLY for parallel lock, it
                          * is never going to be sent to client and we do not
@@ -1620,6 +1642,9 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                 lh->mlh_pdo_lh.cookie = 0ull;
         }
 
+        if (rc == 0)
+                mdt_object_set_mode(o, lh);
+        
         RETURN(rc);
 }
 
@@ -1651,6 +1676,9 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
                 }
                 lh->mlh_reg_lh.cookie = 0;
         }
+        
+        mdt_object_set_mode(o, lh);
+        
         EXIT;
 }
 
