@@ -237,6 +237,7 @@ int server_put_mount_2(const char *name, struct vfsmount *mnt)
 
 /******* mount helper utilities *********/
 
+#if 0
 static void ldd_print(struct lustre_disk_data *ldd)
 {
         PRINT_CMD(PRINT_MASK, "  disk data:\n");
@@ -251,6 +252,7 @@ static void ldd_print(struct lustre_disk_data *ldd)
         PRINT_CMD(PRINT_MASK, "params:  %s\n", ldd->ldd_params);
         PRINT_CMD(PRINT_MASK, "comment: %s\n", ldd->ldd_userdata);
 }
+#endif
 
 static int ldd_parse(struct lvfs_run_ctxt *mount_ctxt,
                            struct lustre_disk_data *ldd)
@@ -346,7 +348,6 @@ static int ldd_write(struct lvfs_run_ctxt *mount_ctxt,
         }
 
         rc = 0;
-        ldd_print(ldd);
 
 out_close:
         filp_close(file, 0);
@@ -1712,6 +1713,7 @@ int lustre_common_put_super(struct super_block *sb)
         RETURN(rc);
 }
 
+#if 0
 static void lmd_print(struct lustre_mount_data *lmd)
 {
         int i;
@@ -1732,6 +1734,7 @@ static void lmd_print(struct lustre_mount_data *lmd)
                           lmd->lmd_exclude[i]);
         }
 }
+#endif
 
 /* Is this server on the exclusion list */
 int lustre_check_exclusion(struct super_block *sb, char *svname)
