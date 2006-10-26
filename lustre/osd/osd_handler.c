@@ -1552,7 +1552,7 @@ static int osd_index_setup(const struct lu_env *env, struct osd_object *obj,
                          */
                         LASSERT(obj->oo_dt.do_index_ops == &osd_index_ops);
                         LASSERT(bag->ic_descr->id_ops->id_ipd_free != NULL);
-                        bag->ic_descr->id_ops->id_ipd_free(bag, obj->oo_ipd);
+                        bag->ic_descr->id_ops->id_ipd_free(bag, ipd);
                 }
                 spin_unlock(&obj->oo_guard);
                 result = 0;
