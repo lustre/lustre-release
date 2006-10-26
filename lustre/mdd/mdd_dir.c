@@ -458,8 +458,7 @@ int mdd_finish_unlink(const struct lu_env *env,
                 /* add new orphan and the object
                  * will be deleted during the object_put() */
                 if (__mdd_orphan_add(env, obj, th) == 0)
-                        set_bit(LU_OBJECT_ORPHAN,
-                                &mdd2lu_obj(obj)->lo_header->loh_flags);
+                        obj->mod_flags |= ORPHAN_OBJ;
 
                 if (obj->mod_count == 0)
                         rc = mdd_object_kill(env, obj, ma);

@@ -409,8 +409,7 @@ enum lu_object_header_flags {
          * as last reference to it is released. This flag cannot be cleared
          * once set.
          */
-        LU_OBJECT_HEARD_BANSHEE = 0,
-        LU_OBJECT_ORPHAN        = 1,
+        LU_OBJECT_HEARD_BANSHEE = 0
 };
 
 enum lu_object_header_attr {

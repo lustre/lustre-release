@@ -72,10 +72,11 @@ struct mdd_device {
 };
 
 enum mod_flags {
-        /*The dir object has been unlinked*/
-        DEAD_OBJ = 1 << 0,
+        /* The dir object has been unlinked */
+        DEAD_OBJ   = 1 << 0,
         APPEND_OBJ = 1 << 1,
-        IMMUTE_OBJ = 1 << 2
+        IMMUTE_OBJ = 1 << 2,
+        ORPHAN_OBJ = 1 << 3
 };
 
 #define LUSTRE_APPEND_FL LDISKFS_APPEND_FL
