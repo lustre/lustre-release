@@ -43,8 +43,8 @@
 #include <lustre/lustre_idl.h>
 
 #ifdef CONFIG_FS_POSIX_ACL
-#include <linux/posix_acl_xattr.h>
-#include <linux/posix_acl.h>
+# include <linux/posix_acl_xattr.h>
+# include <linux/posix_acl.h>
 #endif
 
 #include "mdd_internal.h"
@@ -119,6 +119,20 @@ int mdd_in_group_p(struct md_ucred *uc, gid_t grp)
 }
 
 #ifdef CONFIG_FS_POSIX_ACL
+static inline void mdd_acl_le_to_cpu(posix_acl_xattr_entry *p)
+{
+        p->e_tag = le16_to_cpu(p->e_tag);
+        p->e_perm = le16_to_cpu(p->e_perm);
+        p->e_id = le32_to_cpu(p->e_id);
+}
+
+static inline void mdd_acl_cpu_to_le(posix_acl_xattr_entry *p)
+{
+        p->e_tag = cpu_to_le16(p->e_tag);
+        p->e_perm = cpu_to_le16(p->e_perm);
+        p->e_id = cpu_to_le32(p->e_id);
+}
+
 static int mdd_posix_acl_permission(struct md_ucred *uc, struct lu_attr *la,
                                     int want, posix_acl_xattr_entry *entry,
                                     int count)
@@ -130,9 +144,8 @@ static int mdd_posix_acl_permission(struct md_ucred *uc, struct lu_attr *la,
         if (count <= 0)
                 RETURN(-EACCES);
 
-        pa = &entry[0];
-        pe = &entry[count - 1];
-        for (; pa <= pe; pa++) {
+        for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
+                mdd_acl_le_to_cpu(pa);
                 switch(pa->e_tag) {
                         case ACL_USER_OBJ:
                                 /* (May have been checked already) */
@@ -172,6 +185,7 @@ static int mdd_posix_acl_permission(struct md_ucred *uc, struct lu_attr *la,
 
 mask:
         for (mask_obj = pa + 1; mask_obj <= pe; mask_obj++) {
+                mdd_acl_le_to_cpu(mask_obj);
                 if (mask_obj->e_tag == ACL_MASK) {
                         if ((pa->e_perm & mask_obj->e_perm & want) == want)
                                 RETURN(0);
@@ -216,9 +230,8 @@ static int mdd_posix_acl_chmod_masq(posix_acl_xattr_entry *entry,
 {
 	posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL, *pa, *pe;
 
-        pa = &entry[0];
-        pe = &entry[count - 1];
-        for (; pa <= pe; pa++) {
+        for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
+                mdd_acl_le_to_cpu(pa);
 		switch(pa->e_tag) {
 			case ACL_USER_OBJ:
 				pa->e_perm = (mode & S_IRWXU) >> 6;
@@ -243,14 +256,15 @@ static int mdd_posix_acl_chmod_masq(posix_acl_xattr_entry *entry,
 			default:
 				return -EIO;
 		}
+                mdd_acl_cpu_to_le(pa);
 	}
 
 	if (mask_obj) {
-		mask_obj->e_perm = (mode & S_IRWXG) >> 3;
+		mask_obj->e_perm = cpu_to_le16((mode & S_IRWXG) >> 3);
 	} else {
 		if (!group_obj)
 			return -EIO;
-		group_obj->e_perm = (mode & S_IRWXG) >> 3;
+		group_obj->e_perm = cpu_to_le16((mode & S_IRWXG) >> 3);
 	}
 
 	return 0;
@@ -310,9 +324,8 @@ static int mdd_posix_acl_create_masq(posix_acl_xattr_entry *entry,
 	__u32 mode = *mode_p;
 	int not_equiv = 0;
 
-        pa = &entry[0];
-        pe = &entry[count - 1];
-        for (; pa <= pe; pa++) {
+        for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
+                mdd_acl_le_to_cpu(pa);
                 switch(pa->e_tag) {
                         case ACL_USER_OBJ:
 				pa->e_perm &= (mode >> 6) | ~S_IRWXO;
@@ -341,16 +354,21 @@ static int mdd_posix_acl_create_masq(posix_acl_xattr_entry *entry,
 			default:
 				return -EIO;
                 }
+                mdd_acl_cpu_to_le(pa);
         }
 
 	if (mask_obj) {
-		mask_obj->e_perm &= (mode >> 3) | ~S_IRWXO;
+		mask_obj->e_perm = le16_to_cpu(mask_obj->e_perm) &
+                                   ((mode >> 3) | ~S_IRWXO);
 		mode &= (mask_obj->e_perm << 3) | ~S_IRWXG;
+                mask_obj->e_perm = cpu_to_le16(mask_obj->e_perm);
 	} else {
 		if (!group_obj)
 			return -EIO;
-		group_obj->e_perm &= (mode >> 3) | ~S_IRWXO;
+		group_obj->e_perm = le16_to_cpu(group_obj->e_perm) &
+                                    ((mode >> 3) | ~S_IRWXO);
 		mode &= (group_obj->e_perm << 3) | ~S_IRWXG;
+                group_obj->e_perm = cpu_to_le16(group_obj->e_perm);
 	}
 
 	*mode_p = (*mode_p & ~S_IRWXUGO) | mode;
