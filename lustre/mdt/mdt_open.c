@@ -149,7 +149,7 @@ int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o)
          * In the later case, mdt_reint_setattr will do it. */
         if (cancel && (info->mti_rr.rr_fid1 != NULL)) {
                 struct mdt_lock_handle  *lh = &info->mti_lh[MDT_LH_CHILD];
-                mdt_lock_reg_init(lh, MDT_EX_LOCK);
+                mdt_lock_reg_init(lh, LCK_EX);
                 rc = mdt_object_lock(info, o, lh, MDS_INODELOCK_UPDATE,
                                      MDT_LOCAL_LOCK);
                 if (rc == 0)
@@ -784,10 +784,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         if (!(create_flags & MDS_OPEN_CREAT)) {
-                mdt_lock_pdo_init(lh, MDT_RD_LOCK, rr->rr_name,
+                mdt_lock_pdo_init(lh, LCK_PR, rr->rr_name,
                                   rr->rr_namelen);
         } else {
-                mdt_lock_pdo_init(lh, MDT_WR_LOCK, rr->rr_name,
+                mdt_lock_pdo_init(lh, LCK_PW, rr->rr_name,
                                   rr->rr_namelen);
         }
         parent = mdt_object_find_lock(info, rr->rr_fid1, lh,
@@ -890,7 +890,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                                 rc = 0;
                         } else {
                                 mdt_lock_handle_init(lhc);
-                                mdt_lock_reg_init(lhc, MDT_RD_LOCK);
+                                mdt_lock_reg_init(lhc, LCK_PR);
 
                                 rc = mdt_object_lock(info, child, lhc,
                                                      MDS_INODELOCK_LOOKUP,

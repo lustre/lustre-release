@@ -793,7 +793,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                         rc = 0;
                 } else {
                         mdt_lock_handle_init(lhc);
-                        mdt_lock_reg_init(lhc, MDT_RD_LOCK);
+                        mdt_lock_reg_init(lhc, LCK_PR);
 
                         /*
                          * Object's name is on another MDS, no lookup lock is
@@ -818,7 +818,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         /*step 1: lock parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
-        mdt_lock_pdo_init(lhp, MDT_RD_LOCK, name, namelen);
+        mdt_lock_pdo_init(lhp, LCK_PR, name, namelen);
         rc = mdt_object_lock(info, parent, lhp, MDS_INODELOCK_UPDATE,
                              MDT_LOCAL_LOCK);
         if (rc != 0)
@@ -852,7 +852,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 LDLM_LOCK_PUT(lock);
         } else {
                 mdt_lock_handle_init(lhc);
-                mdt_lock_reg_init(lhc, MDT_RD_LOCK);
+                mdt_lock_reg_init(lhc, LCK_PR);
 
                 rc = mdt_object_lock(info, child, lhc, child_bits,
                                      MDT_CROSS_LOCK);

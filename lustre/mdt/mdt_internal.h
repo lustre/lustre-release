@@ -707,9 +707,5 @@ static inline void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
         ci->mc_capa[offset] = capa;
 }
 
-#define MDT_RD_LOCK LCK_PR
-#define MDT_WR_LOCK LCK_PW
-#define MDT_EX_LOCK LCK_EX
-
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */
