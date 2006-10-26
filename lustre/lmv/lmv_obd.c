@@ -2327,7 +2327,7 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
         {
                 magic = le32_to_cpu(mea->mea_magic);
         } else {
-                /* old mea isnot handled here */
+                /* old mea is not handled here */
                 LBUG();
         }
 

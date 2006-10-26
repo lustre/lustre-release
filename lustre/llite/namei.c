@@ -50,50 +50,11 @@ int ll_unlock(__u32 mode, struct lustre_handle *lockh)
         RETURN(0);
 }
 
-/* Get an inode by inode number (already instantiated by the intent lookup).
+/*
+ * Get an inode by inode number (already instantiated by the intent lookup).
  * Returns inode or NULL
  */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#if 0
-/* that variant provides correct mapping fid to inode,
- * it is put here as alternative way to the current one ll_iget() below */
-int ll_test_inode(struct inode *inode, void *opaque)
-{
-        return lu_fid_eq(&ll_i2info(inode)->lli_fid, (struct lu_fid *)opaque);
-}
-
-int ll_set_inode(struct inode *inode, void *opaque)
-{
-        struct lu_fid *fid = opaque;
-        ll_i2info(inode)->lli_fid = *fid;
-        inode->i_ino = ll_fid_build_ino(ll_s2sbi(inode->i_sb), fid);
-        return 0;
-}
-
-struct inode *ll_iget(struct super_block *sb, ino_t hash,
-                      struct lustre_md *md)
-{
-        struct ll_inode_info *lli;
-        struct inode *inode;
-        LASSERT(hash != 0);
-
-        inode = iget5_locked(sb, hash, ll_test_inode, ll_set_inode,
-                             &md->body->fid1);
-        if (inode) {
-                if (inode->i_state & I_NEW) {
-                        lli = ll_i2info(inode);
-                        ll_read_inode2(inode, md);
-                        unlock_new_inode(inode);
-                } else {
-                        ll_update_inode(inode, md);
-                }
-                CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n",
-                       inode->i_ino, inode->i_generation, inode);
-        }
-
-        return inode;
-}
-#else
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *md)
 {
@@ -108,7 +69,8 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
                         ll_read_inode2(inode, md);
                         unlock_new_inode(inode);
                 } else {
-                        ll_update_inode(inode, md);
+                        if (!(inode->i_state & (I_FREEING | I_CLEAR)))
+                                ll_update_inode(inode, md);
                 }
                 CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n",
                        inode->i_ino, inode->i_generation, inode);
@@ -116,7 +78,6 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 
         return inode;
 }
-#endif
 #else
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *md)
