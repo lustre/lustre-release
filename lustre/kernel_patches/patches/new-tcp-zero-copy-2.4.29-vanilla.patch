@@ -1,0 +1,307 @@
+--- linux-2.4.29-orig/include/linux/skbuff.h	2006-10-10 01:25:07.000000000 +0100
++++ linux-2.4.29/include/linux/skbuff.h	2006-10-10 00:42:59.000000000 +0100
+@@ -116,6 +116,36 @@ struct skb_frag_struct
+ 	__u16 size;
+ };
+ 
++/* Zero Copy Callback Descriptor
++ * This struct supports receiving notification when zero-copy network I/O has
++ * completed.  The ZCCD can be embedded in a struct containing the state of a
++ * zero-copy network send.  Every skbuff that references that send's pages also
++ * keeps a reference on the ZCCD.  When they have all been disposed of, the
++ * reference count on the ZCCD drops to zero and the callback is made, telling
++ * the original caller that the pages may now be overwritten. */
++struct zccd 
++{
++	atomic_t	 zccd_refcount;
++	void           (*zccd_callback)(struct zccd *); 
++};
++
++static inline void zccd_init (struct zccd *d, void (*callback)(struct zccd *))
++{
++	atomic_set (&d->zccd_refcount, 1);
++	d->zccd_callback = callback;
++}
++
++static inline void zccd_incref (struct zccd *d)	/* take a reference */
++{
++	atomic_inc (&d->zccd_refcount);
++}
++
++static inline void zccd_decref (struct zccd *d)	/* release a reference */
++{
++	if (atomic_dec_and_test (&d->zccd_refcount))
++		(d->zccd_callback)(d);
++}
++
+ /* This data is invariant across clones and lives at
+  * the end of the header data, ie. at skb->end.
+  */
+@@ -123,6 +153,11 @@ struct skb_shared_info {
+ 	atomic_t	dataref;
+ 	unsigned int	nr_frags;
+ 	struct sk_buff	*frag_list;
++	struct zccd     *zccd1;
++	struct zccd     *zccd2;
++	/* NB zero-copy data is normally whole pages.  We have 2 zccds in an
++	 * skbuff so we don't unneccessarily split the packet where pages fall
++	 * into the same packet. */
+ 	skb_frag_t	frags[MAX_SKB_FRAGS];
+ };
+ 
+@@ -1131,6 +1166,23 @@ static inline void kunmap_skb_frag(void 
+ #endif
+ }
+ 
++/* This skbuf has dropped its pages: drop refs on any zero-copy callback
++ * descriptors it has. */
++static inline void skb_complete_zccd (struct sk_buff *skb)
++{
++	struct skb_shared_info *info = skb_shinfo(skb);
++	
++	if (info->zccd1 != NULL) {
++		zccd_decref(info->zccd1);
++		info->zccd1 = NULL;
++	}
++
++	if (info->zccd2 != NULL) {
++		zccd_decref(info->zccd2);
++		info->zccd2 = NULL;
++	}
++}
++
+ #define skb_queue_walk(queue, skb) \
+ 		for (skb = (queue)->next;			\
+ 		     (skb != (struct sk_buff *)(queue));	\
+--- linux-2.4.29-orig/include/net/tcp.h	2006-10-10 01:25:07.000000000 +0100
++++ linux-2.4.29/include/net/tcp.h	2006-10-10 00:43:26.000000000 +0100
+@@ -674,6 +674,8 @@ extern int		    	tcp_v4_tw_remember_stam
+ 
+ extern int			tcp_sendmsg(struct sock *sk, struct msghdr *msg, int size);
+ extern ssize_t			tcp_sendpage(struct socket *sock, struct page *page, int offset, size_t size, int flags);
++extern ssize_t			tcp_sendpage_zccd(struct socket *sock, struct page *page, int offset, size_t size,
++						  int flags, struct zccd *zccd);
+ 
+ extern int			tcp_ioctl(struct sock *sk, 
+ 					  int cmd, 
+--- linux-2.4.29-orig/net/core/skbuff.c	2006-10-10 01:25:08.000000000 +0100
++++ linux-2.4.29/net/core/skbuff.c	2006-10-10 02:03:49.000000000 +0100
+@@ -208,6 +208,9 @@ struct sk_buff *alloc_skb(unsigned int s
+ 	atomic_set(&(skb_shinfo(skb)->dataref), 1);
+ 	skb_shinfo(skb)->nr_frags = 0;
+ 	skb_shinfo(skb)->frag_list = NULL;
++	skb_shinfo(skb)->zccd1 = NULL;		/* zero-copy completion callback */
++	skb_shinfo(skb)->zccd2 = NULL;		/* not required (yet) */
++
+ 	return skb;
+ 
+ nodata:
+@@ -277,6 +280,9 @@ static void skb_release_data(struct sk_b
+ {
+ 	if (!skb->cloned ||
+ 	    atomic_dec_and_test(&(skb_shinfo(skb)->dataref))) {
++		/* complete zero-copy callbacks (if any) */
++		skb_complete_zccd(skb);
++
+ 		if (skb_shinfo(skb)->nr_frags) {
+ 			int i;
+ 			for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
+@@ -535,6 +541,8 @@ int skb_linearize(struct sk_buff *skb, i
+ 	atomic_set(&(skb_shinfo(skb)->dataref), 1);
+ 	skb_shinfo(skb)->nr_frags = 0;
+ 	skb_shinfo(skb)->frag_list = NULL;
++	skb_shinfo(skb)->zccd1 = NULL;		/* zero-copy completion callback */
++	skb_shinfo(skb)->zccd2 = NULL;		/* not required */
+ 
+ 	/* We are no longer a clone, even if we were. */
+ 	skb->cloned = 0;
+@@ -589,6 +597,18 @@ struct sk_buff *pskb_copy(struct sk_buff
+ 			get_page(skb_shinfo(n)->frags[i].page);
+ 		}
+ 		skb_shinfo(n)->nr_frags = i;
++
++		if (skb_shinfo(skb)->zccd1 != NULL) {
++			BUG_TRAP(skb_shinfo(n)->zccd1 = NULL);
++			skb_shinfo(n)->zccd1 = skb_shinfo(skb)->zccd1;
++			zccd_incref(skb_shinfo(n)->zccd1);
++		}
++
++		if (skb_shinfo(skb)->zccd2 != NULL) {
++			BUG_TRAP(skb_shinfo(n)->zccd2 = NULL);
++			skb_shinfo(n)->zccd2 = skb_shinfo(skb)->zccd2;
++			zccd_incref(skb_shinfo(n)->zccd2);
++		}
+ 	}
+ 
+ 	if (skb_shinfo(skb)->frag_list) {
+@@ -638,6 +658,13 @@ int pskb_expand_head(struct sk_buff *skb
+ 	memcpy(data+nhead, skb->head, skb->tail-skb->head);
+ 	memcpy(data+size, skb->end, sizeof(struct skb_shared_info));
+ 
++	/* zero-copy descriptors have been copied into the new shinfo - 
++	 * account the new references */
++	if (skb_shinfo(skb)->zccd1 != NULL)
++	   zccd_incref(skb_shinfo(skb)->zccd1);
++	if (skb_shinfo(skb)->zccd2 != NULL)
++	   zccd_incref(skb_shinfo(skb)->zccd2);
++
+ 	for (i=0; i<skb_shinfo(skb)->nr_frags; i++)
+ 		get_page(skb_shinfo(skb)->frags[i].page);
+ 
+@@ -794,6 +821,9 @@ int ___pskb_trim(struct sk_buff *skb, un
+ 		offset = end;
+ 	}
+ 
++	if (skb_shinfo(skb)->nr_frags == 0)	/* dropped all the pages */
++		skb_complete_zccd(skb);		/* drop zccd refs */
++	
+ 	if (offset < len) {
+ 		skb->data_len -= skb->len - len;
+ 		skb->len = len;
+@@ -947,6 +977,9 @@ pull_pages:
+ 	}
+ 	skb_shinfo(skb)->nr_frags = k;
+ 
++	if (k == 0)				/* dropped all the pages */
++		skb_complete_zccd(skb);		/* drop zccd refs */
++
+ 	skb->tail += delta;
+ 	skb->data_len -= delta;
+ 
+--- linux-2.4.29-orig/net/ipv4/tcp_output.c	2004-11-17 11:54:22.000000000 +0000
++++ linux-2.4.29/net/ipv4/tcp_output.c	2006-10-10 01:55:29.000000000 +0100
+@@ -379,6 +379,15 @@ static void skb_split(struct sk_buff *sk
+ 		for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
+ 			skb_shinfo(skb1)->frags[i] = skb_shinfo(skb)->frags[i];
+ 
++		/* Transfer zero-copy callback descriptors */
++		BUG_TRAP(skb_shinfo(skb1)->zccd1 == NULL);
++		skb_shinfo(skb1)->zccd1    = skb_shinfo(skb)->zccd1;
++		skb_shinfo(skb)->zccd1     = NULL;
++
++		BUG_TRAP(skb_shinfo(skb1)->zccd2 == NULL);
++		skb_shinfo(skb1)->zccd2    = skb_shinfo(skb)->zccd2;
++		skb_shinfo(skb)->zccd2     = NULL;
++
+ 		skb_shinfo(skb1)->nr_frags = skb_shinfo(skb)->nr_frags;
+ 		skb_shinfo(skb)->nr_frags = 0;
+ 
+@@ -425,6 +434,30 @@ static void skb_split(struct sk_buff *sk
+ 			pos += size;
+ 		}
+ 		skb_shinfo(skb1)->nr_frags = k;
++
++		if (k != 0) {				
++			/* skb1 has pages. Transfer or clone the zccds */
++
++			if (skb_shinfo(skb)->zccd1 != NULL) {
++				BUG_TRAP(skb_shinfo(skb1)->zccd1 == NULL);
++				skb_shinfo(skb1)->zccd1 = skb_shinfo(skb)->zccd1;
++		      
++				if (skb_shinfo(skb)->nr_frags == 0)
++					skb_shinfo(skb)->zccd1 = NULL;
++				else
++					zccd_incref(skb_shinfo(skb)->zccd1);
++			}
++
++			if (skb_shinfo(skb)->zccd2 != NULL) {
++				BUG_TRAP(skb_shinfo(skb1)->zccd2 == NULL);
++				skb_shinfo(skb1)->zccd2 = skb_shinfo(skb)->zccd2;
++
++				if (skb_shinfo(skb)->nr_frags == 0)
++					skb_shinfo(skb)->zccd2 = NULL;
++				else
++					zccd_incref(skb_shinfo(skb)->zccd2);
++			}
++		}
+ 	}
+ }
+ 
+--- linux-2.4.29-orig/net/ipv4/tcp.c	2006-10-10 01:25:08.000000000 +0100
++++ linux-2.4.29/net/ipv4/tcp.c	2006-10-09 20:53:28.000000000 +0100
+@@ -749,7 +749,8 @@ do_interrupted:
+ 	goto out;
+ }
+ 
+-ssize_t do_tcp_sendpages(struct sock *sk, struct page **pages, int poffset, size_t psize, int flags);
++ssize_t do_tcp_sendpages(struct sock *sk, struct page **pages, int poffset, size_t psize, int flags,
++ 			 struct zccd *zccd);
+ 
+ static inline int
+ can_coalesce(struct sk_buff *skb, int i, struct page *page, int off)
+@@ -828,7 +829,8 @@ static int tcp_error(struct sock *sk, in
+ 	return err;
+ }
+ 
+-ssize_t do_tcp_sendpages(struct sock *sk, struct page **pages, int poffset, size_t psize, int flags)
++ssize_t do_tcp_sendpages(struct sock *sk, struct page **pages, int poffset, size_t psize, int flags,
++			 struct zccd *zccd)
+ {
+ 	struct tcp_opt *tp = &(sk->tp_pinfo.af_tcp);
+ 	int mss_now;
+@@ -876,6 +878,17 @@ new_segment:
+ 			copy = size;
+ 
+ 		i = skb_shinfo(skb)->nr_frags;
++
++		if (zccd != NULL &&		/* this is a zcc I/O */
++		    skb_shinfo(skb)->zccd1 != NULL && /* skb is part of a zcc I/O */
++		    skb_shinfo(skb)->zccd2 != NULL &&
++		    skb_shinfo(skb)->zccd1 != zccd && /* not the same one */
++		    skb_shinfo(skb)->zccd2 != zccd)
++		{
++			tcp_mark_push (tp, skb);
++			goto new_segment;
++		}
++
+ 		if (can_coalesce(skb, i, page, offset)) {
+ 			skb_shinfo(skb)->frags[i-1].size += copy;
+ 		} else if (i < MAX_SKB_FRAGS) {
+@@ -886,6 +899,18 @@ new_segment:
+ 			goto new_segment;
+ 		}
+ 
++		if (zccd != NULL &&		      /* completion callback wanted */
++		    skb_shinfo(skb)->zccd1 != zccd && /* new to this skbuf */
++		    skb_shinfo(skb)->zccd2 != zccd) {
++			if (skb_shinfo(skb)->zccd1 == NULL) {
++				skb_shinfo(skb)->zccd1 = zccd;
++			} else {
++				BUG_TRAP (skb_shinfo(skb)->zccd2 == NULL);
++				skb_shinfo(skb)->zccd2 = zccd;
++			}
++			zccd_incref(zccd);	      /* new reference */
++		}
++
+ 		skb->len += copy;
+ 		skb->data_len += copy;
+ 		skb->ip_summed = CHECKSUM_HW;
+@@ -934,7 +959,8 @@ out_err:
+ 	return tcp_error(sk, flags, err);
+ }
+ 
+-ssize_t tcp_sendpage(struct socket *sock, struct page *page, int offset, size_t size, int flags)
++ssize_t tcp_sendpage_zccd(struct socket *sock, struct page *page, int offset, 
++			  size_t size, int flags, struct zccd *zccd)
+ {
+ 	ssize_t res;
+ 	struct sock *sk = sock->sk;
+@@ -949,12 +975,17 @@ ssize_t tcp_sendpage(struct socket *sock
+ 
+ 	lock_sock(sk);
+ 	TCP_CHECK_TIMER(sk);
+-	res = do_tcp_sendpages(sk, &page, offset, size, flags);
++	res = do_tcp_sendpages(sk, &page, offset, size, flags, zccd);
+ 	TCP_CHECK_TIMER(sk);
+ 	release_sock(sk);
+ 	return res;
+ }
+ 
++ssize_t tcp_sendpage(struct socket *sock, struct page *page, int offset, size_t size, int flags)
++{
++	return tcp_sendpage_zccd(sock, page, offset, size, flags, NULL);
++}
++
+ #define TCP_PAGE(sk)	(sk->tp_pinfo.af_tcp.sndmsg_page)
+ #define TCP_OFF(sk)	(sk->tp_pinfo.af_tcp.sndmsg_off)
+ 
