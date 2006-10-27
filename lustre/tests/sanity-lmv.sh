@@ -239,13 +239,13 @@ run_test 1a " remove splitted dir ============================="
 test_1b() {
 	mkdir $DIR/1b0 || error
 	createmany -o $DIR/1b0/f 4000 || error
-	#find $DIR/1b0 -type f | xargs rm -f
-        for f in $DIR/1b0/*; do rm -fr $f; done
+	unlinkmany  $DIR/1b0/f 4000 || error
 	NUM=`ls $DIR/1b0 | wc -l`
 	if [ $NUM -ne 0 ] ; then
 		echo "dir must be empty"
 		error
 	fi
+
 	touch $DIR/1b0/file0 || error
 	touch $DIR/1b0/file1 || error
 	touch $DIR/1b0/file2 || error
@@ -270,8 +270,7 @@ run_test 1b " remove splitted dir ============================="
 test_1c() {
 	mkdir $DIR/1b1 || error
 	createmany -o $DIR/1b1/f 4000 || error
-	#find $DIR/1b1 -type f | xargs rm -f
-        for f in $DIR/1b1/*; do rm -fr $f; done
+	unlinkmany $DIR/1b1/f 4000 || error
 	NUM=`ls $DIR/1b1 | wc -l`
 	if [ $NUM -ne 0 ] ; then
 		echo "dir must be empty"
