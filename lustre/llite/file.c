@@ -2245,6 +2245,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                         RETURN(rc ? rc : -ENOMEM);
 
                 oa->o_id = lsm->lsm_object_id;
+                oa->o_gr = lsm->lsm_object_gr;
                 oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
                 obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME |

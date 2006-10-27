@@ -2080,6 +2080,7 @@ static int lov_join_lru(struct obd_export *exp,
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
 
                 submd.lsm_object_id = loi->loi_id;
+                submd.lsm_object_gr = lsm->lsm_object_gr;
                 submd.lsm_stripe_count = 0;
                 rc = obd_join_lru(lov->lov_tgts[loi->loi_ost_idx]->ltd_exp,
                                   &submd, join);
