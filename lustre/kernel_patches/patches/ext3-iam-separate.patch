@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1375 @@
+@@ -0,0 +1,1390 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1061,7 +1061,8 @@ Index: iam/fs/ext3/iam.c
 +        return err;
 +}
 +
-+static int iam_add_rec(handle_t *handle, struct iam_path *path,
++static int iam_add_rec(handle_t *handle, struct iam_iterator *it,
++                       struct iam_path *path,
 +                       const struct iam_key *k, const struct iam_rec *r)
 +{
 +	int err;
@@ -1075,7 +1076,21 @@ Index: iam/fs/ext3/iam.c
 +                if (!iam_leaf_can_add(leaf, k, r)) {
 +                        struct dynlock_handle *lh = NULL;
 +
-+                        err = split_index_node(handle, path, &lh);
++                        do {
++                                err = split_index_node(handle, path, &lh);
++                                if (err == -EAGAIN) {
++                                        assert_corr(lh == NULL);
++
++                                        iam_path_fini(path);
++                                        it->ii_state = IAM_IT_DETACHED;
++
++                                        err = iam_it_get_exact(it, k);
++                                        if (err == -ENOENT)
++                                                err = +1; /* repeat split */
++                                        else if (err == 0)
++                                                err = -EEXIST;
++                                }
++                        } while (err > 0);
 +                        assert_inv(iam_path_check(path));
 +                        if (err == 0) {
 +                                err = iam_new_leaf(handle, leaf);
@@ -1130,7 +1145,7 @@ Index: iam/fs/ext3/iam.c
 +        assert_corr(ergo(it_state(it) == IAM_IT_ATTACHED,
 +                         it_keycmp(it, k) <= 0));
 +        assert_corr(ergo(it_before(it), it_keycmp(it, k) > 0));
-+	result = iam_add_rec(h, path, k, r);
++	result = iam_add_rec(h, it, path, k, r);
 +        if (result == 0)
 +                it->ii_state = IAM_IT_ATTACHED;
 +        assert_corr(ergo(result == 0,
