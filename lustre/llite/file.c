@@ -2193,6 +2193,12 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 #endif
                 }
                 retval = offset;
+        } else {
+                CERROR("invalid offset offset "LPX64" inode=%lu/%u(%p)"
+                       "seek (%s) isize "LPU64", f_ops "LPU64"\n",
+                       offset, inode->i_ino, inode->i_generation, inode,
+                       origin == 2 ? "SEEK_END": origin == 1 ? "SEEK_CUR"
+                       : "SEEK_SET", inode->i_size, file->f_pos);
         }
 
         RETURN(retval);
