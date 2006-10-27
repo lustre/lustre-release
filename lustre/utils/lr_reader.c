@@ -121,17 +121,17 @@ int main(int argc, char *const argv[])
                 ret = -errno;
                 goto out_rmdir;
         }
-        
+
         printf("Reading %s\n", LAST_RCVD);
         ret = fread(&lsd, 1, sizeof(lsd), filep);
         if (ret < sizeof(lsd)) {
                 fprintf(stderr, "%s: Short read (%d of %d)\n",
-                        progname, ret, sizeof(lsd));
+                        progname, ret, (int)sizeof(lsd));
                 ret = -ferror(filep);
                 if (ret) 
                         goto out_close;
         }
-        
+
         #if 0
         __u8  lsd_uuid[40];        /* server UUID */
         __u64 lsd_last_transno;    /* last completed transaction ID */
@@ -156,7 +156,7 @@ int main(int argc, char *const argv[])
         printf("Feature compat=%#x\n", lsd.lsd_feature_compat);
         printf("Feature incompat=%#x\n", lsd.lsd_feature_incompat);
         printf("Feature rocompat=%#x\n", lsd.lsd_feature_rocompat);
-        printf("Last transaction %llu\n", lsd.lsd_last_transno);
+        printf("Last transaction %llu\n", (long long)lsd.lsd_last_transno);
         printf("ost index %u\n", lsd.lsd_ost_index);
         printf("mdt index %u\n", lsd.lsd_mdt_index);
 
