@@ -164,11 +164,10 @@ out:
 int ll_md_real_close(struct inode *inode, int flags)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        int rc = 0;
         struct obd_client_handle **och_p;
         struct obd_client_handle *och;
         __u64 *och_usecount;
-
+        int rc = 0;
         ENTRY;
 
         if (flags & FMODE_WRITE) {
@@ -177,7 +176,7 @@ int ll_md_real_close(struct inode *inode, int flags)
         } else if (flags & FMODE_EXEC) {
                 och_p = &lli->lli_mds_exec_och;
                 och_usecount = &lli->lli_open_fd_exec_count;
-         } else {
+        } else {
                 LASSERT(flags & FMODE_READ);
                 och_p = &lli->lli_mds_read_och;
                 och_usecount = &lli->lli_open_fd_read_count;
@@ -204,15 +203,6 @@ int ll_md_real_close(struct inode *inode, int flags)
 
         RETURN(rc);
 }
-
-/* just for debugging by huanghua@clusterfs.com, will be removed later */
-#include <lustre_lib.h>
-struct md_open_data {
-        struct obd_client_handle *mod_och;
-        struct ptlrpc_request    *mod_open_req;
-        struct ptlrpc_request    *mod_close_req;
-};
-/* --end: just for debugging by huanghua@clusterfs.com*/
 
 int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct file *file)
