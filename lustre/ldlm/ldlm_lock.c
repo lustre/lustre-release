@@ -853,7 +853,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
 
                 if (flags & LDLM_FL_TEST_LOCK)
                         LDLM_LOCK_PUT(lock);
-        } else if (!(flags & LDLM_FL_TEST_LOCK)) {/*less verbose for test-only*/
+        } else if (1 || !(flags & LDLM_FL_TEST_LOCK)) {/*less verbose for test-only*/
                 LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
                                   LPU64"/"LPU64" ("LPU64" "LPU64")", ns,
                                   type, mode, res_id->name[0], res_id->name[1],
