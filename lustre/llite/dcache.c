@@ -202,6 +202,14 @@ int ll_drop_dentry(struct dentry *dentry)
                  * sys_getcwd() could return -ENOENT -bzzz */
 #ifdef LUSTRE_KERNEL_VERSION
                 dentry->d_flags |= DCACHE_LUSTRE_INVALID;
+
+                /* 
+                 * XXX: Try to drop negative not directory dentries to check if
+                 * this is source of OOM on clients on big numbers of created
+                 * files.  --umka
+                 */
+                if (!dentry->d_inode || !S_ISDIR(dentry->d_inode->i_mode))
+                        __d_drop(dentry);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 __d_drop(dentry);
                 if (dentry->d_inode) {
