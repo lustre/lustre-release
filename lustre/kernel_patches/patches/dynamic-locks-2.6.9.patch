@@ -27,7 +27,7 @@ Index: linux/include/linux/dynlocks.h
 ===================================================================
 --- linux.orig/include/linux/dynlocks.h
 +++ linux/include/linux/dynlocks.h
-@@ -0,0 +1,37 @@
+@@ -0,0 +1,36 @@
 +#ifndef _LINUX_DYNLOCKS_H
 +#define _LINUX_DYNLOCKS_H
 +
@@ -53,7 +53,6 @@ Index: linux/include/linux/dynlocks.h
 +};
 +
 +enum dynlock_type {
-+	DLT_NONE,
 +	DLT_WRITE,
 +	DLT_READ
 +};
@@ -82,7 +81,7 @@ Index: linux/lib/dynlocks.c
 ===================================================================
 --- linux.orig/lib/dynlocks.c
 +++ linux/lib/dynlocks.c
-@@ -0,0 +1,207 @@
+@@ -0,0 +1,201 @@
 +/*
 + * Dynamic Locks
 + *
@@ -152,23 +151,18 @@ Index: linux/lib/dynlocks.c
 +{
 +	struct dynlock_handle *nhl = NULL;
 +	struct dynlock_handle *hl;
-+	struct list_head *cur;
-+	int num = 0;
 +
 +	BUG_ON(dl == NULL);
 +	BUG_ON(dl->dl_magic != DYNLOCK_LIST_MAGIC);
 +
-+	if (lt == DLT_NONE)
-+		return NULL;
 +repeat:
 +	/* find requested lock in lockspace */
 +	spin_lock(&dl->dl_list_lock);
 +	BUG_ON(dl->dl_list.next == NULL);
 +	BUG_ON(dl->dl_list.prev == NULL);
-+	list_for_each(cur, &dl->dl_list) {
-+		BUG_ON(cur->next == NULL);
-+		BUG_ON(cur->prev == NULL);
-+		hl = list_entry(cur, struct dynlock_handle, dl_list);
++	list_for_each_entry(hl, &dl->dl_list, dl_list) {
++		BUG_ON(hl->dl_list.next == NULL);
++		BUG_ON(hl->dl_list.prev == NULL);
 +		BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
 +		if (hl->dl_value == value) {
 +			/* lock is found */
@@ -183,7 +177,6 @@ Index: linux/lib/dynlocks.c
 +			hl->dl_refcount++;
 +			goto found;
 +		}
-+		num++;
 +	}
 +	/* lock not found */
 +	if (nhl) {
