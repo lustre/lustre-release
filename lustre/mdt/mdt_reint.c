@@ -61,15 +61,6 @@ static int mdt_md_create(struct mdt_thread_info *info)
         if (IS_ERR(parent))
                 RETURN(PTR_ERR(parent));
 
-        rc = mdt_object_exists(parent);
-        if (rc == 0)
-                GOTO(out, rc = -ESTALE);
-        else if (rc < 0) {
-                CERROR("Object "DFID" locates on remote server\n",
-                        PFID(mdt_object_fid(parent)));
-                LBUG();
-        }
-
         child = mdt_object_find(info->mti_env, mdt, rr->rr_fid2);
         if (!IS_ERR(child)) {
                 struct md_object *next = mdt_object_child(parent);
@@ -91,7 +82,6 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 mdt_object_put(info->mti_env, child);
         } else
                 rc = PTR_ERR(child);
-out:
         mdt_object_unlock_put(info, parent, lh, rc);
         RETURN(rc);
 }
@@ -374,15 +364,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                                   MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
                 GOTO(out, rc = PTR_ERR(mp));
-
-        rc = mdt_object_exists(mp);
-        if (rc == 0)
-                GOTO(out_unlock_parent, rc = -ESTALE);
-        else if (rc < 0) {
-                CERROR("Object "DFID" locates on remote server\n",
-                        PFID(mdt_object_fid(mp)));
-                LBUG();
-        }
 
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
         ma->ma_lmm_size = req_capsule_get_size(&info->mti_pill,

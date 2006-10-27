@@ -241,19 +241,17 @@ static ldlm_mode_t mdt_lock_pdo_mode(struct mdt_thread_info *info,
 
         LASSERT(lm != LCK_MINMODE);
 
-        if (mdt_object_exists(o) > 0) {
-                /*
-                 * Ask underlaying level its opinion about possible locks.
-                 */
-                mode = mdo_lock_mode(info->mti_env, mdt_object_child(o),
-                                     mdt_dlm_mode2mdl_mode(lm));
-        } else {
-                /* 
-                 * No pdo locks possible on not existing objects, because pdo
-                 * lock is taken on parent dir and it can't absent.
-                 */
-                LBUG();
-        }
+        /* 
+         * No pdo locks possible on not existing objects, because pdo
+         * lock is taken on parent dir and it can't absent.
+         */
+        LASSERT(mdt_object_exists(o) > 0);
+
+        /*
+         * Ask underlaying level its opinion about possible locks.
+         */
+        mode = mdo_lock_mode(info->mti_env, mdt_object_child(o),
+                             mdt_dlm_mode2mdl_mode(lm));
 
         if (mode != MDL_MINMODE) {
                 /* Lower layer said what lock mode it likes to be, use it. */
@@ -1582,6 +1580,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
         ldlm_policy_data_t *policy = &info->mti_policy;
         struct ldlm_res_id *res_id = &info->mti_res_id;
+        int exist = mdt_object_exists(o);
         int rc;
         ENTRY;
 
@@ -1590,7 +1589,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         LASSERT(lh->mlh_reg_mode != LCK_MINMODE);
         LASSERT(lh->mlh_type != MDT_NUL_LOCK);
 
-        if (mdt_object_exists(o) < 0) {
+        if (exist < 0) {
                 if (locality == MDT_CROSS_LOCK) {
                         /* cross-ref object fix */
                         ibits &= ~MDS_INODELOCK_UPDATE;
@@ -1599,6 +1598,14 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                         LASSERT(!(ibits & MDS_INODELOCK_UPDATE));
                         LASSERT(ibits & MDS_INODELOCK_LOOKUP);
                 }
+                /* No PDO lock on remote object */
+                LASSERT(lh->mlh_type != MDT_PDO_LOCK);
+        } else if (exist == 0 && lh->mlh_type == MDT_PDO_LOCK) {
+                /* 
+                 * No PDO lock on non-existing object.
+                 * This may happen on removed $PWD on client.
+                 */
+                RETURN(-ESTALE);
         }
 
         memset(policy, 0, sizeof(*policy));

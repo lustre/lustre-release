@@ -795,15 +795,6 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         if (IS_ERR(parent))
                 GOTO(out, result = PTR_ERR(parent));
 
-        result = mdt_object_exists(parent);
-        if (result == 0)
-                GOTO(out_parent, result = -ESTALE);
-        else if (result < 0) {
-                CERROR("Object "DFID" locates on remote server\n",
-                        PFID(mdt_object_fid(parent)));
-                LBUG();
-        }
-
         result = mdo_lookup(info->mti_env, mdt_object_child(parent),
                             rr->rr_name, child_fid);
         if (result != 0 && result != -ENOENT && result != -ESTALE)

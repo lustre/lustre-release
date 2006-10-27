@@ -1175,7 +1175,10 @@ static int check_for_next_transno(struct obd_device *obd)
                 CDEBUG(D_HA, "waking for next ("LPD64")\n", next_transno);
                 wake_up = 1;
         } else if (queue_len + completed == max) {
-                LASSERT(req_transno >= next_transno);
+                LASSERTF(req_transno >= next_transno,
+                         "req_transno: "LPU64", next_transno: "LPU64"\n",
+                         req_transno, next_transno);
+                        
                 CDEBUG(req_transno > obd->obd_last_committed ? D_ERROR : D_HA,
                        "waking for skipped transno (skip: "LPD64
                        ", ql: %d, comp: %d, conn: %d, next: "LPD64")\n",
