@@ -393,7 +393,7 @@ Index: linux/kernel/sleep_info.c
 ===================================================================
 --- linux.orig/kernel/sleep_info.c
 +++ linux/kernel/sleep_info.c
-@@ -0,0 +1,392 @@
+@@ -0,0 +1,424 @@
 +#include <linux/config.h>
 +#include <linux/sleep_info.h>
 +#include <linux/seq_file.h>
@@ -550,10 +550,27 @@ Index: linux/kernel/sleep_info.c
 +#endif
 +}
 +
++static void zero_sleep_info(struct __sleep_info *info)
++{
++	int i;
++
++	INIT_LIST_HEAD(&info->lru);
++	for (i = 0; i < info->nr_traces; ++ i) {
++		struct stack_trace *trace;
++
++		trace = &info->traces[i];
++		trace->nr = 0;
++		trace->total = 0;
++		trace->max = 0;
++		trace->hash = 0;
++		list_add(&trace->lru, &info->lru);
++		memset(trace->frame, 0, sizeof trace->frame);
++	}
++}
++
 +static int alloc_sleep_info(struct sleep_info *sinfo, int nr_traces)
 +{
 +	struct __sleep_info *result;
-+	int i;
 +
 +	result = kmalloc(sizeof *result + nr_traces * sizeof result->traces[0],
 +			 GFP_ATOMIC);
@@ -564,18 +581,7 @@ Index: linux/kernel/sleep_info.c
 +	sinfo->last_in = 0;
 +	result->nr_traces = nr_traces;
 +	spin_lock_init(&result->lock);
-+	INIT_LIST_HEAD(&result->lru);
-+	for (i = 0; i < nr_traces; ++ i) {
-+		struct stack_trace *trace;
-+
-+		trace = &result->traces[i];
-+		trace->nr = 0;
-+		trace->total = 0;
-+		trace->max = 0;
-+		trace->hash = 0;
-+		list_add(&trace->lru, &result->lru);
-+		memset(trace->frame, 0, sizeof trace->frame);
-+	}
++	zero_sleep_info(result);
 +	return 0;
 +}
 +
@@ -746,11 +752,29 @@ Index: linux/kernel/sleep_info.c
 +	return ret;
 +}
 +
++static void reset_sleep_info(struct sleep_info *sinfo)
++{
++	spin_lock(&sleep_serializer);
++	if (sinfo->p != NULL)
++		zero_sleep_info(sinfo->p);
++	spin_unlock(&sleep_serializer);
++}
++
++static ssize_t sleep_write(struct file *file, const char __user *buffer,
++			   size_t count, loff_t *ppos)
++{
++	struct task_struct *tsk = PROC_I(file->f_dentry->d_inode)->task;
++
++	reset_sleep_info(&tsk->sinfo);
++	return count;
++}
++
 +struct file_operations proc_sleep_operations = {
 +	.open		= sleep_open,
 +	.read		= seq_read,
 +	.llseek		= seq_lseek,
 +	.release	= seq_release,
++	.write          = sleep_write
 +};
 +
 +static void *global_sleep_start(struct seq_file *m, loff_t *pos)
@@ -776,11 +800,19 @@ Index: linux/kernel/sleep_info.c
 +	return seq_open(file, &global_sleep_op);
 +}
 +
++static ssize_t global_sleep_write(struct file *file, const char __user *buffer,
++				  size_t count, loff_t *ppos)
++{
++	reset_sleep_info(&global_sinfo);
++	return count;
++}
++
 +struct file_operations proc_global_sleep_operations = {
 +	.open		= global_sleep_open,
 +	.read		= seq_read,
 +	.llseek		= seq_lseek,
 +	.release	= seq_release,
++	.write          = global_sleep_write
 +};
 +
 +
