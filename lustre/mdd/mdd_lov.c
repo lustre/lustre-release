@@ -577,26 +577,33 @@ int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,
 int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
                           struct lov_mds_md *lmm, int lmm_size)
 {
-        struct mdd_device       *mdd = mdo2mdd(&obj->mod_obj);
-        struct obd_device       *obd = mdd2obd_dev(mdd);
-        struct lu_attr          *tmp_la = &mdd_env_info(env)->mti_la;
-        struct dt_object        *next = mdd_object_child(obj);
-        __u32  seq  = lu_object_fid(mdd2lu_obj(obj))->f_seq;
-        __u32  oid  = lu_object_fid(mdd2lu_obj(obj))->f_oid;
-        struct obd_capa *oc;
+        struct mdd_device   *mdd = mdo2mdd(&obj->mod_obj);
+        struct obd_device   *obd = mdd2obd_dev(mdd);
+        struct lu_attr      *tmp_la = &mdd_env_info(env)->mti_la;
+        struct dt_object    *next = mdd_object_child(obj);
+        const struct lu_fid *fid = lu_object_fid(mdd2lu_obj(obj));
+        struct obd_capa     *oc;
         int rc = 0;
         ENTRY;
 
+        mdd_read_lock(env, obj);
         rc = next->do_ops->do_attr_get(env, next, tmp_la,
                                        mdd_object_capa(env, obj));
+        mdd_read_unlock(env, obj);
         if (rc)
                 RETURN(rc);
 
         oc = next->do_ops->do_capa_get(env, next, NULL, CAPA_OPC_MDS_DEFAULT);
         if (IS_ERR(oc))
                 oc = NULL;
+        
+        /* 
+         * Wangdi: please fix this. OST will oops if this is called.
+         */
+/*
         rc = mds_osc_setattr_async(obd, tmp_la->la_uid, tmp_la->la_gid, lmm,
-                                   lmm_size, NULL, seq, oid, oc);
+                                   lmm_size, NULL, fid_seq(fid), fid_oid(fid), oc);
+*/
         capa_put(oc);
 
         RETURN(rc);

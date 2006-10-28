@@ -399,7 +399,7 @@ int mdc_send_page(struct cmm_device *cm, const struct lu_env *env,
 
         rc = mdc_sendpage(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
                           page, offset);
-        CDEBUG(D_INFO, "send page %p  offset %d fid "DFID" rc %d \n",
+        CDEBUG(rc ? D_ERROR : D_INFO, "send page %p  offset %d fid "DFID" rc %d \n",
                page, offset, PFID(lu_object_fid(&mo->mo_lu)), rc);
         RETURN(rc);
 }

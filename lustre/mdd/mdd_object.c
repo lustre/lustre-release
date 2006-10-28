@@ -284,7 +284,6 @@ static int __mdd_lmm_get(const struct lu_env *env,
         if (ma->ma_valid & MA_LOV)
                 RETURN(0);
 
-        LASSERT(ma->ma_lmm != NULL && ma->ma_lmm_size > 0);
         lmm_size = ma->ma_lmm_size;
         rc = mdd_get_md(env, mdd_obj, ma->ma_lmm, &lmm_size,
                         MDS_LOV_MD_NAME);
@@ -704,7 +703,7 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
         struct lov_mds_md *lmm = NULL;
-        int  rc = 0, lmm_size = 0, max_size = 0;
+        int  rc, lmm_size = 0, max_size = 0;
         struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         ENTRY;
 
@@ -718,6 +717,7 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
             ma->ma_attr.la_valid & (LA_UID | LA_GID)) {
                 max_size = mdd_lov_mdsize(env, mdd);
                 OBD_ALLOC(lmm, max_size);
+                lmm_size = max_size;
                 if (lmm == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
@@ -766,7 +766,7 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         }
 cleanup:
         mdd_trans_stop(env, mdd, rc, handle);
-        if (rc == 0 && lmm_size) {
+        if (rc == 0 && (lmm != NULL && lmm_size > 0 )) {
                 /*set obd attr, if needed*/
                 rc = mdd_lov_setattr_async(env, mdd_obj, lmm, lmm_size);
         }
