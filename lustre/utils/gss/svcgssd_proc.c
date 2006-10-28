@@ -321,7 +321,7 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 		return -1;
 	}
 	memcpy(sname, name.value, name.length);
-	printerr(1, "authenticate user %s\n", sname);
+	printerr(1, "authenticated %s from %016llx\n", sname, nid);
 	gss_release_buffer(&min_stat, &name);
 
 	lookup_mapping(sname, nid, &cred->cr_mapped_uid);

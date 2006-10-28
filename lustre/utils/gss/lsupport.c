@@ -767,7 +767,7 @@ int lookup_mapping(char *princ, lnet_nid_t nid, uid_t *uid)
                         return 0;
                 }
         }
-        printerr(1, "no mapping for %s/%#Lx\n", princ, nid);
+        printerr(2, "no mapping for %s/%#Lx\n", princ, nid);
         *uid = -1;
         return -1;
 }

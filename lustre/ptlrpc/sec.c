@@ -51,7 +51,7 @@ static void sptlrpc_ctx_refresh(struct ptlrpc_cli_ctx *ctx);
  * policy registers                            *
  ***********************************************/
 
-static spinlock_t policy_lock = SPIN_LOCK_UNLOCKED;
+static rwlock_t policy_lock = RW_LOCK_UNLOCKED;
 static struct ptlrpc_sec_policy *policies[SPTLRPC_POLICY_MAX] = {
         NULL,
 };
@@ -67,13 +67,13 @@ int sptlrpc_register_policy(struct ptlrpc_sec_policy *policy)
         if (number >= SPTLRPC_POLICY_MAX)
                 return -EINVAL;
 
-        spin_lock(&policy_lock);
-        if (policies[number]) {
-                spin_unlock(&policy_lock);
+        write_lock(&policy_lock);
+        if (unlikely(policies[number])) {
+                write_unlock(&policy_lock);
                 return -EALREADY;
         }
         policies[number] = policy;
-        spin_unlock(&policy_lock);
+        write_unlock(&policy_lock);
 
         CDEBUG(D_SEC, "%s: registered\n", policy->sp_name);
         return 0;
@@ -86,16 +86,16 @@ int sptlrpc_unregister_policy(struct ptlrpc_sec_policy *policy)
 
         LASSERT(number < SPTLRPC_POLICY_MAX);
 
-        spin_lock(&policy_lock);
-        if (!policies[number]) {
-                spin_unlock(&policy_lock);
+        write_lock(&policy_lock);
+        if (unlikely(policies[number] == NULL)) {
+                write_unlock(&policy_lock);
                 CERROR("%s: already unregistered\n", policy->sp_name);
                 return -EINVAL;
         }
 
         LASSERT(policies[number] == policy);
         policies[number] = NULL;
-        spin_unlock(&policy_lock);
+        write_unlock(&policy_lock);
 
         CDEBUG(D_SEC, "%s: unregistered\n", policy->sp_name);
         return 0;
@@ -105,27 +105,39 @@ EXPORT_SYMBOL(sptlrpc_unregister_policy);
 static
 struct ptlrpc_sec_policy * sptlrpc_flavor2policy(ptlrpc_sec_flavor_t flavor)
 {
-        static int load_module = 0;
-        struct ptlrpc_sec_policy *policy;
-        __u32 number = SEC_FLAVOR_POLICY(flavor);
+        static DECLARE_MUTEX(load_mutex);
+        static atomic_t         loaded = ATOMIC_INIT(0);
+        struct                  ptlrpc_sec_policy *policy;
+        __u32                   number = SEC_FLAVOR_POLICY(flavor), flag = 0;
 
         if (number >= SPTLRPC_POLICY_MAX)
                 return NULL;
 
 again:
-        spin_lock(&policy_lock);
+        read_lock(&policy_lock);
         policy = policies[number];
         if (policy && !try_module_get(policy->sp_owner))
                 policy = NULL;
-        spin_unlock(&policy_lock);
+        if (policy == NULL)
+                flag = atomic_read(&loaded);
+        read_unlock(&policy_lock);
 
 #ifdef CONFIG_KMOD
         /* if failure, try to load gss module, once */
-        if (policy == NULL && load_module == 0 &&
-            number == SPTLRPC_POLICY_GSS) {
-                load_module = 1;
-                if (request_module("ptlrpc_gss") == 0)
-                        goto again;
+        if (unlikely(policy == NULL) &&
+            number == SPTLRPC_POLICY_GSS && flag == 0) {
+                mutex_down(&load_mutex);
+                if (atomic_read(&loaded) == 0) {
+                        if (request_module("ptlrpc_gss") != 0)
+                                CERROR("Unable to load module ptlrpc_gss\n");
+                        else
+                                CDEBUG(D_INFO, "module ptlrpc_gss loaded\n");
+
+                        atomic_set(&loaded, 1);
+                }
+                mutex_up(&load_mutex);
+
+                goto again;
         }
 #endif
 
