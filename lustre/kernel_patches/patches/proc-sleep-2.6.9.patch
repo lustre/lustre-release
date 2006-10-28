@@ -393,7 +393,7 @@ Index: linux/kernel/sleep_info.c
 ===================================================================
 --- linux.orig/kernel/sleep_info.c
 +++ linux/kernel/sleep_info.c
-@@ -0,0 +1,424 @@
+@@ -0,0 +1,426 @@
 +#include <linux/config.h>
 +#include <linux/sleep_info.h>
 +#include <linux/seq_file.h>
@@ -752,9 +752,11 @@ Index: linux/kernel/sleep_info.c
 +	return ret;
 +}
 +
-+static void reset_sleep_info(struct sleep_info *sinfo)
++static void reset_sleep_info(struct sleep_info *sinfo, int nr_traces)
 +{
 +	spin_lock(&sleep_serializer);
++	if (sinfo->p == NULL)
++		alloc_sleep_info(sinfo, nr_traces);
 +	if (sinfo->p != NULL)
 +		zero_sleep_info(sinfo->p);
 +	spin_unlock(&sleep_serializer);
@@ -765,7 +767,7 @@ Index: linux/kernel/sleep_info.c
 +{
 +	struct task_struct *tsk = PROC_I(file->f_dentry->d_inode)->task;
 +
-+	reset_sleep_info(&tsk->sinfo);
++	reset_sleep_info(&tsk->sinfo, SLEEP_TRACES_DEF);
 +	return count;
 +}
 +
@@ -803,7 +805,7 @@ Index: linux/kernel/sleep_info.c
 +static ssize_t global_sleep_write(struct file *file, const char __user *buffer,
 +				  size_t count, loff_t *ppos)
 +{
-+	reset_sleep_info(&global_sinfo);
++	reset_sleep_info(&global_sinfo, GLOBAL_SLEEP_TRACES_DEF);
 +	return count;
 +}
 +
