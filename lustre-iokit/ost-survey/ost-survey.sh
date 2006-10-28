@@ -34,8 +34,8 @@ fi
 
 test_preq () {
     # check for a mounted Lustre filesystem
-    MNT=`grep lustre /proc/mounts | awk '{print $2}'`
-    if [ -z $MNT ]; then
+    MNT=`grep ":/lustre" /proc/mounts | awk '{print $2}'`
+    if [ -z "$MNT" ]; then
 	echo "Mounted Lustre filesystem not found"
 	exit 1
     fi
@@ -45,8 +45,7 @@ test_preq () {
 }
 
 ost_count () {
-  # We assume that all devices with 'osc' in the string are OSTs
-  OSTS=`lctl dl | grep -c osc`
+  OSTS=$(cat /proc/fs/lustre/lov/lustre-clilov-*/numobd | head -1)
 }
 
 make_dummy () {
