@@ -94,10 +94,21 @@ lmv_obj_alloc(struct obd_device *obd,
 
         /* put all ids in */
         for (i = 0; i < mea->mea_count; i++) {
+                int rc;
+                
                 CDEBUG(D_OTHER, "subobj "DFID"\n",
                        PFID(&mea->mea_ids[i]));
                 obj->lo_inodes[i].li_fid = mea->mea_ids[i];
                 LASSERT(fid_is_sane(&obj->lo_inodes[i].li_fid));
+
+                /* 
+                 * Cache slave mds number to use it in all cases it is needed
+                 * instead of constant lookup.
+                 */
+                rc = lmv_fld_lookup(lmv, &obj->lo_inodes[i].li_fid,
+                                    &obj->lo_inodes[i].li_mds);
+                if (rc)
+                        goto err_obj;
         }
 
         return obj;
@@ -308,7 +319,7 @@ lmv_obj_create(struct obd_export *exp, const struct lu_fid *fid,
                 md.mea = NULL;
                 valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
 
-                tgt_exp = lmv_get_export(lmv, fid);
+                tgt_exp = lmv_find_export(lmv, fid);
                 if (IS_ERR(tgt_exp))
                         GOTO(cleanup, obj = (void *)tgt_exp);
 

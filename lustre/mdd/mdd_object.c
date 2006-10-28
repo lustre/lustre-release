@@ -316,6 +316,7 @@ static int __mdd_lmv_get(const struct lu_env *env,
 
         if (ma->ma_valid & MA_LMV)
                 RETURN(0);
+        
         rc = mdd_get_md(env, mdd_obj, ma->ma_lmv, &ma->ma_lmv_size,
                         MDS_LMV_MD_NAME);
         if (rc > 0) {
@@ -351,7 +352,7 @@ static int mdd_attr_get_internal(const struct lu_env *env,
         }
 #endif
         CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n",
-                        rc, ma->ma_valid);
+               rc, ma->ma_valid);
         RETURN(rc);
 }
 

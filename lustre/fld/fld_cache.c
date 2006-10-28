@@ -166,8 +166,8 @@ fld_cache_bucket(struct fld_cache *cache, seqno_t seq)
 
 /*
  * Check if cache needs to be shrinked. If so - do it. Tries to keep all
- * collision lists well balanced. That is, checks all of them and removes one
- * entry in list and so on.
+ * collision lists well balanced. That is, check all of them and remove one
+ * entry in list and so on until cache is shrinked enough.
  */
 static int fld_cache_shrink(struct fld_cache *cache)
 {

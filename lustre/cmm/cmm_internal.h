@@ -45,7 +45,7 @@ enum {
 };
 
 struct cmm_device {
-        struct md_device       cmm_md_dev;
+        struct md_device      cmm_md_dev;
         /* device flags, taken from enum cmm_flags */
         __u32                 cmm_flags;
         /* underlaying device in MDS stack, usually MDD */

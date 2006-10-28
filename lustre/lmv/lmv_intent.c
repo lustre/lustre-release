@@ -101,7 +101,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
 
         it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
 
-        tgt_exp = lmv_get_export(lmv, &body->fid1);
+        tgt_exp = lmv_find_export(lmv, &body->fid1);
         if (IS_ERR(tgt_exp))
                 GOTO(out, rc = PTR_ERR(tgt_exp));
 
@@ -157,10 +157,8 @@ int lmv_alloc_fid_for_split(struct obd_device *obd, struct lu_fid *pid,
         mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                (char *)op->name, op->namelen);
         rpid = &obj->lo_inodes[mea_idx].li_fid;
-        rc = lmv_fld_lookup(lmv, rpid, &mds);
+        mds = obj->lo_inodes[mea_idx].li_mds;
         lmv_obj_put(obj);
-        if (rc)
-                RETURN(rc);
 
         rc = __lmv_fid_alloc(lmv, fid, mds);
         if (rc) {
@@ -217,11 +215,12 @@ repeat:
                                        op_data->namelen);
 
                 rpid = obj->lo_inodes[mea_idx].li_fid;
+                tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
                 lmv_obj_put(obj);
                 CDEBUG(D_OTHER, "Choose slave dir ("DFID")\n", PFID(&rpid));
+        } else {
+                tgt_exp = lmv_find_export(lmv, &rpid);
         }
-
-        tgt_exp = lmv_get_export(lmv, &rpid);
         if (IS_ERR(tgt_exp))
                 GOTO(out_free_sop_data, rc = PTR_ERR(tgt_exp));
         
@@ -267,11 +266,10 @@ repeat:
                                cb_blocking, extra_lock_flags);
         if (rc != 0) {
                 LASSERT(rc < 0);
-
                 /*
                  * This is possible, that some userspace application will try to
                  * open file as directory and we will have -ENOTDIR here. As
-                 * this is "usual" situation, we should not print error here,
+                 * this is normal situation, we should not print error here,
                  * only debug info.
                  */
                 CDEBUG(D_OTHER, "can't handle remote %s: dir "DFID"("DFID"):"
@@ -373,11 +371,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
                 if (obj) {
                         if (!lu_fid_eq(&op_data->fid1, &op_data->fid2)){
                                 rpid = obj->lo_inodes[mds].li_fid;
-                                rc = lmv_fld_lookup(lmv, &rpid, &mds);
-                                if (rc) {
-                                        lmv_obj_put(obj);
-                                        GOTO(out_free_sop_data, rc);
-                                }
+                                mds = obj->lo_inodes[mds].li_mds;
                         }
                         lmv_obj_put(obj);
                 }
@@ -398,15 +392,15 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
                                                (char *)op_data->name,
                                                op_data->namelen);
                         rpid = obj->lo_inodes[mea_idx].li_fid;
-                        rc = lmv_fld_lookup(lmv, &rpid, &mds);
-                        if (rc) {
-                                lmv_obj_put(obj);
-                                GOTO(out_free_sop_data, rc);
-                        }
+                        mds = obj->lo_inodes[mea_idx].li_mds;
                         lmv_obj_put(obj);
 
                         CDEBUG(D_OTHER, "forward to MDS #"LPU64" (slave "DFID")\n",
                                mds, PFID(&rpid));
+                } else {
+                        rc = lmv_fld_lookup(lmv, &op_data->fid1, &mds);
+                        if (rc)
+                                GOTO(out_free_sop_data, rc);
                 }
         }
 
@@ -563,7 +557,7 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 op_data->fid1 = fid;
                 op_data->fid2 = fid;
 
-                tgt_exp = lmv_get_export(lmv, &fid);
+                tgt_exp = lmv_get_export(lmv, obj->lo_inodes[i].li_mds);
                 if (IS_ERR(tgt_exp))
                         GOTO(cleanup, rc = PTR_ERR(tgt_exp));
 
@@ -662,18 +656,17 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
                                                (char *)op_data->name,
                                                op_data->namelen);
                         rpid = obj->lo_inodes[mea_idx].li_fid;
+                        mds = obj->lo_inodes[mea_idx].li_mds;
                         lmv_obj_put(obj);
+                } else {
+                        rc = lmv_fld_lookup(lmv, &rpid, &mds);
+                        if (rc)
+                                GOTO(out_free_sop_data, rc);
                 }
-                rc = lmv_fld_lookup(lmv, &rpid, &mds);
-                if (rc)
-                        GOTO(out_free_sop_data, rc);
 
                 CDEBUG(D_OTHER, "revalidate lookup for "DFID" to #"LPU64" MDS\n",
                        PFID(&op_data->fid2), mds);
         } else {
-                rc = lmv_fld_lookup(lmv, &op_data->fid1, &mds);
-                if (rc)
-                        GOTO(out_free_sop_data, rc);
 repeat:
                 LASSERT(++loop <= 2);
 
@@ -691,13 +684,13 @@ repeat:
                                                        (char *)op_data->name,
                                                        op_data->namelen);
                                 rpid = obj->lo_inodes[mea_idx].li_fid;
-                                rc = lmv_fld_lookup(lmv, &rpid, &mds);
-                                if (rc) {
-                                        lmv_obj_put(obj);
-                                        GOTO(out_free_sop_data, rc);
-                                }
+                                mds = obj->lo_inodes[mea_idx].li_mds;
                         }
                         lmv_obj_put(obj);
+                } else {
+                        rc = lmv_fld_lookup(lmv, &op_data->fid1, &mds);
+                        if (rc)
+                                GOTO(out_free_sop_data, rc);
                 }
                 fid_zero(&op_data->fid2);
         }
@@ -897,7 +890,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 op_data->fid2 = fid;
 
                 /* is obj valid? */
-                tgt_exp = lmv_get_export(lmv, &fid);
+                tgt_exp = lmv_get_export(lmv, obj->lo_inodes[i].li_mds);
                 if (IS_ERR(tgt_exp))
                         GOTO(cleanup, rc = PTR_ERR(tgt_exp));
 

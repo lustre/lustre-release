@@ -44,6 +44,7 @@ struct qstr {
 
 struct lmv_inode {
         struct lu_fid      li_fid;        /* id of dirobj */
+        mdsno_t            li_mds;        /* cached mdsno where @li_fid lives */
         unsigned long      li_size;       /* slave size value */
         int                li_flags;
 };
@@ -174,7 +175,13 @@ static inline int lmv_get_easize(struct lmv_obd *lmv)
 }
 
 static inline struct obd_export *
-lmv_get_export(struct lmv_obd *lmv, const struct lu_fid *fid)
+lmv_get_export(struct lmv_obd *lmv, mdsno_t mds)
+{
+        return lmv->tgts[mds].ltd_exp;
+}
+
+static inline struct obd_export *
+lmv_find_export(struct lmv_obd *lmv, const struct lu_fid *fid)
 {
         mdsno_t mds;
         int rc;
@@ -183,7 +190,7 @@ lmv_get_export(struct lmv_obd *lmv, const struct lu_fid *fid)
         if (rc)
                 return ERR_PTR(rc);
 
-        return lmv->tgts[mds].ltd_exp;
+        return lmv_get_export(lmv, mds);
 }
 
 /* lproc_lmv.c */

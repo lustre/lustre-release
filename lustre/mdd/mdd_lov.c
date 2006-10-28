@@ -203,7 +203,7 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
         } else if (rc < 0) {
                 CERROR("Error %d reading eadata \n", rc);
         } else {
-                /* FIXME convert lov EA but fixed after verification test */
+                /* XXX: convert lov EA but fixed after verification test. */
                 *md_size = rc;
         }
 

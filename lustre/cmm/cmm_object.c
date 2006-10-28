@@ -379,20 +379,18 @@ static mdl_mode_t cml_lock_mode(const struct lu_env *env,
         struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
         int rc, split;
         ENTRY;
-        
-        memset(ma, 0, sizeof(*ma));
 
         /*
-         * Check only if we need protection from split. If not - mdt
-         * handles other cases.
+         * Check only if we need protection from split. If not - mdt handles
+         * other cases.
          */
-        rc = cmm_expect_splitting(env, mo, ma, &split);
+        rc = cmm_expect_splitting(env, mo, ma, &split); 
         if (rc) {
                 CERROR("Can't check for possible split, error %d\n",
                        rc);
                 RETURN(MDL_MINMODE);
         }
-
+        
         /*
          * Do not take PDO lock on non-splittable objects if this is not PW,
          * this should speed things up a bit.
@@ -401,11 +399,8 @@ static mdl_mode_t cml_lock_mode(const struct lu_env *env,
                 RETURN(MDL_NL);
 
         /* Protect splitting by exclusive lock. */
-        if (split == CMM_EXPECT_SPLIT && lm == MDL_PW) {
-                CDEBUG(D_INFO|D_WARNING, "Going to split "DFID"\n",
-                       PFID(lu_object_fid(&mo->mo_lu)));
+        if (split == CMM_EXPECT_SPLIT && lm == MDL_PW)
                 RETURN(MDL_EX);
-        }
 
         /* Have no idea about lock mode, let it be what higher layer wants. */
         RETURN(MDL_MINMODE);

@@ -72,6 +72,13 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
         if (ma->ma_valid & MA_LMV) {
                 int stripe;
 
+                /* 
+                 * Clean MA_LMV in ->ma_valid because mdd will do nothing
+                 * counting that EA is already taken.
+                 */
+                ma->ma_valid &= ~MA_LMV;
+
+                LASSERT(ma->ma_lmv_size > 0);
                 OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
                 if (ma->ma_lmv == NULL)
                         RETURN(-ENOMEM);
@@ -125,6 +132,7 @@ int cmm_expect_splitting(const struct lu_env *env, struct md_object *mo,
         }
 
         /* MA_INODE is needed to check inode size. */
+        memset(ma, 0, sizeof(*ma));
         ma->ma_need = MA_INODE | MA_LMV;
         rc = mo_attr_get(env, mo, ma);
         if (rc)
@@ -508,15 +516,14 @@ int cmm_try_to_split(const struct lu_env *env, struct md_object *mo)
         ENTRY;
 
         LASSERT(S_ISDIR(lu_object_attr(&mo->mo_lu)));
-        memset(ma, 0, sizeof(*ma));
 
         /* Step1: Checking whether the dir needs to be split. */
         rc = cmm_expect_splitting(env, mo, ma, &split);
         if (rc)
-                GOTO(cleanup, rc);
+                RETURN(rc);
         
         if (split != CMM_EXPECT_SPLIT)
-                GOTO(cleanup, rc = 0);
+                RETURN(0);
 
         LASSERTF(mo->mo_pdo_mode == MDL_EX, "Split is only valid if "
                  "dir is protected by MDL_EX lock. Lock mode 0x%x\n",
@@ -527,18 +534,24 @@ int cmm_try_to_split(const struct lu_env *env, struct md_object *mo)
          * this one ops, confilct with current recovery design.
          */
         rc = cmm_upcall(env, &cmm->cmm_md_dev, MD_NO_TRANS);
-        if (rc)
-                GOTO(cleanup, rc = 0);
+        if (rc) {
+                CERROR("Can't disable trans for split, rc %d\n", rc);
+                RETURN(rc);
+        }
 
         /* Step2: Create slave objects (on slave MDTs) */
         rc = cmm_slaves_create(env, mo, ma);
-        if (rc)
-                GOTO(cleanup, ma);
+        if (rc) {
+                CERROR("Can't create slaves for split, rc %d\n", rc);
+                GOTO(cleanup, rc);
+        }
 
         /* Step3: Scan and split the object. */
         rc = cmm_scan_and_split(env, mo, ma);
-        if (rc)
-                GOTO(cleanup, ma);
+        if (rc) {
+                CERROR("Can't scan and split, rc %d\n", rc);
+                GOTO(cleanup, rc);
+        }
 
         buf = cmm_buf_get(env, ma->ma_lmv, ma->ma_lmv_size);
         
@@ -549,6 +562,9 @@ int cmm_try_to_split(const struct lu_env *env, struct md_object *mo)
                 CWARN("Dir "DFID" has been split\n",
                       PFID(lu_object_fid(&mo->mo_lu)));
                 rc = -ERESTART;
+        } else {
+                CERROR("Can't set MEA to master dir, "
+                       "rc %d\n", rc);
         }
         EXIT;
 cleanup:

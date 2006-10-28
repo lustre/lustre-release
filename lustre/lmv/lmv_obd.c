@@ -760,22 +760,22 @@ static int lmv_placement_policy(struct obd_device *obd,
                  */
                 obj = lmv_obj_grab(obd, hint->ph_pfid);
                 if (obj) {
+                        struct lu_fid *rpid;
+                        int mea_idx;
+
                         /*
                          * If the dir got split, alloc fid according to its
                          * hash. No matter what we create, object create should
-                         * go to correct MDS. 
+                         * go to correct MDS.
                          */
-                        struct lu_fid *rpid;
-                        int mea_idx;
                         mea_idx = raw_name2idx(obj->lo_hashtype,
                                                obj->lo_objcount,
                                                hint->ph_cname->name,
                                                hint->ph_cname->len);
                         rpid = &obj->lo_inodes[mea_idx].li_fid;
-                        rc = lmv_fld_lookup(lmv, rpid, mds);
+                        *mds = obj->lo_inodes[mea_idx].li_mds;
                         lmv_obj_put(obj);
-                        if (rc)
-                                GOTO(exit, rc);
+                        rc = 0;
                                 
                         CDEBUG(D_INODE, "The obj "DFID" has been split, got "
                                "MDS at "LPU64" by name %s\n", PFID(hint->ph_pfid),
@@ -788,7 +788,7 @@ static int lmv_placement_policy(struct obd_device *obd,
                 } else {
                         /*
                          * Default policy for others is to use parent MDS.
-                         * ONLY directories can be cross-ref during creation
+                         * ONLY directories can be cross-ref during creation.
                          */
                         rc = lmv_fld_lookup(lmv, hint->ph_pfid, mds);
                 }
@@ -1078,7 +1078,7 @@ static int lmv_getxattr(struct obd_export *exp, const struct lu_fid *fid,
         if (rc)
                 RETURN(rc);
 
-        tgt_exp = lmv_get_export(lmv, fid);
+        tgt_exp = lmv_find_export(lmv, fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -1103,7 +1103,7 @@ static int lmv_setxattr(struct obd_export *exp, const struct lu_fid *fid,
         if (rc)
                 RETURN(rc);
 
-        tgt_exp = lmv_get_export(lmv, fid);
+        tgt_exp = lmv_find_export(lmv, fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -1128,7 +1128,7 @@ static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
         if (rc)
                 RETURN(rc);
 
-        tgt_exp = lmv_get_export(lmv, fid);
+        tgt_exp = lmv_find_export(lmv, fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -1219,7 +1219,7 @@ static int lmv_close(struct obd_export *exp,
         if (rc)
                 RETURN(rc);
 
-        tgt_exp = lmv_get_export(lmv, &op_data->fid1);
+        tgt_exp = lmv_find_export(lmv, &op_data->fid1);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -1249,7 +1249,7 @@ int lmv_handle_split(struct obd_export *exp, const struct lu_fid *fid)
 
         valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
 
-        tgt_exp = lmv_get_export(lmv, fid);
+        tgt_exp = lmv_find_export(lmv, fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -1311,15 +1311,17 @@ repeat:
                 mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                        op_data->name, op_data->namelen);
                 op_data->fid1 = obj->lo_inodes[mea_idx].li_fid;
+                tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
                 lmv_obj_put(obj);
+        } else {
+                tgt_exp = lmv_find_export(lmv, &op_data->fid1);
         }
+
+        if (IS_ERR(tgt_exp))
+                RETURN(PTR_ERR(tgt_exp));
 
         CDEBUG(D_OTHER, "CREATE '%*s' on "DFID"\n", op_data->namelen,
                op_data->name, PFID(&op_data->fid1));
-
-        tgt_exp = lmv_get_export(lmv, &op_data->fid1);
-        if (IS_ERR(tgt_exp))
-                RETURN(PTR_ERR(tgt_exp));
 
         rc = md_create(tgt_exp, op_data, data, datalen, mode, uid, gid,
                        cap_effective, rdev, request);
@@ -1359,7 +1361,7 @@ static int lmv_done_writing(struct obd_export *exp,
         if (rc)
                 RETURN(rc);
 
-        tgt_exp = lmv_get_export(lmv, &op_data->fid1);
+        tgt_exp = lmv_find_export(lmv, &op_data->fid1);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -1391,7 +1393,7 @@ lmv_enqueue_slaves(struct obd_export *exp, int locktype,
                 memset(op_data2, 0, sizeof(*op_data2));
                 op_data2->fid1 = mea->mea_ids[i];
 
-                tgt_exp = lmv_get_export(lmv, &op_data2->fid1);
+                tgt_exp = lmv_find_export(lmv, &op_data2->fid1);
                 if (IS_ERR(tgt_exp))
                         GOTO(cleanup, rc = PTR_ERR(tgt_exp));
 
@@ -1473,7 +1475,7 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         it->d.lustre.it_disposition &= ~DISP_ENQ_COMPLETE;
         ptlrpc_req_finished(req);
 
-        tgt_exp = lmv_get_export(lmv, &fid_copy);
+        tgt_exp = lmv_find_export(lmv, &fid_copy);
         if (IS_ERR(tgt_exp))
                 GOTO(out, rc = PTR_ERR(tgt_exp));
 
@@ -1505,7 +1507,7 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct obd_export *tgt_exp;
+        struct obd_export *tgt_exp = NULL;
         struct lmv_obj *obj;
         int rc;
         ENTRY;
@@ -1533,15 +1535,18 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
                                                (char *)op_data->name,
                                                op_data->namelen);
                         op_data->fid1 = obj->lo_inodes[mea_idx].li_fid;
+                        tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
                         lmv_obj_put(obj);
                 }
         }
-        CDEBUG(D_OTHER, "ENQUEUE '%s' on "DFID"\n", LL_IT2STR(it),
-               PFID(&op_data->fid1));
-
-        tgt_exp = lmv_get_export(lmv, &op_data->fid1);
+        
+        if (tgt_exp == NULL)
+                tgt_exp = lmv_find_export(lmv, &op_data->fid1);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
+
+        CDEBUG(D_OTHER, "ENQUEUE '%s' on "DFID"\n", LL_IT2STR(it),
+               PFID(&op_data->fid1));
 
         rc = md_enqueue(tgt_exp, lock_type, it, lock_mode, op_data, lockh,
                         lmm, lmmsize, cb_compl, cb_blocking, cb_data,
@@ -1582,15 +1587,16 @@ repeat:
                 mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                        filename, namelen - 1);
                 rid = obj->lo_inodes[mea_idx].li_fid;
+                tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
                 lmv_obj_put(obj);
+        } else {
+                tgt_exp = lmv_find_export(lmv, &rid);
         }
+        if (IS_ERR(tgt_exp))
+                RETURN(PTR_ERR(tgt_exp));
 
         CDEBUG(D_OTHER, "getattr_name for %*s on "DFID" -> "DFID"\n",
                namelen, filename, PFID(fid), PFID(&rid));
-
-        tgt_exp = lmv_get_export(lmv, &rid);
-        if (IS_ERR(tgt_exp))
-                RETURN(PTR_ERR(tgt_exp));
 
         rc = md_getattr_name(tgt_exp, &rid, oc, filename, namelen, valid,
                              ea_size, request);
@@ -1606,7 +1612,7 @@ repeat:
                         CDEBUG(D_OTHER, "request attrs for "DFID"\n",
                                PFID(&rid));
 
-                        tgt_exp = lmv_get_export(lmv, &rid);
+                        tgt_exp = lmv_find_export(lmv, &rid);
                         if (IS_ERR(tgt_exp)) {
                                 ptlrpc_req_finished(*request);
                                 RETURN(PTR_ERR(tgt_exp));
@@ -1657,12 +1663,13 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
                                                op_data->name,
                                                op_data->namelen);
                         op_data->fid2 = obj->lo_inodes[mea_idx].li_fid;
+                        mds = obj->lo_inodes[mea_idx].li_mds;
                         lmv_obj_put(obj);
+                } else {
+                        rc = lmv_fld_lookup(lmv, &op_data->fid2, &mds);
+                        if (rc)
+                                RETURN(rc);
                 }
-
-                rc = lmv_fld_lookup(lmv, &op_data->fid2, &mds);
-                if (rc)
-                        RETURN(rc);
 
                 CDEBUG(D_OTHER,"link "DFID":%*s to "DFID"\n",
                        PFID(&op_data->fid2), op_data->namelen,
@@ -1695,8 +1702,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct lmv_obj *obj;
-        mdsno_t mds, mds2;
         int rc, mea_idx;
+        mdsno_t mds;
         ENTRY;
 
         CDEBUG(D_OTHER, "rename %*s in "DFID" to %*s in "DFID"\n",
@@ -1747,8 +1754,13 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                 mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                        (char *)old, oldlen);
                 op_data->fid1 = obj->lo_inodes[mea_idx].li_fid;
+                mds = obj->lo_inodes[mea_idx].li_mds;
                 CDEBUG(D_OTHER, "Parent obj "DFID"\n", PFID(&op_data->fid1));
                 lmv_obj_put(obj);
+        } else {
+                rc = lmv_fld_lookup(lmv, &op_data->fid1, &mds);
+                if (rc)
+                        RETURN(rc);
         }
 
         obj = lmv_obj_grab(obd, &op_data->fid2);
@@ -1764,21 +1776,7 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                 CDEBUG(D_OTHER, "Parent obj "DFID"\n", PFID(&op_data->fid2));
                 lmv_obj_put(obj);
         }
-
-        rc = lmv_fld_lookup(lmv, &op_data->fid1, &mds);
-        if (rc)
-                RETURN(rc);
-
 request:
-        rc = lmv_fld_lookup(lmv, &op_data->fid2, &mds2);
-        if (rc)
-                RETURN(rc);
-
-        if (mds != mds2) {
-                CDEBUG(D_OTHER,"cross-node rename "DFID"/%*s to "DFID"/%*s\n",
-                       PFID(&op_data->fid1), oldlen, old,
-                       PFID(&op_data->fid2), newlen, new);
-        }
         op_data->fsuid = current->fsuid;
         op_data->fsgid = current->fsgid;
         op_data->cap   = current->cap_effective;
@@ -1813,7 +1811,7 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 for (i = 0; i < obj->lo_objcount; i++) {
                         op_data->fid1 = obj->lo_inodes[i].li_fid;
 
-                        tgt_exp = lmv_get_export(lmv, &op_data->fid1);
+                        tgt_exp = lmv_get_export(lmv, obj->lo_inodes[i].li_mds);
                         if (IS_ERR(tgt_exp)) {
                                 rc = PTR_ERR(tgt_exp);
                                 break;
@@ -1837,7 +1835,7 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 }
                 lmv_obj_put(obj);
         } else {
-                tgt_exp = lmv_get_export(lmv, &op_data->fid1);
+                tgt_exp = lmv_find_export(lmv, &op_data->fid1);
                 if (IS_ERR(tgt_exp))
                         RETURN(PTR_ERR(tgt_exp));
 
@@ -1860,7 +1858,7 @@ static int lmv_sync(struct obd_export *exp, const struct lu_fid *fid,
 	if (rc)
 		RETURN(rc);
 
-        tgt_exp = lmv_get_export(lmv, fid);
+        tgt_exp = lmv_find_export(lmv, fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -1937,14 +1935,16 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                 do_div(index, (__u32)seg);
                 i = (int)index;
                 rid = obj->lo_inodes[i].li_fid;
+                tgt_exp = lmv_get_export(lmv, obj->lo_inodes[i].li_mds);
 
                 lmv_obj_unlock(obj);
 
                 CDEBUG(D_INFO, "forward to "DFID" with offset %lu i %d\n",
                        PFID(&rid), (unsigned long)offset, i);
+        } else {
+                tgt_exp = lmv_find_export(lmv, &rid);
         }
 
-        tgt_exp = lmv_get_export(lmv, &rid);
         if (IS_ERR(tgt_exp))
                 GOTO(cleanup, rc = PTR_ERR(tgt_exp));
 
@@ -1970,10 +1970,11 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
          * Here we could remove "." and ".." from all pages which at not from
          * master. But MDS has only "." and ".." for master dir.
          */
+        EXIT;
 cleanup:
         if (obj)
                 lmv_obj_put(obj);
-        RETURN(rc);
+        return rc;
 }
 
 static int lmv_unlink_slaves(struct obd_export *exp,
@@ -1999,7 +2000,7 @@ static int lmv_unlink_slaves(struct obd_export *exp,
                 op_data2->mode = MDS_MODE_DONT_LOCK | S_IFDIR;
                 op_data2->fsuid = current->fsuid;
                 op_data2->fsgid = current->fsgid;
-                tgt_exp = lmv_get_export(lmv, &op_data2->fid1);
+                tgt_exp = lmv_find_export(lmv, &op_data2->fid1);
                 if (IS_ERR(tgt_exp))
                         GOTO(out_free_op_data2, rc = PTR_ERR(tgt_exp));
 
@@ -2030,7 +2031,7 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct obd_export *tgt_exp;
+        struct obd_export *tgt_exp = NULL;
         int rc;
         ENTRY;
 
@@ -2055,6 +2056,8 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                                                op_data->name,
                                                op_data->namelen);
                         op_data->fid1 = obj->lo_inodes[mea_idx].li_fid;
+                        tgt_exp = lmv_get_export(lmv, 
+                                        obj->lo_inodes[mea_idx].li_mds);
                         lmv_obj_put(obj);
                         CDEBUG(D_OTHER, "unlink '%*s' in "DFID" -> %u\n",
                                op_data->namelen, op_data->name,
@@ -2064,7 +2067,8 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                 CDEBUG(D_OTHER, "drop i_nlink on "DFID"\n",
                        PFID(&op_data->fid1));
         }
-        tgt_exp = lmv_get_export(lmv, &op_data->fid1);
+        if (tgt_exp == NULL)
+                tgt_exp = lmv_find_export(lmv, &op_data->fid1);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
         op_data->fsuid = current->fsuid;
@@ -2433,7 +2437,7 @@ int lmv_set_open_replay_data(struct obd_export *exp,
 
         ENTRY;
 
-        tgt_exp = lmv_get_export(lmv, &och->och_fid);
+        tgt_exp = lmv_find_export(lmv, &och->och_fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -2448,7 +2452,7 @@ int lmv_clear_open_replay_data(struct obd_export *exp,
         struct obd_export *tgt_exp;
         ENTRY;
 
-        tgt_exp = lmv_get_export(lmv, &och->och_fid);
+        tgt_exp = lmv_find_export(lmv, &och->och_fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -2470,7 +2474,7 @@ static int lmv_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
         if (rc)
                 RETURN(rc);
 
-        tgt_exp = lmv_get_export(lmv, fid);
+        tgt_exp = lmv_find_export(lmv, fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -2492,7 +2496,7 @@ static int lmv_renew_capa(struct obd_export *exp, struct obd_capa *oc,
         if (rc)
                 RETURN(rc);
 
-        tgt_exp = lmv_get_export(lmv, &oc->c_capa.lc_fid);
+        tgt_exp = lmv_find_export(lmv, &oc->c_capa.lc_fid);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
