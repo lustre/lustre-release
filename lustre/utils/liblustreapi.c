@@ -1300,7 +1300,10 @@ int llapi_setfacl(char *fname, char *cmd)
 
         rc = ioctl(fd, LL_IOC_SETFACL, &data);
         close(fd);
-        if (rc) {
+        if (errno == EOPNOTSUPP) {
+                fprintf(stderr, "setfacl: %s: %s\n", fname, strerror(errno));
+                rc = 1;
+        } else if (rc) {
                 err_msg("setfacl %s failed", fname);
         } else {
                 printf("%s", out);
