@@ -476,16 +476,14 @@ int cmm_try_to_split(const struct lu_env *env, struct md_object *mo)
 
         LASSERT(S_ISDIR(lu_object_attr(&mo->mo_lu)));
         memset(ma, 0, sizeof(*ma));
+
         /* Step1: Checking whether the dir needs to be split. */
         rc = cmm_expect_splitting(env, mo, ma, &split);
         if (rc)
                 RETURN(rc);
+        
         if (split != CMM_EXPECT_SPLIT)
                 RETURN(0);
-
-        LASSERTF(mo->mo_pdo_mode == MDL_EX, "Split is only valid if "
-                 "dir is protected by MDL_EX lock. Lock mode 0x%x\n",
-                 (int)mo->mo_pdo_mode);
 
         /*
          * Disable trans for splitting, since there will be so many trans in
@@ -497,7 +495,7 @@ int cmm_try_to_split(const struct lu_env *env, struct md_object *mo)
                 GOTO(cleanup, rc);
         }
 
-        /* step2: Prepare the md memory */
+        /* Step2: Prepare the md memory */
         ma->ma_lmv_size = CMM_MD_SIZE(cmm->cmm_tgt_count + 1);
         OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
         if (ma->ma_lmv == NULL)
@@ -530,9 +528,10 @@ int cmm_try_to_split(const struct lu_env *env, struct md_object *mo)
         /* Finally, split succeed, tell client to recreate the object */
         CWARN("Dir "DFID" has been split\n", PFID(lu_object_fid(&mo->mo_lu)));
         rc = -ERESTART;
+        EXIT;
 cleanup:
         OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);
-        RETURN(rc);
+        return rc;
 }
 
 int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,

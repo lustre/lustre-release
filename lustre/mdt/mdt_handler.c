@@ -1550,30 +1550,6 @@ struct mdt_object *mdt_object_find(const struct lu_env *env,
         RETURN(m);
 }
 
-/* XXX: This is for debug only. */
-static inline void mdt_object_set_mode(struct mdt_object *o,
-                                       struct mdt_lock_handle *lh)
-{
-        struct md_object *n = mdt_object_child(o);
-        mdl_mode_t reg_mode, pdo_mode;
-
-        pdo_mode = mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
-        reg_mode = mdt_dlm_mode2mdl_mode(lh->mlh_reg_mode);
-        
-        if (lh->mlh_pdo_lh.cookie != 0)
-                o->mot_obj.mo_pdo_mode = pdo_mode;
-        else
-                o->mot_obj.mo_pdo_mode = MDL_MINMODE;
-        
-        if (lh->mlh_reg_lh.cookie != 0)
-                o->mot_obj.mo_reg_mode = reg_mode;
-        else
-                o->mot_obj.mo_reg_mode = MDL_MINMODE;
-        
-        n->mo_pdo_mode = o->mot_obj.mo_pdo_mode;
-        n->mo_reg_mode = o->mot_obj.mo_reg_mode;
-}
-
 int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                     struct mdt_lock_handle *lh, __u64 ibits, int locality)
 {
@@ -1652,9 +1628,6 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                 mdt_fid_unlock(&lh->mlh_pdo_lh, lh->mlh_pdo_mode);
                 lh->mlh_pdo_lh.cookie = 0ull;
         }
-
-        if (rc == 0)
-                mdt_object_set_mode(o, lh);
         
         RETURN(rc);
 }
@@ -1687,8 +1660,6 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
                 }
                 lh->mlh_reg_lh.cookie = 0;
         }
-        
-        mdt_object_set_mode(o, lh);
         
         EXIT;
 }

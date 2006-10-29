@@ -298,14 +298,6 @@ struct md_object {
         struct lu_object             mo_lu;
         struct md_object_operations *mo_ops;
         struct md_dir_operations    *mo_dir_ops;
-
-        /*
-         * XXX: This is for debug only, to check on all layers lock mode on the
-         * object. This is useful say for split. Split should be protected by EX
-         * lock and this should be checked in cmm split code.
-         */
-        mdl_mode_t                   mo_reg_mode;
-        mdl_mode_t                   mo_pdo_mode;
 };
 
 static inline int lu_device_is_md(const struct lu_device *d)

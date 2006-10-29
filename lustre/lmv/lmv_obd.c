@@ -801,7 +801,7 @@ static int lmv_placement_policy(struct obd_device *obd,
                 *mds = 0;
                 rc = -ENOSYS;
         }
-exit:
+
         if (rc) {
                 CERROR("Can't choose MDS, err = %d\n", rc);
         } else {
