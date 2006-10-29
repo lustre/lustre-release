@@ -596,14 +596,11 @@ int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
         oc = next->do_ops->do_capa_get(env, next, NULL, CAPA_OPC_MDS_DEFAULT);
         if (IS_ERR(oc))
                 oc = NULL;
-        
-        /* 
-         * Wangdi: please fix this. OST will oops if this is called.
-         */
-/*
+
         rc = mds_osc_setattr_async(obd, tmp_la->la_uid, tmp_la->la_gid, lmm,
-                                   lmm_size, NULL, fid_seq(fid), fid_oid(fid), oc);
-*/
+                                   lmm_size, NULL, fid_seq(fid), fid_oid(fid),
+                                   oc);
+
         capa_put(oc);
 
         RETURN(rc);

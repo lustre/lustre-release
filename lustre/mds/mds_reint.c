@@ -446,8 +446,10 @@ int mds_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
         /* then fill oa */
         oinfo.oi_oa->o_uid = uid;
         oinfo.oi_oa->o_gid = gid;
-        oinfo.oi_oa->o_valid |= OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID;
         oinfo.oi_oa->o_id = oinfo.oi_md->lsm_object_id;
+        oinfo.oi_oa->o_gr = oinfo.oi_md->lsm_object_gr;
+        oinfo.oi_oa->o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP | 
+                                OBD_MD_FLUID | OBD_MD_FLGID;
         if (logcookies) {
                 oinfo.oi_oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies = logcookies;
