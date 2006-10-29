@@ -235,7 +235,7 @@ test_0a() {
         done
 	rm -rf $DIR/0a0 || error
 }
-run_test 0a " create random names ============================="
+#run_test 0a " create random names ============================="
 
 test_1a() {
 	mkdir $DIR/1a0 || error 
