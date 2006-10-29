@@ -36,13 +36,6 @@
 #include <md_object.h>
 #include <linux/lustre_acl.h>
 
-#define CMM_NO_SPLIT_EXPECTED   0
-#define CMM_EXPECT_SPLIT        1
-#define CMM_NOT_SPLITTABLE      2
-
-enum {
-        CMM_SPLIT_SIZE =  64 * 1024
-};
 
 struct cmm_device {
         struct md_device      cmm_md_dev;
@@ -154,7 +147,8 @@ int cmm_expect_splitting(const struct lu_env *env, struct md_object *mo,
                          struct md_attr *ma, int *split);
 
 int cmm_try_to_split(const struct lu_env *env, struct md_object *mo);
-
+int cmm_split_lock_mode(const struct lu_env *env, struct md_object *mo,
+                        mdl_mode_t lm);
 #endif
 
 #endif /* __KERNEL__ */

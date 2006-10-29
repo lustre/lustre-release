@@ -375,47 +375,11 @@ static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
 static mdl_mode_t cml_lock_mode(const struct lu_env *env,
                                 struct md_object *mo, mdl_mode_t lm)
 {
+        int rc = MDL_MINMODE;
 #ifdef HAVE_SPLIT_SUPPORT
-        struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
-        struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
-        int rc, split, lmv_size;
-        ENTRY;
-
-        memset(ma, 0, sizeof(*ma));
-        lmv_size = ma->ma_lmv_size = (sizeof(struct lmv_stripe_md) + 
-                        (cmm->cmm_tgt_count + 1) * sizeof(struct lu_fid));
-
-        OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
-        if (ma->ma_lmv == NULL)
-                RETURN(-ENOMEM);
-
-        /*
-         * Check only if we need protection from split. If not - mdt handles
-         * other cases.
-         */
-        rc = cmm_expect_splitting(env, mo, ma, &split); 
-        OBD_FREE(ma->ma_lmv, lmv_size);
-        if (rc) {
-                CERROR("Can't check for possible split, error %d\n",
-                       rc);
-                RETURN(MDL_MINMODE);
-        }
-        
-        /*
-         * Do not take PDO lock on non-splittable objects if this is not PW,
-         * this should speed things up a bit.
-         */
-        if (split == CMM_NOT_SPLITTABLE && lm != MDL_PW)
-                RETURN(MDL_NL);
-
-        /* Protect splitting by exclusive lock. */
-        if (split == CMM_EXPECT_SPLIT && lm == MDL_PW)
-                RETURN(MDL_EX);
-
-        /* Have no idea about lock mode, let it be what higher layer wants. */
-        RETURN(MDL_MINMODE);
+        rc = cmm_split_lock_mode(env, mo, lm);
 #endif
-        return MDL_MINMODE;
+        return rc;
 }
 
 static int cml_create(const struct lu_env *env,
