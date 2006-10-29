@@ -354,7 +354,6 @@ static int cmm_split_entries(const struct lu_env *env,
                 struct lu_dirpage *ldp;
                 __u32  len = 0;
 
-                /* init page with '0' */
                 memset(kmap(rdpg->rp_pages[0]), 0, CFS_PAGE_SIZE);
                 kunmap(rdpg->rp_pages[0]);
 

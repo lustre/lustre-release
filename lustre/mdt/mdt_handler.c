@@ -1029,53 +1029,62 @@ out:
 
 #ifdef HAVE_SPLIT_SUPPORT
 /*
- * Retrieve dir entry from the page and insert it to the
- * slave object, actually, this should be in osd layer,
- * but since it will not in the final product, so just do
- * it here and do not define more moo api anymore for
- * this.
+ * Retrieve dir entry from the page and insert it to the slave object, actually,
+ * this should be in osd layer, but since it will not in the final product, so
+ * just do it here and do not define more moo api anymore for this.
  */
 static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
                               int size)
 {
         struct mdt_object *object = info->mti_object;
+        int rc = 0, offset = 0, is_dir;
         struct lu_dirpage *dp;
         struct lu_dirent *ent;
-        int rc = 0, offset = 0, is_dir;
-
         ENTRY;
 
-        /* Disable trans for this name insert, since it will
-         * include many trans for this */
+        /* Make sure we have at least one entry. */
+        if (size == 0)
+                RETURN(-EINVAL);
+        
+        /*
+         * Disable trans for this name insert, since it will include many trans
+         * for this.
+         */
         info->mti_no_need_trans = 1;
+        
         kmap(page);
         dp = page_address(page);
         offset = (int)((__u32)lu_dirent_start(dp) - (__u32)dp);
 
         for (ent = lu_dirent_start(dp); ent != NULL;
-                          ent = lu_dirent_next(ent)) {
+             ent = lu_dirent_next(ent)) {
                 struct lu_fid *lf = &ent->lde_fid;
                 char *name;
 
-                offset += ent->lde_reclen;
-                if (ent->lde_namelen == 0)
+                if (le32_to_cpu(ent->lde_namelen) == 0)
                         continue;
-
-                if (offset > size)
-                        break;
+                
                 is_dir = le32_to_cpu(ent->lde_hash) & MAX_HASH_HIGHEST_BIT;
-                OBD_ALLOC(name, ent->lde_namelen + 1);
-                memcpy(name, ent->lde_name, ent->lde_namelen);
+                OBD_ALLOC(name, le32_to_cpu(ent->lde_namelen) + 1);
+                if (name == NULL)
+                        GOTO(out, rc = -ENOMEM);
+                
+                memcpy(name, ent->lde_name, le32_to_cpu(ent->lde_namelen));
                 rc = mdo_name_insert(info->mti_env,
                                      md_object_next(&object->mot_obj),
                                      name, lf, is_dir);
-                OBD_FREE(name, ent->lde_namelen + 1);
+                OBD_FREE(name, le32_to_cpu(ent->lde_namelen) + 1);
                 if (rc)
                         GOTO(out, rc);
+
+                offset += le32_to_cpu(ent->lde_reclen);
+                if (offset >= size)
+                        break;
         }
+        EXIT;
 out:
         kunmap(page);
-        RETURN(rc);
+        return rc;
 }
 
 static int mdt_bulk_timeout(void *data)
@@ -1112,15 +1121,15 @@ static int mdt_writepage(struct mdt_thread_info *info)
                 GOTO(desc_cleanup, rc = -ENOMEM);
 
         CDEBUG(D_INFO, "Received page offset %d size %d \n",
-                        (int)reqbody->size, (int)reqbody->nlink);
+               (int)reqbody->size, (int)reqbody->nlink);
 
         ptlrpc_prep_bulk_page(desc, page, (int)reqbody->size,
                               (int)reqbody->nlink);
 
-        /* FIXME: following parts are copied from ost_brw_write */
-
-        /* Check if client was evicted while we were doing i/o before touching
-           network */
+        /*
+         * Check if client was evicted while we were doing i/o before touching
+         * network.
+         */
         OBD_ALLOC_PTR(lwi);
         if (!lwi)
                 GOTO(cleanup_page, rc = -ENOMEM);
