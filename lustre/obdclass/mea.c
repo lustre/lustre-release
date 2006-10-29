@@ -127,16 +127,16 @@ int raw_name2idx(int hashtype, int count, const char *name, int namelen)
 
         switch (hashtype) {
                 case MEA_MAGIC_LAST_CHAR:
-                        c = mea_last_char_hash(count, (char *) name, namelen);
+                        c = mea_last_char_hash(count, (char *)name, namelen);
                         break;
                 case MEA_MAGIC_ALL_CHARS:
-                        c = mea_all_chars_hash(count, (char *) name, namelen);
+                        c = mea_all_chars_hash(count, (char *)name, namelen);
                         break;
                 case MEA_MAGIC_HASH_SEGMENT:
-                        c = mea_hash_segment(count, (char *) name, namelen);
+                        c = mea_hash_segment(count, (char *)name, namelen);
                         break;
                 default:
-                        CERROR("unknown hash type 0x%x\n", hashtype);
+                        CERROR("Unknown hash type 0x%x\n", hashtype);
         }
 	
         return c;
@@ -149,7 +149,7 @@ int mea_name2idx(struct lmv_stripe_md *mea, const char *name, int namelen)
         LASSERT(mea && mea->mea_count);
 
 	c = raw_name2idx(mea->mea_magic, mea->mea_count, name, namelen);
-
+        
         LASSERT(c < mea->mea_count);
         return c;
 }

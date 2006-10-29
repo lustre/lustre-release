@@ -151,6 +151,9 @@ int cmm_split_lock_mode(const struct lu_env *env, struct md_object *mo,
                         mdl_mode_t lm);
 #endif
 
+int cmm_fld_lookup(struct cmm_device *cm, const struct lu_fid *fid,
+                   mdsno_t *mds, const struct lu_env *env);
+
 #endif /* __KERNEL__ */
 #endif /* _CMM_INTERNAL_H */
 

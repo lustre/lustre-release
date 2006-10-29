@@ -228,6 +228,15 @@ echo # add a newline after mke2fs.
 
 umask 077
 
+test_0a() {
+	mkdir $DIR/0a0 || error 
+        for ((i=0;i<5000;i++)); do
+                mkdir $DIR/0a0/`uuidgen -t` || error
+        done
+	rm -rf $DIR/0a0 || error
+}
+run_test 0a " create random names ============================="
+
 test_1a() {
 	mkdir $DIR/1a0 || error 
 	createmany -o $DIR/1a0/f 4000 || error

@@ -141,6 +141,8 @@ static int cmm_slave_object_create(const struct lu_env *env,
                 RETURN(PTR_ERR(obj));
 
         OBD_ALLOC_PTR(spec);
+        if (spec == NULL)
+                RETURN(-ENOMEM);
 
         spec->u.sp_ea.fid = fid;
         spec->u.sp_ea.eadata = lmv;
@@ -185,14 +187,14 @@ static int cmm_slaves_create(const struct lu_env *env,
 {
         struct cmm_device    *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct lu_fid        *lf  = cmm2fid(md2cmm_obj(mo));
-        struct lmv_stripe_md *lmv;
         struct lmv_stripe_md *slave_lmv = NULL;
         struct mdc_device    *mc, *tmp;
+        struct lmv_stripe_md *lmv;
         int i = 1, rc = 0;
         ENTRY;
 
-        lmv = ma->ma_lmv;
         /* Init the split MEA */
+        lmv = ma->ma_lmv;
         lmv->mea_master = cmm->cmm_local_num;
         lmv->mea_magic = MEA_MAGIC_HASH_SEGMENT;
         lmv->mea_count = cmm->cmm_tgt_count + 1;
@@ -313,27 +315,24 @@ static int cmm_remove_entries(const struct lu_env *env,
 
         kmap(rdpg->rp_pages[0]);
         dp = page_address(rdpg->rp_pages[0]);
-        *len = 0;
-
-        for (ent = lu_dirent_start(dp);
-             ent != NULL && ent->lde_hash < hash_end;
+        for (ent = lu_dirent_start(dp); ent != NULL;
              ent = lu_dirent_next(ent)) {
-                rc = cmm_remove_split_ent(env, mo, ent);
-                if (rc) {
-                        /* 
-                         * XXX Error handler to insert remove name back,
-                         * currently we assumed it will success anyway
-                         * in verfication test. 
-                         * 
-                         */
-                        CERROR("Can not del %*.*s rc %d\n", ent->lde_namelen,
-                                ent->lde_namelen, ent->lde_name, rc);
+                if (ent->lde_hash < hash_end) {
+                        rc = cmm_remove_split_ent(env, mo, ent);
+                        if (rc) {
+                                CERROR("Can not del %s rc %d\n",
+                                       ent->lde_name, rc);
+                                GOTO(unmap, rc);
+                        }
+                } else {
+                        if (ent != lu_dirent_start(dp))
+                                *len = (int)((__u32)ent - (__u32)dp);
+                        else
+                                *len = 0;
                         GOTO(unmap, rc);
                 }
-                *len += le16_to_cpu(ent->lde_reclen);
         }
-        if (ent != lu_dirent_start(dp))
-                *len += sizeof(struct lu_dirpage);
+        *len = CFS_PAGE_SIZE;
         EXIT;
 unmap:
         kunmap(rdpg->rp_pages[0]);
@@ -349,6 +348,7 @@ static int cmm_split_entries(const struct lu_env *env,
         ENTRY;
 
         LASSERT(rdpg->rp_npages == 1);
+
         /* Read split page and send them to the slave master. */
         do {
                 struct lu_dirpage *ldp;
@@ -382,9 +382,9 @@ static int cmm_split_entries(const struct lu_env *env,
 
                 kmap(rdpg->rp_pages[0]);
                 ldp = page_address(rdpg->rp_pages[0]);
-                if (ldp->ldp_hash_end >= end) {
+                if (ldp->ldp_hash_end >= end)
                         done = 1;
-                }
+
                 rdpg->rp_hash = ldp->ldp_hash_end;
                 kunmap(rdpg->rp_pages[0]);
         } while (!done);
@@ -431,9 +431,9 @@ static int cmm_scan_and_split(const struct lu_env *env,
                 hash_end = rdpg->rp_hash + hash_segement;
                 rc = cmm_split_entries(env, mo, rdpg, lf, hash_end);
                 if (rc) {
-                        CERROR("Error (rc=%d) while splitting for %d: fid="
-                                DFID", %08x:%08x\n", rc, i, PFID(lf), 
-                                rdpg->rp_hash, hash_end);
+                        CERROR("Error (rc = %d) while splitting for %d: fid="
+                               DFID", %08x:%08x\n", rc, i, PFID(lf), 
+                               rdpg->rp_hash, hash_end);
                         GOTO(cleanup, rc);
                 }
         }
@@ -492,7 +492,7 @@ int cmm_try_to_split(const struct lu_env *env, struct md_object *mo)
         rc = cmm_upcall(env, &cmm->cmm_md_dev, MD_NO_TRANS);
         if (rc) {
                 CERROR("Can't disable trans for split, rc %d\n", rc);
-                GOTO(cleanup, rc);
+                RETURN(rc);
         }
 
         /* Step2: Prepare the md memory */
@@ -551,9 +551,10 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
         rc = mo_attr_get(env, mp, ma);
         if (rc)
                 RETURN(rc);
+        
         /* No LMV just return */
         if (!(ma->ma_valid & MA_LMV))
-                RETURN(rc);
+                RETURN(0);
 
         LASSERT(ma->ma_lmv_size > 0);
         OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
@@ -569,20 +570,22 @@ int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
 
         /* Skip checking the slave dirs (mea_count is 0) */
         if (ma->ma_lmv->mea_count != 0) {
-                int stripe;
-                /* 
-                 * Get stripe by name to check the name belongs to
-                 * master dir, otherwise return the -ERESTART
-                 */
-                stripe = mea_name2idx(ma->ma_lmv, name, strlen(name));
+                int idx;
 
-                /* Master stripe is always 0 */
-                if (stripe != 0)
+                /* 
+                 * Get stripe by name to check the name belongs to master dir,
+                 * otherwise return the -ERESTART
+                 */
+                idx = mea_name2idx(ma->ma_lmv, name, strlen(name));
+                
+                /* Check if name came to correct MDT server. */
+                if (idx != 0)
                         rc = -ERESTART;
         }
+        EXIT;
 cleanup:
         OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);
-        RETURN(rc);
+        return rc;
 }
 
 int cmm_split_lock_mode(const struct lu_env *env, struct md_object *mo,
@@ -593,9 +596,10 @@ int cmm_split_lock_mode(const struct lu_env *env, struct md_object *mo,
         ENTRY;
 
         memset(ma, 0, sizeof(*ma));
+        
         /*
-         * Check only if we need protection from split. 
-         * If not - mdt handles other cases.
+         * Check only if we need protection from split.  If not - mdt handles
+         * other cases.
          */
         rc = cmm_expect_splitting(env, mo, ma, &split);
         if (rc) {
@@ -604,8 +608,8 @@ int cmm_split_lock_mode(const struct lu_env *env, struct md_object *mo,
         }
 
         /*
-         * Do not take PDO lock on non-splittable objects if 
-         * this is not PW, this should speed things up a bit.
+         * Do not take PDO lock on non-splittable objects if this is not PW,
+         * this should speed things up a bit.
          */
         if (split == CMM_NOT_SPLITTABLE && lm != MDL_PW)
                 RETURN(MDL_NL);
@@ -615,8 +619,7 @@ int cmm_split_lock_mode(const struct lu_env *env, struct md_object *mo,
                 RETURN(MDL_EX);
 
         /* 
-         * XXX Have no idea about lock mode, let it be 
-         * what higher layer wants. 
+         * Have no idea about lock mode, let it be what higher layer wants.
          */
         RETURN(MDL_MINMODE);
 }

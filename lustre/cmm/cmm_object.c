@@ -36,9 +36,8 @@
 #include "cmm_internal.h"
 #include "mdc_internal.h"
 
-static int cmm_fld_lookup(struct cmm_device *cm,
-                          const struct lu_fid *fid, mdsno_t *mds,
-                          const struct lu_env *env)
+int cmm_fld_lookup(struct cmm_device *cm, const struct lu_fid *fid,
+                   mdsno_t *mds, const struct lu_env *env)
 {
         int rc = 0;
         ENTRY;
