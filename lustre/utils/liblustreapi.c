@@ -1272,7 +1272,10 @@ int llapi_getfacl(char *fname, char *cmd)
 
         rc = ioctl(fd, LL_IOC_GETFACL, &data);
         close(fd);
-        if (rc) {
+        if (errno == EBADE) {
+                fprintf(stderr, "Please use getfacl directly!\n");
+                rc = 1;
+        } else if (rc) {
                 err_msg("getfacl %s failed", fname);
         } else {
                 printf("%s", out);
@@ -1300,7 +1303,10 @@ int llapi_setfacl(char *fname, char *cmd)
 
         rc = ioctl(fd, LL_IOC_SETFACL, &data);
         close(fd);
-        if (errno == EOPNOTSUPP) {
+        if (errno == EBADE) {
+                fprintf(stderr, "Please use setfacl directly!\n");
+                rc = 1;
+        } else if (errno == EOPNOTSUPP) {
                 fprintf(stderr, "setfacl: %s: %s\n", fname, strerror(errno));
                 rc = 1;
         } else if (rc) {

@@ -2279,12 +2279,16 @@ void ll_finish_md_op_data(struct md_op_data *op_data)
 
 int ll_ioctl_getfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)
 {
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *req = NULL;
         struct mdt_body *body;
         char *cmd, *buf;
         struct obd_capa *oc;
         int rc, buflen;
         ENTRY;
+
+        if (!(sbi->ll_flags & LL_SBI_RMT_CLIENT))
+                RETURN(-EBADE);
 
         LASSERT(ioc->cmd && ioc->cmd_len && ioc->res && ioc->res_len);
 
@@ -2331,8 +2335,10 @@ int ll_ioctl_setfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc)
         int buflen, rc;
         ENTRY;
 
-        if (!(sbi->ll_flags & LL_SBI_ACL) ||
-            !(sbi->ll_flags & LL_SBI_RMT_CLIENT))
+        if (!(sbi->ll_flags & LL_SBI_RMT_CLIENT))
+                RETURN(-EBADE);
+
+        if (!(sbi->ll_flags & LL_SBI_ACL)) 
                 RETURN(-EOPNOTSUPP);
 
         LASSERT(ioc->cmd && ioc->cmd_len && ioc->res && ioc->res_len);
