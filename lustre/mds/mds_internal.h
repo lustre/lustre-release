@@ -122,12 +122,13 @@ static inline void mds_inode_unset_orphan(struct inode *inode)
 }
 
 /* mds/mds_reint.c */
-int res_gt(struct ldlm_res_id *res1, struct ldlm_res_id *res2,
+int res_gt(const struct ldlm_res_id *res1, const struct ldlm_res_id *res2,
            ldlm_policy_data_t *p1, ldlm_policy_data_t *p2);
-int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
+int enqueue_ordered_locks(struct obd_device *obd,
+                          const struct ldlm_res_id *p1_res_id,
                           struct lustre_handle *p1_lockh, int p1_lock_mode,
                           ldlm_policy_data_t *p1_policy,
-                          struct ldlm_res_id *p2_res_id,
+                          const struct ldlm_res_id *p2_res_id,
                           struct lustre_handle *p2_lockh, int p2_lock_mode,
                           ldlm_policy_data_t *p2_policy);
 void mds_commit_cb(struct obd_device *, __u64 last_rcvd, void *data, int error);
@@ -176,7 +177,7 @@ int mds_cleanup_pending(struct obd_device *obd);
 
 
 /* mds/mds_log.c */
-int mds_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
+int mds_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
                   struct obd_device *tgt, int count,
                   struct llog_catid *logid, struct obd_uuid *uuid);
 int mds_llog_finish(struct obd_device *obd, int count);
@@ -188,7 +189,7 @@ int mds_lov_write_objids(struct obd_device *obd);
 int mds_lov_clear_orphans(struct mds_obd *mds, struct obd_uuid *ost_uuid);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
 int mds_lov_set_nextid(struct obd_device *obd);
-int mds_lov_start_synchronize(struct obd_device *obd, 
+int mds_lov_start_synchronize(struct obd_device *obd,
                               struct obd_device *watched,
                               void *data, int nonblock);
 int mds_post_mds_lovconf(struct obd_device *obd);
@@ -212,7 +213,7 @@ int mds_close(struct ptlrpc_request *req, int offset);
 int mds_done_writing(struct ptlrpc_request *req, int offset);
 
 /*mds/mds_join.c*/
-int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req, 
+int mds_join_file(struct mds_update_record *rec, struct ptlrpc_request *req,
                   struct dentry *dchild, struct lustre_handle *lockh);
 
 /* mds/mds_fs.c */

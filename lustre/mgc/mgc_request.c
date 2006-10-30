@@ -69,7 +69,7 @@ int mgc_logname2resid(char *logname, struct ldlm_res_id *res_id)
         memcpy(&resname, logname, len);
 
         memset(res_id, 0, sizeof(*res_id));
-        
+
         /* Always use the same endianness for the resid */
         res_id->name[0] = cpu_to_le64(resname);
         CDEBUG(D_MGC, "log %s to resid "LPX64"/"LPX64" (%.8s)\n", logname,
@@ -94,7 +94,7 @@ static int config_log_get(struct config_llog_data *cld)
         RETURN(0);
 }
 
-/* Drop a reference to a config log.  When no longer referenced, 
+/* Drop a reference to a config log.  When no longer referenced,
    we can free the config log data */
 static void config_log_put(struct config_llog_data *cld)
 {
@@ -114,7 +114,7 @@ static void config_log_put(struct config_llog_data *cld)
 }
 
 /* Find a config log by name */
-static struct config_llog_data *config_log_find(char *logname, 
+static struct config_llog_data *config_log_find(char *logname,
                                                 struct config_llog_instance *cfg)
 {
         struct list_head *tmp;
@@ -179,10 +179,10 @@ static int config_log_add(char *logname, struct config_llog_instance *cfg,
         cld->cld_cfg.cfg_flags = 0;
         cld->cld_cfg.cfg_sb = sb;
         atomic_set(&cld->cld_refcount, 1);
-        
+
         /* Keep the mgc around until we are done */
         cld->cld_mgcexp = class_export_get(lsi->lsi_mgc->obd_self_export);
-        
+
         if (cfg->cfg_instance != NULL) {
                 OBD_ALLOC(cld->cld_cfg.cfg_instance,
                           strlen(cfg->cfg_instance) + 1);
@@ -344,7 +344,7 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         ENTRY;
 
         switch (stage) {
-        case OBD_CLEANUP_EARLY: 
+        case OBD_CLEANUP_EARLY:
                 break;
         case OBD_CLEANUP_EXPORTS:
                 break;
@@ -366,10 +366,10 @@ static int mgc_cleanup(struct obd_device *obd)
         ENTRY;
 
         LASSERT(cli->cl_mgc_vfsmnt == NULL);
-        
-        /* COMPAT_146 - old config logs may have added profiles we don't 
+
+        /* COMPAT_146 - old config logs may have added profiles we don't
            know about */
-        if (obd->obd_type->typ_refcnt <= 1) 
+        if (obd->obd_type->typ_refcnt <= 1)
                 /* Only for the last mgc */
                 class_del_profiles();
 
@@ -447,7 +447,7 @@ static int mgc_async_requeue(void *data)
            it's needed. */
         /* Unsafe - we don't know that the lsi hasn't been destroyed */
         server_register_target(cld->cld_cfg.cfg_sb);
-#endif 
+#endif
 
         rc = mgc_process_log(cld->cld_mgcexp->exp_obd, cld);
 out:
@@ -553,8 +553,8 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         /* We need a callback for every lockholder, so don't try to
            ldlm_lock_match (see rev 1.1.2.11.2.47) */
 
-        rc = ldlm_cli_enqueue(exp, NULL, cld->cld_resid,
-                              type, NULL, mode, flags, 
+        rc = ldlm_cli_enqueue(exp, NULL, &cld->cld_resid,
+                              type, NULL, mode, flags,
                               mgc_blocking_ast, ldlm_completion_ast, NULL,
                               data, NULL, 0, NULL, lockh, 0);
 
@@ -650,7 +650,7 @@ static int mgc_target_register(struct obd_export *exp,
                 RETURN(-ENOMEM);
 
         req_mti = lustre_msg_buf(req->rq_reqmsg, REQ_REC_OFF, sizeof(*req_mti));
-        if (!req_mti) 
+        if (!req_mti)
                 RETURN(-ENOMEM);
         memcpy(req_mti, mti, sizeof(*req_mti));
 
@@ -675,7 +675,7 @@ static int mgc_target_register(struct obd_export *exp,
 }
 
 int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
-                       void *key, obd_count vallen, void *val, 
+                       void *key, obd_count vallen, void *val,
                        struct ptlrpc_request_set *set)
 {
         struct obd_import *imp = class_exp2cliimp(exp);
@@ -698,12 +698,12 @@ int mgc_set_info_async(struct obd_export *exp, obd_count keylen,
                         RETURN(-EINVAL);
                 value = *(int *)val;
                 imp->imp_initial_recov_bk = value > 0;
-                /* Even after the initial connection, give up all comms if 
+                /* Even after the initial connection, give up all comms if
                    nobody answers the first time. */
                 imp->imp_recon_bk = 1;
-                CDEBUG(D_MGC, "InitRecov %s %d/%d:d%d:i%d:r%d:or%d:%s\n", 
+                CDEBUG(D_MGC, "InitRecov %s %d/%d:d%d:i%d:r%d:or%d:%s\n",
                        imp->imp_obd->obd_name, value, imp->imp_initial_recov,
-                       imp->imp_deactive, imp->imp_invalid, 
+                       imp->imp_deactive, imp->imp_invalid,
                        imp->imp_replayable, imp->imp_obd->obd_replayable,
                        ptlrpc_import_state_name(imp->imp_state));
                 /* Resurrect if we previously died */
@@ -766,18 +766,18 @@ static int mgc_import_event(struct obd_device *obd,
         CDEBUG(D_MGC, "import event %#x\n", event);
 
         switch (event) {
-        case IMP_EVENT_DISCON: 
+        case IMP_EVENT_DISCON:
                 /* MGC imports should not wait for recovery */
                 ptlrpc_invalidate_import(imp);
                 break;
-        case IMP_EVENT_INACTIVE: 
+        case IMP_EVENT_INACTIVE:
                 break;
         case IMP_EVENT_INVALIDATE: {
                 struct ldlm_namespace *ns = obd->obd_namespace;
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
                 break;
         }
-        case IMP_EVENT_ACTIVE: 
+        case IMP_EVENT_ACTIVE:
         case IMP_EVENT_OCD:
                 break;
         default:
@@ -787,8 +787,8 @@ static int mgc_import_event(struct obd_device *obd,
         RETURN(rc);
 }
 
-static int mgc_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
-                         struct obd_device *tgt, int count, 
+static int mgc_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
+                         struct obd_device *tgt, int count,
                          struct llog_catid *logid, struct obd_uuid *uuid)
 {
         struct llog_ctxt *ctxt;
@@ -1042,7 +1042,7 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 break;
         }
         case LCFG_LOV_DEL_OBD:
-                /* Remove target from the fs? */  
+                /* Remove target from the fs? */
                 /* FIXME */
                 CERROR("lov_del_obd unimplemented\n");
                 rc = -ENOSYS;
@@ -1072,7 +1072,7 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 /* FIXME only set this for old logs!  Right now this forces
                    us to always skip the "inside markers" check */
                 cld->cld_cfg.cfg_flags |= CFG_F_COMPAT146;
-                
+
                 rc = mgc_process_log(obd, cld);
                 config_log_put(cld);
 
@@ -1118,7 +1118,7 @@ struct obd_ops mgc_obd_ops = {
 
 int __init mgc_init(void)
 {
-        return class_register_type(&mgc_obd_ops, NULL, NULL, 
+        return class_register_type(&mgc_obd_ops, NULL, NULL,
                                    LUSTRE_MGC_NAME, NULL);
 }
 

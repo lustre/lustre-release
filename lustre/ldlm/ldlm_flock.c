@@ -334,7 +334,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                 /* XXX - if ldlm_lock_new() can sleep we should
                  * release the ns_lock, allocate the new lock,
                  * and restart processing this lock. */
-                new2 = ldlm_lock_create(ns, NULL, res->lr_name, LDLM_FLOCK,
+                new2 = ldlm_lock_create(ns, NULL, &res->lr_name, LDLM_FLOCK,
                                         lock->l_granted_mode, NULL, NULL, NULL,
                                         NULL, 0);
                 if (!new2) {
@@ -380,7 +380,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
         if (*flags != LDLM_FL_WAIT_NOREPROC) {
                 if (first_enq) {
                         /* If this is an unlock, reprocess the waitq and
-                         * send completions ASTs for locks that can now be 
+                         * send completions ASTs for locks that can now be
                          * granted. The only problem with doing this
                          * reprocessing here is that the completion ASTs for
                          * newly granted locks will be sent before the unlock
@@ -492,7 +492,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
 
         LDLM_DEBUG(lock, "client-side enqueue waking up: rc = %d", rc);
         RETURN(rc);
- 
+
 granted:
 
         LDLM_DEBUG(lock, "client-side enqueue granted");

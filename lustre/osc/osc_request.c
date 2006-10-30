@@ -280,7 +280,7 @@ static int osc_setattr(struct obd_export *exp, struct obd_info *oinfo,
         int rc, size[3] = { sizeof(struct ptlrpc_body), sizeof(*body) };
         ENTRY;
 
-        LASSERT(!(oinfo->oi_oa->o_valid & OBD_MD_FLGROUP) || 
+        LASSERT(!(oinfo->oi_oa->o_valid & OBD_MD_FLGROUP) ||
                                         oinfo->oi_oa->o_gr > 0);
         size[REQ_REC_OFF + 1] = oinfo->oi_capa ? sizeof(struct lustre_capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_OST_VERSION,
@@ -743,7 +743,7 @@ static void handle_short_read(int nob_read, obd_count page_count,
 
                 if (pga[i]->count > nob_read) {
                         /* EOF inside this page */
-                        ptr = cfs_kmap(pga[i]->pg) + 
+                        ptr = cfs_kmap(pga[i]->pg) +
                                 (pga[i]->off & ~CFS_PAGE_MASK);
                         memset(ptr + nob_read, 0, pga[i]->count - nob_read);
                         cfs_kunmap(pga[i]->pg);
@@ -2684,7 +2684,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
 
                 /* We already have a lock, and it's referenced */
                 oinfo->oi_cb_up(oinfo, ELDLM_OK);
-                
+
                 /* For async requests, decref the lock. */
                 if (einfo->ei_rqset)
                         ldlm_lock_decref(oinfo->oi_lockh, einfo->ei_mode);
@@ -2736,7 +2736,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
                         RETURN(-ENOMEM);
 
                 size[DLM_LOCKREPLY_OFF] = sizeof(*rep);
-                size[DLM_REPLY_REC_OFF] = 
+                size[DLM_REPLY_REC_OFF] =
                         sizeof(oinfo->oi_md->lsm_oinfo->loi_lvb);
                 ptlrpc_req_set_repsize(req, 3, size);
         }
@@ -2744,7 +2744,7 @@ static int osc_enqueue(struct obd_export *exp, struct obd_info *oinfo,
         /* users of osc_enqueue() can pass this flag for ldlm_lock_match() */
         einfo->ei_flags &= ~LDLM_FL_BLOCK_GRANTED;
 
-        rc = ldlm_cli_enqueue(exp, &req, res_id, einfo->ei_type,
+        rc = ldlm_cli_enqueue(exp, &req, &res_id, einfo->ei_type,
                               &oinfo->oi_policy, einfo->ei_mode,
                               &einfo->ei_flags, einfo->ei_cb_bl,
                               einfo->ei_cb_cp, einfo->ei_cb_gl,
@@ -2785,7 +2785,7 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct obd_device *obd = exp->exp_obd;
         int rc;
         ENTRY;
-        
+
         res_id.name[0] = lsm->lsm_object_id;
         res_id.name[2] = lsm->lsm_object_gr;
 
@@ -2848,7 +2848,7 @@ static int osc_cancel_unused(struct obd_export *exp,
                 resp = &res_id;
         }
 
-        return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags, 
+        return ldlm_cli_cancel_unused(obd->obd_namespace, resp, flags,
                                       opaque);
 }
 
@@ -3262,8 +3262,8 @@ static struct llog_operations osc_size_repl_logops = {
 };
 
 static struct llog_operations osc_mds_ost_orig_logops;
-static int osc_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
-                         struct obd_device *tgt, int count, 
+static int osc_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
+                         struct obd_device *tgt, int count,
                          struct llog_catid *catid, struct obd_uuid *uuid)
 {
         int rc;
@@ -3288,11 +3288,11 @@ static int osc_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
 
         rc = llog_setup(obd, llogs, LLOG_SIZE_REPL_CTXT, tgt, count, NULL,
                         &osc_size_repl_logops);
-        if (rc) 
+        if (rc)
                 CERROR("failed LLOG_SIZE_REPL_CTXT\n");
 out:
         if (rc) {
-                CERROR("osc '%s' tgt '%s' cnt %d catid %p rc=%d\n", 
+                CERROR("osc '%s' tgt '%s' cnt %d catid %p rc=%d\n",
                        obd->obd_name, tgt->obd_name, count, catid, rc);
                 CERROR("logid "LPX64":0x%x\n",
                        catid->lci_logid.lgl_oid, catid->lci_logid.lgl_ogen);

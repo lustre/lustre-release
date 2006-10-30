@@ -223,7 +223,8 @@ int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp)
         return -ELDLM_NO_LOCK_DATA;
 }
 
-int ldlm_cli_enqueue_local(struct ldlm_namespace *ns, struct ldlm_res_id res_id,
+int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
+                           const struct ldlm_res_id *res_id,
                            ldlm_type_t type, ldlm_policy_data_t *policy,
                            ldlm_mode_t mode, int *flags,
                            ldlm_blocking_callback blocking,
@@ -267,8 +268,6 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns, struct ldlm_res_id res_id,
 
         if (policy != NULL)
                 *policy = lock->l_policy_data;
-        if ((*flags) & LDLM_FL_LOCK_CHANGED)
-                res_id = lock->l_resource->lr_name;
 
         LDLM_DEBUG_NOLOCK("client-side local enqueue handler END (lock %p)",
                           lock);
@@ -381,7 +380,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                 }
 
                 if (memcmp(reply->lock_desc.l_resource.lr_name.name,
-                          lock->l_resource->lr_name.name, 
+                          lock->l_resource->lr_name.name,
                           sizeof(struct ldlm_res_id))) {
                         CDEBUG(D_INFO, "remote intent success, locking "
                                         "(%ld,%ld,%ld) instead of "
@@ -394,7 +393,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                               (long)lock->l_resource->lr_name.name[2]);
 
                         ldlm_lock_change_resource(ns, lock,
-                                           reply->lock_desc.l_resource.lr_name);
+                                          &reply->lock_desc.l_resource.lr_name);
                         if (lock->l_resource == NULL) {
                                 LBUG();
                                 GOTO(cleanup, rc = -ENOMEM);
@@ -467,8 +466,8 @@ cleanup:
  * request was created in ldlm_cli_enqueue and it is the async request,
  * pass it to the caller in @reqp. */
 int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
-                     struct ldlm_res_id res_id, 
-                     ldlm_type_t type, ldlm_policy_data_t *policy, 
+                     const struct ldlm_res_id *res_id,
+                     ldlm_type_t type, ldlm_policy_data_t *policy,
                      ldlm_mode_t mode, int *flags,
                      ldlm_blocking_callback blocking,
                      ldlm_completion_callback completion,
@@ -880,8 +879,8 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 }
 
 static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
-                                           struct ldlm_res_id res_id, int flags,
-                                           void *opaque)
+                                           const struct ldlm_res_id *res_id,
+                                           int flags, void *opaque)
 {
         struct list_head *tmp, *next, list = CFS_LIST_HEAD_INIT(list);
         struct ldlm_resource *res;
@@ -891,7 +890,7 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
         res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
         if (res == NULL) {
                 /* This is not a problem. */
-                CDEBUG(D_INFO, "No resource "LPU64"\n", res_id.name[0]);
+                CDEBUG(D_INFO, "No resource "LPU64"\n", res_id->name[0]);
                 RETURN(0);
         }
 
@@ -964,7 +963,8 @@ static inline int have_no_nsresource(struct ldlm_namespace *ns)
  * to notify the server.
  * If flags & LDLM_FL_WARN, print a warning if some locks are still in use. */
 int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
-                           struct ldlm_res_id *res_id, int flags, void *opaque)
+                           const struct ldlm_res_id *res_id,
+                           int flags, void *opaque)
 {
         int i;
         ENTRY;
@@ -973,7 +973,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
                 RETURN(ELDLM_OK);
 
         if (res_id)
-                RETURN(ldlm_cli_cancel_unused_resource(ns, *res_id, flags,
+                RETURN(ldlm_cli_cancel_unused_resource(ns, res_id, flags,
                                                        opaque));
 
         spin_lock(&ns->ns_hash_lock);
@@ -988,7 +988,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
                         ldlm_resource_getref(res);
                         spin_unlock(&ns->ns_hash_lock);
 
-                        rc = ldlm_cli_cancel_unused_resource(ns, res->lr_name,
+                        rc = ldlm_cli_cancel_unused_resource(ns, &res->lr_name,
                                                              flags, opaque);
 
                         if (rc)
@@ -1007,7 +1007,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
 
 /* join/split resource locks to/from lru list */
 int ldlm_cli_join_lru(struct ldlm_namespace *ns,
-                      struct ldlm_res_id *res_id, int join)
+                      const struct ldlm_res_id *res_id, int join)
 {
         struct ldlm_resource *res;
         struct ldlm_lock *lock, *n;
@@ -1016,7 +1016,7 @@ int ldlm_cli_join_lru(struct ldlm_namespace *ns,
 
         LASSERT(ns->ns_client == LDLM_NAMESPACE_CLIENT);
 
-        res = ldlm_resource_get(ns, NULL, *res_id, LDLM_EXTENT, 0);
+        res = ldlm_resource_get(ns, NULL, res_id, LDLM_EXTENT, 0);
         if (res == NULL)
                 RETURN(count);
         LASSERT(res->lr_type == LDLM_EXTENT);
@@ -1152,7 +1152,8 @@ int ldlm_namespace_foreach_res(struct ldlm_namespace *ns,
 }
 
 /* non-blocking function to manipulate a lock whose cb_data is being put away.*/
-void ldlm_resource_iterate(struct ldlm_namespace *ns, struct ldlm_res_id *res_id,
+void ldlm_resource_iterate(struct ldlm_namespace *ns,
+                           const struct ldlm_res_id *res_id,
                            ldlm_iterator_t iter, void *data)
 {
         struct ldlm_resource *res;
@@ -1163,7 +1164,7 @@ void ldlm_resource_iterate(struct ldlm_namespace *ns, struct ldlm_res_id *res_id
                 LBUG();
         }
 
-        res = ldlm_resource_get(ns, NULL, *res_id, 0, 0);
+        res = ldlm_resource_get(ns, NULL, res_id, 0, 0);
         if (res == NULL) {
                 EXIT;
                 return;

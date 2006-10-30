@@ -409,7 +409,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         if (rc)
                                 GOTO(out_oa, rc);
                 }
-                rc = obd_create(mds->mds_osc_exp, oinfo.oi_oa, 
+                rc = obd_create(mds->mds_osc_exp, oinfo.oi_oa,
                                 &oinfo.oi_md, &oti);
                 if (rc) {
                         int level = D_ERROR;
@@ -436,8 +436,8 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         }
         if (inode->i_size) {
                 oinfo.oi_oa->o_size = inode->i_size;
-                obdo_from_inode(oinfo.oi_oa, inode, OBD_MD_FLTYPE | 
-                                OBD_MD_FLATIME | OBD_MD_FLMTIME | 
+                obdo_from_inode(oinfo.oi_oa, inode, OBD_MD_FLTYPE |
+                                OBD_MD_FLATIME | OBD_MD_FLMTIME |
                                 OBD_MD_FLCTIME | OBD_MD_FLSIZE);
 
                 /* pack lustre id to OST */
@@ -844,7 +844,7 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
         if (child_lockh == NULL)
                 child_lockh = &lockh;
 
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, child_res_id,
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &child_res_id,
                                     LDLM_PLAIN, NULL, LCK_EX, &lock_flags,
                                     ldlm_blocking_ast, ldlm_completion_ast,
                                     NULL, NULL, 0, NULL, child_lockh);
@@ -1138,16 +1138,16 @@ found_child:
         else
                 child_mode = LCK_CR;
 
-        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) && 
+        if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
              (rec->ur_flags & MDS_OPEN_LOCK)) {
                 /* In case of replay we do not get a lock assuming that the
                    caller has it already */
                 child_res_id.name[0] = dchild->d_inode->i_ino;
                 child_res_id.name[1] = dchild->d_inode->i_generation;
 
-                rc = ldlm_cli_enqueue_local(obd->obd_namespace, child_res_id,
-                                            LDLM_IBITS, &policy, child_mode, 
-                                            &lock_flags, ldlm_blocking_ast, 
+                rc = ldlm_cli_enqueue_local(obd->obd_namespace, &child_res_id,
+                                            LDLM_IBITS, &policy, child_mode,
+                                            &lock_flags, ldlm_blocking_ast,
                                             ldlm_completion_ast, NULL, NULL,
                                             0, NULL, child_lockh);
                 if (rc != ELDLM_OK)

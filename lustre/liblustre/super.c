@@ -152,10 +152,10 @@ void llu_update_inode(struct inode *inode, struct mdt_body *body,
         if (body->valid & OBD_MD_FLATIME &&
             body->atime > LTIME_S(st->st_atime))
                 LTIME_S(st->st_atime) = body->atime;
-        
+
         /* mtime is always updated with ctime, but can be set in past.
            As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, so take mtime from mds 
+           mtime has a priority over write's one, so take mtime from mds
            for the same ctimes. */
         if (body->valid & OBD_MD_FLCTIME &&
             body->ctime >= LTIME_S(st->st_ctime)) {
@@ -623,7 +623,7 @@ int llu_md_setattr(struct inode *inode, struct md_op_data *op_data)
         struct ptlrpc_request *request = NULL;
         int rc;
         ENTRY;
-        
+
         llu_prep_md_op_data(op_data, inode, NULL, NULL, 0, 0);
         rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0, &request);
 
@@ -661,7 +661,7 @@ static int llu_setattr_done_writing(struct inode *inode,
         struct intnl_stat *st = llu_i2stat(inode);
         int rc = 0;
         ENTRY;
-        
+
         LASSERT(op_data != NULL);
         if (!S_ISREG(st->st_mode))
                 RETURN(0);
@@ -733,12 +733,12 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
         if ((attr->ia_valid & ATTR_CTIME) && !(attr->ia_valid & ATTR_MTIME)) {
-                /* To avoid stale mtime on mds, obtain it from ost and send 
+                /* To avoid stale mtime on mds, obtain it from ost and send
                    to mds. */
                 rc = llu_glimpse_size(inode);
-                if (rc) 
+                if (rc)
                         RETURN(rc);
-                
+
                 attr->ia_valid |= ATTR_MTIME_SET | ATTR_MTIME;
                 attr->ia_mtime = inode->i_stbuf.st_mtime;
         }
@@ -791,7 +791,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         }
                 }
 
-                
+
                 /* Won't invoke llu_vmtruncate(), as we already cleared
                  * ATTR_SIZE */
                 inode_setattr(inode, attr);
@@ -845,7 +845,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         if (!rc)
                                 rc = err;
                 }
-                
+
                 if (op_data.ioepoch)
                         rc = llu_setattr_done_writing(inode, &op_data);
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
@@ -1449,9 +1449,9 @@ static int llu_file_flock(struct inode *ino,
                "start="LPU64", end="LPU64"\n", st->st_ino, flock.l_flock.pid,
                flags, mode, flock.l_flock.start, flock.l_flock.end);
 
-        rc = ldlm_cli_enqueue(llu_i2mdcexp(ino), NULL, res_id, 
-                              LDLM_FLOCK, &flock, mode, &flags, NULL, 
-                              ldlm_flock_completion_ast, NULL, 
+        rc = ldlm_cli_enqueue(llu_i2mdcexp(ino), NULL, &res_id,
+                              LDLM_FLOCK, &flock, mode, &flags, NULL,
+                              ldlm_flock_completion_ast, NULL,
                               file_lock, NULL, 0, NULL, &lockh, 0);
         RETURN(rc);
 }
@@ -1693,7 +1693,7 @@ static int llu_put_grouplock(struct inode *inode, unsigned long arg)
 
 static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
 {
-        struct llu_sb_info *sbi = llu_i2sbi(ino); 
+        struct llu_sb_info *sbi = llu_i2sbi(ino);
         struct ptlrpc_request *request = NULL;
         struct md_op_data op_data;
         struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
@@ -1731,7 +1731,7 @@ static int llu_lov_dir_setstripe(struct inode *ino, unsigned long arg)
 static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
                                      struct lov_user_md *lum, int lum_size)
 {
-        struct llu_sb_info *sbi = llu_i2sbi(ino); 
+        struct llu_sb_info *sbi = llu_i2sbi(ino);
         struct llu_inode_info *lli = llu_i2info(ino);
         struct llu_inode_info *lli2 = NULL;
         struct lov_stripe_md *lsm;
@@ -1753,7 +1753,7 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
         OBD_ALLOC(lli2, sizeof(struct llu_inode_info));
         if (!lli2)
                 return -ENOMEM;
-        
+
         memcpy(lli2, lli, sizeof(struct llu_inode_info));
         lli2->lli_open_count = 0;
         lli2->lli_it = NULL;
@@ -1769,38 +1769,38 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
                         llu_md_blocking_ast, NULL, LDLM_FL_INTENT_ONLY);
         if (rc)
                 GOTO(out, rc);
-        
+
         req = oit.d.lustre.it_data;
         rc = it_open_error(DISP_IT_EXECD, &oit);
         if (rc) {
                 req->rq_replay = 0;
                 GOTO(out, rc);
         }
-        
+
         rc = it_open_error(DISP_OPEN_OPEN, &oit);
         if (rc) {
                 req->rq_replay = 0;
                 GOTO(out, rc);
         }
-        
+
         rc = md_get_lustre_md(sbi->ll_md_exp, req,
                               1, sbi->ll_dt_exp, sbi->ll_md_exp, &md);
         if (rc)
                 GOTO(out, rc);
-        
+
         llu_update_inode(ino, md.body, md.lsm);
         lli->lli_smd = lli2->lli_smd;
         lli2->lli_smd = NULL;
 
         llu_local_open(lli2, &oit);
-       
+
         /* release intent */
         if (lustre_handle_is_used(&lockh))
                 ldlm_lock_decref(&lockh, LCK_CR);
 
         ptlrpc_req_finished(req);
         req = NULL;
-        
+
         rc = llu_file_release(ino);
  out:
         ino->i_private = lli;
@@ -1835,8 +1835,8 @@ static int llu_lov_setstripe(struct inode *ino, unsigned long arg)
                 return llu_lov_file_setstripe(ino, arg);
         if (S_ISDIR(st->st_mode))
                 return llu_lov_dir_setstripe(ino, arg);
-        
-        return -EINVAL; 
+
+        return -EINVAL;
 }
 
 static int llu_lov_getstripe(struct inode *ino, unsigned long arg)

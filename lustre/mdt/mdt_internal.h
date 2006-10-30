@@ -358,8 +358,10 @@ struct mdt_thread_info {
 
         struct lu_fid              mti_tmp_fid1;
         struct lu_fid              mti_tmp_fid2;
-        ldlm_policy_data_t         mti_policy;    /* for mdt_object_lock()   */
-        struct ldlm_res_id         mti_res_id;    /* for mdt_object_lock()   */
+        ldlm_policy_data_t         mti_policy;    /* for mdt_object_lock() and
+                                                   * mdt_rename_lock() */
+        struct ldlm_res_id         mti_res_id;    /* for mdt_object_lock() and
+                                                     mdt_rename_lock()   */
         union {
                 struct obd_uuid    uuid[2];       /* for mdt_seq_init_cli()  */
                 char               ns_name[48];   /* for mdt_init0()         */
@@ -662,7 +664,7 @@ static inline int mdt_fid_lock(struct ldlm_namespace *ns,
                                struct lustre_handle *lh,
                                ldlm_mode_t mode,
                                ldlm_policy_data_t *policy,
-                               struct ldlm_res_id *res_id,
+                               const struct ldlm_res_id *res_id,
                                int flags)
 {
         int rc;
@@ -670,7 +672,7 @@ static inline int mdt_fid_lock(struct ldlm_namespace *ns,
         LASSERT(ns != NULL);
         LASSERT(lh != NULL);
 
-        rc = ldlm_cli_enqueue_local(ns, *res_id, LDLM_IBITS, policy,
+        rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
                                     mode, &flags, ldlm_blocking_ast,
                                     ldlm_completion_ast, NULL, NULL,
                                     0, NULL, lh);

@@ -368,7 +368,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 
 /*
  * Prolong the lock
- * 
+ *
  * Called with namespace lock held.
  */
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock)
@@ -804,7 +804,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 
         /* The lock's callback data might be set in the policy function */
         lock = ldlm_lock_create(ns, &dlm_req->lock_handle2,
-                                dlm_req->lock_desc.l_resource.lr_name,
+                                &dlm_req->lock_desc.l_resource.lr_name,
                                 dlm_req->lock_desc.l_resource.lr_type,
                                 dlm_req->lock_desc.l_req_mode,
                                 cbs->lcs_blocking, cbs->lcs_completion,
@@ -1200,7 +1200,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                    sizeof(lock->l_resource->lr_name)) != 0) {
                 unlock_res_and_lock(lock);
                 ldlm_lock_change_resource(ns, lock,
-                                         dlm_req->lock_desc.l_resource.lr_name);
+                                        &dlm_req->lock_desc.l_resource.lr_name);
                 LDLM_DEBUG(lock, "completion AST, new resource");
                 CERROR("change resource!\n");
                 lock_res_and_lock(lock);

@@ -1409,7 +1409,7 @@ static int filter_prepare_destroy(struct obd_device *obd, obd_id objid,
         ENTRY;
         /* Tell the clients that the object is gone now and that they should
          * throw away any cached pages. */
-        rc = ldlm_cli_enqueue_local(obd->obd_namespace, res_id, LDLM_EXTENT,
+        rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id, LDLM_EXTENT,
                                     &policy, LCK_PW, &flags, ldlm_blocking_ast,
                                     ldlm_completion_ast, NULL, NULL, 0, NULL,
                                     &lockh);
@@ -2965,7 +2965,7 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
                 GOTO(out_unlock, rc);
 
         res = ldlm_resource_get(exp->exp_obd->obd_namespace, NULL,
-                                res_id, LDLM_EXTENT, 0);
+                                &res_id, LDLM_EXTENT, 0);
 
         if (res != NULL) {
                 ns_lvbo = res->lr_namespace->ns_lvbo;

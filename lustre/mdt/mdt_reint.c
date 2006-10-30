@@ -96,7 +96,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
-        DEBUG_REQ(D_INODE, mdt_info_req(info), "partial create "DFID"\n", 
+        DEBUG_REQ(D_INODE, mdt_info_req(info), "partial create "DFID"\n",
                            PFID(info->mti_rr.rr_fid2));
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
@@ -112,7 +112,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
                 if (mdt_object_exists(o) == 1) {
                         rc = mo_attr_get(info->mti_env, next, ma);
                 } else {
-                        rc = mo_object_create(info->mti_env, next, 
+                        rc = mo_object_create(info->mti_env, next,
                                               &info->mti_spec, ma);
                 }
                 if (rc == 0) {
@@ -359,7 +359,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         parent_lh = &info->mti_lh[MDT_LH_PARENT];
         mdt_lock_pdo_init(parent_lh, LCK_PW, rr->rr_name,
                           rr->rr_namelen);
-        
+
         mp = mdt_object_find_lock(info, rr->rr_fid1, parent_lh,
                                   MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
@@ -382,7 +382,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (rr->rr_name[0] == 0) {
                 /* remote partial operation
                  * It is possible that replay can happen on parent MDS
-                 * and this operation will be repeated. 
+                 * and this operation will be repeated.
                  * Therefore the object absense is allowed case
                  * and nothing should be done
                  */
@@ -586,36 +586,39 @@ out:
 static int mdt_rename_lock(struct mdt_thread_info *info,
                            struct lustre_handle *lh)
 {
-        ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
-        struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
-        struct ldlm_res_id res_id;
-        struct lu_site *ls;
+        struct ldlm_namespace *ns     = info->mti_mdt->mdt_namespace;
+        ldlm_policy_data_t    *policy = &info->mti_policy;
+        struct ldlm_res_id    *res_id = &info->mti_res_id;
+        struct lu_site        *ls;
         int rc;
         ENTRY;
 
         ls = info->mti_mdt->mdt_md_dev.md_lu_dev.ld_site;
-        fid_build_reg_res_name(&LUSTRE_BFL_FID, &res_id);
+        fid_build_reg_res_name(&LUSTRE_BFL_FID, res_id);
+
+        memset(policy, 0, sizeof *policy);
+        policy->l_inodebits.bits = MDS_INODELOCK_UPDATE;
 
         if (ls->ls_control_exp == NULL) {
                 int flags = LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB;
-                
+
                 /*
                  * Current node is controller, that is mdt0, where we should
                  * take BFL lock.
                  */
-                rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, &policy,
+                rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
                                             LCK_EX, &flags, ldlm_blocking_ast,
                                             ldlm_completion_ast, NULL, NULL, 0,
                                             NULL, lh);
         } else {
                 int flags = 0;
-                
+
                 /*
                  * This is the case mdt0 is remote node, issue DLM lock like
                  * other clients.
                  */
                 rc = ldlm_cli_enqueue(ls->ls_control_exp, NULL, res_id,
-                                      LDLM_IBITS, &policy, LCK_EX, &flags,
+                                      LDLM_IBITS, policy, LCK_EX, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
                                       NULL, NULL, NULL, 0, NULL, lh, 0);
         }
@@ -800,7 +803,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         mdt_set_capainfo(info, 2, old_fid, BYPASS_CAPA);
         mdt_set_capainfo(info, 3, new_fid, BYPASS_CAPA);
-        
+
         /* Check if @dst is subdir of @src. */
         rc = mdt_rename_sanity(info, old_fid);
         if (rc)

@@ -141,7 +141,7 @@ static int ost_statfs(struct ptlrpc_request *req)
 
         osfs = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof(*osfs));
 
-        req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs, 
+        req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs,
                                     cfs_time_current_64() - HZ);
         if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
                 osfs->os_bfree = osfs->os_bavail = 64;
@@ -219,7 +219,7 @@ static int ost_punch_lock_get(struct obd_export *exp, struct obdo *oa,
         else
                 policy.l_extent.end = finis | ~CFS_PAGE_MASK;
 
-        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, res_id, 
+        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
                                       LDLM_EXTENT, &policy, LCK_PW, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
                                       ldlm_glimpse_ast, NULL, 0, NULL, lh));
@@ -542,7 +542,7 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         policy.l_extent.end   = (nb[nrbufs - 1].offset +
                                  nb[nrbufs - 1].len - 1) | ~CFS_PAGE_MASK;
 
-        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, res_id, 
+        RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
                                       LDLM_EXTENT, &policy, mode, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
                                       ldlm_glimpse_ast, NULL, 0, NULL, lh));
@@ -609,7 +609,7 @@ static int ost_prolong_locks_iter(struct ldlm_lock *lock, void *data)
 static void ost_prolong_locks(struct obd_export *exp, struct obd_ioobj *obj,
                               struct niobuf_remote *nb, ldlm_mode_t mode)
 {
-        struct ldlm_res_id res_id = { .name = { obj->ioo_id, 0, 
+        struct ldlm_res_id res_id = { .name = { obj->ioo_id, 0,
                                                 obj->ioo_gr, 0} };
         int nrbufs = obj->ioo_bufcnt;
         struct ost_prolong_data opd;

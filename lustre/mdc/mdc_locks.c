@@ -39,6 +39,8 @@
 #include <linux/lustre_acl.h>
 #include <obd_class.h>
 #include <lustre_dlm.h>
+/* fid_res_name_eq() */
+#include <lustre_fid.h>
 #include <lprocfs_status.h>
 #include "mdc_internal.h"
 
@@ -418,7 +420,7 @@ int mdc_enqueue(struct obd_export *exp,
           * rpcs in flight counter */
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
         mdc_enter_request(&obddev->u.cli);
-        rc = ldlm_cli_enqueue(exp, &req, res_id, lock_type, &policy,
+        rc = ldlm_cli_enqueue(exp, &req, &res_id, lock_type, &policy,
                               lock_mode, &flags, cb_blocking, cb_completion,
                               NULL, cb_data, NULL, 0, NULL, lockh, 0);
         mdc_exit_request(&obddev->u.cli);
