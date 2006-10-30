@@ -597,7 +597,7 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 
         LASSERT(tgt != NULL);
         LASSERT(obd != NULL);
-        
+
         mdc_obd = class_exp2obd(tgt->ltd_exp);
 
         if (mdc_obd)
@@ -621,7 +621,7 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         rc = obd_fid_fini(tgt->ltd_exp);
         if (rc)
                 CERROR("Can't finanize fids factory\n");
-                
+
         CDEBUG(D_OTHER, "Disconnected from %s(%s) successfully\n",
                tgt->ltd_exp->exp_obd->obd_name,
                tgt->ltd_exp->exp_obd->obd_uuid.uuid);
@@ -776,7 +776,7 @@ static int lmv_placement_policy(struct obd_device *obd,
                         *mds = obj->lo_inodes[mea_idx].li_mds;
                         lmv_obj_put(obj);
                         rc = 0;
-                                
+
                         CDEBUG(D_INODE, "The obj "DFID" has been split, got "
                                "MDS at "LPU64" by name %s\n", PFID(hint->ph_pfid),
                                *mds, hint->ph_cname->name);
@@ -1539,7 +1539,7 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
                         lmv_obj_put(obj);
                 }
         }
-        
+
         if (tgt_exp == NULL)
                 tgt_exp = lmv_find_export(lmv, &op_data->fid1);
         if (IS_ERR(tgt_exp))
@@ -1954,12 +1954,12 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
         if (obj && i < obj->lo_objcount - 1) {
                 struct lu_dirpage *dp;
                 __u32 end;
-                kmap(page);
+                (void)kmap(page);
                 dp = cfs_page_address(page);
                 end = le32_to_cpu(dp->ldp_hash_end);
                 if (end == ~0ul) {
                         __u64 max_hash = MAX_HASH_SIZE;
-     
+
                         do_div(max_hash, obj->lo_objcount);
                         dp->ldp_hash_end = (__u32)max_hash * (i + 1);
                         CDEBUG(D_INFO, ""DFID" reset end %lu i %d\n", PFID(&rid),
@@ -2056,7 +2056,7 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                                                op_data->name,
                                                op_data->namelen);
                         op_data->fid1 = obj->lo_inodes[mea_idx].li_fid;
-                        tgt_exp = lmv_get_export(lmv, 
+                        tgt_exp = lmv_get_export(lmv,
                                         obj->lo_inodes[mea_idx].li_mds);
                         lmv_obj_put(obj);
                         CDEBUG(D_OTHER, "unlink '%*s' in "DFID" -> %u\n",
