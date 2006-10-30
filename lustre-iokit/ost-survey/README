@@ -1,45 +1,26 @@
-This script is to be used to test the performance of the
-individual OSTs in a Lustre filesystem.
-
-Goal: 
-	- Generate a fixed amount of IO per OST
-	- Identify the fastest and slowest OST
+ost-survey.pl (OST performance survey)
+======================================
+	This script is designed to test the client-to-disk performance 
+of the individual OSTs in a Lustre filesystem.  The network transfer 
+time from the client is included; to get a better idea of the isolated
+disk perfomance, run this script on a client running on the OST.
 	
-Parameters
-	- Size of per-OST IO
+Syntax:
+	$ ost-survey [-h] [-s <size>] <lustre_path>
+	where		   -s : size in MB
+			   -h : help
+	        <lustre_path> : mount point of lustre client
 
-Plan
-
-	Identify number of OSTs in system
-	For each OST
-	- create a directory
-	- use lfs setstripe to restrict IO to that directory
-	- run some form of IO 
-	
 Assumptions
 	- Lustre filesystem is up and running
 	- Script is being run on a client
 
 
-Steps
+plot-ost.pl (OST survey graph)
+======================================
+	The plot-ost.pl script can be used to plot the results from the
+ost-survey script using gnuplot.
 
-	0. Check pre-requisites
-		- sgp_dd
-	1. Identify the number of OSTs in the system
-		- store value
+Syntax: $ ost-survey /mnt/lustre > ost_log
+	$ plot-ost.pl ost_log
 
-	2. Collect input parameters
-		- store value
-
-	3. Set up array to hold output
-	
-	4. Loop over all OSTs
-		- Create a directory
-		- Set striping on that directory
-		- Run some IO and time
-		- Resolve MB/s
-		- Store in array
-
-	5. Determine max an min for the array
-
-	
