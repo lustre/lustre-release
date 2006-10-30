@@ -557,7 +557,6 @@ static int cml_name_insert(const struct lu_env *env, struct md_object *p,
         RETURN(rc);
 }
 
-/* Common method for remote and local use. */
 static int cmm_is_subdir(const struct lu_env *env, struct md_object *mo,
                          const struct lu_fid *fid, struct lu_fid *sfid)
 {
@@ -676,90 +675,90 @@ static int cmr_object_create(const struct lu_env *env,
                              const struct md_create_spec *spec,
                              struct md_attr *ma)
 {
-        RETURN(-EFAULT);
+        return -EFAULT;
 }
 
 static int cmr_permission(const struct lu_env *env, struct md_object *mo,
                           int mask)
 {
-        RETURN(-EREMOTE);
+        return -EREMOTE;
 }
 
 static int cmr_attr_get(const struct lu_env *env, struct md_object *mo,
                         struct md_attr *attr)
 {
-        RETURN(-EREMOTE);
+        return -EREMOTE;
 }
 
 static int cmr_attr_set(const struct lu_env *env, struct md_object *mo,
                         const struct md_attr *attr)
 {
-        RETURN(-EFAULT);
+        return -EFAULT;
 }
 
 static int cmr_xattr_get(const struct lu_env *env, struct md_object *mo,
                          struct lu_buf *buf, const char *name)
 {
-        RETURN(-EFAULT);
+        return -EFAULT;
 }
 
 static int cmr_readlink(const struct lu_env *env, struct md_object *mo,
                         struct lu_buf *buf)
 {
-        RETURN(-EFAULT);
+        return -EFAULT;
 }
 
 static int cmr_xattr_list(const struct lu_env *env, struct md_object *mo,
                           struct lu_buf *buf)
 {
-        RETURN(-EFAULT);
+        return -EFAULT;
 }
 
 static int cmr_xattr_set(const struct lu_env *env, struct md_object *mo,
                          const struct lu_buf *buf, const char *name, int fl)
 {
-        RETURN(-EFAULT);
+        return -EFAULT;
 }
 
 static int cmr_xattr_del(const struct lu_env *env, struct md_object *mo,
                          const char *name)
 {
-        RETURN(-EFAULT);
+        return -EFAULT;
 }
 
 static int cmr_ref_add(const struct lu_env *env, struct md_object *mo)
 {
-        RETURN(-EFAULT);
+        return -EFAULT;
 }
 
 static int cmr_ref_del(const struct lu_env *env, struct md_object *mo,
                        struct md_attr *ma)
 {
-        RETURN(-EFAULT);
+        return -EFAULT;
 }
 
 static int cmr_open(const struct lu_env *env, struct md_object *mo,
                     int flags)
 {
-        RETURN(-EREMOTE);
+        return -EREMOTE;
 }
 
 static int cmr_close(const struct lu_env *env, struct md_object *mo,
                      struct md_attr *ma)
 {
-        RETURN(-EFAULT);
+        return -EFAULT;
 }
 
 static int cmr_readpage(const struct lu_env *env, struct md_object *mo,
                         const struct lu_rdpg *rdpg)
 {
-        RETURN(-EREMOTE);
+        return -EREMOTE;
 }
 
 static int cmr_capa_get(const struct lu_env *env, struct md_object *mo,
                         struct lustre_capa *capa, int renewal)
 {
-        RETURN(-EFAULT);
+        return -EFAULT;
 }
 
 static struct md_object_operations cmr_mo_ops = {
@@ -789,13 +788,13 @@ static int cmr_lookup(const struct lu_env *env, struct md_object *mo_p,
          * will happen here.
          */
 
-        RETURN(-EREMOTE);
+        return -EREMOTE;
 }
 
 static mdl_mode_t cmr_lock_mode(const struct lu_env *env,
                                 struct md_object *mo, mdl_mode_t lm)
 {
-        RETURN(MDL_MINMODE);
+        return MDL_MINMODE;
 }
 
 /*

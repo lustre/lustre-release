@@ -647,16 +647,15 @@ out:
 
 static int mdt_is_subdir(struct mdt_thread_info *info)
 {
-        struct mdt_object   *obj = info->mti_object;
-        struct req_capsule  *pill = &info->mti_pill;
+        struct mdt_object     *o = info->mti_object;
+        struct req_capsule    *pill = &info->mti_pill;
         const struct mdt_body *body = info->mti_body;
-        struct mdt_body     *repbody;
-        int                  rc;
-
-        obj = info->mti_object;
-        LASSERT(obj != NULL);
-        LASSERT(lu_object_assert_exists(&obj->mot_obj.mo_lu));
+        struct mdt_body       *repbody;
+        int                    rc;
         ENTRY;
+
+        LASSERT(o != NULL);
+        LASSERT(lu_object_assert_exists(&o->mot_obj.mo_lu));
 
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
 
@@ -667,7 +666,9 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
         LASSERT(fid_is_sane(&body->fid2));
         mdt_set_capainfo(info, 0, &body->fid1, BYPASS_CAPA);
         mdt_set_capainfo(info, 1, &body->fid2, BYPASS_CAPA);
-        rc = mdo_is_subdir(info->mti_env, mdt_object_child(obj),
+
+        LASSERT(mdt_object_exists(o) > 0);
+        rc = mdo_is_subdir(info->mti_env, mdt_object_child(o),
                            &body->fid2, &repbody->fid1);
         if (rc < 0)
                 RETURN(rc);

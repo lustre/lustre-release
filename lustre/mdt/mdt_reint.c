@@ -629,6 +629,7 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
 static void mdt_rename_unlock(struct lustre_handle *lh)
 {
         ENTRY;
+        LASSERT(lustre_handle_is_used(lh));
         ldlm_lock_decref(lh, LCK_EX);
         EXIT;
 }
@@ -669,7 +670,6 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                             struct mdt_lock_handle *lhc)
 {
         struct mdt_reint_record *rr = &info->mti_rr;
-        struct req_capsule      *pill = &info->mti_pill;
         struct md_attr          *ma = &info->mti_attr;
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_object       *msrcdir;
@@ -686,9 +686,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         int                      rc;
         ENTRY;
 
-        rc = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
-        if (rc == 1) {
-        /* if (rr->rr_name[0] == 0) {*/
+        if (rr->rr_namelen == 1) {
                 rc = mdt_reint_rename_tgt(info);
                 RETURN(rc);
         }
@@ -699,7 +697,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         rc = mdt_rename_lock(info, &rename_lh);
         if (rc) {
-                CERROR("can't lock FS for rename, rc %d\n", rc);
+                CERROR("Can't lock FS for rename, rc %d\n", rc);
                 GOTO(out, rc);
         }
 
