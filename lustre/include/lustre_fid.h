@@ -221,6 +221,19 @@ fid_build_reg_res_name(const struct lu_fid *f,
         return name;
 }
 
+/*
+ * Return true if resource is for object identified by fid.
+ */
+static inline int fid_res_name_eq(const struct lu_fid *f,
+                                  const struct ldlm_res_id *name)
+{
+        return
+                name->name[LUSTRE_RES_ID_SEQ_OFF] == fid_seq(f) &&
+                name->name[LUSTRE_RES_ID_OID_OFF] == fid_oid(f) &&
+                name->name[LUSTRE_RES_ID_VER_OFF] == fid_ver(f);
+}
+
+
 static inline struct ldlm_res_id *
 fid_build_pdo_res_name(const struct lu_fid *f,
                        unsigned int hash,

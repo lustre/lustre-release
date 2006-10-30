@@ -243,7 +243,7 @@ static inline int fid_is_sane(const struct lu_fid *fid)
 {
         return
                 fid != NULL &&
-                ((fid_seq_is_sane(fid_seq(fid)) && fid_oid(fid) != 0 
+                ((fid_seq_is_sane(fid_seq(fid)) && fid_oid(fid) != 0
                                                 && fid_ver(fid) == 0) ||
                 fid_is_igif(fid));
 }
@@ -799,7 +799,7 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
-#define OST_MIN_PRECREATE 32
+#define OST_MIN_PRECREATE 16384
 #define OST_MAX_PRECREATE 20000
 
 struct obd_ioobj {
@@ -1894,17 +1894,6 @@ typedef enum {
         QUOTA_DQACQ     = 601,
         QUOTA_DQREL     = 602,
 } quota_cmd_t;
-
-/*
- * Return true if resource is for object identified by fid.
- */
-static inline int fid_res_name_eq(const struct lu_fid *f,
-                                  const struct ldlm_res_id *name)
-{
-        return name->name[0] == fid_seq(f) &&
-                name->name[1] == fid_oid(f) &&
-                name->name[2] == fid_ver(f);
-}
 
 #define JOIN_FILE_ALIGN 4096
 
