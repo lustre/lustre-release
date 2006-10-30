@@ -451,7 +451,7 @@ static int cmm_split_remove_page(const struct lu_env *env,
                                 *len = (int)((__u32)ent - (__u32)dp);
                         else
                                 *len = 0;
-                        GOTO(unmap, 0);
+                        GOTO(unmap, rc = 0);
                 }
         }
         *len =  CFS_PAGE_SIZE;
