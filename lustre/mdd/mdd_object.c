@@ -1062,11 +1062,11 @@ static int accmode(struct mdd_object *mdd_obj, int flags)
                 return 0;
 #endif
         if (flags & FMODE_READ)
-                res = MAY_READ;
+                res |= MAY_READ;
         if (flags & (FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
                 res |= MAY_WRITE;
         if (flags & MDS_FMODE_EXEC)
-                res = MAY_EXEC;
+                res |= MAY_EXEC;
         return res;
 }
 
@@ -1103,15 +1103,14 @@ static int mdd_open_sanity_check(const struct lu_env *env,
          * actually live on the filesystem itself, and as such you
          * can write to them even if the filesystem is read-only.
          */
-        if (S_ISFIFO(tmp_la->la_mode) || S_ISSOCK(tmp_la->la_mode) ||
-            S_ISBLK(tmp_la->la_mode) || S_ISCHR(tmp_la->la_mode))
+        if (S_ISFIFO(tmp_la->la_mode) || S_ISSOCK(tmp_la->la_mode)) 
                 flag &= ~O_TRUNC;
 
         /*
          * An append-only file must be opened in append mode for writing.
          */
         if (mdd_is_append(obj)) {
-                if ((flag & FMODE_WRITE) && !(flag & O_APPEND))
+                if ((mode & FMODE_WRITE) && !(flag & O_APPEND))
                         RETURN(-EPERM);
                 if (flag & O_TRUNC)
                         RETURN(-EPERM);

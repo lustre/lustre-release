@@ -207,6 +207,10 @@ int mdd_acl_def_get(const struct lu_env *env, struct mdd_object *mdd_obj,
 {
         struct dt_object *next = mdd_object_child(mdd_obj);
         int rc;
+        ENTRY;
+
+        if (ma->ma_valid & MA_ACL_DEF)
+                RETURN(0);
 
         rc = next->do_ops->do_xattr_get(env, next,
                                         mdd_buf_get(env, ma->ma_acl,
