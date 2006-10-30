@@ -56,14 +56,14 @@ static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
         ENTRY;
 
         mdd->mdd_child = lu2dt_dev(next);
-
         dt = mdd->mdd_child;
-        /* prepare transactions callbacks */
+
+        /* Prepare transactions callbacks. */
         mdd->mdd_txn_cb.dtc_txn_start = mdd_txn_start_cb;
         mdd->mdd_txn_cb.dtc_txn_stop = mdd_txn_stop_cb;
         mdd->mdd_txn_cb.dtc_txn_commit = mdd_txn_commit_cb;
         mdd->mdd_txn_cb.dtc_cookie = mdd;
-        rc = mdd_procfs_init(mdd);
+        rc = mdd_procfs_init(mdd, name);
         RETURN(rc);
 }
 

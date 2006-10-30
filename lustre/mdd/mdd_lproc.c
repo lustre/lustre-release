@@ -98,38 +98,35 @@ int mdd_procfs_fini(struct mdd_device *mdd)
         RETURN(0);
 }
 
-int mdd_procfs_init(struct mdd_device *mdd)
+int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 {
         struct lu_device    *ld = &mdd->mdd_md_dev.md_lu_dev;
         struct obd_type     *type;
-        char mdd_name[10];
-        int rc = 0;
+        int                  rc;
         ENTRY;
 
         type = ld->ld_type->ldt_obd_type;
         
+        LASSERT(name != NULL);
         LASSERT(type != NULL);
 
-        memset(mdd_name, 0, sizeof(mdd_name));
-        snprintf(mdd_name, strlen(LUSTRE_MDD_NAME) + 5, "%s-%d", 
-                 LUSTRE_MDD_NAME, (int)ld->ld_site->ls_node_id);
-
-        /* find the type procroot and add the proc entry for this device */
-        mdd->mdd_proc_entry = lprocfs_register(mdd_name, type->typ_procroot,
+        /* Find the type procroot and add the proc entry for this device */
+        mdd->mdd_proc_entry = lprocfs_register(name, type->typ_procroot,
                                                NULL, NULL);
         if (IS_ERR(mdd->mdd_proc_entry)) {
                 rc = PTR_ERR(mdd->mdd_proc_entry);
-                CERROR("error %d setting up lprocfs for %s\n", 
-                        rc, mdd_name);
+                CERROR("Error %d setting up lprocfs for %s\n", 
+                       rc, name);
                 mdd->mdd_proc_entry = NULL;
                 GOTO(out, rc);
         }
 
         rc = mdd_procfs_init_stats(mdd, LPROC_MDD_LAST);
+        EXIT;
 out:
         if (rc)
                mdd_procfs_fini(mdd); 
-	RETURN(rc);
+	return rc;
 }
 
 void mdd_lproc_time_start(struct mdd_device *mdd, struct timeval *start, int op)

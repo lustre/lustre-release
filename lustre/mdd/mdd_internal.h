@@ -211,7 +211,7 @@ int orph_index_init(const struct lu_env *env, struct mdd_device *mdd);
 void orph_index_fini(const struct lu_env *env, struct mdd_device *mdd);
 int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd);
 
-int mdd_procfs_init(struct mdd_device *mdd);
+int mdd_procfs_init(struct mdd_device *mdd, const char *name);
 int mdd_procfs_fini(struct mdd_device *mdd);
 void mdd_lproc_time_start(struct mdd_device *mdd, struct timeval *start,
                           int op);

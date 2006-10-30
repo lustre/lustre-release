@@ -301,9 +301,8 @@ int mdc_getattr_name(struct obd_export *exp, const struct lu_fid *fid,
         RETURN(rc);
 }
 
-int mdc_is_subdir(struct obd_export *exp, const struct lu_fid *pfid,
-                  const struct lu_fid *cfid,
-                  struct ptlrpc_request **request)
+static int mdc_is_subdir(struct obd_export *exp, const struct lu_fid *pfid,
+                         const struct lu_fid *cfid, struct ptlrpc_request **request)
 {
         int size[2] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mdt_body) };
