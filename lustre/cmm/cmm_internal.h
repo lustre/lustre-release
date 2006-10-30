@@ -140,15 +140,27 @@ int cmm_upcall(const struct lu_env *env, struct md_device *md,
 #ifdef HAVE_SPLIT_SUPPORT
 
 /* cmm_split.c */
-int cmm_mdsnum_check(const struct lu_env *env, struct md_object *mp,
-                     const char *name);
+static inline struct lu_buf *cmm_buf_get(const struct lu_env *env,
+                                         void *area, ssize_t len)
+{
+        struct lu_buf *buf;
 
-int cmm_expect_splitting(const struct lu_env *env, struct md_object *mo,
-                         struct md_attr *ma, int *split);
+        buf = &cmm_env_info(env)->cmi_buf;
+        buf->lb_buf = area;
+        buf->lb_len = len;
+        return buf;
+}
 
-int cmm_try_to_split(const struct lu_env *env, struct md_object *mo);
-int cmm_split_lock_mode(const struct lu_env *env, struct md_object *mo,
-                        mdl_mode_t lm);
+int cmm_split_check(const struct lu_env *env, struct md_object *mp,
+                    const char *name);
+
+int cmm_split_expect(const struct lu_env *env, struct md_object *mo,
+                     struct md_attr *ma, int *split);
+
+int cmm_split_try(const struct lu_env *env, struct md_object *mo);
+
+int cmm_split_access(const struct lu_env *env, struct md_object *mo,
+                     mdl_mode_t lm);
 #endif
 
 int cmm_fld_lookup(struct cmm_device *cm, const struct lu_fid *fid,

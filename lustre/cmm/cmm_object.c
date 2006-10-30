@@ -362,7 +362,7 @@ static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
         ENTRY;
 
 #ifdef HAVE_SPLIT_SUPPORT
-        rc = cmm_mdsnum_check(env, mo_p, name);
+        rc = cmm_split_check(env, mo_p, name);
         if (rc)
                 RETURN(rc);
 #endif
@@ -375,10 +375,13 @@ static mdl_mode_t cml_lock_mode(const struct lu_env *env,
                                 struct md_object *mo, mdl_mode_t lm)
 {
         int rc = MDL_MINMODE;
+        ENTRY;
+        
 #ifdef HAVE_SPLIT_SUPPORT
-        rc = cmm_split_lock_mode(env, mo, lm);
+        rc = cmm_split_access(env, mo, lm);
 #endif
-        return rc;
+        
+        RETURN(rc);
 }
 
 static int cml_create(const struct lu_env *env,
@@ -390,18 +393,35 @@ static int cml_create(const struct lu_env *env,
         ENTRY;
 
 #ifdef HAVE_SPLIT_SUPPORT
-        rc = cmm_try_to_split(env, mo_p);
-        if (rc)
-                RETURN(rc);
+        /* 
+         * Try to split @mo_p. If split is ok, -ERESTART is returned and current
+         * thread will not peoceed with create. Instead it sends -ERESTART to
+         * client to let it know that correct MDT should be choosen.
+         */
+        rc = cmm_split_try(env, mo_p);
+        if (rc) {
+                if (rc == -EALREADY) {
+                        /* 
+                         * Dir is split and we would like to check if name came
+                         * to correct MDT. If not -ERESTART is returned by
+                         * cmm_split_check()
+                         */
+                        rc = cmm_split_check(env, mo_p, child_name);
+                        if (rc)
+                                RETURN(rc);
+                } else {
+                        /* 
+                         * -ERESTART or some split error is returned, we can't
+                         * proceed with create.
+                         */
+                        RETURN(rc);
+                }
+        }
 
-        rc = cmm_mdsnum_check(env, mo_p, child_name);
-        if (rc)
-                RETURN(rc);
 #endif
 
         rc = mdo_create(env, md_object_next(mo_p), child_name,
                         md_object_next(mo_c), spec, ma);
-
 
         RETURN(rc);
 }
