@@ -430,31 +430,34 @@ static int cmm_split_remove_page(const struct lu_env *env,
 
         kmap(rdpg->rp_pages[0]);
         dp = page_address(rdpg->rp_pages[0]);
-
-        /* If page is empty return zero len. */
-        if (lu_dirent_start(dp) == NULL) {
-                *len = 0;
-                GOTO(unmap, rc = 0);
-        }
-        
-        for (ent = lu_dirent_start(dp); ent != NULL;
+        *len = 0;
+        for (ent = lu_dirent_start(dp);
+             ent != NULL && ent->lde_hash < hash_end;
              ent = lu_dirent_next(ent)) {
-                if (ent->lde_hash < hash_end) {
-                        rc = cmm_split_remove_entry(env, mo, ent);
-                        if (rc) {
-                                CERROR("Can not del %s rc %d\n",
-                                       ent->lde_name, rc);
-                                GOTO(unmap, rc);
-                        }
-                } else {
-                        if (ent != lu_dirent_start(dp))
-                                *len = (int)((__u32)ent - (__u32)dp);
-                        else
-                                *len = 0;
-                        GOTO(unmap, rc = 0);
+                rc = cmm_split_remove_entry(env, mo, ent);
+                if (rc) {
+                        /*
+                         * XXX Error handler to insert remove name back,
+                         * currently we assumed it will success anyway
+                         * in verfication test.
+                         */
+                        CWARN("Can not del %*.*s rc %d\n", ent->lde_namelen,
+                                ent->lde_namelen, ent->lde_name, rc);
+                        GOTO(unmap, rc);
                 }
+                if (ent->lde_reclen == 0)
+                        /*
+                         * This is the last ent, whose rec size set to 0
+                         * so recompute here
+                         */
+                        *len += (sizeof *ent + le16_to_cpu(ent->lde_namelen) +
+                                 3) & ~3;
+                else
+                        *len += le16_to_cpu(ent->lde_reclen);
         }
-        *len =  CFS_PAGE_SIZE;
+
+        if (ent != lu_dirent_start(dp))
+                *len += sizeof(struct lu_dirpage);
         EXIT;
 unmap:
         kunmap(rdpg->rp_pages[0]);
@@ -499,6 +502,7 @@ static int cmm_split_read_page(const struct lu_env *env,
  * This function performs migration of all pages with entries which fit into one
  * stripe and one hash segment.
  */
+
 static int cmm_split_process_stripe(const struct lu_env *env,
                                     struct md_object *mo,
                                     struct lu_rdpg *rdpg, 
