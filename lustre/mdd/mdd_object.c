@@ -664,7 +664,7 @@ int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
         /* For tuncate (or setsize), we should have MAY_WRITE perm */
         if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
-                rc = mdd_permission_internal(env, obj, MAY_WRITE);
+                rc = __mdd_permission_internal(env, obj, MAY_WRITE, 0);
                 if (rc)
                         RETURN(rc);
 
