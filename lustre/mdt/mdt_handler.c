@@ -1061,23 +1061,23 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
                 struct lu_fid *lf = &ent->lde_fid;
                 char *name;
 
-                if (le32_to_cpu(ent->lde_namelen) == 0)
+                if (le16_to_cpu(ent->lde_namelen) == 0)
                         continue;
                 
                 is_dir = le32_to_cpu(ent->lde_hash) & MAX_HASH_HIGHEST_BIT;
-                OBD_ALLOC(name, le32_to_cpu(ent->lde_namelen) + 1);
+                OBD_ALLOC(name, le16_to_cpu(ent->lde_namelen) + 1);
                 if (name == NULL)
                         GOTO(out, rc = -ENOMEM);
                 
-                memcpy(name, ent->lde_name, le32_to_cpu(ent->lde_namelen));
+                memcpy(name, ent->lde_name, le16_to_cpu(ent->lde_namelen));
                 rc = mdo_name_insert(info->mti_env,
                                      md_object_next(&object->mot_obj),
                                      name, lf, is_dir);
-                OBD_FREE(name, le32_to_cpu(ent->lde_namelen) + 1);
+                OBD_FREE(name, le16_to_cpu(ent->lde_namelen) + 1);
                 if (rc)
                         GOTO(out, rc);
 
-                offset += le32_to_cpu(ent->lde_reclen);
+                offset += le16_to_cpu(ent->lde_reclen);
                 if (offset >= size)
                         break;
         }

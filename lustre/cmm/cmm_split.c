@@ -430,6 +430,13 @@ static int cmm_split_remove_page(const struct lu_env *env,
 
         kmap(rdpg->rp_pages[0]);
         dp = page_address(rdpg->rp_pages[0]);
+
+        /* If page is empty return zero len. */
+        if (lu_dirent_start(dp) == NULL) {
+                *len = 0;
+                GOTO(unmap, rc = 0);
+        }
+        
         for (ent = lu_dirent_start(dp); ent != NULL;
              ent = lu_dirent_next(ent)) {
                 if (ent->lde_hash < hash_end) {
@@ -444,10 +451,10 @@ static int cmm_split_remove_page(const struct lu_env *env,
                                 *len = (int)((__u32)ent - (__u32)dp);
                         else
                                 *len = 0;
-                        GOTO(unmap, rc);
+                        GOTO(unmap, 0);
                 }
         }
-        *len = CFS_PAGE_SIZE;
+        *len =  CFS_PAGE_SIZE;
         EXIT;
 unmap:
         kunmap(rdpg->rp_pages[0]);
