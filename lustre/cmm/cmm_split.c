@@ -181,7 +181,7 @@ int cmm_split_expect(const struct lu_env *env, struct md_object *mo,
                 RETURN(rc);
 
         if (lu_fid_eq(&root_fid, cmm2fid(md2cmm_obj(mo)))) {
-                *split = CMM_NOT_SPLITTABLE;
+                *split = CMM_NO_SPLIT_EXPECTED;
                 RETURN(0);
         }
 
