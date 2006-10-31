@@ -55,7 +55,7 @@ int target_handle_connect(struct ptlrpc_request *req);
 int target_handle_disconnect(struct ptlrpc_request *req);
 void target_destroy_export(struct obd_export *exp);
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
-                            struct obd_uuid *cluuid);
+                            struct obd_uuid *cluuid, int);
 int target_handle_ping(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
 

@@ -503,10 +503,10 @@ int client_disconnect_export(struct obd_export *exp)
  * -------------------------------------------------------------------------- */
 
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
-                            struct obd_uuid *cluuid)
+                            struct obd_uuid *cluuid, int initial_conn)
 {
         ENTRY;
-        if (exp->exp_connection && exp->exp_imp_reverse) {
+        if (exp->exp_connection && exp->exp_imp_reverse && !initial_conn) {
                 struct lustre_handle *hdl;
                 hdl = &exp->exp_imp_reverse->imp_remote_handle;
                 /* Might be a re-connect after a partition. */
@@ -651,8 +651,12 @@ int target_handle_connect(struct ptlrpc_request *req)
                 }
         }
 
-        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL)
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL) {
+                CWARN("Initial connection\n");
                 initial_conn = 1;
+        } else {
+                CWARN("Not initial connection\n");
+        }
 
         /* lctl gets a backstage, all-access pass. */
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
@@ -673,7 +677,8 @@ int target_handle_connect(struct ptlrpc_request *req)
                         spin_unlock(&target->obd_dev_lock);
                         LASSERT(export->exp_obd == target);
 
-                        rc = target_handle_reconnect(&conn, export, &cluuid);
+                        rc = target_handle_reconnect(&conn, export, &cluuid,
+                                                     initial_conn);
                         break;
                 }
                 export = NULL;
@@ -697,7 +702,8 @@ int target_handle_connect(struct ptlrpc_request *req)
                       libcfs_nid2str(req->rq_peer.nid),
                       export, atomic_read(&export->exp_rpc_count));
                 GOTO(out, rc = -EBUSY);
-        } else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1) {
+        } else if (lustre_msg_get_conn_cnt(req->rq_reqmsg) == 1 &&
+                   !initial_conn) {
                 CERROR("%s: NID %s (%s) reconnected with 1 conn_cnt; "
                        "cookies not random?\n", target->obd_name,
                        libcfs_nid2str(req->rq_peer.nid), cluuid.uuid);
