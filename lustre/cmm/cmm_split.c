@@ -619,8 +619,9 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct md_attr    *ma = &cmm_env_info(env)->cmi_ma;
+        int                rc = 0, split;
+        __u64              la_size = 0;
         struct lu_buf     *buf;
-        int rc = 0, split;
         ENTRY;
 
         LASSERT(S_ISDIR(lu_object_attr(&mo->mo_lu)));
@@ -641,6 +642,7 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
                 /* Split should be done now, let's do it. */
                 CWARN("Dir "DFID" is going to split\n",
                       PFID(lu_object_fid(&mo->mo_lu)));
+                la_size = ma->ma_attr.la_size;
         }
 
         /*
@@ -683,8 +685,13 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
                 GOTO(cleanup, rc);
         }
 
-        /* Finally, split succeed, tell client to recreate the object */
-        CWARN("Dir "DFID" has been split\n", PFID(lu_object_fid(&mo->mo_lu)));
+        /*
+         * Finally, split succeed, tell client to repeat opetartion on correct
+         * MDT.
+         */
+        CWARN("Dir "DFID" has been split (on size: "LPU64")\n",
+              PFID(lu_object_fid(&mo->mo_lu)), la_size);
+        
         rc = -ERESTART;
         EXIT;
 cleanup:

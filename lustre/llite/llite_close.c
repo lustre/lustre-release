@@ -76,11 +76,22 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
 
                 /* DONE_WRITING is allowed and inode has no dirty page. */
                 spin_lock(&lcq->lcq_lock);
-                LASSERT(list_empty(&lli->lli_close_list));
-                CDEBUG(D_INODE, "adding inode %lu/%u to close list\n",
-                       inode->i_ino, inode->i_generation);
-                
-                list_add_tail(&lli->lli_close_list, &lcq->lcq_head);
+
+                /* 
+                 * XXX: Seems sometimes it is possible to try to add inode more
+                 * than once to close thread queue. Not sure if that is correct
+                 * from caller POV, but it looks to me logically to check this
+                 * here and just do nothing if inode is already on the queue.
+                 * Hope Vitaly will correct me if I'm wrong. --umka
+                 */
+                if (list_empty(&lli->lli_close_list)) {
+                        CDEBUG(D_INODE, "adding inode %lu/%u to close list\n",
+                               inode->i_ino, inode->i_generation);
+                        list_add_tail(&lli->lli_close_list, &lcq->lcq_head);
+                } else {
+                        CWARN("Inode %d is already queued for done writing!\n",
+                              inode->i_ino);
+                }
                 wake_up(&lcq->lcq_waitq);
                 spin_unlock(&lcq->lcq_lock);
         }
