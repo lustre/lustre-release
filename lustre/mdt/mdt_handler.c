@@ -772,7 +772,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 RETURN(rc);
         }
 
-        if (name[0] == 0) { /* strlen(name) == 0 */
+        if (name[0] == 0) {
                 /* Only getattr on the child. Parent is on another node. */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 child = parent;
@@ -850,6 +850,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 LASSERT(fid_res_name_eq(child_fid,
                                         &lock->l_resource->lr_name));
                 LDLM_LOCK_PUT(lock);
+                rc = 0;
         } else {
                 mdt_lock_handle_init(lhc);
                 mdt_lock_reg_init(lhc, LCK_PR);
