@@ -151,7 +151,8 @@ struct md_create_spec {
                 } sp_ea;
         } u;
         /* create flag from client: such as MDS_OPEN_CREAT, and others */
-        __u32 sp_cr_flags;
+        __u32      sp_cr_flags;
+        mdl_mode_t sp_cr_mode;
 };
 
 /*

@@ -685,6 +685,21 @@ static inline void mdt_fid_unlock(struct lustre_handle *lh,
         ldlm_lock_decref(lh, mode);
 }
 
+extern mdl_mode_t mdt_mdl_lock_modes[];
+extern ldlm_mode_t mdt_dlm_lock_modes[];
+
+static inline mdl_mode_t mdt_dlm_mode2mdl_mode(ldlm_mode_t mode)
+{
+        LASSERT(IS_PO2(mode));
+        return mdt_mdl_lock_modes[mode];
+}
+
+static inline ldlm_mode_t mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
+{
+        LASSERT(IS_PO2(mode));
+        return mdt_dlm_lock_modes[mode];
+}
+
 /*
  * Capability
  */

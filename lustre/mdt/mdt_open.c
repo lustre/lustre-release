@@ -831,6 +831,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         if (result == -ENOENT) {
                 /* Not found and with MDS_OPEN_CREAT: let's create it. */
                 mdt_set_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
+
+                /* Let lower layers know what is lock mode on directory. */
+                info->mti_spec.sp_cr_mode =
+                        mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
                 result = mdo_create(info->mti_env,
                                     mdt_object_child(parent),
                                     rr->rr_name,

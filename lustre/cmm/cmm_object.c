@@ -393,31 +393,63 @@ static int cml_create(const struct lu_env *env,
         ENTRY;
 
 #ifdef HAVE_SPLIT_SUPPORT
-        /* 
-         * Try to split @mo_p. If split is ok, -ERESTART is returned and current
-         * thread will not peoceed with create. Instead it sends -ERESTART to
-         * client to let it know that correct MDT should be choosen.
+        
+        /* Lock mode always should be sane. */
+        LASSERT(spec->sp_cr_mode != MDL_MINMODE);
+
+        /*
+         * Sigh... This is long story. MDT may have race with detecting if split
+         * is possible in cmm. We know this race and let it live, because
+         * getting it rid (with some sem or spinlock) will also mean that
+         * PDIROPS for craate will not work, what is really bad for performance
+         * and makes no sense. So, we better allow the race but split dir only
+         * if some of concurrent threads takes EX lock. So that, say, two
+         * concurrent threads may have different lock modes on directory (CW and
+         * EX) and not first one which comes here should split dir, but only
+         * that which has EX lock. And we do not care that in this case, split
+         * will happen a bit later may be (when dir size will not be mandatory
+         * <= 64K, but may be larger). So that, we allow concurrent creates and
+         * protect split by EX lock.
          */
-        rc = cmm_split_try(env, mo_p);
-        if (rc) {
+        if (spec->sp_cr_mode == MDL_EX) {
+                /* 
+                 * Try to split @mo_p. If split is ok, -ERESTART is returned and
+                 * current thread will not peoceed with create. Instead it sends
+                 * -ERESTART to client to let it know that correct MDT should be
+                 * choosen.
+                 */
+                rc = cmm_split_try(env, mo_p);
                 if (rc == -EALREADY) {
                         /* 
-                         * Dir is split and we would like to check if name came
-                         * to correct MDT. If not -ERESTART is returned by
-                         * cmm_split_check()
+                         * Dir is already split and we would like to check if
+                         * name came to correct MDT. If not -ERESTART is
+                         * returned by cmm_split_check()
                          */
                         rc = cmm_split_check(env, mo_p, child_name);
                         if (rc)
                                 RETURN(rc);
-                } else {
+                } else if (rc) {
                         /* 
                          * -ERESTART or some split error is returned, we can't
                          * proceed with create.
                          */
                         RETURN(rc);
                 }
-        }
 
+                /* 
+                 * Proceed with cmm_split_try() as nothign happened, split is
+                 * not yet expected.
+                 */
+        } else {
+                /* 
+                 * Check for possible split directory and let caller know that
+                 * it should tell client that directory is split and operation
+                 * should repeat to correct MDT.
+                 */
+                rc = cmm_split_check(env, mo_p, child_name);
+                if (rc)
+                        RETURN(rc);
+        }
 #endif
 
         rc = mdo_create(env, md_object_next(mo_p), child_name,

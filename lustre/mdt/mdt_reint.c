@@ -70,6 +70,9 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                                OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
+                info->mti_spec.sp_cr_mode =
+                        mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
+                
                 rc = mdo_create(info->mti_env, next, rr->rr_name,
                                 mdt_object_child(child),
                                 &info->mti_spec, ma);

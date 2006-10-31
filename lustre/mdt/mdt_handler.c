@@ -59,6 +59,29 @@
 #include "mdt_internal.h"
 #include <linux/lustre_acl.h>
 #include <lustre_param.h>
+
+mdl_mode_t mdt_mdl_lock_modes[] = {
+        [LCK_MINMODE] = MDL_MINMODE,
+        [LCK_EX]      = MDL_EX,
+        [LCK_PW]      = MDL_PW,
+        [LCK_PR]      = MDL_PR,
+        [LCK_CW]      = MDL_CW,
+        [LCK_CR]      = MDL_CR,
+        [LCK_NL]      = MDL_NL,
+        [LCK_GROUP]   = MDL_GROUP
+};
+
+ldlm_mode_t mdt_dlm_lock_modes[] = {
+        [MDL_MINMODE] = LCK_MINMODE,
+        [MDL_EX]      = LCK_EX,
+        [MDL_PW]      = LCK_PW,
+        [MDL_PR]      = LCK_PR,
+        [MDL_CW]      = LCK_CW,
+        [MDL_CR]      = LCK_CR,
+        [MDL_NL]      = LCK_NL,
+        [MDL_GROUP]   = LCK_GROUP
+};
+
 /*
  * Initialized in mdt_mod_init().
  */
@@ -153,40 +176,6 @@ void mdt_set_disposition(struct mdt_thread_info *info,
                 info->mti_opdata |= flag;
         if (rep)
                 rep->lock_policy_res1 |= flag;
-}
-
-static mdl_mode_t mdt_mdl_lock_modes[] = {
-        [LCK_MINMODE] = MDL_MINMODE,
-        [LCK_EX]      = MDL_EX,
-        [LCK_PW]      = MDL_PW,
-        [LCK_PR]      = MDL_PR,
-        [LCK_CW]      = MDL_CW,
-        [LCK_CR]      = MDL_CR,
-        [LCK_NL]      = MDL_NL,
-        [LCK_GROUP]   = MDL_GROUP
-};
-
-static ldlm_mode_t mdt_dlm_lock_modes[] = {
-        [MDL_MINMODE] = LCK_MINMODE,
-        [MDL_EX]      = LCK_EX,
-        [MDL_PW]      = LCK_PW,
-        [MDL_PR]      = LCK_PR,
-        [MDL_CW]      = LCK_CW,
-        [MDL_CR]      = LCK_CR,
-        [MDL_NL]      = LCK_NL,
-        [MDL_GROUP]   = LCK_GROUP
-};
-
-static inline mdl_mode_t mdt_dlm_mode2mdl_mode(ldlm_mode_t mode)
-{
-        LASSERT(IS_PO2(mode));
-        return mdt_mdl_lock_modes[mode];
-}
-
-static inline ldlm_mode_t mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
-{
-        LASSERT(IS_PO2(mode));
-        return mdt_dlm_lock_modes[mode];
 }
 
 void mdt_lock_reg_init(struct mdt_lock_handle *lh, ldlm_mode_t lm)
