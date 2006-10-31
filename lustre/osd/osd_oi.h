@@ -56,10 +56,6 @@ struct osd_oi {
          * underlying index object, where fid->id mapping in stored.
          */
         struct dt_object    *oi_dir;
-        /*
-         * semaphore, synchronizing access to oi.
-         */
-        struct rw_semaphore  oi_lock;
 };
 
 /*
@@ -78,11 +74,6 @@ struct osd_inode_id {
 int  osd_oi_init(struct osd_thread_info *info,
                  struct osd_oi *oi, struct dt_device *dev);
 void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi);
-
-void osd_oi_read_lock(struct osd_oi *oi);
-void osd_oi_read_unlock(struct osd_oi *oi);
-void osd_oi_write_lock(struct osd_oi *oi);
-void osd_oi_write_unlock(struct osd_oi *oi);
 
 int  osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                    const struct lu_fid *fid, struct osd_inode_id *id);

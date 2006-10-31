@@ -446,9 +446,7 @@ static int osd_inode_remove(const struct lu_env *env, struct osd_object *obj)
                 OSD_TXN_INODE_DELETE_CREDITS;
         th = osd_trans_start(env, &osd->od_dt_dev, prm);
         if (!IS_ERR(th)) {
-                osd_oi_write_lock(&osd->od_oi);
                 result = osd_oi_delete(oti, &osd->od_oi, fid, th);
-                osd_oi_write_unlock(&osd->od_oi);
                 osd_trans_stop(env, th);
         } else
                 result = PTR_ERR(th);
@@ -1199,9 +1197,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
                 id->oii_ino = obj->oo_inode->i_ino;
                 id->oii_gen = obj->oo_inode->i_generation;
 
-                osd_oi_write_lock(&osd->od_oi);
                 result = osd_oi_insert(info, &osd->od_oi, fid, id, th);
-                osd_oi_write_unlock(&osd->od_oi);
         }
 
         LASSERT(ergo(result == 0, dt_object_exists(dt)));
@@ -2268,7 +2264,6 @@ static int osd_fid_lookup(const struct lu_env *env,
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
                 RETURN(-ENOENT);
 
-        osd_oi_read_lock(oi);
         result = osd_oi_lookup(info, oi, fid, id);
         if (result == 0) {
                 inode = osd_iget(info, dev, id);
@@ -2287,7 +2282,6 @@ static int osd_fid_lookup(const struct lu_env *env,
                         result = PTR_ERR(inode);
         } else if (result == -ENOENT)
                 result = 0;
-        osd_oi_read_unlock(oi);
         LASSERT(osd_invariant(obj));
         RETURN(result);
 }

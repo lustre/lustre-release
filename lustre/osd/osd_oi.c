@@ -79,11 +79,6 @@ int osd_oi_init(struct osd_thread_info *info,
         const struct lu_env *env;
 
         env = info->oti_env;
-        /*
-         * Initialize ->oi_lock first, because of possible oi re-entrance in
-         * dt_store_open().
-         */
-        init_rwsem(&oi->oi_lock);
 
         obj = dt_store_open(env, dev, oi_dirname, &info->oti_fid);
         if (!IS_ERR(obj)) {
@@ -108,26 +103,6 @@ void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi)
                 lu_object_put(info->oti_env, &oi->oi_dir->do_lu);
                 oi->oi_dir = NULL;
         }
-}
-
-void osd_oi_read_lock(struct osd_oi *oi)
-{
-        down_read(&oi->oi_lock);
-}
-
-void osd_oi_read_unlock(struct osd_oi *oi)
-{
-        up_read(&oi->oi_lock);
-}
-
-void osd_oi_write_lock(struct osd_oi *oi)
-{
-        down_write(&oi->oi_lock);
-}
-
-void osd_oi_write_unlock(struct osd_oi *oi)
-{
-        up_write(&oi->oi_lock);
 }
 
 static const struct dt_key *oi_fid_key(struct osd_thread_info *info,
@@ -155,9 +130,7 @@ static inline void oid_insert_init(struct osd_inode_id *id,
         id->oii_ino = cpu_to_be64(ino);
         id->oii_gen = cpu_to_be32(gen);
 }
-/*
- * Locking: requires at least read lock on oi.
- */
+
 int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, struct osd_inode_id *id)
 {
@@ -176,9 +149,6 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
         return rc;
 }
 
-/*
- * Locking: requires write lock on oi.
- */
 int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, const struct osd_inode_id *id0,
                   struct thandle *th)
@@ -200,9 +170,6 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
                                              BYPASS_CAPA);
 }
 
-/*
- * Locking: requires write lock on oi.
- */
 int osd_oi_delete(struct osd_thread_info *info,
                   struct osd_oi *oi, const struct lu_fid *fid,
                   struct thandle *th)
