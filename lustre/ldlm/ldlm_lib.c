@@ -651,12 +651,8 @@ int target_handle_connect(struct ptlrpc_request *req)
                 }
         }
 
-        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL) {
-                CWARN("Initial connection\n");
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL)
                 initial_conn = 1;
-        } else {
-                CWARN("Not initial connection\n");
-        }
 
         /* lctl gets a backstage, all-access pass. */
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
