@@ -58,15 +58,24 @@ sub ost_count () {
 	}
 }
 
+sub cache_off () {
+	$CACHEFILE = glob ("/proc/fs/lustre/llite/*/max_cached_mb"); 
+	open(PTR, $CACHEFILE) || die "Cannot open $tempfile: $!\n";    
+	$CACHESZ = 0 + <PTR>;
+	close PTR;
+	system("echo 0 >> $CACHEFILE");
+}
+
+sub cache_on () {
+	system("echo $CACHESZ >> $CACHEFILE");
+}
+
 # make_dummy subroutine creates a dummy file that will be used for read operation.
 sub make_dummy () {
 	my $SIZE = $_[0];
 	my $tempfile = $_[1];
 	system ("dd of=$tempfile if=/dev/zero count=$SIZE bs=$BSIZE 2> /dev/null");
 }
-
-my $LoadTimeHiRes = "use Time::HiRes qw(gettimeofday)";
-eval ($LoadTimeHiRes);
 
 # run_test subroutine actually writes and reads data to/from dummy file
 # and compute corresponding time taken for read and write operation and 
@@ -197,6 +206,8 @@ foreach (@ARGV) {
 #Check for Time::HiRes module 
 my $CheckTimeHiRes = "require Time::HiRes";
 eval ($CheckTimeHiRes) or die "You need to install the perl-Time-HiRes package to use this script\n";
+my $LoadTimeHiRes = "use Time::HiRes qw(gettimeofday)";
+eval ($LoadTimeHiRes);
 
 use POSIX qw(strftime);
 my $time_v = time();
@@ -207,32 +218,40 @@ print " OST speed survey on $MNT from $hostname\n";
 
 # get OST count
 ost_count ();
+# turn off local cache
+cache_off ();
+
+$dirpath = "$MNT/ost_survey_tmp";
+eval { mkpath($dirpath) };
+if ($@) {
+	print "Couldn't create $dirpath: $@";
+	exit 1;
+}
 
 use File::Path;
 $CNT = 0;
 while ($CNT < $OSTS) {
-	$dirpath = "$MNT/tmpdir$CNT";
-	eval { mkpath($dirpath) };
-	if ($@) {
-		print "Couldn't create $dirpath: $@";
-		exit 1;
-	}
 	$filename = "$dirpath/file$CNT";
 	if ( $ACTIVEOST_INX[$CNT] ) {
 		# set stripe for OST number $CNT
 		system ("lfs setstripe $filename 0 $CNT 1");
 		# Perform write for OST number $CNT
 		&run_test($FSIZE,$CNT,"write",$filename);
+		$flag++;
+	}
+	$CNT = $CNT + 1;
+}
+$CNT = 0;
+while ($CNT < $OSTS) {
+	$filename = "$dirpath/file$CNT";
+	if ( $ACTIVEOST_INX[$CNT] ) {
 		# Perform read for OST number $CNT
 		&run_test($FSIZE,$CNT,"read",$filename);
 		$flag++;
 	}
-	eval { rmtree($dirpath) };
-	if ($@) {
-		print "Warning: Couldn't  $dirpath: $@";
-	}
 	$CNT = $CNT + 1;
 }
+
 # if read or write performed on any OST then display information. 
 if ( $flag ) {
 	if ( $flag > 1 ) {
@@ -242,4 +261,11 @@ if ( $flag ) {
 	output_all_data ();
 } else {
 	print "There is no active OST's found\n";
+}
+
+cache_on ();
+
+eval { rmtree($dirpath) };
+if ($@) {
+	print "Warning: Couldn't remove $dirpath: $@";
 }
