@@ -437,8 +437,8 @@ static int cml_create(const struct lu_env *env,
                 }
 
                 /* 
-                 * Proceed with cmm_split_try() as nothing happened, split is
-                 * not yet expected.
+                 * Proceed with mdo_create() as nothing happened, split is not
+                 * yet expected.
                  */
         } else {
                 /* 

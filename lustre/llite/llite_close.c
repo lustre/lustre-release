@@ -234,7 +234,7 @@ static struct ll_inode_info *ll_close_next_lli(struct ll_close_queue *lcq)
                                  lli_close_list);
                 list_del_init(&lli->lli_close_list);
         } else if (atomic_read(&lcq->lcq_stop))
-                lli = ERR_PTR(-1);
+                lli = ERR_PTR(-EALREADY);
 
         spin_unlock(&lcq->lcq_lock);
         return lli;
