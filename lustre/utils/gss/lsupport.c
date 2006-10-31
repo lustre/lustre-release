@@ -732,8 +732,16 @@ static inline int mapping_changed(void)
         struct stat st;
 
         if (stat(MAPPING_DATABASE_FILE, &st) == -1) {
-                printerr(0, "stat %s failed\n");
-                return 1;
+                /* stat failed, treat it like doesn't exist or be removed */
+                if (mapping_mtime == 0) {
+                        return 0;
+                } else {
+                        printerr(0, "Warning: stat %s failed: %s\n",
+                                 MAPPING_DATABASE_FILE, strerror(errno));
+
+                        mapping_mtime = 0;
+                        return 1;
+                }
         }
 
         if (st.st_mtime != mapping_mtime) {

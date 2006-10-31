@@ -296,7 +296,7 @@ print_hexl(int pri, unsigned char *cp, int length)
 
 static int
 get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
-	lnet_nid_t nid)
+	lnet_nid_t nid, uint32_t lustre_svc)
 {
 	u_int32_t	maj_stat, min_stat;
 	gss_buffer_desc	name;
@@ -324,7 +324,10 @@ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
 	printerr(1, "authenticated %s from %016llx\n", sname, nid);
 	gss_release_buffer(&min_stat, &name);
 
-	lookup_mapping(sname, nid, &cred->cr_mapped_uid);
+	if (lustre_svc == LUSTRE_GSS_SVC_MDS)
+		lookup_mapping(sname, nid, &cred->cr_mapped_uid);
+	else
+		cred->cr_mapped_uid = -1;
 
         realm = strchr(sname, '@');
         if (!realm) {
@@ -489,7 +492,8 @@ handle_nullreq(FILE *f) {
 			maj_stat, min_stat, mech);
 		goto out_err;
 	}
-	if (get_ids(client_name, mech, &cred, nid)) {
+
+	if (get_ids(client_name, mech, &cred, nid, lustre_svc)) {
 		/* get_ids() prints error msg */
 		maj_stat = GSS_S_BAD_NAME; /* XXX ? */
 		gss_release_name(&ignore_min_stat, &client_name);

@@ -1,5 +1,5 @@
 --- nfs-utils-1.0.10/utils/gssd/gssd_proc.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd_proc.c	2006-10-18 16:14:14.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gssd_proc.c	2006-10-30 16:40:47.000000000 -0700
 @@ -43,7 +43,6 @@
  #endif
  #include "config.h"
@@ -755,8 +755,8 @@
  	goto out;
 +#endif
  }
---- nfs-utils-1.0.10/utils/gssd/context_mit.c.lustre	2006-10-13 16:02:38.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/context_mit.c	2006-10-13 16:03:33.000000000 -0600
+--- nfs-utils-1.0.10/utils/gssd/context_mit.c.lustre	2006-10-30 16:40:17.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/context_mit.c	2006-10-30 16:40:47.000000000 -0700
 @@ -34,8 +34,6 @@
  #include <string.h>
  #include <errno.h>
@@ -807,7 +807,7 @@
  	return -1;
  }
 --- nfs-utils-1.0.10/utils/gssd/context.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/context.h	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/context.h	2006-10-30 16:40:47.000000000 -0700
 @@ -31,8 +31,6 @@
  #ifndef _CONTEXT_H_
  #define _CONTEXT_H_
@@ -818,7 +818,7 @@
  				 gss_OID mech);
  int serialize_spkm3_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf);
 --- nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c	2006-10-30 16:40:47.000000000 -0700
 @@ -94,7 +94,7 @@
  };
  
@@ -837,7 +837,7 @@
  			if (update_client_list()) {
  				printerr(0, "ERROR: couldn't update "
 --- nfs-utils-1.0.10/utils/gssd/svcgssd.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd.c	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd.c	2006-10-30 16:40:47.000000000 -0700
 @@ -43,7 +43,6 @@
  #include <sys/types.h>
  #include <sys/stat.h>
@@ -957,7 +957,7 @@
  	abort();
  }
 --- nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c	2006-10-13 16:48:03.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c	2006-10-30 17:23:21.000000000 -0700
 @@ -35,7 +35,6 @@
  
  #include <sys/param.h>
@@ -1067,7 +1067,7 @@
  void
  print_hexl(int pri, unsigned char *cp, int length)
  {
-@@ -285,12 +292,110 @@
+@@ -285,12 +292,113 @@
  		printerr(pri,"\n");
  	}
  }
@@ -1075,7 +1075,7 @@
 +
 +static int
 +get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
-+	lnet_nid_t nid)
++	lnet_nid_t nid, uint32_t lustre_svc)
 +{
 +	u_int32_t	maj_stat, min_stat;
 +	gss_buffer_desc	name;
@@ -1103,7 +1103,10 @@
 +	printerr(1, "authenticated %s from %016llx\n", sname, nid);
 +	gss_release_buffer(&min_stat, &name);
 +
-+	lookup_mapping(sname, nid, &cred->cr_mapped_uid);
++	if (lustre_svc == LUSTRE_GSS_SVC_MDS)
++		lookup_mapping(sname, nid, &cred->cr_mapped_uid);
++	else
++		cred->cr_mapped_uid = -1;
 +
 +        realm = strchr(sname, '@');
 +        if (!realm) {
@@ -1181,7 +1184,7 @@
  	char			in_tok_buf[TOKEN_BUF_SIZE];
  	char			in_handle_buf[15];
  	char			out_handle_buf[15];
-@@ -302,10 +407,13 @@
+@@ -302,10 +410,13 @@
  				ignore_out_tok = {.value = NULL},
  	/* XXX isn't there a define for this?: */
  				null_token = {.value = NULL};
@@ -1195,7 +1198,7 @@
  	u_int32_t		maj_stat = GSS_S_FAILURE, min_stat = 0;
  	u_int32_t		ignore_min_stat;
  	struct svc_cred		cred;
-@@ -313,7 +421,7 @@
+@@ -313,7 +424,7 @@
  	static int		lbuflen = 0;
  	static char		*cp;
  
@@ -1204,7 +1207,7 @@
  
  	if (readline(fileno(f), &lbuf, &lbuflen) != 1) {
  		printerr(0, "WARNING: handle_nullreq: "
-@@ -323,15 +431,21 @@
+@@ -323,15 +434,21 @@
  
  	cp = lbuf;
  
@@ -1230,7 +1233,7 @@
  
  	if (in_tok.length < 0) {
  		printerr(0, "WARNING: handle_nullreq: "
-@@ -351,7 +465,13 @@
+@@ -351,7 +468,13 @@
  		memcpy(&ctx, in_handle.value, in_handle.length);
  	}
  
@@ -1245,16 +1248,17 @@
  			&in_tok, GSS_C_NO_CHANNEL_BINDINGS, &client_name,
  			&mech, &out_tok, &ret_flags, NULL, NULL);
  
-@@ -369,7 +489,7 @@
+@@ -369,7 +492,8 @@
  			maj_stat, min_stat, mech);
  		goto out_err;
  	}
 -	if (get_ids(client_name, mech, &cred)) {
-+	if (get_ids(client_name, mech, &cred, nid)) {
++
++	if (get_ids(client_name, mech, &cred, nid, lustre_svc)) {
  		/* get_ids() prints error msg */
  		maj_stat = GSS_S_BAD_NAME; /* XXX ? */
  		gss_release_name(&ignore_min_stat, &client_name);
-@@ -377,10 +497,8 @@
+@@ -377,10 +501,8 @@
  	}
  	gss_release_name(&ignore_min_stat, &client_name);
  
@@ -1265,7 +1269,7 @@
  	out_handle.length = sizeof(handle_seq);
  	memcpy(out_handle.value, &handle_seq, sizeof(handle_seq));
  
-@@ -404,7 +522,6 @@
+@@ -404,7 +526,6 @@
  		free(ctx_token.value);
  	if (out_tok.value != NULL)
  		gss_release_buffer(&ignore_min_stat, &out_tok);
@@ -1274,7 +1278,7 @@
  
  out_err:
 --- nfs-utils-1.0.10/utils/gssd/gss_util.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_util.c	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gss_util.c	2006-10-30 16:40:47.000000000 -0700
 @@ -87,9 +87,16 @@
  #ifdef HAVE_COM_ERR_H
  #include <com_err.h>
@@ -1439,7 +1443,7 @@
  
  int gssd_check_mechs(void)
 --- nfs-utils-1.0.10/utils/gssd/gss_util.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_util.h	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gss_util.h	2006-10-30 16:40:47.000000000 -0700
 @@ -32,12 +32,10 @@
  #define _GSS_UTIL_H_
  
@@ -1453,8 +1457,8 @@
  void pgsserr(char *msg, u_int32_t maj_stat, u_int32_t min_stat,
  	const gss_OID mech);
  int gssd_check_mechs(void);
---- nfs-utils-1.0.10/utils/gssd/krb5_util.h.lustre	2006-10-13 16:02:38.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/krb5_util.h	2006-10-17 20:13:38.000000000 -0600
+--- nfs-utils-1.0.10/utils/gssd/krb5_util.h.lustre	2006-10-30 16:40:17.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/krb5_util.h	2006-10-30 16:40:47.000000000 -0700
 @@ -10,13 +10,15 @@
  struct gssd_k5_kt_princ {
  	struct gssd_k5_kt_princ *next;
@@ -1508,8 +1512,8 @@
 +
  
  #endif /* KRB5_UTIL_H */
---- nfs-utils-1.0.10/utils/gssd/krb5_util.c.lustre	2006-10-13 16:02:38.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/krb5_util.c	2006-10-18 11:56:30.000000000 -0600
+--- nfs-utils-1.0.10/utils/gssd/krb5_util.c.lustre	2006-10-30 16:40:17.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/krb5_util.c	2006-10-30 16:40:47.000000000 -0700
 @@ -99,12 +99,14 @@
  #include <rpc/rpc.h>
  #include <sys/types.h>
@@ -1991,7 +1995,7 @@
  /*
   * Obtain supported enctypes from kernel.
 --- nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c	2006-10-30 16:40:47.000000000 -0700
 @@ -47,6 +47,7 @@
  #include "gssd.h"
  #include "write_bytes.h"
@@ -2006,7 +2010,7 @@
  }
 +#endif
 --- nfs-utils-1.0.10/utils/gssd/context.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/context.c	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/context.c	2006-10-30 16:40:47.000000000 -0700
 @@ -33,8 +33,6 @@
  #include <syslog.h>
  #include <string.h>
@@ -2016,8 +2020,8 @@
  #include "gss_util.h"
  #include "gss_oids.h"
  #include "err_util.h"
---- nfs-utils-1.0.10/utils/gssd/lsupport.h.lustre	2006-10-13 16:03:33.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/lsupport.h	2006-10-17 19:46:49.000000000 -0600
+--- nfs-utils-1.0.10/utils/gssd/lsupport.h.lustre	2006-10-30 16:40:47.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/lsupport.h	2006-10-30 16:40:47.000000000 -0700
 @@ -0,0 +1,89 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2109,7 +2113,7 @@
 +
 +#endif /* __LIBCFS_H__ */
 --- nfs-utils-1.0.10/utils/gssd/err_util.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/err_util.c	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/err_util.c	2006-10-30 16:40:47.000000000 -0700
 @@ -32,6 +32,8 @@
  #include <stdarg.h>
  #include <syslog.h>
@@ -2160,8 +2164,8 @@
 +	}
 +}
 +
---- nfs-utils-1.0.10/utils/gssd/context_spkm3.c.lustre	2006-10-13 16:02:38.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/context_spkm3.c	2006-10-13 16:03:33.000000000 -0600
+--- nfs-utils-1.0.10/utils/gssd/context_spkm3.c.lustre	2006-10-30 16:40:17.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/context_spkm3.c	2006-10-30 16:40:47.000000000 -0700
 @@ -33,8 +33,6 @@
  #include <syslog.h>
  #include <string.h>
@@ -2171,8 +2175,8 @@
  #include "gss_util.h"
  #include "gss_oids.h"
  #include "err_util.h"
---- nfs-utils-1.0.10/utils/gssd/gssd.c.lustre	2006-10-13 16:02:38.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd.c	2006-10-13 16:03:33.000000000 -0600
+--- nfs-utils-1.0.10/utils/gssd/gssd.c.lustre	2006-10-30 16:40:17.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/gssd.c	2006-10-30 16:40:47.000000000 -0700
 @@ -40,7 +40,6 @@
  
  #include <sys/param.h>
@@ -2282,7 +2286,7 @@
  	abort();
  }
 --- nfs-utils-1.0.10/utils/gssd/cacheio.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/cacheio.c	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/cacheio.c	2006-10-30 16:40:47.000000000 -0700
 @@ -227,7 +227,8 @@
  		return -1;
  	while (*bp == ' ') bp++;
@@ -2293,9 +2297,9 @@
  	return len;
  }
  
---- nfs-utils-1.0.10/utils/gssd/lsupport.c.lustre	2006-10-13 16:03:33.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/lsupport.c	2006-10-13 17:40:51.000000000 -0600
-@@ -0,0 +1,774 @@
+--- nfs-utils-1.0.10/utils/gssd/lsupport.c.lustre	2006-10-30 16:40:47.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/lsupport.c	2006-10-30 17:42:31.000000000 -0700
+@@ -0,0 +1,782 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3030,8 +3034,16 @@
 +        struct stat st;
 +
 +        if (stat(MAPPING_DATABASE_FILE, &st) == -1) {
-+                printerr(0, "stat %s failed\n");
-+                return 1;
++                /* stat failed, treat it like doesn't exist or be removed */
++                if (mapping_mtime == 0) {
++                        return 0;
++                } else {
++                        printerr(0, "Warning: stat %s failed: %s\n",
++                                 MAPPING_DATABASE_FILE, strerror(errno));
++
++                        mapping_mtime = 0;
++                        return 1;
++                }
 +        }
 +
 +        if (st.st_mtime != mapping_mtime) {
@@ -3071,7 +3083,7 @@
 +}
 +
 --- nfs-utils-1.0.10/utils/gssd/err_util.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/err_util.h	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/err_util.h	2006-10-30 16:40:47.000000000 -0700
 @@ -33,5 +33,6 @@
  
  void initerr(char *progname, int verbosity, int fg);
@@ -3080,7 +3092,7 @@
  
  #endif /* _ERR_UTIL_H_ */
 --- nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c	2006-10-30 16:40:47.000000000 -0700
 @@ -47,31 +47,31 @@
  #include "err_util.h"
  
@@ -3135,7 +3147,7 @@
  	}
  }
 --- nfs-utils-1.0.10/utils/gssd/Makefile.am.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/Makefile.am	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/Makefile.am	2006-10-30 16:40:47.000000000 -0700
 @@ -1,17 +1,11 @@
  ## Process this file with automake to produce Makefile.in
  
@@ -3242,7 +3254,7 @@
 -	  done)
 -
 --- nfs-utils-1.0.10/utils/gssd/gssd.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd.h	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gssd.h	2006-10-30 16:40:47.000000000 -0700
 @@ -48,8 +48,13 @@
  #define GSSD_DEFAULT_CRED_PREFIX		"krb5cc_"
  #define GSSD_DEFAULT_MACHINE_CRED_SUFFIX	"machine"
@@ -3289,7 +3301,7 @@
  
  #endif /* _RPC_GSSD_H_ */
 --- nfs-utils-1.0.10/utils/gssd/svcgssd.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd.h	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd.h	2006-10-30 16:40:47.000000000 -0700
 @@ -36,8 +36,19 @@
  #include <gssapi/gssapi.h>
  
@@ -3313,7 +3325,7 @@
  
  #endif /* _RPC_SVCGSSD_H_ */
 --- nfs-utils-1.0.10/utils/Makefile.am.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/Makefile.am	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/utils/Makefile.am	2006-10-30 16:40:47.000000000 -0700
 @@ -2,31 +2,6 @@
  
  OPTDIRS =
@@ -3348,7 +3360,7 @@
  
  MAINTAINERCLEANFILES = Makefile.in
 --- nfs-utils-1.0.10/configure.in.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/configure.in	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/configure.in	2006-10-30 16:40:47.000000000 -0700
 @@ -17,61 +17,14 @@
  	RELEASE=$withval,
  	RELEASE=1)
@@ -3541,7 +3553,7 @@
  AC_OUTPUT
  
 --- nfs-utils-1.0.10/Makefile.am.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/Makefile.am	2006-10-13 16:03:33.000000000 -0600
++++ nfs-utils-1.0.10/Makefile.am	2006-10-30 16:40:47.000000000 -0700
 @@ -1,6 +1,6 @@
  ## Process this file with automake to produce Makefile.in
  
