@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1390 @@
+@@ -0,0 +1,1407 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -396,6 +396,7 @@ Index: iam/fs/ext3/iam.c
 +        if (leaf->il_lock != NULL) {
 +                dx_unlock_htree(iam_leaf_container(leaf)->ic_object,
 +                                leaf->il_lock);
++		do_corr(schedule());
 +                leaf->il_lock = NULL;
 +        }
 +}
@@ -646,16 +647,19 @@ Index: iam/fs/ext3/iam.c
 +	descr = iam_path_descr(path);
 +	result = dx_lookup_lock(path, &leaf->il_lock, DLT_WRITE);
 +        assert_inv(iam_path_check(path));
++        do_corr(schedule());
 +	if (result == 0) {
 +		result = iam_leaf_load(path);
 +                assert_inv(ergo(result == 0, iam_leaf_check(leaf)));
 +		if (result == 0) {
++                        do_corr(schedule());
 +                        if (index)
 +                                result = iam_leaf_ops(leaf)->
 +                                        ilookup(leaf, path->ip_ikey_target);
 +                        else
 +                                result = iam_leaf_ops(leaf)->
 +                                        lookup(leaf, path->ip_key_target);
++                        do_corr(schedule());
 +                }
 +                if (result < 0)
 +                        iam_leaf_unlock(leaf);
@@ -713,6 +717,7 @@ Index: iam/fs/ext3/iam.c
 +        assert(ergo(it_at_rec(it), !it_keyeq(it, it->ii_path.ip_key_target)));
 +
 +        while ((result = iam_it_next(it)) == 0) {
++		do_corr(schedule());
 +                if (it_ikeycmp(it, it->ii_path.ip_ikey_target) != 0)
 +                        return -ENOENT;
 +                if (it_keyeq(it, it->ii_path.ip_key_target))
@@ -879,6 +884,7 @@ Index: iam/fs/ext3/iam.c
 +                 * multiple iterations may be necessary due to empty leaves.
 +                 */
 +                while (result == 0 && iam_leaf_at_end(leaf)) {
++                        do_corr(schedule());
 +                        iam_leaf_unlock(leaf);
 +                        /* advance index portion of the path */
 +                        result = iam_index_next(iam_it_container(it), path);
@@ -1047,13 +1053,17 @@ Index: iam/fs/ext3/iam.c
 +
 +        obj = c->ic_object;
 +        new_leaf = ext3_append(handle, c->ic_object, &blknr, &err);
++        do_corr(schedule());
 +        if (new_leaf != NULL) {
 +                iam_leaf_ops(leaf)->init_new(c, new_leaf);
++		do_corr(schedule());
 +                iam_leaf_split(leaf, &new_leaf, blknr);
++		do_corr(schedule());
 +                err = iam_txn_dirty(handle, iam_leaf_path(leaf), new_leaf);
 +                brelse(new_leaf);
 +                if (err == 0)
 +                        err = ext3_mark_inode_dirty(handle, c->ic_object);
++		do_corr(schedule());
 +        }
 +        assert_inv(iam_leaf_check(leaf));
 +        assert_inv(iam_leaf_check(&iam_leaf_path(leaf)->ip_leaf));
@@ -1073,10 +1083,13 @@ Index: iam/fs/ext3/iam.c
 +        assert_inv(iam_path_check(path));
 +        err = iam_txn_add(handle, path, leaf->il_bh);
 +        if (err == 0) {
++		do_corr(schedule());
 +                if (!iam_leaf_can_add(leaf, k, r)) {
 +                        struct dynlock_handle *lh = NULL;
 +
 +                        do {
++                                assert_corr(lh == NULL);
++                                do_corr(schedule());
 +                                err = split_index_node(handle, path, &lh);
 +                                if (err == -EAGAIN) {
 +                                        assert_corr(lh == NULL);
@@ -1084,6 +1097,7 @@ Index: iam/fs/ext3/iam.c
 +                                        iam_path_fini(path);
 +                                        it->ii_state = IAM_IT_DETACHED;
 +
++                                        do_corr(schedule());
 +                                        err = iam_it_get_exact(it, k);
 +                                        if (err == -ENOENT)
 +                                                err = +1; /* repeat split */
@@ -1093,6 +1107,8 @@ Index: iam/fs/ext3/iam.c
 +                        } while (err > 0);
 +                        assert_inv(iam_path_check(path));
 +                        if (err == 0) {
++                                assert_corr(lh != NULL);
++                                do_corr(schedule());
 +                                err = iam_new_leaf(handle, leaf);
 +                                /*
 +                                 * refresh @leaf, as split may retarget path
@@ -1104,6 +1120,7 @@ Index: iam/fs/ext3/iam.c
 +                                                            path->ip_frame->bh);
 +                        }
 +                        dx_unlock_htree(iam_path_obj(path), lh);
++                        do_corr(schedule());
 +                }
 +                if (err == 0) {
 +                        iam_leaf_rec_add(leaf, k, r);
