@@ -15,7 +15,6 @@ $pname = $0;			 # to hold program name
 $OSTS = 0;                       # Number of OSTS we will loop over
 $BSIZE = 1024 * 1024;            # Size of i/o block
 $MNT = "/mnt/lustre";            # Location of Lustre file system
-$CNT = 0;
 $FSIZE = 30;			 # Number of i/o blocks
 
 # Usage
@@ -32,12 +31,12 @@ sub usage () {
 # Also fills 1 for active OST indexes in ACTIVEOST_INX array.
 sub ost_count () {
 	# numobd gives number of ost's and activeobd gives number of active ost's
-	my $tempfile = glob ("/proc/fs/lustre/lov/lustre-clilov-*/activeobd"); 
+	my $tempfile = glob ("/proc/fs/lustre/lov/*-clilov-*/activeobd"); 
 	open(PTR, $tempfile) || die "Cannot open $tempfile: $!\n";    
 	$OSTS = <PTR>;
 	close PTR;
 	print "Number of Active OST devices : $OSTS";
-	my $tempfile = glob ("/proc/fs/lustre/lov/lustre-clilov-*/numobd"); 
+	my $tempfile = glob ("/proc/fs/lustre/lov/*-clilov-*/numobd"); 
 	open(PTR, $tempfile) || die "Cannot open $tempfile: $!\n";    
 	$numost = <PTR>;
 	close PTR;
@@ -45,7 +44,7 @@ sub ost_count () {
 		printf "Number of non active ots(s): %d\n", ( $numost - $OSTS );
 		$OSTS = $numost;
 	}
-	my $tempfile = glob ("/proc/fs/lustre/lov/lustre-clilov-*/target_obd");
+	my $tempfile = glob ("/proc/fs/lustre/lov/*-clilov-*/target_obd");
 	open(PTR, $tempfile) || die "Cannot open $tempfile: $!\n";
 	my $count = 0;
 	my $temp;
@@ -66,6 +65,9 @@ sub make_dummy () {
 	system ("dd of=$tempfile if=/dev/zero count=$SIZE bs=$BSIZE 2> /dev/null");
 }
 
+my $LoadTimeHiRes = "use Time::HiRes qw(gettimeofday)";
+eval ($LoadTimeHiRes);
+
 # run_test subroutine actually writes and reads data to/from dummy file
 # and compute corresponding time taken for read and write operation and 
 # byte transfer for the both operations.
@@ -79,8 +81,6 @@ sub run_test () {
 	if ( !(-f $tempfile) && $ACTION eq "read" ) {
 		&make_dummy($SIZE, $tempfile);
 	}
-	my $LoadTimeHiRes = "use Time::HiRes qw(gettimeofday)";
-	eval ($LoadTimeHiRes);
 	system("sync");
 	my ($ts0, $tu0) = gettimeofday();
 	$tu0 = $ts0 + ($tu0 / 1000000);
@@ -148,7 +148,7 @@ sub calculate () {
 	$sd = sqrt($total/$OSTS);
 	printf "Worst  %s OST indx: %d speed: %f\n", $op, $worst_OST, $min_mb;
 	printf "Best   %s OST indx: %d speed: %f\n", $op, $best_OST, $max_mb;
-	printf "%s Avrage: %f +/- %f MB/s\n", $op, $avg, $sd;
+	printf "%s Average: %f +/- %f MB/s\n", $op, $avg, $sd;
 }
 
 # output_all_data subroutine displays speed and time information 
@@ -209,6 +209,7 @@ print " OST speed survey on $MNT from $hostname\n";
 ost_count ();
 
 use File::Path;
+$CNT = 0;
 while ($CNT < $OSTS) {
 	$dirpath = "$MNT/tmpdir$CNT";
 	eval { mkpath($dirpath) };
