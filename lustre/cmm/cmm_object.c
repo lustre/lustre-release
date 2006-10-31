@@ -401,14 +401,14 @@ static int cml_create(const struct lu_env *env,
          * Sigh... This is long story. MDT may have race with detecting if split
          * is possible in cmm. We know this race and let it live, because
          * getting it rid (with some sem or spinlock) will also mean that
-         * PDIROPS for craate will not work, what is really bad for performance
+         * PDIROPS for create will not work, what is really bad for performance
          * and makes no sense. So, we better allow the race but split dir only
          * if some of concurrent threads takes EX lock. So that, say, two
          * concurrent threads may have different lock modes on directory (CW and
          * EX) and not first one which comes here should split dir, but only
          * that which has EX lock. And we do not care that in this case, split
          * will happen a bit later may be (when dir size will not be mandatory
-         * <= 64K, but may be larger). So that, we allow concurrent creates and
+         * 64K, but may be larger). So that, we allow concurrent creates and
          * protect split by EX lock.
          */
         if (spec->sp_cr_mode == MDL_EX) {
@@ -437,7 +437,7 @@ static int cml_create(const struct lu_env *env,
                 }
 
                 /* 
-                 * Proceed with cmm_split_try() as nothign happened, split is
+                 * Proceed with cmm_split_try() as nothing happened, split is
                  * not yet expected.
                  */
         } else {

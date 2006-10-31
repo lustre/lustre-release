@@ -200,11 +200,11 @@ void mdt_lock_pdo_init(struct mdt_lock_handle *lh, ldlm_mode_t lm,
         }
 }
 
-static ldlm_mode_t mdt_lock_pdo_mode(struct mdt_thread_info *info,
-                                     struct mdt_object *o,
-                                     ldlm_mode_t lm)
+static void mdt_lock_pdo_mode(struct mdt_thread_info *info, struct mdt_object *o,
+                              struct mdt_lock_handle *lh)
 {
         mdl_mode_t mode;
+        ENTRY;
 
         /*
          * Any dir access needs couple of locks:
@@ -227,44 +227,58 @@ static ldlm_mode_t mdt_lock_pdo_mode(struct mdt_thread_info *info,
          * splitting then we need to protect it from any type of access
          * (lookup/modify/split) - LCK_EX --bzzz
          */
-
-        LASSERT(lm != LCK_MINMODE);
+        
+        LASSERT(lh->mlh_reg_mode != LCK_MINMODE);
+        LASSERT(lh->mlh_pdo_mode == LCK_MINMODE);
 
         /* 
-         * No pdo locks possible on not existing objects, because pdo
-         * lock is taken on parent dir and it can't absent.
+         * No pdo locks possible on not existing objects, because pdo lock is
+         * taken on parent dir and parent can't be absent.
          */
         LASSERT(mdt_object_exists(o) > 0);
 
         /*
-         * Ask underlaying level its opinion about possible locks.
+         * Ask underlaying level its opinion about preferable PDO lock mode
+         * having access type passed as regular lock mode:
+         *
+         * - MDL_MINMODE means that lower layer does not want to specify lock
+         * mode;
+         *
+         * - MDL_NL means that no PDO lock should be taken. This is used in some
+         * cases. Say, for non-splittable directories no need to use PDO locks
+         * at all.
          */
         mode = mdo_lock_mode(info->mti_env, mdt_object_child(o),
-                             mdt_dlm_mode2mdl_mode(lm));
+                             mdt_dlm_mode2mdl_mode(lh->mlh_reg_mode));
 
         if (mode != MDL_MINMODE) {
-                /* Lower layer said what lock mode it likes to be, use it. */
-                return mdt_mdl_mode2dlm_mode(mode);
+                lh->mlh_pdo_mode = mdt_mdl_mode2dlm_mode(mode);
         } else {
                 /*
-                 * Lower layer does not want to specify locking mode. We od it
+                 * Lower layer does not want to specify locking mode. We do it
                  * our selves. No special protection is needed, just flush
-                 * client's cache on modification.
+                 * client's cache on modification and allow concurrent
+                 * mondification.
                  */
-                if (lm == LCK_EX) {
-                        return LCK_EX;
-                } else if (lm == LCK_PR) {
-                        return LCK_CR;
-                } else if (lm == LCK_PW) {
-                        return LCK_CW;
-                } else {
-                        CWARN("Not expected lock type (0x%x)\n",
-                              (int)mode);
+                switch (lh->mlh_reg_mode) {
+                case LCK_EX:
+                        lh->mlh_pdo_mode = LCK_EX;
+                        break;
+                case LCK_PR:
+                        lh->mlh_pdo_mode = LCK_CR;
+                        break;
+                case LCK_PW:
+                        lh->mlh_pdo_mode = LCK_CW;
+                        break;
+                default:
+                        CERROR("Not expected lock type (0x%x)\n",
+                               (int)lh->mlh_reg_mode);
                         LBUG();
                 }
         }
 
-        return LCK_MINMODE;
+        LASSERT(lh->mlh_pdo_mode != LCK_MINMODE);
+        EXIT;
 }
 
 static int mdt_getstatus(struct mdt_thread_info *info)
@@ -1592,8 +1606,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
          * on part of directory.
          */
         if (lh->mlh_type == MDT_PDO_LOCK && lh->mlh_pdo_hash != 0) {
-                lh->mlh_pdo_mode = mdt_lock_pdo_mode(info, o, lh->mlh_reg_mode);
-                LASSERT(lh->mlh_pdo_mode != LCK_MINMODE);
+                mdt_lock_pdo_mode(info, o, lh);
                 if (lh->mlh_pdo_mode != LCK_NL) {
                         /*
                          * Do not use LDLM_FL_LOCAL_ONLY for parallel lock, it
