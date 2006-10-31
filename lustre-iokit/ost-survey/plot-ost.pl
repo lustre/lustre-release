@@ -10,8 +10,9 @@
 #
 # Syntax:
 # $ plot-ost.pl <log_filename>
-# [Note: This script may need modifications whenever there will be 
-#        modifications in output format of ost-survey.pl script.]
+# Note:  1. This script may need modifications whenever there will be 
+#	    modifications in output format of ost-survey.pl script.
+#	 2. Gnuplot version 4.0 or above is required.
 
 # arg 0 is filename 
 sub usages_msg(){
@@ -70,9 +71,9 @@ open ( SCRFILE, "> $file.scr" ) or die "Can't open scr file for writting";
 print SCRFILE "set title \"$GraphTitle[1]\"\n";
 print SCRFILE "set xlabel \"OST index\"\n";
 print SCRFILE "set ylabel \"MB/s\"\n";
-print SCRFILE "set boxwidth 0.3\n";
-print SCRFILE "plot \"$file.dat\" using 1:2 axes x1y1 title \"Read(MB/s)\" with boxes\n";
-print SCRFILE "replot \"$file.dat\" using 1:3 axes x1y1 title \"Write(MB/s)\" with boxes\n";
+print SCRFILE "set boxwidth 0.2\n";
+print SCRFILE "plot \"$file.dat\" using 1:2 axes x1y1 title \"Read(MB/s)\" with boxes fs solid 0.7\n";
+print SCRFILE "replot \"$file.dat\" using (\$1 + 0.2):3 axes x1y1 title \"Write(MB/s)\" with boxes fs solid 0.7\n";
 print SCRFILE "pause -1\n";
 close SCRFILE;
 # invoke gnuplot to display graph.
