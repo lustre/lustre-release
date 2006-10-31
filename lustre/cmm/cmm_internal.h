@@ -79,6 +79,15 @@ static inline struct lu_device *cmm2lu_dev(struct cmm_device *d)
         return (&d->cmm_md_dev.md_lu_dev);
 }
 
+#ifdef HAVE_SPLIT_SUPPORT
+enum {
+        CMM_SPLIT_UNKNOWN,
+        CMM_SPLIT_NONE,
+        CMM_SPLIT_NEEDED,
+        CMM_SPLIT_DONE,
+        CMM_SPLIT_DENIED
+};
+#endif
 struct cmm_object {
         struct md_object cmo_obj;
 };
@@ -86,6 +95,10 @@ struct cmm_object {
 /* local CMM object */
 struct cml_object {
         struct cmm_object cmm_obj;
+#ifdef HAVE_SPLIT_SUPPORT
+        /* split state of object (for dirs only)*/
+        __u32             clo_split;
+#endif
 };
 
 /* remote CMM object */
@@ -134,6 +147,21 @@ struct lu_object *cmm_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *);
 
+/*
+ * local CMM object operations. cml_...
+ */
+static inline struct cml_object *lu2cml_obj(struct lu_object *o)
+{
+        return container_of0(o, struct cml_object, cmm_obj.cmo_obj.mo_lu);
+}
+static inline struct cml_object *md2cml_obj(struct md_object *mo)
+{
+        return container_of0(mo, struct cml_object, cmm_obj.cmo_obj);
+}
+static inline struct cml_object *cmm2cml_obj(struct cmm_object *co)
+{
+        return container_of0(co, struct cml_object, cmm_obj);
+}
 
 int cmm_upcall(const struct lu_env *env, struct md_device *md,
                enum md_upcall_event ev);

@@ -45,12 +45,6 @@ enum {
         CMM_SPLIT_SIZE =  64 * 1024
 };
 
-enum {
-        CMM_NO_SPLIT_EXPECTED = 0,
-        CMM_EXPECT_SPLIT      = 1,
-        CMM_NOT_SPLITTABLE    = 2
-};
-
 #define CMM_SPLIT_PAGE_COUNT 1
 
 /*
@@ -61,12 +55,15 @@ enum {
 int cmm_split_check(const struct lu_env *env, struct md_object *mp,
                     const char *name)
 {
+        struct cml_object *clo = md2cml_obj(mp);
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mp));
         struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
         int rc;
         ENTRY;
         
-        if (cmm->cmm_tgt_count == 0)
+        /* not split yet */
+        if (clo->clo_split == CMM_SPLIT_NONE ||
+            clo->clo_split == CMM_SPLIT_DENIED)
                 RETURN(0);
 
         /* Try to get the LMV EA size */
@@ -75,11 +72,15 @@ int cmm_split_check(const struct lu_env *env, struct md_object *mp,
         rc = mo_attr_get(env, mp, ma);
         if (rc)
                 RETURN(rc);
-        
-        /* No LMV just return */
-        if (!(ma->ma_valid & MA_LMV))
-                RETURN(0);
 
+        /* No LMV just return */
+        if (!(ma->ma_valid & MA_LMV)) {
+                /* update split state if unknown */
+                if (clo->clo_split == CMM_SPLIT_UNKNOWN)
+                        clo->clo_split = CMM_SPLIT_NONE;
+                RETURN(0);
+        }
+        
         LASSERT(ma->ma_lmv_size > 0);
         OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
         if (ma->ma_lmv == NULL)
@@ -113,6 +114,13 @@ int cmm_split_check(const struct lu_env *env, struct md_object *mp,
                  */
                 if (idx != 0)
                         rc = -ERESTART;
+                
+                /* update split state to DONE if unknown */
+                if (clo->clo_split == CMM_SPLIT_UNKNOWN)
+                        clo->clo_split = CMM_SPLIT_DONE;
+        } else {
+                /* split is denied for slave dir */
+                clo->clo_split = CMM_SPLIT_DENIED;
         }
         EXIT;
 cleanup:
@@ -147,11 +155,11 @@ int cmm_split_access(const struct lu_env *env, struct md_object *mo,
          * Do not take PDO lock on non-splittable objects if this is not PW,
          * this should speed things up a bit.
          */
-        if (split == CMM_NOT_SPLITTABLE && lm != MDL_PW)
+        if (split == CMM_SPLIT_DONE && lm != MDL_PW)
                 RETURN(MDL_NL);
 
         /* Protect splitting by exclusive lock. */
-        if (split == CMM_EXPECT_SPLIT && lm == MDL_PW)
+        if (split == CMM_SPLIT_NEEDED && lm == MDL_PW)
                 RETURN(MDL_EX);
 
         /* 
@@ -160,20 +168,22 @@ int cmm_split_access(const struct lu_env *env, struct md_object *mo,
         RETURN(MDL_MINMODE);
 }
 
-/* Check if split is expected for current thead. */
+/* Check if split is expected for current thread. */
 int cmm_split_expect(const struct lu_env *env, struct md_object *mo,
                      struct md_attr *ma, int *split)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
+        struct cml_object *clo = md2cml_obj(mo);
         struct lu_fid root_fid;
         int rc;
         ENTRY;
 
-        /* No need split for single MDS */
-        if (cmm->cmm_tgt_count == 0) {
-                *split = CMM_NO_SPLIT_EXPECTED;
+        if (clo->clo_split == CMM_SPLIT_DONE ||
+            clo->clo_split == CMM_SPLIT_DENIED) {
+                *split = clo->clo_split;
                 RETURN(0);
         }
+        /* CMM_SPLIT_UNKNOWN case below */
 
         /* No need split for Root object */
         rc = cmm_child_ops(cmm)->mdo_root_get(env, cmm->cmm_child, &root_fid);
@@ -181,7 +191,8 @@ int cmm_split_expect(const struct lu_env *env, struct md_object *mo,
                 RETURN(rc);
 
         if (lu_fid_eq(&root_fid, cmm2fid(md2cmm_obj(mo)))) {
-                *split = CMM_NO_SPLIT_EXPECTED;
+                /* update split state */
+                *split = clo->clo_split == CMM_SPLIT_DENIED;
                 RETURN(0);
         }
 
@@ -198,17 +209,17 @@ int cmm_split_expect(const struct lu_env *env, struct md_object *mo,
         /* No need split for already split object */
         if (ma->ma_valid & MA_LMV) {
                 LASSERT(ma->ma_lmv_size > 0);
-                *split = CMM_NOT_SPLITTABLE;
+                *split = clo->clo_split = CMM_SPLIT_DONE;
                 RETURN(0);
         }
 
         /* No need split for object whose size < CMM_SPLIT_SIZE */
         if (ma->ma_attr.la_size < CMM_SPLIT_SIZE) {
-                *split = CMM_NO_SPLIT_EXPECTED;
+                *split = clo->clo_split = CMM_SPLIT_NONE;
                 RETURN(0);
         }
-
-        *split = CMM_EXPECT_SPLIT;
+        
+        *split = clo->clo_split = CMM_SPLIT_NEEDED;
         RETURN(0);
 }
 
@@ -632,18 +643,14 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
         if (rc)
                 RETURN(rc);
 
-        if (split == CMM_NOT_SPLITTABLE) {
-                /* Let caller know that dir is already split. */
-                RETURN(-EALREADY);
-        } else if (split == CMM_NO_SPLIT_EXPECTED) {
-                /* No split is expected, caller may proceed with create. */
+        if (split != CMM_SPLIT_NEEDED) {
+                /* No split is needed, caller may proceed with create. */
                 RETURN(0);
-        } else {
-                /* Split should be done now, let's do it. */
-                CWARN("Dir "DFID" is going to split\n",
-                      PFID(lu_object_fid(&mo->mo_lu)));
-                la_size = ma->ma_attr.la_size;
         }
+        
+        /* Split should be done now, let's do it. */
+        CWARN("Dir "DFID" is going to split\n",
+              PFID(lu_object_fid(&mo->mo_lu)));
 
         /*
          * Disable transacrions for split, since there will be so many trans in
@@ -684,6 +691,9 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
                 CERROR("Can't set MEA to master dir, " "rc %d\n", rc);
                 GOTO(cleanup, rc);
         }
+
+        /* set flag in cmm_object */
+        md2cml_obj(mo)->clo_split = CMM_SPLIT_DONE;
 
         /*
          * Finally, split succeed, tell client to repeat opetartion on correct

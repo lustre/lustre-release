@@ -130,21 +130,6 @@ struct lu_object *cmm_object_alloc(const struct lu_env *env,
  * of operations so we are avoiding multiple checks in code.
  */
 
-/*
- * local CMM object operations. cml_...
- */
-static inline struct cml_object *lu2cml_obj(struct lu_object *o)
-{
-        return container_of0(o, struct cml_object, cmm_obj.cmo_obj.mo_lu);
-}
-static inline struct cml_object *md2cml_obj(struct md_object *mo)
-{
-        return container_of0(mo, struct cml_object, cmm_obj.cmo_obj);
-}
-static inline struct cml_object *cmm2cml_obj(struct cmm_object *co)
-{
-        return container_of0(co, struct cml_object, cmm_obj);
-}
 /* get local child device */
 static struct lu_device *cml_child_dev(struct cmm_device *d)
 {
@@ -169,6 +154,12 @@ static int cml_object_init(const struct lu_env *env, struct lu_object *lo)
 
         ENTRY;
 
+#ifdef HAVE_SPLIT_SUPPORT
+        if(cd->cmm_tgt_count == 0)
+                lu2cml_obj(lo)->clo_split = CMM_SPLIT_DENIED;
+        else
+                lu2cml_obj(lo)->clo_split = CMM_SPLIT_UNKNOWN;
+#endif
         c_dev = cml_child_dev(cd);
         if (c_dev == NULL) {
                 rc = -ENOENT;
@@ -419,16 +410,7 @@ static int cml_create(const struct lu_env *env,
                  * choosen.
                  */
                 rc = cmm_split_try(env, mo_p);
-                if (rc == -EALREADY) {
-                        /* 
-                         * Dir is already split and we would like to check if
-                         * name came to correct MDT. If not -ERESTART is
-                         * returned by cmm_split_check()
-                         */
-                        rc = cmm_split_check(env, mo_p, child_name);
-                        if (rc)
-                                RETURN(rc);
-                } else if (rc) {
+                if (rc) {
                         /* 
                          * -ERESTART or some split error is returned, we can't
                          * proceed with create.
