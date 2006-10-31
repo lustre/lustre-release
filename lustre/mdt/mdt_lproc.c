@@ -154,8 +154,21 @@ static int lprocfs_wr_identity_flush(struct file *file, const char *buffer,
 {
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        char tmp[8];
+        int uid;
 
-        upcall_cache_flush_idle(mdt->mdt_identity_cache);
+        memset(tmp, 0, 8);
+        if (copy_from_user(tmp, buffer, (count > 7) ? 7 : count)) {
+                CERROR("%s: bad data\n", obd->obd_name);
+                return -EFAULT;
+        }
+
+        if (sscanf(tmp, "%d", &uid) != 1) {
+                CERROR("%s: invalid uid\n", obd->obd_name);
+                return -EFAULT;
+        }
+
+        mdt_flush_identity(mdt->mdt_identity_cache, uid);
         return count;
 }
 
@@ -400,7 +413,7 @@ static int lprocfs_wr_rootsquash_uid(struct file *file, const char *buffer,
         if (!mdt->mdt_rootsquash_info)
                 OBD_ALLOC_PTR(mdt->mdt_rootsquash_info);
         if (!mdt->mdt_rootsquash_info)
-                RETURN(-ENOMEM);
+                return -ENOMEM;
 
         mdt->mdt_rootsquash_info->rsi_uid = val;
         return count;
@@ -432,7 +445,7 @@ static int lprocfs_wr_rootsquash_gid(struct file *file, const char *buffer,
         if (!mdt->mdt_rootsquash_info)
                 OBD_ALLOC_PTR(mdt->mdt_rootsquash_info);
         if (!mdt->mdt_rootsquash_info)
-                RETURN(-ENOMEM);
+                return -ENOMEM;
 
         mdt->mdt_rootsquash_info->rsi_gid = val;
         return count;
@@ -516,7 +529,7 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
         if (!mdt->mdt_rootsquash_info)
                 OBD_ALLOC_PTR(mdt->mdt_rootsquash_info);
         if (!mdt->mdt_rootsquash_info)
-                RETURN(-ENOMEM);
+                return -ENOMEM;
 
         remove_newline(skips);
         do_process_nosquash_nids(mdt, skips);

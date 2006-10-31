@@ -593,7 +593,7 @@ struct mdt_identity *mdt_identity_get(struct upcall_cache *, __u32);
 
 void mdt_identity_put(struct upcall_cache *, struct mdt_identity *);
 
-void mdt_flush_identity(struct upcall_cache *, __u32);
+void mdt_flush_identity(struct upcall_cache *, int);
 
 __u32 mdt_identity_get_setxid_perm(struct mdt_identity *, __u32, lnet_nid_t);
 

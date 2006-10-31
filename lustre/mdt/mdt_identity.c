@@ -199,9 +199,9 @@ struct upcall_cache_ops mdt_identity_upcall_cache_ops = {
         .parse_downcall = mdt_identity_parse_downcall,
 };
 
-void mdt_flush_identity(struct upcall_cache *cache, __u32 uid)
+void mdt_flush_identity(struct upcall_cache *cache, int uid)
 {
-        if (uid == -1)
+        if (uid < 0)
                 upcall_cache_flush_idle(cache);
         else
                 upcall_cache_flush_one(cache, (__u64)uid, NULL);
