@@ -2372,8 +2372,10 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
         new_lock->l_writers = 0;
 
         new_lock->l_export = class_export_get(req->rq_export);
+        spin_lock(&req->rq_export->exp_ldlm_data.led_lock);
         list_add(&new_lock->l_export_chain,
                  &new_lock->l_export->exp_ldlm_data.led_held_locks);
+        spin_unlock(&req->rq_export->exp_ldlm_data.led_lock);
 
         new_lock->l_blocking_ast = lock->l_blocking_ast;
         new_lock->l_completion_ast = lock->l_completion_ast;

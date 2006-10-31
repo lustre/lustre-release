@@ -97,7 +97,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         ENTRY;
 
         DEBUG_REQ(D_INODE, mdt_info_req(info), "partial create "DFID"\n",
-                           PFID(info->mti_rr.rr_fid2));
+                  PFID(info->mti_rr.rr_fid2));
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
@@ -107,8 +107,11 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
 
                 ma->ma_need = MA_INODE;
                 ma->ma_valid = 0;
-                /* Cross-ref create can encounter already created obj in case
-                 * of recovery, just get attr in that case */
+                
+                /*
+                 * Cross-ref create can encounter already created obj in case of
+                 * recovery, just get attr in that case.
+                 */
                 if (mdt_object_exists(o) == 1) {
                         rc = mo_attr_get(info->mti_env, next, ma);
                 } else {
@@ -380,11 +383,11 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 GOTO(out_unlock_parent, rc = -EINVAL);
 
         if (rr->rr_name[0] == 0) {
-                /* remote partial operation
-                 * It is possible that replay can happen on parent MDS
-                 * and this operation will be repeated.
-                 * Therefore the object absense is allowed case
-                 * and nothing should be done
+                /*
+                 * Remote partial operation. It is possible that replay may
+                 * happen on parent MDT and this operation will be repeated.
+                 * Therefore the object absense is allowed case and nothing
+                 * should be done here.
                  */
                 if (mdt_object_exists(mp) > 0) {
                         mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
