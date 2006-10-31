@@ -658,8 +658,7 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
         ENTRY;
 
         LASSERT(o != NULL);
-        LASSERT(lu_object_assert_exists(&o->mot_obj.mo_lu));
-
+ 
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
 
         /*
@@ -1952,6 +1951,12 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
         if (rc == 0 && h->mh_opc != MDS_DISCONNECT)
                 target_committed_to_req(req);
+        
+        if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
+            lustre_msg_get_transno(req->rq_reqmsg) == 0) {
+                DEBUG_REQ(D_ERROR, req, "transno is 0 during REPLAY\n");
+                LBUG();
+        }
 
         RETURN(rc);
 }
