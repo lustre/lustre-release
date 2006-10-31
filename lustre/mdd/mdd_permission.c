@@ -133,6 +133,9 @@ static inline void mdd_acl_cpu_to_le(posix_acl_xattr_entry *p)
         p->e_id = cpu_to_le32(p->e_id);
 }
 
+/*
+ * Check permission based on POSIX ACL.
+ */
 static int mdd_posix_acl_permission(struct md_ucred *uc, struct lu_attr *la,
                                     int want, posix_acl_xattr_entry *entry,
                                     int count)
@@ -316,10 +319,6 @@ int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
 
 /*
  * Modify acl when creating a new obj.
- *
- * mode_p initially must contain the mode parameter to the open() / creat()
- * system calls. All permissions that are not granted by the acl are removed.
- * The permissions in the acl are changed to reflect the mode_p parameter.
  */
 static int mdd_posix_acl_create_masq(posix_acl_xattr_entry *entry,
                                      __u32 *mode_p, int count)
@@ -573,27 +572,15 @@ int __mdd_permission_internal(const struct lu_env *env,
                         mode >>= 3;
         }
 
-        /*
-         * If the DACs are ok we don't need any capability check.
-         */
         if (((mode & mask & S_IRWXO) == mask))
                 RETURN(0);
 
 check_capabilities:
-
-        /*
-         * Read/write DACs are always overridable.
-         * Executable DACs are overridable if at least one exec bit is set.
-         * Dir's DACs are always overridable.
-         */
         if (!(mask & MAY_EXEC) ||
             (la->la_mode & S_IXUGO) || S_ISDIR(la->la_mode))
                 if (mdd_capable(uc, CAP_DAC_OVERRIDE))
                         RETURN(0);
 
-        /*
-         * Searching includes executable on directories, else just read.
-         */
         if ((mask == MAY_READ) ||
             (S_ISDIR(la->la_mode) && !(mask & MAY_WRITE)))
                 if (mdd_capable(uc, CAP_DAC_READ_SEARCH))
@@ -609,8 +596,7 @@ int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
 }
 
 inline int mdd_permission_internal_locked(const struct lu_env *env,
-                                                 struct mdd_object *obj,
-                                                 int mask)
+                                          struct mdd_object *obj, int mask)
 {
         int rc;
 

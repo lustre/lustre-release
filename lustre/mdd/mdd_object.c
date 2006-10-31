@@ -733,9 +733,9 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                        ma->ma_attr.la_mtime, ma->ma_attr.la_ctime);
 
         *la_copy = ma->ma_attr;
-        mdd_write_lock(env, mdd_obj);
+        mdd_read_lock(env, mdd_obj);
         rc = mdd_fix_attr(env, mdd_obj, la_copy);
-        mdd_write_unlock(env, mdd_obj);
+        mdd_read_unlock(env, mdd_obj);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -957,16 +957,16 @@ static int mdd_object_create(const struct lu_env *env,
         int rc;
         ENTRY;
 
-        rc = mdd_oc_sanity_check(env, mdd_obj, ma);
-        if (rc)
-                RETURN(rc);
-
         mdd_txn_param_build(env, mdd, MDD_TXN_OBJECT_CREATE_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
 
         mdd_write_lock(env, mdd_obj);
+        rc = mdd_oc_sanity_check(env, mdd_obj, ma);
+        if (rc)
+                GOTO(unlock, rc);
+
         rc = mdd_object_create_internal(env, mdd_obj, ma, handle);
         if (rc)
                 GOTO(unlock, rc);
@@ -1098,25 +1098,24 @@ static int mdd_open_sanity_check(const struct lu_env *env,
                         RETURN(rc);
         }
 
-        /*
-         * FIFO's, sockets and device files are special: they don't
-         * actually live on the filesystem itself, and as such you
-         * can write to them even if the filesystem is read-only.
-         */
-        if (S_ISFIFO(tmp_la->la_mode) || S_ISSOCK(tmp_la->la_mode)) 
-                flag &= ~O_TRUNC;
+        if (S_ISFIFO(tmp_la->la_mode) || S_ISSOCK(tmp_la->la_mode) ||
+            S_ISBLK(tmp_la->la_mode) || S_ISCHR(tmp_la->la_mode))
+                flag &= ~MDS_OPEN_TRUNC;
 
         /*
-         * An append-only file must be opened in append mode for writing.
+         * For writing append-only file must open it with append mode.
          */
         if (mdd_is_append(obj)) {
-                if ((mode & FMODE_WRITE) && !(flag & O_APPEND))
+                if ((flag & FMODE_WRITE) && !(flag & MDS_OPEN_APPEND))
                         RETURN(-EPERM);
-                if (flag & O_TRUNC)
+                if (flag & MDS_OPEN_TRUNC)
                         RETURN(-EPERM);
         }
 
-        /* O_NOATIME can only be set by the owner or superuser */
+#if 0
+        /*
+         * Now, flag -- O_NOATIME does not be packed by client.
+         */
         if (flag & O_NOATIME) {
                 struct md_ucred *uc = md_ucred(env);
 
@@ -1124,6 +1123,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
                     !mdd_capable(uc, CAP_FOWNER))
                         RETURN(-EPERM);
         }
+#endif
 
         RETURN(0);
 }
