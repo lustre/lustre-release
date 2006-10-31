@@ -24,3 +24,16 @@ ost-survey script using gnuplot.
 Syntax: $ ost-survey /mnt/lustre > ost_log
 	$ plot-ost.pl ost_log
 
+
+
+
+
+
+Some sample test results:
+Ost#  Read(MB/s)  Write(MB/s)  Read-time  Write-time
+----------------------------------------------------
+0     12.080       18.382        2.483      1.632	Local Firewire IDE
+1     15.043       43.289        1.994      0.693	Local IDE
+2     22.546       25.252        1.331      1.188	Local loopback
+0      8.896       17.370        3.372      1.727       GigE to above disks
+
