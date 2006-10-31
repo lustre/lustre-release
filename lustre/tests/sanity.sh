@@ -8,7 +8,7 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42b 42c 42d 45 68"}
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$SLOW" = "no" ] && EXCEPT="$EXCEPT 24o 27m 51b 51c 63 64b 71 76 77 101"
@@ -1026,7 +1026,7 @@ exhaust_precreations() {
         OSC=$(ls $LPROC/osc | grep "${OST}-osc-MDT0000")
         last_id=$(cat $LPROC/osc/${OSC}/prealloc_last_id)
 	next_id=$(cat $LPROC/osc/${OSC}/prealloc_next_id)
-        
+
         mkdir -p $DIR/d27/${OST}
 	$SETSTRIPE $DIR/d27/${OST} 0 $OSTIDX 1
 #define OBD_FAIL_OST_ENOSPC              0x215
