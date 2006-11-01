@@ -2,8 +2,6 @@
 %define name @PACKAGE@
 %define version @VERSION@
 %define release @RELEASE@
-%define libdir %{_datadir}/%{name}
-%define bindir %{_sbindir}
 
 Summary: Lustre IOkit - Benchmark Tools
 Name: %{name}
@@ -31,9 +29,17 @@ make
 %install
 make install DESTDIR=$RPM_BUILD_ROOT
 
-cat > %{name}.files <<EOF
-%attr(-, root, root) %{bindir}/*
-%attr(-, root, root) %{libdir}/*
-EOF
-
-%files -f %{name}.files
+%files
+/usr/local/bin/ior-survey
+/usr/local/bin/parse-ior.pl
+/usr/local/bin/echo.sh
+/usr/local/bin/obdfilter-survey
+/usr/local/bin/obparse.pl
+/usr/local/bin/plot-ost.pl
+/usr/local/bin/ost-survey.pl
+/usr/local/bin/sgpdd-survey
+/usr/local/bin/parse-sgpdd.pl
+%doc obdfilter-survey/README.obdfilter-survey
+%doc ior-survey/README.ior-survey
+%doc ost-survey/README.ost-survey
+%doc sgpdd-survey/README.sgpdd-survey
