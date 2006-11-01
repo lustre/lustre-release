@@ -892,7 +892,20 @@ int ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         unlock_page(page);
 
         if (cmd & OBD_BRW_WRITE) {
-                if (llap_write_complete(page->mapping->host, llap))
+                /* Only rc == 0, write succeed, then we should handle
+                 * write queue done list. because we redirty this page,
+                 * and which will be wrote again. 
+                 * XXX There are also 
+                 * problems here. For example, 
+                 * 1) The inode closed(also finish writing), has been add to
+                 *    the list of the done_writing queue.
+                 * 2) Then another thread open the file again, write some pages 
+                 *    close the inode again, then the inode will be put to this 
+                 *    list again, if the first item are still in the list, then
+                 *    it may cause some problems.
+                 * So that close list should be per-file, not per-inode? Wangdi 
+                 */
+                if (rc == 0 && llap_write_complete(page->mapping->host, llap))
                         ll_queue_done_writing(page->mapping->host, 0);
         }
 
