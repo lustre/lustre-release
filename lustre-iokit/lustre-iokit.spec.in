@@ -23,7 +23,7 @@ A set of wrapper scripts for testing the Lustre filesystem and it's components.
 
 %build
 rm -fr $RPM_BUILD_ROOT
-./configure --prefix=/usr
+./configure --prefix=/usr/local
 make
 
 %install
