@@ -672,7 +672,7 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
         LASSERT(mdt_object_exists(o) > 0);
         rc = mdo_is_subdir(info->mti_env, mdt_object_child(o),
                            &body->fid2, &repbody->fid1);
-        if (rc < 0)
+        if (rc < 0 && rc != -EREMOTE)
                 RETURN(rc);
 
         /*
@@ -1055,7 +1055,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
          * for this.
          */
         info->mti_no_need_trans = 1;
-        
+
         kmap(page);
         dp = page_address(page);
         offset = (int)((__u32)lu_dirent_start(dp) - (__u32)dp);
@@ -1067,7 +1067,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
 
                 if (le16_to_cpu(ent->lde_namelen) == 0)
                         continue;
-                
+
                 is_dir = le32_to_cpu(ent->lde_hash) & MAX_HASH_HIGHEST_BIT;
                 OBD_ALLOC(name, le16_to_cpu(ent->lde_namelen) + 1);
                 if (name == NULL)
