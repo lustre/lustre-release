@@ -237,8 +237,10 @@ int capa_hmac(__u8 *hmac, struct lustre_capa *capa, __u8 *key)
                 .length = offsetof(struct lustre_capa, lc_hmac),
         };
 
-        if (capa_alg(capa) != CAPA_HMAC_ALG_SHA1)
-                RETURN(-EFAULT);
+        if (capa_alg(capa) != CAPA_HMAC_ALG_SHA1) {
+                CERROR("unknown capability hmac algorithm!\n");
+                return -EFAULT;
+        }
 
         alg = &capa_hmac_algs[capa_alg(capa)];
 

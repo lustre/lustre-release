@@ -159,7 +159,8 @@ static int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
         int size[5] = { sizeof(struct ptlrpc_body),
                         sizeof(*body),
                         ea_size,
-                        acl_size };
+                        acl_size,
+                        sizeof(struct lustre_capa) };
         int offset, rc;
         ENTRY;
 
@@ -169,7 +170,6 @@ static int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
                        ea_size);
         if (acl_size)
                 CDEBUG(D_INODE, "reserved %u bytes for ACL\n", acl_size);
-        size[REPLY_REC_OFF + 2] = mdscapa ? sizeof(struct lustre_capa) : 0;
 
         ptlrpc_req_set_repsize(req, 5, size);
 

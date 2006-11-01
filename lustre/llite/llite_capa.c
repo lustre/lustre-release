@@ -44,18 +44,17 @@ static struct ptlrpc_thread ll_capa_thread;
 static struct list_head *ll_capa_list = &capa_list[CAPA_SITE_CLIENT];
 
 /* llite capa renewal timer */
-cfs_timer_t ll_capa_timer;
+struct timer_list ll_capa_timer;
 /* for debug: indicate whether capa on llite is enabled or not */
 static atomic_t ll_capa_debug = ATOMIC_INIT(0);
 
 static inline void update_capa_timer(struct obd_capa *ocapa, cfs_time_t expiry)
 {
-        if (cfs_time_before(expiry, cfs_timer_deadline(&ll_capa_timer)) ||
-            !cfs_timer_is_armed(&ll_capa_timer)) {
-                cfs_timer_arm(&ll_capa_timer, expiry);
+        if (time_before(expiry, ll_capa_timer.expires) ||
+            !timer_pending(&ll_capa_timer)) {
+                mod_timer(&ll_capa_timer, expiry);
                 DEBUG_CAPA(D_SEC, &ocapa->c_capa,
-                           "ll_capa_timer update: %lu/%lu by",
-                           expiry, jiffies);
+                           "ll_capa_timer update: %lu/%lu by", expiry, jiffies);
         }
 }
 
@@ -166,15 +165,15 @@ static int capa_thread_main(void *unused)
                                 break;
                         }
 
+                        /* for MDS capability, only renew those which belong to
+                         * dir, or its inode is opened, or client holds LOOKUP
+                         * lock.
+                         */
                         if (capa_for_mds(&ocapa->c_capa) &&
                             !S_ISDIR(ocapa->u.cli.inode->i_mode) &&
                             obd_capa_open_count(ocapa) == 0 &&
-                            !obd_capa_is_root(ocapa) &&
                             !ll_have_md_lock(ocapa->u.cli.inode,
                                              MDS_INODELOCK_LOOKUP)) {
-                                /* MDS capa without LOOKUP lock, and the related
-                                 * inode is not opened, it won't renew,
-                                 * move to idle list (except root fid) */
                                 DEBUG_CAPA(D_SEC, &ocapa->c_capa,
                                            "skip renewal for");
                                 list_del_init(&ocapa->c_list);
@@ -182,6 +181,9 @@ static int capa_thread_main(void *unused)
                                 continue;
                         }
 
+                        /* for OSS capability, only renew those whose inode is
+                         * opened.
+                         */
                         if (capa_for_oss(&ocapa->c_capa) &&
                             obd_capa_open_count(ocapa) == 0) {
                                 /* oss capa with open count == 0 won't renew,
@@ -311,8 +313,7 @@ struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc)
                 return NULL;
         ENTRY;
 
-        LASSERT(opc == CAPA_OPC_OSS_WRITE ||
-                opc == (CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ) ||
+        LASSERT(opc == CAPA_OPC_OSS_WRITE || opc == CAPA_OPC_OSS_RW ||
                 opc == CAPA_OPC_OSS_TRUNC);
 
         spin_lock(&capa_lock);
@@ -556,7 +557,7 @@ int ll_update_capa(struct obd_capa *ocapa, struct lustre_capa *capa)
         spin_unlock(&ocapa->c_lock);
 
         spin_lock(&capa_lock);
-        if (capa->lc_opc & (CAPA_OPC_OSS_READ | CAPA_OPC_OSS_WRITE))
+        if (capa->lc_opc & CAPA_OPC_OSS_RW)
                 inode_add_oss_capa(inode, ocapa);
         DEBUG_CAPA(D_SEC, capa, "renew");
 

@@ -97,8 +97,7 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         oinfo.oi_oa = oa;
         oinfo.oi_md = lsm;
         /* NB partial write, so we might not have CAPA_OPC_OSS_READ capa */
-        opc = cmd & OBD_BRW_WRITE ? CAPA_OPC_OSS_WRITE :
-                                    CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ;
+        opc = cmd & OBD_BRW_WRITE ? CAPA_OPC_OSS_WRITE : CAPA_OPC_OSS_RW;
         oinfo.oi_capa = ll_osscapa_get(inode, opc);
         rc = obd_brw(cmd, ll_i2dtexp(inode), &oinfo, 1, &pg, NULL);
         capa_put(oinfo.oi_capa);
@@ -414,8 +413,7 @@ static void ll_ap_update_obdo(void *data, int cmd, struct obdo *oa,
 static struct obd_capa *ll_ap_lookup_capa(void *data, int cmd)
 {
         struct ll_async_page *llap = LLAP_FROM_COOKIE(data);
-        int opc = cmd & OBD_BRW_WRITE ? CAPA_OPC_OSS_WRITE :
-                                        CAPA_OPC_OSS_WRITE | CAPA_OPC_OSS_READ;
+        int opc = cmd & OBD_BRW_WRITE ? CAPA_OPC_OSS_WRITE : CAPA_OPC_OSS_RW;
 
         return ll_osscapa_get(llap->llap_page->mapping->host, opc);
 }

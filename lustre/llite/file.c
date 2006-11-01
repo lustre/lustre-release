@@ -2235,7 +2235,6 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 
         if (data && lsm) {
                 struct obdo *oa = obdo_alloc();
-                struct obd_capa *ocapa;
 
                 if (!oa)
                         RETURN(rc ? rc : -ENOMEM);
@@ -2247,10 +2246,10 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                            OBD_MD_FLGROUP);
 
-                ocapa = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
+                oc = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
                 err = obd_sync(ll_i2sbi(inode)->ll_dt_exp, oa, lsm,
-                               0, OBD_OBJECT_EOF, ocapa);
-                capa_put(ocapa);
+                               0, OBD_OBJECT_EOF, oc);
+                capa_put(oc);
                 if (!rc)
                         rc = err;
                 obdo_free(oa);

@@ -86,7 +86,6 @@ enum {
 enum {
         OBD_CAPA_FL_NEW     = 1,
         OBD_CAPA_FL_EXPIRED = 1<<1,
-        OBD_CAPA_FL_ROOT    = 1<<2,
 };
 
 static inline __u64 capa_opc(struct lustre_capa *capa)
@@ -198,16 +197,6 @@ static inline void obd_capa_clear_new(struct obd_capa *oc)
 static inline void obd_capa_clear_expired(struct obd_capa *oc)
 {
         oc->c_flags &= ~OBD_CAPA_FL_EXPIRED;
-}
-
-static inline int obd_capa_is_root(struct obd_capa *oc)
-{
-        return !!((oc)->c_flags & OBD_CAPA_FL_ROOT);
-}
-
-static inline void obd_capa_set_root(struct obd_capa *oc)
-{
-        oc->c_flags |= OBD_CAPA_FL_ROOT;
 }
 
 static inline struct obd_capa *alloc_capa(int site)

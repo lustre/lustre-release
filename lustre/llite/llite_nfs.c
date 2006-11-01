@@ -63,7 +63,7 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
                                              int mode)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct obd_capa *ocapa = NULL;
+        struct obd_capa *oc = NULL;
         struct ptlrpc_request *req = NULL;
         struct inode *inode = NULL;
         unsigned long valid = 0;
@@ -82,15 +82,15 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         }
 
         if (capa) {
-                ocapa = alloc_capa(CAPA_SITE_CLIENT);
-                if (!ocapa)
+                oc = alloc_capa(CAPA_SITE_CLIENT);
+                if (!oc)
                         return ERR_PTR(-ENOMEM);
-                ocapa->c_capa = *capa;
+                oc->c_capa = *capa;
         }
 
-        rc = md_getattr(sbi->ll_md_exp, fid, (struct obd_capa *)ocapa,
-                        valid, eadatalen, &req);
-        free_capa(ocapa);
+        rc = md_getattr(sbi->ll_md_exp, fid, oc, valid, eadatalen, &req);
+        if (oc)
+                free_capa(oc);
         if (rc) {
                 CERROR("can't get object attrs, fid "DFID", rc %d\n",
                        PFID(fid), rc);
@@ -308,7 +308,7 @@ struct dentry *ll_get_dentry(struct super_block *sb, void *data)
         fid = (struct lu_fid *)p;
         capa = (struct lustre_capa *)(p + sizeof(*fid));
         
-        return ll_iget_for_nfs(sb, fid, (capa->lc_opc == 0) ? capa : NULL,
+        return ll_iget_for_nfs(sb, fid, (capa->lc_opc != 0) ? capa : NULL,
                                S_IFREG);
 }
 

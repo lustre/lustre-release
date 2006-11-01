@@ -173,7 +173,7 @@ static ssize_t ll_direct_IO_26_seg(int rw, struct file *file,
         } else {
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_READ, size);
-                opc = CAPA_OPC_OSS_READ | CAPA_OPC_OSS_WRITE;
+                opc = CAPA_OPC_OSS_RW;
         }
         ocapa = ll_osscapa_get(inode, opc);
         rc = obd_brw_rqset(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,

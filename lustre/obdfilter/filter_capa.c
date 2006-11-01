@@ -119,7 +119,7 @@ int filter_verify_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
 #warning "enable fid check in filter_verify_capa when fid ready"
 
         if (opc == CAPA_OPC_OSS_READ) {
-                if (!(capa->lc_opc & (CAPA_OPC_OSS_READ | CAPA_OPC_OSS_WRITE)))
+                if (!(capa->lc_opc & CAPA_OPC_OSS_RW))
                         rc = -EACCES;
         } else if (!capa_opc_supported(capa, opc)) {
                 rc = -EACCES;

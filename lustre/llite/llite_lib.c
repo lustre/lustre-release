@@ -148,10 +148,8 @@ static int ll_init_ea_size(struct obd_export *md_exp, struct obd_export *dt_exp)
         RETURN(rc);
 }
 
-static int client_common_fill_super(struct super_block *sb, 
-                                    char *md, char *dt,
-                                    int mdt_pag,
-                                    uid_t nllu, gid_t nllg)
+static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
+                                    int mdt_pag, uid_t nllu, gid_t nllg)
 {
         struct inode *root = 0;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
@@ -410,8 +408,6 @@ static int client_common_fill_super(struct super_block *sb,
                 GOTO(out_dt, err);
         }
 
-        if (lmd.mds_capa)
-                obd_capa_set_root(lmd.mds_capa);
         LASSERT(fid_is_sane(&sbi->ll_root_fid));
         root = ll_iget(sb, ll_fid_build_ino(sbi, &sbi->ll_root_fid), &lmd);
         ptlrpc_req_finished(request);
@@ -2249,7 +2245,7 @@ ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
                 return NULL;
 
         ll_i2gids(op_data->suppgids, i1, i2);
-        op_data->fid1 = ll_i2info(i1)->lli_fid;
+        op_data->fid1 = *ll_inode2fid(i1);
         op_data->mod_capa1 = ll_mdscapa_get(i1);
 
         /* @i2 may be NULL. In this case caller itself has to initialize ->fid2

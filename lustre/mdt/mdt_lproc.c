@@ -560,9 +560,8 @@ static int lprocfs_wr_capa(struct file *file, const char *buffer,
                 return rc;
 
         if (val < 0 || val > 3) {
-                CERROR("invalid capability mode, only 0/1/2/3 is accepted.\n"
+                CERROR("invalid capability mode, only 0/2/3 is accepted.\n"
                        " 0:  disable fid capability\n"
-                       " 1:  enable OSS fid capability\n"
                        " 2:  enable MDS fid capability\n"
                        " 3:  enable both MDS and OSS fid capability\n");
                 return -EINVAL;
@@ -570,8 +569,11 @@ static int lprocfs_wr_capa(struct file *file, const char *buffer,
 
         /* OSS fid capability needs enable both MDS and OSS fid capability on 
          * MDS */
-        if (val == 1)
-                val = 3;
+        if (val == 1) {
+                CERROR("can't enable OSS fid capability only, you should use "
+                       "'3' to enable both MDS and OSS fid capability.\n");
+                return -EINVAL;
+        }
 
         mdt->mdt_opts.mo_oss_capa = (val & 0x1);
         mdt->mdt_opts.mo_mds_capa = !!(val & 0x2);

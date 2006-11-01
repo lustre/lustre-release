@@ -538,7 +538,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 #endif
 
         if ((reqbody->valid & OBD_MD_FLMDSCAPA) &&
-             info->mti_mdt->mdt_opts.mo_mds_capa) {
+            info->mti_mdt->mdt_opts.mo_mds_capa) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(&info->mti_pill, &RMF_CAPA1);
