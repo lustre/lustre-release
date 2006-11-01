@@ -1,0 +1,39 @@
+# lustre-iokit.spec
+%define name @PACKAGE@
+%define version @VERSION@
+%define release @RELEASE@
+%define libdir %{_datadir}/%{name}
+%define bindir %{_sbindir}
+
+Summary: Lustre IOkit - Benchmark Tools
+Name: %{name}
+Version: %{version}
+Release: %{release}
+License: CFS
+Group: Applications/System
+Source: %{name}-%{version}.tar.gz
+URL: http://clusterfs.com/
+BuildRoot: /var/tmp/%{name}-%{version}-root
+Provides: %{name} = %{version}
+BuildArch: noarch
+
+%description
+A set of wrapper scripts for testing the Lustre filesystem and it's components.
+
+%prep
+%setup -qn %{name}-%{version}
+
+%build
+rm -fr $RPM_BUILD_ROOT
+./configure --prefix=/usr
+make
+
+%install
+make install DESTDIR=$RPM_BUILD_ROOT
+
+cat > %{name}.files <<EOF
+%attr(-, root, root) %{bindir}/*
+%attr(-, root, root) %{libdir}/*
+EOF
+
+%files -f %{name}.files
