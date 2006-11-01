@@ -1,14 +1,14 @@
 #!/bin/sh
 
 fatal() {
-    local msg=$1
+    local msg="$1"
 
     echo "FATAL: $msg"
     exit 1
 }
 
 run_cmd() {
-    local cmd=$1
+    local cmd="$1"
 
     echo "Running $cmd..."
     $cmd || fatal "$cmd failed!"
