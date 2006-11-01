@@ -889,7 +889,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 
                                 rc = mdt_object_lock(info, child, lhc,
                                                      MDS_INODELOCK_LOOKUP,
-                                                     MDT_LOCAL_LOCK);
+                                                     MDT_CROSS_LOCK);
                         }
                         repbody->fid1 = *mdt_object_fid(child);
                         repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);

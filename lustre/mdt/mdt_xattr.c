@@ -53,20 +53,21 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         __u64                   valid = info->mti_body->valid;
         static const char       user_string[] = "user.";
         int                     size, rc;
-
+        ENTRY;
+        
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETXATTR_PACK))
-                return -ENOMEM;
+                RETURN(-ENOMEM);
 
         /* Determine how many bytes we need */
         if ((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) {
                 xattr_name = req_capsule_client_get(pill, &RMF_NAME);
                 if (!xattr_name)
-                        return -EFAULT;
+                        RETURN(-EFAULT);
 
                 if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR) &&
                     !strncmp(xattr_name, user_string, sizeof(user_string) - 1))
-                        return -EOPNOTSUPP;
-
+                        RETURN(-EOPNOTSUPP);
+                
                 if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))
                         size = RMTACL_SIZE_MAX;
                 else
@@ -78,19 +79,22 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                                      mdt_object_child(info->mti_object),
                                      &LU_BUF_NULL);
         } else {
-                CERROR("valid bits: "LPX64"\n", info->mti_body->valid);
-                return -EINVAL;
+                CERROR("Valid bits: "LPX64"\n", info->mti_body->valid);
+                RETURN(-EINVAL);
         }
 
         if (size < 0) {
-                if (size != -ENODATA && size != -EOPNOTSUPP)
-                        CERROR("get EA size error: %d\n", size);
-                return size;
+                if (size == -ENODATA)
+                        size = 0;
+                else if (size != -EOPNOTSUPP) {
+                        CERROR("Error geting EA size: %d\n", size);
+                        RETURN(size);
+                }
         }
 
         if (info->mti_body->eadatasize != 0 &&
             info->mti_body->eadatasize < size)
-                return -ERANGE;
+                RETURN(-ERANGE);
 
         req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER,
                              min_t(int, size, info->mti_body->eadatasize));
@@ -98,10 +102,10 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         rc = req_capsule_pack(pill);
         if (rc) {
                 LASSERT(rc < 0);
-                return rc;
+                RETURN(rc);
         }
 
-        return size;
+        RETURN(size);
 }
 
 static int do_remote_getfacl(struct mdt_thread_info *info,
@@ -152,13 +156,13 @@ int mdt_getxattr(struct mdt_thread_info *info)
                 RETURN(err_serious(easize));
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        LASSERT(repbody);
+        LASSERT(repbody != NULL);
 
         rc = mdt_init_ucred(info, reqbody);
         if (rc)
                 RETURN(rc);
 
-        /* no need further getxattr */
+        /* No need further getxattr. */
         if (easize == 0 || reqbody->eadatasize == 0)
                 GOTO(out, rc = easize);
 
@@ -192,13 +196,14 @@ int mdt_getxattr(struct mdt_thread_info *info)
         } else
                 LBUG();
 
+        EXIT;
 out:
         if (rc >= 0) {
                 repbody->eadatasize = rc;
                 rc = 0;
         }
         mdt_exit_ucred(info);
-        RETURN(rc);
+        return rc;
 }
 
 /* return EADATA length to the caller. negative value means error */

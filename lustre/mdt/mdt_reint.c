@@ -165,17 +165,17 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
 
                 rc = mdt_object_lock(info, mo, lh, lockpart, MDT_LOCAL_LOCK);
                 if (rc != 0)
-                        GOTO(out, rc);
+                        RETURN(rc);
         }
 
         /* Setattrs are syncronized through dlm lock taken above. If another
          * epoch started, its attributes may be already flushed on disk,
          * skip setattr. */
         if (som_update && (info->mti_epoch->ioepoch != mo->mot_ioepoch))
-                GOTO(out, rc = 0);
+                GOTO(out_unlock, rc = 0);
 
         if (lu_object_assert_not_exists(&mo->mot_obj.mo_lu))
-                GOTO(out, rc = -ENOENT);
+                GOTO(out_unlock, rc = -ENOENT);
 
         /* all attrs are packed into mti_attr in unpack_setattr */
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
@@ -184,21 +184,20 @@ int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo, int flags)
         /* all attrs are packed into mti_attr in unpack_setattr */
         rc = mo_attr_set(info->mti_env, mdt_object_child(mo), ma);
         if (rc != 0)
-                GOTO(out, rc);
+                GOTO(out_unlock, rc);
 
         /* Re-enable SIZEONMDS. */
         if (som_update) {
                 CDEBUG(D_INODE, "Closing epoch "LPU64" on "DFID". Count %d\n",
                        mo->mot_ioepoch, PFID(mdt_object_fid(mo)),
                        mo->mot_epochcount);
-
                 mdt_sizeonmds_enable(info, mo);
         }
 
         EXIT;
-out:
+out_unlock:
         mdt_object_unlock(info, mo, lh, rc);
-        return(rc);
+        return rc;
 }
 
 static int mdt_reint_setattr(struct mdt_thread_info *info,
@@ -407,7 +406,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (rc != 0)
                  GOTO(out_unlock_parent, rc);
 
-        /* we will lock the child regardless it is local or remote. No harm. */
+        /* We will lock the child regardless it is local or remote. No harm. */
         mc = mdt_object_find(info->mti_env, info->mti_mdt, child_fid);
         if (IS_ERR(mc))
                 GOTO(out_unlock_parent, rc = PTR_ERR(mc));
@@ -415,8 +414,10 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         mdt_lock_reg_init(child_lh, LCK_EX);
         rc = mdt_object_lock(info, mc, child_lh, MDS_INODELOCK_FULL,
                              MDT_CROSS_LOCK);
-        if (rc != 0)
-                GOTO(out_put_child, rc);
+        if (rc != 0) {
+                mdt_object_put(info->mti_env, mc);
+                GOTO(out_unlock_parent, rc);
+        }
 
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_UNLINK_WRITE);
@@ -430,16 +431,11 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
         rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
                         mdt_object_child(mc), rr->rr_name, ma);
-        if (rc)
-                GOTO(out_unlock_child, rc);
-
-        mdt_handle_last_unlink(info, mc, ma);
+        if (rc == 0)
+                mdt_handle_last_unlink(info, mc, ma);
 
         EXIT;
-out_unlock_child:
-        mdt_object_unlock(info, mc, child_lh, rc);
-out_put_child:
-        mdt_object_put(info->mti_env, mc);
+        mdt_object_unlock_put(info, mc, child_lh, rc);
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, parent_lh, rc);
 out:
@@ -483,7 +479,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
         /* step 1: find & lock the target parent dir */
         lhp = &info->mti_lh[MDT_LH_PARENT];
-        mdt_lock_pdo_init(lhp, LCK_PW, rr->rr_name,
+        mdt_lock_pdo_init(lhp, LCK_EX, rr->rr_name,
                           rr->rr_namelen);
         mp = mdt_object_find_lock(info, rr->rr_fid2, lhp,
                                   MDS_INODELOCK_UPDATE);
@@ -493,14 +489,22 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         /* step 2: find & lock the source */
         lhs = &info->mti_lh[MDT_LH_CHILD];
         mdt_lock_reg_init(lhs, LCK_EX);
-        ms = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
-        if (IS_ERR(ms))
-                GOTO(out_unlock_parent, rc = PTR_ERR(ms));
 
-        rc = mdt_object_lock(info, ms, lhs, MDS_INODELOCK_UPDATE,
-                             MDT_CROSS_LOCK);
-        if (rc != 0)
-                GOTO(out_unlock_source, rc);
+        if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
+                mdt_object_get(info->mti_env, mp);
+                ms = mp;
+        } else {
+                ms = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
+                if (IS_ERR(ms))
+                        GOTO(out_unlock_parent, rc = PTR_ERR(ms));
+                
+                rc = mdt_object_lock(info, ms, lhs, MDS_INODELOCK_UPDATE,
+                                     MDT_CROSS_LOCK);
+                if (rc != 0) {
+                        mdt_object_put(info->mti_env, ms);
+                        GOTO(out_unlock_parent, rc);
+                }
+        }
 
         /* step 3: link it */
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
@@ -510,7 +514,6 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                       mdt_object_child(ms), rr->rr_name, ma);
 
         EXIT;
-out_unlock_source:
         mdt_object_unlock_put(info, ms, lhs, rc);
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, lhp, rc);
@@ -752,12 +755,18 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         if (lu_fid_eq(old_fid, rr->rr_fid1) || lu_fid_eq(old_fid, rr->rr_fid2))
                 GOTO(out_unlock_target, rc = -EINVAL);
 
-        lh_oldp = &info->mti_lh[MDT_LH_OLD];
-        mdt_lock_reg_init(lh_oldp, LCK_EX);
-        mold = mdt_object_find_lock(info, old_fid, lh_oldp,
-                                    MDS_INODELOCK_LOOKUP);
+        mold = mdt_object_find(info->mti_env, info->mti_mdt, old_fid);
         if (IS_ERR(mold))
                 GOTO(out_unlock_target, rc = PTR_ERR(mold));
+
+        lh_oldp = &info->mti_lh[MDT_LH_OLD];
+        mdt_lock_reg_init(lh_oldp, LCK_EX);
+        rc = mdt_object_lock(info, mold, lh_oldp, MDS_INODELOCK_LOOKUP,
+                             MDT_CROSS_LOCK);
+        if (rc != 0) {
+                mdt_object_put(info->mti_env, mold);
+                GOTO(out_unlock_target, rc);
+        }
 
         /* step 4: find & lock the new object. */
         /* new target object may not exist now */

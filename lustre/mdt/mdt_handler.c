@@ -818,7 +818,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 GOTO(out, rc);
         }
 
-        /*step 1: lock parent */
+        /* step 1: lock parent */
         lhp = &info->mti_lh[MDT_LH_PARENT];
         mdt_lock_pdo_init(lhp, LCK_PR, name, namelen);
         rc = mdt_object_lock(info, parent, lhp, MDS_INODELOCK_UPDATE,

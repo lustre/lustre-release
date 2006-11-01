@@ -55,9 +55,8 @@ enum {
 int cmm_split_check(const struct lu_env *env, struct md_object *mp,
                     const char *name)
 {
-        struct cml_object *clo = md2cml_obj(mp);
-        struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mp));
         struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
+        struct cml_object *clo = md2cml_obj(mp);
         int rc;
         ENTRY;
         
@@ -197,8 +196,8 @@ int cmm_split_expect(const struct lu_env *env, struct md_object *mo,
         }
 
         /*
-         * Assumption: ma_valid = 0 here, we only need get
-         * inode and lmv_size for this get_attr
+         * Assumption: ma_valid = 0 here, we only need get inode and lmv_size
+         * for this get_attr.
          */
         LASSERT(ma->ma_valid == 0); 
         ma->ma_need = MA_INODE | MA_LMV;
@@ -370,22 +369,26 @@ cleanup:
         return rc;
 }
 
-/* Remove one entry from local MDT. */
+/*
+ * Remove one entry from local MDT. Do not corrupt byte order in page, it will
+ * be sent to remote MDT.
+ */
 static int cmm_split_remove_entry(const struct lu_env *env,
                                   struct md_object *mo,
                                   struct lu_dirent *ent)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct cmm_object *obj;
-        char *name;
         int is_dir, rc;
+        char *name;
         ENTRY;
 
-        if (!strncmp(ent->lde_name, ".", ent->lde_namelen) ||
-            !strncmp(ent->lde_name, "..", ent->lde_namelen))
+        if (!strncmp(ent->lde_name, ".", le16_to_cpu(ent->lde_namelen)) ||
+            !strncmp(ent->lde_name, "..", le16_to_cpu(ent->lde_namelen)))
                 RETURN(0);
 
-        obj = cmm_object_find(env, cmm, &ent->lde_fid);
+        fid_le_to_cpu(&cmm_env_info(env)->cmi_fid, &ent->lde_fid);
+        obj = cmm_object_find(env, cmm, &cmm_env_info(env)->cmi_fid);
         if (IS_ERR(obj))
                 RETURN(PTR_ERR(obj));
 
@@ -400,14 +403,14 @@ static int cmm_split_remove_entry(const struct lu_env *env,
                  */
                 is_dir = 1;
 
-        OBD_ALLOC(name, ent->lde_namelen + 1);
+        OBD_ALLOC(name, le16_to_cpu(ent->lde_namelen) + 1);
         if (!name)
                 GOTO(cleanup, rc = -ENOMEM);
 
-        memcpy(name, ent->lde_name, ent->lde_namelen);
+        memcpy(name, ent->lde_name, le16_to_cpu(ent->lde_namelen));
         rc = mdo_name_remove(env, md_object_next(mo),
                              name, is_dir);
-        OBD_FREE(name, ent->lde_namelen + 1);
+        OBD_FREE(name, le16_to_cpu(ent->lde_namelen) + 1);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -417,8 +420,10 @@ static int cmm_split_remove_entry(const struct lu_env *env,
          * use the highest bit of the hash to indicate that (because we do not
          * use highest bit of hash).
          */
-        if (is_dir)
-                ent->lde_hash |= MAX_HASH_HIGHEST_BIT;
+        if (is_dir) {
+                ent->lde_hash = le32_to_cpu(ent->lde_hash);
+                ent->lde_hash = cpu_to_le32(ent->lde_hash | MAX_HASH_HIGHEST_BIT);
+        }
         EXIT;
 cleanup:
         cmm_object_put(env, obj);
@@ -443,25 +448,26 @@ static int cmm_split_remove_page(const struct lu_env *env,
         dp = page_address(rdpg->rp_pages[0]);
         *len = 0;
         for (ent = lu_dirent_start(dp);
-             ent != NULL && ent->lde_hash < hash_end;
+             ent != NULL && le32_to_cpu(ent->lde_hash) < hash_end;
              ent = lu_dirent_next(ent)) {
                 rc = cmm_split_remove_entry(env, mo, ent);
                 if (rc) {
                         /*
-                         * XXX Error handler to insert remove name back,
-                         * currently we assumed it will success anyway
-                         * in verfication test.
+                         * XXX: Error handler to insert remove name back,
+                         * currently we assumed it will success anyway in
+                         * verfication test.
                          */
-                        CWARN("Can not del %*.*s rc %d\n", ent->lde_namelen,
-                                ent->lde_namelen, ent->lde_name, rc);
+                        CWARN("Can not del %*.*s rc %d\n", le16_to_cpu(ent->lde_namelen),
+                              le16_to_cpu(ent->lde_namelen), ent->lde_name, rc);
                         GOTO(unmap, rc);
                 }
-                if (ent->lde_reclen == 0)
+                if (le16_to_cpu(ent->lde_reclen) == 0)
                         /*
                          * This is the last ent, whose rec size set to 0
                          * so recompute here
                          */
-                        *len += (sizeof *ent + le16_to_cpu(ent->lde_namelen) +
+                        *len += (sizeof(*ent) +
+                                 le16_to_cpu(ent->lde_namelen) +
                                  3) & ~3;
                 else
                         *len += le16_to_cpu(ent->lde_reclen);
@@ -553,10 +559,10 @@ static int cmm_split_process_stripe(const struct lu_env *env,
 
                 kmap(rdpg->rp_pages[0]);
                 ldp = page_address(rdpg->rp_pages[0]);
-                if (ldp->ldp_hash_end >= end)
+                if (le32_to_cpu(ldp->ldp_hash_end) >= end)
                         done = 1;
 
-                rdpg->rp_hash = ldp->ldp_hash_end;
+                rdpg->rp_hash = le32_to_cpu(ldp->ldp_hash_end);
                 kunmap(rdpg->rp_pages[0]);
         } while (!done);
 
@@ -631,7 +637,7 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct md_attr    *ma = &cmm_env_info(env)->cmi_ma;
         int                rc = 0, split;
-        __u64              la_size = 0;
+        __u64              la_size;
         struct lu_buf     *buf;
         ENTRY;
 
@@ -647,6 +653,8 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
                 /* No split is needed, caller may proceed with create. */
                 RETURN(0);
         }
+
+        la_size = ma->ma_attr.la_size;
         
         /* Split should be done now, let's do it. */
         CWARN("Dir "DFID" is going to split\n",

@@ -111,6 +111,7 @@ struct cmr_object {
 struct cmm_thread_info {
         struct md_attr  cmi_ma;
         struct lu_buf   cmi_buf;
+        struct lu_fid   cmi_fid; /* used for le/cpu convertions */
         char            cmi_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
 };
 

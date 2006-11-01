@@ -309,7 +309,7 @@ static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
 {
         struct lu_dirent *next;
 
-        if (ent->lde_reclen != 0)
+        if (le16_to_cpu(ent->lde_reclen) != 0)
                 next = ((void *)ent) + le16_to_cpu(ent->lde_reclen);
         else
                 next = NULL;

@@ -89,8 +89,8 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
                                inode->i_ino, inode->i_generation);
                         list_add_tail(&lli->lli_close_list, &lcq->lcq_head);
                 } else {
-                        CWARN("Inode %d is already queued for done writing!\n",
-                              inode->i_ino);
+                        CWARN("Inode %lu/%u is already queued for done writing!\n",
+                              inode->i_ino, inode->i_generation);
                 }
                 wake_up(&lcq->lcq_waitq);
                 spin_unlock(&lcq->lcq_lock);
@@ -119,7 +119,7 @@ void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
                 
                 inode = igrab(inode);
                 LASSERT(inode);
-                goto out;
+                GOTO(out, 0);
         }
 
         CDEBUG(D_INODE, "Epoch "LPU64" closed on "DFID"\n",
@@ -136,14 +136,14 @@ void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
                 /* Pack Size-on-MDS inode attributes only if they has changed */
                 if (!(lli->lli_flags & LLIF_SOM_DIRTY)) {
                         spin_unlock(&lli->lli_lock);
-                        goto out;
+                        GOTO(out, 0);
                 }
 
                 /* There is already 1 pending DONE_WRITE, do not create another
                  * one -- close epoch with no attribute change. */
                 if (lli->lli_flags & LLIF_EPOCH_PENDING) {
                         spin_unlock(&lli->lli_lock);
-                        goto out;
+                        GOTO(out, 0);
                 }
         }
         
@@ -157,8 +157,9 @@ void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
                 op_data->attr.ia_valid |= ATTR_MTIME_SET | ATTR_CTIME_SET |
                                           ATTR_SIZE | ATTR_BLOCKS;
         }
-out:
         EXIT;
+out:
+        return;
 }
 
 int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh)
@@ -276,10 +277,13 @@ static int ll_close_thread(void *arg)
                         break;
 
                 inode = ll_info2i(lli);
+                CDEBUG(D_INFO, "done_writting for inode %lu/%u\n",
+                       inode->i_ino, inode->i_generation);
                 ll_done_writing(inode);
                 iput(inode);
         }
 
+        CDEBUG(D_INFO, "ll_close exiting\n");
         complete(&lcq->lcq_comp);
         RETURN(0);
 }
