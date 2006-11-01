@@ -2051,8 +2051,17 @@ static int mdt_recovery(struct mdt_thread_info *info)
         case SEC_CTX_INIT:
         case SEC_CTX_INIT_CONT:
         case SEC_CTX_FINI:
-                mdt_handle_idmap(info);
-                RETURN(+1);
+                {
+#if 0
+                        int rc;
+
+                        rc = mdt_handle_idmap(info);
+                        if (rc)
+                                RETURN(rc);
+                        else
+#endif
+                                RETURN(+1);
+                }
         }
 
         if (req->rq_export == NULL) {
