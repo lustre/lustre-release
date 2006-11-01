@@ -80,7 +80,7 @@ static inline struct lu_device *cmm2lu_dev(struct cmm_device *d)
 }
 
 #ifdef HAVE_SPLIT_SUPPORT
-enum {
+enum cmm_split_state {
         CMM_SPLIT_UNKNOWN,
         CMM_SPLIT_NONE,
         CMM_SPLIT_NEEDED,
@@ -88,16 +88,17 @@ enum {
         CMM_SPLIT_DENIED
 };
 #endif
+
 struct cmm_object {
         struct md_object cmo_obj;
 };
 
 /* local CMM object */
 struct cml_object {
-        struct cmm_object cmm_obj;
+        struct cmm_object    cmm_obj;
 #ifdef HAVE_SPLIT_SUPPORT
         /* split state of object (for dirs only)*/
-        __u32             clo_split;
+        enum cmm_split_state clo_split;
 #endif
 };
 

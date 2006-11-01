@@ -656,15 +656,19 @@ static int mdt_rename_sanity(struct mdt_thread_info *info, struct lu_fid *fid)
         ENTRY;
 
         do {
+                LASSERT(fid_is_sane(&dst_fid));
                 dst = mdt_object_find(info->mti_env, info->mti_mdt, &dst_fid);
                 if (!IS_ERR(dst)) {
-                        rc = mdo_is_subdir(info->mti_env, mdt_object_child(dst),
-                                           fid, &dst_fid);
+                        rc = mdo_is_subdir(info->mti_env,
+                                           mdt_object_child(dst), fid,
+                                           &dst_fid);
                         mdt_object_put(info->mti_env, dst);
-                        if (rc < 0 && rc != -EREMOTE) {
+                        if (rc != -EREMOTE && rc < 0) {
                                 CERROR("Failed mdo_is_subdir(), rc %d\n", rc);
-                        } else if (rc == 1) {
-                                rc = -EINVAL;
+                        } else {
+                                /* check the found fid */
+                                if (lu_fid_eq(&dst_fid, fid))
+                                        rc = -EINVAL;
                         }
                 } else {
                         rc = PTR_ERR(dst);

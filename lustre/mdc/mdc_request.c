@@ -320,7 +320,7 @@ static int mdc_is_subdir(struct obd_export *exp, const struct lu_fid *pfid,
 
         ptlrpc_req_set_repsize(req, 2, size);
         rc = ptlrpc_queue_wait(req);
-        if (rc != 0)
+        if (rc != 0 && rc != -EREMOTE)
                 GOTO(out, rc);
 
         body = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*body),

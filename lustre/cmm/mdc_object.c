@@ -248,6 +248,7 @@ static int mdc_object_create(const struct lu_env *env,
         ENTRY;
 
         LASSERT(spec->u.sp_pfid != NULL);
+        LASSERT(S_ISDIR(la->la_mode));
         mci = mdc_info_init(env);
         mci->mci_opdata.fid2 = *lu_object_fid(&mo->mo_lu);
         /* parent fid is needed to create dotdot on the remote node */
@@ -459,7 +460,11 @@ static int mdc_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
 
         RETURN(rc);
 }
-
+/* 
+ * Return resulting fid in sfid
+ * 0: fids are not relatives
+ * fid: fid at which search stopped
+ */
 static int mdc_is_subdir(const struct lu_env *env, struct md_object *mo,
                          const struct lu_fid *fid, struct lu_fid *sfid)
 {
@@ -473,21 +478,14 @@ static int mdc_is_subdir(const struct lu_env *env, struct md_object *mo,
 
         rc = md_is_subdir(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
                           fid, &mci->mci_req);
-        if (rc)
-                GOTO(out, rc);
-
-        body = lustre_msg_buf(mci->mci_req->rq_repmsg, REPLY_REC_OFF,
-                              sizeof(*body));
-
-        LASSERT(body->valid & (OBD_MD_FLMODE | OBD_MD_FLID) &&
-                (body->mode == 0 || body->mode == 1 || body->mode == EREMOTE));
-
-        rc = body->mode;
-        if (rc == EREMOTE) {
-                CDEBUG(D_INFO, "Remote mdo_is_subdir(), new src "
-                       DFID"\n", PFID(&body->fid1));
+        if (rc == 0 || rc == -EREMOTE) {
+                body = lustre_msg_buf(mci->mci_req->rq_repmsg, REPLY_REC_OFF,
+                                      sizeof(*body));
+                LASSERT(body->valid & OBD_MD_FLID);
+        
+                CDEBUG(D_INFO, "Remote mdo_is_subdir(), new src "DFID"\n",
+                       PFID(&body->fid1));
                 *sfid = body->fid1;
-                rc = -EREMOTE;
         }
         EXIT;
 out:

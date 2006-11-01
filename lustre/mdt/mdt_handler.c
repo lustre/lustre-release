@@ -672,20 +672,10 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
         LASSERT(mdt_object_exists(o) > 0);
         rc = mdo_is_subdir(info->mti_env, mdt_object_child(o),
                            &body->fid2, &repbody->fid1);
-        if (rc < 0 && rc != -EREMOTE)
-                RETURN(rc);
-
-        /*
-         * Save error code to ->mode. Later it it is used for detecting the case
-         * of remote subdir.
-         */
-        repbody->mode = rc < 0 ? -rc : rc;
-        repbody->valid = OBD_MD_FLMODE;
-
-        if (rc == -EREMOTE)
+        if (rc == 0 || rc == -EREMOTE)
                 repbody->valid |= OBD_MD_FLID;
 
-        RETURN(0);
+        RETURN(rc);
 }
 
 static int mdt_raw_lookup(struct mdt_thread_info *info,

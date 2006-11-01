@@ -172,7 +172,14 @@ static int mdd_is_subdir(const struct lu_env *env,
                 RETURN(0);
 
         rc = mdd_is_parent(env, mdd, md2mdd_obj(mo), fid, sfid);
-
+        if (rc == 0) {
+                /* found root */
+                fid_zero(sfid);
+        } else if (rc == 1) {
+                /* found @fid is parent */
+                *sfid = *fid;
+                rc = 0;
+        }
         RETURN(rc);
 }
 
