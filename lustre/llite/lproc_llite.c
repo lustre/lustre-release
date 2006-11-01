@@ -156,6 +156,23 @@ static int ll_rd_filesfree(char *page, char **start, off_t off, int count,
 
 }
 
+static int ll_rd_client_type(char *page, char **start, off_t off, int count,
+                            int *eof, void *data)
+{
+        struct ll_sb_info *sbi = ll_s2sbi((struct super_block *)data);
+        int rc;
+
+        LASSERT(sbi != NULL);
+
+        *eof = 1;
+        if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
+                rc = snprintf(page, count, "remote client\n");
+        else
+                rc = snprintf(page, count, "local client\n");
+
+        return rc;
+}
+
 static int ll_rd_fstype(char *page, char **start, off_t off, int count,
                         int *eof, void *data)
 {
@@ -377,6 +394,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "kbytesavail",  ll_rd_kbytesavail,      0, 0 },
         { "filestotal",   ll_rd_filestotal,       0, 0 },
         { "filesfree",    ll_rd_filesfree,        0, 0 },
+        { "client_type",  ll_rd_client_type,      0, 0 },
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
         { "max_read_ahead_mb", ll_rd_max_readahead_mb,
                                ll_wr_max_readahead_mb, 0 },

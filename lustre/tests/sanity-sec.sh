@@ -29,7 +29,7 @@ log() {
 
 run_one() {
 	BEFORE=`date +%s`
-	log "== test $2= `date +%H:%M:%S` ($BEFORE)"
+	log "== test $1 $2= `date +%H:%M:%S` ($BEFORE)"
 	export TESTNAME=test_$1
 	test_$1 || error "exit with rc=$?"
 	unset TESTNAME
@@ -139,8 +139,11 @@ ROOTSQUASH_UID=$LPROC/mdt/$MDT/rootsquash_uid
 ROOTSQUASH_GID=$LPROC/mdt/$MDT/rootsquash_gid
 NOSQUASH_NIDS=$LPROC/mdt/$MDT/nosquash_nids
 KRB5_REALM=`cat /etc/krb5.conf |grep default_realm| awk '{ print $3 }'`
+CLIENT_TYPE=$LPROC/llite/*/client_type
 USER1=`cat /etc/passwd|grep :500:|cut -d: -f1`
 USER2=`cat /etc/passwd|grep :501:|cut -d: -f1`
+
+grep "local client" $CLIENT_TYPE > /dev/null 2>&1 && EXCEPT="$EXCEPT 2"
 
 if [ ! "$USER1" ]
 then
@@ -166,7 +169,7 @@ setup() {
 		rm -f $SETXID_CONF_BAK
 	fi
 	echo $ENABLE_IDENTITY > $IDENTITY_UPCALL
-	echo 1 > $IDENTITY_FLUSH
+	echo -1 > $IDENTITY_FLUSH
 	$RUNAS -u 500 ls $DIR
 	$RUNAS -u 501 ls $DIR
 }
@@ -203,7 +206,7 @@ test_1() {
 	$RUNAS -u 501 -v 500 touch $DIR/d1/f0 && error
 	echo "* 501 setuid" > $SETXID_CONF
 	echo "enable uid 501 setuid"
-	echo 1 > $IDENTITY_FLUSH
+	echo -1 > $IDENTITY_FLUSH
 	$RUNAS -u 501 -v 500 touch $DIR/d1/f1 || error
 
 	chown root $DIR/d1
@@ -212,13 +215,13 @@ test_1() {
 	$RUNAS -u 501 -g 501 touch $DIR/d1/f2 && error
 	echo "* 501 setuid,setgid" > $SETXID_CONF
 	echo "enable uid 501 setuid,setgid"
-	echo 1 > $IDENTITY_FLUSH
+	echo -1 > $IDENTITY_FLUSH
 	$RUNAS -u 501 -g 501 -j 500 touch $DIR/d1/f3 || error
 	$RUNAS -u 501 -v 500 -g 501 -j 500 touch $DIR/d1/f4 || error
 
 	rm -f $SETXID_CONF
 	rm -rf $DIR/d1
-	echo 1 > $IDENTITY_FLUSH
+	echo -1 > $IDENTITY_FLUSH
 }
 run_test 1 "setuid/gid ============================="
 
@@ -319,7 +322,7 @@ unsetup() {
 		mv -f $SETXID_CONF_BAK $SETXID_CONF
 	fi
 	echo $IDENTITY_UPCALL_BAK > $IDENTITY_UPCALL
-	echo 1 > $IDENTITY_FLUSH
+	echo -1 > $IDENTITY_FLUSH
 	$RUNAS -u 500 ls $DIR
 	$RUNAS -u 501 ls $DIR
 }
