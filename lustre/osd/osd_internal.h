@@ -51,7 +51,6 @@ struct osd_thread_info {
 
         struct lu_fid       oti_fid;
         struct osd_inode_id oti_id;
-        struct iattr        oti_iattr;
         /*
          * XXX temporary: for ->i_op calls.
          */
@@ -64,13 +63,13 @@ struct osd_thread_info {
         /*
          * XXX temporary: fake file for body operations.
          */
-        struct file         oti_file;
         struct timespec     oti_time;
         int                 oti_r_locks;
         int                 oti_w_locks;
         int                 oti_txns;
+
         /*
-         *XXX temporary: for capa operations.
+         * XXX temporary: for capa operations.
          */
         struct lustre_capa_key oti_capa_key;
         struct lustre_capa     oti_capa;
