@@ -139,26 +139,29 @@ int mdt_init_idmap(struct mdt_thread_info *info)
 
         remote = data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT;
 
+#if 1
+        LASSERT(req->rq_auth_uid != INVALID_UID);
+#else
         if (req->rq_auth_uid == INVALID_UID) {
-                if (remote)
-                        CWARN("client %s -> target %s null sec is used, force "
-                              "to be local!\n", client, obd->obd_name);
-        } else {
-                if (remote) {
-                        if (!req->rq_auth_remote)
-                                CWARN("client %s -> target %s local realm asked"
-                                      " to be remote!\n",
-                                      client, obd->obd_name);
-                        med->med_rmtclient = 1;
-                        med->med_nllu = data->ocd_nllu;
-                        med->med_nllg = data->ocd_nllg;
-                } else if (req->rq_auth_remote) {
-                        CWARN("client %s -> target %s remote realm asked to be "
-                              "local!\n", client, obd->obd_name);
-                }
+                CERROR("client %s -> target %s null sec is used!\n",
+                       client, obd->obd_name);
+                RETURN(-EPERM);
+        }
+#endif
+        if (remote) {
+                med->med_rmtclient = 1;
+                if (!req->rq_auth_remote)
+                        CWARN("client (local realm) %s -> target %s asked "
+                              "to be remote!\n", client, obd->obd_name);
+        } else if (req->rq_auth_remote) {
+                med->med_rmtclient = 1;
+                CWARN("client (remote realm) %s -> target %s forced "
+                      "to be remote!\n", client, obd->obd_name);
         }
 
         if (med->med_rmtclient) {
+                med->med_nllu = data->ocd_nllu;
+                med->med_nllg = data->ocd_nllg;
                 if (!med->med_idmap)
                         med->med_idmap = mdt_idmap_alloc();
                 if (!med->med_idmap) {
