@@ -249,6 +249,11 @@ rm -rf $DIR/[Rdfs][1-9]*
 
 build_test_filter
 
+if [ "${ONLY}" = "MOUNT" ] ; then 
+	echo "Lustre is up, please go on"
+	exit
+fi
+
 echo "preparing for tests involving mounts"
 EXT2_DEV=${EXT2_DEV:-$TMP/SANITY.LOOP}
 touch $EXT2_DEV
@@ -1069,6 +1074,7 @@ test_27o() {
 	touch $DIR/d27/f27o && error "able to create $DIR/d27/f27o"
 
 	reset_enospc
+	rm -rf $DIR/d27/*
 }
 run_test 27o "create file with all full OSTs (should error) ===="
 
@@ -1291,6 +1297,49 @@ test_31i() {
         [ `stat -c%h $DIR/d31i/g` == '2' ] || error "target nlink"
 }
 run_test 31i "cross directory link under parent==============="
+
+
+test_31j() {
+        mkdir $DIR/d31j
+        mkdir $DIR/d31j/dir1
+        ln $DIR/d31j/dir1 $DIR/d31j/dir2 && error "ln for dir"
+        link $DIR/d31j/dir1 $DIR/d31j/dir3 && error "link for dir"
+        mlink $DIR/d31j/dir1 $DIR/d31j/dir4 && error "mlink for dir"
+        mlink $DIR/d31j/dir1 $DIR/d31j/dir1 && error "mlink to the same dir"
+	return 0
+}
+run_test 31j "link for directory==============="
+
+
+test_31k() {
+        mkdir $DIR/d31k
+        touch $DIR/d31k/s
+        touch $DIR/d31k/exist
+        mlink $DIR/d31k/s $DIR/d31k/t || error "mlink"
+        mlink $DIR/d31k/s $DIR/d31k/exist && error "mlink to exist file"
+        mlink $DIR/d31k/s $DIR/d31k/s && error "mlink to the same file"
+        mlink $DIR/d31k/s $DIR/d31k && error "mlink to parent dir"
+        mlink $DIR/d31k $DIR/d31k/s && error "mlink parent dir to target"
+        mlink $DIR/d31k/not-exist $DIR/d31k/foo && error "mlink non-existing to new"
+        mlink $DIR/d31k/not-exist $DIR/d31k/s && error "mlink non-existing to exist"
+	return 0
+}
+run_test 31k "link to file: the same, non-existing, dir==============="
+
+test_31m() {
+        mkdir $DIR/d31m
+        touch $DIR/d31m/s
+        mkdir $DIR/d31m2
+        touch $DIR/d31m2/exist
+        mlink $DIR/d31m/s $DIR/d31m2/t || error "mlink"
+        mlink $DIR/d31m/s $DIR/d31m2/exist && error "mlink to exist file"
+        mlink $DIR/d31m/s $DIR/d31m2 && error "mlink to parent dir"
+        mlink $DIR/d31m2 $DIR/d31m/s && error "mlink parent dir to target"
+        mlink $DIR/d31m/not-exist $DIR/d31m2/foo && error "mlink non-existing to new"
+        mlink $DIR/d31m/not-exist $DIR/d31m2/s && error "mlink non-existing to exist"
+	return 0
+}
+run_test 31m "link to file: the same, non-existing, dir==============="
 
 test_32a() {
 	echo "== more mountpoints and symlinks ================="

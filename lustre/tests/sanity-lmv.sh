@@ -220,6 +220,11 @@ rm -rf $DIR/[Rdfs][1-9]*
 
 build_test_filter
 
+if [ "${ONLY}" = "MOUNT" ] ; then
+	echo "Lustre is up, please go on"
+	exit
+fi
+
 echo "preparing for tests involving mounts"
 EXT2_DEV=${EXT2_DEV:-$TMP/SANITY.LOOP}
 touch $EXT2_DEV
