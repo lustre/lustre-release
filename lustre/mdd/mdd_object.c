@@ -1038,13 +1038,13 @@ static int mdd_ref_add(const struct lu_env *env,
 
         mdd_write_lock(env, mdd_obj);
         rc = mdd_link_sanity_check(env, NULL, mdd_obj);
-        if (!rc)
+        if (rc == 0)
                 mdd_ref_add_internal(env, mdd_obj, handle);
         mdd_write_unlock(env, mdd_obj);
 
         mdd_trans_stop(env, mdd, 0, handle);
 
-        RETURN(0);
+        RETURN(rc);
 }
 
 /* do NOT or the MAY_*'s, you'll get the weakest */
