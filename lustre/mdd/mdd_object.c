@@ -817,6 +817,7 @@ static int mdd_xattr_sanity_check(const struct lu_env *env,
 static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
                          const struct lu_buf *buf, const char *name, int fl)
 {
+        struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
@@ -834,7 +835,11 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 
         rc = mdd_xattr_set_txn(env, md2mdd_obj(obj), buf, name,
                                fl, handle);
-
+        if (rc == 0) {
+                la_copy->la_ctime = CURRENT_SECONDS;
+                la_copy->la_valid = LA_CTIME;
+                rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy, handle, 0);
+        }
         mdd_trans_stop(env, mdd, rc, handle);
 
         RETURN(rc);
@@ -855,6 +860,7 @@ static int __mdd_xattr_del(const struct lu_env *env,struct mdd_device *mdd,
 int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
                   const char *name)
 {
+        struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
@@ -872,6 +878,11 @@ int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
 
         mdd_write_lock(env, mdd_obj);
         rc = __mdd_xattr_del(env, mdd, md2mdd_obj(obj), name, handle);
+        if (rc == 0) {
+                la_copy->la_ctime = CURRENT_SECONDS;
+                la_copy->la_valid = LA_CTIME;
+                rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 0);
+        }
         mdd_write_unlock(env, mdd_obj);
 
         mdd_trans_stop(env, mdd, rc, handle);
@@ -883,6 +894,7 @@ int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
 static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
                        struct md_attr *ma)
 {
+        struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
@@ -909,6 +921,12 @@ static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
                 /* unlink dot */
                 mdd_ref_del_internal(env, mdd_obj, handle);
         }
+
+        la_copy->la_ctime = CURRENT_SECONDS;
+        la_copy->la_valid = LA_CTIME;
+        rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 0);
+        if (rc)
+                GOTO(cleanup, rc);
 
         rc = mdd_finish_unlink(env, mdd_obj, ma, handle);
 
@@ -1025,6 +1043,7 @@ unlock:
 static int mdd_ref_add(const struct lu_env *env,
                        struct md_object *obj)
 {
+        struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);
         struct thandle *handle;
@@ -1038,8 +1057,12 @@ static int mdd_ref_add(const struct lu_env *env,
 
         mdd_write_lock(env, mdd_obj);
         rc = mdd_link_sanity_check(env, NULL, mdd_obj);
-        if (rc == 0)
+        if (rc == 0) {
                 mdd_ref_add_internal(env, mdd_obj, handle);
+                la_copy->la_ctime = CURRENT_SECONDS;
+                la_copy->la_valid = LA_CTIME;
+                rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 0);
+        }
         mdd_write_unlock(env, mdd_obj);
 
         mdd_trans_stop(env, mdd, 0, handle);

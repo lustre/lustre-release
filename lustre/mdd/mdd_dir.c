@@ -586,16 +586,16 @@ static int mdd_unlink(const struct lu_env *env,
                 GOTO(cleanup, rc);
 
         mdd_ref_del_internal(env, mdd_cobj, handle);
-        *la_copy = ma->ma_attr;
         if (is_dir) {
                 /* unlink dot */
                 mdd_ref_del_internal(env, mdd_cobj, handle);
-        } else {
-                la_copy->la_valid = LA_CTIME;
-                rc = mdd_attr_set_internal(env, mdd_cobj, la_copy, handle, 0);
-                if (rc)
-                        GOTO(cleanup, rc);
         }
+
+        *la_copy = ma->ma_attr;
+        la_copy->la_valid = LA_CTIME;
+        rc = mdd_attr_set_internal(env, mdd_cobj, la_copy, handle, 0);
+        if (rc)
+                GOTO(cleanup, rc);
 
         la_copy->la_valid = LA_CTIME | LA_MTIME;
         rc = mdd_attr_set_internal_locked(env, mdd_pobj, la_copy, handle, 0);
@@ -652,6 +652,7 @@ static int mdd_name_insert(const struct lu_env *env,
                            const char *name, const struct lu_fid *fid,
                            int isdir)
 {
+        struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct thandle *handle;
@@ -673,6 +674,11 @@ static int mdd_name_insert(const struct lu_env *env,
 
         rc = __mdd_index_insert(env, mdd_obj, fid, name, isdir, handle,
                                 BYPASS_CAPA);
+        if (rc == 0) {
+                la_copy->la_ctime = la_copy->la_mtime = CURRENT_SECONDS;
+                la_copy->la_valid = LA_CTIME | LA_MTIME;
+                rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy, handle, 0);
+        }
 
         EXIT;
 out_unlock:
@@ -715,6 +721,7 @@ static int mdd_name_remove(const struct lu_env *env,
                            struct md_object *pobj,
                            const char *name, int is_dir)
 {
+        struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
         struct thandle *handle;
@@ -736,6 +743,11 @@ static int mdd_name_remove(const struct lu_env *env,
 
         rc = __mdd_index_delete(env, mdd_obj, name, is_dir, handle,
                                 BYPASS_CAPA);
+        if (rc == 0) {
+                la_copy->la_ctime = la_copy->la_mtime = CURRENT_SECONDS;
+                la_copy->la_valid = LA_CTIME | LA_MTIME;
+                rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy, handle, 0);
+        }
 
 out_unlock:
         mdd_pdo_write_unlock(env, mdd_obj, dlh);
@@ -775,6 +787,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
                           const struct lu_fid *lf, const char *name,
                           struct md_attr *ma)
 {
+        struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_tpobj = md2mdd_obj(pobj);
         struct mdd_object *mdd_tobj = md2mdd_obj(tobj);
@@ -810,8 +823,17 @@ static int mdd_rename_tgt(const struct lu_env *env,
         if (rc)
                 GOTO(cleanup, rc);
 
-        if (tobj && lu_object_exists(&tobj->mo_lu))
+        *la_copy = ma->ma_attr;
+        la_copy->la_valid = LA_CTIME | LA_MTIME;
+        rc = mdd_attr_set_internal_locked(env, mdd_tpobj, la_copy, handle, 0);
+        if (rc)
+                GOTO(cleanup, rc);
+
+        if (tobj && lu_object_exists(&tobj->mo_lu)) {
                 mdd_ref_del_internal(env, mdd_tobj, handle);
+                la_copy->la_valid = LA_CTIME;
+                rc = mdd_attr_set_internal(env, mdd_tobj, la_copy, handle, 0);
+        }
 cleanup:
         if (tobj)
                 mdd_write_unlock(env, mdd_tobj);
@@ -1399,10 +1421,10 @@ static int mdd_rename(const struct lu_env *env,
         if (rc)
                 GOTO(cleanup, rc);
 
-        mdd_sobj = mdd_object_find(env, mdd, lf);
         *la_copy = ma->ma_attr;
-        la_copy->la_valid = LA_CTIME;
+        mdd_sobj = mdd_object_find(env, mdd, lf);
         if (mdd_sobj) {
+                la_copy->la_valid = LA_CTIME;
                 /*XXX: how to update ctime for remote sobj? */
                 rc = mdd_attr_set_internal_locked(env, mdd_sobj, la_copy,
                                                   handle, 1);
