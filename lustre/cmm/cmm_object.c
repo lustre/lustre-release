@@ -417,21 +417,15 @@ static int cml_create(const struct lu_env *env,
                          */
                         RETURN(rc);
                 }
-
-                /* 
-                 * Proceed with mdo_create() as nothing happened, split is not
-                 * yet expected.
-                 */
-        } else {
-                /* 
-                 * Check for possible split directory and let caller know that
-                 * it should tell client that directory is split and operation
-                 * should repeat to correct MDT.
-                 */
-                rc = cmm_split_check(env, mo_p, child_name);
-                if (rc)
-                        RETURN(rc);
         }
+        /* 
+         * Check for possible split directory and let caller know that
+         * it should tell client that directory is split and operation
+         * should repeat to correct MDT.
+         */
+        rc = cmm_split_check(env, mo_p, child_name);
+        if (rc)
+                RETURN(rc);
 #endif
 
         rc = mdo_create(env, md_object_next(mo_p), child_name,
@@ -883,14 +877,18 @@ static int cmr_link(const struct lu_env *env, struct md_object *mo_p,
         int rc;
         ENTRY;
 
-        //XXX: make sure that MDT checks name isn't exist
-
-        rc = mo_ref_add(env, md_object_next(mo_s));
-        if (rc == 0) {
-                rc = mdo_name_insert(env, md_object_next(mo_p),
-                                     name, lu_object_fid(&mo_s->mo_lu), 0);
+        /* make sure that name isn't exist before doing remote call */
+        rc = mdo_lookup(env, md_object_next(mo_p), name,
+                        lu_object_fid(&mo_s->mo_lu));
+        if (rc == 0)
+                rc = -EEXIST;
+        else if (rc == -ENOENT) {
+                rc = mo_ref_add(env, md_object_next(mo_s));
+                if (rc == 0) {
+                        rc = mdo_name_insert(env, md_object_next(mo_p), name,
+                                             lu_object_fid(&mo_s->mo_lu), 0);
+                }
         }
-
         RETURN(rc);
 }
 
@@ -903,8 +901,8 @@ static int cmr_unlink(const struct lu_env *env, struct md_object *mo_p,
 
         rc = mo_ref_del(env, md_object_next(mo_c), ma);
         if (rc == 0) {
-                rc = mdo_name_remove(env, md_object_next(mo_p),
-                                     name, S_ISDIR(ma->ma_attr.la_mode));
+                rc = mdo_name_remove(env, md_object_next(mo_p), name,
+                                     S_ISDIR(ma->ma_attr.la_mode));
         }
 
         RETURN(rc);
