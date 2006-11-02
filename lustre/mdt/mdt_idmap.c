@@ -139,15 +139,16 @@ int mdt_init_idmap(struct mdt_thread_info *info)
 
         remote = data->ocd_connect_flags & OBD_CONNECT_RMT_CLIENT;
 
-#if 1
+#if 0
         LASSERT(req->rq_auth_uid != INVALID_UID);
 #else
         if (req->rq_auth_uid == INVALID_UID) {
-                CERROR("client %s -> target %s null sec is used!\n",
-                       client, obd->obd_name);
+                CERROR("client %s -> target %s null sec is used, "
+                       "user not authenticated!\n", client, obd->obd_name);
                 RETURN(-EPERM);
         }
 #endif
+
         if (remote) {
                 med->med_rmtclient = 1;
                 if (!req->rq_auth_remote)

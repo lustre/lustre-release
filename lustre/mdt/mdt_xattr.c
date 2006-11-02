@@ -151,16 +151,16 @@ int mdt_getxattr(struct mdt_thread_info *info)
         if (reqbody == NULL)
                 RETURN(err_serious(-EFAULT));
 
-        easize = mdt_getxattr_pack_reply(info);
-        if (easize < 0)
-                RETURN(err_serious(easize));
-
-        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        LASSERT(repbody != NULL);
-
         rc = mdt_init_ucred(info, reqbody);
         if (rc)
                 RETURN(rc);
+
+        easize = mdt_getxattr_pack_reply(info);
+        if (easize < 0)
+                GOTO(out, rc = err_serious(easize));
+
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+        LASSERT(repbody != NULL);
 
         /* No need further getxattr. */
         if (easize == 0 || reqbody->eadatasize == 0)
@@ -282,10 +282,6 @@ int mdt_setxattr(struct mdt_thread_info *info)
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(err_serious(-ENOMEM));
 
-        rc = mdt_setxattr_pack_reply(info);
-        if (rc < 0)
-                RETURN(err_serious(rc));
-
         reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
         if (reqbody == NULL)
                 RETURN(err_serious(-EFAULT));
@@ -293,6 +289,10 @@ int mdt_setxattr(struct mdt_thread_info *info)
         rc = mdt_init_ucred(info, reqbody);
         if (rc)
                 RETURN(rc);
+
+        rc = mdt_setxattr_pack_reply(info);
+        if (rc < 0)
+                GOTO(out, rc = err_serious(rc));
 
         /* various sanity check for xattr name */
         xattr_name = req_capsule_client_get(pill, &RMF_NAME);
