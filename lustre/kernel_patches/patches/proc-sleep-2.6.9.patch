@@ -42,134 +42,6 @@ Index: linux/arch/i386/Kconfig.debug
 +      N.
 +
  endmenu
-Index: linux/arch/i386/kernel/entry.S
-===================================================================
---- linux.orig/arch/i386/kernel/entry.S
-+++ linux/arch/i386/kernel/entry.S
-@@ -312,6 +312,8 @@ ENTRY(lcall27)
- 	jmp do_lcall
- 
- 
-+ENTRY(kernel_entries_start)
-+
- ENTRY(ret_from_fork)
- 	pushl %eax
- 	call schedule_tail
-@@ -548,6 +550,8 @@ syscall_badsys:
- 	movl $-ENOSYS,EAX(%esp)
- 	jmp resume_userspace
- 
-+ENTRY(kernel_entries_end)
-+
- /*
-  * Build the entry stubs and pointer table with
-  * some assembler magic.
-Index: linux/arch/i386/kernel/process.c
-===================================================================
---- linux.orig/arch/i386/kernel/process.c
-+++ linux/arch/i386/kernel/process.c
-@@ -137,6 +137,9 @@ static void poll_idle (void)
- 	}
- }
- 
-+void cpu_idle_before(void)
-+{;}
-+
- /*
-  * The idle thread. There's no useful work to be
-  * done, so just try to conserve power and have a
-@@ -206,6 +209,9 @@ void __init select_idle_routine(const st
- 	}
- }
- 
-+void cpu_idle_after(void)
-+{;}
-+
- static int __init idle_setup (char *str)
- {
- 	if (!strncmp(str, "poll", 4)) {
-@@ -279,7 +285,7 @@ __asm__(".section .text\n"
- /*
-  * Create a kernel thread
-  */
--int kernel_thread(int (*fn)(void *), void * arg, unsigned long flags)
-+static int arch_kernel_thread(int (*fn)(void *), void * arg, unsigned long flags)
- {
- 	struct pt_regs regs;
- 
-@@ -299,6 +305,50 @@ int kernel_thread(int (*fn)(void *), voi
- 	return do_fork(flags | CLONE_VM | CLONE_UNTRACED, 0, &regs, 0, NULL, NULL);
- }
- 
-+#if defined(CONFIG_PROC_SLEEP)
-+struct bag {
-+	int (*fn)(void *);
-+	void * arg;
-+};
-+
-+void kernel_thread_trampoline_before(void)
-+{;}
-+
-+static int kernel_thread_trampoline(void *__arg)
-+{
-+	struct bag *bag;
-+	int (*fn)(void *);
-+	void * arg;
-+
-+	bag = __arg;
-+	fn  = bag->fn;
-+	arg = bag->arg;
-+	kfree(bag);
-+	return fn(arg);
-+}
-+
-+void kernel_thread_trampoline_after(void)
-+{;}
-+
-+int kernel_thread(int (*fn)(void *), void * arg, unsigned long flags)
-+{
-+	struct bag *bag;
-+
-+	bag = kmalloc(sizeof *bag, GFP_ATOMIC);
-+	if (bag != NULL) {
-+		bag->fn  = fn;
-+		bag->arg = arg;
-+		return arch_kernel_thread(kernel_thread_trampoline, bag, flags);
-+	} else
-+		return -ENOMEM;
-+}
-+#else
-+int kernel_thread(int (*fn)(void *), void * arg, unsigned long flags)
-+{
-+	return arch_kernel_thread(fn, arg, flags);
-+}
-+#endif
-+
- /*
-  * Free current thread data structures etc..
-  */
-Index: linux/arch/i386/mm/fault.c
-===================================================================
---- linux.orig/arch/i386/mm/fault.c
-+++ linux/arch/i386/mm/fault.c
-@@ -214,6 +214,9 @@ static inline int is_prefetch(struct pt_
- 
- asmlinkage void do_invalid_op(struct pt_regs *, unsigned long);
- 
-+void do_page_fault_before(void)
-+{;}
-+
- /*
-  * This routine handles page faults.  It determines the address,
-  * and the problem, and then passes it off to one of the appropriate
-@@ -574,3 +577,7 @@ vmalloc_fault:
- 		return;
- 	}
- }
-+
-+void do_page_fault_after(void)
-+{;}
-+
 Index: linux/fs/proc/base.c
 ===================================================================
 --- linux.orig/fs/proc/base.c
@@ -393,7 +265,7 @@ Index: linux/kernel/sleep_info.c
 ===================================================================
 --- linux.orig/kernel/sleep_info.c
 +++ linux/kernel/sleep_info.c
-@@ -0,0 +1,426 @@
+@@ -0,0 +1,374 @@
 +#include <linux/config.h>
 +#include <linux/sleep_info.h>
 +#include <linux/seq_file.h>
@@ -418,6 +290,7 @@ Index: linux/kernel/sleep_info.c
 +	unsigned long long max;
 +	struct list_head lru;
 +	unsigned long hash;
++	int depth;
 +	void *frame[SLEEP_TRACE_DEPTH];
 +};
 +
@@ -428,91 +301,37 @@ Index: linux/kernel/sleep_info.c
 +	struct stack_trace traces[0];
 +};
 +
-+extern struct exec_domain default_exec_domain;
-+
-+extern void kernel_thread_trampoline_before(void);
-+extern void kernel_thread_trampoline_after(void);
-+
-+extern void cpu_idle_before(void);
-+extern void cpu_idle_after(void);
-+
-+extern void do_page_fault_before(void);
-+extern void do_page_fault_after(void);
-+
-+extern void kernel_entries_start(void);
-+extern void kernel_entries_end(void);
-+
-+static int is_last_frame(void *addr)
++static inline int valid_stack_ptr(struct thread_info *tinfo, void *p)
 +{
-+	if (addr == NULL)
-+		return 1;
-+	else if ((void *)kernel_thread_trampoline_before < addr &&
-+		 addr < (void *)kernel_thread_trampoline_after)
-+		return 1;
-+	else if ((void *)cpu_idle_before < addr && addr < (void *)cpu_idle_after)
-+		return 1;
-+	else if ((void *)do_page_fault_before < addr &&
-+		 addr < (void *)do_page_fault_after)
-+		return 1;
-+	else if ((void *)kernel_entries_start < addr &&
-+		 addr < (void *)kernel_entries_end)
-+		return 1;
-+	else if (!kernel_text_address((unsigned long)addr))
-+		return 1;
-+	else
-+		return 0;
++	return	p > (void *)tinfo &&
++		p < (void *)tinfo + THREAD_SIZE - 3;
 +}
 +
 +static void fill_trace(struct stack_trace *trace)
 +{
-+	int i;
-+	void *addr;
++	
++	struct thread_info *tinfo;
++	unsigned long       ebp;
++	int                 i;
 +
-+#define FRAME(nr)						\
-+	case (nr):						\
-+		addr  = __builtin_return_address((nr) + 2);	\
-+		break
++	tinfo = current_thread_info();
++	/* Grab ebp right from our regs */
++	asm ("movl %%ebp, %0" : "=r" (ebp) : );
 +
-+	memset(trace->frame, 0, sizeof trace->frame);
-+	addr = NULL;
-+	for (i = 0; i < SLEEP_TRACE_DEPTH; ++ i) {
-+		switch(i) {
-+			FRAME(0);
-+			FRAME(1);
-+			FRAME(2);
-+			FRAME(3);
-+			FRAME(4);
-+			FRAME(5);
-+			FRAME(6);
-+			FRAME(7);
-+			FRAME(8);
-+			FRAME(9);
-+			FRAME(10);
-+			FRAME(11);
-+			FRAME(12);
-+			FRAME(13);
-+			FRAME(14);
-+			FRAME(15);
-+			FRAME(16);
-+			FRAME(17);
-+			FRAME(18);
-+			FRAME(19);
-+			FRAME(20);
-+		default:
-+			BUG();
-+		}
-+		trace->frame[i] = addr;
-+		if (is_last_frame(addr))
-+			break;
++	for (i = -3; /* skip three innermost frames */
++	     i < SLEEP_TRACE_DEPTH && valid_stack_ptr(tinfo, (void *)ebp);
++	     ++i, ebp = *(unsigned long *)ebp) {
++		if (i >= 0)
++			trace->frame[i] = *(void **)(ebp + 4);
 +	}
-+
++	trace->depth = max(i, 0);
 +}
 +
 +static int stack_trace_eq(struct stack_trace *t1, struct stack_trace *t2)
 +{
 +	return
-+		t1->hash == t2->hash &&
-+		!memcmp(t1->frame, t2->frame, sizeof t1->frame);
++		t1->hash == t2->hash && t1->depth == t2->depth &&
++		!memcmp(t1->frame, t2->frame, t1->depth * sizeof t1->frame[0]);
 +}
 +
 +static unsigned long stack_trace_hash(struct stack_trace *trace)
@@ -520,8 +339,8 @@ Index: linux/kernel/sleep_info.c
 +	int i;
 +	unsigned hash;
 +
-+	for (i = 0, hash = 0; i < SLEEP_TRACE_DEPTH; ++ i)
-+		hash += (unsigned long)trace->frame[i];
++	for (i = 0, hash = 0; i < trace->depth; ++ i)
++		hash += ((unsigned long)trace->frame[i]) >> 3;
 +	return hash;
 +}
 +
@@ -629,6 +448,7 @@ Index: linux/kernel/sleep_info.c
 +			target->nr = 1;
 +			target->total = target->max = delta;
 +			target->hash = trace.hash;
++			target->depth = trace.depth;
 +			memcpy(target->frame, trace.frame, sizeof target->frame);
 +		}
 +		list_move(&target->lru, &sinfo->lru);
@@ -715,7 +535,7 @@ Index: linux/kernel/sleep_info.c
 +
 +	seq_printf(m, "\n%u %llu %llu",
 +		   trace->nr, trace->total, trace->max);
-+	for (i = 0; i < SLEEP_TRACE_DEPTH; ++ i) {
++	for (i = 0; i < trace->depth; ++ i) {
 +		char         *module;
 +		const char   *name;
 +		char          namebuf[128];
