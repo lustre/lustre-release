@@ -1052,12 +1052,13 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
 
         for (ent = lu_dirent_start(dp); ent != NULL;
              ent = lu_dirent_next(ent)) {
-                struct lu_fid *lf = &ent->lde_fid;
+                struct lu_fid *lf = &info->mti_tmp_fid2;
                 char *name;
 
                 if (le16_to_cpu(ent->lde_namelen) == 0)
                         continue;
 
+                fid_le_to_cpu(lf, &ent->lde_fid);
                 is_dir = le32_to_cpu(ent->lde_hash) & MAX_HASH_HIGHEST_BIT;
                 OBD_ALLOC(name, le16_to_cpu(ent->lde_namelen) + 1);
                 if (name == NULL)
@@ -1068,10 +1069,15 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
                                      md_object_next(&object->mot_obj),
                                      name, lf, is_dir);
                 OBD_FREE(name, le16_to_cpu(ent->lde_namelen) + 1);
-                if (rc)
+                if (rc) {
+                        CERROR("Can't insert %*.*s, rc %d\n",
+                               le16_to_cpu(ent->lde_namelen),
+                               le16_to_cpu(ent->lde_namelen),
+                               ent->lde_name, rc);
                         GOTO(out, rc);
+                }
 
-                offset += le16_to_cpu(ent->lde_reclen);
+                offset += lu_dirent_size(ent);
                 if (offset >= size)
                         break;
         }

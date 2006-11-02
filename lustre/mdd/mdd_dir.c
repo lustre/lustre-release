@@ -724,8 +724,8 @@ static int mdd_name_remove(const struct lu_env *env,
         struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_device *mdd = mdo2mdd(pobj);
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
-        struct thandle *handle;
         struct dynlock_handle *dlh;
+        struct thandle *handle;
         int rc;
         ENTRY;
 
@@ -749,11 +749,12 @@ static int mdd_name_remove(const struct lu_env *env,
                 rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy, handle, 0);
         }
 
+        EXIT;
 out_unlock:
         mdd_pdo_write_unlock(env, mdd_obj, dlh);
 out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
-        RETURN(rc);
+        return rc;
 }
 
 static int mdd_rt_sanity_check(const struct lu_env *env,

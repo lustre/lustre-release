@@ -487,10 +487,8 @@ static int mdc_is_subdir(const struct lu_env *env, struct md_object *mo,
                        PFID(&body->fid1));
                 *sfid = body->fid1;
         }
-        EXIT;
-out:
         ptlrpc_req_finished(mci->mci_req);
-        return rc;
+        RETURN(rc);
 }
 
 static struct md_dir_operations mdc_dir_ops = {

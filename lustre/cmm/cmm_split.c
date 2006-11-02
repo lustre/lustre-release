@@ -369,6 +369,66 @@ cleanup:
         return rc;
 }
 
+static inline int cmm_split_special_entry(struct lu_dirent *ent)
+{
+        if (!strncmp(ent->lde_name, ".", le16_to_cpu(ent->lde_namelen)) ||
+            !strncmp(ent->lde_name, "..", le16_to_cpu(ent->lde_namelen)))
+                return 1;
+        return 0;
+}
+
+static void cmm_split_dump_entry(const struct lu_env *env,
+                                 struct md_object *mo,
+                                 struct lu_dirent *ent)
+{
+        struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
+        struct lu_fid *ef = &cmm_env_info(env)->cmi_fid;
+        struct cmm_object *obj;
+        int local;
+
+        fid_le_to_cpu(ef, &ent->lde_fid);
+        obj = cmm_object_find(env, cmm, ef);
+        if (IS_ERR(obj)) {
+                CERROR("Error while find object by "DFID
+                       ", rc %d\n", ef, (int)PTR_ERR(obj));
+                return;
+        }
+
+        local = (lu_object_exists(&obj->cmo_obj.mo_lu) > 0);
+        
+        printk("%4.4x "DFID" %*.*s/%8.8x [%4.4x] (%s)\n",
+               le16_to_cpu(ent->lde_reclen), PFID(ef),
+               le16_to_cpu(ent->lde_namelen),
+               le16_to_cpu(ent->lde_namelen),
+               ent->lde_name, le32_to_cpu(ent->lde_hash),
+               le16_to_cpu(ent->lde_namelen),
+               (local ? "lc" : "cr"));
+        
+        cmm_object_put(env, obj);
+}
+
+static void cmm_split_dump_page(const struct lu_env *env,
+                                struct md_object *mo,
+                                struct lu_dirpage *dp,
+                                __u32 hash_end)
+{
+        struct lu_dirent  *ent;
+
+        if (le16_to_cpu(dp->ldp_flags) & LDF_EMPTY)
+                return;
+        
+        printk("Dump: page: [%8.8x-%8.8x]/[%8.8x], flags: "
+               "%4.4x\n", le32_to_cpu(dp->ldp_hash_start),
+               le32_to_cpu(dp->ldp_hash_end), hash_end,
+               le16_to_cpu(dp->ldp_flags));
+        
+        for (ent = lu_dirent_start(dp);
+             ent != NULL && le32_to_cpu(ent->lde_hash) < hash_end;
+             ent = lu_dirent_next(ent)) {
+                cmm_split_dump_entry(env, mo, ent);
+        }
+}
+
 /*
  * Remove one entry from local MDT. Do not corrupt byte order in page, it will
  * be sent to remote MDT.
@@ -383,8 +443,7 @@ static int cmm_split_remove_entry(const struct lu_env *env,
         char *name;
         ENTRY;
 
-        if (!strncmp(ent->lde_name, ".", le16_to_cpu(ent->lde_namelen)) ||
-            !strncmp(ent->lde_name, "..", le16_to_cpu(ent->lde_namelen)))
+        if (cmm_split_special_entry(ent))
                 RETURN(0);
 
         fid_le_to_cpu(&cmm_env_info(env)->cmi_fid, &ent->lde_fid);
@@ -415,7 +474,7 @@ static int cmm_split_remove_entry(const struct lu_env *env,
                 GOTO(cleanup, rc);
 
         /*
-         * This @ent will be transferred to slave MDS and insert it there, so in
+         * This @ent will be transferred to slave MDS and insert there, so in
          * the slave MDS, we should know whether this object is dir or not, so
          * use the highest bit of the hash to indicate that (because we do not
          * use highest bit of hash).
@@ -444,9 +503,9 @@ static int cmm_split_remove_page(const struct lu_env *env,
         int rc = 0;
         ENTRY;
 
+        *len = 0;
         kmap(rdpg->rp_pages[0]);
         dp = page_address(rdpg->rp_pages[0]);
-        *len = 0;
         for (ent = lu_dirent_start(dp);
              ent != NULL && le32_to_cpu(ent->lde_hash) < hash_end;
              ent = lu_dirent_next(ent)) {
@@ -457,20 +516,14 @@ static int cmm_split_remove_page(const struct lu_env *env,
                          * currently we assumed it will success anyway in
                          * verfication test.
                          */
-                        CWARN("Can not del %*.*s rc %d\n", le16_to_cpu(ent->lde_namelen),
-                              le16_to_cpu(ent->lde_namelen), ent->lde_name, rc);
+                        CWARN("Can not del %*.*s rc %d\n",
+                              le16_to_cpu(ent->lde_namelen),
+                              le16_to_cpu(ent->lde_namelen),
+                              ent->lde_name, rc);
+                        cmm_split_dump_page(env, mo, dp, hash_end);
                         GOTO(unmap, rc);
                 }
-                if (le16_to_cpu(ent->lde_reclen) == 0)
-                        /*
-                         * This is the last ent, whose rec size set to 0
-                         * so recompute here
-                         */
-                        *len += (sizeof(*ent) +
-                                 le16_to_cpu(ent->lde_namelen) +
-                                 3) & ~3;
-                else
-                        *len += le16_to_cpu(ent->lde_reclen);
+                *len += lu_dirent_size(ent);
         }
 
         if (ent != lu_dirent_start(dp))
@@ -657,8 +710,8 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
         la_size = ma->ma_attr.la_size;
         
         /* Split should be done now, let's do it. */
-        CWARN("Dir "DFID" is going to split\n",
-              PFID(lu_object_fid(&mo->mo_lu)));
+        CWARN("Dir "DFID" is going to split (dir size: "LPU64")\n",
+              PFID(lu_object_fid(&mo->mo_lu)), la_size);
 
         /*
          * Disable transacrions for split, since there will be so many trans in
@@ -707,7 +760,7 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
          * Finally, split succeed, tell client to repeat opetartion on correct
          * MDT.
          */
-        CWARN("Dir "DFID" has been split (on size: "LPU64")\n",
+        CWARN("Dir "DFID" has been split (dir size: "LPU64")\n",
               PFID(lu_object_fid(&mo->mo_lu)), la_size);
         
         rc = -ERESTART;

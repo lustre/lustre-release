@@ -313,7 +313,17 @@ static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
                 next = ((void *)ent) + le16_to_cpu(ent->lde_reclen);
         else
                 next = NULL;
+        
         return next;
+}
+
+static inline int lu_dirent_size(struct lu_dirent *ent)
+{
+        if (le16_to_cpu(ent->lde_reclen) == 0) {
+                return (sizeof(*ent) +
+                        le16_to_cpu(ent->lde_namelen) + 3) & ~3;
+        }
+        return le16_to_cpu(ent->lde_reclen);
 }
 
 #define MEA_MAGIC_LAST_CHAR      0xb2221ca1

@@ -1264,7 +1264,7 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
 
                 fid  = (struct lu_fid *)iops->rec(env, it);
 
-                recsize = (sizeof *ent + len + 3) & ~3;
+                recsize = (sizeof(*ent) + len + 3) & ~3;
                 hash = iops->store(env, it);
                 *end = hash;
                 CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
@@ -1407,9 +1407,10 @@ static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
 
         rc = __mdd_readpage(env, mdd_obj, rdpg);
 
+        EXIT;
 out_unlock:
         mdd_read_unlock(env, mdd_obj);
-        RETURN(rc);
+        return rc;
 }
 
 struct md_object_operations mdd_obj_ops = {

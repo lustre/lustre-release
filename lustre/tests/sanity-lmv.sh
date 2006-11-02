@@ -235,7 +235,7 @@ umask 077
 
 test_0a() {
 	mkdir $DIR/0a0 || error 
-        for ((i=0;i<5000;i++)); do
+        for ((i=0;i<15000;i++)); do
                 mkdir $DIR/0a0/`uuidgen -t` || error
         done
 	rm -rf $DIR/0a0 || error
