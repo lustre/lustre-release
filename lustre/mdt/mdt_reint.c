@@ -477,6 +477,11 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                 RETURN(rc);
         }
 
+        /* Invalid case so return error immediately instead of
+         * processing it */
+        if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2))
+                RETURN(-EPERM);
+        
         /* step 1: find & lock the target parent dir */
         lhp = &info->mti_lh[MDT_LH_PARENT];
         mdt_lock_pdo_init(lhp, LCK_EX, rr->rr_name,
@@ -489,21 +494,16 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         /* step 2: find & lock the source */
         lhs = &info->mti_lh[MDT_LH_CHILD];
         mdt_lock_reg_init(lhs, LCK_EX);
-
-        if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
-                mdt_object_get(info->mti_env, mp);
-                ms = mp;
-        } else {
-                ms = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
-                if (IS_ERR(ms))
-                        GOTO(out_unlock_parent, rc = PTR_ERR(ms));
-                
-                rc = mdt_object_lock(info, ms, lhs, MDS_INODELOCK_UPDATE,
-                                     MDT_CROSS_LOCK);
-                if (rc != 0) {
-                        mdt_object_put(info->mti_env, ms);
-                        GOTO(out_unlock_parent, rc);
-                }
+ 
+        ms = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
+        if (IS_ERR(ms))
+                GOTO(out_unlock_parent, rc = PTR_ERR(ms));
+        
+        rc = mdt_object_lock(info, ms, lhs, MDS_INODELOCK_UPDATE,
+                            MDT_CROSS_LOCK);
+        if (rc != 0) {
+                mdt_object_put(info->mti_env, ms);
+                GOTO(out_unlock_parent, rc);
         }
 
         /* step 3: link it */

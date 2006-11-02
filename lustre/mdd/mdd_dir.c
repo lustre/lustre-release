@@ -185,7 +185,7 @@ static int mdd_is_subdir(const struct lu_env *env,
 
 /* Check whether it may create the cobj under the pobj */
 static int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
-                          struct mdd_object *cobj, int need_check, int lock)
+                          struct mdd_object *cobj, int need_check)
 {
         int rc = 0;
         ENTRY;
@@ -197,14 +197,8 @@ static int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
                 RETURN(-ENOENT);
 
         if (need_check) {
-                if (lock) {
-                        rc = mdd_permission_internal_locked(env, pobj,
-                                                            (MAY_WRITE |
-                                                             MAY_EXEC));
-                } else {
-                        rc = mdd_permission_internal(env, pobj, (MAY_WRITE |
-                                                                 MAY_EXEC));
-                }
+                rc = mdd_permission_internal_locked(env, pobj,
+                                                    (MAY_WRITE | MAY_EXEC));
         }
         RETURN(rc);
 }
@@ -291,22 +285,18 @@ int mdd_link_sanity_check(const struct lu_env *env, struct mdd_object *tgt_obj,
         int rc = 0;
         ENTRY;
 
-        if (tgt_obj) {
-                /* 
-                 * Lock only if tgt and src not same object. This is because
-                 * mdd_link() already locked src and we try to lock it again we
-                 * have a problem.
-                 */
-                rc = mdd_may_create(env, tgt_obj, NULL, 1, (src_obj != tgt_obj));
-                if (rc)
-                        RETURN(rc);
-        }
-
         if (mdd_is_immutable(src_obj) || mdd_is_append(src_obj))
                 RETURN(-EPERM);
 
         if (S_ISDIR(mdd_object_type(src_obj)))
                 RETURN(-EPERM);
+
+        LASSERT(src_obj != tgt_obj);
+        if (tgt_obj) {
+                rc = mdd_may_create(env, tgt_obj, NULL, 1);
+                if (rc)
+                        RETURN(rc);
+        }
 
         RETURN(rc);
 }
@@ -774,7 +764,7 @@ static int mdd_rt_sanity_check(const struct lu_env *env,
                      mdd_dir_is_empty(env, tobj))
                                 RETURN(-ENOTEMPTY);
         } else {
-                rc = mdd_may_create(env, tgt_pobj, NULL, 1, 1);
+                rc = mdd_may_create(env, tgt_pobj, NULL, 1);
         }
 
         RETURN(rc);
@@ -1315,7 +1305,7 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
 
         if (!tobj) {
                 rc = mdd_may_create(env, tgt_pobj, NULL,
-                                    (src_pobj != tgt_pobj), 1);
+                                    (src_pobj != tgt_pobj));
         } else {
                 mdd_read_lock(env, tobj);
                 rc = mdd_may_delete(env, tgt_pobj, tobj, src_is_dir,
