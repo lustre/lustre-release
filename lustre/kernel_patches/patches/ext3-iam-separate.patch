@@ -2974,8 +2974,8 @@ Index: iam/fs/ext3/iam_lvar.c
 +        return ((void *)ent) + e_size(leaf, ent);
 +}
 +
-+#define LVAR_HASH_TEA    (0)
-+#define LVAR_HASH_R5     (1)
++#define LVAR_HASH_TEA    (1)
++#define LVAR_HASH_R5     (0)
 +#define LVAR_HASH_PREFIX (0)
 +
 +static inline lvar_hash_t get_hash(const struct iam_container *bag,
