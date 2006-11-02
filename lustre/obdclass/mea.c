@@ -64,8 +64,8 @@ static int mea_all_chars_hash(int count, char *name, int namelen)
 #ifdef __KERNEL__
 /* This hash calculate method must be same as the lvar hash method */
 
-#define LVAR_HASH_TEA    (0)
-#define LVAR_HASH_R5     (1)
+#define LVAR_HASH_TEA    (1)
+#define LVAR_HASH_R5     (0)
 #define LVAR_HASH_PREFIX (0)
 
 static __u32 hash_build(char *name, int namelen)
@@ -149,7 +149,7 @@ int mea_name2idx(struct lmv_stripe_md *mea, const char *name, int namelen)
         LASSERT(mea && mea->mea_count);
 
 	c = raw_name2idx(mea->mea_magic, mea->mea_count, name, namelen);
-        
+
         LASSERT(c < mea->mea_count);
         return c;
 }
