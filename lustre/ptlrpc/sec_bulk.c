@@ -368,9 +368,12 @@ int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
         int             p_idx, g_idx;
         int             i;
 
-        LASSERT(desc->bd_enc_pages == NULL);
         LASSERT(desc->bd_max_iov > 0);
         LASSERT(desc->bd_max_iov <= page_pools.epp_total_pages);
+
+        /* resent bulk, enc pages might have been allocated previously */
+        if (desc->bd_enc_pages != NULL)
+                return 0;
 
         OBD_ALLOC(desc->bd_enc_pages,
                   desc->bd_max_iov * sizeof(*desc->bd_enc_pages));
