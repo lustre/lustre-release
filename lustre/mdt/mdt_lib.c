@@ -481,10 +481,14 @@ int mdt_check_ucred(struct mdt_thread_info *info)
                 }
         }
 
-        if (is_identity_get_disabled(mdt->mdt_identity_cache) &&
-            med->med_rmtclient) {
-                CERROR("remote client must run with identity_get enabled!\n");
-                RETURN(-EACCES);
+        if (is_identity_get_disabled(mdt->mdt_identity_cache)) {
+                if (med->med_rmtclient) {
+                        CERROR("remote client must run with "
+                               "identity_get enabled!\n");
+                        RETURN(-EACCES);
+                } else {
+                        RETURN(0);
+                }
         }
 
         identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid);
