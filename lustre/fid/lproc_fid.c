@@ -310,13 +310,20 @@ seq_client_proc_read_server(char *page, char **start, off_t off,
                             int count, int *eof, void *data)
 {
         struct lu_client_seq *seq = (struct lu_client_seq *)data;
-        struct client_obd *cli = &seq->lcs_exp->exp_obd->u.cli;
+        struct client_obd *cli;
 	int rc;
 	ENTRY;
 
         LASSERT(seq != NULL);
-        rc = snprintf(page, count, "%s\n",
-                      cli->cl_target_uuid.uuid);
+
+        if (seq->lcs_exp != NULL) {
+                cli = &seq->lcs_exp->exp_obd->u.cli;
+                rc = snprintf(page, count, "%s\n", cli->cl_target_uuid.uuid);
+        } else
+                /*
+                 * Export-less sequence, see mdt_seq_init().
+                 */
+                rc = snprintf(page, count, "none\n");
 	RETURN(rc);
 }
 
