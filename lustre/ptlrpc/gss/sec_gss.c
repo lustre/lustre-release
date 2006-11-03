@@ -2231,6 +2231,26 @@ int gss_svc_accept(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
+static
+void gss_svc_invalidate_ctx(struct ptlrpc_svc_ctx *svc_ctx)
+{
+        struct gss_svc_reqctx  *grctx;
+        ENTRY;
+
+        if (svc_ctx == NULL) {
+                EXIT;
+                return;
+        }
+
+        grctx = gss_svc_ctx2reqctx(svc_ctx);
+
+        CWARN("gss svc invalidate ctx %p(%u)\n",
+              grctx->src_ctx, grctx->src_ctx->gsc_uid);
+        gss_svc_upcall_destroy_ctx(grctx->src_ctx);
+
+        EXIT;
+}
+
 static inline
 int gss_svc_payload(struct gss_svc_reqctx *grctx, int msgsize, int privacy)
 {
@@ -2515,6 +2535,7 @@ int gss_svc_install_rctx(struct obd_import *imp, struct ptlrpc_svc_ctx *ctx)
 
 static struct ptlrpc_sec_sops gss_sec_sops = {
         .accept                 = gss_svc_accept,
+        .invalidate_ctx         = gss_svc_invalidate_ctx,
         .alloc_rs               = gss_svc_alloc_rs,
         .authorize              = gss_svc_authorize,
         .free_rs                = gss_svc_free_rs,

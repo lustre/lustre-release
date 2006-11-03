@@ -1705,6 +1705,19 @@ void sptlrpc_svc_ctx_decref(struct ptlrpc_request *req)
         req->rq_svc_ctx = NULL;
 }
 
+void sptlrpc_svc_ctx_invalidate(struct ptlrpc_request *req)
+{
+        struct ptlrpc_svc_ctx *ctx = req->rq_svc_ctx;
+
+        if (ctx == NULL)
+                return;
+
+        LASSERT(atomic_read(&ctx->sc_refcount) > 0);
+        if (ctx->sc_policy->sp_sops->invalidate_ctx)
+                ctx->sc_policy->sp_sops->invalidate_ctx(ctx);
+}
+EXPORT_SYMBOL(sptlrpc_svc_ctx_invalidate);
+
 /****************************************
  * bulk security                        *
  ****************************************/

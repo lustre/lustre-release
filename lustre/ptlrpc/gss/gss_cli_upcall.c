@@ -856,12 +856,17 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
         rc = ptlrpc_queue_wait(req);
         if (rc) {
                 /* If any _real_ denial be made, we expect server return
-                 * error reply instead of simply drop request. So here
-                 * all errors during networking just be treat as TIMEDOUT,
-                 * caller might re-try negotiation again and again, leave
-                 * recovery decisions to general ptlrpc layer.
+                 * -EACCES reply or return success but indicate gss error
+                 * inside reply messsage. All other errors are treated as
+                 * timeout, caller might try the negotiation repeatedly,
+                 * leave recovery decisions to general ptlrpc layer.
+                 *
+                 * FIXME maybe some other error code shouldn't be treated
+                 * as timeout.
                  */
-                param.status = -ETIMEDOUT;
+                param.status = rc;
+                if (rc != -EACCES)
+                        param.status = -ETIMEDOUT;
                 goto out_copy;
         }
 

@@ -312,6 +312,8 @@ struct ptlrpc_sec_cops {
 struct ptlrpc_sec_sops {
         int                     (*accept)      (struct ptlrpc_request *req);
         int                     (*authorize)   (struct ptlrpc_request *req);
+        void                    (*invalidate_ctx)
+                                               (struct ptlrpc_svc_ctx *ctx);
         /* buffer manipulation */
         int                     (*alloc_rs)    (struct ptlrpc_request *req,
                                                 int msgsize);
@@ -525,6 +527,7 @@ int  sptlrpc_svc_wrap_reply(struct ptlrpc_request *req);
 void sptlrpc_svc_free_rs(struct ptlrpc_reply_state *rs);
 void sptlrpc_svc_ctx_addref(struct ptlrpc_request *req);
 void sptlrpc_svc_ctx_decref(struct ptlrpc_request *req);
+void sptlrpc_svc_ctx_invalidate(struct ptlrpc_request *req);
 
 /*
  * reverse context
