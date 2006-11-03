@@ -618,7 +618,7 @@ static int cmm_split_process_dir(const struct lu_env *env,
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct lu_rdpg *rdpg = &cmm_env_info(env)->cmi_rdpg;
-        __u64 hash_segement = (__u64)(MAX_HASH_SIZE + 1);
+        __u32 hash_segement;
         int rc = 0, i;
         ENTRY;
 
@@ -635,23 +635,18 @@ static int cmm_split_process_dir(const struct lu_env *env,
 
         LASSERT(ma->ma_valid & MA_LMV);
         /* we need range of hashes, so MAX_HASH_SIZE + 1 */
-        do_div(hash_segement, cmm->cmm_tgt_count + 1);
+        hash_segement = MAX_HASH_SIZE / (cmm->cmm_tgt_count + 1);
         for (i = 1; i < cmm->cmm_tgt_count + 1; i++) {
                 struct lu_fid *lf;
                 __u32 hash_end;
 
                 lf = &ma->ma_lmv->mea_ids[i];
 
-                rdpg->rp_hash = (__u32)(i * hash_segement);
-                
-                /*
-                 * For last stripe we should use MAX_HASH_SIZE + 1 as end to not
-                 * loss latest hashes.
-                 */
+                rdpg->rp_hash = i * hash_segement;
                 if (i == cmm->cmm_tgt_count) 
-                        hash_end = (__u32)(MAX_HASH_SIZE + 1);
+                        hash_end = MAX_HASH_SIZE;
                 else
-                        hash_end = (__u32)((i + 1) * hash_segement);
+                        hash_end = rdpg->rp_hash + hash_segement;
                 rc = cmm_split_process_stripe(env, mo, rdpg, lf, hash_end);
                 if (rc) {
                         CERROR("Error (rc = %d) while splitting for %d: fid="
