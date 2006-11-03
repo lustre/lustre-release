@@ -109,11 +109,20 @@ struct cmr_object {
         mdsno_t           cmo_num;
 };
 
+enum {
+        CMM_SPLIT_PAGE_COUNT = 1
+};
+
 struct cmm_thread_info {
-        struct md_attr  cmi_ma;
-        struct lu_buf   cmi_buf;
-        struct lu_fid   cmi_fid; /* used for le/cpu convertions */
-        char            cmi_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
+        struct md_attr        cmi_ma;
+        struct lu_buf         cmi_buf;
+        struct lu_fid         cmi_fid; /* used for le/cpu conversions */
+        struct lu_rdpg        cmi_rdpg;
+        /* pointers to pages for readpage. */
+        struct page          *cmi_pages[CMM_SPLIT_PAGE_COUNT];
+        struct md_create_spec cmi_spec;
+        struct lmv_stripe_md  cmi_lmv;
+        char                  cmi_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
 };
 
 static inline struct cmm_device *cmm_obj2dev(struct cmm_object *c)
