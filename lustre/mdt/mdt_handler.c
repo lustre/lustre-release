@@ -227,11 +227,11 @@ static void mdt_lock_pdo_mode(struct mdt_thread_info *info, struct mdt_object *o
          * splitting then we need to protect it from any type of access
          * (lookup/modify/split) - LCK_EX --bzzz
          */
-        
+
         LASSERT(lh->mlh_reg_mode != LCK_MINMODE);
         LASSERT(lh->mlh_pdo_mode == LCK_MINMODE);
 
-        /* 
+        /*
          * No pdo locks possible on not existing objects, because pdo lock is
          * taken on parent dir and parent can't be absent.
          */
@@ -666,7 +666,7 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
         ENTRY;
 
         LASSERT(o != NULL);
- 
+
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
 
         /*
@@ -1047,7 +1047,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
         /* Make sure we have at least one entry. */
         if (size == 0)
                 RETURN(-EINVAL);
-        
+
         /*
          * Disable trans for this name insert, since it will include many trans
          * for this.
@@ -1071,7 +1071,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
                 OBD_ALLOC(name, le16_to_cpu(ent->lde_namelen) + 1);
                 if (name == NULL)
                         GOTO(out, rc = -ENOMEM);
-                
+
                 memcpy(name, ent->lde_name, le16_to_cpu(ent->lde_namelen));
                 rc = mdo_name_insert(info->mti_env,
                                      md_object_next(&object->mot_obj),
@@ -1598,7 +1598,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                 /* No PDO lock on remote object */
                 LASSERT(lh->mlh_type != MDT_PDO_LOCK);
         } else if (exist == 0 && lh->mlh_type == MDT_PDO_LOCK) {
-                /* 
+                /*
                  * No PDO lock on non-existing object.
                  * This may happen on removed $PWD on client.
                  */
@@ -1648,7 +1648,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
                 mdt_fid_unlock(&lh->mlh_pdo_lh, lh->mlh_pdo_mode);
                 lh->mlh_pdo_lh.cookie = 0ull;
         }
-        
+
         RETURN(rc);
 }
 
@@ -1680,7 +1680,7 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
                 }
                 lh->mlh_reg_lh.cookie = 0;
         }
-        
+
         EXIT;
 }
 
@@ -1959,7 +1959,7 @@ static int mdt_req_handle(struct mdt_thread_info *info,
         /* If we're DISCONNECTing, the mdt_export_data is already freed */
         if (rc == 0 && h->mh_opc != MDS_DISCONNECT)
                 target_committed_to_req(req);
-        
+
         if ((lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) &&
             lustre_msg_get_transno(req->rq_reqmsg) == 0) {
                 DEBUG_REQ(D_ERROR, req, "transno is 0 during REPLAY\n");
@@ -3015,7 +3015,10 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 {
         int rc;
         static struct ptlrpc_service_conf conf;
+        cfs_proc_dir_entry_t *procfs_entry;
         ENTRY;
+
+        procfs_entry = m->mdt_md_dev.md_lu_dev.ld_obd->obd_proc_entry;
 
         conf = (typeof(conf)) {
                 .psc_nbufs            = MDS_NBUFS,
@@ -3040,8 +3043,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 
         m->mdt_regular_service =
                 ptlrpc_init_svc_conf(&conf, mdt_regular_handle, LUSTRE_MDT_NAME,
-                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
-                                     NULL);
+                                     procfs_entry, NULL);
         if (m->mdt_regular_service == NULL)
                 RETURN(-ENOMEM);
 
@@ -3068,8 +3070,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         m->mdt_readpage_service =
                 ptlrpc_init_svc_conf(&conf, mdt_readpage_handle,
                                      LUSTRE_MDT_NAME "_readpage",
-                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
-                                     NULL);
+                                     procfs_entry, NULL);
 
         if (m->mdt_readpage_service == NULL) {
                 CERROR("failed to start readpage service\n");
@@ -3097,8 +3098,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         m->mdt_setattr_service =
                 ptlrpc_init_svc_conf(&conf, mdt_regular_handle,
                                      LUSTRE_MDT_NAME "_setattr",
-                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
-                                     NULL);
+                                     procfs_entry, NULL);
 
         if (!m->mdt_setattr_service) {
                 CERROR("failed to start setattr service\n");
@@ -3127,8 +3127,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         m->mdt_mdsc_service =
                 ptlrpc_init_svc_conf(&conf, mdt_mdsc_handle,
                                      LUSTRE_MDT_NAME"_mdsc",
-                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
-                                     NULL);
+                                     procfs_entry, NULL);
         if (!m->mdt_mdsc_service) {
                 CERROR("failed to start seq controller service\n");
                 GOTO(err_mdt_svc, rc = -ENOMEM);
@@ -3156,8 +3155,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         m->mdt_mdss_service =
                 ptlrpc_init_svc_conf(&conf, mdt_mdss_handle,
                                      LUSTRE_MDT_NAME"_mdss",
-                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
-                                     NULL);
+                                     procfs_entry, NULL);
         if (!m->mdt_mdss_service) {
                 CERROR("failed to start metadata seq server service\n");
                 GOTO(err_mdt_svc, rc = -ENOMEM);
@@ -3188,8 +3186,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         m->mdt_dtss_service =
                 ptlrpc_init_svc_conf(&conf, mdt_dtss_handle,
                                      LUSTRE_MDT_NAME"_dtss",
-                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
-                                     NULL);
+                                     procfs_entry, NULL);
         if (!m->mdt_dtss_service) {
                 CERROR("failed to start data seq server service\n");
                 GOTO(err_mdt_svc, rc = -ENOMEM);
@@ -3215,8 +3212,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
         m->mdt_fld_service =
                 ptlrpc_init_svc_conf(&conf, mdt_fld_handle,
                                      LUSTRE_MDT_NAME"_fld",
-                                     m->mdt_md_dev.md_lu_dev.ld_proc_entry,
-                                     NULL);
+                                     procfs_entry, NULL);
         if (!m->mdt_fld_service) {
                 CERROR("failed to start fld service\n");
                 GOTO(err_mdt_svc, rc = -ENOMEM);
@@ -3583,6 +3579,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 CERROR("can't init lprocfs, rc %d\n", rc);
                 GOTO(err_fini_site, rc);
         }
+        ptlrpc_lprocfs_register_obd(obd);
 
         /* set server index */
         LASSERT(num);
@@ -3720,7 +3717,7 @@ static int mdt_process_config(const struct lu_env *env,
                 rc = next->ld_ops->ldo_process_config(env, next, cfg);
                 if (rc)
                         CERROR("Can't add mdc, rc %d\n", rc);
-                else                
+                else
                         rc = mdt_seq_init_cli(env, mdt_dev(d), cfg);
                 break;
         default:
