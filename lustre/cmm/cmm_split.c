@@ -650,7 +650,8 @@ static int cmm_split_process_dir(const struct lu_env *env,
         }
 
         LASSERT(ma->ma_valid & MA_LMV);
-        hash_segement = MAX_HASH_SIZE / (cmm->cmm_tgt_count + 1);
+        /* we need range of hashes, so MAX_HASH_SIZE + 1 */
+        hash_segement = (MAX_HASH_SIZE + 1) / (cmm->cmm_tgt_count + 1);
         for (i = 1; i < cmm->cmm_tgt_count + 1; i++) {
                 struct lu_fid *lf;
                 __u32 hash_end;
@@ -658,7 +659,12 @@ static int cmm_split_process_dir(const struct lu_env *env,
                 lf = &ma->ma_lmv->mea_ids[i];
 
                 rdpg->rp_hash = i * hash_segement;
-                hash_end = rdpg->rp_hash + hash_segement;
+                /* for last stripe we should use MAX_HASH_SIZE + 1 as end
+                 * to don't lost latest hashed */
+                if (i == cmm->cmm_tgt_count) 
+                        hash_end = MAX_HASH_SIZE + 1;
+                else
+                        hash_end = rdpg->rp_hash + hash_segement;
                 rc = cmm_split_process_stripe(env, mo, rdpg, lf, hash_end);
                 if (rc) {
                         CERROR("Error (rc = %d) while splitting for %d: fid="
