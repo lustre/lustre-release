@@ -153,7 +153,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
 
         rc = mdt_init_ucred(info, reqbody);
         if (rc)
-                RETURN(rc);
+                RETURN(err_serious(rc));
 
         easize = mdt_getxattr_pack_reply(info);
         if (easize < 0)
@@ -288,7 +288,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
         rc = mdt_init_ucred(info, reqbody);
         if (rc)
-                RETURN(rc);
+                RETURN(err_serious(rc));
 
         rc = mdt_setxattr_pack_reply(info);
         if (rc < 0)

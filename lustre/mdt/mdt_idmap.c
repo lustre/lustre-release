@@ -225,8 +225,10 @@ void mdt_cleanup_idmap(struct mdt_export_data *med)
 
 static inline void mdt_revoke_export_locks(struct obd_export *exp)
 {
+#if 0
         if (!exp->exp_mdt_data.med_rmtclient)
                 return;
+#endif
 
         /* don't revoke locks during recovery */
         if (exp->exp_obd->obd_recovering)

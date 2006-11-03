@@ -354,8 +354,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
         identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid);
         if (!identity) {
-                CERROR("Deny access without identity: uid %d\n",
-                       ucred->mu_fsuid);
+                CERROR("Deny access without identity: uid %d\n", pud->pud_uid);
                 RETURN(-EACCES);
         }
 
@@ -429,6 +428,74 @@ out:
                 mdt_identity_put(mdt->mdt_identity_cache, identity);
 
         RETURN(rc);
+}
+
+int mdt_check_ucred(struct mdt_thread_info *info)
+{
+        struct ptlrpc_request   *req = mdt_info_req(info);
+        struct mdt_export_data  *med = mdt_req2med(req);
+        struct mdt_device       *mdt = info->mti_mdt;
+        struct ptlrpc_user_desc *pud = req->rq_user_desc;
+        struct md_ucred         *ucred = mdt_ucred(info);
+        struct mdt_identity     *identity;
+        lnet_nid_t              peernid = req->rq_peer.nid;
+
+        ENTRY;
+
+        if ((ucred->mu_valid == UCRED_OLD) || (ucred->mu_valid == UCRED_NEW))
+                RETURN(0);
+
+        /* !rq_user_desc means null security, maybe inter-mds ops */
+        if (!req->rq_user_desc)
+                RETURN(0);
+
+        if (req->rq_auth_gss && req->rq_auth_uid == INVALID_UID) {
+                CWARN("user not authenticated, deny access!\n");
+                RETURN(-EACCES);
+        }
+
+        /* sanity check: if we use strong authentication, we expect the
+         * uid which client claimed is true */
+        if (req->rq_auth_gss) {
+                if (med->med_rmtclient) {
+                        if (ptlrpc_user_desc_do_idmap(req, pud))
+                                RETURN(-EACCES);
+
+                        if (req->rq_auth_mapped_uid != pud->pud_uid) {
+                                CERROR("remote client "LPU64": auth uid %u "
+                                       "while client claim %u:%u/%u:%u\n",
+                                       peernid, req->rq_auth_uid, pud->pud_uid,
+                                       pud->pud_gid, pud->pud_fsuid,
+                                       pud->pud_fsgid);
+                                RETURN(-EACCES);
+                        }
+                } else {
+                        if (req->rq_auth_uid != pud->pud_uid) {
+                                CERROR("local client "LPU64": auth uid %u "
+                                       "while client claim %u:%u/%u:%u\n",
+                                       peernid, req->rq_auth_uid, pud->pud_uid,
+                                       pud->pud_gid, pud->pud_fsuid,
+                                       pud->pud_fsgid);
+                                RETURN(-EACCES);
+                        }
+                }
+        }
+
+        if (is_identity_get_disabled(mdt->mdt_identity_cache) &&
+            med->med_rmtclient) {
+                CERROR("remote client must run with identity_get enabled!\n");
+                RETURN(-EACCES);
+        }
+
+        identity = mdt_identity_get(mdt->mdt_identity_cache, pud->pud_uid);
+        if (!identity) {
+                CERROR("Deny access without identity: uid %d\n", pud->pud_uid);
+                RETURN(-EACCES);
+        }
+
+        mdt_identity_put(mdt->mdt_identity_cache, identity);
+
+        RETURN(0);
 }
 
 int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)

@@ -290,6 +290,10 @@ static int mdt_getstatus(struct mdt_thread_info *info)
 
         ENTRY;
 
+        rc = mdt_check_ucred(info);
+        if (rc)
+                RETURN(err_serious(rc));
+
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_GETSTATUS_PACK))
                 RETURN(err_serious(-ENOMEM));
 
@@ -334,6 +338,9 @@ static int mdt_statfs(struct mdt_thread_info *info)
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
                          (MDT_SERVICE_WATCHDOG_TIMEOUT / 1000) + 1);
 
+        rc = mdt_check_ucred(info);
+        if (rc)
+                RETURN(err_serious(rc));
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
                 rc = err_serious(-ENOMEM);
@@ -629,11 +636,12 @@ static int mdt_getattr(struct mdt_thread_info *info)
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
 
-        if (reqbody->valid & OBD_MD_FLRMTPERM) {
+        if (reqbody->valid & OBD_MD_FLRMTPERM)
                 rc = mdt_init_ucred(info, reqbody);
-                if (rc)
-                        GOTO(out, rc);
-        }
+        else
+                rc = mdt_check_ucred(info);
+        if (rc)
+                GOTO(out, rc);
 
         /* don't check capability at all, because rename might
          * getattr for remote obj, and at that time no capability
@@ -1194,6 +1202,10 @@ static int mdt_readpage(struct mdt_thread_info *info)
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         if (reqbody == NULL || repbody == NULL)
                 RETURN(err_serious(-EFAULT));
+
+        rc = mdt_check_ucred(info);
+        if (rc)
+                RETURN(err_serious(rc));
 
         /*
          * prepare @rdpg before calling lower layers and transfer itself. Here
