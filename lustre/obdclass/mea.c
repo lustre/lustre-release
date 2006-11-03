@@ -101,7 +101,7 @@ static __u32 hash_build(char *name, int namelen)
 static int mea_hash_segment(int count, char *name, int namelen)
 {
         __u64 hash;
-        __u64 hash_segment = MAX_HASH_SIZE;
+        __u64 hash_segment = MAX_HASH_SIZE + 1;
 
         hash = hash_build(name, namelen);
         do_div(hash_segment, count);

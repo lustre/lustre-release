@@ -330,7 +330,7 @@ static inline int lu_dirent_size(struct lu_dirent *ent)
 #define MEA_MAGIC_ALL_CHARS      0xb222a11c
 #define MEA_MAGIC_HASH_SEGMENT   0xb222a11b
 
-#define MAX_HASH_SIZE            0x7fffffff
+#define MAX_HASH_SIZE            0x7fffffffUL
 #define MAX_HASH_HIGHEST_BIT     0x10000000
 
 /* TODO: lmv_stripe_md should contain mds capabilities for all slave fids */
