@@ -182,8 +182,9 @@ int cmm_split_expect(const struct lu_env *env, struct md_object *mo,
         }
         /* CMM_SPLIT_UNKNOWN case below */
 
-        /* No need split for Root object */
-        rc = cmm_child_ops(cmm)->mdo_root_get(env, cmm->cmm_child, &root_fid);
+        /* No need to split root object. */
+        rc = cmm_child_ops(cmm)->mdo_root_get(env, cmm->cmm_child,
+                                              &root_fid);
         if (rc)
                 RETURN(rc);
 
@@ -505,7 +506,7 @@ static int cmm_split_remove_page(const struct lu_env *env,
                          * currently we assumed it will success anyway in
                          * verfication test.
                          */
-                        CWARN("Can not del %*.*s rc %d\n",
+                        CWARN("Can not del %*.*s, rc %d\n",
                               le16_to_cpu(ent->lde_namelen),
                               le16_to_cpu(ent->lde_namelen),
                               ent->lde_name, rc);
@@ -642,8 +643,11 @@ static int cmm_split_process_dir(const struct lu_env *env,
                 lf = &ma->ma_lmv->mea_ids[i];
 
                 rdpg->rp_hash = (__u32)(i * hash_segement);
-                /* for last stripe we should use MAX_HASH_SIZE + 1 as end
-                 * to don't lost latest hashed */
+                
+                /*
+                 * For last stripe we should use MAX_HASH_SIZE + 1 as end to not
+                 * loss latest hashes.
+                 */
                 if (i == cmm->cmm_tgt_count) 
                         hash_end = (__u32)(MAX_HASH_SIZE + 1);
                 else
@@ -672,7 +676,6 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct md_attr    *ma = &cmm_env_info(env)->cmi_ma;
         int                rc = 0, split;
-        __u64              la_size;
         struct lu_buf     *buf;
         ENTRY;
 
@@ -689,11 +692,9 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
                 RETURN(0);
         }
 
-        la_size = ma->ma_attr.la_size;
-
         /* Split should be done now, let's do it. */
-        CWARN("Dir "DFID" is going to split (dir size: "LPU64")\n",
-              PFID(lu_object_fid(&mo->mo_lu)), la_size);
+        CWARN("Dir "DFID" is going to split (size: "LPU64")\n",
+              PFID(lu_object_fid(&mo->mo_lu)), ma->ma_attr.la_size);
 
         /*
          * Disable transacrions for split, since there will be so many trans in
@@ -742,9 +743,7 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
          * Finally, split succeed, tell client to repeat opetartion on correct
          * MDT.
          */
-        CWARN("Dir "DFID" has been split (dir size: "LPU64")\n",
-              PFID(lu_object_fid(&mo->mo_lu)), la_size);
-
+        CWARN("Dir "DFID" has been split\n", PFID(lu_object_fid(&mo->mo_lu)));
         rc = -ERESTART;
         EXIT;
 cleanup:

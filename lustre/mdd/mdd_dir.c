@@ -312,60 +312,50 @@ const struct dt_rec *__mdd_fid_rec(const struct lu_env *env,
 
 
 /* insert new index, add reference if isdir, update times */
-static int __mdd_index_insert(const struct lu_env *env,
-                             struct mdd_object *pobj, const struct lu_fid *lf,
-                             const char *name, int isdir, struct thandle *th,
-                             struct lustre_capa *capa)
+static int __mdd_index_insert(const struct lu_env *env, struct mdd_object *pobj,
+                              const struct lu_fid *lf, const char *name, int is_dir,
+                              struct thandle *handle, struct lustre_capa *capa)
 {
         struct dt_object *next = mdd_object_child(pobj);
-        struct timeval start;
-        int rc;
+        struct timeval    start;
+        int               rc;
         ENTRY;
 
         mdd_lproc_time_start(mdo2mdd(&pobj->mod_obj), &start,
                              LPROC_MDD_INDEX_INSERT);
-#if 0
-        struct lu_attr   *la = &mdd_env_info(env)->mti_la;
-#endif
-
-        if (dt_try_as_dir(env, next))
+        if (dt_try_as_dir(env, next)) {
                 rc = next->do_index_ops->dio_insert(env, next,
                                                     __mdd_fid_rec(env, lf),
                                                     (const struct dt_key *)name,
-                                                    th, capa);
-        else
+                                                    handle, capa);
+        } else {
                 rc = -ENOTDIR;
+        }
 
         if (rc == 0) {
-                if (isdir) {
+                if (is_dir) {
                         mdd_write_lock(env, pobj);
-                        mdd_ref_add_internal(env, pobj, th);
+                        mdd_ref_add_internal(env, pobj, handle);
                         mdd_write_unlock(env, pobj);
                 }
-#if 0
-                la->la_valid = LA_MTIME|LA_CTIME;
-                la->la_atime = ma->ma_attr.la_atime;
-                la->la_ctime = ma->ma_attr.la_ctime;
-                rc = mdd_attr_set_internal(env, mdd_obj, la, handle, 0);
-#endif
         }
         mdd_lproc_time_end(mdo2mdd(&pobj->mod_obj), &start,
                            LPROC_MDD_INDEX_INSERT);
-        return rc;
+        RETURN(rc);
 }
 
-static int __mdd_index_delete(const struct lu_env *env,
-                              struct mdd_object *pobj, const char *name,
-                              int is_dir, struct thandle *handle,
+static int __mdd_index_delete(const struct lu_env *env, struct mdd_object *pobj,
+                              const char *name, int is_dir, struct thandle *handle,
                               struct lustre_capa *capa)
 {
         struct dt_object *next = mdd_object_child(pobj);
-        struct timeval start;
-        int rc;
+        struct timeval    start;
+        int               rc;
         ENTRY;
 
         mdd_lproc_time_start(mdo2mdd(&pobj->mod_obj), &start,
                              LPROC_MDD_INDEX_DELETE);
+        
         if (dt_try_as_dir(env, next)) {
                 rc = next->do_index_ops->dio_delete(env, next,
                                                     (struct dt_key *)name,
@@ -377,26 +367,26 @@ static int __mdd_index_delete(const struct lu_env *env,
                 }
         } else
                 rc = -ENOTDIR;
+
         mdd_lproc_time_end(mdo2mdd(&pobj->mod_obj), &start,
                            LPROC_MDD_INDEX_DELETE);
         RETURN(rc);
 }
 
-static int __mdd_index_insert_only(const struct lu_env *env,
-                                   struct mdd_object *pobj,
-                                   const struct lu_fid *lf,
-                                   const char *name, struct thandle *th,
-                                   struct lustre_capa *capa)
+static int
+__mdd_index_insert_only(const struct lu_env *env, struct mdd_object *pobj,
+                        const struct lu_fid *lf, const char *name,
+                        struct thandle *handle, struct lustre_capa *capa)
 {
         struct dt_object *next = mdd_object_child(pobj);
-        int rc;
+        int               rc;
         ENTRY;
 
         if (dt_try_as_dir(env, next)) {
                 rc = next->do_index_ops->dio_insert(env, next,
                                                     __mdd_fid_rec(env, lf),
                                                     (const struct dt_key *)name,
-                                                    th, capa);
+                                                    handle, capa);
         } else {
                 rc = -ENOTDIR;
         }
@@ -407,7 +397,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
                     struct md_object *src_obj, const char *name,
                     struct md_attr *ma)
 {
-        struct lu_attr    *la_copy = &mdd_env_info(env)->mti_la_for_fix;
+        struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_tobj = md2mdd_obj(tgt_obj);
         struct mdd_object *mdd_sobj = md2mdd_obj(src_obj);
         struct mdd_device *mdd = mdo2mdd(src_obj);
@@ -437,22 +427,22 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
                 GOTO(out_unlock, rc);
         
         mdd_ref_add_internal(env, mdd_sobj, handle);
-
-        *la_copy = ma->ma_attr;
-        la_copy->la_valid = LA_CTIME;
-        rc = mdd_attr_set_internal(env, mdd_sobj, la_copy, handle, 0);
+       
+        *la = ma->ma_attr;
+        la->la_valid = LA_CTIME | LA_MTIME;
+        rc = mdd_attr_set_internal_locked(env, mdd_tobj, la, handle, 0);
         if (rc)
                 GOTO(out_unlock, rc);
 
-        la_copy->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_tobj, la_copy, handle, 0);
-
+        la->la_valid = LA_CTIME;
+        rc = mdd_attr_set_internal(env, mdd_sobj, la, handle, 0);
+        EXIT;
 out_unlock:
         mdd_write_unlock(env, mdd_sobj);
         mdd_pdo_write_unlock(env, mdd_tobj, dlh);
 out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
-        RETURN(rc);
+        return rc;
 }
 
 /* caller should take a lock before calling */
@@ -549,16 +539,16 @@ int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
         RETURN(rc);
 }
 
-static int mdd_unlink(const struct lu_env *env,
-                      struct md_object *pobj, struct md_object *cobj,
-                      const char *name, struct md_attr *ma)
+static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
+                      struct md_object *cobj, const char *name,
+                      struct md_attr *ma)
 {
-        struct mdd_device *mdd = mdo2mdd(pobj);
+        struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *mdd_cobj = md2mdd_obj(cobj);
-        struct lu_attr    *la_copy = &mdd_env_info(env)->mti_la_for_fix;
-        struct thandle    *handle;
+        struct mdd_device *mdd = mdo2mdd(pobj);
         struct dynlock_handle *dlh;
+        struct thandle    *handle;
         int rc, is_dir;
         ENTRY;
 
@@ -591,29 +581,31 @@ static int mdd_unlink(const struct lu_env *env,
                 mdd_ref_del_internal(env, mdd_cobj, handle);
         }
 
-        *la_copy = ma->ma_attr;
-        la_copy->la_valid = LA_CTIME;
-        rc = mdd_attr_set_internal(env, mdd_cobj, la_copy, handle, 0);
+        *la = ma->ma_attr;
+        la->la_valid = LA_CTIME | LA_MTIME;
+        rc = mdd_attr_set_internal_locked(env, mdd_pobj, la,
+                                          handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
-
-        la_copy->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_pobj, la_copy, handle, 0);
+                
+        la->la_valid = LA_CTIME;
+        rc = mdd_attr_set_internal(env, mdd_cobj, la, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
-
+        
         rc = mdd_finish_unlink(env, mdd_cobj, ma, handle);
 
         if (rc == 0)
                 obd_set_info_async(mdd2obd_dev(mdd)->u.mds.mds_osc_exp,
                                    strlen("unlinked"), "unlinked", 0,
                                    NULL, NULL);
+        EXIT;
 cleanup:
         mdd_write_unlock(env, mdd_cobj);
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
 out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
-        RETURN(rc);
+        return rc;
 }
 
 /*
@@ -625,38 +617,27 @@ static int mdd_ni_sanity_check(const struct lu_env *env,
                                const char *name,
                                const struct lu_fid *fid)
 {
-        struct mdd_object *obj       = md2mdd_obj(pobj);
-#if 0
-        int rc;
-#endif
+        struct mdd_object *obj = md2mdd_obj(pobj);
         ENTRY;
 
         /* EEXIST check */
         if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
 
-         /* The exist of the name will be checked in _index_insert. */
-#if 0
-        rc = __mdd_lookup(env, pobj, name, fid, MAY_WRITE | MAY_EXEC);
-        if (rc != -ENOENT)
-                RETURN(rc ? : -EEXIST);
-        else
-                RETURN(0);
-#endif
+        /* The exist of the name will be checked in _index_insert. */
         RETURN(mdd_permission_internal_locked(env, obj,
                                               MAY_WRITE | MAY_EXEC));
 }
 
-static int mdd_name_insert(const struct lu_env *env,
-                           struct md_object *pobj,
+static int mdd_name_insert(const struct lu_env *env, struct md_object *pobj,
                            const char *name, const struct lu_fid *fid,
-                           int isdir)
+                           int is_dir)
 {
-        struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
+        struct lu_attr   *la = &mdd_env_info(env)->mti_la;
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
         struct mdd_device *mdd = mdo2mdd(pobj);
-        struct thandle *handle;
         struct dynlock_handle *dlh;
+        struct thandle *handle;
         int rc;
         ENTRY;
 
@@ -672,14 +653,13 @@ static int mdd_name_insert(const struct lu_env *env,
         if (rc)
                 GOTO(out_unlock, rc);
 
-        rc = __mdd_index_insert(env, mdd_obj, fid, name, isdir, handle,
-                                BYPASS_CAPA);
-        if (rc == 0) {
-                la_copy->la_ctime = la_copy->la_mtime = CURRENT_SECONDS;
-                la_copy->la_valid = LA_CTIME | LA_MTIME;
-                rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy, handle, 0);
-        }
+        rc = __mdd_index_insert(env, mdd_obj, fid, name, is_dir,
+                                handle, BYPASS_CAPA);
 
+        la->la_ctime = la->la_atime = CURRENT_SECONDS;
+        la->la_valid = LA_ATIME | LA_CTIME;
+        rc = mdd_attr_set_internal_locked(env, mdd_obj, la,
+                                          handle, 0);
         EXIT;
 out_unlock:
         mdd_pdo_write_unlock(env, mdd_obj, dlh);
@@ -696,34 +676,29 @@ static int mdd_nr_sanity_check(const struct lu_env *env,
                                struct md_object *pobj,
                                const char *name)
 {
-        struct mdd_object *obj       = md2mdd_obj(pobj);
-#if 0
-        struct mdd_thread_info *info = mdd_env_info(env);
-        struct lu_fid     *fid       = &info->mti_fid;
+        struct mdd_object *obj = md2mdd_obj(pobj);
         int rc;
-#endif
         ENTRY;
 
         /* EEXIST check */
-        if (mdd_is_dead_obj(obj))
+        if (mdd_is_dead_obj(obj)) {
+                CWARN("Dir "DFID" is dead?\n", PFID(mdo2fid(obj)));
                 RETURN(-ENOENT);
+        }
 
-         /* The exist of the name will be checked in _index_delete. */
-#if 0
-        rc = __mdd_lookup(env, pobj, name, fid, MAY_WRITE | MAY_EXEC);
+        /* Name presense will be checked in _index_delete. */
+        rc = mdd_permission_internal_locked(env, obj,
+                                            MAY_WRITE | MAY_EXEC);
         RETURN(rc);
-#endif
-        RETURN(mdd_permission_internal_locked(env, obj,
-                                              MAY_WRITE | MAY_EXEC));
 }
 
 static int mdd_name_remove(const struct lu_env *env,
                            struct md_object *pobj,
                            const char *name, int is_dir)
 {
-        struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
-        struct mdd_device *mdd = mdo2mdd(pobj);
+        struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
+        struct mdd_device *mdd = mdo2mdd(pobj);
         struct dynlock_handle *dlh;
         struct thandle *handle;
         int rc;
@@ -741,14 +716,15 @@ static int mdd_name_remove(const struct lu_env *env,
         if (rc)
                 GOTO(out_unlock, rc);
 
-        rc = __mdd_index_delete(env, mdd_obj, name, is_dir, handle,
-                                BYPASS_CAPA);
-        if (rc == 0) {
-                la_copy->la_ctime = la_copy->la_mtime = CURRENT_SECONDS;
-                la_copy->la_valid = LA_CTIME | LA_MTIME;
-                rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy, handle, 0);
-        }
+        rc = __mdd_index_delete(env, mdd_obj, name, is_dir,
+                                handle, BYPASS_CAPA);
+        if (rc)
+                GOTO(out_unlock, rc);
 
+        la->la_ctime = la->la_mtime = CURRENT_SECONDS;
+        la->la_valid = LA_CTIME | LA_MTIME;
+        rc = mdd_attr_set_internal_locked(env, mdd_obj, la,
+                                          handle, 0);
         EXIT;
 out_unlock:
         mdd_pdo_write_unlock(env, mdd_obj, dlh);
@@ -788,12 +764,12 @@ static int mdd_rename_tgt(const struct lu_env *env,
                           const struct lu_fid *lf, const char *name,
                           struct md_attr *ma)
 {
-        struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
-        struct mdd_device *mdd = mdo2mdd(pobj);
+        struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_tpobj = md2mdd_obj(pobj);
         struct mdd_object *mdd_tobj = md2mdd_obj(tobj);
-        struct thandle *handle;
+        struct mdd_device *mdd = mdo2mdd(pobj);
         struct dynlock_handle *dlh;
+        struct thandle *handle;
         int rc;
         ENTRY;
 
@@ -808,13 +784,15 @@ static int mdd_rename_tgt(const struct lu_env *env,
         if (mdd_tobj)
                 mdd_write_lock(env, mdd_tobj);
 
-        /*TODO rename sanity checking*/
+        /* XXX: Rename sanity checking. */
         rc = mdd_rt_sanity_check(env, mdd_tpobj, mdd_tobj, lf, name, ma);
         if (rc)
                 GOTO(cleanup, rc);
 
-        /* if rename_tgt is called then we should just re-insert name with
-         * correct fid, no need to dec/inc parent nlink if obj is dir */
+        /*
+         * If rename_tgt is called then we should just re-insert name with
+         * correct fid, no need to dec/inc parent nlink if obj is dir.
+         */
         rc = __mdd_index_delete(env, mdd_tpobj, name, 0, handle, BYPASS_CAPA);
         if (rc)
                 GOTO(cleanup, rc);
@@ -824,47 +802,40 @@ static int mdd_rename_tgt(const struct lu_env *env,
         if (rc)
                 GOTO(cleanup, rc);
 
-        *la_copy = ma->ma_attr;
-        la_copy->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_tpobj, la_copy, handle, 0);
+        *la = ma->ma_attr;
+        la->la_valid = LA_CTIME | LA_MTIME;
+        rc = mdd_attr_set_internal_locked(env, mdd_tpobj, la, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
         if (tobj && lu_object_exists(&tobj->mo_lu)) {
                 mdd_ref_del_internal(env, mdd_tobj, handle);
-                la_copy->la_valid = LA_CTIME;
-                rc = mdd_attr_set_internal(env, mdd_tobj, la_copy, handle, 0);
+                la->la_valid = LA_CTIME;
+                rc = mdd_attr_set_internal(env, mdd_tobj, la, handle, 0);
         }
+        EXIT;
 cleanup:
         if (tobj)
                 mdd_write_unlock(env, mdd_tobj);
         mdd_pdo_write_unlock(env, mdd_tpobj, dlh);
 out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
-        RETURN(rc);
+        return rc;
 }
 
 /*
- * The permission has been checked when obj created,
- * no need check again.
+ * The permission has been checked when obj created, no need check again.
  */
 static int mdd_cd_sanity_check(const struct lu_env *env,
                                struct mdd_object *obj)
 {
-        int rc = 0;
         ENTRY;
 
         /* EEXIST check */
         if (!obj || mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
 
-#if 0
-        mdd_read_lock(env, obj);
-        rc = mdd_permission_internal(env, obj, MAY_WRITE);
-        mdd_read_unlock(env, obj);
-#endif
-
-        RETURN(rc);
+        RETURN(0);
 
 }
 
@@ -902,6 +873,7 @@ static int mdd_create_data(const struct lu_env *env,
 
         /*
          * XXX: Setting the lov ea is not locked but setting the attr is locked?
+         * Should this be fixed?
          */
 
         /* Replay creates has objects already */
@@ -929,10 +901,10 @@ static int
 __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
              const char *name, struct lu_fid* fid, int mask)
 {
+        const struct dt_key *key = (const struct dt_key *)name;
         struct mdd_object   *mdd_obj = md2mdd_obj(pobj);
         struct dt_object    *dir = mdd_object_child(mdd_obj);
         struct dt_rec       *rec = (struct dt_rec *)fid;
-        const struct dt_key *key = (const struct dt_key *)name;
         struct timeval       start;
         int rc;
         ENTRY;
@@ -950,11 +922,6 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                 LBUG();
         }
 
-#if 0
-        if (mask == MAY_EXEC)
-                rc = mdd_exec_permission_lite(env, mdd_obj);
-        else
-#endif
         rc = mdd_permission_internal_locked(env, mdd_obj, mask);
         if (rc)
                 RETURN(rc);
@@ -978,7 +945,9 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
         int rc;
         ENTRY;
 
-        /* update attributes for child.
+        /*
+         * Update attributes for child.
+         *  
          * FIXME:
          *  (1) the valid bits should be converted between Lustre and Linux;
          *  (2) maybe, the child attributes should be set in OSD when creation.
@@ -989,7 +958,7 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
                 RETURN(rc);
 
         if (S_ISDIR(ma->ma_attr.la_mode)) {
-                /* add . and .. for newly created dir */
+                /* Add "." and ".." for newly created dir */
                 mdd_ref_add_internal(env, child, handle);
                 rc = __mdd_index_insert_only(env, child, mdo2fid(child),
                                              dot, handle, BYPASS_CAPA);
@@ -1015,7 +984,8 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
 
 static int mdd_create_sanity_check(const struct lu_env *env,
                                    struct md_object *pobj,
-                                   const char *name, struct md_attr *ma)
+                                   const char *name,
+                                   struct md_attr *ma)
 {
         struct mdd_thread_info *info = mdd_env_info(env);
         struct lu_attr    *la        = &info->mti_la;
@@ -1079,10 +1049,10 @@ static int mdd_create(const struct lu_env *env,
                       struct md_create_spec *spec,
                       struct md_attr* ma)
 {
-        struct mdd_device *mdd = mdo2mdd(pobj);
+        struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *son = md2mdd_obj(child);
-        struct lu_attr    *la_copy = &mdd_env_info(env)->mti_la_for_fix;
+        struct mdd_device *mdd = mdo2mdd(pobj);
         struct lu_attr    *attr = &ma->ma_attr;
         struct lov_mds_md *lmm = NULL;
         struct thandle    *handle;
@@ -1092,6 +1062,7 @@ static int mdd_create(const struct lu_env *env,
         ENTRY;
 
         mdd_lproc_time_start(mdd, &start, LPROC_MDD_CREATE);
+        
         /*
          * Two operations have to be performed:
          *
@@ -1133,8 +1104,10 @@ static int mdd_create(const struct lu_env *env,
         if (rc)
                 RETURN(rc);
 
-        /* no RPC inside the transaction, so OST objects should be created at
-         * first */
+        /*
+         * No RPC inside the transaction, so OST objects should be created at
+         * first.
+         */
         if (S_ISREG(attr->la_mode)) {
                 rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size,
                                     spec, attr);
@@ -1152,7 +1125,7 @@ static int mdd_create(const struct lu_env *env,
                 GOTO(out_trans, rc = -ENOMEM);
 
         /*
-         * XXX check that link can be added to the parent in mkdir case.
+         * XXX: Check that link can be added to the parent in mkdir case.
          */
 
         mdd_write_lock(env, son);
@@ -1194,7 +1167,8 @@ static int mdd_create(const struct lu_env *env,
                 GOTO(cleanup, rc);
 
         inserted = 1;
-        /* replay creates has objects already */
+        
+        /* Replay creates has objects already. */
         if (spec->u.sp_ea.no_lov_create) {
                 CDEBUG(D_INFO, "we already have lov ea\n");
                 LASSERT(lmm == NULL);
@@ -1207,7 +1181,7 @@ static int mdd_create(const struct lu_env *env,
                 GOTO(cleanup, rc);
         }
         if (lmm && lmm_size > 0) {
-                /* set Lov here, do not get lmm again later */
+                /* Set Lov here, do not get lmm again later */
                 memcpy(ma->ma_lmm, lmm, lmm_size);
                 ma->ma_lmm_size = lmm_size;
                 ma->ma_valid |= MA_LOV;
@@ -1229,14 +1203,15 @@ static int mdd_create(const struct lu_env *env,
                         rc = -EFAULT;
         }
 
-        *la_copy = ma->ma_attr;
-        la_copy->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_pobj, la_copy, handle, 0);
+        *la = ma->ma_attr;
+        la->la_valid = LA_CTIME | LA_MTIME;
+        rc = mdd_attr_set_internal_locked(env, mdd_pobj, la, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
-        /* return attr back */
+        /* Return attr back. */
         rc = mdd_attr_get_internal_locked(env, son, ma);
+        EXIT;
 cleanup:
         if (rc && created) {
                 int rc2 = 0;
@@ -1255,7 +1230,8 @@ cleanup:
                         mdd_write_unlock(env, son);
                 }
         }
-        /* finish mdd_lov_create() stuff */
+        
+        /* Finish mdd_lov_create() stuff */
         mdd_lov_create_finish(env, mdd, rc);
         if (lmm && !spec->u.sp_ea.no_lov_create)
                 OBD_FREE(lmm, lmm_size);
@@ -1263,7 +1239,7 @@ cleanup:
 out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
         mdd_lproc_time_end(mdd, &start, LPROC_MDD_CREATE);
-        RETURN(rc);
+        return rc;
 }
 
 /*
@@ -1349,12 +1325,12 @@ static int mdd_rename(const struct lu_env *env,
                       struct md_object *tobj, const char *tname,
                       struct md_attr *ma)
 {
-        struct mdd_device *mdd = mdo2mdd(src_pobj);
+        struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_spobj = md2mdd_obj(src_pobj);
         struct mdd_object *mdd_tpobj = md2mdd_obj(tgt_pobj);
+        struct mdd_device *mdd = mdo2mdd(src_pobj);
         struct mdd_object *mdd_sobj = NULL;
         struct mdd_object *mdd_tobj = NULL;
-        struct lu_attr    *la_copy = &mdd_env_info(env)->mti_la_for_fix;
         struct dynlock_handle *sdlh, *tdlh;
         struct thandle *handle;
         int is_dir;
@@ -1380,7 +1356,7 @@ static int mdd_rename(const struct lu_env *env,
         if (rc < 0)
                 GOTO(cleanup_unlocked, rc);
 
-        /* get locks in determined order */
+        /* Get locks in determined order */
         if (rc == MDD_RN_SAME) {
                 sdlh = mdd_pdo_write_lock(env, mdd_spobj, sname);
                 /* check hashes to determine do we need one lock or two */
@@ -1422,12 +1398,13 @@ static int mdd_rename(const struct lu_env *env,
         if (rc)
                 GOTO(cleanup, rc);
 
-        *la_copy = ma->ma_attr;
+        *la = ma->ma_attr;
         mdd_sobj = mdd_object_find(env, mdd, lf);
         if (mdd_sobj) {
-                la_copy->la_valid = LA_CTIME;
-                /*XXX: how to update ctime for remote sobj? */
-                rc = mdd_attr_set_internal_locked(env, mdd_sobj, la_copy,
+                la->la_valid = LA_CTIME;
+                
+                /* XXX: How to update ctime for remote sobj? */
+                rc = mdd_attr_set_internal_locked(env, mdd_sobj, la,
                                                   handle, 1);
                 if (rc)
                         GOTO(cleanup, rc);
@@ -1435,12 +1412,13 @@ static int mdd_rename(const struct lu_env *env,
         if (tobj && lu_object_exists(&tobj->mo_lu)) {
                 mdd_write_lock(env, mdd_tobj);
                 mdd_ref_del_internal(env, mdd_tobj, handle);
-                /* remove dot reference */
+                
+                /* Remove dot reference. */
                 if (is_dir)
                         mdd_ref_del_internal(env, mdd_tobj, handle);
 
-                la_copy->la_valid = LA_CTIME;
-                rc = mdd_attr_set_internal(env, mdd_tobj, la_copy, handle, 0);
+                la->la_valid = LA_CTIME;
+                rc = mdd_attr_set_internal(env, mdd_tobj, la, handle, 0);
                 if (rc)
                         GOTO(cleanup, rc);
 
@@ -1450,17 +1428,18 @@ static int mdd_rename(const struct lu_env *env,
                         GOTO(cleanup, rc);
         }
 
-        la_copy->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_spobj, la_copy, handle, 0);
+        la->la_valid = LA_CTIME | LA_MTIME;
+        rc = mdd_attr_set_internal_locked(env, mdd_spobj, la, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
 
         if (mdd_spobj != mdd_tpobj) {
-                la_copy->la_valid = LA_CTIME | LA_MTIME;
-                rc = mdd_attr_set_internal_locked(env, mdd_tpobj, la_copy,
+                la->la_valid = LA_CTIME | LA_MTIME;
+                rc = mdd_attr_set_internal_locked(env, mdd_tpobj, la,
                                                   handle, 0);
         }
 
+        EXIT;
 cleanup:
         if (likely(tdlh) && sdlh != tdlh)
                 mdd_pdo_write_unlock(env, mdd_tpobj, tdlh);
@@ -1470,7 +1449,7 @@ cleanup_unlocked:
         mdd_trans_stop(env, mdd, rc, handle);
         if (mdd_sobj)
                 mdd_object_put(env, mdd_sobj);
-        RETURN(rc);
+        return rc;
 }
 
 struct md_dir_operations mdd_dir_ops = {

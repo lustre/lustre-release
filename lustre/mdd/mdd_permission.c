@@ -443,48 +443,6 @@ int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
 }
 #endif
 
-#if 0
-static int mdd_exec_permission_lite(const struct lu_env *env,
-                                    struct mdd_object *obj)
-{
-        struct lu_attr  *la = &mdd_env_info(env)->mti_la;
-        struct md_ucred *uc = md_ucred(env);
-        umode_t mode;
-        int rc;
-        ENTRY;
-
-        /* These means unnecessary for permission check */
-        if ((uc == NULL) || (uc->mu_valid == UCRED_INIT))
-                RETURN(0);
-
-        /* Invalid user credit */
-        if (uc->mu_valid == UCRED_INVALID)
-                RETURN(-EACCES);
-
-        rc = __mdd_la_get(env, obj, la, BYPASS_CAPA);
-        if (rc)
-                RETURN(rc);
-
-        mode = la->la_mode;
-        if (uc->mu_fsuid == la->la_uid)
-                mode >>= 6;
-        else if (mdd_in_group_p(uc, la->la_gid))
-                mode >>= 3;
-
-        if (mode & MAY_EXEC)
-                RETURN(0);
-
-        if (((la->la_mode & S_IXUGO) || S_ISDIR(la->la_mode)) &&
-            mdd_capable(uc, CAP_DAC_OVERRIDE))
-                RETURN(0);
-
-        if (S_ISDIR(la->la_mode) && mdd_capable(uc, CAP_DAC_READ_SEARCH))
-                RETURN(0);
-
-        RETURN(-EACCES);
-}
-#endif
-
 static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
                          struct lu_attr* la, int mask)
 {

@@ -1006,6 +1006,7 @@ static int mdd_object_create(const struct lu_env *env,
 
                 CDEBUG(D_INFO, "Set slave ea "DFID", eadatalen %d, rc %d\n",
                        PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
+                
                 rc = mdd_attr_set_internal(env, mdd_obj, &ma->ma_attr, handle, 0);
         } else {
 #ifdef CONFIG_FS_POSIX_ACL
@@ -1038,7 +1039,7 @@ unlock:
 }
 
 /*
- * XXX: if permission check is needed here?
+ * XXX: Do we need permission checks here?
  */
 static int mdd_ref_add(const struct lu_env *env,
                        struct md_object *obj)
@@ -1064,7 +1065,6 @@ static int mdd_ref_add(const struct lu_env *env,
                 rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 0);
         }
         mdd_write_unlock(env, mdd_obj);
-
         mdd_trans_stop(env, mdd, 0, handle);
 
         RETURN(rc);

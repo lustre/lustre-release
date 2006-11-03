@@ -874,16 +874,15 @@ static int cmr_link(const struct lu_env *env, struct md_object *mo_p,
                     struct md_object *mo_s, const char *name,
                     struct md_attr *ma)
 {
-        struct cmm_thread_info *cmi;
         int rc;
         ENTRY;
         
-        cmi = cmm_env_info(env);
-        /* make sure that name isn't exist before doing remote call */
-        rc = mdo_lookup(env, md_object_next(mo_p), name, &cmi->cmi_fid);
-        if (rc == 0)
+        /* Make sure that name isn't exist before doing remote call. */
+        rc = mdo_lookup(env, md_object_next(mo_p), name,
+                        &cmm_env_info(env)->cmi_fid);
+        if (rc == 0) {
                 rc = -EEXIST;
-        else if (rc == -ENOENT) {
+        } else if (rc == -ENOENT) {
                 rc = mo_ref_add(env, md_object_next(mo_s));
                 if (rc == 0) {
                         rc = mdo_name_insert(env, md_object_next(mo_p), name,
