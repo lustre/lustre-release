@@ -86,6 +86,8 @@ struct osd_object {
         struct rw_semaphore    oo_sem;
         struct iam_container   oo_container;
         struct iam_descr       oo_descr;
+        /* protects inode attributes */
+        spinlock_t             oo_guard;
         const struct lu_env   *oo_owner;
 };
 
@@ -153,9 +155,9 @@ static int   osd_device_init   (const struct lu_env *env,
 static int   osd_fid_lookup    (const struct lu_env *env,
                                 struct osd_object *obj,
                                 const struct lu_fid *fid);
-static int   osd_inode_getattr (const struct lu_env *env,
+static void  osd_inode_getattr (const struct lu_env *env,
                                 struct inode *inode, struct lu_attr *attr);
-static int   osd_inode_setattr (const struct lu_env *env,
+static void  osd_inode_setattr (const struct lu_env *env,
                                 struct inode *inode, const struct lu_attr *attr);
 static int   osd_param_is_sane (const struct osd_device *dev,
                                 const struct txn_param *param);
@@ -335,6 +337,7 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
                 mo->oo_dt.do_ops = &osd_obj_ops;
                 l->lo_ops = &osd_lu_obj_ops;
                 init_rwsem(&mo->oo_sem);
+                spin_lock_init(&mo->oo_guard);
                 return l;
         } else
                 return NULL;
@@ -923,12 +926,14 @@ static int osd_attr_get(const struct lu_env *env,
 
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
-        LASSERT(osd_read_locked(env, obj) || osd_write_locked(env, obj));
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_READ))
                 return -EACCES;
 
-        return osd_inode_getattr(env, obj->oo_inode, attr);
+        spin_lock(&obj->oo_guard);
+        osd_inode_getattr(env, obj->oo_inode, attr);
+        spin_unlock(&obj->oo_guard);
+        return 0;
 }
 
 static int osd_attr_set(const struct lu_env *env,
@@ -942,12 +947,16 @@ static int osd_attr_set(const struct lu_env *env,
         LASSERT(handle != NULL);
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
-        LASSERT(osd_write_locked(env, obj));
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
-        return osd_inode_setattr(env, obj->oo_inode, attr);
+        spin_lock(&obj->oo_guard);
+        osd_inode_setattr(env, obj->oo_inode, attr);
+        spin_unlock(&obj->oo_guard);
+
+        mark_inode_dirty(obj->oo_inode);
+        return 0;
 }
 
 static struct timespec *osd_inode_time(const struct lu_env *env,
@@ -962,8 +971,8 @@ static struct timespec *osd_inode_time(const struct lu_env *env,
         return t;
 }
 
-static int osd_inode_setattr(const struct lu_env *env,
-                             struct inode *inode, const struct lu_attr *attr)
+static void osd_inode_setattr(const struct lu_env *env,
+                              struct inode *inode, const struct lu_attr *attr)
 {
         __u64 bits;
 
@@ -1001,8 +1010,6 @@ static int osd_inode_setattr(const struct lu_env *env,
                 li->i_flags = (li->i_flags & ~LDISKFS_FL_USER_MODIFIABLE) |
                         (attr->la_flags & LDISKFS_FL_USER_MODIFIABLE);
         }
-        mark_inode_dirty(inode);
-        return 0;
 }
 
 /*
@@ -1219,12 +1226,16 @@ static void osd_object_ref_add(const struct lu_env *env,
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
 
+        spin_lock(&obj->oo_guard);
         if (inode->i_nlink < LDISKFS_LINK_MAX) {
                 inode->i_nlink ++;
+                spin_unlock(&obj->oo_guard);
                 mark_inode_dirty(inode);
-        } else
+        } else {
+                spin_unlock(&obj->oo_guard);
                 LU_OBJECT_DEBUG(D_ERROR, env, &dt->do_lu,
                                 "Overflowed nlink\n");
+        }
         LASSERT(osd_invariant(obj));
 }
 
@@ -1243,12 +1254,16 @@ static void osd_object_ref_del(const struct lu_env *env,
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
 
+        spin_lock(&obj->oo_guard);
         if (inode->i_nlink > 0) {
                 inode->i_nlink --;
+                spin_unlock(&obj->oo_guard);
                 mark_inode_dirty(inode);
-        } else
+        } else {
+                spin_unlock(&obj->oo_guard);
                 LU_OBJECT_DEBUG(D_ERROR, env, &dt->do_lu,
                                 "Underflowed nlink\n");
+        }
         LASSERT(osd_invariant(obj));
 }
 
@@ -2276,8 +2291,8 @@ static int osd_fid_lookup(const struct lu_env *env,
         RETURN(result);
 }
 
-static int osd_inode_getattr(const struct lu_env *env,
-                             struct inode *inode, struct lu_attr *attr)
+static void osd_inode_getattr(const struct lu_env *env,
+                              struct inode *inode, struct lu_attr *attr)
 {
         attr->la_valid      |= LA_ATIME | LA_MTIME | LA_CTIME | LA_MODE |
                                LA_SIZE | LA_BLOCKS | LA_UID | LA_GID |
@@ -2295,7 +2310,6 @@ static int osd_inode_getattr(const struct lu_env *env,
         attr->la_nlink      = inode->i_nlink;
         attr->la_rdev       = inode->i_rdev;
         attr->la_blksize    = inode->i_blksize;
-        return 0;
 }
 
 /*

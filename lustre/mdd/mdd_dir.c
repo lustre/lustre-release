@@ -355,7 +355,7 @@ static int __mdd_index_delete(const struct lu_env *env, struct mdd_object *pobj,
 
         mdd_lproc_time_start(mdo2mdd(&pobj->mod_obj), &start,
                              LPROC_MDD_INDEX_DELETE);
-        
+
         if (dt_try_as_dir(env, next)) {
                 rc = next->do_index_ops->dio_delete(env, next,
                                                     (struct dt_key *)name,
@@ -425,9 +425,9 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
                                      mdd_object_capa(env, mdd_tobj));
         if (rc)
                 GOTO(out_unlock, rc);
-        
+
         mdd_ref_add_internal(env, mdd_sobj, handle);
-       
+
         *la = ma->ma_attr;
         la->la_valid = LA_CTIME | LA_MTIME;
         rc = mdd_attr_set_internal_locked(env, mdd_tobj, la, handle, 0);
@@ -583,16 +583,15 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 
         *la = ma->ma_attr;
         la->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_pobj, la,
-                                          handle, 0);
+        rc = mdd_attr_set_internal_locked(env, mdd_pobj, la, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
-                
+
         la->la_valid = LA_CTIME;
         rc = mdd_attr_set_internal(env, mdd_cobj, la, handle, 0);
         if (rc)
                 GOTO(cleanup, rc);
-        
+
         rc = mdd_finish_unlink(env, mdd_cobj, ma, handle);
 
         if (rc == 0)
@@ -658,8 +657,7 @@ static int mdd_name_insert(const struct lu_env *env, struct md_object *pobj,
 
         la->la_ctime = la->la_atime = CURRENT_SECONDS;
         la->la_valid = LA_ATIME | LA_CTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_obj, la,
-                                          handle, 0);
+        rc = mdd_attr_set_internal_locked(env, mdd_obj, la, handle, 0);
         EXIT;
 out_unlock:
         mdd_pdo_write_unlock(env, mdd_obj, dlh);
@@ -723,8 +721,7 @@ static int mdd_name_remove(const struct lu_env *env,
 
         la->la_ctime = la->la_mtime = CURRENT_SECONDS;
         la->la_valid = LA_CTIME | LA_MTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_obj, la,
-                                          handle, 0);
+        rc = mdd_attr_set_internal_locked(env, mdd_obj, la, handle, 0);
         EXIT;
 out_unlock:
         mdd_pdo_write_unlock(env, mdd_obj, dlh);
@@ -947,7 +944,7 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
 
         /*
          * Update attributes for child.
-         *  
+         *
          * FIXME:
          *  (1) the valid bits should be converted between Lustre and Linux;
          *  (2) maybe, the child attributes should be set in OSD when creation.
@@ -1062,7 +1059,7 @@ static int mdd_create(const struct lu_env *env,
         ENTRY;
 
         mdd_lproc_time_start(mdd, &start, LPROC_MDD_CREATE);
-        
+
         /*
          * Two operations have to be performed:
          *
@@ -1167,7 +1164,7 @@ static int mdd_create(const struct lu_env *env,
                 GOTO(cleanup, rc);
 
         inserted = 1;
-        
+
         /* Replay creates has objects already. */
         if (spec->u.sp_ea.no_lov_create) {
                 CDEBUG(D_INFO, "we already have lov ea\n");
@@ -1230,7 +1227,7 @@ cleanup:
                         mdd_write_unlock(env, son);
                 }
         }
-        
+
         /* Finish mdd_lov_create() stuff */
         mdd_lov_create_finish(env, mdd, rc);
         if (lmm && !spec->u.sp_ea.no_lov_create)
@@ -1402,17 +1399,16 @@ static int mdd_rename(const struct lu_env *env,
         mdd_sobj = mdd_object_find(env, mdd, lf);
         if (mdd_sobj) {
                 la->la_valid = LA_CTIME;
-                
+
                 /* XXX: How to update ctime for remote sobj? */
-                rc = mdd_attr_set_internal_locked(env, mdd_sobj, la,
-                                                  handle, 1);
+                rc = mdd_attr_set_internal_locked(env, mdd_sobj, la, handle, 1);
                 if (rc)
                         GOTO(cleanup, rc);
         }
         if (tobj && lu_object_exists(&tobj->mo_lu)) {
                 mdd_write_lock(env, mdd_tobj);
                 mdd_ref_del_internal(env, mdd_tobj, handle);
-                
+
                 /* Remove dot reference. */
                 if (is_dir)
                         mdd_ref_del_internal(env, mdd_tobj, handle);

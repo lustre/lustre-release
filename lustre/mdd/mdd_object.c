@@ -315,7 +315,7 @@ static int __mdd_lmv_get(const struct lu_env *env,
 
         if (ma->ma_valid & MA_LMV)
                 RETURN(0);
-        
+
         rc = mdd_get_md(env, mdd_obj, ma->ma_lmv, &ma->ma_lmv_size,
                         MDS_LMV_MD_NAME);
         if (rc > 0) {
@@ -491,9 +491,16 @@ int mdd_attr_set_internal_locked(const struct lu_env *env,
                                  struct thandle *handle, int needacl)
 {
         int rc;
-        mdd_write_lock(env, o);
+
+        needacl = needacl && (attr->la_valid & LA_MODE);
+
+        if (needacl)
+                mdd_write_lock(env, o);
+
         rc = mdd_attr_set_internal(env, o, attr, handle, needacl);
-        mdd_write_unlock(env, o);
+
+        if (needacl)
+                mdd_write_unlock(env, o);
         return rc;
 }
 
@@ -878,12 +885,12 @@ int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
 
         mdd_write_lock(env, mdd_obj);
         rc = __mdd_xattr_del(env, mdd, md2mdd_obj(obj), name, handle);
+        mdd_write_unlock(env, mdd_obj);
         if (rc == 0) {
                 la_copy->la_ctime = CURRENT_SECONDS;
                 la_copy->la_valid = LA_CTIME;
                 rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 0);
         }
-        mdd_write_unlock(env, mdd_obj);
 
         mdd_trans_stop(env, mdd, rc, handle);
 
@@ -1006,7 +1013,7 @@ static int mdd_object_create(const struct lu_env *env,
 
                 CDEBUG(D_INFO, "Set slave ea "DFID", eadatalen %d, rc %d\n",
                        PFID(mdo2fid(mdd_obj)), spec->u.sp_ea.eadatalen, rc);
-                
+
                 rc = mdd_attr_set_internal(env, mdd_obj, &ma->ma_attr, handle, 0);
         } else {
 #ifdef CONFIG_FS_POSIX_ACL
@@ -1058,13 +1065,14 @@ static int mdd_ref_add(const struct lu_env *env,
 
         mdd_write_lock(env, mdd_obj);
         rc = mdd_link_sanity_check(env, NULL, mdd_obj);
-        if (rc == 0) {
+        if (rc == 0)
                 mdd_ref_add_internal(env, mdd_obj, handle);
+        mdd_write_unlock(env, mdd_obj);
+        if (rc == 0) {
                 la_copy->la_ctime = CURRENT_SECONDS;
                 la_copy->la_valid = LA_CTIME;
                 rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 0);
         }
-        mdd_write_unlock(env, mdd_obj);
         mdd_trans_stop(env, mdd, 0, handle);
 
         RETURN(rc);
@@ -1269,7 +1277,7 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
                 recsize = (sizeof(*ent) + len + 3) & ~3;
                 hash = iops->store(env, it);
                 *end = hash;
-                
+
                 CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
                        name, ent, nob, PFID(fid2), hash, len, len, len, name);
 
