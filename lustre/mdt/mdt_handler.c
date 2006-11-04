@@ -1259,16 +1259,21 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
         struct mdt_device       *mdt = info->mti_mdt;
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_body         *repbody;
+        int                      has_md = 0, has_cookie = 0;
         int                      rc;
         ENTRY;
 
         /* pack reply */
-        if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
+        if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER)) {
                 req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
                                      mdt->mdt_max_mdsize);
-        if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER))
+                has_md = 1;
+        }
+        if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER)) {
                 req_capsule_set_size(pill, &RMF_LOGCOOKIES, RCL_SERVER,
                                      mdt->mdt_max_cookiesize);
+                has_cookie = 1;
+        }
         rc = req_capsule_pack(pill);
         if (rc != 0) {
                 CERROR("Can't pack response, rc %d\n", rc);
@@ -1282,27 +1287,22 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 repbody->aclsize = 0;
         }
 
-        /*
-         * Check this after packing response, because after we fail here without
-         * allocating response, caller anyway may want to get ldlm_reply from it
-         * and will get oops.
-         */
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNPACK))
-                RETURN(err_serious(-EFAULT));
+                GOTO(out_shrink, rc = err_serious(-EFAULT));
 
         rc = mdt_reint_unpack(info, op);
         if (rc != 0) {
                 CERROR("Can't unpack reint, rc %d\n", rc);
-                RETURN(err_serious(rc));
+                GOTO(out_shrink, rc = err_serious(rc));
         }
 
         rc = mdt_init_ucred_reint(info);
         if (rc)
-                RETURN(rc);
+                GOTO(out_shrink, rc = err_serious(rc));
 
         rc = mdt_fix_attr_ucred(info, op);
         if (rc != 0)
-                GOTO(out, rc);
+                GOTO(out_shrink, rc = err_serious(rc));
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
                 struct mdt_client_data *mcd;
@@ -1316,10 +1316,19 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 DEBUG_REQ(D_HA, req, "no reply for RESENT (xid "LPD64")",
                           mcd->mcd_last_xid);
         }
+        
         rc = mdt_reint_rec(info, lhc);
 out:
         mdt_exit_ucred(info);
         RETURN(rc);
+out_shrink:
+        if (has_md || has_cookie) {
+                if (info->mti_pill.rc_fmt == &RQF_LDLM_INTENT_OPEN)
+                        mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 0, 0);
+                else
+                        mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
+        }
+        goto out;
 }
 
 static long mdt_reint_opcode(struct mdt_thread_info *info,
@@ -2554,7 +2563,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
                             int flags)
 {
         struct mdt_lock_handle *lhc = &info->mti_lh[MDT_LH_RMT];
-        struct ldlm_reply      *rep;
+        struct ldlm_reply      *rep = NULL;
         long                    opc;
         int                     rc;
 
@@ -2579,8 +2588,10 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         mdt_intent_fixup_resent(&info->mti_pill, *lockp, NULL, lhc);
 
         rc = mdt_reint_internal(info, lhc, opc);
-
-        rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
+        
+        /* Check whether the reply has been packed successfully. */
+        if (mdt_info_req(info)->rq_repmsg != NULL)
+                rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         if (rep == NULL)
                 RETURN(err_serious(-EFAULT));
 
@@ -3435,6 +3446,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         mdt_seq_fini(env, m);
         mdt_seq_fini_cli(m);
         mdt_fld_fini(env, m);
+        ptlrpc_lprocfs_unregister_obd(d->ld_obd);
         lprocfs_obd_cleanup(d->ld_obd);
 
         if (m->mdt_rootsquash_info) {
