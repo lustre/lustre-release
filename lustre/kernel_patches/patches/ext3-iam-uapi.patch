@@ -100,7 +100,7 @@ Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
 --- iam.orig/fs/ext3/iam-uapi.c
 +++ iam/fs/ext3/iam-uapi.c
-@@ -0,0 +1,368 @@
+@@ -0,0 +1,367 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -243,8 +243,7 @@ Index: iam/fs/ext3/iam-uapi.c
 +        iam_it_put(&info->ipi_it);
 +        iam_it_fini(&info->ipi_it);
 +        if (info->ipi_ipd != NULL)
-+                info->ipi_bag.ic_descr->id_ops->id_ipd_free(&info->ipi_bag,
-+                                                            info->ipi_ipd);
++                info->ipi_bag.ic_descr->id_ops->id_ipd_free(info->ipi_ipd);
 +        iam_container_fini(&info->ipi_bag);
 +}
 +

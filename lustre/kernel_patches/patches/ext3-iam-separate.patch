@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1407 @@
+@@ -0,0 +1,1402 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1110,11 +1110,6 @@ Index: iam/fs/ext3/iam.c
 +                                assert_corr(lh != NULL);
 +                                do_corr(schedule());
 +                                err = iam_new_leaf(handle, leaf);
-+                                /*
-+                                 * refresh @leaf, as split may retarget path
-+                                 * to the new leaf node.
-+                                 */
-+                                leaf = &path->ip_leaf;
 +                                if (err == 0)
 +                                        err = iam_txn_dirty(handle, path,
 +                                                            path->ip_frame->bh);
@@ -1427,7 +1422,7 @@ Index: iam/fs/ext3/iam_htree.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_htree.c
 +++ iam/fs/ext3/iam_htree.c
-@@ -0,0 +1,683 @@
+@@ -0,0 +1,682 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2044,8 +2039,7 @@ Index: iam/fs/ext3/iam_htree.c
 +		return NULL;
 +}
 +
-+static void iam_htree_ipd_free(const struct iam_container *c,
-+			   struct iam_path_descr *ipd)
++static void iam_htree_ipd_free(struct iam_path_descr *ipd)
 +{
 +	struct iam_path_compat *ipc;
 +
@@ -2115,7 +2109,7 @@ Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c
 +++ iam/fs/ext3/iam_lfix.c
-@@ -0,0 +1,682 @@
+@@ -0,0 +1,676 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2700,12 +2694,6 @@ Index: iam/fs/ext3/iam_lfix.c
 +        return iam_ipd_alloc(c->ic_descr->id_ikey_size);
 +}
 +
-+static void iam_lfix_ipd_free(const struct iam_container *c,
-+                              struct iam_path_descr *ipd)
-+{
-+        iam_ipd_free(ipd);
-+}
-+
 +static struct iam_operations iam_lfix_ops = {
 +        .id_root_ptr    = iam_lfix_root_ptr,
 +        .id_node_read   = iam_node_read,
@@ -2715,7 +2703,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +        .id_ikeycmp     = iam_lfix_ikeycmp,
 +        .id_root_inc    = iam_lfix_root_inc,
 +        .id_ipd_alloc   = iam_lfix_ipd_alloc,
-+        .id_ipd_free    = iam_lfix_ipd_free,
++        .id_ipd_free    = iam_ipd_free,
 +        .id_name        = "lfix"
 +};
 +
@@ -2802,7 +2790,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,1006 @@
+@@ -0,0 +1,1011 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2974,8 +2962,8 @@ Index: iam/fs/ext3/iam_lvar.c
 +        return ((void *)ent) + e_size(leaf, ent);
 +}
 +
-+#define LVAR_HASH_TEA    (1)
-+#define LVAR_HASH_R5     (0)
++#define LVAR_HASH_TEA    (0)
++#define LVAR_HASH_R5     (1)
 +#define LVAR_HASH_PREFIX (0)
 +
 +static inline lvar_hash_t get_hash(const struct iam_container *bag,
@@ -3079,21 +3067,32 @@ Index: iam/fs/ext3/iam_lvar.c
 +#if EXT3_INVARIANT_ON
 +static int n_invariant(const struct iam_leaf *leaf)
 +{
++        struct iam_path        *path;
 +        struct lvar_leaf_entry *scan;
 +        struct lvar_leaf_entry *end;
 +        lvar_hash_t             hash;
 +        lvar_hash_t             nexthash;
++        lvar_hash_t             starthash;
 +
-+        end = n_end(leaf);
++        end  = n_end(leaf);
 +        hash = 0;
++        path = leaf->il_path;
 +
 +        if (h_used(n_head(leaf)) > blocksize(leaf))
 +                return 0;
 +
++        starthash = *(lvar_hash_t *)iam_ikey_at(path, path->ip_frame->at);
 +        for (scan = n_start(leaf); scan < end; scan = e_next(leaf, scan)) {
 +                nexthash = e_hash(scan);
 +                if (nexthash != get_hash(iam_leaf_container(leaf),
 +                                         e_char(scan), e_keysize(scan))) {
++                        BREAKPOINT();
++                        return 0;
++                }
++                if (nexthash < starthash) {
++                        n_print(leaf);
++                        printk("%#x < %#x\n", nexthash, starthash);
++                        dump_stack();
 +                        BREAKPOINT();
 +                        return 0;
 +                }
@@ -3624,12 +3623,6 @@ Index: iam/fs/ext3/iam_lvar.c
 +        return iam_ipd_alloc(c->ic_descr->id_ikey_size);
 +}
 +
-+static void lvar_ipd_free(const struct iam_container *c,
-+                          struct iam_path_descr *ipd)
-+{
-+        iam_ipd_free(ipd);
-+}
-+
 +static int root_limit(int rootgap, int blocksize, int size)
 +{
 +        int limit;
@@ -3766,7 +3759,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +        .id_ikeycmp     = lvar_ikeycmp,
 +        .id_root_inc    = lvar_root_inc,
 +        .id_ipd_alloc   = lvar_ipd_alloc,
-+        .id_ipd_free    = lvar_ipd_free,
++        .id_ipd_free    = iam_ipd_free,
 +        .id_name        = "lvar"
 +};
 +

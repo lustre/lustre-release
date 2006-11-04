@@ -74,9 +74,6 @@
 #include "osd_igif.h"
 
 struct osd_object {
-        /*
-         * Mutable fields (like ->do_index_ops) are protected by ->oo_guard.
-         */
         struct dt_object       oo_dt;
         /*
          * Inode for file system object represented by this osd_object. This
@@ -89,11 +86,6 @@ struct osd_object {
         struct rw_semaphore    oo_sem;
         struct iam_container   oo_container;
         struct iam_descr       oo_descr;
-        /*
-         * Protected by ->oo_guard.
-         */
-        struct iam_path_descr *oo_ipd;
-        spinlock_t             oo_guard;
         const struct lu_env   *oo_owner;
 };
 
@@ -343,7 +335,6 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
                 mo->oo_dt.do_ops = &osd_obj_ops;
                 l->lo_ops = &osd_lu_obj_ops;
                 init_rwsem(&mo->oo_sem);
-                spin_lock_init(&mo->oo_guard);
                 return l;
         } else
                 return NULL;
@@ -394,6 +385,19 @@ static void osd_object_free(const struct lu_env *env, struct lu_object *l)
         OBD_FREE_PTR(obj);
 }
 
+static struct iam_path_descr *osd_ipd_get(const struct lu_env *env,
+                                          const struct iam_container *bag)
+{
+        return bag->ic_descr->id_ops->id_ipd_alloc(bag);
+}
+
+static void osd_ipd_put(const struct lu_env *env,
+                        const struct iam_container *bag,
+                        struct iam_path_descr *ipd)
+{
+        bag->ic_descr->id_ops->id_ipd_free(ipd);
+}
+
 /*
  * Concurrency: no concurrent access is possible that late in object
  * life-cycle.
@@ -403,14 +407,9 @@ static void osd_index_fini(struct osd_object *o)
         struct iam_container *bag;
 
         bag = &o->oo_container;
-        if (o->oo_ipd != NULL) {
-                LASSERT(bag->ic_descr->id_ops->id_ipd_free != NULL);
-                bag->ic_descr->id_ops->id_ipd_free(&o->oo_container, o->oo_ipd);
-                o->oo_ipd = NULL;
-        }
         if (o->oo_inode != NULL) {
-                if (o->oo_container.ic_object == o->oo_inode)
-                        iam_container_fini(&o->oo_container);
+                if (bag->ic_object == o->oo_inode)
+                        iam_container_fini(bag);
         }
 }
 
@@ -1525,33 +1524,6 @@ static int osd_index_probe(const struct lu_env *env, struct osd_object *o,
                                 * writable */);
 }
 
-static int osd_index_setup(const struct lu_env *env, struct osd_object *obj,
-                           struct iam_container *bag)
-{
-        struct iam_path_descr *ipd;
-        int result;
-
-        ipd = bag->ic_descr->id_ops->id_ipd_alloc(bag);
-        if (ipd != NULL) {
-                spin_lock(&obj->oo_guard);
-                if (obj->oo_ipd == NULL) {
-                        obj->oo_ipd = ipd;
-                        obj->oo_dt.do_index_ops = &osd_index_ops;
-                } else {
-                        /*
-                         * Oops, index was setup concurrently.
-                         */
-                        LASSERT(obj->oo_dt.do_index_ops == &osd_index_ops);
-                        LASSERT(bag->ic_descr->id_ops->id_ipd_free != NULL);
-                        bag->ic_descr->id_ops->id_ipd_free(bag, ipd);
-                }
-                spin_unlock(&obj->oo_guard);
-                result = 0;
-        } else
-                result = -ENOMEM;
-        return result;
-}
-
 /*
  * Concurrency: no external locking is necessary.
  */
@@ -1575,7 +1547,7 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
                 if (result == 0) {
                         result = iam_container_setup(bag);
                         if (result == 0)
-                                result = osd_index_setup(env, obj, bag);
+                                obj->oo_dt.do_index_ops = &osd_index_ops;
                 }
         } else
                 result = 0;
@@ -1597,25 +1569,29 @@ static int osd_index_delete(const struct lu_env *env, struct dt_object *dt,
 {
         struct osd_object     *obj = osd_dt_obj(dt);
         struct osd_thandle    *oh;
+        struct iam_path_descr *ipd;
+        struct iam_container  *bag = &obj->oo_container;
         int rc;
 
         ENTRY;
 
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
-        LASSERT(obj->oo_container.ic_object == obj->oo_inode);
-        LASSERT(obj->oo_ipd != NULL);
+        LASSERT(bag->ic_object == obj->oo_inode);
         LASSERT(handle != NULL);
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_DELETE))
                 RETURN(-EACCES);
 
+        ipd = osd_ipd_get(env, bag);
+        if (ipd == NULL)
+                RETURN(-ENOMEM);
+
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
 
-        rc = iam_delete(oh->ot_handle, &obj->oo_container,
-                        (const struct iam_key *)key, obj->oo_ipd);
-
+        rc = iam_delete(oh->ot_handle, bag, (const struct iam_key *)key, ipd);
+        osd_ipd_put(env, bag, ipd);
         LASSERT(osd_invariant(obj));
         RETURN(rc);
 }
@@ -1624,22 +1600,27 @@ static int osd_index_lookup(const struct lu_env *env, struct dt_object *dt,
                             struct dt_rec *rec, const struct dt_key *key,
                             struct lustre_capa *capa)
 {
-        struct osd_object *obj = osd_dt_obj(dt);
+        struct osd_object     *obj = osd_dt_obj(dt);
+        struct iam_path_descr *ipd;
+        struct iam_container  *bag = &obj->oo_container;
         int rc;
 
         ENTRY;
 
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
-        LASSERT(obj->oo_container.ic_object == obj->oo_inode);
-        LASSERT(obj->oo_ipd != NULL);
+        LASSERT(bag->ic_object == obj->oo_inode);
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_LOOKUP))
                 return -EACCES;
 
-        rc = iam_lookup(&obj->oo_container, (const struct iam_key *)key,
-                        (struct iam_rec *)rec, obj->oo_ipd);
+        ipd = osd_ipd_get(env, bag);
+        if (ipd == NULL)
+                RETURN(-ENOMEM);
 
+        rc = iam_lookup(bag, (const struct iam_key *)key,
+                        (struct iam_rec *)rec, ipd);
+        osd_ipd_put(env, bag, ipd);
         LASSERT(osd_invariant(obj));
 
         RETURN(rc);
@@ -1650,27 +1631,30 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
                             struct thandle *th, struct lustre_capa *capa)
 {
         struct osd_object     *obj = osd_dt_obj(dt);
-
+        struct iam_path_descr *ipd;
         struct osd_thandle    *oh;
+        struct iam_container  *bag = &obj->oo_container;
         int rc;
 
         ENTRY;
 
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
-        LASSERT(obj->oo_container.ic_object == obj->oo_inode);
-        LASSERT(obj->oo_ipd != NULL);
+        LASSERT(bag->ic_object == obj->oo_inode);
         LASSERT(th != NULL);
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
                 return -EACCES;
 
+        ipd = osd_ipd_get(env, bag);
+        if (ipd == NULL)
+                RETURN(-ENOMEM);
+
         oh = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
-        rc = iam_insert(oh->ot_handle, &obj->oo_container,
-                        (const struct iam_key *)key,
-                        (struct iam_rec *)rec, obj->oo_ipd);
-
+        rc = iam_insert(oh->ot_handle, bag, (const struct iam_key *)key,
+                        (struct iam_rec *)rec, ipd);
+        osd_ipd_put(env, bag, ipd);
         LASSERT(osd_invariant(obj));
         RETURN(rc);
 }
@@ -1687,25 +1671,31 @@ static struct dt_it *osd_it_init(const struct lu_env *env,
                                  struct dt_object *dt, int writable,
                                  struct lustre_capa *capa)
 {
-        struct osd_it     *it;
-        struct osd_object *obj = osd_dt_obj(dt);
-        struct lu_object  *lo  = &dt->do_lu;
-        __u32              flags;
+        struct osd_it         *it;
+        struct osd_object     *obj = osd_dt_obj(dt);
+        struct lu_object      *lo  = &dt->do_lu;
+        struct iam_path_descr *ipd;
+        struct iam_container  *bag = &obj->oo_container;
+        __u32                  flags;
 
         LASSERT(lu_object_exists(lo));
-        LASSERT(obj->oo_ipd != NULL);
 
         if (osd_object_auth(env, dt, capa, writable ? CAPA_OPC_BODY_WRITE :
                             CAPA_OPC_BODY_READ))
                 return ERR_PTR(-EACCES);
+
+        ipd = osd_ipd_get(env, bag);
+        if (ipd == NULL)
+                return ERR_PTR(-ENOMEM);
 
         flags = writable ? IAM_IT_MOVE|IAM_IT_WRITE : IAM_IT_MOVE;
         OBD_ALLOC_PTR(it);
         if (it != NULL) {
                 it->oi_obj = obj;
                 lu_object_get(lo);
-                iam_it_init(&it->oi_it, &obj->oo_container, flags, obj->oo_ipd);
+                iam_it_init(&it->oi_it, bag, flags, ipd);
         }
+        osd_ipd_put(env, bag, ipd);
         return (struct dt_it *)it;
 }
 

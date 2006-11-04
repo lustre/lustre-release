@@ -918,7 +918,17 @@ Index: iam/include/linux/lustre_iam.h
  };
  
  /*
-@@ -331,6 +349,7 @@ struct iam_leaf_operations {
+@@ -271,8 +289,7 @@ struct iam_operations {
+                                          struct iam_frame *frame);
+ 
+         struct iam_path_descr *(*id_ipd_alloc)(const struct iam_container *c);
+-        void (*id_ipd_free)(const struct iam_container *c,
+-                            struct iam_path_descr *ipd);
++        void (*id_ipd_free)(struct iam_path_descr *ipd);
+         /*
+          * Format name.
+          */
+@@ -331,6 +348,7 @@ struct iam_leaf_operations {
          void (*rec_set)(struct iam_leaf *l, const struct iam_rec *r);
  
  	int (*key_cmp)(const struct iam_leaf *l, const struct iam_key *k);
@@ -926,7 +936,7 @@ Index: iam/include/linux/lustre_iam.h
  
          int (*key_size)(const struct iam_leaf *l);
          /*
-@@ -473,7 +492,7 @@ struct iam_path_compat {
+@@ -473,7 +491,7 @@ struct iam_path_compat {
  	struct iam_container ipc_container;
  	__u32                 ipc_scratch[DX_SCRATCH_KEYS];
  	struct dx_hash_info  *ipc_hinfo;
@@ -935,7 +945,7 @@ Index: iam/include/linux/lustre_iam.h
  	struct iam_path_descr ipc_descr;
          struct dx_hash_info   ipc_hinfo_area;
  };
-@@ -848,7 +867,9 @@ static inline struct iam_ikey *iam_path_
+@@ -848,7 +866,9 @@ static inline struct iam_ikey *iam_path_
  	return path->ip_data->ipd_key_scratch[nr];
  }
  
@@ -946,7 +956,7 @@ Index: iam/include/linux/lustre_iam.h
  void dx_insert_block(struct iam_path *path, struct iam_frame *frame,
  		     u32 hash, u32 block);
  int dx_index_is_compat(struct iam_path *path);
-@@ -858,7 +879,8 @@ int ext3_htree_next_block(struct inode *
+@@ -858,7 +878,8 @@ int ext3_htree_next_block(struct inode *
  
  struct buffer_head *ext3_append(handle_t *handle, struct inode *inode,
  				u32 *block, int *err);
@@ -956,7 +966,7 @@ Index: iam/include/linux/lustre_iam.h
  struct ext3_dir_entry_2 *split_entry(struct inode *dir,
  				     struct ext3_dir_entry_2 *de,
  				     unsigned long ino, mode_t mode,
-@@ -874,6 +896,10 @@ struct ext3_dir_entry_2 *move_entries(st
+@@ -874,6 +895,10 @@ struct ext3_dir_entry_2 *move_entries(st
  
  extern struct iam_descr iam_htree_compat_param;
  

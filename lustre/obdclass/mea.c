@@ -64,8 +64,8 @@ static int mea_all_chars_hash(int count, char *name, int namelen)
 #ifdef __KERNEL__
 /* This hash calculate method must be same as the lvar hash method */
 
-#define LVAR_HASH_TEA    (1)
-#define LVAR_HASH_R5     (0)
+#define LVAR_HASH_TEA    (0)
+#define LVAR_HASH_R5     (1)
 #define LVAR_HASH_PREFIX (0)
 
 static __u32 hash_build(char *name, int namelen)
