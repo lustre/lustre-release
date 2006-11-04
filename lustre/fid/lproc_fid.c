@@ -101,9 +101,8 @@ seq_server_proc_write_space(struct file *file, const char *buffer,
 	rc = seq_proc_write_common(file, buffer, count,
                                    data, &seq->lss_space);
 	if (rc == 0) {
-		CDEBUG(D_INFO, "%s: Sequences space has "
-                       "changed to "DRANGE"\n", seq->lss_name,
-                       PRANGE(&seq->lss_space));
+		CDEBUG(D_INFO, "%s: Space: "DRANGE"\n",
+                       seq->lss_name, PRANGE(&seq->lss_space));
 	}
 	
 	up(&seq->lss_sem);
@@ -134,6 +133,7 @@ seq_server_proc_read_server(char *page, char **start, off_t off,
                             int count, int *eof, void *data)
 {
         struct lu_server_seq *seq = (struct lu_server_seq *)data;
+        struct client_obd *cli;
 	int rc;
 	ENTRY;
 
@@ -141,12 +141,16 @@ seq_server_proc_read_server(char *page, char **start, off_t off,
 
 	*eof = 1;
 	if (seq->lss_cli) {
-		struct obd_export *exp = seq->lss_cli->lcs_exp;
-
-		rc = snprintf(page, count, "%s\n",
-			      exp->exp_client_uuid.uuid);
+                if (seq->lss_cli->lcs_exp != NULL) {
+                        cli = &seq->lss_cli->lcs_exp->exp_obd->u.cli;
+                        rc = snprintf(page, count, "%s\n",
+                                      cli->cl_target_uuid.uuid);
+                } else {
+                        rc = snprintf(page, count, "%s\n",
+                                      seq->lss_cli->lcs_srv->lss_name);
+                }
 	} else {
-		rc = snprintf(page, count, "<not assigned>\n");
+		rc = snprintf(page, count, "<none>\n");
 	}
 	
 	RETURN(rc);
@@ -171,8 +175,8 @@ seq_server_proc_write_width(struct file *file, const char *buffer,
         seq->lss_width = val;
 
 	if (rc == 0) {
-		CDEBUG(D_INFO, "%s: Allocation unit has changed to "
-                       LPU64"\n", seq->lss_name, seq->lss_width);
+		CDEBUG(D_INFO, "%s: Width: "LPU64"\n",
+                       seq->lss_name, seq->lss_width);
 	}
 	
 	up(&seq->lss_sem);
@@ -213,9 +217,8 @@ seq_client_proc_write_space(struct file *file, const char *buffer,
                                    data, &seq->lcs_space);
 
 	if (rc == 0) {
-		CDEBUG(D_INFO, "%s: Sequences space has "
-                       "changed to "DRANGE"\n", seq->lcs_name,
-                       PRANGE(&seq->lcs_space));
+		CDEBUG(D_INFO, "%s: Space: "DRANGE"\n",
+                       seq->lcs_name, PRANGE(&seq->lcs_space));
 	}
 	
 	up(&seq->lcs_sem);
@@ -289,8 +292,8 @@ seq_client_proc_read_width(char *page, char **start, off_t off,
 }
 
 static int
-seq_client_proc_read_next_fid(char *page, char **start, off_t off,
-                              int count, int *eof, void *data)
+seq_client_proc_read_fid(char *page, char **start, off_t off,
+                         int count, int *eof, void *data)
 {
         struct lu_client_seq *seq = (struct lu_client_seq *)data;
 	int rc;
@@ -319,11 +322,9 @@ seq_client_proc_read_server(char *page, char **start, off_t off,
         if (seq->lcs_exp != NULL) {
                 cli = &seq->lcs_exp->exp_obd->u.cli;
                 rc = snprintf(page, count, "%s\n", cli->cl_target_uuid.uuid);
-        } else
-                /*
-                 * Export-less sequence, see mdt_seq_init().
-                 */
-                rc = snprintf(page, count, "none\n");
+        } else {
+                rc = snprintf(page, count, "%s\n", seq->lcs_srv->lss_name);
+        }
 	RETURN(rc);
 }
 
@@ -337,6 +338,6 @@ struct lprocfs_vars seq_client_proc_list[] = {
 	{ "space",    seq_client_proc_read_space, seq_client_proc_write_space, NULL },
 	{ "width",    seq_client_proc_read_width, seq_client_proc_write_width, NULL },
 	{ "server",   seq_client_proc_read_server, NULL, NULL },
-	{ "next_fid", seq_client_proc_read_next_fid, NULL, NULL },
+	{ "fid",      seq_client_proc_read_fid, NULL, NULL },
 	{ NULL }};
 #endif

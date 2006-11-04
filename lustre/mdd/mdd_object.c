@@ -1234,13 +1234,14 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
 }
 
 static int mdd_dir_page_build(const struct lu_env *env, int first,
-                              void *area, int nob,
-                              struct dt_it_ops  *iops, struct dt_it *it,
-                              __u32 *start, __u32 *end, struct lu_dirent **last)
+                              void *area, int nob, struct dt_it_ops *iops,
+                              struct dt_it *it, __u32 *start, __u32 *end,
+                              struct lu_dirent **last)
 {
-        int result;
+        struct lu_fid          *fid2  = &mdd_env_info(env)->mti_fid2;
         struct mdd_thread_info *info = mdd_env_info(env);
         struct lu_fid          *fid  = &info->mti_fid;
+        int                     result;
         struct lu_dirent       *ent;
 
         if (first) {
@@ -1263,12 +1264,31 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
                 len  = iops->key_size(env, it);
 
                 fid  = (struct lu_fid *)iops->rec(env, it);
+                fid_be_to_cpu(fid2, fid);
 
                 recsize = (sizeof(*ent) + len + 3) & ~3;
                 hash = iops->store(env, it);
+                if (ent != area) {
+                        /*
+                         * This is not first entry, *start is initialized so
+                         * that we can check hash for validness, that is, if it
+                         * fits into allowed range. It should not be smaller
+                         * than *start. Otherwise - iam iterator is buggy.
+                         */
+                        if (hash < *start) {
+                                CERROR("Entry hash (%#8.8x) < page hash (%#8.8x) - ["
+                                       "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"]\n",
+                                       hash, *start, name, ent, nob, PFID(fid2), hash,
+                                       len, len, len, name);
+                                result = iops->next(env, it);
+                                continue;
+                        }
+                }
+
                 *end = hash;
+                
                 CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
-                       name, ent, nob, PFID(fid), hash, len, len, len, name);
+                       name, ent, nob, PFID(fid2), hash, len, len, len, name);
 
                 if (nob >= recsize) {
                         fid_be_to_cpu(&ent->lde_fid, fid);
