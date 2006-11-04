@@ -1555,7 +1555,7 @@ static int mdt_sec_ctx_handle(struct mdt_thread_info *info)
                 __u32                  opc;
 
                 opc = lustre_msg_get_opc(req->rq_reqmsg);
-                if (opc = SEC_CTX_INIT || opc == SEC_CTX_INIT_CONT)
+                if (opc == SEC_CTX_INIT || opc == SEC_CTX_INIT_CONT)
                         sptlrpc_svc_ctx_invalidate(req);
         }
 
