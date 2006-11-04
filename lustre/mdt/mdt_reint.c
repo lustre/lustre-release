@@ -317,7 +317,8 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFDIR:{
-                if (info->mti_rr.rr_name[0] == 0) {
+                /* Cross-ref case. */
+                if (info->mti_rr.rr_namelen == 1) {
                         rc = mdt_md_mkobj(info);
                         break;
                 }

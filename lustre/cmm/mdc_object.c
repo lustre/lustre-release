@@ -247,11 +247,12 @@ static int mdc_object_create(const struct lu_env *env,
         __u32 cap;
         ENTRY;
 
-        LASSERT(spec->u.sp_pfid != NULL);
         LASSERT(S_ISDIR(la->la_mode));
+        LASSERT(spec->u.sp_pfid != NULL);
         mci = mdc_info_init(env);
         mci->mci_opdata.fid2 = *lu_object_fid(&mo->mo_lu);
-        /* parent fid is needed to create dotdot on the remote node */
+        
+        /* Parent fid is needed to create dotdot on the remote node. */
         mci->mci_opdata.fid1 = *(spec->u.sp_pfid);
         mci->mci_opdata.mod_time = la->la_mtime;
         if (uc &&

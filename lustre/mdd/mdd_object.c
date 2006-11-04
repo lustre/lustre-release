@@ -1268,23 +1268,6 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
 
                 recsize = (sizeof(*ent) + len + 3) & ~3;
                 hash = iops->store(env, it);
-                if (ent != area) {
-                        /*
-                         * This is not first entry, *start is initialized so
-                         * that we can check hash for validness, that is, if it
-                         * fits into allowed range. It should not be smaller
-                         * than *start. Otherwise - iam iterator is buggy.
-                         */
-                        if (hash < *start) {
-                                CERROR("Entry hash (%#8.8x) < page hash (%#8.8x) - ["
-                                       "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"]\n",
-                                       hash, *start, name, ent, nob, PFID(fid2), hash,
-                                       len, len, len, name);
-                                result = iops->next(env, it);
-                                continue;
-                        }
-                }
-
                 *end = hash;
                 
                 CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",

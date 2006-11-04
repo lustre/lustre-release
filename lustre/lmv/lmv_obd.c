@@ -2057,7 +2057,7 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                                                op_data->namelen);
                         op_data->fid1 = obj->lo_inodes[mea_idx].li_fid;
                         tgt_exp = lmv_get_export(lmv,
-                                        obj->lo_inodes[mea_idx].li_mds);
+                                                 obj->lo_inodes[mea_idx].li_mds);
                         lmv_obj_put(obj);
                         CDEBUG(D_OTHER, "unlink '%*s' in "DFID" -> %u\n",
                                op_data->namelen, op_data->name,

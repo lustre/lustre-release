@@ -367,58 +367,6 @@ static inline int cmm_split_special_entry(struct lu_dirent *ent)
         return 0;
 }
 
-static void cmm_split_dump_entry(const struct lu_env *env,
-                                 struct md_object *mo,
-                                 struct lu_dirent *ent)
-{
-        struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
-        struct lu_fid *ef = &cmm_env_info(env)->cmi_fid;
-        struct cmm_object *obj;
-        int local;
-
-        fid_le_to_cpu(ef, &ent->lde_fid);
-        obj = cmm_object_find(env, cmm, ef);
-        if (IS_ERR(obj)) {
-                CERROR("Error while find object by "DFID
-                       ", rc %d\n", PFID(ef), (int)PTR_ERR(obj));
-                return;
-        }
-
-        local = (lu_object_exists(&obj->cmo_obj.mo_lu) > 0);
-
-        printk("%4.4x "DFID" %*.*s/%8.8x [%4.4x] (%s)\n",
-               le16_to_cpu(ent->lde_reclen), PFID(ef),
-               le16_to_cpu(ent->lde_namelen),
-               le16_to_cpu(ent->lde_namelen),
-               ent->lde_name, le32_to_cpu(ent->lde_hash),
-               le16_to_cpu(ent->lde_namelen),
-               (local ? "lc" : "cr"));
-
-        cmm_object_put(env, obj);
-}
-
-static void cmm_split_dump_page(const struct lu_env *env,
-                                struct md_object *mo,
-                                struct lu_dirpage *dp,
-                                __u32 hash_end)
-{
-        struct lu_dirent  *ent;
-
-        if (le16_to_cpu(dp->ldp_flags) & LDF_EMPTY)
-                return;
-
-        printk("Dump: page: [%8.8x-%8.8x]/[%8.8x], flags: "
-               "%4.4x\n", le32_to_cpu(dp->ldp_hash_start),
-               le32_to_cpu(dp->ldp_hash_end), hash_end,
-               le16_to_cpu(dp->ldp_flags));
-
-        for (ent = lu_dirent_start(dp);
-             ent != NULL && le32_to_cpu(ent->lde_hash) < hash_end;
-             ent = lu_dirent_next(ent)) {
-                cmm_split_dump_entry(env, mo, ent);
-        }
-}
-
 /*
  * Remove one entry from local MDT. Do not corrupt byte order in page, it will
  * be sent to remote MDT.
@@ -506,11 +454,10 @@ static int cmm_split_remove_page(const struct lu_env *env,
                          * currently we assumed it will success anyway in
                          * verfication test.
                          */
-                        CWARN("Can not del %*.*s, rc %d\n",
-                              le16_to_cpu(ent->lde_namelen),
-                              le16_to_cpu(ent->lde_namelen),
-                              ent->lde_name, rc);
-                        cmm_split_dump_page(env, mo, dp, hash_end);
+                        CERROR("Can not del %*.*s, rc %d\n",
+                               le16_to_cpu(ent->lde_namelen),
+                               le16_to_cpu(ent->lde_namelen),
+                               ent->lde_name, rc);
                         GOTO(unmap, rc);
                 }
                 *len += lu_dirent_size(ent);
@@ -634,7 +581,6 @@ static int cmm_split_process_dir(const struct lu_env *env,
         }
 
         LASSERT(ma->ma_valid & MA_LMV);
-        /* we need range of hashes, so MAX_HASH_SIZE + 1 */
         hash_segement = MAX_HASH_SIZE / (cmm->cmm_tgt_count + 1);
         for (i = 1; i < cmm->cmm_tgt_count + 1; i++) {
                 struct lu_fid *lf;

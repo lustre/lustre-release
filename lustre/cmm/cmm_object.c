@@ -418,10 +418,11 @@ static int cml_create(const struct lu_env *env,
                         RETURN(rc);
                 }
         }
+        
         /* 
-         * Check for possible split directory and let caller know that
-         * it should tell client that directory is split and operation
-         * should repeat to correct MDT.
+         * Check for possible split directory and let caller know that it should
+         * tell client that directory is split and operation should repeat to
+         * correct MDT.
          */
         rc = cmm_split_check(env, mo_p, child_name);
         if (rc)
