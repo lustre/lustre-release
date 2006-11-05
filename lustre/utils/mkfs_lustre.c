@@ -471,9 +471,12 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         /* Allocate fewer inodes on large OST devices.  Most
                            filesystems can be much more aggressive than even
                            this. */
-                        if ((IS_OST(&mop->mo_ldd) &&
-                            (device_sz > 100000000))) /* 100 Gb */
-                                bytes_per_inode = 16384;
+                        if (IS_OST(&mop->mo_ldd)) {
+                                if (device_sz > 100000000) /* 100 Gb */
+                                        bytes_per_inode = 16384;
+                                else
+                                        bytes_per_inode = 4096;
+                        }
 
                         if (bytes_per_inode > 0) {
                                 sprintf(buf, " -i %ld", bytes_per_inode);
