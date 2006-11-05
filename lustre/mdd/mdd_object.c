@@ -1133,9 +1133,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
             S_ISBLK(tmp_la->la_mode) || S_ISCHR(tmp_la->la_mode))
                 flag &= ~MDS_OPEN_TRUNC;
 
-        /*
-         * For writing append-only file must open it with append mode.
-         */
+        /* For writing append-only file must open it with append mode. */
         if (mdd_is_append(obj)) {
                 if ((flag & FMODE_WRITE) && !(flag & MDS_OPEN_APPEND))
                         RETURN(-EPERM);

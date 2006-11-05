@@ -538,7 +538,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
 
         rc = obd_packmd(lov_exp, lmm, lsm);
         if (rc < 0) {
-                CERROR("cannot pack lsm, err = %d\n", rc);
+                CERROR("Cannot pack lsm, err = %d\n", rc);
                 GOTO(out_oti, rc);
         }
         *lmm_size = rc;

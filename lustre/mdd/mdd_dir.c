@@ -982,7 +982,8 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
 static int mdd_create_sanity_check(const struct lu_env *env,
                                    struct md_object *pobj,
                                    const char *name,
-                                   struct md_attr *ma)
+                                   struct md_attr *ma,
+                                   int lookup)
 {
         struct mdd_thread_info *info = mdd_env_info(env);
         struct lu_attr    *la        = &info->mti_la;
@@ -996,15 +997,21 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                 RETURN(-ENOENT);
 
         /*
-         * Check if the name already exist, though it will be checked
-         * in _index_insert also, for avoiding rolling back if exists
-         * _index_insert.
+         * In some cases this lookup is not needed - we know before that if name
+         * exists or not.
          */
-        rc = __mdd_lookup_locked(env, pobj, name, fid,
-                                 MAY_WRITE | MAY_EXEC);
-        if (rc != -ENOENT)
-                RETURN(rc ? : -EEXIST);
-
+        if (lookup) {
+                /*
+                 * Check if the name already exist, though it will be checked in
+                 * _index_insert also, for avoiding rolling back if exists
+                 * _index_insert.
+                 */
+                rc = __mdd_lookup_locked(env, pobj, name, fid,
+                                         MAY_WRITE | MAY_EXEC);
+                if (rc != -ENOENT)
+                        RETURN(rc ? : -EEXIST);
+        }
+        
         /* sgid check */
         mdd_read_lock(env, obj);
         rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
@@ -1096,8 +1103,8 @@ static int mdd_create(const struct lu_env *env,
          *     2. insert            (__mdd_index_insert(), lookup again)
          */
 
-        /* sanity checks before big job */
-        rc = mdd_create_sanity_check(env, pobj, name, ma);
+        /* Sanity checks before big job. */
+        rc = mdd_create_sanity_check(env, pobj, name, ma, spec->sp_cr_lookup);
         if (rc)
                 RETURN(rc);
 

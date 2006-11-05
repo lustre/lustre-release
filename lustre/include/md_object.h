@@ -150,8 +150,14 @@ struct md_create_spec {
                         int  eadatalen;
                 } sp_ea;
         } u;
-        /* create flag from client: such as MDS_OPEN_CREAT, and others */
+        
+        /* Create flag from client: such as MDS_OPEN_CREAT, and others. */
         __u32      sp_cr_flags;
+
+        /* Should mdd do lookup sanity check or not. */
+        int        sp_cr_lookup;
+
+        /* Current lock mode for parent dir where create is performing. */
         mdl_mode_t sp_cr_mode;
 };
 

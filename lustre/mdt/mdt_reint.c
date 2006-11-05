@@ -70,14 +70,21 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                                OBD_FAIL_MDS_REINT_CREATE_WRITE);
 
+                /* Let lower layer know current lock mode. */
                 info->mti_spec.sp_cr_mode =
                         mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
+                
+                /* 
+                 * Do perform lookup sanity check. We do not know if name exists
+                 * or not.
+                 */
+                info->mti_spec.sp_cr_lookup = 1;
                 
                 rc = mdo_create(info->mti_env, next, rr->rr_name,
                                 mdt_object_child(child),
                                 &info->mti_spec, ma);
                 if (rc == 0) {
-                        /* return fid & attr to client. */
+                        /* Return fid & attr to client. */
                         if (ma->ma_valid & MA_INODE)
                                 mdt_pack_attr2body(info, repbody, &ma->ma_attr,
                                                    mdt_object_fid(child));

@@ -235,8 +235,8 @@ int oscc_recovering(struct osc_creator *oscc)
 int osc_create(struct obd_export *exp, struct obdo *oa,
                struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
-        struct lov_stripe_md *lsm;
         struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
+        struct lov_stripe_md *lsm;
         int try_again = 1, rc = 0;
         ENTRY;
 

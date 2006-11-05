@@ -488,7 +488,6 @@ int __mdd_permission_internal(const struct lu_env *env,
         struct md_ucred *uc = md_ucred(env);
         __u32 mode;
         int rc;
-
         ENTRY;
 
         if (mask == 0)

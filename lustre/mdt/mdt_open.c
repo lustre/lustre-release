@@ -401,8 +401,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 repbody->valid |= OBD_MD_FLOSSCAPA;
         }
 
-        /* if we are following a symlink, don't open; and
-         * do not return open handle for special nodes as client required
+        /*
+         * If we are following a symlink, don't open; and do not return open
+         * handle for special nodes as client required.
          */
         if (islnk || (!isreg && !isdir &&
             (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))) {
@@ -411,16 +412,18 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         }
 
         mdt_set_disposition(info, rep, DISP_OPEN_OPEN);
-        /* we need to return the existing object's fid back, so it is done
-         * here, after preparing the reply */
+
+        /*
+         * We need to return the existing object's fid back, so it is done here,
+         * after preparing the reply.
+         */
         if (!created && (flags & MDS_OPEN_EXCL) && (flags & MDS_OPEN_CREAT))
                 RETURN(-EEXIST);
 
         /* This can't be done earlier, we need to return reply body */
         if (isdir) {
                 if (flags & (MDS_OPEN_CREAT | FMODE_WRITE)) {
-                        /* we are trying to create or
-                         * write an existing dir. */
+                        /* We are trying to create or write an existing dir. */
                         RETURN(-EISDIR);
                 }
         } else if (flags & MDS_OPEN_DIRECTORY)
@@ -496,11 +499,13 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         mfd = mdt_mfd_new();
         if (mfd != NULL) {
 
-                /* keep a reference on this object for this open,
-                * and is released by mdt_mfd_close() */
+                /*
+                 * Keep a reference on this object for this open, and is
+                 * released by mdt_mfd_close().
+                 */
                 mdt_object_get(info->mti_env, o);
-                /* open handling */
 
+                /* Open handling. */
                 mfd->mfd_mode = flags;
                 mfd->mfd_object = o;
                 mfd->mfd_xid = req->rq_xid;
@@ -625,8 +630,9 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
 
-        /* FIXME: capability in replay open request might have expired, disable
-         * capability check for this kind of request. security hole?
+        /*
+         * XXX: capability in replay open request might have expired, disable
+         * capability check for this kind of request. Security hole?
          */
         if (mdt->mdt_opts.mo_mds_capa)
                 mdt->mdt_child->md_ops->mdo_init_capa_ctxt(env, next, 0, 0, 0,
@@ -775,7 +781,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                             (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
 
         if (rr->rr_name[0] == 0) {
-                /* this is cross-ref open */
+                /* This is cross-ref open */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 result = mdt_cross_open(info, rr->rr_fid1, ldlm_rep,
                                         create_flags);
@@ -804,7 +810,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
                 if (result == -ESTALE) {
                         /*
-                         * ESTALE means the parent is a dead(unlinked) dir, so
+                         * -ESTALE means the parent is a dead(unlinked) dir, so
                          * it should return -ENOENT to in accordance with the
                          * original mds implementaion.
                          */
@@ -813,10 +819,9 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 if (!(create_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
                 *child_fid = *info->mti_rr.rr_fid2;
-                /* new object will be created. see the following */
         } else {
                 /*
-                 * Check for O_EXCL is moved to the mdt_mfd_open, we need to
+                 * Check for O_EXCL is moved to the mdt_mfd_open(), we need to
                  * return FID back in that case.
                  */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
@@ -835,6 +840,13 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 /* Let lower layers know what is lock mode on directory. */
                 info->mti_spec.sp_cr_mode =
                         mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
+
+                /* 
+                 * Do not perform lookup sanity check. We know that name does
+                 * not exist.
+                 */
+                info->mti_spec.sp_cr_lookup = 0;
+                
                 result = mdo_create(info->mti_env,
                                     mdt_object_child(parent),
                                     rr->rr_name,
@@ -844,8 +856,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 if (result == -ERESTART) {
                         mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
                         GOTO(out_child, result);
-                }
-                else {
+                } else {
                         if (result != 0)
                                 GOTO(out_child, result);
                 }
@@ -902,9 +913,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         /* Try to open it now. */
         result = mdt_mfd_open(info, parent, child, create_flags,
                               created, ldlm_rep);
-        GOTO(finish_open, result);
 
-finish_open:
         if (result != 0 && created) {
                 int rc2;
                 ma->ma_need = 0;
@@ -916,8 +925,9 @@ finish_open:
                                  rr->rr_name,
                                  &info->mti_attr);
                 if (rc2 != 0)
-                        CERROR("error in cleanup of open");
+                        CERROR("Error in cleanup of open\n");
         }
+        EXIT;
 out_child:
         mdt_object_put(info->mti_env, child);
 out_parent:
