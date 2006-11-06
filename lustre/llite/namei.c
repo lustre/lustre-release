@@ -449,7 +449,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                                                   .ph_cname = &dentry->d_name,
                                                   .ph_opc = LUSTRE_OPC_CREATE };
 
-                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2, &hint);
+                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->op_fid2, &hint);
                 if (rc) {
                         ll_finish_md_op_data(op_data);
                         LASSERT(rc < 0);
@@ -752,7 +752,7 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
                                              name->len, 0);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
-                err = ll_fid_md_alloc(sbi, &op_data->fid2, &hint);
+                err = ll_fid_md_alloc(sbi, &op_data->op_fid2, &hint);
                 if (err) {
                         ll_finish_md_op_data(op_data);
                         break;
@@ -855,7 +855,7 @@ static int ll_symlink_generic(struct inode *dir, struct dentry *dchild,
                 RETURN(-ENOMEM);
 
         /* allocate new fid */
-        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data->fid2, &hint);
+        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data->op_fid2, &hint);
         if (err) {
                 ll_finish_md_op_data(op_data);
                 RETURN(err);
@@ -932,7 +932,7 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
                 RETURN(-ENOMEM);
 
         /* Allocate new fid. */
-        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data->fid2, &hint);
+        err = ll_fid_md_alloc(ll_i2sbi(dir), &op_data->op_fid2, &hint);
         if (err) {
                 ll_finish_md_op_data(op_data);
                 RETURN(err);

@@ -214,15 +214,15 @@ EXPORT_SYMBOL(iattr_from_obdo);
 
 void md_from_obdo(struct md_op_data *op_data, struct obdo *oa, obd_flag valid)
 {
-        iattr_from_obdo(&op_data->attr, oa, valid);
+        iattr_from_obdo(&op_data->op_attr, oa, valid);
         if (valid & OBD_MD_FLBLOCKS) {
-                op_data->attr_blocks = oa->o_blocks;
-                op_data->attr.ia_valid |= ATTR_BLOCKS;
+                op_data->op_attr_blocks = oa->o_blocks;
+                op_data->op_attr.ia_valid |= ATTR_BLOCKS;
         }
         if (valid & OBD_MD_FLFLAGS) {
-                ((struct ll_iattr *)&op_data->attr)->ia_attr_flags =
+                ((struct ll_iattr *)&op_data->op_attr)->ia_attr_flags =
                         oa->o_flags;
-                op_data->attr.ia_valid |= ATTR_ATTR_FLAG;
+                op_data->op_attr.ia_valid |= ATTR_ATTR_FLAG;
         }
 }
 EXPORT_SYMBOL(md_from_obdo);
@@ -230,14 +230,14 @@ EXPORT_SYMBOL(md_from_obdo);
 void obdo_from_md(struct obdo *oa, struct md_op_data *op_data,
                   unsigned int valid)
 {
-        obdo_from_iattr(oa, &op_data->attr, valid);
+        obdo_from_iattr(oa, &op_data->op_attr, valid);
         if (valid & ATTR_BLOCKS) {
-                oa->o_blocks = op_data->attr_blocks;
+                oa->o_blocks = op_data->op_attr_blocks;
                 oa->o_valid |= OBD_MD_FLBLOCKS;
         }
         if (valid & ATTR_ATTR_FLAG) {
                 oa->o_flags = 
-                        ((struct ll_iattr *)&op_data->attr)->ia_attr_flags;
+                        ((struct ll_iattr *)&op_data->op_attr)->ia_attr_flags;
                 oa->o_valid |= OBD_MD_FLFLAGS;
         }
 }

@@ -233,18 +233,18 @@ enum {
 };
 
 struct mdt_reint_record {
-        mdt_reint_t          rr_opcode;
-        const struct lu_fid *rr_fid1;
-        const struct lu_fid *rr_fid2;
-        const char          *rr_name;
-        int                  rr_namelen;
-        const char          *rr_tgt;
-        int                  rr_tgtlen;
-        const void          *rr_eadata;
-        int                  rr_eadatalen;
-        int                  rr_logcookielen;
+        mdt_reint_t             rr_opcode;
+        const struct lu_fid    *rr_fid1;
+        const struct lu_fid    *rr_fid2;
+        const char             *rr_name;
+        int                     rr_namelen;
+        const char             *rr_tgt;
+        int                     rr_tgtlen;
+        const void             *rr_eadata;
+        int                     rr_eadatalen;
+        int                     rr_logcookielen;
         const struct llog_cookie  *rr_logcookies;
-        __u32                rr_flags;
+        __u32                   rr_flags;
 };
 
 enum mdt_reint_flag {

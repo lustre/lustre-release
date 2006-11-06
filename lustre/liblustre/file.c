@@ -80,20 +80,20 @@ void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
         memset(op_data, 0, sizeof(*op_data));
 
         if (i1) {
-                ll_i2gids(op_data->suppgids, i1, i2);
-                op_data->fid1 = *ll_inode2fid(i1);
+                ll_i2gids(op_data->op_suppgids, i1, i2);
+                op_data->op_fid1 = *ll_inode2fid(i1);
         }else {
-                ll_i2gids(op_data->suppgids, i2, i1);
-                op_data->fid1 = *ll_inode2fid(i2);
+                ll_i2gids(op_data->op_suppgids, i2, i1);
+                op_data->op_fid1 = *ll_inode2fid(i2);
         }
 
         if (i2)
-                op_data->fid2 = *ll_inode2fid(i2);
+                op_data->op_fid2 = *ll_inode2fid(i2);
 
-        op_data->name = name;
-        op_data->namelen = namelen;
-        op_data->mode = mode;
-        op_data->mod_time = CURRENT_TIME;
+        op_data->op_name = name;
+        op_data->op_namelen = namelen;
+        op_data->op_mode = mode;
+        op_data->op_mod_time = CURRENT_TIME;
 }
 
 void llu_finish_md_op_data(struct md_op_data *op_data)
@@ -333,8 +333,8 @@ int llu_sizeonmds_update(struct inode *inode, struct lustre_handle *fh)
         }
         
         md_from_obdo(&op_data, &oa, oa.o_valid);
-        memcpy(&op_data.handle, fh, sizeof(*fh));
-        op_data.flags |= MF_SOM_CHANGE;
+        memcpy(&op_data.op_handle, fh, sizeof(*fh));
+        op_data.op_flags |= MF_SOM_CHANGE;
 
         rc = llu_md_setattr(inode, &op_data);
         RETURN(rc);
@@ -359,36 +359,36 @@ int llu_md_close(struct obd_export *md_exp, struct inode *inode)
                                        &fd->fd_cwlockh);
         }
 
-        op_data.attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
+        op_data.op_attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
                                 ATTR_MTIME_SET | ATTR_CTIME_SET;
         
         if (fd->fd_flags & FMODE_WRITE) {
                 if (!S_ISREG(llu_i2stat(inode)->st_mode)) {
-                        op_data.attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
+                        op_data.op_attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
                 } else {
                         /* Inode cannot be dirty. Close the epoch. */
-                        op_data.flags |= MF_EPOCH_CLOSE;
+                        op_data.op_flags |= MF_EPOCH_CLOSE;
                         /* XXX: Send CHANGE flag only if Size-on-MDS inode attributes
                          * are really changed.  */
-                        op_data.flags |= MF_SOM_CHANGE;
+                        op_data.op_flags |= MF_SOM_CHANGE;
 
                         /* Pack Size-on-MDS attributes if we are in IO epoch and 
                          * attributes are valid. */
                         LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
                         if (!llu_local_size(inode))
-                                op_data.attr.ia_valid |= 
+                                op_data.op_attr.ia_valid |= 
                                         OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
                 }
         }
-        op_data.fid1 = lli->lli_fid;
-        op_data.attr.ia_atime = st->st_atime;
-        op_data.attr.ia_mtime = st->st_mtime;
-        op_data.attr.ia_ctime = st->st_ctime;
-        op_data.attr.ia_size = st->st_size;
-        op_data.attr_blocks = st->st_blocks;
-        op_data.attr.ia_attr_flags = lli->lli_st_flags;
-        op_data.ioepoch = lli->lli_ioepoch;
-        memcpy(&op_data.handle, &och->och_fh, sizeof(op_data.handle));
+        op_data.op_fid1 = lli->lli_fid;
+        op_data.op_attr.ia_atime = st->st_atime;
+        op_data.op_attr.ia_mtime = st->st_mtime;
+        op_data.op_attr.ia_ctime = st->st_ctime;
+        op_data.op_attr.ia_size = st->st_size;
+        op_data.op_attr_blocks = st->st_blocks;
+        op_data.op_attr.ia_attr_flags = lli->lli_st_flags;
+        op_data.op_ioepoch = lli->lli_ioepoch;
+        memcpy(&op_data.op_handle, &och->och_fh, sizeof(op_data.op_handle));
 
         rc = md_close(md_exp, &op_data, och, &req);
         if (rc == -EAGAIN) {

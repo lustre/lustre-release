@@ -414,7 +414,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                                             de->d_name.name, de->d_name.len, 0);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
-                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2, &hint);
+                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->op_fid2, &hint);
                 if (rc) {
                         ll_finish_md_op_data(op_data);
                         RETURN(rc);
@@ -590,7 +590,7 @@ do_lookup:
                                                   .ph_cname = &de->d_name,
                                                   .ph_opc = LUSTRE_OPC_CREATE };
 
-                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->fid2, &hint);
+                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->op_fid2, &hint);
                 if (rc) {
                         ll_finish_md_op_data(op_data);
                         RETURN(rc);
@@ -604,7 +604,7 @@ do_lookup:
                                                            DLM_REPLY_REC_OFF,
                                                            sizeof(*mdt_body));
                 /* see if we got same inode, if not - return error */
-                if (lu_fid_eq(&op_data->fid2, &mdt_body->fid1)) {
+                if (lu_fid_eq(&op_data->op_fid2, &mdt_body->fid1)) {
                         ll_finish_md_op_data(op_data);
                         op_data = NULL;
                         goto revalidate_finish;

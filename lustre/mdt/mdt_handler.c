@@ -824,7 +824,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         if (rc != 0)
                 RETURN(rc);
 
-        /*step 2: lookup child's fid by name */
+        /* step 2: lookup child's fid by name */
         rc = mdo_lookup(info->mti_env, next, name, child_fid);
         if (rc != 0) {
                 if (rc == -ENOENT)

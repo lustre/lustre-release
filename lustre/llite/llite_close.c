@@ -123,8 +123,8 @@ void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
         }
 
         CDEBUG(D_INODE, "Epoch "LPU64" closed on "DFID"\n",
-               op_data->ioepoch, PFID(&lli->lli_fid));
-        op_data->flags |= MF_EPOCH_CLOSE;
+               op_data->op_ioepoch, PFID(&lli->lli_fid));
+        op_data->op_flags |= MF_EPOCH_CLOSE;
 
         if (flags & LLIF_DONE_WRITING) {
                 LASSERT(lli->lli_flags & LLIF_SOM_DIRTY);
@@ -148,13 +148,13 @@ void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
         }
         
         spin_unlock(&lli->lli_lock);
-        op_data->flags |= MF_SOM_CHANGE;
+        op_data->op_flags |= MF_SOM_CHANGE;
 
         /* Check if Size-on-MDS attributes are valid. */
         LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
         if (!ll_local_size(inode)) {
                 /* Send Size-on-MDS Attributes if valid. */
-                op_data->attr.ia_valid |= ATTR_MTIME_SET | ATTR_CTIME_SET |
+                op_data->op_attr.ia_valid |= ATTR_MTIME_SET | ATTR_CTIME_SET |
                                           ATTR_SIZE | ATTR_BLOCKS;
         }
         EXIT;
@@ -188,10 +188,10 @@ int ll_sizeonmds_update(struct inode *inode, struct lustre_handle *fh)
         CDEBUG(D_INODE, "Size-on-MDS update on "DFID"\n", PFID(&lli->lli_fid));
         
         md_from_obdo(op_data, oa, oa->o_valid);
-        memcpy(&op_data->handle, fh, sizeof(*fh));
+        memcpy(&op_data->op_handle, fh, sizeof(*fh));
         
-        op_data->ioepoch = lli->lli_ioepoch;
-        op_data->flags |= MF_SOM_CHANGE;
+        op_data->op_ioepoch = lli->lli_ioepoch;
+        op_data->op_flags |= MF_SOM_CHANGE;
         
         rc = ll_md_setattr(inode, op_data);
         EXIT;

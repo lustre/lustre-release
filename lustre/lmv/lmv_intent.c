@@ -109,7 +109,7 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         if (op_data == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-        op_data->fid1 = body->fid1;
+        op_data->op_fid1 = body->fid1;
 
         rc = md_intent_lock(tgt_exp, op_data, lmm, lmmsize, it, flags,
                             &req, cb_blocking, extra_lock_flags);
@@ -136,8 +136,8 @@ out:
         return rc;
 }
 
-int lmv_alloc_fid_for_split(struct obd_device *obd, struct lu_fid *pid,
-                            struct md_op_data *op, struct lu_fid *fid)
+int lmv_alloc_slave_fids(struct obd_device *obd, struct lu_fid *pid,
+                         struct md_op_data *op, struct lu_fid *fid)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         struct lmv_obj *obj;
@@ -155,7 +155,7 @@ int lmv_alloc_fid_for_split(struct obd_device *obd, struct lu_fid *pid,
         }
         
         mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
-                               (char *)op->name, op->namelen);
+                               (char *)op->op_name, op->op_namelen);
         rpid = &obj->lo_inodes[mea_idx].li_fid;
         mds = obj->lo_inodes[mea_idx].li_mds;
         lmv_obj_put(obj);
@@ -185,7 +185,7 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
 {
         struct obd_device *obd = exp->exp_obd;
         struct obd_export *tgt_exp;
-        struct lu_fid rpid = op_data->fid1;
+        struct lu_fid rpid = op_data->op_fid1;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mdt_body *body = NULL;
         struct md_op_data *sop_data;
@@ -211,8 +211,8 @@ repeat:
                  * the right MDS.
                  */
                 mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
-                                       (char *)op_data->name,
-                                       op_data->namelen);
+                                       (char *)op_data->op_name,
+                                       op_data->op_namelen);
 
                 rpid = obj->lo_inodes[mea_idx].li_fid;
                 tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
@@ -224,7 +224,7 @@ repeat:
         if (IS_ERR(tgt_exp))
                 GOTO(out_free_sop_data, rc = PTR_ERR(tgt_exp));
         
-        sop_data->fid1 = rpid;
+        sop_data->op_fid1 = rpid;
 
         rc = md_intent_lock(tgt_exp, sop_data, lmm, lmmsize, it, flags,
                             reqp, cb_blocking, extra_lock_flags);
@@ -240,12 +240,12 @@ repeat:
                  * Directory got split. Time to update local object and repeat
                  * the request with proper MDS.
                  */
-                LASSERT(lu_fid_eq(&op_data->fid1, &rpid));
+                LASSERT(lu_fid_eq(&op_data->op_fid1, &rpid));
                 rc = lmv_handle_split(exp, &rpid);
                 if (rc == 0) {
                         /* We should reallocate child FID. */
-                        rc = lmv_alloc_fid_for_split(obd, &rpid, op_data,
-                                                     &sop_data->fid2);
+                        rc = lmv_alloc_slave_fids(obd, &rpid, op_data,
+                                                  &sop_data->op_fid2);
                         if (rc == 0)
                                 goto repeat;
                 }
@@ -269,13 +269,13 @@ repeat:
                  * only debug info.
                  */
                 CDEBUG(D_OTHER, "can't handle remote %s: dir "DFID"("DFID"):"
-                       "%*s: %d\n", LL_IT2STR(it), PFID(&op_data->fid2),
-                       PFID(&rpid), op_data->namelen, op_data->name, rc);
+                       "%*s: %d\n", LL_IT2STR(it), PFID(&op_data->op_fid2),
+                       PFID(&rpid), op_data->op_namelen, op_data->op_name, rc);
                 GOTO(out_free_sop_data, rc);
         }
 
         /*
-         * nothing is found, do not access body->fid1 as it is zero and thus
+         * Nothing is found, do not access body->fid1 as it is zero and thus
          * pointless.
          */
         if ((it->d.lustre.it_disposition & DISP_LOOKUP_NEG) &&
@@ -331,7 +331,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
 {
         struct lmv_obj *obj = NULL, *obj2 = NULL;
         struct obd_device *obd = exp->exp_obd;
-        struct lu_fid rpid = op_data->fid1;
+        struct lu_fid rpid = op_data->op_fid1;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mdt_body *body = NULL;
         struct md_op_data *sop_data;
@@ -347,15 +347,15 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
         /* save op_data fro repeat case */
         *sop_data = *op_data;
 
-        if (fid_is_sane(&op_data->fid2)) {
+        if (fid_is_sane(&op_data->op_fid2)) {
                 /*
                  * Caller wants to revalidate attrs of obj we have to revalidate
                  * slaves if requested object is split directory.
                  */
                 CDEBUG(D_OTHER, "revalidate attrs for "DFID"\n",
-                       PFID(&op_data->fid2));
+                       PFID(&op_data->op_fid2));
 
-                rc = lmv_fld_lookup(lmv, &op_data->fid2, &mds);
+                rc = lmv_fld_lookup(lmv, &op_data->op_fid2, &mds);
                 if (rc)
                         GOTO(out_free_sop_data, rc);
 #if 0
@@ -363,9 +363,9 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
                  * In fact, we do not need this with current intent_lock(), but
                  * it may change some day.
                  */
-                obj = lmv_obj_grab(obd, &op_data->fid2);
+                obj = lmv_obj_grab(obd, &op_data->op_fid2);
                 if (obj) {
-                        if (!lu_fid_eq(&op_data->fid1, &op_data->fid2)){
+                        if (!lu_fid_eq(&op_data->op_fid1, &op_data->op_fid2)){
                                 rpid = obj->lo_inodes[mds].li_fid;
                                 mds = obj->lo_inodes[mds].li_mds;
                         }
@@ -374,19 +374,20 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
 #endif
         } else {
                 CDEBUG(D_OTHER, "INTENT getattr for %*s on "DFID"\n",
-                       op_data->namelen, op_data->name,
-                       PFID(&op_data->fid1));
+                       op_data->op_namelen, op_data->op_name,
+                       PFID(&op_data->op_fid1));
 
-                rc = lmv_fld_lookup(lmv, &op_data->fid1, &mds);
+                rc = lmv_fld_lookup(lmv, &op_data->op_fid1, &mds);
                 if (rc)
                         GOTO(out_free_sop_data, rc);
-                obj = lmv_obj_grab(obd, &op_data->fid1);
-                if (obj && op_data->namelen) {
+                obj = lmv_obj_grab(obd, &op_data->op_fid1);
+                if (obj && op_data->op_namelen) {
                         int mea_idx;
+                        
                         /* directory is already split. calculate mds */
                         mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
-                                               (char *)op_data->name,
-                                               op_data->namelen);
+                                               (char *)op_data->op_name,
+                                               op_data->op_namelen);
                         rpid = obj->lo_inodes[mea_idx].li_fid;
                         mds = obj->lo_inodes[mea_idx].li_mds;
                         lmv_obj_put(obj);
@@ -394,13 +395,13 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
                         CDEBUG(D_OTHER, "forward to MDS #"LPU64" (slave "DFID")\n",
                                mds, PFID(&rpid));
                 } else {
-                        rc = lmv_fld_lookup(lmv, &op_data->fid1, &mds);
+                        rc = lmv_fld_lookup(lmv, &op_data->op_fid1, &mds);
                         if (rc)
                                 GOTO(out_free_sop_data, rc);
                 }
         }
 
-        sop_data->fid1 = rpid;
+        sop_data->op_fid1 = rpid;
 
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, sop_data, lmm,
                             lmmsize, it, flags, reqp, cb_blocking,
@@ -421,10 +422,10 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
                  */
                 CDEBUG(D_OTHER,
                        "revalidate slaves for "DFID", rc %d\n",
-                       PFID(&op_data->fid2), rc);
+                       PFID(&op_data->op_fid2), rc);
 
-                LASSERT(fid_is_sane(&op_data->fid2));
-                rc = lmv_revalidate_slaves(exp, reqp, &op_data->fid2, it, rc,
+                LASSERT(fid_is_sane(&op_data->op_fid2));
+                rc = lmv_revalidate_slaves(exp, reqp, &op_data->op_fid2, it, rc,
                                            cb_blocking, extra_lock_flags);
                 GOTO(out_free_sop_data, rc);
         }
@@ -552,8 +553,8 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                 it.it_op = IT_GETATTR;
 
                 memset(op_data, 0, sizeof(*op_data));
-                op_data->fid1 = fid;
-                op_data->fid2 = fid;
+                op_data->op_fid1 = fid;
+                op_data->op_fid2 = fid;
 
                 tgt_exp = lmv_get_export(lmv, obj->lo_inodes[i].li_mds);
                 if (IS_ERR(tgt_exp))
@@ -616,7 +617,7 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
                       int extra_lock_flags)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct lu_fid rpid = op_data->fid1;
+        struct lu_fid rpid = op_data->op_fid1;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mdt_body *body = NULL;
         struct md_op_data *sop_data;
@@ -637,22 +638,22 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
         /*
          * IT_LOOKUP is intended to produce name -> fid resolving (let's call
          * this lookup below) or to confirm requested resolving is still valid
-         * (let's call this revalidation) fid_is_sane(&sop_data->fid2) specifies
+         * (let's call this revalidation) fid_is_sane(&sop_data->op_fid2) specifies
          * revalidation.
          */
-        if (fid_is_sane(&op_data->fid2)) {
+        if (fid_is_sane(&op_data->op_fid2)) {
                 /*
                  * This is revalidate: we have to check is LOOKUP lock still
                  * valid for given fid. Very important part is that we have to
                  * choose right mds because namespace is per mds.
                  */
-                rpid = op_data->fid1;
+                rpid = op_data->op_fid1;
                 obj = lmv_obj_grab(obd, &rpid);
                 if (obj) {
                         mea_idx = raw_name2idx(obj->lo_hashtype,
                                                obj->lo_objcount,
-                                               (char *)op_data->name,
-                                               op_data->namelen);
+                                               (char *)op_data->op_name,
+                                               op_data->op_namelen);
                         rpid = obj->lo_inodes[mea_idx].li_fid;
                         mds = obj->lo_inodes[mea_idx].li_mds;
                         lmv_obj_put(obj);
@@ -663,7 +664,7 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
                 }
 
                 CDEBUG(D_OTHER, "revalidate lookup for "DFID" to #"LPU64" MDS\n",
-                       PFID(&op_data->fid2), mds);
+                       PFID(&op_data->op_fid2), mds);
         } else {
 repeat:
                 LASSERT(++loop <= 2);
@@ -673,32 +674,32 @@ repeat:
                  * attributes, because returned values will be put in struct
                  * inode.
                  */
-                obj = lmv_obj_grab(obd, &op_data->fid1);
+                obj = lmv_obj_grab(obd, &op_data->op_fid1);
                 if (obj) {
-                        if (op_data->namelen) {
+                        if (op_data->op_namelen) {
                                 /* directory is already split. calculate mds */
                                 mea_idx = raw_name2idx(obj->lo_hashtype,
                                                        obj->lo_objcount,
-                                                       (char *)op_data->name,
-                                                       op_data->namelen);
+                                                       (char *)op_data->op_name,
+                                                       op_data->op_namelen);
                                 rpid = obj->lo_inodes[mea_idx].li_fid;
                                 mds = obj->lo_inodes[mea_idx].li_mds;
                         }
                         lmv_obj_put(obj);
                 } else {
-                        rc = lmv_fld_lookup(lmv, &op_data->fid1, &mds);
+                        rc = lmv_fld_lookup(lmv, &op_data->op_fid1, &mds);
                         if (rc)
                                 GOTO(out_free_sop_data, rc);
                 }
-                fid_zero(&sop_data->fid2);
+                fid_zero(&sop_data->op_fid2);
         }
 
-        sop_data->fid1 = rpid;
+        sop_data->op_fid1 = rpid;
 
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, sop_data, lmm, lmmsize,
                             it, flags, reqp, cb_blocking, extra_lock_flags);
         if (rc > 0) {
-                LASSERT(fid_is_sane(&op_data->fid2));
+                LASSERT(fid_is_sane(&op_data->op_fid2));
                 /*
                  * Very interesting. it seems object is still valid but for some
                  * reason llite calls lookup, not revalidate.
@@ -725,7 +726,7 @@ repeat:
                 it->d.lustre.it_data = 0;
                 /*
                  * Directory got split since last update. This shouldn't be
-                 * becasue splitting causes lock revocation, so revalidate had
+                 * because splitting causes lock revocation, so revalidate had
                  * to fail and lookup on dir had to return mea.
                  */
                 CWARN("we haven't knew about directory splitting!\n");
@@ -786,11 +787,11 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
         ENTRY;
 
         LASSERT(it != NULL);
-        LASSERT(fid_is_sane(&op_data->fid1));
+        LASSERT(fid_is_sane(&op_data->op_fid1));
 
         CDEBUG(D_OTHER, "INTENT LOCK '%s' for '%*s' on "DFID"\n",
-               LL_IT2STR(it), op_data->namelen, op_data->name,
-               PFID(&op_data->fid1));
+               LL_IT2STR(it), op_data->op_namelen, op_data->op_name,
+               PFID(&op_data->op_fid1));
 
         rc = lmv_check_connect(obd);
         if (rc)
@@ -889,8 +890,8 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                         cb = cb_blocking;
                 }
 
-                op_data->fid1 = fid;
-                op_data->fid2 = fid;
+                op_data->op_fid1 = fid;
+                op_data->op_fid2 = fid;
 
                 /* is obj valid? */
                 tgt_exp = lmv_get_export(lmv, obj->lo_inodes[i].li_mds);

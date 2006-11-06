@@ -79,7 +79,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data, int rc)
                 oscc->oscc_grow_count = OST_MIN_PRECREATE;
                 spin_unlock(&oscc->oscc_lock);
                 DEBUG_REQ(D_ERROR, req,
-                          "unknown rc %d from async create: failing oscc", rc);
+                          "Unknown rc %d from async create: failing oscc", rc);
                 ptlrpc_fail_import(req->rq_import,
                                    lustre_msg_get_conn_cnt(req->rq_reqmsg));
         } else {

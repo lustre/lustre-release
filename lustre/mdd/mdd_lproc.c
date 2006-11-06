@@ -77,12 +77,13 @@ static int mdd_procfs_init_stats(struct mdd_device *mdd, int num_stats)
                              LPROCFS_CNTR_AVGMINMAX, "get_md", "time");
         lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_LOOKUP,
                              LPROCFS_CNTR_AVGMINMAX, "lookup", "lookup");
+        EXIT;
 cleanup:
         if (rc) {
                 lprocfs_free_stats(stats);
                 mdd->mdd_stats = NULL;
         }
-        RETURN(rc);
+        return rc;
 }
 
 int mdd_procfs_fini(struct mdd_device *mdd)

@@ -1219,11 +1219,11 @@ static int lmv_close(struct obd_export *exp,
         if (rc)
                 RETURN(rc);
 
-        tgt_exp = lmv_find_export(lmv, &op_data->fid1);
+        tgt_exp = lmv_find_export(lmv, &op_data->op_fid1);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        CDEBUG(D_OTHER, "CLOSE "DFID"\n", PFID(&op_data->fid1));
+        CDEBUG(D_OTHER, "CLOSE "DFID"\n", PFID(&op_data->op_fid1));
         rc = md_close(tgt_exp, op_data, och, request);
         RETURN(rc);
 }
@@ -1304,31 +1304,31 @@ int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
                 RETURN(-EIO);
 repeat:
         LASSERT(++loop <= 2);
-        obj = lmv_obj_grab(obd, &op_data->fid1);
+        obj = lmv_obj_grab(obd, &op_data->op_fid1);
         if (obj) {
                 int mea_idx;
 
                 mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
-                                       op_data->name, op_data->namelen);
-                op_data->fid1 = obj->lo_inodes[mea_idx].li_fid;
+                                       op_data->op_name, op_data->op_namelen);
+                op_data->op_fid1 = obj->lo_inodes[mea_idx].li_fid;
                 tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
                 lmv_obj_put(obj);
         } else {
-                tgt_exp = lmv_find_export(lmv, &op_data->fid1);
+                tgt_exp = lmv_find_export(lmv, &op_data->op_fid1);
         }
 
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
-        CDEBUG(D_OTHER, "CREATE '%*s' on "DFID"\n", op_data->namelen,
-               op_data->name, PFID(&op_data->fid1));
+        CDEBUG(D_OTHER, "CREATE '%*s' on "DFID"\n", op_data->op_namelen,
+               op_data->op_name, PFID(&op_data->op_fid1));
 
         rc = md_create(tgt_exp, op_data, data, datalen, mode, uid, gid,
                        cap_effective, rdev, request);
         if (rc == 0) {
                 if (*request == NULL)
                         RETURN(rc);
-                CDEBUG(D_OTHER, "created. "DFID"\n", PFID(&op_data->fid1));
+                CDEBUG(D_OTHER, "created. "DFID"\n", PFID(&op_data->op_fid1));
         } else if (rc == -ERESTART) {
                 LASSERT(*request != NULL);
                 DEBUG_REQ(D_WARNING|D_RPCTRACE, *request, 
@@ -1339,10 +1339,10 @@ repeat:
                  * Directory got split. Time to update local object and repeat
                  * the request with proper MDS.
                  */
-                rc = lmv_handle_split(exp, &op_data->fid1);
+                rc = lmv_handle_split(exp, &op_data->op_fid1);
                 if (rc == 0) {
-                        rc = lmv_alloc_fid_for_split(obd, &op_data->fid1,
-                                                     op_data, &op_data->fid2);
+                        rc = lmv_alloc_slave_fids(obd, &op_data->op_fid1,
+                                                  op_data, &op_data->op_fid2);
                         if (rc)
                                 RETURN(rc);
                         goto repeat;
@@ -1365,7 +1365,7 @@ static int lmv_done_writing(struct obd_export *exp,
         if (rc)
                 RETURN(rc);
 
-        tgt_exp = lmv_find_export(lmv, &op_data->fid1);
+        tgt_exp = lmv_find_export(lmv, &op_data->op_fid1);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
@@ -1382,7 +1382,7 @@ lmv_enqueue_slaves(struct obd_export *exp, int locktype,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct lmv_stripe_md *mea = op_data->mea1;
+        struct lmv_stripe_md *mea = op_data->op_mea1;
         struct md_op_data *op_data2;
         struct obd_export *tgt_exp;
         int i, rc = 0;
@@ -1395,9 +1395,9 @@ lmv_enqueue_slaves(struct obd_export *exp, int locktype,
         LASSERT(mea != NULL);
         for (i = 0; i < mea->mea_count; i++) {
                 memset(op_data2, 0, sizeof(*op_data2));
-                op_data2->fid1 = mea->mea_ids[i];
+                op_data2->op_fid1 = mea->mea_ids[i];
 
-                tgt_exp = lmv_find_export(lmv, &op_data2->fid1);
+                tgt_exp = lmv_find_export(lmv, &op_data2->op_fid1);
                 if (IS_ERR(tgt_exp))
                         GOTO(cleanup, rc = PTR_ERR(tgt_exp));
 
@@ -1466,7 +1466,7 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
                 RETURN(0);
 
         CDEBUG(D_OTHER, "ENQUEUE '%s' on "DFID" -> "DFID"\n",
-               LL_IT2STR(it), PFID(&op_data->fid1), PFID(&body->fid1));
+               LL_IT2STR(it), PFID(&op_data->op_fid1), PFID(&body->fid1));
 
         /* We got LOOKUP lock, but we really need attrs */
         pmode = it->d.lustre.it_lock_mode;
@@ -1487,9 +1487,9 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         if (rdata == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-        rdata->fid1 = fid_copy;
-        rdata->name = NULL;
-        rdata->namelen = 0;
+        rdata->op_fid1 = fid_copy;
+        rdata->op_name = NULL;
+        rdata->op_namelen = 0;
 
         rc = md_enqueue(tgt_exp, lock_type, it, lock_mode, rdata,
                         lockh, lmm, lmmsize, cb_compl, cb_blocking,
@@ -1520,15 +1520,15 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
         if (rc)
                 RETURN(rc);
 
-        if (op_data->mea1 && it->it_op == IT_UNLINK) {
+        if (op_data->op_mea1 && it->it_op == IT_UNLINK) {
                 rc = lmv_enqueue_slaves(exp, lock_type, it, lock_mode,
                                         op_data, lockh, lmm, lmmsize,
                                         cb_compl, cb_blocking, cb_data);
                 RETURN(rc);
         }
 
-        if (op_data->namelen) {
-                obj = lmv_obj_grab(obd, &op_data->fid1);
+        if (op_data->op_namelen) {
+                obj = lmv_obj_grab(obd, &op_data->op_fid1);
                 if (obj) {
                         int mea_idx;
 
@@ -1536,21 +1536,21 @@ lmv_enqueue(struct obd_export *exp, int lock_type,
                          * name */
                         mea_idx = raw_name2idx(obj->lo_hashtype,
                                                obj->lo_objcount,
-                                               (char *)op_data->name,
-                                               op_data->namelen);
-                        op_data->fid1 = obj->lo_inodes[mea_idx].li_fid;
+                                               (char *)op_data->op_name,
+                                               op_data->op_namelen);
+                        op_data->op_fid1 = obj->lo_inodes[mea_idx].li_fid;
                         tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
                         lmv_obj_put(obj);
                 }
         }
 
         if (tgt_exp == NULL)
-                tgt_exp = lmv_find_export(lmv, &op_data->fid1);
+                tgt_exp = lmv_find_export(lmv, &op_data->op_fid1);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
         CDEBUG(D_OTHER, "ENQUEUE '%s' on "DFID"\n", LL_IT2STR(it),
-               PFID(&op_data->fid1));
+               PFID(&op_data->op_fid1));
 
         rc = md_enqueue(tgt_exp, lock_type, it, lock_mode, op_data, lockh,
                         lmm, lmmsize, cb_compl, cb_blocking, cb_data,
@@ -1644,8 +1644,8 @@ repeat:
 }
 
 /*
- * llite passes fid of an target inode in op_data->fid1 and id of directory in
- * op_data->fid2
+ * llite passes fid of an target inode in op_data->op_fid1 and id of directory in
+ * op_data->op_fid2
  */
 static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
                     struct ptlrpc_request **request)
@@ -1661,43 +1661,43 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
 	if (rc)
 		RETURN(rc);
 
-        if (op_data->namelen != 0) {
+        if (op_data->op_namelen != 0) {
                 int mea_idx;
                 /* usual link request */
-                obj = lmv_obj_grab(obd, &op_data->fid2);
+                obj = lmv_obj_grab(obd, &op_data->op_fid2);
                 if (obj) {
                         mea_idx = raw_name2idx(obj->lo_hashtype,
                                                obj->lo_objcount,
-                                               op_data->name,
-                                               op_data->namelen);
-                        op_data->fid2 = obj->lo_inodes[mea_idx].li_fid;
+                                               op_data->op_name,
+                                               op_data->op_namelen);
+                        op_data->op_fid2 = obj->lo_inodes[mea_idx].li_fid;
                         mds = obj->lo_inodes[mea_idx].li_mds;
                         lmv_obj_put(obj);
                 } else {
-                        rc = lmv_fld_lookup(lmv, &op_data->fid2, &mds);
+                        rc = lmv_fld_lookup(lmv, &op_data->op_fid2, &mds);
                         if (rc)
                                 RETURN(rc);
                 }
 
                 CDEBUG(D_OTHER,"link "DFID":%*s to "DFID"\n",
-                       PFID(&op_data->fid2), op_data->namelen,
-                       op_data->name, PFID(&op_data->fid1));
+                       PFID(&op_data->op_fid2), op_data->op_namelen,
+                       op_data->op_name, PFID(&op_data->op_fid1));
         } else {
-                rc = lmv_fld_lookup(lmv, &op_data->fid1, &mds);
+                rc = lmv_fld_lookup(lmv, &op_data->op_fid1, &mds);
                 if (rc)
                         RETURN(rc);
 
                 /* request from MDS to acquire i_links for inode by fid1 */
                 CDEBUG(D_OTHER, "inc i_nlinks for "DFID"\n",
-                       PFID(&op_data->fid1));
+                       PFID(&op_data->op_fid1));
         }
 
         CDEBUG(D_OTHER, "forward to MDS #"LPU64" ("DFID")\n",
-               mds, PFID(&op_data->fid1));
+               mds, PFID(&op_data->op_fid1));
 
-        op_data->fsuid = current->fsuid;
-        op_data->fsgid = current->fsgid;
-        op_data->cap   = current->cap_effective;
+        op_data->op_fsuid = current->fsuid;
+        op_data->op_fsgid = current->fsgid;
+        op_data->op_cap   = current->cap_effective;
         rc = md_link(lmv->tgts[mds].ltd_exp, op_data, request);
 
         RETURN(rc);
@@ -1715,8 +1715,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
         ENTRY;
 
         CDEBUG(D_OTHER, "rename %*s in "DFID" to %*s in "DFID"\n",
-               oldlen, old, PFID(&op_data->fid1),
-               newlen, new, PFID(&op_data->fid2));
+               oldlen, old, PFID(&op_data->op_fid1),
+               newlen, new, PFID(&op_data->op_fid2));
 
         rc = lmv_check_connect(obd);
 	if (rc)
@@ -1730,9 +1730,9 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                 CDEBUG(D_OTHER,
                        "create %*s(%d/%d) in "DFID" pointing "
                        "to "DFID"\n", newlen, new, oldlen, newlen,
-                       PFID(&op_data->fid2), PFID(&op_data->fid1));
+                       PFID(&op_data->op_fid2), PFID(&op_data->op_fid1));
 
-                rc = lmv_fld_lookup(lmv, &op_data->fid2, &mds);
+                rc = lmv_fld_lookup(lmv, &op_data->op_fid2, &mds);
                 if (rc)
                         RETURN(rc);
 
@@ -1740,20 +1740,20 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                  * target directory can be split, sowe should forward request to
                  * the right MDS.
                  */
-                obj = lmv_obj_grab(obd, &op_data->fid2);
+                obj = lmv_obj_grab(obd, &op_data->op_fid2);
                 if (obj) {
                         mea_idx = raw_name2idx(obj->lo_hashtype,
                                                obj->lo_objcount,
                                                (char *)new, newlen);
-                        op_data->fid2 = obj->lo_inodes[mea_idx].li_fid;
+                        op_data->op_fid2 = obj->lo_inodes[mea_idx].li_fid;
                         CDEBUG(D_OTHER, "Parent obj "DFID"\n",
-                               PFID(&op_data->fid2));
+                               PFID(&op_data->op_fid2));
                         lmv_obj_put(obj);
                 }
                 goto request;
         }
 
-        obj = lmv_obj_grab(obd, &op_data->fid1);
+        obj = lmv_obj_grab(obd, &op_data->op_fid1);
         if (obj) {
                 /*
                  * directory is already split, so we have to forward request to
@@ -1761,17 +1761,17 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                  */
                 mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                        (char *)old, oldlen);
-                op_data->fid1 = obj->lo_inodes[mea_idx].li_fid;
+                op_data->op_fid1 = obj->lo_inodes[mea_idx].li_fid;
                 mds = obj->lo_inodes[mea_idx].li_mds;
-                CDEBUG(D_OTHER, "Parent obj "DFID"\n", PFID(&op_data->fid1));
+                CDEBUG(D_OTHER, "Parent obj "DFID"\n", PFID(&op_data->op_fid1));
                 lmv_obj_put(obj);
         } else {
-                rc = lmv_fld_lookup(lmv, &op_data->fid1, &mds);
+                rc = lmv_fld_lookup(lmv, &op_data->op_fid1, &mds);
                 if (rc)
                         RETURN(rc);
         }
 
-        obj = lmv_obj_grab(obd, &op_data->fid2);
+        obj = lmv_obj_grab(obd, &op_data->op_fid2);
         if (obj) {
                 /*
                  * directory is already split, so we have to forward request to
@@ -1780,14 +1780,14 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                 mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                        (char *)new, newlen);
 
-                op_data->fid2 = obj->lo_inodes[mea_idx].li_fid;
-                CDEBUG(D_OTHER, "Parent obj "DFID"\n", PFID(&op_data->fid2));
+                op_data->op_fid2 = obj->lo_inodes[mea_idx].li_fid;
+                CDEBUG(D_OTHER, "Parent obj "DFID"\n", PFID(&op_data->op_fid2));
                 lmv_obj_put(obj);
         }
 request:
-        op_data->fsuid = current->fsuid;
-        op_data->fsgid = current->fsgid;
-        op_data->cap   = current->cap_effective;
+        op_data->op_fsuid = current->fsuid;
+        op_data->op_fsgid = current->fsgid;
+        op_data->op_cap   = current->cap_effective;
         rc = md_rename(lmv->tgts[mds].ltd_exp, op_data, old, oldlen,
                        new, newlen, request);
         RETURN(rc);
@@ -1809,15 +1809,15 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
 	if (rc)
 		RETURN(rc);
 
-        obj = lmv_obj_grab(obd, &op_data->fid1);
+        obj = lmv_obj_grab(obd, &op_data->op_fid1);
 
         CDEBUG(D_OTHER, "SETATTR for "DFID", valid 0x%x%s\n",
-               PFID(&op_data->fid1), op_data->attr.ia_valid,
+               PFID(&op_data->op_fid1), op_data->op_attr.ia_valid,
                obj ? ", split" : "");
 
         if (obj) {
                 for (i = 0; i < obj->lo_objcount; i++) {
-                        op_data->fid1 = obj->lo_inodes[i].li_fid;
+                        op_data->op_fid1 = obj->lo_inodes[i].li_fid;
 
                         tgt_exp = lmv_get_export(lmv, obj->lo_inodes[i].li_mds);
                         if (IS_ERR(tgt_exp)) {
@@ -1843,7 +1843,7 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 }
                 lmv_obj_put(obj);
         } else {
-                tgt_exp = lmv_find_export(lmv, &op_data->fid1);
+                tgt_exp = lmv_find_export(lmv, &op_data->op_fid1);
                 if (IS_ERR(tgt_exp))
                         RETURN(PTR_ERR(tgt_exp));
 
@@ -1991,7 +1991,7 @@ static int lmv_unlink_slaves(struct obd_export *exp,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct lmv_stripe_md *mea = op_data->mea1;
+        struct lmv_stripe_md *mea = op_data->op_mea1;
         struct md_op_data *op_data2;
         struct obd_export *tgt_exp;
         int i, rc = 0;
@@ -2004,11 +2004,11 @@ static int lmv_unlink_slaves(struct obd_export *exp,
         LASSERT(mea != NULL);
         for (i = 0; i < mea->mea_count; i++) {
                 memset(op_data2, 0, sizeof(*op_data2));
-                op_data2->fid1 = mea->mea_ids[i];
-                op_data2->mode = MDS_MODE_DONT_LOCK | S_IFDIR;
-                op_data2->fsuid = current->fsuid;
-                op_data2->fsgid = current->fsgid;
-                tgt_exp = lmv_find_export(lmv, &op_data2->fid1);
+                op_data2->op_fid1 = mea->mea_ids[i];
+                op_data2->op_mode = MDS_MODE_DONT_LOCK | S_IFDIR;
+                op_data2->op_fsuid = current->fsuid;
+                op_data2->op_fsgid = current->fsgid;
+                tgt_exp = lmv_find_export(lmv, &op_data2->op_fid1);
                 if (IS_ERR(tgt_exp))
                         GOTO(out_free_op_data2, rc = PTR_ERR(tgt_exp));
 
@@ -2047,41 +2047,41 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
 	if (rc)
 		RETURN(rc);
 
-        if (op_data->namelen == 0 && op_data->mea1 != NULL) {
+        if (op_data->op_namelen == 0 && op_data->op_mea1 != NULL) {
                 /* mds asks to remove slave objects */
                 rc = lmv_unlink_slaves(exp, op_data, request);
                 RETURN(rc);
         }
 
-        if (op_data->namelen != 0) {
+        if (op_data->op_namelen != 0) {
                 struct lmv_obj *obj;
                 int mea_idx;
 
-                obj = lmv_obj_grab(obd, &op_data->fid1);
+                obj = lmv_obj_grab(obd, &op_data->op_fid1);
                 if (obj) {
                         mea_idx = raw_name2idx(obj->lo_hashtype,
                                                obj->lo_objcount,
-                                               op_data->name,
-                                               op_data->namelen);
-                        op_data->fid1 = obj->lo_inodes[mea_idx].li_fid;
+                                               op_data->op_name,
+                                               op_data->op_namelen);
+                        op_data->op_fid1 = obj->lo_inodes[mea_idx].li_fid;
                         tgt_exp = lmv_get_export(lmv,
                                                  obj->lo_inodes[mea_idx].li_mds);
                         lmv_obj_put(obj);
                         CDEBUG(D_OTHER, "unlink '%*s' in "DFID" -> %u\n",
-                               op_data->namelen, op_data->name,
-                               PFID(&op_data->fid1), mea_idx);
+                               op_data->op_namelen, op_data->op_name,
+                               PFID(&op_data->op_fid1), mea_idx);
                 }
         } else {
                 CDEBUG(D_OTHER, "drop i_nlink on "DFID"\n",
-                       PFID(&op_data->fid1));
+                       PFID(&op_data->op_fid1));
         }
         if (tgt_exp == NULL)
-                tgt_exp = lmv_find_export(lmv, &op_data->fid1);
+                tgt_exp = lmv_find_export(lmv, &op_data->op_fid1);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
-        op_data->fsuid = current->fsuid;
-        op_data->fsgid = current->fsgid;
-        op_data->cap   = current->cap_effective;
+        op_data->op_fsuid = current->fsuid;
+        op_data->op_fsgid = current->fsgid;
+        op_data->op_cap   = current->cap_effective;
         rc = md_unlink(tgt_exp, op_data, request);
         RETURN(rc);
 }

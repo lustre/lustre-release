@@ -121,18 +121,18 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
         rec->cr_fsuid = uid;
         rec->cr_fsgid = gid;
         rec->cr_cap = cap_effective;
-        rec->cr_fid1 = op_data->fid1;
-        rec->cr_fid2 = op_data->fid2;
+        rec->cr_fid1 = op_data->op_fid1;
+        rec->cr_fid2 = op_data->op_fid2;
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;
-        rec->cr_time = op_data->mod_time;
-        rec->cr_suppgid = op_data->suppgids[0];
-        rec->cr_flags = op_data->flags;
+        rec->cr_time = op_data->op_mod_time;
+        rec->cr_suppgid = op_data->op_suppgids[0];
+        rec->cr_flags = op_data->op_flags;
 
-        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->namelen + 1);
-        LOGL0(op_data->name, op_data->namelen, tmp);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->op_namelen + 1);
+        LOGL0(op_data->op_name, op_data->op_namelen, tmp);
 
         if (data) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, datalen);
@@ -168,7 +168,7 @@ void mdc_join_pack(struct ptlrpc_request *req, int offset,
 
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof(*rec));
         LASSERT(rec != NULL);
-        rec->jr_fid = op_data->fid2;
+        rec->jr_fid = op_data->op_fid2;
         rec->jr_headsize = head_size;
 }
 
@@ -186,30 +186,30 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_fsgid = current->fsgid;
         rec->cr_cap = current->cap_effective;
         if (op_data != NULL) {
-                rec->cr_fid1 = op_data->fid1;
-                rec->cr_fid2 = op_data->fid2;
+                rec->cr_fid1 = op_data->op_fid1;
+                rec->cr_fid2 = op_data->op_fid2;
         }
         rec->cr_mode = mode;
         rec->cr_flags = mds_pack_open_flags(flags);
         rec->cr_rdev = rdev;
-        rec->cr_time = op_data->mod_time;
-        rec->cr_suppgid = op_data->suppgids[0];
+        rec->cr_time = op_data->op_mod_time;
+        rec->cr_suppgid = op_data->op_suppgids[0];
 
-        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
         /* the next buffer is child capa, which is used for replay,
          * will be packed from the data in reply message. */
 
-        if (op_data->name) {
+        if (op_data->op_name) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3,
-                                     op_data->namelen + 1);
-                LOGL0(op_data->name, op_data->namelen, tmp);
+                                     op_data->op_namelen + 1);
+                LOGL0(op_data->op_name, op_data->op_namelen, tmp);
         }
 
         if (lmm) {
                 rec->cr_flags |= MDS_OPEN_HAS_EA;
 #ifndef __KERNEL__
                 /*XXX a hack for liblustre to set EA (LL_IOC_LOV_SETSTRIPE) */
-                rec->cr_fid2 = op_data->fid2;
+                rec->cr_fid2 = op_data->op_fid2;
 #endif
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 4, lmmlen);
                 memcpy (tmp, lmm, lmmlen);
@@ -225,29 +225,29 @@ static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
         rec->sa_cap = current->cap_effective;
         rec->sa_suppgid = -1;
 
-        rec->sa_fid = op_data->fid1;
-        rec->sa_valid = op_data->attr.ia_valid;
-        rec->sa_mode = op_data->attr.ia_mode;
-        rec->sa_uid = op_data->attr.ia_uid;
-        rec->sa_gid = op_data->attr.ia_gid;
-        rec->sa_size = op_data->attr.ia_size;
-        rec->sa_blocks = op_data->attr_blocks;
-        rec->sa_atime = LTIME_S(op_data->attr.ia_atime);
-        rec->sa_mtime = LTIME_S(op_data->attr.ia_mtime);
-        rec->sa_ctime = LTIME_S(op_data->attr.ia_ctime);
-        rec->sa_attr_flags = ((struct ll_iattr *)&op_data->attr)->ia_attr_flags;
-        if ((op_data->attr.ia_valid & ATTR_GID) &&
-            in_group_p(op_data->attr.ia_gid))
-                rec->sa_suppgid = op_data->attr.ia_gid;
+        rec->sa_fid = op_data->op_fid1;
+        rec->sa_valid = op_data->op_attr.ia_valid;
+        rec->sa_mode = op_data->op_attr.ia_mode;
+        rec->sa_uid = op_data->op_attr.ia_uid;
+        rec->sa_gid = op_data->op_attr.ia_gid;
+        rec->sa_size = op_data->op_attr.ia_size;
+        rec->sa_blocks = op_data->op_attr_blocks;
+        rec->sa_atime = LTIME_S(op_data->op_attr.ia_atime);
+        rec->sa_mtime = LTIME_S(op_data->op_attr.ia_mtime);
+        rec->sa_ctime = LTIME_S(op_data->op_attr.ia_ctime);
+        rec->sa_attr_flags = ((struct ll_iattr *)&op_data->op_attr)->ia_attr_flags;
+        if ((op_data->op_attr.ia_valid & ATTR_GID) &&
+            in_group_p(op_data->op_attr.ia_gid))
+                rec->sa_suppgid = op_data->op_attr.ia_gid;
         else
-                rec->sa_suppgid = op_data->suppgids[0];
+                rec->sa_suppgid = op_data->op_suppgids[0];
 }
 
 static void mdc_epoch_pack(struct mdt_epoch *epoch, struct md_op_data *op_data)
 {
-        memcpy(&epoch->handle, &op_data->handle, sizeof(epoch->handle));
-        epoch->ioepoch = op_data->ioepoch;
-        epoch->flags = op_data->flags;
+        memcpy(&epoch->handle, &op_data->op_handle, sizeof(epoch->handle));
+        epoch->ioepoch = op_data->op_ioepoch;
+        epoch->flags = op_data->op_flags;
 }
 
 void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
@@ -260,9 +260,9 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));        
         mdc_setattr_pack_rec(rec, op_data);
 
-        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
 
-        if (op_data->flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN)) {
+        if (op_data->op_flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN)) {
                 epoch = lustre_msg_buf(req->rq_reqmsg, offset + 2,
                                         sizeof(*epoch));
                 mdc_epoch_pack(epoch, op_data);
@@ -289,20 +289,20 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         LASSERT (rec != NULL);
 
         rec->ul_opcode = REINT_UNLINK;
-        rec->ul_fsuid = op_data->fsuid;//current->fsuid;
-        rec->ul_fsgid = op_data->fsgid;//current->fsgid;
-        rec->ul_cap = op_data->cap;//current->cap_effective;
-        rec->ul_mode = op_data->mode;
-        rec->ul_suppgid = op_data->suppgids[0];
-        rec->ul_fid1 = op_data->fid1;
-        rec->ul_fid2 = op_data->fid2;
-        rec->ul_time = op_data->mod_time;
+        rec->ul_fsuid = op_data->op_fsuid;//current->fsuid;
+        rec->ul_fsgid = op_data->op_fsgid;//current->fsgid;
+        rec->ul_cap = op_data->op_cap;//current->cap_effective;
+        rec->ul_mode = op_data->op_mode;
+        rec->ul_suppgid = op_data->op_suppgids[0];
+        rec->ul_fid1 = op_data->op_fid1;
+        rec->ul_fid2 = op_data->op_fid2;
+        rec->ul_time = op_data->op_mod_time;
 
-        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->namelen + 1);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->op_namelen + 1);
         LASSERT(tmp != NULL);
-        LOGL0(op_data->name, op_data->namelen, tmp);
+        LOGL0(op_data->op_name, op_data->op_namelen, tmp);
 }
 
 void mdc_link_pack(struct ptlrpc_request *req, int offset,
@@ -314,20 +314,20 @@ void mdc_link_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
         rec->lk_opcode = REINT_LINK;
-        rec->lk_fsuid = op_data->fsuid;//current->fsuid;
-        rec->lk_fsgid = op_data->fsgid;//current->fsgid;
-        rec->lk_cap = op_data->cap;//current->cap_effective;
-        rec->lk_suppgid1 = op_data->suppgids[0];
-        rec->lk_suppgid2 = op_data->suppgids[1];
-        rec->lk_fid1 = op_data->fid1;
-        rec->lk_fid2 = op_data->fid2;
-        rec->lk_time = op_data->mod_time;
+        rec->lk_fsuid = op_data->op_fsuid;//current->fsuid;
+        rec->lk_fsgid = op_data->op_fsgid;//current->fsgid;
+        rec->lk_cap = op_data->op_cap;//current->cap_effective;
+        rec->lk_suppgid1 = op_data->op_suppgids[0];
+        rec->lk_suppgid2 = op_data->op_suppgids[1];
+        rec->lk_fid1 = op_data->op_fid1;
+        rec->lk_fid2 = op_data->op_fid2;
+        rec->lk_time = op_data->op_mod_time;
 
-        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
-        mdc_pack_capa(req, offset + 2, op_data->mod_capa2);
+        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
+        mdc_pack_capa(req, offset + 2, op_data->op_mod_capa2);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, op_data->namelen + 1);
-        LOGL0(op_data->name, op_data->namelen, tmp);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, op_data->op_namelen + 1);
+        LOGL0(op_data->op_name, op_data->op_namelen, tmp);
 }
 
 void mdc_rename_pack(struct ptlrpc_request *req, int offset,
@@ -341,18 +341,18 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
 
         /* XXX do something about time, uid, gid */
         rec->rn_opcode = REINT_RENAME;
-        rec->rn_fsuid = op_data->fsuid;//current->fsuid;
-        rec->rn_fsgid = op_data->fsgid;//current->fsgid;
-        rec->rn_cap = op_data->cap;//current->cap_effective;
-        rec->rn_suppgid1 = op_data->suppgids[0];
-        rec->rn_suppgid2 = op_data->suppgids[1];
-        rec->rn_fid1 = op_data->fid1;
-        rec->rn_fid2 = op_data->fid2;
-        rec->rn_time = op_data->mod_time;
-        rec->rn_mode = op_data->mode;
+        rec->rn_fsuid = op_data->op_fsuid;//current->fsuid;
+        rec->rn_fsgid = op_data->op_fsgid;//current->fsgid;
+        rec->rn_cap = op_data->op_cap;//current->cap_effective;
+        rec->rn_suppgid1 = op_data->op_suppgids[0];
+        rec->rn_suppgid2 = op_data->op_suppgids[1];
+        rec->rn_fid1 = op_data->op_fid1;
+        rec->rn_fid2 = op_data->op_fid2;
+        rec->rn_time = op_data->op_mod_time;
+        rec->rn_mode = op_data->op_mode;
 
-        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
-        mdc_pack_capa(req, offset + 2, op_data->mod_capa2);
+        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
+        mdc_pack_capa(req, offset + 2, op_data->op_mod_capa2);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, oldlen + 1);
         LOGL0(old, oldlen, tmp);
@@ -374,18 +374,18 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
         b->capability = current->cap_effective;
         b->valid = valid;
         b->flags = flags | MDS_BFLAG_EXT_FLAGS;
-        b->suppgid = op_data->suppgids[0];
+        b->suppgid = op_data->op_suppgids[0];
 
-        b->fid1 = op_data->fid1;
-        b->fid2 = op_data->fid2;
+        b->fid1 = op_data->op_fid1;
+        b->fid2 = op_data->op_fid2;
 
-        mdc_pack_capa(req, offset + 1, op_data->mod_capa1);
+        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
 
-        if (op_data->name) {
+        if (op_data->op_name) {
                 char *tmp;
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2,
-                                     op_data->namelen + 1);
-                LOGL0(op_data->name, op_data->namelen, tmp);
+                                     op_data->op_namelen + 1);
+                LOGL0(op_data->op_name, op_data->op_namelen, tmp);
         }
 }
 
@@ -399,7 +399,7 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset + 1, sizeof(*rec));
 
         mdc_setattr_pack_rec(rec, op_data);
-        mdc_pack_capa(req, offset + 2, op_data->mod_capa1);
+        mdc_pack_capa(req, offset + 2, op_data->op_mod_capa1);
         mdc_epoch_pack(epoch, op_data);
 }
 

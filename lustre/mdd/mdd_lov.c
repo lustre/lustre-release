@@ -194,7 +194,7 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                                         mdd_buf_get(env, md, *md_size), name,
                                         mdd_object_capa(env, obj));
         /*
-         * XXX: handling of -ENODATA, the right way is to have ->do_md_get()
+         * XXX: Handling of -ENODATA, the right way is to have ->do_md_get()
          * exported by dt layer.
          */
         if (rc == 0 || rc == -ENODATA) {
@@ -203,12 +203,12 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
         } else if (rc < 0) {
                 CERROR("Error %d reading eadata \n", rc);
         } else {
-                /* XXX: convert lov EA but fixed after verification test. */
+                /* XXX: Convert lov EA but fixed after verification test. */
                 *md_size = rc;
         }
 
         mdd_lproc_time_end(mdd, &start, LPROC_MDD_GET_MD);
-        RETURN (rc);
+        RETURN(rc);
 }
 
 int mdd_get_md_locked(const struct lu_env *env, struct mdd_object *obj,
@@ -296,7 +296,7 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
                         rc = mdd_xattr_set_txn(env, child, buf,
                                                MDS_LOV_MD_NAME, 0, handle);
                 }
-        } else  if (S_ISDIR(mode)) {
+        } else if (S_ISDIR(mode)) {
                 if (lmmp == NULL && lmm_size == 0) {
                         struct lov_mds_md *lmm = &mdd_env_info(env)->mti_lmm;
                         int size = sizeof(*lmm);
@@ -487,9 +487,9 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
         }
 
         /*
-         * Sometimes, we may truncate some object(without lsm) then open (with
-         * write flags)it, so creating lsm above.  The Nonzero(truncated) size
-         * should tell ost. since size attr is in charged by OST.
+         * Sometimes, we may truncate some object(without lsm) then open it
+         * (with write flags), so creating lsm above.  The Nonzero(truncated)
+         * size should tell ost, since size attr is in charge by OST.
          */
         if (la->la_size && la->la_valid & LA_SIZE) {
                 struct obd_info *oinfo = &mdd_env_info(env)->mti_oi;

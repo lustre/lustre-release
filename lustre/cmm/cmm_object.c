@@ -75,8 +75,8 @@ struct lu_object *cmm_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *loh,
                                    struct lu_device *ld)
 {
-        struct lu_object  *lo = NULL;
         const struct lu_fid *fid = &loh->loh_fid;
+        struct lu_object  *lo = NULL;
         struct cmm_device *cd;
         mdsno_t mdsnum;
         int rc = 0;

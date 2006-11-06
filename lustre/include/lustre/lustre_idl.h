@@ -584,15 +584,17 @@ typedef uint32_t        obd_count;
 #define OBD_FL_CREATE_CROW   (0x00000400) /* object should be create on write */
 
 /*
- * set this to delegate DLM locking during obd_punch() to the OSTs. Only OSTs
+ * Set this to delegate DLM locking during obd_punch() to the OSTs. Only OSTs
  * that declared OBD_CONNECT_TRUNCLOCK in their connect flags support this
  * functionality.
  */
 #define OBD_FL_TRUNCLOCK     (0x00000800)
 
-/* this should be not smaller than sizeof(struct lustre_handle) + sizeof(struct
- * llog_cookie) + sizeof(ll_fid). Nevertheless struct ll_fid is not longer
- * stored in o_inline, we keep this just for case. */
+/*
+ * This should not be smaller than sizeof(struct lustre_handle) + sizeof(struct
+ * llog_cookie) + sizeof(struct ll_fid). Nevertheless struct ll_fid is not
+ * longer stored in o_inline, we keep this just for case.
+ */
 #define OBD_INLINESZ    80
 
 /* Note: 64-bit types are 64-bit aligned in structure */
@@ -633,35 +635,36 @@ struct obdo {
 extern void lustre_swab_obdo (struct obdo *o);
 
 struct md_op_data {
-        struct lu_fid         fid1;
-        struct lu_fid         fid2;
-        struct lustre_handle  handle;
-        __u64                 mod_time;
-        const char           *name;
-        int                   namelen;
-        __u32                 mode;
-        struct lmv_stripe_md *mea1;
-        struct lmv_stripe_md *mea2;
-        __u32                 suppgids[2];
-        __u32                 fsuid;
-        __u32                 fsgid;
-        __u32                 cap;
+        struct lu_fid           op_fid1;
+        struct lu_fid           op_fid2;
+        struct lustre_handle    op_handle;
+        __u64                   op_mod_time;
+        const char             *op_name;
+        int                     op_namelen;
+        __u32                   op_mode;
+        struct lmv_stripe_md   *op_mea1;
+        struct lmv_stripe_md   *op_mea2;
+        __u32                   op_suppgids[2];
+        __u32                   op_fsuid;
+        __u32                   op_fsgid;
+        __u32                   op_cap;
 
         /* iattr fields and blocks. */
-        struct iattr          attr;
+        struct iattr            op_attr;
 #ifdef __KERNEL__
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
-        unsigned int          attr_flags;
+        unsigned int            op_attr_flags;
 #endif
 #endif
-        loff_t                attr_blocks;
+        loff_t                  op_attr_blocks;
 
         /* Size-on-MDS epoch and flags. */
-        __u64                 ioepoch;
-        __u32                 flags;
+        __u64                   op_ioepoch;
+        __u32                   op_flags;
 
-        struct obd_capa      *mod_capa1;
-        struct obd_capa      *mod_capa2;
+        /* Capa fields */
+        struct obd_capa        *op_mod_capa1;
+        struct obd_capa        *op_mod_capa2;
 };
 
 #define MDS_MODE_DONT_LOCK (1 << 30)

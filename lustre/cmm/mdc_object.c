@@ -105,12 +105,8 @@ struct mdc_thread_info *mdc_info_get(const struct lu_env *env)
 static
 struct mdc_thread_info *mdc_info_init(const struct lu_env *env)
 {
-        struct mdc_thread_info *mci;
-
-        mci = mdc_info_get(env);
-
+        struct mdc_thread_info *mci = mdc_info_get(env);
         memset(mci, 0, sizeof(*mci));
-
         return mci;
 }
 
@@ -216,10 +212,9 @@ static int mdc_attr_get(const struct lu_env *env, struct md_object *mo,
 
         memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
 
-        rc = md_getattr(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu), NULL,
-                        OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID |
-                        OBD_MD_FLFLAGS,
-                        0, &mci->mci_req);
+        rc = md_getattr(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
+                        NULL, OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID |
+                        OBD_MD_FLFLAGS, 0, &mci->mci_req);
         if (rc == 0) {
                 /* get attr from request */
                 rc = mdc_req2attr_update(env, ma);
@@ -249,12 +244,13 @@ static int mdc_object_create(const struct lu_env *env,
 
         LASSERT(S_ISDIR(la->la_mode));
         LASSERT(spec->u.sp_pfid != NULL);
+
         mci = mdc_info_init(env);
-        mci->mci_opdata.fid2 = *lu_object_fid(&mo->mo_lu);
+        mci->mci_opdata.op_fid2 = *lu_object_fid(&mo->mo_lu);
         
         /* Parent fid is needed to create dotdot on the remote node. */
-        mci->mci_opdata.fid1 = *(spec->u.sp_pfid);
-        mci->mci_opdata.mod_time = la->la_mtime;
+        mci->mci_opdata.op_fid1 = *(spec->u.sp_pfid);
+        mci->mci_opdata.op_mod_time = la->la_mtime;
         if (uc &&
             ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))) {
                 uid = uc->mu_fsuid;
@@ -264,27 +260,27 @@ static int mdc_object_create(const struct lu_env *env,
                         gid = uc->mu_fsgid;
                 cap = uc->mu_cap;
                 if (uc->mu_ginfo || (uc->mu_valid == UCRED_OLD))
-                        mci->mci_opdata.suppgids[0] = uc->mu_suppgids[0];
+                        mci->mci_opdata.op_suppgids[0] = uc->mu_suppgids[0];
                 else
-                        mci->mci_opdata.suppgids[0] = -1;
+                        mci->mci_opdata.op_suppgids[0] = -1;
         } else {
                 uid = la->la_uid;
                 gid = la->la_gid;
                 cap = 0;
-                mci->mci_opdata.suppgids[0] = -1;
+                mci->mci_opdata.op_suppgids[0] = -1;
         }
 
         /* get data from spec */
         if (spec->sp_cr_flags & MDS_CREATE_SLAVE_OBJ) {
                 symname = spec->u.sp_ea.eadata;
                 symlen = spec->u.sp_ea.eadatalen;
-                mci->mci_opdata.fid1 = *(spec->u.sp_ea.fid);
-                mci->mci_opdata.flags |= MDS_CREATE_SLAVE_OBJ;
+                mci->mci_opdata.op_fid1 = *(spec->u.sp_ea.fid);
+                mci->mci_opdata.op_flags |= MDS_CREATE_SLAVE_OBJ;
 #ifdef CONFIG_FS_POSIX_ACL
         } else if (spec->sp_cr_flags & MDS_CREATE_RMT_ACL) {
                 symname = spec->u.sp_ea.eadata;
                 symlen = spec->u.sp_ea.eadatalen;
-                mci->mci_opdata.flags |= MDS_CREATE_RMT_ACL;
+                mci->mci_opdata.op_flags |= MDS_CREATE_RMT_ACL;
 #endif
         } else {
                 symname = spec->u.sp_symname;
@@ -292,9 +288,8 @@ static int mdc_object_create(const struct lu_env *env,
         }
 
         rc = md_create(mc->mc_desc.cl_exp, &mci->mci_opdata,
-                       symname, symlen,
-                       la->la_mode, uid, gid, cap, la->la_rdev,
-                       &mci->mci_req);
+                       symname, symlen, la->la_mode, uid, gid,
+                       cap, la->la_rdev, &mci->mci_req);
 
         if (rc == 0) {
                 /* get attr from request */
@@ -318,28 +313,28 @@ static int mdc_ref_add(const struct lu_env *env, struct md_object *mo)
         LASSERT(mci);
 
         memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
-        mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
-        //mci->mci_opdata.mod_time = la->la_ctime;
-        //mci->mci_opdata.fsuid = la->la_uid;
-        //mci->mci_opdata.fsgid = la->la_gid;
-        mci->mci_opdata.mod_time = CURRENT_SECONDS;
+        mci->mci_opdata.op_fid1 = *lu_object_fid(&mo->mo_lu);
+        //mci->mci_opdata.op_mod_time = la->la_ctime;
+        //mci->mci_opdata.op_fsuid = la->la_uid;
+        //mci->mci_opdata.op_fsgid = la->la_gid;
+        mci->mci_opdata.op_mod_time = CURRENT_SECONDS;
         if (uc &&
             ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))) {
-                mci->mci_opdata.fsuid = uc->mu_fsuid;
-                mci->mci_opdata.fsgid = uc->mu_fsgid;
-                mci->mci_opdata.cap = uc->mu_cap;
+                mci->mci_opdata.op_fsuid = uc->mu_fsuid;
+                mci->mci_opdata.op_fsgid = uc->mu_fsgid;
+                mci->mci_opdata.op_cap = uc->mu_cap;
                 if (uc->mu_ginfo || (uc->mu_valid == UCRED_OLD)) {
-                        mci->mci_opdata.suppgids[0] = uc->mu_suppgids[0];
-                        mci->mci_opdata.suppgids[1] = uc->mu_suppgids[1];
+                        mci->mci_opdata.op_suppgids[0] = uc->mu_suppgids[0];
+                        mci->mci_opdata.op_suppgids[1] = uc->mu_suppgids[1];
                 } else {
-                        mci->mci_opdata.suppgids[0] =
-                                mci->mci_opdata.suppgids[1] = -1;
+                        mci->mci_opdata.op_suppgids[0] =
+                                mci->mci_opdata.op_suppgids[1] = -1;
                 }
         } else {
-                mci->mci_opdata.fsuid = current->fsuid;
-                mci->mci_opdata.fsgid = current->fsgid;
-                mci->mci_opdata.cap = current->cap_effective;
-                mci->mci_opdata.suppgids[0] = mci->mci_opdata.suppgids[1] = -1;
+                mci->mci_opdata.op_fsuid = current->fsuid;
+                mci->mci_opdata.op_fsgid = current->fsgid;
+                mci->mci_opdata.op_cap = current->cap_effective;
+                mci->mci_opdata.op_suppgids[0] = mci->mci_opdata.op_suppgids[1] = -1;
         }
 
 
@@ -361,23 +356,23 @@ static int mdc_ref_del(const struct lu_env *env, struct md_object *mo,
         ENTRY;
 
         mci = mdc_info_init(env);
-        mci->mci_opdata.fid1 = *lu_object_fid(&mo->mo_lu);
-        mci->mci_opdata.mode = la->la_mode;
-        mci->mci_opdata.mod_time = la->la_ctime;
+        mci->mci_opdata.op_fid1 = *lu_object_fid(&mo->mo_lu);
+        mci->mci_opdata.op_mode = la->la_mode;
+        mci->mci_opdata.op_mod_time = la->la_ctime;
         if (uc &&
             ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))) {
-                mci->mci_opdata.fsuid = uc->mu_fsuid;
-                mci->mci_opdata.fsgid = uc->mu_fsgid;
-                mci->mci_opdata.cap = uc->mu_cap;
+                mci->mci_opdata.op_fsuid = uc->mu_fsuid;
+                mci->mci_opdata.op_fsgid = uc->mu_fsgid;
+                mci->mci_opdata.op_cap = uc->mu_cap;
                 if (uc->mu_ginfo || (uc->mu_valid == UCRED_OLD))
-                        mci->mci_opdata.suppgids[0] = uc->mu_suppgids[0];
+                        mci->mci_opdata.op_suppgids[0] = uc->mu_suppgids[0];
                 else
-                        mci->mci_opdata.suppgids[0] = -1;
+                        mci->mci_opdata.op_suppgids[0] = -1;
         } else {
-                mci->mci_opdata.fsuid = la->la_uid;
-                mci->mci_opdata.fsgid = la->la_gid;
-                mci->mci_opdata.cap = current->cap_effective;
-                mci->mci_opdata.suppgids[0] = -1;
+                mci->mci_opdata.op_fsuid = la->la_uid;
+                mci->mci_opdata.op_fsgid = la->la_gid;
+                mci->mci_opdata.op_cap = current->cap_effective;
+                mci->mci_opdata.op_suppgids[0] = -1;
         }
 
         rc = md_unlink(mc->mc_desc.cl_exp, &mci->mci_opdata, &mci->mci_req);
@@ -427,27 +422,27 @@ static int mdc_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
         ENTRY;
 
         mci = mdc_info_init(env);
-        mci->mci_opdata.fid1 = *lu_object_fid(&mo_p->mo_lu);
-        mci->mci_opdata.fid2 = *lf;
-        mci->mci_opdata.mode = la->la_mode;
-        mci->mci_opdata.mod_time = la->la_ctime;
+        mci->mci_opdata.op_fid1 = *lu_object_fid(&mo_p->mo_lu);
+        mci->mci_opdata.op_fid2 = *lf;
+        mci->mci_opdata.op_mode = la->la_mode;
+        mci->mci_opdata.op_mod_time = la->la_ctime;
         if (uc &&
             ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))) {
-                mci->mci_opdata.fsuid = uc->mu_fsuid;
-                mci->mci_opdata.fsgid = uc->mu_fsgid;
-                mci->mci_opdata.cap = uc->mu_cap;
+                mci->mci_opdata.op_fsuid = uc->mu_fsuid;
+                mci->mci_opdata.op_fsgid = uc->mu_fsgid;
+                mci->mci_opdata.op_cap = uc->mu_cap;
                 if (uc->mu_ginfo || (uc->mu_valid == UCRED_OLD)) {
-                        mci->mci_opdata.suppgids[0] = uc->mu_suppgids[0];
-                        mci->mci_opdata.suppgids[1] = uc->mu_suppgids[1];
+                        mci->mci_opdata.op_suppgids[0] = uc->mu_suppgids[0];
+                        mci->mci_opdata.op_suppgids[1] = uc->mu_suppgids[1];
                 } else {
-                        mci->mci_opdata.suppgids[0] =
-                                mci->mci_opdata.suppgids[1] = -1;
+                        mci->mci_opdata.op_suppgids[0] =
+                                mci->mci_opdata.op_suppgids[1] = -1;
                 }
         } else {
-                mci->mci_opdata.fsuid = la->la_uid;
-                mci->mci_opdata.fsgid = la->la_gid;
-                mci->mci_opdata.cap = current->cap_effective;
-                mci->mci_opdata.suppgids[0] = mci->mci_opdata.suppgids[1] = -1;
+                mci->mci_opdata.op_fsuid = la->la_uid;
+                mci->mci_opdata.op_fsgid = la->la_gid;
+                mci->mci_opdata.op_cap = current->cap_effective;
+                mci->mci_opdata.op_suppgids[0] = mci->mci_opdata.op_suppgids[1] = -1;
         }
 
         rc = md_rename(mc->mc_desc.cl_exp, &mci->mci_opdata, NULL, 0,

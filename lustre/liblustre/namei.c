@@ -455,7 +455,7 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                                                   .ph_cname = &pnode->p_base->pb_name,
                                                   .ph_opc = LUSTRE_OPC_CREATE };
                 
-                rc = llu_fid_md_alloc(llu_i2sbi(parent), &op_data.fid2, &hint);
+                rc = llu_fid_md_alloc(llu_i2sbi(parent), &op_data.op_fid2, &hint);
                 if (rc) {
                         CERROR("can't allocate new fid, rc %d\n", rc);
                         LBUG();

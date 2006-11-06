@@ -51,17 +51,17 @@ static void ll_file_data_put(struct ll_file_data *fd)
 void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
                           struct lustre_handle *fh)
 {
-        op_data->fid1 = ll_i2info(inode)->lli_fid;
-        op_data->attr.ia_mode = inode->i_mode;
-        op_data->attr.ia_atime = inode->i_atime;
-        op_data->attr.ia_mtime = inode->i_mtime;
-        op_data->attr.ia_ctime = inode->i_ctime;
-        op_data->attr.ia_size = inode->i_size;
-        op_data->attr_blocks = inode->i_blocks;
-        ((struct ll_iattr *)&op_data->attr)->ia_attr_flags = inode->i_flags;
-        op_data->ioepoch = ll_i2info(inode)->lli_ioepoch;
-        memcpy(&op_data->handle, fh, sizeof(op_data->handle));
-        op_data->mod_capa1 = ll_mdscapa_get(inode);
+        op_data->op_fid1 = ll_i2info(inode)->lli_fid;
+        op_data->op_attr.ia_mode = inode->i_mode;
+        op_data->op_attr.ia_atime = inode->i_atime;
+        op_data->op_attr.ia_mtime = inode->i_mtime;
+        op_data->op_attr.ia_ctime = inode->i_ctime;
+        op_data->op_attr.ia_size = inode->i_size;
+        op_data->op_attr_blocks = inode->i_blocks;
+        ((struct ll_iattr *)&op_data->op_attr)->ia_attr_flags = inode->i_flags;
+        op_data->op_ioepoch = ll_i2info(inode)->lli_ioepoch;
+        memcpy(&op_data->op_handle, fh, sizeof(op_data->op_handle));
+        op_data->op_mod_capa1 = ll_mdscapa_get(inode);
 }
 
 static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
@@ -69,14 +69,14 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
 {
         ENTRY;
 
-        op_data->attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
+        op_data->op_attr.ia_valid = ATTR_MODE | ATTR_ATIME_SET |
                                  ATTR_MTIME_SET | ATTR_CTIME_SET;
 
         if (!(och->och_flags & FMODE_WRITE))
                 goto out;
 
         if (!S_ISREG(inode->i_mode))
-                op_data->attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
+                op_data->op_attr.ia_valid |= ATTR_SIZE | ATTR_BLOCKS;
         else
                 ll_epoch_close(inode, op_data, &och, 0);
 
@@ -121,7 +121,7 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
 
         ll_prepare_close(inode, op_data, och);
         epoch_close = (och->och_flags & FMODE_WRITE) &&
-                      ((op_data->flags & MF_EPOCH_CLOSE) ||
+                      ((op_data->op_flags & MF_EPOCH_CLOSE) ||
                        !S_ISREG(inode->i_mode));
         rc = md_close(md_exp, op_data, och, &req);
 

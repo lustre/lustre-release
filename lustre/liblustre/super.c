@@ -646,7 +646,7 @@ int llu_md_setattr(struct inode *inode, struct md_op_data *op_data)
          * above to avoid invoking vmtruncate, otherwise it is important
          * to call vmtruncate in inode_setattr to update inode->i_size
          * (bug 6196) */
-        inode_setattr(inode, &op_data->attr);
+        inode_setattr(inode, &op_data->op_attr);
         llu_update_inode(inode, md.body, md.lsm);
         ptlrpc_req_finished(request);
 
@@ -668,14 +668,14 @@ static int llu_setattr_done_writing(struct inode *inode,
 
         /* XXX: pass och here for the recovery purpose. */
         CDEBUG(D_INODE, "Epoch "LPU64" closed on "DFID" for truncate\n",
-               op_data->ioepoch, PFID(&lli->lli_fid));
+               op_data->op_ioepoch, PFID(&lli->lli_fid));
 
-        op_data->flags = MF_EPOCH_CLOSE | MF_SOM_CHANGE;
+        op_data->op_flags = MF_EPOCH_CLOSE | MF_SOM_CHANGE;
         rc = md_done_writing(llu_i2sbi(inode)->ll_md_exp, op_data, NULL);
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute
                  * from OSTs and send setattr to back to MDS. */
-                rc = llu_sizeonmds_update(inode, &op_data->handle);
+                rc = llu_sizeonmds_update(inode, &op_data->op_handle);
         } else if (rc) {
                 CERROR("inode %llu mdc truncate failed: rc = %d\n",
                        st->st_ino, rc);
@@ -757,18 +757,18 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
          * In that case, we need to check permissions and update the local
          * inode ourselves so we can call obdo_from_inode() always. */
         if (ia_valid & (lsm ? ~(ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
-                memcpy(&op_data.attr, attr, sizeof(*attr));
+                memcpy(&op_data.op_attr, attr, sizeof(*attr));
 
                 /* Open epoch for truncate. */
                 if (ia_valid & ATTR_SIZE)
-                        op_data.flags = MF_EPOCH_OPEN;
+                        op_data.op_flags = MF_EPOCH_OPEN;
                 rc = llu_md_setattr(inode, &op_data);
                 if (rc)
                         RETURN(rc);
 
                 if (!lsm || !S_ISREG(st->st_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
-                        if (op_data.ioepoch)
+                        if (op_data.op_ioepoch)
                                 rc = llu_setattr_done_writing(inode, &op_data);
                         RETURN(rc);
                 }
@@ -846,7 +846,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                                 rc = err;
                 }
 
-                if (op_data.ioepoch)
+                if (op_data.op_ioepoch)
                         rc = llu_setattr_done_writing(inode, &op_data);
         } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 struct obd_info oinfo = { { { 0 } } };
@@ -948,7 +948,7 @@ static int llu_iop_symlink_raw(struct pnode *pno, const char *tgt)
         llu_prep_md_op_data(&op_data, dir, NULL, name, len, 0);
 
         /* allocate new fid */
-        err = llu_fid_md_alloc(sbi, &op_data.fid2, &hint);
+        err = llu_fid_md_alloc(sbi, &op_data.op_fid2, &hint);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 RETURN(err);
@@ -1086,7 +1086,7 @@ static int llu_iop_mknod_raw(struct pnode *pno,
                                     pno->p_base->pb_name.name,
                                     pno->p_base->pb_name.len, 0);
                 /* allocate new fid */
-                err = llu_fid_md_alloc(sbi, &op_data.fid2, &hint);
+                err = llu_fid_md_alloc(sbi, &op_data.op_fid2, &hint);
                 if (err) {
                         CERROR("can't allocate new fid, rc %d\n", err);
                         RETURN(err);
@@ -1330,7 +1330,7 @@ static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
         llu_prep_md_op_data(&op_data, dir, NULL, name, len, 0);
 
         /* allocate new fid */
-        err = llu_fid_md_alloc(llu_i2sbi(dir), &op_data.fid2, &hint);
+        err = llu_fid_md_alloc(llu_i2sbi(dir), &op_data.op_fid2, &hint);
         if (err) {
                 CERROR("can't allocate new fid, rc %d\n", err);
                 RETURN(err);

@@ -81,10 +81,10 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 
         LASSERT(op_data != NULL);
 
-        size[REQ_REC_OFF + 1] = op_data->mod_capa1 ?
+        size[REQ_REC_OFF + 1] = op_data->op_mod_capa1 ?
                                         sizeof(struct lustre_capa) : 0;
 
-        if (op_data->flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN))
+        if (op_data->op_flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN))
                 size[REQ_REC_OFF + 2] = sizeof(struct mdt_epoch);
 
         if (ealen > 0) {
@@ -98,17 +98,17 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        if (op_data->attr.ia_valid & ATTR_FROM_OPEN) {
+        if (op_data->op_attr.ia_valid & ATTR_FROM_OPEN) {
                 req->rq_request_portal = MDS_SETATTR_PORTAL; //XXX FIXME bug 249
                 rpc_lock = obd->u.cli.cl_setattr_lock;
         } else {
                 rpc_lock = obd->u.cli.cl_rpc_lock;
         }
 
-        if (op_data->attr.ia_valid & (ATTR_MTIME | ATTR_CTIME))
+        if (op_data->op_attr.ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu\n",
-                       LTIME_S(op_data->attr.ia_mtime),
-                       LTIME_S(op_data->attr.ia_ctime));
+                       LTIME_S(op_data->op_attr.ia_mtime),
+                       LTIME_S(op_data->op_attr.ia_ctime));
         mdc_setattr_pack(req, REQ_REC_OFF, op_data, ea, ealen, ea2, ea2len);
 
         size[REPLY_REC_OFF] = sizeof(struct mdt_body);
@@ -129,13 +129,13 @@ int mdc_create(struct obd_export *exp, struct md_op_data *op_data,
 {
         int size[5] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mdt_rec_create),
-                        0, op_data->namelen + 1 };
+                        0, op_data->op_namelen + 1 };
         struct obd_device *obd = exp->exp_obd;
         int level, bufcount = 4, rc;
         struct ptlrpc_request *req;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = op_data->mod_capa1 ?
+        size[REQ_REC_OFF + 1] = op_data->op_mod_capa1 ?
                                         sizeof(struct lustre_capa) : 0;
         if (data && datalen) {
                 size[bufcount] = datalen;
@@ -178,13 +178,13 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
         struct ptlrpc_request *req = *request;
         int size[4] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mdt_rec_unlink),
-                        0, op_data->namelen + 1 };
+                        0, op_data->op_namelen + 1 };
         int rc;
         ENTRY;
 
         LASSERT(req == NULL);
 
-        size[REQ_REC_OFF + 1] = op_data->mod_capa1 ?
+        size[REQ_REC_OFF + 1] = op_data->op_mod_capa1 ?
                                         sizeof(struct lustre_capa) : 0;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
@@ -213,13 +213,13 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
         struct ptlrpc_request *req;
         int size[5] = { sizeof(struct ptlrpc_body),
                         sizeof(struct mdt_rec_link),
-                        0, 0, op_data->namelen + 1 };
+                        0, 0, op_data->op_namelen + 1 };
         int rc;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = op_data->mod_capa1 ?
+        size[REQ_REC_OFF + 1] = op_data->op_mod_capa1 ?
                                         sizeof(struct lustre_capa) : 0;
-        size[REQ_REC_OFF + 2] = op_data->mod_capa2 ?
+        size[REQ_REC_OFF + 2] = op_data->op_mod_capa2 ?
                                         sizeof(struct lustre_capa) : 0;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
@@ -252,9 +252,9 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
         int rc;
         ENTRY;
 
-        size[REQ_REC_OFF + 1] = op_data->mod_capa1 ?
+        size[REQ_REC_OFF + 1] = op_data->op_mod_capa1 ?
                                         sizeof(struct lustre_capa) : 0;
-        size[REQ_REC_OFF + 2] = op_data->mod_capa2 ?
+        size[REQ_REC_OFF + 2] = op_data->op_mod_capa2 ?
                                         sizeof(struct lustre_capa) : 0;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,

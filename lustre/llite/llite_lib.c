@@ -1264,7 +1264,7 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data)
                          * Pretend we done everything. */
                         if (!S_ISREG(inode->i_mode) &&
                             !S_ISDIR(inode->i_mode))
-                                rc = inode_setattr(inode, &op_data->attr);
+                                rc = inode_setattr(inode, &op_data->op_attr);
                 } else if (rc != -EPERM && rc != -EACCES) {
                         CERROR("md_setattr fails: rc = %d\n", rc);
                 }
@@ -1283,11 +1283,11 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data)
          * above to avoid invoking vmtruncate, otherwise it is important
          * to call vmtruncate in inode_setattr to update inode->i_size
          * (bug 6196) */
-        rc = inode_setattr(inode, &op_data->attr);
+        rc = inode_setattr(inode, &op_data->op_attr);
 
         /* Extract epoch data if obtained. */
-        memcpy(&op_data->handle, &md.body->handle, sizeof(op_data->handle));
-        op_data->ioepoch = md.body->ioepoch;
+        memcpy(&op_data->op_handle, &md.body->handle, sizeof(op_data->op_handle));
+        op_data->op_ioepoch = md.body->ioepoch;
         
         ll_update_inode(inode, &md);
         ptlrpc_req_finished(request);
@@ -1308,15 +1308,15 @@ static int ll_setattr_done_writing(struct inode *inode,
                 RETURN(0);
 
         CDEBUG(D_INODE, "Epoch "LPU64" closed on "DFID" for truncate\n",
-               op_data->ioepoch, PFID(&lli->lli_fid));
+               op_data->op_ioepoch, PFID(&lli->lli_fid));
 
-        op_data->flags = MF_EPOCH_CLOSE | MF_SOM_CHANGE;
+        op_data->op_flags = MF_EPOCH_CLOSE | MF_SOM_CHANGE;
         /* XXX: pass och here for the recovery purpose. */
         rc = md_done_writing(ll_i2sbi(inode)->ll_md_exp, op_data, NULL);
         if (rc == -EAGAIN) {
                 /* MDS has instructed us to obtain Size-on-MDS attribute
                  * from OSTs and send setattr to back to MDS. */
-                rc = ll_sizeonmds_update(inode, &op_data->handle);
+                rc = ll_sizeonmds_update(inode, &op_data->op_handle);
         } else if (rc) {
                 CERROR("inode %lu mdc truncate failed: rc = %d\n",
                        inode->i_ino, rc);
@@ -1409,17 +1409,17 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
 
-                memcpy(&op_data->attr, attr, sizeof(*attr));
+                memcpy(&op_data->op_attr, attr, sizeof(*attr));
 
                 /* Open epoch for truncate. */
                 if (ia_valid & ATTR_SIZE)
-                        op_data->flags = MF_EPOCH_OPEN;
+                        op_data->op_flags = MF_EPOCH_OPEN;
                 rc = ll_md_setattr(inode, op_data);
                 if (rc)
                         GOTO(out, rc);
 
                 CDEBUG(D_INODE, "Epoch "LPU64" opened on "DFID" for truncate\n",
-                       op_data->ioepoch, PFID(&lli->lli_fid));
+                       op_data->op_ioepoch, PFID(&lli->lli_fid));
 
                 if (!lsm || !S_ISREG(inode->i_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
@@ -1533,7 +1533,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         EXIT;
 out:
         if (op_data) {
-                if (op_data->ioepoch) {
+                if (op_data->op_ioepoch) {
                         rc1 = ll_setattr_done_writing(inode, op_data);
                 }
                 ll_finish_md_op_data(op_data);
@@ -1946,8 +1946,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
                 
-                ((struct ll_iattr *)&op_data->attr)->ia_attr_flags = flags;
-                op_data->attr.ia_valid |= ATTR_ATTR_FLAG;
+                ((struct ll_iattr *)&op_data->op_attr)->ia_attr_flags = flags;
+                op_data->op_attr.ia_valid |= ATTR_ATTR_FLAG;
                 rc = md_setattr(sbi->ll_md_exp, op_data,
                                 NULL, 0, NULL, 0, &req);
                 ll_finish_md_op_data(op_data);
@@ -2244,32 +2244,32 @@ ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
         if (op_data == NULL)
                 return NULL;
 
-        ll_i2gids(op_data->suppgids, i1, i2);
-        op_data->fid1 = *ll_inode2fid(i1);
-        op_data->mod_capa1 = ll_mdscapa_get(i1);
+        ll_i2gids(op_data->op_suppgids, i1, i2);
+        op_data->op_fid1 = *ll_inode2fid(i1);
+        op_data->op_mod_capa1 = ll_mdscapa_get(i1);
 
         /* @i2 may be NULL. In this case caller itself has to initialize ->fid2
          * if needed. */
         if (i2) {
-                op_data->fid2 = *ll_inode2fid(i2);
-                op_data->mod_capa2 = ll_mdscapa_get(i2);
+                op_data->op_fid2 = *ll_inode2fid(i2);
+                op_data->op_mod_capa2 = ll_mdscapa_get(i2);
         }
 
-        op_data->name = name;
-        op_data->namelen = namelen;
-        op_data->mode = mode;
-        op_data->mod_time = CURRENT_SECONDS;
-        op_data->fsuid = current->fsuid;
-        op_data->fsgid = current->fsgid;
-        op_data->cap = current->cap_effective;
+        op_data->op_name = name;
+        op_data->op_namelen = namelen;
+        op_data->op_mode = mode;
+        op_data->op_mod_time = CURRENT_SECONDS;
+        op_data->op_fsuid = current->fsuid;
+        op_data->op_fsgid = current->fsgid;
+        op_data->op_cap = current->cap_effective;
 
         return op_data;
 }
 
 void ll_finish_md_op_data(struct md_op_data *op_data)
 {
-        capa_put(op_data->mod_capa1);
-        capa_put(op_data->mod_capa2);
+        capa_put(op_data->op_mod_capa1);
+        capa_put(op_data->op_mod_capa2);
         OBD_FREE_PTR(op_data);
 }
 

@@ -57,7 +57,7 @@ struct mdc_device {
 
 struct mdc_thread_info {
         struct md_op_data       mci_opdata;
-        struct ptlrpc_request   *mci_req;
+        struct ptlrpc_request  *mci_req;
 };
 
 struct mdc_object {

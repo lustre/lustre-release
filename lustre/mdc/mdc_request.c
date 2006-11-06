@@ -803,7 +803,7 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
         int rc;
         ENTRY;
 
-        reqsize[REQ_REC_OFF + 2] = op_data->mod_capa1 ?
+        reqsize[REQ_REC_OFF + 2] = op_data->op_mod_capa1 ?
                                         sizeof(struct lustre_capa) : 0;
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_CLOSE, 4, reqsize, NULL);
@@ -892,7 +892,7 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
         int rc;
         ENTRY;
 
-        if (op_data->mod_capa1)
+        if (op_data->op_mod_capa1)
                 size[REQ_REC_OFF + 2] = sizeof(struct lustre_capa);
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_DONE_WRITING, 4, size, NULL);
