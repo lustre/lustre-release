@@ -559,6 +559,8 @@ static int cmm_split_process_stripe(const struct lu_env *env,
         RETURN(rc);
 }
 
+extern int bug11150;
+
 static int cmm_split_process_dir(const struct lu_env *env,
                                  struct md_object *mo,
                                  struct md_attr *ma)
@@ -589,7 +591,7 @@ static int cmm_split_process_dir(const struct lu_env *env,
                 lf = &ma->ma_lmv->mea_ids[i];
 
                 rdpg->rp_hash = i * hash_segement;
-                if (i == cmm->cmm_tgt_count) 
+                if (i == cmm->cmm_tgt_count)
                         hash_end = MAX_HASH_SIZE;
                 else
                         hash_end = rdpg->rp_hash + hash_segement;
@@ -598,6 +600,7 @@ static int cmm_split_process_dir(const struct lu_env *env,
                         CERROR("Error (rc = %d) while splitting for %d: fid="
                                DFID", %08x:%08x\n", rc, i, PFID(lf),
                                rdpg->rp_hash, hash_end);
+                        bug11150 = 1;
                         GOTO(cleanup, rc);
                 }
         }

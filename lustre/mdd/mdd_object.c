@@ -1239,6 +1239,9 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
         RETURN(rc);
 }
 
+int bug11150 = 0;
+EXPORT_SYMBOL(bug11150);
+
 static int mdd_dir_page_build(const struct lu_env *env, int first,
                               void *area, int nob, struct dt_it_ops *iops,
                               struct dt_it *it, __u32 *start, __u32 *end,
@@ -1278,6 +1281,12 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
 
                 CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
                        name, ent, nob, PFID(fid2), hash, len, len, len, name);
+
+                if (bug11150)
+                        CDEBUG(D_INFO,
+                               "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
+                               name, ent, nob, PFID(fid2), hash,
+                               len, len, len, name);
 
                 if (nob >= recsize) {
                         fid_be_to_cpu(&ent->lde_fid, fid);
