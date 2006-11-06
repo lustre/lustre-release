@@ -230,6 +230,12 @@ repeat:
                             reqp, cb_blocking, extra_lock_flags);
 
         if (rc == -ERESTART) {
+                LASSERT(*reqp != NULL);
+                DEBUG_REQ(D_WARNING|D_RPCTRACE, *reqp, 
+                          "Got -ERESTART during open!\n");
+                ptlrpc_req_finished(*reqp);
+                *reqp = NULL;
+                it->d.lustre.it_data = 0;
                 /*
                  * Directory got split. Time to update local object and repeat
                  * the request with proper MDS.
@@ -237,21 +243,11 @@ repeat:
                 LASSERT(lu_fid_eq(&op_data->fid1, &rpid));
                 rc = lmv_handle_split(exp, &rpid);
                 if (rc == 0) {
-                        ptlrpc_req_finished(*reqp);
-
-                        /* 
-                         * Zero out reqp to not confuse client. In many cases it
-                         * tries to free req even if error is returned.
-                         */
-                        it->d.lustre.it_data = 0;
-                        *reqp = NULL;
-
                         /* We should reallocate child FID. */
                         rc = lmv_alloc_fid_for_split(obd, &rpid, op_data,
                                                      &sop_data->fid2);
-                        if (rc)
-                                GOTO(out_free_sop_data, rc);
-                        goto repeat;
+                        if (rc == 0)
+                                goto repeat;
                 }
         }
         
@@ -409,6 +405,8 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, sop_data, lmm,
                             lmmsize, it, flags, reqp, cb_blocking,
                             extra_lock_flags);
+
+        LASSERTF(rc != -ERESTART, "GETATTR: Got unhandled -ERESTART!\n");
         if (rc < 0)
                 GOTO(out_free_sop_data, rc);
 
@@ -692,7 +690,7 @@ repeat:
                         if (rc)
                                 GOTO(out_free_sop_data, rc);
                 }
-                fid_zero(&op_data->fid2);
+                fid_zero(&sop_data->fid2);
         }
 
         sop_data->fid1 = rpid;
@@ -719,6 +717,12 @@ repeat:
         }
 
         if (rc == -ERESTART) {
+                LASSERT(*reqp != NULL);
+                DEBUG_REQ(D_WARNING|D_RPCTRACE, *reqp, 
+                          "Got -ERESTART during lookup!\n");
+                ptlrpc_req_finished(*reqp);
+                *reqp = NULL;
+                it->d.lustre.it_data = 0;
                 /*
                  * Directory got split since last update. This shouldn't be
                  * becasue splitting causes lock revocation, so revalidate had
@@ -729,9 +733,8 @@ repeat:
 
                 obj = lmv_obj_create(exp, &rpid, NULL);
                 if (IS_ERR(obj))
-                        RETURN((int)PTR_ERR(obj));
+                        GOTO(out_free_sop_data, rc = PTR_ERR(obj));
                 lmv_obj_put(obj);
-                /* XXX: what about reqp? */
                 goto repeat;
         }
 
