@@ -1010,6 +1010,13 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                                          MAY_WRITE | MAY_EXEC);
                 if (rc != -ENOENT)
                         RETURN(rc ? : -EEXIST);
+        } else {
+                /*
+                 * Check if has WRITE permission for the parent.
+                 */
+                rc = mdd_permission_internal_locked(env, obj, MAY_WRITE);
+                if (rc)
+                        RETURN(rc);
         }
         
         /* sgid check */
