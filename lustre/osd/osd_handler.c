@@ -1678,8 +1678,9 @@ static int osd_index_insert(const struct lu_env *env, struct dt_object *dt,
  * Iterator operations.
  */
 struct osd_it {
-        struct osd_object  *oi_obj;
-        struct iam_iterator oi_it;
+        struct osd_object     *oi_obj;
+        struct iam_path_descr *oi_ipd;
+        struct iam_iterator    oi_it;
 };
 
 static struct dt_it *osd_it_init(const struct lu_env *env,
@@ -1699,27 +1700,31 @@ static struct dt_it *osd_it_init(const struct lu_env *env,
                             CAPA_OPC_BODY_READ))
                 return ERR_PTR(-EACCES);
 
-        ipd = osd_ipd_get(env, bag);
-        if (ipd == NULL)
-                return ERR_PTR(-ENOMEM);
-
         flags = writable ? IAM_IT_MOVE|IAM_IT_WRITE : IAM_IT_MOVE;
         OBD_ALLOC_PTR(it);
         if (it != NULL) {
-                it->oi_obj = obj;
-                lu_object_get(lo);
-                iam_it_init(&it->oi_it, bag, flags, ipd);
+                ipd = osd_ipd_get(env, bag);
+                if (ipd != NULL) {
+                        it->oi_obj = obj;
+                        it->oi_ipd = ipd;
+                        lu_object_get(lo);
+                        iam_it_init(&it->oi_it, bag, flags, ipd);
+                        return (struct dt_it *)it;
+                } else
+                        OBD_FREE_PTR(it);
+
         }
-        osd_ipd_put(env, bag, ipd);
-        return (struct dt_it *)it;
+        return ERR_PTR(-ENOMEM);
 }
 
 static void osd_it_fini(const struct lu_env *env, struct dt_it *di)
 {
-        struct osd_it *it = (struct osd_it *)di;
+        struct osd_it     *it = (struct osd_it *)di;
+        struct osd_object *obj = it->oi_obj;
 
         iam_it_fini(&it->oi_it);
-        lu_object_put(env, &it->oi_obj->oo_dt.do_lu);
+        osd_ipd_put(env, &obj->oo_container, it->oi_ipd);
+        lu_object_put(env, &obj->oo_dt.do_lu);
         OBD_FREE_PTR(it);
 }
 
