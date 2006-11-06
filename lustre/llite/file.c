@@ -1404,6 +1404,11 @@ repeat:
         if (ra != 0)
                 ll_ra_read_ex(file, &bead);
         retval = (sum > 0) ? sum : retval;
+        if (retval < 0)
+               CERROR("Read error inode=%lu/%u(%p),size="LPSZ",off=%Ld rc %d\n",
+                      inode->i_ino, inode->i_generation, inode, count, *ppos,
+                      retval);
+
         RETURN(retval);
 }
 
