@@ -1330,13 +1330,17 @@ repeat:
                         RETURN(rc);
                 CDEBUG(D_OTHER, "created. "DFID"\n", PFID(&op_data->fid1));
         } else if (rc == -ERESTART) {
+                LASSERT(*request != NULL);
+                DEBUG_REQ(D_WARNING|D_RPCTRACE, *request, 
+                          "Got -ERESTART during create!\n");
+                ptlrpc_req_finished(*request);
+                *request = NULL;
                 /*
                  * Directory got split. Time to update local object and repeat
                  * the request with proper MDS.
                  */
                 rc = lmv_handle_split(exp, &op_data->fid1);
                 if (rc == 0) {
-                        ptlrpc_req_finished(*request);
                         rc = lmv_alloc_fid_for_split(obd, &op_data->fid1,
                                                      op_data, &op_data->fid2);
                         if (rc)
@@ -1624,11 +1628,15 @@ repeat:
                         *request = req;
                 }
         } else if (rc == -ERESTART) {
+                LASSERT(*request != NULL);
+                DEBUG_REQ(D_WARNING|D_RPCTRACE, *request, 
+                          "Got -ERESTART during getattr!\n");
+                ptlrpc_req_finished(*request);
+                *request = NULL;
                 /* directory got split. time to update local object and repeat
                  * the request with proper MDS */
                 rc = lmv_handle_split(exp, &rid);
                 if (rc == 0) {
-                        ptlrpc_req_finished(*request);
                         goto repeat;
                 }
         }
