@@ -1121,7 +1121,7 @@ static int mdd_create(const struct lu_env *env,
         mdd_txn_param_build(env, mdd, MDD_TXN_MKDIR_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
-                RETURN(PTR_ERR(handle));
+                GOTO(out_free, rc = PTR_ERR(handle));
 
         dlh = mdd_pdo_write_lock(env, mdd_pobj, name);
         if (dlh == NULL)
@@ -1200,10 +1200,11 @@ static int mdd_create(const struct lu_env *env,
                 buf = mdd_buf_get_const(env, target_name, sym_len);
                 rc = dt->do_body_ops->dbo_write(env, dt, buf, &pos, handle,
                                                 mdd_object_capa(env, son));
+
                 if (rc == sym_len)
                         rc = 0;
                 else
-                        rc = -EFAULT;
+                        GOTO(cleanup, rc = -EFAULT);
         }
 
         *la = ma->ma_attr;
@@ -1234,13 +1235,14 @@ cleanup:
                 }
         }
 
-        /* Finish mdd_lov_create() stuff */
-        mdd_lov_create_finish(env, mdd, rc);
-        if (lmm && !spec->u.sp_ea.no_lov_create)
-                OBD_FREE(lmm, lmm_size);
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
 out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
+out_free:
+        if (lmm && !spec->u.sp_ea.no_lov_create)
+                OBD_FREE(lmm, lmm_size);
+        /* Finish mdd_lov_create() stuff */
+        mdd_lov_create_finish(env, mdd, rc);
         mdd_lproc_time_end(mdd, &start, LPROC_MDD_CREATE);
         return rc;
 }
