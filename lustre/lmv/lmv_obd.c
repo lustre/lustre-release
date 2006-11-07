@@ -185,9 +185,9 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
         if (ev == OBD_NOTIFY_OCD) {
                 struct obd_connect_data *conn_data =
                         &watched->u.cli.cl_import->imp_connect_data;
-                /*
-                 * Set connect data to desired target, update exp_connect_flags.
-                 */
+                
+                /* Set connect data to desired target, update
+                 * exp_connect_flags. */
                 rc = lmv_set_mdc_data(lmv, uuid, conn_data);
                 if (rc) {
                         CERROR("can't set connect data to target %s, rc %d\n",
@@ -196,7 +196,7 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
                 }
 
                 /*
-                 * XXX: make sure that ocd_connect_flags from all targets are
+                 * XXX: Make sure that ocd_connect_flags from all targets are
                  * the same. Otherwise one of MDTs runs wrong version or
                  * something like this.  --umka
                  */
@@ -1633,12 +1633,14 @@ repeat:
                           "Got -ERESTART during getattr!\n");
                 ptlrpc_req_finished(*request);
                 *request = NULL;
-                /* directory got split. time to update local object and repeat
-                 * the request with proper MDS */
+                
+                /*
+                 * Directory got split. Time to update local object and repeat
+                 * the request with proper MDS.
+                 */
                 rc = lmv_handle_split(exp, &rid);
-                if (rc == 0) {
+                if (rc == 0)
                         goto repeat;
-                }
         }
         RETURN(rc);
 }
@@ -1653,17 +1655,20 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct lmv_obj *obj;
+        int rc, loop = 0;
         mdsno_t mds;
-        int rc;
         ENTRY;
 
         rc = lmv_check_connect(obd);
 	if (rc)
 		RETURN(rc);
 
+repeat:
+        LASSERT(++loop <= 2);
         if (op_data->op_namelen != 0) {
                 int mea_idx;
-                /* usual link request */
+                
+                /* Usual link request */
                 obj = lmv_obj_grab(obd, &op_data->op_fid2);
                 if (obj) {
                         mea_idx = raw_name2idx(obj->lo_hashtype,
@@ -1698,7 +1703,23 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
         op_data->op_fsuid = current->fsuid;
         op_data->op_fsgid = current->fsgid;
         op_data->op_cap   = current->cap_effective;
+
         rc = md_link(lmv->tgts[mds].ltd_exp, op_data, request);
+        if (rc == -ERESTART) {
+                LASSERT(*request != NULL);
+                DEBUG_REQ(D_WARNING|D_RPCTRACE, *request, 
+                          "Got -ERESTART during link!\n");
+                ptlrpc_req_finished(*request);
+                *request = NULL;
+                
+                /*
+                 * Directory got split. Time to update local object and repeat
+                 * the request with proper MDS.
+                 */
+                rc = lmv_handle_split(exp, &op_data->op_fid2);
+                if (rc == 0)
+                        goto repeat;
+        }
 
         RETURN(rc);
 }
@@ -1709,8 +1730,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
+        int rc, mea_idx, loop = 0;
         struct lmv_obj *obj;
-        int rc, mea_idx;
         mdsno_t mds;
         ENTRY;
 
@@ -1737,7 +1758,7 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                         RETURN(rc);
 
                 /*
-                 * target directory can be split, sowe should forward request to
+                 * Target directory can be split, sowe should forward request to
                  * the right MDS.
                  */
                 obj = lmv_obj_grab(obd, &op_data->op_fid2);
@@ -1753,6 +1774,8 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                 goto request;
         }
 
+repeat:
+        LASSERT(++loop <= 2);
         obj = lmv_obj_grab(obd, &op_data->op_fid1);
         if (obj) {
                 /*
@@ -1774,7 +1797,7 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
         obj = lmv_obj_grab(obd, &op_data->op_fid2);
         if (obj) {
                 /*
-                 * directory is already split, so we have to forward request to
+                 * Directory is already split, so we have to forward request to
                  * the right MDS.
                  */
                 mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
@@ -1784,12 +1807,29 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
                 CDEBUG(D_OTHER, "Parent obj "DFID"\n", PFID(&op_data->op_fid2));
                 lmv_obj_put(obj);
         }
+        
 request:
         op_data->op_fsuid = current->fsuid;
         op_data->op_fsgid = current->fsgid;
         op_data->op_cap   = current->cap_effective;
+
         rc = md_rename(lmv->tgts[mds].ltd_exp, op_data, old, oldlen,
                        new, newlen, request);
+        if (rc == -ERESTART) {
+                LASSERT(*request != NULL);
+                DEBUG_REQ(D_WARNING|D_RPCTRACE, *request, 
+                          "Got -ERESTART during rename!\n");
+                ptlrpc_req_finished(*request);
+                *request = NULL;
+                
+                /*
+                 * Directory got split. Time to update local object and repeat
+                 * the request with proper MDS.
+                 */
+                rc = lmv_handle_split(exp, &op_data->op_fid1);
+                if (rc == 0)
+                        goto repeat;
+        }
         RETURN(rc);
 }
 
@@ -2040,7 +2080,7 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_export *tgt_exp = NULL;
-        int rc;
+        int rc, loop = 0;
         ENTRY;
 
 	rc = lmv_check_connect(obd);
@@ -2053,6 +2093,8 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                 RETURN(rc);
         }
 
+repeat:
+        LASSERT(++loop <= 2);
         if (op_data->op_namelen != 0) {
                 struct lmv_obj *obj;
                 int mea_idx;
@@ -2079,10 +2121,26 @@ static int lmv_unlink(struct obd_export *exp, struct md_op_data *op_data,
                 tgt_exp = lmv_find_export(lmv, &op_data->op_fid1);
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
+
         op_data->op_fsuid = current->fsuid;
         op_data->op_fsgid = current->fsgid;
         op_data->op_cap   = current->cap_effective;
         rc = md_unlink(tgt_exp, op_data, request);
+        if (rc == -ERESTART) {
+                LASSERT(*request != NULL);
+                DEBUG_REQ(D_WARNING|D_RPCTRACE, *request, 
+                          "Got -ERESTART during unlink!\n");
+                ptlrpc_req_finished(*request);
+                *request = NULL;
+                
+                /*
+                 * Directory got split. Time to update local object and repeat
+                 * the request with proper MDS.
+                 */
+                rc = lmv_handle_split(exp, &op_data->op_fid1);
+                if (rc == 0)
+                        goto repeat;
+        }
         RETURN(rc);
 }
 

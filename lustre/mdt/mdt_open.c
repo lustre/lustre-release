@@ -696,8 +696,8 @@ static int mdt_cross_open(struct mdt_thread_info* info,
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
                 /*
-                 * XX: Something wrong here, lookup was positive but there is no
-                 * object!
+                 * XXX: Something wrong here, lookup was positive but there is
+                 * no object!
                  */
                 CERROR("Cross-ref object doesn't exist!\n");
                 rc = -EFAULT;
