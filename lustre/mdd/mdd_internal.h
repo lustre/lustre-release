@@ -213,9 +213,10 @@ int mdd_txn_init_credits(const struct lu_env *env, struct mdd_device *mdd);
 
 int mdd_procfs_init(struct mdd_device *mdd, const char *name);
 int mdd_procfs_fini(struct mdd_device *mdd);
-void mdd_lproc_time_start(struct mdd_device *mdd, struct timeval *start,
+void mdd_lprocfs_time_start(struct mdd_device *mdd, struct timeval *start,
                           int op);
-void mdd_lproc_time_end(struct mdd_device *mdd, struct timeval *start, int op);
+void mdd_lprocfs_time_end(struct mdd_device *mdd, struct timeval *start,
+                          int op);
 
 int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj);
 
@@ -424,4 +425,5 @@ enum {
         LPROC_MDD_LOOKUP,
         LPROC_MDD_LAST
 };
+
 #endif

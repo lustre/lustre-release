@@ -451,7 +451,8 @@ static int cmm_device_init(const struct lu_env *env, struct lu_device *d,
         /* Assign site's fld client ref, needed for asserts in osd. */
         ls = cmm2lu_dev(m)->ld_site;
         ls->ls_client_fld = m->cmm_fld;
-
+        err = cmm_procfs_init(m, name);
+        
         RETURN(err);
 }
 
@@ -479,6 +480,7 @@ static struct lu_device *cmm_device_fini(const struct lu_env *env,
         fld_client_fini(cm->cmm_fld);
         ls = cmm2lu_dev(cm)->ld_site;
         ls->ls_client_fld = NULL;
+        cmm_procfs_fini(cm);
 
         RETURN (md2lu_dev(cm->cmm_child));
 }

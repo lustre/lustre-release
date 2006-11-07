@@ -375,10 +375,9 @@ static mdl_mode_t cml_lock_mode(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int cml_create(const struct lu_env *env,
-                      struct md_object *mo_p, const char *child_name,
-                      struct md_object *mo_c, struct md_create_spec *spec,
-                      struct md_attr *ma)
+static int cml_create(const struct lu_env *env, struct md_object *mo_p,
+                      const char *name, struct md_object *mo_c,
+                      struct md_create_spec *spec, struct md_attr *ma)
 {
         int rc;
         ENTRY;
@@ -424,13 +423,13 @@ static int cml_create(const struct lu_env *env,
          * tell client that directory is split and operation should repeat to
          * correct MDT.
          */
-        rc = cmm_split_check(env, mo_p, child_name);
+        rc = cmm_split_check(env, mo_p, name);
         if (rc)
                 RETURN(rc);
 #endif
 
-        rc = mdo_create(env, md_object_next(mo_p), child_name,
-                        md_object_next(mo_c), spec, ma);
+        rc = mdo_create(env, md_object_next(mo_p), name, md_object_next(mo_c),
+                        spec, ma);
 
         RETURN(rc);
 }

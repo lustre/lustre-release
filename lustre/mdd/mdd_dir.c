@@ -313,8 +313,8 @@ static int __mdd_index_insert(const struct lu_env *env, struct mdd_object *pobj,
         int               rc;
         ENTRY;
 
-        mdd_lproc_time_start(mdo2mdd(&pobj->mod_obj), &start,
-                             LPROC_MDD_INDEX_INSERT);
+        mdd_lprocfs_time_start(mdo2mdd(&pobj->mod_obj), &start,
+                               LPROC_MDD_INDEX_INSERT);
         if (dt_try_as_dir(env, next)) {
                 rc = next->do_index_ops->dio_insert(env, next,
                                                     __mdd_fid_rec(env, lf),
@@ -331,8 +331,8 @@ static int __mdd_index_insert(const struct lu_env *env, struct mdd_object *pobj,
                         mdd_write_unlock(env, pobj);
                 }
         }
-        mdd_lproc_time_end(mdo2mdd(&pobj->mod_obj), &start,
-                           LPROC_MDD_INDEX_INSERT);
+        mdd_lprocfs_time_end(mdo2mdd(&pobj->mod_obj), &start,
+                             LPROC_MDD_INDEX_INSERT);
         RETURN(rc);
 }
 
@@ -345,8 +345,8 @@ static int __mdd_index_delete(const struct lu_env *env, struct mdd_object *pobj,
         int               rc;
         ENTRY;
 
-        mdd_lproc_time_start(mdo2mdd(&pobj->mod_obj), &start,
-                             LPROC_MDD_INDEX_DELETE);
+        mdd_lprocfs_time_start(mdo2mdd(&pobj->mod_obj), &start,
+                               LPROC_MDD_INDEX_DELETE);
 
         if (dt_try_as_dir(env, next)) {
                 rc = next->do_index_ops->dio_delete(env, next,
@@ -360,8 +360,8 @@ static int __mdd_index_delete(const struct lu_env *env, struct mdd_object *pobj,
         } else
                 rc = -ENOTDIR;
 
-        mdd_lproc_time_end(mdo2mdd(&pobj->mod_obj), &start,
-                           LPROC_MDD_INDEX_DELETE);
+        mdd_lprocfs_time_end(mdo2mdd(&pobj->mod_obj), &start,
+                             LPROC_MDD_INDEX_DELETE);
         RETURN(rc);
 }
 
@@ -894,7 +894,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         int rc;
         ENTRY;
 
-        mdd_lproc_time_start(mdo2mdd(pobj), &start, LPROC_MDD_LOOKUP);
+        mdd_lprocfs_time_start(mdo2mdd(pobj), &start, LPROC_MDD_LOOKUP);
         if (mdd_is_dead_obj(mdd_obj))
                 RETURN(-ESTALE);
 
@@ -919,7 +919,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         } else
                 rc = -ENOTDIR;
 
-        mdd_lproc_time_end(mdo2mdd(pobj), &start, LPROC_MDD_LOOKUP);
+        mdd_lprocfs_time_end(mdo2mdd(pobj), &start, LPROC_MDD_LOOKUP);
         RETURN(rc);
 }
 
@@ -1058,7 +1058,7 @@ static int mdd_create(const struct lu_env *env,
         struct timeval  start;
         ENTRY;
 
-        mdd_lproc_time_start(mdd, &start, LPROC_MDD_CREATE);
+        mdd_lprocfs_time_start(mdd, &start, LPROC_MDD_CREATE);
 
         /*
          * Two operations have to be performed:
@@ -1237,7 +1237,7 @@ out_free:
                 OBD_FREE(lmm, lmm_size);
         /* Finish mdd_lov_create() stuff */
         mdd_lov_create_finish(env, mdd, rc);
-        mdd_lproc_time_end(mdd, &start, LPROC_MDD_CREATE);
+        mdd_lprocfs_time_end(mdd, &start, LPROC_MDD_CREATE);
         return rc;
 }
 

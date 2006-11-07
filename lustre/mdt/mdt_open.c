@@ -313,16 +313,16 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                         int created,
                         struct ldlm_reply *rep)
 {
-        struct ptlrpc_request  *req = mdt_info_req(info);
-        struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
-        struct mdt_device      *mdt = info->mti_mdt;
-        struct md_attr         *ma  = &info->mti_attr;
-        struct lu_attr         *la  = &ma->ma_attr;
-        struct mdt_file_data   *mfd;
-        struct mdt_body        *repbody;
-        int                     rc = 0;
-        int                     isreg, isdir, islnk;
-        struct list_head        *t;
+        struct ptlrpc_request   *req = mdt_info_req(info);
+        struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
+        struct mdt_device       *mdt = info->mti_mdt;
+        struct md_attr          *ma  = &info->mti_attr;
+        struct lu_attr          *la  = &ma->ma_attr;
+        struct mdt_file_data    *mfd;
+        struct mdt_body         *repbody;
+        int                      rc = 0;
+        int                      isreg, isdir, islnk;
+        struct list_head         *t;
         ENTRY;
 
         LASSERT(ma->ma_valid & MA_INODE);
@@ -498,7 +498,6 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
 
         mfd = mdt_mfd_new();
         if (mfd != NULL) {
-
                 /*
                  * Keep a reference on this object for this open, and is
                  * released by mdt_mfd_close().
@@ -623,7 +622,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         struct mdt_reint_record *rr = &info->mti_rr;
         struct md_attr          *ma = &info->mti_attr;
         struct mdt_object       *o;
-        int                     rc;
+        int                      rc;
         ENTRY;
 
         o = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid2);
@@ -635,8 +634,8 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
          * capability check for this kind of request. Security hole?
          */
         if (mdt->mdt_opts.mo_mds_capa)
-                mdt->mdt_child->md_ops->mdo_init_capa_ctxt(env, next, 0, 0, 0,
-                                                           0);
+                mdt->mdt_child->md_ops->mdo_init_capa_ctxt(env, next, 0, 0,
+                                                           0, 0);
 
         rc = mdt_object_exists(o);
         if (rc > 0) {
@@ -697,13 +696,13 @@ static int mdt_cross_open(struct mdt_thread_info* info,
                         rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
                 /*
-                 * FIXME: something wrong here, lookup was positive but there is
-                 * no object!
+                 * XX: Something wrong here, lookup was positive but there is no
+                 * object!
                  */
                 CERROR("Cross-ref object doesn't exist!\n");
                 rc = -EFAULT;
         } else  {
-                /* FIXME: something wrong here, the object is on another MDS! */
+                /* XXX: Something wrong here, the object is on another MDS! */
                 CERROR("The object isn't on this server! FLD error?\n");
                 rc = -EFAULT;
         }

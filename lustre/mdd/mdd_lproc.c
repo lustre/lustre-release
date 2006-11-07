@@ -1,7 +1,7 @@
 /* -*- MODE: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  mdd/mdd_handler.c
+ *  mdd/mdd_lproc.c
  *  Lustre Metadata Server (mdd) routines
  *
  *  Copyright (C) 2006 Cluster File Systems, Inc.
@@ -76,7 +76,7 @@ static int mdd_procfs_init_stats(struct mdd_device *mdd, int num_stats)
         lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_GET_MD,
                              LPROCFS_CNTR_AVGMINMAX, "get_md", "time");
         lprocfs_counter_init(mdd->mdd_stats, LPROC_MDD_LOOKUP,
-                             LPROCFS_CNTR_AVGMINMAX, "lookup", "lookup");
+                             LPROCFS_CNTR_AVGMINMAX, "lookup", "time");
         EXIT;
 cleanup:
         if (rc) {
@@ -84,19 +84,6 @@ cleanup:
                 mdd->mdd_stats = NULL;
         }
         return rc;
-}
-
-int mdd_procfs_fini(struct mdd_device *mdd)
-{
-        if (mdd->mdd_stats) {
-                lprocfs_free_stats(mdd->mdd_stats);
-                mdd->mdd_stats = NULL;
-        }
-        if (mdd->mdd_proc_entry) {
-                 lprocfs_remove(mdd->mdd_proc_entry);
-                 mdd->mdd_proc_entry = NULL;
-        }
-        RETURN(0);
 }
 
 int mdd_procfs_init(struct mdd_device *mdd, const char *name)
@@ -130,12 +117,27 @@ out:
 	return rc;
 }
 
-void mdd_lproc_time_start(struct mdd_device *mdd, struct timeval *start, int op)
+int mdd_procfs_fini(struct mdd_device *mdd)
+{
+        if (mdd->mdd_stats) {
+                lprocfs_free_stats(mdd->mdd_stats);
+                mdd->mdd_stats = NULL;
+        }
+        if (mdd->mdd_proc_entry) {
+                 lprocfs_remove(mdd->mdd_proc_entry);
+                 mdd->mdd_proc_entry = NULL;
+        }
+        RETURN(0);
+}
+
+void mdd_lprocfs_time_start(struct mdd_device *mdd,
+                            struct timeval *start, int op)
 {
         do_gettimeofday(start);
 }
 
-void mdd_lproc_time_end(struct mdd_device *mdd, struct timeval *start, int op)
+void mdd_lprocfs_time_end(struct mdd_device *mdd,
+                          struct timeval *start, int op)
 {
         struct timeval end;
         long timediff;

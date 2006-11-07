@@ -53,42 +53,41 @@ enum {
 int cmm_split_check(const struct lu_env *env, struct md_object *mp,
                     const char *name)
 {
+        struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mp));
         struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
         struct cml_object *clo = md2cml_obj(mp);
+        struct timeval start;
         int rc;
         ENTRY;
 
-        /* not split yet */
+        cmm_lprocfs_time_start(cmm, &start, LPROC_CMM_SPLIT_CHECK);
+        
+        /* Not split yet */
         if (clo->clo_split == CMM_SPLIT_NONE ||
             clo->clo_split == CMM_SPLIT_DENIED)
-                RETURN(0);
+                GOTO(out, rc = 0);
 
-        /* Try to get the LMV EA size */
+        /* Try to get the LMV EA */
         memset(ma, 0, sizeof(*ma));
+        
         ma->ma_need = MA_LMV;
+        ma->ma_lmv_size = CMM_MD_SIZE(cmm->cmm_tgt_count + 1);
+        OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
+        if (ma->ma_lmv == NULL)
+                GOTO(out, rc = -ENOMEM);
+
+        /* Get LMV EA, Note: refresh valid here for getting LMV_EA */
         rc = mo_attr_get(env, mp, ma);
         if (rc)
-                RETURN(rc);
+                GOTO(cleanup, rc);
 
         /* No LMV just return */
         if (!(ma->ma_valid & MA_LMV)) {
                 /* update split state if unknown */
                 if (clo->clo_split == CMM_SPLIT_UNKNOWN)
                         clo->clo_split = CMM_SPLIT_NONE;
-                RETURN(0);
+                GOTO(cleanup, rc = 0);
         }
-
-        LASSERT(ma->ma_lmv_size > 0);
-        OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
-        if (ma->ma_lmv == NULL)
-                RETURN(-ENOMEM);
-
-        /* Get LMV EA, Note: refresh valid here for getting LMV_EA */
-        ma->ma_valid &= ~MA_LMV;
-        ma->ma_need = MA_LMV;
-        rc = mo_attr_get(env, mp, ma);
-        if (rc)
-                GOTO(cleanup, rc);
 
         /* Skip checking the slave dirs (mea_count is 0) */
         if (ma->ma_lmv->mea_count != 0) {
@@ -122,6 +121,8 @@ int cmm_split_check(const struct lu_env *env, struct md_object *mp,
         EXIT;
 cleanup:
         OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);
+out:
+        cmm_lprocfs_time_end(cmm, &start, LPROC_CMM_SPLIT_CHECK);
         return rc;
 }
 
@@ -612,28 +613,28 @@ cleanup:
         return rc;
 }
 
-#define CMM_MD_SIZE(stripes)  (sizeof(struct lmv_stripe_md) +  \
-                               (stripes) * sizeof(struct lu_fid))
-
 int cmm_split_try(const struct lu_env *env, struct md_object *mo)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct md_attr    *ma = &cmm_env_info(env)->cmi_ma;
         int                rc = 0, split;
         struct lu_buf     *buf;
+        struct timeval     start;
         ENTRY;
 
+        cmm_lprocfs_time_start(cmm, &start, LPROC_CMM_SPLIT_EXEC);
+        
         LASSERT(S_ISDIR(lu_object_attr(&mo->mo_lu)));
         memset(ma, 0, sizeof(*ma));
 
         /* Step1: Checking whether the dir needs to be split. */
         rc = cmm_split_expect(env, mo, ma, &split);
         if (rc)
-                RETURN(rc);
+                GOTO(out, rc);
 
         if (split != CMM_SPLIT_NEEDED) {
                 /* No split is needed, caller may proceed with create. */
-                RETURN(0);
+                GOTO(out, rc = 0);
         }
 
         /* Split should be done now, let's do it. */
@@ -647,14 +648,14 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
         rc = cmm_upcall(env, &cmm->cmm_md_dev, MD_NO_TRANS);
         if (rc) {
                 CERROR("Can't disable trans for split, rc %d\n", rc);
-                RETURN(rc);
+                GOTO(out, rc);
         }
 
         /* Step2: Prepare the md memory */
         ma->ma_lmv_size = CMM_MD_SIZE(cmm->cmm_tgt_count + 1);
         OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
         if (ma->ma_lmv == NULL)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         /* Step3: Create slave objects and fill the ma->ma_lmv */
         rc = cmm_split_slaves_create(env, mo, ma);
@@ -692,5 +693,7 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
         EXIT;
 cleanup:
         OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);
+out:
+        cmm_lprocfs_time_end(cmm, &start, LPROC_CMM_SPLIT_EXEC);
         return rc;
 }

@@ -209,6 +209,7 @@ struct md_object_operations {
 
         int (*moo_close)(const struct lu_env *env, struct md_object *obj,
                          struct md_attr *ma);
+        
         int (*moo_capa_get)(const struct lu_env *, struct md_object *,
                             struct lustre_capa *, int renewal);
 };

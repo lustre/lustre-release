@@ -38,18 +38,20 @@
 
 
 struct cmm_device {
-        struct md_device      cmm_md_dev;
+        struct md_device        cmm_md_dev;
         /* device flags, taken from enum cmm_flags */
-        __u32                 cmm_flags;
+        __u32                   cmm_flags;
         /* underlaying device in MDS stack, usually MDD */
-        struct md_device      *cmm_child;
+        struct md_device       *cmm_child;
         /* FLD client to talk to FLD */
-        struct lu_client_fld *cmm_fld;
+        struct lu_client_fld   *cmm_fld;
         /* other MD servers in cluster */
-        mdsno_t               cmm_local_num;
-        __u32                 cmm_tgt_count;
-        struct list_head      cmm_targets;
-        spinlock_t            cmm_tgt_guard;
+        mdsno_t                 cmm_local_num;
+        __u32                   cmm_tgt_count;
+        struct list_head        cmm_targets;
+        spinlock_t              cmm_tgt_guard;
+        cfs_proc_dir_entry_t   *cmm_proc_entry;
+        struct lprocfs_stats   *cmm_stats;
 };
 
 enum cmm_flags {
@@ -176,7 +178,11 @@ static inline struct cml_object *cmm2cml_obj(struct cmm_object *co)
 
 int cmm_upcall(const struct lu_env *env, struct md_device *md,
                enum md_upcall_event ev);
+
 #ifdef HAVE_SPLIT_SUPPORT
+
+#define CMM_MD_SIZE(stripes)  (sizeof(struct lmv_stripe_md) +  \
+                               (stripes) * sizeof(struct lu_fid))
 
 /* cmm_split.c */
 static inline struct lu_buf *cmm_buf_get(const struct lu_env *env,
@@ -204,6 +210,21 @@ int cmm_split_access(const struct lu_env *env, struct md_object *mo,
 
 int cmm_fld_lookup(struct cmm_device *cm, const struct lu_fid *fid,
                    mdsno_t *mds, const struct lu_env *env);
+
+int cmm_procfs_init(struct cmm_device *cmm, const char *name);
+int cmm_procfs_fini(struct cmm_device *cmm);
+
+void cmm_lprocfs_time_start(struct cmm_device *cmm,
+                            struct timeval *start, int op);
+
+void cmm_lprocfs_time_end(struct cmm_device *cmm,
+                          struct timeval *start, int op);
+
+enum {
+        LPROC_CMM_SPLIT_CHECK = 0,
+        LPROC_CMM_SPLIT_EXEC,
+        LPROC_CMM_LAST
+};
 
 #endif /* __KERNEL__ */
 #endif /* _CMM_INTERNAL_H */
