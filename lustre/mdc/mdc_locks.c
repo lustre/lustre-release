@@ -290,7 +290,7 @@ int mdc_enqueue(struct obd_export *exp,
 
                 size[DLM_INTENT_REC_OFF] = sizeof(struct mdt_rec_create);
                 /* parent capability */
-                size[DLM_INTENT_REC_OFF + 1] = op_data->op_mod_capa1 ?
+                size[DLM_INTENT_REC_OFF + 1] = op_data->op_capa1 ?
                                                sizeof(struct lustre_capa) : 0;
                 /* child capability, used for replay only */
                 size[DLM_INTENT_REC_OFF + 2] = sizeof(struct lustre_capa);
@@ -349,7 +349,7 @@ int mdc_enqueue(struct obd_export *exp,
                 repsize[repbufcnt++] = sizeof(struct lustre_capa);
         } else if (it->it_op & IT_UNLINK) {
                 size[DLM_INTENT_REC_OFF] = sizeof(struct mdt_rec_unlink);
-                size[DLM_INTENT_REC_OFF + 1] = op_data->op_mod_capa1 ?
+                size[DLM_INTENT_REC_OFF + 1] = op_data->op_capa1 ?
                                                sizeof(struct lustre_capa) : 0;
                 size[DLM_INTENT_REC_OFF + 2] = op_data->op_namelen + 1;
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
@@ -374,7 +374,7 @@ int mdc_enqueue(struct obd_export *exp,
                 valid |= client_is_remote(exp) ? OBD_MD_FLRMTPERM :
                                                  OBD_MD_FLACL;
                 size[DLM_INTENT_REC_OFF] = sizeof(struct mdt_body);
-                size[DLM_INTENT_REC_OFF + 1] = op_data->op_mod_capa1 ?
+                size[DLM_INTENT_REC_OFF + 1] = op_data->op_capa1 ?
                                                sizeof(struct lustre_capa) : 0;
                 size[DLM_INTENT_REC_OFF + 2] = op_data->op_namelen + 1;
 

@@ -61,7 +61,7 @@ void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
         ((struct ll_iattr *)&op_data->op_attr)->ia_attr_flags = inode->i_flags;
         op_data->op_ioepoch = ll_i2info(inode)->lli_ioepoch;
         memcpy(&op_data->op_handle, fh, sizeof(op_data->op_handle));
-        op_data->op_mod_capa1 = ll_mdscapa_get(inode);
+        op_data->op_capa1 = ll_mdscapa_get(inode);
 }
 
 static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,

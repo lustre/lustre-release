@@ -663,8 +663,8 @@ struct md_op_data {
         __u32                   op_flags;
 
         /* Capa fields */
-        struct obd_capa        *op_mod_capa1;
-        struct obd_capa        *op_mod_capa2;
+        struct obd_capa        *op_capa1;
+        struct obd_capa        *op_capa2;
 };
 
 #define MDS_MODE_DONT_LOCK (1 << 30)

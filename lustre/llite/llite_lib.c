@@ -2246,13 +2246,13 @@ ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
 
         ll_i2gids(op_data->op_suppgids, i1, i2);
         op_data->op_fid1 = *ll_inode2fid(i1);
-        op_data->op_mod_capa1 = ll_mdscapa_get(i1);
+        op_data->op_capa1 = ll_mdscapa_get(i1);
 
         /* @i2 may be NULL. In this case caller itself has to initialize ->fid2
          * if needed. */
         if (i2) {
                 op_data->op_fid2 = *ll_inode2fid(i2);
-                op_data->op_mod_capa2 = ll_mdscapa_get(i2);
+                op_data->op_capa2 = ll_mdscapa_get(i2);
         }
 
         op_data->op_name = name;
@@ -2268,8 +2268,8 @@ ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
 
 void ll_finish_md_op_data(struct md_op_data *op_data)
 {
-        capa_put(op_data->op_mod_capa1);
-        capa_put(op_data->op_mod_capa2);
+        capa_put(op_data->op_capa1);
+        capa_put(op_data->op_capa2);
         OBD_FREE_PTR(op_data);
 }
 

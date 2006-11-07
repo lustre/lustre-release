@@ -129,7 +129,7 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
         rec->cr_suppgid = op_data->op_suppgids[0];
         rec->cr_flags = op_data->op_flags;
 
-        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->op_namelen + 1);
         LOGL0(op_data->op_name, op_data->op_namelen, tmp);
@@ -195,7 +195,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_time = op_data->op_mod_time;
         rec->cr_suppgid = op_data->op_suppgids[0];
 
-        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
         /* the next buffer is child capa, which is used for replay,
          * will be packed from the data in reply message. */
 
@@ -260,7 +260,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));        
         mdc_setattr_pack_rec(rec, op_data);
 
-        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
 
         if (op_data->op_flags & (MF_SOM_CHANGE | MF_EPOCH_OPEN)) {
                 epoch = lustre_msg_buf(req->rq_reqmsg, offset + 2,
@@ -298,7 +298,7 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         rec->ul_fid2 = op_data->op_fid2;
         rec->ul_time = op_data->op_mod_time;
 
-        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, op_data->op_namelen + 1);
         LASSERT(tmp != NULL);
@@ -323,8 +323,8 @@ void mdc_link_pack(struct ptlrpc_request *req, int offset,
         rec->lk_fid2 = op_data->op_fid2;
         rec->lk_time = op_data->op_mod_time;
 
-        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
-        mdc_pack_capa(req, offset + 2, op_data->op_mod_capa2);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+        mdc_pack_capa(req, offset + 2, op_data->op_capa2);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, op_data->op_namelen + 1);
         LOGL0(op_data->op_name, op_data->op_namelen, tmp);
@@ -351,8 +351,8 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_time = op_data->op_mod_time;
         rec->rn_mode = op_data->op_mode;
 
-        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
-        mdc_pack_capa(req, offset + 2, op_data->op_mod_capa2);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
+        mdc_pack_capa(req, offset + 2, op_data->op_capa2);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 3, oldlen + 1);
         LOGL0(old, oldlen, tmp);
@@ -379,7 +379,7 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int offset, __u64 valid,
         b->fid1 = op_data->op_fid1;
         b->fid2 = op_data->op_fid2;
 
-        mdc_pack_capa(req, offset + 1, op_data->op_mod_capa1);
+        mdc_pack_capa(req, offset + 1, op_data->op_capa1);
 
         if (op_data->op_name) {
                 char *tmp;
@@ -399,7 +399,7 @@ void mdc_close_pack(struct ptlrpc_request *req, int offset,
         rec = lustre_msg_buf(req->rq_reqmsg, offset + 1, sizeof(*rec));
 
         mdc_setattr_pack_rec(rec, op_data);
-        mdc_pack_capa(req, offset + 2, op_data->op_mod_capa1);
+        mdc_pack_capa(req, offset + 2, op_data->op_capa1);
         mdc_epoch_pack(epoch, op_data);
 }
 

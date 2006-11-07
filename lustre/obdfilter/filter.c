@@ -1881,6 +1881,9 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         INIT_LIST_HEAD(&filter->fo_llog_list);
         spin_lock_init(&filter->fo_llog_list_lock);
 
+        filter->fo_fl_oss_capa = 0;
+        INIT_LIST_HEAD(&filter->fo_capa_keys);
+
         sprintf(ns_name, "filter-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (obd->obd_namespace == NULL)
@@ -1933,9 +1936,6 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
                               label ?: "", label ? "/" : "", str,
                               obd->obd_replayable ? "enabled" : "disabled");
         }
-
-        filter->fo_fl_oss_capa = 0;
-        INIT_LIST_HEAD(&filter->fo_capa_keys);
 
         RETURN(0);
 
