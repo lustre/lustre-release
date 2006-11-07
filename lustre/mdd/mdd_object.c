@@ -227,9 +227,7 @@ int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj)
         int rc;
 
         ENTRY;
-        mdd_read_lock(env, obj);
         rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
-        mdd_read_unlock(env, obj);
         if (rc == 0)
                 mdd_flags_xlate(obj, la->la_flags);
         RETURN(rc);
@@ -524,15 +522,15 @@ static int __mdd_xattr_set(const struct lu_env *env, struct mdd_object *o,
         RETURN(rc);
 }
 
-/* this gives the same functionality as the code between
+/*
+ * This gives the same functionality as the code between
  * sys_chmod and inode_setattr
  * chown_common and inode_setattr
  * utimes and inode_setattr
  * This API is ported from mds_fix_attr but remove some unnecesssary stuff.
- * and port to
  */
-int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
-                 struct lu_attr *la)
+static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
+                        struct lu_attr *la)
 {
         struct lu_attr   *tmp_la     = &mdd_env_info(env)->mti_la;
         struct md_ucred  *uc         = md_ucred(env);
@@ -585,7 +583,7 @@ int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
         /* Check for setting the obj time. */
         if ((la->la_valid & (LA_MTIME | LA_ATIME | LA_CTIME)) &&
             !(la->la_valid & ~(LA_MTIME | LA_ATIME | LA_CTIME))) {
-                rc = __mdd_permission_internal(env, obj, MAY_WRITE, tmp_la);
+                rc = mdd_permission_internal(env, obj, tmp_la, MAY_WRITE, 1);
                 if (rc)
                         RETURN(rc);
         }
@@ -671,7 +669,7 @@ int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
         /* For tuncate (or setsize), we should have MAY_WRITE perm */
         if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
-                rc = __mdd_permission_internal(env, obj, MAY_WRITE, tmp_la);
+                rc = mdd_permission_internal(env, obj, tmp_la, MAY_WRITE, 1);
                 if (rc)
                         RETURN(rc);
 
@@ -740,9 +738,7 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                        ma->ma_attr.la_mtime, ma->ma_attr.la_ctime);
 
         *la_copy = ma->ma_attr;
-        mdd_read_lock(env, mdd_obj);
         rc = mdd_fix_attr(env, mdd_obj, la_copy);
-        mdd_read_unlock(env, mdd_obj);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -809,9 +805,7 @@ static int mdd_xattr_sanity_check(const struct lu_env *env,
         if (mdd_is_immutable(obj) || mdd_is_append(obj))
                 RETURN(-EPERM);
 
-        mdd_read_lock(env, obj);
         rc = mdd_la_get(env, obj, tmp_la, BYPASS_CAPA);
-        mdd_read_unlock(env, obj);
         if (rc)
                 RETURN(rc);
 
@@ -1124,7 +1118,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
                 RETURN(-EISDIR);
 
         if (!(flag & MDS_OPEN_CREATED)) {
-                rc = __mdd_permission_internal(env, obj, mode, tmp_la);
+                rc = mdd_permission_internal(env, obj, tmp_la, mode, 0);
                 if (rc)
                         RETURN(rc);
         }
@@ -1229,7 +1223,7 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
 
         if (S_ISDIR(mdd_object_type(obj)) && dt_try_as_dir(env, next))
 #if 0
-                rc = mdd_permission_internal(env, obj, MAY_READ);
+                rc = mdd_permission_internal(env, obj, NULL, MAY_READ, 0);
 #else
                 rc = 0;
 #endif

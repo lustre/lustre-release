@@ -204,7 +204,10 @@ check_perm:
         RETURN(-EACCES);
 }
 
-/* get default acl EA only */
+/*
+ * Get default acl EA only.
+ * Hold read_lock for mdd_obj.
+ */
 int mdd_acl_def_get(const struct lu_env *env, struct mdd_object *mdd_obj, 
                     struct md_attr *ma)
 {
@@ -277,6 +280,9 @@ static int mdd_posix_acl_chmod_masq(posix_acl_xattr_entry *entry,
 	return 0;
 }
 
+/*
+ * Hold write_lock for o.
+ */
 int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode, 
                   struct thandle *handle)
 {
@@ -378,6 +384,9 @@ static int mdd_posix_acl_create_masq(posix_acl_xattr_entry *entry,
         return not_equiv;
 }
 
+/*
+ * Hold write_lock for obj.
+ */
 int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
                    struct lu_buf *buf, __u32 *mode, struct thandle *handle)
 {
@@ -415,9 +424,12 @@ int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
         RETURN(rc);
 }
 
+/*
+ * Hold read_lock for pobj.
+ * Hold write_lock for cobj.
+ */
 int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
-                 struct mdd_object *cobj, __u32 *mode,
-                 struct thandle *handle)
+                 struct mdd_object *cobj, __u32 *mode, struct thandle *handle)
 {
         struct dt_object        *next = mdd_object_child(pobj);
         struct lu_buf           *buf = &mdd_env_info(env)->mti_buf;
@@ -443,8 +455,11 @@ int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
 }
 #endif
 
+/*
+ * Hold read_lock for obj.
+ */
 static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
-                         struct lu_attr* la, int mask)
+                         struct lu_attr *la, int mask)
 {
 #ifdef CONFIG_FS_POSIX_ACL
         struct dt_object *next;
@@ -480,9 +495,8 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 #endif
 }
 
-int __mdd_permission_internal(const struct lu_env *env,
-                              struct mdd_object *obj,
-                              int mask, struct lu_attr *la)
+int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
+                            struct lu_attr *la, int mask, int needlock)
 {
         struct md_ucred *uc = md_ucred(env);
         __u32 mode;
@@ -518,7 +532,11 @@ int __mdd_permission_internal(const struct lu_env *env,
                 mode >>= 6;
         } else {
                 if (mode & S_IRWXG) {
+                        if (needlock)
+                                mdd_read_lock(env, obj);
                         rc = mdd_check_acl(env, obj, la, mask);
+                        if (needlock)
+                                mdd_read_unlock(env, obj);
                         if (rc == -EACCES)
                                 goto check_capabilities;
                         else if ((rc != -EAGAIN) && (rc != -EOPNOTSUPP) &&
@@ -546,31 +564,13 @@ check_capabilities:
         RETURN(-EACCES);
 }
 
-int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj, 
-                            int mask)
-{
-        return __mdd_permission_internal(env, obj, mask, NULL);
-}
-
-inline int mdd_permission_internal_locked(const struct lu_env *env,
-                                          struct mdd_object *obj, int mask)
-{
-        int rc;
-
-        mdd_read_lock(env, obj);
-        rc = mdd_permission_internal(env, obj, mask);
-        mdd_read_unlock(env, obj);
-
-        return rc;
-}
-
 int mdd_permission(const struct lu_env *env, struct md_object *obj, int mask)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         int rc;
         ENTRY;
 
-        rc = mdd_permission_internal_locked(env, mdd_obj, mask);
+        rc = mdd_permission_internal(env, mdd_obj, NULL, mask, 1);
 
         RETURN(rc);
 }
@@ -598,4 +598,3 @@ int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
 
         RETURN(rc);
 }
-

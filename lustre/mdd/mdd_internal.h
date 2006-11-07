@@ -284,13 +284,8 @@ int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
                    struct lu_buf *buf, __u32 *mode, struct thandle *handle);
 int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
                  struct mdd_object *cobj, __u32 *mode, struct thandle *handle);
-int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
-                              int mask, struct lu_attr *la);
 int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
-                            int mask);
-int mdd_permission_internal_locked(const struct lu_env *env,
-                                   struct mdd_object *obj, int mask);
-
+                            struct lu_attr *la, int mask, int needlock);
 int mdd_permission(const struct lu_env *env, struct md_object *obj, int mask);
 int mdd_capa_get(const struct lu_env *env, struct md_object *obj,
                  struct lustre_capa *capa, int renewal);

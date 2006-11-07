@@ -197,8 +197,8 @@ static int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
                 RETURN(-ENOENT);
 
         if (need_check) {
-                rc = mdd_permission_internal_locked(env, pobj,
-                                                    (MAY_WRITE | MAY_EXEC));
+                rc = mdd_permission_internal(env, pobj, NULL,
+                                             MAY_WRITE | MAY_EXEC, 1);
         }
         RETURN(rc);
 }
@@ -221,9 +221,7 @@ static inline int mdd_is_sticky(const struct lu_env *env,
         } else if (tmp_la->la_uid == uc->mu_fsuid) {
                 return 0;
         } else {
-                mdd_read_lock(env, pobj);
                 rc = mdd_la_get(env, pobj, tmp_la, BYPASS_CAPA);
-                mdd_read_unlock(env, pobj);
                 if (rc)
                         return rc;
                 else if (!(tmp_la->la_mode & S_ISVTX))
@@ -272,9 +270,8 @@ static int mdd_may_delete(const struct lu_env *env,
                         RETURN(-EPERM);
 
                 if (need_check)
-                        rc = mdd_permission_internal_locked(env, pobj,
-                                                            MAY_WRITE |
-                                                            MAY_EXEC);
+                        rc = mdd_permission_internal(env, pobj, NULL,
+                                                     MAY_WRITE | MAY_EXEC, 1);
         }
         RETURN(rc);
 }
@@ -607,10 +604,6 @@ out_trans:
         return rc;
 }
 
-/*
- * Partial operation. Be aware, this is called with write lock taken, so we use
- * locksless version of __mdd_lookup() here.
- */
 static int mdd_ni_sanity_check(const struct lu_env *env,
                                struct md_object *pobj,
                                const char *name,
@@ -624,10 +617,13 @@ static int mdd_ni_sanity_check(const struct lu_env *env,
                 RETURN(-ENOENT);
 
         /* The exist of the name will be checked in _index_insert. */
-        RETURN(mdd_permission_internal_locked(env, obj,
-                                              MAY_WRITE | MAY_EXEC));
+        RETURN(mdd_permission_internal(env, obj, NULL,
+                                       MAY_WRITE | MAY_EXEC, 1));
 }
 
+/*
+ * Partial operation.
+ */
 static int mdd_name_insert(const struct lu_env *env, struct md_object *pobj,
                            const char *name, const struct lu_fid *fid,
                            int is_dir)
@@ -666,10 +662,6 @@ out_trans:
         return rc;
 }
 
-/*
- * Be aware, this is called with write lock taken, so we use locksless version
- * of __mdd_lookup() here.
- */
 static int mdd_nr_sanity_check(const struct lu_env *env,
                                struct md_object *pobj,
                                const char *name)
@@ -685,11 +677,13 @@ static int mdd_nr_sanity_check(const struct lu_env *env,
         }
 
         /* Name presense will be checked in _index_delete. */
-        rc = mdd_permission_internal_locked(env, obj,
-                                            MAY_WRITE | MAY_EXEC);
+        rc = mdd_permission_internal(env, obj, NULL, MAY_WRITE | MAY_EXEC, 1);
         RETURN(rc);
 }
 
+/*
+ * Partial operation.
+ */
 static int mdd_name_remove(const struct lu_env *env,
                            struct md_object *pobj,
                            const char *name, int is_dir)
@@ -919,7 +913,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                 LBUG();
         }
 
-        rc = mdd_permission_internal_locked(env, mdd_obj, mask);
+        rc = mdd_permission_internal(env, mdd_obj, NULL, mask, 1);
         if (rc)
                 RETURN(rc);
 
@@ -1014,15 +1008,13 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                 /*
                  * Check if has WRITE permission for the parent.
                  */
-                rc = mdd_permission_internal_locked(env, obj, MAY_WRITE);
+                rc = mdd_permission_internal(env, obj, NULL, MAY_WRITE, 1);
                 if (rc)
                         RETURN(rc);
         }
         
         /* sgid check */
-        mdd_read_lock(env, obj);
         rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
-        mdd_read_unlock(env, obj);
         if (rc != 0)
                 RETURN(rc);
 
@@ -1308,8 +1300,8 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
                 RETURN(-ENOENT);
 
         /* The sobj maybe on the remote, check parent permission only here */
-        rc = mdd_permission_internal_locked(env, src_pobj,
-                                            MAY_WRITE | MAY_EXEC);
+        rc = mdd_permission_internal(env, src_pobj, NULL,
+                                     MAY_WRITE | MAY_EXEC, 1);
         if (rc)
                 RETURN(rc);
 
@@ -1317,14 +1309,12 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
                 rc = mdd_may_create(env, tgt_pobj, NULL,
                                     (src_pobj != tgt_pobj));
         } else {
-                mdd_read_lock(env, tobj);
                 rc = mdd_may_delete(env, tgt_pobj, tobj, src_is_dir,
                                     (src_pobj != tgt_pobj));
                 if (rc == 0)
                         if (S_ISDIR(mdd_object_type(tobj))
                             && mdd_dir_is_empty(env, tobj))
                                 rc = -ENOTEMPTY;
-                mdd_read_unlock(env, tobj);
         }
 
         RETURN(rc);
