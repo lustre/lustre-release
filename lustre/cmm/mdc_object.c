@@ -228,7 +228,7 @@ static int mdc_attr_get(const struct lu_env *env, struct md_object *mo,
 
 static int mdc_object_create(const struct lu_env *env,
                              struct md_object *mo,
-                             const struct md_create_spec *spec,
+                             const struct md_op_spec *spec,
                              struct md_attr *ma)
 {
         struct mdc_device *mc = md2mdc_dev(md_obj2dev(mo));

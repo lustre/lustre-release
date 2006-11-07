@@ -969,7 +969,7 @@ static int mdd_oc_sanity_check(const struct lu_env *env,
 
 static int mdd_object_create(const struct lu_env *env,
                              struct md_object *obj,
-                             const struct md_create_spec *spec,
+                             const struct md_op_spec *spec,
                              struct md_attr *ma)
 {
 

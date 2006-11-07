@@ -341,11 +341,11 @@ struct mdt_thread_info {
          * reint record. contains information for reint operations.
          */
         struct mdt_reint_record    mti_rr;
+        
         /*
          * Create specification
          */
-        struct md_create_spec      mti_spec;
-
+        struct md_op_spec          mti_spec;
 
         /*
          * XXX: Part Four:

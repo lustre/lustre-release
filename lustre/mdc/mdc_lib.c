@@ -128,6 +128,7 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
         rec->cr_time = op_data->op_mod_time;
         rec->cr_suppgid = op_data->op_suppgids[0];
         rec->cr_flags = op_data->op_flags;
+        rec->cr_cksplit = op_data->op_cksplit;
 
         mdc_pack_capa(req, offset + 1, op_data->op_capa1);
 
@@ -194,6 +195,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_rdev = rdev;
         rec->cr_time = op_data->op_mod_time;
         rec->cr_suppgid = op_data->op_suppgids[0];
+        rec->cr_cksplit = op_data->op_cksplit;
 
         mdc_pack_capa(req, offset + 1, op_data->op_capa1);
         /* the next buffer is child capa, which is used for replay,
@@ -297,6 +299,7 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         rec->ul_fid1 = op_data->op_fid1;
         rec->ul_fid2 = op_data->op_fid2;
         rec->ul_time = op_data->op_mod_time;
+        rec->ul_cksplit = op_data->op_cksplit;
 
         mdc_pack_capa(req, offset + 1, op_data->op_capa1);
 
@@ -322,6 +325,7 @@ void mdc_link_pack(struct ptlrpc_request *req, int offset,
         rec->lk_fid1 = op_data->op_fid1;
         rec->lk_fid2 = op_data->op_fid2;
         rec->lk_time = op_data->op_mod_time;
+        rec->lk_cksplit = op_data->op_cksplit;
 
         mdc_pack_capa(req, offset + 1, op_data->op_capa1);
         mdc_pack_capa(req, offset + 2, op_data->op_capa2);
@@ -350,6 +354,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_fid2 = op_data->op_fid2;
         rec->rn_time = op_data->op_mod_time;
         rec->rn_mode = op_data->op_mode;
+        rec->rn_cksplit = op_data->op_cksplit;
 
         mdc_pack_capa(req, offset + 1, op_data->op_capa1);
         mdc_pack_capa(req, offset + 2, op_data->op_capa2);

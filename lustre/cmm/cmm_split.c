@@ -284,7 +284,7 @@ static int cmm_split_slave_create(const struct lu_env *env,
                                   struct lmv_stripe_md *lmv,
                                   int lmv_size)
 {
-        struct md_create_spec *spec = &cmm_env_info(env)->cmi_spec;
+        struct md_op_spec *spec = &cmm_env_info(env)->cmi_spec;
         struct cmm_object *obj;
         int rc;
         ENTRY;
@@ -613,7 +613,7 @@ cleanup:
         return rc;
 }
 
-int cmm_split_try(const struct lu_env *env, struct md_object *mo)
+int cmm_split_dir(const struct lu_env *env, struct md_object *mo)
 {
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo));
         struct md_attr    *ma = &cmm_env_info(env)->cmi_ma;
@@ -622,7 +622,7 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
         struct timeval     start;
         ENTRY;
 
-        cmm_lprocfs_time_start(cmm, &start, LPROC_CMM_SPLIT_EXEC);
+        cmm_lprocfs_time_start(cmm, &start, LPROC_CMM_SPLIT);
         
         LASSERT(S_ISDIR(lu_object_attr(&mo->mo_lu)));
         memset(ma, 0, sizeof(*ma));
@@ -643,7 +643,7 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
 
         /*
          * Disable transacrions for split, since there will be so many trans in
-         * this one ops, confilct with current recovery design.
+         * this one ops, conflict with current recovery design.
          */
         rc = cmm_upcall(env, &cmm->cmm_md_dev, MD_NO_TRANS);
         if (rc) {
@@ -694,6 +694,6 @@ int cmm_split_try(const struct lu_env *env, struct md_object *mo)
 cleanup:
         OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);
 out:
-        cmm_lprocfs_time_end(cmm, &start, LPROC_CMM_SPLIT_EXEC);
+        cmm_lprocfs_time_end(cmm, &start, LPROC_CMM_SPLIT);
         return rc;
 }

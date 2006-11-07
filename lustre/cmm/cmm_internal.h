@@ -122,7 +122,7 @@ struct cmm_thread_info {
         struct lu_rdpg        cmi_rdpg;
         /* pointers to pages for readpage. */
         struct page          *cmi_pages[CMM_SPLIT_PAGE_COUNT];
-        struct md_create_spec cmi_spec;
+        struct md_op_spec     cmi_spec;
         struct lmv_stripe_md  cmi_lmv;
         char                  cmi_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
 };
@@ -202,7 +202,7 @@ int cmm_split_check(const struct lu_env *env, struct md_object *mp,
 int cmm_split_expect(const struct lu_env *env, struct md_object *mo,
                      struct md_attr *ma, int *split);
 
-int cmm_split_try(const struct lu_env *env, struct md_object *mo);
+int cmm_split_dir(const struct lu_env *env, struct md_object *mo);
 
 int cmm_split_access(const struct lu_env *env, struct md_object *mo,
                      mdl_mode_t lm);
@@ -222,7 +222,8 @@ void cmm_lprocfs_time_end(struct cmm_device *cmm,
 
 enum {
         LPROC_CMM_SPLIT_CHECK = 0,
-        LPROC_CMM_SPLIT_EXEC,
+        LPROC_CMM_SPLIT,
+        LPROC_CMM_LOOKUP,
         LPROC_CMM_LAST
 };
 

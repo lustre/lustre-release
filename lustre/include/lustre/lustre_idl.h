@@ -665,6 +665,9 @@ struct md_op_data {
         /* Capa fields */
         struct obd_capa        *op_capa1;
         struct obd_capa        *op_capa2;
+
+        /* Should server check split in lookups or not. */
+        int                     op_cksplit;
 };
 
 #define MDS_MODE_DONT_LOCK (1 << 30)
@@ -752,6 +755,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLRMTPERM   (0x0000010000000000ULL) /* remote permission */
 #define OBD_MD_FLMDSCAPA   (0x0000020000000000ULL) /* MDS capability */
 #define OBD_MD_FLOSSCAPA   (0x0000040000000000ULL) /* OSS capability */
+#define OBD_MD_FLCKSPLIT   (0x0000080000000000ULL) /* Check split on server */
 
 #define OBD_MD_FLGETATTR (OBD_MD_FLID    | OBD_MD_FLATIME | OBD_MD_FLMTIME | \
                           OBD_MD_FLCTIME | OBD_MD_FLSIZE  | OBD_MD_FLBLKSZ | \
@@ -1258,7 +1262,7 @@ struct mdt_rec_create {
         __u64           cr_rdev;
         __u64           cr_ioepoch;
         __u32           cr_suppgid;
-        __u32           cr_padding_1; /* also fix lustre_swab_mds_rec_create */
+        __u32           cr_cksplit;
         __u32           cr_padding_2; /* also fix lustre_swab_mds_rec_create */
         __u32           cr_padding_3; /* also fix lustre_swab_mds_rec_create */
 };
@@ -1293,7 +1297,7 @@ struct mdt_rec_link {
         struct lu_fid   lk_fid1;
         struct lu_fid   lk_fid2;
         __u64           lk_time;
-        __u32           lk_padding_1;  /* also fix lustre_swab_mds_rec_link */
+        __u32           lk_cksplit;
         __u32           lk_padding_2;  /* also fix lustre_swab_mds_rec_link */
         __u32           lk_padding_3;  /* also fix lustre_swab_mds_rec_link */
         __u32           lk_padding_4;  /* also fix lustre_swab_mds_rec_link */
@@ -1329,7 +1333,7 @@ struct mdt_rec_unlink {
         struct lu_fid   ul_fid1;
         struct lu_fid   ul_fid2;
         __u64           ul_time;
-        __u32           ul_padding_1; /* also fix lustre_swab_mds_rec_unlink */
+        __u32           ul_cksplit;
         __u32           ul_padding_2; /* also fix lustre_swab_mds_rec_unlink */
         __u32           ul_padding_3; /* also fix lustre_swab_mds_rec_unlink */
         __u32           ul_padding_4; /* also fix lustre_swab_mds_rec_unlink */
@@ -1366,7 +1370,7 @@ struct mdt_rec_rename {
         struct lu_fid   rn_fid2;
         __u64           rn_time;
         __u32           rn_mode;      /* cross-ref rename has mode */
-        __u32           rn_padding_2; /* also fix lustre_swab_mdt_rec_rename */
+        __u32           rn_cksplit;   /* check for split or not */
         __u32           rn_padding_3; /* also fix lustre_swab_mdt_rec_rename */
         __u32           rn_padding_4; /* also fix lustre_swab_mdt_rec_rename */
 };

@@ -1138,14 +1138,16 @@ static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
 
         obj = lmv_obj_grab(obd, fid);
 
-        CDEBUG(D_OTHER, "GETATTR for "DFID" %s\n",
-               PFID(fid), obj ? "(split)" : "");
+        CDEBUG(D_OTHER, "GETATTR for "DFID" %s\n", PFID(fid),
+               obj ? "(split)" : "");
 
-        /* if object is split, then we loop over all the slaves and gather size
+        /*
+         * If object is split, then we loop over all the slaves and gather size
          * attribute. In ideal world we would have to gather also mds field from
          * all slaves, as object is spread over the cluster and this is
          * definitely interesting information and it is not good to loss it,
-         * but... */
+         * but...
+         */
         if (obj) {
                 struct mdt_body *body;
 
@@ -1195,9 +1197,11 @@ static int lmv_change_cbdata(struct obd_export *exp, const struct lu_fid *fid,
 
         CDEBUG(D_OTHER, "CBDATA for "DFID"\n", PFID(fid));
 
-        /* with CMD every object can have two locks in different namespaces:
+        /*
+         * With CMD every object can have two locks in different namespaces:
          * lookup lock in space of mds storing direntry and update/open lock in
-         * space of mds storing inode */
+         * space of mds storing inode.
+         */
         for (i = 0; i < lmv->desc.ld_tgt_count; i++)
                 md_change_cbdata(lmv->tgts[i].ltd_exp, fid, it, data);
 
@@ -1311,10 +1315,12 @@ repeat:
                 mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                        op_data->op_name, op_data->op_namelen);
                 op_data->op_fid1 = obj->lo_inodes[mea_idx].li_fid;
+                op_data->op_cksplit = 0;
                 tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
                 lmv_obj_put(obj);
         } else {
                 tgt_exp = lmv_find_export(lmv, &op_data->op_fid1);
+                op_data->op_cksplit = 1;
         }
 
         if (IS_ERR(tgt_exp))
@@ -1396,6 +1402,7 @@ lmv_enqueue_slaves(struct obd_export *exp, int locktype,
         for (i = 0; i < mea->mea_count; i++) {
                 memset(op_data2, 0, sizeof(*op_data2));
                 op_data2->op_fid1 = mea->mea_ids[i];
+                op_data2->op_cksplit = 0;
 
                 tgt_exp = lmv_find_export(lmv, &op_data2->op_fid1);
                 if (IS_ERR(tgt_exp))
@@ -1593,8 +1600,10 @@ repeat:
                 rid = obj->lo_inodes[mea_idx].li_fid;
                 tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
                 lmv_obj_put(obj);
+                valid &= ~OBD_MD_FLCKSPLIT;
         } else {
                 tgt_exp = lmv_find_export(lmv, &rid);
+                valid |= OBD_MD_FLCKSPLIT;
         }
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));

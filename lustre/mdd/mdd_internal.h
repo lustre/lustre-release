@@ -126,7 +126,7 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
 int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size,
-                   const struct md_create_spec *spec, struct lu_attr *la);
+                   const struct md_op_spec *spec, struct lu_attr *la);
 void mdd_lov_create_finish(const struct lu_env *env,
                            struct mdd_device *mdd, int rc);
 int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,

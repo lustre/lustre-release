@@ -69,7 +69,7 @@ __mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
 
 static int mdd_lookup(const struct lu_env *env,
                       struct md_object *pobj, const char *name,
-                      struct lu_fid* fid)
+                      struct lu_fid* fid, struct md_op_spec *spec)
 {
         int rc;
         ENTRY;
@@ -826,7 +826,7 @@ static int mdd_cd_sanity_check(const struct lu_env *env,
 
 static int mdd_create_data(const struct lu_env *env,
                            struct md_object *pobj, struct md_object *cobj,
-                           const struct md_create_spec *spec,
+                           const struct md_op_spec *spec,
                            struct md_attr *ma)
 {
         struct mdd_device *mdd = mdo2mdd(cobj);
@@ -1043,7 +1043,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 static int mdd_create(const struct lu_env *env,
                       struct md_object *pobj, const char *name,
                       struct md_object *child,
-                      struct md_create_spec *spec,
+                      struct md_op_spec *spec,
                       struct md_attr* ma)
 {
         struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;

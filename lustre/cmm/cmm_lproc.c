@@ -58,10 +58,12 @@ static int cmm_procfs_init_stats(struct cmm_device *cmm, int num_stats)
 
         cmm->cmm_stats = stats;
 
+        lprocfs_counter_init(cmm->cmm_stats, LPROC_CMM_LOOKUP,
+                             LPROCFS_CNTR_AVGMINMAX, "lookup", "time");
+        lprocfs_counter_init(cmm->cmm_stats, LPROC_CMM_SPLIT,
+                             LPROCFS_CNTR_AVGMINMAX, "split", "time");
         lprocfs_counter_init(cmm->cmm_stats, LPROC_CMM_SPLIT_CHECK,
                              LPROCFS_CNTR_AVGMINMAX, "split_check", "time");
-        lprocfs_counter_init(cmm->cmm_stats, LPROC_CMM_SPLIT_EXEC,
-                             LPROCFS_CNTR_AVGMINMAX, "split_exec", "time");
         EXIT;
 cleanup:
         if (rc) {

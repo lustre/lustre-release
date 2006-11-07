@@ -235,7 +235,7 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
         size[REQ_REC_OFF + 1] = oc ? sizeof(struct lustre_capa) : 0;
 
         /*
-         * XXX do we need to make another request here?  We just did a getattr
+         * XXX: Do we need to make another request here?  We just did a getattr
          * to do the lookup in the first place.
          */
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
@@ -248,7 +248,8 @@ int mdc_getattr(struct obd_export *exp, const struct lu_fid *fid,
 
         if (valid & OBD_MD_FLRMTPERM)
                 acl_size = sizeof(struct mdt_remote_perm);
-        /* currently only root inode will call us with FLACL */
+        
+        /* Currently only root inode will call us with FLACL */
         else if (valid & OBD_MD_FLACL)
                 acl_size = LUSTRE_POSIX_ACL_MAX_SIZE;
 

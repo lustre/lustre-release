@@ -75,7 +75,7 @@ void mdt_mfd_free(struct mdt_file_data *mfd)
 static int mdt_create_data(struct mdt_thread_info *info,
                            struct mdt_object *p, struct mdt_object *o)
 {
-        struct md_create_spec *spec = &info->mti_spec;
+        struct md_op_spec     *spec = &info->mti_spec;
         struct md_attr        *ma = &info->mti_attr;
         int rc;
         ENTRY;
@@ -801,7 +801,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 GOTO(out, result = PTR_ERR(parent));
 
         result = mdo_lookup(info->mti_env, mdt_object_child(parent),
-                            rr->rr_name, child_fid);
+                            rr->rr_name, child_fid, &info->mti_spec);
         if (result != 0 && result != -ENOENT && result != -ESTALE)
                 GOTO(out_parent, result);
 

@@ -702,7 +702,8 @@ static int mdt_raw_lookup(struct mdt_thread_info *info,
                 RETURN(0);
 
         /* Only got the fid of this obj by name */
-        rc = mdo_lookup(info->mti_env, next, name, child_fid);
+        rc = mdo_lookup(info->mti_env, next, name, child_fid,
+                        &info->mti_spec);
         if (rc != 0) {
                 if (rc == -ENOENT)
                         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
@@ -825,7 +826,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 RETURN(rc);
 
         /* step 2: lookup child's fid by name */
-        rc = mdo_lookup(info->mti_env, next, name, child_fid);
+        rc = mdo_lookup(info->mti_env, next, name, child_fid,
+                        &info->mti_spec);
         if (rc != 0) {
                 if (rc == -ENOENT)
                         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
@@ -914,9 +916,11 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
         ENTRY;
 
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
-        LASSERT(reqbody);
+        LASSERT(reqbody != NULL);
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        LASSERT(repbody);
+        LASSERT(repbody != NULL);
+
+        info->mti_spec.sp_ck_split = (reqbody->valid & OBD_MD_FLCKSPLIT);
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
 
@@ -2045,6 +2049,9 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
         info->mti_has_trans = 0;
         info->mti_no_need_trans = 0;
         info->mti_opdata = 0;
+
+        /* To not check for split by default. */
+        info->mti_spec.sp_ck_split = 0;
 }
 
 static void mdt_thread_info_fini(struct mdt_thread_info *info)

@@ -192,7 +192,7 @@ static struct lu_object_operations cml_obj_ops = {
 /* CMM local md_object operations */
 static int cml_object_create(const struct lu_env *env,
                              struct md_object *mo,
-                             const struct md_create_spec *spec,
+                             const struct md_op_spec *spec,
                              struct md_attr *attr)
 {
         int rc;
@@ -347,17 +347,27 @@ static struct md_object_operations cml_mo_ops = {
 
 /* md_dir operations */
 static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
-                      const char *name, struct lu_fid *lf)
+                      const char *name, struct lu_fid *lf,
+                      struct md_op_spec *spec)
 {
+        struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo_p));
+        struct timeval start;
         int rc;
         ENTRY;
 
+        cmm_lprocfs_time_start(cmm, &start, LPROC_CMM_LOOKUP);
+        
 #ifdef HAVE_SPLIT_SUPPORT
-        rc = cmm_split_check(env, mo_p, name);
-        if (rc)
-                RETURN(rc);
+        if (spec != NULL && spec->sp_ck_split) {
+                rc = cmm_split_check(env, mo_p, name);
+                if (rc) {
+                        cmm_lprocfs_time_end(cmm, &start, LPROC_CMM_LOOKUP);
+                        RETURN(rc);
+                }
+        }
 #endif
-        rc = mdo_lookup(env, md_object_next(mo_p), name, lf);
+        rc = mdo_lookup(env, md_object_next(mo_p), name, lf, spec);
+        cmm_lprocfs_time_end(cmm, &start, LPROC_CMM_LOOKUP);
         RETURN(rc);
 
 }
@@ -377,7 +387,7 @@ static mdl_mode_t cml_lock_mode(const struct lu_env *env,
 
 static int cml_create(const struct lu_env *env, struct md_object *mo_p,
                       const char *name, struct md_object *mo_c,
-                      struct md_create_spec *spec, struct md_attr *ma)
+                      struct md_op_spec *spec, struct md_attr *ma)
 {
         int rc;
         ENTRY;
@@ -408,24 +418,25 @@ static int cml_create(const struct lu_env *env, struct md_object *mo_p,
                  * -ERESTART to client to let it know that correct MDT should be
                  * choosen.
                  */
-                rc = cmm_split_try(env, mo_p);
-                if (rc) {
+                rc = cmm_split_dir(env, mo_p);
+                if (rc)
                         /* 
                          * -ERESTART or some split error is returned, we can't
                          * proceed with create.
                          */
                         RETURN(rc);
-                }
         }
-        
-        /* 
-         * Check for possible split directory and let caller know that it should
-         * tell client that directory is split and operation should repeat to
-         * correct MDT.
-         */
-        rc = cmm_split_check(env, mo_p, name);
-        if (rc)
-                RETURN(rc);
+
+        if (spec != NULL && spec->sp_ck_split) {
+                /* 
+                 * Check for possible split directory and let caller know that
+                 * it should tell client that directory is split and operation
+                 * should repeat to correct MDT.
+                 */
+                rc = cmm_split_check(env, mo_p, name);
+                if (rc)
+                        RETURN(rc);
+        }
 #endif
 
         rc = mdo_create(env, md_object_next(mo_p), name, md_object_next(mo_c),
@@ -436,7 +447,7 @@ static int cml_create(const struct lu_env *env, struct md_object *mo_p,
 
 static int cml_create_data(const struct lu_env *env, struct md_object *p,
                            struct md_object *o,
-                           const struct md_create_spec *spec,
+                           const struct md_op_spec *spec,
                            struct md_attr *ma)
 {
         int rc;
@@ -680,7 +691,7 @@ static struct lu_object_operations cmr_obj_ops = {
 /* CMM remote md_object operations. All are invalid */
 static int cmr_object_create(const struct lu_env *env,
                              struct md_object *mo,
-                             const struct md_create_spec *spec,
+                             const struct md_op_spec *spec,
                              struct md_attr *ma)
 {
         return -EFAULT;
@@ -789,7 +800,8 @@ static struct md_object_operations cmr_mo_ops = {
 
 /* remote part of md_dir operations */
 static int cmr_lookup(const struct lu_env *env, struct md_object *mo_p,
-                      const char *name, struct lu_fid *lf)
+                      const char *name, struct lu_fid *lf,
+                      struct md_op_spec *spec)
 {
         /*
          * This can happens while rename() If new parent is remote dir, lookup
@@ -816,7 +828,7 @@ static mdl_mode_t cmr_lock_mode(const struct lu_env *env,
  */
 static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
                       const char *child_name, struct md_object *mo_c,
-                      struct md_create_spec *spec,
+                      struct md_op_spec *spec,
                       struct md_attr *ma)
 {
         struct cmm_thread_info *cmi;
@@ -879,7 +891,7 @@ static int cmr_link(const struct lu_env *env, struct md_object *mo_p,
         
         /* Make sure that name isn't exist before doing remote call. */
         rc = mdo_lookup(env, md_object_next(mo_p), name,
-                        &cmm_env_info(env)->cmi_fid);
+                        &cmm_env_info(env)->cmi_fid, NULL);
         if (rc == 0) {
                 rc = -EEXIST;
         } else if (rc == -ENOENT) {

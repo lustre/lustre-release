@@ -134,8 +134,8 @@ struct md_attr {
         int                     ma_cookie_size;
 };
 
-/* additional parameters for create */
-struct md_create_spec {
+/* Additional parameters for create */
+struct md_op_spec {
         union {
                 /* symlink target */
                 const char               *sp_symname;
@@ -159,6 +159,9 @@ struct md_create_spec {
 
         /* Current lock mode for parent dir where create is performing. */
         mdl_mode_t sp_cr_mode;
+
+        /* Check for split */
+        int        sp_ck_split;
 };
 
 /*
@@ -196,7 +199,7 @@ struct md_object_operations {
         /* part of cross-ref operation */
         int (*moo_object_create)(const struct lu_env *env,
                                  struct md_object *obj,
-                                 const struct md_create_spec *spec,
+                                 const struct md_op_spec *spec,
                                  struct md_attr *ma);
 
         int (*moo_ref_add)(const struct lu_env *env, struct md_object *obj);
@@ -222,20 +225,21 @@ struct md_dir_operations {
                               const struct lu_fid *fid, struct lu_fid *sfid);
 
         int (*mdo_lookup)(const struct lu_env *env, struct md_object *obj,
-                          const char *name, struct lu_fid *fid);
+                          const char *name, struct lu_fid *fid,
+                          struct md_op_spec *spec);
 
         mdl_mode_t (*mdo_lock_mode)(const struct lu_env *env, struct md_object *obj,
                                     mdl_mode_t mode);
 
         int (*mdo_create)(const struct lu_env *env, struct md_object *pobj,
                           const char *name, struct md_object *child,
-                          struct md_create_spec *spec,
+                          struct md_op_spec *spec,
                           struct md_attr *ma);
 
         /* This method is used for creating data object for this meta object*/
         int (*mdo_create_data)(const struct lu_env *env, struct md_object *p,
                                struct md_object *o,
-                               const struct md_create_spec *spec,
+                               const struct md_op_spec *spec,
                                struct md_attr *ma);
 
         int (*mdo_rename)(const struct lu_env *env, struct md_object *spobj,
@@ -445,7 +449,7 @@ static inline int mo_readpage(const struct lu_env *env,
 
 static inline int mo_object_create(const struct lu_env *env,
                                    struct md_object *m,
-                                   const struct md_create_spec *spc,
+                                   const struct md_op_spec *spc,
                                    struct md_attr *at)
 {
         LASSERT(m->mo_ops->moo_object_create);
@@ -479,10 +483,11 @@ static inline int mo_capa_get(const struct lu_env *env,
 static inline int mdo_lookup(const struct lu_env *env,
                              struct md_object *p,
                              const char *name,
-                             struct lu_fid *f)
+                             struct lu_fid *f,
+                             struct md_op_spec *spec)
 {
         LASSERT(p->mo_dir_ops->mdo_lookup);
-        return p->mo_dir_ops->mdo_lookup(env, p, name, f);
+        return p->mo_dir_ops->mdo_lookup(env, p, name, f, spec);
 }
 
 static inline mdl_mode_t mdo_lock_mode(const struct lu_env *env,
@@ -498,7 +503,7 @@ static inline int mdo_create(const struct lu_env *env,
                              struct md_object *p,
                              const char *child_name,
                              struct md_object *c,
-                             struct md_create_spec *spc,
+                             struct md_op_spec *spc,
                              struct md_attr *at)
 {
         LASSERT(c->mo_dir_ops->mdo_create);
@@ -508,7 +513,7 @@ static inline int mdo_create(const struct lu_env *env,
 static inline int mdo_create_data(const struct lu_env *env,
                                   struct md_object *p,
                                   struct md_object *c,
-                                  const struct md_create_spec *spec,
+                                  const struct md_op_spec *spec,
                                   struct md_attr *ma)
 {
         LASSERT(c->mo_dir_ops->mdo_create_data);

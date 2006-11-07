@@ -218,9 +218,9 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
         ENTRY;
 
         size[REQ_REC_OFF + 1] = op_data->op_capa1 ?
-                                        sizeof(struct lustre_capa) : 0;
+                sizeof(struct lustre_capa) : 0;
         size[REQ_REC_OFF + 2] = op_data->op_capa2 ?
-                                        sizeof(struct lustre_capa) : 0;
+                sizeof(struct lustre_capa) : 0;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
                               MDS_REINT, 5, size, NULL);

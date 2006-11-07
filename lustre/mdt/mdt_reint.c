@@ -410,7 +410,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         /* step 2: find & lock the child */
         rc = mdo_lookup(info->mti_env, mdt_object_child(mp),
-                        rr->rr_name, child_fid);
+                        rr->rr_name, child_fid, &info->mti_spec);
         if (rc != 0)
                  GOTO(out_unlock_parent, rc);
 
@@ -545,7 +545,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         DEBUG_REQ(D_INODE, req, "rename_tgt: insert (%s->"DFID") in "DFID,
                   rr->rr_tgt, PFID(rr->rr_fid2), PFID(rr->rr_fid1));
 
-        /* step 1: lookup & lock the tgt dir */
+        /* step 1: lookup & lock the tgt dir. */
         lh_tgtdir = &info->mti_lh[MDT_LH_PARENT];
         mdt_lock_pdo_init(lh_tgtdir, LCK_PW, rr->rr_tgt,
                           rr->rr_tgtlen);
@@ -554,10 +554,10 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         if (IS_ERR(mtgtdir))
                 GOTO(out, rc = PTR_ERR(mtgtdir));
 
-        /*step 2: find & lock the target object if exists*/
+        /* step 2: find & lock the target object if exists. */
         mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
         rc = mdo_lookup(info->mti_env, mdt_object_child(mtgtdir),
-                        rr->rr_tgt, tgt_fid);
+                        rr->rr_tgt, tgt_fid, &info->mti_spec);
         if (rc != 0 && rc != -ENOENT) {
                 GOTO(out_unlock_tgtdir, rc);
         } else if (rc == 0) {
@@ -760,7 +760,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         /* step 3: find & lock the old object. */
         rc = mdo_lookup(info->mti_env, mdt_object_child(msrcdir),
-                        rr->rr_name, old_fid);
+                        rr->rr_name, old_fid, &info->mti_spec);
         if (rc != 0)
                 GOTO(out_unlock_target, rc);
 
@@ -783,7 +783,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         /* step 4: find & lock the new object. */
         /* new target object may not exist now */
         rc = mdo_lookup(info->mti_env, mdt_object_child(mtgtdir),
-                        rr->rr_tgt, new_fid);
+                        rr->rr_tgt, new_fid, &info->mti_spec);
         if (rc == 0) {
                 /* the new_fid should have been filled at this moment */
                 if (lu_fid_eq(old_fid, new_fid))
