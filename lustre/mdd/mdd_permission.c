@@ -495,8 +495,8 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 #endif
 }
 
-int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
-                            struct lu_attr *la, int mask, int needlock)
+int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
+                              struct lu_attr *la, int mask, int needlock)
 {
         struct md_ucred *uc = md_ucred(env);
         __u32 mode;
@@ -570,7 +570,7 @@ int mdd_permission(const struct lu_env *env, struct md_object *obj, int mask)
         int rc;
         ENTRY;
 
-        rc = mdd_permission_internal(env, mdd_obj, NULL, mask, 1);
+        rc = mdd_permission_internal_locked(env, mdd_obj, NULL, mask);
 
         RETURN(rc);
 }

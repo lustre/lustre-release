@@ -357,9 +357,13 @@ int mdd_attr_get_internal_locked(const struct lu_env *env,
                                  struct mdd_object *mdd_obj, struct md_attr *ma)
 {
         int rc;
-        mdd_read_lock(env, mdd_obj);
+        int needlock = ma->ma_need & (MA_LOV | MA_LMV | MA_ACL_DEF);
+
+        if (needlock)
+                mdd_read_lock(env, mdd_obj);
         rc = mdd_attr_get_internal(env, mdd_obj, ma);
-        mdd_read_unlock(env, mdd_obj);
+        if (needlock)
+                mdd_read_unlock(env, mdd_obj);
         return rc;
 }
 
@@ -572,8 +576,8 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                         RETURN(-EPERM);
 
                 /*
-                 * According to Ext3 implementation on this, the
-                 * Ctime will be changed, but not clear why?
+                 * According to Ext3 implementation on this,
+                 * the ctime will be changed, but not clear why?
                  */
                 la->la_ctime = now;
                 la->la_valid |= LA_CTIME;
@@ -583,7 +587,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
         /* Check for setting the obj time. */
         if ((la->la_valid & (LA_MTIME | LA_ATIME | LA_CTIME)) &&
             !(la->la_valid & ~(LA_MTIME | LA_ATIME | LA_CTIME))) {
-                rc = mdd_permission_internal(env, obj, tmp_la, MAY_WRITE, 1);
+                rc = mdd_permission_internal_locked(env, obj, tmp_la, MAY_WRITE);
                 if (rc)
                         RETURN(rc);
         }
@@ -669,7 +673,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
         /* For tuncate (or setsize), we should have MAY_WRITE perm */
         if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
-                rc = mdd_permission_internal(env, obj, tmp_la, MAY_WRITE, 1);
+                rc = mdd_permission_internal_locked(env, obj, tmp_la, MAY_WRITE);
                 if (rc)
                         RETURN(rc);
 
@@ -1039,9 +1043,7 @@ unlock:
         return rc;
 }
 
-/*
- * XXX: Do we need permission checks here?
- */
+/* partial link */
 static int mdd_ref_add(const struct lu_env *env,
                        struct md_object *obj)
 {
@@ -1072,7 +1074,10 @@ static int mdd_ref_add(const struct lu_env *env,
         RETURN(rc);
 }
 
-/* do NOT or the MAY_*'s, you'll get the weakest */
+/* 
+ * do NOT or the MAY_*'s, you'll get the weakest
+ * XXX: Can NOT understand.
+ */
 static int accmode(struct mdd_object *mdd_obj, int flags)
 {
         int res = 0;
@@ -1118,7 +1123,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
                 RETURN(-EISDIR);
 
         if (!(flag & MDS_OPEN_CREATED)) {
-                rc = mdd_permission_internal(env, obj, tmp_la, mode, 0);
+                rc = mdd_permission_internal(env, obj, tmp_la, mode);
                 if (rc)
                         RETURN(rc);
         }
@@ -1222,11 +1227,7 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
         ENTRY;
 
         if (S_ISDIR(mdd_object_type(obj)) && dt_try_as_dir(env, next))
-#if 0
-                rc = mdd_permission_internal(env, obj, NULL, MAY_READ, 0);
-#else
                 rc = 0;
-#endif
         else
                 rc = -ENOTDIR;
 

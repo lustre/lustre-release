@@ -196,17 +196,13 @@ static int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
         if (mdd_is_dead_obj(pobj))
                 RETURN(-ENOENT);
 
-        if (need_check) {
-                rc = mdd_permission_internal(env, pobj, NULL,
-                                             MAY_WRITE | MAY_EXEC, 1);
-        }
+        if (need_check)
+                rc = mdd_permission_internal_locked(env, pobj, NULL,
+                                                    MAY_WRITE | MAY_EXEC);
+
         RETURN(rc);
 }
 
-/*
- * It's inline, so penalty for filesystems that don't use sticky bit is
- * minimal.
- */
 static inline int mdd_is_sticky(const struct lu_env *env,
                                 struct mdd_object *pobj,
                                 struct mdd_object *cobj)
@@ -224,9 +220,8 @@ static inline int mdd_is_sticky(const struct lu_env *env,
                 rc = mdd_la_get(env, pobj, tmp_la, BYPASS_CAPA);
                 if (rc)
                         return rc;
-                else if (!(tmp_la->la_mode & S_ISVTX))
-                        return 0;
-                else if (tmp_la->la_uid == uc->mu_fsuid)
+                else if (!(tmp_la->la_mode & S_ISVTX) ||
+                         (tmp_la->la_uid == uc->mu_fsuid))
                         return 0;
                 else
                         return !mdd_capable(uc, CAP_FOWNER);
@@ -270,8 +265,8 @@ static int mdd_may_delete(const struct lu_env *env,
                         RETURN(-EPERM);
 
                 if (need_check)
-                        rc = mdd_permission_internal(env, pobj, NULL,
-                                                     MAY_WRITE | MAY_EXEC, 1);
+                        rc = mdd_permission_internal_locked(env, pobj, NULL,
+                                                     MAY_WRITE | MAY_EXEC);
         }
         RETURN(rc);
 }
@@ -617,8 +612,8 @@ static int mdd_ni_sanity_check(const struct lu_env *env,
                 RETURN(-ENOENT);
 
         /* The exist of the name will be checked in _index_insert. */
-        RETURN(mdd_permission_internal(env, obj, NULL,
-                                       MAY_WRITE | MAY_EXEC, 1));
+        RETURN(mdd_permission_internal_locked(env, obj, NULL,
+                                              MAY_WRITE | MAY_EXEC));
 }
 
 /*
@@ -667,7 +662,6 @@ static int mdd_nr_sanity_check(const struct lu_env *env,
                                const char *name)
 {
         struct mdd_object *obj = md2mdd_obj(pobj);
-        int rc;
         ENTRY;
 
         /* EEXIST check */
@@ -677,8 +671,8 @@ static int mdd_nr_sanity_check(const struct lu_env *env,
         }
 
         /* Name presense will be checked in _index_delete. */
-        rc = mdd_permission_internal(env, obj, NULL, MAY_WRITE | MAY_EXEC, 1);
-        RETURN(rc);
+        RETURN(mdd_permission_internal_locked(env, obj, NULL,
+                                              MAY_WRITE | MAY_EXEC));
 }
 
 /*
@@ -913,7 +907,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                 LBUG();
         }
 
-        rc = mdd_permission_internal(env, mdd_obj, NULL, mask, 1);
+        rc = mdd_permission_internal_locked(env, mdd_obj, NULL, mask);
         if (rc)
                 RETURN(rc);
 
@@ -1008,7 +1002,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                 /*
                  * Check if has WRITE permission for the parent.
                  */
-                rc = mdd_permission_internal(env, obj, NULL, MAY_WRITE, 1);
+                rc = mdd_permission_internal_locked(env, obj, NULL, MAY_WRITE);
                 if (rc)
                         RETURN(rc);
         }
@@ -1302,8 +1296,8 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
                 RETURN(-ENOENT);
 
         /* The sobj maybe on the remote, check parent permission only here */
-        rc = mdd_permission_internal(env, src_pobj, NULL,
-                                     MAY_WRITE | MAY_EXEC, 1);
+        rc = mdd_permission_internal_locked(env, src_pobj, NULL,
+                                            MAY_WRITE | MAY_EXEC);
         if (rc)
                 RETURN(rc);
 
