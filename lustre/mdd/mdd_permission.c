@@ -482,9 +482,8 @@ static int mdd_check_acl(const struct lu_env *env, struct mdd_object *obj,
 
 int __mdd_permission_internal(const struct lu_env *env,
                               struct mdd_object *obj,
-                              int mask, int getattr)
+                              int mask, struct lu_attr *la)
 {
-        struct lu_attr  *la = &mdd_env_info(env)->mti_la;
         struct md_ucred *uc = md_ucred(env);
         __u32 mode;
         int rc;
@@ -507,7 +506,8 @@ int __mdd_permission_internal(const struct lu_env *env,
         if ((mask & MAY_WRITE) && mdd_is_immutable(obj))
                 RETURN(-EACCES);
 
-        if (getattr) {
+        if (la == NULL) {
+                la = &mdd_env_info(env)->mti_la;
                 rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
                 if (rc)
                         RETURN(rc);
@@ -549,7 +549,7 @@ check_capabilities:
 int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj, 
                             int mask)
 {
-        return __mdd_permission_internal(env, obj, mask, 1);
+        return __mdd_permission_internal(env, obj, mask, NULL);
 }
 
 inline int mdd_permission_internal_locked(const struct lu_env *env,

@@ -285,7 +285,7 @@ int __mdd_acl_init(const struct lu_env *env, struct mdd_object *obj,
 int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
                  struct mdd_object *cobj, __u32 *mode, struct thandle *handle);
 int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
-                              int mask, int getattr);
+                              int mask, struct lu_attr *la);
 int mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
                             int mask);
 int mdd_permission_internal_locked(const struct lu_env *env,

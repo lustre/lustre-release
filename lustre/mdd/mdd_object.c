@@ -585,7 +585,7 @@ int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
         /* Check for setting the obj time. */
         if ((la->la_valid & (LA_MTIME | LA_ATIME | LA_CTIME)) &&
             !(la->la_valid & ~(LA_MTIME | LA_ATIME | LA_CTIME))) {
-                rc = __mdd_permission_internal(env, obj, MAY_WRITE, 0);
+                rc = __mdd_permission_internal(env, obj, MAY_WRITE, tmp_la);
                 if (rc)
                         RETURN(rc);
         }
@@ -671,7 +671,7 @@ int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
         /* For tuncate (or setsize), we should have MAY_WRITE perm */
         if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
-                rc = __mdd_permission_internal(env, obj, MAY_WRITE, 0);
+                rc = __mdd_permission_internal(env, obj, MAY_WRITE, tmp_la);
                 if (rc)
                         RETURN(rc);
 
@@ -1124,7 +1124,7 @@ static int mdd_open_sanity_check(const struct lu_env *env,
                 RETURN(-EISDIR);
 
         if (!(flag & MDS_OPEN_CREATED)) {
-                rc = __mdd_permission_internal(env, obj, mode, 0);
+                rc = __mdd_permission_internal(env, obj, mode, tmp_la);
                 if (rc)
                         RETURN(rc);
         }
