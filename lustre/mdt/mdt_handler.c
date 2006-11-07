@@ -1259,7 +1259,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
         struct mdt_device       *mdt = info->mti_mdt;
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_body         *repbody;
-        int                      has_md = 0, has_cookie = 0;
+        int                      need_shrink = 0;
         int                      rc;
         ENTRY;
 
@@ -1267,12 +1267,12 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
         if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER)) {
                 req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
                                      mdt->mdt_max_mdsize);
-                has_md = 1;
+                need_shrink = 1;
         }
         if (req_capsule_has_field(pill, &RMF_LOGCOOKIES, RCL_SERVER)) {
                 req_capsule_set_size(pill, &RMF_LOGCOOKIES, RCL_SERVER,
                                      mdt->mdt_max_cookiesize);
-                has_cookie = 1;
+                need_shrink = 1;
         }
         rc = req_capsule_pack(pill);
         if (rc != 0) {
@@ -1302,33 +1302,35 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 
         rc = mdt_fix_attr_ucred(info, op);
         if (rc != 0)
-                GOTO(out_shrink, rc = err_serious(rc));
+                GOTO(out_ucred, rc = err_serious(rc));
 
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
                 struct mdt_client_data *mcd;
 
                 mcd = req->rq_export->exp_mdt_data.med_mcd;
                 if (req_xid_is_last(req)) {
+                        need_shrink = 0;
                         mdt_reconstruct(info, lhc);
                         rc = lustre_msg_get_status(req->rq_repmsg);
-                        GOTO(out, rc);
+                        GOTO(out_ucred, rc);
                 }
                 DEBUG_REQ(D_HA, req, "no reply for RESENT (xid "LPD64")",
                           mcd->mcd_last_xid);
         }
         
+        need_shrink = 0;
         rc = mdt_reint_rec(info, lhc);
-out:
+        EXIT;
+out_ucred:
         mdt_exit_ucred(info);
-        RETURN(rc);
 out_shrink:
-        if (has_md || has_cookie) {
+        if (need_shrink) {
                 if (info->mti_pill.rc_fmt == &RQF_LDLM_INTENT_OPEN)
                         mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 0, 0);
                 else
                         mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
         }
-        goto out;
+        return rc;
 }
 
 static long mdt_reint_opcode(struct mdt_thread_info *info,
@@ -2549,9 +2551,9 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         }
 
         rc = mdt_intent_lock_replace(info, lockp, new_lock, lhc, flags);
+        EXIT;
 out_ucred:
         mdt_exit_ucred(info);
-        GOTO(out, rc);
 out:
         mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 1, 0);
         return rc;
