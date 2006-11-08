@@ -448,13 +448,9 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                 /* Journal size in MB */
                 if (strstr(mop->mo_mkfsopts, "-J") == NULL) {
                         /* Choose our own default journal size */
-                        long journal_sz = 0, max_sz;
+                        long journal_sz = 0;
                         if (device_sz > 1024 * 1024) /* 1GB */
                                 journal_sz = (device_sz / 102400) * 4;
-                        /* man mkfs.ext3 */
-                        max_sz = (102400 * L_BLOCK_SIZE) >> 20; /* 400MB */
-                        if (journal_sz > max_sz)
-                                journal_sz = max_sz;
                         if (journal_sz) {
                                 sprintf(buf, " -J size=%ld", journal_sz);
                                 strcat(mop->mo_mkfsopts, buf);
