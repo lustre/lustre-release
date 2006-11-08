@@ -2075,15 +2075,13 @@ int gss_svc_handle_data(struct ptlrpc_request *req,
                 rc = -EINVAL;
         }
 
-        if (rc != 0)
-                goto error;
+        if (rc == 0)
+                RETURN(SECSVC_OK);
 
-        RETURN(SECSVC_OK);
-
-error:
         CERROR("svc %u failed: major 0x%08x: ctx %p(%u->%s)\n",
                gw->gw_svc, major, grctx->src_ctx, grctx->src_ctx->gsc_uid,
                libcfs_nid2str(req->rq_peer.nid));
+error:
         /*
          * we only notify client in case of NO_CONTEXT/BAD_SIG, which
          * might happen after server reboot, to allow recovery.
