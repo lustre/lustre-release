@@ -117,7 +117,7 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
                 RETURN(-EACCES);
         }
 
-#warning "enable fid check in filter_auth_capa when fid ready"
+#warning "enable fid check in filter_auth_capa() when fid stored in OSS object"
 
         if (opc == CAPA_OPC_OSS_READ) {
                 if (!(capa->lc_opc & CAPA_OPC_OSS_RW))
