@@ -2195,7 +2195,7 @@ diff -puN /dev/null arch/i386/kernel/kgdb_stub.c
 +			{
 +				static long no_idt[2];
 +				__asm__ __volatile__("lidt %0"::"m"(no_idt[0]));
-+				BREAKPOINT;
++				BREAKPOINT();
 +			}
 +
 +		}		/* switch */
@@ -2359,7 +2359,7 @@ diff -puN /dev/null arch/i386/kernel/kgdb_stub.c
 +stack_overflow(void)
 +{
 +#ifdef BREAKPOINT
-+	BREAKPOINT;
++	BREAKPOINT();
 +#else
 +	printk("Kernel stack overflow, looping forever\n");
 +#endif
@@ -2757,7 +2757,7 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
 +	set_intr_gate(1,&debug);
 +	set_intr_gate(14,&page_fault);
 +
-+        BREAKPOINT;
++        BREAKPOINT();
 +}
 +#define	CHK_REMOTE_DEBUG(trapnr,signr,error_code,regs,after)		\
 +    {									\
@@ -2784,7 +2784,7 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
 +	 * always be in kernel mode.
 +	 */
 +		if (user_mode(regs))
-+			BREAKPOINT;
++			BREAKPOINT();
 +#endif
 +	 	CHK_REMOTE_DEBUG(0,SIGTRAP,err,regs,)
  	notify_die(DIE_OOPS, (char *)str, regs, err, 255, SIGSEGV);
@@ -3082,7 +3082,7 @@ diff -puN /dev/null arch/i386/lib/kgdb_serial.c
 +			continue;
 +
 +		if (chr == 3) {	/* Ctrl-C means remote interrupt */
-+			BREAKPOINT;
++			BREAKPOINT();
 +			continue;
 +		}
 +
