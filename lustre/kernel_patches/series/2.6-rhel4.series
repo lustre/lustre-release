@@ -8,7 +8,7 @@ iopen-misc-2.6-suse.patch
 export-truncate-2.6-suse.patch 
 export_symbols-2.6-rhel4.patch 
 dev_read_only-2.6-suse.patch 
-export-log-2.6-rhel4.patch
+export-log-2.6-rhel4.patch 
 lookup_bdev_init_intent.patch
 remove-suid-2.6-suse.patch
 export-show_task-2.6-vanilla.patch
@@ -32,3 +32,4 @@ highmem-split-2.6-rhel4.patch
 proc-sleep-2.6.9.patch
 pag-basic-2.6-rhel4.patch
 dynamic-locks-2.6.9.patch 
+jbd-copy-out-everything.patch 
