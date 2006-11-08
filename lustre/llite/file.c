@@ -143,9 +143,10 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         }
 
         if (!epoch_close && (och->och_flags & FMODE_WRITE)) {
-                ll_queue_done_writing(inode, LLIF_DONE_WRITING);
                 md_clear_open_replay_data(md_exp, och);
                 clear_ord = 1;
+                
+                ll_queue_done_writing(inode, LLIF_DONE_WRITING);
         }
 
         if (rc == 0) {
