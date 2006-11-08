@@ -578,6 +578,12 @@ static int lprocfs_wr_capa(struct file *file, const char *buffer,
         mdt->mdt_opts.mo_oss_capa = (val & 0x1);
         mdt->mdt_opts.mo_mds_capa = !!(val & 0x2);
         mdt->mdt_capa_conf = 1;
+        LCONSOLE_INFO("MDS %s %s MDS fid capability.\n",
+                      obd->obd_name,
+                      mdt->mdt_opts.mo_mds_capa ? "enabled" : "disabled");
+        LCONSOLE_INFO("MDS %s %s OSS fid capability.\n",
+                      obd->obd_name,
+                      mdt->mdt_opts.mo_oss_capa ? "enabled" : "disabled");
         return count;
 }
 

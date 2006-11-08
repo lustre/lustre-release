@@ -95,8 +95,8 @@ int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *new)
         RETURN(0);
 }
 
-int filter_verify_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
-                       struct lustre_capa *capa, __u64 opc)
+int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
+                     struct lustre_capa *capa, __u64 opc)
 {
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *filter = &obd->u.filter;
@@ -112,11 +112,12 @@ int filter_verify_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
                 RETURN(0);
 
         if (capa == NULL) {
-                CERROR("no capa has been passed\n");
+                CERROR("mdsno/fid/opc "LPU64"/"DFID"/"LPX64": no capa has been "
+                       "passed\n", mdsid, PFID(fid), opc);
                 RETURN(-EACCES);
         }
 
-#warning "enable fid check in filter_verify_capa when fid ready"
+#warning "enable fid check in filter_auth_capa when fid ready"
 
         if (opc == CAPA_OPC_OSS_READ) {
                 if (!(capa->lc_opc & CAPA_OPC_OSS_RW))

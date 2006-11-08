@@ -334,6 +334,9 @@ static int lprocfs_filter_wr_capa(struct file *file, const char *buffer,
         }
 
         obd->u.filter.fo_fl_oss_capa = val;
+        if (val)
+                LCONSOLE_INFO("OSS %s enabled fid capability.\n",
+                              obd->obd_name);
         return count;
 }
 

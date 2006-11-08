@@ -291,8 +291,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERTF(objcount == 1, "%d\n", objcount);
         LASSERTF(obj->ioo_bufcnt > 0, "%d\n", obj->ioo_bufcnt);
 
-        rc = filter_verify_capa(exp, NULL, obdo_mdsno(oa), capa,
-                                CAPA_OPC_OSS_READ);
+        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa), capa,
+                              CAPA_OPC_OSS_READ);
         if (rc)
                 RETURN(rc);
 
@@ -527,8 +527,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
-        rc = filter_verify_capa(exp, NULL, obdo_mdsno(oa), capa,
-                                CAPA_OPC_OSS_WRITE);
+        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa), capa,
+                              CAPA_OPC_OSS_WRITE);
         if (rc)
                 RETURN(rc);
 

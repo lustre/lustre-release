@@ -2730,8 +2730,8 @@ static int filter_getattr(struct obd_export *exp, struct obd_info *oinfo)
         int rc = 0;
         ENTRY;
 
-        rc = filter_verify_capa(exp, NULL, oinfo_mdsno(oinfo),
-                                oinfo_capa(oinfo), CAPA_OPC_META_READ);
+        rc = filter_auth_capa(exp, NULL, oinfo_mdsno(oinfo),
+                              oinfo_capa(oinfo), CAPA_OPC_META_READ);
         if (rc)
                 RETURN(rc);
 
@@ -2939,8 +2939,8 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
         int rc;
         ENTRY;
 
-        rc = filter_verify_capa(exp, NULL, oinfo_mdsno(oinfo),
-                                oinfo_capa(oinfo), CAPA_OPC_META_WRITE);
+        rc = filter_auth_capa(exp, NULL, oinfo_mdsno(oinfo),
+                              oinfo_capa(oinfo), CAPA_OPC_META_WRITE);
         if (rc)
                 RETURN(rc);
 
@@ -3612,8 +3612,8 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
                ", o_size = "LPD64"\n", oinfo->oi_oa->o_id,
                oinfo->oi_oa->o_valid, oinfo->oi_policy.l_extent.start);
 
-        rc = filter_verify_capa(exp, NULL, oinfo_mdsno(oinfo),
-                                oinfo_capa(oinfo), CAPA_OPC_OSS_TRUNC);
+        rc = filter_auth_capa(exp, NULL, oinfo_mdsno(oinfo),
+                              oinfo_capa(oinfo), CAPA_OPC_OSS_TRUNC);
         if (rc)
                 RETURN(rc);
 
@@ -3633,8 +3633,8 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         int rc, rc2;
         ENTRY;
 
-        rc = filter_verify_capa(exp, NULL, obdo_mdsno(oa),
-                                (struct lustre_capa *)capa, CAPA_OPC_OSS_WRITE);
+        rc = filter_auth_capa(exp, NULL, obdo_mdsno(oa),
+                              (struct lustre_capa *)capa, CAPA_OPC_OSS_WRITE);
         if (rc)
                 RETURN(rc);
 

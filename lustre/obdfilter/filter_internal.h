@@ -199,7 +199,7 @@ static inline __u64 obdo_mdsno(struct obdo *oa)
 }
 
 int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
-int filter_verify_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
-                       struct lustre_capa *capa, __u64 opc);
+int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
+                     struct lustre_capa *capa, __u64 opc);
 void filter_free_capa_keys(struct filter_obd *filter);
 #endif /* _FILTER_INTERNAL_H */

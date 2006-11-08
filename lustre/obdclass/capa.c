@@ -96,13 +96,24 @@ int init_capa_hash(void)
 void cleanup_capa_hash(void)
 {
         int i;
+        struct hlist_node *pos;
+        struct obd_capa *oc;
 
-        for (i = 0; i < NR_CAPAHASH; i++)
-                LASSERTF(hlist_empty(capa_hash + i),
-                         "capa hash %d not empty\n", i);
-        for (i = CAPA_SITE_MAX; i < CAPA_SITE_MAX; i++)
-                LASSERTF(list_empty(&capa_list[i]),
-                         "capa list %d not empty\n", i);
+        for (i = 0; i < NR_CAPAHASH; i++) {
+                if (hlist_empty(capa_hash + i))
+                        continue;
+                hlist_for_each_entry(oc, pos, capa_hash + i, u.tgt.c_hash)
+                        DEBUG_CAPA(D_ERROR, &oc->c_capa, "remaining cached");
+                LBUG();
+        }
+        for (i = CAPA_SITE_MAX; i < CAPA_SITE_MAX; i++) {
+                if (list_empty(&capa_list[i]))
+                        continue;
+                list_for_each_entry(oc, &capa_list[i], c_list)
+                        DEBUG_CAPA(D_ERROR, &oc->c_capa, "remaining %s",
+                                   capa_site_name[oc->c_site]);
+                LBUG();
+        }
         OBD_FREE(capa_hash, PAGE_SIZE);
 }
 
