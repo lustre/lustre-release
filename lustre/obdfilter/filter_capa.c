@@ -112,8 +112,12 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, __u64 mdsid,
                 RETURN(0);
 
         if (capa == NULL) {
-                CERROR("mdsno/fid/opc "LPU64"/"DFID"/"LPX64": no capa has been "
-                       "passed\n", mdsid, PFID(fid), opc);
+                if (fid)
+                        CERROR("mdsno/fid/opc "LPU64"/"DFID"/"LPX64": "
+                               "no capability has been passed\n",
+                               mdsid, PFID(fid), opc);
+                else
+                        CERROR("no capability has been passed\n");
                 RETURN(-EACCES);
         }
 

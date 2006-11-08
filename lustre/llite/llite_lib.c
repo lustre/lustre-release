@@ -1962,10 +1962,12 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 oinfo.oi_oa->o_flags = flags;
                 oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS | 
                                        OBD_MD_FLGROUP;
+                oinfo.oi_capa = ll_mdscapa_get(inode);
 
                 obdo_from_inode(oinfo.oi_oa, inode,
                                 OBD_MD_FLFID | OBD_MD_FLGENER);
                 rc = obd_setattr_rqset(sbi->ll_dt_exp, &oinfo, NULL);
+                capa_put(oinfo.oi_capa);
                 obdo_free(oinfo.oi_oa);
                 if (rc) {
                         if (rc != -EPERM && rc != -EACCES)
