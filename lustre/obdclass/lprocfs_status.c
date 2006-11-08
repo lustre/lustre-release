@@ -359,12 +359,20 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
 {
         struct obd_device *obd = (struct obd_device*)data;
         struct ptlrpc_connection *conn;
+        int rc;
 
         LASSERT(obd != NULL);
-        conn = obd->u.cli.cl_import->imp_connection;
-        LASSERT(conn != NULL);
+
         *eof = 1;
-        return snprintf(page, count, "%s\n", conn->c_remote_uuid.uuid);
+        if (obd->u.cli.cl_import) {
+                conn = obd->u.cli.cl_import->imp_connection;
+                LASSERT(conn != NULL);
+                rc = snprintf(page, count, "%s\n",
+                              conn->c_remote_uuid.uuid);
+        } else {
+                rc = snprintf(page, count, "%s\n", "<none>");
+        }
+        return rc;
 }
 
 static const char *obd_connect_names[] = {
