@@ -2534,7 +2534,8 @@ int lmv_clear_open_replay_data(struct obd_export *exp,
         RETURN(md_clear_open_replay_data(tgt_exp, och));
 }
 
-static int lmv_get_remote_perm(struct obd_export *exp, const struct lu_fid *fid,
+static int lmv_get_remote_perm(struct obd_export *exp,
+                               const struct lu_fid *fid,
                                struct obd_capa *oc,
                                struct ptlrpc_request **request)
 {

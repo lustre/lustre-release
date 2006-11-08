@@ -92,8 +92,8 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         struct md_op_data *op_data;
         struct ptlrpc_request *req = NULL;
         struct obd_device *obd;
+        int rc, clear_ord = 0;
         int epoch_close = 1;
-        int rc;
         ENTRY;
 
         obd = class_exp2obd(ll_i2mdexp(inode));
@@ -142,8 +142,11 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                        inode->i_ino, rc);
         }
 
-        if (!epoch_close && (och->och_flags & FMODE_WRITE))
+        if (!epoch_close && (och->och_flags & FMODE_WRITE)) {
                 ll_queue_done_writing(inode, LLIF_DONE_WRITING);
+                md_clear_open_replay_data(md_exp, och);
+                clear_ord = 1;
+        }
 
         if (rc == 0) {
                 rc = ll_objects_destroy(req, inode);
@@ -155,7 +158,9 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         ptlrpc_req_finished(req); /* This is close request */
         EXIT;
 out:
-        md_clear_open_replay_data(md_exp, och);
+        if (!clear_ord)
+                md_clear_open_replay_data(md_exp, och);
+        
         if (epoch_close || !(och->och_flags & FMODE_WRITE))
                 och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         return rc;
