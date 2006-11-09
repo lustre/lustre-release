@@ -451,6 +451,9 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                         long journal_sz = 0;
                         if (device_sz > 1024 * 1024) /* 1GB */
                                 journal_sz = (device_sz / 102400) * 4;
+                        /* cap journal size at 2GB */
+                        if (journal_sz > 2048L)
+                                journal_sz = 2048L;
                         if (journal_sz) {
                                 sprintf(buf, " -J size=%ld", journal_sz);
                                 strcat(mop->mo_mkfsopts, buf);
