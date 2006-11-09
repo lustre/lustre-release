@@ -896,7 +896,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 
         mdd_lprocfs_time_start(mdo2mdd(pobj), &start, LPROC_MDD_LOOKUP);
         if (mdd_is_dead_obj(mdd_obj))
-                RETURN(-ESTALE);
+                RETURN(-ENOENT);
 
         rc = lu_object_exists(mdd2lu_obj(mdd_obj));
         if (rc == 0)
