@@ -81,6 +81,7 @@ static struct ptlrpc_cli_ctx * gss_sec_create_ctx(struct ptlrpc_sec *sec,
                                                   struct vfs_cred *vcred);
 static void gss_sec_destroy_ctx(struct ptlrpc_sec *sec,
                                 struct ptlrpc_cli_ctx *ctx);
+static __gss_mod_initialized = 0;
 /********************************************
  * wire data swabber                        *
  ********************************************/
@@ -2148,6 +2149,8 @@ int gss_svc_accept(struct ptlrpc_request *req)
         int                     rc;
         ENTRY;
 
+        LASSERTF((__gss_mod_initialized == 1),
+                 "not initialized %d\n", __gss_mod_initialized);
         LASSERT(req->rq_reqbuf);
         LASSERT(req->rq_svc_ctx == NULL);
 
@@ -2571,6 +2574,7 @@ int __init sptlrpc_gss_init(void)
         if (rc)
                 goto out_upcall;
 
+        __gss_mod_initialized = 1;
         return 0;
 out_upcall:
         gss_exit_upcall();

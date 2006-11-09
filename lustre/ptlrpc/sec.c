@@ -131,7 +131,7 @@ again:
                         if (request_module("ptlrpc_gss") != 0)
                                 CERROR("Unable to load module ptlrpc_gss\n");
                         else
-                                CDEBUG(D_INFO, "module ptlrpc_gss loaded\n");
+                                CWARN("module ptlrpc_gss loaded\n");
 
                         atomic_set(&loaded, 1);
                 }
