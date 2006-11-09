@@ -276,7 +276,7 @@ int mdc_enqueue(struct obd_export *exp,
                            [DLM_REPLY_REC_OFF+1] = obddev->u.cli.
                                                    cl_max_mds_easize };
         int flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
-        int repbufcnt = 4, ea_off, rc;
+        int repbufcnt = 4, rc;
         ENTRY;
 
         LASSERTF(lock_type == LDLM_IBITS, "lock type %d\n", lock_type);
@@ -297,13 +297,10 @@ int mdc_enqueue(struct obd_export *exp,
                 size[DLM_INTENT_REC_OFF + 3] = op_data->op_namelen + 1;
                 /* As an optimization, we allocate an RPC request buffer for
                  * at least a default-sized LOV EA even if we aren't sending
-                 * one.  We grow the whole request to the next power-of-two
-                 * size since we get that much from a slab allocation anyways.
-                 * This avoids an allocation below in the common case where
-                 * we need to save a default-sized LOV EA for open replay. */
-                ea_off = DLM_INTENT_REC_OFF + 4;
-                size[ea_off] = max(lmmsize,
-                                   obddev->u.cli.cl_default_mds_easize);
+                 * one.
+                 */
+                size[DLM_INTENT_REC_OFF + 4] = max(lmmsize,
+                                           obddev->u.cli.cl_default_mds_easize);
                 if (do_join)
                         size[DLM_INTENT_REC_OFF + 5] =
                                                 sizeof(struct mdt_rec_join);
