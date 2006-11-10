@@ -191,13 +191,21 @@ struct thandle* mdd_trans_start(const struct lu_env *env,
                                 struct mdd_device *mdd)
 {
         struct txn_param *p = &mdd_env_info(env)->mti_param;
+        struct timeval  start;
+        struct thandle *th;
 
-        return mdd_child_ops(mdd)->dt_trans_start(env, mdd->mdd_child, p);
+        mdd_lprocfs_time_start(mdd, &start, LPROC_MDD_TRANS_START);
+        th = mdd_child_ops(mdd)->dt_trans_start(env, mdd->mdd_child, p);
+        mdd_lprocfs_time_end(mdd, &start, LPROC_MDD_TRANS_START);
+        return th;
 }
 
 void mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd,
                     int result, struct thandle *handle)
 {
+        struct timeval  start;
         handle->th_result = result;
+        mdd_lprocfs_time_start(mdd, &start, LPROC_MDD_TRANS_STOP);
         mdd_child_ops(mdd)->dt_trans_stop(env, handle);
+        mdd_lprocfs_time_end(mdd, &start, LPROC_MDD_TRANS_STOP);
 }

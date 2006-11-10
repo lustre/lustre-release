@@ -327,9 +327,12 @@ static int mdd_attr_get_internal(const struct lu_env *env,
                                  struct mdd_object *mdd_obj,
                                  struct md_attr *ma)
 {
+        struct mdd_device *mdd = mdo2mdd(&mdd_obj->mod_obj);
+        struct timeval  start;
         int rc = 0;
         ENTRY;
-
+        
+        mdd_lprocfs_time_start(mdd, &start, LPROC_MDD_ATTR_GET);
         if (ma->ma_need & MA_INODE)
                 rc = mdd_iattr_get(env, mdd_obj, ma);
 
@@ -350,6 +353,7 @@ static int mdd_attr_get_internal(const struct lu_env *env,
 #endif
         CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64"\n",
                rc, ma->ma_valid);
+        mdd_lprocfs_time_end(mdd, &start, LPROC_MDD_ATTR_GET);
         RETURN(rc);
 }
 
@@ -436,7 +440,6 @@ static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
         int rc;
 
         ENTRY;
-
         LASSERT(lu_object_exists(&obj->mo_lu));
 
         next = mdd_object_child(mdd_obj);
@@ -452,10 +455,14 @@ int mdd_object_create_internal(const struct lu_env *env,
                                struct mdd_object *obj, struct md_attr *ma,
                                struct thandle *handle)
 {
+        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
         struct dt_object *next;
         struct lu_attr *attr = &ma->ma_attr;
+        struct timeval  start;
         int rc;
         ENTRY;
+
+        mdd_lprocfs_time_start(mdd, &start, LPROC_MDD_CREATE_OBJ);
 
         if (!lu_object_exists(mdd2lu_obj(obj))) {
                 next = mdd_object_child(obj);
@@ -464,7 +471,7 @@ int mdd_object_create_internal(const struct lu_env *env,
                 rc = -EEXIST;
 
         LASSERT(ergo(rc == 0, lu_object_exists(mdd2lu_obj(obj))));
-
+        mdd_lprocfs_time_end(mdd, &start, LPROC_MDD_CREATE_OBJ);
         RETURN(rc);
 }
 
@@ -473,9 +480,12 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
                           const struct lu_attr *attr, struct thandle *handle,
                           const int needacl)
 {
+        struct mdd_device *mdd = mdo2mdd(&o->mod_obj);
         struct dt_object *next;
+        struct timeval  start;
         int rc;
 
+        mdd_lprocfs_time_start(mdd, &start, LPROC_MDD_ATTR_SET);
         LASSERT(lu_object_exists(mdd2lu_obj(o)));
         next = mdd_object_child(o);
         rc = next->do_ops->do_attr_set(env, next, attr, handle,
@@ -484,6 +494,7 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
         if (!rc && (attr->la_valid & LA_MODE) && needacl)
                 rc = mdd_acl_chmod(env, o, attr->la_mode, handle);
 #endif
+        mdd_lprocfs_time_end(mdd, &start, LPROC_MDD_ATTR_SET);        
         return rc;
 }
 

@@ -415,6 +415,7 @@ static inline struct lustre_capa *mdd_object_capa(const struct lu_env *env,
 enum {
         LPROC_MDD_OPEN = 0,
         LPROC_MDD_CREATE,
+        LPROC_MDD_CREATE_OBJ,
         LPROC_MDD_INDEX_INSERT,
         LPROC_MDD_INDEX_DELETE,
         LPROC_MDD_SET_MD,
@@ -423,6 +424,10 @@ enum {
         LPROC_MDD_UNLINK_LOG,
         LPROC_MDD_LOV_CREATE,
         LPROC_MDD_LOOKUP,
+        LPROC_MDD_TRANS_START,
+        LPROC_MDD_TRANS_STOP,
+        LPROC_MDD_ATTR_GET,
+        LPROC_MDD_ATTR_SET,
         LPROC_MDD_LAST
 };
 

@@ -155,7 +155,7 @@ static int cml_object_init(const struct lu_env *env, struct lu_object *lo)
         ENTRY;
 
 #ifdef HAVE_SPLIT_SUPPORT
-        if(cd->cmm_tgt_count == 0)
+        if (cd->cmm_tgt_count == 0)
                 lu2cml_obj(lo)->clo_split = CMM_SPLIT_DENIED;
         else
                 lu2cml_obj(lo)->clo_split = CMM_SPLIT_UNKNOWN;
