@@ -544,6 +544,14 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
         int rc, is_dir;
         ENTRY;
 
+        /*
+         * Check -ENOENT early here because we need to get object type
+         * to calculate credits before transaction start
+         */
+        if (!lu_object_exists(&cobj->mo_lu))
+                RETURN(-ENOENT);
+        LASSERT(lu_object_exists(&cobj->mo_lu) > 0);
+        
         rc = mdd_log_txn_param_build(env, cobj, ma, MDD_TXN_UNLINK_OP);
         if (rc)
                 RETURN(rc);
@@ -1100,7 +1108,7 @@ static int mdd_create(const struct lu_env *env,
         rc = mdd_create_sanity_check(env, pobj, name, ma, spec->sp_cr_lookup);
         if (rc)
                 RETURN(rc);
-
+        
         /*
          * No RPC inside the transaction, so OST objects should be created at
          * first.

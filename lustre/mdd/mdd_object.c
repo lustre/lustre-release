@@ -917,6 +917,14 @@ static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
         int rc;
         ENTRY;
 
+        /*
+         * Check -ENOENT early here because we need to get object type
+         * to calculate credits before transaction start
+         */
+        if (!lu_object_exists(&obj->mo_lu))
+                RETURN(-ENOENT);
+        LASSERT(lu_object_exists(&obj->mo_lu) > 0);
+
         rc = mdd_log_txn_param_build(env, obj, ma, MDD_TXN_UNLINK_OP);
         if (rc)
                 RETURN(rc);
