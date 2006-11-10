@@ -84,6 +84,7 @@ sub add_ost {
     $ost->{"lov"} = get_arg_val("lov", \@_);
     $ost->{"mountfsoptions"} = get_arg_val("mountfsoptions", \@_);
     $ost->{"failover"} = get_arg("failover", \@_);
+    $ost->{"failout"} = get_arg("failout", \@_);
     if ($#_ > 0) {
         print STDERR "Unknown arguments to \"--add ost\": @_\n";
         exit(1);
@@ -217,13 +218,26 @@ foreach my $ost (@{$objs{"ost"}}) {
     if (defined($ost->{"mountfsoptions"})) {
         $mount_opts .= "," . $ost->{"mountfsoptions"};
     }
+    my $mkfs_options="";
+    if (defined($ost->{"failover"})) {
+        $mkfs_options .= "failover.mode=failover" . " ";
+    }
+    if (defined($ost->{"failout"})) {
+        $mkfs_options .= "failover.mode=failout" . " ";
+    }
+    chop($mkfs_options);
+    if ($mkfs_options ne "") {
+        $mkfs_options = " --param=\"$mkfs_options\"";
+    }
+    
     my $net = find_obj("net", "node", $ost->{"node"}, @{$objs{"net"}});
-    printf "%s,%s,%s,$MOUNTPT/%s,ost,,\"%s\",,--device-size=%s --noformat,,\"%s\"\n", 
+    printf "%s,%s,%s,$MOUNTPT/%s,ost,,\"%s\",,--device-size=%s --noformat%s,,\"%s\"\n", 
     $ost->{"node"},
     lnet_options($net),
     $ost->{"dev"},
     $ost->{"ost"},
     join(",", @mgses),
     $ost->{"size"},
+    $mkfs_options,
     $mount_opts;
 }
