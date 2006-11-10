@@ -779,7 +779,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         mdt_set_disposition(info, ldlm_rep,
                             (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
 
-        if (rr->rr_name[0] == 0) {
+        if (info->mti_cross_ref) {
                 /* This is cross-ref open */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 result = mdt_cross_open(info, rr->rr_fid1, ldlm_rep,

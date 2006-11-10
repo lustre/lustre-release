@@ -805,7 +805,8 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                          LA_CTIME | LA_MTIME | LA_ATIME;
         memset(&sp->u, 0, sizeof(sp->u));
         sp->sp_cr_flags = rec->cr_flags;
-        sp->sp_ck_split = rec->cr_cksplit;
+        sp->sp_ck_split = !!(rec->cr_bias & MDS_CHECK_SPLIT);
+        info->mti_cross_ref = !!(rec->cr_bias & MDS_CROSS_REF);
 
         if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
                 mdt_set_capainfo(info, 0, rr->rr_fid1,
@@ -897,7 +898,8 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
         if (rr->rr_name == NULL)
                 RETURN(-EFAULT);
         rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
-        info->mti_spec.sp_ck_split = rec->lk_cksplit;
+        info->mti_spec.sp_ck_split = !!(rec->lk_bias & MDS_CHECK_SPLIT);
+        info->mti_cross_ref = !!(rec->lk_bias & MDS_CROSS_REF);
 
         RETURN(0);
 }
@@ -938,7 +940,8 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
         if (rr->rr_name == NULL)
                 RETURN(-EFAULT);
         rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
-        info->mti_spec.sp_ck_split = rec->ul_cksplit;
+        info->mti_spec.sp_ck_split = !!(rec->ul_bias & MDS_CHECK_SPLIT);
+        info->mti_cross_ref = !!(rec->ul_bias & MDS_CROSS_REF);
 
         RETURN(0);
 }
@@ -985,7 +988,8 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
                 RETURN(-EFAULT);
         rr->rr_namelen = req_capsule_get_size(pill, &RMF_NAME, RCL_CLIENT);
         rr->rr_tgtlen = req_capsule_get_size(pill, &RMF_SYMTGT, RCL_CLIENT);
-        info->mti_spec.sp_ck_split = rec->rn_cksplit;
+        info->mti_spec.sp_ck_split = !!(rec->rn_bias & MDS_CHECK_SPLIT);
+        info->mti_cross_ref = !!(rec->rn_bias & MDS_CROSS_REF);
 
         RETURN(0);
 }
@@ -1025,7 +1029,8 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         info->mti_spec.sp_cr_flags = rec->cr_flags;
         info->mti_replayepoch = rec->cr_ioepoch;
 
-        info->mti_spec.sp_ck_split = rec->cr_cksplit;
+        info->mti_spec.sp_ck_split = !!(rec->cr_bias & MDS_CHECK_SPLIT);
+        info->mti_cross_ref = !!(rec->cr_bias & MDS_CROSS_REF);
 
         if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
                 mdt_set_capainfo(info, 0, rr->rr_fid1,

@@ -325,7 +325,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFDIR:{
                 /* Cross-ref case. */
-                if (info->mti_rr.rr_name[0] == 0) {
+                if (info->mti_cross_ref) {
                         rc = mdt_md_mkobj(info);
                         break;
                 }
@@ -391,7 +391,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         if (!ma->ma_lmm || !ma->ma_cookie)
                 GOTO(out_unlock_parent, rc = -EINVAL);
 
-        if (rr->rr_name[0] == 0) {
+        if (info->mti_cross_ref) {
                 /*
                  * Remote partial operation. It is possible that replay may
                  * happen on parent MDT and this operation will be repeated.
@@ -470,7 +470,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
                 RETURN(err_serious(-ENOENT));
 
-        if (rr->rr_name[0] == 0) {
+        if (info->mti_cross_ref) {
                 /* MDT holding name ask us to add ref. */
                 lhs = &info->mti_lh[MDT_LH_CHILD];
                 mdt_lock_reg_init(lhs, LCK_EX);
@@ -706,7 +706,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         int                      rc;
         ENTRY;
 
-        if (rr->rr_name[0] == 0) {
+        if (info->mti_cross_ref) {
                 rc = mdt_reint_rename_tgt(info);
                 RETURN(rc);
         }

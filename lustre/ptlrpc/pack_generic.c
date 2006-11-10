@@ -1827,7 +1827,7 @@ void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr)
         __swab64s (&cr->cr_rdev);
         __swab64s (&cr->cr_ioepoch);
         __swab32s (&cr->cr_suppgid);
-        __swab32s (&cr->cr_cksplit);
+        __swab32s (&cr->cr_bias);
         CLASSERT(offsetof(typeof(*cr), cr_padding_2) != 0);
         CLASSERT(offsetof(typeof(*cr), cr_padding_3) != 0);
 }
@@ -1860,7 +1860,7 @@ void lustre_swab_mdt_rec_link (struct mdt_rec_link *lk)
         lustre_swab_lu_fid (&lk->lk_fid1);
         lustre_swab_lu_fid (&lk->lk_fid2);
         __swab64s (&lk->lk_time);
-        __swab32s (&lk->lk_cksplit);
+        __swab32s (&lk->lk_bias);
         CLASSERT(offsetof(typeof(*lk), lk_padding_2) != 0);
         CLASSERT(offsetof(typeof(*lk), lk_padding_3) != 0);
         CLASSERT(offsetof(typeof(*lk), lk_padding_4) != 0);
@@ -1894,7 +1894,7 @@ void lustre_swab_mdt_rec_unlink (struct mdt_rec_unlink *ul)
         lustre_swab_lu_fid (&ul->ul_fid1);
         lustre_swab_lu_fid (&ul->ul_fid2);
         __swab64s (&ul->ul_time);
-        __swab32s (&ul->ul_cksplit);
+        __swab32s (&ul->ul_bias);
         CLASSERT(offsetof(typeof(*ul), ul_padding_2) != 0);
         CLASSERT(offsetof(typeof(*ul), ul_padding_3) != 0);
         CLASSERT(offsetof(typeof(*ul), ul_padding_4) != 0);
@@ -1929,7 +1929,7 @@ void lustre_swab_mdt_rec_rename (struct mdt_rec_rename *rn)
         lustre_swab_lu_fid (&rn->rn_fid2);
         __swab64s (&rn->rn_time);
         __swab32s (&rn->rn_mode);
-        __swab32s (&rn->rn_cksplit);
+        __swab32s (&rn->rn_bias);
         CLASSERT(offsetof(typeof(*rn), rn_padding_3) != 0);
         CLASSERT(offsetof(typeof(*rn), rn_padding_4) != 0);
 }

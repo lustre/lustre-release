@@ -214,7 +214,7 @@ static int mdc_attr_get(const struct lu_env *env, struct md_object *mo,
 
         rc = md_getattr(mc->mc_desc.cl_exp, lu_object_fid(&mo->mo_lu),
                         NULL, OBD_MD_FLMODE | OBD_MD_FLUID | OBD_MD_FLGID |
-                        OBD_MD_FLFLAGS, 0, &mci->mci_req);
+                        OBD_MD_FLFLAGS | OBD_MD_FLCROSSREF, 0, &mci->mci_req);
         if (rc == 0) {
                 /* get attr from request */
                 rc = mdc_req2attr_update(env, ma);
@@ -246,6 +246,7 @@ static int mdc_object_create(const struct lu_env *env,
         LASSERT(spec->u.sp_pfid != NULL);
 
         mci = mdc_info_init(env);
+        mci->mci_opdata.op_bias = MDS_CROSS_REF;
         mci->mci_opdata.op_fid2 = *lu_object_fid(&mo->mo_lu);
         
         /* Parent fid is needed to create dotdot on the remote node. */
@@ -313,6 +314,7 @@ static int mdc_ref_add(const struct lu_env *env, struct md_object *mo)
         LASSERT(mci);
 
         memset(&mci->mci_opdata, 0, sizeof(mci->mci_opdata));
+        mci->mci_opdata.op_bias = MDS_CROSS_REF;
         mci->mci_opdata.op_fid1 = *lu_object_fid(&mo->mo_lu);
         //mci->mci_opdata.op_mod_time = la->la_ctime;
         //mci->mci_opdata.op_fsuid = la->la_uid;
@@ -356,6 +358,7 @@ static int mdc_ref_del(const struct lu_env *env, struct md_object *mo,
         ENTRY;
 
         mci = mdc_info_init(env);
+        mci->mci_opdata.op_bias = MDS_CROSS_REF;
         mci->mci_opdata.op_fid1 = *lu_object_fid(&mo->mo_lu);
         mci->mci_opdata.op_mode = la->la_mode;
         mci->mci_opdata.op_mod_time = la->la_ctime;
@@ -422,6 +425,7 @@ static int mdc_rename_tgt(const struct lu_env *env, struct md_object *mo_p,
         ENTRY;
 
         mci = mdc_info_init(env);
+        mci->mci_opdata.op_bias = MDS_CROSS_REF;
         mci->mci_opdata.op_fid1 = *lu_object_fid(&mo_p->mo_lu);
         mci->mci_opdata.op_fid2 = *lf;
         mci->mci_opdata.op_mode = la->la_mode;

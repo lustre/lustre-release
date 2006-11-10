@@ -824,13 +824,12 @@ static int mdd_cd_sanity_check(const struct lu_env *env,
 
 }
 
-static int mdd_create_data(const struct lu_env *env,
-                           struct md_object *pobj, struct md_object *cobj,
-                           const struct md_op_spec *spec,
+static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
+                           struct md_object *cobj, const struct md_op_spec *spec,
                            struct md_attr *ma)
 {
         struct mdd_device *mdd = mdo2mdd(cobj);
-        struct mdd_object *mdd_pobj = md2mdd_obj(pobj);/* XXX maybe NULL */
+        struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *son = md2mdd_obj(cobj);
         struct lu_attr    *attr = &ma->ma_attr;
         struct lov_mds_md *lmm = NULL;
@@ -844,10 +843,11 @@ static int mdd_create_data(const struct lu_env *env,
                 RETURN(rc);
 
         if (spec->sp_cr_flags & MDS_OPEN_DELAY_CREATE ||
-                        !(spec->sp_cr_flags & FMODE_WRITE))
+            !(spec->sp_cr_flags & FMODE_WRITE))
                 RETURN(0);
-        rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size, spec,
-                            attr);
+        
+        rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size,
+                            spec, attr);
         if (rc)
                 RETURN(rc);
 

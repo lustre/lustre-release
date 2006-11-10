@@ -2264,6 +2264,7 @@ ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
         op_data->op_fsuid = current->fsuid;
         op_data->op_fsgid = current->fsgid;
         op_data->op_cap = current->cap_effective;
+        op_data->op_bias = MDS_CHECK_SPLIT;
 
         return op_data;
 }

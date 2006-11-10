@@ -1315,12 +1315,12 @@ repeat:
                 mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                        op_data->op_name, op_data->op_namelen);
                 op_data->op_fid1 = obj->lo_inodes[mea_idx].li_fid;
-                op_data->op_cksplit = 0;
+                op_data->op_bias &= ~MDS_CHECK_SPLIT;
                 tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
                 lmv_obj_put(obj);
         } else {
                 tgt_exp = lmv_find_export(lmv, &op_data->op_fid1);
-                op_data->op_cksplit = 1;
+                op_data->op_bias |= MDS_CHECK_SPLIT;
         }
 
         if (IS_ERR(tgt_exp))
@@ -1402,8 +1402,8 @@ lmv_enqueue_slaves(struct obd_export *exp, int locktype,
         for (i = 0; i < mea->mea_count; i++) {
                 memset(op_data2, 0, sizeof(*op_data2));
                 op_data2->op_fid1 = mea->mea_ids[i];
-                op_data2->op_cksplit = 0;
-
+                op_data2->op_bias = 0;
+        
                 tgt_exp = lmv_find_export(lmv, &op_data2->op_fid1);
                 if (IS_ERR(tgt_exp))
                         GOTO(cleanup, rc = PTR_ERR(tgt_exp));
@@ -1497,6 +1497,7 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         rdata->op_fid1 = fid_copy;
         rdata->op_name = NULL;
         rdata->op_namelen = 0;
+        rdata->op_bias = 0;
 
         rc = md_enqueue(tgt_exp, lock_type, it, lock_mode, rdata,
                         lockh, lmm, lmmsize, cb_compl, cb_blocking,
@@ -1632,7 +1633,8 @@ repeat:
                         }
 
                         rc = md_getattr_name(tgt_exp, &rid, NULL, NULL, 1,
-                                             valid, ea_size, &req);
+                                             valid | OBD_MD_FLCROSSREF,
+                                             ea_size, &req);
                         ptlrpc_req_finished(*request);
                         *request = req;
                 }
@@ -2050,13 +2052,15 @@ static int lmv_unlink_slaves(struct obd_export *exp,
         if (op_data2 == NULL)
                 RETURN(-ENOMEM);
 
+        op_data2->op_mode = MDS_MODE_DONT_LOCK | S_IFDIR;
+        op_data2->op_fsuid = current->fsuid;
+        op_data2->op_fsgid = current->fsgid;
+        op_data2->op_bias = 0;
+        
         LASSERT(mea != NULL);
         for (i = 0; i < mea->mea_count; i++) {
                 memset(op_data2, 0, sizeof(*op_data2));
                 op_data2->op_fid1 = mea->mea_ids[i];
-                op_data2->op_mode = MDS_MODE_DONT_LOCK | S_IFDIR;
-                op_data2->op_fsuid = current->fsuid;
-                op_data2->op_fsgid = current->fsgid;
                 tgt_exp = lmv_find_export(lmv, &op_data2->op_fid1);
                 if (IS_ERR(tgt_exp))
                         GOTO(out_free_op_data2, rc = PTR_ERR(tgt_exp));
@@ -2114,6 +2118,7 @@ repeat:
                                                obj->lo_objcount,
                                                op_data->op_name,
                                                op_data->op_namelen);
+                        op_data->op_bias &= ~MDS_CHECK_SPLIT;
                         op_data->op_fid1 = obj->lo_inodes[mea_idx].li_fid;
                         tgt_exp = lmv_get_export(lmv,
                                                  obj->lo_inodes[mea_idx].li_mds);
@@ -2126,14 +2131,17 @@ repeat:
                 CDEBUG(D_OTHER, "drop i_nlink on "DFID"\n",
                        PFID(&op_data->op_fid1));
         }
-        if (tgt_exp == NULL)
+        if (tgt_exp == NULL) {
                 tgt_exp = lmv_find_export(lmv, &op_data->op_fid1);
-        if (IS_ERR(tgt_exp))
-                RETURN(PTR_ERR(tgt_exp));
+                if (IS_ERR(tgt_exp))
+                        RETURN(PTR_ERR(tgt_exp));
+                op_data->op_bias |= MDS_CHECK_SPLIT;
+        }
 
         op_data->op_fsuid = current->fsuid;
         op_data->op_fsgid = current->fsgid;
         op_data->op_cap   = current->cap_effective;
+        
         rc = md_unlink(tgt_exp, op_data, request);
         if (rc == -ERESTART) {
                 LASSERT(*request != NULL);

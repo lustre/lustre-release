@@ -322,7 +322,8 @@ struct mdt_thread_info {
         const struct ldlm_request *mti_dlm_req;
 
         __u32                      mti_has_trans:1, /* has txn already? */
-                                   mti_no_need_trans:1;
+                                   mti_no_need_trans:1,
+                                   mti_cross_ref:1;
 
         /* opdata for mdt_reint_open(), has the same as
          * ldlm_reply:lock_policy_res1.  mdt_update_last_rcvd() stores this
@@ -343,7 +344,7 @@ struct mdt_thread_info {
         struct mdt_reint_record    mti_rr;
         
         /*
-         * Create specification
+         * Operation specification (currently create and lookup)
          */
         struct md_op_spec          mti_spec;
 

@@ -475,7 +475,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         repbody->valid |= OBD_MD_MEA;
                 }
         } else if (S_ISLNK(la->la_mode) &&
-                          reqbody->valid & OBD_MD_LINKNAME) {
+                   reqbody->valid & OBD_MD_LINKNAME) {
                 buffer->lb_buf = ma->ma_lmm;
                 buffer->lb_len = reqbody->eadatasize;
                 rc = mo_readlink(env, next, buffer);
@@ -497,9 +497,8 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 repbody->max_mdsize = info->mti_mdt->mdt_max_mdsize;
                 repbody->valid |= OBD_MD_FLMODEASIZE;
                 CDEBUG(D_INODE, "I am going to change the MAX_MD_SIZE & "
-                                "MAX_COOKIE to : %d:%d\n",
-                                repbody->max_mdsize,
-                                repbody->max_cookiesize);
+                       "MAX_COOKIE to : %d:%d\n", repbody->max_mdsize,
+                       repbody->max_cookiesize);
         }
 
         if (med->med_rmtclient && (reqbody->valid & OBD_MD_FLRMTPERM)) {
@@ -632,7 +631,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
                 RETURN(err_serious(rc));
 
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
-        LASSERT(repbody);
+        LASSERT(repbody != NULL);
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
 
@@ -643,9 +642,13 @@ static int mdt_getattr(struct mdt_thread_info *info)
         if (rc)
                 GOTO(out, rc);
 
-        /* don't check capability at all, because rename might
-         * getattr for remote obj, and at that time no capability
-         * is available. */
+        info->mti_spec.sp_ck_split = !!(reqbody->valid & OBD_MD_FLCKSPLIT);
+        info->mti_cross_ref = !!(reqbody->valid & OBD_MD_FLCROSSREF);
+        
+        /*
+         * Don't check capability at all, because rename might getattr for
+         * remote obj, and at that time no capability is available.
+         */
         mdt_set_capainfo(info, 1, &reqbody->fid1, BYPASS_CAPA);
         rc = mdt_getattr_internal(info, obj);
         if (reqbody->valid & OBD_MD_FLRMTPERM)
@@ -701,6 +704,8 @@ static int mdt_raw_lookup(struct mdt_thread_info *info,
         if (reqbody->valid != OBD_MD_FLID)
                 RETURN(0);
 
+        LASSERT(!info->mti_cross_ref);
+        
         /* Only got the fid of this obj by name */
         rc = mdo_lookup(info->mti_env, next, name, child_fid,
                         &info->mti_spec);
@@ -762,7 +767,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 RETURN(-ESTALE);
         else if (rc < 0) {
                 CERROR("Object "DFID" locates on remote server\n",
-                        PFID(mdt_object_fid(parent)));
+                       PFID(mdt_object_fid(parent)));
                 LBUG();
         }
 
@@ -773,7 +778,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 RETURN(rc);
         }
 
-        if (name[0] == 0) {
+        if (info->mti_cross_ref) {
                 /* Only getattr on the child. Parent is on another node. */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
                 child = parent;
@@ -877,17 +882,19 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
                         /* Debugging code. */
                         res_id = &lock->l_resource->lr_name;
-                        LDLM_DEBUG(lock, "we will return this lock client\n");
+                        LDLM_DEBUG(lock, "We will return this lock client\n");
                         LASSERTF(fid_res_name_eq(mdt_object_fid(child),
                                                  &lock->l_resource->lr_name),
-                                "Lock res_id: %lu/%lu/%lu, Fid: "DFID".\n",
-                                (unsigned long)res_id->name[0],
-                                (unsigned long)res_id->name[1],
-                                (unsigned long)res_id->name[2],
-                                PFID(mdt_object_fid(child)));
+                                 "Lock res_id: %lu/%lu/%lu, Fid: "DFID".\n",
+                                 (unsigned long)res_id->name[0],
+                                 (unsigned long)res_id->name[1],
+                                 (unsigned long)res_id->name[2],
+                                 PFID(mdt_object_fid(child)));
 
-                        /* Pack Size-on-MDS inode attributes to the body if
-                         * update lock is given. */
+                        /*
+                         * Pack Size-on-MDS inode attributes to the body if
+                         * update lock is given.
+                         */
                         repbody = req_capsule_server_get(&info->mti_pill,
                                                          &RMF_MDT_BODY);
                         ma = &info->mti_attr.ma_attr;
@@ -920,7 +927,8 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(repbody != NULL);
 
-        info->mti_spec.sp_ck_split = (reqbody->valid & OBD_MD_FLCKSPLIT);
+        info->mti_spec.sp_ck_split = !!(reqbody->valid & OBD_MD_FLCKSPLIT);
+        info->mti_cross_ref = !!(reqbody->valid & OBD_MD_FLCROSSREF);
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
 
@@ -1852,8 +1860,9 @@ static int mdt_unpack_req_pack_rep(struct mdt_thread_info *info, __u32 flags)
                 rc = 0;
 
         if (rc == 0 && (flags & HABEO_REFERO)) {
-                struct mdt_device       *mdt = info->mti_mdt;
-                /*pack reply*/
+                struct mdt_device *mdt = info->mti_mdt;
+
+                /* Pack reply. */
                 if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER))
                         req_capsule_set_size(pill, &RMF_MDT_MD, RCL_SERVER,
                                              mdt->mdt_max_mdsize);
@@ -2048,6 +2057,7 @@ static void mdt_thread_info_init(struct ptlrpc_request *req,
         info->mti_dlm_req = NULL;
         info->mti_has_trans = 0;
         info->mti_no_need_trans = 0;
+        info->mti_cross_ref = 0;
         info->mti_opdata = 0;
 
         /* To not check for split by default. */
@@ -2518,8 +2528,12 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(reqbody);
+
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(repbody);
+
+        info->mti_spec.sp_ck_split = !!(reqbody->valid & OBD_MD_FLCKSPLIT);
+        info->mti_cross_ref = !!(reqbody->valid & OBD_MD_FLCROSSREF);
         repbody->eadatasize = 0;
         repbody->aclsize = 0;
 

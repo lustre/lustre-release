@@ -506,17 +506,14 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 sprintf(buf, " -I %ld", inode_size);
                                 strcat(mop->mo_mkfsopts, buf);
                         }
-
                 }
 
-                if (verbose < 2) {
+                if (verbose < 2)
                         strcat(mop->mo_mkfsopts, " -q");
-                }
 
                 /* Enable hashed b-tree directory lookup in large dirs bz6224 */
-                if (strstr(mop->mo_mkfsopts, "-O") == NULL) {
+                if (strstr(mop->mo_mkfsopts, "-O") == NULL)
                         strcat(mop->mo_mkfsopts, " -O dir_index");
-                }
 
                 /* Allow reformat of full devices (as opposed to
                    partitions.)  We already checked for mounted dev. */
@@ -524,7 +521,6 @@ int make_lustre_backfs(struct mkfs_opts *mop)
 
                 sprintf(mkfs_cmd, "mkfs.ext2 -j -b %d -L %s ", L_BLOCK_SIZE,
                         mop->mo_ldd.ldd_svname);
-
         } else if (mop->mo_ldd.ldd_mount_type == LDD_MT_REISERFS) {
                 long journal_sz = 0; /* FIXME default journal size */
                 if (journal_sz > 0) {
