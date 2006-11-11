@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1402 @@
+@@ -0,0 +1,1410 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -382,6 +382,14 @@ Index: iam/fs/ext3/iam.c
 +	leaf  = &path->ip_leaf;
 +	descr = iam_path_descr(path);
 +	block = dx_get_block(path, path->ip_frame->at);
++        if (block == 0) {
++                /* XXX bug 11027 */
++                printk(KERN_EMERG "wrong leaf: %p %d [%p %p %p]\n",
++                       path->ip_frame->at,
++                       dx_get_count(dx_node_get_entries(path, path->ip_frame)),
++                       path->ip_frames[0].bh, path->ip_frames[1].bh,
++                       path->ip_frames[2].bh);
++        }
 +	err   = descr->id_ops->id_node_read(c, block, NULL, &bh);
 +	if (err == 0) {
 +		leaf->il_bh = bh;
