@@ -550,7 +550,8 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
          */
         if (!lu_object_exists(&cobj->mo_lu))
                 RETURN(-ENOENT);
-        LASSERT(lu_object_exists(&cobj->mo_lu) > 0);
+        LASSERTF(lu_object_exists(&cobj->mo_lu) > 0, "FID is"DFID"\n",
+                 PFID(lu_object_fid(&cobj->mo_lu)));
         
         rc = mdd_log_txn_param_build(env, cobj, ma, MDD_TXN_UNLINK_OP);
         if (rc)

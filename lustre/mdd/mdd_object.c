@@ -58,7 +58,8 @@ int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                struct lu_attr *la, struct lustre_capa *capa)
 {
         struct dt_object *next = mdd_object_child(obj);
-        LASSERT(lu_object_exists(mdd2lu_obj(obj)));
+        LASSERTF(lu_object_exists(mdd2lu_obj(obj)), "FID is "DFID"\n",
+                 PFID(lu_object_fid(mdd2lu_obj(obj))));
         return next->do_ops->do_attr_get(env, next, la, capa);
 }
 
