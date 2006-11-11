@@ -997,7 +997,8 @@ static int mdd_create_sanity_check(const struct lu_env *env,
          * In some cases this lookup is not needed - we know before that if name
          * exists or not.
          */
-        if (lookup) {
+        /* XXX disable that lookup temporary */
+        if (0 && lookup) {
                 /*
                  * Check if the name already exist, though it will be checked in
                  * _index_insert also, for avoiding rolling back if exists
