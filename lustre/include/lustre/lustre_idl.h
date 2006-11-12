@@ -817,7 +817,7 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
-#define OST_MIN_PRECREATE 16384
+#define OST_MIN_PRECREATE 32
 #define OST_MAX_PRECREATE 20000
 
 struct obd_ioobj {

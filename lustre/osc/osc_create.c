@@ -151,7 +151,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         spin_lock(&oscc->oscc_lock);
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
-        body->oa.o_gr = oscc->oscc_oa.o_gr;
+        body->oa.o_gr = oscc->oa.o_gr;
         LASSERT(body->oa.o_gr > 0);
         body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
         spin_unlock(&oscc->oscc_lock);
@@ -249,6 +249,9 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
             oa->o_flags == OBD_FL_RECREATE_OBJS) {
                 RETURN(osc_real_create(exp, oa, ea, oti));
         }
+
+        if (oa->o_gr == FILTER_GROUP_LLOG || oa->o_gr == FILTER_GROUP_ECHO)
+                RETURN(osc_real_create(exp, oa, ea, oti));
 
         /* this is the special case where create removes orphans */
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
