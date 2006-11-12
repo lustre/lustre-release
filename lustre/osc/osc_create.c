@@ -151,7 +151,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
         spin_lock(&oscc->oscc_lock);
         body->oa.o_id = oscc->oscc_last_id + oscc->oscc_grow_count;
-        body->oa.o_gr = oscc->oa.o_gr;
+        body->oa.o_gr = oscc->oscc_oa.o_gr;
         LASSERT(body->oa.o_gr > 0);
         body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
         spin_unlock(&oscc->oscc_lock);
