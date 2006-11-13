@@ -1,0 +1,52 @@
+Index: linux/fs/jbd/journal.c
+===================================================================
+--- linux.orig/fs/jbd/journal.c
++++ linux/fs/jbd/journal.c
+@@ -130,6 +130,7 @@ int kjournald(void *arg)
+ 	journal_t *journal = (journal_t *) arg;
+ 	transaction_t *transaction;
+ 	struct timer_list timer;
++	int transaction_size;
+ 
+ 	current_journal = journal;
+ 
+@@ -154,12 +155,15 @@ int kjournald(void *arg)
+ 	 */
+ 	spin_lock(&journal->j_state_lock);
+ 
++	transaction_size = 0;
+ loop:
+ 	jbd_debug(1, "commit_sequence=%d, commit_request=%d\n",
+ 		journal->j_commit_sequence, journal->j_commit_request);
+ 
+ 	if (journal->j_commit_sequence != journal->j_commit_request) {
+ 		jbd_debug(1, "OK, requests differ\n");
++		transaction_size =
++			journal->j_running_transaction->t_outstanding_credits;
+ 		spin_unlock(&journal->j_state_lock);
+ 		del_timer_sync(journal->j_commit_timer);
+ 		journal_commit_transaction(journal);
+@@ -168,6 +172,23 @@ loop:
+ 	}
+ 
+ 	wake_up(&journal->j_wait_done_commit);
++
++	/*
++	 * If journal is low on free space, do a checkpoint, pro-actively.
++	 *
++	 * Do this after wake-up to reduce waiters latency.
++	 */
++	spin_unlock(&journal->j_state_lock);
++	down(&journal->j_checkpoint_sem);
++	spin_lock(&journal->j_state_lock);
++	while (__log_space_left(journal) <
++	       journal->j_max_transaction_buffers + 2 * transaction_size) {
++		spin_unlock(&journal->j_state_lock);
++		log_do_checkpoint(journal);
++		spin_lock(&journal->j_state_lock);
++	}
++	up(&journal->j_checkpoint_sem);
++
+ 	if (current->flags & PF_FREEZE) {
+ 		/*
+ 		 * The simpler the better. Flushing journal isn't a
