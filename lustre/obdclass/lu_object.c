@@ -37,6 +37,8 @@
 #include <linux/module.h>
 /* nr_free_pages() */
 #include <linux/swap.h>
+/* hash_long() */
+#include <linux/hash.h>
 #include <obd_support.h>
 #include <lustre_disk.h>
 #include <lustre_fid.h>
@@ -424,11 +426,26 @@ static struct lu_object *htable_lookup(struct lu_site *s,
         return NULL;
 }
 
+/*
+ * Hash-table parameters. Initialized in lu_global_init(). This assumes single
+ * site per node.
+ */
+static int lu_site_htable_bits;
+static int lu_site_htable_size;
+static int lu_site_htable_mask;
+
 static __u32 fid_hash(const struct lu_fid *f)
 {
+        unsigned long hash;
+        __u64 seq;
+
         /* all objects with same id and different versions will belong to same
          * collisions list. */
-        return (fid_seq(f) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(f);
+        seq  = fid_seq(f);
+        hash = seq ^ fid_oid(f);
+        if (sizeof hash != sizeof seq)
+                hash ^= seq >> 32;
+        return hash_long(hash, lu_site_htable_bits);
 }
 
 /*
@@ -503,14 +520,6 @@ static DECLARE_MUTEX(lu_sites_guard);
  * Global environment used by site shrinker.
  */
 static struct lu_env lu_shrink_env;
-
-/*
- * Hash-table parameters. Initialized in lu_global_init(). This assumes single
- * site per node.
- */
-static int lu_site_htable_bits;
-static int lu_site_htable_size;
-static int lu_site_htable_mask;
 
 /*
  * Print all objects in @s.
