@@ -550,9 +550,9 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
          */
         if (!lu_object_exists(&cobj->mo_lu))
                 RETURN(-ENOENT);
-        LASSERTF(lu_object_exists(&cobj->mo_lu) > 0, "FID is"DFID"\n",
+        LASSERTF(lu_object_exists(&cobj->mo_lu) > 0, "FID is "DFID"\n",
                  PFID(lu_object_fid(&cobj->mo_lu)));
-        
+
         rc = mdd_log_txn_param_build(env, cobj, ma, MDD_TXN_UNLINK_OP);
         if (rc)
                 RETURN(rc);
@@ -854,7 +854,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
         if (spec->sp_cr_flags & MDS_OPEN_DELAY_CREATE ||
             !(spec->sp_cr_flags & FMODE_WRITE))
                 RETURN(0);
-        
+
         rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size,
                             spec, attr);
         if (rc)
@@ -1017,7 +1017,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                 if (rc)
                         RETURN(rc);
         }
-        
+
         /* sgid check */
         rc = mdd_la_get(env, obj, la, BYPASS_CAPA);
         if (rc != 0)
@@ -1111,7 +1111,7 @@ static int mdd_create(const struct lu_env *env,
         rc = mdd_create_sanity_check(env, pobj, name, ma, spec->sp_cr_lookup);
         if (rc)
                 RETURN(rc);
-        
+
         /*
          * No RPC inside the transaction, so OST objects should be created at
          * first.
