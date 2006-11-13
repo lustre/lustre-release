@@ -449,6 +449,16 @@ static int osd_inode_remove(const struct lu_env *env, struct osd_object *obj)
         th = osd_trans_start(env, &osd->od_dt_dev, prm);
         if (!IS_ERR(th)) {
                 result = osd_oi_delete(oti, &osd->od_oi, fid, th);
+                /*
+                 * XXX chasing buffalo bug.
+                 */
+                if (result == -ENOENT) {
+                        extern int lfix_dump;
+
+                        lfix_dump = 1;
+                        osd_oi_delete(oti, &osd->od_oi, fid, th);
+                        lfix_dump = 0;
+                }
                 osd_trans_stop(env, th);
         } else
                 result = PTR_ERR(th);
