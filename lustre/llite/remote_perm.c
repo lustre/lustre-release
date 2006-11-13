@@ -134,8 +134,8 @@ static int do_check_remote_perm(struct ll_inode_info *lli, int mask)
         CDEBUG(D_SEC, "found remote perm: %u/%u/%u/%u - %#x\n",
                lrp->lrp_uid, lrp->lrp_gid, lrp->lrp_fsuid, lrp->lrp_fsgid,
                lrp->lrp_access_perm);
-        rc = (lrp->lrp_access_perm & mask) == mask ? 0 : -EACCES;
-        GOTO(out, rc);
+        rc = ((lrp->lrp_access_perm & mask) == mask) ? 0 : -EACCES;
+
 out:
         spin_unlock(&lli->lli_lock);
         return rc;
@@ -151,6 +151,7 @@ int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm)
 
         LASSERT(ll_i2sbi(inode)->ll_flags & LL_SBI_RMT_CLIENT);
 
+#if 0
         if (perm->rp_uid != current->uid ||
             perm->rp_gid != current->gid ||
             perm->rp_fsuid != current->fsuid ||
@@ -163,6 +164,7 @@ int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm)
                        current->fsuid, current->fsgid);
                 RETURN(-EAGAIN);
         }
+#endif
 
         if (!lli->lli_remote_perms) {
                 perm_hash = alloc_rmtperm_hash();
@@ -183,13 +185,13 @@ int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm)
 
 again:
         hlist_for_each_entry(tmp, node, head, lrp_list) {
-                if (tmp->lrp_uid != current->uid)
+                if (tmp->lrp_uid != perm->rp_uid)
                         continue;
-                if (tmp->lrp_gid != current->gid)
+                if (tmp->lrp_gid != perm->rp_gid)
                         continue;
-                if (tmp->lrp_fsuid != current->fsuid)
+                if (tmp->lrp_fsuid != perm->rp_fsuid)
                         continue;
-                if (tmp->lrp_fsgid != current->fsgid)
+                if (tmp->lrp_fsgid != perm->rp_fsgid)
                         continue;
                 if (lrp)
                         free_ll_remote_perm(lrp);
@@ -208,13 +210,14 @@ again:
                 goto again;
         }
 
-        lrp->lrp_uid         = perm->rp_uid;
-        lrp->lrp_gid         = perm->rp_gid;
-        lrp->lrp_fsuid       = perm->rp_fsuid;
-        lrp->lrp_fsgid       = perm->rp_fsgid;
         lrp->lrp_access_perm = perm->rp_access_perm;
-        if (lrp != tmp)
+        if (lrp != tmp) {
+                lrp->lrp_uid         = perm->rp_uid;
+                lrp->lrp_gid         = perm->rp_gid;
+                lrp->lrp_fsuid       = perm->rp_fsuid;
+                lrp->lrp_fsgid       = perm->rp_fsgid;
                 hlist_add_head(&lrp->lrp_list, head);
+        }
         lli->lli_rmtperm_utime = jiffies;
         spin_unlock(&lli->lli_lock);
 
