@@ -2118,7 +2118,7 @@ Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c
 +++ iam/fs/ext3/iam_lfix.c
-@@ -0,0 +1,676 @@
+@@ -0,0 +1,728 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2336,6 +2336,55 @@ Index: iam/fs/ext3/iam_lfix.c
 +        l->il_at = iam_lfix_shift(l, l->il_at, 1);
 +}
 +
++/*
++ * Bug chasing.
++ */
++int lfix_dump = 0;
++EXPORT_SYMBOL(lfix_dump);
++
++static char hdigit(char ch)
++{
++        static char d[] = "0123456789abcdef";
++        return d[ch & 0xf];
++}
++
++static char *hex(char ch, char *area)
++{
++        area[0] = hdigit(ch >> 4);
++        area[1] = hdigit(ch);
++        area[2] = 0;
++        return area;
++}
++
++static void l_print(struct iam_leaf *leaf, struct iam_lentry *entry)
++{
++        int i;
++        char *area;
++        char h[3];
++
++        area = (char *)entry;
++        printk(KERN_EMERG "[");
++        for (i = iam_lfix_key_size(leaf); i > 0; --i, ++area)
++                printk("%s", hex(*area, h));
++        printk("]-(");
++        for (i = iam_leaf_descr(leaf)->id_rec_size; i > 0; --i, ++area)
++                printk("%s", hex(*area, h));
++        printk(")\n");
++}
++
++static void lfix_print(struct iam_leaf *leaf)
++{
++        struct iam_lentry *entry;
++        int count;
++        int i;
++
++        entry = leaf->il_entries;
++        count = lentry_count_get(leaf);
++        printk("lfix: %p %p %d\n", leaf, leaf->il_at, count);
++        for (i = 0; i < count; ++i, entry = iam_lfix_shift(leaf, entry, 1))
++                l_print(leaf, entry);
++}
++
 +static int iam_lfix_lookup(struct iam_leaf *l, const struct iam_key *k)
 +{
 +        struct iam_lentry *p, *q, *m, *t;
@@ -2387,6 +2436,9 @@ Index: iam/fs/ext3/iam_lfix.c
 +
 +        if (lfix_keycmp(c, iam_leaf_key_at(l->il_at), k) == 0)
 +                result = IAM_LOOKUP_EXACT;
++
++        if (lfix_dump)
++                lfix_print(l);
 +
 +        return result;
 +}
