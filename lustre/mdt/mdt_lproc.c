@@ -60,7 +60,7 @@ static int lprocfs_rd_identity_expire(char *page, char **start, off_t off,
 {
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
+        
         *eof = 1;
         return snprintf(page, count, "%lu\n",
                         mdt->mdt_identity_cache->uc_entry_expire / HZ);
@@ -154,19 +154,11 @@ static int lprocfs_wr_identity_flush(struct file *file, const char *buffer,
 {
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        char tmp[8];
-        int uid;
+        int rc, uid;
 
-        memset(tmp, 0, 8);
-        if (copy_from_user(tmp, buffer, (count > 7) ? 7 : count)) {
-                CERROR("%s: bad data\n", obd->obd_name);
-                return -EFAULT;
-        }
-
-        if (sscanf(tmp, "%d", &uid) != 1) {
-                CERROR("%s: invalid uid\n", obd->obd_name);
-                return -EFAULT;
-        }
+        rc = lprocfs_write_helper(buffer, count, &uid);
+        if (rc)
+                return rc;
 
         mdt_flush_identity(mdt->mdt_identity_cache, uid);
         return count;

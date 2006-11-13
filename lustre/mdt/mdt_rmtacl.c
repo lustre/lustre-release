@@ -198,15 +198,15 @@ struct upcall_cache_ops mdt_rmtacl_upcall_cache_ops = {
 int mdt_rmtacl_upcall(struct mdt_thread_info *info, unsigned long key,
                       char *cmd, struct lu_buf *buf)
 {
-        struct ptlrpc_request           *req = mdt_info_req(info);
-        struct obd_device               *obd = req->rq_export->exp_obd;
-        struct mdt_device               *mdt = info->mti_mdt;
+        struct ptlrpc_request          *req = mdt_info_req(info);
+        struct obd_device              *obd = req->rq_export->exp_obd;
+        struct mdt_device              *mdt = info->mti_mdt;
         struct lvfs_ucred               uc;
         struct md_ucred                *uc0 = mdt_ucred(info);
         struct lvfs_run_ctxt            saved;
         struct rmtacl_upcall_data       data;
-        struct upcall_cache_entry       *entry;
-        char                            *tmp = NULL;
+        struct upcall_cache_entry      *entry;
+        char                           *tmp = NULL;
         int                             rc = 0;
         ENTRY;
 

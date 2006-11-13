@@ -655,16 +655,24 @@ int mdt_remote_perm_reverse_idmap(struct ptlrpc_request *req,
                 return -EPERM;
         }
 
-        fsuid = mdt_idmap_lookup_uid(med->med_idmap, 1, perm->rp_fsuid);
-        if (fsuid == MDT_IDMAP_NOTFOUND) {
-                CERROR("no mapping for fsuid %u\n", perm->rp_fsuid);
-                return -EPERM;
+        if (perm->rp_uid != perm->rp_fsuid) {
+                fsuid = mdt_idmap_lookup_uid(med->med_idmap, 1, perm->rp_fsuid);
+                if (fsuid == MDT_IDMAP_NOTFOUND) {
+                        CERROR("no mapping for fsuid %u\n", perm->rp_fsuid);
+                        return -EPERM;
+                }
+        } else {
+                fsuid = uid;
         }
 
-        fsgid = mdt_idmap_lookup_gid(med->med_idmap, 1, perm->rp_fsgid);
-        if (fsgid == MDT_IDMAP_NOTFOUND) {
-                CERROR("no mapping for fsgid %u\n", perm->rp_fsgid);
-                return -EPERM;
+        if (perm->rp_gid != perm->rp_fsgid) {
+                fsgid = mdt_idmap_lookup_gid(med->med_idmap, 1, perm->rp_fsgid);
+                if (fsgid == MDT_IDMAP_NOTFOUND) {
+                        CERROR("no mapping for fsgid %u\n", perm->rp_fsgid);
+                        return -EPERM;
+                }
+        } else {
+                fsgid = gid;
         }
 
         perm->rp_uid = uid;
@@ -698,6 +706,7 @@ int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
                         if ((attr->la_valid & LA_GID) && (attr->la_gid != -1))
                                 attr->la_gid = uc->mu_fsgid;
                 } else {
+                        /* for S_ISGID, inherit gid from his parent */
                         if (!(attr->la_mode & S_ISGID) && (attr->la_gid != -1))
                                 attr->la_gid = uc->mu_fsgid;
                 }

@@ -127,7 +127,7 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 
         LASSERT(data);
         if (data->idd_ngroups > NGROUPS_MAX)
-                return -E2BIG;
+                RETURN(-E2BIG);
 
         ginfo = groups_alloc(data->idd_ngroups);
         if (!ginfo) {
