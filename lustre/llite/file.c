@@ -92,8 +92,8 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         struct md_op_data *op_data;
         struct ptlrpc_request *req = NULL;
         struct obd_device *obd;
-        int rc, clear_ord = 0;
         int epoch_close = 1;
+        int rc;
         ENTRY;
 
         obd = class_exp2obd(ll_i2mdexp(inode));
@@ -120,14 +120,12 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                 GOTO(out, rc = -ENOMEM);
 
         ll_prepare_close(inode, op_data, och);
-        epoch_close = (och->och_flags & FMODE_WRITE) &&
-                      ((op_data->op_flags & MF_EPOCH_CLOSE) ||
-                       !S_ISREG(inode->i_mode));
+        epoch_close = (op_data->op_flags & MF_EPOCH_CLOSE);
         rc = md_close(md_exp, op_data, och, &req);
 
         ll_finish_md_op_data(op_data);
         if (rc == -EAGAIN) {
-                /* This close must have closed the epoch. */
+                /* This close must have the epoch closed. */
                 LASSERT(epoch_close);
                 /* MDS has instructed us to obtain Size-on-MDS attribute from
                  * OSTs and send setattr to back to MDS. */
@@ -142,13 +140,6 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                        inode->i_ino, rc);
         }
 
-        if (!epoch_close && (och->och_flags & FMODE_WRITE)) {
-                md_clear_open_replay_data(md_exp, och);
-                clear_ord = 1;
-                
-                ll_queue_done_writing(inode, LLIF_DONE_WRITING);
-        }
-
         if (rc == 0) {
                 rc = ll_objects_destroy(req, inode);
                 if (rc)
@@ -159,11 +150,17 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         ptlrpc_req_finished(req); /* This is close request */
         EXIT;
 out:
-        if (!clear_ord)
-                md_clear_open_replay_data(md_exp, och);
+        md_clear_open_replay_data(md_exp, och);
         
-        if (epoch_close || !(och->och_flags & FMODE_WRITE))
+        if (!epoch_close && S_ISREG(inode->i_mode) &&
+            (och->och_flags & FMODE_WRITE)) {
+                ll_queue_done_writing(inode, LLIF_DONE_WRITING);
+        } else {
+                /* Free @och if it is not waiting for DONE_WRITING. */
                 och->och_fh.cookie = DEAD_HANDLE_MAGIC;
+                OBD_FREE(och, sizeof(*och));
+        }
+        
         return rc;
 }
 
@@ -202,9 +199,6 @@ int ll_md_real_close(struct inode *inode, int flags)
                       already */
                 rc = ll_close_inode_openhandle(ll_i2sbi(inode)->ll_md_exp,
                                                inode, och);
-                /* Do not free @och is it is waiting for DONE_WRITING. */
-                if (och->och_fh.cookie == DEAD_HANDLE_MAGIC)
-                        OBD_FREE(och, sizeof *och);
         }
 
         RETURN(rc);
@@ -2037,10 +2031,6 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
 
         rc = ll_close_inode_openhandle(ll_i2sbi(inode)->ll_md_exp,
                                        inode, och);
-
-        /* Do not free @och is it is waiting for DONE_WRITING. */
-        if (och->och_fh.cookie == DEAD_HANDLE_MAGIC)
-                OBD_FREE(och, sizeof(*och));
  out:
         /* this one is in place of ll_file_open */
         ptlrpc_req_finished(it->d.lustre.it_data);
