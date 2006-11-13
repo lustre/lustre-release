@@ -863,7 +863,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
         mdd_txn_param_build(env, mdd, MDD_TXN_CREATE_DATA_OP);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
-                RETURN(rc = PTR_ERR(handle));
+                GOTO(out_free, rc = PTR_ERR(handle));
 
         /*
          * XXX: Setting the lov ea is not locked but setting the attr is locked?
@@ -883,9 +883,10 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
         if (rc == 0)
                rc = mdd_attr_get_internal_locked(env, son, ma);
 
+        mdd_trans_stop(env, mdd, rc, handle);
+out_free:
         /* Finish mdd_lov_create() stuff. */
         mdd_lov_create_finish(env, mdd, rc);
-        mdd_trans_stop(env, mdd, rc, handle);
         if (lmm)
                 OBD_FREE(lmm, lmm_size);
         RETURN(rc);
