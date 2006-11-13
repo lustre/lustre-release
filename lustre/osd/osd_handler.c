@@ -1712,7 +1712,6 @@ static struct dt_it *osd_it_init(const struct lu_env *env,
                         return (struct dt_it *)it;
                 } else
                         OBD_FREE_PTR(it);
-
         }
         return ERR_PTR(-ENOMEM);
 }
@@ -2262,7 +2261,7 @@ static int osd_fid_lookup(const struct lu_env *env,
          * fids. Unfortunately it is somewhat expensive (does a
          * cache-lookup). Disabling it for production/acceptance-testing.
          */
-        LASSERT(1 || fid_is_local(ldev->ld_site, fid));
+        LASSERT(fid_is_local(ldev->ld_site, fid));
 
         ENTRY;
 
