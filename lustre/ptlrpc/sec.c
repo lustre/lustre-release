@@ -1186,7 +1186,7 @@ int sptlrpc_cli_unwrap_reply(struct ptlrpc_request *req)
                 LBUG();
         }
 
-        LASSERT(rc || req->rq_repmsg);
+        LASSERT(rc || req->rq_repmsg || req->rq_resend);
         RETURN(rc);
 }
 
