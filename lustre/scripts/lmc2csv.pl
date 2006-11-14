@@ -219,10 +219,10 @@ foreach my $ost (@{$objs{"ost"}}) {
         $mount_opts .= "," . $ost->{"mountfsoptions"};
     }
     my $mkfs_options="";
-    if (defined($ost->{"failover"})) {
+    if (defined($ost->{"failover"}) & $ost->{"failover"}) {
         $mkfs_options .= "failover.mode=failover" . " ";
     }
-    if (defined($ost->{"failout"})) {
+    if (defined($ost->{"failout"}) & $ost->{"failout"}) {
         $mkfs_options .= "failover.mode=failout" . " ";
     }
     chop($mkfs_options);
