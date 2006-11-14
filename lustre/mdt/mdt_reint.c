@@ -220,26 +220,28 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         struct md_object        *next;
         struct mdt_body         *repbody;
         int                      rc;
-
         ENTRY;
 
+        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
+                               LPROC_MDT_REINT_SETATTR);
+        
         DEBUG_REQ(D_INODE, req, "setattr "DFID" %x", PFID(rr->rr_fid1),
                   (unsigned int)ma->ma_attr.la_valid);
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
         mo = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
         if (IS_ERR(mo))
-                RETURN(rc = PTR_ERR(mo));
+                GOTO(out, rc = PTR_ERR(mo));
 
         if (info->mti_epoch && (info->mti_epoch->flags & MF_EPOCH_OPEN)) {
                 /* Truncate case. */
                 rc = mdt_write_get(info->mti_mdt, mo);
                 if (rc)
-                        GOTO(out, rc);
+                        GOTO(out_put, rc);
 
                 mfd = mdt_mfd_new();
                 if (mfd == NULL)
-                        GOTO(out, rc = -ENOMEM);
+                        GOTO(out_put, rc = -ENOMEM);
 
                 mdt_epoch_open(info, mo);
                 repbody->ioepoch = mo->mot_ioepoch;
@@ -257,7 +259,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
         rc = mdt_attr_set(info, mo, rr->rr_flags);
         if (rc)
-                GOTO(out, rc);
+                GOTO(out_put, rc);
 
         if (info->mti_epoch && (info->mti_epoch->flags & MF_SOM_CHANGE)) {
                 LASSERT(info->mti_epoch);
@@ -271,7 +273,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                                "fid = "DFID": cookie = "LPX64"\n",
                                PFID(info->mti_rr.rr_fid1),
                                info->mti_epoch->handle.cookie);
-                        GOTO(out, rc = -ESTALE);
+                        GOTO(out_put, rc = -ESTALE);
                 }
 
                 LASSERT(mfd->mfd_mode == FMODE_SOM);
@@ -289,7 +291,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         next = mdt_object_child(mo);
         rc = mo_attr_get(info->mti_env, next, ma);
         if (rc != 0)
-                GOTO(out, rc);
+                GOTO(out_put, rc);
 
         mdt_pack_attr2body(info, repbody, &ma->ma_attr, mdt_object_fid(mo));
 
@@ -303,13 +305,16 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 capa->lc_opc = CAPA_OPC_OSS_DEFAULT | CAPA_OPC_OSS_TRUNC;
                 rc = mo_capa_get(info->mti_env, mdt_object_child(mo), capa, 0);
                 if (rc)
-                        GOTO(out, rc);
+                        GOTO(out_put, rc);
                 repbody->valid |= OBD_MD_FLOSSCAPA;
         }
 
         EXIT;
-out:
+out_put:
         mdt_object_put(info->mti_env, mo);
+out:
+        mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                             LPROC_MDT_REINT_SETATTR);
         return rc;
 }
 
@@ -323,7 +328,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
                                LPROC_MDT_REINT_CREATE);
         
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
-                RETURN(err_serious(-ESTALE));
+                GOTO(out, rc = err_serious(-ESTALE));
 
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
         case S_IFDIR:{
@@ -347,9 +352,11 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         default:
                 rc = err_serious(-EOPNOTSUPP);
         }
+        EXIT;
+out:
         mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
                              LPROC_MDT_REINT_CREATE);
-        RETURN(rc);
+        return rc;
 }
 
 static int mdt_reint_unlink(struct mdt_thread_info *info,
@@ -366,6 +373,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         int                      rc;
         ENTRY;
 
+        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
+                               LPROC_MDT_REINT_UNLINK);
+        
         DEBUG_REQ(D_INODE, req, "unlink "DFID"/%s\n", PFID(rr->rr_fid1),
                   rr->rr_name);
 
@@ -453,6 +463,8 @@ out_unlock_parent:
         mdt_object_unlock_put(info, mp, parent_lh, rc);
 out:
         mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
+        mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                             LPROC_MDT_REINT_UNLINK);
         return rc;
 }
 
@@ -469,11 +481,14 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         int rc;
         ENTRY;
 
+        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
+                               LPROC_MDT_REINT_LINK);
+        
         DEBUG_REQ(D_INODE, req, "link "DFID" to "DFID"/%s",
                   PFID(rr->rr_fid1), PFID(rr->rr_fid2), rr->rr_name);
 
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))
-                RETURN(err_serious(-ENOENT));
+                GOTO(out, rc = err_serious(-ENOENT));
 
         if (info->mti_cross_ref) {
                 /* MDT holding name ask us to add ref. */
@@ -482,18 +497,20 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                 ms = mdt_object_find_lock(info, rr->rr_fid1, lhs,
                                           MDS_INODELOCK_UPDATE);
                 if (IS_ERR(ms))
-                        RETURN(PTR_ERR(ms));
+                        GOTO(out, rc = PTR_ERR(ms));
 
                 mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
                 rc = mo_ref_add(info->mti_env, mdt_object_child(ms));
                 mdt_object_unlock_put(info, ms, lhs, rc);
-                RETURN(rc);
+                mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                                     LPROC_MDT_REINT_LINK);
+                GOTO(out, rc);
         }
 
         /* Invalid case so return error immediately instead of
          * processing it */
         if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2))
-                RETURN(-EPERM);
+                GOTO(out, rc = -EPERM);
         
         /* step 1: find & lock the target parent dir */
         lhp = &info->mti_lh[MDT_LH_PARENT];
@@ -502,7 +519,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         mp = mdt_object_find_lock(info, rr->rr_fid2, lhp,
                                   MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
-                RETURN(PTR_ERR(mp));
+                GOTO(out, rc = PTR_ERR(mp));
 
         /* step 2: find & lock the source */
         lhs = &info->mti_lh[MDT_LH_CHILD];
@@ -530,6 +547,9 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         mdt_object_unlock_put(info, ms, lhs, rc);
 out_unlock_parent:
         mdt_object_unlock_put(info, mp, lhp, rc);
+out:
+        mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                             LPROC_MDT_REINT_LINK);
         return rc;
 }
 
@@ -711,8 +731,13 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         int                      rc;
         ENTRY;
 
+        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
+                               LPROC_MDT_REINT_RENAME);
+        
         if (info->mti_cross_ref) {
                 rc = mdt_reint_rename_tgt(info);
+                mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                                     LPROC_MDT_REINT_RENAME);
                 RETURN(rc);
         }
 
@@ -860,6 +885,8 @@ out_rename_lock:
         mdt_rename_unlock(&rename_lh);
 out:
         mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
+        mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                             LPROC_MDT_REINT_RENAME);
         return rc;
 }
 

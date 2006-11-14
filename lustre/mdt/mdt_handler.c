@@ -601,6 +601,9 @@ static int mdt_getattr(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
+        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
+                               LPROC_MDT_GETATTR);
+        
         reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
         LASSERT(reqbody);
 
@@ -610,7 +613,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
                         RETURN(err_serious(rc));
                 rc = mdt_renew_capa(info);
                 mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
-                RETURN(rc);
+                GOTO(out, rc);
         }
 
         LASSERT(obj != NULL);
@@ -628,7 +631,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
 
         rc = req_capsule_pack(pill);
         if (rc != 0)
-                RETURN(err_serious(rc));
+                GOTO(out, rc = err_serious(rc));
 
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
         LASSERT(repbody != NULL);
@@ -640,7 +643,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
         else
                 rc = mdt_check_ucred(info);
         if (rc)
-                GOTO(out, rc);
+                GOTO(out_shrink, rc);
 
         info->mti_spec.sp_ck_split = !!(reqbody->valid & OBD_MD_FLCKSPLIT);
         info->mti_cross_ref = !!(reqbody->valid & OBD_MD_FLCROSSREF);
@@ -654,8 +657,11 @@ static int mdt_getattr(struct mdt_thread_info *info)
         if (reqbody->valid & OBD_MD_FLRMTPERM)
                 mdt_exit_ucred(info);
         EXIT;
-out:
+out_shrink:
         mdt_shrink_reply(info, REPLY_REC_OFF + 1, 1, 0);
+out:
+        mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                             LPROC_MDT_GETATTR);
         return rc;
 }
 
@@ -922,6 +928,9 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
+        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
+                               LPROC_MDT_GETATTR_NAME);
+        
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(reqbody != NULL);
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
@@ -945,6 +954,8 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
         EXIT;
 out:
         mdt_shrink_reply(info, REPLY_REC_OFF + 1, 1, 0);
+        mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                             LPROC_MDT_GETATTR_NAME);
         return rc;
 }
 
@@ -2526,6 +2537,9 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         int                     rc;
         ENTRY;
 
+        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
+                               LPROC_MDT_INTENT_GETATTR);
+
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(reqbody);
 
@@ -2577,6 +2591,8 @@ out_ucred:
         mdt_exit_ucred(info);
 out:
         mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 1, 0);
+        mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                             LPROC_MDT_INTENT_GETATTR);
         return rc;
 }
 
@@ -2597,14 +2613,17 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
 
         ENTRY;
 
+        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
+                               LPROC_MDT_INTENT_REINT);
+
         opc = mdt_reint_opcode(info, intent_fmts);
         if (opc < 0)
-                RETURN(opc);
+                GOTO(out, rc = opc);
 
         if (mdt_it_flavor[opcode].it_reint != opc) {
                 CERROR("Reint code %ld doesn't match intent: %d\n",
                        opc, opcode);
-                RETURN(err_serious(-EPROTO));
+                GOTO(out, rc = err_serious(-EPROTO));
         }
 
         /* Get lock from request for possible resent case. */
@@ -2616,22 +2635,28 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         if (mdt_info_req(info)->rq_repmsg != NULL)
                 rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
         if (rep == NULL)
-                RETURN(err_serious(-EFAULT));
+                GOTO(out, rc = err_serious(-EFAULT));
 
         /* MDC expects this in any case */
         if (rc != 0)
                 mdt_set_disposition(info, rep, DISP_LOOKUP_EXECD);
 
-        /* cross-ref case, the lock should be returned to the client */
+        /* Cross-ref case, the lock should be returned to the client */
         if (rc == -EREMOTE) {
                 LASSERT(lustre_handle_is_used(&lhc->mlh_reg_lh));
                 rep->lock_policy_res2 = 0;
-                RETURN(mdt_intent_lock_replace(info, lockp, NULL, lhc, flags));
+                rc = mdt_intent_lock_replace(info, lockp, NULL, lhc, flags);
+                GOTO(out, rc);
         }
         rep->lock_policy_res2 = clear_serious(rc);
 
         lhc->mlh_reg_lh.cookie = 0ull;
-        RETURN(ELDLM_LOCK_ABORTED);
+        rc = ELDLM_LOCK_ABORTED;
+        EXIT;
+out:
+        mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                             LPROC_MDT_INTENT_REINT);
+        return rc;
 }
 
 static int mdt_intent_code(long itcode)

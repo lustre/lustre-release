@@ -728,10 +728,12 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         int                      created = 0;
         ENTRY;
 
+        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
+                               LPROC_MDT_REINT_OPEN);
+        
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PAUSE_OPEN | OBD_FAIL_ONCE,
                          (obd_timeout + 1) / 4);
 
-        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time, LPROC_MDT_REINT_OPEN);
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
