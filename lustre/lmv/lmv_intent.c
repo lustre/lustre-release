@@ -207,6 +207,7 @@ repeat:
         obj = lmv_obj_grab(obd, &rpid);
         if (obj) {
                 int mea_idx;
+                
                 /*
                  * Directory is already split, so we have to forward request to
                  * the right MDS.
@@ -229,6 +230,16 @@ repeat:
         
         sop_data->op_fid1 = rpid;
 
+        if (it->it_op & IT_CREAT) {
+                /* 
+                 * For open with IT_CREATE and for IT_CREATE cases allocate new
+                 * fid and setup FLD for it.
+                 */
+                rc = lmv_fid_alloc(exp, &sop_data->op_fid2, sop_data);
+                if (rc)
+                        GOTO(out_free_sop_data, rc);
+        }
+        
         rc = md_intent_lock(tgt_exp, sop_data, lmm, lmmsize, it, flags,
                             reqp, cb_blocking, extra_lock_flags);
 
@@ -239,6 +250,7 @@ repeat:
                 ptlrpc_req_finished(*reqp);
                 *reqp = NULL;
                 it->d.lustre.it_data = 0;
+                
                 /*
                  * Directory got split. Time to update local object and repeat
                  * the request with proper MDS.

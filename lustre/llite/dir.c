@@ -293,7 +293,8 @@ static struct page *ll_get_dir_page(struct inode *dir, __u32 hash, int exact,
                 struct ptlrpc_request *request;
                 struct md_op_data *op_data;
 
-                op_data = ll_prep_md_op_data(NULL, dir, NULL, NULL, 0, 0);
+                op_data = ll_prep_md_op_data(NULL, dir, NULL, NULL, 0, 0, 
+                                             LUSTRE_OPC_ANY);
                 if (op_data == NULL)
                         return ERR_PTR(-ENOMEM);
 
@@ -606,7 +607,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         lustre_swab_lov_user_md(&lum);
 
                 /* swabbing is done in lov_setstripe() on server side */
-                op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0);
+                op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+                                             LUSTRE_OPC_ANY);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
                 rc = md_setattr(sbi->ll_md_exp, op_data, &lum,

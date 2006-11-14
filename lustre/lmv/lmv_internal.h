@@ -141,6 +141,8 @@ int lmv_fld_lookup(struct lmv_obd *lmv, const struct lu_fid *fid,
                    mdsno_t *mds);
 int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
                     mdsno_t mds);
+int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
+                  struct md_op_data *op_data);
 int lmv_alloc_slave_fids(struct obd_device *obd, struct lu_fid *pid,
                          struct md_op_data *op, struct lu_fid *fid);
 

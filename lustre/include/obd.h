@@ -707,18 +707,6 @@ struct niobuf_local {
         int rc;
 };
 
-#define LUSTRE_OPC_MKDIR     (1 << 0)
-#define LUSTRE_OPC_SYMLINK   (1 << 1)
-#define LUSTRE_OPC_MKNOD     (1 << 2)
-#define LUSTRE_OPC_CREATE    (1 << 3)
-
-struct lu_placement_hint {
-        struct qstr   *ph_pname;
-        struct lu_fid *ph_pfid;
-        struct qstr   *ph_cname;
-        int            ph_opc;
-};
-
 #define LUSTRE_FLD_NAME         "fld"
 #define LUSTRE_SEQ_NAME         "seq"
 
@@ -1022,13 +1010,18 @@ struct obd_ops {
                            struct obd_connect_data *ocd);
         int (*o_disconnect)(struct obd_export *exp);
 
-        /* maybe later these should be moved into separate fid_ops */
+        /* Initialize/finalize fids infrastructure. */
         int (*o_fid_init)(struct obd_export *exp);
         int (*o_fid_fini)(struct obd_export *exp);
 
+        /* Allocate new fid according to passed @hint. */
         int (*o_fid_alloc)(struct obd_export *exp, struct lu_fid *fid,
-                           struct lu_placement_hint *hint);
+                           struct md_op_data *op_data);
 
+        /* 
+         * Object with @fid is getting deleted, we may want to do something
+         * about this.
+         */
         int (*o_fid_delete)(struct obd_export *exp, const struct lu_fid *fid);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,

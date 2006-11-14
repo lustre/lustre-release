@@ -711,6 +711,15 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
          * this and use the request from revalidate.  In this case, revalidate
          * never dropped its reference, so the refcounts are all OK */
         if (!it_disposition(it, DISP_ENQ_COMPLETE)) {
+                /* For case if upper layer did not alloc fid, do it now. */
+                if (!fid_is_sane(&op_data->op_fid2) && it->it_op & IT_CREAT) {
+                        rc = mdc_fid_alloc(exp, &op_data->op_fid2, op_data);
+                        if (rc < 0) {
+                                CERROR("Can't alloc new fid, rc %d\n", rc);
+                                RETURN(rc);
+                        }
+                }
+                
                 rc = mdc_enqueue(exp, LDLM_IBITS, it, it_to_lock_mode(it),
                                  op_data, &lockh, lmm, lmmsize,
                                  ldlm_completion_ast, cb_blocking, NULL,
@@ -718,8 +727,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                 if (rc < 0)
                         RETURN(rc);
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
-        } else if (!fid_is_sane(&op_data->op_fid2) ||
-                        !(it->it_flags & O_CHECK_STALE)) {
+        } else if (!fid_is_sane(&op_data->op_fid2) || !(it->it_flags & O_CHECK_STALE)) {
                 /* DISP_ENQ_COMPLETE set means there is extra reference on
                  * request referenced from this intent, saved for subsequent
                  * lookup.  This path is executed when we proceed to this

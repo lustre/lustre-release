@@ -230,13 +230,20 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         }
         sbi->ll_md_exp = class_conn2export(&md_conn);
 
+        err = obd_fid_init(sbi->ll_md_exp);
+        if (err) {
+                CERROR("Can't init metadata layer FID infrastructure, "
+                       "rc %d\n", err);
+                GOTO(out_md, err);
+        }
+
         err = obd_statfs(obd, &osfs, cfs_time_current_64() - HZ);
         if (err)
-                GOTO(out_md, err);
+                GOTO(out_md_fid, err);
 
         size = sizeof(*data);
-        err = obd_get_info(sbi->ll_md_exp, strlen(KEY_CONN_DATA), KEY_CONN_DATA,
-                           &size, data);
+        err = obd_get_info(sbi->ll_md_exp, strlen(KEY_CONN_DATA),
+                           KEY_CONN_DATA,  &size, data);
         if (err) {
                 CERROR("Get connect data failed: %d \n", err);
                 GOTO(out_md, err);
@@ -316,7 +323,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         obd = class_name2obd(dt);
         if (!obd) {
                 CERROR("DT %s: not setup or attached\n", dt);
-                GOTO(out_md, err = -ENODEV);
+                GOTO(out_md_fid, err = -ENODEV);
         }
 
         data->ocd_connect_flags = OBD_CONNECT_GRANT | OBD_CONNECT_VERSION |
@@ -337,14 +344,21 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 LCONSOLE_ERROR("An OST (dt %s) is performing recovery, of which this"
                                " client is not a part.  Please wait for recovery to "
                                "complete, abort, or time out.\n", dt);
-                GOTO(out, err);
+                GOTO(out_md_fid, err);
         } else if (err) {
-                CERROR("cannot connect to %s: rc = %d\n", dt, err);
-                GOTO(out_md, err);
+                CERROR("Cannot connect to %s: rc = %d\n", dt, err);
+                GOTO(out_md_fid, err);
         }
 
         sbi->ll_dt_exp = class_conn2export(&dt_conn);
 
+        err = obd_fid_init(sbi->ll_dt_exp);
+        if (err) {
+                CERROR("Can't init data layer FID infrastructure, "
+                       "rc %d\n", err);
+                GOTO(out_dt, err);
+        }
+        
         spin_lock(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
         spin_unlock(&sbi->ll_lco.lco_lock);
@@ -357,7 +371,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 LCONSOLE_ERROR("There are no OST's in this filesystem. "
                                "There must be at least one active OST for "
                                "a client to start.\n");
-                GOTO(out_dt, err);
+                GOTO(out_dt_fid, err);
         }
 
         if (!ll_async_page_slab) {
@@ -367,13 +381,13 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                                                        ll_async_page_slab_size,
                                                        0, 0, NULL, NULL);
                 if (!ll_async_page_slab)
-                        GOTO(out_dt, err = -ENOMEM);
+                        GOTO(out_dt_fid, err = -ENOMEM);
         }
 
         err = md_getstatus(sbi->ll_md_exp, &rootfid, &oc);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_dt, err);
+                GOTO(out_dt_fid, err);
         }
         CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&rootfid));
         sbi->ll_root_fid = rootfid;
@@ -396,7 +410,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 free_capa(oc);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
-                GOTO(out_dt, err);
+                GOTO(out_dt_fid, err);
         }
 
         err = md_get_lustre_md(sbi->ll_md_exp, request, 
@@ -405,7 +419,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         if (err) {
                 CERROR("failed to understand root inode md: rc = %d\n", err);
                 ptlrpc_req_finished (request);
-                GOTO(out_dt, err);
+                GOTO(out_dt_fid, err);
         }
 
         LASSERT(fid_is_sane(&sbi->ll_root_fid));
@@ -438,13 +452,16 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 OBD_FREE(data, sizeof(*data));
         sb->s_root->d_op = &ll_d_root_ops;
         RETURN(err);
-
 out_root:
         if (root)
                 iput(root);
+out_dt_fid:
+        obd_fid_fini(sbi->ll_dt_exp);
 out_dt:
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
+out_md_fid:
+        obd_fid_fini(sbi->ll_md_exp);
 out_md:
         obd_disconnect(sbi->ll_md_exp);
         sbi->ll_md_exp = NULL;
@@ -452,7 +469,7 @@ out:
         if (data != NULL)
                 OBD_FREE_PTR(data);
         lprocfs_unregister_mountpoint(sbi);
-        RETURN(err);
+        return err;
 }
 
 int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
@@ -637,11 +654,14 @@ void client_common_put_super(struct super_block *sb)
         prune_deathrow(sbi, 0);
 
         list_del(&sbi->ll_conn_chain);
+        
+        obd_fid_fini(sbi->ll_dt_exp);
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
 
         lprocfs_unregister_mountpoint(sbi);
 
+        obd_fid_fini(sbi->ll_md_exp);
         obd_disconnect(sbi->ll_md_exp);
         sbi->ll_md_exp = NULL;
 
@@ -1254,8 +1274,10 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data)
         int rc;
         ENTRY;
         
-        op_data = ll_prep_md_op_data(op_data, inode, NULL, NULL, 0, 0);
-        rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0, &request);
+        op_data = ll_prep_md_op_data(op_data, inode, NULL, NULL, 0, 0, 
+                                     LUSTRE_OPC_ANY);
+        rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0, 
+                        &request);
         if (rc) {
                 ptlrpc_req_finished(request);
                 if (rc == -ENOENT) {
@@ -1942,7 +1964,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 if (!oinfo.oi_oa)
                         RETURN(-ENOMEM);
 
-                op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0);
+                op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+                                             LUSTRE_OPC_ANY);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
                 
@@ -2236,7 +2259,8 @@ int ll_process_config(struct lustre_cfg *lcfg)
 /* this function prepares md_op_data hint for passing ot down to MD stack. */
 struct md_op_data *
 ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
-                   struct inode *i2, const char *name, int namelen, int mode)
+                   struct inode *i2, const char *name, int namelen,
+                   int mode, __u32 opc)
 {
         LASSERT(i1 != NULL);
 
@@ -2250,11 +2274,11 @@ ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
         op_data->op_fid1 = *ll_inode2fid(i1);
         op_data->op_capa1 = ll_mdscapa_get(i1);
 
-        /* @i2 may be NULL. In this case caller itself has to initialize ->fid2
-         * if needed. */
         if (i2) {
                 op_data->op_fid2 = *ll_inode2fid(i2);
                 op_data->op_capa2 = ll_mdscapa_get(i2);
+        } else {
+                fid_zero(&op_data->op_fid2);
         }
 
         op_data->op_name = name;
@@ -2265,6 +2289,7 @@ ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
         op_data->op_fsgid = current->fsgid;
         op_data->op_cap = current->cap_effective;
         op_data->op_bias = MDS_CHECK_SPLIT;
+        op_data->op_opc = opc;
 
         return op_data;
 }

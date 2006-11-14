@@ -578,7 +578,7 @@ int ll_ioctl_setfacl(struct inode *inode, struct rmtacl_ioctl_data *ioc);
 struct md_op_data *ll_prep_md_op_data(struct md_op_data *op_data,
                                       struct inode *i1, struct inode *i2,
                                       const char *name, int namelen,
-                                      int mode);
+                                      int mode, __u32 opc);
 void ll_finish_md_op_data(struct md_op_data *op_data);
 
 /* llite/llite_nfs.c */
@@ -727,12 +727,6 @@ int ll_update_remote_perm(struct inode *inode, struct mdt_remote_perm *perm);
 int lustre_check_remote_perm(struct inode *inode, int mask);
 
 /* llite/llite_fid.c */
-int ll_fid_md_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
-                    struct lu_placement_hint *hint);
-
-int ll_fid_dt_alloc(struct ll_sb_info *sbi, struct lu_fid *fid,
-                    struct lu_placement_hint *hint);
-
 ino_t ll_fid_build_ino(struct ll_sb_info *sbi, struct lu_fid *fid);
 
 /* llite/llite_capa.c */

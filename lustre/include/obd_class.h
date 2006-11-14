@@ -780,7 +780,7 @@ static inline int obd_fid_init(struct obd_export *exp)
         ENTRY;
 
         if (OBP(exp->exp_obd, fid_init) == NULL)
-                RETURN(-ENOTSUPP);
+                RETURN(0);
 
         OBD_COUNTER_INCREMENT(exp->exp_obd, fid_init);
 
@@ -794,7 +794,7 @@ static inline int obd_fid_fini(struct obd_export *exp)
         ENTRY;
 
         if (OBP(exp->exp_obd, fid_fini) == NULL)
-                RETURN(-ENOTSUPP);
+                RETURN(0);
 
         OBD_COUNTER_INCREMENT(exp->exp_obd, fid_fini);
 
@@ -804,7 +804,7 @@ static inline int obd_fid_fini(struct obd_export *exp)
 
 static inline int obd_fid_alloc(struct obd_export *exp,
                                 struct lu_fid *fid,
-                                struct lu_placement_hint *hint)
+                                struct md_op_data *op_data)
 {
         int rc;
         ENTRY;
@@ -814,7 +814,7 @@ static inline int obd_fid_alloc(struct obd_export *exp,
 
         OBD_COUNTER_INCREMENT(exp->exp_obd, fid_alloc);
 
-        rc = OBP(exp->exp_obd, fid_alloc)(exp, fid, hint);
+        rc = OBP(exp->exp_obd, fid_alloc)(exp, fid, op_data);
         RETURN(rc);
 }
 

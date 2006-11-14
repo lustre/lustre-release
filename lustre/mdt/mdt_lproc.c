@@ -54,6 +54,95 @@
 #include <lprocfs_status.h>
 #include "mdt_internal.h"
 
+static int mdt_procfs_init_stats(struct mdt_device *mdt, int num_stats)
+{
+        struct lprocfs_stats *stats;
+        int rc;
+        ENTRY;
+        
+        stats = lprocfs_alloc_stats(num_stats);
+        if (!stats)
+                RETURN(-ENOMEM);
+
+        rc = lprocfs_register_stats(mdt->mdt_proc_entry, "stats", stats);
+        if (rc != 0)
+                GOTO(cleanup, rc);
+
+        mdt->mdt_stats = stats;
+
+        lprocfs_counter_init(mdt->mdt_stats, LPROC_MDT_REINT_CREATE,
+                             LPROCFS_CNTR_AVGMINMAX, "reint_create", "time");
+        lprocfs_counter_init(mdt->mdt_stats, LPROC_MDT_REINT_OPEN,
+                             LPROCFS_CNTR_AVGMINMAX, "reint_open", "time");
+        lprocfs_counter_init(mdt->mdt_stats, LPROC_MDT_REINT_LINK,
+                             LPROCFS_CNTR_AVGMINMAX, "reint_link", "time");
+        lprocfs_counter_init(mdt->mdt_stats, LPROC_MDT_REINT_UNLINK,
+                             LPROCFS_CNTR_AVGMINMAX, "reint_unlink", "time");
+        lprocfs_counter_init(mdt->mdt_stats, LPROC_MDT_REINT_SETATTR,
+                             LPROCFS_CNTR_AVGMINMAX, "reint_setattr", "time");
+        lprocfs_counter_init(mdt->mdt_stats, LPROC_MDT_REINT_RENAME,
+                             LPROCFS_CNTR_AVGMINMAX, "reint_rename", "time");
+        lprocfs_counter_init(mdt->mdt_stats, LPROC_MDT_GETATTR,
+                             LPROCFS_CNTR_AVGMINMAX, "getattr", "time");
+        lprocfs_counter_init(mdt->mdt_stats, LPROC_MDT_GETATTR_NAME,
+                             LPROCFS_CNTR_AVGMINMAX, "getattr_name", "time");
+        lprocfs_counter_init(mdt->mdt_stats, LPROC_MDT_INTENT_GETATTR,
+                             LPROCFS_CNTR_AVGMINMAX, "intent_getattr", "time");
+        lprocfs_counter_init(mdt->mdt_stats, LPROC_MDT_INTENT_REINT,
+                             LPROCFS_CNTR_AVGMINMAX, "intent_reint", "time");
+        EXIT;
+cleanup:
+        if (rc) {
+                lprocfs_free_stats(stats);
+                mdt->mdt_stats = NULL;
+        }
+        return rc;
+}
+
+int mdt_procfs_init(struct mdt_device *mdt, const char *name)
+{
+        struct lu_device    *ld = &mdt->mdt_md_dev.md_lu_dev;
+        int                  rc;
+        ENTRY;
+
+        LASSERT(name != NULL);
+        mdt->mdt_proc_entry = ld->ld_obd->obd_proc_entry;
+        LASSERT(mdt->mdt_proc_entry != NULL);
+        
+        rc = mdt_procfs_init_stats(mdt, LPROC_MDT_LAST);
+	return rc;
+}
+
+int mdt_procfs_fini(struct mdt_device *mdt)
+{
+        if (mdt->mdt_stats) {
+                lprocfs_free_stats(mdt->mdt_stats);
+                mdt->mdt_stats = NULL;
+        }
+        if (mdt->mdt_proc_entry)
+                 mdt->mdt_proc_entry = NULL;
+        RETURN(0);
+}
+
+void mdt_lprocfs_time_start(struct mdt_device *mdt,
+			    struct timeval *start, int op)
+{
+        do_gettimeofday(start);
+}
+
+void mdt_lprocfs_time_end(struct mdt_device *mdt,
+			  struct timeval *start, int op)
+{
+        struct timeval end;
+        long timediff;
+
+        do_gettimeofday(&end);
+        timediff = cfs_timeval_sub(&end, start, NULL);
+
+        if (mdt->mdt_stats)
+                lprocfs_counter_add(mdt->mdt_stats, op, timediff);
+        return;
+}
 
 static int lprocfs_rd_identity_expire(char *page, char **start, off_t off,
                                       int count, int *eof, void *data)
@@ -469,8 +558,9 @@ static inline void remove_newline(char *str)
                 str[len - 1] = '\0';
 }
 
-/* FIXME: this macro is copied from lnet/libcfs/nidstring.c */
+/* XXX: This macro is copied from lnet/libcfs/nidstring.c */
 #define LNET_NIDSTR_SIZE   32      /* size of each one (see below for usage) */
+
 static void do_process_nosquash_nids(struct mdt_device *m, char *buf)
 {
         struct rootsquash_info *rsi = m->mdt_rootsquash_info;

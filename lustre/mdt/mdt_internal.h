@@ -188,6 +188,9 @@ struct mdt_device {
         struct ptlrpc_thread       mdt_ck_thread;
         struct lustre_capa_key     mdt_capa_keys[2];
         unsigned int               mdt_capa_conf:1;
+
+        cfs_proc_dir_entry_t      *mdt_proc_entry;
+        struct lprocfs_stats      *mdt_stats;
 };
 
 /*XXX copied from mds_internal.h */
@@ -387,6 +390,9 @@ struct mdt_thread_info {
         struct txn_param           mti_txn_param;
         struct lu_buf              mti_buf;
         struct lustre_capa_key     mti_capa_key;
+
+        /* Time for stats */
+        struct timeval             mti_time;
 };
 /*
  * Info allocated per-transaction.
@@ -703,9 +709,31 @@ static inline ldlm_mode_t mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
         return mdt_dlm_lock_modes[mode];
 }
 
-/*
- * Capability
- */
+/* lprocfs stuff */
+int mdt_procfs_init(struct mdt_device *mdt, const char *name);
+int mdt_procfs_fini(struct mdt_device *mdt);
+
+void mdt_lprocfs_time_start(struct mdt_device *mdt,
+			    struct timeval *start, int op);
+
+void mdt_lprocfs_time_end(struct mdt_device *mdt,
+			  struct timeval *start, int op);
+
+enum {
+        LPROC_MDT_REINT_CREATE = 0,
+        LPROC_MDT_REINT_OPEN,
+        LPROC_MDT_REINT_LINK,
+        LPROC_MDT_REINT_UNLINK,
+        LPROC_MDT_REINT_RENAME,
+        LPROC_MDT_REINT_SETATTR,
+        LPROC_MDT_GETATTR,
+        LPROC_MDT_GETATTR_NAME,
+        LPROC_MDT_INTENT_GETATTR,
+        LPROC_MDT_INTENT_REINT,
+        LPROC_MDT_LAST
+};
+
+/* Capability */
 int mdt_ck_thread_start(struct mdt_device *mdt);
 void mdt_ck_thread_stop(struct mdt_device *mdt);
 void mdt_ck_timer_callback(unsigned long castmeharder);

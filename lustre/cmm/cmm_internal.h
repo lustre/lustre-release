@@ -224,6 +224,7 @@ enum {
         LPROC_CMM_SPLIT_CHECK = 0,
         LPROC_CMM_SPLIT,
         LPROC_CMM_LOOKUP,
+        LPROC_CMM_CREATE,
         LPROC_CMM_LAST
 };
 

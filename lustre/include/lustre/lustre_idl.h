@@ -634,6 +634,14 @@ struct obdo {
 
 extern void lustre_swab_obdo (struct obdo *o);
 
+enum {
+        LUSTRE_OPC_MKDIR    = (1 << 0),
+        LUSTRE_OPC_SYMLINK  = (1 << 1),
+        LUSTRE_OPC_MKNOD    = (1 << 2),
+        LUSTRE_OPC_CREATE   = (1 << 3),
+        LUSTRE_OPC_ANY      = (1 << 4)
+};
+
 struct md_op_data {
         struct lu_fid           op_fid1;
         struct lu_fid           op_fid2;
@@ -668,6 +676,9 @@ struct md_op_data {
 
         /* Various operation flags. */
         __u32                   op_bias;
+
+        /* Operation type */
+        __u32                   op_opc;
 };
 
 #define MDS_MODE_DONT_LOCK (1 << 30)

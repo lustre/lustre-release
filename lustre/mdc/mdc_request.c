@@ -1381,7 +1381,7 @@ static int mdc_fid_init(struct obd_export *exp)
         snprintf(prefix, MAX_OBD_NAME + 5, "srv-%s",
                  exp->exp_obd->obd_name);
 
-        /* init client side sequence-manager */
+        /* Init client side sequence-manager */
         rc = seq_client_init(cli->cl_seq, exp, 
                              LUSTRE_SEQ_METADATA,
                              prefix, NULL);
@@ -1390,7 +1390,6 @@ static int mdc_fid_init(struct obd_export *exp)
                 GOTO(out_free_seq, rc);
 
         RETURN(rc);
-
 out_free_seq:
         OBD_FREE_PTR(cli->cl_seq);
         cli->cl_seq = NULL;
@@ -1411,12 +1410,11 @@ static int mdc_fid_fini(struct obd_export *exp)
         RETURN(0);
 }
 
-static int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
-                         struct lu_placement_hint *hint)
+int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
+                  struct md_op_data *op_data)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct lu_client_seq *seq = cli->cl_seq;
-
         ENTRY;
         RETURN(seq_client_alloc_fid(seq, fid));
 }

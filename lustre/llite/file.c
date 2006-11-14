@@ -328,7 +328,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                 itp->it_flags |= MDS_OPEN_LOCK;
 
         op_data  = ll_prep_md_op_data(NULL, parent->d_inode, NULL, name, len,
-                                      O_RDWR);
+                                      O_RDWR, LUSTRE_OPC_ANY);
         if (op_data == NULL)
                 RETURN(-ENOMEM);
 
@@ -1881,7 +1881,8 @@ static int join_file(struct inode *head_inode, struct file *head_filp,
 
         op_data = ll_prep_md_op_data(NULL, head_inode, tail_parent,
                                      tail_dentry->d_name.name,
-                                     tail_dentry->d_name.len, 0);
+                                     tail_dentry->d_name.len, 0,
+                                     LUSTRE_OPC_ANY);
         if (op_data == NULL)
                 RETURN(-ENOMEM);
 
@@ -2416,7 +2417,8 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 
                 /* Call getattr by fid, so do not provide name at all. */
                 op_data = ll_prep_md_op_data(NULL, dentry->d_parent->d_inode,
-                                             dentry->d_inode, NULL, 0, 0);
+                                             dentry->d_inode, NULL, 0, 0,
+                                             LUSTRE_OPC_ANY);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
                 it->it_flags |= O_CHECK_STALE;

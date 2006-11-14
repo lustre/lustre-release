@@ -712,25 +712,26 @@ static int mdt_cross_open(struct mdt_thread_info* info,
 
 int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 {
-        struct mdt_device      *mdt = info->mti_mdt;
-        struct ptlrpc_request  *req = mdt_info_req(info);
-        struct mdt_object      *parent;
-        struct mdt_object      *child;
-        struct mdt_lock_handle *lh;
-        struct ldlm_reply      *ldlm_rep;
-        struct mdt_body        *repbody;
-        struct lu_fid          *child_fid = &info->mti_tmp_fid1;
-        struct md_attr         *ma = &info->mti_attr;
-        struct lu_attr         *la = &ma->ma_attr;
-        __u32                   create_flags = info->mti_spec.sp_cr_flags;
+        struct mdt_device       *mdt = info->mti_mdt;
+        struct ptlrpc_request   *req = mdt_info_req(info);
+        struct mdt_object       *parent;
+        struct mdt_object       *child;
+        struct mdt_lock_handle  *lh;
+        struct ldlm_reply       *ldlm_rep;
+        struct mdt_body         *repbody;
+        struct lu_fid           *child_fid = &info->mti_tmp_fid1;
+        struct md_attr          *ma = &info->mti_attr;
+        struct lu_attr          *la = &ma->ma_attr;
+        __u32                    create_flags = info->mti_spec.sp_cr_flags;
         struct mdt_reint_record *rr = &info->mti_rr;
-        int                     result;
-        int                     created = 0;
+        int                      result;
+        int                      created = 0;
         ENTRY;
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PAUSE_OPEN | OBD_FAIL_ONCE,
                          (obd_timeout + 1) / 4);
 
+        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time, LPROC_MDT_REINT_OPEN);
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
 
         ma->ma_lmm = req_capsule_server_get(&info->mti_pill, &RMF_MDT_MD);
@@ -935,6 +936,8 @@ out:
         mdt_shrink_reply(info, DLM_REPLY_REC_OFF + 1, 1, 1);
         if (result)
                 lustre_msg_set_transno(req->rq_repmsg, 0);
+        mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                             LPROC_MDT_REINT_OPEN);
         return result;
 }
 

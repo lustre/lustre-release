@@ -276,7 +276,8 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
         }
 
         llu_prep_md_op_data(&op_data, pnode->p_parent->p_base->pb_ino,
-                            pb->pb_ino, pb->pb_name.name, pb->pb_name.len,0);
+                            pb->pb_ino, pb->pb_name.name, pb->pb_name.len,
+                            0, LUSTRE_OPC_ANY);
 
         rc = md_intent_lock(exp, &op_data, NULL, 0, it, flags,
                             &req, llu_md_blocking_ast,
@@ -430,6 +431,7 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
+        __u32 opc;
         int rc;
         ENTRY;
 
@@ -444,23 +446,17 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         icbd.icbd_child = pnode;
         icbd.icbd_parent = parent;
 
-        llu_prep_md_op_data(&op_data, parent, NULL,
-                            pnode->p_base->pb_name.name,
-                            pnode->p_base->pb_name.len, flags);
-
-        /* allocate new fid for child */
         if (it->it_op & IT_CREAT || 
             (it->it_op & IT_OPEN && it->it_create_mode & O_CREAT)) {
-                struct lu_placement_hint hint = { .ph_pname = NULL,
-                                                  .ph_cname = &pnode->p_base->pb_name,
-                                                  .ph_opc = LUSTRE_OPC_CREATE };
-                
-                rc = llu_fid_md_alloc(llu_i2sbi(parent), &op_data.op_fid2, &hint);
-                if (rc) {
-                        CERROR("can't allocate new fid, rc %d\n", rc);
-                        LBUG();
-                }
+                opc = LUSTRE_OPC_CREATE;
+        } else {
+                opc = LUSTRE_OPC_ANY;
         }
+        
+        llu_prep_md_op_data(&op_data, parent, NULL,
+                            pnode->p_base->pb_name.name,
+                            pnode->p_base->pb_name.len, flags, opc);
+
         rc = md_intent_lock(llu_i2mdcexp(parent), &op_data, NULL, 0, it,
                             flags, &req, llu_md_blocking_ast,
                             LDLM_FL_CANCEL_ON_BLOCK);

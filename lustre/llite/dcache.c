@@ -397,31 +397,14 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         parent = de->d_parent->d_inode;
 
         if (it->it_op & IT_CREAT) {
-                /* 
-                 * Allocate new fid for case of create or open(O_CREAT). In both
-                 * cases it->it_op will contain IT_CREAT. In case of
-                 * open(O_CREAT) agains existing file, fid allocating is not
-                 * needed, but this is not known until server returns
-                 * anything. Well, in this case new allocated fid is lost. But
-                 * this is not big deal, we have 64bit fids. --umka
-                 */
-                struct lu_placement_hint hint = { .ph_pname = NULL,
-                                                  .ph_pfid = ll_inode2fid(parent),
-                                                  .ph_cname = &de->d_name,
-                                                  .ph_opc = LUSTRE_OPC_CREATE };
-
-                op_data = ll_prep_md_op_data(NULL, parent, NULL,
-                                            de->d_name.name, de->d_name.len, 0);
+                op_data = ll_prep_md_op_data(NULL, parent, NULL, de->d_name.name,
+                                             de->d_name.len, 0, LUSTRE_OPC_CREATE);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
-                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->op_fid2, &hint);
-                if (rc) {
-                        ll_finish_md_op_data(op_data);
-                        RETURN(rc);
-                }
         } else {
                 op_data = ll_prep_md_op_data(NULL, parent, de->d_inode,
-                                             de->d_name.name, de->d_name.len, 0);
+                                             de->d_name.name, de->d_name.len,
+                                             0, LUSTRE_OPC_ANY);
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
         }
@@ -574,28 +557,13 @@ do_lookup:
                 it = &lookup_it;
         }
         
-        /* do real lookup here */
-        op_data = ll_prep_md_op_data(NULL, parent, NULL,
-                                     de->d_name.name, de->d_name.len, 0);
+        /* Do real lookup here. */
+        op_data = ll_prep_md_op_data(NULL, parent, NULL, de->d_name.name,
+                                     de->d_name.len, 0, (it->it_op & IT_CREAT ?
+                                                         LUSTRE_OPC_CREATE :
+                                                         LUSTRE_OPC_ANY));
         if (op_data == NULL)
                 RETURN(-ENOMEM);
-        
-        if (it->it_op & IT_CREAT) {
-                /* 
-                 * Allocate new fid for case of create or open with O_CREAT. In
-                 * both cases it->it_op will contain IT_CREAT.
-                 */
-                struct lu_placement_hint hint = { .ph_pname = NULL,
-                                                  .ph_pfid = ll_inode2fid(parent),
-                                                  .ph_cname = &de->d_name,
-                                                  .ph_opc = LUSTRE_OPC_CREATE };
-
-                rc = ll_fid_md_alloc(ll_i2sbi(parent), &op_data->op_fid2, &hint);
-                if (rc) {
-                        ll_finish_md_op_data(op_data);
-                        RETURN(rc);
-                }
-        }
         
         rc = md_intent_lock(exp, op_data, NULL, 0,  it, 0, &req,
                             ll_md_blocking_ast, 0);

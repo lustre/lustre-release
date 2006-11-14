@@ -78,7 +78,7 @@ struct lu_object *cmm_object_alloc(const struct lu_env *env,
         const struct lu_fid *fid = &loh->loh_fid;
         struct lu_object  *lo = NULL;
         struct cmm_device *cd;
-        mdsno_t mdsnum;
+        mdsno_t mds;
         int rc = 0;
 
         ENTRY;
@@ -86,7 +86,7 @@ struct lu_object *cmm_object_alloc(const struct lu_env *env,
         cd = lu2cmm_dev(ld);
         if (cd->cmm_flags & CMM_INITIALIZED) {
                 /* get object location */
-                rc = cmm_fld_lookup(lu2cmm_dev(ld), fid, &mdsnum, env);
+                rc = cmm_fld_lookup(lu2cmm_dev(ld), fid, &mds, env);
                 if (rc)
                         RETURN(NULL);
         } else
@@ -95,10 +95,10 @@ struct lu_object *cmm_object_alloc(const struct lu_env *env,
                  * as part of early bootstrap procedure (it is /ROOT, or /fld,
                  * etc.). Such object *has* to be local.
                  */
-                mdsnum = cd->cmm_local_num;
+                mds = cd->cmm_local_num;
 
         /* select the proper set of operations based on object location */
-        if (mdsnum == cd->cmm_local_num) {
+        if (mds == cd->cmm_local_num) {
                 struct cml_object *clo;
 
                 OBD_ALLOC_PTR(clo);
@@ -119,7 +119,7 @@ struct lu_object *cmm_object_alloc(const struct lu_env *env,
                         cro->cmm_obj.cmo_obj.mo_ops = &cmr_mo_ops;
                         cro->cmm_obj.cmo_obj.mo_dir_ops = &cmr_dir_ops;
                         lo->lo_ops = &cmr_obj_ops;
-                        cro->cmo_num = mdsnum;
+                        cro->cmo_num = mds;
                 }
         }
         RETURN(lo);
@@ -389,11 +389,14 @@ static int cml_create(const struct lu_env *env, struct md_object *mo_p,
                       const char *name, struct md_object *mo_c,
                       struct md_op_spec *spec, struct md_attr *ma)
 {
+        struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo_p));
+        struct timeval start;
         int rc;
         ENTRY;
 
-#ifdef HAVE_SPLIT_SUPPORT
+        cmm_lprocfs_time_start(cmm, &start, LPROC_CMM_CREATE);
         
+#ifdef HAVE_SPLIT_SUPPORT
         /* Lock mode always should be sane. */
         LASSERT(spec->sp_cr_mode != MDL_MINMODE);
 
@@ -401,15 +404,17 @@ static int cml_create(const struct lu_env *env, struct md_object *mo_p,
          * Sigh... This is long story. MDT may have race with detecting if split
          * is possible in cmm. We know this race and let it live, because
          * getting it rid (with some sem or spinlock) will also mean that
-         * PDIROPS for create will not work, what is really bad for performance
-         * and makes no sense. So, we better allow the race but split dir only
-         * if some of concurrent threads takes EX lock. So that, say, two
-         * concurrent threads may have different lock modes on directory (CW and
-         * EX) and not first one which comes here should split dir, but only
-         * that which has EX lock. And we do not care that in this case, split
-         * will happen a bit later may be (when dir size will not be mandatory
-         * 64K, but may be larger). So that, we allow concurrent creates and
-         * protect split by EX lock.
+         * PDIROPS for create will not work because we kill parallel work, what
+         * is really bad for performance and makes no sense having PDIROPS. So,
+         * we better allow the race to live, but split dir only if some of
+         * concurrent threads takes EX lock, not matter which one. So that, say,
+         * two concurrent threads may have different lock modes on directory (CW
+         * and EX) and not first one which comes here and see that split is
+         * possible should split the dir, but only that one which has EX
+         * lock. And we do not care that in this case, split may happen a bit
+         * later (when dir size will not be necessarily 64K, but may be a bit
+         * larger). So that, we allow concurrent creates and protect split by EX
+         * lock.
          */
         if (spec->sp_cr_mode == MDL_EX) {
                 /* 
@@ -424,7 +429,7 @@ static int cml_create(const struct lu_env *env, struct md_object *mo_p,
                          * -ERESTART or some split error is returned, we can't
                          * proceed with create.
                          */
-                        RETURN(rc);
+                        GOTO(out, rc);
         }
 
         if (spec != NULL && spec->sp_ck_split) {
@@ -435,14 +440,17 @@ static int cml_create(const struct lu_env *env, struct md_object *mo_p,
                  */
                 rc = cmm_split_check(env, mo_p, name);
                 if (rc)
-                        RETURN(rc);
+                        GOTO(out, rc);
         }
 #endif
 
         rc = mdo_create(env, md_object_next(mo_p), name, md_object_next(mo_c),
                         spec, ma);
 
-        RETURN(rc);
+        EXIT;
+out:
+        cmm_lprocfs_time_end(cmm, &start, LPROC_CMM_CREATE);
+        return rc;
 }
 
 static int cml_create_data(const struct lu_env *env, struct md_object *p,
@@ -836,6 +844,7 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
         int rc;
 
         ENTRY;
+
         /* check the SGID attr */
         cmi = cmm_env_info(env);
         LASSERT(cmi);
@@ -850,7 +859,6 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
                 tmp_ma->ma_need |= MA_ACL_DEF;
         }
 #endif
-
         rc = mo_attr_get(env, md_object_next(mo_p), tmp_ma);
         if (rc)
                 RETURN(rc);
@@ -871,7 +879,7 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
         }
 #endif
 
-        /* remote object creation and local name insert */
+        /* Remote object creation and local name insert. */
         rc = mo_object_create(env, md_object_next(mo_c), spec, ma);
         if (rc == 0) {
                 rc = mdo_name_insert(env, md_object_next(mo_p),

@@ -319,6 +319,9 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         int rc;
         ENTRY;
 
+        mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
+                               LPROC_MDT_REINT_CREATE);
+        
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
                 RETURN(err_serious(-ESTALE));
 
@@ -344,6 +347,8 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         default:
                 rc = err_serious(-EOPNOTSUPP);
         }
+        mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
+                             LPROC_MDT_REINT_CREATE);
         RETURN(rc);
 }
 

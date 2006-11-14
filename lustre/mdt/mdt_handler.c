@@ -3469,6 +3469,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         mdt_seq_fini(env, m);
         mdt_seq_fini_cli(m);
         mdt_fld_fini(env, m);
+        mdt_procfs_fini(m);
         ptlrpc_lprocfs_unregister_obd(d->ld_obd);
         lprocfs_obd_cleanup(d->ld_obd);
 
@@ -3617,17 +3618,23 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         rc = lu_site_init(s, &m->mdt_md_dev.md_lu_dev);
         if (rc) {
-                CERROR("can't init lu_site, rc %d\n", rc);
+                CERROR("Can't init lu_site, rc %d\n", rc);
                 GOTO(err_free_site, rc);
         }
 
         lprocfs_init_vars(mdt, &lvars);
         rc = lprocfs_obd_setup(obd, lvars.obd_vars);
         if (rc) {
-                CERROR("can't init lprocfs, rc %d\n", rc);
+                CERROR("Can't init lprocfs, rc %d\n", rc);
                 GOTO(err_fini_site, rc);
         }
         ptlrpc_lprocfs_register_obd(obd);
+
+        rc = mdt_procfs_init(m, dev);
+        if (rc) {
+                CERROR("Can't init MDT lprocfs, rc %d\n", rc);
+                GOTO(err_fini_proc, rc);
+        }
 
         /* set server index */
         LASSERT(num);
@@ -3636,7 +3643,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         /* init the stack */
         rc = mdt_stack_init(env, m, cfg);
         if (rc) {
-                CERROR("can't init device stack, rc %d\n", rc);
+                CERROR("Can't init device stack, rc %d\n", rc);
                 GOTO(err_fini_proc, rc);
         }
 
@@ -3725,6 +3732,7 @@ err_fini_fld:
 err_fini_stack:
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 err_fini_proc:
+        mdt_procfs_fini(m);
         lprocfs_obd_cleanup(obd);
 err_fini_site:
         lu_site_fini(s);

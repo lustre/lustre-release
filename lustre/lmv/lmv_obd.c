@@ -729,19 +729,19 @@ static int lmv_fids_balanced(struct obd_device *obd)
         RETURN(1);
 }
 
-static int lmv_all_chars_policy(int count, struct qstr *name)
+static int lmv_all_chars_policy(int count, const char *name,
+                                int len)
 {
         unsigned int c = 0;
-        unsigned int len = name->len;
 
         while (len > 0)
-                c += name->name[-- len];
+                c += name[--len];
         c = c % count;
         return c;
 }
 
 static int lmv_placement_policy(struct obd_device *obd,
-                                struct lu_placement_hint *hint,
+                                struct md_op_data *op_data,
                                 mdsno_t *mds)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -758,7 +758,7 @@ static int lmv_placement_policy(struct obd_device *obd,
                  * balanced, that is all sequences have more or less equal
                  * number of objects created.
                  */
-                obj = lmv_obj_grab(obd, hint->ph_pfid);
+                obj = lmv_obj_grab(obd, &op_data->op_fid1);
                 if (obj) {
                         struct lu_fid *rpid;
                         int mea_idx;
@@ -770,27 +770,28 @@ static int lmv_placement_policy(struct obd_device *obd,
                          */
                         mea_idx = raw_name2idx(obj->lo_hashtype,
                                                obj->lo_objcount,
-                                               hint->ph_cname->name,
-                                               hint->ph_cname->len);
+                                               op_data->op_name,
+                                               op_data->op_namelen);
                         rpid = &obj->lo_inodes[mea_idx].li_fid;
                         *mds = obj->lo_inodes[mea_idx].li_mds;
                         lmv_obj_put(obj);
                         rc = 0;
 
-                        CDEBUG(D_INODE, "The obj "DFID" has been split, got "
-                               "MDS at "LPU64" by name %s\n", PFID(hint->ph_pfid),
-                               *mds, hint->ph_cname->name);
-                } else if (hint->ph_cname && (hint->ph_opc == LUSTRE_OPC_MKDIR)) {
+                        CDEBUG(D_INODE, "The obj "DFID" has been split, got MDS at "
+                               LPU64" by name %s\n", PFID(&op_data->op_fid1), *mds,
+                               op_data->op_name);
+                } else if (op_data->op_name && (op_data->op_opc == LUSTRE_OPC_MKDIR)) {
                         /* Default policy for directories. */
                         *mds = lmv_all_chars_policy(lmv->desc.ld_tgt_count,
-                                                    hint->ph_cname);
+                                                    op_data->op_name,
+                                                    op_data->op_namelen);
                         rc = 0;
                 } else {
                         /*
                          * Default policy for others is to use parent MDS.
                          * ONLY directories can be cross-ref during creation.
                          */
-                        rc = lmv_fld_lookup(lmv, hint->ph_pfid, mds);
+                        rc = lmv_fld_lookup(lmv, &op_data->op_fid1, mds);
                 }
         } else {
                 /*
@@ -838,8 +839,8 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
         RETURN(rc);
 }
 
-static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
-                         struct lu_placement_hint *hint)
+int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
+                  struct md_op_data *op_data)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -847,12 +848,13 @@ static int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
         int rc;
         ENTRY;
 
-        LASSERT(hint != NULL);
+        LASSERT(op_data != NULL);
         LASSERT(fid != NULL);
 
-        rc = lmv_placement_policy(obd, hint, &mds);
+        rc = lmv_placement_policy(obd, op_data, &mds);
         if (rc) {
-                CERROR("Can't get target for allocating fid, rc %d\n", rc);
+                CERROR("Can't get target for allocating fid, "
+                       "rc %d\n", rc);
                 RETURN(rc);
         }
 
@@ -1326,6 +1328,10 @@ repeat:
         if (IS_ERR(tgt_exp))
                 RETURN(PTR_ERR(tgt_exp));
 
+        rc = lmv_fid_alloc(exp, &op_data->op_fid2, op_data);
+        if (rc)
+                RETURN(rc);
+
         CDEBUG(D_OTHER, "CREATE '%*s' on "DFID"\n", op_data->op_namelen,
                op_data->op_name, PFID(&op_data->op_fid1));
 
@@ -1334,13 +1340,14 @@ repeat:
         if (rc == 0) {
                 if (*request == NULL)
                         RETURN(rc);
-                CDEBUG(D_OTHER, "created. "DFID"\n", PFID(&op_data->op_fid1));
+                CDEBUG(D_OTHER, "created - "DFID"\n", PFID(&op_data->op_fid1));
         } else if (rc == -ERESTART) {
                 LASSERT(*request != NULL);
                 DEBUG_REQ(D_WARNING|D_RPCTRACE, *request, 
                           "Got -ERESTART during create!\n");
                 ptlrpc_req_finished(*request);
                 *request = NULL;
+                
                 /*
                  * Directory got split. Time to update local object and repeat
                  * the request with proper MDS.
@@ -2604,9 +2611,8 @@ struct obd_ops lmv_obd_ops = {
         .o_packmd               = lmv_packmd,
         .o_unpackmd             = lmv_unpackmd,
         .o_notify               = lmv_notify,
-        .o_fid_alloc            = lmv_fid_alloc,
-        .o_fid_delete           = lmv_fid_delete,
-        .o_iocontrol            = lmv_iocontrol
+        .o_iocontrol            = lmv_iocontrol,
+        .o_fid_delete           = lmv_fid_delete
 };
 
 struct md_ops lmv_md_ops = {

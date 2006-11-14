@@ -105,6 +105,9 @@ int mdc_enqueue(struct obd_export *exp,
                 void *cb_data, int extra_lock_flags);
 
 /* mdc/mdc_request.c */
+int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
+                  struct md_op_data *op_data);
+
 int mdc_init_ea_size(struct obd_export *exp, int easize, int def_easzie,
                      int cookiesize);
 

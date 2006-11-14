@@ -200,7 +200,7 @@ extern struct fssw_ops llu_fssw_ops;
 /* file.c */
 void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
                          struct inode *i2, const char *name, int namelen,
-                         int mode);
+                         int mode, __u32 opc);
 void llu_finish_md_op_data(struct md_op_data *op_data);
 int llu_create(struct inode *dir, struct pnode_base *pnode, int mode);
 int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it);
@@ -244,12 +244,6 @@ ssize_t llu_iop_filldirentries(struct inode *ino, _SYSIO_OFF_T *basep,
                                char *buf, size_t nbytes);
 
 /* liblustre/llite_fid.c*/
-int llu_fid_md_alloc(struct llu_sb_info *sbi, struct lu_fid *fid, 
-                     struct lu_placement_hint *hint);
-
-int llu_fid_dt_alloc(struct llu_sb_info *sbi, struct lu_fid *fid,
-                     struct lu_placement_hint *hint);
-
 unsigned long llu_fid_build_ino(struct llu_sb_info *sbi, 
                                 struct lu_fid *fid);
 

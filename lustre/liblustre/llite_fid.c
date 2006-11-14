@@ -51,31 +51,6 @@
 #include <lustre_ver.h>
 #include <lustre_fid.h>
 
-static int llu_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
-                         struct lu_placement_hint *hint)
-{
-        int rc;
-        ENTRY;
-        rc = obd_fid_alloc(exp, fid, hint);
-        RETURN(rc);
-}
-
-/* allocates passed fid, that is assigns f_num and f_seq to the @fid */
-int llu_fid_md_alloc(struct llu_sb_info *sbi, struct lu_fid *fid,
-                     struct lu_placement_hint *hint)
-{
-        ENTRY;
-        RETURN(llu_fid_alloc(sbi->ll_md_exp, fid, hint));
-}
-
-/* allocates passed fid, that is assigns f_num and f_seq to the @fid */
-int llu_fid_dt_alloc(struct llu_sb_info *sbi, struct lu_fid *fid,
-                     struct lu_placement_hint *hint)
-{
-        ENTRY;
-        RETURN(llu_fid_alloc(sbi->ll_dt_exp, fid, hint));
-}
-
 /* build inode number on passed @fid */
 unsigned long llu_fid_build_ino(struct llu_sb_info *sbi,
                                 struct lu_fid *fid)

@@ -73,7 +73,7 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
 
 void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
                          struct inode *i2, const char *name, int namelen,
-                         int mode)
+                         int mode, __u32 opc)
 {
         LASSERT(i1 != NULL || i2 != NULL);
         LASSERT(op_data);
@@ -89,10 +89,13 @@ void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
 
         if (i2)
                 op_data->op_fid2 = *ll_inode2fid(i2);
+        else
+                fid_zero(&op_data->op_fid2);
 
+        op_data->op_opc = opc;
         op_data->op_name = name;
-        op_data->op_namelen = namelen;
         op_data->op_mode = mode;
+        op_data->op_namelen = namelen;
         op_data->op_mod_time = CURRENT_TIME;
 }
 
