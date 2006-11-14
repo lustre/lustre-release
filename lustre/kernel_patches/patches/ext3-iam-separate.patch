@@ -2380,7 +2380,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +
 +        entry = leaf->il_entries;
 +        count = lentry_count_get(leaf);
-+        printk("lfix: %p %p %d\n", leaf, leaf->il_at, count);
++        printk(KERN_EMERG "lfix: %p %p %d\n", leaf, leaf->il_at, count);
 +        for (i = 0; i < count; ++i, entry = iam_lfix_shift(leaf, entry, 1))
 +                l_print(leaf, entry);
 +}
@@ -2851,7 +2851,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,1011 @@
+@@ -0,0 +1,1024 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3112,7 +3112,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +{
 +        struct lvar_leaf_entry *scan;
 +
-+        printk("used: %d\n", h_used(n_head(l)));
++        printk(KERN_EMERG "used: %d\n", h_used(n_head(l)));
 +        for (scan = n_start(l); scan < n_end(l); scan = e_next(l, scan))
 +                e_print(scan);
 +}
@@ -3249,6 +3249,9 @@ Index: iam/fs/ext3/iam_lvar.c
 +        l->il_at = lvar_lentry(e_next(l, n_cur(l)));
 +}
 +
++atomic_t lvar_enoent_debug = ATOMIC_INIT(0);
++EXPORT_SYMBOL(lvar_enoent_debug);
++
 +static int lvar_lookup(struct iam_leaf *leaf, const struct iam_key *k)
 +{
 +        struct lvar_leaf_entry *found;
@@ -3307,6 +3310,16 @@ Index: iam/fs/ext3/iam_lvar.c
 +        if (last)
 +                result |= IAM_LOOKUP_LAST;
 +        assert_inv(n_invariant(leaf));
++
++        if (unlikely(atomic_read(&lvar_enoent_debug))) {
++                struct iam_path *path;
++
++                path = leaf->il_path;
++                printk(KERN_EMERG "lvar noent: `%s'/%#x/%#x\n", name, hash,
++                       *(lvar_hash_t *)iam_ikey_at(path, path->ip_frame->at));
++                n_print(leaf);
++        }
++
 +        return result;
 +}
 +

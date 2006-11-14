@@ -531,6 +531,7 @@ int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
         RETURN(rc);
 }
 
+extern atomic_t lvar_enoent_debug;
 static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
                       struct md_object *cobj, const char *name,
                       struct md_attr *ma)
@@ -548,8 +549,12 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
          * Check -ENOENT early here because we need to get object type
          * to calculate credits before transaction start
          */
-        if (!lu_object_exists(&cobj->mo_lu))
+        if (!lu_object_exists(&cobj->mo_lu)) {
+                LU_OBJECT_DEBUG(D_ERROR, env, &cobj->mo_lu,
+                                "unlinking as `%s'", name);
                 RETURN(-ENOENT);
+        }
+
         LASSERTF(lu_object_exists(&cobj->mo_lu) > 0, "FID is "DFID"\n",
                  PFID(lu_object_fid(&cobj->mo_lu)));
 
@@ -571,8 +576,13 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
                 GOTO(cleanup, rc);
 
         is_dir = S_ISDIR(lu_object_attr(&cobj->mo_lu));
+        /*
+         * This should be per-thread debugging flag, but
+         */
+        atomic_inc(&lvar_enoent_debug);
         rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle,
                                 mdd_object_capa(env, mdd_pobj));
+        atomic_dec(&lvar_enoent_debug);
         if (rc)
                 GOTO(cleanup, rc);
 
