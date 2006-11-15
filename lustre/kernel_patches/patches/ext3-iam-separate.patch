@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1410 @@
+@@ -0,0 +1,1430 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1050,28 +1050,48 @@ Index: iam/fs/ext3/iam.c
 +static int iam_new_leaf(handle_t *handle, struct iam_leaf *leaf)
 +{
 +        int err;
-+        u32 blknr; /* XXX 32bit block size */
++        iam_ptr_t blknr;
 +        struct buffer_head   *new_leaf;
++        struct buffer_head   *old_leaf;
 +        struct iam_container *c;
 +        struct inode         *obj;
++        struct iam_path      *path;
 +
 +        assert_inv(iam_leaf_check(leaf));
 +
 +        c = iam_leaf_container(leaf);
++        path = leaf->il_path;
 +
 +        obj = c->ic_object;
-+        new_leaf = ext3_append(handle, c->ic_object, &blknr, &err);
++        new_leaf = ext3_append(handle, obj, (__u32 *)&blknr, &err);
 +        do_corr(schedule());
 +        if (new_leaf != NULL) {
-+                iam_leaf_ops(leaf)->init_new(c, new_leaf);
-+		do_corr(schedule());
-+                iam_leaf_split(leaf, &new_leaf, blknr);
-+		do_corr(schedule());
-+                err = iam_txn_dirty(handle, iam_leaf_path(leaf), new_leaf);
-+                brelse(new_leaf);
-+                if (err == 0)
-+                        err = ext3_mark_inode_dirty(handle, c->ic_object);
-+		do_corr(schedule());
++                struct dynlock_handle *lh;
++
++                lh = dx_lock_htree(obj, blknr, DLT_WRITE);
++                do_corr(schedule());
++                if (lh != NULL) {
++                        iam_leaf_ops(leaf)->init_new(c, new_leaf);
++                        do_corr(schedule());
++                        old_leaf = leaf->il_bh;
++                        iam_leaf_split(leaf, &new_leaf, blknr);
++                        if (old_leaf != leaf->il_bh) {
++                                /*
++                                 * Switched to the new leaf.
++                                 */
++                                iam_leaf_unlock(leaf);
++                                leaf->il_lock = lh;
++                                path->ip_frame->leaf = blknr;
++                        } else
++                                dx_unlock_htree(obj, lh);
++                        do_corr(schedule());
++                        err = iam_txn_dirty(handle, path, new_leaf);
++                        brelse(new_leaf);
++                        if (err == 0)
++                                err = ext3_mark_inode_dirty(handle, obj);
++                        do_corr(schedule());
++                } else
++                        err = -ENOMEM;
 +        }
 +        assert_inv(iam_leaf_check(leaf));
 +        assert_inv(iam_leaf_check(&iam_leaf_path(leaf)->ip_leaf));
@@ -1861,8 +1881,6 @@ Index: iam/fs/ext3/iam_htree.c
 +         * the node) into index node.
 +         */
 +        path = iam_leaf_path(l);
-+        iam_insert_key_lock(path,
-+                            path->ip_frame, (void *)&delim_hash, new_blknr);
 +        if (l->il_bh == newbh) {
 +                /*
 +                 * insertion point moves into new leaf.
@@ -1870,6 +1888,8 @@ Index: iam/fs/ext3/iam_htree.c
 +                assert_corr(delim_hash >= old_hash);
 +                iam_htree_lookup(l, (void *)&old_hash);
 +        }
++        iam_insert_key_lock(path,
++                            path->ip_frame, (void *)&delim_hash, new_blknr);
 +}
 +
 +static struct iam_leaf_operations iam_htree_leaf_ops = {
@@ -2118,7 +2138,7 @@ Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c
 +++ iam/fs/ext3/iam_lfix.c
-@@ -0,0 +1,728 @@
+@@ -0,0 +1,727 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2582,11 +2602,6 @@ Index: iam/fs/ext3/iam_lfix.c
 +        memmove(iam_entries(new_leaf), start, finis - start);
 +        hdr->ill_count = count - split;
 +        lentry_count_set(l, split);
-+        /*
-+         * Insert pointer to the new node (together with the least key in
-+         * the node) into index node.
-+         */
-+        iam_insert_key_lock(path, path->ip_frame, pivot, new_blknr);
 +        if ((void *)l->il_at >= start) {
 +                /*
 +                 * insertion point moves into new leaf.
@@ -2604,7 +2619,11 @@ Index: iam/fs/ext3/iam_lfix.c
 +                assert_corr(result == 0);
 +                l->il_at = iam_lfix_shift(l, iam_get_lentries(l), shift);
 +        }
-+
++        /*
++         * Insert pointer to the new node (together with the least key in
++         * the node) into index node.
++         */
++        iam_insert_key_lock(path, path->ip_frame, pivot, new_blknr);
 +}
 +
 +static struct iam_leaf_operations iam_lfix_leaf_ops = {
@@ -2851,7 +2870,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,1024 @@
+@@ -0,0 +1,1028 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3142,7 +3161,11 @@ Index: iam/fs/ext3/iam_lvar.c
 +        if (h_used(n_head(leaf)) > blocksize(leaf))
 +                return 0;
 +
-+        starthash = *(lvar_hash_t *)iam_ikey_at(path, path->ip_frame->at);
++        /*
++         * Delimiting key in the parent index node. Clear least bit to account
++         * for hash collision marker.
++         */
++        starthash = *(lvar_hash_t *)iam_ikey_at(path, path->ip_frame->at) & ~1;
 +        for (scan = n_start(leaf); scan < end; scan = e_next(leaf, scan)) {
 +                nexthash = e_hash(scan);
 +                if (nexthash != get_hash(iam_leaf_container(leaf),
@@ -3522,12 +3545,6 @@ Index: iam/fs/ext3/iam_lvar.c
 +
 +        assert_corr(n_end(leaf) == first_to_move);
 +
-+        /*
-+         * Insert pointer to the new node (together with the least key in
-+         * the node) into index node.
-+         */
-+        iam_insert_key_lock(path, path->ip_frame, (struct iam_ikey *)&hash,
-+                            new_blknr);
 +        if (n_cur(leaf) >= first_to_move) {
 +                /*
 +                 * insertion point moves into new leaf.
@@ -3545,6 +3562,12 @@ Index: iam/fs/ext3/iam_lvar.c
 +                assert_corr(result == 0);
 +                leaf->il_at = ((void *)leaf->il_at) + shift;
 +        }
++        /*
++         * Insert pointer to the new node (together with the least key in
++         * the node) into index node.
++         */
++        iam_insert_key_lock(path, path->ip_frame, (struct iam_ikey *)&hash,
++                            new_blknr);
 +        assert_corr(n_cur(leaf) < n_end(leaf));
 +        assert_inv(n_invariant(leaf));
 +}
