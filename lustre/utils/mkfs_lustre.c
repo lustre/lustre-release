@@ -495,7 +495,7 @@ int make_lustre_backfs(struct mkfs_opts *mop)
                                 else if (mop->mo_stripe_count > 13)
                                         inode_size = 1024;
                                 else
-                                        inode_size = 512;
+                                        inode_size = 256;
                         } else if (IS_OST(&mop->mo_ldd)) {
                                 /* now as we store fids in EA on OST we need
                                    to make inode bigger */
