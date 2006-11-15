@@ -436,16 +436,20 @@ static int lu_site_htable_mask;
 
 static __u32 fid_hash(const struct lu_fid *f)
 {
+        /* all objects with same id and different versions will belong to same
+         * collisions list. */
+#if 1
+        return (fid_seq(f) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(f);
+#else
         unsigned long hash;
         __u64 seq;
 
-        /* all objects with same id and different versions will belong to same
-         * collisions list. */
         seq  = fid_seq(f);
         hash = seq ^ fid_oid(f);
         if (sizeof hash != sizeof seq)
                 hash ^= seq >> 32;
         return hash_long(hash, lu_site_htable_bits);
+#endif
 }
 
 /*
