@@ -1006,8 +1006,8 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                 RETURN(-ENOENT);
 
         /*
-         * In some cases this lookup is not needed - we know before that if name
-         * exists or not.
+         * In some cases this lookup is not needed - we know before if name
+         * exists or not because MDT performs lookup for it.
          */
         /* XXX disable that lookup temporary */
         if (0 && lookup) {

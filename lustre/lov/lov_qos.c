@@ -150,10 +150,10 @@ static int qos_calc_ppo(struct obd_device *obd)
         __u32 num_active;
         int rc, i, prio_wide;
         ENTRY;
-        
+
         if (!lov->lov_qos.lq_dirty) 
                 GOTO(out, rc = 0);
-                
+
         num_active = lov->desc.ld_active_tgt_count - 1; 
         if (num_active < 1)
                 GOTO(out, rc = -EAGAIN);
@@ -327,11 +327,19 @@ static int qos_calc_rr(struct lov_obd *lov)
         int i;
         ENTRY;
 
+        /*
+         * Check for dirtiness first under read lock to make it as parallel as
+         * possible.
+         */
+        down_read(&lov->lov_qos.lq_rw_sem);
         if (!lov->lov_qos.lq_dirty_rr) {
                 LASSERT(lov->lov_qos.lq_rr_size);
+                up_read(&lov->lov_qos.lq_rw_sem);
                 RETURN(0);
         }
+        up_read(&lov->lov_qos.lq_rw_sem);
 
+        /* Do actuall allocation. */
         down_write(&lov->lov_qos.lq_rw_sem);
         ost_count = lov->desc.ld_tgt_count;
 
@@ -571,16 +579,28 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
         ENTRY;
         
         lov_getref(exp->exp_obd);
-        down_write(&lov->lov_qos.lq_rw_sem);
 
+        /* 
+         * Quick check for dirtriness first, use read lock to make this parallel
+         * as much as possible.
+         */
+        down_read(&lov->lov_qos.lq_rw_sem);
+        if (!lov->lov_qos.lq_dirty) {
+                up_read(&lov->lov_qos.lq_rw_sem);
+                GOTO(out, rc = -EAGAIN);
+        }
+        up_read(&lov->lov_qos.lq_rw_sem);
+        
+        /* Do actuall allocation, use write lock here. */
+        down_write(&lov->lov_qos.lq_rw_sem);
         ost_count = lov->desc.ld_tgt_count;
 
         if (lov->desc.ld_active_tgt_count < 2) 
-                GOTO(out, rc = -EAGAIN);
+                GOTO(out_up_write, rc = -EAGAIN);
 
         rc = qos_calc_ppo(exp->exp_obd);
         if (rc) 
-                GOTO(out, rc);
+                GOTO(out_up_write, rc);
         
         total_bavail = 0;
         good_osts = 0;
@@ -618,14 +638,14 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
         }
         
         if (!total_bavail)
-                GOTO(out, rc = -ENOSPC);
+                GOTO(out_up_write, rc = -ENOSPC);
        
         /* if we don't have enough good OSTs, we reduce the stripe count. */
         if (good_osts < *stripe_cnt)
                 *stripe_cnt = good_osts;
 
         if (!*stripe_cnt) 
-                GOTO(out, rc = -EAGAIN);
+                GOTO(out_up_write, rc = -EAGAIN);
         
         /* Find enough OSTs with weighted random allocation. */
         nfound = 0;
@@ -668,9 +688,10 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
         }
         LASSERT(nfound == *stripe_cnt);
         
-out:
+out_up_write:
         up_write(&lov->lov_qos.lq_rw_sem);
         
+out:
         if (rc == -EAGAIN)
                 rc = alloc_rr(lov, idx_arr, stripe_cnt);
         

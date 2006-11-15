@@ -9,6 +9,7 @@
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *   Author: Phil Schwan <phil@clusterfs.com>
  *   Author: Huang Hua <huanghua@clusterfs.com>
+ *   Author: Yury Umanets <umka@clusterfs.com>
  *
  *   This file is part of the Lustre file system, http://www.lustre.org
  *   Lustre is a trademark of Cluster File Systems, Inc.
@@ -48,7 +49,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
-        DEBUG_REQ(D_INODE, mdt_info_req(info), "create  (%s->"DFID") in "DFID,
+        DEBUG_REQ(D_INODE, mdt_info_req(info), "Create  (%s->"DFID") in "DFID,
                   rr->rr_name, PFID(rr->rr_fid2), PFID(rr->rr_fid1));
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
@@ -96,7 +97,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
         RETURN(rc);
 }
 
-/* partial request to create object only */
+/* Partial request to create object only */
 static int mdt_md_mkobj(struct mdt_thread_info *info)
 {
         struct mdt_device      *mdt = info->mti_mdt;
@@ -106,7 +107,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
         int rc;
         ENTRY;
 
-        DEBUG_REQ(D_INODE, mdt_info_req(info), "partial create "DFID"\n",
+        DEBUG_REQ(D_INODE, mdt_info_req(info), "Partial create "DFID"\n",
                   PFID(info->mti_rr.rr_fid2));
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
@@ -129,7 +130,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
                                               &info->mti_spec, ma);
                 }
                 if (rc == 0) {
-                        /* return fid & attr to client. */
+                        /* Return fid & attr to client. */
                         if (ma->ma_valid & MA_INODE)
                                 mdt_pack_attr2body(info, repbody, &ma->ma_attr,
                                                    mdt_object_fid(o));

@@ -791,13 +791,9 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         }
 
         lh = &info->mti_lh[MDT_LH_PARENT];
-        if (!(create_flags & MDS_OPEN_CREAT)) {
-                mdt_lock_pdo_init(lh, LCK_PR, rr->rr_name,
-                                  rr->rr_namelen);
-        } else {
-                mdt_lock_pdo_init(lh, LCK_PW, rr->rr_name,
-                                  rr->rr_namelen);
-        }
+        mdt_lock_pdo_init(lh, (create_flags & MDS_OPEN_CREAT) ?
+                          LCK_PW : LCK_PR, rr->rr_name, rr->rr_namelen);
+        
         parent = mdt_object_find_lock(info, rr->rr_fid1, lh,
                                       MDS_INODELOCK_UPDATE);
         if (IS_ERR(parent))
