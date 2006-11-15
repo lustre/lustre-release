@@ -44,7 +44,6 @@ void mdd_write_lock(const struct lu_env *env, struct mdd_object *obj)
 void mdd_read_lock(const struct lu_env *env, struct mdd_object *obj)
 {
         struct dt_object  *next = mdd_object_child(obj);
-
         next->do_ops->do_read_lock(env, next);
 }
 

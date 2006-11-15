@@ -664,10 +664,11 @@ static int mdd_name_insert(const struct lu_env *env, struct md_object *pobj,
 
         rc = __mdd_index_insert(env, mdd_obj, fid, name, is_dir,
                                 handle, BYPASS_CAPA);
-
-        la->la_ctime = la->la_atime = CURRENT_SECONDS;
-        la->la_valid = LA_ATIME | LA_CTIME;
-        rc = mdd_attr_set_internal_locked(env, mdd_obj, la, handle, 0);
+        if (rc == 0) {
+                la->la_ctime = la->la_atime = CURRENT_SECONDS;
+                la->la_valid = LA_ATIME | LA_CTIME;
+                rc = mdd_attr_set_internal_locked(env, mdd_obj, la, handle, 0);
+        }
         EXIT;
 out_unlock:
         mdd_pdo_write_unlock(env, mdd_obj, dlh);

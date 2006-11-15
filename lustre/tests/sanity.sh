@@ -279,6 +279,7 @@ run_test 0b "chmod 0755 $DIR ============================="
 test_1a() {
 	mkdir $DIR/d1
 	mkdir $DIR/d1/d2
+	mkdir $DIR/d1/d2 && error "we expect EEXIST, but not returned"
 	$CHECKSTAT -t dir $DIR/d1/d2 || error
 }
 run_test 1a "mkdir .../d1; mkdir .../d1/d2 ====================="

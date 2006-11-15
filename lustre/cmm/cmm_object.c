@@ -842,8 +842,13 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
         struct cmm_thread_info *cmi;
         struct md_attr *tmp_ma;
         int rc;
-
         ENTRY;
+
+        /* Make sure that name isn't exist before doing remote call. */
+        rc = mdo_lookup(env, md_object_next(mo_p), child_name,
+                        &cmm_env_info(env)->cmi_fid, NULL);
+        if (rc == 0)
+                RETURN(-EEXIST);
 
         /* check the SGID attr */
         cmi = cmm_env_info(env);

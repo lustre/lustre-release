@@ -468,10 +468,10 @@ int mdd_object_create_internal(const struct lu_env *env,
         if (!lu_object_exists(mdd2lu_obj(obj))) {
                 next = mdd_object_child(obj);
                 rc = next->do_ops->do_create(env, next, attr, handle);
+                LASSERT(ergo(rc == 0, lu_object_exists(mdd2lu_obj(obj))));
         } else
                 rc = -EEXIST;
 
-        LASSERT(ergo(rc == 0, lu_object_exists(mdd2lu_obj(obj))));
         mdd_lprocfs_time_end(mdd, &start, LPROC_MDD_CREATE_OBJ);
         RETURN(rc);
 }
@@ -485,6 +485,7 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
         struct dt_object *next;
         struct timeval  start;
         int rc;
+        ENTRY;
 
         mdd_lprocfs_time_start(mdd, &start, LPROC_MDD_ATTR_SET);
         LASSERT(lu_object_exists(mdd2lu_obj(o)));
@@ -496,7 +497,7 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
                 rc = mdd_acl_chmod(env, o, attr->la_mode, handle);
 #endif
         mdd_lprocfs_time_end(mdd, &start, LPROC_MDD_ATTR_SET);        
-        return rc;
+        RETURN(rc);
 }
 
 int mdd_attr_set_internal_locked(const struct lu_env *env,
@@ -505,6 +506,7 @@ int mdd_attr_set_internal_locked(const struct lu_env *env,
                                  struct thandle *handle, int needacl)
 {
         int rc;
+        ENTRY;
 
         needacl = needacl && (attr->la_valid & LA_MODE);
 
@@ -515,7 +517,7 @@ int mdd_attr_set_internal_locked(const struct lu_env *env,
 
         if (needacl)
                 mdd_write_unlock(env, o);
-        return rc;
+        RETURN(rc);
 }
 
 static int __mdd_xattr_set(const struct lu_env *env, struct mdd_object *o,
