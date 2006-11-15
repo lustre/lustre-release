@@ -27,7 +27,7 @@ Index: linux/include/linux/dynlocks.h
 ===================================================================
 --- linux.orig/include/linux/dynlocks.h
 +++ linux/include/linux/dynlocks.h
-@@ -0,0 +1,36 @@
+@@ -0,0 +1,37 @@
 +#ifndef _LINUX_DYNLOCKS_H
 +#define _LINUX_DYNLOCKS_H
 +
@@ -62,6 +62,7 @@ Index: linux/include/linux/dynlocks.h
 +				    enum dynlock_type lt, int gfp);
 +void dynlock_unlock(struct dynlock *dl, struct dynlock_handle *lock);
 +
++int dynlock_is_locked(struct dynlock *dl, unsigned long value);
 +#endif
 +
 Index: linux/lib/Makefile
@@ -81,7 +82,7 @@ Index: linux/lib/dynlocks.c
 ===================================================================
 --- linux.orig/lib/dynlocks.c
 +++ linux/lib/dynlocks.c
-@@ -0,0 +1,201 @@
+@@ -0,0 +1,226 @@
 +/*
 + * Dynamic Locks
 + *
@@ -279,7 +280,32 @@ Index: linux/lib/dynlocks.c
 +	spin_unlock(&dl->dl_list_lock);
 +}
 +
++int dynlock_is_locked(struct dynlock *dl, unsigned long value)
++{
++	struct dynlock_handle *hl;
++	int result;
++
++	result = 0;
++	/* find requested lock in lockspace */
++	spin_lock(&dl->dl_list_lock);
++	BUG_ON(dl->dl_list.next == NULL);
++	BUG_ON(dl->dl_list.prev == NULL);
++	list_for_each_entry(hl, &dl->dl_list, dl_list) {
++		BUG_ON(hl->dl_list.next == NULL);
++		BUG_ON(hl->dl_list.prev == NULL);
++		BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
++		if (hl->dl_value == value && hl->dl_pid == current->pid) {
++			/* lock is found */
++			result = 1;
++			break;
++		}
++	}
++	spin_unlock(&dl->dl_list_lock);
++	return result;
++}
++
 +EXPORT_SYMBOL(dynlock_init);
 +EXPORT_SYMBOL(dynlock_lock);
 +EXPORT_SYMBOL(dynlock_unlock);
++EXPORT_SYMBOL(dynlock_is_locked);
 +
