@@ -116,8 +116,8 @@ load_modules() {
     load_module ../lnet/klnds/$LNETLND
     load_module ldiskfs/ldiskfs
     load_module lvfs/lvfs
-    load_module lvfs/fsfilt_ldiskfs
     load_module obdclass/obdclass
+    load_module lvfs/fsfilt_ldiskfs
     load_module ptlrpc/ptlrpc
     load_module ptlrpc/gss/ptlrpc_gss
     load_module fid/fid
