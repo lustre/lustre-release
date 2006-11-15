@@ -351,13 +351,12 @@ static struct lu_context_key mdd_ucred_key = {
         .lct_fini = mdd_ucred_key_fini
 };
 
-/* XXX: This seems not used? */
-struct md_ucred *md_ucred_get(const struct lu_env *env)
+struct md_ucred *md_ucred(const struct lu_env *env)
 {
         LASSERT(env->le_ses != NULL);
         return lu_context_key_get(env->le_ses, &mdd_ucred_key);
 }
-EXPORT_SYMBOL(md_ucred_get);
+EXPORT_SYMBOL(md_ucred);
 
 static void *mdd_capainfo_key_init(const struct lu_context *ctx,
                                    struct lu_context_key *key)
