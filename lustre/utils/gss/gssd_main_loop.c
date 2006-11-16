@@ -106,9 +106,9 @@ lgssd_run()
 	dn_act.sa_flags = SA_SIGINFO;
 	sigaction(DNOTIFY_SIGNAL, &dn_act, NULL);
 
-	if ((fd = open(pipefsdir, O_RDONLY)) == -1) {
+	if ((fd = open(pipefs_dir, O_RDONLY)) == -1) {
 		printerr(0, "ERROR: failed to open %s: %s\n",
-			 pipefsdir, strerror(errno));
+			 pipefs_dir, strerror(errno));
 		exit(1);
 	}
 	fcntl(fd, F_SETSIG, DNOTIFY_SIGNAL);
@@ -118,8 +118,8 @@ lgssd_run()
 
 	while (1) {
 		while (dir_changed) {
-			printerr(2, "pipefs root dir changed\n");
 			dir_changed = 0;
+			printerr(2, "pipefs root dir changed\n");
 			if (update_client_list()) {
 				printerr(0, "ERROR: couldn't update "
 					 "client list\n");

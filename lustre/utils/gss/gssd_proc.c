@@ -46,6 +46,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <sys/fsuid.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -79,19 +80,19 @@
  *	with an index into pollarray[], and other basic data about that client.
  *
  * Directory structure: created by the kernel nfs client
- *      /pipefsdir/clntXX             : one per rpc_clnt struct in the kernel
- *      /pipefsdir/clntXX/krb5        : read uid for which kernel wants
- *      				 a context, write the resulting context
- *      /pipefsdir/clntXX/info        : stores info such as server name
+ *      {pipefs_nfsdir}/clntXX             : one per rpc_clnt struct in the kernel
+ *      {pipefs_nfsdir}/clntXX/krb5        : read uid for which kernel wants
+ *					    a context, write the resulting context
+ *      {pipefs_nfsdir}/clntXX/info        : stores info such as server name
  *
  * Algorithm:
- *      Poll all /pipefsdir/clntXX/krb5 files.  When ready, data read
+ *      Poll all {pipefs_nfsdir}/clntXX/krb5 files.  When ready, data read
  *      is a uid; performs rpcsec_gss context initialization protocol to
  *      get a cred for that user.  Writes result to corresponding krb5 file
  *      in a form the kernel code will understand.
  *      In addition, we make sure we are notified whenever anything is
- *      created or destroyed in pipefsdir/ or in an of the clntXX directories,
- *      and rescan the whole pipefsdir when this happens.
+ *      created or destroyed in {pipefs_nfsdir} or in an of the clntXX directories,
+ *      and rescan the whole {pipefs_nfsdir} when this happens.
  */
 
 struct pollfd * pollarray;
@@ -101,6 +102,7 @@ int pollsize;  /* the size of pollaray (in pollfd's) */
 static void
 destroy_client(struct clnt_info *clp)
 {
+	printerr(3, "clp %p: dirname %s, krb5fd %d\n", clp, clp->dirname, clp->krb5_fd);
 	if (clp->krb5_poll_index != -1)
 		memset(&pollarray[clp->krb5_poll_index], 0,
 					sizeof(struct pollfd));
@@ -306,13 +308,13 @@ update_client_list(void)
 	struct stat statbuf;
 	int i, j;
 
-	if (chdir(pipefsdir) < 0) {
+	if (chdir(pipefs_dir) < 0) {
 		printerr(0, "ERROR: can't chdir to %s: %s\n",
-			 pipefsdir, strerror(errno));
+			 pipefs_dir, strerror(errno));
 		return -1;
 	}
 
-	snprintf(lustre_dir, sizeof(lustre_dir), "%s/%s", pipefsdir, "lustre");
+	snprintf(lustre_dir, sizeof(lustre_dir), "%s/%s", pipefs_dir, "lustre");
 	if (stat(lustre_dir, &statbuf) == 0) {
 		namelist[0] = &lustre_dirent;
 		j = 1;
@@ -325,8 +327,7 @@ update_client_list(void)
 
 	update_old_clients(namelist, j);
 	for (i=0; i < j; i++) {
-		if (i < FD_ALLOC_BLOCK &&
-		    !find_client(namelist[i]->d_name))
+		if (i < FD_ALLOC_BLOCK && !find_client(namelist[i]->d_name))
 			process_clnt_dir(namelist[i]->d_name);
 	}
 
@@ -363,7 +364,7 @@ struct lustre_gss_data {
 
 static int
 do_downcall(int k5_fd, struct lgssd_upcall_data *updata,
-	    struct lustre_gss_data *lgd, gss_buffer_desc *context_token)
+            struct lustre_gss_data *lgd, gss_buffer_desc *context_token)
 {
 	char    *buf = NULL, *p = NULL, *end = NULL;
 	unsigned int timeout = 0; /* XXX decide on a reasonable value */
@@ -904,16 +905,26 @@ handle_krb5_upcall(struct clnt_info *clp)
 	struct lustre_gss_data	lgd;
 	char			**credlist = NULL;
 	char			**ccname;
+	int			read_rc;
 
 	printerr(2, "handling krb5 upcall\n");
 
 	memset(&lgd, 0, sizeof(lgd));
 	lgd.lgd_rpc_err = -EPERM; /* default error code */
 
-	if (read(clp->krb5_fd, &updata, sizeof(updata)) != sizeof(updata)) {
+	read_rc = read(clp->krb5_fd, &updata, sizeof(updata));
+	if (read_rc < 0) {
 		printerr(0, "WARNING: failed reading from krb5 "
 			    "upcall pipe: %s\n", strerror(errno));
 		goto out;
+	} else if (read_rc != sizeof(updata)) {
+		printerr(0, "upcall data mismatch: length %d, expect %d\n",
+			 read_rc, sizeof(updata));
+
+		if (read_rc >= 4)
+			goto out_return_error;
+		else
+			goto out;
 	}
 
 	printerr(1, "krb5 upcall: seq %u, uid %u, svc %u, nid 0x%llx, "

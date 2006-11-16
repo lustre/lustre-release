@@ -235,6 +235,7 @@ gssd_find_existing_krb5_ccache(uid_t uid, struct dirent **d)
 	struct dirent *best_match_dir = NULL;
 	struct stat best_match_stat, tmp_stat;
 
+	memset(&best_match_stat, 0, sizeof(best_match_stat));
 	*d = NULL;
 	n = scandir(ccachedir, &namelist, select_krb5_ccache, 0);
 	if (n < 0) {
@@ -340,6 +341,7 @@ gssd_get_single_krb5_cred(krb5_context context,
 	char cc_name[BUFSIZ];
 	int code;
 	time_t now = time(0);
+	char *cache_type;
 
 	memset(&my_creds, 0, sizeof(my_creds));
 
@@ -382,7 +384,12 @@ gssd_get_single_krb5_cred(krb5_context context,
 	 * Initialize cache file which we're going to be using
 	 */
 
-	snprintf(cc_name, sizeof(cc_name), "FILE:%s/%s%s_%s",
+	if (use_memcache)
+	    cache_type = "MEMORY";
+	else
+	    cache_type = "FILE";
+	snprintf(cc_name, sizeof(cc_name), "%s:%s/%s%s_%s",
+		cache_type,
 		GSSD_DEFAULT_CRED_DIR, GSSD_DEFAULT_CRED_PREFIX,
 		GSSD_DEFAULT_MACHINE_CRED_SUFFIX, ple->realm);
 	ple->endtime = my_creds.times.endtime;
@@ -1073,7 +1080,7 @@ gssd_obtain_kernel_krb5_info(void)
 	char enctype_file_name[128];
 	char buf[1024];
 	char enctypes[128];
-	char extrainfo[1024];
+	int nscanned;
 	int fd;
 	int use_default_enctypes = 0;
 	int nbytes, numfields;
@@ -1081,7 +1088,7 @@ gssd_obtain_kernel_krb5_info(void)
 	int code;
 
 	snprintf(enctype_file_name, sizeof(enctype_file_name),
-		 "%s/%s", pipefsdir, "krb5_info");
+		 "%s/%s", pipefs_dir, "krb5_info");
 
 	if ((fd = open(enctype_file_name, O_RDONLY)) == -1) {
 		printerr(1, "WARNING: gssd_obtain_kernel_krb5_info: "
@@ -1092,15 +1099,18 @@ gssd_obtain_kernel_krb5_info(void)
 		use_default_enctypes = 1;
 		goto do_the_parse;
 	}
-	if ((nbytes = read(fd, buf, sizeof(buf))) == -1) {
+	memset(buf, 0, sizeof(buf));
+	if ((nbytes = read(fd, buf, sizeof(buf)-1)) == -1) {
 		printerr(0, "WARNING: gssd_obtain_kernel_krb5_info: "
 			 "Error reading Kerberos encryption type "
 			 "information file '%s'; using defaults (%s).\n",
 			 enctype_file_name, default_enctypes);
 		use_default_enctypes = 1;
+		close(fd);
 		goto do_the_parse;
 	}
-	numfields = sscanf(buf, "enctypes: %s\n%s", enctypes, extrainfo);
+	close(fd);
+	numfields = sscanf(buf, "enctypes: %s\n%n", enctypes, &nscanned);
 	if (numfields < 1) {
 		printerr(0, "WARNING: gssd_obtain_kernel_krb5_info: "
 			 "error parsing Kerberos encryption type "
@@ -1109,11 +1119,10 @@ gssd_obtain_kernel_krb5_info(void)
 		use_default_enctypes = 1;
 		goto do_the_parse;
 	}
-	if (numfields > 1) {
-		printerr(0, "WARNING: gssd_obtain_kernel_krb5_info: "
-			 "Extra information, '%s', from '%s' is ignored\n",
-			 enctype_file_name, extrainfo);
-		use_default_enctypes = 1;
+	if (nbytes > nscanned) {
+		printerr(2, "gssd_obtain_kernel_krb5_info: "
+			 "Ignoring extra information, '%s', from '%s'\n",
+			 buf+nscanned, enctype_file_name);
 		goto do_the_parse;
 	}
   do_the_parse:

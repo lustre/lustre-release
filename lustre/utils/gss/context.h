@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2004 The Regents of the University of Michigan.
+  Copyright (c) 2004-2006 The Regents of the University of Michigan.
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,14 @@
 
 #ifndef _CONTEXT_H_
 #define _CONTEXT_H_
+
+/* Hopefully big enough to hold any serialized context */
+#define MAX_CTX_LEN 4096
+
+/* New context format flag values */
+#define KRB5_CTX_FLAG_INITIATOR         0x00000001
+#define KRB5_CTX_FLAG_CFX               0x00000002
+#define KRB5_CTX_FLAG_ACCEPTOR_SUBKEY   0x00000004
 
 int serialize_context_for_kernel(gss_ctx_id_t ctx, gss_buffer_desc *buf,
 				 gss_OID mech);

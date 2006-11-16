@@ -12,6 +12,7 @@ sbin_PROGRAMS = lgssd lsvcgssd l_idmap
 
 COMMON_SRCS = \
         context.c \
+        context_lucid.c \
         context_mit.c \
         context_heimdal.c \
         context_spkm3.c \

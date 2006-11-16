@@ -53,9 +53,11 @@
 #include "krb5_util.h"
 #include "lsupport.h"
 
-char pipefsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
+char pipefs_dir[PATH_MAX] = GSSD_PIPEFS_DIR;
+char pipefs_nfsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
 char keytabfile[PATH_MAX] = GSSD_DEFAULT_KEYTAB_FILE;
 char ccachedir[PATH_MAX] = GSSD_DEFAULT_CRED_DIR;
+int  use_memcache = 0;
 
 void
 sig_die(int signal)
@@ -91,17 +93,20 @@ main(int argc, char *argv[])
 	extern char *optarg;
 	char *progname;
 
-	while ((opt = getopt(argc, argv, "fvrmp:k:d:")) != -1) {
+	while ((opt = getopt(argc, argv, "fvrmMp:k:d:")) != -1) {
 		switch (opt) {
 			case 'f':
 				fg = 1;
+				break;
+			case 'M':
+				use_memcache = 1;
 				break;
 			case 'v':
 				verbosity++;
 				break;
 			case 'p':
-				strncpy(pipefsdir, optarg, sizeof(pipefsdir));
-				if (pipefsdir[sizeof(pipefsdir)-1] != '\0')
+				strncpy(pipefs_dir, optarg, sizeof(pipefs_dir));
+				if (pipefs_dir[sizeof(pipefs_dir)-1] != '\0')
 					errx(1, "pipefs path name too long");
 				break;
 			case 'k':
@@ -130,11 +135,6 @@ main(int argc, char *argv[])
 	if (gssd_check_mechs() != 0)
 		errx(1, "Problem with gssapi library");
 
-#if 0
-	/* Determine Kerberos information from the kernel */
-	gssd_obtain_kernel_krb5_info();
-#endif
-
 	if (!fg && daemon(0, 0) < 0)
 		errx(1, "fork");
 
@@ -152,6 +152,11 @@ main(int argc, char *argv[])
 	signal(SIGINT, sig_die);
 	signal(SIGTERM, sig_die);
 	signal(SIGHUP, sig_hup);
+
+#if 0
+	/* Determine Kerberos information from the kernel */
+	gssd_obtain_kernel_krb5_info();
+#endif
 
 	lgssd_run();
 	printerr(0, "gssd_run returned!\n");

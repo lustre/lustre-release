@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2004 The Regents of the University of Michigan.
+  Copyright (c) 2004-2006 The Regents of the University of Michigan.
   All rights reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -30,6 +30,7 @@
 
 #include "config.h"
 
+#ifndef HAVE_LUCID_CONTEXT_SUPPORT
 #ifdef HAVE_HEIMDAL
 
 #include <stdio.h>
@@ -45,8 +46,6 @@
 #include "err_util.h"
 #include "gss_oids.h"
 #include "write_bytes.h"
-
-#define MAX_CTX_LEN 4096
 
 int write_heimdal_keyblock(char **p, char *end, krb5_keyblock *key)
 {
@@ -265,3 +264,4 @@ out_err:
 }
 
 #endif	/* HAVE_HEIMDAL */
+#endif	/* HAVE_LUCID_CONTEXT_SUPPORT */

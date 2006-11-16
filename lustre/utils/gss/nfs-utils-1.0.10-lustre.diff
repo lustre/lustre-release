@@ -1,5 +1,586 @@
---- nfs-utils-1.0.10/utils/gssd/gssd_proc.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd_proc.c	2006-10-30 16:40:47.000000000 -0700
+diff -rup nfs-utils-1.0.10.orig/configure.in nfs-utils-1.0.10/configure.in
+--- nfs-utils-1.0.10.orig/configure.in	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/configure.in	2006-11-15 21:44:43.000000000 -0700
+@@ -17,61 +17,14 @@ AC_ARG_WITH(release,
+ 	RELEASE=$withval,
+ 	RELEASE=1)
+ 	AC_SUBST(RELEASE)
+-AC_ARG_WITH(statedir,
+-	[  --with-statedir=/foo    use state dir /foo [/var/lib/nfs]],
+-	statedir=$withval,
+-	statedir=/var/lib/nfs)
+-	AC_SUBST(statedir)
+-AC_ARG_WITH(statduser,
+-	[AC_HELP_STRING([--with-statduser=rpcuser],
+-                        [statd to run under @<:@rpcuser or nobody@:>@]
+-	)],
+-	statduser=$withval,
+-	if test "x$cross_compiling" = "xno"; then
+-		if grep -s '^rpcuser:' /etc/passwd > /dev/null; then
+-			statduser=rpcuser
+-		else
+-			statduser=nobody
+-		fi
+-	else
+-		statduser=nobody
+-	fi)
+-	AC_SUBST(statduser)
+-AC_ARG_ENABLE(nfsv3,
+-	[AC_HELP_STRING([--enable-nfsv3],
+-                        [enable support for NFSv3 @<:@default=yes@:>@])],
+-	enable_nfsv3=$enableval,
+-	enable_nfsv3=yes)
+-	if test "$enable_nfsv3" = yes; then
+-		AC_DEFINE(NFS3_SUPPORTED, 1, [Define this if you want NFSv3 support compiled in])
+-	else
+-		enable_nfsv3=
+-	fi
+-	AC_SUBST(enable_nfsv3)
+-AC_ARG_ENABLE(nfsv4,
+-	[AC_HELP_STRING([--enable-nfsv4],
+-                        [enable support for NFSv4 @<:@default=yes@:>@])],
+-	enable_nfsv4=$enableval,
+-	enable_nfsv4=yes)
+-	if test "$enable_nfsv4" = yes; then
+-		AC_DEFINE(NFS4_SUPPORTED, 1, [Define this if you want NFSv4 support compiled in])
+-		IDMAPD=idmapd
+-	else
+-		enable_nfsv4=
+-		IDMAPD=
+-	fi
+-	AC_SUBST(IDMAPD)
+-	AC_SUBST(enable_nfsv4)
+-	AM_CONDITIONAL(CONFIG_NFSV4, [test "$enable_nfsv4" = "yes"])
+ AC_ARG_ENABLE(gss,
+ 	[AC_HELP_STRING([--enable-gss],
+                         [enable support for rpcsec_gss @<:@default=yes@:>@])],
+ 	enable_gss=$enableval,
+ 	enable_gss=yes)
+ 	if test "$enable_gss" = yes; then
+-		AC_DEFINE(GSS_SUPPORTED, 1, [Define this if you want rpcsec_gss support compiled in])
+-		GSSD=gssd
+-		SVCGSSD=svcgssd
++		GSSD=lgssd
++		SVCGSSD=lsvcgssd
+ 	else
+ 		enable_gss=
+ 		GSSD=
+@@ -81,38 +34,6 @@ AC_ARG_ENABLE(gss,
+ 	AC_SUBST(SVCGSSD)
+ 	AC_SUBST(enable_gss)
+ 	AM_CONDITIONAL(CONFIG_GSS, [test "$enable_gss" = "yes"])
+-AC_ARG_ENABLE(kprefix,
+-	[AC_HELP_STRING([--enable-kprefix], [install progs as rpc.knfsd etc])],
+-	test "$enableval" = "yes" && kprefix=k,
+-	kprefix=)
+-	AC_SUBST(kprefix)
+-AC_ARG_ENABLE(secure-statd,
+-	[AC_HELP_STRING([--enable-secure-statd],
+-                        [Only lockd can use statd (security)])],
+-	test "$enableval" = "yes" && secure_statd=yes,
+-	secure_statd=no)
+-	if test "$secure_statd" = yes; then
+-		AC_DEFINE(RESTRICTED_STATD, 1, [Define this if you want to enable various security checks in statd. These checks basically keep anyone but lockd from using this service.])
+-	fi
+-	AC_SUBST(secure_statd)
+-AC_ARG_ENABLE(rquotad,
+-	[AC_HELP_STRING([--enable-rquotad],
+-                        [enable rquotad @<:@default=yes@:>@])],
+-	enable_rquotad=$enableval,
+-	enable_rquotad=yes)
+-	if test "$enable_rquotad" = yes; then
+-		RQUOTAD=rquotad
+-	else
+-		RQUOTAD=
+-	fi
+-	AM_CONDITIONAL(CONFIG_RQUOTAD, [test "$enable_rquotad" = "yes"])
+-
+-AC_ARG_ENABLE(mount,
+-	[AC_HELP_STRING([--enable-mount],
+-			[Create mount.nfs and don't use the util-linux mount(8) functionality. @<:@default=no@:>@])],
+-	enable_mount=$enableval,
+-	enable_mount=no)
+-	AM_CONDITIONAL(CONFIG_MOUNT, [test "$enable_mount" = "yes"])
+ 
+ # Check whether user wants TCP wrappers support
+ AC_TCP_WRAPPERS
+@@ -155,47 +76,17 @@ AC_CHECK_FUNC(connect, , 
+                 AC_MSG_ERROR(Function 'socket' not found.), $LIBNSL))
+ 
+ AC_CHECK_LIB(crypt, crypt, [LIBCRYPT="-lcrypt"])
+-if test "$enable_nfsv4" = yes; then
+-    AC_CHECK_LIB(event, event_dispatch, [libevent=1], AC_MSG_ERROR([libevent needed for nfsv4 support]))
+-    AC_CHECK_LIB(nfsidmap, nfs4_init_name_mapping, [libnfsidmap=1], AC_MSG_ERROR([libnfsidmap needed for nfsv4 support]))
+-    AC_CHECK_HEADERS(event.h, ,AC_MSG_ERROR([libevent needed for nfsv4 support]))
+-    AC_CHECK_HEADERS(nfsidmap.h, ,AC_MSG_ERROR([libnfsidmap needed for nfsv4 support]))
+-    dnl librpcsecgss already has a dependency on libgssapi,
+-    dnl but we need to make sure we get the right version
+     if test "$enable_gss" = yes; then
+-     PKG_CHECK_MODULES(RPCSECGSS, librpcsecgss >= 0.10, ,
+-      [AC_MSG_ERROR([Unable to locate information required to use librpcsecgss.  If you have pkgconfig installed, you might try setting environment variable PKG_CONFIG_PATH to /usr/local/lib/pkgconfig])
+-      ]
+-     )
+     PKG_CHECK_MODULES(GSSAPI, libgssapi >= 0.9)
+     fi
+ 
+-fi
+-if test "$knfsd_cv_glibc2" = no; then
+-    AC_CHECK_LIB(bsd, daemon, [LIBBSD="-lbsd"])
+-fi
+ AC_SUBST(LIBSOCKET)
+ AC_SUBST(LIBCRYPT)
+ AC_SUBST(LIBBSD)
+ 
+ if test "$enable_gss" = yes; then
+-  dnl 'gss' also depends on nfsidmap.h - at least for svcgssd_proc.c
+-  AC_CHECK_HEADERS(nfsidmap.h, ,AC_MSG_ERROR([libnfsidmap needed for gss support]))
+-  AC_CHECK_HEADERS(spkm3.h, ,AC_MSG_WARN([could not locate SPKM3 header; will not have SPKM3 support]))
+-  dnl the nfs4_set_debug function doesn't appear in all version of the library
+-  AC_CHECK_LIB(nfsidmap, nfs4_set_debug,
+-	       AC_DEFINE(HAVE_NFS4_SET_DEBUG,1,
+-			 [Whether nfs4_set_debug() is present in libnfsidmap]),)
+-
+   dnl Check for Kerberos V5
+   AC_KERBEROS_V5
+-
+-  dnl This is not done until here because we need to have KRBLIBS set
+-  dnl ("librpcsecgss=1" is so that it doesn't get added to LIBS)
+-  AC_CHECK_LIB(rpcsecgss, authgss_create_default, [librpcsecgss=1], AC_MSG_ERROR([librpcsecgss needed for nfsv4 support]), -lgssapi -ldl)
+-  AC_CHECK_LIB(rpcsecgss, authgss_set_debug_level,
+-  	       AC_DEFINE(HAVE_AUTHGSS_SET_DEBUG_LEVEL, 1, [Define this if the rpcsec_gss library has the function authgss_set_debug_level]),, -lgssapi -ldl)
+-
+ fi
+ 
+ dnl *************************************************************
+@@ -307,35 +198,7 @@ AC_SUBST([ACLOCAL_AMFLAGS], ["-I $ac_mac
+ 
+ AC_CONFIG_FILES([
+ 	Makefile
+-	linux-nfs/Makefile
+-	support/Makefile
+-	support/export/Makefile
+-	support/include/nfs/Makefile
+-	support/include/rpcsvc/Makefile
+-	support/include/sys/fs/Makefile
+-	support/include/sys/Makefile
+-	support/include/Makefile
+-	support/misc/Makefile
+-	support/nfs/Makefile
+-	tools/Makefile
+-	tools/getiversion/Makefile
+-	tools/getkversion/Makefile
+-	tools/locktest/Makefile
+-	tools/nlmtest/Makefile
+-	tools/rpcdebug/Makefile
+-	tools/rpcgen/Makefile
+ 	utils/Makefile
+-	utils/exportfs/Makefile
+-	utils/gssd/Makefile
+-	utils/idmapd/Makefile
+-	utils/lockd/Makefile
+-	utils/mount/Makefile
+-	utils/mountd/Makefile
+-	utils/nfsd/Makefile
+-	utils/nfsstat/Makefile
+-	utils/nhfsstone/Makefile
+-	utils/rquotad/Makefile
+-	utils/showmount/Makefile
+-	utils/statd/Makefile])
++	utils/gssd/Makefile])
+ AC_OUTPUT
+ 
+diff -rup nfs-utils-1.0.10.orig/Makefile.am nfs-utils-1.0.10/Makefile.am
+--- nfs-utils-1.0.10.orig/Makefile.am	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/Makefile.am	2006-11-15 21:44:43.000000000 -0700
+@@ -1,6 +1,6 @@
+ ## Process this file with automake to produce Makefile.in
+ 
+-SUBDIRS = tools support utils linux-nfs
++SUBDIRS = utils
+ 
+ MAINTAINERCLEANFILES = Makefile.in
+ 
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/cacheio.c nfs-utils-1.0.10/utils/gssd/cacheio.c
+--- nfs-utils-1.0.10.orig/utils/gssd/cacheio.c	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/cacheio.c	2006-11-15 21:44:43.000000000 -0700
+@@ -227,7 +227,8 @@ int qword_get(char **bpp, char *dest, in
+ 		return -1;
+ 	while (*bp == ' ') bp++;
+ 	*bpp = bp;
+-	*dest = '\0';
++// why should we clear *dest???
++//	*dest = '\0';
+ 	return len;
+ }
+ 
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/context.c nfs-utils-1.0.10/utils/gssd/context.c
+--- nfs-utils-1.0.10.orig/utils/gssd/context.c	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/context.c	2006-11-15 21:44:43.000000000 -0700
+@@ -33,8 +33,6 @@
+ #include <syslog.h>
+ #include <string.h>
+ #include <gssapi/gssapi.h>
+-#include <rpc/rpc.h>
+-#include <rpc/auth_gss.h>
+ #include "gss_util.h"
+ #include "gss_oids.h"
+ #include "err_util.h"
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/context.h nfs-utils-1.0.10/utils/gssd/context.h
+--- nfs-utils-1.0.10.orig/utils/gssd/context.h	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/context.h	2006-11-15 21:44:43.000000000 -0700
+@@ -31,8 +31,6 @@
+ #ifndef _CONTEXT_H_
+ #define _CONTEXT_H_
+ 
+-#include <rpc/rpc.h>
+-
+ /* Hopefully big enough to hold any serialized context */
+ #define MAX_CTX_LEN 4096
+ 
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/context_lucid.c nfs-utils-1.0.10/utils/gssd/context_lucid.c
+--- nfs-utils-1.0.10.orig/utils/gssd/context_lucid.c	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/context_lucid.c	2006-11-15 21:44:43.000000000 -0700
+@@ -41,11 +41,7 @@
+ #include <syslog.h>
+ #include <string.h>
+ #include <errno.h>
+-#include "gss_util.h"
+-#include "gss_oids.h"
+-#include "err_util.h"
+-#include "context.h"
+-
++#include <stdint.h>
+ #include <krb5.h>
+ #include <gssapi/gssapi.h>
+ #ifndef OM_uint64
+@@ -53,6 +49,11 @@ typedef uint64_t OM_uint64;
+ #endif
+ #include <gssapi/gssapi_krb5.h>
+ 
++#include "gss_util.h"
++#include "gss_oids.h"
++#include "err_util.h"
++#include "context.h"
++
+ static int
+ write_lucid_keyblock(char **p, char *end, gss_krb5_lucid_key_t *key)
+ {
+@@ -451,6 +452,7 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
+ 		else
+ 			keyptr = &lctx->cfx_kd.ctx_key;
+ 
++#if 0
+ 		if (lctx->initiate == 1) {
+ 			sign_usage = KG_USAGE_INITIATOR_SIGN;
+ 			seal_usage = KG_USAGE_INITIATOR_SEAL;
+@@ -458,6 +460,19 @@ prepare_krb5_rfc4121_buffer(gss_krb5_luc
+ 			sign_usage = KG_USAGE_ACCEPTOR_SIGN;
+ 			seal_usage = KG_USAGE_ACCEPTOR_SEAL;
+ 		}
++#else
++		/* FIXME
++		 * These are from rfc4142, but I don't understand: if we supply
++		 * different 'usage' value for client & server, then the peers
++		 * will have different derived keys. How could this work?
++		 *
++		 * Here we simply use old SIGN/SEAL values until we find the
++		 * answer.  --ericm
++		 * FIXME
++		 */
++		sign_usage = KG_USAGE_SIGN;
++		seal_usage = KG_USAGE_SEAL;
++#endif
+ 
+ 		/* derive and send down: Ke, Ki, and Kc */
+ 
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/context_spkm3.c nfs-utils-1.0.10/utils/gssd/context_spkm3.c
+--- nfs-utils-1.0.10.orig/utils/gssd/context_spkm3.c	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/context_spkm3.c	2006-11-15 21:44:43.000000000 -0700
+@@ -33,8 +33,6 @@
+ #include <syslog.h>
+ #include <string.h>
+ #include <gssapi/gssapi.h>
+-#include <rpc/rpc.h>
+-#include <rpc/auth_gss.h>
+ #include "gss_util.h"
+ #include "gss_oids.h"
+ #include "err_util.h"
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/err_util.c nfs-utils-1.0.10/utils/gssd/err_util.c
+--- nfs-utils-1.0.10.orig/utils/gssd/err_util.c	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/err_util.c	2006-11-15 21:44:43.000000000 -0700
+@@ -32,6 +32,8 @@
+ #include <stdarg.h>
+ #include <syslog.h>
+ #include <string.h>
++#include <fcntl.h>
++#include <ctype.h>
+ #include "err_util.h"
+ 
+ static int verbosity = 0;
+@@ -91,3 +93,40 @@ printit:
+ 	/* reset the buffer */
+ 	memset(message_buf, 0, sizeof(message_buf));
+ }
++
++void print_hexl(int pri, unsigned char *cp, int length)
++{
++	int i, j, jm;
++	unsigned char c;
++
++	printerr(pri, "length %d\n",length);
++	printerr(pri, "\n");
++
++	for (i = 0; i < length; i += 0x10) {
++		printerr(pri, "  %04x: ", (u_int)i);
++		jm = length - i;
++		jm = jm > 16 ? 16 : jm;
++
++		for (j = 0; j < jm; j++) {
++			if ((j % 2) == 1)
++				printerr(pri,"%02x ", (u_int)cp[i+j]);
++			else
++				printerr(pri,"%02x", (u_int)cp[i+j]);
++		}
++		for (; j < 16; j++) {
++			if ((j % 2) == 1)
++				printerr(pri,"   ");
++			else
++				printerr(pri,"  ");
++		}
++		printerr(pri," ");
++
++		for (j = 0; j < jm; j++) {
++			c = cp[i+j];
++			c = isprint(c) ? c : '.';
++			printerr(pri,"%c", c);
++		}
++		printerr(pri,"\n");
++	}
++}
++
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/err_util.h nfs-utils-1.0.10/utils/gssd/err_util.h
+--- nfs-utils-1.0.10.orig/utils/gssd/err_util.h	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/err_util.h	2006-11-15 21:44:43.000000000 -0700
+@@ -33,5 +33,6 @@
+ 
+ void initerr(char *progname, int verbosity, int fg);
+ void printerr(int priority, char *format, ...);
++void print_hexl(int pri, unsigned char *cp, int length);
+ 
+ #endif /* _ERR_UTIL_H_ */
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/gss_clnt_send_err.c nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c
+--- nfs-utils-1.0.10.orig/utils/gssd/gss_clnt_send_err.c	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c	2006-11-15 21:44:43.000000000 -0700
+@@ -47,6 +47,7 @@
+ #include "gssd.h"
+ #include "write_bytes.h"
+ 
++#if 0
+ char pipefsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
+ 
+ static void
+@@ -102,3 +103,4 @@ main(int argc, char *argv[])
+ 	}
+ 	exit(0);
+ }
++#endif
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.c nfs-utils-1.0.10/utils/gssd/gssd.c
+--- nfs-utils-1.0.10.orig/utils/gssd/gssd.c	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/gssd.c	2006-11-15 21:44:43.000000000 -0700
+@@ -40,7 +40,6 @@
+ 
+ #include <sys/param.h>
+ #include <sys/socket.h>
+-#include <rpc/rpc.h>
+ 
+ #include <unistd.h>
+ #include <err.h>
+@@ -52,6 +51,7 @@
+ #include "err_util.h"
+ #include "gss_util.h"
+ #include "krb5_util.h"
++#include "lsupport.h"
+ 
+ char pipefs_dir[PATH_MAX] = GSSD_PIPEFS_DIR;
+ char pipefs_nfsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
+@@ -79,7 +79,7 @@ sig_hup(int signal)
+ static void
+ usage(char *progname)
+ {
+-	fprintf(stderr, "usage: %s [-f] [-v] [-r] [-p pipefsdir] [-k keytab] [-d ccachedir]\n",
++	fprintf(stderr, "usage: %s [-f] [-v] [-p pipefsdir] [-k keytab] [-d ccachedir]\n",
+ 		progname);
+ 	exit(1);
+ }
+@@ -89,7 +89,6 @@ main(int argc, char *argv[])
+ {
+ 	int fg = 0;
+ 	int verbosity = 0;
+-	int rpc_verbosity = 0;
+ 	int opt;
+ 	extern char *optarg;
+ 	char *progname;
+@@ -99,18 +98,12 @@ main(int argc, char *argv[])
+ 			case 'f':
+ 				fg = 1;
+ 				break;
+-			case 'm':
+-				/* Accept but ignore this. Now the default. */
+-				break;
+ 			case 'M':
+ 				use_memcache = 1;
+ 				break;
+ 			case 'v':
+ 				verbosity++;
+ 				break;
+-			case 'r':
+-				rpc_verbosity++;
+-				break;
+ 			case 'p':
+ 				strncpy(pipefs_dir, optarg, sizeof(pipefs_dir));
+ 				if (pipefs_dir[sizeof(pipefs_dir)-1] != '\0')
+@@ -131,10 +124,6 @@ main(int argc, char *argv[])
+ 				break;
+ 		}
+ 	}
+-	snprintf(pipefs_nfsdir, sizeof(pipefs_nfsdir), "%s/%s",
+-		 pipefs_dir, GSSD_SERVICE_NAME);
+-	if (pipefs_nfsdir[sizeof(pipefs_nfsdir)-1] != '\0')
+-		errx(1, "pipefs_nfsdir path name too long");
+ 
+ 	if ((progname = strrchr(argv[0], '/')))
+ 		progname++;
+@@ -142,13 +131,6 @@ main(int argc, char *argv[])
+ 		progname = argv[0];
+ 
+ 	initerr(progname, verbosity, fg);
+-#ifdef HAVE_AUTHGSS_SET_DEBUG_LEVEL
+-	authgss_set_debug_level(rpc_verbosity);
+-#else
+-        if (rpc_verbosity > 0)
+-		printerr(0, "Warning: rpcsec_gss library does not "
+-			    "support setting debug level\n");
+-#endif
+ 
+ 	if (gssd_check_mechs() != 0)
+ 		errx(1, "Problem with gssapi library");
+@@ -156,16 +138,27 @@ main(int argc, char *argv[])
+ 	if (!fg && daemon(0, 0) < 0)
+ 		errx(1, "fork");
+ 
++	/* This should be checked _after_ daemon(), because we need to own
++	 * the undo-able semaphore by this process
++	 */
++	gssd_init_unique(GSSD_CLI);
++
++	/* Process keytab file and get machine credentials. This will modify
++	 * disk status so do it after we are sure we are the only instance
++	 */
++	if (gssd_refresh_krb5_machine_creds())
++		return -1;
++
+ 	signal(SIGINT, sig_die);
+ 	signal(SIGTERM, sig_die);
+ 	signal(SIGHUP, sig_hup);
+ 
+-	/* Process keytab file and get machine credentials */
+-	gssd_refresh_krb5_machine_creds();
++#if 0
+ 	/* Determine Kerberos information from the kernel */
+ 	gssd_obtain_kernel_krb5_info();
++#endif
+ 
+-	gssd_run();
++	lgssd_run();
+ 	printerr(0, "gssd_run returned!\n");
+ 	abort();
+ }
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.h nfs-utils-1.0.10/utils/gssd/gssd.h
+--- nfs-utils-1.0.10.orig/utils/gssd/gssd.h	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/gssd.h	2006-11-15 21:44:43.000000000 -0700
+@@ -48,8 +48,13 @@
+ #define GSSD_DEFAULT_CRED_PREFIX		"krb5cc_"
+ #define GSSD_DEFAULT_MACHINE_CRED_SUFFIX	"machine"
+ #define GSSD_DEFAULT_KEYTAB_FILE		"/etc/krb5.keytab"
+-#define GSSD_SERVICE_NAME			"nfs"
+-#define GSSD_SERVICE_NAME_LEN			3
++#define GSSD_SERVICE_MDS			"lustre_mds"
++#define GSSD_SERVICE_OSS			"lustre_oss"
++#define GSSD_SERVICE_MDS_NAMELEN		10
++#define GSSD_SERVICE_OSS_NAMELEN		10
++
++#define LUSTRE_ROOT_NAME			"lustre_root"
++#define LUSTRE_ROOT_NAMELEN			11
+ 
+ /*
+  * The gss mechanisms that we can handle
+@@ -59,9 +64,9 @@ enum {AUTHTYPE_KRB5, AUTHTYPE_SPKM3, AUT
+ 
+ 
+ extern char			pipefs_dir[PATH_MAX];
+-extern char			pipefs_nfsdir[PATH_MAX];
+ extern char			keytabfile[PATH_MAX];
+ extern char			ccachedir[PATH_MAX];
++extern char			gethostname_ex[PATH_MAX];
+ extern int			use_memcache;
+ 
+ TAILQ_HEAD(clnt_list_head, clnt_info) clnt_list;
+@@ -71,10 +76,6 @@ struct clnt_info {
+ 	char			*dirname;
+ 	int			dir_fd;
+ 	char			*servicename;
+-	char			*servername;
+-	int			prog;
+-	int			vers;
+-	char			*protocol;
+ 	int			krb5_fd;
+ 	int			krb5_poll_index;
+ 	int			spkm3_fd;
+@@ -85,8 +86,7 @@ void init_client_list(void);
+ int update_client_list(void);
+ void handle_krb5_upcall(struct clnt_info *clp);
+ void handle_spkm3_upcall(struct clnt_info *clp);
+-int gssd_acquire_cred(char *server_name);
+-void gssd_run(void);
++void lgssd_run(void);
+ 
+ 
+ #endif /* _RPC_GSSD_H_ */
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_main_loop.c nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c
+--- nfs-utils-1.0.10.orig/utils/gssd/gssd_main_loop.c	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c	2006-11-15 21:44:43.000000000 -0700
+@@ -94,7 +94,7 @@ scan_poll_results(int ret)
+ };
+ 
+ void
+-gssd_run()
++lgssd_run()
+ {
+ 	int			ret;
+ 	struct sigaction	dn_act;
+@@ -106,9 +106,9 @@ gssd_run()
+ 	dn_act.sa_flags = SA_SIGINFO;
+ 	sigaction(DNOTIFY_SIGNAL, &dn_act, NULL);
+ 
+-	if ((fd = open(pipefs_nfsdir, O_RDONLY)) == -1) {
++	if ((fd = open(pipefs_dir, O_RDONLY)) == -1) {
+ 		printerr(0, "ERROR: failed to open %s: %s\n",
+-			 pipefs_nfsdir, strerror(errno));
++			 pipefs_dir, strerror(errno));
+ 		exit(1);
+ 	}
+ 	fcntl(fd, F_SETSIG, DNOTIFY_SIGNAL);
+@@ -119,6 +119,7 @@ gssd_run()
+ 	while (1) {
+ 		while (dir_changed) {
+ 			dir_changed = 0;
++			printerr(2, "pipefs root dir changed\n");
+ 			if (update_client_list()) {
+ 				printerr(0, "ERROR: couldn't update "
+ 					 "client list\n");
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gssd/gssd_proc.c
+--- nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/gssd_proc.c	2006-11-15 21:44:43.000000000 -0700
 @@ -43,7 +43,6 @@
  #endif
  #include "config.h"
@@ -8,7 +589,7 @@
  #include <sys/stat.h>
  #include <sys/socket.h>
  #include <arpa/inet.h>
-@@ -68,6 +67,7 @@
+@@ -69,6 +68,7 @@
  #include "gss_oids.h"
  #include "krb5_util.h"
  #include "context.h"
@@ -16,7 +597,7 @@
  
  /*
   * pollarray:
-@@ -98,83 +98,6 @@
+@@ -99,86 +99,10 @@ struct pollfd * pollarray;
  
  int pollsize;  /* the size of pollaray (in pollfd's) */
  
@@ -100,7 +681,11 @@
  static void
  destroy_client(struct clnt_info *clp)
  {
-@@ -189,8 +112,6 @@
++	printerr(3, "clp %p: dirname %s, krb5fd %d\n", clp, clp->dirname, clp->krb5_fd);
+ 	if (clp->krb5_poll_index != -1)
+ 		memset(&pollarray[clp->krb5_poll_index], 0,
+ 					sizeof(struct pollfd));
+@@ -190,8 +114,6 @@ destroy_client(struct clnt_info *clp)
  	if (clp->spkm3_fd != -1) close(clp->spkm3_fd);
  	if (clp->dirname) free(clp->dirname);
  	if (clp->servicename) free(clp->servicename);
@@ -109,7 +694,7 @@
  	free(clp);
  }
  
-@@ -220,7 +141,6 @@
+@@ -221,7 +143,6 @@ process_clnt_dir_files(struct clnt_info 
  {
  	char	kname[32];
  	char	sname[32];
@@ -117,7 +702,7 @@
  
  	if (clp->krb5_fd == -1) {
  		snprintf(kname, sizeof(kname), "%s/krb5", clp->dirname);
-@@ -232,13 +152,6 @@
+@@ -233,13 +154,6 @@ process_clnt_dir_files(struct clnt_info 
  	}
  	if((clp->krb5_fd == -1) && (clp->spkm3_fd == -1))
  		return -1;
@@ -131,7 +716,7 @@
  	return 0;
  }
  
-@@ -272,6 +185,8 @@
+@@ -273,6 +187,8 @@ insert_clnt_poll(struct clnt_info *clp)
  		}
  		pollarray[clp->krb5_poll_index].fd = clp->krb5_fd;
  		pollarray[clp->krb5_poll_index].events |= POLLIN;
@@ -140,7 +725,7 @@
  	}
  
  	if ((clp->spkm3_fd != -1) && (clp->spkm3_poll_index == -1)) {
-@@ -385,7 +300,10 @@
+@@ -386,54 +302,87 @@ find_client(char *dirname)
  int
  update_client_list(void)
  {
@@ -151,17 +736,20 @@
 +	struct stat statbuf;
  	int i, j;
  
- 	if (chdir(pipefsdir) < 0) {
-@@ -394,45 +312,76 @@
+-	if (chdir(pipefs_nfsdir) < 0) {
++	if (chdir(pipefs_dir) < 0) {
+ 		printerr(0, "ERROR: can't chdir to %s: %s\n",
+-			 pipefs_nfsdir, strerror(errno));
++			 pipefs_dir, strerror(errno));
  		return -1;
  	}
  
--	j = scandir(pipefsdir, &namelist, NULL, alphasort);
+-	j = scandir(pipefs_nfsdir, &namelist, NULL, alphasort);
 -	if (j < 0) {
 -		printerr(0, "ERROR: can't scandir %s: %s\n",
--			 pipefsdir, strerror(errno));
+-			 pipefs_nfsdir, strerror(errno));
 -		return -1;
-+	snprintf(lustre_dir, sizeof(lustre_dir), "%s/%s", pipefsdir, "lustre");
++	snprintf(lustre_dir, sizeof(lustre_dir), "%s/%s", pipefs_dir, "lustre");
 +	if (stat(lustre_dir, &statbuf) == 0) {
 +		namelist[0] = &lustre_dirent;
 +		j = 1;
@@ -177,8 +765,7 @@
 -		if (i < FD_ALLOC_BLOCK
 -				&& !strncmp(namelist[i]->d_name, "clnt", 4)
 -				&& !find_client(namelist[i]->d_name))
-+		if (i < FD_ALLOC_BLOCK &&
-+		    !find_client(namelist[i]->d_name))
++		if (i < FD_ALLOC_BLOCK && !find_client(namelist[i]->d_name))
  			process_clnt_dir(namelist[i]->d_name);
 -		free(namelist[i]);
  	}
@@ -219,7 +806,7 @@
 -do_downcall(int k5_fd, uid_t uid, struct authgss_private_data *pd,
 -	    gss_buffer_desc *context_token)
 +do_downcall(int k5_fd, struct lgssd_upcall_data *updata,
-+	    struct lustre_gss_data *lgd, gss_buffer_desc *context_token)
++            struct lustre_gss_data *lgd, gss_buffer_desc *context_token)
  {
  	char    *buf = NULL, *p = NULL, *end = NULL;
  	unsigned int timeout = 0; /* XXX decide on a reasonable value */
@@ -247,7 +834,7 @@
  	if (write_buffer(&p, end, context_token)) goto out_err;
  
  	if (write(k5_fd, buf, p - buf) < p - buf) goto out_err;
-@@ -440,12 +389,13 @@
+@@ -441,12 +390,13 @@ do_downcall(int k5_fd, uid_t uid, struct
  	return 0;
  out_err:
  	if (buf) free(buf);
@@ -263,7 +850,7 @@
  {
  	char	buf[1024];
  	char	*p = buf, *end = buf + 1024;
-@@ -454,11 +404,12 @@
+@@ -455,11 +405,12 @@ do_error_downcall(int k5_fd, uid_t uid, 
  
  	printerr(1, "doing error downcall\n");
  
@@ -278,7 +865,7 @@
  
  	if (write(k5_fd, buf, p - buf) < p - buf) goto out_err;
  	return 0;
-@@ -467,6 +418,7 @@
+@@ -468,6 +419,7 @@ out_err:
  	return -1;
  }
  
@@ -286,7 +873,7 @@
  /*
   * Create an RPC connection and establish an authenticated
   * gss context with a server.
-@@ -658,7 +610,287 @@
+@@ -659,7 +611,287 @@ int create_auth_rpc_client(struct clnt_i
  
  	goto out;
  }
@@ -449,7 +1036,7 @@
 +				recv_tokenp = &gr.gr_token;
 +			}
 +		}
- 
++
 +		/* GSS_S_COMPLETE => check gss header verifier,
 +		 * usually checked in gss_validate
 +		 */
@@ -471,7 +1058,7 @@
 +	printerr(2, "successfully refreshed lgd\n");
 +	return 0;
 +}
-+
+ 
 +static
 +int gssd_create_lgd(struct clnt_info *clp,
 +		    struct lustre_gss_data *lgd,
@@ -574,7 +1161,7 @@
  
  /*
   * this code uses the userland rpcsec gss library to create a krb5
-@@ -667,27 +899,53 @@
+@@ -668,27 +900,63 @@ int create_auth_rpc_client(struct clnt_i
  void
  handle_krb5_upcall(struct clnt_info *clp)
  {
@@ -588,6 +1175,7 @@
 +	struct lustre_gss_data	lgd;
  	char			**credlist = NULL;
  	char			**ccname;
++	int			read_rc;
  
 -	printerr(1, "handling krb5 upcall\n");
 +	printerr(2, "handling krb5 upcall\n");
@@ -600,10 +1188,19 @@
  
 -	if (read(clp->krb5_fd, &uid, sizeof(uid)) < sizeof(uid)) {
 -		printerr(0, "WARNING: failed reading uid from krb5 "
-+	if (read(clp->krb5_fd, &updata, sizeof(updata)) != sizeof(updata)) {
++	read_rc = read(clp->krb5_fd, &updata, sizeof(updata));
++	if (read_rc < 0) {
 +		printerr(0, "WARNING: failed reading from krb5 "
  			    "upcall pipe: %s\n", strerror(errno));
  		goto out;
++	} else if (read_rc != sizeof(updata)) {
++		printerr(0, "upcall data mismatch: length %d, expect %d\n",
++			 read_rc, sizeof(updata));
++
++		if (read_rc >= 4)
++			goto out_return_error;
++		else
++			goto out;
  	}
  
 -	if (uid == 0) {
@@ -640,7 +1237,7 @@
  		int success = 0;
  
  		/*
-@@ -695,75 +953,66 @@
+@@ -696,75 +964,66 @@ handle_krb5_upcall(struct clnt_info *clp
  		 * of them until one works or we've tried them all
  		 */
  		if (gssd_get_krb5_machine_cred_list(&credlist)) {
@@ -741,7 +1338,7 @@
  	goto out;
  }
  
-@@ -774,6 +1023,7 @@
+@@ -775,6 +1034,7 @@ out_return_error:
  void
  handle_spkm3_upcall(struct clnt_info *clp)
  {
@@ -749,536 +1346,15 @@
  	uid_t			uid;
  	CLIENT			*rpc_clnt = NULL;
  	AUTH			*auth = NULL;
-@@ -825,4 +1075,5 @@
+@@ -826,4 +1086,5 @@ out:
  out_return_error:
  	do_error_downcall(clp->spkm3_fd, uid, -1);
  	goto out;
 +#endif
  }
---- nfs-utils-1.0.10/utils/gssd/context_mit.c.lustre	2006-10-30 16:40:17.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/context_mit.c	2006-10-30 16:40:47.000000000 -0700
-@@ -34,8 +34,6 @@
- #include <string.h>
- #include <errno.h>
- #include <gssapi/gssapi.h>
--#include <rpc/rpc.h>
--#include <rpc/auth_gss.h>
- #include "gss_util.h"
- #include "gss_oids.h"
- #include "err_util.h"
-@@ -468,6 +466,7 @@
- 		else
- 			keyptr = &lctx->cfx_kd.ctx_key;
- 
-+#if 0
- 		if (lctx->initiate == 1) {
- 			sign_usage = KG_USAGE_INITIATOR_SIGN;
- 			seal_usage = KG_USAGE_INITIATOR_SEAL;
-@@ -475,6 +474,19 @@
- 			sign_usage = KG_USAGE_ACCEPTOR_SIGN;
- 			seal_usage = KG_USAGE_ACCEPTOR_SEAL;
- 		}
-+#else
-+		/* FIXME
-+		 * These are from rfc4142, but I don't understand: if we supply
-+		 * different 'usage' value for client & server, then the peers
-+		 * will have different derived keys. How could this work?
-+		 *
-+		 * Here we simply use old SIGN/SEAL values until we find the
-+		 * answer.  --ericm
-+		 * FIXME
-+		 */
-+		sign_usage = KG_USAGE_SIGN;
-+		seal_usage = KG_USAGE_SEAL;
-+#endif
- 
- 		/* derive and send down: Ke, Ki, and Kc */
- 
-@@ -793,7 +805,10 @@
- 
- out_err:
- 	printerr(0, "ERROR: failed serializing krb5 context for kernel\n");
--	if (buf->value) free(buf->value);
-+	if (buf->value) {
-+		free(buf->value);
-+		buf->value = NULL;
-+	}
- 	buf->length = 0;
- 	return -1;
- }
---- nfs-utils-1.0.10/utils/gssd/context.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/context.h	2006-10-30 16:40:47.000000000 -0700
-@@ -31,8 +31,6 @@
- #ifndef _CONTEXT_H_
- #define _CONTEXT_H_
- 
--#include <rpc/rpc.h>
--
- int serialize_context_for_kernel(gss_ctx_id_t ctx, gss_buffer_desc *buf,
- 				 gss_OID mech);
- int serialize_spkm3_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf);
---- nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c	2006-10-30 16:40:47.000000000 -0700
-@@ -94,7 +94,7 @@
- };
- 
- void
--gssd_run()
-+lgssd_run()
- {
- 	int			ret;
- 	struct sigaction	dn_act;
-@@ -118,6 +118,7 @@
- 
- 	while (1) {
- 		while (dir_changed) {
-+			printerr(2, "pipefs root dir changed\n");
- 			dir_changed = 0;
- 			if (update_client_list()) {
- 				printerr(0, "ERROR: couldn't update "
---- nfs-utils-1.0.10/utils/gssd/svcgssd.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd.c	2006-10-30 16:40:47.000000000 -0700
-@@ -43,7 +43,6 @@
- #include <sys/types.h>
- #include <sys/stat.h>
- #include <sys/socket.h>
--#include <rpc/rpc.h>
- #include <fcntl.h>
- #include <errno.h>
- 
-@@ -54,11 +53,33 @@
- #include <stdlib.h>
- #include <string.h>
- #include <signal.h>
--#include "nfslib.h"
-+#include <dirent.h>
- #include "svcgssd.h"
- #include "gss_util.h"
- #include "err_util.h"
-+#include "lsupport.h"
- 
-+void
-+closeall(int min)
-+{
-+	DIR *dir = opendir("/proc/self/fd");
-+	if (dir != NULL) {
-+		int dfd = dirfd(dir);
-+		struct dirent *d;
-+
-+		while ((d = readdir(dir)) != NULL) {
-+			char *endp;
-+			long n = strtol(d->d_name, &endp, 10);
-+			if (*endp != '\0' && n >= min && n != dfd)
-+				(void) close(n);
-+		}
-+		closedir(dir);
-+	} else {
-+		int fd = sysconf(_SC_OPEN_MAX);
-+		while (--fd >= min)
-+			(void) close(fd);
-+	}
-+}
- /*
-  * mydaemon creates a pipe between the partent and child
-  * process. The parent process will wait until the
-@@ -165,8 +186,8 @@
- 	int get_creds = 1;
- 	int fg = 0;
- 	int verbosity = 0;
--	int rpc_verbosity = 0;
- 	int opt;
-+	int must_srv_mds = 0, must_srv_oss = 0;
- 	extern char *optarg;
- 	char *progname;
- 
-@@ -181,8 +202,13 @@
- 			case 'v':
- 				verbosity++;
- 				break;
--			case 'r':
--				rpc_verbosity++;
-+			case 'm':
-+				get_creds = 1;
-+				must_srv_mds = 1;
-+				break;
-+			case 'o':
-+				get_creds = 1;
-+				must_srv_oss = 1;
- 				break;
- 			default:
- 				usage(argv[0]);
-@@ -196,27 +222,13 @@
- 		progname = argv[0];
- 
- 	initerr(progname, verbosity, fg);
--#ifdef HAVE_AUTHGSS_SET_DEBUG_LEVEL
--	authgss_set_debug_level(rpc_verbosity);
--#else
--	if (rpc_verbosity > 0)
--		printerr(0, "Warning: rpcsec_gss library does not "
--			    "support setting debug level\n");
--#endif
- 
- 	if (gssd_check_mechs() != 0) {
- 		printerr(0, "ERROR: Problem with gssapi library\n");
- 		exit(1);
- 	}
- 
--	if (!fg)
--		mydaemon(0, 0);
--
--	signal(SIGINT, sig_die);
--	signal(SIGTERM, sig_die);
--	signal(SIGHUP, sig_hup);
--
--	if (get_creds && !gssd_acquire_cred(GSSD_SERVICE_NAME)) {
-+	if (get_creds && gssd_prepare_creds(must_srv_mds, must_srv_oss)) {
-                 printerr(0, "unable to obtain root (machine) credentials\n");
-                 printerr(0, "do you have a keytab entry for "
- 			    "nfs/<your.host>@<YOUR.REALM> in "
-@@ -225,9 +237,18 @@
- 	}
- 
- 	if (!fg)
-+		mydaemon(0, 0);
-+
-+	signal(SIGINT, sig_die);
-+	signal(SIGTERM, sig_die);
-+	signal(SIGHUP, sig_hup);
-+
-+	if (!fg)
- 		release_parent();
- 
--	gssd_run();
-+	gssd_init_unique(GSSD_SVC);
-+
-+	svcgssd_run();
- 	printerr(0, "gssd_run returned!\n");
- 	abort();
- }
---- nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c	2006-10-30 17:23:21.000000000 -0700
-@@ -35,7 +35,6 @@
- 
- #include <sys/param.h>
- #include <sys/stat.h>
--#include <rpc/rpc.h>
- 
- #include <pwd.h>
- #include <stdio.h>
-@@ -44,25 +43,28 @@
- #include <string.h>
- #include <fcntl.h>
- #include <errno.h>
--#include <nfsidmap.h>
-+#include <netdb.h>
- 
- #include "svcgssd.h"
- #include "gss_util.h"
- #include "err_util.h"
- #include "context.h"
- #include "cacheio.h"
-+#include "lsupport.h"
- 
- extern char * mech2file(gss_OID mech);
--#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.rpcsec.context/channel"
--#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.rpcsec.init/channel"
-+#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.ptlrpcs.context/channel"
-+#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.ptlrpcs.init/channel"
- 
- #define TOKEN_BUF_SIZE		8192
- 
- struct svc_cred {
--	uid_t	cr_uid;
--	gid_t	cr_gid;
--	int	cr_ngroups;
--	gid_t	cr_groups[NGROUPS];
-+	uint32_t cr_remote;
-+	uint32_t cr_usr_root;
-+	uint32_t cr_usr_mds;
-+	uid_t    cr_uid;
-+	uid_t    cr_mapped_uid;
-+	uid_t    cr_gid;
- };
- 
- static int
-@@ -70,10 +72,9 @@
- 		gss_OID mech, gss_buffer_desc *context_token)
- {
- 	FILE *f;
--	int i;
- 	char *fname = NULL;
- 
--	printerr(1, "doing downcall\n");
-+	printerr(2, "doing downcall\n");
- 	if ((fname = mech2file(mech)) == NULL)
- 		goto out_err;
- 	f = fopen(SVCGSSD_CONTEXT_CHANNEL, "w");
-@@ -86,11 +87,12 @@
- 	qword_printhex(f, out_handle->value, out_handle->length);
- 	/* XXX are types OK for the rest of this? */
- 	qword_printint(f, 0x7fffffff); /*XXX need a better timeout */
-+	qword_printint(f, cred->cr_remote);
-+	qword_printint(f, cred->cr_usr_root);
-+	qword_printint(f, cred->cr_usr_mds);
-+	qword_printint(f, cred->cr_mapped_uid);
- 	qword_printint(f, cred->cr_uid);
- 	qword_printint(f, cred->cr_gid);
--	qword_printint(f, cred->cr_ngroups);
--	for (i=0; i < cred->cr_ngroups; i++)
--		qword_printint(f, cred->cr_groups[i]);
- 	qword_print(f, fname);
- 	qword_printhex(f, context_token->value, context_token->length);
- 	qword_eol(f);
-@@ -119,7 +121,7 @@
- 	/* XXXARG: */
- 	int g;
- 
--	printerr(1, "sending null reply\n");
-+	printerr(2, "sending null reply\n");
- 
- 	qword_addhex(&bp, &blen, in_handle->value, in_handle->length);
- 	qword_addhex(&bp, &blen, in_token->value, in_token->length);
-@@ -159,6 +161,7 @@
- #define rpcsec_gsserr_credproblem	13
- #define rpcsec_gsserr_ctxproblem	14
- 
-+#if 0
- static void
- add_supplementary_groups(char *secname, char *name, struct svc_cred *cred)
- {
-@@ -182,7 +185,9 @@
- 		}
- 	}
- }
-+#endif
- 
-+#if 0
- static int
- get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred)
- {
-@@ -248,7 +253,9 @@
- out:
- 	return res;
- }
-+#endif
- 
-+#if 0
- void
- print_hexl(int pri, unsigned char *cp, int length)
- {
-@@ -285,12 +292,113 @@
- 		printerr(pri,"\n");
- 	}
- }
-+#endif
-+
-+static int
-+get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
-+	lnet_nid_t nid, uint32_t lustre_svc)
-+{
-+	u_int32_t	maj_stat, min_stat;
-+	gss_buffer_desc	name;
-+	char		*sname, *realm, *slash;
-+	int		res = -1;
-+	gss_OID		name_type = GSS_C_NO_OID;
-+	struct passwd	*pw;
-+
-+	memset(cred, 0, sizeof(*cred));
-+
-+	maj_stat = gss_display_name(&min_stat, client_name, &name, &name_type);
-+	if (maj_stat != GSS_S_COMPLETE) {
-+		pgsserr("get_ids: gss_display_name",
-+			maj_stat, min_stat, mech);
-+		return -1;
-+	}
-+	if (name.length >= 0xffff || /* be certain name.length+1 doesn't overflow */
-+	    !(sname = calloc(name.length + 1, 1))) {
-+		printerr(0, "WARNING: get_ids: error allocating %d bytes "
-+			"for sname\n", name.length + 1);
-+		gss_release_buffer(&min_stat, &name);
-+		return -1;
-+	}
-+	memcpy(sname, name.value, name.length);
-+	printerr(1, "authenticated %s from %016llx\n", sname, nid);
-+	gss_release_buffer(&min_stat, &name);
-+
-+	if (lustre_svc == LUSTRE_GSS_SVC_MDS)
-+		lookup_mapping(sname, nid, &cred->cr_mapped_uid);
-+	else
-+		cred->cr_mapped_uid = -1;
-+
-+        realm = strchr(sname, '@');
-+        if (!realm) {
-+                printerr(0, "WARNNING: principal %s contains no realm name\n",
-+			 sname);
-+                cred->cr_remote = (mds_local_realm != NULL);
-+        } else {
-+                *realm++ = '\0';
-+                if (!mds_local_realm)
-+                        cred->cr_remote = 1;
-+                else
-+                        cred->cr_remote =
-+                                (strcasecmp(mds_local_realm, realm) != 0);
-+        }
-+
-+        if (cred->cr_remote) {
-+                if (cred->cr_mapped_uid != -1)
-+                        res = 0;
-+                else
-+                        printerr(0, "principal %s is remote without mapping\n",
-+                                 sname);
-+		goto out_free;
-+        }
-+
-+        slash = strchr(sname, '/');
-+        if (slash)
-+                *slash = '\0';
-+
-+        if (!(pw = getpwnam(sname))) {
-+                /* If client use machine credential, we map it to root, which
-+                 * will subject to further mapping by root-squash in kernel.
-+                 *
-+                 * MDS service keytab is treated as special user, also mapped
-+                 * to root. OSS service keytab can't be used as a user.
-+                 */
-+                if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
-+                        printerr(2, "lustre_root principal, resolve to uid 0\n");
-+                        cred->cr_uid = 0;
-+                        cred->cr_usr_root = 1;
-+                } else if (!strcmp(sname, GSSD_SERVICE_MDS)) {
-+                        printerr(2, "mds service principal, resolve to uid 0\n");
-+                        cred->cr_uid = 0;
-+                        cred->cr_usr_mds = 1;
-+                } else {
-+                        cred->cr_uid = -1;
-+                        if (cred->cr_mapped_uid == -1) {
-+                                printerr(0, "invalid user %s\n", sname);
-+                                goto out_free;
-+                        }
-+                        printerr(2, "user %s mapped to %u\n",
-+                                 sname, cred->cr_mapped_uid);
-+                }
-+        } else {
-+                cred->cr_uid = pw->pw_uid;
-+                printerr(2, "%s resolve to uid %u\n", sname, cred->cr_uid);
-+        }
-+
-+        res = 0;
-+out_free:
-+        free(sname);
-+        return res;
-+}
-+
-+typedef struct gss_union_ctx_id_t {
-+	gss_OID         mech_type;
-+	gss_ctx_id_t    internal_ctx_id;
-+} gss_union_ctx_id_desc, *gss_union_ctx_id_t;
- 
- void
- handle_nullreq(FILE *f) {
--	/* XXX initialize to a random integer to reduce chances of unnecessary
--	 * invalidation of existing ctx's on restarting svcgssd. */
--	static u_int32_t	handle_seq = 0;
-+	uint64_t		handle_seq;
- 	char			in_tok_buf[TOKEN_BUF_SIZE];
- 	char			in_handle_buf[15];
- 	char			out_handle_buf[15];
-@@ -302,10 +410,13 @@
- 				ignore_out_tok = {.value = NULL},
- 	/* XXX isn't there a define for this?: */
- 				null_token = {.value = NULL};
-+	uint32_t		lustre_svc;
-+	lnet_nid_t		nid;
- 	u_int32_t		ret_flags;
- 	gss_ctx_id_t		ctx = GSS_C_NO_CONTEXT;
- 	gss_name_t		client_name;
- 	gss_OID			mech = GSS_C_NO_OID;
-+	gss_cred_id_t		svc_cred;
- 	u_int32_t		maj_stat = GSS_S_FAILURE, min_stat = 0;
- 	u_int32_t		ignore_min_stat;
- 	struct svc_cred		cred;
-@@ -313,7 +424,7 @@
- 	static int		lbuflen = 0;
- 	static char		*cp;
- 
--	printerr(1, "handling null request\n");
-+	printerr(2, "handling null request\n");
- 
- 	if (readline(fileno(f), &lbuf, &lbuflen) != 1) {
- 		printerr(0, "WARNING: handle_nullreq: "
-@@ -323,15 +434,21 @@
- 
- 	cp = lbuf;
- 
-+	qword_get(&cp, (char *) &lustre_svc, sizeof(lustre_svc));
-+	qword_get(&cp, (char *) &nid, sizeof(nid));
-+	qword_get(&cp, (char *) &handle_seq, sizeof(handle_seq));
-+	printerr(1, "handling req: svc %u, nid %016llx, idx %llx\n",
-+		 lustre_svc, nid, handle_seq);
-+
- 	in_handle.length = (size_t) qword_get(&cp, in_handle.value,
- 					      sizeof(in_handle_buf));
--	printerr(2, "in_handle: \n");
--	print_hexl(2, in_handle.value, in_handle.length);
-+	printerr(3, "in_handle: \n");
-+	print_hexl(3, in_handle.value, in_handle.length);
- 
- 	in_tok.length = (size_t) qword_get(&cp, in_tok.value,
- 					   sizeof(in_tok_buf));
--	printerr(2, "in_tok: \n");
--	print_hexl(2, in_tok.value, in_tok.length);
-+	printerr(3, "in_tok: \n");
-+	print_hexl(3, in_tok.value, in_tok.length);
- 
- 	if (in_tok.length < 0) {
- 		printerr(0, "WARNING: handle_nullreq: "
-@@ -351,7 +468,13 @@
- 		memcpy(&ctx, in_handle.value, in_handle.length);
- 	}
- 
--	maj_stat = gss_accept_sec_context(&min_stat, &ctx, gssd_creds,
-+	svc_cred = gssd_select_svc_cred(lustre_svc);
-+	if (!svc_cred) {
-+		printerr(0, "no service credential for svc %u\n", lustre_svc);
-+		goto out_err;
-+	}
-+
-+	maj_stat = gss_accept_sec_context(&min_stat, &ctx, svc_cred,
- 			&in_tok, GSS_C_NO_CHANNEL_BINDINGS, &client_name,
- 			&mech, &out_tok, &ret_flags, NULL, NULL);
- 
-@@ -369,7 +492,8 @@
- 			maj_stat, min_stat, mech);
- 		goto out_err;
- 	}
--	if (get_ids(client_name, mech, &cred)) {
-+
-+	if (get_ids(client_name, mech, &cred, nid, lustre_svc)) {
- 		/* get_ids() prints error msg */
- 		maj_stat = GSS_S_BAD_NAME; /* XXX ? */
- 		gss_release_name(&ignore_min_stat, &client_name);
-@@ -377,10 +501,8 @@
- 	}
- 	gss_release_name(&ignore_min_stat, &client_name);
- 
--
- 	/* Context complete. Pass handle_seq in out_handle to use
- 	 * for context lookup in the kernel. */
--	handle_seq++;
- 	out_handle.length = sizeof(handle_seq);
- 	memcpy(out_handle.value, &handle_seq, sizeof(handle_seq));
- 
-@@ -404,7 +526,6 @@
- 		free(ctx_token.value);
- 	if (out_tok.value != NULL)
- 		gss_release_buffer(&ignore_min_stat, &out_tok);
--	printerr(1, "finished handling null request\n");
- 	return;
- 
- out_err:
---- nfs-utils-1.0.10/utils/gssd/gss_util.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_util.c	2006-10-30 16:40:47.000000000 -0700
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/gss_util.c nfs-utils-1.0.10/utils/gssd/gss_util.c
+--- nfs-utils-1.0.10.orig/utils/gssd/gss_util.c	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gss_util.c	2006-11-15 21:44:43.000000000 -0700
 @@ -87,9 +87,16 @@
  #ifdef HAVE_COM_ERR_H
  #include <com_err.h>
@@ -1297,7 +1373,7 @@
  
  gss_OID g_mechOid = GSS_C_NULL_OID;;
  
-@@ -183,15 +190,51 @@
+@@ -183,15 +190,51 @@ pgsserr(char *msg, u_int32_t maj_stat, u
  	display_status_2(msg, maj_stat, min_stat, mech);
  }
  
@@ -1351,7 +1427,7 @@
  	name.value = (void *)server_name;
  	name.length = strlen(server_name);
  
-@@ -201,12 +244,20 @@
+@@ -201,12 +244,20 @@ gssd_acquire_cred(char *server_name)
  
  	if (maj_stat != GSS_S_COMPLETE) {
  		pgsserr("gss_import_name", maj_stat, min_stat, g_mechOid);
@@ -1374,7 +1450,7 @@
  
  	if (maj_stat != GSS_S_COMPLETE) {
  		pgsserr("gss_acquire_cred", maj_stat, min_stat, g_mechOid);
-@@ -218,11 +269,65 @@
+@@ -218,11 +269,65 @@ gssd_acquire_cred(char *server_name)
  			ignore_maj_stat = gss_release_buffer(&ignore_min_stat,
  							     &pbuf);
  		}
@@ -1442,8 +1518,9 @@
  }
  
  int gssd_check_mechs(void)
---- nfs-utils-1.0.10/utils/gssd/gss_util.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_util.h	2006-10-30 16:40:47.000000000 -0700
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/gss_util.h nfs-utils-1.0.10/utils/gssd/gss_util.h
+--- nfs-utils-1.0.10.orig/utils/gssd/gss_util.h	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/gss_util.h	2006-11-15 21:44:43.000000000 -0700
 @@ -32,12 +32,10 @@
  #define _GSS_UTIL_H_
  
@@ -1457,63 +1534,9 @@
  void pgsserr(char *msg, u_int32_t maj_stat, u_int32_t min_stat,
  	const gss_OID mech);
  int gssd_check_mechs(void);
---- nfs-utils-1.0.10/utils/gssd/krb5_util.h.lustre	2006-10-30 16:40:17.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/krb5_util.h	2006-10-30 16:40:47.000000000 -0700
-@@ -10,13 +10,15 @@
- struct gssd_k5_kt_princ {
- 	struct gssd_k5_kt_princ *next;
- 	krb5_principal princ;
-+	unsigned int	fl_root:1,
-+			fl_mds:1;
- 	char *ccname;
- 	char *realm;
- 	krb5_timestamp endtime;
- };
- 
- 
--void gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername);
-+void gssd_setup_krb5_user_gss_ccache(uint64_t pag, uid_t uid, char *servername);
- int  gssd_get_krb5_machine_cred_list(char ***list);
- int  gssd_refresh_krb5_machine_creds(void);
- void gssd_free_krb5_machine_cred_list(char **list);
-@@ -25,8 +27,32 @@
- void gssd_obtain_kernel_krb5_info(void);
- 
- 
--#ifdef HAVE_SET_ALLOWABLE_ENCTYPES
--int limit_krb5_enctypes(struct rpc_gss_sec *sec, uid_t uid);
--#endif
-+#endif /* KRB5_UTIL_H */
-+#ifndef KRB5_UTIL_H
-+#define KRB5_UTIL_H
-+
-+#include <krb5.h>
-+
-+/*
-+ * List of principals from our keytab that we
-+ * may try to get credentials for
-+ */
-+struct gssd_k5_kt_princ {
-+	struct gssd_k5_kt_princ *next;
-+	krb5_principal princ;
-+	char *ccname;
-+	char *realm;
-+	krb5_timestamp endtime;
-+};
-+
-+
-+void gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername);
-+int  gssd_get_krb5_machine_cred_list(char ***list);
-+int  gssd_refresh_krb5_machine_creds(void);
-+void gssd_free_krb5_machine_cred_list(char **list);
-+void gssd_setup_krb5_machine_gss_ccache(char *servername);
-+void gssd_destroy_krb5_machine_creds(void);
-+void gssd_obtain_kernel_krb5_info(void);
-+
- 
- #endif /* KRB5_UTIL_H */
---- nfs-utils-1.0.10/utils/gssd/krb5_util.c.lustre	2006-10-30 16:40:17.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/krb5_util.c	2006-10-30 16:40:47.000000000 -0700
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/krb5_util.c nfs-utils-1.0.10/utils/gssd/krb5_util.c
+--- nfs-utils-1.0.10.orig/utils/gssd/krb5_util.c	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/krb5_util.c	2006-11-15 21:44:43.000000000 -0700
 @@ -99,12 +99,14 @@
  #include <rpc/rpc.h>
  #include <sys/types.h>
@@ -1537,7 +1560,7 @@
  
  #include "gssd.h"
  #include "err_util.h"
-@@ -129,6 +130,12 @@
+@@ -129,6 +130,12 @@ struct gssd_k5_kt_princ *gssd_k5_kt_prin
  int num_krb5_enctypes = 0;
  krb5_enctype *krb5_enctypes = NULL;
  
@@ -1550,7 +1573,7 @@
  /*==========================*/
  /*===  Internal routines ===*/
  /*==========================*/
-@@ -137,11 +144,55 @@
+@@ -137,11 +144,55 @@ static int select_krb5_ccache(const stru
  static int gssd_find_existing_krb5_ccache(uid_t uid, struct dirent **d);
  static int gssd_get_single_krb5_cred(krb5_context context,
  		krb5_keytab kt, struct gssd_k5_kt_princ *ple);
@@ -1607,7 +1630,7 @@
   * Called from the scandir function to weed out potential krb5
   * credentials cache files
   *
-@@ -292,7 +343,7 @@
+@@ -294,7 +345,7 @@ gssd_get_single_krb5_cred(krb5_context c
  
  	memset(&my_creds, 0, sizeof(my_creds));
  
@@ -1616,7 +1639,7 @@
  		printerr(2, "INFO: Credentials in CC '%s' are good until %d\n",
  			 ple->ccname, ple->endtime);
  		code = 0;
-@@ -323,11 +374,7 @@
+@@ -325,11 +376,7 @@ gssd_get_single_krb5_cred(krb5_context c
  			    "principal '%s' from keytab '%s'\n",
  			 error_message(code),
  			 pname ? pname : "<unparsable>", kt_name);
@@ -1629,7 +1652,7 @@
  		goto out;
  	}
  
-@@ -371,15 +418,7 @@
+@@ -378,15 +425,7 @@ gssd_get_single_krb5_cred(krb5_context c
  	return (code);
  }
  
@@ -1646,7 +1669,7 @@
  {
  	struct gssd_k5_kt_princ *ple;
  #ifdef HAVE_KRB5
-@@ -389,18 +428,76 @@
+@@ -396,18 +435,76 @@ gssd_have_realm_ple(void *r)
  #endif
  
  	for (ple = gssd_k5_kt_princ_list; ple; ple = ple->next) {
@@ -1731,7 +1754,7 @@
  /*
   * Process the given keytab file and create a list of principals we
   * might use to perform mount operations.
-@@ -444,82 +541,106 @@
+@@ -451,82 +548,106 @@ gssd_process_krb5_keytab(krb5_context co
  		}
  		printerr(2, "Processing keytab entry for principal '%s'\n",
  			 pname);
@@ -1907,7 +1930,7 @@
  	}
  
  	if ((code = krb5_kt_end_seq_get(context, kt, &cursor))) {
-@@ -627,14 +748,21 @@
+@@ -634,14 +755,21 @@ parse_enctypes(char *enctypes)
   *	void
   */
  void
@@ -1932,7 +1955,7 @@
  	if (gssd_find_existing_krb5_ccache(uid, &d)) {
  		snprintf(buf, sizeof(buf), "FILE:%s/%s",
  			ccachedir, d->d_name);
-@@ -645,6 +773,7 @@
+@@ -652,6 +780,7 @@ gssd_setup_krb5_user_gss_ccache(uid_t ui
  			ccachedir, GSSD_DEFAULT_CRED_PREFIX, uid);
  	printerr(2, "using %s as credentials cache for client with "
  		    "uid %u for server %s\n", buf, uid, servername);
@@ -1940,7 +1963,7 @@
  	gssd_set_krb5_ccache_name(buf);
  }
  
-@@ -695,7 +824,18 @@
+@@ -702,7 +831,18 @@ gssd_refresh_krb5_machine_creds(void)
  		goto out;
  	}
  
@@ -1960,7 +1983,7 @@
  
  	if ((code = krb5_kt_resolve(context, keytabfile, &kt))) {
  		printerr(0, "ERROR: %s while resolving keytab '%s'\n",
-@@ -710,12 +850,12 @@
+@@ -717,12 +857,12 @@ gssd_refresh_krb5_machine_creds(void)
  		if (gssd_k5_kt_princ_list == NULL) {
  			printerr(0, "ERROR: No usable keytab entries found in "
  				    "keytab '%s'\n", keytabfile);
@@ -1978,7 +2001,7 @@
  		}
  	}
  
-@@ -865,6 +1005,7 @@
+@@ -872,6 +1012,7 @@ gssd_destroy_krb5_machine_creds(void)
  	krb5_free_context(context);
  }
  
@@ -1986,7 +2009,7 @@
  #ifdef HAVE_SET_ALLOWABLE_ENCTYPES
  /*
   * this routine obtains a credentials handle via gss_acquire_cred()
-@@ -920,6 +1061,7 @@
+@@ -927,6 +1068,7 @@ limit_krb5_enctypes(struct rpc_gss_sec *
  	return 0;
  }
  #endif	/* HAVE_SET_ALLOWABLE_ENCTYPES */
@@ -1994,311 +2017,65 @@
  
  /*
   * Obtain supported enctypes from kernel.
---- nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c	2006-10-30 16:40:47.000000000 -0700
-@@ -47,6 +47,7 @@
- #include "gssd.h"
- #include "write_bytes.h"
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/krb5_util.h nfs-utils-1.0.10/utils/gssd/krb5_util.h
+--- nfs-utils-1.0.10.orig/utils/gssd/krb5_util.h	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/krb5_util.h	2006-11-15 21:44:43.000000000 -0700
+@@ -10,13 +10,15 @@
+ struct gssd_k5_kt_princ {
+ 	struct gssd_k5_kt_princ *next;
+ 	krb5_principal princ;
++	unsigned int	fl_root:1,
++			fl_mds:1;
+ 	char *ccname;
+ 	char *realm;
+ 	krb5_timestamp endtime;
+ };
  
-+#if 0
- char pipefsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
  
- static void
-@@ -102,3 +103,4 @@
- 	}
- 	exit(0);
- }
-+#endif
---- nfs-utils-1.0.10/utils/gssd/context.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/context.c	2006-10-30 16:40:47.000000000 -0700
-@@ -33,8 +33,6 @@
- #include <syslog.h>
- #include <string.h>
- #include <gssapi/gssapi.h>
--#include <rpc/rpc.h>
--#include <rpc/auth_gss.h>
- #include "gss_util.h"
- #include "gss_oids.h"
- #include "err_util.h"
---- nfs-utils-1.0.10/utils/gssd/lsupport.h.lustre	2006-10-30 16:40:47.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/lsupport.h	2006-10-30 16:40:47.000000000 -0700
-@@ -0,0 +1,89 @@
-+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
-+ * vim:expandtab:shiftwidth=8:tabstop=8:
-+ */
+-void gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername);
++void gssd_setup_krb5_user_gss_ccache(uint64_t pag, uid_t uid, char *servername);
+ int  gssd_get_krb5_machine_cred_list(char ***list);
+ int  gssd_refresh_krb5_machine_creds(void);
+ void gssd_free_krb5_machine_cred_list(char **list);
+@@ -25,8 +27,32 @@ void gssd_destroy_krb5_machine_creds(voi
+ void gssd_obtain_kernel_krb5_info(void);
+ 
+ 
+-#ifdef HAVE_SET_ALLOWABLE_ENCTYPES
+-int limit_krb5_enctypes(struct rpc_gss_sec *sec, uid_t uid);
+-#endif
++#endif /* KRB5_UTIL_H */
++#ifndef KRB5_UTIL_H
++#define KRB5_UTIL_H
 +
-+#ifndef __LIBCFS_H__
-+#define __LIBCFS_H__
-+
-+#include <unistd.h>
-+#include <stdint.h>
-+
-+#define GSSD_CLI        (0)
-+#define GSSD_SVC        (1)
-+
-+void gssd_init_unique(int type);
-+void gssd_exit_unique(int type);
++#include <krb5.h>
 +
 +/*
-+ * copied from lustre source
++ * List of principals from our keytab that we
++ * may try to get credentials for
 + */
-+
-+#define LUSTRE_GSS_SVC_MDS      0
-+#define LUSTRE_GSS_SVC_OSS      1
-+
-+struct lgssd_upcall_data {
-+        uint32_t        seq;
-+        uint32_t        uid;
-+        uint32_t        gid;
-+        uint32_t        svc;
-+        uint64_t        nid;
-+        uint64_t        pag;
-+        char            obd[64];
++struct gssd_k5_kt_princ {
++	struct gssd_k5_kt_princ *next;
++	krb5_principal princ;
++	char *ccname;
++	char *realm;
++	krb5_timestamp endtime;
 +};
 +
-+#define GSSD_INTERFACE_VERSION        (1)
 +
-+struct lgssd_ioctl_param {
-+        int             version;        /* in   */
-+        char           *uuid;           /* in   */
-+        int             lustre_svc;     /* in   */
-+        uid_t           uid;            /* in   */
-+        gid_t           gid;            /* in   */
-+        long            send_token_size;/* in   */
-+        char           *send_token;     /* in   */
-+        long            reply_buf_size; /* in   */
-+        char           *reply_buf;      /* in   */
-+        long            status;         /* out  */
-+        long            reply_length;   /* out  */
-+};
++void gssd_setup_krb5_user_gss_ccache(uid_t uid, char *servername);
++int  gssd_get_krb5_machine_cred_list(char ***list);
++int  gssd_refresh_krb5_machine_creds(void);
++void gssd_free_krb5_machine_cred_list(char **list);
++void gssd_setup_krb5_machine_gss_ccache(char *servername);
++void gssd_destroy_krb5_machine_creds(void);
++void gssd_obtain_kernel_krb5_info(void);
 +
-+#define GSSD_DEFAULT_GETHOSTNAME_EX     "/etc/lustre/nid2hostname"
-+#define MAPPING_DATABASE_FILE           "/etc/lustre/idmap.conf"
-+
-+typedef uint64_t lnet_nid_t;
-+typedef uint32_t lnet_netid_t;
-+
-+#define LNET_NID_ANY      ((lnet_nid_t) -1)
-+#define LNET_PID_ANY      ((lnet_pid_t) -1)
-+
-+enum {
-+        /* Only add to these values (i.e. don't ever change or redefine them):
-+         * network addresses depend on them... */
-+        QSWLND    = 1,
-+        SOCKLND   = 2,
-+        GMLND     = 3,
-+        PTLLND    = 4,
-+        O2IBLND   = 5,
-+        CIBLND    = 6,
-+        OPENIBLND = 7,
-+        IIBLND    = 8,
-+        LOLND     = 9,
-+        RALND     = 10,
-+        VIBLND    = 11,
-+        LND_ENUM_END_MARKER
-+};
-+
-+int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen);
-+int lookup_mapping(char *princ, uint64_t nid, uid_t *uid);
-+lnet_nid_t libcfs_str2nid(char *str);
-+
-+/* how an LNET NID encodes net:address */
-+#define LNET_NIDADDR(nid)      ((uint32_t)((nid) & 0xffffffff))
-+#define LNET_NIDNET(nid)       ((uint32_t)(((nid) >> 32)) & 0xffffffff)
-+#define LNET_MKNID(net,addr)   ((((uint64_t)(net))<<32)|((uint64_t)(addr)))
-+/* how net encodes type:number */
-+#define LNET_NETNUM(net)       ((net) & 0xffff)
-+#define LNET_NETTYP(net)       (((net) >> 16) & 0xffff)
-+#define LNET_MKNET(typ,num)    ((((uint32_t)(typ))<<16)|((uint32_t)(num)))
-+
-+#endif /* __LIBCFS_H__ */
---- nfs-utils-1.0.10/utils/gssd/err_util.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/err_util.c	2006-10-30 16:40:47.000000000 -0700
-@@ -32,6 +32,8 @@
- #include <stdarg.h>
- #include <syslog.h>
- #include <string.h>
-+#include <fcntl.h>
-+#include <ctype.h>
- #include "err_util.h"
  
- static int verbosity = 0;
-@@ -91,3 +93,40 @@
- 	/* reset the buffer */
- 	memset(message_buf, 0, sizeof(message_buf));
- }
-+
-+void print_hexl(int pri, unsigned char *cp, int length)
-+{
-+	int i, j, jm;
-+	unsigned char c;
-+
-+	printerr(pri, "length %d\n",length);
-+	printerr(pri, "\n");
-+
-+	for (i = 0; i < length; i += 0x10) {
-+		printerr(pri, "  %04x: ", (u_int)i);
-+		jm = length - i;
-+		jm = jm > 16 ? 16 : jm;
-+
-+		for (j = 0; j < jm; j++) {
-+			if ((j % 2) == 1)
-+				printerr(pri,"%02x ", (u_int)cp[i+j]);
-+			else
-+				printerr(pri,"%02x", (u_int)cp[i+j]);
-+		}
-+		for (; j < 16; j++) {
-+			if ((j % 2) == 1)
-+				printerr(pri,"   ");
-+			else
-+				printerr(pri,"  ");
-+		}
-+		printerr(pri," ");
-+
-+		for (j = 0; j < jm; j++) {
-+			c = cp[i+j];
-+			c = isprint(c) ? c : '.';
-+			printerr(pri,"%c", c);
-+		}
-+		printerr(pri,"\n");
-+	}
-+}
-+
---- nfs-utils-1.0.10/utils/gssd/context_spkm3.c.lustre	2006-10-30 16:40:17.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/context_spkm3.c	2006-10-30 16:40:47.000000000 -0700
-@@ -33,8 +33,6 @@
- #include <syslog.h>
- #include <string.h>
- #include <gssapi/gssapi.h>
--#include <rpc/rpc.h>
--#include <rpc/auth_gss.h>
- #include "gss_util.h"
- #include "gss_oids.h"
- #include "err_util.h"
---- nfs-utils-1.0.10/utils/gssd/gssd.c.lustre	2006-10-30 16:40:17.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/gssd.c	2006-10-30 16:40:47.000000000 -0700
-@@ -40,7 +40,6 @@
- 
- #include <sys/param.h>
- #include <sys/socket.h>
--#include <rpc/rpc.h>
- 
- #include <unistd.h>
- #include <err.h>
-@@ -52,6 +51,7 @@
- #include "err_util.h"
- #include "gss_util.h"
- #include "krb5_util.h"
-+#include "lsupport.h"
- 
- char pipefsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
- char keytabfile[PATH_MAX] = GSSD_DEFAULT_KEYTAB_FILE;
-@@ -77,7 +77,7 @@
- static void
- usage(char *progname)
- {
--	fprintf(stderr, "usage: %s [-f] [-v] [-r] [-p pipefsdir] [-k keytab] [-d ccachedir]\n",
-+	fprintf(stderr, "usage: %s [-f] [-v] [-p pipefsdir] [-k keytab] [-d ccachedir]\n",
- 		progname);
- 	exit(1);
- }
-@@ -87,7 +87,6 @@
- {
- 	int fg = 0;
- 	int verbosity = 0;
--	int rpc_verbosity = 0;
- 	int opt;
- 	extern char *optarg;
- 	char *progname;
-@@ -97,15 +96,9 @@
- 			case 'f':
- 				fg = 1;
- 				break;
--			case 'm':
--				/* Accept but ignore this. Now the default. */
--				break;
- 			case 'v':
- 				verbosity++;
- 				break;
--			case 'r':
--				rpc_verbosity++;
--				break;
- 			case 'p':
- 				strncpy(pipefsdir, optarg, sizeof(pipefsdir));
- 				if (pipefsdir[sizeof(pipefsdir)-1] != '\0')
-@@ -126,10 +119,6 @@
- 				break;
- 		}
- 	}
--	strncat(pipefsdir + strlen(pipefsdir), "/" GSSD_SERVICE_NAME,
--		sizeof(pipefsdir)-strlen(pipefsdir));
--	if (pipefsdir[sizeof(pipefsdir)-1] != '\0')
--		errx(1, "pipefs path name too long");
- 
- 	if ((progname = strrchr(argv[0], '/')))
- 		progname++;
-@@ -137,30 +126,34 @@
- 		progname = argv[0];
- 
- 	initerr(progname, verbosity, fg);
--#ifdef HAVE_AUTHGSS_SET_DEBUG_LEVEL
--	authgss_set_debug_level(rpc_verbosity);
--#else
--        if (rpc_verbosity > 0)
--		printerr(0, "Warning: rpcsec_gss library does not "
--			    "support setting debug level\n");
--#endif
- 
- 	if (gssd_check_mechs() != 0)
- 		errx(1, "Problem with gssapi library");
- 
-+#if 0
-+	/* Determine Kerberos information from the kernel */
-+	gssd_obtain_kernel_krb5_info();
-+#endif
-+
- 	if (!fg && daemon(0, 0) < 0)
- 		errx(1, "fork");
- 
-+	/* This should be checked _after_ daemon(), because we need to own
-+	 * the undo-able semaphore by this process
-+	 */
-+	gssd_init_unique(GSSD_CLI);
-+
-+	/* Process keytab file and get machine credentials. This will modify
-+	 * disk status so do it after we are sure we are the only instance
-+	 */
-+	if (gssd_refresh_krb5_machine_creds())
-+		return -1;
-+
- 	signal(SIGINT, sig_die);
- 	signal(SIGTERM, sig_die);
- 	signal(SIGHUP, sig_hup);
- 
--	/* Process keytab file and get machine credentials */
--	gssd_refresh_krb5_machine_creds();
--	/* Determine Kerberos information from the kernel */
--	gssd_obtain_kernel_krb5_info();
--
--	gssd_run();
-+	lgssd_run();
- 	printerr(0, "gssd_run returned!\n");
- 	abort();
- }
---- nfs-utils-1.0.10/utils/gssd/cacheio.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/cacheio.c	2006-10-30 16:40:47.000000000 -0700
-@@ -227,7 +227,8 @@
- 		return -1;
- 	while (*bp == ' ') bp++;
- 	*bpp = bp;
--	*dest = '\0';
-+// why should we clear *dest???
-+//	*dest = '\0';
- 	return len;
- }
- 
---- nfs-utils-1.0.10/utils/gssd/lsupport.c.lustre	2006-10-30 16:40:47.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/lsupport.c	2006-10-30 17:42:31.000000000 -0700
+ #endif /* KRB5_UTIL_H */
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/lsupport.c nfs-utils-1.0.10/utils/gssd/lsupport.c
+--- nfs-utils-1.0.10.orig/utils/gssd/lsupport.c	2006-11-15 21:41:25.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/lsupport.c	2006-11-15 21:44:43.000000000 -0700
 @@ -0,0 +1,782 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -3082,17 +2859,356 @@
 +        return -1;
 +}
 +
---- nfs-utils-1.0.10/utils/gssd/err_util.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/err_util.h	2006-10-30 16:40:47.000000000 -0700
-@@ -33,5 +33,6 @@
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/lsupport.h nfs-utils-1.0.10/utils/gssd/lsupport.h
+--- nfs-utils-1.0.10.orig/utils/gssd/lsupport.h	2006-11-15 21:41:23.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/lsupport.h	2006-11-15 21:44:43.000000000 -0700
+@@ -0,0 +1,89 @@
++/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
++ * vim:expandtab:shiftwidth=8:tabstop=8:
++ */
++
++#ifndef __LIBCFS_H__
++#define __LIBCFS_H__
++
++#include <unistd.h>
++#include <stdint.h>
++
++#define GSSD_CLI        (0)
++#define GSSD_SVC        (1)
++
++void gssd_init_unique(int type);
++void gssd_exit_unique(int type);
++
++/*
++ * copied from lustre source
++ */
++
++#define LUSTRE_GSS_SVC_MDS      0
++#define LUSTRE_GSS_SVC_OSS      1
++
++struct lgssd_upcall_data {
++        uint32_t        seq;
++        uint32_t        uid;
++        uint32_t        gid;
++        uint32_t        svc;
++        uint64_t        nid;
++        uint64_t        pag;
++        char            obd[64];
++};
++
++#define GSSD_INTERFACE_VERSION        (1)
++
++struct lgssd_ioctl_param {
++        int             version;        /* in   */
++        char           *uuid;           /* in   */
++        int             lustre_svc;     /* in   */
++        uid_t           uid;            /* in   */
++        gid_t           gid;            /* in   */
++        long            send_token_size;/* in   */
++        char           *send_token;     /* in   */
++        long            reply_buf_size; /* in   */
++        char           *reply_buf;      /* in   */
++        long            status;         /* out  */
++        long            reply_length;   /* out  */
++};
++
++#define GSSD_DEFAULT_GETHOSTNAME_EX     "/etc/lustre/nid2hostname"
++#define MAPPING_DATABASE_FILE           "/etc/lustre/idmap.conf"
++
++typedef uint64_t lnet_nid_t;
++typedef uint32_t lnet_netid_t;
++
++#define LNET_NID_ANY      ((lnet_nid_t) -1)
++#define LNET_PID_ANY      ((lnet_pid_t) -1)
++
++enum {
++        /* Only add to these values (i.e. don't ever change or redefine them):
++         * network addresses depend on them... */
++        QSWLND    = 1,
++        SOCKLND   = 2,
++        GMLND     = 3,
++        PTLLND    = 4,
++        O2IBLND   = 5,
++        CIBLND    = 6,
++        OPENIBLND = 7,
++        IIBLND    = 8,
++        LOLND     = 9,
++        RALND     = 10,
++        VIBLND    = 11,
++        LND_ENUM_END_MARKER
++};
++
++int lnet_nid2hostname(lnet_nid_t nid, char *buf, int buflen);
++int lookup_mapping(char *princ, uint64_t nid, uid_t *uid);
++lnet_nid_t libcfs_str2nid(char *str);
++
++/* how an LNET NID encodes net:address */
++#define LNET_NIDADDR(nid)      ((uint32_t)((nid) & 0xffffffff))
++#define LNET_NIDNET(nid)       ((uint32_t)(((nid) >> 32)) & 0xffffffff)
++#define LNET_MKNID(net,addr)   ((((uint64_t)(net))<<32)|((uint64_t)(addr)))
++/* how net encodes type:number */
++#define LNET_NETNUM(net)       ((net) & 0xffff)
++#define LNET_NETTYP(net)       (((net) >> 16) & 0xffff)
++#define LNET_MKNET(typ,num)    ((((uint32_t)(typ))<<16)|((uint32_t)(num)))
++
++#endif /* __LIBCFS_H__ */
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/Makefile.am nfs-utils-1.0.10/utils/gssd/Makefile.am
+--- nfs-utils-1.0.10.orig/utils/gssd/Makefile.am	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/Makefile.am	2006-11-15 21:44:43.000000000 -0700
+@@ -1,17 +1,11 @@
+ ## Process this file with automake to produce Makefile.in
  
- void initerr(char *progname, int verbosity, int fg);
- void printerr(int priority, char *format, ...);
-+void print_hexl(int pri, unsigned char *cp, int length);
+-man8_MANS	= gssd.man svcgssd.man
+-
+-RPCPREFIX	= rpc.
++RPCPREFIX	= 
+ KPREFIX		= @kprefix@
+-sbin_PREFIXED	= gssd svcgssd
+-sbin_PROGRAMS	= $(sbin_PREFIXED) gss_clnt_send_err
++sbin_PREFIXED	= lgssd lsvcgssd
++sbin_PROGRAMS	= $(sbin_PREFIXED)
+ sbin_SCRIPTS	= gss_destroy_creds
  
- #endif /* _ERR_UTIL_H_ */
---- nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c	2006-10-30 16:40:47.000000000 -0700
+-EXTRA_DIST = \
+-	gss_destroy_creds \
+-	$(man8_MANS)
+-
+ COMMON_SRCS = \
+ 	context.c \
+ 	context_mit.c \
+@@ -21,13 +15,15 @@ COMMON_SRCS = \
+ 	gss_util.c \
+ 	gss_oids.c \
+ 	err_util.c \
++	lsupport.c \
+ 	\
+ 	context.h \
+ 	err_util.h \
+ 	gss_oids.h \
+-	gss_util.h
++	gss_util.h \
++	lsupport.h
+ 
+-gssd_SOURCES = \
++lgssd_SOURCES = \
+ 	$(COMMON_SRCS) \
+ 	gssd.c \
+ 	gssd_main_loop.c \
+@@ -38,13 +34,12 @@ gssd_SOURCES = \
+ 	krb5_util.h \
+ 	write_bytes.h
+ 
+-gssd_LDADD = $(RPCSECGSS_LIBS) $(KRBLIBS)
+-gssd_LDFLAGS = $(KRBLDFLAGS)
++lgssd_LDADD = $(GSSAPI_LIBS) $(KRBLIBS)
++lgssd_LDFLAGS = $(KRBLDFLAGS)
+ 
+-gssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) \
+-	      $(RPCSECGSS_CFLAGS) $(KRBCFLAGS)
++lgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(GSSAPI_CFLAGS) $(KRBCFLAGS)
+ 
+-svcgssd_SOURCES = \
++lsvcgssd_SOURCES = \
+ 	$(COMMON_SRCS) \
+ 	cacheio.c \
+ 	svcgssd.c \
+@@ -55,20 +50,11 @@ svcgssd_SOURCES = \
+ 	cacheio.h \
+ 	svcgssd.h
+ 
+-svcgssd_LDADD = \
+-	../../support/nfs/libnfs.a \
+-	$(RPCSECGSS_LIBS) -lnfsidmap \
+-	$(KRBLIBS)
+-
+-svcgssd_LDFLAGS = $(KRBLDFLAGS)
+-
+-svcgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) \
+-		 $(RPCSECGSS_CFLAGS) $(KRBCFLAGS)
++lsvcgssd_LDADD = $(GSSAPI_LIBS) $(KRBLIBS)
+ 
+-gss_clnt_send_err_SOURCES = gss_clnt_send_err.c
++lsvcgssd_LDFLAGS = $(KRBLDFLAGS)
+ 
+-gss_clnt_send_err_CFLAGS = $(AM_CFLAGS) $(CFLAGS) \
+-		 $(RPCSECGSS_CFLAGS) $(KRBCFLAGS)
++lsvcgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(GSSAPI_CFLAGS) $(KRBCFLAGS)
+ 
+ MAINTAINERCLEANFILES = Makefile.in
+ 
+@@ -92,23 +78,3 @@ uninstall-hook:
+ 	  done)
+ 
+ 
+-# XXX This makes some assumptions about what automake does.
+-# XXX But there is no install-man-hook or install-man-local.
+-install-man: install-man8 install-man-links
+-uninstall-man: uninstall-man8 uninstall-man-links
+-
+-install-man-links:
+-	(cd $(DESTDIR)$(man8dir) && \
+-	  for m in $(man8_MANS) $(dist_man8_MANS) $(nodist_man8_MANS); do \
+-	    inst=`echo $$m | sed -e 's/man$$/8/'`; \
+-	    rm -f $(RPCPREFIX)$$inst ; \
+-	    $(LN_S) $$inst $(RPCPREFIX)$$inst ; \
+-	  done)
+-
+-uninstall-man-links:
+-	(cd $(DESTDIR)$(man8dir) && \
+-	  for m in $(man8_MANS) $(dist_man8_MANS) $(nodist_man8_MANS); do \
+-	    inst=`echo $$m | sed -e 's/man$$/8/'`; \
+-	    rm -f $(RPCPREFIX)$$inst ; \
+-	  done)
+-
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd.c nfs-utils-1.0.10/utils/gssd/svcgssd.c
+--- nfs-utils-1.0.10.orig/utils/gssd/svcgssd.c	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd.c	2006-11-15 21:44:43.000000000 -0700
+@@ -43,7 +43,6 @@
+ #include <sys/types.h>
+ #include <sys/stat.h>
+ #include <sys/socket.h>
+-#include <rpc/rpc.h>
+ #include <fcntl.h>
+ #include <errno.h>
+ 
+@@ -54,11 +53,33 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <signal.h>
+-#include "nfslib.h"
++#include <dirent.h>
+ #include "svcgssd.h"
+ #include "gss_util.h"
+ #include "err_util.h"
++#include "lsupport.h"
+ 
++void
++closeall(int min)
++{
++	DIR *dir = opendir("/proc/self/fd");
++	if (dir != NULL) {
++		int dfd = dirfd(dir);
++		struct dirent *d;
++
++		while ((d = readdir(dir)) != NULL) {
++			char *endp;
++			long n = strtol(d->d_name, &endp, 10);
++			if (*endp != '\0' && n >= min && n != dfd)
++				(void) close(n);
++		}
++		closedir(dir);
++	} else {
++		int fd = sysconf(_SC_OPEN_MAX);
++		while (--fd >= min)
++			(void) close(fd);
++	}
++}
+ /*
+  * mydaemon creates a pipe between the partent and child
+  * process. The parent process will wait until the
+@@ -165,8 +186,8 @@ main(int argc, char *argv[])
+ 	int get_creds = 1;
+ 	int fg = 0;
+ 	int verbosity = 0;
+-	int rpc_verbosity = 0;
+ 	int opt;
++	int must_srv_mds = 0, must_srv_oss = 0;
+ 	extern char *optarg;
+ 	char *progname;
+ 
+@@ -181,8 +202,13 @@ main(int argc, char *argv[])
+ 			case 'v':
+ 				verbosity++;
+ 				break;
+-			case 'r':
+-				rpc_verbosity++;
++			case 'm':
++				get_creds = 1;
++				must_srv_mds = 1;
++				break;
++			case 'o':
++				get_creds = 1;
++				must_srv_oss = 1;
+ 				break;
+ 			default:
+ 				usage(argv[0]);
+@@ -196,27 +222,13 @@ main(int argc, char *argv[])
+ 		progname = argv[0];
+ 
+ 	initerr(progname, verbosity, fg);
+-#ifdef HAVE_AUTHGSS_SET_DEBUG_LEVEL
+-	authgss_set_debug_level(rpc_verbosity);
+-#else
+-	if (rpc_verbosity > 0)
+-		printerr(0, "Warning: rpcsec_gss library does not "
+-			    "support setting debug level\n");
+-#endif
+ 
+ 	if (gssd_check_mechs() != 0) {
+ 		printerr(0, "ERROR: Problem with gssapi library\n");
+ 		exit(1);
+ 	}
+ 
+-	if (!fg)
+-		mydaemon(0, 0);
+-
+-	signal(SIGINT, sig_die);
+-	signal(SIGTERM, sig_die);
+-	signal(SIGHUP, sig_hup);
+-
+-	if (get_creds && !gssd_acquire_cred(GSSD_SERVICE_NAME)) {
++	if (get_creds && gssd_prepare_creds(must_srv_mds, must_srv_oss)) {
+                 printerr(0, "unable to obtain root (machine) credentials\n");
+                 printerr(0, "do you have a keytab entry for "
+ 			    "nfs/<your.host>@<YOUR.REALM> in "
+@@ -225,9 +237,18 @@ main(int argc, char *argv[])
+ 	}
+ 
+ 	if (!fg)
++		mydaemon(0, 0);
++
++	signal(SIGINT, sig_die);
++	signal(SIGTERM, sig_die);
++	signal(SIGHUP, sig_hup);
++
++	if (!fg)
+ 		release_parent();
+ 
+-	gssd_run();
++	gssd_init_unique(GSSD_SVC);
++
++	svcgssd_run();
+ 	printerr(0, "gssd_run returned!\n");
+ 	abort();
+ }
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd.h nfs-utils-1.0.10/utils/gssd/svcgssd.h
+--- nfs-utils-1.0.10.orig/utils/gssd/svcgssd.h	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd.h	2006-11-15 21:44:43.000000000 -0700
+@@ -36,8 +36,19 @@
+ #include <gssapi/gssapi.h>
+ 
+ void handle_nullreq(FILE *f);
+-void gssd_run(void);
++void svcgssd_run(void);
++int gssd_prepare_creds(int must_srv_mds, int must_srv_oss);
++gss_cred_id_t gssd_select_svc_cred(int lustre_svc);
+ 
+-#define GSSD_SERVICE_NAME	"nfs"
++extern char *mds_local_realm;
++extern char *oss_local_realm;
++
++#define GSSD_SERVICE_NAME	"lustre"
++
++/* XXX */
++#define GSSD_SERVICE_MDS			"lustre_mds"
++#define GSSD_SERVICE_OSS			"lustre_oss"
++#define LUSTRE_ROOT_NAME			"lustre_root"
++#define LUSTRE_ROOT_NAMELEN			11
+ 
+ #endif /* _RPC_SVCGSSD_H_ */
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd_main_loop.c nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c
+--- nfs-utils-1.0.10.orig/utils/gssd/svcgssd_main_loop.c	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c	2006-11-15 21:44:43.000000000 -0700
 @@ -47,31 +47,31 @@
  #include "err_util.h"
  
@@ -3139,193 +3255,338 @@
  		if (ret < 0) {
  			if (save_err != EINTR)
  				printerr(0, "error return from poll: %s\n",
-@@ -87,5 +87,6 @@
+@@ -87,5 +87,6 @@ gssd_run()
  			if (pollfd.revents & POLLIN)
  				handle_nullreq(f);
  		}
 +		fclose(f);
  	}
  }
---- nfs-utils-1.0.10/utils/gssd/Makefile.am.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/Makefile.am	2006-10-30 16:40:47.000000000 -0700
-@@ -1,17 +1,11 @@
- ## Process this file with automake to produce Makefile.in
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c
+--- nfs-utils-1.0.10.orig/utils/gssd/svcgssd_proc.c	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c	2006-11-15 21:44:43.000000000 -0700
+@@ -35,7 +35,6 @@
  
--man8_MANS	= gssd.man svcgssd.man
--
--RPCPREFIX	= rpc.
-+RPCPREFIX	= 
- KPREFIX		= @kprefix@
--sbin_PREFIXED	= gssd svcgssd
--sbin_PROGRAMS	= $(sbin_PREFIXED) gss_clnt_send_err
-+sbin_PREFIXED	= lgssd lsvcgssd
-+sbin_PROGRAMS	= $(sbin_PREFIXED)
- sbin_SCRIPTS	= gss_destroy_creds
+ #include <sys/param.h>
+ #include <sys/stat.h>
+-#include <rpc/rpc.h>
  
--EXTRA_DIST = \
--	gss_destroy_creds \
--	$(man8_MANS)
--
- COMMON_SRCS = \
- 	context.c \
- 	context_mit.c \
-@@ -20,13 +14,15 @@
- 	gss_util.c \
- 	gss_oids.c \
- 	err_util.c \
-+	lsupport.c \
- 	\
- 	context.h \
- 	err_util.h \
- 	gss_oids.h \
--	gss_util.h
-+	gss_util.h \
-+	lsupport.h
+ #include <pwd.h>
+ #include <stdio.h>
+@@ -44,25 +43,28 @@
+ #include <string.h>
+ #include <fcntl.h>
+ #include <errno.h>
+-#include <nfsidmap.h>
++#include <netdb.h>
  
--gssd_SOURCES = \
-+lgssd_SOURCES = \
- 	$(COMMON_SRCS) \
- 	gssd.c \
- 	gssd_main_loop.c \
-@@ -37,13 +33,12 @@
- 	krb5_util.h \
- 	write_bytes.h
+ #include "svcgssd.h"
+ #include "gss_util.h"
+ #include "err_util.h"
+ #include "context.h"
+ #include "cacheio.h"
++#include "lsupport.h"
  
--gssd_LDADD = $(RPCSECGSS_LIBS) $(KRBLIBS)
--gssd_LDFLAGS = $(KRBLDFLAGS)
-+lgssd_LDADD = $(GSSAPI_LIBS) $(KRBLIBS)
-+lgssd_LDFLAGS = $(KRBLDFLAGS)
+ extern char * mech2file(gss_OID mech);
+-#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.rpcsec.context/channel"
+-#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.rpcsec.init/channel"
++#define SVCGSSD_CONTEXT_CHANNEL "/proc/net/rpc/auth.ptlrpcs.context/channel"
++#define SVCGSSD_INIT_CHANNEL    "/proc/net/rpc/auth.ptlrpcs.init/channel"
  
--gssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) \
--	      $(RPCSECGSS_CFLAGS) $(KRBCFLAGS)
-+lgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(GSSAPI_CFLAGS) $(KRBCFLAGS)
+ #define TOKEN_BUF_SIZE		8192
  
--svcgssd_SOURCES = \
-+lsvcgssd_SOURCES = \
- 	$(COMMON_SRCS) \
- 	cacheio.c \
- 	svcgssd.c \
-@@ -54,20 +49,11 @@
- 	cacheio.h \
- 	svcgssd.h
+ struct svc_cred {
+-	uid_t	cr_uid;
+-	gid_t	cr_gid;
+-	int	cr_ngroups;
+-	gid_t	cr_groups[NGROUPS];
++	uint32_t cr_remote;
++	uint32_t cr_usr_root;
++	uint32_t cr_usr_mds;
++	uid_t    cr_uid;
++	uid_t    cr_mapped_uid;
++	uid_t    cr_gid;
+ };
  
--svcgssd_LDADD = \
--	../../support/nfs/libnfs.a \
--	$(RPCSECGSS_LIBS) -lnfsidmap \
--	$(KRBLIBS)
--
--svcgssd_LDFLAGS = $(KRBLDFLAGS)
--
--svcgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) \
--		 $(RPCSECGSS_CFLAGS) $(KRBCFLAGS)
-+lsvcgssd_LDADD = $(GSSAPI_LIBS) $(KRBLIBS)
+ static int
+@@ -70,10 +72,9 @@ do_svc_downcall(gss_buffer_desc *out_han
+ 		gss_OID mech, gss_buffer_desc *context_token)
+ {
+ 	FILE *f;
+-	int i;
+ 	char *fname = NULL;
  
--gss_clnt_send_err_SOURCES = gss_clnt_send_err.c
-+lsvcgssd_LDFLAGS = $(KRBLDFLAGS)
+-	printerr(1, "doing downcall\n");
++	printerr(2, "doing downcall\n");
+ 	if ((fname = mech2file(mech)) == NULL)
+ 		goto out_err;
+ 	f = fopen(SVCGSSD_CONTEXT_CHANNEL, "w");
+@@ -86,11 +87,12 @@ do_svc_downcall(gss_buffer_desc *out_han
+ 	qword_printhex(f, out_handle->value, out_handle->length);
+ 	/* XXX are types OK for the rest of this? */
+ 	qword_printint(f, 0x7fffffff); /*XXX need a better timeout */
++	qword_printint(f, cred->cr_remote);
++	qword_printint(f, cred->cr_usr_root);
++	qword_printint(f, cred->cr_usr_mds);
++	qword_printint(f, cred->cr_mapped_uid);
+ 	qword_printint(f, cred->cr_uid);
+ 	qword_printint(f, cred->cr_gid);
+-	qword_printint(f, cred->cr_ngroups);
+-	for (i=0; i < cred->cr_ngroups; i++)
+-		qword_printint(f, cred->cr_groups[i]);
+ 	qword_print(f, fname);
+ 	qword_printhex(f, context_token->value, context_token->length);
+ 	qword_eol(f);
+@@ -119,7 +121,7 @@ send_response(FILE *f, gss_buffer_desc *
+ 	/* XXXARG: */
+ 	int g;
  
--gss_clnt_send_err_CFLAGS = $(AM_CFLAGS) $(CFLAGS) \
--		 $(RPCSECGSS_CFLAGS) $(KRBCFLAGS)
-+lsvcgssd_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(GSSAPI_CFLAGS) $(KRBCFLAGS)
+-	printerr(1, "sending null reply\n");
++	printerr(2, "sending null reply\n");
  
- MAINTAINERCLEANFILES = Makefile.in
+ 	qword_addhex(&bp, &blen, in_handle->value, in_handle->length);
+ 	qword_addhex(&bp, &blen, in_token->value, in_token->length);
+@@ -159,6 +161,7 @@ send_response(FILE *f, gss_buffer_desc *
+ #define rpcsec_gsserr_credproblem	13
+ #define rpcsec_gsserr_ctxproblem	14
  
-@@ -91,23 +77,3 @@
- 	  done)
++#if 0
+ static void
+ add_supplementary_groups(char *secname, char *name, struct svc_cred *cred)
+ {
+@@ -182,7 +185,9 @@ add_supplementary_groups(char *secname, 
+ 		}
+ 	}
+ }
++#endif
  
++#if 0
+ static int
+ get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred)
+ {
+@@ -248,7 +253,9 @@ out_free:
+ out:
+ 	return res;
+ }
++#endif
  
--# XXX This makes some assumptions about what automake does.
--# XXX But there is no install-man-hook or install-man-local.
--install-man: install-man8 install-man-links
--uninstall-man: uninstall-man8 uninstall-man-links
--
--install-man-links:
--	(cd $(DESTDIR)$(man8dir) && \
--	  for m in $(man8_MANS) $(dist_man8_MANS) $(nodist_man8_MANS); do \
--	    inst=`echo $$m | sed -e 's/man$$/8/'`; \
--	    rm -f $(RPCPREFIX)$$inst ; \
--	    $(LN_S) $$inst $(RPCPREFIX)$$inst ; \
--	  done)
--
--uninstall-man-links:
--	(cd $(DESTDIR)$(man8dir) && \
--	  for m in $(man8_MANS) $(dist_man8_MANS) $(nodist_man8_MANS); do \
--	    inst=`echo $$m | sed -e 's/man$$/8/'`; \
--	    rm -f $(RPCPREFIX)$$inst ; \
--	  done)
--
---- nfs-utils-1.0.10/utils/gssd/gssd.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gssd.h	2006-10-30 16:40:47.000000000 -0700
-@@ -48,8 +48,13 @@
- #define GSSD_DEFAULT_CRED_PREFIX		"krb5cc_"
- #define GSSD_DEFAULT_MACHINE_CRED_SUFFIX	"machine"
- #define GSSD_DEFAULT_KEYTAB_FILE		"/etc/krb5.keytab"
--#define GSSD_SERVICE_NAME			"nfs"
--#define GSSD_SERVICE_NAME_LEN			3
-+#define GSSD_SERVICE_MDS			"lustre_mds"
-+#define GSSD_SERVICE_OSS			"lustre_oss"
-+#define GSSD_SERVICE_MDS_NAMELEN		10
-+#define GSSD_SERVICE_OSS_NAMELEN		10
++#if 0
+ void
+ print_hexl(int pri, unsigned char *cp, int length)
+ {
+@@ -285,12 +292,113 @@ print_hexl(int pri, unsigned char *cp, i
+ 		printerr(pri,"\n");
+ 	}
+ }
++#endif
 +
-+#define LUSTRE_ROOT_NAME			"lustre_root"
-+#define LUSTRE_ROOT_NAMELEN			11
- 
- /*
-  * The gss mechanisms that we can handle
-@@ -61,6 +66,7 @@
- extern char			pipefsdir[PATH_MAX];
- extern char			keytabfile[PATH_MAX];
- extern char			ccachedir[PATH_MAX];
-+extern char			gethostname_ex[PATH_MAX];
- 
- TAILQ_HEAD(clnt_list_head, clnt_info) clnt_list;
- 
-@@ -69,10 +75,6 @@
- 	char			*dirname;
- 	int			dir_fd;
- 	char			*servicename;
--	char			*servername;
--	int			prog;
--	int			vers;
--	char			*protocol;
- 	int			krb5_fd;
- 	int			krb5_poll_index;
- 	int			spkm3_fd;
-@@ -83,8 +85,7 @@
- int update_client_list(void);
- void handle_krb5_upcall(struct clnt_info *clp);
- void handle_spkm3_upcall(struct clnt_info *clp);
--int gssd_acquire_cred(char *server_name);
--void gssd_run(void);
-+void lgssd_run(void);
- 
- 
- #endif /* _RPC_GSSD_H_ */
---- nfs-utils-1.0.10/utils/gssd/svcgssd.h.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd.h	2006-10-30 16:40:47.000000000 -0700
-@@ -36,8 +36,19 @@
- #include <gssapi/gssapi.h>
- 
- void handle_nullreq(FILE *f);
--void gssd_run(void);
-+void svcgssd_run(void);
-+int gssd_prepare_creds(int must_srv_mds, int must_srv_oss);
-+gss_cred_id_t gssd_select_svc_cred(int lustre_svc);
- 
--#define GSSD_SERVICE_NAME	"nfs"
-+extern char *mds_local_realm;
-+extern char *oss_local_realm;
++static int
++get_ids(gss_name_t client_name, gss_OID mech, struct svc_cred *cred,
++	lnet_nid_t nid, uint32_t lustre_svc)
++{
++	u_int32_t	maj_stat, min_stat;
++	gss_buffer_desc	name;
++	char		*sname, *realm, *slash;
++	int		res = -1;
++	gss_OID		name_type = GSS_C_NO_OID;
++	struct passwd	*pw;
 +
-+#define GSSD_SERVICE_NAME	"lustre"
++	memset(cred, 0, sizeof(*cred));
 +
-+/* XXX */
-+#define GSSD_SERVICE_MDS			"lustre_mds"
-+#define GSSD_SERVICE_OSS			"lustre_oss"
-+#define LUSTRE_ROOT_NAME			"lustre_root"
-+#define LUSTRE_ROOT_NAMELEN			11
++	maj_stat = gss_display_name(&min_stat, client_name, &name, &name_type);
++	if (maj_stat != GSS_S_COMPLETE) {
++		pgsserr("get_ids: gss_display_name",
++			maj_stat, min_stat, mech);
++		return -1;
++	}
++	if (name.length >= 0xffff || /* be certain name.length+1 doesn't overflow */
++	    !(sname = calloc(name.length + 1, 1))) {
++		printerr(0, "WARNING: get_ids: error allocating %d bytes "
++			"for sname\n", name.length + 1);
++		gss_release_buffer(&min_stat, &name);
++		return -1;
++	}
++	memcpy(sname, name.value, name.length);
++	printerr(1, "authenticated %s from %016llx\n", sname, nid);
++	gss_release_buffer(&min_stat, &name);
++
++	if (lustre_svc == LUSTRE_GSS_SVC_MDS)
++		lookup_mapping(sname, nid, &cred->cr_mapped_uid);
++	else
++		cred->cr_mapped_uid = -1;
++
++        realm = strchr(sname, '@');
++        if (!realm) {
++                printerr(0, "WARNNING: principal %s contains no realm name\n",
++			 sname);
++                cred->cr_remote = (mds_local_realm != NULL);
++        } else {
++                *realm++ = '\0';
++                if (!mds_local_realm)
++                        cred->cr_remote = 1;
++                else
++                        cred->cr_remote =
++                                (strcasecmp(mds_local_realm, realm) != 0);
++        }
++
++        if (cred->cr_remote) {
++                if (cred->cr_mapped_uid != -1)
++                        res = 0;
++                else
++                        printerr(0, "principal %s is remote without mapping\n",
++                                 sname);
++		goto out_free;
++        }
++
++        slash = strchr(sname, '/');
++        if (slash)
++                *slash = '\0';
++
++        if (!(pw = getpwnam(sname))) {
++                /* If client use machine credential, we map it to root, which
++                 * will subject to further mapping by root-squash in kernel.
++                 *
++                 * MDS service keytab is treated as special user, also mapped
++                 * to root. OSS service keytab can't be used as a user.
++                 */
++                if (!strcmp(sname, LUSTRE_ROOT_NAME)) {
++                        printerr(2, "lustre_root principal, resolve to uid 0\n");
++                        cred->cr_uid = 0;
++                        cred->cr_usr_root = 1;
++                } else if (!strcmp(sname, GSSD_SERVICE_MDS)) {
++                        printerr(2, "mds service principal, resolve to uid 0\n");
++                        cred->cr_uid = 0;
++                        cred->cr_usr_mds = 1;
++                } else {
++                        cred->cr_uid = -1;
++                        if (cred->cr_mapped_uid == -1) {
++                                printerr(0, "invalid user %s\n", sname);
++                                goto out_free;
++                        }
++                        printerr(2, "user %s mapped to %u\n",
++                                 sname, cred->cr_mapped_uid);
++                }
++        } else {
++                cred->cr_uid = pw->pw_uid;
++                printerr(2, "%s resolve to uid %u\n", sname, cred->cr_uid);
++        }
++
++        res = 0;
++out_free:
++        free(sname);
++        return res;
++}
++
++typedef struct gss_union_ctx_id_t {
++	gss_OID         mech_type;
++	gss_ctx_id_t    internal_ctx_id;
++} gss_union_ctx_id_desc, *gss_union_ctx_id_t;
  
- #endif /* _RPC_SVCGSSD_H_ */
---- nfs-utils-1.0.10/utils/Makefile.am.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/Makefile.am	2006-10-30 16:40:47.000000000 -0700
+ void
+ handle_nullreq(FILE *f) {
+-	/* XXX initialize to a random integer to reduce chances of unnecessary
+-	 * invalidation of existing ctx's on restarting svcgssd. */
+-	static u_int32_t	handle_seq = 0;
++	uint64_t		handle_seq;
+ 	char			in_tok_buf[TOKEN_BUF_SIZE];
+ 	char			in_handle_buf[15];
+ 	char			out_handle_buf[15];
+@@ -302,10 +410,13 @@ handle_nullreq(FILE *f) {
+ 				ignore_out_tok = {.value = NULL},
+ 	/* XXX isn't there a define for this?: */
+ 				null_token = {.value = NULL};
++	uint32_t		lustre_svc;
++	lnet_nid_t		nid;
+ 	u_int32_t		ret_flags;
+ 	gss_ctx_id_t		ctx = GSS_C_NO_CONTEXT;
+ 	gss_name_t		client_name;
+ 	gss_OID			mech = GSS_C_NO_OID;
++	gss_cred_id_t		svc_cred;
+ 	u_int32_t		maj_stat = GSS_S_FAILURE, min_stat = 0;
+ 	u_int32_t		ignore_min_stat;
+ 	struct svc_cred		cred;
+@@ -313,7 +424,7 @@ handle_nullreq(FILE *f) {
+ 	static int		lbuflen = 0;
+ 	static char		*cp;
+ 
+-	printerr(1, "handling null request\n");
++	printerr(2, "handling null request\n");
+ 
+ 	if (readline(fileno(f), &lbuf, &lbuflen) != 1) {
+ 		printerr(0, "WARNING: handle_nullreq: "
+@@ -323,15 +434,21 @@ handle_nullreq(FILE *f) {
+ 
+ 	cp = lbuf;
+ 
++	qword_get(&cp, (char *) &lustre_svc, sizeof(lustre_svc));
++	qword_get(&cp, (char *) &nid, sizeof(nid));
++	qword_get(&cp, (char *) &handle_seq, sizeof(handle_seq));
++	printerr(1, "handling req: svc %u, nid %016llx, idx %llx\n",
++		 lustre_svc, nid, handle_seq);
++
+ 	in_handle.length = (size_t) qword_get(&cp, in_handle.value,
+ 					      sizeof(in_handle_buf));
+-	printerr(2, "in_handle: \n");
+-	print_hexl(2, in_handle.value, in_handle.length);
++	printerr(3, "in_handle: \n");
++	print_hexl(3, in_handle.value, in_handle.length);
+ 
+ 	in_tok.length = (size_t) qword_get(&cp, in_tok.value,
+ 					   sizeof(in_tok_buf));
+-	printerr(2, "in_tok: \n");
+-	print_hexl(2, in_tok.value, in_tok.length);
++	printerr(3, "in_tok: \n");
++	print_hexl(3, in_tok.value, in_tok.length);
+ 
+ 	if (in_tok.length < 0) {
+ 		printerr(0, "WARNING: handle_nullreq: "
+@@ -351,7 +468,13 @@ handle_nullreq(FILE *f) {
+ 		memcpy(&ctx, in_handle.value, in_handle.length);
+ 	}
+ 
+-	maj_stat = gss_accept_sec_context(&min_stat, &ctx, gssd_creds,
++	svc_cred = gssd_select_svc_cred(lustre_svc);
++	if (!svc_cred) {
++		printerr(0, "no service credential for svc %u\n", lustre_svc);
++		goto out_err;
++	}
++
++	maj_stat = gss_accept_sec_context(&min_stat, &ctx, svc_cred,
+ 			&in_tok, GSS_C_NO_CHANNEL_BINDINGS, &client_name,
+ 			&mech, &out_tok, &ret_flags, NULL, NULL);
+ 
+@@ -369,7 +492,8 @@ handle_nullreq(FILE *f) {
+ 			maj_stat, min_stat, mech);
+ 		goto out_err;
+ 	}
+-	if (get_ids(client_name, mech, &cred)) {
++
++	if (get_ids(client_name, mech, &cred, nid, lustre_svc)) {
+ 		/* get_ids() prints error msg */
+ 		maj_stat = GSS_S_BAD_NAME; /* XXX ? */
+ 		gss_release_name(&ignore_min_stat, &client_name);
+@@ -377,10 +501,8 @@ handle_nullreq(FILE *f) {
+ 	}
+ 	gss_release_name(&ignore_min_stat, &client_name);
+ 
+-
+ 	/* Context complete. Pass handle_seq in out_handle to use
+ 	 * for context lookup in the kernel. */
+-	handle_seq++;
+ 	out_handle.length = sizeof(handle_seq);
+ 	memcpy(out_handle.value, &handle_seq, sizeof(handle_seq));
+ 
+@@ -404,7 +526,6 @@ out:
+ 		free(ctx_token.value);
+ 	if (out_tok.value != NULL)
+ 		gss_release_buffer(&ignore_min_stat, &out_tok);
+-	printerr(1, "finished handling null request\n");
+ 	return;
+ 
+ out_err:
+diff -rup nfs-utils-1.0.10.orig/utils/Makefile.am nfs-utils-1.0.10/utils/Makefile.am
+--- nfs-utils-1.0.10.orig/utils/Makefile.am	2006-08-07 00:40:50.000000000 -0600
++++ nfs-utils-1.0.10/utils/Makefile.am	2006-11-15 21:44:43.000000000 -0700
 @@ -2,31 +2,6 @@
  
  OPTDIRS =
@@ -3359,206 +3620,3 @@
 +SUBDIRS = gssd
  
  MAINTAINERCLEANFILES = Makefile.in
---- nfs-utils-1.0.10/configure.in.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/configure.in	2006-10-30 16:40:47.000000000 -0700
-@@ -17,61 +17,14 @@
- 	RELEASE=$withval,
- 	RELEASE=1)
- 	AC_SUBST(RELEASE)
--AC_ARG_WITH(statedir,
--	[  --with-statedir=/foo    use state dir /foo [/var/lib/nfs]],
--	statedir=$withval,
--	statedir=/var/lib/nfs)
--	AC_SUBST(statedir)
--AC_ARG_WITH(statduser,
--	[AC_HELP_STRING([--with-statduser=rpcuser],
--                        [statd to run under @<:@rpcuser or nobody@:>@]
--	)],
--	statduser=$withval,
--	if test "x$cross_compiling" = "xno"; then
--		if grep -s '^rpcuser:' /etc/passwd > /dev/null; then
--			statduser=rpcuser
--		else
--			statduser=nobody
--		fi
--	else
--		statduser=nobody
--	fi)
--	AC_SUBST(statduser)
--AC_ARG_ENABLE(nfsv3,
--	[AC_HELP_STRING([--enable-nfsv3],
--                        [enable support for NFSv3 @<:@default=yes@:>@])],
--	enable_nfsv3=$enableval,
--	enable_nfsv3=yes)
--	if test "$enable_nfsv3" = yes; then
--		AC_DEFINE(NFS3_SUPPORTED, 1, [Define this if you want NFSv3 support compiled in])
--	else
--		enable_nfsv3=
--	fi
--	AC_SUBST(enable_nfsv3)
--AC_ARG_ENABLE(nfsv4,
--	[AC_HELP_STRING([--enable-nfsv4],
--                        [enable support for NFSv4 @<:@default=yes@:>@])],
--	enable_nfsv4=$enableval,
--	enable_nfsv4=yes)
--	if test "$enable_nfsv4" = yes; then
--		AC_DEFINE(NFS4_SUPPORTED, 1, [Define this if you want NFSv4 support compiled in])
--		IDMAPD=idmapd
--	else
--		enable_nfsv4=
--		IDMAPD=
--	fi
--	AC_SUBST(IDMAPD)
--	AC_SUBST(enable_nfsv4)
--	AM_CONDITIONAL(CONFIG_NFSV4, [test "$enable_nfsv4" = "yes"])
- AC_ARG_ENABLE(gss,
- 	[AC_HELP_STRING([--enable-gss],
-                         [enable support for rpcsec_gss @<:@default=yes@:>@])],
- 	enable_gss=$enableval,
- 	enable_gss=yes)
- 	if test "$enable_gss" = yes; then
--		AC_DEFINE(GSS_SUPPORTED, 1, [Define this if you want rpcsec_gss support compiled in])
--		GSSD=gssd
--		SVCGSSD=svcgssd
-+		GSSD=lgssd
-+		SVCGSSD=lsvcgssd
- 	else
- 		enable_gss=
- 		GSSD=
-@@ -81,38 +34,6 @@
- 	AC_SUBST(SVCGSSD)
- 	AC_SUBST(enable_gss)
- 	AM_CONDITIONAL(CONFIG_GSS, [test "$enable_gss" = "yes"])
--AC_ARG_ENABLE(kprefix,
--	[AC_HELP_STRING([--enable-kprefix], [install progs as rpc.knfsd etc])],
--	test "$enableval" = "yes" && kprefix=k,
--	kprefix=)
--	AC_SUBST(kprefix)
--AC_ARG_ENABLE(secure-statd,
--	[AC_HELP_STRING([--enable-secure-statd],
--                        [Only lockd can use statd (security)])],
--	test "$enableval" = "yes" && secure_statd=yes,
--	secure_statd=no)
--	if test "$secure_statd" = yes; then
--		AC_DEFINE(RESTRICTED_STATD, 1, [Define this if you want to enable various security checks in statd. These checks basically keep anyone but lockd from using this service.])
--	fi
--	AC_SUBST(secure_statd)
--AC_ARG_ENABLE(rquotad,
--	[AC_HELP_STRING([--enable-rquotad],
--                        [enable rquotad @<:@default=yes@:>@])],
--	enable_rquotad=$enableval,
--	enable_rquotad=yes)
--	if test "$enable_rquotad" = yes; then
--		RQUOTAD=rquotad
--	else
--		RQUOTAD=
--	fi
--	AM_CONDITIONAL(CONFIG_RQUOTAD, [test "$enable_rquotad" = "yes"])
--
--AC_ARG_ENABLE(mount,
--	[AC_HELP_STRING([--enable-mount],
--			[Create mount.nfs and don't use the util-linux mount(8) functionality. @<:@default=no@:>@])],
--	enable_mount=$enableval,
--	enable_mount=no)
--	AM_CONDITIONAL(CONFIG_MOUNT, [test "$enable_mount" = "yes"])
- 
- # Check whether user wants TCP wrappers support
- AC_TCP_WRAPPERS
-@@ -150,50 +71,18 @@
- AC_CHECK_LIB(socket, main, [LIBSOCKET="-lnsl"])
- AC_CHECK_LIB(nsl, main,	[LIBNSL="-lnsl"])
- AC_CHECK_LIB(crypt, crypt, [LIBCRYPT="-lcrypt"])
--if test "$enable_nfsv4" = yes; then
--    AC_CHECK_LIB(event, event_dispatch, [libevent=1], AC_MSG_ERROR([libevent needed for nfsv4 support]))
--    AC_CHECK_LIB(nfsidmap, nfs4_init_name_mapping, [libnfsidmap=1], AC_MSG_ERROR([libnfsidmap needed for nfsv4 support]))
--    AC_CHECK_HEADERS(event.h, ,AC_MSG_ERROR([libevent needed for nfsv4 support]))
--    AC_CHECK_HEADERS(nfsidmap.h, ,AC_MSG_ERROR([libnfsidmap needed for nfsv4 support]))
--    dnl librpcsecgss already has a dependency on libgssapi,
--    dnl but we need to make sure we get the right version
-     if test "$enable_gss" = yes; then
--     PKG_CHECK_MODULES(RPCSECGSS, librpcsecgss >= 0.10, ,
--      [AC_MSG_ERROR([Unable to locate information required to use librpcsecgss.])
--       AC_MSG_ERROR([If you have pkgconfig installed, you might try setting environment])
--       AC_MSG_ERROR([variable PKG_CONFIG_PATH to /usr/local/lib/pkgconfig])
--      ]
--     )
-     PKG_CHECK_MODULES(GSSAPI, libgssapi >= 0.9)
-     fi
- 
--fi
--if test "$knfsd_cv_glibc2" = no; then
--    AC_CHECK_LIB(bsd, daemon, [LIBBSD="-lbsd"])
--fi
- AC_SUBST(LIBSOCKET)
- AC_SUBST(LIBNSL)
- AC_SUBST(LIBCRYPT)
- AC_SUBST(LIBBSD)
- 
- if test "$enable_gss" = yes; then
--  dnl 'gss' also depends on nfsidmap.h - at least for svcgssd_proc.c
--  AC_CHECK_HEADERS(nfsidmap.h, ,AC_MSG_ERROR([libnfsidmap needed for gss support]))
--  AC_CHECK_HEADERS(spkm3.h, ,AC_MSG_WARN([could not locate SPKM3 header; will not have SPKM3 support]))
--  dnl the nfs4_set_debug function doesn't appear in all version of the library
--  AC_CHECK_LIB(nfsidmap, nfs4_set_debug,
--	       AC_DEFINE(HAVE_NFS4_SET_DEBUG,1,
--			 [Whether nfs4_set_debug() is present in libnfsidmap]),)
--
-   dnl Check for Kerberos V5
-   AC_KERBEROS_V5
--
--  dnl This is not done until here because we need to have KRBLIBS set
--  dnl ("librpcsecgss=1" is so that it doesn't get added to LIBS)
--  AC_CHECK_LIB(rpcsecgss, authgss_create_default, [librpcsecgss=1], AC_MSG_ERROR([librpcsecgss needed for nfsv4 support]), -lgssapi -ldl)
--  AC_CHECK_LIB(rpcsecgss, authgss_set_debug_level,
--  	       AC_DEFINE(HAVE_AUTHGSS_SET_DEBUG_LEVEL, 1, [Define this if the rpcsec_gss library has the function authgss_set_debug_level]),, -lgssapi -ldl)
--
- fi
- 
- dnl *************************************************************
-@@ -305,35 +194,7 @@
- 
- AC_CONFIG_FILES([
- 	Makefile
--	linux-nfs/Makefile
--	support/Makefile
--	support/export/Makefile
--	support/include/nfs/Makefile
--	support/include/rpcsvc/Makefile
--	support/include/sys/fs/Makefile
--	support/include/sys/Makefile
--	support/include/Makefile
--	support/misc/Makefile
--	support/nfs/Makefile
--	tools/Makefile
--	tools/getiversion/Makefile
--	tools/getkversion/Makefile
--	tools/locktest/Makefile
--	tools/nlmtest/Makefile
--	tools/rpcdebug/Makefile
--	tools/rpcgen/Makefile
- 	utils/Makefile
--	utils/exportfs/Makefile
--	utils/gssd/Makefile
--	utils/idmapd/Makefile
--	utils/lockd/Makefile
--	utils/mount/Makefile
--	utils/mountd/Makefile
--	utils/nfsd/Makefile
--	utils/nfsstat/Makefile
--	utils/nhfsstone/Makefile
--	utils/rquotad/Makefile
--	utils/showmount/Makefile
--	utils/statd/Makefile])
-+	utils/gssd/Makefile])
- AC_OUTPUT
- 
---- nfs-utils-1.0.10/Makefile.am.lustre	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/Makefile.am	2006-10-30 16:40:47.000000000 -0700
-@@ -1,6 +1,6 @@
- ## Process this file with automake to produce Makefile.in
- 
--SUBDIRS = tools support utils linux-nfs
-+SUBDIRS = utils
- 
- MAINTAINERCLEANFILES = Makefile.in
- 

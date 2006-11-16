@@ -36,11 +36,7 @@
 
 #include "config.h"
 
-#ifdef HAVE_KRB5
-#include <gssapi/gssapi_generic.h>
-#elif HAVE_HEIMDAL
-#include <gssapi.h>
-#endif
+#include <gssapi/gssapi.h>
 #include <string.h>
 
 
