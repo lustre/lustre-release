@@ -293,6 +293,17 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/context_lucid.c nfs-utils-1.0.10/util
  
  		/* derive and send down: Ke, Ki, and Kc */
  
+diff -rup nfs-utils-1.0.10.orig/utils/gssd/context_mit.c nfs-utils-1.0.10/utils/gssd/context_mit.c
+--- nfs-utils-1.0.10.orig/utils/gssd/context_mit.c	2006-11-15 21:26:08.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/context_mit.c	2006-11-15 21:44:43.000000000 -0700
+@@ -39,7 +39,6 @@
+ #include <errno.h>
+ #include <gssapi/gssapi.h>
+ #include <rpc/rpc.h>
+-#include <rpc/auth_gss.h>
+ #include "gss_util.h"
+ #include "gss_oids.h"
+ #include "err_util.h"
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/context_spkm3.c nfs-utils-1.0.10/utils/gssd/context_spkm3.c
 --- nfs-utils-1.0.10.orig/utils/gssd/context_spkm3.c	2006-11-15 21:26:08.000000000 -0700
 +++ nfs-utils-1.0.10/utils/gssd/context_spkm3.c	2006-11-15 21:44:43.000000000 -0700

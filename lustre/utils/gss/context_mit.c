@@ -39,7 +39,6 @@
 #include <errno.h>
 #include <gssapi/gssapi.h>
 #include <rpc/rpc.h>
-#include <rpc/auth_gss.h>
 #include "gss_util.h"
 #include "gss_oids.h"
 #include "err_util.h"
