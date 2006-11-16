@@ -679,7 +679,12 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
                 RETURN(PTR_ERR(inode));
         }
 
-        d_instantiate(dentry, inode);
+        /* Negative dentry may be unhashed if parent does not have UPDATE lock,
+         * but some callers, e.g. do_coredump, expect dentry to be hashed after
+         * successful create. Hash it here. */
+        spin_lock(&dcache_lock);
+        ll_d_add(dentry, inode);
+        spin_unlock(&dcache_lock);
         RETURN(0);
 }
 

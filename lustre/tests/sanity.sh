@@ -3254,6 +3254,31 @@ test_104() {
 }
 run_test 104 "lfs df [-ih] [path] test ========================="
 
+test_107() {
+        CDIR=`pwd`
+        cd $DIR
+        ulimit -c unlimited
+        sleep 60 &
+        MULTIPID=$!
+        
+        file=`cat /proc/sys/kernel/core_pattern`
+        core_pid=`cat /proc/sys/kernel/core_uses_pid`
+        [ $core_pid -eq 1 ] && file=$file.$MULTIPID
+        rm -f $file
+        sleep 1
+
+        kill -s 11 $MULTIPID
+        wait $MULTIPID
+        if [ -e $file ]; then
+                size=`stat -c%s $file`
+                [ $size -eq 0 ] && error "Fail to create core file"
+        else
+                error "Fail to create core file"
+        fi
+        cd $CDIR
+}
+run_test 107 "Coredump on SIG"
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME
