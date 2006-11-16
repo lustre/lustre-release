@@ -118,26 +118,36 @@ fi
 DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
 
+EXCEPT="$EXCEPT 1 3"
+
 if [ -z "`lsmod|grep mdt`" ]; then
-	echo "skipping $TESTNAME (remote MDT)"
-	exit 0
+	LOCAL_MDT=0
+	echo "remote mdt"
+else
+	LOCAL_MDT=1
+	echo "local mdt"
 fi
 
 LPROC=/proc/fs/lustre
 ENABLE_IDENTITY=/usr/sbin/l_getidentity
 DISABLE_IDENTITY=NONE
 LOVNAME=`cat $LPROC/llite/*/lov/common_name | tail -n 1`
-MDT=$(\ls $LPROC/mdt 2> /dev/null | grep -v num_refs | tail -n 1)
 TSTDIR="$MOUNT/remote_user_dir"
 LUSTRE_CONF_DIR=/etc/lustre
 SETXID_CONF=$LUSTRE_CONF_DIR/setxid.conf
 SETXID_CONF_BAK=$LUSTRE_CONF_DIR/setxid.conf.bak
-IDENTITY_UPCALL=$LPROC/mdt/$MDT/identity_upcall
-IDENTITY_UPCALL_BAK=`more $IDENTITY_UPCALL`
-IDENTITY_FLUSH=$LPROC/mdt/$MDT/identity_flush
-ROOTSQUASH_UID=$LPROC/mdt/$MDT/rootsquash_uid
-ROOTSQUASH_GID=$LPROC/mdt/$MDT/rootsquash_gid
-NOSQUASH_NIDS=$LPROC/mdt/$MDT/nosquash_nids
+
+if [ $LOCAL_MDT -eq 1 ]
+then
+	MDT=$(\ls $LPROC/mdt 2> /dev/null | grep -v num_refs | tail -n 1)
+	IDENTITY_UPCALL=$LPROC/mdt/$MDT/identity_upcall
+	IDENTITY_UPCALL_BAK=`more $IDENTITY_UPCALL`
+	IDENTITY_FLUSH=$LPROC/mdt/$MDT/identity_flush
+	ROOTSQUASH_UID=$LPROC/mdt/$MDT/rootsquash_uid
+	ROOTSQUASH_GID=$LPROC/mdt/$MDT/rootsquash_gid
+	NOSQUASH_NIDS=$LPROC/mdt/$MDT/nosquash_nids
+fi
+
 KRB5_REALM=`cat /etc/krb5.conf |grep default_realm| awk '{ print $3 }'`
 CLIENT_TYPE=$LPROC/llite/*/client_type
 USER1=`cat /etc/passwd|grep :500:|cut -d: -f1`
@@ -168,8 +178,11 @@ setup() {
 	else
 		rm -f $SETXID_CONF_BAK
 	fi
-	echo $ENABLE_IDENTITY > $IDENTITY_UPCALL
-	echo -1 > $IDENTITY_FLUSH
+	if [ $LOCAL_MDT -eq 1 ]
+	then
+		echo $ENABLE_IDENTITY > $IDENTITY_UPCALL
+		echo -1 > $IDENTITY_FLUSH
+	fi
 	$RUNAS -u 500 ls $DIR
 	$RUNAS -u 501 ls $DIR
 }
@@ -321,8 +334,11 @@ unsetup() {
 	then
 		mv -f $SETXID_CONF_BAK $SETXID_CONF
 	fi
-	echo $IDENTITY_UPCALL_BAK > $IDENTITY_UPCALL
-	echo -1 > $IDENTITY_FLUSH
+	if [ $LOCAL_MDT -eq 1 ]
+	then
+		echo $IDENTITY_UPCALL_BAK > $IDENTITY_UPCALL
+		echo -1 > $IDENTITY_FLUSH
+	fi
 	$RUNAS -u 500 ls $DIR
 	$RUNAS -u 501 ls $DIR
 }
