@@ -295,9 +295,13 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
         ENTRY;
 
+        LASSERT(req->rq_auth_gss);
+        LASSERT(!req->rq_auth_usr_mdt);
+        LASSERT(req->rq_user_desc);
+        
         ucred->mu_valid = UCRED_INVALID;
 
-        if (req->rq_auth_gss && req->rq_auth_uid == INVALID_UID) {
+        if (req->rq_auth_uid == INVALID_UID) {
                 CWARN("user not authenticated, deny access!\n");
                 RETURN(-EACCES);
         }
@@ -314,30 +318,25 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                 ucred->mu_suppgids[1] = -1;
         }
 
-        /* sanity check: if we use strong authentication, we expect the
-         * uid which client claimed is true */
-        if (req->rq_auth_gss) {
-                if (med->med_rmtclient) {
-                        if (ptlrpc_user_desc_do_idmap(req, pud))
-                                RETURN(-EACCES);
+        /* sanity check: we expect the uid which client claimed is true */
+        if (med->med_rmtclient) {
+                if (ptlrpc_user_desc_do_idmap(req, pud))
+                        RETURN(-EACCES);
 
-                        if (req->rq_auth_mapped_uid != pud->pud_uid) {
-                                CERROR("remote client "LPU64": auth uid %u "
-                                       "while client claim %u:%u/%u:%u\n",
-                                       peernid, req->rq_auth_uid, pud->pud_uid,
-                                       pud->pud_gid, pud->pud_fsuid,
-                                       pud->pud_fsgid);
-                                RETURN(-EACCES);
-                        }
-                } else {
-                        if (req->rq_auth_uid != pud->pud_uid) {
-                                CERROR("local client "LPU64": auth uid %u "
-                                       "while client claim %u:%u/%u:%u\n",
-                                       peernid, req->rq_auth_uid, pud->pud_uid,
-                                       pud->pud_gid, pud->pud_fsuid,
-                                       pud->pud_fsgid);
-                                RETURN(-EACCES);
-                        }
+                if (req->rq_auth_mapped_uid != pud->pud_uid) {
+                        CERROR("remote client "LPU64": auth uid %u "
+                               "while client claim %u:%u/%u:%u\n",
+                               peernid, req->rq_auth_uid, pud->pud_uid,
+                               pud->pud_gid, pud->pud_fsuid, pud->pud_fsgid);
+                        RETURN(-EACCES);
+                }
+        } else {
+                if (req->rq_auth_uid != pud->pud_uid) {
+                        CERROR("local client "LPU64": auth uid %u "
+                               "while client claim %u:%u/%u:%u\n",
+                               peernid, req->rq_auth_uid, pud->pud_uid,
+                               pud->pud_gid, pud->pud_fsuid, pud->pud_fsgid);
+                        RETURN(-EACCES);
                 }
         }
 
@@ -513,7 +512,7 @@ int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
 
         mdt_exit_ucred(info);
 
-        if (req->rq_auth_usr_mdt || !req->rq_user_desc)
+        if (!req->rq_auth_gss || req->rq_auth_usr_mdt || !req->rq_user_desc)
                 return old_init_ucred(info, body);
         else
                 return new_init_ucred(info, BODY_INIT, body);
@@ -529,7 +528,7 @@ int mdt_init_ucred_reint(struct mdt_thread_info *info)
 
         mdt_exit_ucred(info);
 
-        if (req->rq_auth_usr_mdt || !req->rq_user_desc)
+        if (!req->rq_auth_gss || req->rq_auth_usr_mdt || !req->rq_user_desc)
                 return old_init_ucred_reint(info);
         else
                 return new_init_ucred(info, REC_INIT, NULL);
