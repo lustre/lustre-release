@@ -225,7 +225,6 @@ static int mdc_attr_get(const struct lu_env *env, struct md_object *mo,
         RETURN(rc);
 }
 
-
 static int mdc_object_create(const struct lu_env *env,
                              struct md_object *mo,
                              const struct md_op_spec *spec,

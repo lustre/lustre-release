@@ -764,6 +764,17 @@ static int lmv_placement_policy(struct obd_device *obd,
                         struct lu_fid *rpid;
                         int mea_idx;
 
+                        /* 
+                         * If we have this flag turned on, this means that
+                         * caller did not notice yet that dir is split. And if
+                         * see that it is split in fact - this is race, let
+                         * caller know.
+                         */
+                        if (op_data->op_bias & MDS_CHECK_SPLIT) {
+                                lmv_obj_put(obj);
+                                RETURN(-ERESTART);
+                        }
+                        
                         /*
                          * If the dir got split, alloc fid according to its
                          * hash. No matter what we create, object create should
@@ -774,16 +785,6 @@ static int lmv_placement_policy(struct obd_device *obd,
                         rpid = &obj->lo_inodes[mea_idx].li_fid;
                         *mds = obj->lo_inodes[mea_idx].li_mds;
                         lmv_obj_put(obj);
-
-                        /* 
-                         * If we have this flag turned on, this means that
-                         * caller did not notice yet that dir is split. And if
-                         * see that it is split in fact - this is race, let
-                         * caller know.
-                         */
-                        if (op_data->op_bias & MDS_CHECK_SPLIT)
-                                RETURN(-ERESTART);
-                        
                         rc = 0;
 
                         CDEBUG(D_INODE, "The obj "DFID" has been split, got MDS at "
