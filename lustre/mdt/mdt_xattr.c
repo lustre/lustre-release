@@ -108,8 +108,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
         RETURN(size);
 }
 
-static int do_remote_getfacl(struct mdt_thread_info *info,
-                             struct lu_fid *fid, struct lu_buf *buf)
+static int do_remote_getfacl(struct mdt_thread_info *info, struct lu_buf *buf)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
         char *cmd;
@@ -125,7 +124,7 @@ static int do_remote_getfacl(struct mdt_thread_info *info,
                 RETURN(-EFAULT);
         }
 
-        rc = mdt_rmtacl_upcall(info, fid_oid(fid), cmd, buf);
+        rc = mdt_rmtacl_upcall(info, cmd, buf);
         if (rc)
                 CERROR("remote acl upcall failed: %d\n", rc);
 
@@ -176,14 +175,10 @@ int mdt_getxattr(struct mdt_thread_info *info)
                                                           &RMF_NAME);
                 CDEBUG(D_INODE, "getxattr %s\n", xattr_name);
 
-                if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL)) {
-                        struct mdt_body *body =
-                                        (struct mdt_body *)info->mti_body;
-
-                        rc = do_remote_getfacl(info, &body->fid1, buf);
-                } else {
+                if (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))
+                        rc = do_remote_getfacl(info, buf);
+                else
                         rc = mo_xattr_get(info->mti_env, next, buf, xattr_name);
-                }
 
                 if (rc < 0)
                         CERROR("getxattr failed: %d\n", rc);
@@ -231,7 +226,7 @@ static int mdt_setxattr_pack_reply(struct mdt_thread_info * info)
         return rc = rc1 ? rc1 : rc;
 }
 
-static int do_remote_setfacl(struct mdt_thread_info *info, struct lu_fid *fid)
+static int do_remote_setfacl(struct mdt_thread_info *info)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
         struct lu_buf         *buf = &info->mti_buf;
@@ -249,7 +244,7 @@ static int do_remote_setfacl(struct mdt_thread_info *info, struct lu_fid *fid)
         LASSERT(buf->lb_buf);
         buf->lb_len = RMTACL_SIZE_MAX;
 
-        rc = mdt_rmtacl_upcall(info, fid_oid(fid), cmd, buf);
+        rc = mdt_rmtacl_upcall(info, cmd, buf);
         if (rc)
                 CERROR("remote acl upcall failed: %d\n", rc);
 
@@ -304,7 +299,7 @@ int mdt_setxattr(struct mdt_thread_info *info)
 
         if (((valid & OBD_MD_FLXATTR) == OBD_MD_FLXATTR) &&
             (!strcmp(xattr_name, XATTR_NAME_LUSTRE_ACL))) {
-                rc = do_remote_setfacl(info, &body->fid1);
+                rc = do_remote_setfacl(info);
                 GOTO(out, rc);
         }
 

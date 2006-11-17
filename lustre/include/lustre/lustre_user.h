@@ -206,7 +206,7 @@ struct identity_downcall_data {
 struct rmtacl_downcall_data {
         __u32           add_magic;
         __u32           add_handle;
-        __u64           add_ino;
+        __u64           add_key;
         __u32           add_buflen;
         __u8            add_buf[0];
 };

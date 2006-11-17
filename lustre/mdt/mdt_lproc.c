@@ -446,19 +446,19 @@ static int lprocfs_wr_rmtacl_info(struct file *file, const char *buffer,
                 OBD_ALLOC(param, size);
                 if (!param) {
                         CERROR("%s: fail to alloc %d bytes for ino "LPU64"\n",
-                               obd->obd_name, size, sparam.add_ino);
+                               obd->obd_name, size, sparam.add_key);
                         param = &sparam;
                         param->add_buflen = 0;
                 } else if (copy_from_user(param, buffer, size)) {
                         CERROR("%s: ino "LPU64" bad remote acl data\n",
-                               obd->obd_name, sparam.add_ino);
+                               obd->obd_name, sparam.add_key);
                         OBD_FREE(param, size);
                         param = &sparam;
                         param->add_buflen = 0;
                 }
         }
 
-        rc = upcall_cache_downcall(mdt->mdt_rmtacl_cache, 0, param->add_ino,
+        rc = upcall_cache_downcall(mdt->mdt_rmtacl_cache, 0, param->add_key,
                                    param);
 
 out:

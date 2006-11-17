@@ -3588,7 +3588,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         const char                *num = lustre_cfg_string(cfg, 2);
         struct lustre_mount_info  *lmi;
         struct lustre_sb_info     *lsi;
-        struct vfsmount           *mnt;
         struct lu_site            *s;
         int                        rc;
         ENTRY;
@@ -3613,14 +3612,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         } else {
                 lsi = s2lsi(lmi->lmi_sb);
                 fsoptions_to_mdt_flags(m, lsi->lsi_lmd->lmd_opts);
-
-                mnt = lmi->lmi_mnt;
-                OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
-                obd->obd_lvfs_ctxt.pwdmnt = mnt;
-                obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
-                obd->obd_lvfs_ctxt.fs = get_ds();
-
-                server_put_mount_2(dev, mnt);
+                server_put_mount_2(dev, lmi->lmi_mnt);
         }
 
         spin_lock_init(&m->mdt_ioepoch_lock);

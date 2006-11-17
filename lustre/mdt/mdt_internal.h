@@ -613,8 +613,7 @@ int mdt_pack_remote_perm(struct mdt_thread_info *, struct mdt_object *, void *);
 
 extern struct upcall_cache_ops mdt_rmtacl_upcall_cache_ops;
 
-int mdt_rmtacl_upcall(struct mdt_thread_info *, unsigned long,
-                      char *, struct lu_buf *);
+int mdt_rmtacl_upcall(struct mdt_thread_info *, char *, struct lu_buf *);
 
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/

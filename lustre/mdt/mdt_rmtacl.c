@@ -58,12 +58,32 @@
 
 #define MAX_CMD_LEN     256
 
+static __u64 rmtacl_key = 0;
+static spinlock_t rmtacl_key_lock = SPIN_LOCK_UNLOCKED;
+
+/* 
+ * For remote acl operation, do NOT cache!
+ * Use different key for each remote acl operation.
+ */
+static __u64 mdt_rmtacl_getkey(void)
+{
+        __u64 key;
+
+        spin_lock(&rmtacl_key_lock);
+        key = ++rmtacl_key;
+        spin_unlock(&rmtacl_key_lock);
+
+        return key;
+}
+
 static void mdt_rmtacl_entry_init(struct upcall_cache_entry *entry, void *args)
 {
         struct rmtacl_upcall_data *data = args;
         struct mdt_rmtacl *acl = &entry->u.acl;
         char *cmd;
 
+        acl->ra_uid = data->aud_uid;
+        acl->ra_gid = data->aud_gid;
         /* we use address of this cache entry as handle */
         acl->ra_handle = (__u32)entry;
         OBD_ALLOC(cmd, strlen(data->aud_cmd) + 1);
@@ -71,7 +91,7 @@ static void mdt_rmtacl_entry_init(struct upcall_cache_entry *entry, void *args)
                 return; /* upcall will fail later! */
 
         strcpy(cmd, data->aud_cmd);
-        entry->u.acl.ra_cmd = cmd;
+        acl->ra_cmd = cmd;
 }
 
 static void mdt_rmtacl_entry_free(struct upcall_cache *cache,
@@ -115,15 +135,19 @@ static int mdt_rmtacl_do_upcall(struct upcall_cache *cache,
                                 struct upcall_cache_entry *entry)
 {
         struct mdt_rmtacl *acl = &entry->u.acl;
+        char uidstr[8] = "";
+        char gidstr[8] = "";
         char handle[20] = "";
         char keystr[20] = "";
         char *argv[] = {
                   [0] = cache->uc_upcall,
-                  [1] = cache->uc_name,
-                  [2] = keystr,
-                  [3] = handle,
-                  [4] = acl->ra_cmd,
-                  [5] = NULL
+                  [1] = uidstr,
+                  [2] = gidstr,
+                  [3] = cache->uc_name,
+                  [4] = keystr,
+                  [5] = handle,
+                  [6] = acl->ra_cmd,
+                  [7] = NULL
         };
         char *envp[] = {
                   [0] = "HOME=/",
@@ -136,24 +160,27 @@ static int mdt_rmtacl_do_upcall(struct upcall_cache *cache,
         if (!acl->ra_cmd)
                 RETURN(-ENOMEM);
 
+        snprintf(uidstr, sizeof(uidstr), "%u", acl->ra_uid);
+        snprintf(gidstr, sizeof(gidstr), "%u", acl->ra_gid);
         snprintf(keystr, sizeof(keystr), LPU64, entry->ue_key);
         snprintf(handle, sizeof(handle), "%u", acl->ra_handle);
 
         LASSERTF(strcmp(cache->uc_upcall, "NONE"), "no upcall set!");
 
-        CDEBUG(D_INFO, "%s: remote acl upcall %s %s %s %s %s\n",
-               cache->uc_name, argv[0], argv[1], argv[2], argv[3], argv[4]);
+        CDEBUG(D_INFO, "%s: remote acl upcall %s %s %s %s %s %s %s\n",
+               cache->uc_name, argv[0], argv[1], argv[2], argv[3], argv[4],
+               argv[5], argv[6]);
 
         rc = USERMODEHELPER(argv[0], argv, envp);
         if (rc < 0) {
-                CERROR("%s: error invoking upcall %s %s %s %s %s: rc %d; "
+                CERROR("%s: error invoking upcall %s %s %s %s %s %s %s: rc %d; "
                        "check /proc/fs/lustre/mdt/%s/rmtacl_upcall\n",
                        cache->uc_name, argv[0], argv[1], argv[2], argv[3],
-                       argv[4], rc, cache->uc_name);
+                       argv[4], argv[5], argv[6], rc, cache->uc_name);
         } else {
-                CDEBUG(D_HA, "%s: invoked upcall %s %s %s %s %s\n",
+                CDEBUG(D_HA, "%s: invoked upcall %s %s %s %s %s %s %s\n",
                        cache->uc_name, argv[0], argv[1], argv[2], argv[3],
-                       argv[4]);
+                       argv[4], argv[5], argv[6]);
                 rc = 0;
         }
         RETURN(rc);
@@ -195,41 +222,29 @@ struct upcall_cache_ops mdt_rmtacl_upcall_cache_ops = {
         .parse_downcall   = mdt_rmtacl_parse_downcall,
 };
 
-int mdt_rmtacl_upcall(struct mdt_thread_info *info, unsigned long key,
-                      char *cmd, struct lu_buf *buf)
+int mdt_rmtacl_upcall(struct mdt_thread_info *info, char *cmd,
+                      struct lu_buf *buf)
 {
-        struct ptlrpc_request          *req = mdt_info_req(info);
-        struct obd_device              *obd = req->rq_export->exp_obd;
         struct mdt_device              *mdt = info->mti_mdt;
-        struct lvfs_ucred               uc;
-        struct md_ucred                *uc0 = mdt_ucred(info);
-        struct lvfs_run_ctxt            saved;
+        struct md_ucred                *uc  = mdt_ucred(info);
         struct rmtacl_upcall_data       data;
         struct upcall_cache_entry      *entry;
+        __u64                           key;
         char                           *tmp = NULL;
-        int                             rc = 0;
+        int                             rc  = 0;
         ENTRY;
 
         OBD_ALLOC(tmp, PAGE_SIZE);
         if (!tmp)
                 RETURN(-ENOMEM);
 
+        data.aud_uid = uc->mu_fsuid;
+        data.aud_gid = uc->mu_fsgid;
         data.aud_cmd = cmd;
 
-        uc.luc_uid      = uc0->mu_uid;
-        uc.luc_gid      = uc0->mu_gid;
-        uc.luc_fsuid    = uc0->mu_fsuid;
-        uc.luc_fsgid    = uc0->mu_fsgid;
-        uc.luc_cap      = uc0->mu_cap;
-        uc.luc_umask    = uc0->mu_umask;
-        uc.luc_ginfo    = uc0->mu_ginfo;
-        uc.luc_identity = uc0->mu_identity;
+        key = mdt_rmtacl_getkey();
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
-        entry = upcall_cache_get_entry(mdt->mdt_rmtacl_cache, (__u64)key,
-                                       &data);
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
-
+        entry = upcall_cache_get_entry(mdt->mdt_rmtacl_cache, key, &data);
         if (IS_ERR(entry))
                 GOTO(out, rc = PTR_ERR(entry));
 

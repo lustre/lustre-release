@@ -50,11 +50,14 @@ struct mdt_identity {
 };
 
 struct rmtacl_upcall_data {
+        uid_t                      aud_uid;
+        gid_t                      aud_gid;
         char                      *aud_cmd;
 };
 
 struct mdt_rmtacl {
-        unsigned long              ra_ino;
+        uid_t                      ra_uid;
+        gid_t                      ra_gid;
         __u32                      ra_handle;
         char                      *ra_cmd;
         char                      *ra_buf;

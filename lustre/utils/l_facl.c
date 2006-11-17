@@ -46,7 +46,7 @@ static char *progname;
 static void usage(void)
 {
         fprintf(stderr,
-                "\nusage: %s {mdtname} {ino} {handle} {cmd}\n"
+                "\nusage: %s {uid} {gid} {mdtname} {ino} {handle} {cmd}\n"
                 "Normally invoked as an upcall from Lustre, set via:\n"
                 "  /proc/fs/lustre/mdt/{mdtname}/rmtacl_upcall\n",
                 progname);
@@ -109,7 +109,7 @@ int main(int argc, char **argv)
 
         progname = basename(argv[0]);
 
-        if (argc != 5) {
+        if (argc != 7) {
                 usage();
                 return 1;
         }
@@ -122,8 +122,8 @@ int main(int argc, char **argv)
         }
         memset(data, 0, size);
         data->add_magic = RMTACL_DOWNCALL_MAGIC;
-        data->add_ino = strtoll(argv[2], NULL, 10);
-        data->add_handle = strtoul(argv[3], NULL, 10);
+        data->add_key = strtoll(argv[4], NULL, 10);
+        data->add_handle = strtoul(argv[5], NULL, 10);
         buf = data->add_buf;
 
         mntpath = get_lustre_mount();
@@ -142,6 +142,9 @@ int main(int argc, char **argv)
                 errlog(buf, MDS_ERR"(fork failed): %s\n", strerror(errno));
                 goto downcall;
         } else if (pid == 0) {
+                uid_t uid;
+                gid_t gid;
+
                 close(out_pipe[0]);
                 if (out_pipe[1] != STDOUT_FILENO) {
                         dup2(out_pipe[1], STDOUT_FILENO);
@@ -160,9 +163,27 @@ int main(int argc, char **argv)
                         return 1;
                 }
 
-                execl("/bin/sh", "sh", "-c", argv[4], NULL);
+                gid = (gid_t)atoi(argv[2]);
+                if (gid) {
+                        if (setgid(gid) == -1) {
+                                fprintf(stderr, "setgid %u failed: %s\n",
+                                        gid, strerror(errno));
+                                return 1;
+                        }
+                }
+
+                uid = (uid_t)atoi(argv[1]);
+                if (uid) {
+                        if (setuid(uid) == -1) {
+                                fprintf(stderr, "setuid %u failed: %s\n",
+                                        uid, strerror(errno));
+                                return 1;
+                        }
+                }
+
+                execl("/bin/sh", "sh", "-c", argv[6], NULL);
                 fprintf(stderr, "execl %s failed: %s\n",
-                        argv[4], strerror(errno));
+                        argv[6], strerror(errno));
 
                 return 1;
         }
@@ -217,7 +238,7 @@ downcall:
         }
 
         snprintf(procname, sizeof(procname),
-                 "/proc/fs/lustre/mdt/%s/rmtacl_info", argv[1]);
+                 "/proc/fs/lustre/mdt/%s/rmtacl_info", argv[3]);
         fd = open(procname, O_WRONLY);
         if (fd < 0) {
                 fprintf(stderr, "open %s failed: %s\n",
