@@ -740,6 +740,7 @@ static int lmv_all_chars_policy(int count, const char *name,
         return c;
 }
 
+/* This is _inode_ placement policy function (not name). */
 static int lmv_placement_policy(struct obd_device *obd,
                                 struct md_op_data *op_data,
                                 mdsno_t *mds)
@@ -768,13 +769,21 @@ static int lmv_placement_policy(struct obd_device *obd,
                          * hash. No matter what we create, object create should
                          * go to correct MDS.
                          */
-                        mea_idx = raw_name2idx(obj->lo_hashtype,
-                                               obj->lo_objcount,
-                                               op_data->op_name,
-                                               op_data->op_namelen);
+                        mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
+                                               op_data->op_name, op_data->op_namelen);
                         rpid = &obj->lo_inodes[mea_idx].li_fid;
                         *mds = obj->lo_inodes[mea_idx].li_mds;
                         lmv_obj_put(obj);
+
+                        /* 
+                         * If we have this flag turned on, this means that
+                         * caller did not notice yet that dir is split. And if
+                         * see that it is split in fact - this is race, let
+                         * caller know.
+                         */
+                        if (op_data->op_bias & MDS_CHECK_SPLIT)
+                                RETURN(-ERESTART);
+                        
                         rc = 0;
 
                         CDEBUG(D_INODE, "The obj "DFID" has been split, got MDS at "
@@ -1329,7 +1338,9 @@ repeat:
                 RETURN(PTR_ERR(tgt_exp));
 
         rc = lmv_fid_alloc(exp, &op_data->op_fid2, op_data);
-        if (rc)
+        if (rc == -ERESTART)
+                goto repeat;
+        else if (rc)
                 RETURN(rc);
 
         CDEBUG(D_OTHER, "CREATE '%*s' on "DFID"\n", op_data->op_namelen,

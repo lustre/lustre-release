@@ -238,6 +238,11 @@ repeat:
                 rc = lmv_fid_alloc(exp, &sop_data->op_fid2, sop_data);
                 if (rc)
                         GOTO(out_free_sop_data, rc);
+
+                if (rc == -ERESTART)
+                        goto repeat;
+                else if (rc)
+                        GOTO(out_free_sop_data, rc);
         }
         
         rc = md_intent_lock(tgt_exp, sop_data, lmm, lmmsize, it, flags,
