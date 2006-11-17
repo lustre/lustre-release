@@ -319,10 +319,10 @@ __get_mem_track(void *ptr, int size,
                 CWARN("Can't allocate new memory track\n");
                 return 0;
         }
-        
+
         if (!lvfs_memdbg_check_insert(mt))
                 __free_mem_track(mt);
-        
+
         return 1;
 }
 
@@ -343,7 +343,7 @@ __put_mem_track(void *ptr, int size,
                         if (!(mt->mt_flags & OBD_MT_ALREADY_FREED)) {
                                 mt->mt_flags |= (OBD_MT_WRONG_SIZE |
                                                  OBD_MT_ALREADY_FREED);
-                                
+
                                 CWARN("Freeing memory chunk (at 0x%p) of "
                                       "different size than allocated "
                                       "(%d != %d) at %s:%d, allocated at %s\n",
@@ -374,7 +374,7 @@ __put_mem_track(void *ptr, int size,
 
 #if defined(LUSTRE_UTILS) /* this version is for utils only */
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
-do {                                                                          \
+({                                                                            \
         (ptr) = cfs_alloc(size, (gfp_mask));                                  \
         if ((ptr) == NULL) {                                                  \
                 CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
@@ -384,10 +384,10 @@ do {                                                                          \
                 CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p\n",          \
                        (int)(size), ptr);                                     \
         }                                                                     \
-} while (0)
+})
 #else /* this version is for the kernel and liblustre */
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
-do {                                                                          \
+({                                                                            \
         (ptr) = cfs_alloc(size, (gfp_mask));                                  \
         if ((ptr) == NULL) {                                                  \
                 CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
@@ -403,7 +403,7 @@ do {                                                                          \
                 CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d)\n", \
                        (int)(size), ptr, atomic_read(&obd_memory));           \
         }                                                                     \
-} while (0)
+})
 #endif
 
 #ifndef OBD_ALLOC_MASK
@@ -419,7 +419,7 @@ do {                                                                          \
 # define OBD_VMALLOC(ptr, size) OBD_ALLOC(ptr, size)
 #else
 # define OBD_VMALLOC(ptr, size)                                               \
-do {                                                                          \
+({                                                                            \
         (ptr) = cfs_alloc_large(size);                                        \
         if ((ptr) == NULL) {                                                  \
                 CERROR("vmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
@@ -435,7 +435,7 @@ do {                                                                          \
                 CDEBUG(D_MALLOC, "vmalloced '" #ptr "': %d at %p (tot %d)\n", \
                        (int)(size), ptr, atomic_read(&obd_memory));           \
         }                                                                     \
-} while (0)
+})
 #endif
 
 #ifdef CONFIG_DEBUG_SLAB
@@ -453,7 +453,7 @@ do {                                                                          \
 
 #ifdef __KERNEL__
 #define OBD_FREE(ptr, size)                                                   \
-do {                                                                          \
+({                                                                            \
         LASSERT(ptr);                                                         \
         put_mem_track((ptr), (size), __FILE__, __LINE__);                     \
         atomic_sub(size, &obd_memory);                                        \
@@ -462,7 +462,7 @@ do {                                                                          \
         POISON(ptr, 0x5a, size);                                              \
         cfs_free(ptr);                                                        \
         (ptr) = (void *)0xdeadbeef;                                           \
-} while (0)
+})
 #else
 #define OBD_FREE(ptr, size) ((void)(size), free((ptr)))
 #endif
@@ -471,7 +471,7 @@ do {                                                                          \
 # define OBD_VFREE(ptr, size) OBD_FREE(ptr, size)
 #else
 # define OBD_VFREE(ptr, size)                                                 \
-do {                                                                          \
+({                                                                            \
         LASSERT(ptr);                                                         \
         put_mem_track((ptr), (size), __FILE__, __LINE__);                     \
         atomic_sub(size, &obd_memory);                                        \
@@ -480,14 +480,14 @@ do {                                                                          \
         POISON(ptr, 0x5a, size);                                              \
         cfs_free_large(ptr);                                                  \
         (ptr) = (void *)0xdeadbeef;                                           \
-} while (0)
+})
 #endif
 
 /* we memset() the slab object to 0 when allocation succeeds, so DO NOT
  * HAVE A CTOR THAT DOES ANYTHING.  its work will be cleared here.  we'd
  * love to assert on that, but slab.c keeps kmem_cache_s all to itself. */
 #define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
-do {                                                                          \
+({                                                                            \
         LASSERT(!in_interrupt());                                             \
         (ptr) = cfs_mem_cache_alloc(slab, (type));                            \
         if ((ptr) == NULL) {                                                  \
@@ -504,12 +504,12 @@ do {                                                                          \
                 CDEBUG(D_MALLOC, "slab-alloced '"#ptr"': %d at %p (tot %d)\n",\
                        (int)(size), ptr, atomic_read(&obd_memory));           \
         }                                                                     \
-} while (0)
+})
 
 #define OBD_FREE_PTR(ptr) OBD_FREE(ptr, sizeof *(ptr))
 
 #define OBD_SLAB_FREE(ptr, slab, size)                                        \
-do {                                                                          \
+({                                                                            \
         LASSERT(ptr);                                                         \
         CDEBUG(D_MALLOC, "slab-freed '" #ptr "': %d at %p (tot %d).\n",       \
                (int)(size), ptr, atomic_read(&obd_memory));                   \
@@ -518,7 +518,7 @@ do {                                                                          \
         POISON(ptr, 0x5a, size);                                              \
         cfs_mem_cache_free(slab, ptr);                                        \
         (ptr) = (void *)0xdeadbeef;                                           \
-} while (0)
+})
 
 #define KEY_IS(str) \
         (keylen == strlen(str) && memcmp(key, str, keylen) == 0)
