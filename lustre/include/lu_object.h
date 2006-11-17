@@ -500,6 +500,14 @@ struct lu_site {
          * Bit-mask for hash-table size.
          */
         int                   ls_hash_mask;
+        /*
+         * Order of hash-table.
+         */
+        int                   ls_hash_bits;
+        /*
+         * Number of buckets in the hash-table.
+         */
+        int                   ls_hash_size;
 
         /*
          * LRU list, updated on each access to object. Protected by
@@ -568,6 +576,7 @@ struct lu_site {
                 __u32 s_cache_race;
                 __u32 s_lru_purged;
         } ls_stats;
+
         /*
          * Linkage into global list of sites.
          */
