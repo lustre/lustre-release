@@ -1367,6 +1367,7 @@ repeat:
                 ll_inode_size_unlock(inode, 1);
         }
 
+        LASSERTF(end >= *ppos, "end: %Ld ppos %Ld \n", end, *ppos);
         chunk = end - *ppos + 1;
         CDEBUG(D_VFSTRACE, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
                inode->i_ino, chunk, *ppos, inode->i_size);
