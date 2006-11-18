@@ -867,6 +867,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                                lhc->mlh_reg_lh.cookie);
                         LBUG();
                 }
+                res_id = &lock->l_resource->lr_name;
                 LASSERTF(fid_res_name_eq(child_fid,
                                          &lock->l_resource->lr_name),
                         "Lock res_id: %lx/%lx/%lx/%lx, Fid: "DFID".\n",
@@ -880,6 +881,10 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         } else {
                 mdt_lock_handle_init(lhc);
                 mdt_lock_reg_init(lhc, LCK_PR);
+                
+                if (mdt_object_exists(child) == 0)
+                        CWARN("Going to lock not existent object "DFID" %s\n",
+                              PFID(child_fid), name);
 
                 rc = mdt_object_lock(info, child, lhc, child_bits,
                                      MDT_CROSS_LOCK);
