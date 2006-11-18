@@ -715,6 +715,8 @@ static int mdt_raw_lookup(struct mdt_thread_info *info,
         /* Only got the fid of this obj by name */
         rc = mdo_lookup(info->mti_env, next, name, child_fid,
                         &info->mti_spec);
+#if 0
+        /* XXX is raw_lookup possible as intent operation? */
         if (rc != 0) {
                 if (rc == -ENOENT)
                         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_NEG);
@@ -723,9 +725,13 @@ static int mdt_raw_lookup(struct mdt_thread_info *info,
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
-        repbody->fid1 = *child_fid;
-        repbody->valid = OBD_MD_FLID;
-
+#endif
+        if (rc == 0) {
+                repbody = req_capsule_server_get(&info->mti_pill,
+                                                 &RMF_MDT_BODY);
+                repbody->fid1 = *child_fid;
+                repbody->valid = OBD_MD_FLID;
+        }
         RETURN(1);
 }
 
@@ -749,6 +755,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         const char            *name;
         struct mdt_lock_handle *lhp;
         struct ldlm_lock      *lock;
+        struct ldlm_res_id *res_id;
         ENTRY;
 
         is_resent = lustre_handle_is_used(&lhc->mlh_reg_lh);
@@ -860,8 +867,14 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                                lhc->mlh_reg_lh.cookie);
                         LBUG();
                 }
-                LASSERT(fid_res_name_eq(child_fid,
-                                        &lock->l_resource->lr_name));
+                LASSERTF(fid_res_name_eq(child_fid,
+                                         &lock->l_resource->lr_name),
+                        "Lock res_id: %lx/%lx/%lx/%lx, Fid: "DFID".\n",
+                        (unsigned long)res_id->name[0],
+                        (unsigned long)res_id->name[1],
+                        (unsigned long)res_id->name[2],
+                        (unsigned long)res_id->name[3],
+                        PFID(mdt_object_fid(child)));
                 LDLM_LOCK_PUT(lock);
                 rc = 0;
         } else {
@@ -880,9 +893,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         if (rc != 0) {
                 mdt_object_unlock(info, child, lhc, 1);
         } else {
-                struct ldlm_lock *lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
+                lock = ldlm_handle2lock(&lhc->mlh_reg_lh);
                 if (lock) {
-                        struct ldlm_res_id *res_id;
                         struct mdt_body *repbody;
                         struct lu_attr *ma;
 
