@@ -396,7 +396,11 @@ typedef struct gss_union_ctx_id_t {
 	gss_ctx_id_t    internal_ctx_id;
 } gss_union_ctx_id_desc, *gss_union_ctx_id_t;
 
-void
+/*
+ * return -1 only if we detect error during reading from upcall channel,
+ * all other cases return 0.
+ */
+int
 handle_nullreq(FILE *f) {
 	uint64_t		handle_seq;
 	char			in_tok_buf[TOKEN_BUF_SIZE];
@@ -429,7 +433,7 @@ handle_nullreq(FILE *f) {
 	if (readline(fileno(f), &lbuf, &lbuflen) != 1) {
 		printerr(0, "WARNING: handle_nullreq: "
 			    "failed reading request\n");
-		return;
+		return -1;
 	}
 
 	cp = lbuf;
@@ -526,7 +530,7 @@ out:
 		free(ctx_token.value);
 	if (out_tok.value != NULL)
 		gss_release_buffer(&ignore_min_stat, &out_tok);
-	return;
+	return 0;
 
 out_err:
 	if (ctx != GSS_C_NO_CONTEXT)

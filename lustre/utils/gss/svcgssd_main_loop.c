@@ -46,47 +46,66 @@
 #include "svcgssd.h"
 #include "err_util.h"
 
+/*
+ * nfs4 in-kernel cache implementation make upcall failed directly
+ * if there's no listener detected. so here we should keep the init
+ * channel file open as possible as we can.
+ *
+ * unfortunately the proc doesn't support dir change notification.
+ * and when an entry get unlinked, we only got POLLIN event once,
+ * it's the only oppotunity we can close the file and startover.
+ */
 void
 svcgssd_run()
 {
 	int			ret;
-	FILE			*f;
+	FILE			*f = NULL;
 	struct pollfd		pollfd;
+	struct timespec		halfsec = { .tv_sec = 0, .tv_nsec = 500000000 };
 
 #define NULLRPC_FILE "/proc/net/rpc/auth.ptlrpcs.init/channel"
 
 	while (1) {
 		int save_err;
 
-		while ((f = fopen(NULLRPC_FILE, "rw")) == NULL) {
-			printerr(3, "failed to open %s: %s\n",
-				 NULLRPC_FILE, strerror(errno));
-			sleep(1);
+		while (f == NULL) {
+			f = fopen(NULLRPC_FILE, "rw");
+			if (f == NULL) {
+				printerr(3, "failed to open %s: %s\n",
+					 NULLRPC_FILE, strerror(errno));
+				nanosleep(&halfsec, NULL);
+			} else {
+				printerr(2, "successfully open %s\n",
+					 NULLRPC_FILE);
+				break;
+			}
 		}
 		pollfd.fd = fileno(f);
 		pollfd.events = POLLIN;
 
 		pollfd.revents = 0;
-		printerr(3, "entering poll\n");
 		ret = poll(&pollfd, 1, 1000);
 		save_err = errno;
-		printerr(3, "leaving poll\n");
 
 		if (ret < 0) {
-			if (save_err != EINTR)
-				printerr(0, "error return from poll: %s\n",
-					 strerror(save_err));
+			printerr(0, "error return from poll: %s\n",
+				 strerror(save_err));
+			fclose(f);
+			f = NULL;
 		} else if (ret == 0) {
-			/* timeout; shouldn't happen. */
+			printerr(3, "poll timeout\n");
 		} else {
 			if (ret != 1) {
 				printerr(0, "bug: unexpected poll return %d\n",
 						ret);
 				exit(1);
 			}
-			if (pollfd.revents & POLLIN)
-				handle_nullreq(f);
+			if (pollfd.revents & POLLIN) {
+				if (handle_nullreq(f) < 0) {
+					fclose(f);
+					f = NULL;
+				}
+			}
 		}
-		fclose(f);
 	}
 }
