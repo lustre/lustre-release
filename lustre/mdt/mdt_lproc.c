@@ -59,7 +59,7 @@ static int mdt_procfs_init_stats(struct mdt_device *mdt, int num_stats)
         struct lprocfs_stats *stats;
         int rc;
         ENTRY;
-        
+
         stats = lprocfs_alloc_stats(num_stats);
         if (!stats)
                 RETURN(-ENOMEM);
@@ -108,7 +108,7 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
         LASSERT(name != NULL);
         mdt->mdt_proc_entry = ld->ld_obd->obd_proc_entry;
         LASSERT(mdt->mdt_proc_entry != NULL);
-        
+
         rc = mdt_procfs_init_stats(mdt, LPROC_MDT_LAST);
 	return rc;
 }
@@ -149,7 +149,7 @@ static int lprocfs_rd_identity_expire(char *page, char **start, off_t off,
 {
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        
+
         *eof = 1;
         return snprintf(page, count, "%lu\n",
                         mdt->mdt_identity_cache->uc_entry_expire / HZ);
@@ -649,7 +649,7 @@ static int lprocfs_wr_capa(struct file *file, const char *buffer,
                 return -EINVAL;
         }
 
-        /* OSS fid capability needs enable both MDS and OSS fid capability on 
+        /* OSS fid capability needs enable both MDS and OSS fid capability on
          * MDS */
         if (val == 1) {
                 CERROR("can't enable OSS fid capability only, you should use "
@@ -675,6 +675,22 @@ static int lprocfs_rd_capa_count(char *page, char **start, off_t off,
         return snprintf(page, count, "%d %d\n",
                         capa_count[CAPA_SITE_CLIENT],
                         capa_count[CAPA_SITE_SERVER]);
+}
+
+static int lprocfs_rd_site_stats(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+        struct lu_site    *s   = mdt->mdt_md_dev.md_lu_dev.ld_site;
+        return snprintf(page, count, "%d %d %d %d %d %d %d\n",
+                        s->ls_hash_bits,
+                        s->ls_stats.s_created,
+                        s->ls_stats.s_cache_hit,
+                        s->ls_stats.s_cache_miss,
+                        s->ls_stats.s_cache_check,
+                        s->ls_stats.s_cache_race,
+                        s->ls_stats.s_lru_purged);
 }
 
 static int lprocfs_rd_capa_timeout(char *page, char **start, off_t off,
@@ -759,6 +775,7 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "capa_key_timeout",           lprocfs_rd_ck_timeout,
                                         lprocfs_wr_ck_timeout,              0 },
         { "capa_count",                 lprocfs_rd_capa_count,           0, 0 },
+        { "site_stats",                 lprocfs_rd_site_stats,           0, 0 },
         { 0 }
 };
 
