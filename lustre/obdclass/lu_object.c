@@ -564,7 +564,7 @@ static int lu_htable_order(void)
          *
          * Size of lu_object is (arbitrary) taken as 1K (together with inode).
          */
-        cache_size = nr_free_pages() / 100 *
+        cache_size = nr_free_buffer_pages() / 100 *
                 LU_CACHE_PERCENT * (CFS_PAGE_SIZE / 1024);
 
         for (bits = 1; (1 << bits) < cache_size; ++bits) {
