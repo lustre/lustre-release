@@ -776,8 +776,11 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
 
         rc = mdt_object_exists(parent);
-        if (rc == 0)
+        if (rc == 0) {
+                LU_OBJECT_DEBUG(D_WARNING, info->mti_env, &parent->mot_obj.mo_lu,
+                                "Parent doesn't exist!\n");
                 RETURN(-ESTALE);
+        }
         else if (rc < 0) {
                 CERROR("Object "DFID" locates on remote server\n",
                        PFID(mdt_object_fid(parent)));
@@ -882,10 +885,11 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 mdt_lock_handle_init(lhc);
                 mdt_lock_reg_init(lhc, LCK_PR);
                 
-                if (mdt_object_exists(child) == 0)
-                        CWARN("Going to lock not existent object "DFID" %s\n",
-                              PFID(child_fid), name);
-
+                if (mdt_object_exists(child) == 0) {
+                        LU_OBJECT_DEBUG(D_WARNING, info->mti_env,
+                                        &child->mot_obj.mo_lu,
+                                        "Object doesn't exist!\n");
+                }
                 rc = mdt_object_lock(info, child, lhc, child_bits,
                                      MDT_CROSS_LOCK);
                 if (rc != 0)
