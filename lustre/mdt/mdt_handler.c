@@ -2500,7 +2500,7 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
         dlmreq = req_capsule_client_get(&info->mti_pill, &RMF_DLM_REQ);
         remote_hdl = dlmreq->lock_handle1;
 
-        spin_lock(&info->mti_mdt->mdt_namespace->ns_hash_lock);
+        spin_lock(&exp->exp_ldlm_data.led_lock);
         list_for_each(iter, &exp->exp_ldlm_data.led_held_locks) {
                 struct ldlm_lock *lock;
                 lock = list_entry(iter, struct ldlm_lock, l_export_chain);
@@ -2515,11 +2515,11 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
                                   lh->mlh_reg_lh.cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
-                        spin_unlock(&info->mti_mdt->mdt_namespace->ns_hash_lock);
+                        spin_unlock(&exp->exp_ldlm_data.led_lock);
                         return;
                 }
         }
-        spin_unlock(&info->mti_mdt->mdt_namespace->ns_hash_lock);
+        spin_unlock(&exp->exp_ldlm_data.led_lock);
 
         /*
          * If the xid matches, then we know this is a resent request, and allow
