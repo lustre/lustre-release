@@ -1,3 +1,66 @@
+Index: linux/fs/jbd/checkpoint.c
+===================================================================
+--- linux.orig/fs/jbd/checkpoint.c
++++ linux/fs/jbd/checkpoint.c
+@@ -170,6 +170,15 @@ static int __cleanup_transaction(journal
+ 			spin_unlock(&journal->j_list_lock);
+ 			jbd_unlock_bh_state(bh);
+ 			log_start_commit(journal, tid);
++			if (journal->j_task == current) {
++				/*
++				 * Don't wait for commit if called from
++				 * kjournald to avoid deadlock.
++				 */
++				ret = -EAGAIN;
++				spin_lock(&journal->j_list_lock);
++				break;
++			}
+ 			log_wait_commit(journal, tid);
+ 			goto out_return_1;
+ 		}
+@@ -286,6 +295,7 @@ static int __flush_buffer(journal_t *jou
+ int log_do_checkpoint(journal_t *journal)
+ {
+ 	int result;
++	int result2;
+ 	int batch_count = 0;
+ 	struct buffer_head *bhs[NR_BATCH];
+ 
+@@ -314,7 +324,7 @@ int log_do_checkpoint(journal_t *journal
+ 		transaction_t *transaction;
+ 		struct journal_head *jh, *last_jh, *next_jh;
+ 		int drop_count = 0;
+-		int cleanup_ret, retry = 0;
++		int retry = 0;
+ 		tid_t this_tid;
+ 
+ 		transaction = journal->j_checkpoint_transactions;
+@@ -364,17 +374,19 @@ int log_do_checkpoint(journal_t *journal
+ 		 * finding anything to write to disk.  We had better be
+ 		 * able to make some progress or we are in trouble.
+ 		 */
+-		cleanup_ret = __cleanup_transaction(journal, transaction);
+-		J_ASSERT(drop_count != 0 || cleanup_ret != 0);
++		result = __cleanup_transaction(journal, transaction);
++		J_ASSERT(drop_count != 0 || result != 0);
++		if (result == -EAGAIN)
++			break;
+ 		if (journal->j_checkpoint_transactions != transaction)
+ 			break;
+ 	}
+ 	spin_unlock(&journal->j_list_lock);
+-	result = cleanup_journal_tail(journal);
+-	if (result < 0)
+-		return result;
++	result2 = cleanup_journal_tail(journal);
++	if (result == 0)
++		result = result2;
+ 
+-	return 0;
++	return result;
+ }
+ 
+ /*
 Index: linux/fs/jbd/journal.c
 ===================================================================
 --- linux.orig/fs/jbd/journal.c
@@ -26,7 +89,7 @@ Index: linux/fs/jbd/journal.c
  		spin_unlock(&journal->j_state_lock);
  		del_timer_sync(journal->j_commit_timer);
  		journal_commit_transaction(journal);
-@@ -168,6 +172,23 @@ loop:
+@@ -168,6 +172,27 @@ loop:
  	}
  
  	wake_up(&journal->j_wait_done_commit);
@@ -41,9 +104,13 @@ Index: linux/fs/jbd/journal.c
 +	spin_lock(&journal->j_state_lock);
 +	while (__log_space_left(journal) <
 +	       journal->j_max_transaction_buffers + 2 * transaction_size) {
++		int result;
++
 +		spin_unlock(&journal->j_state_lock);
-+		log_do_checkpoint(journal);
++		result = log_do_checkpoint(journal);
 +		spin_lock(&journal->j_state_lock);
++		if (result < 0)
++			break;
 +	}
 +	up(&journal->j_checkpoint_sem);
 +
