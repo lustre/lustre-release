@@ -2874,7 +2874,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,1040 @@
+@@ -0,0 +1,1045 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3177,7 +3177,12 @@ Index: iam/fs/ext3/iam_lvar.c
 +                        BREAKPOINT();
 +                        return 0;
 +                }
-+                if (nexthash < starthash) {
++                if (0 && nexthash < starthash) {
++                        /*
++                         * Unfortunately this useful invariant cannot be
++                         * reliably checked as parent node is nor necessarily
++                         * locked.
++                         */
 +                        n_print(leaf);
 +                        printk("%#x < %#x\n", nexthash, starthash);
 +                        dump_stack();
