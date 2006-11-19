@@ -2483,12 +2483,12 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
         RETURN(ELDLM_LOCK_REPLACED);
 }
 
-static void mdt_intent_fixup_resent(struct req_capsule *pill,
+static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
                                     struct ldlm_lock *new_lock,
                                     struct ldlm_lock **old_lock,
                                     struct mdt_lock_handle *lh)
 {
-        struct ptlrpc_request  *req = pill->rc_req;
+        struct ptlrpc_request  *req = mdt_info_req(info);
         struct obd_export      *exp = req->rq_export;
         struct lustre_handle    remote_hdl;
         struct ldlm_request    *dlmreq;
@@ -2497,10 +2497,10 @@ static void mdt_intent_fixup_resent(struct req_capsule *pill,
         if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))
                 return;
 
-        dlmreq = req_capsule_client_get(pill, &RMF_DLM_REQ);
+        dlmreq = req_capsule_client_get(&info->mti_pill, &RMF_DLM_REQ);
         remote_hdl = dlmreq->lock_handle1;
 
-        spin_lock(&exp->exp_ldlm_data.led_lock);
+        spin_lock(&info->mti_mdt->mdt_namespace->ns_hash_lock);
         list_for_each(iter, &exp->exp_ldlm_data.led_held_locks) {
                 struct ldlm_lock *lock;
                 lock = list_entry(iter, struct ldlm_lock, l_export_chain);
@@ -2515,11 +2515,11 @@ static void mdt_intent_fixup_resent(struct req_capsule *pill,
                                   lh->mlh_reg_lh.cookie);
                         if (old_lock)
                                 *old_lock = LDLM_LOCK_GET(lock);
-                        spin_unlock(&exp->exp_ldlm_data.led_lock);
+                        spin_unlock(&info->mti_mdt->mdt_namespace->ns_hash_lock);
                         return;
                 }
         }
-        spin_unlock(&exp->exp_ldlm_data.led_lock);
+        spin_unlock(&info->mti_mdt->mdt_namespace->ns_hash_lock);
 
         /*
          * If the xid matches, then we know this is a resent request, and allow
@@ -2589,7 +2589,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
         mdt_set_disposition(info, ldlm_rep, DISP_IT_EXECD);
 
         /* Get lock from request for possible resent case. */
-        mdt_intent_fixup_resent(&info->mti_pill, *lockp, &new_lock, lhc);
+        mdt_intent_fixup_resent(info, *lockp, &new_lock, lhc);
 
         ldlm_rep->lock_policy_res2 =
                 mdt_getattr_name_lock(info, lhc, child_bits, ldlm_rep);
@@ -2644,7 +2644,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         }
 
         /* Get lock from request for possible resent case. */
-        mdt_intent_fixup_resent(&info->mti_pill, *lockp, NULL, lhc);
+        mdt_intent_fixup_resent(info, *lockp, NULL, lhc);
 
         rc = mdt_reint_internal(info, lhc, opc);
         
