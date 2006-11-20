@@ -48,12 +48,6 @@
 
 static struct lu_object_operations mdd_lu_obj_ops;
 
-static inline void mdd_set_dead_obj(struct mdd_object *obj)
-{
-        if (obj)
-                obj->mod_flags |= DEAD_OBJ;
-}
-
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                struct lu_attr *la, struct lustre_capa *capa)
 {
@@ -1206,7 +1200,6 @@ int mdd_object_kill(const struct lu_env *env, struct mdd_object *obj,
         int rc = 0;
         ENTRY;
 
-        mdd_set_dead_obj(obj);
         if (S_ISREG(mdd_object_type(obj))) {
                 /* Return LOV & COOKIES unconditionally here. We clean evth up.
                  * Caller must be ready for that. */
@@ -1405,7 +1398,7 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
                 /*
                  * end of directory.
                  */
-                hash_end = ~0ul;
+                hash_end = DIR_END_OFF;
                 rc = 0;
         }
         if (rc == 0) {
@@ -1443,6 +1436,16 @@ static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
         rc = mdd_readpage_sanity_check(env, mdd_obj);
         if (rc)
                 GOTO(out_unlock, rc);
+        
+        if (mdd_is_dead_obj(mdd_obj)) {
+                /* 
+                 * TODO:
+                 * According to POSIX, please do not return any entry to client:
+                 * even dot and dotdot should not be returned.  How to do this?
+                 */
+                CWARN("readdir from dead object: "DFID"\n", 
+                        PFID(lu_object_fid(mdd2lu_obj(mdd_obj))));
+        }
 
         rc = __mdd_readpage(env, mdd_obj, rdpg);
 

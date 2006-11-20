@@ -410,7 +410,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                inode->i_ino, inode->i_generation, inode,
                (unsigned long)pos, inode->i_size);
 
-        if (pos == ~0)
+        if (pos == DIR_END_OFF)
                 /*
                  * end-of-file.
                  */
@@ -428,8 +428,11 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                 struct lu_dirent  *ent;
 
                 if (!IS_ERR(page)) {
-                        __u32 hash = ~0; /* if page is empty (end of directory
-                                          * is reached) use this value. */
+                        /* 
+                         * If page is empty (end of directoryis reached),
+                         * use this value. 
+                         */
+                        __u32 hash = DIR_END_OFF; 
                         __u32 next;
 
                         dp = page_address(page);
@@ -472,7 +475,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                         ll_put_page(page);
                         if (!done) {
                                 pos = next;
-                                if (pos == ~0)
+                                if (pos == DIR_END_OFF)
                                         /*
                                          * End of directory reached.
                                          */
@@ -498,7 +501,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                 }
         }
 
-        filp->f_pos = pos;
+        filp->f_pos = (loff_t)(__s32)pos;
         filp->f_version = inode->i_version;
         touch_atime(filp->f_vfsmnt, filp->f_dentry);
 

@@ -2035,7 +2035,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                 (void)kmap(page);
                 dp = cfs_page_address(page);
                 end = le32_to_cpu(dp->ldp_hash_end);
-                if (end == ~0ul) {
+                if (end == DIR_END_OFF) {
                         __u64 max_hash = MAX_HASH_SIZE;
 
                         do_div(max_hash, obj->lo_objcount);

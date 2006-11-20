@@ -437,6 +437,12 @@ out_trans:
         return rc;
 }
 
+static inline void mdd_set_dead_obj(struct mdd_object *obj)
+{
+        if (obj)
+                obj->mod_flags |= DEAD_OBJ;
+}
+
 /* caller should take a lock before calling */
 int mdd_finish_unlink(const struct lu_env *env,
                       struct mdd_object *obj, struct md_attr *ma,
@@ -452,6 +458,7 @@ int mdd_finish_unlink(const struct lu_env *env,
                 if (__mdd_orphan_add(env, obj, th) == 0)
                         obj->mod_flags |= ORPHAN_OBJ;
 
+                mdd_set_dead_obj(obj);
                 if (obj->mod_count == 0)
                         rc = mdd_object_kill(env, obj, ma);
                 else
