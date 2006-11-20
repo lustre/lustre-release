@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1432 @@
+@@ -0,0 +1,1445 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -222,17 +222,22 @@ Index: iam/fs/ext3/iam.c
 +
 +static void iam_leaf_fini(struct iam_leaf *leaf);
 +
-+void iam_path_fini(struct iam_path *path)
++void iam_path_release(struct iam_path *path)
 +{
 +	int i;
 +
-+	iam_leaf_fini(&path->ip_leaf);
 +	for (i = 0; i < ARRAY_SIZE(path->ip_frames); i++) {
 +		if (path->ip_frames[i].bh != NULL) {
 +			brelse(path->ip_frames[i].bh);
 +			path->ip_frames[i].bh = NULL;
 +		}
 +	}
++}
++
++void iam_path_fini(struct iam_path *path)
++{
++	iam_leaf_fini(&path->ip_leaf);
++        iam_path_release(path);
 +}
 +
 +void iam_path_compat_init(struct iam_path_compat *path, struct inode *inode)
@@ -857,6 +862,8 @@ Index: iam/fs/ext3/iam.c
 +}
 +EXPORT_SYMBOL(iam_it_put);
 +
++static struct iam_ikey *iam_it_ikey_get(const struct iam_iterator *it,
++                                        struct iam_ikey *ikey);
 +/*
 + * Move iterator one record right.
 + *
@@ -875,6 +882,7 @@ Index: iam/fs/ext3/iam.c
 +        struct iam_path      *path;
 +        struct iam_leaf      *leaf;
 +        struct inode         *obj;
++        do_corr(struct iam_ikey *ik_orig);
 +
 +        /* assert_corr(it->ii_flags&IAM_IT_MOVE); */
 +        assert_corr(it_state(it) == IAM_IT_ATTACHED ||
@@ -884,7 +892,10 @@ Index: iam/fs/ext3/iam.c
 +        leaf = &path->ip_leaf;
 +        obj  = iam_path_obj(path);
 +
++        assert_corr(iam_leaf_is_locked(leaf));
++
 +        result = 0;
++        do_corr(ik_orig = iam_it_ikey_get(it, iam_path_ikey(path, 2)));
 +        if (it_before(it)) {
 +                assert_corr(!iam_leaf_at_end(leaf));
 +                it->ii_state = IAM_IT_ATTACHED;
@@ -899,6 +910,7 @@ Index: iam/fs/ext3/iam.c
 +                        do_corr(schedule());
 +                        /* advance index portion of the path */
 +                        result = iam_index_next(iam_it_container(it), path);
++                        assert_corr(iam_leaf_is_locked(leaf));
 +                        if (result == 1) {
 +                                struct dynlock_handle *lh;
 +                                lh = dx_lock_htree(obj, path->ip_frame->leaf,
@@ -922,6 +934,7 @@ Index: iam/fs/ext3/iam.c
 +        }
 +        assert_corr(ergo(result == 0, it_state(it) == IAM_IT_ATTACHED));
 +        assert_corr(ergo(result >  0, it_state(it) == IAM_IT_DETACHED));
++        assert_corr(ergo(result == 0, it_ikeycmp(it, ik_orig) >= 0));
 +        return result;
 +}
 +EXPORT_SYMBOL(iam_it_next);
@@ -1347,7 +1360,7 @@ Index: iam/fs/ext3/iam.c
 + * Search container @c for record with key @k. If record is found, its data
 + * are moved into @r.
 + *
-+ * Return values: +ve: found, 0: not-found, -ve: error
++ * Return values: 0: found, -ENOENT: not-found, -ve: error
 + */
 +int iam_lookup(struct iam_container *c, const struct iam_key *k,
 +               struct iam_rec *r, struct iam_path_descr *pd)
