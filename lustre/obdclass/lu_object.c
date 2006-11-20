@@ -431,7 +431,7 @@ static __u32 fid_hash(const struct lu_fid *f, int bits)
 {
         /* all objects with same id and different versions will belong to same
          * collisions list. */
-#if 0
+#if 1
         return (fid_seq(f) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(f);
 #else
         unsigned long hash;
