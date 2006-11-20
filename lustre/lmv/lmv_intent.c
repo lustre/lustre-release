@@ -142,7 +142,6 @@ int lmv_alloc_slave_fids(struct obd_device *obd, struct lu_fid *pid,
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         struct lmv_obj *obj;
-        struct lu_fid *rpid;
         mdsno_t mds;
         int mea_idx;
         int rc;
@@ -157,7 +156,6 @@ int lmv_alloc_slave_fids(struct obd_device *obd, struct lu_fid *pid,
         
         mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                (char *)op->op_name, op->op_namelen);
-        rpid = &obj->lo_inodes[mea_idx].li_fid;
         mds = obj->lo_inodes[mea_idx].li_mds;
         lmv_obj_put(obj);
 

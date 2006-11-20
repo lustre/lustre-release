@@ -176,14 +176,20 @@ static inline int lmv_get_easize(struct lmv_obd *lmv)
                 sizeof(struct lu_fid);
 }
 
-static inline struct obd_export *
-lmv_get_export(struct lmv_obd *lmv, mdsno_t mds)
+static inline struct lmv_tgt_desc *
+lmv_get_target(struct lmv_obd *lmv, mdsno_t mds)
 {
-        return lmv->tgts[mds].ltd_exp;
+        return &lmv->tgts[mds];
 }
 
 static inline struct obd_export *
-lmv_find_export(struct lmv_obd *lmv, const struct lu_fid *fid)
+lmv_get_export(struct lmv_obd *lmv, mdsno_t mds)
+{
+        return lmv_get_target(lmv, mds)->ltd_exp;
+}
+
+static inline struct lmv_tgt_desc *
+lmv_find_target(struct lmv_obd *lmv, const struct lu_fid *fid)
 {
         mdsno_t mds;
         int rc;
@@ -192,7 +198,13 @@ lmv_find_export(struct lmv_obd *lmv, const struct lu_fid *fid)
         if (rc)
                 return ERR_PTR(rc);
 
-        return lmv_get_export(lmv, mds);
+        return lmv_get_target(lmv, mds);
+}
+
+static inline struct obd_export *
+lmv_find_export(struct lmv_obd *lmv, const struct lu_fid *fid)
+{
+        return lmv_find_target(lmv, fid)->ltd_exp;
 }
 
 /* lproc_lmv.c */

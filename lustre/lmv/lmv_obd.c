@@ -722,13 +722,6 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
         RETURN(rc);
 }
 
-/* assume all is balanced for now */
-static int lmv_fids_balanced(struct obd_device *obd)
-{
-        ENTRY;
-        RETURN(1);
-}
-
 static int lmv_all_chars_policy(int count, const char *name,
                                 int len)
 {
@@ -752,74 +745,58 @@ static int lmv_placement_policy(struct obd_device *obd,
 
         LASSERT(mds != NULL);
 
-        /* Here are some policies to allocate new fid */
-        if (lmv_fids_balanced(obd)) {
-                /*
-                 * Allocate new fid basing on its name in the case fids are
-                 * balanced, that is all sequences have more or less equal
-                 * number of objects created.
+        /* 
+         * Allocate new fid on target according to operation type and parent
+         * home mds.
+         */
+        obj = lmv_obj_grab(obd, &op_data->op_fid1);
+        if (obj != NULL || op_data->op_name == NULL ||
+            op_data->op_opc != LUSTRE_OPC_MKDIR) {
+                /* 
+                 * Allocate fid for non-dir or for null name or for case parent
+                 * dir is split.
                  */
-                obj = lmv_obj_grab(obd, &op_data->op_fid1);
                 if (obj) {
-                        struct lu_fid *rpid;
-                        int mea_idx;
+                        lmv_obj_put(obj);
 
                         /* 
-                         * If we have this flag turned on, this means that
-                         * caller did not notice yet that dir is split. And if
-                         * see that it is split in fact - this is race, let
-                         * caller know.
+                         * If we have this flag turned on, and we see that
+                         * parent dir is split, this means, that caller did not
+                         * notice split yet. This is race and we would like to
+                         * let caller know that.
                          */
-                        if (op_data->op_bias & MDS_CHECK_SPLIT) {
-                                lmv_obj_put(obj);
+                        if (op_data->op_bias & MDS_CHECK_SPLIT)
                                 RETURN(-ERESTART);
-                        }
-                        
-                        /*
-                         * If the dir got split, alloc fid according to its
-                         * hash. No matter what we create, object create should
-                         * go to correct MDS.
-                         */
-                        mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
-                                               op_data->op_name, op_data->op_namelen);
-                        rpid = &obj->lo_inodes[mea_idx].li_fid;
-                        *mds = obj->lo_inodes[mea_idx].li_mds;
-                        lmv_obj_put(obj);
-                        rc = 0;
-
-                        CDEBUG(D_INODE, "The obj "DFID" has been split, got MDS at "
-                               LPU64" by name %s\n", PFID(&op_data->op_fid1), *mds,
-                               op_data->op_name);
-                } else if (op_data->op_name && (op_data->op_opc == LUSTRE_OPC_MKDIR)) {
-                        /* Default policy for directories. */
-                        *mds = lmv_all_chars_policy(lmv->desc.ld_tgt_count,
-                                                    op_data->op_name,
-                                                    op_data->op_namelen);
-                        rc = 0;
-                } else {
-                        /*
-                         * Default policy for others is to use parent MDS.
-                         * ONLY directories can be cross-ref during creation.
-                         */
-                        rc = lmv_fld_lookup(lmv, &op_data->op_fid1, mds);
                 }
-        } else {
+                                
                 /*
-                 * Sequences among all tgts are not well balanced, allocate new
-                 * fid taking this into account to balance them. Not implemented
-                 * yet!
+                 * Allocate new fid on same mds where parent fid is located. In
+                 * case of split dir, ->op_fid1 here will contain fid of slave
+                 * directory object (assgined by caller).
                  */
-                *mds = 0;
-                rc = -ENOSYS;
+                rc = lmv_fld_lookup(lmv, &op_data->op_fid1, mds);
+                if (rc)
+                        GOTO(out, rc);
+        } else {
+                /* 
+                 * Parent directory is not split and we want to create a
+                 * directory in it. Let's calculate where to place it according
+                 * to name.
+                 */
+                *mds = lmv_all_chars_policy(lmv->desc.ld_tgt_count,
+                                            op_data->op_name,
+                                            op_data->op_namelen);
+                rc = 0;
         }
-
+        EXIT;
+out:
         if (rc) {
                 CERROR("Can't choose MDS, err = %d\n", rc);
         } else {
                 LASSERT(*mds < lmv->desc.ld_tgt_count);
         }
 
-        RETURN(rc);
+        return rc;
 }
 
 int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
@@ -1614,7 +1591,8 @@ repeat:
         obj = lmv_obj_grab(obd, &rid);
         if (obj) {
                 int mea_idx;
-                /* directory is split. look for right mds for this name */
+                
+                /* Directory is split. Look for right mds for this name */
                 mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                        filename, namelen - 1);
                 rid = obj->lo_inodes[mea_idx].li_fid;
