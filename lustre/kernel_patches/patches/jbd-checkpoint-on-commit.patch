@@ -35,7 +35,7 @@ Index: linux/fs/jbd/checkpoint.c
  		tid_t this_tid;
  
  		transaction = journal->j_checkpoint_transactions;
-@@ -364,17 +374,19 @@ int log_do_checkpoint(journal_t *journal
+@@ -364,17 +374,20 @@ int log_do_checkpoint(journal_t *journal
  		 * finding anything to write to disk.  We had better be
  		 * able to make some progress or we are in trouble.
  		 */
@@ -45,6 +45,7 @@ Index: linux/fs/jbd/checkpoint.c
 +		J_ASSERT(drop_count != 0 || result != 0);
 +		if (result == -EAGAIN)
 +			break;
++		result = 0;
  		if (journal->j_checkpoint_transactions != transaction)
  			break;
  	}
