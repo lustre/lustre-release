@@ -57,7 +57,7 @@ int cmm_split_check(const struct lu_env *env, struct md_object *mp,
         struct md_attr *ma = &cmm_env_info(env)->cmi_ma;
         struct cml_object *clo = md2cml_obj(mp);
         struct timeval start;
-        int rc;
+        int rc, lmv_size;
         ENTRY;
 
         cmm_lprocfs_time_start(cmm, &start, LPROC_CMM_SPLIT_CHECK);
@@ -67,12 +67,14 @@ int cmm_split_check(const struct lu_env *env, struct md_object *mp,
             clo->clo_split == CMM_SPLIT_DENIED)
                 GOTO(out, rc = 0);
 
+        lmv_size = CMM_MD_SIZE(cmm->cmm_tgt_count + 1);
+
         /* Try to get the LMV EA */
         memset(ma, 0, sizeof(*ma));
         
         ma->ma_need = MA_LMV;
-        ma->ma_lmv_size = CMM_MD_SIZE(cmm->cmm_tgt_count + 1);
-        OBD_ALLOC(ma->ma_lmv, ma->ma_lmv_size);
+        ma->ma_lmv_size = lmv_size;
+        OBD_ALLOC(ma->ma_lmv, lmv_size);
         if (ma->ma_lmv == NULL)
                 GOTO(out, rc = -ENOMEM);
 
@@ -120,7 +122,7 @@ int cmm_split_check(const struct lu_env *env, struct md_object *mp,
         }
         EXIT;
 cleanup:
-        OBD_FREE(ma->ma_lmv, ma->ma_lmv_size);
+        OBD_FREE(ma->ma_lmv, lmv_size);
 out:
         cmm_lprocfs_time_end(cmm, &start, LPROC_CMM_SPLIT_CHECK);
         return rc;

@@ -66,19 +66,16 @@ static int mdd_lov_update(struct obd_device *host,
 int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
                  struct lustre_cfg *cfg)
 {
+        char                   *dev = lustre_cfg_string(cfg, 0);
+        int                     rc, name_size, uuid_size;
+        char                   *name, *uuid;
+        __u32                   mds_id;
         struct lustre_cfg_bufs *bufs;
         struct lustre_cfg      *lcfg;
         struct obd_device      *obd;
-        char                   *dev = lustre_cfg_string(cfg, 0);
-        char                   *index_string = lustre_cfg_string(cfg, 2);
-        char                   *name, *uuid, *p;
-        int rc, name_size, uuid_size, index;
         ENTRY;
 
-        LASSERT(index_string);
-
-        index = simple_strtol(index_string, &p, 10);
-
+        mds_id = mdd2lu_dev(mdd)->ld_site->ls_node_id;
         name_size = strlen(MDD_OBD_NAME) + 5;
         uuid_size = strlen(MDD_OBD_UUID) + 5;
 
@@ -93,14 +90,15 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
         }
 
         OBD_ALLOC_PTR(bufs);
-        if (!bufs) {
+        if (!bufs)
                 GOTO(cleanup_mem, rc = -ENOMEM);
-        }
 
         snprintf(name, strlen(MDD_OBD_NAME) + 5, "%s-%d",
-                                              MDD_OBD_NAME, index);
+                 MDD_OBD_NAME, mds_id);
+        
         snprintf(uuid, strlen(MDD_OBD_UUID) + 5, "%s-%d",
-                                              MDD_OBD_UUID, index);
+                 MDD_OBD_UUID, mds_id);
+        
         lustre_cfg_bufs_reset(bufs, name);
         lustre_cfg_bufs_set_string(bufs, 1, MDD_OBD_TYPE);
         lustre_cfg_bufs_set_string(bufs, 2, uuid);
@@ -118,23 +116,25 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
 
         obd = class_name2obd(name);
         if (!obd) {
-                CERROR("can not find obd %s \n", MDD_OBD_NAME);
+                CERROR("Can not find obd %s\n", MDD_OBD_NAME);
                 LBUG();
         }
 
-        obd->u.mds.mds_id = index;
         obd->obd_recovering = 1;
+        obd->u.mds.mds_id = mds_id;
         rc = class_setup(obd, lcfg);
         if (rc)
                 GOTO(class_detach, rc);
+
         /*
-         * Add here for obd notify mechiasm,
-         * when adding a new ost, the mds will notify this mdd
+         * Add here for obd notify mechanism, when adding a new ost, the mds
+         * will notify this mdd.
          */
-        obd->obd_upcall.onu_owner = mdd;
         obd->obd_upcall.onu_upcall = mdd_lov_update;
+        obd->obd_upcall.onu_owner = mdd;
         mdd->mdd_obd_dev = obd;
-        /* update lov info if this mdd is setup for recoverying */
+        
+        EXIT;
 class_detach:
         if (rc)
                 class_detach(obd, lcfg);
@@ -143,7 +143,7 @@ lcfg_cleanup:
 cleanup_mem:
         OBD_FREE(name, name_size);
         OBD_FREE(uuid, uuid_size);
-        RETURN(rc);
+        return rc;
 }
 
 int mdd_fini_obd(const struct lu_env *env, struct mdd_device *mdd)
@@ -160,6 +160,7 @@ int mdd_fini_obd(const struct lu_env *env, struct mdd_device *mdd)
         OBD_ALLOC_PTR(bufs);
         if (!bufs)
                 RETURN(-ENOMEM);
+        
         lustre_cfg_bufs_reset(bufs, MDD_OBD_NAME);
         lcfg = lustre_cfg_new(LCFG_ATTACH, bufs);
         OBD_FREE_PTR(bufs);
@@ -174,9 +175,11 @@ int mdd_fini_obd(const struct lu_env *env, struct mdd_device *mdd)
         if (rc)
                 GOTO(lcfg_cleanup, rc);
         mdd->mdd_obd_dev = NULL;
+
+        EXIT;
 lcfg_cleanup:
         lustre_cfg_free(lcfg);
-        RETURN(rc);
+        return rc;
 }
 
 int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
