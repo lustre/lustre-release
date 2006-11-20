@@ -75,7 +75,7 @@ svcgssd_run()
 					 NULLRPC_FILE, strerror(errno));
 				nanosleep(&halfsec, NULL);
 			} else {
-				printerr(2, "successfully open %s\n",
+				printerr(1, "successfully open %s\n",
 					 NULLRPC_FILE);
 				break;
 			}
