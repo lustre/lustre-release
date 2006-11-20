@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1433 @@
+@@ -0,0 +1,1432 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -897,7 +897,6 @@ Index: iam/fs/ext3/iam.c
 +                 */
 +                while (result == 0 && iam_leaf_at_end(leaf)) {
 +                        do_corr(schedule());
-+                        iam_leaf_unlock(leaf);
 +                        /* advance index portion of the path */
 +                        result = iam_index_next(iam_it_container(it), path);
 +                        if (result == 1) {
