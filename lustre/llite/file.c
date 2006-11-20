@@ -1393,6 +1393,9 @@ repeat:
 
         ll_tree_unlock(&tree);
 
+        CDEBUG(D_INFO, "finish inode=%lu/%u(%p),size="LPSZ",off=%Ld rc %d\n",
+                      inode->i_ino, inode->i_generation, inode, count, *ppos,
+                      retval);
         if (retval > 0) {
                 buf += retval;
                 count -= retval;
