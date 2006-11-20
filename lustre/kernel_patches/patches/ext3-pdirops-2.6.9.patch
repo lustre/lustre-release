@@ -89,7 +89,19 @@ Index: iam/fs/ext3/namei.c
  int dx_node_check(struct iam_path *p, struct iam_frame *f)
  {
  	struct iam_entry     *e;
-@@ -241,12 +277,183 @@ struct stats dx_show_entries(struct dx_h
+@@ -143,7 +179,10 @@ int dx_node_check(struct iam_path *p, st
+ 			return 0;
+ 	}
+ 		blk = dx_get_block(p, e);
+-		if (inode->i_size < (blk + 1) * inode->i_sb->s_blocksize) {
++		/*
++		 * Disable this check as it is racy.
++		 */
++		if (0 && inode->i_size < (blk + 1) * inode->i_sb->s_blocksize) {
+ 			BREAKPOINT();
+ 	return 0;
+ 		}
+@@ -241,12 +280,197 @@ struct stats dx_show_entries(struct dx_h
  }
  #endif /* DX_DEBUG */
  
@@ -207,6 +219,11 @@ Index: iam/fs/ext3/namei.c
 +	return iam_entry_shift(path, p, -1);
 +}
 +
++static iam_ptr_t dx_find_ptr(struct iam_path *path, struct iam_frame *frame)
++{
++	return dx_get_block(path, dx_find_position(path, frame));
++}
++
 +/*
 + * returns 0 if path was unchanged, -EAGAIN otherwise.
 + */
@@ -215,7 +232,7 @@ Index: iam/fs/ext3/namei.c
 +	int equal;
 +
 +	dx_lock_bh(frame->bh);
-+	equal = frame->leaf == dx_get_block(path, frame->at);
++	equal = frame->leaf == dx_find_ptr(path, frame);
 +	DX_DEVAL(dx_lock_stats.dls_bh_again += !equal);
 +	dx_unlock_bh(frame->bh);
 +	
@@ -225,7 +242,7 @@ Index: iam/fs/ext3/namei.c
 +/*
 + * returns 0 if path was unchanged, -EAGAIN otherwise.
 + */
-+static int dx_check_full_path(struct iam_path *path)
++static int dx_check_full_path(struct iam_path *path, int search)
 +{
 +	struct iam_frame *bottom;
 +	struct iam_frame *scan;
@@ -249,7 +266,16 @@ Index: iam/fs/ext3/namei.c
 +	 */
 +	result = 0;
 +	for (scan = path->ip_frames; scan < bottom; ++scan) {
-+		if (scan->leaf != dx_get_block(path, scan->at)) {
++		if (search) {
++			struct iam_entry *pos;
++
++			pos = dx_find_position(path, scan);
++			if (scan->leaf != dx_get_block(path, pos)) {
++				result = -EAGAIN;
++				break;
++			}
++			scan->at = pos;
++		} else if (scan->leaf != dx_get_block(path, scan->at)) {
 +			result = -EAGAIN;
 +			break;
 +		}
@@ -275,7 +301,7 @@ Index: iam/fs/ext3/namei.c
  
  	struct iam_descr *param;
  	struct iam_frame *frame;
-@@ -255,20 +462,19 @@ int dx_lookup(struct iam_path *path)
+@@ -255,20 +479,19 @@ int dx_lookup(struct iam_path *path)
  	param = iam_path_descr(path);
  	c = path->ip_container;
  	
@@ -306,7 +332,7 @@ Index: iam/fs/ext3/namei.c
  		if (err != 0)
  			break;
  
-@@ -283,53 +489,83 @@ int dx_lookup(struct iam_path *path)
+@@ -283,53 +506,83 @@ int dx_lookup(struct iam_path *path)
  			break;
  
  		assert_inv(dx_node_check(path, frame));
@@ -417,7 +443,7 @@ Index: iam/fs/ext3/namei.c
 +		 * while locking leaf we just found may get split so we need
 +		 * to check this -bzzz
 +		 */
-+		if (dx_check_full_path(path) == 0)
++		if (dx_check_full_path(path, 1) == 0)
 +			break;
 +		dx_unlock_htree(dir, *dl);
 +		*dl = NULL;
@@ -429,7 +455,7 @@ Index: iam/fs/ext3/namei.c
  /*
   * Probe for a directory leaf block to search.
   *
-@@ -339,7 +575,7 @@ int dx_lookup(struct iam_path *path)
+@@ -339,7 +592,7 @@ int dx_lookup(struct iam_path *path)
   * check for this error code, and make sure it never gets reflected
   * back to userspace.
   */
@@ -438,7 +464,7 @@ Index: iam/fs/ext3/namei.c
  		    struct dx_hash_info *hinfo, struct iam_path *path)
  {
  	int err;
-@@ -347,7 +583,7 @@ static int dx_probe(struct dentry *dentr
+@@ -347,7 +600,7 @@ static int dx_probe(struct dentry *dentr
  	
  	assert_corr(path->ip_data != NULL);
  	ipc = container_of(path->ip_data, struct iam_path_compat, ipc_descr);
@@ -447,7 +473,7 @@ Index: iam/fs/ext3/namei.c
  	ipc->ipc_hinfo = hinfo;
  
  	assert_corr(dx_index_is_compat(path));
-@@ -356,6 +592,7 @@ static int dx_probe(struct dentry *dentr
+@@ -356,6 +609,7 @@ static int dx_probe(struct dentry *dentr
  	return err;
  }
  
@@ -455,7 +481,7 @@ Index: iam/fs/ext3/namei.c
  /*
   * This function increments the frame pointer to search the next leaf
   * block, and reads in the necessary intervening nodes if the search
-@@ -391,10 +628,13 @@ static int ext3_htree_advance(struct ino
+@@ -391,10 +645,13 @@ static int ext3_htree_advance(struct ino
  	 * nodes need to be read.
  	 */
  	while (1) {
@@ -470,7 +496,7 @@ Index: iam/fs/ext3/namei.c
  		if (p == path->ip_frames)
  			return 0;
  		num_frames++;
-@@ -409,7 +649,7 @@ static int ext3_htree_advance(struct ino
+@@ -409,7 +666,7 @@ static int ext3_htree_advance(struct ino
  	 * If the hash is 1, then continue only if the next page has a
  	 * continuation hash of any value.  This is used for readdir
  	 * handling.  Otherwise, check to see if the hash matches the
@@ -479,7 +505,7 @@ Index: iam/fs/ext3/namei.c
  	 * there's no point to read in the successive index pages.
  	 */
  		iam_get_ikey(path, p->at, (struct iam_ikey *)&bhash);
-@@ -425,25 +665,92 @@ static int ext3_htree_advance(struct ino
+@@ -425,25 +682,91 @@ static int ext3_htree_advance(struct ino
  	 * block so no check is necessary
  	 */
  	while (num_frames--) {
@@ -532,8 +558,7 @@ Index: iam/fs/ext3/namei.c
 +
 +/*
 + * Advance index part of @path to point to the next leaf. Returns 1 on
-+ * success, 0, when end of container was reached. No locks can be held by
-+ * caller.
++ * success, 0, when end of container was reached. Leaf node is locked.
 + */
  int iam_index_next(struct iam_container *c, struct iam_path *path)
  {
@@ -556,7 +581,7 @@ Index: iam/fs/ext3/namei.c
 +		if (result <= 0) /* error, or end of index... */
 +			break;
 +
-+		result = dx_check_full_path(path);
++		result = dx_check_full_path(path, 0);
 +		if (result == 0 && cursor == path->ip_frame->leaf) {
 +			result = iam_index_advance(path);
 +			break;
@@ -577,10 +602,21 @@ Index: iam/fs/ext3/namei.c
  }
  
  int ext3_htree_next_block(struct inode *dir, __u32 hash,
-@@ -657,6 +964,15 @@ void iam_insert_key(struct iam_path *pat
+@@ -649,14 +972,26 @@ void iam_insert_key(struct iam_path *pat
+ 	struct iam_entry *new = iam_entry_shift(path, frame->at, +1);
+ 	int count = dx_get_count(entries);
+ 
++	assert_corr(iam_frame_is_locked(path, frame));
+ 	assert_corr(count < dx_get_limit(entries));
+ 	assert_corr(frame->at < iam_entry_shift(path, entries, count));
++	assert_inv(dx_node_check(path, frame));
+ 
+ 	memmove(iam_entry_shift(path, new, 1), new,
+ 		(char *)iam_entry_shift(path, entries, count) - (char *)new);
  	dx_set_ikey(path, new, key);
  	dx_set_block(path, new, ptr);
  	dx_set_count(entries, count + 1);
++	assert_inv(dx_node_check(path, frame));
 +	assert(dx_bug11027_check(path, frame));
 +}
 +
@@ -593,7 +629,7 @@ Index: iam/fs/ext3/namei.c
  }
  
  void dx_insert_block(struct iam_path *path, struct iam_frame *frame,
-@@ -882,7 +1198,7 @@ static struct buffer_head * ext3_dx_find
+@@ -882,7 +1217,7 @@ static struct buffer_head * ext3_dx_find
  	sb = dir->i_sb;
  	/* NFS may look up ".." - look at dx_root directory block */
  	if (namelen > 2 || name[0] != '.'||(name[1] != '.' && name[1] != '\0')){
@@ -602,7 +638,7 @@ Index: iam/fs/ext3/namei.c
  		if (*err != 0)
  			return NULL;
  	} else {
-@@ -1114,7 +1430,7 @@ struct ext3_dir_entry_2 *move_entries(st
+@@ -1114,7 +1449,7 @@ struct ext3_dir_entry_2 *move_entries(st
  	hash2 = map[split].hash;
  	continued = hash2 == map[split - 1].hash;
  	dxtrace(printk("Split block %i at %x, %i/%i\n",
@@ -611,7 +647,7 @@ Index: iam/fs/ext3/namei.c
  
  	/* Fancy dance to stay within two buffers */
  	de2 = dx_move_dirents(data1, data2, map + split, count - split);
-@@ -1484,16 +1800,38 @@ static int shift_entries(struct iam_path
+@@ -1484,16 +1819,38 @@ static int shift_entries(struct iam_path
  	       (char *) iam_entry_shift(path, entries, count1),
  	       count2 * iam_entry_size(path));
  
@@ -653,7 +689,7 @@ Index: iam/fs/ext3/namei.c
  {
  
  	struct iam_entry *entries;   /* old block contents */
-@@ -1501,6 +1839,8 @@ int split_index_node(handle_t *handle, s
+@@ -1501,6 +1858,8 @@ int split_index_node(handle_t *handle, s
   	struct iam_frame *frame, *safe;
  	struct buffer_head *bh_new[DX_MAX_TREE_HEIGHT] = {0};
  	u32 newblock[DX_MAX_TREE_HEIGHT] = {0};
@@ -662,7 +698,7 @@ Index: iam/fs/ext3/namei.c
  	struct inode *dir = iam_path_obj(path);
  	struct iam_descr *descr;
  	int nr_splet;
-@@ -1523,12 +1863,14 @@ int split_index_node(handle_t *handle, s
+@@ -1523,12 +1882,14 @@ int split_index_node(handle_t *handle, s
  	 *   - first allocate all necessary blocks
  	 *
  	 *   - insert pointers into them atomically.
@@ -681,7 +717,7 @@ Index: iam/fs/ext3/namei.c
  	dxtrace(printk("using %u of %u node entries\n",
  		       dx_get_count(entries), dx_get_limit(entries)));
  
-@@ -1536,6 +1878,7 @@ int split_index_node(handle_t *handle, s
+@@ -1536,6 +1897,7 @@ int split_index_node(handle_t *handle, s
  	for (nr_splet = 0; frame >= path->ip_frames &&
  	     dx_get_count(frame->entries) == dx_get_limit(frame->entries);
  	     --frame, ++nr_splet) {
@@ -689,7 +725,7 @@ Index: iam/fs/ext3/namei.c
  		if (nr_splet == DX_MAX_TREE_HEIGHT) {
  			ext3_warning(dir->i_sb, __FUNCTION__,
  				     "Directory index full!\n");
-@@ -1545,14 +1888,53 @@ int split_index_node(handle_t *handle, s
+@@ -1545,14 +1907,53 @@ int split_index_node(handle_t *handle, s
  	}
  
  	safe = frame;
@@ -710,7 +746,7 @@ Index: iam/fs/ext3/namei.c
 +	/*
 +	 * Check for concurrent index modification.
 +	 */
-+	err = dx_check_full_path(path);
++	err = dx_check_full_path(path, 1);
 +	if (err)
 +		goto cleanup;
 +	/*
@@ -744,7 +780,7 @@ Index: iam/fs/ext3/namei.c
  		BUFFER_TRACE(frame->bh, "get_write_access");
  		err = ext3_journal_get_write_access(handle, frame->bh);
  		if (err)
-@@ -1560,6 +1942,7 @@ int split_index_node(handle_t *handle, s
+@@ -1560,6 +1961,7 @@ int split_index_node(handle_t *handle, s
  	}
  	/* Add "safe" node to transaction too */
  	if (safe + 1 != path->ip_frames) {
@@ -752,7 +788,7 @@ Index: iam/fs/ext3/namei.c
  		err = ext3_journal_get_write_access(handle, safe->bh);
  		if (err)
  			goto journal_error;
-@@ -1596,16 +1979,21 @@ int split_index_node(handle_t *handle, s
+@@ -1596,16 +1998,21 @@ int split_index_node(handle_t *handle, s
  
  			assert_corr(i == 0);
  
@@ -774,7 +810,7 @@ Index: iam/fs/ext3/namei.c
  			/* Shift frames in the path */
  			memmove(frames + 2, frames + 1,
  				(sizeof path->ip_frames) - 2 * sizeof frames[0]);
-@@ -1613,18 +2001,22 @@ int split_index_node(handle_t *handle, s
+@@ -1613,18 +2020,22 @@ int split_index_node(handle_t *handle, s
  			frames[1].at = iam_entry_shift(path, entries2, idx);
  			frames[1].entries = entries = entries2;
  			frames[1].bh = bh2;
@@ -797,9 +833,11 @@ Index: iam/fs/ext3/namei.c
  			count = shift_entries(path, frame, count,
  					      entries, entries2, newblock[i]);
  			/* Which index block gets the new entry? */
-@@ -1635,32 +2027,42 @@ int split_index_node(handle_t *handle, s
+@@ -1634,33 +2045,44 @@ int split_index_node(handle_t *handle, s
+ 				frame->at = iam_entry_shift(path, entries2,
  							    idx - count + d);
  				frame->entries = entries = entries2;
++				frame->curidx = newblock[i];
  				swap(frame->bh, bh2);
 +				assert_corr(lock[i + 1] != NULL);
 +				assert_corr(new_lock[i] != NULL);
@@ -841,18 +879,20 @@ Index: iam/fs/ext3/namei.c
  	if (nr_splet > 0) {
  		/*
  		 * Log ->i_size modification.
-@@ -1674,6 +2076,10 @@ journal_error:
+@@ -1674,6 +2096,12 @@ journal_error:
  	ext3_std_error(dir->i_sb, err);
  
  cleanup:
 +	dx_unlock_array(dir, lock);
 +	dx_unlock_array(dir, new_lock);
 +
++	assert_corr(err || iam_frame_is_locked(path, path->ip_frame));
++
 +	do_corr(schedule());
  	for (i = 0; i < ARRAY_SIZE(bh_new); ++i) {
  		if (bh_new[i] != NULL)
  			brelse(bh_new[i]);
-@@ -1695,18 +2101,18 @@ static int ext3_dx_add_entry(handle_t *h
+@@ -1695,18 +2123,18 @@ static int ext3_dx_add_entry(handle_t *h
  	struct buffer_head * bh = NULL;
  	struct inode *dir = dentry->d_parent->d_inode;
  	struct ext3_dir_entry_2 *de;
@@ -873,7 +913,7 @@ Index: iam/fs/ext3/namei.c
  	isize = dir->i_size;
  
  	err = param->id_ops->id_node_read(path->ip_container,
-@@ -1726,7 +2132,7 @@ static int ext3_dx_add_entry(handle_t *h
+@@ -1726,7 +2154,7 @@ static int ext3_dx_add_entry(handle_t *h
  		goto cleanup;
  	}
  	
@@ -882,7 +922,7 @@ Index: iam/fs/ext3/namei.c
  	if (err)
  		goto cleanup;	
  
-@@ -1736,12 +2142,14 @@ static int ext3_dx_add_entry(handle_t *h
+@@ -1736,12 +2164,14 @@ static int ext3_dx_add_entry(handle_t *h
  		goto cleanup;
  
  	assert_inv(dx_node_check(path, frame));
@@ -965,6 +1005,15 @@ Index: iam/include/linux/lustre_iam.h
  #endif
  
  #if EXT3_INVARIANT_ON
+@@ -179,7 +184,7 @@ struct iam_ikey;
+  * support interfaces like readdir(), where iteration over index has to be
+  * re-startable.
+  */
+-typedef __u64 iam_ptr_t;
++typedef __u32 iam_ptr_t;
+ 
+ /*
+  * Index node traversed during tree lookup.
 @@ -188,6 +193,11 @@ struct iam_frame {
  	struct buffer_head *bh;    /* buffer holding node data */
  	struct iam_entry *entries; /* array of entries */
