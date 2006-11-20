@@ -683,7 +683,9 @@ static int lprocfs_rd_site_stats(char *page, char **start, off_t off,
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
         struct lu_site    *s   = mdt->mdt_md_dev.md_lu_dev.ld_site;
-        return snprintf(page, count, "%d %d %d %d %d %d %d\n",
+        return snprintf(page, count, "%d %d %d %d %d %d %d %d %d\n",
+                        s->ls_total,
+                        s->ls_busy,
                         s->ls_hash_bits,
                         s->ls_stats.s_created,
                         s->ls_stats.s_cache_hit,
