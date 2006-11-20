@@ -594,7 +594,7 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
 
         for (bits = lu_htable_order(), size = 1 << bits;
              (s->ls_hash =
-              cfs_alloc(size * sizeof s->ls_hash[0], OBD_ALLOC_MASK)) == NULL;
+              cfs_alloc_large(size * sizeof s->ls_hash[0])) == NULL;
              --bits, size >>= 1) {
                 /*
                  * Scale hash table down, until allocation succeeds.
@@ -630,7 +630,7 @@ void lu_site_fini(struct lu_site *s)
                 int i;
                 for (i = 0; i < s->ls_hash_size; i++)
                         LASSERT(hlist_empty(&s->ls_hash[i]));
-                cfs_free(s->ls_hash);
+                cfs_free_large(s->ls_hash);
                 s->ls_hash = NULL;
         }
         if (s->ls_top_dev != NULL) {
