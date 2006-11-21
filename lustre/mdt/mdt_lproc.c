@@ -683,10 +683,21 @@ static int lprocfs_rd_site_stats(char *page, char **start, off_t off,
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
         struct lu_site    *s   = mdt->mdt_md_dev.md_lu_dev.ld_site;
-        return snprintf(page, count, "%d %d %d %d %d %d %d %d %d\n",
+        int i;
+        int populated;
+
+        /*
+         * How many hash buckets are not-empty? Don't bother with locks: it's
+         * an estimation anyway.
+         */
+        for (i = 0, populated = 0; i < s->ls_hash_size; i++)
+                populated += !hlist_empty(&s->ls_hash[i]);
+
+        return snprintf(page, count, "%d %d %d/%d %d %d %d %d %d %d\n",
                         s->ls_total,
                         s->ls_busy,
-                        s->ls_hash_bits,
+                        populated,
+                        s->ls_hash_size,
                         s->ls_stats.s_created,
                         s->ls_stats.s_cache_hit,
                         s->ls_stats.s_cache_miss,
