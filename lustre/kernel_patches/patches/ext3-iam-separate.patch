@@ -2887,7 +2887,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,1045 @@
+@@ -0,0 +1,1042 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3315,7 +3315,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +        hash = get_hash(iam_leaf_container(leaf), name, namelen);
 +        found = NULL;
 +        found_equal = 0;
-+        last = 0;
++        last = 1;
 +
 +        for (scan = n_start(leaf); scan < end; scan = e_next(leaf, scan)) {
 +                lvar_hash_t scan_hash;
@@ -3330,12 +3330,9 @@ Index: iam/fs/ext3/iam_lvar.c
 +                                 */
 +                                leaf->il_at = lvar_lentry(scan);
 +                                return IAM_LOOKUP_EXACT;
-+                        } else {
-+                                if (!found_equal) {
++                        } else if (!found_equal) {
 +                                        found = scan;
 +                                        found_equal = 1;
-+                                }
-+                                last = 1;
 +                        }
 +                } else {
 +                        last = 0;
