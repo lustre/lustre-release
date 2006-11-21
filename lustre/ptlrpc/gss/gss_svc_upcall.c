@@ -956,8 +956,28 @@ void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx)
 
 int __init gss_svc_init_upcall(void)
 {
-        cache_register(&rsc_cache);
+        int     i;
+
         cache_register(&rsi_cache);
+        cache_register(&rsc_cache);
+
+        /* FIXME this looks stupid. we intend to give lsvcgssd a chance to open
+         * the init upcall channel, otherwise there's big chance that the first
+         * upcall issued before the channel be opened thus nfsv4 cache code will
+         * drop the request direclty, thus lead to unnecessary recovery time.
+         * here we wait at miximum 1.5 seconds.
+         */
+        for (i = 0; i < 6; i++) {
+                if (atomic_read(&rsi_cache.readers) > 0)
+                        break;
+                set_current_state(TASK_UNINTERRUPTIBLE);
+                LASSERT(HZ >= 4);
+                schedule_timeout(HZ / 4);
+        }
+
+        if (atomic_read(&rsi_cache.readers) == 0)
+                CWARN("init channel is not opened by lsvcgssd, following "
+                      "request might be dropped until lsvcgssd be active\n");
 
         return 0;
 }

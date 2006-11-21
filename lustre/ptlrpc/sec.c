@@ -133,15 +133,6 @@ again:
                         else
                                 CWARN("module ptlrpc_gss loaded\n");
 
-                        /* this is stupid. we intend to give lsvcgssd a chance
-                         * to open the upcall channel, otherwise there's big
-                         * chance the first upcall issued before the channel be
-                         * opened thus nfsv4 cache code will drop the call
-                         * direclty. FIXME
-                         */
-                        set_current_state(TASK_UNINTERRUPTIBLE);
-                        schedule_timeout(2 * HZ);
-
                         atomic_set(&loaded, 1);
                 }
                 mutex_up(&load_mutex);
