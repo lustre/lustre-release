@@ -1049,6 +1049,8 @@ static int mdd_object_create(const struct lu_env *env,
                                 else
                                         ma->ma_attr.la_valid |= LA_MODE;
                         }
+
+                        pfid = spec->u.sp_ea.fid;
                 }
 #endif
                 rc = mdd_object_initialize(env, pfid, mdd_obj, ma, handle);

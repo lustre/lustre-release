@@ -828,6 +828,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
                 sp->u.sp_ea.eadata = req_capsule_client_get(pill, &RMF_EADATA);
                 sp->u.sp_ea.eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
                                                                 RCL_CLIENT);
+                sp->u.sp_ea.fid = rr->rr_fid1;
                 RETURN(0);
         }
 #endif
