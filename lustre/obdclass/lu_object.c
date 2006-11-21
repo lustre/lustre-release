@@ -432,7 +432,8 @@ static __u32 fid_hash(const struct lu_fid *f, int bits)
         /* all objects with same id and different versions will belong to same
          * collisions list. */
 #if 1
-        return (fid_seq(f) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(f);
+        return hash_long((fid_seq(f) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(f),
+                         bits);
 #else
         unsigned long hash;
         __u64 seq;
@@ -441,7 +442,7 @@ static __u32 fid_hash(const struct lu_fid *f, int bits)
         hash = seq ^ fid_oid(f);
         if (sizeof hash != sizeof seq)
                 hash ^= seq >> 32;
-        return hash_long(hash, bits);
+        return hash_long(hash, 32);
 #endif
 }
 
@@ -471,11 +472,12 @@ struct lu_object *lu_object_find(const struct lu_env *env,
          *     - return object.
          */
 
-        bucket = s->ls_hash + (fid_hash(f, s->ls_hash_bits) & s->ls_hash_mask);
+        bucket = s->ls_hash + fid_hash(f, s->ls_hash_bits);
+
         spin_lock(&s->ls_guard);
         o = htable_lookup(s, bucket, f);
-
         spin_unlock(&s->ls_guard);
+
         if (o != NULL)
                 return o;
 
