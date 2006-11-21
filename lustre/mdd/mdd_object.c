@@ -1424,13 +1424,11 @@ static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
 static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                         const struct lu_rdpg *rdpg)
 {
-        struct dt_object *next;
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         int rc;
         ENTRY;
 
         LASSERT(lu_object_exists(mdd2lu_obj(mdd_obj)));
-        next = mdd_object_child(mdd_obj);
 
         mdd_read_lock(env, mdd_obj);
         rc = mdd_readpage_sanity_check(env, mdd_obj);
@@ -1438,13 +1436,29 @@ static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                 GOTO(out_unlock, rc);
         
         if (mdd_is_dead_obj(mdd_obj)) {
+                struct page *pg;
+                struct lu_dirpage *dp;
+
                 /* 
-                 * TODO:
                  * According to POSIX, please do not return any entry to client:
-                 * even dot and dotdot should not be returned.  How to do this?
+                 * even dot and dotdot should not be returned.
                  */
                 CWARN("readdir from dead object: "DFID"\n", 
                         PFID(lu_object_fid(mdd2lu_obj(mdd_obj))));
+
+                if (rdpg->rp_count <= 0)
+                        GOTO(out_unlock, rc = -EFAULT);
+                LASSERT(rdpg->rp_pages != NULL);
+
+                pg = rdpg->rp_pages[0];
+                dp = (struct lu_dirpage*)kmap(pg);
+                memset(dp, 0 , sizeof(struct lu_dirpage));
+                dp->ldp_hash_start = rdpg->rp_hash;
+                dp->ldp_hash_end   = DIR_END_OFF;
+                dp->ldp_flags |= LDF_EMPTY;
+                dp->ldp_flags = cpu_to_le16(dp->ldp_flags);
+                kunmap(pg);
+                GOTO(out_unlock, rc = 0);
         }
 
         rc = __mdd_readpage(env, mdd_obj, rdpg);

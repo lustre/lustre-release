@@ -51,12 +51,10 @@ static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
-        struct dt_device  *dt;
-        int rc = 0;
+        int rc;
         ENTRY;
 
         mdd->mdd_child = lu2dt_dev(next);
-        dt = mdd->mdd_child;
 
         /* Prepare transactions callbacks. */
         mdd->mdd_txn_cb.dtc_txn_start = mdd_txn_start_cb;

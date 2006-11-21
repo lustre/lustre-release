@@ -1050,8 +1050,12 @@ static int mdd_create_sanity_check(const struct lu_env *env,
         }
 
         switch (ma->ma_attr.la_mode & S_IFMT) {
+        case S_IFDIR: {
+                struct mdd_device *mdd = mdo2mdd(pobj);
+                if (la->la_nlink >= mdd->mdd_dt_conf.ddp_max_nlink)
+                        RETURN(-EMLINK);
+        }
         case S_IFREG:
-        case S_IFDIR:
         case S_IFLNK:
         case S_IFCHR:
         case S_IFBLK:
