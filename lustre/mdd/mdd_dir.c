@@ -538,7 +538,6 @@ int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
         RETURN(rc);
 }
 
-extern atomic_t lvar_enoent_debug;
 static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
                       struct md_object *cobj, const char *name,
                       struct md_attr *ma)
@@ -583,13 +582,12 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
                 GOTO(cleanup, rc);
 
         is_dir = S_ISDIR(lu_object_attr(&cobj->mo_lu));
-        /*
-         * This should be per-thread debugging flag, but
-         */
-        atomic_inc(&lvar_enoent_debug);
+
+        current->debugging1 |= 0x1; /* XXX enable lvar_enoent_debug
+                                     * debugging */
         rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle,
                                 mdd_object_capa(env, mdd_pobj));
-        atomic_dec(&lvar_enoent_debug);
+        current->debugging1 &= ~0x1;
         if (rc)
                 GOTO(cleanup, rc);
 

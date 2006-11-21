@@ -74,13 +74,13 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 /* Let lower layer know current lock mode. */
                 info->mti_spec.sp_cr_mode =
                         mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
-                
-                /* 
+
+                /*
                  * Do perform lookup sanity check. We do not know if name exists
                  * or not.
                  */
                 info->mti_spec.sp_cr_lookup = 1;
-                
+
                 rc = mdo_create(info->mti_env, next, rr->rr_name,
                                 mdt_object_child(child),
                                 &info->mti_spec, ma);
@@ -118,7 +118,7 @@ static int mdt_md_mkobj(struct mdt_thread_info *info)
 
                 ma->ma_need = MA_INODE;
                 ma->ma_valid = 0;
-                
+
                 /*
                  * Cross-ref create can encounter already created obj in case of
                  * recovery, just get attr in that case.
@@ -225,7 +225,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
         mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
                                LPROC_MDT_REINT_SETATTR);
-        
+
         DEBUG_REQ(D_INODE, req, "setattr "DFID" %x", PFID(rr->rr_fid1),
                   (unsigned int)ma->ma_attr.la_valid);
 
@@ -327,7 +327,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 
         mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
                                LPROC_MDT_REINT_CREATE);
-        
+
         if (MDT_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE))
                 GOTO(out, rc = err_serious(-ESTALE));
 
@@ -376,7 +376,13 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
         mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
                                LPROC_MDT_REINT_UNLINK);
-        
+
+        /*
+         * XXX Enforce full debugging log for unlinks, to track buffalo
+         * -ENOENT error.
+         */
+        current->debugging0 = ~0;
+
         DEBUG_REQ(D_INODE, req, "unlink "DFID"/%s\n", PFID(rr->rr_fid1),
                   rr->rr_name);
 
@@ -466,6 +472,7 @@ out:
         mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
         mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
                              LPROC_MDT_REINT_UNLINK);
+        current->debugging0 = 0;
         return rc;
 }
 
@@ -484,7 +491,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
         mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
                                LPROC_MDT_REINT_LINK);
-        
+
         DEBUG_REQ(D_INODE, req, "link "DFID" to "DFID"/%s",
                   PFID(rr->rr_fid1), PFID(rr->rr_fid2), rr->rr_name);
 
@@ -512,7 +519,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
          * processing it */
         if (lu_fid_eq(rr->rr_fid1, rr->rr_fid2))
                 GOTO(out, rc = -EPERM);
-        
+
         /* step 1: find & lock the target parent dir */
         lhp = &info->mti_lh[MDT_LH_PARENT];
         mdt_lock_pdo_init(lhp, LCK_EX, rr->rr_name,
@@ -525,11 +532,11 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         /* step 2: find & lock the source */
         lhs = &info->mti_lh[MDT_LH_CHILD];
         mdt_lock_reg_init(lhs, LCK_EX);
- 
+
         ms = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
         if (IS_ERR(ms))
                 GOTO(out_unlock_parent, rc = PTR_ERR(ms));
-        
+
         rc = mdt_object_lock(info, ms, lhs, MDS_INODELOCK_UPDATE,
                             MDT_CROSS_LOCK);
         if (rc != 0) {
@@ -734,7 +741,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
                                LPROC_MDT_REINT_RENAME);
-        
+
         if (info->mti_cross_ref) {
                 rc = mdt_reint_rename_tgt(info);
                 mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,

@@ -2887,7 +2887,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,1048 @@
+@@ -0,0 +1,1045 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3295,9 +3295,6 @@ Index: iam/fs/ext3/iam_lvar.c
 +        l->il_at = lvar_lentry(e_next(l, n_cur(l)));
 +}
 +
-+atomic_t lvar_enoent_debug = ATOMIC_INIT(0);
-+EXPORT_SYMBOL(lvar_enoent_debug);
-+
 +static int lvar_lookup(struct iam_leaf *leaf, const struct iam_key *k)
 +{
 +        struct lvar_leaf_entry *found;
@@ -3360,7 +3357,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +                result |= IAM_LOOKUP_LAST;
 +        assert_inv(n_invariant(leaf));
 +
-+        if (unlikely(atomic_read(&lvar_enoent_debug))) {
++        if (unlikely(current->debugging1 & 0x1)) {
 +                struct iam_path *path;
 +
 +                path = leaf->il_path;
