@@ -243,31 +243,34 @@ foreach my $mds (@{$objs{"mds"}}) {
         $mkfs_options = " --param=\"$mkfs_options\"";
     }
 
+    my $fs_name="";
     my $mount_point = "$MOUNTPT/" . $mds->{"name"};
     if (defined($mtpt->{"node"})) {
-        $mkfs_options .= " --fsname=\"" . $mtpt->{"node"} . "\" ";
+        $fs_name = $mtpt->{"node"};
         $mount_point .= "_" . $mtpt->{"node"};
     }
     $mkfs_options =~ s/\s*$//;
 
     if ($COUNT == 1) {
         # mgs/mdt
-        printf "%s,%s,%s,%s,mgs|mdt,,,,--device-size=%s --noformat%s,,noauto\n", 
+        printf "%s,%s,%s,%s,mgs|mdt,%s,,,--device-size=%s --noformat%s,,noauto\n", 
         $mds->{"node"},
         lnet_options($nets[0]),
         $mds->{"dev"},
         $mount_point,
+        $fs_name,
         $mds->{"size"},
         $mkfs_options;
 
         push(@mgses, $nets[0]->{"nid"});
     } else {
         # mdt
-        printf "%s,%s,%s,%s,mdt,,\"%s\",,--device-size=%s --noformat%s,,noauto\n",
+        printf "%s,%s,%s,%s,mdt,%s,\"%s\",,--device-size=%s --noformat%s,,noauto\n",
         $mds->{"node"},
         lnet_options($nets[0]),
         $mds->{"dev"},
         $mount_point,
+        $fs_name,
         join(",", @mgses),
         $mds->{"size"},
         $mkfs_options;
@@ -293,20 +296,22 @@ foreach my $ost (@{$objs{"ost"}}) {
     }
     
     $ost->{"lov"} = (find_objs("lov", "name", $ost->{"lov"}, @{$objs{"lov"}}))[0];
+    my $fs_name="";
     my $mount_point = "$MOUNTPT/" . $ost->{"name"}, 
     my $mtpt = $ost->{"lov"}->{"mtpt"};
     if (defined($mtpt->{"node"})) {
-        $mkfs_options .= " --fsname=\"" . $mtpt->{"node"} . "\" ";
+        $fs_name = $mtpt->{"node"};
         $mount_point .= "_" . $mtpt->{"node"};
     }
     $mkfs_options =~ s/\s*$//;
     # find the net for this node
     my @nets = find_objs("net", "node", $ost->{"node"}, @{$objs{"net"}});
-    printf "%s,%s,%s,%s,ost,,\"%s\",,--device-size=%s --noformat%s,,\"%s\"\n", 
+    printf "%s,%s,%s,%s,ost,%s,\"%s\",,--device-size=%s --noformat%s,,\"%s\"\n", 
     $ost->{"node"},
     lnet_options($nets[0]),
     $ost->{"dev"},
     $mount_point,
+    $fs_name,
     join(",", @mgses),
     $ost->{"size"},
     $mkfs_options,
