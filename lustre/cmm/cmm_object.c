@@ -849,6 +849,8 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
                         &cmm_env_info(env)->cmi_fid, NULL);
         if (rc == 0)
                 RETURN(-EEXIST);
+        else if (rc != -ENOENT)
+                RETURN(rc);
 
         /* check the SGID attr */
         cmi = cmm_env_info(env);
