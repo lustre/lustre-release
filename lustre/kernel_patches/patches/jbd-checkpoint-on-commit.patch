@@ -66,15 +66,16 @@ Index: linux/fs/jbd/journal.c
 ===================================================================
 --- linux.orig/fs/jbd/journal.c
 +++ linux/fs/jbd/journal.c
-@@ -130,6 +130,7 @@ int kjournald(void *arg)
+@@ -130,6 +130,8 @@ int kjournald(void *arg)
  	journal_t *journal = (journal_t *) arg;
  	transaction_t *transaction;
  	struct timer_list timer;
 +	int transaction_size;
++	int canlock;
  
  	current_journal = journal;
  
-@@ -154,12 +155,15 @@ int kjournald(void *arg)
+@@ -154,12 +156,15 @@ int kjournald(void *arg)
  	 */
  	spin_lock(&journal->j_state_lock);
  
@@ -90,7 +91,7 @@ Index: linux/fs/jbd/journal.c
  		spin_unlock(&journal->j_state_lock);
  		del_timer_sync(journal->j_commit_timer);
  		journal_commit_transaction(journal);
-@@ -168,6 +172,33 @@ loop:
+@@ -168,6 +173,36 @@ loop:
  	}
  
  	wake_up(&journal->j_wait_done_commit);
@@ -100,13 +101,16 @@ Index: linux/fs/jbd/journal.c
 +	 *
 +	 * Do this after wake-up to reduce waiters latency.
 +	 */
-+	spin_unlock(&journal->j_state_lock);
++
 +	/*
 +	 * Trylock to avoid deadlock with threads waiting for commit under
 +	 * journal->j_checkpoint_sem.
 +	 */
-+	if (!down_trylock(&journal->j_checkpoint_sem)) {
-+	        spin_lock(&journal->j_state_lock);
++	spin_unlock(&journal->j_state_lock);
++	canlock = !down_trylock(&journal->j_checkpoint_sem);
++	spin_lock(&journal->j_state_lock);
++
++	if (canlock) {
 +		while (__log_space_left(journal) <
 +		       journal->j_max_transaction_buffers +
 +		       2 * transaction_size) {
