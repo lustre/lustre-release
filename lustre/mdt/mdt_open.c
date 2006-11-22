@@ -282,10 +282,14 @@ static void mdt_write_allow(struct mdt_device *mdt, struct mdt_object *o)
 }
 
 /* there can be no real transaction so prepare the fake one */
-static void mdt_open_transno(struct mdt_thread_info* info)
+static void mdt_empty_transno(struct mdt_thread_info* info)
 {
         struct mdt_device *mdt = info->mti_mdt;
         struct ptlrpc_request *req = mdt_info_req(info);
+
+        /* transaction is occured already */
+        if (lustre_msg_get_transno(req->rq_repmsg) != 0)
+                return;
 
         spin_lock(&mdt->mdt_transno_lock);
         if (info->mti_transno == 0) {
@@ -297,7 +301,7 @@ static void mdt_open_transno(struct mdt_thread_info* info)
         }
         spin_unlock(&mdt->mdt_transno_lock);
 
-        CDEBUG(D_INODE, "open only: transno = %llu, last_committed = %llu\n",
+        CDEBUG(D_INODE, "transno = %llu, last_committed = %llu\n",
                         info->mti_transno,
                         req->rq_export->exp_obd->obd_last_committed);
 
@@ -514,7 +518,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 spin_unlock(&med->med_open_lock);
 
                 repbody->handle.cookie = mfd->mfd_handle.h_cookie;
-                mdt_open_transno(info);
+                mdt_empty_transno(info);
         } else
                 rc = -ENOMEM;
 
@@ -625,6 +629,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         int                      rc;
         ENTRY;
 
+        LASSERT(info->mti_spec.u.sp_ea.no_lov_create);
         o = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid2);
         if (IS_ERR(o))
                 RETURN(rc = PTR_ERR(o));
@@ -970,6 +975,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
         }
 
         ma->ma_need |= MA_INODE;
+        ma->ma_valid = 0;
 
         if (!MFD_CLOSED(mode))
                 rc = mo_close(info->mti_env, next, ma);
@@ -1073,6 +1079,7 @@ int mdt_close(struct mdt_thread_info *info)
                 ret = mdt_mfd_close(info, mfd);
                 if (repbody != NULL)
                         rc = mdt_handle_last_unlink(info, o, ma);
+                mdt_empty_transno(info);
                 mdt_object_put(info->mti_env, o);
         }
         if (repbody != NULL)
@@ -1126,6 +1133,7 @@ int mdt_done_writing(struct mdt_thread_info *info)
                 info->mti_epoch->flags |= MF_EPOCH_CLOSE;
                 info->mti_attr.ma_valid = 0;
                 rc = mdt_mfd_close(info, mfd);
+                mdt_empty_transno(info);
         }
         RETURN(rc);
 }
