@@ -2010,7 +2010,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
         if (obj && i < obj->lo_objcount - 1) {
                 struct lu_dirpage *dp;
                 __u32 end;
-                (void)kmap(page);
+                (void)cfs_kmap(page);
                 dp = cfs_page_address(page);
                 end = le32_to_cpu(dp->ldp_hash_end);
                 if (end == DIR_END_OFF) {
@@ -2021,6 +2021,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                         CDEBUG(D_INFO, ""DFID" reset end %lu i %d\n", PFID(&rid),
                                         (unsigned long)dp->ldp_hash_end, i);
                 }
+                cfs_kunmap(page);
         }
         /*
          * Here we could remove "." and ".." from all pages which at not from
