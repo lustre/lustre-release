@@ -127,8 +127,10 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size,
                    const struct md_op_spec *spec, struct lu_attr *la);
-void mdd_lov_create_finish(const struct lu_env *env,
-                           struct mdd_device *mdd, int rc);
+void mdd_lov_objid_update(const struct lu_env *env, struct mdd_device *mdd);
+void mdd_lov_create_finish(const struct lu_env *env, struct mdd_device *mdd,
+                           struct lov_mds_md *lmm, int lmm_size,
+                           const struct md_op_spec *spec);
 int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                void *md, int *md_size, const char *name);
 int mdd_get_md_locked(const struct lu_env *env, struct mdd_object *obj,

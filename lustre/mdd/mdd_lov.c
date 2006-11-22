@@ -348,11 +348,12 @@ static int mdd_lov_objid_alloc(const struct lu_env *env,
         return (info->mti_oti.oti_objid == NULL ? -ENOMEM : 0);
 }
 
-static void mdd_lov_objid_update(const struct lu_env *env,
-                          struct mdd_device *mdd)
+void mdd_lov_objid_update(const struct lu_env *env, struct mdd_device *mdd)
 {
         struct mdd_thread_info *info = mdd_env_info(env);
-        mds_lov_update_objids(mdd->mdd_obd_dev, info->mti_oti.oti_objid);
+        if (info->mti_oti.oti_objid != NULL)
+                mds_lov_update_objids(mdd->mdd_obd_dev,
+                                      info->mti_oti.oti_objid);
 }
 
 static void mdd_lov_objid_from_lmm(const struct lu_env *env,
@@ -375,16 +376,17 @@ static void mdd_lov_objid_free(const struct lu_env *env,
         info->mti_oti.oti_objid = NULL;
 }
 
-void mdd_lov_create_finish(const struct lu_env *env,
-                           struct mdd_device *mdd, int rc)
+void mdd_lov_create_finish(const struct lu_env *env, struct mdd_device *mdd,
+                           struct lov_mds_md *lmm, int lmm_size,
+                           const struct md_op_spec *spec)
 {
         struct mdd_thread_info *info = mdd_env_info(env);
 
-        if (info->mti_oti.oti_objid != NULL) {
-                if (rc == 0)
-                        mdd_lov_objid_update(env, mdd);
+        if (lmm && !spec->u.sp_ea.no_lov_create)
+                OBD_FREE(lmm, lmm_size);
+
+        if (info->mti_oti.oti_objid != NULL)
                 mdd_lov_objid_free(env, mdd);
-        }
 }
 
 int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
@@ -417,7 +419,9 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
 
         /* replay case, should get lov from eadata */
         if (spec->u.sp_ea.no_lov_create != 0) {
-                mdd_lov_objid_from_lmm(env, mdd, (struct lov_mds_md *)eadata);
+                *lmm = (struct lov_mds_md *)spec->u.sp_ea.eadata;
+                *lmm_size = spec->u.sp_ea.eadatalen;
+                mdd_lov_objid_from_lmm(env, mdd, *lmm);
                 RETURN(0);
         }
 

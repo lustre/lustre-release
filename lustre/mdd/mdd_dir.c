@@ -904,24 +904,28 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
          */
 
         /* Replay creates has objects already */
+#if 0
         if (spec->u.sp_ea.no_lov_create) {
                 CDEBUG(D_INFO, "we already have lov ea\n");
                 rc = mdd_lov_set_md(env, mdd_pobj, son,
                                     (struct lov_mds_md *)spec->u.sp_ea.eadata,
                                     spec->u.sp_ea.eadatalen, handle, 0);
         } else
+#endif
                 rc = mdd_lov_set_md(env, mdd_pobj, son, lmm,
                                     lmm_size, handle, 0);
 
         if (rc == 0)
                rc = mdd_attr_get_internal_locked(env, son, ma);
 
+        /* update lov_objid data, must be before transaction stop! */
+        if (rc == 0)
+                mdd_lov_objid_update(env, mdd);
+
         mdd_trans_stop(env, mdd, rc, handle);
 out_free:
         /* Finish mdd_lov_create() stuff. */
-        mdd_lov_create_finish(env, mdd, rc);
-        if (lmm)
-                OBD_FREE(lmm, lmm_size);
+        mdd_lov_create_finish(env, mdd, lmm, lmm_size, spec);
         RETURN(rc);
 }
 
@@ -1224,12 +1228,14 @@ static int mdd_create(const struct lu_env *env,
         inserted = 1;
 
         /* Replay creates has objects already. */
+#if 0
         if (spec->u.sp_ea.no_lov_create) {
                 CDEBUG(D_INFO, "we already have lov ea\n");
                 LASSERT(lmm == NULL);
                 lmm = (struct lov_mds_md *)spec->u.sp_ea.eadata;
                 lmm_size = spec->u.sp_ea.eadatalen;
         }
+#endif
         rc = mdd_lov_set_md(env, mdd_pobj, son, lmm, lmm_size, handle, 0);
         if (rc) {
                 CERROR("error on stripe info copy %d \n", rc);
@@ -1287,14 +1293,16 @@ cleanup:
                 }
         }
 
+        /* update lov_objid data, must be before transaction stop! */
+        if (rc == 0)
+                mdd_lov_objid_update(env, mdd);
+
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
 out_trans:
         mdd_trans_stop(env, mdd, rc, handle);
 out_free:
-        if (lmm && !spec->u.sp_ea.no_lov_create)
-                OBD_FREE(lmm, lmm_size);
-        /* Finish mdd_lov_create() stuff */
-        mdd_lov_create_finish(env, mdd, rc);
+        /* finis lov_create stuff, free all temporary data */
+        mdd_lov_create_finish(env, mdd, lmm, lmm_size, spec);
         mdd_lprocfs_time_end(mdd, &start, LPROC_MDD_CREATE);
         return rc;
 }
