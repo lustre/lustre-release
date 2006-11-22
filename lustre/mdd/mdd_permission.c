@@ -567,10 +567,23 @@ check_capabilities:
 int mdd_permission(const struct lu_env *env, struct md_object *obj, int mask)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
+        int check_link = mask & MAY_LINK;
         int rc;
         ENTRY;
 
+        mask &= ~MAY_LINK;
         rc = mdd_permission_internal_locked(env, mdd_obj, NULL, mask);
+        if (!rc && check_link) {
+                struct lu_attr *la = &mdd_env_info(env)->mti_la;
+                struct mdd_device *m = mdo2mdd(obj);
+
+                rc = mdd_la_get(env, mdd_obj, la, BYPASS_CAPA);
+                if (rc)
+                        RETURN(rc);
+
+                if (la->la_nlink >= m->mdd_dt_conf.ddp_max_nlink)
+                        RETURN(-EMLINK);
+        }
 
         RETURN(rc);
 }

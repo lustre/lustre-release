@@ -274,6 +274,8 @@ static int mdd_may_delete(const struct lu_env *env,
 int mdd_link_sanity_check(const struct lu_env *env, struct mdd_object *tgt_obj,
                           struct mdd_object *src_obj)
 {
+        struct lu_attr *la = &mdd_env_info(env)->mti_la;
+        struct mdd_device *m = mdd_obj2mdd_dev(src_obj);
         int rc = 0;
         ENTRY;
 
@@ -290,7 +292,14 @@ int mdd_link_sanity_check(const struct lu_env *env, struct mdd_object *tgt_obj,
                         RETURN(rc);
         }
 
-        RETURN(rc);
+        rc = mdd_la_get(env, src_obj, la, BYPASS_CAPA);
+        if (rc)
+                RETURN(rc);
+
+        if (la->la_nlink >= m->mdd_dt_conf.ddp_max_nlink)
+                RETURN(-EMLINK);
+        else
+                RETURN(0);
 }
 
 const struct dt_rec *__mdd_fid_rec(const struct lu_env *env,
@@ -781,6 +790,18 @@ static int mdd_rt_sanity_check(const struct lu_env *env,
                                 RETURN(-ENOTEMPTY);
         } else {
                 rc = mdd_may_create(env, tgt_pobj, NULL, 1);
+        }
+
+        if (!rc && src_is_dir) {
+                struct lu_attr *la = &mdd_env_info(env)->mti_la;
+                struct mdd_device *m = mdd_obj2mdd_dev(tgt_pobj);
+
+                rc = mdd_la_get(env, tgt_pobj, la, BYPASS_CAPA);
+                if (rc)
+                        RETURN(rc);
+
+                if (la->la_nlink >= m->mdd_dt_conf.ddp_max_nlink)
+                        RETURN(-EMLINK);
         }
 
         RETURN(rc);
@@ -1377,6 +1398,18 @@ static int mdd_rename_sanity_check(const struct lu_env *env,
                         if (S_ISDIR(mdd_object_type(tobj))
                             && mdd_dir_is_empty(env, tobj))
                                 rc = -ENOTEMPTY;
+        }
+
+        if (!rc && src_is_dir && (src_pobj != tgt_pobj)) {
+                struct lu_attr *la = &mdd_env_info(env)->mti_la;
+                struct mdd_device *m = mdd_obj2mdd_dev(tgt_pobj);
+
+                rc = mdd_la_get(env, tgt_pobj, la, BYPASS_CAPA);
+                if (rc)
+                        RETURN(rc);
+
+                if (la->la_nlink >= m->mdd_dt_conf.ddp_max_nlink)
+                        RETURN(-EMLINK);
         }
 
         RETURN(rc);

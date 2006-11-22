@@ -615,7 +615,8 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
         } else /* -ENOENT */ {
                 /* Do permission check for name_insert first */
                 rc = mo_permission(info->mti_env, mdt_object_child(mtgtdir),
-                                   MAY_WRITE);
+                                   MAY_WRITE |
+                                   (S_ISDIR(ma->ma_attr.la_mode) ? MAY_LINK : 0));
                 if (rc)
                         GOTO(out_unlock_tgtdir, rc);
 

@@ -1228,6 +1228,9 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
 
+/* permission for increase nlink of a file */
+#define MAY_LINK        64
+
 enum {
         MDS_CHECK_SPLIT = 1 << 0,
         MDS_CROSS_REF   = 1 << 1

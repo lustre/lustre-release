@@ -893,7 +893,8 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
 #endif
 
         /* Local permission check for name_insert before remote ops. */
-        rc = mo_permission(env, md_object_next(mo_p), MAY_WRITE);
+        rc = mo_permission(env, md_object_next(mo_p), MAY_WRITE |
+                           (S_ISDIR(ma->ma_attr.la_mode) ? MAY_LINK : 0));
         if (rc)
                 RETURN(rc);
 

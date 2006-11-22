@@ -354,9 +354,15 @@ static inline struct dt_object* mdd_object_child(struct mdd_object *o)
         return container_of0(lu_object_next(mdd2lu_obj(o)),
                              struct dt_object, do_lu);
 }
+
 static inline struct obd_device *mdd2obd_dev(struct mdd_device *mdd)
 {
         return mdd->mdd_obd_dev;
+}
+
+static inline struct mdd_device *mdd_obj2mdd_dev(struct mdd_object *obj)
+{
+        return mdo2mdd(&obj->mod_obj);
 }
 
 static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
