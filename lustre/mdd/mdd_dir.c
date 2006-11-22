@@ -997,12 +997,14 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                                    struct md_object *pobj,
                                    const char *name,
                                    struct md_attr *ma,
-                                   int lookup)
+                                   struct md_op_spec *spec)
 {
         struct mdd_thread_info *info = mdd_env_info(env);
         struct lu_attr    *la        = &info->mti_la;
         struct lu_fid     *fid       = &info->mti_fid;
         struct mdd_object *obj       = md2mdd_obj(pobj);
+        struct mdd_device *m         = mdo2mdd(pobj);
+        int lookup                   = spec->sp_cr_lookup;
         int rc;
         ENTRY;
 
@@ -1049,12 +1051,20 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 
         switch (ma->ma_attr.la_mode & S_IFMT) {
         case S_IFDIR: {
-                struct mdd_device *mdd = mdo2mdd(pobj);
-                if (la->la_nlink >= mdd->mdd_dt_conf.ddp_max_nlink)
+                if (la->la_nlink >= m->mdd_dt_conf.ddp_max_nlink)
                         RETURN(-EMLINK);
+                else
+                        RETURN(0);
+        }
+        case S_IFLNK: {
+                unsigned int symlen = strlen(spec->u.sp_symname) + 1;
+
+                if (symlen > (1 << m->mdd_dt_conf.ddp_block_shift))
+                        RETURN(-ENAMETOOLONG);
+                else
+                        RETURN(0);
         }
         case S_IFREG:
-        case S_IFLNK:
         case S_IFCHR:
         case S_IFBLK:
         case S_IFIFO:
@@ -1128,7 +1138,7 @@ static int mdd_create(const struct lu_env *env,
          */
 
         /* Sanity checks before big job. */
-        rc = mdd_create_sanity_check(env, pobj, name, ma, spec->sp_cr_lookup);
+        rc = mdd_create_sanity_check(env, pobj, name, ma, spec);
         if (rc)
                 RETURN(rc);
 
