@@ -204,7 +204,11 @@ lmv_find_target(struct lmv_obd *lmv, const struct lu_fid *fid)
 static inline struct obd_export *
 lmv_find_export(struct lmv_obd *lmv, const struct lu_fid *fid)
 {
-        return lmv_find_target(lmv, fid)->ltd_exp;
+        struct lmv_tgt_desc *tgt = lmv_find_target(lmv, fid);
+        if (IS_ERR(tgt))
+                return (struct obd_export*)tgt;
+        else
+                return tgt->ltd_exp;
 }
 
 /* lproc_lmv.c */
