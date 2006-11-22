@@ -874,7 +874,7 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
         EXIT;
         *request = req;
  out:
-        if (rc != 0 && req && req->rq_commit_cb)
+        if (rc != 0 && rc != -EAGAIN && req && req->rq_commit_cb)
                 req->rq_commit_cb(req);
 
         return rc;
