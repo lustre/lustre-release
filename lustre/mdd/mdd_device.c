@@ -196,12 +196,12 @@ static int mdd_recovery_complete(const struct lu_env *env,
                 RETURN(rc);
         }
 #endif
-        obd->obd_recovering = 0;
         obd_notify(obd->u.mds.mds_osc_obd, NULL,
                    (obd->obd_async_recov ?
                     OBD_NOTIFY_SYNC_NONBLOCK :
                     OBD_NOTIFY_SYNC), NULL);
 
+        obd->obd_recovering = 0;
         obd->obd_type->typ_dt_ops->o_postrecov(obd);
 
         /* XXX: orphans handling. */
