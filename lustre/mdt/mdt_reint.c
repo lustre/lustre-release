@@ -613,6 +613,12 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
                                     mdt_object_child(mtgt), rr->rr_fid2,
                                     rr->rr_tgt, ma);
         } else /* -ENOENT */ {
+                /* Do permission check for name_insert first */
+                rc = mo_permission(info->mti_env, mdt_object_child(mtgtdir),
+                                   MAY_WRITE);
+                if (rc)
+                        GOTO(out_unlock_tgtdir, rc);
+
                 rc = mdo_name_insert(info->mti_env, mdt_object_child(mtgtdir),
                                      rr->rr_tgt, rr->rr_fid2,
                                      S_ISDIR(ma->ma_attr.la_mode));

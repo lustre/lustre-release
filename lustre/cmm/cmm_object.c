@@ -548,6 +548,11 @@ static int cml_rename(const struct lu_env *env, struct md_object *mo_po,
 
         if (mo_t && lu_object_exists(&mo_t->mo_lu) < 0) {
                 /* mo_t is remote object and there is RPC to unlink it */
+                /*
+                 * XXX: before remote unlink, maybe need local sanity check
+                 * for mdo_rename first, or do some revocation for remote
+                 * unlink if mdo_rename failed.
+                 */
                 rc = mo_ref_del(env, md_object_next(mo_t), ma);
                 if (rc)
                         RETURN(rc);
@@ -887,6 +892,11 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
         }
 #endif
 
+        /* Local permission check for name_insert before remote ops. */
+        rc = mo_permission(env, md_object_next(mo_p), MAY_WRITE);
+        if (rc)
+                RETURN(rc);
+
         /* Remote object creation and local name insert. */
         rc = mo_object_create(env, md_object_next(mo_c), spec, ma);
         if (rc == 0) {
@@ -911,6 +921,11 @@ static int cmr_link(const struct lu_env *env, struct md_object *mo_p,
         if (rc == 0) {
                 rc = -EEXIST;
         } else if (rc == -ENOENT) {
+                /* Local permission check for name_insert before remote ops. */
+                rc = mo_permission(env, md_object_next(mo_p), MAY_WRITE);
+                if (rc)
+                        RETURN(rc);
+
                 rc = mo_ref_add(env, md_object_next(mo_s));
                 if (rc == 0) {
                         rc = mdo_name_insert(env, md_object_next(mo_p), name,
@@ -926,6 +941,11 @@ static int cmr_unlink(const struct lu_env *env, struct md_object *mo_p,
 {
         int rc;
         ENTRY;
+
+        /* Local permission check for name_remove before remote ops. */
+        rc = mo_permission(env, md_object_next(mo_p), MAY_WRITE);
+        if (rc)
+                RETURN(rc);
 
         rc = mo_ref_del(env, md_object_next(mo_c), ma);
         if (rc == 0) {
@@ -951,6 +971,12 @@ static int cmr_rename(const struct lu_env *env,
                 RETURN(rc);
 
         LASSERT(mo_t == NULL);
+
+        /* Local permission check for name_remove before remote ops. */
+        rc = mo_permission(env, md_object_next(mo_po), MAY_WRITE);
+        if (rc)
+                RETURN(rc);
+
         /* the mo_pn is remote directory, so we cannot even know if there is
          * mo_t or not. Therefore mo_t is NULL here but remote server should do
          * lookup and process this further */
@@ -974,6 +1000,11 @@ static int cmr_rename_tgt(const struct lu_env *env,
         int rc;
         ENTRY;
         /* target object is remote one */
+        /*
+         * XXX: before remote unlink, maybe need local sanity check
+         * for mdo_rename_tgt first, or do some revocation for remote
+         * unlink if mdo_rename_tgt failed.
+         */
         rc = mo_ref_del(env, md_object_next(mo_t), ma);
         /* continue locally with name handling only */
         if (rc == 0)

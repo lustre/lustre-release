@@ -408,6 +408,7 @@ static int cmm_split_remove_entry(const struct lu_env *env,
                 GOTO(cleanup, rc = -ENOMEM);
 
         memcpy(name, ent->lde_name, le16_to_cpu(ent->lde_namelen));
+        /* No permission check for name_remove when split */
         rc = mdo_name_remove(env, md_object_next(mo),
                              name, is_dir);
         OBD_FREE(name, le16_to_cpu(ent->lde_namelen) + 1);

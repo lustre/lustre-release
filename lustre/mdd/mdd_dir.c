@@ -623,6 +623,7 @@ out_trans:
         return rc;
 }
 
+#if 0
 static int mdd_ni_sanity_check(const struct lu_env *env,
                                struct md_object *pobj,
                                const char *name,
@@ -639,6 +640,7 @@ static int mdd_ni_sanity_check(const struct lu_env *env,
         RETURN(mdd_permission_internal_locked(env, obj, NULL,
                                               MAY_WRITE | MAY_EXEC));
 }
+#endif
 
 /*
  * Partial operation.
@@ -663,17 +665,24 @@ static int mdd_name_insert(const struct lu_env *env, struct md_object *pobj,
         dlh = mdd_pdo_write_lock(env, mdd_obj, name);
         if (dlh == NULL)
                 GOTO(out_trans, rc = -ENOMEM);
+#if 0
+        /*
+         * For some case, no need permission check, e.g. split_dir.
+         * When need permission check, do it before name_insert.
+         */
         rc = mdd_ni_sanity_check(env, pobj, name, fid);
         if (rc)
                 GOTO(out_unlock, rc);
+#endif
 
         rc = __mdd_index_insert(env, mdd_obj, fid, name, is_dir,
                                 handle, BYPASS_CAPA);
-        if (rc == 0) {
-                la->la_ctime = la->la_atime = CURRENT_SECONDS;
-                la->la_valid = LA_ATIME | LA_CTIME;
-                rc = mdd_attr_set_internal_locked(env, mdd_obj, la, handle, 0);
-        }
+        if (rc)
+                GOTO(out_unlock, rc);
+
+        la->la_ctime = la->la_atime = CURRENT_SECONDS;
+        la->la_valid = LA_ATIME | LA_CTIME;
+        rc = mdd_attr_set_internal_locked(env, mdd_obj, la, handle, 0);
         EXIT;
 out_unlock:
         mdd_pdo_write_unlock(env, mdd_obj, dlh);
@@ -682,6 +691,7 @@ out_trans:
         return rc;
 }
 
+#if 0
 static int mdd_nr_sanity_check(const struct lu_env *env,
                                struct md_object *pobj,
                                const char *name)
@@ -699,6 +709,7 @@ static int mdd_nr_sanity_check(const struct lu_env *env,
         RETURN(mdd_permission_internal_locked(env, obj, NULL,
                                               MAY_WRITE | MAY_EXEC));
 }
+#endif
 
 /*
  * Partial operation.
@@ -723,9 +734,15 @@ static int mdd_name_remove(const struct lu_env *env,
         dlh = mdd_pdo_write_lock(env, mdd_obj, name);
         if (dlh == NULL)
                 GOTO(out_trans, rc = -ENOMEM);
+#if 0
+        /*
+         * For some case, no need permission check, e.g. split_dir.
+         * When need permission check, do it before name_remove.
+         */
         rc = mdd_nr_sanity_check(env, pobj, name);
         if (rc)
                 GOTO(out_unlock, rc);
+#endif
 
         rc = __mdd_index_delete(env, mdd_obj, name, is_dir,
                                 handle, BYPASS_CAPA);

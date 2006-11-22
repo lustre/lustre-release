@@ -1117,6 +1117,7 @@ static int mdt_write_dir_page(struct mdt_thread_info *info, struct page *page,
                         GOTO(out, rc = -ENOMEM);
 
                 memcpy(name, ent->lde_name, le16_to_cpu(ent->lde_namelen));
+                /* No permission check for name_insert when write_dir_page */
                 rc = mdo_name_insert(info->mti_env,
                                      md_object_next(&object->mot_obj),
                                      name, lf, is_dir);
