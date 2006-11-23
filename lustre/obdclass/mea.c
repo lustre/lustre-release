@@ -68,16 +68,16 @@ static int mea_all_chars_hash(int count, char *name, int namelen)
 #define LVAR_HASH_R5     (0)
 #define LVAR_HASH_PREFIX (0)
 
-static __u32 hash_build(char *name, int namelen)
+static __u32 hash_build0(const char *name, int namelen)
 {
         __u32 result;
 
         if (namelen == 0)
                 return 0;
         if (strncmp(name, ".", 1) == 0 && namelen == 1)
-                return 2;
+                return 1;
         if (strncmp(name, "..", 2) == 0 && namelen == 2)
-                return 4;
+                return 2;
 
         if (LVAR_HASH_PREFIX) {
                 result = 0;
@@ -95,18 +95,31 @@ static __u32 hash_build(char *name, int namelen)
                 result = hinfo.hash;
         }
 
-        return (result << 1) & 0x7fffffff;
+        return result;
 }
 
-static int mea_hash_segment(int count, char *name, int namelen)
-{
-        __u64 hash;
-        __u64 hash_segment = MAX_HASH_SIZE;
+enum {
+        HASH_GRAY_AREA = 1024
+};
 
-        hash = hash_build(name, namelen);
-        do_div(hash_segment, count);
-        do_div(hash, hash_segment);
-        LASSERTF(hash <= count, "hash "LPU64" count %d \n", hash, count);
+static __u32 hash_build(const char *name, int namelen)
+{
+        __u32 hash;
+
+        hash = (hash_build0(name, namelen) << 1) & MAX_HASH_SIZE;
+        if (hash > MAX_HASH_SIZE - HASH_GRAY_AREA)
+                hash += HASH_GRAY_AREA;
+        return hash;
+}
+
+static int mea_hash_segment(int count, const char *name, int namelen)
+{
+        __u32 hash;
+
+        LASSERT(IS_PO2(MAX_HASH_SIZE + 1));
+
+        hash = hash_build(name, namelen) / (MAX_HASH_SIZE / count);
+        LASSERTF(hash <= count, "hash %x count %d \n", hash, count);
 
         return hash;
 }

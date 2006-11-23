@@ -2887,7 +2887,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,1042 @@
+@@ -0,0 +1,1061 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3063,17 +3063,16 @@ Index: iam/fs/ext3/iam_lvar.c
 +#define LVAR_HASH_R5     (0)
 +#define LVAR_HASH_PREFIX (0)
 +
-+static inline lvar_hash_t get_hash(const struct iam_container *bag,
-+                                   const char *name, int namelen)
++static __u32 hash_build0(const char *name, int namelen)
 +{
-+        lvar_hash_t result;
++        __u32 result;
 +
 +        if (namelen == 0)
 +                return 0;
 +        if (strncmp(name, ".", 1) == 0 && namelen == 1)
-+                return 2;
++                return 1;
 +        if (strncmp(name, "..", 2) == 0 && namelen == 2)
-+                return 4;
++                return 2;
 +
 +        if (LVAR_HASH_PREFIX) {
 +                result = 0;
@@ -3084,14 +3083,34 @@ Index: iam/fs/ext3/iam_lvar.c
 +
 +                if (LVAR_HASH_TEA)
 +                        hinfo.hash_version = DX_HASH_TEA;
-+                else if (LVAR_HASH_R5)
++                else
 +                        hinfo.hash_version = DX_HASH_R5;
 +                hinfo.seed = 0;
 +                ext3fs_dirhash(name, namelen, &hinfo);
 +                result = hinfo.hash;
 +        }
++        return result;
++}
 +
-+        return (result << 1) & 0x7fffffff;
++enum {
++        HASH_GRAY_AREA = 1024,
++        MAX_HASH_SIZE  = 0x7fffffffUL
++};
++
++static __u32 hash_build(const char *name, int namelen)
++{
++        __u32 hash;
++
++        hash = (hash_build0(name, namelen) << 1) & MAX_HASH_SIZE;
++        if (hash > MAX_HASH_SIZE - HASH_GRAY_AREA)
++                hash += HASH_GRAY_AREA;
++        return hash;
++}
++
++static inline lvar_hash_t get_hash(const struct iam_container *bag,
++                                   const char *name, int namelen)
++{
++        return hash_build(name, namelen);
 +}
 +
 +static inline int e_eq(const struct lvar_leaf_entry *ent,
