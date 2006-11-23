@@ -729,6 +729,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         struct lu_attr          *la = &ma->ma_attr;
         __u32                    create_flags = info->mti_spec.sp_cr_flags;
         struct mdt_reint_record *rr = &info->mti_rr;
+        struct lu_name          *lname;
         int                      result;
         int                      created = 0;
         ENTRY;
@@ -805,8 +806,11 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 GOTO(out, result = PTR_ERR(parent));
 
         fid_zero(child_fid);
+
+        lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
+
         result = mdo_lookup(info->mti_env, mdt_object_child(parent),
-                            rr->rr_name, child_fid, &info->mti_spec);
+                            lname, child_fid, &info->mti_spec);
         LASSERTF(ergo(result == 0, fid_is_sane(child_fid)),
                  "looking for "DFID"/%s, result fid="DFID"\n", 
                  PFID(mdt_object_fid(parent)), rr->rr_name, PFID(child_fid));
@@ -858,7 +862,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 
                 result = mdo_create(info->mti_env,
                                     mdt_object_child(parent),
-                                    rr->rr_name,
+                                    lname,
                                     mdt_object_child(child),
                                     &info->mti_spec,
                                     &info->mti_attr);

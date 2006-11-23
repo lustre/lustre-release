@@ -225,14 +225,14 @@ struct md_dir_operations {
                               const struct lu_fid *fid, struct lu_fid *sfid);
 
         int (*mdo_lookup)(const struct lu_env *env, struct md_object *obj,
-                          const char *name, struct lu_fid *fid,
+                          const struct lu_name *lname, struct lu_fid *fid,
                           struct md_op_spec *spec);
 
         mdl_mode_t (*mdo_lock_mode)(const struct lu_env *env, struct md_object *obj,
                                     mdl_mode_t mode);
 
         int (*mdo_create)(const struct lu_env *env, struct md_object *pobj,
-                          const char *name, struct md_object *child,
+                          const struct lu_name *lname, struct md_object *child,
                           struct md_op_spec *spec,
                           struct md_attr *ma);
 
@@ -248,7 +248,7 @@ struct md_dir_operations {
                           const char *tname, struct md_attr *ma);
 
         int (*mdo_link)(const struct lu_env *env, struct md_object *tgt_obj,
-                        struct md_object *src_obj, const char *name,
+                        struct md_object *src_obj, const struct lu_name *lname,
                         struct md_attr *ma);
 
         int (*mdo_unlink)(const struct lu_env *env, struct md_object *pobj,
@@ -482,12 +482,12 @@ static inline int mo_capa_get(const struct lu_env *env,
 
 static inline int mdo_lookup(const struct lu_env *env,
                              struct md_object *p,
-                             const char *name,
+                             const struct lu_name *lname,
                              struct lu_fid *f,
                              struct md_op_spec *spec)
 {
         LASSERT(p->mo_dir_ops->mdo_lookup);
-        return p->mo_dir_ops->mdo_lookup(env, p, name, f, spec);
+        return p->mo_dir_ops->mdo_lookup(env, p, lname, f, spec);
 }
 
 static inline mdl_mode_t mdo_lock_mode(const struct lu_env *env,
@@ -501,13 +501,13 @@ static inline mdl_mode_t mdo_lock_mode(const struct lu_env *env,
 
 static inline int mdo_create(const struct lu_env *env,
                              struct md_object *p,
-                             const char *child_name,
+                             const struct lu_name *lchild_name,
                              struct md_object *c,
                              struct md_op_spec *spc,
                              struct md_attr *at)
 {
         LASSERT(c->mo_dir_ops->mdo_create);
-        return c->mo_dir_ops->mdo_create(env, p, child_name, c, spc, at);
+        return c->mo_dir_ops->mdo_create(env, p, lchild_name, c, spc, at);
 }
 
 static inline int mdo_create_data(const struct lu_env *env,
@@ -545,11 +545,11 @@ static inline int mdo_is_subdir(const struct lu_env *env,
 static inline int mdo_link(const struct lu_env *env,
                            struct md_object *p,
                            struct md_object *s,
-                           const char *name,
+                           const struct lu_name *lname,
                            struct md_attr *ma)
 {
         LASSERT(s->mo_dir_ops->mdo_link);
-        return s->mo_dir_ops->mdo_link(env, p, s, name, ma);
+        return s->mo_dir_ops->mdo_link(env, p, s, lname, ma);
 }
 
 static inline int mdo_unlink(const struct lu_env *env,

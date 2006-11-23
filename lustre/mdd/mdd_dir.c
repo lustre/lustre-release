@@ -48,12 +48,19 @@
 static const char dot[] = ".";
 static const char dotdot[] = "..";
 
+static struct lu_name lname_dotdot = {
+        (char *) dotdot,
+        sizeof(dotdot) - 1
+};
+
 static int __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
-                        const char *name, struct lu_fid* fid, int mask);
+                        const struct lu_name *lname, struct lu_fid* fid,
+                        int mask);
 static int
 __mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
-                    const char *name, struct lu_fid* fid, int mask)
+                    const struct lu_name *lname, struct lu_fid* fid, int mask)
 {
+        char *name = lname->ln_name;
         struct mdd_object *mdd_obj = md2mdd_obj(pobj);
         struct dynlock_handle *dlh;
         int rc;
@@ -61,19 +68,19 @@ __mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
         dlh = mdd_pdo_read_lock(env, mdd_obj, name);
         if (dlh == NULL)
                 return -ENOMEM;
-        rc = __mdd_lookup(env, pobj, name, fid, mask);
+        rc = __mdd_lookup(env, pobj, lname, fid, mask);
         mdd_pdo_read_unlock(env, mdd_obj, dlh);
 
         return rc;
 }
 
 static int mdd_lookup(const struct lu_env *env,
-                      struct md_object *pobj, const char *name,
+                      struct md_object *pobj, const struct lu_name *lname,
                       struct lu_fid* fid, struct md_op_spec *spec)
 {
         int rc;
         ENTRY;
-        rc = __mdd_lookup_locked(env, pobj, name, fid, MAY_EXEC);
+        rc = __mdd_lookup_locked(env, pobj, lname, fid, MAY_EXEC);
         RETURN(rc);
 }
 
@@ -81,7 +88,7 @@ static int mdd_lookup(const struct lu_env *env,
 static int mdd_parent_fid(const struct lu_env *env, struct mdd_object *obj,
                           struct lu_fid *fid)
 {
-        return __mdd_lookup_locked(env, &obj->mod_obj, dotdot, fid, 0);
+        return __mdd_lookup_locked(env, &obj->mod_obj, &lname_dotdot, fid, 0);
 }
 
 /*
@@ -271,13 +278,19 @@ static int mdd_may_delete(const struct lu_env *env,
         RETURN(rc);
 }
 
-int mdd_link_sanity_check(const struct lu_env *env, struct mdd_object *tgt_obj,
+int mdd_link_sanity_check(const struct lu_env *env,
+                          struct mdd_object *tgt_obj,
+                          const struct lu_name *lname,
                           struct mdd_object *src_obj)
 {
         struct lu_attr *la = &mdd_env_info(env)->mti_la;
         struct mdd_device *m = mdd_obj2mdd_dev(src_obj);
         int rc = 0;
         ENTRY;
+
+        /* Local ops, no lookup before link, check filename length here. */
+        if (lname && (lname->ln_namelen > m->mdd_dt_conf.ddp_max_name_len))
+                RETURN(-ENAMETOOLONG);
 
         if (mdd_is_immutable(src_obj) || mdd_is_append(src_obj))
                 RETURN(-EPERM);
@@ -395,9 +408,10 @@ __mdd_index_insert_only(const struct lu_env *env, struct mdd_object *pobj,
 }
 
 static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
-                    struct md_object *src_obj, const char *name,
+                    struct md_object *src_obj, const struct lu_name *lname,
                     struct md_attr *ma)
 {
+        char *name = lname->ln_name;
         struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_tobj = md2mdd_obj(tgt_obj);
         struct mdd_object *mdd_sobj = md2mdd_obj(src_obj);
@@ -417,7 +431,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
                 GOTO(out_trans, rc = -ENOMEM);
         mdd_write_lock(env, mdd_sobj);
 
-        rc = mdd_link_sanity_check(env, mdd_tobj, mdd_sobj);
+        rc = mdd_link_sanity_check(env, mdd_tobj, lname, mdd_sobj);
         if (rc)
                 GOTO(out_unlock, rc);
 
@@ -952,10 +966,12 @@ out_free:
 
 static int
 __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
-             const char *name, struct lu_fid* fid, int mask)
+             const struct lu_name *lname, struct lu_fid* fid, int mask)
 {
+        char                *name = lname->ln_name;
         const struct dt_key *key = (const struct dt_key *)name;
         struct mdd_object   *mdd_obj = md2mdd_obj(pobj);
+        struct mdd_device   *m = mdo2mdd(pobj);
         struct dt_object    *dir = mdd_object_child(mdd_obj);
         struct dt_rec       *rec = (struct dt_rec *)fid;
         struct timeval       start;
@@ -974,6 +990,10 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                         PFID(mdo2fid(mdd_obj)));
                 LBUG();
         }
+
+        /* The common filename length check. */
+        if (lname->ln_namelen > m->mdd_dt_conf.ddp_max_name_len)
+                RETURN(-ENAMETOOLONG);
 
         rc = mdd_permission_internal_locked(env, mdd_obj, NULL, mask);
         if (rc)
@@ -1037,7 +1057,7 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
 
 static int mdd_create_sanity_check(const struct lu_env *env,
                                    struct md_object *pobj,
-                                   const char *name,
+                                   const struct lu_name *lname,
                                    struct md_attr *ma,
                                    struct md_op_spec *spec)
 {
@@ -1058,6 +1078,12 @@ static int mdd_create_sanity_check(const struct lu_env *env,
          * In some cases this lookup is not needed - we know before if name
          * exists or not because MDT performs lookup for it.
          */
+        /* XXX we perform filename length check in lookup. */
+#if 1
+        /* XXX check filename length here temporary when lookup disabled. */
+        if (lname->ln_namelen > m->mdd_dt_conf.ddp_max_name_len)
+                RETURN(-ENAMETOOLONG);
+#endif
         /* XXX disable that lookup temporary */
         if (0 && lookup) {
                 /*
@@ -1065,13 +1091,13 @@ static int mdd_create_sanity_check(const struct lu_env *env,
                  * _index_insert also, for avoiding rolling back if exists
                  * _index_insert.
                  */
-                rc = __mdd_lookup_locked(env, pobj, name, fid,
+                rc = __mdd_lookup_locked(env, pobj, lname, fid,
                                          MAY_WRITE | MAY_EXEC);
                 if (rc != -ENOENT)
                         RETURN(rc ? : -EEXIST);
         } else {
                 /*
-                 * Check if has WRITE permission for the parent.
+                 * Check WRITE permission for the parent.
                  */
                 rc = mdd_permission_internal_locked(env, obj, NULL, MAY_WRITE);
                 if (rc)
@@ -1124,11 +1150,13 @@ static int mdd_create_sanity_check(const struct lu_env *env,
  * Create object and insert it into namespace.
  */
 static int mdd_create(const struct lu_env *env,
-                      struct md_object *pobj, const char *name,
+                      struct md_object *pobj,
+                      const struct lu_name *lname,
                       struct md_object *child,
                       struct md_op_spec *spec,
                       struct md_attr* ma)
 {
+        char *name = lname->ln_name;
         struct lu_attr    *la = &mdd_env_info(env)->mti_la_for_fix;
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *son = md2mdd_obj(child);
@@ -1180,7 +1208,7 @@ static int mdd_create(const struct lu_env *env,
          */
 
         /* Sanity checks before big job. */
-        rc = mdd_create_sanity_check(env, pobj, name, ma, spec);
+        rc = mdd_create_sanity_check(env, pobj, lname, ma, spec);
         if (rc)
                 RETURN(rc);
 

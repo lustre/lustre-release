@@ -183,7 +183,7 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
                           struct mdd_object *child, struct md_attr *ma,
                           struct thandle *handle);
 int mdd_link_sanity_check(const struct lu_env *env, struct mdd_object *tgt_obj,
-                          struct mdd_object *src_obj);
+                          const struct lu_name *lname, struct mdd_object *src_obj);
 void mdd_ref_add_internal(const struct lu_env *env, struct mdd_object *obj,
                           struct thandle *handle);
 void mdd_ref_del_internal(const struct lu_env *env, struct mdd_object *obj,

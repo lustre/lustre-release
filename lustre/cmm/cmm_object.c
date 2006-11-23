@@ -347,9 +347,10 @@ static struct md_object_operations cml_mo_ops = {
 
 /* md_dir operations */
 static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
-                      const char *name, struct lu_fid *lf,
+                      const struct lu_name *lname, struct lu_fid *lf,
                       struct md_op_spec *spec)
 {
+        char *name = lname->ln_name;
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo_p));
         struct timeval start;
         int rc;
@@ -366,7 +367,7 @@ static int cml_lookup(const struct lu_env *env, struct md_object *mo_p,
                 }
         }
 #endif
-        rc = mdo_lookup(env, md_object_next(mo_p), name, lf, spec);
+        rc = mdo_lookup(env, md_object_next(mo_p), lname, lf, spec);
         cmm_lprocfs_time_end(cmm, &start, LPROC_CMM_LOOKUP);
         RETURN(rc);
 
@@ -386,9 +387,10 @@ static mdl_mode_t cml_lock_mode(const struct lu_env *env,
 }
 
 static int cml_create(const struct lu_env *env, struct md_object *mo_p,
-                      const char *name, struct md_object *mo_c,
+                      const struct lu_name *lname, struct md_object *mo_c,
                       struct md_op_spec *spec, struct md_attr *ma)
 {
+        char *name = lname->ln_name;
         struct cmm_device *cmm = cmm_obj2dev(md2cmm_obj(mo_p));
         struct timeval start;
         int rc;
@@ -444,7 +446,7 @@ static int cml_create(const struct lu_env *env, struct md_object *mo_p,
         }
 #endif
 
-        rc = mdo_create(env, md_object_next(mo_p), name, md_object_next(mo_c),
+        rc = mdo_create(env, md_object_next(mo_p), lname, md_object_next(mo_c),
                         spec, ma);
 
         EXIT;
@@ -466,13 +468,13 @@ static int cml_create_data(const struct lu_env *env, struct md_object *p,
 }
 
 static int cml_link(const struct lu_env *env, struct md_object *mo_p,
-                    struct md_object *mo_s, const char *name,
+                    struct md_object *mo_s, const struct lu_name *lname,
                     struct md_attr *ma)
 {
         int rc;
         ENTRY;
         rc = mdo_link(env, md_object_next(mo_p), md_object_next(mo_s),
-                      name, ma);
+                      lname, ma);
         RETURN(rc);
 }
 
@@ -813,7 +815,7 @@ static struct md_object_operations cmr_mo_ops = {
 
 /* remote part of md_dir operations */
 static int cmr_lookup(const struct lu_env *env, struct md_object *mo_p,
-                      const char *name, struct lu_fid *lf,
+                      const struct lu_name *lname, struct lu_fid *lf,
                       struct md_op_spec *spec)
 {
         /*
@@ -840,17 +842,18 @@ static mdl_mode_t cmr_lock_mode(const struct lu_env *env,
  * For more details see rollback HLD/DLD.
  */
 static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
-                      const char *child_name, struct md_object *mo_c,
+                      const struct lu_name *lchild_name, struct md_object *mo_c,
                       struct md_op_spec *spec,
                       struct md_attr *ma)
 {
+        char *child_name = lchild_name->ln_name;
         struct cmm_thread_info *cmi;
         struct md_attr *tmp_ma;
         int rc;
         ENTRY;
 
         /* Make sure that name isn't exist before doing remote call. */
-        rc = mdo_lookup(env, md_object_next(mo_p), child_name,
+        rc = mdo_lookup(env, md_object_next(mo_p), lchild_name,
                         &cmm_env_info(env)->cmi_fid, NULL);
         if (rc == 0)
                 RETURN(-EEXIST);
@@ -910,14 +913,15 @@ static int cmr_create(const struct lu_env *env, struct md_object *mo_p,
 }
 
 static int cmr_link(const struct lu_env *env, struct md_object *mo_p,
-                    struct md_object *mo_s, const char *name,
+                    struct md_object *mo_s, const struct lu_name *lname,
                     struct md_attr *ma)
 {
+        char *name = lname->ln_name;
         int rc;
         ENTRY;
         
         /* Make sure that name isn't exist before doing remote call. */
-        rc = mdo_lookup(env, md_object_next(mo_p), name,
+        rc = mdo_lookup(env, md_object_next(mo_p), lname,
                         &cmm_env_info(env)->cmi_fid, NULL);
         if (rc == 0) {
                 rc = -EEXIST;

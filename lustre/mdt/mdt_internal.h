@@ -393,6 +393,9 @@ struct mdt_thread_info {
 
         /* Time for stats */
         struct timeval             mti_time;
+
+        /* Ops object filename */
+        struct lu_name             mti_name;
 };
 /*
  * Info allocated per-transaction.
@@ -706,6 +709,19 @@ static inline ldlm_mode_t mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
 {
         LASSERT(IS_PO2(mode));
         return mdt_dlm_lock_modes[mode];
+}
+
+static inline struct lu_name *mdt_name(const struct lu_env *env,
+                                       char *name, int namelen)
+{
+        struct lu_name *lname;
+        struct mdt_thread_info *mti;
+
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+        lname = &mti->mti_name;
+        lname->ln_name = name;
+        lname->ln_namelen = namelen;
+        return lname;
 }
 
 /* lprocfs stuff */

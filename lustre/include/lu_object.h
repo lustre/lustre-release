@@ -1014,6 +1014,14 @@ int  lu_env_init(struct lu_env *env, struct lu_context *ses, __u32 tags);
 void lu_env_fini(struct lu_env *env);
 
 /*
+ * Common name structure to be passed around for various name related methods.
+ */
+struct lu_name {
+        char    *ln_name;
+        int      ln_namelen;
+};
+
+/*
  * Common buffer structure to be passed around for various xattr_{s,g}et()
  * methods.
  */

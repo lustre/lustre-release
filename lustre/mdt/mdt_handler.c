@@ -697,7 +697,7 @@ static int mdt_is_subdir(struct mdt_thread_info *info)
 
 static int mdt_raw_lookup(struct mdt_thread_info *info,
                           struct mdt_object *parent,
-                          const char* name,
+                          const struct lu_name *lname,
                           struct ldlm_reply *ldlm_rep)
 {
         struct md_object *next = mdt_object_child(info->mti_object);
@@ -713,7 +713,7 @@ static int mdt_raw_lookup(struct mdt_thread_info *info,
         LASSERT(!info->mti_cross_ref);
         
         /* Only got the fid of this obj by name */
-        rc = mdo_lookup(info->mti_env, next, name, child_fid,
+        rc = mdo_lookup(info->mti_env, next, lname, child_fid,
                         &info->mti_spec);
 #if 0
         /* XXX is raw_lookup possible as intent operation? */
@@ -753,6 +753,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         struct lu_fid         *child_fid = &info->mti_tmp_fid1;
         int                    is_resent, rc, namelen = 0;
         const char            *name;
+        struct lu_name        *lname;
         struct mdt_lock_handle *lhp;
         struct ldlm_lock      *lock;
         struct ldlm_res_id *res_id;
@@ -769,6 +770,8 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         namelen = req_capsule_get_size(&info->mti_pill, &RMF_NAME,
                                        RCL_CLIENT);
+
+        lname = mdt_name(info->mti_env, (char *)name, namelen);
 
         CDEBUG(D_INODE, "getattr with lock for "DFID"/%s, ldlm_rep = %p\n",
                         PFID(mdt_object_fid(parent)), name, ldlm_rep);
@@ -787,7 +790,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 LBUG();
         }
 
-        rc = mdt_raw_lookup(info, parent, name, ldlm_rep);
+        rc = mdt_raw_lookup(info, parent, lname, ldlm_rep);
         if (rc != 0) {
                 if (rc > 0)
                         rc = 0;
@@ -847,7 +850,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                 RETURN(rc);
 
         /* step 2: lookup child's fid by name */
-        rc = mdo_lookup(info->mti_env, next, name, child_fid,
+        rc = mdo_lookup(info->mti_env, next, lname, child_fid,
                         &info->mti_spec);
         if (rc != 0) {
                 if (rc == -ENOENT)
