@@ -804,11 +804,12 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         if (IS_ERR(parent))
                 GOTO(out, result = PTR_ERR(parent));
 
+        fid_zero(child_fid);
         result = mdo_lookup(info->mti_env, mdt_object_child(parent),
                             rr->rr_name, child_fid, &info->mti_spec);
         LASSERTF(ergo(result == 0, fid_is_sane(child_fid)),
                  "looking for "DFID"/%s, result fid="DFID"\n", 
-                 mdt_object_fid(parent), rr->rr_name, PFID(child_fid));
+                 PFID(mdt_object_fid(parent)), rr->rr_name, PFID(child_fid));
 
         if (result != 0 && result != -ENOENT && result != -ESTALE)
                 GOTO(out_parent, result);
