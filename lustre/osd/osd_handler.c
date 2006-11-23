@@ -2271,7 +2271,7 @@ static int osd_fid_lookup(const struct lu_env *env,
          * fids. Unfortunately it is somewhat expensive (does a
          * cache-lookup). Disabling it for production/acceptance-testing.
          */
-        LASSERT(fid_is_local(ldev->ld_site, fid));
+        LASSERT(1 || fid_is_local(ldev->ld_site, fid));
 
         ENTRY;
 
