@@ -1491,9 +1491,7 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
                 GOTO(out, rc = -ENOMEM);
 
         rdata->op_fid1 = fid_copy;
-        rdata->op_name = NULL;
-        rdata->op_namelen = 0;
-        rdata->op_bias = 0;
+        rdata->op_bias = MDS_CROSS_REF;
 
         rc = md_enqueue(tgt_exp, lock_type, it, lock_mode, rdata,
                         lockh, lmm, lmmsize, cb_compl, cb_blocking,
