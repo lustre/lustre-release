@@ -57,6 +57,6 @@ unsigned long llu_fid_build_ino(struct llu_sb_info *sbi,
 {
         unsigned long ino;
         ENTRY;
-        ino = (fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid);
+        ino = fid_flatten(fid);
         RETURN(ino & 0x7fffffff);
 }

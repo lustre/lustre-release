@@ -95,10 +95,10 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
 
         snprintf(name, strlen(MDD_OBD_NAME) + 5, "%s-%d",
                  MDD_OBD_NAME, mds_id);
-        
+
         snprintf(uuid, strlen(MDD_OBD_UUID) + 5, "%s-%d",
                  MDD_OBD_UUID, mds_id);
-        
+
         lustre_cfg_bufs_reset(bufs, name);
         lustre_cfg_bufs_set_string(bufs, 1, MDD_OBD_TYPE);
         lustre_cfg_bufs_set_string(bufs, 2, uuid);
@@ -133,7 +133,7 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
         obd->obd_upcall.onu_upcall = mdd_lov_update;
         obd->obd_upcall.onu_owner = mdd;
         mdd->mdd_obd_dev = obd;
-        
+
         EXIT;
 class_detach:
         if (rc)
@@ -160,7 +160,7 @@ int mdd_fini_obd(const struct lu_env *env, struct mdd_device *mdd)
         OBD_ALLOC_PTR(bufs);
         if (!bufs)
                 RETURN(-ENOMEM);
-        
+
         lustre_cfg_bufs_reset(bufs, MDD_OBD_NAME);
         lcfg = lustre_cfg_new(LCFG_ATTACH, bufs);
         OBD_FREE_PTR(bufs);
@@ -334,7 +334,7 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
  */
 static obd_id mdd_lov_create_id(const struct lu_fid *fid)
 {
-        return ((fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid));
+        return fid_flatten(fid);
 }
 
 static int mdd_lov_objid_alloc(const struct lu_env *env,

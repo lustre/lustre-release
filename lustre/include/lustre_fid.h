@@ -244,6 +244,11 @@ fid_build_pdo_res_name(const struct lu_fid *f,
         return name;
 }
 
+static inline __u64 fid_flatten(const struct lu_fid *fid)
+{
+        return (fid_seq(fid) - 1) * LUSTRE_SEQ_MAX_WIDTH + fid_oid(fid);
+}
+
 #define LUSTRE_SEQ_SRV_NAME "seq_srv"
 #define LUSTRE_SEQ_CTL_NAME "seq_ctl"
 
