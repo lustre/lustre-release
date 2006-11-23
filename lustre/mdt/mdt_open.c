@@ -806,6 +806,10 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 
         result = mdo_lookup(info->mti_env, mdt_object_child(parent),
                             rr->rr_name, child_fid, &info->mti_spec);
+        LASSERTF(ergo(result == 0, fid_is_sane(child_fid)),
+                 "looking for "DFID"/%s, result fid="DFID"\n", 
+                 mdt_object_fid(parent), rr->rr_name, PFID(child_fid));
+
         if (result != 0 && result != -ENOENT && result != -ESTALE)
                 GOTO(out_parent, result);
 
@@ -822,6 +826,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 if (!(create_flags & MDS_OPEN_CREAT))
                         GOTO(out_parent, result);
                 *child_fid = *info->mti_rr.rr_fid2;
+                LASSERTF(fid_is_sane(child_fid), "fid="DFID"\n", 
+                         PFID(child_fid));
         } else {
                 /*
                  * Check for O_EXCL is moved to the mdt_mfd_open(), we need to
@@ -830,8 +836,6 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
         }
 
-        LASSERTF(fid_is_sane(child_fid), "result=%d fid="DFID"\n",
-                 result, PFID(child_fid));
         child = mdt_object_find(info->mti_env, mdt, child_fid);
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
