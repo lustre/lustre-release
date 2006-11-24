@@ -207,20 +207,22 @@ static
 int get_rawobj(char **ptr, const char *end, rawobj_t *res)
 {
         char *p, *q;
+        __u32   len;
 
         p = *ptr;
-        if (get_bytes(&p, end, &res->len, sizeof(res->len)))
+        if (get_bytes(&p, end, &len, sizeof(len)))
                 return -1;
 
-        q = p + res->len;
+        q = p + len;
         if (q > end || q < p)
                 return -1;
 
-        OBD_ALLOC(res->data, res->len);
+        OBD_ALLOC(res->data, len);
         if (!res->data)
                 return -1;
 
-        memcpy(res->data, p, res->len);
+        res->len = len;
+        memcpy(res->data, p, len);
         *ptr = q;
         return 0;
 }
