@@ -985,6 +985,7 @@ int ll_fill_super(struct super_block *sb)
 
         cfs_module_get();
 
+        sb->s_type->fs_flags |= FS_ODD_RENAME;
         /* client additional sb info */
         lsi->lsi_llsbi = sbi = ll_init_sbi();
         if (!sbi) {
