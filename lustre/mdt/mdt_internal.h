@@ -712,15 +712,19 @@ static inline ldlm_mode_t mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
 }
 
 static inline struct lu_name *mdt_name(const struct lu_env *env,
-                                       char *name, int namelen)
+                                       char *name, int buflen)
 {
         struct lu_name *lname;
         struct mdt_thread_info *mti;
 
+        LASSERT(buflen > 0);
+        LASSERT(name[buflen - 1] == '\0');
+
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         lname = &mti->mti_name;
         lname->ln_name = name;
-        lname->ln_namelen = namelen;
+        /* NOT count the terminating '\0' of name for length */
+        lname->ln_namelen = buflen - 1;
         return lname;
 }
 

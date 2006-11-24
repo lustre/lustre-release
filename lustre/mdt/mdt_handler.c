@@ -771,8 +771,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         namelen = req_capsule_get_size(&info->mti_pill, &RMF_NAME,
                                        RCL_CLIENT);
 
-        /* NOT count the terminating '\0' of filename for length */
-        lname = mdt_name(info->mti_env, (char *)name, namelen - 1);
+        lname = mdt_name(info->mti_env, (char *)name, namelen);
 
         CDEBUG(D_INODE, "getattr with lock for "DFID"/%s, ldlm_rep = %p\n",
                         PFID(mdt_object_fid(parent)), name, ldlm_rep);

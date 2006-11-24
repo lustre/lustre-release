@@ -83,7 +83,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 info->mti_spec.sp_cr_lookup = 1;
 
                 lname = mdt_name(info->mti_env, (char *)rr->rr_name,
-                                 rr->rr_namelen - 1);
+                                 rr->rr_namelen);
                 rc = mdo_create(info->mti_env, next, lname,
                                 mdt_object_child(child),
                                 &info->mti_spec, ma);
@@ -435,7 +435,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         }
 
         /* step 2: find & lock the child */
-        lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen - 1);
+        lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
         rc = mdo_lookup(info->mti_env, mdt_object_child(mp),
                         lname, child_fid, &info->mti_spec);
         if (rc != 0)
@@ -554,7 +554,7 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_LINK_WRITE);
 
-        lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen - 1);
+        lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
         rc = mdo_link(info->mti_env, mdt_object_child(mp),
                       mdt_object_child(ms), lname, ma);
 
@@ -597,7 +597,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
 
         /* step 2: find & lock the target object if exists. */
         mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
-        lname = mdt_name(info->mti_env, (char *)rr->rr_tgt, rr->rr_tgtlen - 1);
+        lname = mdt_name(info->mti_env, (char *)rr->rr_tgt, rr->rr_tgtlen);
         rc = mdo_lookup(info->mti_env, mdt_object_child(mtgtdir),
                         lname, tgt_fid, &info->mti_spec);
         if (rc != 0 && rc != -ENOENT) {
@@ -814,7 +814,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         }
 
         /* step 3: find & lock the old object. */
-        lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen - 1);
+        lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
         rc = mdo_lookup(info->mti_env, mdt_object_child(msrcdir),
                         lname, old_fid, &info->mti_spec);
         if (rc != 0)
@@ -838,7 +838,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         /* step 4: find & lock the new object. */
         /* new target object may not exist now */
-        lname = mdt_name(info->mti_env, (char *)rr->rr_tgt, rr->rr_tgtlen - 1);
+        lname = mdt_name(info->mti_env, (char *)rr->rr_tgt, rr->rr_tgtlen);
         rc = mdo_lookup(info->mti_env, mdt_object_child(mtgtdir),
                         lname, new_fid, &info->mti_spec);
         if (rc == 0) {

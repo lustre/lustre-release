@@ -807,7 +807,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 
         fid_zero(child_fid);
 
-        lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen - 1);
+        lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
 
         result = mdo_lookup(info->mti_env, mdt_object_child(parent),
                             lname, child_fid, &info->mti_spec);
