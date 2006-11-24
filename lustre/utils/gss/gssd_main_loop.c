@@ -99,6 +99,8 @@ lgssd_run()
 	int			ret;
 	struct sigaction	dn_act;
 	int			fd;
+	time_t			child_check = 0;
+	pid_t			child_pid;
 
 	/* Taken from linux/Documentation/dnotify.txt: */
 	dn_act.sa_sigaction = dir_notify_handler;
@@ -109,7 +111,7 @@ lgssd_run()
 	if ((fd = open(pipefs_dir, O_RDONLY)) == -1) {
 		printerr(0, "ERROR: failed to open %s: %s\n",
 			 pipefs_dir, strerror(errno));
-		exit(1);
+		return;
 	}
 	fcntl(fd, F_SETSIG, DNOTIFY_SIGNAL);
 	fcntl(fd, F_NOTIFY, DN_CREATE|DN_DELETE|DN_MODIFY|DN_MULTISHOT);
@@ -123,9 +125,26 @@ lgssd_run()
 			if (update_client_list()) {
 				printerr(0, "ERROR: couldn't update "
 					 "client list\n");
-				exit(1);
+				goto out;
 			}
 		}
+
+		/* every 5s cleanup possible zombies of child processes */
+		if (time(NULL) - child_check >= 5) {
+			printerr(3, "check zombie children...\n");
+
+			while (1) {
+				child_pid = waitpid(-1, NULL, WNOHANG);
+				if (child_pid <= 0)
+					break;
+
+				printerr(2, "terminate zombie child: %d\n",
+					 child_pid);
+			}
+
+			child_check = time(NULL);
+		}
+
 		/* race condition here: dir_changed could be set before we
 		 * enter the poll, and we'd never notice if it weren't for the
 		 * timeout. */
@@ -140,6 +159,7 @@ lgssd_run()
 			scan_poll_results(ret);
 		}
 	}
+out:
 	close(fd);
 	return;
 }

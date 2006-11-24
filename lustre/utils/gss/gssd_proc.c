@@ -385,7 +385,13 @@ do_downcall(int k5_fd, struct lgssd_upcall_data *updata,
 	if (write_buffer(&p, end, &lgd->lgd_rmt_ctx)) goto out_err;
 	if (write_buffer(&p, end, context_token)) goto out_err;
 
-	if (write(k5_fd, buf, p - buf) < p - buf) goto out_err;
+	lgssd_mutex_get(lgssd_mutex_downcall);
+	if (write(k5_fd, buf, p - buf) < p - buf) {
+		lgssd_mutex_put(lgssd_mutex_downcall);
+		goto out_err;
+	}
+	lgssd_mutex_put(lgssd_mutex_downcall);
+
 	if (buf) free(buf);
 	return 0;
 out_err:
@@ -395,8 +401,7 @@ out_err:
 }
 
 static int
-do_error_downcall(int k5_fd, struct lgssd_upcall_data *updata,
-		  int rpc_err, int gss_err)
+do_error_downcall(int k5_fd, uint32_t seq, int rpc_err, int gss_err)
 {
 	char	buf[1024];
 	char	*p = buf, *end = buf + 1024;
@@ -405,14 +410,19 @@ do_error_downcall(int k5_fd, struct lgssd_upcall_data *updata,
 
 	printerr(1, "doing error downcall\n");
 
-	if (WRITE_BYTES(&p, end, updata->seq)) goto out_err;
+	if (WRITE_BYTES(&p, end, seq)) goto out_err;
 	if (WRITE_BYTES(&p, end, timeout)) goto out_err;
 	/* use seq_win = 0 to indicate an error: */
 	if (WRITE_BYTES(&p, end, zero)) goto out_err;
 	if (WRITE_BYTES(&p, end, rpc_err)) goto out_err;
 	if (WRITE_BYTES(&p, end, gss_err)) goto out_err;
 
-	if (write(k5_fd, buf, p - buf) < p - buf) goto out_err;
+	lgssd_mutex_get(lgssd_mutex_downcall);
+	if (write(k5_fd, buf, p - buf) < p - buf) {
+		lgssd_mutex_put(lgssd_mutex_downcall);
+		goto out_err;
+	}
+	lgssd_mutex_put(lgssd_mutex_downcall);
 	return 0;
 out_err:
 	printerr(0, "Failed to write error downcall!\n");
@@ -900,6 +910,7 @@ int construct_service_name(struct clnt_info *clp,
 void
 handle_krb5_upcall(struct clnt_info *clp)
 {
+	pid_t			pid;
 	gss_buffer_desc		token = { 0, NULL };
 	struct lgssd_upcall_data updata;
 	struct lustre_gss_data	lgd;
@@ -916,15 +927,29 @@ handle_krb5_upcall(struct clnt_info *clp)
 	if (read_rc < 0) {
 		printerr(0, "WARNING: failed reading from krb5 "
 			    "upcall pipe: %s\n", strerror(errno));
-		goto out;
+		return;
 	} else if (read_rc != sizeof(updata)) {
 		printerr(0, "upcall data mismatch: length %d, expect %d\n",
 			 read_rc, sizeof(updata));
 
+		/* the sequence number must be the first field. if read >= 4
+		 * bytes then we know at least sequence is fine, try to send
+		 * error notification nicely.
+		 */
 		if (read_rc >= 4)
-			goto out_return_error;
-		else
-			goto out;
+			do_error_downcall(clp->krb5_fd, updata.seq, -EPERM, 0);
+		return;
+	}
+
+	/* fork child process */
+	pid = fork();
+	if (pid < 0) {
+		printerr(0, "can't fork: %s\n", strerror(errno));
+		do_error_downcall(clp->krb5_fd, updata.seq, -EPERM, 0);
+		return;
+	} else if (pid > 0) {
+		printerr(2, "forked child process: %d\n", pid);
+		return;
 	}
 
 	printerr(1, "krb5 upcall: seq %u, uid %u, svc %u, nid 0x%llx, "
@@ -1019,10 +1044,10 @@ out:
 		free(token.value);
 
 	gssd_free_lgd(&lgd);
-	return;
+	exit(0); /* i'm child process */
 
 out_return_error:
-	do_error_downcall(clp->krb5_fd, &updata,
+	do_error_downcall(clp->krb5_fd, updata.seq,
 			  lgd.lgd_rpc_err, lgd.lgd_gss_err);
 	goto out;
 }

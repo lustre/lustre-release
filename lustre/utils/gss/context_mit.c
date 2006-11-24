@@ -332,12 +332,7 @@ serialize_krb5_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf)
 		 * keydata-2;                (  Ki  (Kseq for DES3) )
 		 * keydata-3;                (  Kc (derived checksum key) )
 		 */
-		if (kctx->initiate) {
-			if (WRITE_BYTES(&p, end, constant_one)) goto out_err;
-		}
-		else {
-			if (WRITE_BYTES(&p, end, constant_zero)) goto out_err;
-		}
+		if (WRITE_BYTES(&p, end, constant_two)) goto out_err;
 		if (WRITE_BYTES(&p, end, kctx->endtime)) goto out_err;
 
 		/* Only applicable flag for this is initiator */

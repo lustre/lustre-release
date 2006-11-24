@@ -38,8 +38,12 @@
 
 #include "config.h"
 
+#include <sys/types.h>
 #include <sys/param.h>
 #include <sys/socket.h>
+#include <sys/wait.h>
+#include <sys/ipc.h>
+#include <sys/sem.h>
 
 #include <unistd.h>
 #include <err.h>
@@ -47,6 +51,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <errno.h>
 #include "gssd.h"
 #include "err_util.h"
 #include "gss_util.h"
@@ -58,13 +63,95 @@ char pipefs_nfsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
 char keytabfile[PATH_MAX] = GSSD_DEFAULT_KEYTAB_FILE;
 char ccachedir[PATH_MAX] = GSSD_DEFAULT_CRED_DIR;
 int  use_memcache = 0;
+int  lgssd_mutex_downcall = -1;
+
+static int lgssd_create_mutex(int *semid)
+{
+	int		id;
+	int		arg;
+
+	id = semget(IPC_PRIVATE, 1, IPC_CREAT);
+	if (id == -1) {
+		printerr(0, "semget: %s\n", strerror(errno));
+		return -1;
+	}
+
+	arg = 1;
+	if (semctl(id, 0, SETVAL, arg) != 0) {
+		printerr(0, "semctl: %s\n", strerror(errno));
+		semctl(id, 1, IPC_RMID, arg);
+		return -1;
+	}
+
+	*semid = id;
+	return 0;
+}
+
+void lgssd_init_mutexs(void)
+{
+	if (lgssd_create_mutex(&lgssd_mutex_downcall)) {
+		printerr(0, "can't create downcall mutex\n");
+		exit(1);
+	}
+}
+
+void lgssd_fini_mutexs(void)
+{
+	int	arg = 0;
+
+	if (lgssd_mutex_downcall != -1)
+		semctl(lgssd_mutex_downcall, 1, IPC_RMID, arg);
+}
+
+void lgssd_mutex_get(int semid)
+{
+	struct sembuf	op[1] = { {0, -1, SEM_UNDO} };
+	int		rc;
+
+	rc = semop(semid, op, 1);
+	if (rc != 0) {
+		printerr(0, "exit on mutex_get err %d: %s\n",
+			 rc, strerror(errno));
+		exit(1);
+	}
+}
+
+void lgssd_mutex_put(int semid)
+{
+	struct sembuf	op[1] = { {0, 1, 0} };
+	int		rc;
+
+	rc = semop(semid, op, 1);
+	if (rc != 0) {
+		printerr(0, "ignore mutex_put err %d: %s\n",
+			 rc, strerror(errno));
+	}
+}
+
+static void lgssd_cleanup(void)
+{
+	pid_t	child_pid;
+
+	/* make sure all children finished */
+	while (1) {
+		child_pid = waitpid(-1, NULL, 0);
+		if (child_pid < 0)
+			break;
+
+		printerr(3, "cleanup: child %d terminated\n", child_pid);
+	}
+
+	lgssd_fini_mutexs();
+
+	/* destroy krb5 machine creds */
+	gssd_destroy_krb5_machine_creds();
+}
 
 void
 sig_die(int signal)
 {
-	/* destroy krb5 machine creds */
-	gssd_destroy_krb5_machine_creds();
 	printerr(1, "exiting on signal %d\n", signal);
+	lgssd_cleanup();
 	exit(1);
 }
 
@@ -158,7 +245,11 @@ main(int argc, char *argv[])
 	gssd_obtain_kernel_krb5_info();
 #endif
 
+	lgssd_init_mutexs();
+
 	lgssd_run();
-	printerr(0, "gssd_run returned!\n");
-	abort();
+
+	lgssd_cleanup();
+	printerr(0, "lgssd exiting\n");
+	return 0;
 }

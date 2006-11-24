@@ -1,6 +1,6 @@
 diff -rup nfs-utils-1.0.10.orig/configure.in nfs-utils-1.0.10/configure.in
 --- nfs-utils-1.0.10.orig/configure.in	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/configure.in	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/configure.in	2006-11-23 22:06:03.000000000 -0700
 @@ -17,61 +17,14 @@ AC_ARG_WITH(release,
  	RELEASE=$withval,
  	RELEASE=1)
@@ -191,7 +191,7 @@ diff -rup nfs-utils-1.0.10.orig/configure.in nfs-utils-1.0.10/configure.in
  
 diff -rup nfs-utils-1.0.10.orig/Makefile.am nfs-utils-1.0.10/Makefile.am
 --- nfs-utils-1.0.10.orig/Makefile.am	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/Makefile.am	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/Makefile.am	2006-11-23 22:06:03.000000000 -0700
 @@ -1,6 +1,6 @@
  ## Process this file with automake to produce Makefile.in
  
@@ -202,7 +202,7 @@ diff -rup nfs-utils-1.0.10.orig/Makefile.am nfs-utils-1.0.10/Makefile.am
  
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/cacheio.c nfs-utils-1.0.10/utils/gssd/cacheio.c
 --- nfs-utils-1.0.10.orig/utils/gssd/cacheio.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/cacheio.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/cacheio.c	2006-11-23 22:06:17.000000000 -0700
 @@ -227,7 +227,8 @@ int qword_get(char **bpp, char *dest, in
  		return -1;
  	while (*bp == ' ') bp++;
@@ -215,7 +215,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/cacheio.c nfs-utils-1.0.10/utils/gssd
  
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/context.c nfs-utils-1.0.10/utils/gssd/context.c
 --- nfs-utils-1.0.10.orig/utils/gssd/context.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/context.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/context.c	2006-11-23 22:06:17.000000000 -0700
 @@ -33,8 +33,6 @@
  #include <syslog.h>
  #include <string.h>
@@ -227,7 +227,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/context.c nfs-utils-1.0.10/utils/gssd
  #include "err_util.h"
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/context.h nfs-utils-1.0.10/utils/gssd/context.h
 --- nfs-utils-1.0.10.orig/utils/gssd/context.h	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/context.h	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/context.h	2006-11-23 22:06:17.000000000 -0700
 @@ -31,8 +31,6 @@
  #ifndef _CONTEXT_H_
  #define _CONTEXT_H_
@@ -239,7 +239,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/context.h nfs-utils-1.0.10/utils/gssd
  
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/context_lucid.c nfs-utils-1.0.10/utils/gssd/context_lucid.c
 --- nfs-utils-1.0.10.orig/utils/gssd/context_lucid.c	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/context_lucid.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/context_lucid.c	2006-11-23 22:06:17.000000000 -0700
 @@ -41,11 +41,7 @@
  #include <syslog.h>
  #include <string.h>
@@ -295,7 +295,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/context_lucid.c nfs-utils-1.0.10/util
  
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/context_mit.c nfs-utils-1.0.10/utils/gssd/context_mit.c
 --- nfs-utils-1.0.10.orig/utils/gssd/context_mit.c	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/context_mit.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/context_mit.c	2006-11-23 22:06:17.000000000 -0700
 @@ -39,7 +39,6 @@
  #include <errno.h>
  #include <gssapi/gssapi.h>
@@ -304,9 +304,23 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/context_mit.c nfs-utils-1.0.10/utils/
  #include "gss_util.h"
  #include "gss_oids.h"
  #include "err_util.h"
+@@ -333,12 +332,7 @@ serialize_krb5_ctx(gss_ctx_id_t ctx, gss
+ 		 * keydata-2;                (  Ki  (Kseq for DES3) )
+ 		 * keydata-3;                (  Kc (derived checksum key) )
+ 		 */
+-		if (kctx->initiate) {
+-			if (WRITE_BYTES(&p, end, constant_one)) goto out_err;
+-		}
+-		else {
+-			if (WRITE_BYTES(&p, end, constant_zero)) goto out_err;
+-		}
++		if (WRITE_BYTES(&p, end, constant_two)) goto out_err;
+ 		if (WRITE_BYTES(&p, end, kctx->endtime)) goto out_err;
+ 
+ 		/* Only applicable flag for this is initiator */
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/context_spkm3.c nfs-utils-1.0.10/utils/gssd/context_spkm3.c
 --- nfs-utils-1.0.10.orig/utils/gssd/context_spkm3.c	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/context_spkm3.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/context_spkm3.c	2006-11-23 22:06:17.000000000 -0700
 @@ -33,8 +33,6 @@
  #include <syslog.h>
  #include <string.h>
@@ -318,7 +332,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/context_spkm3.c nfs-utils-1.0.10/util
  #include "err_util.h"
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/err_util.c nfs-utils-1.0.10/utils/gssd/err_util.c
 --- nfs-utils-1.0.10.orig/utils/gssd/err_util.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/err_util.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/err_util.c	2006-11-23 22:06:17.000000000 -0700
 @@ -32,6 +32,8 @@
  #include <stdarg.h>
  #include <syslog.h>
@@ -371,7 +385,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/err_util.c nfs-utils-1.0.10/utils/gss
 +
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/err_util.h nfs-utils-1.0.10/utils/gssd/err_util.h
 --- nfs-utils-1.0.10.orig/utils/gssd/err_util.h	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/err_util.h	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/err_util.h	2006-11-23 22:06:17.000000000 -0700
 @@ -33,5 +33,6 @@
  
  void initerr(char *progname, int verbosity, int fg);
@@ -381,7 +395,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/err_util.h nfs-utils-1.0.10/utils/gss
  #endif /* _ERR_UTIL_H_ */
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/gss_clnt_send_err.c nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c
 --- nfs-utils-1.0.10.orig/utils/gssd/gss_clnt_send_err.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/gss_clnt_send_err.c	2006-11-23 22:06:17.000000000 -0700
 @@ -47,6 +47,7 @@
  #include "gssd.h"
  #include "write_bytes.h"
@@ -397,16 +411,27 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gss_clnt_send_err.c nfs-utils-1.0.10/
 +#endif
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.c nfs-utils-1.0.10/utils/gssd/gssd.c
 --- nfs-utils-1.0.10.orig/utils/gssd/gssd.c	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/gssd.c	2006-11-17 19:00:09.000000000 -0700
-@@ -40,7 +40,6 @@
++++ nfs-utils-1.0.10/utils/gssd/gssd.c	2006-11-23 22:06:17.000000000 -0700
+@@ -38,9 +38,12 @@
  
+ #include "config.h"
+ 
++#include <sys/types.h>
  #include <sys/param.h>
  #include <sys/socket.h>
 -#include <rpc/rpc.h>
++#include <sys/wait.h>
++#include <sys/ipc.h>
++#include <sys/sem.h>
  
  #include <unistd.h>
  #include <err.h>
-@@ -52,6 +51,7 @@
+@@ -48,23 +51,107 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <signal.h>
++#include <errno.h>
+ #include "gssd.h"
  #include "err_util.h"
  #include "gss_util.h"
  #include "krb5_util.h"
@@ -414,7 +439,104 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.c nfs-utils-1.0.10/utils/gssd/gs
  
  char pipefs_dir[PATH_MAX] = GSSD_PIPEFS_DIR;
  char pipefs_nfsdir[PATH_MAX] = GSSD_PIPEFS_DIR;
-@@ -79,7 +79,7 @@ sig_hup(int signal)
+ char keytabfile[PATH_MAX] = GSSD_DEFAULT_KEYTAB_FILE;
+ char ccachedir[PATH_MAX] = GSSD_DEFAULT_CRED_DIR;
+ int  use_memcache = 0;
++int  lgssd_mutex_downcall = -1;
+ 
+-void
+-sig_die(int signal)
++static int lgssd_create_mutex(int *semid)
++{
++	int		id;
++	int		arg;
++
++	id = semget(IPC_PRIVATE, 1, IPC_CREAT);
++	if (id == -1) {
++		printerr(0, "semget: %s\n", strerror(errno));
++		return -1;
++	}
++
++	arg = 1;
++	if (semctl(id, 0, SETVAL, arg) != 0) {
++		printerr(0, "semctl: %s\n", strerror(errno));
++		semctl(id, 1, IPC_RMID, arg);
++		return -1;
++	}
++
++	*semid = id;
++	return 0;
++}
++
++void lgssd_init_mutexs(void)
++{
++	if (lgssd_create_mutex(&lgssd_mutex_downcall)) {
++		printerr(0, "can't create downcall mutex\n");
++		exit(1);
++	}
++}
++
++void lgssd_fini_mutexs(void)
++{
++	int	arg = 0;
++
++	if (lgssd_mutex_downcall != -1)
++		semctl(lgssd_mutex_downcall, 1, IPC_RMID, arg);
++}
++
++void lgssd_mutex_get(int semid)
++{
++	struct sembuf	op[1] = { {0, -1, SEM_UNDO} };
++	int		rc;
++
++	rc = semop(semid, op, 1);
++	if (rc != 0) {
++		printerr(0, "exit on mutex_get err %d: %s\n",
++			 rc, strerror(errno));
++		exit(1);
++	}
++}
++
++void lgssd_mutex_put(int semid)
+ {
++	struct sembuf	op[1] = { {0, 1, 0} };
++	int		rc;
++
++	rc = semop(semid, op, 1);
++	if (rc != 0) {
++		printerr(0, "ignore mutex_put err %d: %s\n",
++			 rc, strerror(errno));
++	}
++}
++
++static void lgssd_cleanup(void)
++{
++	pid_t	child_pid;
++
++	/* make sure all children finished */
++	while (1) {
++		child_pid = waitpid(-1, NULL, 0);
++		if (child_pid < 0)
++			break;
++
++		printerr(3, "cleanup: child %d terminated\n", child_pid);
++	}
++
++	lgssd_fini_mutexs();
++
+ 	/* destroy krb5 machine creds */
+ 	gssd_destroy_krb5_machine_creds();
++}
++
++void
++sig_die(int signal)
++{
+ 	printerr(1, "exiting on signal %d\n", signal);
++	lgssd_cleanup();
+ 	exit(1);
+ }
+ 
+@@ -79,7 +166,7 @@ sig_hup(int signal)
  static void
  usage(char *progname)
  {
@@ -423,7 +545,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.c nfs-utils-1.0.10/utils/gssd/gs
  		progname);
  	exit(1);
  }
-@@ -89,7 +89,6 @@ main(int argc, char *argv[])
+@@ -89,7 +176,6 @@ main(int argc, char *argv[])
  {
  	int fg = 0;
  	int verbosity = 0;
@@ -431,7 +553,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.c nfs-utils-1.0.10/utils/gssd/gs
  	int opt;
  	extern char *optarg;
  	char *progname;
-@@ -99,18 +98,12 @@ main(int argc, char *argv[])
+@@ -99,18 +185,12 @@ main(int argc, char *argv[])
  			case 'f':
  				fg = 1;
  				break;
@@ -450,7 +572,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.c nfs-utils-1.0.10/utils/gssd/gs
  			case 'p':
  				strncpy(pipefs_dir, optarg, sizeof(pipefs_dir));
  				if (pipefs_dir[sizeof(pipefs_dir)-1] != '\0')
-@@ -131,10 +124,6 @@ main(int argc, char *argv[])
+@@ -131,10 +211,6 @@ main(int argc, char *argv[])
  				break;
  		}
  	}
@@ -461,7 +583,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.c nfs-utils-1.0.10/utils/gssd/gs
  
  	if ((progname = strrchr(argv[0], '/')))
  		progname++;
-@@ -142,13 +131,6 @@ main(int argc, char *argv[])
+@@ -142,13 +218,6 @@ main(int argc, char *argv[])
  		progname = argv[0];
  
  	initerr(progname, verbosity, fg);
@@ -475,7 +597,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.c nfs-utils-1.0.10/utils/gssd/gs
  
  	if (gssd_check_mechs() != 0)
  		errx(1, "Problem with gssapi library");
-@@ -156,16 +138,27 @@ main(int argc, char *argv[])
+@@ -156,16 +225,31 @@ main(int argc, char *argv[])
  	if (!fg && daemon(0, 0) < 0)
  		errx(1, "fork");
  
@@ -500,15 +622,21 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.c nfs-utils-1.0.10/utils/gssd/gs
  	/* Determine Kerberos information from the kernel */
  	gssd_obtain_kernel_krb5_info();
 +#endif
++
++	lgssd_init_mutexs();
++
++	lgssd_run();
  
 -	gssd_run();
-+	lgssd_run();
- 	printerr(0, "gssd_run returned!\n");
- 	abort();
+-	printerr(0, "gssd_run returned!\n");
+-	abort();
++	lgssd_cleanup();
++	printerr(0, "lgssd exiting\n");
++	return 0;
  }
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.h nfs-utils-1.0.10/utils/gssd/gssd.h
 --- nfs-utils-1.0.10.orig/utils/gssd/gssd.h	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/gssd.h	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/gssd.h	2006-11-23 22:06:17.000000000 -0700
 @@ -48,8 +48,13 @@
  #define GSSD_DEFAULT_CRED_PREFIX		"krb5cc_"
  #define GSSD_DEFAULT_MACHINE_CRED_SUFFIX	"machine"
@@ -547,20 +675,27 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd.h nfs-utils-1.0.10/utils/gssd/gs
  	int			krb5_fd;
  	int			krb5_poll_index;
  	int			spkm3_fd;
-@@ -85,8 +86,7 @@ void init_client_list(void);
+@@ -85,8 +86,14 @@ void init_client_list(void);
  int update_client_list(void);
  void handle_krb5_upcall(struct clnt_info *clp);
  void handle_spkm3_upcall(struct clnt_info *clp);
 -int gssd_acquire_cred(char *server_name);
 -void gssd_run(void);
 +void lgssd_run(void);
++
++
++extern int lgssd_mutex_downcall;
  
++void lgssd_init_mutexs(void);
++void lgssd_fini_mutexs(void);
++void lgssd_mutex_get(int semid);
++void lgssd_mutex_put(int semid);
  
  #endif /* _RPC_GSSD_H_ */
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_main_loop.c nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c
 --- nfs-utils-1.0.10.orig/utils/gssd/gssd_main_loop.c	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c	2006-11-17 19:00:09.000000000 -0700
-@@ -94,7 +94,7 @@ scan_poll_results(int ret)
++++ nfs-utils-1.0.10/utils/gssd/gssd_main_loop.c	2006-11-23 22:06:17.000000000 -0700
+@@ -94,11 +94,13 @@ scan_poll_results(int ret)
  };
  
  void
@@ -569,7 +704,13 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_main_loop.c nfs-utils-1.0.10/uti
  {
  	int			ret;
  	struct sigaction	dn_act;
-@@ -106,9 +106,9 @@ gssd_run()
+ 	int			fd;
++	time_t			child_check = 0;
++	pid_t			child_pid;
+ 
+ 	/* Taken from linux/Documentation/dnotify.txt: */
+ 	dn_act.sa_sigaction = dir_notify_handler;
+@@ -106,10 +108,10 @@ gssd_run()
  	dn_act.sa_flags = SA_SIGINFO;
  	sigaction(DNOTIFY_SIGNAL, &dn_act, NULL);
  
@@ -577,11 +718,13 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_main_loop.c nfs-utils-1.0.10/uti
 +	if ((fd = open(pipefs_dir, O_RDONLY)) == -1) {
  		printerr(0, "ERROR: failed to open %s: %s\n",
 -			 pipefs_nfsdir, strerror(errno));
+-		exit(1);
 +			 pipefs_dir, strerror(errno));
- 		exit(1);
++		return;
  	}
  	fcntl(fd, F_SETSIG, DNOTIFY_SIGNAL);
-@@ -119,6 +119,7 @@ gssd_run()
+ 	fcntl(fd, F_NOTIFY, DN_CREATE|DN_DELETE|DN_MODIFY|DN_MULTISHOT);
+@@ -119,12 +121,30 @@ gssd_run()
  	while (1) {
  		while (dir_changed) {
  			dir_changed = 0;
@@ -589,9 +732,41 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_main_loop.c nfs-utils-1.0.10/uti
  			if (update_client_list()) {
  				printerr(0, "ERROR: couldn't update "
  					 "client list\n");
+-				exit(1);
++				goto out;
+ 			}
+ 		}
++
++		/* every 5s cleanup possible zombies of child processes */
++		if (time(NULL) - child_check >= 5) {
++			printerr(3, "check zombie children...\n");
++
++			while (1) {
++				child_pid = waitpid(-1, NULL, WNOHANG);
++				if (child_pid <= 0)
++					break;
++
++				printerr(2, "terminate zombie child: %d\n",
++					 child_pid);
++			}
++
++			child_check = time(NULL);
++		}
++
+ 		/* race condition here: dir_changed could be set before we
+ 		 * enter the poll, and we'd never notice if it weren't for the
+ 		 * timeout. */
+@@ -139,6 +159,7 @@ gssd_run()
+ 			scan_poll_results(ret);
+ 		}
+ 	}
++out:
+ 	close(fd);
+ 	return;
+ }
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gssd/gssd_proc.c
 --- nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/gssd_proc.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/gssd_proc.c	2006-11-23 22:06:17.000000000 -0700
 @@ -43,7 +43,6 @@
  #endif
  #include "config.h"
@@ -736,7 +911,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
  	}
  
  	if ((clp->spkm3_fd != -1) && (clp->spkm3_poll_index == -1)) {
-@@ -386,54 +302,87 @@ find_client(char *dirname)
+@@ -386,67 +302,106 @@ find_client(char *dirname)
  int
  update_client_list(void)
  {
@@ -844,8 +1019,15 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
 +	if (write_buffer(&p, end, &lgd->lgd_rmt_ctx)) goto out_err;
  	if (write_buffer(&p, end, context_token)) goto out_err;
  
- 	if (write(k5_fd, buf, p - buf) < p - buf) goto out_err;
-@@ -441,12 +390,13 @@ do_downcall(int k5_fd, uid_t uid, struct
+-	if (write(k5_fd, buf, p - buf) < p - buf) goto out_err;
++	lgssd_mutex_get(lgssd_mutex_downcall);
++	if (write(k5_fd, buf, p - buf) < p - buf) {
++		lgssd_mutex_put(lgssd_mutex_downcall);
++		goto out_err;
++	}
++	lgssd_mutex_put(lgssd_mutex_downcall);
++
+ 	if (buf) free(buf);
  	return 0;
  out_err:
  	if (buf) free(buf);
@@ -856,17 +1038,16 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
  
  static int
 -do_error_downcall(int k5_fd, uid_t uid, int err)
-+do_error_downcall(int k5_fd, struct lgssd_upcall_data *updata,
-+		  int rpc_err, int gss_err)
++do_error_downcall(int k5_fd, uint32_t seq, int rpc_err, int gss_err)
  {
  	char	buf[1024];
  	char	*p = buf, *end = buf + 1024;
-@@ -455,11 +405,12 @@ do_error_downcall(int k5_fd, uid_t uid, 
+@@ -455,19 +410,26 @@ do_error_downcall(int k5_fd, uid_t uid, 
  
  	printerr(1, "doing error downcall\n");
  
 -	if (WRITE_BYTES(&p, end, uid)) goto out_err;
-+	if (WRITE_BYTES(&p, end, updata->seq)) goto out_err;
++	if (WRITE_BYTES(&p, end, seq)) goto out_err;
  	if (WRITE_BYTES(&p, end, timeout)) goto out_err;
  	/* use seq_win = 0 to indicate an error: */
  	if (WRITE_BYTES(&p, end, zero)) goto out_err;
@@ -874,9 +1055,16 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
 +	if (WRITE_BYTES(&p, end, rpc_err)) goto out_err;
 +	if (WRITE_BYTES(&p, end, gss_err)) goto out_err;
  
- 	if (write(k5_fd, buf, p - buf) < p - buf) goto out_err;
+-	if (write(k5_fd, buf, p - buf) < p - buf) goto out_err;
++	lgssd_mutex_get(lgssd_mutex_downcall);
++	if (write(k5_fd, buf, p - buf) < p - buf) {
++		lgssd_mutex_put(lgssd_mutex_downcall);
++		goto out_err;
++	}
++	lgssd_mutex_put(lgssd_mutex_downcall);
  	return 0;
-@@ -468,6 +419,7 @@ out_err:
+ out_err:
+ 	printerr(0, "Failed to write error downcall!\n");
  	return -1;
  }
  
@@ -884,7 +1072,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
  /*
   * Create an RPC connection and establish an authenticated
   * gss context with a server.
-@@ -659,7 +611,287 @@ int create_auth_rpc_client(struct clnt_i
+@@ -659,7 +621,287 @@ int create_auth_rpc_client(struct clnt_i
  
  	goto out;
  }
@@ -1069,7 +1257,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
 +	printerr(2, "successfully refreshed lgd\n");
 +	return 0;
 +}
- 
++
 +static
 +int gssd_create_lgd(struct clnt_info *clp,
 +		    struct lustre_gss_data *lgd,
@@ -1117,7 +1305,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
 +		pgsserr(0, maj_stat, min_stat, lgd->lgd_mech);
 +		goto out_fail;
 +	}
-+
+ 
 +	retval = gssd_refresh_lgd(lgd);
 +
 +	if (lgd->lgd_name != GSS_C_NO_NAME)
@@ -1172,7 +1360,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
  
  /*
   * this code uses the userland rpcsec gss library to create a krb5
-@@ -668,27 +900,63 @@ int create_auth_rpc_client(struct clnt_i
+@@ -668,27 +910,78 @@ int create_auth_rpc_client(struct clnt_i
  void
  handle_krb5_upcall(struct clnt_info *clp)
  {
@@ -1181,6 +1369,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
 -	AUTH			*auth = NULL;
 -	struct authgss_private_data pd;
 -	gss_buffer_desc		token;
++	pid_t			pid;
 +	gss_buffer_desc		token = { 0, NULL };
 +	struct lgssd_upcall_data updata;
 +	struct lustre_gss_data	lgd;
@@ -1203,18 +1392,32 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
 +	if (read_rc < 0) {
 +		printerr(0, "WARNING: failed reading from krb5 "
  			    "upcall pipe: %s\n", strerror(errno));
- 		goto out;
+-		goto out;
++		return;
 +	} else if (read_rc != sizeof(updata)) {
 +		printerr(0, "upcall data mismatch: length %d, expect %d\n",
 +			 read_rc, sizeof(updata));
 +
++		/* the sequence number must be the first field. if read >= 4
++		 * bytes then we know at least sequence is fine, try to send
++		 * error notification nicely.
++		 */
 +		if (read_rc >= 4)
-+			goto out_return_error;
-+		else
-+			goto out;
- 	}
- 
--	if (uid == 0) {
++			do_error_downcall(clp->krb5_fd, updata.seq, -EPERM, 0);
++		return;
++	}
++
++	/* fork child process */
++	pid = fork();
++	if (pid < 0) {
++		printerr(0, "can't fork: %s\n", strerror(errno));
++		do_error_downcall(clp->krb5_fd, updata.seq, -EPERM, 0);
++		return;
++	} else if (pid > 0) {
++		printerr(2, "forked child process: %d\n", pid);
++		return;
++	}
++
 +	printerr(1, "krb5 upcall: seq %u, uid %u, svc %u, nid 0x%llx, "
 +		 "pag %llx, obd %s\n", updata.seq, updata.uid, updata.svc,
 +		 updata.nid, updata.pag, updata.obd);
@@ -1229,8 +1432,9 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
 +			 updata.uid, updata.pag);
 +		lgd.lgd_rpc_err = -EPROTO;
 +		goto out_return_error;
-+	}
-+
+ 	}
+ 
+-	if (uid == 0) {
 +	if (updata.svc != LUSTRE_GSS_SVC_MDS &&
 +	    updata.svc != LUSTRE_GSS_SVC_OSS) {
 +		printerr(0, "invalid svc %d\n", updata.svc);
@@ -1248,7 +1452,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
  		int success = 0;
  
  		/*
-@@ -696,75 +964,66 @@ handle_krb5_upcall(struct clnt_info *clp
+@@ -696,75 +989,66 @@ handle_krb5_upcall(struct clnt_info *clp
  		 * of them until one works or we've tried them all
  		 */
  		if (gssd_get_krb5_machine_cred_list(&credlist)) {
@@ -1338,18 +1542,19 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
 -		AUTH_DESTROY(auth);
 -	if (rpc_clnt)
 -		clnt_destroy(rpc_clnt);
+-	return;
 +
 +	gssd_free_lgd(&lgd);
- 	return;
++	exit(0); /* i'm child process */
  
  out_return_error:
 -	do_error_downcall(clp->krb5_fd, uid, -1);
-+	do_error_downcall(clp->krb5_fd, &updata,
++	do_error_downcall(clp->krb5_fd, updata.seq,
 +			  lgd.lgd_rpc_err, lgd.lgd_gss_err);
  	goto out;
  }
  
-@@ -775,6 +1034,7 @@ out_return_error:
+@@ -775,6 +1059,7 @@ out_return_error:
  void
  handle_spkm3_upcall(struct clnt_info *clp)
  {
@@ -1357,7 +1562,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
  	uid_t			uid;
  	CLIENT			*rpc_clnt = NULL;
  	AUTH			*auth = NULL;
-@@ -826,4 +1086,5 @@ out:
+@@ -826,4 +1111,5 @@ out:
  out_return_error:
  	do_error_downcall(clp->spkm3_fd, uid, -1);
  	goto out;
@@ -1365,7 +1570,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gssd_proc.c nfs-utils-1.0.10/utils/gs
  }
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/gss_util.c nfs-utils-1.0.10/utils/gssd/gss_util.c
 --- nfs-utils-1.0.10.orig/utils/gssd/gss_util.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_util.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/gss_util.c	2006-11-23 22:06:17.000000000 -0700
 @@ -87,9 +87,16 @@
  #ifdef HAVE_COM_ERR_H
  #include <com_err.h>
@@ -1531,7 +1736,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gss_util.c nfs-utils-1.0.10/utils/gss
  int gssd_check_mechs(void)
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/gss_util.h nfs-utils-1.0.10/utils/gssd/gss_util.h
 --- nfs-utils-1.0.10.orig/utils/gssd/gss_util.h	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/gss_util.h	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/gss_util.h	2006-11-23 22:06:17.000000000 -0700
 @@ -32,12 +32,10 @@
  #define _GSS_UTIL_H_
  
@@ -1547,7 +1752,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/gss_util.h nfs-utils-1.0.10/utils/gss
  int gssd_check_mechs(void);
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/krb5_util.c nfs-utils-1.0.10/utils/gssd/krb5_util.c
 --- nfs-utils-1.0.10.orig/utils/gssd/krb5_util.c	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/krb5_util.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/krb5_util.c	2006-11-23 22:06:17.000000000 -0700
 @@ -99,12 +99,14 @@
  #include <rpc/rpc.h>
  #include <sys/types.h>
@@ -2030,7 +2235,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/krb5_util.c nfs-utils-1.0.10/utils/gs
   * Obtain supported enctypes from kernel.
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/krb5_util.h nfs-utils-1.0.10/utils/gssd/krb5_util.h
 --- nfs-utils-1.0.10.orig/utils/gssd/krb5_util.h	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/krb5_util.h	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/krb5_util.h	2006-11-23 22:06:17.000000000 -0700
 @@ -10,13 +10,15 @@
  struct gssd_k5_kt_princ {
  	struct gssd_k5_kt_princ *next;
@@ -2084,9 +2289,10 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/krb5_util.h nfs-utils-1.0.10/utils/gs
 +
  
  #endif /* KRB5_UTIL_H */
+Only in nfs-utils-1.0.10/utils/gssd: l_idmap.c
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/lsupport.c nfs-utils-1.0.10/utils/gssd/lsupport.c
 --- nfs-utils-1.0.10.orig/utils/gssd/lsupport.c	2006-11-15 21:41:25.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/lsupport.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/lsupport.c	2006-11-23 22:06:17.000000000 -0700
 @@ -0,0 +1,782 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2872,7 +3078,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/lsupport.c nfs-utils-1.0.10/utils/gss
 +
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/lsupport.h nfs-utils-1.0.10/utils/gssd/lsupport.h
 --- nfs-utils-1.0.10.orig/utils/gssd/lsupport.h	2006-11-15 21:41:23.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/lsupport.h	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/lsupport.h	2006-11-23 22:06:17.000000000 -0700
 @@ -0,0 +1,89 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
@@ -2965,7 +3171,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/lsupport.h nfs-utils-1.0.10/utils/gss
 +#endif /* __LIBCFS_H__ */
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/Makefile.am nfs-utils-1.0.10/utils/gssd/Makefile.am
 --- nfs-utils-1.0.10.orig/utils/gssd/Makefile.am	2006-11-15 21:26:08.000000000 -0700
-+++ nfs-utils-1.0.10/utils/gssd/Makefile.am	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/Makefile.am	2006-11-23 22:06:03.000000000 -0700
 @@ -1,17 +1,11 @@
  ## Process this file with automake to produce Makefile.in
  
@@ -3073,7 +3279,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/Makefile.am nfs-utils-1.0.10/utils/gs
 -
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd.c nfs-utils-1.0.10/utils/gssd/svcgssd.c
 --- nfs-utils-1.0.10.orig/utils/gssd/svcgssd.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd.c	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/svcgssd.c	2006-11-23 22:06:17.000000000 -0700
 @@ -43,7 +43,6 @@
  #include <sys/types.h>
  #include <sys/stat.h>
@@ -3194,7 +3400,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd.c nfs-utils-1.0.10/utils/gssd
  }
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd.h nfs-utils-1.0.10/utils/gssd/svcgssd.h
 --- nfs-utils-1.0.10.orig/utils/gssd/svcgssd.h	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd.h	2006-11-17 19:00:32.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/svcgssd.h	2006-11-23 22:06:17.000000000 -0700
 @@ -35,9 +35,20 @@
  #include <sys/queue.h>
  #include <gssapi/gssapi.h>
@@ -3221,7 +3427,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd.h nfs-utils-1.0.10/utils/gssd
  #endif /* _RPC_SVCGSSD_H_ */
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd_main_loop.c nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c
 --- nfs-utils-1.0.10.orig/utils/gssd/svcgssd_main_loop.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c	2006-11-17 19:00:38.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/svcgssd_main_loop.c	2006-11-23 22:06:17.000000000 -0700
 @@ -46,46 +46,66 @@
  #include "svcgssd.h"
  #include "err_util.h"
@@ -3267,7 +3473,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd_main_loop.c nfs-utils-1.0.10/
 +					 NULLRPC_FILE, strerror(errno));
 +				nanosleep(&halfsec, NULL);
 +			} else {
-+				printerr(2, "successfully open %s\n",
++				printerr(1, "successfully open %s\n",
 +					 NULLRPC_FILE);
 +				break;
 +			}
@@ -3312,7 +3518,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd_main_loop.c nfs-utils-1.0.10/
  }
 diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c
 --- nfs-utils-1.0.10.orig/utils/gssd/svcgssd_proc.c	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c	2006-11-17 19:00:48.000000000 -0700
++++ nfs-utils-1.0.10/utils/gssd/svcgssd_proc.c	2006-11-23 22:06:17.000000000 -0700
 @@ -35,7 +35,6 @@
  
  #include <sys/param.h>
@@ -3644,7 +3850,7 @@ diff -rup nfs-utils-1.0.10.orig/utils/gssd/svcgssd_proc.c nfs-utils-1.0.10/utils
  	if (ctx != GSS_C_NO_CONTEXT)
 diff -rup nfs-utils-1.0.10.orig/utils/Makefile.am nfs-utils-1.0.10/utils/Makefile.am
 --- nfs-utils-1.0.10.orig/utils/Makefile.am	2006-08-07 00:40:50.000000000 -0600
-+++ nfs-utils-1.0.10/utils/Makefile.am	2006-11-17 19:00:09.000000000 -0700
++++ nfs-utils-1.0.10/utils/Makefile.am	2006-11-23 22:06:03.000000000 -0700
 @@ -2,31 +2,6 @@
  
  OPTDIRS =

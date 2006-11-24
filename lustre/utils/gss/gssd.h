@@ -89,4 +89,11 @@ void handle_spkm3_upcall(struct clnt_info *clp);
 void lgssd_run(void);
 
 
+extern int lgssd_mutex_downcall;
+
+void lgssd_init_mutexs(void);
+void lgssd_fini_mutexs(void);
+void lgssd_mutex_get(int semid);
+void lgssd_mutex_put(int semid);
+
 #endif /* _RPC_GSSD_H_ */
