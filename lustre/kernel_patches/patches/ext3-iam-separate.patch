@@ -3103,7 +3103,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +
 +        hash = (hash_build0(name, namelen) << 1) & MAX_HASH_SIZE;
 +        if (hash > MAX_HASH_SIZE - HASH_GRAY_AREA)
-+                hash += HASH_GRAY_AREA;
++                hash &= HASH_GRAY_AREA - 1;
 +        return hash;
 +}
 +

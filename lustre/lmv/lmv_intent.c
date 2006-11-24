@@ -154,7 +154,7 @@ int lmv_alloc_slave_fids(struct obd_device *obd, struct lu_fid *pid,
                        PFID(pid));
                 RETURN(0);
         }
-        
+
         mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                (char *)op->op_name, op->op_namelen);
         mds = obj->lo_inodes[mea_idx].li_mds;
@@ -166,10 +166,10 @@ int lmv_alloc_slave_fids(struct obd_device *obd, struct lu_fid *pid,
                        rc);
                 RETURN(rc);
         }
-        
+
         CDEBUG(D_INFO, "Allocate new fid "DFID" for split "
                "obj\n", PFID(fid));
-        
+
         RETURN(rc);
 }
 
@@ -202,11 +202,12 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
         *sop_data = *op_data;
 
 repeat:
+
         LASSERT(++loop <= 2);
         obj = lmv_obj_grab(obd, &rpid);
         if (obj) {
                 int mea_idx;
-                
+
                 /*
                  * Directory is already split, so we have to forward request to
                  * the right MDS.
@@ -216,6 +217,7 @@ repeat:
                                        op_data->op_namelen);
 
                 rpid = obj->lo_inodes[mea_idx].li_fid;
+
                 tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
                 sop_data->op_bias &= ~MDS_CHECK_SPLIT;
                 lmv_obj_put(obj);
@@ -226,11 +228,11 @@ repeat:
         }
         if (IS_ERR(tgt_exp))
                 GOTO(out_free_sop_data, rc = PTR_ERR(tgt_exp));
-        
+
         sop_data->op_fid1 = rpid;
 
         if (it->it_op & IT_CREAT) {
-                /* 
+                /*
                  * For open with IT_CREATE and for IT_CREATE cases allocate new
                  * fid and setup FLD for it.
                  */
@@ -243,18 +245,18 @@ repeat:
                 else if (rc)
                         GOTO(out_free_sop_data, rc);
         }
-        
+
         rc = md_intent_lock(tgt_exp, sop_data, lmm, lmmsize, it, flags,
                             reqp, cb_blocking, extra_lock_flags);
 
         if (rc == -ERESTART) {
                 LASSERT(*reqp != NULL);
-                DEBUG_REQ(D_WARNING|D_RPCTRACE, *reqp, 
+                DEBUG_REQ(D_WARNING|D_RPCTRACE, *reqp,
                           "Got -ERESTART during open!\n");
                 ptlrpc_req_finished(*reqp);
                 *reqp = NULL;
                 it->d.lustre.it_data = 0;
-                
+
                 /*
                  * Directory got split. Time to update local object and repeat
                  * the request with proper MDS.
@@ -269,7 +271,7 @@ repeat:
                                 goto repeat;
                 }
         }
-        
+
         if (rc != 0)
                 GOTO(out_free_sop_data, rc);
 
@@ -403,7 +405,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
                 obj = lmv_obj_grab(obd, &op_data->op_fid1);
                 if (obj && op_data->op_namelen) {
                         int mea_idx;
-                        
+
                         /* directory is already split. calculate mds */
                         mea_idx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                                (char *)op_data->op_name,
@@ -752,7 +754,7 @@ repeat:
 
         if (rc == -ERESTART) {
                 LASSERT(*reqp != NULL);
-                DEBUG_REQ(D_WARNING|D_RPCTRACE, *reqp, 
+                DEBUG_REQ(D_WARNING|D_RPCTRACE, *reqp,
                           "Got -ERESTART during lookup!\n");
                 ptlrpc_req_finished(*reqp);
                 *reqp = NULL;
@@ -919,7 +921,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                         master = 1;
                         cb = cb_blocking;
                 }
-                
+
                 op_data->op_fid1 = fid;
                 op_data->op_fid2 = fid;
                 op_data->op_bias = MDS_CROSS_REF;
@@ -942,7 +944,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
                 if (rc < 0)
                         GOTO(cleanup, rc);
-                
+
                 if (master) {
                         LASSERT(master_valid == 0);
                         /* save lock on master to be returned to the caller */

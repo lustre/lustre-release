@@ -269,8 +269,8 @@ static inline int lu_fid_eq(const struct lu_fid *f0,
 	/* Check that there is no alignment padding. */
 	CLASSERT(sizeof *f0 ==
                  sizeof f0->f_seq + sizeof f0->f_oid + sizeof f0->f_ver);
-        LASSERT(fid_is_igif(f0) || fid_ver(f0) == 0);
-        LASSERT(fid_is_igif(f1) || fid_ver(f1) == 0);
+        LASSERTF(fid_is_igif(f0) || fid_ver(f0) == 0, DFID, PFID(f0));
+        LASSERTF(fid_is_igif(f1) || fid_ver(f1) == 0, DFID, PFID(f1));
 	return memcmp(f0, f1, sizeof *f0) == 0;
 }
 
@@ -313,7 +313,7 @@ static inline struct lu_dirent *lu_dirent_next(struct lu_dirent *ent)
                 next = ((void *)ent) + le16_to_cpu(ent->lde_reclen);
         else
                 next = NULL;
-        
+
         return next;
 }
 

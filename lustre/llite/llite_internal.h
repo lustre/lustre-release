@@ -498,7 +498,7 @@ int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_local_size(struct inode *inode);
-int ll_glimpse_ioctl(struct ll_sb_info *sbi, 
+int ll_glimpse_ioctl(struct ll_sb_info *sbi,
                      struct lov_stripe_md *lsm, lstat_t *st);
 int ll_glimpse_size(struct inode *inode, int ast_flags);
 int ll_local_open(struct file *file,
@@ -695,8 +695,11 @@ static inline struct obd_export *ll_i2mdexp(struct inode *inode)
 
 static inline struct lu_fid *ll_inode2fid(struct inode *inode)
 {
+        struct lu_fid *fid;
         LASSERT(inode != NULL);
-        return &ll_i2info(inode)->lli_fid;
+        fid = &ll_i2info(inode)->lli_fid;
+        LASSERT(fid_is_igif(fid) || fid_ver(fid) == 0);
+        return fid;
 }
 
 static inline int ll_mds_max_easize(struct super_block *sb)

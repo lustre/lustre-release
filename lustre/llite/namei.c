@@ -159,18 +159,18 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                      (bits & MDS_INODELOCK_UPDATE)) {
                         struct dentry *dentry, *tmp, *dir;
                         struct list_head *list;
-                        
+
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
                         truncate_inode_pages(inode->i_mapping, 0);
 
-                        
+
                         /* Drop possible cached negative dentries */
                         list = &inode->i_dentry;
                         dir = NULL;
                         spin_lock(&dcache_lock);
-                        
-                        /* It is possible to have several dentries (with 
+
+                        /* It is possible to have several dentries (with
                            racer?) */
                         while ((list = list->next) != &inode->i_dentry) {
                                 dir = list_entry(list, struct dentry, d_alias);
@@ -183,17 +183,17 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
                                 dir = NULL;
                         }
-                        
+
                         if (dir) {
 restart:
-                                list_for_each_entry_safe(dentry, tmp, 
-                                                         &dir->d_subdirs, 
+                                list_for_each_entry_safe(dentry, tmp,
+                                                         &dir->d_subdirs,
                                                          d_child)
                                 {
                                         /* XXX Print some debug here? */
-                                        if (!dentry->d_inode) 
-                                                /* Negative dentry. If we were 
-                                                   dropping dcache lock, go 
+                                        if (!dentry->d_inode)
+                                                /* Negative dentry. If we were
+                                                   dropping dcache lock, go
                                                    throught the list again */
                                                 if (ll_drop_dentry(dentry))
                                                         goto restart;
@@ -398,7 +398,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         ll_d_add(*de, inode);
                         spin_unlock(&dcache_lock);
                 } else {
-                        (*de)->d_inode = NULL; 
+                        (*de)->d_inode = NULL;
                 }
         }
 
@@ -440,9 +440,10 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
                 opc = LUSTRE_OPC_CREATE;
         else
                 opc = LUSTRE_OPC_ANY;
-        
+
         op_data = ll_prep_md_op_data(NULL, parent, NULL, dentry->d_name.name,
                                      dentry->d_name.len, lookup_flags, opc);
+
         if (op_data == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
 
@@ -553,7 +554,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                 if (de)
                         dentry = de;
                 if ((nd->flags & LOOKUP_OPEN) && !IS_ERR(dentry)) { /* Open */
-                        if (dentry->d_inode && 
+                        if (dentry->d_inode &&
                             it_disposition(it, DISP_OPEN_OPEN)) { /* nocreate */
 #ifdef HAVE_FILE_IN_STRUCT_INTENT
                                 if (S_ISFIFO(dentry->d_inode->i_mode)) {
@@ -577,7 +578,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                                                 de = (struct dentry *) filp;
                                         }
 #endif
-                                                
+
                                 }
 #else /* HAVE_FILE_IN_STRUCT_INTENT */
                                 /* Release open handle as we have no way to
@@ -697,7 +698,7 @@ static void ll_update_times(struct ptlrpc_request *request, int offset,
 
         /* mtime is always updated with ctime, but can be set in past.
            As write and utime(2) may happen within 1 second, and utime's
-           mtime has a priority over write's one, so take mtime from mds 
+           mtime has a priority over write's one, so take mtime from mds
            for the same ctimes. */
         if (body->valid & OBD_MD_FLCTIME &&
             body->ctime >= LTIME_S(inode->i_ctime)) {
@@ -705,7 +706,7 @@ static void ll_update_times(struct ptlrpc_request *request, int offset,
 
                 if (body->valid & OBD_MD_FLMTIME) {
                         CDEBUG(D_INODE, "setting ino %lu mtime from %lu "
-                               "to "LPU64"\n", inode->i_ino, 
+                               "to "LPU64"\n", inode->i_ino,
                                LTIME_S(inode->i_mtime), body->mtime);
                         LTIME_S(inode->i_mtime) = body->mtime;
                 }
@@ -774,18 +775,18 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, stru
 {
         struct lookup_intent *it = ll_d2d(dentry)->lld_it;
         int rc;
-        
+
         if (!it)
                 return ll_mknod_generic(dir, &dentry->d_name, mode, 0, dentry);
-                
+
         ll_d2d(dentry)->lld_it = NULL;
-        
+
         /* Was there an error? Propagate it! */
         if (it->d.lustre.it_status) {
                 rc = it->d.lustre.it_status;
                 goto out;
-        }       
-        
+        }
+
         rc = ll_create_it(dir, dentry, mode, it);
 #ifdef HAVE_FILE_IN_STRUCT_INTENT
         if (nd && (nd->flags & LOOKUP_OPEN) && dentry->d_inode) { /* Open */
@@ -867,7 +868,7 @@ static int ll_link_generic(struct inode *src,  struct inode *dir,
                src->i_ino, src->i_generation, src, dir->i_ino,
                dir->i_generation, dir, name->len, name->name);
 
-        op_data = ll_prep_md_op_data(NULL, src, dir, name->name, name->len, 
+        op_data = ll_prep_md_op_data(NULL, src, dir, name->name, name->len,
                                      0, LUSTRE_OPC_ANY);
         if (op_data == NULL)
                 RETURN(-ENOMEM);
@@ -890,7 +891,7 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
         struct md_op_data *op_data;
         int err;
         ENTRY;
-        
+
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
@@ -904,7 +905,7 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
         err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,
                         current->fsuid, current->fsgid,
                         current->cap_effective, 0, &request);
-        
+
         ll_finish_md_op_data(op_data);
         if (err == 0) {
                 ll_update_times(request, REPLY_REC_OFF, dir);
@@ -1040,13 +1041,13 @@ static int ll_unlink_generic(struct inode *dir, struct qstr *name)
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
-        op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name, 
+        op_data = ll_prep_md_op_data(NULL, dir, NULL, name->name,
                                      name->len, 0, LUSTRE_OPC_ANY);
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         ll_finish_md_op_data(op_data);
-        
+
         if (rc)
                 GOTO(out, rc);
 
@@ -1071,7 +1072,7 @@ static int ll_rename_generic(struct inode *src, struct qstr *src_name,
                src->i_ino, src->i_generation, src, tgt_name->len,
                tgt_name->name, tgt->i_ino, tgt->i_generation, tgt);
 
-        op_data = ll_prep_md_op_data(NULL, src, tgt, NULL, 0, 0, 
+        op_data = ll_prep_md_op_data(NULL, src, tgt, NULL, 0, 0,
                                      LUSTRE_OPC_ANY);
         if (op_data == NULL)
                 RETURN(-ENOMEM);
@@ -1205,7 +1206,7 @@ struct inode_operations ll_special_inode_operations = {
         .setattr        = ll_setattr,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         .getattr        = ll_getattr,
-#else   
+#else
         .revalidate_it  = ll_inode_revalidate_it,
 #endif
         .permission     = ll_inode_permission,

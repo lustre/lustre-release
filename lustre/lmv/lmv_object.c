@@ -64,7 +64,7 @@ lmv_obj_alloc(struct obd_device *obd,
         struct lmv_obd *lmv = &obd->u.lmv;
 
         LASSERT(mea->mea_magic == MEA_MAGIC_LAST_CHAR
-                || mea->mea_magic == MEA_MAGIC_ALL_CHARS 
+                || mea->mea_magic == MEA_MAGIC_ALL_CHARS
                 || mea->mea_magic == MEA_MAGIC_HASH_SEGMENT);
 
         OBD_SLAB_ALLOC(obj, obj_cache, CFS_ALLOC_STD,
@@ -95,13 +95,13 @@ lmv_obj_alloc(struct obd_device *obd,
         /* put all ids in */
         for (i = 0; i < mea->mea_count; i++) {
                 int rc;
-                
+
                 CDEBUG(D_OTHER, "subobj "DFID"\n",
                        PFID(&mea->mea_ids[i]));
                 obj->lo_inodes[i].li_fid = mea->mea_ids[i];
                 LASSERT(fid_is_sane(&obj->lo_inodes[i].li_fid));
 
-                /* 
+                /*
                  * Cache slave mds number to use it in all cases it is needed
                  * instead of constant lookup.
                  */
