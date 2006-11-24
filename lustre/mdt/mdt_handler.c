@@ -428,19 +428,9 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 
         repbody = req_capsule_server_get(pill, &RMF_MDT_BODY);
 
-        if (reqbody->valid & OBD_MD_MEA) {
-                /* Assumption: MDT_MD size is enough for lmv size FIXME */
-                ma->ma_lmv = req_capsule_server_get(pill, &RMF_MDT_MD);
-                ma->ma_lmv_size = req_capsule_get_size(pill, &RMF_MDT_MD,
-                                                             RCL_SERVER);
-                ma->ma_need = MA_INODE | MA_LMV;
-        } else {
-                ma->ma_need = MA_INODE | MA_LOV ;
-                ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
-                ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD,
-                                                             RCL_SERVER);
-        }
+        /* First got the inode attr */
         ma->ma_valid = 0;
+        ma->ma_need = MA_INODE;
         rc = mo_attr_get(env, next, ma);
         if (rc == -EREMOTE) {
                 /* This object is located on remote node.*/
@@ -457,6 +447,26 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                 mdt_pack_attr2body(info, repbody, la, mdt_object_fid(o));
         else
                 RETURN(-EFAULT);
+
+        /* If it is dir object and client require MEA, then we got MEA */
+        if (S_ISDIR(la->la_mode) && reqbody->valid & OBD_MD_MEA) {
+                /* Assumption: MDT_MD size is enough for lmv size FIXME */
+                ma->ma_lmv = req_capsule_server_get(pill, &RMF_MDT_MD);
+                ma->ma_lmv_size = req_capsule_get_size(pill, &RMF_MDT_MD,
+                                                             RCL_SERVER);
+                ma->ma_need = MA_LMV;
+        } else {
+                ma->ma_lmm = req_capsule_server_get(pill, &RMF_MDT_MD);
+                ma->ma_lmm_size = req_capsule_get_size(pill, &RMF_MDT_MD,
+                                                             RCL_SERVER);
+                ma->ma_need = MA_LOV;
+        }
+        rc = mo_attr_get(env, next, ma);
+        if (rc) {
+                CERROR("getattr error for "DFID": %d\n",
+                        PFID(mdt_object_fid(o)), rc);
+                RETURN(rc);
+        }
 
         if (mdt_body_has_lov(la, reqbody)) {
                 if (ma->ma_valid & MA_LOV) {
