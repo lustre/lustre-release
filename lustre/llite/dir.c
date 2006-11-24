@@ -158,8 +158,10 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, REPLY_REC_OFF,
                                       sizeof(*body));
-                LASSERT(body != NULL); /* checked by md_readpage() */
-                /* swabbed by md_readpage() */
+                /* Checked by mdc_readpage() */
+                LASSERT(body != NULL);
+
+                /* Swabbed by mdc_readpage() */
                 LASSERT_REPSWABBED(request, REPLY_REC_OFF);
 
                 if (body->valid & OBD_MD_FLSIZE)

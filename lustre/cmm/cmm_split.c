@@ -503,8 +503,8 @@ static int cmm_split_read_page(const struct lu_env *env,
 {
         int rc;
         ENTRY;
-        memset(kmap(rdpg->rp_pages[0]), 0, CFS_PAGE_SIZE);
-        kunmap(rdpg->rp_pages[0]);
+        memset(cfs_kmap(rdpg->rp_pages[0]), 0, CFS_PAGE_SIZE);
+        cfs_kunmap(rdpg->rp_pages[0]);
         rc = mo_readpage(env, md_object_next(mo), rdpg);
         RETURN(rc);
 }
@@ -513,7 +513,6 @@ static int cmm_split_read_page(const struct lu_env *env,
  * This function performs migration of all pages with entries which fit into one
  * stripe and one hash segment.
  */
-
 static int cmm_split_process_stripe(const struct lu_env *env,
                                     struct md_object *mo,
                                     struct lu_rdpg *rdpg,

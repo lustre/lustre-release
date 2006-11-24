@@ -366,8 +366,8 @@ int mdc_enqueue(struct obd_export *exp,
                 repsize[repbufcnt++] = obddev->u.cli.cl_max_mds_cookiesize;
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
                 obd_valid valid = OBD_MD_FLGETATTR | OBD_MD_FLEASIZE |
-                                  OBD_MD_FLMODEASIZE | OBD_MD_FLDIREA |
-                                  OBD_MD_FLMDSCAPA | OBD_MD_MEA;;
+                        OBD_MD_FLMODEASIZE | OBD_MD_FLDIREA |
+                        OBD_MD_FLMDSCAPA | OBD_MD_MEA;
                 valid |= client_is_remote(exp) ? OBD_MD_FLRMTPERM :
                                                  OBD_MD_FLACL;
                 size[DLM_INTENT_REC_OFF] = sizeof(struct mdt_body);

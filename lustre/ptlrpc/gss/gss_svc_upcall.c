@@ -976,8 +976,8 @@ int __init gss_svc_init_upcall(void)
         }
 
         if (atomic_read(&rsi_cache.readers) == 0)
-                CWARN("init channel is not opened by lsvcgssd, following "
-                      "request might be dropped until lsvcgssd be active\n");
+                CWARN("Init channel is not opened by lsvcgssd, following "
+                      "request might be dropped until lsvcgssd is active\n");
 
         return 0;
 }

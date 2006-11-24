@@ -1149,6 +1149,7 @@ static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
                 body = lustre_msg_buf((*request)->rq_repmsg, REPLY_REC_OFF,
                                       sizeof(*body));
                 LASSERT(body != NULL);
+                LASSERT_REPSWABBED((*request), REPLY_REC_OFF);
 
                 lmv_obj_lock(obj);
 
@@ -1454,17 +1455,18 @@ lmv_enqueue_remote(struct obd_export *exp, int lock_type,
         struct ptlrpc_request *req = it->d.lustre.it_data;
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct mdt_body *body = NULL;
         struct lustre_handle plock;
         struct obd_export *tgt_exp;
         struct md_op_data *rdata;
-        int rc = 0, pmode;
         struct lu_fid fid_copy;
+        struct mdt_body *body;
+        int rc = 0, pmode;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_repmsg,
                               DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
+        LASSERT_REPSWABBED(req, DLM_REPLY_REC_OFF);
 
         if (!(body->valid & OBD_MD_MDS))
                 RETURN(0);
@@ -1614,6 +1616,7 @@ repeat:
                 body = lustre_msg_buf((*request)->rq_repmsg,
                                       REQ_REC_OFF, sizeof(*body));
                 LASSERT(body != NULL);
+                LASSERT_REPSWABBED((*request), REQ_REC_OFF);
 
                 if (body->valid & OBD_MD_MDS) {
                         struct ptlrpc_request *req = NULL;

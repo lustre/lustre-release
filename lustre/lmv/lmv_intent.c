@@ -63,16 +63,17 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct ptlrpc_request *req = NULL;
-        struct mdt_body *body = NULL;
         struct lustre_handle plock;
         struct md_op_data *op_data;
         struct obd_export *tgt_exp;
+        struct mdt_body *body;
         int pmode, rc = 0;
         ENTRY;
 
         body = lustre_msg_buf((*reqp)->rq_repmsg,
                               DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
+        LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
 
         if (!(body->valid & OBD_MD_MDS))
                 RETURN(0);
@@ -183,12 +184,12 @@ int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
                     int extra_lock_flags)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct obd_export *tgt_exp;
         struct lu_fid rpid = op_data->op_fid1;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct mdt_body *body = NULL;
         struct md_op_data *sop_data;
+        struct obd_export *tgt_exp;
         struct lmv_stripe_md *mea;
+        struct mdt_body *body;
         struct lmv_obj *obj;
         int rc, loop = 0;
         ENTRY;
@@ -306,6 +307,7 @@ repeat:
         body = lustre_msg_buf((*reqp)->rq_repmsg,
                               DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
+        LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
 
         /* could not find object, FID is not present in response. */
         if (!(body->valid & OBD_MD_FLID))
@@ -351,9 +353,9 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
         struct obd_device *obd = exp->exp_obd;
         struct lu_fid rpid = op_data->op_fid1;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct mdt_body *body = NULL;
         struct md_op_data *sop_data;
         struct lmv_stripe_md *mea;
+        struct mdt_body *body;
         mdsno_t mds;
         int rc = 0;
         ENTRY;
@@ -474,6 +476,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct md_op_data *op_data,
         body = lustre_msg_buf((*reqp)->rq_repmsg,
                               DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
+        LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
 
         /* could not find object, FID is not present in response. */
         if (!(body->valid & OBD_MD_FLID))
@@ -517,11 +520,11 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct mdt_body *body = NULL;
         struct lustre_handle *lockh;
         struct md_op_data *op_data;
         struct ldlm_lock *lock;
         struct mdt_body *body2;
+        struct mdt_body *body;
         struct lmv_obj *obj;
         int i, rc = 0;
         ENTRY;
@@ -529,15 +532,17 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         LASSERT(reqp);
         LASSERT(*reqp);
 
-        /* master is locked. we'd like to take locks on slaves and update
+        /*
+         * Master is locked. we'd like to take locks on slaves and update
          * attributes to be returned from the slaves it's important that lookup
          * is called in two cases:
 
          *  - for first time (dcache has no such a resolving yet).  -
          *  ->d_revalidate() returned false.
 
-         * last case possible only if all the objs (master and all slaves aren't
-         * valid */
+         * Last case possible only if all the objs (master and all slaves aren't
+         * valid.
+         */
 
         OBD_ALLOC_PTR(op_data);
         if (op_data == NULL)
@@ -546,8 +551,9 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
         body = lustre_msg_buf((*reqp)->rq_repmsg,
                               DLM_REPLY_REC_OFF, sizeof(*body));
         LASSERT(body != NULL);
-        LASSERT((body->valid & OBD_MD_FLID) != 0);
+        LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
 
+        LASSERT((body->valid & OBD_MD_FLID) != 0);
         obj = lmv_obj_grab(obd, &body->fid1);
         LASSERT(obj != NULL);
 
@@ -603,7 +609,8 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 
                 body2 = lustre_msg_buf(req->rq_repmsg,
                                        DLM_REPLY_REC_OFF, sizeof(*body2));
-                LASSERT(body2);
+                LASSERT(body2 != NULL);
+                LASSERT_REPSWABBED(req, DLM_REPLY_REC_OFF);
 
                 obj->lo_inodes[i].li_size = body2->size;
 
@@ -640,9 +647,9 @@ int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
         struct obd_device *obd = exp->exp_obd;
         struct lu_fid rpid = op_data->op_fid1;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct mdt_body *body = NULL;
         struct md_op_data *sop_data;
         struct lmv_stripe_md *mea;
+        struct mdt_body *body;
         struct lmv_obj *obj;
         int rc, loop = 0;
         int mea_idx;
@@ -776,15 +783,11 @@ repeat:
                                cb_blocking, extra_lock_flags);
 
         if (rc == 0 && (mea = lmv_get_mea(*reqp, DLM_REPLY_REC_OFF))) {
-                /* wow! this is split dir, we'd like to handle it */
+                /* Wow! This is split dir, we'd like to handle it. */
                 body = lustre_msg_buf((*reqp)->rq_repmsg,
                                       DLM_REPLY_REC_OFF, sizeof(*body));
                 LASSERT(body != NULL);
-                LASSERT((body->valid & OBD_MD_FLID) != 0);
-
-                body = lustre_msg_buf((*reqp)->rq_repmsg,
-                                      DLM_REPLY_REC_OFF, sizeof(*body));
-                LASSERT(body != NULL);
+                LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
                 LASSERT((body->valid & OBD_MD_FLID) != 0);
 
                 obj = lmv_obj_grab(obd, &body->fid1);
@@ -905,6 +908,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                                                               DLM_REPLY_REC_OFF,
                                                               sizeof(*body));
                                         LASSERT(body != NULL);
+                                        LASSERT_REPSWABBED(mreq, DLM_REPLY_REC_OFF);
                                         goto update;
                                 }
                                 /* take already cached attrs into account */
@@ -965,7 +969,8 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
                 body = lustre_msg_buf(req->rq_repmsg,
                                       DLM_REPLY_REC_OFF, sizeof(*body));
-                LASSERT(body);
+                LASSERT(body != NULL);
+                LASSERT_REPSWABBED(req, DLM_REPLY_REC_OFF);
 
 update:
                 obj->lo_inodes[i].li_size = body->size;
@@ -994,7 +999,8 @@ release_lock:
 
                 body = lustre_msg_buf((*reqp)->rq_repmsg,
                                       DLM_REPLY_REC_OFF, sizeof(*body));
-                LASSERT(body);
+                LASSERT(body != NULL);
+                LASSERT_REPSWABBED((*reqp), DLM_REPLY_REC_OFF);
 
                 body->size = size;
 
