@@ -212,6 +212,13 @@ lmv_find_export(struct lmv_obd *lmv, const struct lu_fid *fid)
                 return tgt->ltd_exp;
 }
 
+static inline void lmv_update_body(struct mdt_body *body, 
+                                   struct lmv_inode *lino)
+{
+        /* update size */
+        body->size += lino->li_size;
+}
+
 /* lproc_lmv.c */
 extern struct file_operations lmv_proc_target_fops;
 

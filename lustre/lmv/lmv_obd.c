@@ -1164,7 +1164,7 @@ static int lmv_getattr(struct obd_export *exp, const struct lu_fid *fid,
                         if (lu_fid_eq(&obj->lo_fid, &obj->lo_inodes[i].li_fid))
                                 continue;
 
-                        body->size += obj->lo_inodes[i].li_size;
+                        lmv_update_body(body, &obj->lo_inodes[i]);
                 }
 
                 lmv_obj_unlock(obj);

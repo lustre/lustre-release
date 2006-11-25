@@ -511,12 +511,6 @@ out_free_sop_data:
         return rc;
 }
 
-void lmv_update_body(struct mdt_body *body, struct lmv_inode *lino)
-{
-        /* update size */
-        body->size += lino->li_size;
-}
-
 /* this is not used currently */
 int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
 {
@@ -901,11 +895,15 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
                 if (lu_fid_eq(&fid, &obj->lo_fid)) {
                         if (master_valid) {
-                                /* lmv_intent_getattr() already checked
-                                 * validness and took the lock */
+                                /*
+                                 * lmv_intent_getattr() already checked
+                                 * validness and took the lock.
+                                 */
                                 if (mreq) {
-                                        /* it even got the reply refresh attrs
-                                         * from that reply */
+                                        /*
+                                         * It even got the reply refresh attrs
+                                         * from that reply.
+                                         */
                                         body = lustre_msg_buf(mreq->rq_repmsg,
                                                               DLM_REPLY_REC_OFF,
                                                               sizeof(*body));
@@ -926,7 +924,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 op_data->op_fid2 = fid;
                 op_data->op_bias = MDS_CROSS_REF;
 
-                /* is obj valid? */
+                /* Is obj valid? */
                 tgt_exp = lmv_get_export(lmv, obj->lo_inodes[i].li_mds);
                 if (IS_ERR(tgt_exp))
                         GOTO(cleanup, rc = PTR_ERR(tgt_exp));
@@ -936,7 +934,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
                 lockh = (struct lustre_handle *)&it.d.lustre.it_lock_handle;
                 if (rc > 0 && req == NULL) {
-                        /* nice, this slave is valid */
+                        /* Nice, this slave is valid */
                         LASSERT(req == NULL);
                         CDEBUG(D_OTHER, "cached\n");
                         goto release_lock;
@@ -947,26 +945,27 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
 
                 if (master) {
                         LASSERT(master_valid == 0);
-                        /* save lock on master to be returned to the caller */
+                        /* Save lock on master to be returned to the caller. */
                         CDEBUG(D_OTHER, "no lock on master yet\n");
                         memcpy(&master_lockh, lockh, sizeof(master_lockh));
                         master_lock_mode = it.d.lustre.it_lock_mode;
                         it.d.lustre.it_lock_mode = 0;
                 } else {
-                        /* this is slave. we want to control it */
+                        /* This is slave. We want to control it. */
                         lock = ldlm_handle2lock(lockh);
-                        LASSERT(lock);
+                        LASSERT(lock != NULL);
                         lock->l_ast_data = lmv_obj_get(obj);
                         LDLM_LOCK_PUT(lock);
                 }
 
                 if (*reqp == NULL) {
-                        /* this is first reply, we'll use it to return updated
-                         * data back to the caller */
+                        /*
+                         * This is first reply, we'll use it to return updated
+                         * data back to the caller.
+                         */
                         LASSERT(req);
                         ptlrpc_request_addref(req);
                         *reqp = req;
-
                 }
 
                 body = lustre_msg_buf(req->rq_repmsg,
@@ -1013,12 +1012,6 @@ release_lock:
                          * no reply and the only attr we can return is size.
                          */
                         body->valid = OBD_MD_FLSIZE;
-
-#if 0
-                        rc = lmv_fld_lookup(lmv, &obj->lo_fid, &body->mds);
-                        if (rc)
-                                GOTO(cleanup, rc);
-#endif
                 }
                 if (master_valid == 0) {
                         memcpy(&oit->d.lustre.it_lock_handle,
@@ -1027,7 +1020,7 @@ release_lock:
                 }
                 rc = 0;
         } else {
-                /* it seems all the attrs are fresh and we did no request */
+                /* It seems all the attrs are fresh and we did no request */
                 CDEBUG(D_OTHER, "all the attrs were fresh\n");
                 if (master_valid == 0)
                         oit->d.lustre.it_lock_mode = master_lock_mode;
