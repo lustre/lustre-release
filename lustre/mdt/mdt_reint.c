@@ -268,18 +268,17 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         if (info->mti_epoch && (info->mti_epoch->flags & MF_SOM_CHANGE)) {
                 LASSERT(info->mti_epoch);
 
-                /* Size-on-MDS Update. Find and free mfd. */
                 spin_lock(&med->med_open_lock);
-                mfd = mdt_handle2mfd(&(info->mti_epoch->handle));
+                /* Size-on-MDS Update. Find and free mfd. */
+                mfd = mdt_handle2mfd(info, &info->mti_epoch->handle);
                 if (mfd == NULL) {
                         spin_unlock(&med->med_open_lock);
                         CDEBUG(D_INODE, "no handle for file close: "
-                               "fid = "DFID": cookie = "LPX64"\n",
-                               PFID(info->mti_rr.rr_fid1),
-                               info->mti_epoch->handle.cookie);
+                                        "fid = "DFID": cookie = "LPX64"\n",
+                                        PFID(info->mti_rr.rr_fid1),
+                                        info->mti_epoch->handle.cookie);
                         GOTO(out_put, rc = -ESTALE);
                 }
-
                 LASSERT(mfd->mfd_mode == FMODE_SOM);
                 LASSERT(ma->ma_attr.la_valid & LA_SIZE);
                 LASSERT(!(info->mti_epoch->flags & MF_EPOCH_CLOSE));
@@ -287,6 +286,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 class_handle_unhash(&mfd->mfd_handle);
                 list_del_init(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
+
                 mdt_mfd_close(info, mfd);
         }
 

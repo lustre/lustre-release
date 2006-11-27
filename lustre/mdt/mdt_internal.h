@@ -64,7 +64,7 @@ struct mdt_client_data {
         __u64 mcd_last_xid;     /* xid for the last transaction */
         __u32 mcd_last_result;  /* result from last RPC */
         __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        /* for MDS_CLOSE requests */
+        /* for MDS_CLOSE and MDS_DONE_WRITTING requests */
         __u64 mcd_last_close_transno; /* last completed transaction ID */
         __u64 mcd_last_close_xid;     /* xid for the last transaction */
         __u32 mcd_last_close_result;  /* result from last RPC */
@@ -116,6 +116,7 @@ struct mdt_file_data {
         struct portals_handle mfd_handle; /* must be first */
         struct list_head      mfd_list;   /* protected by med_open_lock */
         __u64                 mfd_xid;    /* xid of the open request */
+        struct lustre_handle  mfd_old_handle; /* old handle in replay case */
         int                   mfd_mode;   /* open mode provided by client */
         struct mdt_object    *mfd_object; /* point to opened object */
 };
@@ -237,6 +238,7 @@ enum {
 
 struct mdt_reint_record {
         mdt_reint_t             rr_opcode;
+        const struct lustre_handle *rr_handle;
         const struct lu_fid    *rr_fid1;
         const struct lu_fid    *rr_fid2;
         const char             *rr_name;
@@ -527,7 +529,8 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
 int mdt_reint_open(struct mdt_thread_info *info,
                    struct mdt_lock_handle *lhc);
 
-struct mdt_file_data *mdt_handle2mfd(const struct lustre_handle *handle);
+struct mdt_file_data *mdt_handle2mfd(struct mdt_thread_info *, 
+                                     const struct lustre_handle *);
 int mdt_epoch_open(struct mdt_thread_info *info, struct mdt_object *o);
 void mdt_sizeonmds_enable(struct mdt_thread_info *info, struct mdt_object *mo);
 int mdt_sizeonmds_enabled(struct mdt_object *mo);

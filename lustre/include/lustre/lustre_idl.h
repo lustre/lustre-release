@@ -1278,6 +1278,7 @@ struct mdt_rec_create {
         __u32           cr_cap;
         __u32           cr_flags; /* for use with open */
         __u32           cr_mode;
+        struct lustre_handle cr_old_handle; /* u64 handle in case of open replay */
         struct lu_fid   cr_fid1;
         struct lu_fid   cr_fid2;
         __u64           cr_time;
@@ -1285,8 +1286,6 @@ struct mdt_rec_create {
         __u64           cr_ioepoch;
         __u32           cr_suppgid;
         __u32           cr_bias;
-        __u32           cr_padding_2; /* also fix lustre_swab_mds_rec_create */
-        __u32           cr_padding_3; /* also fix lustre_swab_mds_rec_create */
 };
 
 extern void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr);

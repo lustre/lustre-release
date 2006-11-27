@@ -56,12 +56,30 @@ struct mdt_file_data *mdt_mfd_new(void)
         RETURN(mfd);
 }
 
-/* Find the mfd pointed to by handle in global hash table. */
-struct mdt_file_data *mdt_handle2mfd(const struct lustre_handle *handle)
+/* 
+ * Find the mfd pointed to by handle in global hash table.
+ * In case of replay the handle is obsoleted
+ * but mfd can be found in mfd list by that handle 
+ */
+struct mdt_file_data *mdt_handle2mfd(struct mdt_thread_info *info,
+                                     const struct lustre_handle *handle)
 {
+        struct ptlrpc_request *req = mdt_info_req(info);
+        struct mdt_file_data  *mfd;
+
         ENTRY;
         LASSERT(handle != NULL);
-        RETURN(class_handle2object(handle->cookie));
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                struct mdt_export_data *med = &req->rq_export->exp_mdt_data;
+                list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
+                        if (mfd->mfd_old_handle.cookie == handle->cookie)
+                                RETURN (mfd);
+                }
+                mfd = NULL;
+        } else {
+                mfd = class_handle2object(handle->cookie);
+        }
+        RETURN (mfd);
 }
 
 /* free mfd */
@@ -512,7 +530,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 mfd->mfd_mode = flags;
                 mfd->mfd_object = o;
                 mfd->mfd_xid = req->rq_xid;
-
+                /* replay handle */
+                if (info->mti_rr.rr_handle)
+                        mfd->mfd_old_handle = *info->mti_rr.rr_handle;
                 spin_lock(&med->med_open_lock);
                 list_add(&mfd->mfd_list, &med->med_open_head);
                 spin_unlock(&med->med_open_lock);
@@ -1070,9 +1090,10 @@ int mdt_close(struct mdt_thread_info *info)
         med = &mdt_info_req(info)->rq_export->exp_mdt_data;
 
         spin_lock(&med->med_open_lock);
-        mfd = mdt_handle2mfd(&(info->mti_epoch->handle));
+        mfd = mdt_handle2mfd(info, &info->mti_epoch->handle);
         if (mdt_mfd_closed(mfd)) {
                 spin_unlock(&med->med_open_lock);
+
                 CDEBUG(D_INODE, "no handle for file close: fid = "DFID
                        ": cookie = "LPX64"\n", PFID(info->mti_rr.rr_fid1),
                        info->mti_epoch->handle.cookie);
@@ -1124,7 +1145,7 @@ int mdt_done_writing(struct mdt_thread_info *info)
 
         med = &mdt_info_req(info)->rq_export->exp_mdt_data;
         spin_lock(&med->med_open_lock);
-        mfd = mdt_handle2mfd(&(info->mti_epoch->handle));
+        mfd = mdt_handle2mfd(info, &info->mti_epoch->handle);
         if (mfd == NULL) {
                 spin_unlock(&med->med_open_lock);
                 CDEBUG(D_INODE, "no handle for file close: fid = "DFID

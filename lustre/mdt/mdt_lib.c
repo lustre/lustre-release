@@ -1019,6 +1019,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 
         rr->rr_fid1   = &rec->cr_fid1;
         rr->rr_fid2   = &rec->cr_fid2;
+        rr->rr_handle = &rec->cr_old_handle;
         attr->la_mode = rec->cr_mode;
         attr->la_rdev  = rec->cr_rdev;
         attr->la_uid   = rec->cr_fsuid;

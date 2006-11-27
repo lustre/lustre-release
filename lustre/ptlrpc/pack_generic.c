@@ -1821,6 +1821,7 @@ void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr)
         __swab32s (&cr->cr_cap);
         __swab32s (&cr->cr_flags); /* for use with open */
         __swab32s (&cr->cr_mode);
+        /* handle is opaque */
         lustre_swab_lu_fid (&cr->cr_fid1);
         lustre_swab_lu_fid (&cr->cr_fid2);
         __swab64s (&cr->cr_time);
@@ -1828,8 +1829,6 @@ void lustre_swab_mdt_rec_create (struct mdt_rec_create *cr)
         __swab64s (&cr->cr_ioepoch);
         __swab32s (&cr->cr_suppgid);
         __swab32s (&cr->cr_bias);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_2) != 0);
-        CLASSERT(offsetof(typeof(*cr), cr_padding_3) != 0);
 }
 
 void lustre_swab_mds_rec_link (struct mds_rec_link *lk)
