@@ -648,6 +648,8 @@ void client_common_put_super(struct super_block *sb)
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         ENTRY;
 
+        obd_cancel_unused(sbi->ll_dt_exp, NULL, 0, NULL);
+
         ll_close_thread_shutdown(sbi->ll_lcq);
 
         /* destroy inodes in deathrow */
