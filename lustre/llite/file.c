@@ -1367,10 +1367,9 @@ repeat:
                 ll_inode_size_unlock(inode, 1);
         }
 
-        LASSERTF(end >= *ppos, "end: %Ld ppos %Ld \n", end, *ppos);
         chunk = end - *ppos + 1;
-        CDEBUG(D_VFSTRACE, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
-               inode->i_ino, chunk, *ppos, inode->i_size);
+        CDEBUG(D_INFO, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
+                        inode->i_ino, chunk, *ppos, inode->i_size);
 
         /* turn off the kernel's read-ahead */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -1393,9 +1392,6 @@ repeat:
 
         ll_tree_unlock(&tree);
 
-        CDEBUG(D_INFO, "finish inode=%lu/%u(%p),size="LPSZ",off=%Ld rc %d\n",
-                      inode->i_ino, inode->i_generation, inode, count, *ppos,
-                      retval);
         if (retval > 0) {
                 buf += retval;
                 count -= retval;
@@ -1408,11 +1404,6 @@ repeat:
         if (ra != 0)
                 ll_ra_read_ex(file, &bead);
         retval = (sum > 0) ? sum : retval;
-        if (retval < 0)
-               CERROR("Read error inode=%lu/%u(%p),size="LPSZ",off=%Ld rc %d\n",
-                      inode->i_ino, inode->i_generation, inode, count, *ppos,
-                      retval);
-
         RETURN(retval);
 }
 
