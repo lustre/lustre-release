@@ -38,7 +38,11 @@ filesystem with or without ACL support.
 	$ mkdir d
 	$ touch d/y
 	$ ln -s d l
-	$ getfacl -dR . | grep file | sort
+The result of "getfacl -dR . | grep file | sort" is related with
+the dentry item order in parent directory. Such order depends on
+FS implementation. Fix with -P (--physical) option.
+#	$ getfacl -dR . | grep file | sort
+	$ getfacl -dRP . | grep file | sort
 	> # file: .
 	> # file: d
 	> # file: d/y
