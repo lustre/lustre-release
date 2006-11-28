@@ -291,6 +291,39 @@ test_6() {
 }
 run_test 6 "recoverable from losing context"
 
+test_7() {
+    local tdir=$MOUNT/dir7
+    local num_osts
+
+    #
+    # for open(), client only reserve space for default stripe count lovea,
+    # and server may return larger lovea in reply (because of larger stripe
+    # count), client need call enlarge_reqbuf() and save the replied lovea
+    # in request for future possible replay.
+    #
+    # Note: current script does NOT guarantee enlarge_reqbuf() will be in
+    # the path, however it does work in local test which has 2 OSTs and
+    # default stripe count is 1.
+    #
+    num_osts=`$LFS getstripe $MOUNT | egrep "^[0-9]*:.*ACTIVE" | wc -l`
+    echo "found $num_osts active OSTs"
+    [ $num_osts -lt 2 ] && echo "skipping $TESTNAME (must have >= 2 OSTs)" && return
+
+    mkdir $tdir || error
+    $LFS setstripe $tdir 0 -1 -1 || error
+
+    echo "creating..."
+    for ((i=0;i<20;i++)); do
+        dd if=/dev/zero of=$tdir/f$i bs=4k count=16 2>/dev/null
+    done
+    echo "reading..."
+    for ((i=0;i<20;i++)); do
+        dd if=$tdir/f$i of=/dev/null bs=4k count=16 2>/dev/null
+    done
+    rm -rf $tdir
+}
+run_test 7 "exercise enlarge_reqbuf()"
+
 check_multiple_gss_daemons() {
     local facet=$1
 
