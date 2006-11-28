@@ -885,7 +885,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
 #ifdef __KERNEL__
                 rc = cfs_kernel_thread(ptlrpc_invalidate_import_thread, imp,
-                                   CLONE_VM | CLONE_FILES);
+                                       CLONE_VM | CLONE_FILES);
                 if (rc < 0)
                         CERROR("error starting invalidate thread: %d\n", rc);
                 else

@@ -42,7 +42,7 @@
 #include "mdc_internal.h"
 
 enum {
-        CMM_SPLIT_SIZE =  64 * 1024
+        CMM_SPLIT_SIZE =  128 * 1024
 };
 
 /*
