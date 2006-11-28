@@ -1969,7 +1969,9 @@ static void lmv_hash_adjust(__u32 *hash, __u32 hash_adj)
         __u32 val;
 
         val = le32_to_cpu(*hash);
-        if (val != 0 && val != DIR_END_OFF)
+        if (val < hash_adj)
+                val += MAX_HASH_SIZE;
+        if (val != DIR_END_OFF)
                 *hash = cpu_to_le32(val - hash_adj);
 }
 
@@ -1995,6 +1997,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
         struct obd_export *tgt_exp;
         struct lu_fid rid = *fid;
         struct lmv_obj *obj;
+        __u32 offset0;
         __u32 offset;
         __u32 hash_adj = 0;
         __u32 rank = 0;
@@ -2005,7 +2008,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
         int nr = 0;
         ENTRY;
 
-        offset = offset64;
+        offset0 = offset = offset64;
         /*
          * Check that offset is representable by 32bit number.
          */
@@ -2064,15 +2067,14 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
         if (rc)
                 GOTO(cleanup, rc);
         if (obj) {
-                __u32 hend;
                 struct lu_dirpage *dp;
                 struct lu_dirent  *ent;
 
                 dp = cfs_kmap(page);
 
-                hend = le32_to_cpu(dp->ldp_hash_end);
                 lmv_hash_adjust(&dp->ldp_hash_start, hash_adj);
                 lmv_hash_adjust(&dp->ldp_hash_end,   hash_adj);
+                LASSERT(cpu_to_le32(dp->ldp_hash_start) <= offset0);
 
                 for (ent = lu_dirent_start(dp); ent != NULL;
                      ent = lu_dirent_next(ent))
