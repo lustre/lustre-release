@@ -1050,7 +1050,7 @@ void lustre_msg_clear_flags(struct lustre_msg *msg, int flags)
 
                 pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF, sizeof(*pb));
                 LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                pb->pb_flags = 0;
+                pb->pb_flags &= ~(MSG_GEN_FLAG_MASK & flags);
                 return;
         }
         default:
