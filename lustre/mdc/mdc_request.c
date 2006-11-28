@@ -606,15 +606,6 @@ out:
 int mdc_free_lustre_md(struct obd_export *exp, struct lustre_md *md)
 {
         ENTRY;
-        if (md->lsm)
-                obd_free_memmd(exp, &md->lsm);
-
-#ifdef CONFIG_FS_POSIX_ACL
-        if (md->posix_acl) {
-                posix_acl_release(md->posix_acl);
-                md->posix_acl = NULL;
-        }
-#endif
         RETURN(0);
 }
 

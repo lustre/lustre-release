@@ -2465,6 +2465,7 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
         if (*lsmp != NULL && lmm == NULL) {
                 OBD_FREE(*tmea, mea_size);
+                *lsmp = NULL;
                 RETURN(0);
         }
 
@@ -2576,6 +2577,8 @@ int lmv_free_lustre_md(struct obd_export *exp, struct lustre_md *md)
         struct lmv_obd *lmv = &obd->u.lmv;
 
         ENTRY;
+        if (md->mea)
+                obd_free_memmd(exp, (struct lov_stripe_md**)&md->mea);
         RETURN(md_free_lustre_md(lmv->tgts[0].ltd_exp, md));
 }
 

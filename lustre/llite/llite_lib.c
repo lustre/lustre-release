@@ -412,7 +412,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 CERROR("md_getattr failed for root: rc = %d\n", err);
                 GOTO(out_dt_fid, err);
         }
-
+        memset(&lmd, 0, sizeof(lmd));
         err = md_get_lustre_md(sbi->ll_md_exp, request, 
                                REPLY_REC_OFF, sbi->ll_dt_exp, sbi->ll_md_exp, 
                                &lmd);
@@ -424,10 +424,18 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 
         LASSERT(fid_is_sane(&sbi->ll_root_fid));
         root = ll_iget(sb, ll_fid_build_ino(sbi, &sbi->ll_root_fid), &lmd);
+        md_free_lustre_md(sbi->ll_md_exp, &lmd);
         ptlrpc_req_finished(request);
 
         if (root == NULL || is_bad_inode(root)) {
-                md_free_lustre_md(sbi->ll_dt_exp, &lmd);
+                if (lmd.lsm)
+                        obd_free_memmd(sbi->ll_dt_exp, &lmd.lsm);
+#ifdef CONFIG_FS_POSIX_ACL
+                if (lmd.posix_acl) {
+                        posix_acl_release(lmd.posix_acl);
+                        lmd.posix_acl = NULL;
+                }
+#endif
                 CERROR("lustre_lite: bad iget4 for root\n");
                 GOTO(out_root, err = -EBADF);
         }
@@ -2110,6 +2118,7 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
         LASSERT(*inode || sb);
         sbi = sb ? ll_s2sbi(sb) : ll_i2sbi(*inode);
         prune_deathrow(sbi, 1);
+        memset(&md, 0, sizeof(struct lustre_md));
 
         rc = md_get_lustre_md(sbi->ll_md_exp, req, offset,
                               sbi->ll_dt_exp, sbi->ll_md_exp, &md);
@@ -2129,7 +2138,14 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
 
                 *inode = ll_iget(sb, ll_fid_build_ino(sbi, &md.body->fid1), &md);
                 if (*inode == NULL || is_bad_inode(*inode)) {
-                        md_free_lustre_md(sbi->ll_dt_exp, &md);
+                        if (md.lsm)
+                                obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
+#ifdef CONFIG_FS_POSIX_ACL
+                        if (md.posix_acl) {
+                                posix_acl_release(md.posix_acl);
+                                md.posix_acl = NULL;
+                        }
+#endif
                         rc = -ENOMEM;
                         CERROR("new_inode -fatal: rc %d\n", rc);
                         GOTO(out, rc);
@@ -2139,6 +2155,7 @@ int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
         rc = obd_checkmd(sbi->ll_dt_exp, sbi->ll_md_exp,
                          ll_i2info(*inode)->lli_smd);
 out:
+        md_free_lustre_md(sbi->ll_md_exp, &md);
         RETURN(rc);
 }
 
