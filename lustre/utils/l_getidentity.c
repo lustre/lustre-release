@@ -41,10 +41,19 @@
 
 #define SETXID_PATHNAME "/etc/lustre/setxid.conf"
 
-/* setxid permission file format is like this:
+/*
+ * setxid permission file format is like this:
  * {nid} {uid} {perms}
- * the valid values for perms are setuid/setgid/setgrp, and they can be listed
- * together, seperated by ','.
+ *
+ * '*' nid means any nid
+ * '*' uid means any uid
+ * the valid values for perms are:
+ * setuid/setgid/setgrp         -- enable corresponding perm
+ * nosetuid/nosetgid/nosetgrp   -- disable corresponding perm
+ * they can be listed together, seperated by ',',
+ * when perm and noperm are in the same line (item), noperm is preferential,
+ * when they are in different lines (items), the latter is preferential,
+ * '*' nid is as default perm, and is not preferential.
  */
 
 static char *progname;
@@ -152,6 +161,9 @@ static inline int match_uid(uid_t uid, const char *str)
         char *end;
         uid_t uid2;
 
+        if(!strcmp(str, "*"))
+                return -1;
+
         uid2 = strtoul(str, &end, 0);
         if (*end)
                 return 0;
@@ -159,23 +171,33 @@ static inline int match_uid(uid_t uid, const char *str)
         return (uid == uid2);
 }
 
-static struct setxid_perm_type_t {
+typedef struct {
         char   *name;
         __u32   bit;
-} setxid_perm_types[] =  {
+} setxid_perm_type_t;
+
+static setxid_perm_type_t setxid_perm_types[] = {
         { "setuid", LUSTRE_SETUID_PERM },
         { "setgid", LUSTRE_SETGID_PERM },
         { "setgrp", LUSTRE_SETGRP_PERM },
-        { NULL },
+        { 0 }
 };
 
-int parse_setxid_perm(__u32 *perm, char *str)
+static setxid_perm_type_t setxid_noperm_types[] = {
+        { "nosetuid", LUSTRE_SETUID_PERM },
+        { "nosetgid", LUSTRE_SETGID_PERM },
+        { "nosetgrp", LUSTRE_SETGRP_PERM },
+        { 0 }
+};
+
+int parse_setxid_perm(__u32 *perm, __u32 *noperm, char *str)
 {
         char *start, *end;
         char name[64];
-        struct setxid_perm_type_t *pt;
+        setxid_perm_type_t *pt;
 
         *perm = 0;
+        *noperm = 0;
         start = str;
         while (1) {
                 memset(name, 0, sizeof(name));
@@ -193,8 +215,17 @@ int parse_setxid_perm(__u32 *perm, char *str)
                 }
 
                 if (!pt->name) {
-                        printf("unkown perm type: %s\n", name);
-                        return -1;
+                        for (pt = setxid_noperm_types; pt->name; pt++) {
+                                if (!strcasecmp(name, pt->name)) {
+                                        *noperm |= pt->bit;
+                                        break;
+                                }
+                        }
+
+                        if (!pt->name) {
+                                printf("unkown type: %s\n", name);
+                                return -1;
+                        }
                 }
 
                 start = end + 1;
@@ -206,9 +237,7 @@ int parse_setxid_perm_line(struct identity_downcall_data *data, char *line)
 {
         char uid_str[256], nid_str[256], perm_str[256];
         lnet_nid_t nid;
-        __u32 perm;
-        struct setxid_perm_downcall_data *pdd =
-                              &data->idd_perms[data->idd_nperms];
+        __u32 perm, noperm;
         int rc, i;
 
         if (data->idd_nperms >= N_SETXID_PERMS_MAX) {
@@ -236,22 +265,62 @@ int parse_setxid_perm_line(struct identity_downcall_data *data, char *line)
                 }
         }
 
-        if (parse_setxid_perm(&perm, perm_str)) {
-                errlog("invalid setxid perm %s\n", perm_str);
+        if (parse_setxid_perm(&perm, &noperm, perm_str)) {
+                errlog("invalid perm %s\n", perm_str);
                 return -1;
         }
 
-        /* merge the perms with the same nid */
-        for (i = 0; i < data->idd_nperms; i++) {
-                if (data->idd_perms[i].pdd_nid == nid) {
-                        data->idd_perms[i].pdd_perm |= perm;
-                        return 0;
+        /* merge the perms with the same nid.
+         *
+         * If there is LNET_NID_ANY in data->idd_perms[i].pdd_nid,
+         * it must be data->idd_perms[0].pdd_nid, and act as default perm.
+         */
+        if (nid != LNET_NID_ANY) {
+                int found = 0;
+
+                /* search for the same nid */
+                for (i = data->idd_nperms - 1; i >= 0; i--) {
+                        if (data->idd_perms[i].pdd_nid == nid) {
+                                data->idd_perms[i].pdd_perm =
+                                        (data->idd_perms[i].pdd_perm | perm) &
+                                        ~noperm;
+                                found = 1;
+                                break;
+                        }
+                }
+
+                /* NOT found, add to tail */
+                if (!found) {
+                        data->idd_perms[data->idd_nperms].pdd_nid = nid;
+                        data->idd_perms[data->idd_nperms].pdd_perm =
+                                perm & ~noperm;
+                        data->idd_nperms++;
+                }
+        } else {
+                if (data->idd_nperms > 0) {
+                        /* the first one isn't LNET_NID_ANY, need exchange */
+                        if (data->idd_perms[0].pdd_nid != LNET_NID_ANY) {
+                                data->idd_perms[data->idd_nperms].pdd_nid =
+                                        data->idd_perms[0].pdd_nid;
+                                data->idd_perms[data->idd_nperms].pdd_perm =
+                                        data->idd_perms[0].pdd_perm;
+                                data->idd_perms[0].pdd_nid = LNET_NID_ANY;
+                                data->idd_perms[0].pdd_perm = perm & ~noperm;
+                                data->idd_nperms++;
+                        } else {
+                                /* only fix LNET_NID_ANY item */
+                                data->idd_perms[0].pdd_perm =
+                                        (data->idd_perms[0].pdd_perm | perm) &
+                                        ~noperm;
+                        }
+                } else {
+                        /* it is the first one, only add to head */
+                        data->idd_perms[0].pdd_nid = LNET_NID_ANY;
+                        data->idd_perms[0].pdd_perm = perm & ~noperm;
+                        data->idd_nperms = 1;
                 }
         }
 
-        pdd->pdd_nid = nid;
-        pdd->pdd_perm = perm;
-        data->idd_nperms++;
         return 0;
 }
 
