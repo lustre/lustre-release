@@ -207,19 +207,29 @@ void mdt_flush_identity(struct upcall_cache *cache, int uid)
                 upcall_cache_flush_one(cache, (__u64)uid, NULL);
 }
 
+/*
+ * If there is LNET_NID_ANY in perm[i].mp_nid,
+ * it must be perm[0].mp_nid, and act as default perm.
+ */
 __u32 mdt_identity_get_setxid_perm(struct mdt_identity *identity,
                                    __u32 is_rmtclient, lnet_nid_t nid)
 {
         struct mdt_setxid_perm *perm = identity->mi_perms;
         int i;
 
-        for (i = 0; i < identity->mi_nperms; i++) {
-                if ((perm[i].mp_nid != LNET_NID_ANY) && (perm[i].mp_nid != nid))
+        /* check exactly matched nid first */
+        for (i = identity->mi_nperms - 1; i > 0; i--) {
+                if (perm[i].mp_nid != nid)
                         continue;
                 return perm[i].mp_perm;
         }
 
-        /* default */
+        /* check LNET_NID_ANY then */
+        if ((identity->mi_nperms > 0) &&
+            ((perm[0].mp_nid == nid) || (perm[0].mp_nid == LNET_NID_ANY)))
+                return perm[0].mp_perm;
+
+        /* return default last */
         return is_rmtclient ? 0 : LUSTRE_SETGRP_PERM;
 }
 
