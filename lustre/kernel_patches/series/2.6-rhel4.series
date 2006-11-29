@@ -37,3 +37,4 @@ jbd-checkpoint-on-commit.patch
 export-nr_free_buffer_pages.patch 
 __find_get_block_slow-scale.patch 
 debugging-fields-in-current.patch 
+increase-BH_LRU_SIZE.patch 
