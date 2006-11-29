@@ -425,7 +425,6 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                  * change, LOOKUP lock is revoked.
                  */
 
-                it->it_create_mode &= ~current->fs->umask;
 
                 if (it->it_flags & FMODE_WRITE) {
                         och_p = &lli->lli_mds_write_och;
@@ -460,6 +459,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         }
 
 do_lock:
+        it->it_create_mode &= ~current->fs->umask;
         it->it_flags |= O_CHECK_STALE;
         rc = md_intent_lock(exp, op_data, NULL, 0, it, lookup_flags,
                             &req, ll_md_blocking_ast, 0);
