@@ -54,7 +54,7 @@ Index: linux/fs/jbd/checkpoint.c
 -	if (result < 0)
 -		return result;
 +	result2 = cleanup_journal_tail(journal);
-+	if (result == 0)
++	if (result == 0 && result2 < 0)
 +		result = result2;
  
 -	return 0;
