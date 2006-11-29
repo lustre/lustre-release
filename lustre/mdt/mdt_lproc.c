@@ -756,6 +756,21 @@ static int lprocfs_wr_ck_timeout(struct file *file, const char *buffer,
         return count;
 }
 
+static int lprocfs_mdt_wr_evict_client(struct file *file, const char *buffer,
+                                       unsigned long count, void *data)
+{
+        char tmpbuf[sizeof(struct obd_uuid)];
+
+        sscanf(buffer, "%40s", tmpbuf);
+
+        if (strncmp(tmpbuf, "nid:", 4) != 0)
+                return lprocfs_wr_evict_client(file, buffer, count, data);
+        
+        CERROR("NOT implement evict client by nid %s\n", tmpbuf);
+        
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "uuid",                       lprocfs_rd_uuid,                 0, 0 },
         { "recovery_status",            lprocfs_obd_rd_recovery_status,  0, 0 },
@@ -789,6 +804,7 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
                                         lprocfs_wr_ck_timeout,              0 },
         { "capa_count",                 lprocfs_rd_capa_count,           0, 0 },
         { "site_stats",                 lprocfs_rd_site_stats,           0, 0 },
+        { "evict_client",               0, lprocfs_mdt_wr_evict_client,     0 },
         { 0 }
 };
 
