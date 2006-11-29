@@ -107,6 +107,7 @@ struct obd_import {
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;
         __u64                     imp_connect_flags_orig;
+        int                       imp_connect_error;
 
         __u32                     imp_msg_magic;
 

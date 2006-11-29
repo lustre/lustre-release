@@ -145,7 +145,7 @@ int mdt_init_idmap(struct mdt_thread_info *info)
         if (req->rq_auth_uid == INVALID_UID) {
                 CERROR("client %s -> target %s null sec is used, "
                        "user not authenticated!\n", client, obd->obd_name);
-                RETURN(-EPERM);
+                RETURN(-EACCES);
         }
 #endif
 

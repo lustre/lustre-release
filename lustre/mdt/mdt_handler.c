@@ -1011,6 +1011,9 @@ static int mdt_connect(struct mdt_thread_info *info)
                 LASSERT(req->rq_export != NULL);
                 info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
                 rc = mdt_init_idmap(info);
+                if (rc != 0)
+                        /* if mdt_init_idmap failed, revocation for connect */
+                        obd_disconnect(class_export_get(req->rq_export));
         } else
                 rc = err_serious(rc);
         return rc;

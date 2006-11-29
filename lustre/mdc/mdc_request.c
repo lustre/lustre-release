@@ -1189,8 +1189,13 @@ static int mdc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 
         rc = ptlrpc_queue_wait(req);
 
-        if (rc)
+        if (rc) {
+                /* check connection error first */
+                if (obd->u.cli.cl_import->imp_connect_error)
+                        rc = obd->u.cli.cl_import->imp_connect_error;
+
                 GOTO(out, rc);
+        }
 
         msfs = lustre_swab_repbuf(req, REPLY_REC_OFF, sizeof(*msfs),
                                   lustre_swab_obd_statfs);

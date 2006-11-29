@@ -674,6 +674,7 @@ static int after_reply(struct ptlrpc_request *req)
         }
 
         rc = ptlrpc_check_status(req);
+        imp->imp_connect_error = rc;
 
         /* Either we've been evicted, or the server has failed for
          * some reason. Try to reconnect, and if that fails, punt to the

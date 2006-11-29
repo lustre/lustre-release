@@ -745,8 +745,12 @@ finish:
                 if (aa->pcaa_initial_connect && !imp->imp_initial_recov)
                         ptlrpc_deactivate_import(imp);
 
-                if (imp->imp_recon_bk && imp->imp_last_recon) {
-                        /* Give up trying to reconnect */
+                if ((imp->imp_recon_bk && imp->imp_last_recon) ||
+                    (rc == -EACCES)) {
+                        /*
+                         * Give up trying to reconnect
+                         * EACCES means client has no permission for connection
+                         */
                         imp->imp_obd->obd_no_recov = 1;
                         ptlrpc_deactivate_import(imp);
                 }
