@@ -61,7 +61,7 @@ int cmm_split_check(const struct lu_env *env, struct md_object *mp,
         ENTRY;
 
         cmm_lprocfs_time_start(cmm, &start, LPROC_CMM_SPLIT_CHECK);
-        
+
         /* Not split yet */
         if (clo->clo_split == CMM_SPLIT_NONE ||
             clo->clo_split == CMM_SPLIT_DENIED)
@@ -71,7 +71,7 @@ int cmm_split_check(const struct lu_env *env, struct md_object *mp,
 
         /* Try to get the LMV EA */
         memset(ma, 0, sizeof(*ma));
-        
+
         ma->ma_need = MA_LMV;
         ma->ma_lmv_size = lmv_size;
         OBD_ALLOC(ma->ma_lmv, lmv_size);
@@ -562,8 +562,6 @@ static int cmm_split_process_stripe(const struct lu_env *env,
         RETURN(rc);
 }
 
-extern int bug11150;
-
 static int cmm_split_process_dir(const struct lu_env *env,
                                  struct md_object *mo,
                                  struct md_attr *ma)
@@ -603,7 +601,6 @@ static int cmm_split_process_dir(const struct lu_env *env,
                         CERROR("Error (rc = %d) while splitting for %d: fid="
                                DFID", %08x:%08x\n", rc, i, PFID(lf),
                                rdpg->rp_hash, hash_end);
-                        bug11150 = 1;
                         GOTO(cleanup, rc);
                 }
         }
@@ -625,7 +622,7 @@ int cmm_split_dir(const struct lu_env *env, struct md_object *mo)
         ENTRY;
 
         cmm_lprocfs_time_start(cmm, &start, LPROC_CMM_SPLIT);
-        
+
         LASSERT(S_ISDIR(lu_object_attr(&mo->mo_lu)));
         memset(ma, 0, sizeof(*ma));
 

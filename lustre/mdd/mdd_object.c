@@ -326,7 +326,7 @@ static int mdd_attr_get_internal(const struct lu_env *env,
         struct timeval  start;
         int rc = 0;
         ENTRY;
-        
+
         mdd_lprocfs_time_start(mdd, &start, LPROC_MDD_ATTR_GET);
         if (ma->ma_need & MA_INODE)
                 rc = mdd_iattr_get(env, mdd_obj, ma);
@@ -490,7 +490,7 @@ int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *o,
         if (!rc && (attr->la_valid & LA_MODE) && needacl)
                 rc = mdd_acl_chmod(env, o, attr->la_mode, handle);
 #endif
-        mdd_lprocfs_time_end(mdd, &start, LPROC_MDD_ATTR_SET);        
+        mdd_lprocfs_time_end(mdd, &start, LPROC_MDD_ATTR_SET);
         RETURN(rc);
 }
 
@@ -1096,7 +1096,7 @@ static int mdd_ref_add(const struct lu_env *env,
         RETURN(rc);
 }
 
-/* 
+/*
  * do NOT or the MAY_*'s, you'll get the weakest
  * XXX: Can NOT understand.
  */
@@ -1255,9 +1255,6 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
         RETURN(rc);
 }
 
-int bug11150 = 0;
-EXPORT_SYMBOL(bug11150);
-
 static int mdd_dir_page_build(const struct lu_env *env, int first,
                               void *area, int nob, struct dt_it_ops *iops,
                               struct dt_it *it, __u32 *start, __u32 *end,
@@ -1297,12 +1294,6 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
 
                 CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
                        name, ent, nob, PFID(fid2), hash, len, len, len, name);
-
-                if (bug11150)
-                        CDEBUG(D_INFO,
-                               "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
-                               name, ent, nob, PFID(fid2), hash,
-                               len, len, len, name);
 
                 if (nob >= recsize) {
                         fid_be_to_cpu(&ent->lde_fid, fid);

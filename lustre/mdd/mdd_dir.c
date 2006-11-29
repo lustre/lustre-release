@@ -574,16 +574,6 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
         int rc, is_dir;
         ENTRY;
 
-        /*
-         * Check -ENOENT early here because we need to get object type
-         * to calculate credits before transaction start
-         */
-        if (!lu_object_exists(&cobj->mo_lu)) {
-                LU_OBJECT_DEBUG(D_ERROR, env, &cobj->mo_lu,
-                                "unlinking as `%s'", name);
-                RETURN(-ENOENT);
-        }
-
         LASSERTF(lu_object_exists(&cobj->mo_lu) > 0, "FID is "DFID"\n",
                  PFID(lu_object_fid(&cobj->mo_lu)));
 
@@ -606,11 +596,8 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 
         is_dir = S_ISDIR(lu_object_attr(&cobj->mo_lu));
 
-        current->debugging1 |= 0x1; /* XXX enable lvar_enoent_debug
-                                     * debugging */
         rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle,
                                 mdd_object_capa(env, mdd_pobj));
-        current->debugging1 &= ~0x1;
         if (rc)
                 GOTO(cleanup, rc);
 

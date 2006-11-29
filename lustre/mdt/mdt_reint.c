@@ -381,12 +381,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
                                LPROC_MDT_REINT_UNLINK);
 
-        /*
-         * XXX Enforce full debugging log for unlinks, to track buffalo
-         * -ENOENT error.
-         */
-        current->debugging0 = ~0;
-
         DEBUG_REQ(D_INODE, req, "unlink "DFID"/%s\n", PFID(rr->rr_fid1),
                   rr->rr_name);
 
@@ -477,7 +471,6 @@ out:
         mdt_shrink_reply(info, REPLY_REC_OFF + 1, 0, 0);
         mdt_lprocfs_time_end(info->mti_mdt, &info->mti_time,
                              LPROC_MDT_REINT_UNLINK);
-        current->debugging0 = 0;
         return rc;
 }
 
