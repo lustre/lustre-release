@@ -64,9 +64,10 @@ static int mea_all_chars_hash(int count, char *name, int namelen)
 #ifdef __KERNEL__
 /* This hash calculate method must be same as the lvar hash method */
 
-#define LVAR_HASH_TEA    (1)
-#define LVAR_HASH_R5     (0)
-#define LVAR_HASH_PREFIX (0)
+#define LVAR_HASH_SANDWICH  (1)
+#define LVAR_HASH_TEA       (0)
+#define LVAR_HASH_R5        (0)
+#define LVAR_HASH_PREFIX    (0)
 
 static __u32 hash_build0(const char *name, int namelen)
 {
@@ -93,6 +94,15 @@ static __u32 hash_build0(const char *name, int namelen)
                 hinfo.seed = 0;
                 ldiskfsfs_dirhash(name, namelen, &hinfo);
                 result = hinfo.hash;
+                if (LVAR_HASH_SANDWICH) {
+                        __u32 result2;
+
+                        hinfo.hash_version = LDISKFS_DX_HASH_TEA;
+                        hinfo.seed = 0;
+                        ldiskfsfs_dirhash(name, namelen, &hinfo);
+                        result2 = hinfo.hash;
+                        result = (0xff000000 & result2) | (0x00ffffff & result);
+                }
         }
 
         return result;

@@ -2887,7 +2887,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,1061 @@
+@@ -0,0 +1,1071 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -3059,9 +3059,10 @@ Index: iam/fs/ext3/iam_lvar.c
 +        return ((void *)ent) + e_size(leaf, ent);
 +}
 +
-+#define LVAR_HASH_TEA    (1)
-+#define LVAR_HASH_R5     (0)
-+#define LVAR_HASH_PREFIX (0)
++#define LVAR_HASH_SANDWICH  (1)
++#define LVAR_HASH_TEA       (0)
++#define LVAR_HASH_R5        (0)
++#define LVAR_HASH_PREFIX    (0)
 +
 +static __u32 hash_build0(const char *name, int namelen)
 +{
@@ -3088,6 +3089,15 @@ Index: iam/fs/ext3/iam_lvar.c
 +                hinfo.seed = 0;
 +                ext3fs_dirhash(name, namelen, &hinfo);
 +                result = hinfo.hash;
++                if (LVAR_HASH_SANDWICH) {
++                        __u32 result2;
++
++                        hinfo.hash_version = DX_HASH_TEA;
++                        hinfo.seed = 0;
++                        ext3fs_dirhash(name, namelen, &hinfo);
++                        result2 = hinfo.hash;
++                        result = (0xff000000 & result2) | (0x00ffffff & result);
++                }
 +        }
 +        return result;
 +}
