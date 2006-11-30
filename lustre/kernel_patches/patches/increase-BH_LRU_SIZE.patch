@@ -7,7 +7,7 @@ Index: linux/fs/buffer.c
   */
  
 -#define BH_LRU_SIZE	8
-+#define BH_LRU_SIZE	64
++#define BH_LRU_SIZE	32
  
  struct bh_lru {
  	struct buffer_head *bhs[BH_LRU_SIZE];
