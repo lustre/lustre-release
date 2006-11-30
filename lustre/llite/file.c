@@ -150,15 +150,15 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
         ptlrpc_req_finished(req); /* This is close request */
         EXIT;
 out:
-        md_clear_open_replay_data(md_exp, och);
-        
+      
         if (!epoch_close && S_ISREG(inode->i_mode) &&
             (och->och_flags & FMODE_WRITE)) {
                 ll_queue_done_writing(inode, LLIF_DONE_WRITING);
         } else {
+                md_clear_open_replay_data(md_exp, och);
                 /* Free @och if it is not waiting for DONE_WRITING. */
                 och->och_fh.cookie = DEAD_HANDLE_MAGIC;
-                OBD_FREE(och, sizeof(*och));
+                OBD_FREE_PTR(och);
         }
         
         return rc;

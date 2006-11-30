@@ -231,6 +231,7 @@ static void ll_done_writing(struct inode *inode)
                 CERROR("inode %lu mdc done_writing failed: rc = %d\n",
                        inode->i_ino, rc);
         }
+        md_clear_open_replay_data(ll_i2sbi(inode)->ll_md_exp, och);
         OBD_FREE_PTR(och);
         EXIT;
 }
