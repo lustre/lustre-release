@@ -26,7 +26,15 @@ Index: linux/fs/jbd/checkpoint.c
  	int batch_count = 0;
  	struct buffer_head *bhs[NR_BATCH];
  
-@@ -314,7 +324,7 @@ int log_do_checkpoint(journal_t *journal
+@@ -300,6 +310,7 @@ int log_do_checkpoint(journal_t *journal
+ 	jbd_debug(1, "cleanup_journal_tail returned %d\n", result);
+ 	if (result <= 0)
+ 		return result;
++	result = 0;
+ 
+ 	/*
+ 	 * OK, we need to start writing disk blocks.  Try to free up a
+@@ -314,7 +325,7 @@ int log_do_checkpoint(journal_t *journal
  		transaction_t *transaction;
  		struct journal_head *jh, *last_jh, *next_jh;
  		int drop_count = 0;
@@ -35,7 +43,7 @@ Index: linux/fs/jbd/checkpoint.c
  		tid_t this_tid;
  
  		transaction = journal->j_checkpoint_transactions;
-@@ -364,17 +374,20 @@ int log_do_checkpoint(journal_t *journal
+@@ -364,17 +375,20 @@ int log_do_checkpoint(journal_t *journal
  		 * finding anything to write to disk.  We had better be
  		 * able to make some progress or we are in trouble.
  		 */
