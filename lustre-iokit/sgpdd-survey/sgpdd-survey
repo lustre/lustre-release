@@ -18,7 +18,7 @@ actions="write read"
 
 # total size per device (MBytes)
 # NB bigger than device cache is good
-size=8192
+size=${size:-8192}
 
 # record size (KBytes)
 rszlo=1024
@@ -29,6 +29,7 @@ crglo=${crglo:-1}
 crghi=${crghi:-256}
 
 # threads to share between concurrent regions per device
+# multiple threads per region simulates a deeper request queue
 # NB survey skips over #thr < #regions and #thr/#regions > SG_MAX_QUEUE
 thrlo=${thrlo:-1}
 thrhi=${thrhi:-4096}
@@ -93,6 +94,15 @@ print_summary () {
     echo $minusn "$*" >> $rsltf
     echo $minusn "$*"
 }
+
+time_v=`date`
+hostname=`hostname`
+if [ "$rawdevs" ]; then
+	print_summary "$time_v sgpdd-survey on $rawdevs from $hostname"
+fi
+if [ "$scsidevs" ]; then
+	print_summary "$time_v sgpdd-survey on $scsidevs from $hostname"
+fi
 
 for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
     for ((crg=$crglo;crg<=$crghi;crg*=2)); do 

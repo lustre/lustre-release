@@ -31,6 +31,7 @@ number of concurrent stripe files.
 The device(s) used must meet one of two tests:
 SCSI device:
 	Must appear in the output of 'sg_map'
+	(make sure the kernel module "sg" is loaded)
 Raw device:
 	Must appear in the output of 'raw -qa'
 You may not mix raw and SCSI devices in the test specification.
@@ -42,6 +43,8 @@ Running
 The script must be customised according to the particular device under test
 and where it should keep its working files.   Customisation variables are
 described clearly at the start of the script.
+
+e.g.: scsidevs=/dev/sda size=128 crghi=16 thrhi=32 ./sgpdd-survey
 
 When the script runs, it creates a number of working files and a pair of
 result files.  All files start with the prefix given by ${rslt}.
@@ -76,5 +79,8 @@ regions) all seem to land on top of each other, it shows the device is
 phased by seeks at the given record size.
 
 
-The included script, parse.pl will process output files and create .csv files fo spreadsheet import
+The included script "parse.pl" will process output files and create
+.csv files for spreadsheet import
+
+The "plot-sgpdd.pl" script plots the results directly using gnuplot.
 
