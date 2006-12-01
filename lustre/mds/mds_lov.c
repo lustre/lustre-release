@@ -842,6 +842,15 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched,
                    after the mdt in the config log.  They didn't make it into
                    mds_lov_connect. */
                 rc = mds_lov_update_desc(obd, obd->u.mds.mds_osc_exp);
+                if (rc)
+                        RETURN(rc);
+                /* We should update init llog here too for replay unlink and 
+                 * possiable llog init race when recovery complete */
+                mutex_down(&obd->obd_dev_sem);
+                llog_cat_initialize(obd, NULL, 
+                                    obd->u.mds.mds_lov_desc.ld_tgt_count,
+                                    &watched->u.cli.cl_target_uuid);
+                mutex_up(&obd->obd_dev_sem);
                 RETURN(rc);
         }
 
