@@ -355,6 +355,7 @@ static int
 prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
 			    gss_buffer_desc *buf)
 {
+	static int constant_two = 2;
 	char *p, *end;
 	uint32_t v2_flags = 0;
 	gss_krb5_lucid_key_t enc_key;
@@ -373,7 +374,7 @@ prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
 	end = buf->value + MAX_CTX_LEN;
 
 	/* Version 2 */
-	if (WRITE_BYTES(&p, end, lctx->initiate)) goto out_err;
+	if (WRITE_BYTES(&p, end, constant_two)) goto out_err;
 	if (WRITE_BYTES(&p, end, lctx->endtime)) goto out_err;
 
 	if (lctx->initiate)
