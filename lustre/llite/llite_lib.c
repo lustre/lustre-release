@@ -1818,6 +1818,11 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (body->valid & OBD_MD_FLSIZE) {
                 inode->i_size = body->size;
 
+                LASSERTF(!(lli->lli_flags & 
+                          (LLIF_DONE_WRITING | LLIF_EPOCH_PENDING)),
+                          "ino %lu flags %lu has size authority!\n", 
+                          inode->i_ino, lli->lli_flags);
+                
                 if (body->valid & OBD_MD_FLBLOCKS)
                         inode->i_blocks = body->blocks;
 

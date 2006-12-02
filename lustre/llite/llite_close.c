@@ -74,6 +74,9 @@ void ll_queue_done_writing(struct inode *inode, unsigned long flags)
             list_empty(&lli->lli_pending_write_llaps)) {
                 struct ll_close_queue *lcq = ll_i2sbi(inode)->ll_lcq;
 
+                LASSERTF(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK), 
+                         "inode ino %lu/%u lli_flags %lu\n", inode->i_ino, 
+                         inode->i_generation, lli->lli_flags);
                 /* DONE_WRITING is allowed and inode has no dirty page. */
                 spin_lock(&lcq->lcq_lock);
 
@@ -146,12 +149,13 @@ void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
                         GOTO(out, 0);
                 }
         }
-        
+
         spin_unlock(&lli->lli_lock);
         op_data->op_flags |= MF_SOM_CHANGE;
 
         /* Check if Size-on-MDS attributes are valid. */
-        LASSERT(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK));
+        LASSERTF(!(lli->lli_flags & LLIF_MDS_SIZE_LOCK), 
+                 "inode %lu flags %lu \n", inode->i_ino, lli->lli_flags);
         if (!ll_local_size(inode)) {
                 /* Send Size-on-MDS Attributes if valid. */
                 op_data->op_attr.ia_valid |= ATTR_MTIME_SET | ATTR_CTIME_SET |
