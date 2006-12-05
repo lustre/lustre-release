@@ -96,8 +96,7 @@ unsigned long gss_round_imp_reconnect(unsigned long expiry)
 }
 
 /*
- * Max encryption element in block cipher algorithms, most of which
- * are 64 bits, here we choose 128 bits to be safe for future extension.
+ * Max encryption element in block cipher algorithms.
  */
 #define GSS_MAX_CIPHER_BLOCK               (16)
 

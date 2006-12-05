@@ -436,14 +436,25 @@ prepare_krb5_rfc4121_buffer(gss_krb5_lucid_context_v1_t *lctx,
 			goto out_err;
 
 		/* Kc */
-		if (derive_key_lucid(&lctx->rfc1964_kd.ctx_key,
-				&derived_key,
-				KG_USAGE_SIGN, KEY_USAGE_SEED_CHECKSUM))
-			goto out_err;
-		if (write_bytes(&p, end, derived_key.data,
-				derived_key.length))
-			goto out_err;
-		free(derived_key.data);
+		/*
+		 * RC4 is special, it dosen't need key derivation. Actually
+		 * the Ke is based on plain text. Here we just let all three
+		 * key identical, kernel will handle everything. --ericm
+		 */
+		if (lctx->rfc1964_kd.ctx_key.type == ENCTYPE_ARCFOUR_HMAC) {
+			if (write_bytes(&p, end, lctx->rfc1964_kd.ctx_key.data,
+					lctx->rfc1964_kd.ctx_key.length))
+				goto out_err;
+		} else {
+			if (derive_key_lucid(&lctx->rfc1964_kd.ctx_key,
+					&derived_key,
+					KG_USAGE_SIGN, KEY_USAGE_SEED_CHECKSUM))
+				goto out_err;
+			if (write_bytes(&p, end, derived_key.data,
+					derived_key.length))
+				goto out_err;
+			free(derived_key.data);
+		}
 	} else {
 		gss_krb5_lucid_key_t *keyptr;
 		uint32_t sign_usage, seal_usage;
