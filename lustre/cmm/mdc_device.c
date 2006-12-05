@@ -58,7 +58,13 @@ static int mdc_obd_update(struct obd_device *host,
 
         LASSERT(mc != NULL);
         CDEBUG(D_CONFIG, "notify %s ev=%d\n", watched->obd_name, ev);
-        if (ev == OBD_NOTIFY_OCD) {
+        if (ev == OBD_NOTIFY_ACTIVE) {
+                CDEBUG(D_INFO|D_WARNING, "Device %s is active now: "LPX64"\n",
+                       watched->obd_name);
+        } else if (ev == OBD_NOTIFY_INACTIVE) {
+                CDEBUG(D_INFO|D_WARNING, "Device %s is inactive now: "LPX64"\n",
+                       watched->obd_name);
+        } else if (ev == OBD_NOTIFY_OCD) {
                 struct obd_connect_data *conn_data =
                                   &watched->u.cli.cl_import->imp_connect_data;
                 /*
@@ -148,6 +154,8 @@ static int mdc_obd_add(const struct lu_env *env,
                                 /* obd notify mechanism */
                                 mdc->obd_upcall.onu_owner = mc;
                                 mdc->obd_upcall.onu_upcall = mdc_obd_update;
+                                obd_set_info_async(desc->cl_exp, strlen("mds_conn"),
+                                                   "mds_conn", 0, NULL, NULL);
                         }
                 }
                 
@@ -188,6 +196,8 @@ static int mdc_obd_del(const struct lu_env *env, struct mdc_device *mc,
                 CERROR("Fid fini error %d\n", rc);
 
         obd_register_observer(mdc_obd, NULL);
+        mdc_obd->obd_upcall.onu_owner = NULL;
+        mdc_obd->obd_upcall.onu_upcall = NULL;
         rc = obd_disconnect(desc->cl_exp);
         if (rc) {
                 CERROR("Target %s disconnect error %d\n",
@@ -196,7 +206,7 @@ static int mdc_obd_del(const struct lu_env *env, struct mdc_device *mc,
         class_manual_cleanup(mdc_obd);
         desc->cl_exp = NULL;
 
-        RETURN(rc);
+        RETURN(0);
 }
 
 static int mdc_process_config(const struct lu_env *env,

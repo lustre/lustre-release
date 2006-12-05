@@ -1132,6 +1132,14 @@ int mdc_set_info_async(struct obd_export *exp, obd_count keylen,
                 RETURN(0);
         }
 
+        if (KEY_IS("mds_conn")) {
+                struct obd_import *imp = class_exp2cliimp(exp);
+                
+                imp->imp_server_timeout = 1;
+                CDEBUG(D_OTHER|D_WARNING, "%s: timeout / 2\n", exp->exp_obd->obd_name);
+                RETURN(0);
+        }
+
         RETURN(rc);
 }
 
