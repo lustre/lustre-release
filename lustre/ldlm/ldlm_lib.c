@@ -1569,7 +1569,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 
         if (obd->obd_recovery_data.trd_processing_task == current->pid) {
                 /* Processing the queue right now, don't re-add. */
-                return 1;
+                RETURN (1);
         }
 
         target_process_req_flags(obd, req);
@@ -1606,7 +1606,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         if (!transno) {
                 CFS_INIT_LIST_HEAD(&req->rq_list);
                 DEBUG_REQ(D_HA, req, "not queueing");
-                return 1;
+                RETURN (1);
         }
 
         spin_lock_bh(&obd->obd_processing_task_lock);

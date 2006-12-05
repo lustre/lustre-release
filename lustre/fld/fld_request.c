@@ -455,12 +455,10 @@ int fld_client_create(struct lu_client_fld *fld,
 #ifdef __KERNEL__
         if (target->ft_srv != NULL) {
                 LASSERT(env != NULL);
-                rc = fld_server_create(target->ft_srv,
-                                       env, seq, mds);
+                rc = fld_server_create(target->ft_srv, env, seq, mds);
         } else {
 #endif
-                rc = fld_client_rpc(target->ft_exp,
-                                    &md_fld, FLD_CREATE);
+                rc = fld_client_rpc(target->ft_exp, &md_fld, FLD_CREATE);
 #ifdef __KERNEL__
         }
 #endif

@@ -2177,7 +2177,8 @@ static int mdt_recovery(struct mdt_thread_info *info)
                 if (!(lustre_msg_get_flags(req->rq_reqmsg) &
                       (MSG_RESENT | MSG_REPLAY))) {
                         DEBUG_REQ(D_WARNING, req, "rq_xid "LPU64" matches last_xid, "
-                                  "expected REPLAY or RESENT flag\n", req->rq_xid);
+                                  "expected REPLAY or RESENT flag (%x)\n", req->rq_xid,
+                                  lustre_msg_get_flags(req->rq_reqmsg));
                         LBUG();
                         req->rq_status = -ENOTCONN;
                         RETURN(-ENOTCONN);

@@ -236,8 +236,7 @@ static int lov_connect(const struct lu_env *env,
                 if (!tgt || obd_uuid_empty(&tgt->ltd_uuid))
                         continue;
                 /* Flags will be lowest common denominator */
-                rc = lov_connect_obd(obd, i, lov->lov_tgts[i]->ltd_activate,
-                                     &lov->lov_ocd);
+                rc = lov_connect_obd(obd, i, tgt->ltd_activate, &lov->lov_ocd);
                 if (rc) {
                         CERROR("%s: lov connect tgt %d failed: %d\n",
                                obd->obd_name, i, rc);
