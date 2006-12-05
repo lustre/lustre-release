@@ -1985,6 +1985,10 @@ static __u32 lmv_node_rank(struct obd_export *exp, const struct lu_fid *fid)
          */
         imp  = class_exp2cliimp(exp);
         id   = imp->imp_connection->c_self + fid_flatten(fid);
+
+        CDEBUG(D_INFO, "node rank: %llx "DFID" %llx %llx\n",
+               imp->imp_connection->c_self, PFID(fid), id, id ^ (id >> 32));
+
         return id ^ (id >> 32);
 }
 
