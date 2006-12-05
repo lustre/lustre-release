@@ -3096,7 +3096,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +                        hinfo.seed = 0;
 +                        ext3fs_dirhash(name, namelen, &hinfo);
 +                        result2 = hinfo.hash;
-+                        result = (0xff000000 & result2) | (0x00ffffff & result);
++                        result = (0xfc000000 & result2) | (0x03ffffff & result);
 +                }
 +        }
 +        return result;

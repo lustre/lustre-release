@@ -101,7 +101,7 @@ static __u32 hash_build0(const char *name, int namelen)
                         hinfo.seed = 0;
                         ldiskfsfs_dirhash(name, namelen, &hinfo);
                         result2 = hinfo.hash;
-                        result = (0xff000000 & result2) | (0x00ffffff & result);
+                        result = (0xfc000000 & result2) | (0x03ffffff & result);
                 }
         }
 
