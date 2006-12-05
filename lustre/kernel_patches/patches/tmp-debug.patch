@@ -1,0 +1,64 @@
+Index: linux/fs/buffer.c
+===================================================================
+--- linux.orig/fs/buffer.c
++++ linux/fs/buffer.c
+@@ -1528,6 +1528,9 @@ lookup_bh_lru(struct block_device *bdev,
+ 	return ret;
+ }
+ 
++int __find_get_block_trace = 0;
++EXPORT_SYMBOL(__find_get_block_trace);
++
+ /*
+  * Perform a pagecache lookup for the matching buffer.  If it's there, refresh
+  * it in the LRU and mark it as accessed.  If it is not present then return
+@@ -1538,6 +1541,17 @@ __find_get_block(struct block_device *bd
+ {
+ 	struct buffer_head *bh = lookup_bh_lru(bdev, block, size);
+ 
++	if (__find_get_block_trace != 0) {
++		static unsigned long last_dump;
++
++		if (time_after(jiffies,
++			       last_dump + __find_get_block_trace * HZ)) {
++			last_dump = jiffies;
++			printk("%s@%lu\n", __FUNCTION__, last_dump);
++			dump_stack();
++		}
++	}
++
+ 	if (bh == NULL) {
+ 		bh = __find_get_block_slow(bdev, block, size);
+ 		if (bh)
+Index: linux/kernel/sched.c
+===================================================================
+--- linux.orig/kernel/sched.c
++++ linux/kernel/sched.c
+@@ -1106,6 +1106,9 @@ static inline int wake_idle(int cpu, tas
+ }
+ #endif
+ 
++int try_to_wake_up_trace = 0;
++EXPORT_SYMBOL(try_to_wake_up_trace);
++
+ /***
+  * try_to_wake_up - wake up a thread
+  * @p: the to-be-woken-up thread
+@@ -1132,6 +1135,17 @@ static int try_to_wake_up(task_t * p, un
+ 	int new_cpu;
+ #endif
+ 
++	if (try_to_wake_up_trace != 0) {
++		static unsigned long last_dump;
++
++		if (time_after(jiffies,
++			       last_dump + try_to_wake_up_trace * HZ)) {
++			last_dump = jiffies;
++			printk("%s@%lu\n", __FUNCTION__, last_dump);
++			dump_stack();
++		}
++	}
++
+ 	rq = task_rq_lock(p, &flags);
+ 	schedstat_inc(rq, ttwu_cnt);
+ 	old_state = p->state;
