@@ -3487,8 +3487,20 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 ptlrpc_deactivate_import(imp);
                 break;
         }
-        case OBD_CLEANUP_EXPORTS:
+        case OBD_CLEANUP_EXPORTS: {
+                /* If we set up but never connected, the
+                   client import will not have been cleaned. */
+                if (obd->u.cli.cl_import) {
+                        struct obd_import *imp;
+                        imp = obd->u.cli.cl_import;
+                        CERROR("client import never connected\n");
+                        ptlrpc_invalidate_import(imp);
+                        ptlrpc_free_rq_pool(imp->imp_rq_pool);
+                        class_destroy_import(imp);
+                        obd->u.cli.cl_import = NULL;
+                }
                 break;
+        }
         case OBD_CLEANUP_SELF_EXP:
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
