@@ -34,6 +34,11 @@ SCSI device:
 	(make sure the kernel module "sg" is loaded)
 Raw device:
 	Must appear in the output of 'raw -qa'
+
+	If you need to create raw devices in order to use this tool, note that
+	raw device 0 can not be used due to a bug in certain versions of the
+	"raw" utility (including that shipped with RHEL4U4.)
+
 You may not mix raw and SCSI devices in the test specification.
 
 
