@@ -723,6 +723,11 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
         RETURN(rc);
 }
 
+enum MDS_POLICY {
+     CHAR_TYPE,
+     NID_TYPE
+};
+
 static int lmv_all_chars_policy(int count, const char *name,
                                 int len)
 {
@@ -732,6 +737,36 @@ static int lmv_all_chars_policy(int count, const char *name,
                 c += name[--len];
         c = c % count;
         return c;
+}
+
+static int lmv_nid_policy(struct lmv_obd *lmv)
+{
+        struct obd_import *imp = class_exp2cliimp(lmv->tgts[0].ltd_exp);
+        __u32 id;
+       /*
+        * XXX Hack: to get nid we assume that underlying obd device is mdc.
+        */
+        id = imp->imp_connection->c_self ^ (imp->imp_connection->c_self >> 32);
+        return id % lmv->desc.ld_tgt_count;
+}
+
+static int lmv_choose_mds(struct lmv_obd *lmv, struct md_op_data *op_data, 
+                          int type)
+{
+        switch (type) {
+        case CHAR_TYPE:
+                return lmv_all_chars_policy(lmv->desc.ld_tgt_count,
+                                            op_data->op_name, 
+                                            op_data->op_namelen);
+        case NID_TYPE:
+                return lmv_nid_policy(lmv);
+        
+        default:
+                break;
+        }
+        
+        CERROR("unsupport type %d \n", type);
+        return -EINVAL;
 }
 
 /* This is _inode_ placement policy function (not name). */
@@ -784,9 +819,7 @@ static int lmv_placement_policy(struct obd_device *obd,
                  * directory in it. Let's calculate where to place it according
                  * to name.
                  */
-                *mds = lmv_all_chars_policy(lmv->desc.ld_tgt_count,
-                                            op_data->op_name,
-                                            op_data->op_namelen);
+                *mds = lmv_choose_mds(lmv, op_data, NID_TYPE);
                 rc = 0;
         }
         EXIT;
