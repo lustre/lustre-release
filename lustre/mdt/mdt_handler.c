@@ -613,7 +613,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
 
         mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
                                LPROC_MDT_GETATTR);
-        
+
         reqbody = req_capsule_client_get(pill, &RMF_MDT_BODY);
         LASSERT(reqbody);
 
@@ -657,7 +657,7 @@ static int mdt_getattr(struct mdt_thread_info *info)
 
         info->mti_spec.sp_ck_split = !!(reqbody->valid & OBD_MD_FLCKSPLIT);
         info->mti_cross_ref = !!(reqbody->valid & OBD_MD_FLCROSSREF);
-        
+
         /*
          * Don't check capability at all, because rename might getattr for
          * remote obj, and at that time no capability is available.
@@ -721,7 +721,7 @@ static int mdt_raw_lookup(struct mdt_thread_info *info,
                 RETURN(0);
 
         LASSERT(!info->mti_cross_ref);
-        
+
         /* Only got the fid of this obj by name */
         rc = mdo_lookup(info->mti_env, next, lname, child_fid,
                         &info->mti_spec);
@@ -897,7 +897,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         } else {
                 mdt_lock_handle_init(lhc);
                 mdt_lock_reg_init(lhc, LCK_PR);
-                
+
                 if (mdt_object_exists(child) == 0) {
                         LU_OBJECT_DEBUG(D_WARNING, info->mti_env,
                                         &child->mot_obj.mo_lu,
@@ -964,7 +964,7 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
 
         mdt_lprocfs_time_start(info->mti_mdt, &info->mti_time,
                                LPROC_MDT_GETATTR_NAME);
-        
+
         reqbody = req_capsule_client_get(&info->mti_pill, &RMF_MDT_BODY);
         LASSERT(reqbody != NULL);
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
@@ -1378,7 +1378,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 DEBUG_REQ(D_HA, req, "no reply for RESENT (xid "LPD64")",
                           mcd->mcd_last_xid);
         }
-        
+
         need_shrink = 0;
         rc = mdt_reint_rec(info, lhc);
         EXIT;
@@ -2669,7 +2669,7 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         mdt_intent_fixup_resent(info, *lockp, NULL, lhc);
 
         rc = mdt_reint_internal(info, lhc, opc);
-        
+
         /* Check whether the reply has been packed successfully. */
         if (mdt_info_req(info)->rq_repmsg != NULL)
                 rep = req_capsule_server_get(&info->mti_pill, &RMF_DLM_REP);
@@ -3617,6 +3617,9 @@ static void fsoptions_to_mdt_flags(struct mdt_device *m, char *options)
 
 int mdt_postrecov(const struct lu_env *, struct mdt_device *);
 
+extern int try_to_wake_up_trace;
+extern int __find_get_block_trace;
+
 static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                      struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
@@ -3765,6 +3768,10 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 mdt_postrecov(env, m);
 
         mdt_init_capa_ctxt(env, m);
+
+        try_to_wake_up_trace = 2;
+        __find_get_block_trace = 2;
+
         RETURN(0);
 
 err_fs_cleanup:
