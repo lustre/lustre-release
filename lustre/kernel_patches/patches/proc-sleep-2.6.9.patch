@@ -93,23 +93,25 @@ Index: linux/fs/proc/proc_misc.c
 ===================================================================
 --- linux.orig/fs/proc/proc_misc.c
 +++ linux/fs/proc/proc_misc.c
-@@ -270,6 +270,10 @@ static struct file_operations proc_cpuin
+@@ -270,6 +270,11 @@ static struct file_operations proc_cpuin
  	.release	= seq_release,
  };
  
 +#ifdef CONFIG_PROC_SLEEP
 +extern struct file_operations proc_global_sleep_operations;
++extern struct file_operations proc_global_stack_operations;
 +#endif
 +
  extern struct seq_operations vmstat_op;
  static int vmstat_open(struct inode *inode, struct file *file)
  {
-@@ -641,4 +645,7 @@ void __init proc_misc_init(void)
+@@ -641,4 +646,8 @@ void __init proc_misc_init(void)
  			entry->proc_fops = &ppc_htab_operations;
  	}
  #endif
 +#ifdef CONFIG_PROC_SLEEP
 +	create_seq_entry("sleep", 0, &proc_global_sleep_operations);
++	create_seq_entry("stacktrace", 0, &proc_global_stack_operations);
 +#endif
  }
 Index: linux/include/linux/sched.h
@@ -137,7 +139,7 @@ Index: linux/include/linux/sleep_info.h
 ===================================================================
 --- linux.orig/include/linux/sleep_info.h
 +++ linux/include/linux/sleep_info.h
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,50 @@
 +#ifndef _LINUX_SLEEP_INFO_H
 +#define _LINUX_SLEEP_INFO_H
 +
@@ -151,19 +153,20 @@ Index: linux/include/linux/sleep_info.h
 +#ifdef CONFIG_PROC_SLEEP
 +
 +struct __sleep_info;
++struct task_struct;
 +
 +struct sleep_info {
 +	struct __sleep_info *p;
 +	unsigned long long last_in;
 +};
 +
-+extern void init_sleep_info(struct task_struct *tsk);
-+extern void free_sleep_info(struct sleep_info *sinfo);
++void init_sleep_info(struct task_struct *tsk);
++void free_sleep_info(struct sleep_info *sinfo);
 +
-+struct task_struct;
++void sleep_in_hook(struct task_struct *tsk);
++void sleep_ex_hook(struct task_struct *tsk);
 +
-+extern void sleep_in_hook(struct task_struct *tsk);
-+extern void sleep_ex_hook(struct task_struct *tsk);
++void stacktrace_record(void);
 +
 +extern struct file_operations proc_sleep_operations;
 +
@@ -175,8 +178,9 @@ Index: linux/include/linux/sleep_info.h
 +#define init_sleep_info(tsk)
 +#define free_sleep_info(sinfo)
 +
-+#define sleep_in_hook(tsk) 
-+#define sleep_ex_hook(tsk) 
++#define sleep_in_hook(tsk)
++#define sleep_ex_hook(tsk)
++#define stacktrace_record()
 +
 +/* CONFIG_PROC_SLEEP */
 +#endif
@@ -265,7 +269,7 @@ Index: linux/kernel/sleep_info.c
 ===================================================================
 --- linux.orig/kernel/sleep_info.c
 +++ linux/kernel/sleep_info.c
-@@ -0,0 +1,374 @@
+@@ -0,0 +1,423 @@
 +#include <linux/config.h>
 +#include <linux/sleep_info.h>
 +#include <linux/seq_file.h>
@@ -274,6 +278,7 @@ Index: linux/kernel/sleep_info.c
 +#include <linux/sched.h>
 +#include <linux/proc_fs.h>
 +#include <linux/fs.h>
++#include <linux/module.h>
 +
 +#include <asm/div64.h>
 +#include <linux/errno.h>
@@ -283,6 +288,7 @@ Index: linux/kernel/sleep_info.c
 +#define SLEEP_TRACES_DEF (32)
 +#define GLOBAL_SLEEP_TRACES_DEF (512)
 +#define SLEEP_TRACE_DEPTH (20)
++#define GLOBAL_STACK_TRACES_DEF (512)
 +
 +struct stack_trace {
 +	unsigned nr;
@@ -637,6 +643,53 @@ Index: linux/kernel/sleep_info.c
 +	.write          = global_sleep_write
 +};
 +
++static struct sleep_info stack_sinfo = {
++	.p = NULL
++};
++
++static void *global_stack_start(struct seq_file *m, loff_t *pos)
++{
++	return sinfo_start(&stack_sinfo, GLOBAL_STACK_TRACES_DEF, *pos);
++}
++
++static void *global_stack_next(struct seq_file *m, void *v, loff_t *pos)
++{
++	return sinfo_next(&stack_sinfo, v, pos);
++}
++
++
++struct seq_operations global_stack_op = {
++	.start	= global_stack_start,
++	.next	= global_stack_next,
++	.stop	= sleep_stop,
++	.show	= show_sleep
++};
++
++static int global_stack_open(struct inode *inode, struct file *file)
++{
++	return seq_open(file, &global_stack_op);
++}
++
++static ssize_t global_stack_write(struct file *file, const char __user *buffer,
++				  size_t count, loff_t *ppos)
++{
++	reset_sleep_info(&stack_sinfo, GLOBAL_STACK_TRACES_DEF);
++	return count;
++}
++
++struct file_operations proc_global_stack_operations = {
++	.open		= global_stack_open,
++	.read		= seq_read,
++	.llseek		= seq_lseek,
++	.release	= seq_release,
++	.write          = global_stack_write
++};
++
++void stacktrace_record(void)
++{
++	update_sinfo(stack_sinfo.p, 1);
++}
++EXPORT_SYMBOL(stacktrace_record);
 +
 +/* CONFIG_PROC_SLEEP */
 +#endif
