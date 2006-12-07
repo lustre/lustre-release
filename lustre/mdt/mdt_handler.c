@@ -3769,8 +3769,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         mdt_init_capa_ctxt(env, m);
 
-        try_to_wake_up_trace = 2;
-        __find_get_block_trace = 2;
+        try_to_wake_up_trace = 1;
+        __find_get_block_trace = 1;
 
         RETURN(0);
 
