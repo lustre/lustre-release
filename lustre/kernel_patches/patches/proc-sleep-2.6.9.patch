@@ -269,7 +269,7 @@ Index: linux/kernel/sleep_info.c
 ===================================================================
 --- linux.orig/kernel/sleep_info.c
 +++ linux/kernel/sleep_info.c
-@@ -0,0 +1,423 @@
+@@ -0,0 +1,425 @@
 +#include <linux/config.h>
 +#include <linux/sleep_info.h>
 +#include <linux/seq_file.h>
@@ -279,6 +279,7 @@ Index: linux/kernel/sleep_info.c
 +#include <linux/proc_fs.h>
 +#include <linux/fs.h>
 +#include <linux/module.h>
++#include <linux/hardirq.h>
 +
 +#include <asm/div64.h>
 +#include <linux/errno.h>
@@ -687,7 +688,8 @@ Index: linux/kernel/sleep_info.c
 +
 +void stacktrace_record(void)
 +{
-+	update_sinfo(stack_sinfo.p, 1);
++	if (!in_interrupt())
++		update_sinfo(stack_sinfo.p, 1);
 +}
 +EXPORT_SYMBOL(stacktrace_record);
 +
