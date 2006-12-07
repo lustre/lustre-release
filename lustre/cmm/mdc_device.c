@@ -59,10 +59,10 @@ static int mdc_obd_update(struct obd_device *host,
         LASSERT(mc != NULL);
         CDEBUG(D_CONFIG, "notify %s ev=%d\n", watched->obd_name, ev);
         if (ev == OBD_NOTIFY_ACTIVE) {
-                CDEBUG(D_INFO|D_WARNING, "Device %s is active now: "LPX64"\n",
+                CDEBUG(D_INFO|D_WARNING, "Device %s is active now\n",
                        watched->obd_name);
         } else if (ev == OBD_NOTIFY_INACTIVE) {
-                CDEBUG(D_INFO|D_WARNING, "Device %s is inactive now: "LPX64"\n",
+                CDEBUG(D_INFO|D_WARNING, "Device %s is inactive now\n",
                        watched->obd_name);
         } else if (ev == OBD_NOTIFY_OCD) {
                 struct obd_connect_data *conn_data =
