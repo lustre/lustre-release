@@ -188,52 +188,1409 @@ Kernel Hacking menu.
 
 Signed-off-by: Andy Whitcroft <apw@shadowen.org>
 Signed-off-by: Andrew Morton <akpm@osdl.org>
----
-
- 25-akpm/Documentation/i386/kgdb/andthen         |  100 +
- 25-akpm/Documentation/i386/kgdb/debug-nmi.txt   |   37 
- 25-akpm/Documentation/i386/kgdb/gdb-globals.txt |   71 
- 25-akpm/Documentation/i386/kgdb/gdbinit         |   14 
- 25-akpm/Documentation/i386/kgdb/gdbinit-modules |  146 +
- 25-akpm/Documentation/i386/kgdb/gdbinit.hw      |  117 +
- 25-akpm/Documentation/i386/kgdb/kgdb.txt        |  775 +++++++
- 25-akpm/Documentation/i386/kgdb/loadmodule.sh   |   78 
- 25-akpm/MAINTAINERS                             |    6 
- 25-akpm/arch/i386/Kconfig                       |    8 
- 25-akpm/arch/i386/Kconfig.debug                 |    2 
- 25-akpm/arch/i386/Kconfig.kgdb                  |  175 +
- 25-akpm/arch/i386/Makefile                      |    3 
- 25-akpm/arch/i386/kernel/Makefile               |    1 
- 25-akpm/arch/i386/kernel/entry.S                |   29 
- 25-akpm/arch/i386/kernel/kgdb_stub.c            | 2330 ++++++++++++++++++++++++
- 25-akpm/arch/i386/kernel/nmi.c                  |   25 
- 25-akpm/arch/i386/kernel/smp.c                  |   12 
- 25-akpm/arch/i386/kernel/traps.c                |   77 
- 25-akpm/arch/i386/lib/Makefile                  |    1 
- 25-akpm/arch/i386/lib/kgdb_serial.c             |  485 ++++
- 25-akpm/arch/i386/mm/fault.c                    |    6 
- 25-akpm/arch/x86_64/boot/compressed/head.S      |    1 
- 25-akpm/arch/x86_64/boot/compressed/misc.c      |    1 
- 25-akpm/drivers/char/keyboard.c                 |    3 
- 25-akpm/drivers/char/sysrq.c                    |   23 
- 25-akpm/drivers/serial/8250.c                   |   40 
- 25-akpm/drivers/serial/serial_core.c            |    5 
- 25-akpm/include/asm-i386/bugs.h                 |   21 
- 25-akpm/include/asm-i386/kgdb.h                 |   59 
- 25-akpm/include/asm-i386/kgdb_local.h           |  102 +
- 25-akpm/include/linux/config.h                  |    3 
- 25-akpm/include/linux/dwarf2-lang.h             |  132 +
- 25-akpm/include/linux/dwarf2.h                  |  738 +++++++
- 25-akpm/include/linux/serial_core.h             |    4 
- 25-akpm/include/linux/spinlock.h                |   12 
- 25-akpm/kernel/pid.c                            |    6 
- 25-akpm/kernel/sched.c                          |    7 
- 38 files changed, 5645 insertions(+), 10 deletions(-)
-
-diff -puN arch/i386/Kconfig~kgdb-ga arch/i386/Kconfig
---- 25/arch/i386/Kconfig~kgdb-ga	2004-10-21 14:54:15.256604136 -0700
-+++ 25-akpm/arch/i386/Kconfig	2004-10-21 14:54:15.295598208 -0700
-@@ -1184,6 +1184,14 @@ menu "Executable file formats"
+Index: linux/Documentation/i386/kgdb/andthen
+===================================================================
+--- linux.orig/Documentation/i386/kgdb/andthen
++++ linux/Documentation/i386/kgdb/andthen
+@@ -0,0 +1,100 @@
++
++define	set_andthen
++	set var $thp=0
++	set var $thp=(struct kgdb_and_then_struct *)&kgdb_data[0]
++	set var $at_size = (sizeof kgdb_data)/(sizeof *$thp)
++	set var $at_oc=kgdb_and_then_count
++	set var $at_cc=$at_oc
++end
++
++define andthen_next
++	set var $at_cc=$arg0
++end
++
++define andthen
++	andthen_set_edge
++	if ($at_cc >= $at_oc)
++		printf "Outside window.  Window size is %d\n",($at_oc-$at_low)
++	else
++		printf "%d: ",$at_cc
++		output *($thp+($at_cc++ % $at_size ))
++		printf "\n"
++	end
++end
++define andthen_set_edge
++	set var $at_oc=kgdb_and_then_count
++	set var $at_low = $at_oc - $at_size
++	if ($at_low < 0 )
++		set var $at_low = 0
++	end
++	if (( $at_cc > $at_oc) || ($at_cc < $at_low))
++		printf "Count outside of window, setting count to "
++		if ($at_cc >= $at_oc)
++			set var $at_cc = $at_oc
++		else
++			set var $at_cc = $at_low
++		end
++		printf "%d\n",$at_cc
++	end
++end
++
++define beforethat
++	andthen_set_edge
++	if ($at_cc <= $at_low)
++		printf "Outside window.  Window size is %d\n",($at_oc-$at_low)
++	else
++		printf "%d: ",$at_cc-1
++		output *($thp+(--$at_cc % $at_size ))
++		printf "\n"
++	end
++end
++
++document andthen_next
++	andthen_next <count>
++	.	sets the number of the event to display next. If this event
++	.	is not in the event pool, either andthen or beforethat will
++	.	correct it to the nearest event pool edge.  The event pool
++	.	ends at the last event recorded and begins <number of events>
++	.	prior to that.  If beforethat is used next, it will display
++	.	event <count> -1.
++.
++	andthen commands are: set_andthen, andthen_next, andthen and beforethat
++end
++
++
++document andthen
++	andthen
++.	displays the next event in the list.  <set_andthen> sets up to display
++.	the oldest saved event first.
++.	<count> (optional) count of the event to display.
++.	note the number of events saved is specified at configure time.
++.	if events are saved between calls to andthen the index will change
++.	but the displayed event will be the next one (unless the event buffer
++.	is overrun).
++.
++.	andthen commands are: set_andthen, andthen_next, andthen and beforethat
++end
++
++document set_andthen
++	set_andthen
++.	sets up to use the <andthen> and <beforethat> commands.
++.		if you have defined your own struct, use the above and
++.		then enter the following:
++.		p $thp=(struct kgdb_and_then_structX *)&kgdb_data[0]
++.		where <kgdb_and_then_structX> is the name of your structure.
++.
++.	andthen commands are: set_andthen, andthen_next, andthen and beforethat
++end
++
++document beforethat
++	beforethat
++.	displays the next prior event in the list. <set_andthen> sets up to
++.	display the last occuring event first.
++.
++.	note the number of events saved is specified at configure time.
++.	if events are saved between calls to beforethat the index will change
++.	but the displayed event will be the next one (unless the event buffer
++.	is overrun).
++.
++.	andthen commands are: set_andthen, andthen_next, andthen and beforethat
++end
+Index: linux/Documentation/i386/kgdb/debug-nmi.txt
+===================================================================
+--- linux.orig/Documentation/i386/kgdb/debug-nmi.txt
++++ linux/Documentation/i386/kgdb/debug-nmi.txt
+@@ -0,0 +1,37 @@
++Subject: Debugging with NMI
++Date: Mon, 12 Jul 1999 11:28:31 -0500
++From: David Grothe <dave@gcom.com>
++Organization: Gcom, Inc
++To: David Grothe <dave@gcom.com>
++
++Kernel hackers:
++
++Maybe this is old hat, but it is new to me --
++
++On an ISA bus machine, if you short out the A1 and B1 pins of an ISA
++slot you will generate an NMI to the CPU.  This interrupts even a
++machine that is hung in a loop with interrupts disabled.  Used in
++conjunction with kgdb <
++ftp://ftp.gcom.com/pub/linux/src/kgdb-2.3.35/kgdb-2.3.35.tgz > you can
++gain debugger control of a machine that is hung in the kernel!  Even
++without kgdb the kernel will print a stack trace so you can find out
++where it was hung.
++
++The A1/B1 pins are directly opposite one another and the farthest pins
++towards the bracket end of the ISA bus socket.  You can stick a paper
++clip or multi-meter probe between them to short them out.
++
++I had a spare ISA bus to PC104 bus adapter around.  The PC104 end of the
++board consists of two rows of wire wrap pins.  So I wired a push button
++between the A1/B1 pins and now have an ISA board that I can stick into
++any ISA bus slot for debugger entry.
++
++Microsoft has a circuit diagram of a PCI card at
++http://www.microsoft.com/hwdev/DEBUGGING/DMPSW.HTM.  If you want to
++build one you will have to mail them and ask for the PAL equations.
++Nobody makes one comercially.
++
++[THIS TIP COMES WITH NO WARRANTY WHATSOEVER.  It works for me, but if
++your machine catches fire, it is your problem, not mine.]
++
++-- Dave (the kgdb guy)
+Index: linux/Documentation/i386/kgdb/gdb-globals.txt
+===================================================================
+--- linux.orig/Documentation/i386/kgdb/gdb-globals.txt
++++ linux/Documentation/i386/kgdb/gdb-globals.txt
+@@ -0,0 +1,71 @@
++Sender: akale@veritas.com
++Date: Fri, 23 Jun 2000 19:26:35 +0530
++From: "Amit S. Kale" <akale@veritas.com>
++Organization: Veritas Software (India)
++To: Dave Grothe <dave@gcom.com>, linux-kernel@vger.rutgers.edu
++CC: David Milburn <dmilburn@wirespeed.com>,
++        "Edouard G. Parmelan" <Edouard.Parmelan@quadratec.fr>,
++        ezannoni@cygnus.com, Keith Owens <kaos@ocs.com.au>
++Subject: Re: Module debugging using kgdb
++
++Dave Grothe wrote:
++>
++> Amit:
++>
++> There is a 2.4.0 version of kgdb on our ftp site:
++> ftp://ftp.gcom.com/pub/linux/src/kgdb.  I mirrored your version of gdb
++> and loadmodule.sh there.
++>
++> Have a look at the README file and see if I go it right.  If not, send
++> me some corrections and I will update it.
++>
++> Does your version of gdb solve the global variable problem?
++
++Yes.
++Thanks to Elena Zanoni, gdb (developement version) can now calculate
++correctly addresses  of dynamically loaded object files. I have not been
++following gdb developement for sometime and am not sure when symbol
++address calculation fix is going to appear in a gdb stable version.
++
++Elena, any idea when the fix will make it to a prebuilt gdb from a
++redhat release?
++
++For the time being I have built a gdb developement version. It can be
++used for module debugging with loadmodule.sh script.
++
++The problem with calculating of module addresses with previous versions
++of gdb was as follows:
++gdb did not use base address of a section while calculating address of
++a symbol in the section in an object file loaded via 'add-symbol-file'.
++It used address of .text segment instead. Due to this addresses of
++symbols in .data, .bss etc. (e.g. global variables) were calculated incorrectly.
++
++Above mentioned fix allow gdb to use base address of a segment while
++calculating address of a symbol in it. It adds a parameter '-s' to
++'add-symbol-file' command for specifying base address of a segment.
++
++loadmodule.sh script works as follows.
++
++1. Copy a module file to target machine.
++2. Load the module on the target machine using insmod with -m parameter.
++insmod produces a module load map which contains base addresses of all
++sections in the module and addresses of symbols in the module file.
++3. Find all sections and their base addresses in the module from
++the module map.
++4. Generate a script that loads the module file. The script uses
++'add-symbol-file' and specifies address of text segment followed by
++addresses of all segments in the module.
++
++Here is an example gdb script produced by loadmodule.sh script.
++
++add-symbol-file foo 0xd082c060 -s .text.lock 0xd08cbfb5
++-s .fixup 0xd08cfbdf -s .rodata 0xd08cfde0 -s __ex_table 0xd08e3b38
++-s .data 0xd08e3d00 -s .bss 0xd08ec8c0 -s __ksymtab 0xd08ee838
++
++With this command gdb can calculate addresses of symbols in ANY segment
++in a module file.
++
++Regards.
++--
++Amit Kale
++Veritas Software ( http://www.veritas.com )
+Index: linux/Documentation/i386/kgdb/gdbinit
+===================================================================
+--- linux.orig/Documentation/i386/kgdb/gdbinit
++++ linux/Documentation/i386/kgdb/gdbinit
+@@ -0,0 +1,14 @@
++shell echo -e "\003" >/dev/ttyS0
++set remotebaud 38400
++target remote /dev/ttyS0
++define si
++stepi
++printf "EAX=%08x EBX=%08x ECX=%08x EDX=%08x\n", $eax, $ebx, $ecx, $edx
++printf "ESI=%08x EDI=%08x EBP=%08x ESP=%08x\n", $esi, $edi, $ebp, $esp
++x/i $eip
++end
++define ni
++nexti
++printf "EAX=%08x EBX=%08x ECX=%08x EDX=%08x\n", $eax, $ebx, $ecx, $edx
++printf "ESI=%08x EDI=%08x EBP=%08x ESP=%08x\n", $esi, $edi, $ebp, $esp
++x/i $eip
+Index: linux/Documentation/i386/kgdb/gdbinit-modules
+===================================================================
+--- linux.orig/Documentation/i386/kgdb/gdbinit-modules
++++ linux/Documentation/i386/kgdb/gdbinit-modules
+@@ -0,0 +1,149 @@
++#
++# Usefull GDB user-command to debug Linux Kernel Modules with gdbstub.
++#
++# This don't work for Linux-2.0 or older.
++#
++# Author Edouard G. Parmelan <Edouard.Parmelan@quadratec.fr>
++#
++#
++# Fri Apr 30 20:33:29 CEST 1999
++#   First public release.
++#
++#   Major cleanup after experiment Linux-2.0 kernel without success.
++#   Symbols of a module are not in the correct order, I can't explain
++#   why :(
++#
++# Fri Mar 19 15:41:40 CET 1999
++#   Initial version.
++#
++# Thu Jan  6 16:29:03 CST 2000
++#   A little fixing by Dave Grothe <dave@gcom.com>
++#
++# Mon Jun 19 09:33:13 CDT 2000
++#   Alignment changes from Edouard Parmelan
++#
++# The basic idea is to find where insmod load the module and inform
++# GDB to load the symbol table of the module with the GDB command
++# ``add-symbol-file <object> <address>''.
++#
++# The Linux kernel holds the list of all loaded modules in module_list,
++# this list end with &kernel_module (exactly with module->next == NULL,
++# but the last module is not a real module).
++#
++# Insmod allocates the struct module before the object file.  Since
++# Linux-2.1, this structure contain his size.  The real address of
++# the object file is then (char*)module + module->size_of_struct.
++#
++# You can use three user functions ``mod-list'', ``mod-print-symbols''
++# and ``add-module-symbols''.
++#
++# mod-list list all loaded modules with the format:
++#    <module-address> <module-name>
++#
++# As soon as you have found the address of your module, you can
++# print its exported symbols (mod-print-symbols) or inform GDB to add
++# symbols from your module file (mod-add-symbols).
++#
++# The argument that you give to mod-print-symbols or mod-add-symbols
++# is the <module-address> from the mod-list command.
++#
++# When using the mod-add-symbols command you must also give the full
++# pathname of the modules object code file.
++#
++# The command mod-add-lis is an example of how to make this easier.
++# You can edit this macro to contain the path name of your own
++# favorite module and then use it as a shorthand to load it.  You
++# still need the module-address, however.
++#
++# The internal function ``mod-validate'' set the GDB variable $mod
++# as a ``struct module*'' if the kernel known the module otherwise
++# $mod is set to NULL.  This ensure to not add symbols for a wrong
++# address.
++#
++#
++# Sat Feb 12 20:05:47 CET 2005
++#
++# Adapted to the 2.6.* module data structure.
++# (Getting miffed at gdb for not having "offsetof" in the process :-/ )
++#
++# Autogenerate add-symbol-file statements from the module list instead
++# of relying on a no-longer-working loadmodule.sh program.
++#
++#                                   Matthias Urlichs <smurf@debian.org>
++#
++#
++# Have a nice hacking day !
++#
++#
++define mod-list
++    set $lmod = modules->next
++    # This is a circular data structure
++    while $lmod != &modules
++		set $mod = (struct module *)(((char *)$lmod) - ((int)&(((struct module *)0) -> list)))
++        printf "%p\t%s\n", $mod, $mod->name
++		set $lmod = $lmod->next
++    end
++end
++document mod-list
++mod-list
++List all modules in the form: <module-address> <module-name>
++Use the <module-address> as the argument for the other
++mod-commands: mod-print-symbols, mod-add-symbols.
++end
++
++define mod-list-syms
++    set $lmod = modules->next
++    # This is a circular data structure
++    while $lmod != &modules
++		set $mod = (struct module *)(((char *)$lmod) - ((int)&(((struct module *)0) -> list)))
++        printf "add-symbol-file %s.ko %p\n", $mod->name, $mod->module_core
++		set $lmod = $lmod->next
++    end
++end
++document mod-list-syms
++mod-list-syms
++List all modules in the form: add-symbol-file <module-path> <module-core>
++for adding modules' symbol tables without loadmodule.sh.
++end
++
++define mod-validate
++    set $lmod = modules->next
++	set $mod = (struct module *)(((char *)$lmod) - ((int)&(((struct module *)0) -> list)))
++    while ($lmod != &modules) && ($mod != $arg0)
++        set $lmod = $lmod->next
++	    set $mod = (struct module *)(((char *)$lmod) - ((int)&(((struct module *)0) -> list)))
++    end
++    if $lmod == &modules
++    	set $mod = 0
++        printf "%p is not a module\n", $arg0
++    end
++end
++document mod-validate
++mod-validate <module-address>
++Internal user-command used to validate the module parameter.
++If <module> is a real loaded module, set $mod to it, otherwise set $mod
++to 0.
++end
++
++define mod-print-symbols
++    mod-validate $arg0
++    if $mod != 0
++		set $i = 0
++		while $i < $mod->num_syms
++			set $sym = $mod->syms[$i]
++			printf "%p\t%s\n", $sym->value, $sym->name
++			set $i = $i + 1
++		end
++		set $i = 0
++		while $i < $mod->num_gpl_syms
++			set $sym = $mod->gpl_syms[$i]
++			printf "%p\t%s\n", $sym->value, $sym->name
++			set $i = $i + 1
++		end
++    end
++end
++document mod-print-symbols
++mod-print-symbols <module-address>
++Print all exported symbols of the module.  See mod-list
++end
++
+Index: linux/Documentation/i386/kgdb/gdbinit.hw
+===================================================================
+--- linux.orig/Documentation/i386/kgdb/gdbinit.hw
++++ linux/Documentation/i386/kgdb/gdbinit.hw
+@@ -0,0 +1,117 @@
++
++#Using ia-32 hardware breakpoints.
++#
++#4 hardware breakpoints are available in ia-32 processors. These breakpoints
++#do not need code modification. They are set using debug registers.
++#
++#Each hardware breakpoint can be of one of the
++#three types: execution, write, access.
++#1. An Execution breakpoint is triggered when code at the breakpoint address is
++#executed.
++#2. A write breakpoint ( aka watchpoints ) is triggered when memory location
++#at the breakpoint address is written.
++#3. An access breakpoint is triggered when memory location at the breakpoint
++#address is either read or written.
++#
++#As hardware breakpoints are available in limited number, use software
++#breakpoints ( br command in gdb ) instead of execution hardware breakpoints.
++#
++#Length of an access or a write breakpoint defines length of the datatype to
++#be watched. Length is 1 for char, 2 short , 3 int.
++#
++#For placing execution, write and access breakpoints, use commands
++#hwebrk, hwwbrk, hwabrk
++#To remove a breakpoint use hwrmbrk command.
++#
++#These commands take following types of arguments. For arguments associated
++#with each command, use help command.
++#1. breakpointno: 0 to 3
++#2. length: 1 to 3
++#3. address: Memory location in hex ( without 0x ) e.g c015e9bc
++#
++#Use the command exinfo to find which hardware breakpoint occured.
++
++#hwebrk breakpointno address
++define hwebrk
++	maintenance packet Y$arg0,0,0,$arg1
++end
++document hwebrk
++	hwebrk <breakpointno> <address>
++	Places a hardware execution breakpoint
++	<breakpointno> = 0 - 3
++	<address> = Hex digits without leading "0x".
++end
++
++#hwwbrk breakpointno length address
++define hwwbrk
++	maintenance packet Y$arg0,1,$arg1,$arg2
++end
++document hwwbrk
++	hwwbrk <breakpointno> <length> <address>
++	Places a hardware write breakpoint
++	<breakpointno> = 0 - 3
++	<length> = 1 (1 byte), 2 (2 byte), 3 (4 byte)
++	<address> = Hex digits without leading "0x".
++end
++
++#hwabrk breakpointno length address
++define hwabrk
++	maintenance packet Y$arg0,1,$arg1,$arg2
++end
++document hwabrk
++	hwabrk <breakpointno> <length> <address>
++	Places a hardware access breakpoint
++	<breakpointno> = 0 - 3
++	<length> = 1 (1 byte), 2 (2 byte), 3 (4 byte)
++	<address> = Hex digits without leading "0x".
++end
++
++#hwrmbrk breakpointno
++define hwrmbrk
++	maintenance packet y$arg0
++end
++document hwrmbrk
++	hwrmbrk <breakpointno>
++	<breakpointno> = 0 - 3
++	Removes a hardware breakpoint
++end
++
++define reboot
++        maintenance packet r
++end
++#exinfo
++define exinfo
++	maintenance packet qE
++end
++document exinfo
++	exinfo
++	Gives information about a breakpoint.
++end
++define get_th
++	p $th=(struct thread_info *)((int)$esp & ~8191)
++end
++document get_th
++	get_tu
++	Gets and prints the current thread_info pointer, Defines th to be it.
++end
++define get_cu
++	p $cu=((struct thread_info *)((int)$esp & ~8191))->task
++end
++document get_cu
++	get_cu
++	Gets and print the "current" value.  Defines $cu to be it.
++end
++define int_off
++	set var $flags=$eflags
++	set $eflags=$eflags&~0x200
++	end
++define int_on
++	set var $eflags|=$flags&0x200
++	end
++document int_off
++	saves the current interrupt state and clears the processor interrupt
++	flag.  Use int_on to restore the saved flag.
++end
++document int_on
++	Restores the interrupt flag saved by int_off.
++end
+Index: linux/Documentation/i386/kgdb/kgdb.txt
+===================================================================
+--- linux.orig/Documentation/i386/kgdb/kgdb.txt
++++ linux/Documentation/i386/kgdb/kgdb.txt
+@@ -0,0 +1,775 @@
++Last edit: <20030806.1637.12>
++This file has information specific to the i386 kgdb option.  Other
++platforms with the kgdb option may behave in a similar fashion.
++
++New features:
++============
++20030806.1557.37
++This version was made against the 2.6.0-test2 kernel. We have made the
++following changes:
++
++- The getthread() code in the stub calls find_task_by_pid().  It fails
++  if we are early in the bring up such that the pid arrays have yet to
++  be allocated.  We have added a line to kernel/pid.c to make
++  "kgdb_pid_init_done" true once the arrays are allocated.  This way the
++  getthread() code knows not to call.  This is only used by the thread
++  debugging stuff and threads will not yet exist at this point in the
++  boot.
++
++- For some reason, gdb was not asking for a new thread list when the
++  "info thread" command was given.  We changed to the newer version of
++  the thread info command and gdb now seems to ask when needed.  Result,
++  we now get all threads in the thread list.
++
++- We now respond to the ThreadExtraInfo request from gdb with the thread
++  name from task_struct .comm.  This then appears in the thread list.
++  Thoughts on additional options for this are welcome.  Things such as
++  "has BKL" and "Preempted" come to mind.  I think we could have a flag
++  word that could enable different bits of info here.
++
++- We now honor, sort of, the C and S commands.  These are continue and
++  single set after delivering a signal.  We ignore the signal and do the
++  requested action.  This only happens when we told gdb that a signal
++  was the reason for entry, which is only done on memory faults.  The
++  result is that you can now continue into the Oops.
++
++- We changed the -g to -gdwarf-2.  This seems to be the same as -ggdb,
++  but it is more exact on what language to use.
++
++- We added two dwarf2 include files and a bit of code at the end of
++  entry.S.  This does not yet work, so it is disabled.  Still we want to
++  keep track of the code and "maybe" someone out there can fix it.
++
++- Randy Dunlap sent some fix ups for this file which are now merged.
++
++- Hugh Dickins sent a fix to a bit of code in traps.c that prevents a
++  compiler warning if CONFIG_KGDB is off (now who would do that :).
++
++- Andrew Morton sent a fix for the serial driver which is now merged.
++
++- Andrew also sent a change to the stub around the cpu managment code
++  which is also merged.
++
++- Andrew also sent a patch to make "f" as well as "g" work as SysRq
++  commands to enter kgdb, merged.
++
++- If CONFIG_KGDB and CONFIG_DEBUG_SPINLOCKS are both set we added a
++  "who" field to the spinlock data struct.  This is filled with
++  "current" when ever the spinlock suceeds.  Useful if you want to know
++  who has the lock.
++
++_ And last, but not least, we fixed the "get_cu" macro to properly get
++  the current value of "current".
++
++New features:
++============
++20030505.1827.27
++We are starting to align with the sourceforge version, at least in
++commands.  To this end, the boot command string to start kgdb at
++boot time has been changed from "kgdb" to "gdb".
++
++Andrew Morton sent a couple of patches which are now included as follows:
++1.) We now return a flag to the interrupt handler.
++2.) We no longer use smp_num_cpus (a conflict with the lock meter).
++3.) And from William Lee Irwin III <wli@holomorphy.com> code to make
++    sure high-mem is set up before we attempt to register our interrupt
++    handler.
++We now include asm/kgdb.h from config.h so you will most likely never
++have to include it.  It also 'NULLS' the kgdb macros you might have in
++your code when CONFIG_KGDB is not defined.  This allows you to just
++turn off CONFIG_KGDB to turn off all the kgdb_ts() calls and such.
++This include is conditioned on the machine being an x86 so as to not
++mess with other archs.
++
++20020801.1129.03
++This is currently the version for the 2.4.18 (and beyond?) kernel.
++
++We have several new "features" beginning with this version:
++
++1.) Kgdb now syncs the "other" CPUs with a cross-CPU NMI.  No more
++    waiting and it will pull that guy out of an IRQ off spin lock :)
++
++2.) We doctored up the code that tells where a task is waiting and
++    included it so that the "info thread" command will show a bit more
++    than "schedule()".  Try it...
++
++3.) Added the ability to call a function from gdb.  All the standard gdb
++    issues apply, i.e. if you hit a breakpoint in the function, you are
++    not allowed to call another (gdb limitation, not kgdb).  To help
++    this capability we added a memory allocation function.  Gdb does not
++    return this memory (it is used for strings that you pass to that function
++    you are calling from gdb) so we fixed up a way to allow you to
++    manually return the memory (see below).
++
++4.) Kgdb time stamps (kgdb_ts()) are enhanced to expand what was the
++    interrupt flag to now also include the preemption count and the
++    "in_interrupt" info.  The flag is now called "with_pif" to indicate
++    the order, preempt_count, in_interrupt, flag.  The preempt_count is
++    shifted left by 4 bits so you can read the count in hex by dropping
++    the low order digit.  In_interrupt is in bit 1, and the flag is in
++    bit 0.
++
++5.) The command: "p kgdb_info" is now expanded and prints something
++    like:
++(gdb) p kgdb_info
++$2 = {used_malloc = 0, called_from = 0xc0107506, entry_tsc = 67468627259,
++  errcode = 0, vector = 3, print_debug_info = 0, hold_on_sstep = 1,
++  cpus_waiting = {{task = 0xc027a000, pid = 32768, hold = 0,
++      regs = 0xc027bf84}, {task = 0x0, pid = 0, hold = 0, regs = 0x0}}}
++
++    Things to note here: a.) used_malloc is the amount of memory that
++    has been malloc'ed to do calls from gdb.  You can reclaim this
++    memory like this: "p kgdb_info.used_malloc=0" Cool, huh?  b.)
++    cpus_waiting is now "sized" by the number of CPUs you enter at
++    configure time in the kgdb configure section.  This is NOT used
++    anywhere else in the system, but it is "nice" here.  c.)  The task's
++    "pid" is now in the structure.  This is the pid you will need to use
++    to decode to the thread id to get gdb to look at that thread.
++    Remember that the "info thread" command prints a list of threads
++    wherein it numbers each thread with its reference number followed
++    by the thread's pid.  Note that the per-CPU idle threads actually
++    have pids of 0 (yes, there is more than one pid 0 in an SMP system).
++    To avoid confusion, kgdb numbers these threads with numbers beyond
++    the MAX_PID.  That is why you see 32768 and above.
++
++6.) A subtle change, we now provide the complete register set for tasks
++    that are active on the other CPUs.  This allows better trace back on
++    those tasks.
++
++    And, let's mention what we could not fix.  Back-trace from all but the
++    thread that we trapped will, most likely, have a bogus entry in it.
++    The problem is that gdb does not recognize the entry code for
++    functions that use "current" near (at all?) the entry.  The compiler
++    is putting the "current" decode as the first two instructions of the
++    function where gdb expects to find %ebp changing code.  Back trace
++    also has trouble with interrupt frames.  I am talking with Daniel
++    Jacobowitz about some way to fix this, but don't hold your breath.
++
++20011220.0050.35
++Major enhancement with this version is the ability to hold one or more
++CPUs in an SMP system while allowing the others to continue.  Also, by
++default only the current CPU is enabled on single-step commands (please
++note that gdb issues single-step commands at times other than when you
++use the si command).
++
++Another change is to collect some useful information in
++a global structure called "kgdb_info".  You should be able to just:
++
++p kgdb_info
++
++although I have seen cases where the first time this is done gdb just
++prints the first member but prints the whole structure if you then enter
++CR (carriage return or enter).  This also works:
++
++p *&kgdb_info
++
++Here is a sample:
++(gdb) p kgdb_info
++$4 = {called_from = 0xc010732c, entry_tsc = 32804123790856, errcode = 0,
++  vector = 3, print_debug_info = 0}
++
++"Called_from" is the return address from the current entry into kgdb.
++Sometimes it is useful to know why you are in kgdb, for example, was
++it an NMI or a real breakpoint?  The simple way to interrogate this
++return address is:
++
++l *0xc010732c
++
++which will print the surrounding few lines of source code.
++
++"Entry_tsc" is the CPU TSC on entry to kgdb (useful to compare to the
++kgdb_ts entries).
++
++"errcode" and "vector" are other entry parameters which may be helpful on
++some traps.
++
++"print_debug_info" is the internal debugging kgdb print enable flag.  Yes,
++you can modify it.
++
++In SMP systems kgdb_info also includes the "cpus_waiting" structure and
++"hold_on_step":
++
++(gdb) p kgdb_info
++$7 = {called_from = 0xc0112739, entry_tsc = 1034936624074, errcode = 0,
++  vector = 2, print_debug_info = 0, hold_on_sstep = 1, cpus_waiting = {{
++      task = 0x0, hold = 0, regs = 0x0}, {task = 0xc71b8000, hold = 0,
++      regs = 0xc71b9f70}, {task = 0x0, hold = 0, regs = 0x0}, {task = 0x0,
++      hold = 0, regs = 0x0}, {task = 0x0, hold = 0, regs = 0x0}, {task = 0x0,
++      hold = 0, regs = 0x0}, {task = 0x0, hold = 0, regs = 0x0}, {task = 0x0,
++      hold = 0, regs = 0x0}}}
++
++"Cpus_waiting" has an entry for each CPU other than the current one that
++has been stopped.  Each entry contains the task_struct address for that
++CPU, the address of the regs for that task and a hold flag.  All these
++have the proper typing so that, for example:
++
++p *kgdb_info.cpus_waiting[1].regs
++
++will print the registers for CPU 1.
++
++"Hold_on_sstep" is a new feature with this version and comes up set or
++true.  What this means is that whenever kgdb is asked to single-step all
++other CPUs are held (i.e. not allowed to execute).  The flag applies to
++all but the current CPU and, again, can be changed:
++
++p kgdb_info.hold_on_sstep=0
++
++restores the old behavior of letting all CPUs run during single-stepping.
++
++Likewise, each CPU has a "hold" flag, which if set, locks that CPU out
++of execution.  Note that this has some risk in cases where the CPUs need
++to communicate with each other.  If kgdb finds no CPU available on exit,
++it will push a message thru gdb and stay in kgdb.  Note that it is legal
++to hold the current CPU as long as at least one CPU can execute.
++
++20010621.1117.09
++This version implements an event queue.  Events are signaled by calling
++a function in the kgdb stub and may be examined from gdb.  See EVENTS
++below for details.  This version also tightens up the interrupt and SMP
++handling to not allow interrupts on the way to kgdb from a breakpoint
++trap.  It is fine to allow these interrupts for user code, but not
++system debugging.
++
++Version
++=======
++
++This version of the kgdb package was developed and tested on
++kernel version 2.4.16.  It will not install on any earlier kernels.
++It is possible that it will continue to work on later versions
++of 2.4 and then versions of 2.5 (I hope).
++
++
++Debugging Setup
++===============
++
++Designate one machine as the "development" machine.  This is the
++machine on which you run your compiles and which has your source
++code for the kernel.  Designate a second machine as the "target"
++machine.  This is the machine that will run your experimental
++kernel.
++
++The two machines will be connected together via a serial line out
++one or the other of the COM ports of the PC.  You will need the
++appropriate modem eliminator (null modem) cable(s) for this.
++
++Decide on which tty port you want the machines to communicate, then
++connect them up back-to-back using the null modem cable.  COM1 is
++/dev/ttyS0 and COM2 is /dev/ttyS1. You should test this connection
++with the two machines prior to trying to debug a kernel.  Once you
++have it working, on the TARGET machine, enter:
++
++setserial /dev/ttyS0 (or what ever tty you are using)
++
++and record the port address and the IRQ number.
++
++On the DEVELOPMENT machine you need to apply the patch for the kgdb
++hooks.  You have probably already done that if you are reading this
++file.
++
++On your DEVELOPMENT machine, go to your kernel source directory and do
++"make Xconfig" where X is one of "x", "menu", or "".  If you are
++configuring in the standard serial driver, it must not be a module.
++Either yes or no is ok, but making the serial driver a module means it
++will initialize after kgdb has set up the UART interrupt code and may
++cause a failure of the control-C option discussed below.  The configure
++question for the serial driver is under the "Character devices" heading
++and is:
++
++"Standard/generic (8250/16550 and compatible UARTs) serial support"
++
++Go down to the kernel debugging menu item and open it up.  Enable the
++kernel kgdb stub code by selecting that item.  You can also choose to
++turn on the "-ggdb -O1" compile options.  The -ggdb causes the compiler
++to put more debug info (like local symbols) in the object file.  On the
++i386 -g and -ggdb are the same so this option just reduces to "O1".  The
++-O1 reduces the optimization level.  This may be helpful in some cases,
++be aware, however, that this may also mask the problem you are looking
++for.
++
++The baud rate.  Default is 115200.  What ever you choose be sure that
++the host machine is set to the same speed.  I recommend the default.
++
++The port.  This is the I/O address of the serial UART that you should
++have gotten using setserial as described above.  The standard COM1 port
++(3f8) using IRQ 4 is default.  COM2 is 2f8 which by convention uses IRQ
++3.
++
++The port IRQ (see above).
++
++Stack overflow test.  This option makes a minor change in the trap,
++system call and interrupt code to detect stack overflow and transfer
++control to kgdb if it happens.  (Some platforms have this in the
++baseline code, but the i386 does not.)
++
++You can also configure the system to recognize the boot option
++"console=kgdb" which if given will cause all console output during
++booting to be put thru gdb as well as other consoles.  This option
++requires that gdb and kgdb be connected prior to sending console output
++so, if they are not, a breakpoint is executed to force the connection.
++This will happen before any kernel output (it is going thru gdb, right),
++and will stall the boot until the connection is made.
++
++You can also configure in a patch to SysRq to enable the kGdb SysRq.
++This request generates a breakpoint.  Since the serial port IRQ line is
++set up after any serial drivers, it is possible that this command will
++work when the control-C will not.
++
++Save and exit the Xconfig program.  Then do "make clean" , "make dep"
++and "make bzImage" (or whatever target you want to make).  This gets the
++kernel compiled with the "-g" option set -- necessary for debugging.
++
++You have just built the kernel on your DEVELOPMENT machine that you
++intend to run on your TARGET machine.
++
++To install this new kernel, use the following installation procedure.
++Remember, you are on the DEVELOPMENT machine patching the kernel source
++for the kernel that you intend to run on the TARGET machine.
++
++Copy this kernel to your target machine using your usual procedures.  I
++usually arrange to copy development:
++/usr/src/linux/arch/i386/boot/bzImage to /vmlinuz on the TARGET machine
++via a LAN based NFS access.  That is, I run the cp command on the target
++and copy from the development machine via the LAN.  Run Lilo (see "man
++lilo" for details on how to set this up) on the new kernel on the target
++machine so that it will boot!  Then boot the kernel on the target
++machine.
++
++On the DEVELOPMENT machine, create a file called .gdbinit in the
++directory /usr/src/linux.  An example .gdbinit file looks like this:
++
++shell echo -e "\003" >/dev/ttyS0
++set remotebaud 38400 (or what ever speed you have chosen)
++target remote /dev/ttyS0
++
++
++Change the "echo" and "target" definition so that it specifies the tty
++port that you intend to use.  Change the "remotebaud" definition to
++match the data rate that you are going to use for the com line.
++
++You are now ready to try it out.
++
++Boot your target machine with "kgdb" in the boot command i.e. something
++like:
++
++lilo> test kgdb
++
++or if you also want console output thru gdb:
++
++lilo> test kgdb console=kgdb
++
++You should see the lilo message saying it has loaded the kernel and then
++all output stops.  The kgdb stub is trying to connect with gdb.  Start
++gdb something like this:
++
++
++On your DEVELOPMENT machine, cd /usr/src/linux and enter "gdb vmlinux".
++When gdb gets the symbols loaded it will read your .gdbinit file and, if
++everything is working correctly, you should see gdb print out a few
++lines indicating that a breakpoint has been taken.  It will actually
++show a line of code in the target kernel inside the kgdb activation
++code.
++
++The gdb interaction should look something like this:
++
++    linux-dev:/usr/src/linux# gdb vmlinux
++    GDB is free software and you are welcome to distribute copies of it
++     under certain conditions; type "show copying" to see the conditions.
++    There is absolutely no warranty for GDB; type "show warranty" for details.
++    GDB 4.15.1 (i486-slackware-linux),
++    Copyright 1995 Free Software Foundation, Inc...
++    breakpoint () at i386-stub.c:750
++    750     }
++    (gdb)
++
++You can now use whatever gdb commands you like to set breakpoints.
++Enter "continue" to start your target machine executing again.  At this
++point the target system will run at full speed until it encounters
++your breakpoint or gets a segment violation in the kernel, or whatever.
++
++If you have the kgdb console enabled when you continue, gdb will print
++out all the console messages.
++
++The above example caused a breakpoint relatively early in the boot
++process.  For the i386 kgdb it is possible to code a break instruction
++as the first C-language point in init/main.c, i.e. as the first instruction
++in start_kernel().  This could be done as follows:
++
++#include <asm/kgdb.h>
++	 breakpoint();
++
++This breakpoint() is really a function that sets up the breakpoint and
++single-step hardware trap cells and then executes a breakpoint.  Any
++early hard coded breakpoint will need to use this function.  Once the
++trap cells are set up they need not be set again, but doing it again
++does not hurt anything, so you don't need to be concerned about which
++breakpoint is hit first.  Once the trap cells are set up (and the kernel
++sets them up in due course even if breakpoint() is never called) the
++macro:
++
++BREAKPOINT;
++
++will generate an inline breakpoint.  This may be more useful as it stops
++the processor at the instruction instead of in a function a step removed
++from the location of interest.  In either case <asm/kgdb.h> must be
++included to define both breakpoint() and BREAKPOINT.
++
++Triggering kgdbstub at other times
++==================================
++
++Often you don't need to enter the debugger until much later in the boot
++or even after the machine has been running for some time.  Once the
++kernel is booted and interrupts are on, you can force the system to
++enter the debugger by sending a control-C to the debug port. This is
++what the first line of the recommended .gdbinit file does.  This allows
++you to start gdb any time after the system is up as well as when the
++system is already at a breakpoint.  (In the case where the system is
++already at a breakpoint the control-C is not needed, however, it will
++be ignored by the target so no harm is done.  Also note the the echo
++command assumes that the port speed is already set.  This will be true
++once gdb has connected, but it is best to set the port speed before you
++run gdb.)
++
++Another simple way to do this is to put the following file in you ~/bin
++directory:
++
++#!/bin/bash
++echo  -e "\003"  > /dev/ttyS0
++
++Here, the ttyS0 should be replaced with what ever port you are using.
++The "\003" is control-C.  Once you are connected with gdb, you can enter
++control-C at the command prompt.
++
++An alternative way to get control to the debugger is to enable the kGdb
++SysRq command.  Then you would enter Alt-SysRq-g (all three keys at the
++same time, but push them down in the order given).  To refresh your
++memory of the available SysRq commands try Alt-SysRq-=.  Actually any
++undefined command could replace the "=", but I like to KNOW that what I
++am pushing will never be defined.
++
++Debugging hints
++===============
++
++You can break into the target machine at any time from the development
++machine by typing ^C (see above paragraph).  If the target machine has
++interrupts enabled this will stop it in the kernel and enter the
++debugger.
++
++There is unfortunately no way of breaking into the kernel if it is
++in a loop with interrupts disabled, so if this happens to you then
++you need to place exploratory breakpoints or printk's into the kernel
++to find out where it is looping.  The exploratory breakpoints can be
++entered either thru gdb or hard coded into the source.  This is very
++handy if you do something like:
++
++if (<it hurts>) BREAKPOINT;
++
++
++There is a copy of an e-mail in the Documentation/i386/kgdb/ directory
++(debug-nmi.txt) which describes how to create an NMI on an ISA bus
++machine using a paper clip.  I have a sophisticated version of this made
++by wiring a push button switch into a PC104/ISA bus adapter card.  The
++adapter card nicely furnishes wire wrap pins for all the ISA bus
++signals.
++
++When you are done debugging the kernel on the target machine it is a
++good idea to leave it in a running state.  This makes reboots faster,
++bypassing the fsck.  So do a gdb "continue" as the last gdb command if
++this is possible.  To terminate gdb itself on the development machine
++and leave the target machine running, first clear all breakpoints and
++continue, then type ^Z to suspend gdb and then kill it with "kill %1" or
++something similar.
++
++If gdbstub Does Not Work
++========================
++
++If it doesn't work, you will have to troubleshoot it.  Do the easy
++things first like double checking your cabling and data rates.  You
++might try some non-kernel based programs to see if the back-to-back
++connection works properly.  Just something simple like cat /etc/hosts
++>/dev/ttyS0 on one machine and cat /dev/ttyS0 on the other will tell you
++if you can send data from one machine to the other.  Make sure it works
++in both directions.  There is no point in tearing out your hair in the
++kernel if the line doesn't work.
++
++All of the real action takes place in the file
++/usr/src/linux/arch/i386/kernel/kgdb_stub.c.  That is the code on the target
++machine that interacts with gdb on the development machine.  In gdb you can
++turn on a debug switch with the following command:
++
++	set remotedebug
++
++This will print out the protocol messages that gdb is exchanging with
++the target machine.
++
++Another place to look is /usr/src/arch/i386/lib/kgdb_serial.c. This is
++the code that talks to the serial port on the target side.  There might
++be a problem there.  In particular there is a section of this code that
++tests the UART which will tell you what UART you have if you define
++"PRNT" (just remove "_off" from the #define PRNT_off).  To view this
++report you will need to boot the system without any beakpoints.  This
++allows the kernel to run to the point where it calls kgdb to set up
++interrupts.  At this time kgdb will test the UART and print out the type
++it finds.  (You need to wait so that the printks are actually being
++printed.  Early in the boot they are cached, waiting for the console to
++be enabled.  Also, if kgdb is entered thru a breakpoint it is possible
++to cause a dead lock by calling printk when the console is locked.  The
++stub thus avoids doing printks from breakpoints, especially in the
++serial code.)  At this time, if the UART fails to do the expected thing,
++kgdb will print out (using printk) information on what failed.  (These
++messages will be buried in all the other boot up messages.  Look for
++lines that start with "gdb_hook_interrupt:".  You may want to use dmesg
++once the system is up to view the log.  If this fails or if you still
++don't connect, review your answers for the port address.  Use:
++
++setserial /dev/ttyS0
++
++to get the current port and IRQ information.  This command will also
++tell you what the system found for the UART type. The stub recognizes
++the following UART types:
++
++16450, 16550, and 16550A
++
++If you are really desperate you can use printk debugging in the
++kgdbstub code in the target kernel until you get it working.  In particular,
++there is a global variable in /usr/src/linux/arch/i386/kernel/kgdb_stub.c
++named "remote_debug".  Compile your kernel with this set to 1, rather
++than 0 and the debug stub will print out lots of stuff as it does
++what it does.  Likewise there are debug printks in the kgdb_serial.c
++code that can be turned on with simple changes in the macro defines.
++
++
++Debugging Loadable Modules
++==========================
++
++This technique comes courtesy of Edouard Parmelan
++<Edouard.Parmelan@quadratec.fr>
++
++When you run gdb, enter the command
++
++source gdbinit-modules
++
++This will read in a file of gdb macros that was installed in your
++kernel source directory when kgdb was installed.  This file implements
++the following commands:
++
++mod-list
++    Lists the loaded modules in the form <module-address> <module-name>
++
++mod-print-symbols <module-address>
++    Prints all the symbols in the indicated module.
++
++mod-add-symbols <module-address> <object-file-path-name>
++    Loads the symbols from the object file and associates them
++    with the indicated module.
++
++After you have loaded the module that you want to debug, use the command
++mod-list to find the <module-address> of your module.  Then use that
++address in the mod-add-symbols command to load your module's symbols.
++From that point onward you can debug your module as if it were a part
++of the kernel.
++
++The file gdbinit-modules also contains a command named mod-add-lis as
++an example of how to construct a command of your own to load your
++favorite module.  The idea is to "can" the pathname of the module
++in the command so you don't have to type so much.
++
++Threads
++=======
++
++Each process in a target machine is seen as a gdb thread. gdb thread
++related commands (info threads, thread n) can be used.
++
++ia-32 hardware breakpoints
++==========================
++
++kgdb stub contains support for hardware breakpoints using debugging features
++of ia-32(x86) processors. These breakpoints do not need code modification.
++They use debugging registers. 4 hardware breakpoints are available in ia-32
++processors.
++
++Each hardware breakpoint can be of one of the following three types.
++
++1. Execution breakpoint - An Execution breakpoint is triggered when code
++	at the breakpoint address is executed.
++
++	As limited number of hardware breakpoints are available, it is
++	advisable to use software breakpoints ( break command ) instead
++	of execution hardware breakpoints, unless modification of code
++	is to be avoided.
++
++2. Write breakpoint - A write breakpoint is triggered when memory
++	location at the breakpoint address is written.
++
++	A write or can be placed for data of variable length. Length of
++	a write breakpoint indicates length of the datatype to be
++	watched. Length is 1 for 1 byte data , 2 for 2 byte data, 3 for
++	4 byte data.
++
++3. Access breakpoint - An access breakpoint is triggered when memory
++	location at the breakpoint address is either read or written.
++
++	Access breakpoints also have lengths similar to write breakpoints.
++
++IO breakpoints in ia-32 are not supported.
++
++Since gdb stub at present does not use the protocol used by gdb for hardware
++breakpoints, hardware breakpoints are accessed through gdb macros. gdb macros
++for hardware breakpoints are described below.
++
++hwebrk	- Places an execution breakpoint
++	hwebrk breakpointno address
++hwwbrk	- Places a write breakpoint
++	hwwbrk breakpointno length address
++hwabrk	- Places an access breakpoint
++	hwabrk breakpointno length address
++hwrmbrk	- Removes a breakpoint
++	hwrmbrk breakpointno
++exinfo	- Tells whether a software or hardware breakpoint has occurred.
++	Prints number of the hardware breakpoint if a hardware breakpoint has
++	occurred.
++
++Arguments required by these commands are as follows
++breakpointno	- 0 to 3
++length		- 1 to 3
++address		- Memory location in hex digits ( without 0x ) e.g c015e9bc
++
++SMP support
++==========
++
++When a breakpoint occurs or user issues a break ( Ctrl + C ) to gdb
++client, all the processors are forced to enter the debugger. Current
++thread corresponds to the thread running on the processor where
++breakpoint occurred.  Threads running on other processor(s) appear
++similar to other non-running threads in the 'info threads' output.
++Within the kgdb stub there is a structure "waiting_cpus" in which kgdb
++records the values of "current" and "regs" for each CPU other than the
++one that hit the breakpoint.  "current" is a pointer to the task
++structure for the task that CPU is running, while "regs" points to the
++saved registers for the task.  This structure can be examined with the
++gdb "p" command.
++
++ia-32 hardware debugging registers on all processors are set to same
++values.  Hence any hardware breakpoints may occur on any processor.
++
++gdb troubleshooting
++===================
++
++1. gdb hangs
++Kill it. restart gdb. Connect to target machine.
++
++2. gdb cannot connect to target machine (after killing a gdb and
++restarting another) If the target machine was not inside debugger when
++you killed gdb, gdb cannot connect because the target machine won't
++respond.  In this case echo "Ctrl+C"(ASCII 3) to the serial line.
++e.g. echo -e "\003" > /dev/ttyS1
++This forces that target machine into the debugger, after which you
++can connect.
++
++3. gdb cannot connect even after echoing Ctrl+C into serial line
++Try changing serial line settings min to 1 and time to 0
++e.g. stty min 1 time 0 < /dev/ttyS1
++Try echoing again
++
++Check serial line speed and set it to correct value if required
++e.g. stty ispeed 115200 ospeed 115200 < /dev/ttyS1
++
++EVENTS
++======
++
++Ever want to know the order of things happening?  Which CPU did what and
++when?  How did the spinlock get the way it is?  Then events are for
++you.  Events are defined by calls to an event collection interface and
++saved for later examination.  In this case, kgdb events are saved by a
++very fast bit of code in kgdb which is fully SMP and interrupt protected
++and they are examined by using gdb to display them.  Kgdb keeps only
++the last N events, where N must be a power of two and is defined at
++configure time.
++
++
++Events are signaled to kgdb by calling:
++
++kgdb_ts(data0,data1)
++
++For each call kgdb records each call in an array along with other info.
++Here is the array definition:
++
++struct kgdb_and_then_struct {
++#ifdef CONFIG_SMP
++	int	on_cpu;
++#endif
++	long long at_time;
++	int  	from_ln;
++	char	* in_src;
++	void	*from;
++        int     with_if;
++	int	data0;
++	int	data1;
++};
++
++For SMP machines the CPU is recorded, for all machines the TSC is
++recorded (gets a time stamp) as well as the line number and source file
++the call was made from.  The address of the (from), the "if" (interrupt
++flag) and the two data items are also recorded.  The macro kgdb_ts casts
++the types to int, so you can put any 32-bit values here.  There is a
++configure option to select the number of events you want to keep.  A
++nice number might be 128, but you can keep up to 1024 if you want.  The
++number must be a power of two.  An "andthen" macro library is provided
++for gdb to help you look at these events.  It is also possible to define
++a different structure for the event storage and cast the data to this
++structure.  For example the following structure is defined in kgdb:
++
++struct kgdb_and_then_struct2 {
++#ifdef CONFIG_SMP
++	int	on_cpu;
++#endif
++	long long at_time;
++	int  	from_ln;
++	char	* in_src;
++	void	*from;
++        int     with_if;
++	struct task_struct *t1;
++	struct task_struct *t2;
++};
++
++If you use this for display, the data elements will be displayed as
++pointers to task_struct entries.  You may want to define your own
++structure to use in casting.  You should only change the last two items
++and you must keep the structure size the same.  Kgdb will handle these
++as 32-bit ints, but within that constraint you can define a structure to
++cast to any 32-bit quantity.  This need only be available to gdb and is
++only used for casting in the display code.
++
++Final Items
++===========
++
++I picked up this code from Amit S. Kale and enhanced it.
++
++If you make some really cool modification to this stuff, or if you
++fix a bug, please let me know.
++
++George Anzinger
++<george@mvista.com>
++
++Amit S. Kale
++<akale@veritas.com>
++
++(First kgdb by David Grothe <dave@gcom.com>)
++
++(modified by Tigran Aivazian <tigran@sco.com>)
++    Putting gdbstub into the kernel config menu.
++
++(modified by Scott Foehner <sfoehner@engr.sgi.com>)
++    Hooks for entering gdbstub at boot time.
++
++(modified by Amit S. Kale <akale@veritas.com>)
++    Threads, ia-32 hw debugging, mp support, console support,
++    nmi watchdog handling.
++
++(modified by George Anzinger <george@mvista.com>)
++    Extended threads to include the idle threads.
++    Enhancements to allow breakpoint() at first C code.
++    Use of module_init() and __setup() to automate the configure.
++    Enhanced the cpu "collection" code to work in early bring-up.
++    Added ability to call functions from gdb
++    Print info thread stuff without going back to schedule()
++    Now collect the "other" cpus with an IPI/ NMI.
+Index: linux/Documentation/i386/kgdb/loadmodule.sh
+===================================================================
+--- linux.orig/Documentation/i386/kgdb/loadmodule.sh
++++ linux/Documentation/i386/kgdb/loadmodule.sh
+@@ -0,0 +1,78 @@
++#/bin/sh
++# This script loads a module on a target machine and generates a gdb script.
++# source generated gdb script to load the module file at appropriate addresses
++# in gdb.
++#
++# Usage:
++# Loading the module on target machine and generating gdb script)
++#	[foo]$ loadmodule.sh <modulename>
++#
++# Loading the module file into gdb
++#	(gdb) source <gdbscriptpath>
++#
++# Modify following variables according to your setup.
++#	TESTMACHINE - Name of the target machine
++#	GDBSCRIPTS - The directory where a gdb script will be generated
++#
++# Author: Amit S. Kale (akale@veritas.com).
++#
++# If you run into problems, please check files pointed to by following
++# variables.
++#	ERRFILE - /tmp/<modulename>.errs contains stderr output of insmod
++#	MAPFILE - /tmp/<modulename>.map contains stdout output of insmod
++#	GDBSCRIPT - $GDBSCRIPTS/load<modulename> gdb script.
++
++TESTMACHINE=foo
++GDBSCRIPTS=/home/bar
++
++if [ $# -lt 1 ] ; then {
++	echo Usage: $0 modulefile
++	exit
++} ; fi
++
++MODULEFILE=$1
++MODULEFILEBASENAME=`basename $1`
++
++if [ $MODULEFILE = $MODULEFILEBASENAME ] ; then {
++	MODULEFILE=`pwd`/$MODULEFILE
++} fi
++
++ERRFILE=/tmp/$MODULEFILEBASENAME.errs
++MAPFILE=/tmp/$MODULEFILEBASENAME.map
++GDBSCRIPT=$GDBSCRIPTS/load$MODULEFILEBASENAME
++
++function findaddr() {
++	local ADDR=0x$(echo "$SEGMENTS" | \
++		grep "$1" | sed 's/^[^ ]*[ ]*[^ ]*[ ]*//' | \
++		sed 's/[ ]*[^ ]*$//')
++	echo $ADDR
++}
++
++function checkerrs() {
++	if [ "`cat $ERRFILE`" != "" ] ; then {
++		cat $ERRFILE
++		exit
++	} fi
++}
++
++#load the module
++echo Copying $MODULEFILE to $TESTMACHINE
++rcp $MODULEFILE root@${TESTMACHINE}:
++
++echo Loading module $MODULEFILE
++rsh -l root $TESTMACHINE  /sbin/insmod -m ./`basename $MODULEFILE` \
++	> $MAPFILE 2> $ERRFILE
++checkerrs
++
++SEGMENTS=`head -n 11 $MAPFILE | tail -n 10`
++TEXTADDR=$(findaddr "\\.text[^.]")
++LOADSTRING="add-symbol-file $MODULEFILE $TEXTADDR"
++SEGADDRS=`echo "$SEGMENTS" | awk '//{
++	if ($1 != ".text" && $1 != ".this" &&
++	    $1 != ".kstrtab" && $1 != ".kmodtab") {
++		print " -s " $1 " 0x" $3 " "
++	}
++}'`
++LOADSTRING="$LOADSTRING $SEGADDRS"
++echo Generating script $GDBSCRIPT
++echo $LOADSTRING > $GDBSCRIPT
+Index: linux/MAINTAINERS
+===================================================================
+--- linux.orig/MAINTAINERS
++++ linux/MAINTAINERS
+@@ -1242,6 +1242,12 @@ W:	http://sf.net/projects/kernel-janitor
+ W:	http://developer.osdl.org/rddunlap/kj-patches/
+ S:	Maintained
+ 
++KGDB FOR I386 PLATFORM
++P:	George Anzinger
++M:	george@mvista.com
++L:	linux-net@vger.kernel.org
++S:	Supported
++
+ KERNEL NFSD
+ P:	Neil Brown
+ M:	neilb@cse.unsw.edu.au
+Index: linux/arch/i386/Kconfig
+===================================================================
+--- linux.orig/arch/i386/Kconfig
++++ linux/arch/i386/Kconfig
+@@ -1250,6 +1250,14 @@ menu "Executable file formats"
  
  source "fs/Kconfig.binfmt"
  
@@ -248,10 +1605,228 @@ diff -puN arch/i386/Kconfig~kgdb-ga arch/i386/Kconfig
  endmenu
  
  source "drivers/Kconfig"
-diff -puN arch/i386/kernel/entry.S~kgdb-ga arch/i386/kernel/entry.S
---- 25/arch/i386/kernel/entry.S~kgdb-ga	2004-10-21 14:54:15.257603984 -0700
-+++ 25-akpm/arch/i386/kernel/entry.S	2004-10-21 14:54:15.296598056 -0700
-@@ -48,6 +48,18 @@
+Index: linux/arch/i386/Kconfig.debug
+===================================================================
+--- linux.orig/arch/i386/Kconfig.debug
++++ linux/arch/i386/Kconfig.debug
+@@ -77,4 +77,6 @@ config X86_MPPARSE
+ 	depends on X86_LOCAL_APIC && !X86_VISWS
+ 	default y
+ 
++source "arch/i386/Kconfig.kgdb"
++
+ endmenu
+Index: linux/arch/i386/Kconfig.kgdb
+===================================================================
+--- linux.orig/arch/i386/Kconfig.kgdb
++++ linux/arch/i386/Kconfig.kgdb
+@@ -0,0 +1,175 @@
++config KGDB
++	bool "Include kgdb kernel debugger"
++	depends on DEBUG_KERNEL
++	help
++	  If you say Y here, the system will be compiled with the debug
++	  option (-g) and a debugging stub will be included in the
++	  kernel.  This stub communicates with gdb on another (host)
++	  computer via a serial port.  The host computer should have
++	  access to the kernel binary file (vmlinux) and a serial port
++	  that is connected to the target machine.  Gdb can be made to
++	  configure the serial port or you can use stty and setserial to
++	  do this. See the 'target' command in gdb. This option also
++	  configures in the ability to request a breakpoint early in the
++	  boot process.  To request the breakpoint just include 'kgdb'
++	  as a boot option when booting the target machine.  The system
++	  will then break as soon as it looks at the boot options.  This
++	  option also installs a breakpoint in panic and sends any
++	  kernel faults to the debugger. For more information see the
++	  Documentation/i386/kgdb/kgdb.txt file.
++
++choice
++	depends on KGDB
++    	prompt "Debug serial port BAUD"
++	default KGDB_115200BAUD
++	help
++	  Gdb and the kernel stub need to agree on the baud rate to be
++	  used.  Some systems (x86 family at this writing) allow this to
++	  be configured.
++
++config KGDB_9600BAUD
++	bool "9600"
++
++config KGDB_19200BAUD
++	bool "19200"
++
++config KGDB_38400BAUD
++	bool "38400"
++
++config KGDB_57600BAUD
++	bool "57600"
++
++config KGDB_115200BAUD
++	bool "115200"
++endchoice
++
++config KGDB_PORT
++	hex "hex I/O port address of the debug serial port"
++	depends on KGDB
++	default  3f8
++	help
++	  Some systems (x86 family at this writing) allow the port
++	  address to be configured.  The number entered is assumed to be
++	  hex, don't put 0x in front of it.  The standard address are:
++	  COM1 3f8 , irq 4 and COM2 2f8 irq 3.  Setserial /dev/ttySx
++	  will tell you what you have.  It is good to test the serial
++	  connection with a live system before trying to debug.
++
++config KGDB_IRQ
++	int "IRQ of the debug serial port"
++	depends on KGDB
++	default 4
++	help
++	  This is the irq for the debug port.  If everything is working
++	  correctly and the kernel has interrupts on a control C to the
++	  port should cause a break into the kernel debug stub.
++
++config DEBUG_INFO
++	bool
++	depends on KGDB
++	default y
++
++config KGDB_MORE
++	bool "Add any additional compile options"
++	depends on KGDB
++	default n
++	help
++	  Saying yes here turns on the ability to enter additional
++	  compile options.
++
++
++config KGDB_OPTIONS
++	depends on KGDB_MORE
++	string "Additional compile arguments"
++	default "-O1"
++	help
++	  This option allows you enter additional compile options for
++	  the whole kernel compile.  Each platform will have a default
++	  that seems right for it.  For example on PPC "-ggdb -O1", and
++	  for i386 "-O1".  Note that by configuring KGDB "-g" is already
++	  turned on.  In addition, on i386 platforms
++	  "-fomit-frame-pointer" is deleted from the standard compile
++	  options.
++
++config NO_KGDB_CPUS
++	int "Number of CPUs"
++	depends on KGDB && SMP
++	default NR_CPUS
++	help
++
++	  This option sets the number of cpus for kgdb ONLY.  It is used
++	  to prune some internal structures so they look "nice" when
++	  displayed with gdb.  This is to overcome possibly larger
++	  numbers that may have been entered above.  Enter the real
++	  number to get nice clean kgdb_info displays.
++
++config KGDB_TS
++	bool "Enable kgdb time stamp macros?"
++	depends on KGDB
++	default n
++	help
++	  Kgdb event macros allow you to instrument your code with calls
++	  to the kgdb event recording function.  The event log may be
++	  examined with gdb at a break point.  Turning on this
++	  capability also allows you to choose how many events to
++	  keep. Kgdb always keeps the lastest events.
++
++choice
++	depends on KGDB_TS
++	prompt "Max number of time stamps to save?"
++	default KGDB_TS_128
++
++config KGDB_TS_64
++	bool "64"
++
++config KGDB_TS_128
++	bool "128"
++
++config KGDB_TS_256
++	bool "256"
++
++config KGDB_TS_512
++	bool "512"
++
++config KGDB_TS_1024
++	bool "1024"
++
++endchoice
++
++config STACK_OVERFLOW_TEST
++	bool "Turn on kernel stack overflow testing?"
++	depends on KGDB
++	default n
++	help
++	  This option enables code in the front line interrupt handlers
++	  to check for kernel stack overflow on interrupts and system
++	  calls.  This is part of the kgdb code on x86 systems.
++
++config KGDB_CONSOLE
++	bool "Enable serial console thru kgdb port"
++	depends on KGDB
++	default n
++	help
++	  This option enables the command line "console=kgdb" option.
++	  When the system is booted with this option in the command line
++	  all kernel printk output is sent to gdb (as well as to other
++	  consoles).  For this to work gdb must be connected.  For this
++	  reason, this command line option will generate a breakpoint if
++	  gdb has not yet connected.  After the gdb continue command is
++	  given all pent up console output will be printed by gdb on the
++	  host machine.  Neither this option, nor KGDB require the
++	  serial driver to be configured.
++
++config KGDB_SYSRQ
++	bool "Turn on SysRq 'G' command to do a break?"
++	depends on KGDB
++	default y
++	help
++	  This option includes an option in the SysRq code that allows
++	  you to enter SysRq G which generates a breakpoint to the KGDB
++	  stub.  This will work if the keyboard is alive and can
++	  interrupt the system.  Because of constraints on when the
++	  serial port interrupt can be enabled, this code may allow you
++	  to interrupt the system before the serial port control C is
++	  available.  Just say yes here.
++
+Index: linux/arch/i386/Makefile
+===================================================================
+--- linux.orig/arch/i386/Makefile
++++ linux/arch/i386/Makefile
+@@ -98,6 +98,9 @@ core-$(CONFIG_X86_ES7000)	:= arch/i386/m
+ # default subarch .h files
+ mflags-y += -Iinclude/asm-i386/mach-default
+ 
++mflags-$(CONFIG_KGDB) += -gdwarf-2
++mflags-$(CONFIG_KGDB_MORE) += $(shell echo $(CONFIG_KGDB_OPTIONS) | sed -e 's/"//g')
++
+ head-y := arch/i386/kernel/head.o arch/i386/kernel/init_task.o
+ 
+ libs-y 					+= arch/i386/lib/
+Index: linux/arch/i386/kernel/Makefile
+===================================================================
+--- linux.orig/arch/i386/kernel/Makefile
++++ linux/arch/i386/kernel/Makefile
+@@ -14,6 +14,7 @@ obj-y				+= timers/
+ obj-$(CONFIG_ACPI_BOOT)		+= acpi/
+ obj-$(CONFIG_X86_BIOS_REBOOT)	+= reboot.o
+ obj-$(CONFIG_MCA)		+= mca.o
++obj-$(CONFIG_KGDB)		+= kgdb_stub.o
+ obj-$(CONFIG_X86_MSR)		+= msr.o
+ obj-$(CONFIG_X86_CPUID)		+= cpuid.o
+ obj-$(CONFIG_MICROCODE)		+= microcode.o
+Index: linux/arch/i386/kernel/entry.S
+===================================================================
+--- linux.orig/arch/i386/kernel/entry.S
++++ linux/arch/i386/kernel/entry.S
+@@ -50,6 +50,18 @@
  #include <asm/smp.h>
  #include <asm/page.h>
  #include "irq_vectors.h"
@@ -270,7 +1845,7 @@ diff -puN arch/i386/kernel/entry.S~kgdb-ga arch/i386/kernel/entry.S
  
  #define nr_syscalls ((syscall_table_size)/4)
  
-@@ -94,7 +106,8 @@ VM_MASK		= 0x00020000
+@@ -191,7 +203,8 @@ int80_ret_end_marker:					\
  	pushl %ebx; \
  	movl $(__USER_DS), %edx; \
  	movl %edx, %ds; \
@@ -278,9 +1853,9 @@ diff -puN arch/i386/kernel/entry.S~kgdb-ga arch/i386/kernel/entry.S
 +	movl %edx, %es; \
 +        STACK_OVERFLOW_TEST
  
- #define RESTORE_INT_REGS \
+ #define __RESTORE_INT_REGS \
  	popl %ebx;	\
-@@ -198,6 +211,7 @@ need_resched:
+@@ -357,6 +370,7 @@ need_resched:
  	# sysenter call handler stub
  ENTRY(sysenter_entry)
  	movl TSS_sysenter_esp0(%esp),%esp
@@ -288,7 +1863,7 @@ diff -puN arch/i386/kernel/entry.S~kgdb-ga arch/i386/kernel/entry.S
  sysenter_past_esp:
  	sti
  	pushl $(__USER_DS)
-@@ -260,6 +274,19 @@ syscall_exit:
+@@ -437,6 +451,19 @@ syscall_exit:
  	testw $_TIF_ALLWORK_MASK, %cx	# current->work
  	jne syscall_exit_work
  restore_all:
@@ -308,9 +1883,10 @@ diff -puN arch/i386/kernel/entry.S~kgdb-ga arch/i386/kernel/entry.S
  	RESTORE_ALL
  
  	# perform work that needs to be done immediately before resumption
-diff -puN /dev/null arch/i386/kernel/kgdb_stub.c
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/arch/i386/kernel/kgdb_stub.c	2004-10-21 14:54:15.307596384 -0700
+Index: linux/arch/i386/kernel/kgdb_stub.c
+===================================================================
+--- linux.orig/arch/i386/kernel/kgdb_stub.c
++++ linux/arch/i386/kernel/kgdb_stub.c
 @@ -0,0 +1,2330 @@
 +/*
 + *
@@ -2642,20 +4218,10 @@ diff -puN /dev/null arch/i386/kernel/kgdb_stub.c
 +typedef int gdb_debug_hook(int exceptionVector,
 +			   int signo, int err_code, struct pt_regs *linux_regs);
 +gdb_debug_hook *linux_debug_hook = &kgdb_handle_exception;	/* histerical reasons... */
-diff -puN arch/i386/kernel/Makefile~kgdb-ga arch/i386/kernel/Makefile
---- 25/arch/i386/kernel/Makefile~kgdb-ga	2004-10-21 14:54:15.259603680 -0700
-+++ 25-akpm/arch/i386/kernel/Makefile	2004-10-21 14:54:15.308596232 -0700
-@@ -14,6 +14,7 @@ obj-y				+= timers/
- obj-$(CONFIG_ACPI_BOOT)		+= acpi/
- obj-$(CONFIG_X86_BIOS_REBOOT)	+= reboot.o
- obj-$(CONFIG_MCA)		+= mca.o
-+obj-$(CONFIG_KGDB)		+= kgdb_stub.o
- obj-$(CONFIG_X86_MSR)		+= msr.o
- obj-$(CONFIG_X86_CPUID)		+= cpuid.o
- obj-$(CONFIG_MICROCODE)		+= microcode.o
-diff -puN arch/i386/kernel/nmi.c~kgdb-ga arch/i386/kernel/nmi.c
---- 25/arch/i386/kernel/nmi.c~kgdb-ga	2004-10-21 14:54:15.261603376 -0700
-+++ 25-akpm/arch/i386/kernel/nmi.c	2004-10-21 14:54:15.308596232 -0700
+Index: linux/arch/i386/kernel/nmi.c
+===================================================================
+--- linux.orig/arch/i386/kernel/nmi.c
++++ linux/arch/i386/kernel/nmi.c
 @@ -34,7 +34,17 @@
  
  #include "mach_traps.h"
@@ -2685,7 +4251,7 @@ diff -puN arch/i386/kernel/nmi.c~kgdb-ga arch/i386/kernel/nmi.c
  extern void die_nmi(struct pt_regs *, const char *msg);
  
 @@ -481,12 +494,24 @@ void nmi_watchdog_tick (struct pt_regs *
- 	 */
+ 
  	sum = irq_stat[cpu].apic_timer_irqs;
  
 +#ifdef CONFIG_KGDB
@@ -2709,10 +4275,11 @@ diff -puN arch/i386/kernel/nmi.c~kgdb-ga arch/i386/kernel/nmi.c
  		if (alert_counter[cpu] == 30*nmi_hz)
  			die_nmi(regs, "NMI Watchdog detected LOCKUP");
  	} else {
-diff -puN arch/i386/kernel/smp.c~kgdb-ga arch/i386/kernel/smp.c
---- 25/arch/i386/kernel/smp.c~kgdb-ga	2004-10-21 14:54:15.262603224 -0700
-+++ 25-akpm/arch/i386/kernel/smp.c	2004-10-21 14:54:15.309596080 -0700
-@@ -466,7 +466,17 @@ void flush_tlb_all(void)
+Index: linux/arch/i386/kernel/smp.c
+===================================================================
+--- linux.orig/arch/i386/kernel/smp.c
++++ linux/arch/i386/kernel/smp.c
+@@ -459,7 +459,17 @@ void flush_tlb_all(void)
  {
  	on_each_cpu(do_flush_tlb_all, NULL, 1, 1);
  }
@@ -2731,10 +4298,11 @@ diff -puN arch/i386/kernel/smp.c~kgdb-ga arch/i386/kernel/smp.c
  /*
   * this function sends a 'reschedule' IPI to another CPU.
   * it goes straight through and wastes no time serializing
-diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
---- 25/arch/i386/kernel/traps.c~kgdb-ga	2004-10-21 14:54:15.264602920 -0700
-+++ 25-akpm/arch/i386/kernel/traps.c	2004-10-21 14:54:15.311595776 -0700
-@@ -105,6 +105,39 @@ int register_die_notifier(struct notifie
+Index: linux/arch/i386/kernel/traps.c
+===================================================================
+--- linux.orig/arch/i386/kernel/traps.c
++++ linux/arch/i386/kernel/traps.c
+@@ -103,6 +103,39 @@ int register_die_notifier(struct notifie
  	return err;
  }
  
@@ -2774,7 +4342,7 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
  static inline int valid_stack_ptr(struct thread_info *tinfo, void *p)
  {
  	return	p > (void *)tinfo &&
-@@ -332,6 +365,15 @@ void die(const char * str, struct pt_reg
+@@ -328,6 +361,15 @@ void die(const char * str, struct pt_reg
  #endif
  		if (nl)
  			printk("\n");
@@ -2789,8 +4357,8 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
 +	 	CHK_REMOTE_DEBUG(0,SIGTRAP,err,regs,)
  	notify_die(DIE_OOPS, (char *)str, regs, err, 255, SIGSEGV);
  		show_registers(regs);
-   	} else
-@@ -406,6 +448,7 @@ static inline void do_trap(int trapnr, i
+ 		try_crashdump(regs);
+@@ -453,6 +495,7 @@ static inline void do_trap(int trapnr, i
  #define DO_ERROR(trapnr, signr, str, name) \
  asmlinkage void do_##name(struct pt_regs * regs, long error_code) \
  { \
@@ -2798,7 +4366,7 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
  	if (notify_die(DIE_TRAP, str, regs, error_code, trapnr, signr) \
  						== NOTIFY_STOP) \
  		return; \
-@@ -429,6 +472,7 @@ asmlinkage void do_##name(struct pt_regs
+@@ -476,6 +519,7 @@ asmlinkage void do_##name(struct pt_regs
  #define DO_VM86_ERROR(trapnr, signr, str, name) \
  asmlinkage void do_##name(struct pt_regs * regs, long error_code) \
  { \
@@ -2806,8 +4374,7 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
  	if (notify_die(DIE_TRAP, str, regs, error_code, trapnr, signr) \
  						== NOTIFY_STOP) \
  		return; \
-@@ -512,7 +556,8 @@ gp_in_vm86:
- 
+@@ -605,6 +649,7 @@ gp_in_vm86:
  gp_in_kernel:
  	if (!fixup_exception(regs)) {
  	die:
@@ -2815,7 +4382,7 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
  		if (notify_die(DIE_GPF, "general protection fault", regs,
  				error_code, 13, SIGSEGV) == NOTIFY_STOP)
  			return;
-@@ -721,8 +766,18 @@ asmlinkage void do_debug(struct pt_regs 
+@@ -829,8 +874,18 @@ asmlinkage void do_debug(struct pt_regs 
  		 * allowing programs to debug themselves without the ptrace()
  		 * interface.
  		 */
@@ -2834,7 +4401,7 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
  		if ((tsk->ptrace & (PT_DTRACE|PT_PTRACED)) == PT_DTRACE)
  			goto clear_TF;
  	}
-@@ -734,6 +789,17 @@ asmlinkage void do_debug(struct pt_regs 
+@@ -842,6 +897,17 @@ asmlinkage void do_debug(struct pt_regs 
  	info.si_errno = 0;
  	info.si_code = TRAP_BRKPT;
  	
@@ -2852,7 +4419,7 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
  	/* If this is a kernel mode trap, save the user PC on entry to 
  	 * the kernel, that's what the debugger can make sense of.
  	 */
-@@ -748,6 +814,7 @@ clear_dr7:
+@@ -856,6 +922,7 @@ clear_dr7:
  	__asm__("movl %0,%%db7"
  		: /* no output */
  		: "r" (0));
@@ -2860,7 +4427,7 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
  	return;
  
  debug_vm86:
-@@ -1004,6 +1071,12 @@ static void __init set_task_gate(unsigne
+@@ -1151,6 +1218,12 @@ static void __init set_task_gate(unsigne
  {
  	_set_gate(idt_table+n,5,0,0,(gdt_entry<<3));
  }
@@ -2873,7 +4440,7 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
  
  
  void __init trap_init(void)
-@@ -1021,7 +1094,11 @@ void __init trap_init(void)
+@@ -1169,7 +1242,11 @@ void __init trap_init(void)
  	set_trap_gate(0,&divide_error);
  	set_intr_gate(1,&debug);
  	set_intr_gate(2,&nmi);
@@ -2885,9 +4452,19 @@ diff -puN arch/i386/kernel/traps.c~kgdb-ga arch/i386/kernel/traps.c
  	set_system_gate(4,&overflow);
  	set_system_gate(5,&bounds);
  	set_trap_gate(6,&invalid_op);
-diff -puN /dev/null arch/i386/lib/kgdb_serial.c
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/arch/i386/lib/kgdb_serial.c	2004-10-21 14:54:15.313595472 -0700
+Index: linux/arch/i386/lib/Makefile
+===================================================================
+--- linux.orig/arch/i386/lib/Makefile
++++ linux/arch/i386/lib/Makefile
+@@ -8,3 +8,4 @@ lib-y = checksum.o delay.o usercopy.o ge
+ 
+ lib-$(CONFIG_X86_USE_3DNOW) += mmx.o
+ lib-$(CONFIG_HAVE_DEC_LOCK) += dec_and_lock.o
++lib-$(CONFIG_KGDB) += kgdb_serial.o
+Index: linux/arch/i386/lib/kgdb_serial.c
+===================================================================
+--- linux.orig/arch/i386/lib/kgdb_serial.c
++++ linux/arch/i386/lib/kgdb_serial.c
 @@ -0,0 +1,485 @@
 +/*
 + * Serial interface GDB stub
@@ -3374,31 +4951,11 @@ diff -puN /dev/null arch/i386/lib/kgdb_serial.c
 +}				/* putDebugChar */
 +
 +module_init(kgdb_enable_ints);
-diff -puN arch/i386/lib/Makefile~kgdb-ga arch/i386/lib/Makefile
---- 25/arch/i386/lib/Makefile~kgdb-ga	2004-10-21 14:54:15.265602768 -0700
-+++ 25-akpm/arch/i386/lib/Makefile	2004-10-21 14:54:15.313595472 -0700
-@@ -8,3 +8,4 @@ lib-y = checksum.o delay.o usercopy.o ge
- 
- lib-$(CONFIG_X86_USE_3DNOW) += mmx.o
- lib-$(CONFIG_HAVE_DEC_LOCK) += dec_and_lock.o
-+lib-$(CONFIG_KGDB) += kgdb_serial.o
-diff -puN arch/i386/Makefile~kgdb-ga arch/i386/Makefile
---- 25/arch/i386/Makefile~kgdb-ga	2004-10-21 14:54:15.266602616 -0700
-+++ 25-akpm/arch/i386/Makefile	2004-10-21 14:54:15.314595320 -0700
-@@ -99,6 +99,9 @@ core-$(CONFIG_X86_ES7000)	:= arch/i386/m
- # default subarch .h files
- mflags-y += -Iinclude/asm-i386/mach-default
- 
-+mflags-$(CONFIG_KGDB) += -gdwarf-2
-+mflags-$(CONFIG_KGDB_MORE) += $(shell echo $(CONFIG_KGDB_OPTIONS) | sed -e 's/"//g')
-+
- head-y := arch/i386/kernel/head.o arch/i386/kernel/init_task.o
- 
- libs-y 					+= arch/i386/lib/
-diff -puN arch/i386/mm/fault.c~kgdb-ga arch/i386/mm/fault.c
---- 25/arch/i386/mm/fault.c~kgdb-ga	2004-10-21 14:54:15.268602312 -0700
-+++ 25-akpm/arch/i386/mm/fault.c	2004-10-21 14:54:15.314595320 -0700
-@@ -430,6 +430,12 @@ no_context:
+Index: linux/arch/i386/mm/fault.c
+===================================================================
+--- linux.orig/arch/i386/mm/fault.c
++++ linux/arch/i386/mm/fault.c
+@@ -453,6 +453,12 @@ no_context:
   * Oops. The kernel tried to access some bad page. We'll have to
   * terminate things with extreme prejudice.
   */
@@ -3411,9 +4968,10 @@ diff -puN arch/i386/mm/fault.c~kgdb-ga arch/i386/mm/fault.c
  
  	bust_spinlocks(1);
  
-diff -puN arch/x86_64/boot/compressed/head.S~kgdb-ga arch/x86_64/boot/compressed/head.S
---- 25/arch/x86_64/boot/compressed/head.S~kgdb-ga	2004-10-21 14:54:15.269602160 -0700
-+++ 25-akpm/arch/x86_64/boot/compressed/head.S	2004-10-21 14:54:15.315595168 -0700
+Index: linux/arch/x86_64/boot/compressed/head.S
+===================================================================
+--- linux.orig/arch/x86_64/boot/compressed/head.S
++++ linux/arch/x86_64/boot/compressed/head.S
 @@ -26,6 +26,7 @@
  .code32
  .text
@@ -3422,9 +4980,10 @@ diff -puN arch/x86_64/boot/compressed/head.S~kgdb-ga arch/x86_64/boot/compressed
  #include <linux/linkage.h>
  #include <asm/segment.h>
  
-diff -puN arch/x86_64/boot/compressed/misc.c~kgdb-ga arch/x86_64/boot/compressed/misc.c
---- 25/arch/x86_64/boot/compressed/misc.c~kgdb-ga	2004-10-21 14:54:15.270602008 -0700
-+++ 25-akpm/arch/x86_64/boot/compressed/misc.c	2004-10-21 14:54:15.315595168 -0700
+Index: linux/arch/x86_64/boot/compressed/misc.c
+===================================================================
+--- linux.orig/arch/x86_64/boot/compressed/misc.c
++++ linux/arch/x86_64/boot/compressed/misc.c
 @@ -9,6 +9,7 @@
   * High loaded stuff by Hans Lermen & Werner Almesberger, Feb. 1996
   */
@@ -3433,1383 +4992,11 @@ diff -puN arch/x86_64/boot/compressed/misc.c~kgdb-ga arch/x86_64/boot/compressed
  #include "miscsetup.h"
  #include <asm/io.h>
  
-diff -puN /dev/null Documentation/i386/kgdb/andthen
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/Documentation/i386/kgdb/andthen	2004-10-21 14:54:15.316595016 -0700
-@@ -0,0 +1,100 @@
-+
-+define	set_andthen
-+	set var $thp=0
-+	set var $thp=(struct kgdb_and_then_struct *)&kgdb_data[0]
-+	set var $at_size = (sizeof kgdb_data)/(sizeof *$thp)
-+	set var $at_oc=kgdb_and_then_count
-+	set var $at_cc=$at_oc
-+end
-+
-+define andthen_next
-+	set var $at_cc=$arg0
-+end
-+
-+define andthen
-+	andthen_set_edge
-+	if ($at_cc >= $at_oc)
-+		printf "Outside window.  Window size is %d\n",($at_oc-$at_low)
-+	else
-+		printf "%d: ",$at_cc
-+		output *($thp+($at_cc++ % $at_size ))
-+		printf "\n"
-+	end
-+end
-+define andthen_set_edge
-+	set var $at_oc=kgdb_and_then_count
-+	set var $at_low = $at_oc - $at_size
-+	if ($at_low < 0 )
-+		set var $at_low = 0
-+	end
-+	if (( $at_cc > $at_oc) || ($at_cc < $at_low))
-+		printf "Count outside of window, setting count to "
-+		if ($at_cc >= $at_oc)
-+			set var $at_cc = $at_oc
-+		else
-+			set var $at_cc = $at_low
-+		end
-+		printf "%d\n",$at_cc
-+	end
-+end
-+
-+define beforethat
-+	andthen_set_edge
-+	if ($at_cc <= $at_low)
-+		printf "Outside window.  Window size is %d\n",($at_oc-$at_low)
-+	else
-+		printf "%d: ",$at_cc-1
-+		output *($thp+(--$at_cc % $at_size ))
-+		printf "\n"
-+	end
-+end
-+
-+document andthen_next
-+	andthen_next <count>
-+	.	sets the number of the event to display next. If this event
-+	.	is not in the event pool, either andthen or beforethat will
-+	.	correct it to the nearest event pool edge.  The event pool
-+	.	ends at the last event recorded and begins <number of events>
-+	.	prior to that.  If beforethat is used next, it will display
-+	.	event <count> -1.
-+.
-+	andthen commands are: set_andthen, andthen_next, andthen and beforethat
-+end
-+
-+
-+document andthen
-+	andthen
-+.	displays the next event in the list.  <set_andthen> sets up to display
-+.	the oldest saved event first.
-+.	<count> (optional) count of the event to display.
-+.	note the number of events saved is specified at configure time.
-+.	if events are saved between calls to andthen the index will change
-+.	but the displayed event will be the next one (unless the event buffer
-+.	is overrun).
-+.
-+.	andthen commands are: set_andthen, andthen_next, andthen and beforethat
-+end
-+
-+document set_andthen
-+	set_andthen
-+.	sets up to use the <andthen> and <beforethat> commands.
-+.		if you have defined your own struct, use the above and
-+.		then enter the following:
-+.		p $thp=(struct kgdb_and_then_structX *)&kgdb_data[0]
-+.		where <kgdb_and_then_structX> is the name of your structure.
-+.
-+.	andthen commands are: set_andthen, andthen_next, andthen and beforethat
-+end
-+
-+document beforethat
-+	beforethat
-+.	displays the next prior event in the list. <set_andthen> sets up to
-+.	display the last occuring event first.
-+.
-+.	note the number of events saved is specified at configure time.
-+.	if events are saved between calls to beforethat the index will change
-+.	but the displayed event will be the next one (unless the event buffer
-+.	is overrun).
-+.
-+.	andthen commands are: set_andthen, andthen_next, andthen and beforethat
-+end
-diff -puN /dev/null Documentation/i386/kgdb/debug-nmi.txt
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/Documentation/i386/kgdb/debug-nmi.txt	2004-10-21 14:54:15.316595016 -0700
-@@ -0,0 +1,37 @@
-+Subject: Debugging with NMI
-+Date: Mon, 12 Jul 1999 11:28:31 -0500
-+From: David Grothe <dave@gcom.com>
-+Organization: Gcom, Inc
-+To: David Grothe <dave@gcom.com>
-+
-+Kernel hackers:
-+
-+Maybe this is old hat, but it is new to me --
-+
-+On an ISA bus machine, if you short out the A1 and B1 pins of an ISA
-+slot you will generate an NMI to the CPU.  This interrupts even a
-+machine that is hung in a loop with interrupts disabled.  Used in
-+conjunction with kgdb <
-+ftp://ftp.gcom.com/pub/linux/src/kgdb-2.3.35/kgdb-2.3.35.tgz > you can
-+gain debugger control of a machine that is hung in the kernel!  Even
-+without kgdb the kernel will print a stack trace so you can find out
-+where it was hung.
-+
-+The A1/B1 pins are directly opposite one another and the farthest pins
-+towards the bracket end of the ISA bus socket.  You can stick a paper
-+clip or multi-meter probe between them to short them out.
-+
-+I had a spare ISA bus to PC104 bus adapter around.  The PC104 end of the
-+board consists of two rows of wire wrap pins.  So I wired a push button
-+between the A1/B1 pins and now have an ISA board that I can stick into
-+any ISA bus slot for debugger entry.
-+
-+Microsoft has a circuit diagram of a PCI card at
-+http://www.microsoft.com/hwdev/DEBUGGING/DMPSW.HTM.  If you want to
-+build one you will have to mail them and ask for the PAL equations.
-+Nobody makes one comercially.
-+
-+[THIS TIP COMES WITH NO WARRANTY WHATSOEVER.  It works for me, but if
-+your machine catches fire, it is your problem, not mine.]
-+
-+-- Dave (the kgdb guy)
-diff -puN /dev/null Documentation/i386/kgdb/gdb-globals.txt
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/Documentation/i386/kgdb/gdb-globals.txt	2004-10-21 14:54:15.317594864 -0700
-@@ -0,0 +1,71 @@
-+Sender: akale@veritas.com
-+Date: Fri, 23 Jun 2000 19:26:35 +0530
-+From: "Amit S. Kale" <akale@veritas.com>
-+Organization: Veritas Software (India)
-+To: Dave Grothe <dave@gcom.com>, linux-kernel@vger.rutgers.edu
-+CC: David Milburn <dmilburn@wirespeed.com>,
-+        "Edouard G. Parmelan" <Edouard.Parmelan@quadratec.fr>,
-+        ezannoni@cygnus.com, Keith Owens <kaos@ocs.com.au>
-+Subject: Re: Module debugging using kgdb
-+
-+Dave Grothe wrote:
-+>
-+> Amit:
-+>
-+> There is a 2.4.0 version of kgdb on our ftp site:
-+> ftp://ftp.gcom.com/pub/linux/src/kgdb.  I mirrored your version of gdb
-+> and loadmodule.sh there.
-+>
-+> Have a look at the README file and see if I go it right.  If not, send
-+> me some corrections and I will update it.
-+>
-+> Does your version of gdb solve the global variable problem?
-+
-+Yes.
-+Thanks to Elena Zanoni, gdb (developement version) can now calculate
-+correctly addresses  of dynamically loaded object files. I have not been
-+following gdb developement for sometime and am not sure when symbol
-+address calculation fix is going to appear in a gdb stable version.
-+
-+Elena, any idea when the fix will make it to a prebuilt gdb from a
-+redhat release?
-+
-+For the time being I have built a gdb developement version. It can be
-+used for module debugging with loadmodule.sh script.
-+
-+The problem with calculating of module addresses with previous versions
-+of gdb was as follows:
-+gdb did not use base address of a section while calculating address of
-+a symbol in the section in an object file loaded via 'add-symbol-file'.
-+It used address of .text segment instead. Due to this addresses of
-+symbols in .data, .bss etc. (e.g. global variables) were calculated incorrectly.
-+
-+Above mentioned fix allow gdb to use base address of a segment while
-+calculating address of a symbol in it. It adds a parameter '-s' to
-+'add-symbol-file' command for specifying base address of a segment.
-+
-+loadmodule.sh script works as follows.
-+
-+1. Copy a module file to target machine.
-+2. Load the module on the target machine using insmod with -m parameter.
-+insmod produces a module load map which contains base addresses of all
-+sections in the module and addresses of symbols in the module file.
-+3. Find all sections and their base addresses in the module from
-+the module map.
-+4. Generate a script that loads the module file. The script uses
-+'add-symbol-file' and specifies address of text segment followed by
-+addresses of all segments in the module.
-+
-+Here is an example gdb script produced by loadmodule.sh script.
-+
-+add-symbol-file foo 0xd082c060 -s .text.lock 0xd08cbfb5
-+-s .fixup 0xd08cfbdf -s .rodata 0xd08cfde0 -s __ex_table 0xd08e3b38
-+-s .data 0xd08e3d00 -s .bss 0xd08ec8c0 -s __ksymtab 0xd08ee838
-+
-+With this command gdb can calculate addresses of symbols in ANY segment
-+in a module file.
-+
-+Regards.
-+--
-+Amit Kale
-+Veritas Software ( http://www.veritas.com )
-diff -puN /dev/null Documentation/i386/kgdb/gdbinit
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/Documentation/i386/kgdb/gdbinit	2004-10-21 14:54:15.317594864 -0700
-@@ -0,0 +1,14 @@
-+shell echo -e "\003" >/dev/ttyS0
-+set remotebaud 38400
-+target remote /dev/ttyS0
-+define si
-+stepi
-+printf "EAX=%08x EBX=%08x ECX=%08x EDX=%08x\n", $eax, $ebx, $ecx, $edx
-+printf "ESI=%08x EDI=%08x EBP=%08x ESP=%08x\n", $esi, $edi, $ebp, $esp
-+x/i $eip
-+end
-+define ni
-+nexti
-+printf "EAX=%08x EBX=%08x ECX=%08x EDX=%08x\n", $eax, $ebx, $ecx, $edx
-+printf "ESI=%08x EDI=%08x EBP=%08x ESP=%08x\n", $esi, $edi, $ebp, $esp
-+x/i $eip
-diff -puN /dev/null Documentation/i386/kgdb/gdbinit.hw
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/Documentation/i386/kgdb/gdbinit.hw	2004-10-21 14:54:15.318594712 -0700
-@@ -0,0 +1,117 @@
-+
-+#Using ia-32 hardware breakpoints.
-+#
-+#4 hardware breakpoints are available in ia-32 processors. These breakpoints
-+#do not need code modification. They are set using debug registers.
-+#
-+#Each hardware breakpoint can be of one of the
-+#three types: execution, write, access.
-+#1. An Execution breakpoint is triggered when code at the breakpoint address is
-+#executed.
-+#2. A write breakpoint ( aka watchpoints ) is triggered when memory location
-+#at the breakpoint address is written.
-+#3. An access breakpoint is triggered when memory location at the breakpoint
-+#address is either read or written.
-+#
-+#As hardware breakpoints are available in limited number, use software
-+#breakpoints ( br command in gdb ) instead of execution hardware breakpoints.
-+#
-+#Length of an access or a write breakpoint defines length of the datatype to
-+#be watched. Length is 1 for char, 2 short , 3 int.
-+#
-+#For placing execution, write and access breakpoints, use commands
-+#hwebrk, hwwbrk, hwabrk
-+#To remove a breakpoint use hwrmbrk command.
-+#
-+#These commands take following types of arguments. For arguments associated
-+#with each command, use help command.
-+#1. breakpointno: 0 to 3
-+#2. length: 1 to 3
-+#3. address: Memory location in hex ( without 0x ) e.g c015e9bc
-+#
-+#Use the command exinfo to find which hardware breakpoint occured.
-+
-+#hwebrk breakpointno address
-+define hwebrk
-+	maintenance packet Y$arg0,0,0,$arg1
-+end
-+document hwebrk
-+	hwebrk <breakpointno> <address>
-+	Places a hardware execution breakpoint
-+	<breakpointno> = 0 - 3
-+	<address> = Hex digits without leading "0x".
-+end
-+
-+#hwwbrk breakpointno length address
-+define hwwbrk
-+	maintenance packet Y$arg0,1,$arg1,$arg2
-+end
-+document hwwbrk
-+	hwwbrk <breakpointno> <length> <address>
-+	Places a hardware write breakpoint
-+	<breakpointno> = 0 - 3
-+	<length> = 1 (1 byte), 2 (2 byte), 3 (4 byte)
-+	<address> = Hex digits without leading "0x".
-+end
-+
-+#hwabrk breakpointno length address
-+define hwabrk
-+	maintenance packet Y$arg0,1,$arg1,$arg2
-+end
-+document hwabrk
-+	hwabrk <breakpointno> <length> <address>
-+	Places a hardware access breakpoint
-+	<breakpointno> = 0 - 3
-+	<length> = 1 (1 byte), 2 (2 byte), 3 (4 byte)
-+	<address> = Hex digits without leading "0x".
-+end
-+
-+#hwrmbrk breakpointno
-+define hwrmbrk
-+	maintenance packet y$arg0
-+end
-+document hwrmbrk
-+	hwrmbrk <breakpointno>
-+	<breakpointno> = 0 - 3
-+	Removes a hardware breakpoint
-+end
-+
-+define reboot
-+        maintenance packet r
-+end
-+#exinfo
-+define exinfo
-+	maintenance packet qE
-+end
-+document exinfo
-+	exinfo
-+	Gives information about a breakpoint.
-+end
-+define get_th
-+	p $th=(struct thread_info *)((int)$esp & ~8191)
-+end
-+document get_th
-+	get_tu
-+	Gets and prints the current thread_info pointer, Defines th to be it.
-+end
-+define get_cu
-+	p $cu=((struct thread_info *)((int)$esp & ~8191))->task
-+end
-+document get_cu
-+	get_cu
-+	Gets and print the "current" value.  Defines $cu to be it.
-+end
-+define int_off
-+	set var $flags=$eflags
-+	set $eflags=$eflags&~0x200
-+	end
-+define int_on
-+	set var $eflags|=$flags&0x200
-+	end
-+document int_off
-+	saves the current interrupt state and clears the processor interrupt
-+	flag.  Use int_on to restore the saved flag.
-+end
-+document int_on
-+	Restores the interrupt flag saved by int_off.
-+end
-diff -puN /dev/null Documentation/i386/kgdb/gdbinit-modules
---- /dev/null	Thu Apr 11 07:25:15 2002
-+++ 25-akpm/Documentation/i386/kgdb/gdbinit-modules	Fri Jan 13 17:54:25 2006
-@@ -0,0 +1,149 @@
-+#
-+# Usefull GDB user-command to debug Linux Kernel Modules with gdbstub.
-+#
-+# This don't work for Linux-2.0 or older.
-+#
-+# Author Edouard G. Parmelan <Edouard.Parmelan@quadratec.fr>
-+#
-+#
-+# Fri Apr 30 20:33:29 CEST 1999
-+#   First public release.
-+#
-+#   Major cleanup after experiment Linux-2.0 kernel without success.
-+#   Symbols of a module are not in the correct order, I can't explain
-+#   why :(
-+#
-+# Fri Mar 19 15:41:40 CET 1999
-+#   Initial version.
-+#
-+# Thu Jan  6 16:29:03 CST 2000
-+#   A little fixing by Dave Grothe <dave@gcom.com>
-+#
-+# Mon Jun 19 09:33:13 CDT 2000
-+#   Alignment changes from Edouard Parmelan
-+#
-+# The basic idea is to find where insmod load the module and inform
-+# GDB to load the symbol table of the module with the GDB command
-+# ``add-symbol-file <object> <address>''.
-+#
-+# The Linux kernel holds the list of all loaded modules in module_list,
-+# this list end with &kernel_module (exactly with module->next == NULL,
-+# but the last module is not a real module).
-+#
-+# Insmod allocates the struct module before the object file.  Since
-+# Linux-2.1, this structure contain his size.  The real address of
-+# the object file is then (char*)module + module->size_of_struct.
-+#
-+# You can use three user functions ``mod-list'', ``mod-print-symbols''
-+# and ``add-module-symbols''.
-+#
-+# mod-list list all loaded modules with the format:
-+#    <module-address> <module-name>
-+#
-+# As soon as you have found the address of your module, you can
-+# print its exported symbols (mod-print-symbols) or inform GDB to add
-+# symbols from your module file (mod-add-symbols).
-+#
-+# The argument that you give to mod-print-symbols or mod-add-symbols
-+# is the <module-address> from the mod-list command.
-+#
-+# When using the mod-add-symbols command you must also give the full
-+# pathname of the modules object code file.
-+#
-+# The command mod-add-lis is an example of how to make this easier.
-+# You can edit this macro to contain the path name of your own
-+# favorite module and then use it as a shorthand to load it.  You
-+# still need the module-address, however.
-+#
-+# The internal function ``mod-validate'' set the GDB variable $mod
-+# as a ``struct module*'' if the kernel known the module otherwise
-+# $mod is set to NULL.  This ensure to not add symbols for a wrong
-+# address.
-+#
-+#
-+# Sat Feb 12 20:05:47 CET 2005
-+#
-+# Adapted to the 2.6.* module data structure.
-+# (Getting miffed at gdb for not having "offsetof" in the process :-/ )
-+#
-+# Autogenerate add-symbol-file statements from the module list instead
-+# of relying on a no-longer-working loadmodule.sh program.
-+#
-+#                                   Matthias Urlichs <smurf@debian.org>
-+#
-+#
-+# Have a nice hacking day !
-+#
-+#
-+define mod-list
-+    set $lmod = modules->next
-+    # This is a circular data structure
-+    while $lmod != &modules
-+		set $mod = (struct module *)(((char *)$lmod) - ((int)&(((struct module *)0) -> list)))
-+        printf "%p\t%s\n", $mod, $mod->name
-+		set $lmod = $lmod->next
-+    end
-+end
-+document mod-list
-+mod-list
-+List all modules in the form: <module-address> <module-name>
-+Use the <module-address> as the argument for the other
-+mod-commands: mod-print-symbols, mod-add-symbols.
-+end
-+
-+define mod-list-syms
-+    set $lmod = modules->next
-+    # This is a circular data structure
-+    while $lmod != &modules
-+		set $mod = (struct module *)(((char *)$lmod) - ((int)&(((struct module *)0) -> list)))
-+        printf "add-symbol-file %s.ko %p\n", $mod->name, $mod->module_core
-+		set $lmod = $lmod->next
-+    end
-+end
-+document mod-list-syms
-+mod-list-syms
-+List all modules in the form: add-symbol-file <module-path> <module-core>
-+for adding modules' symbol tables without loadmodule.sh.
-+end
-+
-+define mod-validate
-+    set $lmod = modules->next
-+	set $mod = (struct module *)(((char *)$lmod) - ((int)&(((struct module *)0) -> list)))
-+    while ($lmod != &modules) && ($mod != $arg0)
-+        set $lmod = $lmod->next
-+	    set $mod = (struct module *)(((char *)$lmod) - ((int)&(((struct module *)0) -> list)))
-+    end
-+    if $lmod == &modules
-+    	set $mod = 0
-+        printf "%p is not a module\n", $arg0
-+    end
-+end
-+document mod-validate
-+mod-validate <module-address>
-+Internal user-command used to validate the module parameter.
-+If <module> is a real loaded module, set $mod to it, otherwise set $mod
-+to 0.
-+end
-+
-+define mod-print-symbols
-+    mod-validate $arg0
-+    if $mod != 0
-+		set $i = 0
-+		while $i < $mod->num_syms
-+			set $sym = $mod->syms[$i]
-+			printf "%p\t%s\n", $sym->value, $sym->name
-+			set $i = $i + 1
-+		end
-+		set $i = 0
-+		while $i < $mod->num_gpl_syms
-+			set $sym = $mod->gpl_syms[$i]
-+			printf "%p\t%s\n", $sym->value, $sym->name
-+			set $i = $i + 1
-+		end
-+    end
-+end
-+document mod-print-symbols
-+mod-print-symbols <module-address>
-+Print all exported symbols of the module.  See mod-list
-+end
-+
-diff -puN /dev/null Documentation/i386/kgdb/kgdb.txt
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/Documentation/i386/kgdb/kgdb.txt	2004-10-21 14:54:15.324593800 -0700
-@@ -0,0 +1,775 @@
-+Last edit: <20030806.1637.12>
-+This file has information specific to the i386 kgdb option.  Other
-+platforms with the kgdb option may behave in a similar fashion.
-+
-+New features:
-+============
-+20030806.1557.37
-+This version was made against the 2.6.0-test2 kernel. We have made the
-+following changes:
-+
-+- The getthread() code in the stub calls find_task_by_pid().  It fails
-+  if we are early in the bring up such that the pid arrays have yet to
-+  be allocated.  We have added a line to kernel/pid.c to make
-+  "kgdb_pid_init_done" true once the arrays are allocated.  This way the
-+  getthread() code knows not to call.  This is only used by the thread
-+  debugging stuff and threads will not yet exist at this point in the
-+  boot.
-+
-+- For some reason, gdb was not asking for a new thread list when the
-+  "info thread" command was given.  We changed to the newer version of
-+  the thread info command and gdb now seems to ask when needed.  Result,
-+  we now get all threads in the thread list.
-+
-+- We now respond to the ThreadExtraInfo request from gdb with the thread
-+  name from task_struct .comm.  This then appears in the thread list.
-+  Thoughts on additional options for this are welcome.  Things such as
-+  "has BKL" and "Preempted" come to mind.  I think we could have a flag
-+  word that could enable different bits of info here.
-+
-+- We now honor, sort of, the C and S commands.  These are continue and
-+  single set after delivering a signal.  We ignore the signal and do the
-+  requested action.  This only happens when we told gdb that a signal
-+  was the reason for entry, which is only done on memory faults.  The
-+  result is that you can now continue into the Oops.
-+
-+- We changed the -g to -gdwarf-2.  This seems to be the same as -ggdb,
-+  but it is more exact on what language to use.
-+
-+- We added two dwarf2 include files and a bit of code at the end of
-+  entry.S.  This does not yet work, so it is disabled.  Still we want to
-+  keep track of the code and "maybe" someone out there can fix it.
-+
-+- Randy Dunlap sent some fix ups for this file which are now merged.
-+
-+- Hugh Dickins sent a fix to a bit of code in traps.c that prevents a
-+  compiler warning if CONFIG_KGDB is off (now who would do that :).
-+
-+- Andrew Morton sent a fix for the serial driver which is now merged.
-+
-+- Andrew also sent a change to the stub around the cpu managment code
-+  which is also merged.
-+
-+- Andrew also sent a patch to make "f" as well as "g" work as SysRq
-+  commands to enter kgdb, merged.
-+
-+- If CONFIG_KGDB and CONFIG_DEBUG_SPINLOCKS are both set we added a
-+  "who" field to the spinlock data struct.  This is filled with
-+  "current" when ever the spinlock suceeds.  Useful if you want to know
-+  who has the lock.
-+
-+_ And last, but not least, we fixed the "get_cu" macro to properly get
-+  the current value of "current".
-+
-+New features:
-+============
-+20030505.1827.27
-+We are starting to align with the sourceforge version, at least in
-+commands.  To this end, the boot command string to start kgdb at
-+boot time has been changed from "kgdb" to "gdb".
-+
-+Andrew Morton sent a couple of patches which are now included as follows:
-+1.) We now return a flag to the interrupt handler.
-+2.) We no longer use smp_num_cpus (a conflict with the lock meter).
-+3.) And from William Lee Irwin III <wli@holomorphy.com> code to make
-+    sure high-mem is set up before we attempt to register our interrupt
-+    handler.
-+We now include asm/kgdb.h from config.h so you will most likely never
-+have to include it.  It also 'NULLS' the kgdb macros you might have in
-+your code when CONFIG_KGDB is not defined.  This allows you to just
-+turn off CONFIG_KGDB to turn off all the kgdb_ts() calls and such.
-+This include is conditioned on the machine being an x86 so as to not
-+mess with other archs.
-+
-+20020801.1129.03
-+This is currently the version for the 2.4.18 (and beyond?) kernel.
-+
-+We have several new "features" beginning with this version:
-+
-+1.) Kgdb now syncs the "other" CPUs with a cross-CPU NMI.  No more
-+    waiting and it will pull that guy out of an IRQ off spin lock :)
-+
-+2.) We doctored up the code that tells where a task is waiting and
-+    included it so that the "info thread" command will show a bit more
-+    than "schedule()".  Try it...
-+
-+3.) Added the ability to call a function from gdb.  All the standard gdb
-+    issues apply, i.e. if you hit a breakpoint in the function, you are
-+    not allowed to call another (gdb limitation, not kgdb).  To help
-+    this capability we added a memory allocation function.  Gdb does not
-+    return this memory (it is used for strings that you pass to that function
-+    you are calling from gdb) so we fixed up a way to allow you to
-+    manually return the memory (see below).
-+
-+4.) Kgdb time stamps (kgdb_ts()) are enhanced to expand what was the
-+    interrupt flag to now also include the preemption count and the
-+    "in_interrupt" info.  The flag is now called "with_pif" to indicate
-+    the order, preempt_count, in_interrupt, flag.  The preempt_count is
-+    shifted left by 4 bits so you can read the count in hex by dropping
-+    the low order digit.  In_interrupt is in bit 1, and the flag is in
-+    bit 0.
-+
-+5.) The command: "p kgdb_info" is now expanded and prints something
-+    like:
-+(gdb) p kgdb_info
-+$2 = {used_malloc = 0, called_from = 0xc0107506, entry_tsc = 67468627259,
-+  errcode = 0, vector = 3, print_debug_info = 0, hold_on_sstep = 1,
-+  cpus_waiting = {{task = 0xc027a000, pid = 32768, hold = 0,
-+      regs = 0xc027bf84}, {task = 0x0, pid = 0, hold = 0, regs = 0x0}}}
-+
-+    Things to note here: a.) used_malloc is the amount of memory that
-+    has been malloc'ed to do calls from gdb.  You can reclaim this
-+    memory like this: "p kgdb_info.used_malloc=0" Cool, huh?  b.)
-+    cpus_waiting is now "sized" by the number of CPUs you enter at
-+    configure time in the kgdb configure section.  This is NOT used
-+    anywhere else in the system, but it is "nice" here.  c.)  The task's
-+    "pid" is now in the structure.  This is the pid you will need to use
-+    to decode to the thread id to get gdb to look at that thread.
-+    Remember that the "info thread" command prints a list of threads
-+    wherein it numbers each thread with its reference number followed
-+    by the thread's pid.  Note that the per-CPU idle threads actually
-+    have pids of 0 (yes, there is more than one pid 0 in an SMP system).
-+    To avoid confusion, kgdb numbers these threads with numbers beyond
-+    the MAX_PID.  That is why you see 32768 and above.
-+
-+6.) A subtle change, we now provide the complete register set for tasks
-+    that are active on the other CPUs.  This allows better trace back on
-+    those tasks.
-+
-+    And, let's mention what we could not fix.  Back-trace from all but the
-+    thread that we trapped will, most likely, have a bogus entry in it.
-+    The problem is that gdb does not recognize the entry code for
-+    functions that use "current" near (at all?) the entry.  The compiler
-+    is putting the "current" decode as the first two instructions of the
-+    function where gdb expects to find %ebp changing code.  Back trace
-+    also has trouble with interrupt frames.  I am talking with Daniel
-+    Jacobowitz about some way to fix this, but don't hold your breath.
-+
-+20011220.0050.35
-+Major enhancement with this version is the ability to hold one or more
-+CPUs in an SMP system while allowing the others to continue.  Also, by
-+default only the current CPU is enabled on single-step commands (please
-+note that gdb issues single-step commands at times other than when you
-+use the si command).
-+
-+Another change is to collect some useful information in
-+a global structure called "kgdb_info".  You should be able to just:
-+
-+p kgdb_info
-+
-+although I have seen cases where the first time this is done gdb just
-+prints the first member but prints the whole structure if you then enter
-+CR (carriage return or enter).  This also works:
-+
-+p *&kgdb_info
-+
-+Here is a sample:
-+(gdb) p kgdb_info
-+$4 = {called_from = 0xc010732c, entry_tsc = 32804123790856, errcode = 0,
-+  vector = 3, print_debug_info = 0}
-+
-+"Called_from" is the return address from the current entry into kgdb.
-+Sometimes it is useful to know why you are in kgdb, for example, was
-+it an NMI or a real breakpoint?  The simple way to interrogate this
-+return address is:
-+
-+l *0xc010732c
-+
-+which will print the surrounding few lines of source code.
-+
-+"Entry_tsc" is the CPU TSC on entry to kgdb (useful to compare to the
-+kgdb_ts entries).
-+
-+"errcode" and "vector" are other entry parameters which may be helpful on
-+some traps.
-+
-+"print_debug_info" is the internal debugging kgdb print enable flag.  Yes,
-+you can modify it.
-+
-+In SMP systems kgdb_info also includes the "cpus_waiting" structure and
-+"hold_on_step":
-+
-+(gdb) p kgdb_info
-+$7 = {called_from = 0xc0112739, entry_tsc = 1034936624074, errcode = 0,
-+  vector = 2, print_debug_info = 0, hold_on_sstep = 1, cpus_waiting = {{
-+      task = 0x0, hold = 0, regs = 0x0}, {task = 0xc71b8000, hold = 0,
-+      regs = 0xc71b9f70}, {task = 0x0, hold = 0, regs = 0x0}, {task = 0x0,
-+      hold = 0, regs = 0x0}, {task = 0x0, hold = 0, regs = 0x0}, {task = 0x0,
-+      hold = 0, regs = 0x0}, {task = 0x0, hold = 0, regs = 0x0}, {task = 0x0,
-+      hold = 0, regs = 0x0}}}
-+
-+"Cpus_waiting" has an entry for each CPU other than the current one that
-+has been stopped.  Each entry contains the task_struct address for that
-+CPU, the address of the regs for that task and a hold flag.  All these
-+have the proper typing so that, for example:
-+
-+p *kgdb_info.cpus_waiting[1].regs
-+
-+will print the registers for CPU 1.
-+
-+"Hold_on_sstep" is a new feature with this version and comes up set or
-+true.  What this means is that whenever kgdb is asked to single-step all
-+other CPUs are held (i.e. not allowed to execute).  The flag applies to
-+all but the current CPU and, again, can be changed:
-+
-+p kgdb_info.hold_on_sstep=0
-+
-+restores the old behavior of letting all CPUs run during single-stepping.
-+
-+Likewise, each CPU has a "hold" flag, which if set, locks that CPU out
-+of execution.  Note that this has some risk in cases where the CPUs need
-+to communicate with each other.  If kgdb finds no CPU available on exit,
-+it will push a message thru gdb and stay in kgdb.  Note that it is legal
-+to hold the current CPU as long as at least one CPU can execute.
-+
-+20010621.1117.09
-+This version implements an event queue.  Events are signaled by calling
-+a function in the kgdb stub and may be examined from gdb.  See EVENTS
-+below for details.  This version also tightens up the interrupt and SMP
-+handling to not allow interrupts on the way to kgdb from a breakpoint
-+trap.  It is fine to allow these interrupts for user code, but not
-+system debugging.
-+
-+Version
-+=======
-+
-+This version of the kgdb package was developed and tested on
-+kernel version 2.4.16.  It will not install on any earlier kernels.
-+It is possible that it will continue to work on later versions
-+of 2.4 and then versions of 2.5 (I hope).
-+
-+
-+Debugging Setup
-+===============
-+
-+Designate one machine as the "development" machine.  This is the
-+machine on which you run your compiles and which has your source
-+code for the kernel.  Designate a second machine as the "target"
-+machine.  This is the machine that will run your experimental
-+kernel.
-+
-+The two machines will be connected together via a serial line out
-+one or the other of the COM ports of the PC.  You will need the
-+appropriate modem eliminator (null modem) cable(s) for this.
-+
-+Decide on which tty port you want the machines to communicate, then
-+connect them up back-to-back using the null modem cable.  COM1 is
-+/dev/ttyS0 and COM2 is /dev/ttyS1. You should test this connection
-+with the two machines prior to trying to debug a kernel.  Once you
-+have it working, on the TARGET machine, enter:
-+
-+setserial /dev/ttyS0 (or what ever tty you are using)
-+
-+and record the port address and the IRQ number.
-+
-+On the DEVELOPMENT machine you need to apply the patch for the kgdb
-+hooks.  You have probably already done that if you are reading this
-+file.
-+
-+On your DEVELOPMENT machine, go to your kernel source directory and do
-+"make Xconfig" where X is one of "x", "menu", or "".  If you are
-+configuring in the standard serial driver, it must not be a module.
-+Either yes or no is ok, but making the serial driver a module means it
-+will initialize after kgdb has set up the UART interrupt code and may
-+cause a failure of the control-C option discussed below.  The configure
-+question for the serial driver is under the "Character devices" heading
-+and is:
-+
-+"Standard/generic (8250/16550 and compatible UARTs) serial support"
-+
-+Go down to the kernel debugging menu item and open it up.  Enable the
-+kernel kgdb stub code by selecting that item.  You can also choose to
-+turn on the "-ggdb -O1" compile options.  The -ggdb causes the compiler
-+to put more debug info (like local symbols) in the object file.  On the
-+i386 -g and -ggdb are the same so this option just reduces to "O1".  The
-+-O1 reduces the optimization level.  This may be helpful in some cases,
-+be aware, however, that this may also mask the problem you are looking
-+for.
-+
-+The baud rate.  Default is 115200.  What ever you choose be sure that
-+the host machine is set to the same speed.  I recommend the default.
-+
-+The port.  This is the I/O address of the serial UART that you should
-+have gotten using setserial as described above.  The standard COM1 port
-+(3f8) using IRQ 4 is default.  COM2 is 2f8 which by convention uses IRQ
-+3.
-+
-+The port IRQ (see above).
-+
-+Stack overflow test.  This option makes a minor change in the trap,
-+system call and interrupt code to detect stack overflow and transfer
-+control to kgdb if it happens.  (Some platforms have this in the
-+baseline code, but the i386 does not.)
-+
-+You can also configure the system to recognize the boot option
-+"console=kgdb" which if given will cause all console output during
-+booting to be put thru gdb as well as other consoles.  This option
-+requires that gdb and kgdb be connected prior to sending console output
-+so, if they are not, a breakpoint is executed to force the connection.
-+This will happen before any kernel output (it is going thru gdb, right),
-+and will stall the boot until the connection is made.
-+
-+You can also configure in a patch to SysRq to enable the kGdb SysRq.
-+This request generates a breakpoint.  Since the serial port IRQ line is
-+set up after any serial drivers, it is possible that this command will
-+work when the control-C will not.
-+
-+Save and exit the Xconfig program.  Then do "make clean" , "make dep"
-+and "make bzImage" (or whatever target you want to make).  This gets the
-+kernel compiled with the "-g" option set -- necessary for debugging.
-+
-+You have just built the kernel on your DEVELOPMENT machine that you
-+intend to run on your TARGET machine.
-+
-+To install this new kernel, use the following installation procedure.
-+Remember, you are on the DEVELOPMENT machine patching the kernel source
-+for the kernel that you intend to run on the TARGET machine.
-+
-+Copy this kernel to your target machine using your usual procedures.  I
-+usually arrange to copy development:
-+/usr/src/linux/arch/i386/boot/bzImage to /vmlinuz on the TARGET machine
-+via a LAN based NFS access.  That is, I run the cp command on the target
-+and copy from the development machine via the LAN.  Run Lilo (see "man
-+lilo" for details on how to set this up) on the new kernel on the target
-+machine so that it will boot!  Then boot the kernel on the target
-+machine.
-+
-+On the DEVELOPMENT machine, create a file called .gdbinit in the
-+directory /usr/src/linux.  An example .gdbinit file looks like this:
-+
-+shell echo -e "\003" >/dev/ttyS0
-+set remotebaud 38400 (or what ever speed you have chosen)
-+target remote /dev/ttyS0
-+
-+
-+Change the "echo" and "target" definition so that it specifies the tty
-+port that you intend to use.  Change the "remotebaud" definition to
-+match the data rate that you are going to use for the com line.
-+
-+You are now ready to try it out.
-+
-+Boot your target machine with "kgdb" in the boot command i.e. something
-+like:
-+
-+lilo> test kgdb
-+
-+or if you also want console output thru gdb:
-+
-+lilo> test kgdb console=kgdb
-+
-+You should see the lilo message saying it has loaded the kernel and then
-+all output stops.  The kgdb stub is trying to connect with gdb.  Start
-+gdb something like this:
-+
-+
-+On your DEVELOPMENT machine, cd /usr/src/linux and enter "gdb vmlinux".
-+When gdb gets the symbols loaded it will read your .gdbinit file and, if
-+everything is working correctly, you should see gdb print out a few
-+lines indicating that a breakpoint has been taken.  It will actually
-+show a line of code in the target kernel inside the kgdb activation
-+code.
-+
-+The gdb interaction should look something like this:
-+
-+    linux-dev:/usr/src/linux# gdb vmlinux
-+    GDB is free software and you are welcome to distribute copies of it
-+     under certain conditions; type "show copying" to see the conditions.
-+    There is absolutely no warranty for GDB; type "show warranty" for details.
-+    GDB 4.15.1 (i486-slackware-linux),
-+    Copyright 1995 Free Software Foundation, Inc...
-+    breakpoint () at i386-stub.c:750
-+    750     }
-+    (gdb)
-+
-+You can now use whatever gdb commands you like to set breakpoints.
-+Enter "continue" to start your target machine executing again.  At this
-+point the target system will run at full speed until it encounters
-+your breakpoint or gets a segment violation in the kernel, or whatever.
-+
-+If you have the kgdb console enabled when you continue, gdb will print
-+out all the console messages.
-+
-+The above example caused a breakpoint relatively early in the boot
-+process.  For the i386 kgdb it is possible to code a break instruction
-+as the first C-language point in init/main.c, i.e. as the first instruction
-+in start_kernel().  This could be done as follows:
-+
-+#include <asm/kgdb.h>
-+	 breakpoint();
-+
-+This breakpoint() is really a function that sets up the breakpoint and
-+single-step hardware trap cells and then executes a breakpoint.  Any
-+early hard coded breakpoint will need to use this function.  Once the
-+trap cells are set up they need not be set again, but doing it again
-+does not hurt anything, so you don't need to be concerned about which
-+breakpoint is hit first.  Once the trap cells are set up (and the kernel
-+sets them up in due course even if breakpoint() is never called) the
-+macro:
-+
-+BREAKPOINT;
-+
-+will generate an inline breakpoint.  This may be more useful as it stops
-+the processor at the instruction instead of in a function a step removed
-+from the location of interest.  In either case <asm/kgdb.h> must be
-+included to define both breakpoint() and BREAKPOINT.
-+
-+Triggering kgdbstub at other times
-+==================================
-+
-+Often you don't need to enter the debugger until much later in the boot
-+or even after the machine has been running for some time.  Once the
-+kernel is booted and interrupts are on, you can force the system to
-+enter the debugger by sending a control-C to the debug port. This is
-+what the first line of the recommended .gdbinit file does.  This allows
-+you to start gdb any time after the system is up as well as when the
-+system is already at a breakpoint.  (In the case where the system is
-+already at a breakpoint the control-C is not needed, however, it will
-+be ignored by the target so no harm is done.  Also note the the echo
-+command assumes that the port speed is already set.  This will be true
-+once gdb has connected, but it is best to set the port speed before you
-+run gdb.)
-+
-+Another simple way to do this is to put the following file in you ~/bin
-+directory:
-+
-+#!/bin/bash
-+echo  -e "\003"  > /dev/ttyS0
-+
-+Here, the ttyS0 should be replaced with what ever port you are using.
-+The "\003" is control-C.  Once you are connected with gdb, you can enter
-+control-C at the command prompt.
-+
-+An alternative way to get control to the debugger is to enable the kGdb
-+SysRq command.  Then you would enter Alt-SysRq-g (all three keys at the
-+same time, but push them down in the order given).  To refresh your
-+memory of the available SysRq commands try Alt-SysRq-=.  Actually any
-+undefined command could replace the "=", but I like to KNOW that what I
-+am pushing will never be defined.
-+
-+Debugging hints
-+===============
-+
-+You can break into the target machine at any time from the development
-+machine by typing ^C (see above paragraph).  If the target machine has
-+interrupts enabled this will stop it in the kernel and enter the
-+debugger.
-+
-+There is unfortunately no way of breaking into the kernel if it is
-+in a loop with interrupts disabled, so if this happens to you then
-+you need to place exploratory breakpoints or printk's into the kernel
-+to find out where it is looping.  The exploratory breakpoints can be
-+entered either thru gdb or hard coded into the source.  This is very
-+handy if you do something like:
-+
-+if (<it hurts>) BREAKPOINT;
-+
-+
-+There is a copy of an e-mail in the Documentation/i386/kgdb/ directory
-+(debug-nmi.txt) which describes how to create an NMI on an ISA bus
-+machine using a paper clip.  I have a sophisticated version of this made
-+by wiring a push button switch into a PC104/ISA bus adapter card.  The
-+adapter card nicely furnishes wire wrap pins for all the ISA bus
-+signals.
-+
-+When you are done debugging the kernel on the target machine it is a
-+good idea to leave it in a running state.  This makes reboots faster,
-+bypassing the fsck.  So do a gdb "continue" as the last gdb command if
-+this is possible.  To terminate gdb itself on the development machine
-+and leave the target machine running, first clear all breakpoints and
-+continue, then type ^Z to suspend gdb and then kill it with "kill %1" or
-+something similar.
-+
-+If gdbstub Does Not Work
-+========================
-+
-+If it doesn't work, you will have to troubleshoot it.  Do the easy
-+things first like double checking your cabling and data rates.  You
-+might try some non-kernel based programs to see if the back-to-back
-+connection works properly.  Just something simple like cat /etc/hosts
-+>/dev/ttyS0 on one machine and cat /dev/ttyS0 on the other will tell you
-+if you can send data from one machine to the other.  Make sure it works
-+in both directions.  There is no point in tearing out your hair in the
-+kernel if the line doesn't work.
-+
-+All of the real action takes place in the file
-+/usr/src/linux/arch/i386/kernel/kgdb_stub.c.  That is the code on the target
-+machine that interacts with gdb on the development machine.  In gdb you can
-+turn on a debug switch with the following command:
-+
-+	set remotedebug
-+
-+This will print out the protocol messages that gdb is exchanging with
-+the target machine.
-+
-+Another place to look is /usr/src/arch/i386/lib/kgdb_serial.c. This is
-+the code that talks to the serial port on the target side.  There might
-+be a problem there.  In particular there is a section of this code that
-+tests the UART which will tell you what UART you have if you define
-+"PRNT" (just remove "_off" from the #define PRNT_off).  To view this
-+report you will need to boot the system without any beakpoints.  This
-+allows the kernel to run to the point where it calls kgdb to set up
-+interrupts.  At this time kgdb will test the UART and print out the type
-+it finds.  (You need to wait so that the printks are actually being
-+printed.  Early in the boot they are cached, waiting for the console to
-+be enabled.  Also, if kgdb is entered thru a breakpoint it is possible
-+to cause a dead lock by calling printk when the console is locked.  The
-+stub thus avoids doing printks from breakpoints, especially in the
-+serial code.)  At this time, if the UART fails to do the expected thing,
-+kgdb will print out (using printk) information on what failed.  (These
-+messages will be buried in all the other boot up messages.  Look for
-+lines that start with "gdb_hook_interrupt:".  You may want to use dmesg
-+once the system is up to view the log.  If this fails or if you still
-+don't connect, review your answers for the port address.  Use:
-+
-+setserial /dev/ttyS0
-+
-+to get the current port and IRQ information.  This command will also
-+tell you what the system found for the UART type. The stub recognizes
-+the following UART types:
-+
-+16450, 16550, and 16550A
-+
-+If you are really desperate you can use printk debugging in the
-+kgdbstub code in the target kernel until you get it working.  In particular,
-+there is a global variable in /usr/src/linux/arch/i386/kernel/kgdb_stub.c
-+named "remote_debug".  Compile your kernel with this set to 1, rather
-+than 0 and the debug stub will print out lots of stuff as it does
-+what it does.  Likewise there are debug printks in the kgdb_serial.c
-+code that can be turned on with simple changes in the macro defines.
-+
-+
-+Debugging Loadable Modules
-+==========================
-+
-+This technique comes courtesy of Edouard Parmelan
-+<Edouard.Parmelan@quadratec.fr>
-+
-+When you run gdb, enter the command
-+
-+source gdbinit-modules
-+
-+This will read in a file of gdb macros that was installed in your
-+kernel source directory when kgdb was installed.  This file implements
-+the following commands:
-+
-+mod-list
-+    Lists the loaded modules in the form <module-address> <module-name>
-+
-+mod-print-symbols <module-address>
-+    Prints all the symbols in the indicated module.
-+
-+mod-add-symbols <module-address> <object-file-path-name>
-+    Loads the symbols from the object file and associates them
-+    with the indicated module.
-+
-+After you have loaded the module that you want to debug, use the command
-+mod-list to find the <module-address> of your module.  Then use that
-+address in the mod-add-symbols command to load your module's symbols.
-+From that point onward you can debug your module as if it were a part
-+of the kernel.
-+
-+The file gdbinit-modules also contains a command named mod-add-lis as
-+an example of how to construct a command of your own to load your
-+favorite module.  The idea is to "can" the pathname of the module
-+in the command so you don't have to type so much.
-+
-+Threads
-+=======
-+
-+Each process in a target machine is seen as a gdb thread. gdb thread
-+related commands (info threads, thread n) can be used.
-+
-+ia-32 hardware breakpoints
-+==========================
-+
-+kgdb stub contains support for hardware breakpoints using debugging features
-+of ia-32(x86) processors. These breakpoints do not need code modification.
-+They use debugging registers. 4 hardware breakpoints are available in ia-32
-+processors.
-+
-+Each hardware breakpoint can be of one of the following three types.
-+
-+1. Execution breakpoint - An Execution breakpoint is triggered when code
-+	at the breakpoint address is executed.
-+
-+	As limited number of hardware breakpoints are available, it is
-+	advisable to use software breakpoints ( break command ) instead
-+	of execution hardware breakpoints, unless modification of code
-+	is to be avoided.
-+
-+2. Write breakpoint - A write breakpoint is triggered when memory
-+	location at the breakpoint address is written.
-+
-+	A write or can be placed for data of variable length. Length of
-+	a write breakpoint indicates length of the datatype to be
-+	watched. Length is 1 for 1 byte data , 2 for 2 byte data, 3 for
-+	4 byte data.
-+
-+3. Access breakpoint - An access breakpoint is triggered when memory
-+	location at the breakpoint address is either read or written.
-+
-+	Access breakpoints also have lengths similar to write breakpoints.
-+
-+IO breakpoints in ia-32 are not supported.
-+
-+Since gdb stub at present does not use the protocol used by gdb for hardware
-+breakpoints, hardware breakpoints are accessed through gdb macros. gdb macros
-+for hardware breakpoints are described below.
-+
-+hwebrk	- Places an execution breakpoint
-+	hwebrk breakpointno address
-+hwwbrk	- Places a write breakpoint
-+	hwwbrk breakpointno length address
-+hwabrk	- Places an access breakpoint
-+	hwabrk breakpointno length address
-+hwrmbrk	- Removes a breakpoint
-+	hwrmbrk breakpointno
-+exinfo	- Tells whether a software or hardware breakpoint has occurred.
-+	Prints number of the hardware breakpoint if a hardware breakpoint has
-+	occurred.
-+
-+Arguments required by these commands are as follows
-+breakpointno	- 0 to 3
-+length		- 1 to 3
-+address		- Memory location in hex digits ( without 0x ) e.g c015e9bc
-+
-+SMP support
-+==========
-+
-+When a breakpoint occurs or user issues a break ( Ctrl + C ) to gdb
-+client, all the processors are forced to enter the debugger. Current
-+thread corresponds to the thread running on the processor where
-+breakpoint occurred.  Threads running on other processor(s) appear
-+similar to other non-running threads in the 'info threads' output.
-+Within the kgdb stub there is a structure "waiting_cpus" in which kgdb
-+records the values of "current" and "regs" for each CPU other than the
-+one that hit the breakpoint.  "current" is a pointer to the task
-+structure for the task that CPU is running, while "regs" points to the
-+saved registers for the task.  This structure can be examined with the
-+gdb "p" command.
-+
-+ia-32 hardware debugging registers on all processors are set to same
-+values.  Hence any hardware breakpoints may occur on any processor.
-+
-+gdb troubleshooting
-+===================
-+
-+1. gdb hangs
-+Kill it. restart gdb. Connect to target machine.
-+
-+2. gdb cannot connect to target machine (after killing a gdb and
-+restarting another) If the target machine was not inside debugger when
-+you killed gdb, gdb cannot connect because the target machine won't
-+respond.  In this case echo "Ctrl+C"(ASCII 3) to the serial line.
-+e.g. echo -e "\003" > /dev/ttyS1
-+This forces that target machine into the debugger, after which you
-+can connect.
-+
-+3. gdb cannot connect even after echoing Ctrl+C into serial line
-+Try changing serial line settings min to 1 and time to 0
-+e.g. stty min 1 time 0 < /dev/ttyS1
-+Try echoing again
-+
-+Check serial line speed and set it to correct value if required
-+e.g. stty ispeed 115200 ospeed 115200 < /dev/ttyS1
-+
-+EVENTS
-+======
-+
-+Ever want to know the order of things happening?  Which CPU did what and
-+when?  How did the spinlock get the way it is?  Then events are for
-+you.  Events are defined by calls to an event collection interface and
-+saved for later examination.  In this case, kgdb events are saved by a
-+very fast bit of code in kgdb which is fully SMP and interrupt protected
-+and they are examined by using gdb to display them.  Kgdb keeps only
-+the last N events, where N must be a power of two and is defined at
-+configure time.
-+
-+
-+Events are signaled to kgdb by calling:
-+
-+kgdb_ts(data0,data1)
-+
-+For each call kgdb records each call in an array along with other info.
-+Here is the array definition:
-+
-+struct kgdb_and_then_struct {
-+#ifdef CONFIG_SMP
-+	int	on_cpu;
-+#endif
-+	long long at_time;
-+	int  	from_ln;
-+	char	* in_src;
-+	void	*from;
-+        int     with_if;
-+	int	data0;
-+	int	data1;
-+};
-+
-+For SMP machines the CPU is recorded, for all machines the TSC is
-+recorded (gets a time stamp) as well as the line number and source file
-+the call was made from.  The address of the (from), the "if" (interrupt
-+flag) and the two data items are also recorded.  The macro kgdb_ts casts
-+the types to int, so you can put any 32-bit values here.  There is a
-+configure option to select the number of events you want to keep.  A
-+nice number might be 128, but you can keep up to 1024 if you want.  The
-+number must be a power of two.  An "andthen" macro library is provided
-+for gdb to help you look at these events.  It is also possible to define
-+a different structure for the event storage and cast the data to this
-+structure.  For example the following structure is defined in kgdb:
-+
-+struct kgdb_and_then_struct2 {
-+#ifdef CONFIG_SMP
-+	int	on_cpu;
-+#endif
-+	long long at_time;
-+	int  	from_ln;
-+	char	* in_src;
-+	void	*from;
-+        int     with_if;
-+	struct task_struct *t1;
-+	struct task_struct *t2;
-+};
-+
-+If you use this for display, the data elements will be displayed as
-+pointers to task_struct entries.  You may want to define your own
-+structure to use in casting.  You should only change the last two items
-+and you must keep the structure size the same.  Kgdb will handle these
-+as 32-bit ints, but within that constraint you can define a structure to
-+cast to any 32-bit quantity.  This need only be available to gdb and is
-+only used for casting in the display code.
-+
-+Final Items
-+===========
-+
-+I picked up this code from Amit S. Kale and enhanced it.
-+
-+If you make some really cool modification to this stuff, or if you
-+fix a bug, please let me know.
-+
-+George Anzinger
-+<george@mvista.com>
-+
-+Amit S. Kale
-+<akale@veritas.com>
-+
-+(First kgdb by David Grothe <dave@gcom.com>)
-+
-+(modified by Tigran Aivazian <tigran@sco.com>)
-+    Putting gdbstub into the kernel config menu.
-+
-+(modified by Scott Foehner <sfoehner@engr.sgi.com>)
-+    Hooks for entering gdbstub at boot time.
-+
-+(modified by Amit S. Kale <akale@veritas.com>)
-+    Threads, ia-32 hw debugging, mp support, console support,
-+    nmi watchdog handling.
-+
-+(modified by George Anzinger <george@mvista.com>)
-+    Extended threads to include the idle threads.
-+    Enhancements to allow breakpoint() at first C code.
-+    Use of module_init() and __setup() to automate the configure.
-+    Enhanced the cpu "collection" code to work in early bring-up.
-+    Added ability to call functions from gdb
-+    Print info thread stuff without going back to schedule()
-+    Now collect the "other" cpus with an IPI/ NMI.
-diff -puN /dev/null Documentation/i386/kgdb/loadmodule.sh
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/Documentation/i386/kgdb/loadmodule.sh	2004-10-21 14:54:15.325593648 -0700
-@@ -0,0 +1,78 @@
-+#/bin/sh
-+# This script loads a module on a target machine and generates a gdb script.
-+# source generated gdb script to load the module file at appropriate addresses
-+# in gdb.
-+#
-+# Usage:
-+# Loading the module on target machine and generating gdb script)
-+#	[foo]$ loadmodule.sh <modulename>
-+#
-+# Loading the module file into gdb
-+#	(gdb) source <gdbscriptpath>
-+#
-+# Modify following variables according to your setup.
-+#	TESTMACHINE - Name of the target machine
-+#	GDBSCRIPTS - The directory where a gdb script will be generated
-+#
-+# Author: Amit S. Kale (akale@veritas.com).
-+#
-+# If you run into problems, please check files pointed to by following
-+# variables.
-+#	ERRFILE - /tmp/<modulename>.errs contains stderr output of insmod
-+#	MAPFILE - /tmp/<modulename>.map contains stdout output of insmod
-+#	GDBSCRIPT - $GDBSCRIPTS/load<modulename> gdb script.
-+
-+TESTMACHINE=foo
-+GDBSCRIPTS=/home/bar
-+
-+if [ $# -lt 1 ] ; then {
-+	echo Usage: $0 modulefile
-+	exit
-+} ; fi
-+
-+MODULEFILE=$1
-+MODULEFILEBASENAME=`basename $1`
-+
-+if [ $MODULEFILE = $MODULEFILEBASENAME ] ; then {
-+	MODULEFILE=`pwd`/$MODULEFILE
-+} fi
-+
-+ERRFILE=/tmp/$MODULEFILEBASENAME.errs
-+MAPFILE=/tmp/$MODULEFILEBASENAME.map
-+GDBSCRIPT=$GDBSCRIPTS/load$MODULEFILEBASENAME
-+
-+function findaddr() {
-+	local ADDR=0x$(echo "$SEGMENTS" | \
-+		grep "$1" | sed 's/^[^ ]*[ ]*[^ ]*[ ]*//' | \
-+		sed 's/[ ]*[^ ]*$//')
-+	echo $ADDR
-+}
-+
-+function checkerrs() {
-+	if [ "`cat $ERRFILE`" != "" ] ; then {
-+		cat $ERRFILE
-+		exit
-+	} fi
-+}
-+
-+#load the module
-+echo Copying $MODULEFILE to $TESTMACHINE
-+rcp $MODULEFILE root@${TESTMACHINE}:
-+
-+echo Loading module $MODULEFILE
-+rsh -l root $TESTMACHINE  /sbin/insmod -m ./`basename $MODULEFILE` \
-+	> $MAPFILE 2> $ERRFILE
-+checkerrs
-+
-+SEGMENTS=`head -n 11 $MAPFILE | tail -n 10`
-+TEXTADDR=$(findaddr "\\.text[^.]")
-+LOADSTRING="add-symbol-file $MODULEFILE $TEXTADDR"
-+SEGADDRS=`echo "$SEGMENTS" | awk '//{
-+	if ($1 != ".text" && $1 != ".this" &&
-+	    $1 != ".kstrtab" && $1 != ".kmodtab") {
-+		print " -s " $1 " 0x" $3 " "
-+	}
-+}'`
-+LOADSTRING="$LOADSTRING $SEGADDRS"
-+echo Generating script $GDBSCRIPT
-+echo $LOADSTRING > $GDBSCRIPT
-diff -puN drivers/char/keyboard.c~kgdb-ga drivers/char/keyboard.c
---- 25/drivers/char/keyboard.c~kgdb-ga	2004-10-21 14:54:15.273601552 -0700
-+++ 25-akpm/drivers/char/keyboard.c	2004-10-21 14:54:15.326593496 -0700
-@@ -1081,6 +1081,9 @@ void kbd_keycode(unsigned int keycode, i
+Index: linux/drivers/char/keyboard.c
+===================================================================
+--- linux.orig/drivers/char/keyboard.c
++++ linux/drivers/char/keyboard.c
+@@ -1078,6 +1078,9 @@ void kbd_keycode(unsigned int keycode, i
  	}
  	if (sysrq_down && down && !rep) {
  		handle_sysrq(kbd_sysrq_xlate[keycode], regs, tty);
@@ -4819,9 +5006,10 @@ diff -puN drivers/char/keyboard.c~kgdb-ga drivers/char/keyboard.c
  		return;
  	}
  #endif
-diff -puN drivers/char/sysrq.c~kgdb-ga drivers/char/sysrq.c
---- 25/drivers/char/sysrq.c~kgdb-ga	2004-10-21 14:54:15.275601248 -0700
-+++ 25-akpm/drivers/char/sysrq.c	2004-10-21 14:54:15.326593496 -0700
+Index: linux/drivers/char/sysrq.c
+===================================================================
+--- linux.orig/drivers/char/sysrq.c
++++ linux/drivers/char/sysrq.c
 @@ -35,6 +35,25 @@
  #include <linux/spinlock.h>
  
@@ -4848,8 +5036,8 @@ diff -puN drivers/char/sysrq.c~kgdb-ga drivers/char/sysrq.c
  
  extern void reset_vc(unsigned int);
  
-@@ -238,8 +257,8 @@ static struct sysrq_key_op *sysrq_key_ta
- /* c */ NULL,
+@@ -271,8 +290,8 @@ static struct sysrq_key_op *sysrq_key_ta
+ /* c */ &sysrq_crash_op,
  /* d */	NULL,
  /* e */	&sysrq_term_op,
 -/* f */	NULL,
@@ -4859,10 +5047,11 @@ diff -puN drivers/char/sysrq.c~kgdb-ga drivers/char/sysrq.c
  /* h */	NULL,
  /* i */	&sysrq_kill_op,
  /* j */	NULL,
-diff -puN drivers/serial/8250.c~kgdb-ga drivers/serial/8250.c
---- 25/drivers/serial/8250.c~kgdb-ga	2004-10-21 14:54:15.276601096 -0700
-+++ 25-akpm/drivers/serial/8250.c	2004-10-21 14:54:15.328593192 -0700
-@@ -983,7 +983,7 @@ receive_chars(struct uart_8250_port *up,
+Index: linux/drivers/serial/8250.c
+===================================================================
+--- linux.orig/drivers/serial/8250.c
++++ linux/drivers/serial/8250.c
+@@ -880,7 +880,7 @@ receive_chars(struct uart_8250_port *up,
  		if (unlikely(tty->flip.count >= TTY_FLIPBUF_SIZE)) {
  			tty->flip.work.func((void *)tty);
  			if (tty->flip.count >= TTY_FLIPBUF_SIZE)
@@ -4871,7 +5060,7 @@ diff -puN drivers/serial/8250.c~kgdb-ga drivers/serial/8250.c
  		}
  		ch = serial_inp(up, UART_RX);
  		*tty->flip.char_buf_ptr = ch;
-@@ -1348,12 +1348,21 @@ static void serial8250_break_ctl(struct 
+@@ -1241,12 +1241,21 @@ static void serial8250_break_ctl(struct 
  	spin_unlock_irqrestore(&up->port.lock, flags);
  }
  
@@ -4893,7 +5082,7 @@ diff -puN drivers/serial/8250.c~kgdb-ga drivers/serial/8250.c
  	up->capabilities = uart_config[up->port.type].flags;
  	up->mcr = 0;
  
-@@ -1990,6 +1999,10 @@ serial8250_register_ports(struct uart_dr
+@@ -1877,6 +1886,10 @@ static void __init serial8250_register_p
  	for (i = 0; i < UART_NR; i++) {
  		struct uart_8250_port *up = &serial8250_ports[i];
  
@@ -4903,10 +5092,10 @@ diff -puN drivers/serial/8250.c~kgdb-ga drivers/serial/8250.c
 +#endif
  		up->port.line = i;
  		up->port.ops = &serial8250_pops;
- 		up->port.dev = dev;
-@@ -2376,6 +2389,31 @@ void serial8250_unregister_port(int line
+ 		init_timer(&up->timer);
+@@ -2160,6 +2173,31 @@ void serial8250_resume_port(int line)
+ 	uart_resume_port(&serial8250_reg, &serial8250_ports[line].port);
  }
- EXPORT_SYMBOL(serial8250_unregister_port);
  
 +#ifdef CONFIG_KGDB
 +/*
@@ -4936,10 +5125,11 @@ diff -puN drivers/serial/8250.c~kgdb-ga drivers/serial/8250.c
  static int __init serial8250_init(void)
  {
  	int ret, i;
-diff -puN drivers/serial/serial_core.c~kgdb-ga drivers/serial/serial_core.c
---- 25/drivers/serial/serial_core.c~kgdb-ga	2004-10-21 14:54:15.278600792 -0700
-+++ 25-akpm/drivers/serial/serial_core.c	2004-10-21 14:54:15.330592888 -0700
-@@ -1976,6 +1976,11 @@ uart_configure_port(struct uart_driver *
+Index: linux/drivers/serial/serial_core.c
+===================================================================
+--- linux.orig/drivers/serial/serial_core.c
++++ linux/drivers/serial/serial_core.c
+@@ -1981,6 +1981,11 @@ uart_configure_port(struct uart_driver *
  {
  	unsigned int flags;
  
@@ -4951,23 +5141,10 @@ diff -puN drivers/serial/serial_core.c~kgdb-ga drivers/serial/serial_core.c
  	/*
  	 * If there isn't a port here, don't do anything further.
  	 */
-diff -puN include/asm-i386/bugs.h~kgdb-ga include/asm-i386/bugs.h
---- 25/include/asm-i386/bugs.h~kgdb-ga	2004-10-21 14:54:15.279600640 -0700
-+++ 25-akpm/include/asm-i386/bugs.h	2004-10-21 14:54:15.331592736 -0700
-@@ -1,11 +1,11 @@
- /*
-  *  include/asm-i386/bugs.h
-  *
-- *  Copyright (C) 1994  Linus Torvalds
-+ *  Copyright (C) 1994	Linus Torvalds
-  *
-  *  Cyrix stuff, June 1998 by:
-  *	- Rafael R. Reilova (moved everything from head.S),
-- *        <rreilova@ececs.uc.edu>
-+ *	  <rreilova@ececs.uc.edu>
-  *	- Channing Corn (tests & fixes),
-  *	- Andrew D. Balsa (code cleanup).
-  *
+Index: linux/include/asm-i386/bugs.h
+===================================================================
+--- linux.orig/include/asm-i386/bugs.h
++++ linux/include/asm-i386/bugs.h
 @@ -25,7 +25,20 @@
  #include <asm/processor.h>
  #include <asm/i387.h>
@@ -4990,18 +5167,10 @@ diff -puN include/asm-i386/bugs.h~kgdb-ga include/asm-i386/bugs.h
  static int __init no_halt(char *s)
  {
  	boot_cpu_data.hlt_works_ok = 0;
-@@ -140,7 +153,7 @@ static void __init check_popad(void)
- 	  : "ecx", "edi" );
- 	/* If this fails, it means that any user program may lock the CPU hard. Too bad. */
- 	if (res != 12345678) printk( "Buggy.\n" );
--		        else printk( "OK.\n" );
-+			else printk( "OK.\n" );
- #endif
- }
- 
-diff -puN /dev/null include/asm-i386/kgdb.h
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/include/asm-i386/kgdb.h	2004-10-21 14:54:15.331592736 -0700
+Index: linux/include/asm-i386/kgdb.h
+===================================================================
+--- linux.orig/include/asm-i386/kgdb.h
++++ linux/include/asm-i386/kgdb.h
 @@ -0,0 +1,59 @@
 +#ifndef __KGDB
 +#define __KGDB
@@ -5062,9 +5231,10 @@ diff -puN /dev/null include/asm-i386/kgdb.h
 +#define INIT_KGDB_INTS
 +#endif
 +#endif				/* __KGDB */
-diff -puN /dev/null include/asm-i386/kgdb_local.h
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/include/asm-i386/kgdb_local.h	2004-10-21 14:54:15.332592584 -0700
+Index: linux/include/asm-i386/kgdb_local.h
+===================================================================
+--- linux.orig/include/asm-i386/kgdb_local.h
++++ linux/include/asm-i386/kgdb_local.h
 @@ -0,0 +1,102 @@
 +#ifndef __KGDB_LOCAL
 +#define ___KGDB_LOCAL
@@ -5168,9 +5338,38 @@ diff -puN /dev/null include/asm-i386/kgdb_local.h
 +#endif
 +#define INIT_KDEBUG putDebugChar("+");
 +#endif				/* __KGDB_LOCAL */
-diff -puN include/linux/config.h~kgdb-ga include/linux/config.h
---- 25/include/linux/config.h~kgdb-ga	2004-10-21 14:54:15.281600336 -0700
-+++ 25-akpm/include/linux/config.h	2004-10-21 14:54:15.332592584 -0700
+Index: linux/include/asm-x86_64/kgdb.h
+===================================================================
+--- linux.orig/include/asm-x86_64/kgdb.h
++++ linux/include/asm-x86_64/kgdb.h
+@@ -0,0 +1,23 @@
++#ifndef __KGDB
++#define __KGDB
++
++/*
++ * This file should not include ANY others.  This makes it usable
++ * most anywhere without the fear of include order or inclusion.
++ * Make it so!
++ *
++ * This file may be included all the time.  It is only active if
++ * CONFIG_KGDB is defined, otherwise it stubs out all the macros
++ * and entry points.
++ */
++#ifndef BREAKPOINT
++#define BREAKPOINT()
++#endif
++
++#define kgdb_ts(data0,data1)
++#define in_kgdb
++#define kgdb_handle_exception
++#define breakpoint
++#define INIT_KGDB_INTS
++
++#endif				/* __KGDB */
+Index: linux/include/linux/config.h
+===================================================================
+--- linux.orig/include/linux/config.h
++++ linux/include/linux/config.h
 @@ -2,6 +2,9 @@
  #define _LINUX_CONFIG_H
  
@@ -5181,9 +5380,147 @@ diff -puN include/linux/config.h~kgdb-ga include/linux/config.h
  #if !defined (__KERNEL__) && !defined(__KERNGLUE__)
  #error including kernel header in userspace; use the glibc headers instead!
  #endif
-diff -puN /dev/null include/linux/dwarf2.h
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/include/linux/dwarf2.h	2004-10-21 14:54:15.336591976 -0700
+Index: linux/include/linux/dwarf2-lang.h
+===================================================================
+--- linux.orig/include/linux/dwarf2-lang.h
++++ linux/include/linux/dwarf2-lang.h
+@@ -0,0 +1,132 @@
++#ifndef DWARF2_LANG
++#define DWARF2_LANG
++#include <linux/dwarf2.h>
++
++/*
++ * This is free software; you can redistribute it and/or modify it under
++ * the terms of the GNU General Public License as published by the Free
++ * Software Foundation; either version 2, or (at your option) any later
++ * version.
++ */
++/*
++ * This file defines macros that allow generation of DWARF debug records
++ * for asm files.  This file is platform independent.  Register numbers
++ * (which are about the only thing that is platform dependent) are to be
++ * supplied by a platform defined file.
++ */
++#define DWARF_preamble()	.section	.debug_frame,"",@progbits
++/*
++ * This macro starts a debug frame section.  The debug_frame describes
++ * where to find the registers that the enclosing function saved on
++ * entry.
++ *
++ * ORD is use by the label generator and should be the same as what is
++ * passed to CFI_postamble.
++ *
++ * pc,	pc register gdb ordinal.
++ *
++ * code_align this is the factor used to define locations or regions
++ * where the given definitions apply.  If you use labels to define these
++ * this should be 1.
++ *
++ * data_align this is the factor used to define register offsets.  If
++ * you use struct offset, this should be the size of the register in
++ * bytes or the negative of that.  This is how it is used: you will
++ * define a register as the reference register, say the stack pointer,
++ * then you will say where a register is located relative to this
++ * reference registers value, say 40 for register 3 (the gdb register
++ * number).  The <40> will be multiplied by <data_align> to define the
++ * byte offset of the given register (3, in this example).  So if your
++ * <40> is the byte offset and the reference register points at the
++ * begining, you would want 1 for the data_offset.  If <40> was the 40th
++ * 4-byte element in that structure you would want 4.  And if your
++ * reference register points at the end of the structure you would want
++ * a negative data_align value(and you would have to do other math as
++ * well).
++ */
++
++#define CFI_preamble(ORD, pc, code_align, data_align)	\
++.section	.debug_frame,"",@progbits ;		\
++frame/**/_/**/ORD:						\
++	.long end/**/_/**/ORD-start/**/_/**/ORD;			\
++start/**/_/**/ORD:						\
++	.long	DW_CIE_ID;				\
++	.byte	DW_CIE_VERSION;			\
++	.byte 0	 ;				\
++	.uleb128 code_align;				\
++	.sleb128 data_align;				\
++	.byte pc;
++
++/*
++ * After the above macro and prior to the CFI_postamble, you need to
++ * define the initial state.  This starts with defining the reference
++ * register and, usually the pc.  Here are some helper macros:
++ */
++
++#define CFA_define_reference(reg, offset)	\
++	.byte DW_CFA_def_cfa;			\
++	.uleb128 reg;				\
++	.uleb128 (offset);
++
++#define CFA_define_offset(reg, offset)		\
++	.byte (DW_CFA_offset + reg);		\
++	.uleb128 (offset);
++
++#define CFI_postamble(ORD)			\
++	.align 4;				\
++end/**/_/**/ORD:
++/*
++ * So now your code pushs stuff on the stack, you need a new location
++ * and the rules for what to do.  This starts a running description of
++ * the call frame.  You need to describe what changes with respect to
++ * the call registers as the location of the pc moves through the code.
++ * The following builds an FDE (fram descriptor entry?).  Like the
++ * above, it has a preamble and a postamble.  It also is tied to the CFI
++ * above.
++ * The first entry after the preamble must be the location in the code
++ * that the call frame is being described for.
++ */
++#define FDE_preamble(ORD, fde_no, initial_address, length)	\
++	.long FDE_end/**/_/**/fde_no-FDE_start/**/_/**/fde_no;		\
++FDE_start/**/_/**/fde_no:						\
++	.long frame/**/_/**/ORD;					\
++	.long initial_address;					\
++	.long length;
++
++#define FDE_postamble(fde_no)			\
++	.align 4;				\
++FDE_end/**/_/**/fde_no:
++/*
++ * That done, you can now add registers, subtract registers, move the
++ * reference and even change the reference.  You can also define a new
++ * area of code the info applies to.  For discontinuous bits you should
++ * start a new FDE.  You may have as many as you like.
++ */
++
++/*
++ * To advance the address by <bytes>
++ */
++
++#define FDE_advance(bytes)			\
++	.byte DW_CFA_advance_loc4		\
++	.long bytes
++
++
++
++/*
++ * With the above you can define all the register locations.  But
++ * suppose the reference register moves... Takes the new offset NOT an
++ * increment.  This is how esp is tracked if it is not saved.
++ */
++
++#define CFA_define_cfa_offset(offset) \
++	.byte $DW_CFA_def_cfa_offset; \
++	.uleb128 (offset);
++/*
++ * Or suppose you want to use a different reference register...
++ */
++#define CFA_define_cfa_register(reg)		\
++	.byte DW_CFA_def_cfa_register;		\
++	.uleb128 reg;
++
++#endif
+Index: linux/include/linux/dwarf2.h
+===================================================================
+--- linux.orig/include/linux/dwarf2.h
++++ linux/include/linux/dwarf2.h
 @@ -0,0 +1,738 @@
 +/* Declarations and definitions of codes relating to the DWARF2 symbolic
 +   debugging information format.
@@ -5923,146 +6260,11 @@ diff -puN /dev/null include/linux/dwarf2.h
 +#define DW_EH_PE_indirect	0x80
 +
 +#endif /* _ELF_DWARF2_H */
-diff -puN /dev/null include/linux/dwarf2-lang.h
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/include/linux/dwarf2-lang.h	2004-10-21 14:54:15.337591824 -0700
-@@ -0,0 +1,132 @@
-+#ifndef DWARF2_LANG
-+#define DWARF2_LANG
-+#include <linux/dwarf2.h>
-+
-+/*
-+ * This is free software; you can redistribute it and/or modify it under
-+ * the terms of the GNU General Public License as published by the Free
-+ * Software Foundation; either version 2, or (at your option) any later
-+ * version.
-+ */
-+/*
-+ * This file defines macros that allow generation of DWARF debug records
-+ * for asm files.  This file is platform independent.  Register numbers
-+ * (which are about the only thing that is platform dependent) are to be
-+ * supplied by a platform defined file.
-+ */
-+#define DWARF_preamble()	.section	.debug_frame,"",@progbits
-+/*
-+ * This macro starts a debug frame section.  The debug_frame describes
-+ * where to find the registers that the enclosing function saved on
-+ * entry.
-+ *
-+ * ORD is use by the label generator and should be the same as what is
-+ * passed to CFI_postamble.
-+ *
-+ * pc,	pc register gdb ordinal.
-+ *
-+ * code_align this is the factor used to define locations or regions
-+ * where the given definitions apply.  If you use labels to define these
-+ * this should be 1.
-+ *
-+ * data_align this is the factor used to define register offsets.  If
-+ * you use struct offset, this should be the size of the register in
-+ * bytes or the negative of that.  This is how it is used: you will
-+ * define a register as the reference register, say the stack pointer,
-+ * then you will say where a register is located relative to this
-+ * reference registers value, say 40 for register 3 (the gdb register
-+ * number).  The <40> will be multiplied by <data_align> to define the
-+ * byte offset of the given register (3, in this example).  So if your
-+ * <40> is the byte offset and the reference register points at the
-+ * begining, you would want 1 for the data_offset.  If <40> was the 40th
-+ * 4-byte element in that structure you would want 4.  And if your
-+ * reference register points at the end of the structure you would want
-+ * a negative data_align value(and you would have to do other math as
-+ * well).
-+ */
-+
-+#define CFI_preamble(ORD, pc, code_align, data_align)	\
-+.section	.debug_frame,"",@progbits ;		\
-+frame/**/_/**/ORD:						\
-+	.long end/**/_/**/ORD-start/**/_/**/ORD;			\
-+start/**/_/**/ORD:						\
-+	.long	DW_CIE_ID;				\
-+	.byte	DW_CIE_VERSION;			\
-+	.byte 0	 ;				\
-+	.uleb128 code_align;				\
-+	.sleb128 data_align;				\
-+	.byte pc;
-+
-+/*
-+ * After the above macro and prior to the CFI_postamble, you need to
-+ * define the initial state.  This starts with defining the reference
-+ * register and, usually the pc.  Here are some helper macros:
-+ */
-+
-+#define CFA_define_reference(reg, offset)	\
-+	.byte DW_CFA_def_cfa;			\
-+	.uleb128 reg;				\
-+	.uleb128 (offset);
-+
-+#define CFA_define_offset(reg, offset)		\
-+	.byte (DW_CFA_offset + reg);		\
-+	.uleb128 (offset);
-+
-+#define CFI_postamble(ORD)			\
-+	.align 4;				\
-+end/**/_/**/ORD:
-+/*
-+ * So now your code pushs stuff on the stack, you need a new location
-+ * and the rules for what to do.  This starts a running description of
-+ * the call frame.  You need to describe what changes with respect to
-+ * the call registers as the location of the pc moves through the code.
-+ * The following builds an FDE (fram descriptor entry?).  Like the
-+ * above, it has a preamble and a postamble.  It also is tied to the CFI
-+ * above.
-+ * The first entry after the preamble must be the location in the code
-+ * that the call frame is being described for.
-+ */
-+#define FDE_preamble(ORD, fde_no, initial_address, length)	\
-+	.long FDE_end/**/_/**/fde_no-FDE_start/**/_/**/fde_no;		\
-+FDE_start/**/_/**/fde_no:						\
-+	.long frame/**/_/**/ORD;					\
-+	.long initial_address;					\
-+	.long length;
-+
-+#define FDE_postamble(fde_no)			\
-+	.align 4;				\
-+FDE_end/**/_/**/fde_no:
-+/*
-+ * That done, you can now add registers, subtract registers, move the
-+ * reference and even change the reference.  You can also define a new
-+ * area of code the info applies to.  For discontinuous bits you should
-+ * start a new FDE.  You may have as many as you like.
-+ */
-+
-+/*
-+ * To advance the address by <bytes>
-+ */
-+
-+#define FDE_advance(bytes)			\
-+	.byte DW_CFA_advance_loc4		\
-+	.long bytes
-+
-+
-+
-+/*
-+ * With the above you can define all the register locations.  But
-+ * suppose the reference register moves... Takes the new offset NOT an
-+ * increment.  This is how esp is tracked if it is not saved.
-+ */
-+
-+#define CFA_define_cfa_offset(offset) \
-+	.byte $DW_CFA_def_cfa_offset; \
-+	.uleb128 (offset);
-+/*
-+ * Or suppose you want to use a different reference register...
-+ */
-+#define CFA_define_cfa_register(reg)		\
-+	.byte DW_CFA_def_cfa_register;		\
-+	.uleb128 reg;
-+
-+#endif
-diff -puN include/linux/serial_core.h~kgdb-ga include/linux/serial_core.h
---- 25/include/linux/serial_core.h~kgdb-ga	2004-10-21 14:54:15.282600184 -0700
-+++ 25-akpm/include/linux/serial_core.h	2004-10-21 14:54:15.338591672 -0700
-@@ -172,7 +172,9 @@ struct uart_port {
+Index: linux/include/linux/serial_core.h
+===================================================================
+--- linux.orig/include/linux/serial_core.h
++++ linux/include/linux/serial_core.h
+@@ -174,7 +174,9 @@ struct uart_port {
  	unsigned char		x_char;			/* xon/xoff char */
  	unsigned char		regshift;		/* reg offset shift */
  	unsigned char		iotype;			/* io access style */
@@ -6073,9 +6275,10 @@ diff -puN include/linux/serial_core.h~kgdb-ga include/linux/serial_core.h
  #define UPIO_PORT		(0)
  #define UPIO_HUB6		(1)
  #define UPIO_MEM		(2)
-diff -puN include/linux/spinlock.h~kgdb-ga include/linux/spinlock.h
---- 25/include/linux/spinlock.h~kgdb-ga	2004-10-21 14:54:15.284599880 -0700
-+++ 25-akpm/include/linux/spinlock.h	2004-10-21 14:54:15.338591672 -0700
+Index: linux/include/linux/spinlock.h
+===================================================================
+--- linux.orig/include/linux/spinlock.h
++++ linux/include/linux/spinlock.h
 @@ -15,6 +15,12 @@
  
  #include <asm/processor.h>	/* for cpu relax */
@@ -6123,10 +6326,11 @@ diff -puN include/linux/spinlock.h~kgdb-ga include/linux/spinlock.h
  		1; \
  	})
  
-diff -puN kernel/pid.c~kgdb-ga kernel/pid.c
---- 25/kernel/pid.c~kgdb-ga	2004-10-21 14:54:15.285599728 -0700
-+++ 25-akpm/kernel/pid.c	2004-10-21 14:54:15.339591520 -0700
-@@ -252,6 +252,9 @@ void switch_exec_pids(task_t *leader, ta
+Index: linux/kernel/pid.c
+===================================================================
+--- linux.orig/kernel/pid.c
++++ linux/kernel/pid.c
+@@ -276,6 +276,9 @@ int pid_alive(struct task_struct *p)
   * machine.  From a minimum of 16 slots up to 4096 slots at one gigabyte or
   * more.
   */
@@ -6136,7 +6340,7 @@ diff -puN kernel/pid.c~kgdb-ga kernel/pid.c
  void __init pidhash_init(void)
  {
  	int i, j, pidhash_size;
-@@ -273,6 +276,9 @@ void __init pidhash_init(void)
+@@ -297,6 +300,9 @@ void __init pidhash_init(void)
  		for (j = 0; j < pidhash_size; j++)
  			INIT_HLIST_HEAD(&pid_hash[i][j]);
  	}
@@ -6146,10 +6350,11 @@ diff -puN kernel/pid.c~kgdb-ga kernel/pid.c
  }
  
  void __init pidmap_init(void)
-diff -puN kernel/sched.c~kgdb-ga kernel/sched.c
---- 25/kernel/sched.c~kgdb-ga	2004-10-21 14:54:15.287599424 -0700
-+++ 25-akpm/kernel/sched.c	2004-10-21 14:54:15.342591064 -0700
-@@ -2931,6 +2931,13 @@ out_unlock:
+Index: linux/kernel/sched.c
+===================================================================
+--- linux.orig/kernel/sched.c
++++ linux/kernel/sched.c
+@@ -3190,6 +3190,13 @@ out_unlock:
  
  EXPORT_SYMBOL(set_user_nice);
  
@@ -6163,209 +6368,3 @@ diff -puN kernel/sched.c~kgdb-ga kernel/sched.c
  #ifdef __ARCH_WANT_SYS_NICE
  
  /*
-diff -puN MAINTAINERS~kgdb-ga MAINTAINERS
---- 25/MAINTAINERS~kgdb-ga	2004-10-21 14:54:15.288599272 -0700
-+++ 25-akpm/MAINTAINERS	2004-10-21 14:54:15.344590760 -0700
-@@ -1242,6 +1242,12 @@ W:	http://sf.net/projects/kernel-janitor
- W:	http://developer.osdl.org/rddunlap/kj-patches/
- S:	Maintained
- 
-+KGDB FOR I386 PLATFORM
-+P:	George Anzinger
-+M:	george@mvista.com
-+L:	linux-net@vger.kernel.org
-+S:	Supported
-+
- KERNEL NFSD
- P:	Neil Brown
- M:	neilb@cse.unsw.edu.au
-diff -puN arch/i386/Kconfig.debug~kgdb-ga arch/i386/Kconfig.debug
---- 25/arch/i386/Kconfig.debug~kgdb-ga	2004-10-21 14:54:15.290598968 -0700
-+++ 25-akpm/arch/i386/Kconfig.debug	2004-10-21 14:54:15.344590760 -0700
-@@ -65,4 +65,6 @@ config X86_MPPARSE
- 	depends on X86_LOCAL_APIC && !X86_VISWS
- 	default y
- 
-+source "arch/i386/Kconfig.kgdb"
-+
- endmenu
-diff -puN /dev/null arch/i386/Kconfig.kgdb
---- /dev/null	2003-09-15 06:40:47.000000000 -0700
-+++ 25-akpm/arch/i386/Kconfig.kgdb	2004-10-21 14:54:15.345590608 -0700
-@@ -0,0 +1,175 @@
-+config KGDB
-+	bool "Include kgdb kernel debugger"
-+	depends on DEBUG_KERNEL
-+	help
-+	  If you say Y here, the system will be compiled with the debug
-+	  option (-g) and a debugging stub will be included in the
-+	  kernel.  This stub communicates with gdb on another (host)
-+	  computer via a serial port.  The host computer should have
-+	  access to the kernel binary file (vmlinux) and a serial port
-+	  that is connected to the target machine.  Gdb can be made to
-+	  configure the serial port or you can use stty and setserial to
-+	  do this. See the 'target' command in gdb. This option also
-+	  configures in the ability to request a breakpoint early in the
-+	  boot process.  To request the breakpoint just include 'kgdb'
-+	  as a boot option when booting the target machine.  The system
-+	  will then break as soon as it looks at the boot options.  This
-+	  option also installs a breakpoint in panic and sends any
-+	  kernel faults to the debugger. For more information see the
-+	  Documentation/i386/kgdb/kgdb.txt file.
-+
-+choice
-+	depends on KGDB
-+    	prompt "Debug serial port BAUD"
-+	default KGDB_115200BAUD
-+	help
-+	  Gdb and the kernel stub need to agree on the baud rate to be
-+	  used.  Some systems (x86 family at this writing) allow this to
-+	  be configured.
-+
-+config KGDB_9600BAUD
-+	bool "9600"
-+
-+config KGDB_19200BAUD
-+	bool "19200"
-+
-+config KGDB_38400BAUD
-+	bool "38400"
-+
-+config KGDB_57600BAUD
-+	bool "57600"
-+
-+config KGDB_115200BAUD
-+	bool "115200"
-+endchoice
-+
-+config KGDB_PORT
-+	hex "hex I/O port address of the debug serial port"
-+	depends on KGDB
-+	default  3f8
-+	help
-+	  Some systems (x86 family at this writing) allow the port
-+	  address to be configured.  The number entered is assumed to be
-+	  hex, don't put 0x in front of it.  The standard address are:
-+	  COM1 3f8 , irq 4 and COM2 2f8 irq 3.  Setserial /dev/ttySx
-+	  will tell you what you have.  It is good to test the serial
-+	  connection with a live system before trying to debug.
-+
-+config KGDB_IRQ
-+	int "IRQ of the debug serial port"
-+	depends on KGDB
-+	default 4
-+	help
-+	  This is the irq for the debug port.  If everything is working
-+	  correctly and the kernel has interrupts on a control C to the
-+	  port should cause a break into the kernel debug stub.
-+
-+config DEBUG_INFO
-+	bool
-+	depends on KGDB
-+	default y
-+
-+config KGDB_MORE
-+	bool "Add any additional compile options"
-+	depends on KGDB
-+	default n
-+	help
-+	  Saying yes here turns on the ability to enter additional
-+	  compile options.
-+
-+
-+config KGDB_OPTIONS
-+	depends on KGDB_MORE
-+	string "Additional compile arguments"
-+	default "-O1"
-+	help
-+	  This option allows you enter additional compile options for
-+	  the whole kernel compile.  Each platform will have a default
-+	  that seems right for it.  For example on PPC "-ggdb -O1", and
-+	  for i386 "-O1".  Note that by configuring KGDB "-g" is already
-+	  turned on.  In addition, on i386 platforms
-+	  "-fomit-frame-pointer" is deleted from the standard compile
-+	  options.
-+
-+config NO_KGDB_CPUS
-+	int "Number of CPUs"
-+	depends on KGDB && SMP
-+	default NR_CPUS
-+	help
-+
-+	  This option sets the number of cpus for kgdb ONLY.  It is used
-+	  to prune some internal structures so they look "nice" when
-+	  displayed with gdb.  This is to overcome possibly larger
-+	  numbers that may have been entered above.  Enter the real
-+	  number to get nice clean kgdb_info displays.
-+
-+config KGDB_TS
-+	bool "Enable kgdb time stamp macros?"
-+	depends on KGDB
-+	default n
-+	help
-+	  Kgdb event macros allow you to instrument your code with calls
-+	  to the kgdb event recording function.  The event log may be
-+	  examined with gdb at a break point.  Turning on this
-+	  capability also allows you to choose how many events to
-+	  keep. Kgdb always keeps the lastest events.
-+
-+choice
-+	depends on KGDB_TS
-+	prompt "Max number of time stamps to save?"
-+	default KGDB_TS_128
-+
-+config KGDB_TS_64
-+	bool "64"
-+
-+config KGDB_TS_128
-+	bool "128"
-+
-+config KGDB_TS_256
-+	bool "256"
-+
-+config KGDB_TS_512
-+	bool "512"
-+
-+config KGDB_TS_1024
-+	bool "1024"
-+
-+endchoice
-+
-+config STACK_OVERFLOW_TEST
-+	bool "Turn on kernel stack overflow testing?"
-+	depends on KGDB
-+	default n
-+	help
-+	  This option enables code in the front line interrupt handlers
-+	  to check for kernel stack overflow on interrupts and system
-+	  calls.  This is part of the kgdb code on x86 systems.
-+
-+config KGDB_CONSOLE
-+	bool "Enable serial console thru kgdb port"
-+	depends on KGDB
-+	default n
-+	help
-+	  This option enables the command line "console=kgdb" option.
-+	  When the system is booted with this option in the command line
-+	  all kernel printk output is sent to gdb (as well as to other
-+	  consoles).  For this to work gdb must be connected.  For this
-+	  reason, this command line option will generate a breakpoint if
-+	  gdb has not yet connected.  After the gdb continue command is
-+	  given all pent up console output will be printed by gdb on the
-+	  host machine.  Neither this option, nor KGDB require the
-+	  serial driver to be configured.
-+
-+config KGDB_SYSRQ
-+	bool "Turn on SysRq 'G' command to do a break?"
-+	depends on KGDB
-+	default y
-+	help
-+	  This option includes an option in the SysRq code that allows
-+	  you to enter SysRq G which generates a breakpoint to the KGDB
-+	  stub.  This will work if the keyboard is alive and can
-+	  interrupt the system.  Because of constraints on when the
-+	  serial port interrupt can be enabled, this code may allow you
-+	  to interrupt the system before the serial port control C is
-+	  available.  Just say yes here.
-+
-_
