@@ -658,8 +658,15 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
                       "NO_CONTEXT" : "BAD_SIG");
 
                 sptlrpc_ctx_expire(ctx);
-                req->rq_resend = 1;
-                rc = 0;
+                /*
+                 * we need replace the ctx right here, otherwise during
+                 * resent we'll hit the logic in sptlrpc_req_refresh_ctx()
+                 * which keep the ctx with RESEND flag, thus we'll never
+                 * get rid of this ctx.
+                 */
+                rc = sptlrpc_req_replace_dead_ctx(req);
+                if (rc == 0)
+                        req->rq_resend = 1;
         } else {
                 CERROR("req %p: server report gss error (%x/%x)\n",
                         req, errhdr->gh_major, errhdr->gh_minor);

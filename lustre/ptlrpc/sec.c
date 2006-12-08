@@ -771,6 +771,7 @@ int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
         }
         RETURN(rc);
 }
+EXPORT_SYMBOL(sptlrpc_req_replace_dead_ctx);
 
 static
 int ctx_check_refresh(struct ptlrpc_cli_ctx *ctx)
