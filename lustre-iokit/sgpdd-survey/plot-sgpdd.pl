@@ -48,7 +48,7 @@ LABEL: while ( <PFILE> ) {
 		$out{$line[7]}{$line[5]} = $line[9];	
 	    }
 	}
-	print "rg$line[5] th$line[7] w$line[9] r$line[$rindex]\n";
+	#print "rg$line[5] th$line[7] w$line[9] r$line[$rindex]\n";
 	if ($line[$rindex]) {
 	    if (!($line[$rindex+1] eq "failed")) {
 		if ($line[5] <= 1 ) {
@@ -76,7 +76,7 @@ for ($j = 1; $j <= $thread ; $j = $j + $j) {
 	print DATAFILE "  write$j  read$j";
 }
 for ( $i = 1; $i <= $region; $i = $i + $i ) {
-	print DATAFILE "\n$i";
+	printf DATAFILE "\n%-4s", $i;
 	for ($j = 1; $j <= $thread ; $j = $j + $j) {
 		if ( $out{$i}{$j} ) {
 			print DATAFILE "  $out{$i}{$j}";
