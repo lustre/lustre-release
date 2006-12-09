@@ -243,6 +243,7 @@ static void lvar_leaf(void *buf,
                       int blocksize, int keysize, int ptrsize, int recsize)
 {
         struct lvar_leaf_header *head;
+        char                    *rec;
 
         /* form leaf */
         head = buf;
@@ -250,6 +251,8 @@ static void lvar_leaf(void *buf,
                 .vlh_magic = cpu_to_le16(IAM_LVAR_LEAF_MAGIC),
                 .vlh_used  = cpu_to_le16(sizeof *head + lvar_esize(0, recsize))
         };
+        rec = (head + 1);
+        rec[offsetof(struct lvar_leaf_entry, vle_key)] = recsize;
 }
 
 

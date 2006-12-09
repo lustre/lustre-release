@@ -318,10 +318,10 @@ int mdd_link_sanity_check(const struct lu_env *env,
 const struct dt_rec *__mdd_fid_rec(const struct lu_env *env,
                                    const struct lu_fid *fid)
 {
-        struct mdd_thread_info *info = mdd_env_info(env);
+        struct lu_fid_pack *pack = &mdd_env_info(env)->mti_pack;
 
-        fid_cpu_to_be(&info->mti_fid2, fid);
-        return (const struct dt_rec *)&info->mti_fid2;
+        fid_pack(pack, fid, &mdd_env_info(env)->mti_fid2);
+        return (const struct dt_rec *)pack;
 }
 
 
@@ -960,7 +960,7 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
         struct mdd_object   *mdd_obj = md2mdd_obj(pobj);
         struct mdd_device   *m = mdo2mdd(pobj);
         struct dt_object    *dir = mdd_object_child(mdd_obj);
-        struct dt_rec       *rec = (struct dt_rec *)fid;
+        struct lu_fid_pack  *pack = &mdd_env_info(env)->mti_pack;
         struct timeval       start;
         int rc;
         ENTRY;
@@ -987,10 +987,11 @@ __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                 RETURN(rc);
 
         if (S_ISDIR(mdd_object_type(mdd_obj)) && dt_try_as_dir(env, dir)) {
-                rc = dir->do_index_ops->dio_lookup(env, dir, rec, key,
+                rc = dir->do_index_ops->dio_lookup(env, dir,
+                                                   (struct dt_rec *)pack, key,
                                                    mdd_object_capa(env, mdd_obj));
                 if (rc == 0)
-                        fid_be_to_cpu(fid, fid);
+                        fid_unpack(pack, fid);
         } else
                 rc = -ENOTDIR;
 

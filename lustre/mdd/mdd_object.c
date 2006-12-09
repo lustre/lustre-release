@@ -1260,9 +1260,9 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
                               struct dt_it *it, __u32 *start, __u32 *end,
                               struct lu_dirent **last)
 {
-        struct lu_fid          *fid2  = &mdd_env_info(env)->mti_fid2;
+        struct lu_fid          *fid  = &mdd_env_info(env)->mti_fid2;
         struct mdd_thread_info *info = mdd_env_info(env);
-        struct lu_fid          *fid  = &info->mti_fid;
+        struct lu_fid_pack     *pack = &info->mti_pack;
         int                     result;
         struct lu_dirent       *ent;
 
@@ -1285,18 +1285,18 @@ static int mdd_dir_page_build(const struct lu_env *env, int first,
                 name = (char *)iops->key(env, it);
                 len  = iops->key_size(env, it);
 
-                fid  = (struct lu_fid *)iops->rec(env, it);
-                fid_be_to_cpu(fid2, fid);
+                pack = (struct lu_fid_pack *)iops->rec(env, it);
+                fid_unpack(pack, fid);
 
                 recsize = (sizeof(*ent) + len + 3) & ~3;
                 hash = iops->store(env, it);
                 *end = hash;
 
                 CDEBUG(D_INFO, "%p %p %d "DFID": %#8.8x (%d) \"%*.*s\"\n",
-                       name, ent, nob, PFID(fid2), hash, len, len, len, name);
+                       name, ent, nob, PFID(fid), hash, len, len, len, name);
 
                 if (nob >= recsize) {
-                        fid_be_to_cpu(&ent->lde_fid, fid);
+                        ent->lde_fid = *fid;
                         fid_cpu_to_le(&ent->lde_fid, &ent->lde_fid);
                         ent->lde_hash = hash;
                         ent->lde_namelen = cpu_to_le16(len);
@@ -1427,16 +1427,16 @@ static int mdd_readpage(const struct lu_env *env, struct md_object *obj,
         rc = mdd_readpage_sanity_check(env, mdd_obj);
         if (rc)
                 GOTO(out_unlock, rc);
-        
+
         if (mdd_is_dead_obj(mdd_obj)) {
                 struct page *pg;
                 struct lu_dirpage *dp;
 
-                /* 
+                /*
                  * According to POSIX, please do not return any entry to client:
                  * even dot and dotdot should not be returned.
                  */
-                CWARN("readdir from dead object: "DFID"\n", 
+                CWARN("readdir from dead object: "DFID"\n",
                         PFID(lu_object_fid(mdd2lu_obj(mdd_obj))));
 
                 if (rdpg->rp_count <= 0)

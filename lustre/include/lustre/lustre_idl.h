@@ -239,6 +239,56 @@ static inline int fid_is_igif(const struct lu_fid *fid)
         return fid_seq(fid) == LUSTRE_ROOT_FID_SEQ;
 }
 
+#define DFID "[0x%16.16"LPF64"x/0x%8.8x:0x%8.8x]"
+
+#define PFID(fid)     \
+        fid_seq(fid), \
+        fid_oid(fid), \
+        fid_ver(fid)
+
+#ifdef __KERNEL__
+static inline void fid_cpu_to_be(struct lu_fid *dst, const struct lu_fid *src)
+{
+        /* check that all fields are converted */
+        CLASSERT(sizeof *src ==
+                 sizeof fid_seq(src) +
+                 sizeof fid_oid(src) + sizeof fid_ver(src));
+        LASSERTF(fid_is_igif(src) || fid_ver(src) == 0, DFID"\n", PFID(src));
+        dst->f_seq = cpu_to_be64(fid_seq(src));
+        dst->f_oid = cpu_to_be32(fid_oid(src));
+        dst->f_ver = cpu_to_be32(fid_ver(src));
+}
+
+static inline void fid_be_to_cpu(struct lu_fid *dst, const struct lu_fid *src)
+{
+        /* check that all fields are converted */
+        CLASSERT(sizeof *src ==
+                 sizeof fid_seq(src) +
+                 sizeof fid_oid(src) + sizeof fid_ver(src));
+        dst->f_seq = be64_to_cpu(fid_seq(src));
+        dst->f_oid = be32_to_cpu(fid_oid(src));
+        dst->f_ver = be32_to_cpu(fid_ver(src));
+        LASSERTF(fid_is_igif(dst) || fid_ver(dst) == 0, DFID"\n", PFID(dst));
+}
+
+/*
+ * Storage representation for fids.
+ *
+ * Variable size, first byte contains the length of the whole record.
+ */
+
+struct lu_fid_pack {
+        char fp_len;
+        char fp_area[sizeof(struct lu_fid)];
+};
+
+void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,
+              struct lu_fid *befider);
+void fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid);
+
+/* __KERNEL__ */
+#endif
+
 static inline int fid_is_sane(const struct lu_fid *fid)
 {
         return
@@ -252,13 +302,6 @@ static inline int fid_is_zero(const struct lu_fid *fid)
 {
         return fid_seq(fid) == 0 && fid_oid(fid) == 0;
 }
-
-#define DFID "[0x%16.16"LPF64"x/0x%8.8x:0x%8.8x]"
-
-#define PFID(fid)     \
-        fid_seq(fid), \
-        fid_oid(fid), \
-        fid_ver(fid)
 
 extern void lustre_swab_lu_fid(struct lu_fid *fid);
 extern void lustre_swab_lu_range(struct lu_range *range);

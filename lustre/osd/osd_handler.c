@@ -1087,7 +1087,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
                  * XXX uh-oh... call low-level iam function directly.
                  */
                 result = iam_lvar_create(obj->oo_inode, OSD_NAME_LEN, 4,
-                                         sizeof (struct lu_fid),
+                                         sizeof (struct lu_fid_pack),
                                          oth->ot_handle);
         }
         return result;
@@ -1520,7 +1520,7 @@ static int osd_index_probe(const struct lu_env *env, struct osd_object *o,
         if (feat == &dt_directory_features)
                 return osd_sb(osd_obj2dev(o))->s_root->d_inode == o->oo_inode ||
                         descr == &iam_htree_compat_param ||
-                        (descr->id_rec_size == sizeof(struct lu_fid) &&
+                        (descr->id_rec_size == sizeof(struct lu_fid_pack) &&
                          1 /*
                             * XXX check that index looks like directory.
                             */
@@ -1845,13 +1845,16 @@ static int osd_index_compat_delete(const struct lu_env *env,
  */
 
 
-static int osd_build_fid(struct osd_device *osd,
-                         struct dentry *dentry, struct lu_fid *fid)
+static void osd_build_pack(const struct lu_env *env, struct osd_device *osd,
+                           struct dentry *dentry, struct lu_fid_pack *pack)
 {
         struct inode *inode = dentry->d_inode;
+        struct lu_fid *fid   = &osd_oti_get(env)->oti_fid;
 
         lu_igif_build(fid, inode->i_ino, inode->i_generation);
-        return 0;
+        fid_cpu_to_be(fid, fid);
+        pack->fp_len = sizeof *fid + 1;
+        memcpy(pack->fp_area, fid, sizeof *fid);
 }
 
 static int osd_index_compat_lookup(const struct lu_env *env,
@@ -1903,10 +1906,11 @@ static int osd_index_compat_lookup(const struct lu_env *env,
                         /*
                          * normal case, result is in @dentry.
                          */
-                        if (dentry->d_inode != NULL)
-                                result = osd_build_fid(osd, dentry,
-                                                       (struct lu_fid *)rec);
-                        else
+                        if (dentry->d_inode != NULL) {
+                                osd_build_pack(env, osd, dentry,
+                                               (struct lu_fid_pack *)rec);
+                                result = 0;
+                        } else
                                 result = -ENOENT;
                  } else {
                         /* What? Disconnected alias? Ppheeeww... */
@@ -1976,13 +1980,14 @@ static int osd_index_compat_insert(const struct lu_env *env,
 {
         struct osd_object     *obj = osd_dt_obj(dt);
 
-        const struct lu_fid *fid  = (const struct lu_fid *)rec;
         const char          *name = (const char *)key;
 
         struct lu_device    *ludev = dt->do_lu.lo_dev;
         struct lu_object    *luch;
 
-        struct osd_thread_info *info = osd_oti_get(env);
+        struct osd_thread_info   *info = osd_oti_get(env);
+        const struct lu_fid_pack *pack  = (const struct lu_fid_pack *)rec;
+        struct lu_fid            *fid   = &osd_oti_get(env)->oti_fid;
 
         int result;
 
@@ -1993,6 +1998,7 @@ static int osd_index_compat_insert(const struct lu_env *env,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
                 return -EACCES;
 
+        fid_unpack(pack, fid);
         luch = lu_object_find(env, ludev->ld_site, fid);
         if (!IS_ERR(luch)) {
                 if (lu_object_exists(luch)) {

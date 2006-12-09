@@ -282,9 +282,13 @@ struct lu_cdebug_data {
          * Temporary buffer.
          */
         char lck_area[LU_CDEBUG_LINE];
+        /*
+         * fid staging area used by dt_store_open().
+         */
+        struct lu_fid_pack lck_pack;
 };
 
-static void *lu_cdebug_key_init(const struct lu_context *ctx,
+static void *lu_global_key_init(const struct lu_context *ctx,
                                 struct lu_context_key *key)
 {
         struct lu_cdebug_data *value;
@@ -295,7 +299,7 @@ static void *lu_cdebug_key_init(const struct lu_context *ctx,
         return value;
 }
 
-static void lu_cdebug_key_fini(const struct lu_context *ctx,
+static void lu_global_key_fini(const struct lu_context *ctx,
                                struct lu_context_key *key, void *data)
 {
         struct lu_cdebug_data *value = data;
@@ -306,10 +310,10 @@ static void lu_cdebug_key_fini(const struct lu_context *ctx,
  * Key, holding temporary buffer. This key is registered very early by
  * lu_global_init().
  */
-static struct lu_context_key lu_cdebug_key = {
+struct lu_context_key lu_global_key = {
         .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD|LCT_CL_THREAD,
-        .lct_init = lu_cdebug_key_init,
-        .lct_fini = lu_cdebug_key_fini
+        .lct_init = lu_global_key_init,
+        .lct_fini = lu_global_key_fini
 };
 
 /*
@@ -326,7 +330,7 @@ int lu_cdebug_printer(const struct lu_env *env,
 
         va_start(args, format);
 
-        key = lu_context_key_get(&env->le_ctx, &lu_cdebug_key);
+        key = lu_context_key_get(&env->le_ctx, &lu_global_key);
         LASSERT(key != NULL);
 
         used = strlen(key->lck_area);
@@ -1046,7 +1050,7 @@ int lu_global_init(void)
 {
         int result;
 
-        result = lu_context_key_register(&lu_cdebug_key);
+        result = lu_context_key_register(&lu_global_key);
         if (result == 0) {
                 /*
                  * At this level, we don't know what tags are needed, so
@@ -1073,11 +1077,11 @@ void lu_global_fini(void)
                 lu_site_shrinker = NULL;
         }
 
-        lu_context_key_degister(&lu_cdebug_key);
+        lu_context_key_degister(&lu_global_key);
 
         /*
          * Tear shrinker environment down _after_ de-registering
-         * lu_cdebug_key, because the latter has a value in the former.
+         * lu_global_key, because the latter has a value in the former.
          */
         down(&lu_sites_guard);
         lu_env_fini(&lu_shrink_env);
@@ -1089,3 +1093,74 @@ struct lu_buf LU_BUF_NULL = {
         .lb_len = 0
 };
 EXPORT_SYMBOL(LU_BUF_NULL);
+
+/*
+ * XXX: Functions below logically belong to fid module, but they are used by
+ * dt_store_open(). Put them here until better place is found.
+ */
+
+void fid_pack(struct lu_fid_pack *pack, const struct lu_fid *fid,
+              struct lu_fid *befider)
+{
+        int recsize;
+        __u64 seq;
+        __u32 oid;
+
+        seq = fid_seq(fid);
+        oid = fid_oid(fid);
+
+        /*
+         * Two cases: compact 6 bytes representation for a common case, and
+         * full 17 byte representation for "unusual" fid.
+         */
+
+        /*
+         * Check that usual case is really usual.
+         */
+        CLASSERT(LUSTRE_SEQ_MAX_WIDTH < 0xffffull);
+
+        if (fid_is_igif(fid) ||
+            seq > 0xffffffull || oid > 0xffff || fid_ver(fid) != 0) {
+                fid_cpu_to_be(befider, fid);
+                recsize = sizeof *befider;
+        } else {
+                unsigned char *small_befider;
+
+                small_befider = (char *)befider;
+
+                small_befider[0] = seq >> 16;
+                small_befider[1] = seq >> 8;
+                small_befider[2] = seq;
+
+                small_befider[3] = oid >> 8;
+                small_befider[4] = oid;
+
+                recsize = 5;
+        }
+        memcpy(pack->fp_area, befider, recsize);
+        pack->fp_len = recsize + 1;
+}
+EXPORT_SYMBOL(fid_pack);
+
+void fid_unpack(const struct lu_fid_pack *pack, struct lu_fid *fid)
+{
+        switch (pack->fp_len) {
+        case sizeof *fid + 1:
+                memcpy(fid, pack->fp_area, sizeof *fid);
+                fid_be_to_cpu(fid, fid);
+                break;
+        case 6: {
+                const unsigned char *area;
+
+                area = pack->fp_area;
+                fid->f_seq = (area[0] << 16) | (area[1] << 8) | area[2];
+                fid->f_oid = (area[3] << 8) | area[4];
+                fid->f_ver = 0;
+                break;
+        }
+        default:
+                CERROR("Unexpected packed fid size: %d\n", pack->fp_len);
+                LBUG();
+        }
+}
+EXPORT_SYMBOL(fid_unpack);

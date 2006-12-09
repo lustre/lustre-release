@@ -35,6 +35,8 @@
 #include <obd.h>
 #include <dt_object.h>
 #include <libcfs/list.h>
+/* fid_be_to_cpu() */
+#include <lustre_fid.h>
 
 /* no lock is necessary to protect the list, because call-backs
  * are added during system startup. Please refer to "struct dt_device".
@@ -141,17 +143,22 @@ int dt_try_as_dir(const struct lu_env *env, struct dt_object *obj)
 }
 EXPORT_SYMBOL(dt_try_as_dir);
 
+extern struct lu_context_key lu_global_key;
+
 static int dt_lookup(const struct lu_env *env, struct dt_object *dir,
                      const char *name, struct lu_fid *fid)
 {
-        struct dt_rec       *rec = (struct dt_rec *)fid;
+        struct lu_fid_pack  *pack = lu_context_key_get(&env->le_ctx,
+                                                       &lu_global_key);
+        struct dt_rec       *rec = (struct dt_rec *)pack;
         const struct dt_key *key = (const struct dt_key *)name;
         int result;
 
-        if (dt_try_as_dir(env, dir))
+        if (dt_try_as_dir(env, dir)) {
                 result = dir->do_index_ops->dio_lookup(env, dir, rec, key,
                                                        BYPASS_CAPA);
-        else
+                fid_unpack(pack, fid);
+        } else
                 result = -ENOTDIR;
         return result;
 }

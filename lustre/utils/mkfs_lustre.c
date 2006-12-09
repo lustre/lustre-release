@@ -1282,7 +1282,7 @@ static int mkfs_mdt(struct mkfs_opts *mop)
         }
 
         snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "root");
-        ret = iam_creat(filepnm, FMT_LVAR, L_BLOCK_SIZE, 4, 16, 4);
+        ret = iam_creat(filepnm, FMT_LVAR, L_BLOCK_SIZE, 4, 17, 4);
         if (ret) {
                 goto out_umount;
         }
@@ -1352,7 +1352,7 @@ static int mkfs_mdt(struct mkfs_opts *mop)
                 goto out_umount;
         }
 
-        snprintf(recbuf, sizeof(recbuf) - 1, "0000000000000001%8.8x%8.8x",
+        snprintf(recbuf, sizeof(recbuf) - 1, "110000000000000001%8.8x%8.8x",
                  (unsigned int)st.st_ino, (unsigned int)generation);
         ret = mkfs_iam_insert(0, ".", 1, recbuf, filepnm);
         if (ret) {
