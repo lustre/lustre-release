@@ -100,7 +100,7 @@ Index: iam/fs/ext3/iam-uapi.c
 ===================================================================
 --- iam.orig/fs/ext3/iam-uapi.c
 +++ iam/fs/ext3/iam-uapi.c
-@@ -0,0 +1,367 @@
+@@ -0,0 +1,366 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -192,8 +192,7 @@ Index: iam/fs/ext3/iam-uapi.c
 +                memcpy(itop->iui_op.iul_key, iam_it_key_get(it),
 +                       iam_it_key_size(it));
 +        if (st == IAM_IT_ATTACHED)
-+                iam_reccpy(&it->ii_path,
-+                           itop->iui_op.iul_rec, iam_it_rec_get(it));
++                iam_reccpy(&it->ii_path.ip_leaf, itop->iui_op.iul_rec);
 +        itop->iui_state = st;
 +        return result;
 +}

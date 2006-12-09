@@ -15,7 +15,7 @@ Index: iam/fs/ext3/iam.c
 ===================================================================
 --- iam.orig/fs/ext3/iam.c
 +++ iam/fs/ext3/iam.c
-@@ -0,0 +1,1443 @@
+@@ -0,0 +1,1442 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -893,7 +893,8 @@ Index: iam/fs/ext3/iam.c
 +        assert_corr(iam_leaf_is_locked(leaf));
 +
 +        result = 0;
-+        do_corr(ik_orig = iam_it_ikey_get(it, iam_path_ikey(path, 2)));
++        do_corr(ik_orig = it_at_rec(it) ?
++                iam_it_ikey_get(it, iam_path_ikey(path, 2)) : NULL);
 +        if (it_before(it)) {
 +                assert_corr(!iam_leaf_at_end(leaf));
 +                it->ii_state = IAM_IT_ATTACHED;
@@ -932,7 +933,8 @@ Index: iam/fs/ext3/iam.c
 +        }
 +        assert_corr(ergo(result == 0, it_state(it) == IAM_IT_ATTACHED));
 +        assert_corr(ergo(result >  0, it_state(it) == IAM_IT_DETACHED));
-+        assert_corr(ergo(result == 0, it_ikeycmp(it, ik_orig) >= 0));
++        assert_corr(ergo(result == 0 && ik_orig != NULL,
++                         it_ikeycmp(it, ik_orig) >= 0));
 +        return result;
 +}
 +EXPORT_SYMBOL(iam_it_next);
@@ -1203,9 +1205,7 @@ Index: iam/fs/ext3/iam.c
 +                it->ii_state = IAM_IT_ATTACHED;
 +        assert_corr(ergo(result == 0,
 +                         it_state(it) == IAM_IT_ATTACHED &&
-+                         it_keycmp(it, k) == 0 &&
-+                         !memcmp(iam_it_rec_get(it), r,
-+                                 iam_it_container(it)->ic_descr->id_rec_size)));
++                         it_keycmp(it, k) == 0));
 +        return result;
 +}
 +EXPORT_SYMBOL(iam_it_rec_insert);
@@ -1373,7 +1373,7 @@ Index: iam/fs/ext3/iam.c
 +                /*
 +                 * record with required key found, copy it into user buffer
 +                 */
-+                iam_reccpy(&it.ii_path, r, iam_it_rec_get(&it));
++                iam_reccpy(&it.ii_path.ip_leaf, r);
 +        iam_it_put(&it);
 +        iam_it_fini(&it);
 +        return result;
@@ -1388,8 +1388,7 @@ Index: iam/fs/ext3/iam.c
 + * given key is already present.
 + *
 + * postcondition: ergo(result == 0 || result == -EEXIST,
-+ *                                  iam_lookup(c, k, r2) > 0 &&
-+ *                                  !memcmp(r, r2, c->ic_descr->id_rec_size));
++ *                                  iam_lookup(c, k, r2) > 0;
 + */
 +int iam_insert(handle_t *h, struct iam_container *c, const struct iam_key *k,
 +               const struct iam_rec *r, struct iam_path_descr *pd)
@@ -1463,7 +1462,7 @@ Index: iam/fs/ext3/iam_htree.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_htree.c
 +++ iam/fs/ext3/iam_htree.c
-@@ -0,0 +1,684 @@
+@@ -0,0 +1,693 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -1805,6 +1804,14 @@ Index: iam/fs/ext3/iam_htree.c
 +        getent(l)->inode = cpu_to_le32(*ino);
 +}
 +
++static void iam_htree_rec_get(const struct iam_leaf *l, struct iam_rec *r)
++{
++        __u32 *ino;
++
++        ino = (void *)r;
++        *ino = le32_to_cpu(getent(l)->inode);
++}
++
 +static void iam_htree_rec_add(struct iam_leaf *leaf, const struct iam_key *k,
 +                              const struct iam_rec *r)
 +{
@@ -1920,6 +1927,7 @@ Index: iam/fs/ext3/iam_htree.c
 +        .key_eq         = iam_htree_key_eq,
 +        .key_size       = iam_htree_key_size,
 +        .rec_set        = iam_htree_rec_set,
++        .rec_get        = iam_htree_rec_get,
 +        .lookup         = iam_htree_lookup,
 +        .ilookup        = iam_htree_ilookup,
 +        .at_end         = iam_htree_at_end,
@@ -2152,7 +2160,7 @@ Index: iam/fs/ext3/iam_lfix.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lfix.c
 +++ iam/fs/ext3/iam_lfix.c
-@@ -0,0 +1,724 @@
+@@ -0,0 +1,731 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2502,7 +2510,13 @@ Index: iam/fs/ext3/iam_lfix.c
 +static void iam_lfix_rec_set(struct iam_leaf *l, const struct iam_rec *r)
 +{
 +        assert_corr(iam_leaf_at_rec(l));
-+        iam_reccpy(iam_leaf_path(l), iam_lfix_rec(l), r);
++        memcpy(iam_lfix_rec(l), r, iam_leaf_descr(l)->id_rec_size);
++}
++
++static void iam_lfix_rec_get(const struct iam_leaf *l, struct iam_rec *r)
++{
++        assert_corr(iam_leaf_at_rec(l));
++        memcpy(r, iam_lfix_rec(l), iam_leaf_descr(l)->id_rec_size);
 +}
 +
 +static void iam_lfix_rec_add(struct iam_leaf *leaf,
@@ -2654,6 +2668,7 @@ Index: iam/fs/ext3/iam_lfix.c
 +        .key_eq         = iam_lfix_key_eq,
 +        .key_size       = iam_lfix_key_size,
 +        .rec_set        = iam_lfix_rec_set,
++        .rec_get        = iam_lfix_rec_get,
 +        .lookup         = iam_lfix_lookup,
 +        .ilookup        = iam_lfix_ilookup,
 +        .at_end         = iam_lfix_at_end,
@@ -2881,7 +2896,7 @@ Index: iam/fs/ext3/iam_lvar.c
 ===================================================================
 --- iam.orig/fs/ext3/iam_lvar.c
 +++ iam/fs/ext3/iam_lvar.c
-@@ -0,0 +1,1060 @@
+@@ -0,0 +1,1088 @@
 +/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
 + * vim:expandtab:shiftwidth=8:tabstop=8:
 + *
@@ -2979,11 +2994,6 @@ Index: iam/fs/ext3/iam_lvar.c
 +}
 +
 +
-+static inline int recsize(const struct iam_leaf *leaf)
-+{
-+        return iam_leaf_descr(leaf)->id_rec_size;
-+}
-+
 +static inline int e_keysize(const struct lvar_leaf_entry *ent)
 +{
 +        return le16_to_cpu(ent->vle_keysize);
@@ -2995,18 +3005,29 @@ Index: iam/fs/ext3/iam_lvar.c
 +        LVAR_ROUND = LVAR_PAD - 1
 +};
 +
-+static inline int getsize(const struct iam_leaf *leaf, int namelen)
++static inline int getsize(const struct iam_leaf *leaf, int namelen, int recsize)
 +{
 +        CLASSERT(!(LVAR_PAD & (LVAR_PAD - 1)));
 +
 +        return (offsetof(struct lvar_leaf_entry, vle_key) +
-+                namelen + recsize(leaf) + LVAR_ROUND) & ~LVAR_ROUND;
++                namelen + recsize + LVAR_ROUND) & ~LVAR_ROUND;
++}
++
++static inline int rec_size(const struct iam_rec *rec)
++{
++        return *(const char *)rec;
++}
++
++static inline struct iam_rec *e_rec(const struct lvar_leaf_entry *ent)
++{
++        return ((void *)ent) +
++                offsetof(struct lvar_leaf_entry, vle_key) + e_keysize(ent);
 +}
 +
 +static inline int e_size(const struct iam_leaf *leaf,
 +                         const struct lvar_leaf_entry *ent)
 +{
-+        return getsize(leaf, e_keysize(ent));
++        return getsize(leaf, e_keysize(ent), rec_size(e_rec(ent)));
 +}
 +
 +static inline char *e_char(const struct lvar_leaf_entry *ent)
@@ -3022,12 +3043,6 @@ Index: iam/fs/ext3/iam_lvar.c
 +static inline lvar_hash_t e_hash(const struct lvar_leaf_entry *ent)
 +{
 +        return le32_to_cpu(ent->vle_hash);
-+}
-+
-+static inline struct iam_rec *e_rec(const struct lvar_leaf_entry *ent)
-+{
-+        return ((void *)ent) +
-+                offsetof(struct lvar_leaf_entry, vle_key) + e_keysize(ent);
 +}
 +
 +static void e_print(const struct lvar_leaf_entry *ent)
@@ -3210,6 +3225,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +                nexthash = e_hash(scan);
 +                if (nexthash != get_hash(iam_leaf_container(leaf),
 +                                         e_char(scan), e_keysize(scan))) {
++                        BREAKPOINT();
 +                        return 0;
 +                }
 +                if (0 && nexthash < starthash) {
@@ -3224,11 +3240,13 @@ Index: iam/fs/ext3/iam_lvar.c
 +                        return 0;
 +                }
 +                if (nexthash < hash) {
++                        BREAKPOINT();
 +                        return 0;
 +                }
 +                hash = nexthash;
 +        }
 +        if (scan != end) {
++                BREAKPOINT();
 +                return 0;
 +        }
 +        return 1;
@@ -3414,12 +3432,17 @@ Index: iam/fs/ext3/iam_lvar.c
 +        return IAM_LOOKUP_OK;
 +}
 +
++static void __lvar_key_set(struct iam_leaf *l, const struct iam_key *k)
++{
++        memcpy(e_key(n_cur(l)), k, e_keysize(n_cur(l)));
++}
++
 +static void lvar_key_set(struct iam_leaf *l, const struct iam_key *k)
 +{
 +        assert_corr(n_at_rec(l));
 +        assert_corr(strlen(kchar(k)) == e_keysize(n_cur(l)));
 +        assert_corr(iam_leaf_is_locked(l));
-+        memcpy(e_key(n_cur(l)), k, e_keysize(n_cur(l)));
++        __lvar_key_set(l, k);
 +        assert_inv(n_invariant(l));
 +}
 +
@@ -3442,11 +3465,27 @@ Index: iam/fs/ext3/iam_lvar.c
 +        return e_eq(n_cur(l), name, strlen(name));
 +}
 +
++static void __lvar_rec_set(struct iam_leaf *l, const struct iam_rec *r)
++{
++        memcpy(e_rec(n_cur(l)), r, rec_size(r));
++}
++
 +static void lvar_rec_set(struct iam_leaf *l, const struct iam_rec *r)
 +{
 +        assert_corr(n_at_rec(l));
 +        assert_corr(iam_leaf_is_locked(l));
-+        iam_reccpy(iam_leaf_path(l), e_rec(n_cur(l)), r);
++        __lvar_rec_set(l, r);
++        assert_inv(n_invariant(l));
++}
++
++static void lvar_rec_get(const struct iam_leaf *l, struct iam_rec *r)
++{
++        struct iam_rec *rec;
++
++        rec = e_rec(n_cur(l));
++        assert_corr(n_at_rec(l));
++        assert_corr(iam_leaf_is_locked(l));
++        memcpy(r, rec, rec_size(rec));
 +        assert_inv(n_invariant(l));
 +}
 +
@@ -3454,7 +3493,9 @@ Index: iam/fs/ext3/iam_lvar.c
 +                        const struct iam_key *k, const struct iam_rec *r)
 +{
 +        assert_corr(iam_leaf_is_locked(l));
-+        return h_used(n_head(l)) + getsize(l, strlen(kchar(k))) <= blocksize(l);
++        return
++                h_used(n_head(l)) +
++                getsize(l, strlen(kchar(k)), rec_size(r)) <= blocksize(l);
 +}
 +
 +static int lvar_at_end(const struct iam_leaf *folio)
@@ -3479,7 +3520,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +
 +        key   = kchar(k);
 +        ksize = strlen(key);
-+        shift = getsize(leaf, ksize);
++        shift = getsize(leaf, ksize, rec_size(r));
 +
 +        if (!lvar_at_end(leaf)) {
 +                assert_corr(n_cur(leaf) < n_end(leaf));
@@ -3502,8 +3543,8 @@ Index: iam/fs/ext3/iam_lvar.c
 +        n_cur(leaf)->vle_keysize = cpu_to_le16(ksize);
 +        n_cur(leaf)->vle_hash = cpu_to_le32(get_hash(iam_leaf_container(leaf),
 +                                                     key, ksize));
-+        lvar_key_set(leaf, k);
-+        lvar_rec_set(leaf, r);
++        __lvar_key_set(leaf, k);
++        __lvar_rec_set(leaf, r);
 +        assert_corr(n_at_rec(leaf));
 +        assert_inv(n_invariant(leaf));
 +}
@@ -3634,6 +3675,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +        .key_eq         = lvar_key_eq,
 +        .key_size       = lvar_key_size,
 +        .rec_set        = lvar_rec_set,
++        .rec_get        = lvar_rec_get,
 +        .lookup         = lvar_lookup,
 +        .ilookup        = lvar_ilookup,
 +        .at_end         = lvar_at_end,
@@ -3851,6 +3893,7 @@ Index: iam/fs/ext3/iam_lvar.c
 +                .vle_keysize = 0
 +        };
 +        memset(e_rec(entry), 0, recsize);
++        *(char *)e_rec(entry) = recsize;
 +}
 +
 +#include <linux/jbd.h>
