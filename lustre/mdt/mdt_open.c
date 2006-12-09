@@ -305,9 +305,12 @@ static void mdt_empty_transno(struct mdt_thread_info* info)
         struct mdt_device *mdt = info->mti_mdt;
         struct ptlrpc_request *req = mdt_info_req(info);
 
+        ENTRY;
         /* transaction is occured already */
-        if (lustre_msg_get_transno(req->rq_repmsg) != 0)
+        if (lustre_msg_get_transno(req->rq_repmsg) != 0) {
+                EXIT;
                 return;
+        }
 
         spin_lock(&mdt->mdt_transno_lock);
         if (info->mti_transno == 0) {
@@ -326,14 +329,76 @@ static void mdt_empty_transno(struct mdt_thread_info* info)
         req->rq_transno = info->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, info->mti_transno);
         lustre_msg_set_last_xid(req->rq_repmsg, req->rq_xid);
+        EXIT;
 }
 
 static int mdt_mfd_open(struct mdt_thread_info *info,
-                        struct mdt_object *p,
-                        struct mdt_object *o,
-                        int flags,
-                        int created,
-                        struct ldlm_reply *rep)
+                        struct mdt_object *o, int flags)
+{
+        struct ptlrpc_request   *req = mdt_info_req(info);
+        struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
+        struct mdt_device       *mdt = info->mti_mdt;
+        struct mdt_file_data    *mfd;
+        struct mdt_body         *repbody;
+        int                      rc = 0;
+        struct list_head        *t;
+        ENTRY;
+
+        repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
+
+        if (flags & FMODE_WRITE) {
+                rc = mdt_write_get(info->mti_mdt, o);
+                if (rc == 0) {
+                        mdt_epoch_open(info, o);
+                        repbody->ioepoch = o->mot_ioepoch;
+                }
+        } else if (flags & MDS_FMODE_EXEC) {
+                rc = mdt_write_deny(info->mti_mdt, o);
+        }
+        if (rc)
+                RETURN(rc);
+
+        rc = mo_open(info->mti_env, mdt_object_child(o), flags);
+        if (rc)
+                RETURN(rc);
+
+        mfd = mdt_mfd_new();
+        if (mfd != NULL) {
+                /*
+                 * Keep a reference on this object for this open, and is
+                 * released by mdt_mfd_close().
+                 */
+                mdt_object_get(info->mti_env, o);
+
+                /* Open handling. */
+                mfd->mfd_mode = flags;
+                mfd->mfd_object = o;
+                mfd->mfd_xid = req->rq_xid;
+                /* replay handle */
+                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                        if (info->mti_rr.rr_handle) {
+                                CDEBUG(D_HA, "Store old cookie "LPX64" in new mfd\n",
+                                       info->mti_rr.rr_handle->cookie);
+                                mfd->mfd_old_handle.cookie = info->mti_rr.rr_handle->cookie;
+                        } else
+                                LBUG();
+                }
+                spin_lock(&med->med_open_lock);
+                list_add(&mfd->mfd_list, &med->med_open_head);
+                spin_unlock(&med->med_open_lock);
+
+                repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+                mdt_empty_transno(info);
+        } else
+                rc = -ENOMEM;
+
+        RETURN(rc);
+}
+
+
+static int mdt_finish_open(struct mdt_thread_info *info,
+                           struct mdt_object *p, struct mdt_object *o,
+                           int flags, int created, struct ldlm_reply *rep)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
@@ -501,6 +566,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 }
         }
 
+        rc = mdt_mfd_open(info, o,
+                          created ? flags | MDS_OPEN_CREATED : flags);
+#if 0
         if (flags & FMODE_WRITE) {
                 rc = mdt_write_get(info->mti_mdt, o);
                 if (rc == 0) {
@@ -531,8 +599,14 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 mfd->mfd_object = o;
                 mfd->mfd_xid = req->rq_xid;
                 /* replay handle */
-                if (info->mti_rr.rr_handle)
-                        mfd->mfd_old_handle = *info->mti_rr.rr_handle;
+                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                        if (info->mti_rr.rr_handle) {
+                                CDEBUG(D_HA, "Store old cookie "LPX64" in new mfd\n",
+                                       info->mti_rr.rr_handle->cookie);
+                                mfd->mfd_old_handle.cookie = info->mti_rr.rr_handle->cookie;
+                        } else
+                                LBUG();
+                }
                 spin_lock(&med->med_open_lock);
                 list_add(&mfd->mfd_list, &med->med_open_head);
                 spin_unlock(&med->med_open_lock);
@@ -541,7 +615,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
                 mdt_empty_transno(info);
         } else
                 rc = -ENOMEM;
-
+#endif
         RETURN(rc);
 }
 
@@ -607,8 +681,8 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
                         next = mdt_object_child(child);
                         rc = mo_attr_get(env, next, ma);
                         if (rc == 0)
-                              rc = mdt_mfd_open(info, parent, child,
-                                                flags, 1, ldlm_rep);
+                              rc = mdt_finish_open(info, parent, child,
+                                                   flags, 1, ldlm_rep);
                 } else if (rc < 0) {
                         /* the child object was created on remote server */
                         repbody->fid1 = *rr->rr_fid2;
@@ -670,7 +744,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
 
                 rc = mo_attr_get(env, mdt_object_child(o), ma);
                 if (rc == 0)
-                        rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
+                        rc = mdt_mfd_open(info, o, flags);
         } else if (rc == 0) {
                 rc = -ENOENT;
         } else  {
@@ -718,7 +792,7 @@ static int mdt_cross_open(struct mdt_thread_info* info,
                 mdt_set_capainfo(info, 0, fid, BYPASS_CAPA);
                 rc = mo_attr_get(info->mti_env, mdt_object_child(o), ma);
                 if (rc == 0)
-                        rc = mdt_mfd_open(info, NULL, o, flags, 0, rep);
+                        rc = mdt_finish_open(info, NULL, o, flags, 0, rep);
         } else if (rc == 0) {
                 /*
                  * XXX: Something wrong here, lookup was positive but there is
@@ -855,7 +929,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                          PFID(child_fid));
         } else {
                 /*
-                 * Check for O_EXCL is moved to the mdt_mfd_open(), we need to
+                 * Check for O_EXCL is moved to the mdt_finish_open(), we need to
                  * return FID back in that case.
                  */
                 mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
@@ -944,8 +1018,8 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
         }
 
         /* Try to open it now. */
-        result = mdt_mfd_open(info, parent, child, create_flags,
-                              created, ldlm_rep);
+        result = mdt_finish_open(info, parent, child, create_flags,
+                                 created, ldlm_rep);
 
         if (result != 0 && created) {
                 int rc2;

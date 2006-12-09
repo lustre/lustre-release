@@ -2215,9 +2215,10 @@ void debug_req(cfs_debug_limit_state_t *cdls,
         va_end(args);
 
         cdebug(cdls, level, file, func, line,
-               " req@%p x"LPD64"/t"LPD64" o%d->%s@%s:%d lens %d/%d ref %d fl "
+               " req@%p x"LPD64"/t"LPD64"("LPD64") o%d->%s@%s:%d lens %d/%d ref %d fl "
                REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
                req, req->rq_xid, req->rq_transno,
+               req->rq_reqmsg ? lustre_msg_get_transno(req->rq_reqmsg) : 0,
                req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
                req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
                   req->rq_export ?
