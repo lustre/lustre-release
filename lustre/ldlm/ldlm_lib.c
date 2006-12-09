@@ -1370,8 +1370,8 @@ static int target_recovery_thread(void *arg)
         /* If some clients haven't connected in time, evict them */
         if (obd->obd_abort_recovery) {
                 int stale;
-                CDEBUG(D_ERROR, "few clients haven't connect in time (%d/%d),"
-                       "evict them ...\n", obd->obd_connected_clients,
+                CDEBUG(D_ERROR, "Some clients haven't connect in time (%d/%d),"
+                       "evict them\n", obd->obd_connected_clients,
                        obd->obd_max_recoverable_clients);
                 obd->obd_abort_recovery = 0;
                 stale = class_disconnect_stale_exports(obd, connect_done);
@@ -1511,7 +1511,7 @@ void target_stop_recovery_thread(struct obd_device *obd)
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovery_data.trd_processing_task > 0) {
                 struct target_recovery_data *trd = &obd->obd_recovery_data;
-                CERROR("%s: aborting recovery\n", obd->obd_name);
+                CERROR("%s: Aborting recovery\n", obd->obd_name);
                 obd->obd_abort_recovery = 1;
                 wake_up(&obd->obd_next_transno_waitq);
                 spin_unlock_bh(&obd->obd_processing_task_lock);

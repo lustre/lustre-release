@@ -4239,19 +4239,17 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_SYNC:
                 rc = dt->dd_ops->dt_sync(&env, dt);
                 break;
-
         case OBD_IOC_SET_READONLY:
                 rc = dt->dd_ops->dt_sync(&env, dt);
                 dt->dd_ops->dt_ro(&env, dt);
                 break;
-
         case OBD_IOC_ABORT_RECOVERY:
-                CERROR("aborting recovery for device %s\n", obd->obd_name);
+                CERROR("Aborting recovery for device %s\n", obd->obd_name);
                 target_stop_recovery_thread(obd);
+                rc = 0;
                 break;
-
         default:
-                CERROR("not supported cmd = %d for device %s\n",
+                CERROR("Not supported cmd = %d for device %s\n",
                        cmd, obd->obd_name);
                 rc = -EOPNOTSUPP;
         }
