@@ -341,6 +341,17 @@ static int qos_calc_rr(struct lov_obd *lov)
 
         /* Do actuall allocation. */
         down_write(&lov->lov_qos.lq_rw_sem);
+
+        /*
+         * Check again. While we were sleeping on @lq_rw_sem something could
+         * change.
+         */
+        if (!lov->lov_qos.lq_dirty_rr) {
+                LASSERT(lov->lov_qos.lq_rr_size);
+                up_write(&lov->lov_qos.lq_rw_sem);
+                RETURN(0);
+        }
+
         ost_count = lov->desc.ld_tgt_count;
 
         if (lov->lov_qos.lq_rr_size) 
@@ -593,6 +604,15 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
         
         /* Do actuall allocation, use write lock here. */
         down_write(&lov->lov_qos.lq_rw_sem);
+
+        /* 
+         * Check again, while we were sleeping on @lq_rw_sem things could
+         * change.
+         */
+        if (!lov->lov_qos.lq_dirty) {
+                up_write(&lov->lov_qos.lq_rw_sem);
+                GOTO(out, rc = -EAGAIN);
+        }
         ost_count = lov->desc.ld_tgt_count;
 
         if (lov->desc.ld_active_tgt_count < 2) 

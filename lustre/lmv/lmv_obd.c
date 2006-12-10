@@ -743,9 +743,9 @@ static int lmv_nid_policy(struct lmv_obd *lmv)
 {
         struct obd_import *imp = class_exp2cliimp(lmv->tgts[0].ltd_exp);
         __u32 id;
-       /*
-        * XXX Hack: to get nid we assume that underlying obd device is mdc.
-        */
+        /*
+         * XXX Hack: to get nid we assume that underlying obd device is mdc.
+         */
         id = imp->imp_connection->c_self ^ (imp->imp_connection->c_self >> 32);
         return id % lmv->desc.ld_tgt_count;
 }
@@ -831,7 +831,9 @@ static int lmv_placement_policy(struct obd_device *obd,
                 rc = 0;
         }
         EXIT;
+#if 0
 out:
+#endif
         if (rc) {
                 CERROR("Can't choose MDS, err = %d\n", rc);
         } else {
