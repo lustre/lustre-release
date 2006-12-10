@@ -337,11 +337,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
-        struct mdt_device       *mdt = info->mti_mdt;
         struct mdt_file_data    *mfd;
         struct mdt_body         *repbody;
         int                      rc = 0;
-        struct list_head        *t;
         ENTRY;
 
         repbody = req_capsule_server_get(&info->mti_pill, &RMF_MDT_BODY);
