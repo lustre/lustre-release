@@ -235,7 +235,7 @@ umask 077
 
 test_0a() {
 	mkdir $DIR/0a0 || error 
-        for ((i=0;i<4000;i++)); do
+        for ((i=0;i<5000;i++)); do
                 mkdir $DIR/0a0/`uuidgen -t` || error
         done
 	rm -rf $DIR/0a0 || error
@@ -244,7 +244,7 @@ test_0a() {
 
 test_1a() {
 	mkdir $DIR/1a0 || error 
-	createmany -o $DIR/1a0/f 4000 || error
+	createmany -o $DIR/1a0/f 5000 || error
 	rmdir $DIR/1a0 && error
 	rm -rf $DIR/1a0 || error
 }
@@ -252,8 +252,8 @@ run_test 1a " remove splitted dir ============================="
 
 test_1b() {
 	mkdir $DIR/1b0 || error
-	createmany -o $DIR/1b0/f 4000 || error
-	unlinkmany  $DIR/1b0/f 4000 || error
+	createmany -o $DIR/1b0/f 5000 || error
+	unlinkmany  $DIR/1b0/f 5000 || error
 	NUM=`ls $DIR/1b0 | wc -l`
 	if [ $NUM -ne 0 ] ; then
 		echo "dir must be empty"
@@ -283,8 +283,8 @@ run_test 1b " remove splitted dir ============================="
 
 test_1c() {
 	mkdir $DIR/1b1 || error
-	createmany -o $DIR/1b1/f 4000 || error
-	unlinkmany $DIR/1b1/f 4000 || error
+	createmany -o $DIR/1b1/f 5000 || error
+	unlinkmany $DIR/1b1/f 5000 || error
 	NUM=`ls $DIR/1b1 | wc -l`
 	if [ $NUM -ne 0 ] ; then
 		echo "dir must be empty"
