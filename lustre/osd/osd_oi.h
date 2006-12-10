@@ -47,6 +47,11 @@ struct thandle;
 
 struct dt_device;
 
+enum {
+        OSD_OI_FID_SMALL,
+        OSD_OI_FID_OTHER,
+        OSD_OI_FID_NR
+};
 
 /*
  * Object Index (oi) instance.
@@ -55,7 +60,7 @@ struct osd_oi {
         /*
          * underlying index object, where fid->id mapping in stored.
          */
-        struct dt_object    *oi_dir;
+        struct dt_object *oi_dir[OSD_OI_FID_NR];
 };
 
 /*
@@ -66,9 +71,8 @@ struct osd_oi {
  * should be generalized to work with other local file systems.
  */
 struct osd_inode_id {
-        __u64 oii_ino; /* inode number */
+        __u32 oii_ino; /* inode number */
         __u32 oii_gen; /* inode generation */
-        __u32 oii_pad; /* alignment padding */
 };
 
 int  osd_oi_init(struct osd_thread_info *info,

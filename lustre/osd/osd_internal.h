@@ -73,6 +73,8 @@ struct osd_thread_info {
          */
         struct lustre_capa_key oti_capa_key;
         struct lustre_capa     oti_capa;
+
+        struct lu_fid_pack     oti_pack;
 };
 
 #endif /* __KERNEL__ */

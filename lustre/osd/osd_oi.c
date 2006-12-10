@@ -59,77 +59,107 @@
 #include "osd_igif.h"
 #include "dt_object.h"
 
-static const struct dt_key *oi_fid_key(struct osd_thread_info *info,
-                                       const struct lu_fid *fid);
-static const char oi_dirname[] = "oi";
+struct oi_descr {
+        int                      fid_size;
+        char                    *name;
+};
 
-static const struct dt_index_features oi_index_features = {
-        .dif_flags       = DT_IND_UPDATE,
-        .dif_keysize_min = sizeof(struct lu_fid),
-        .dif_keysize_max = sizeof(struct lu_fid),
-        .dif_recsize_min = sizeof(struct osd_inode_id),
-        .dif_recsize_max = sizeof(struct osd_inode_id)
+static const struct oi_descr oi_descr[OSD_OI_FID_NR] = {
+        [OSD_OI_FID_SMALL] = {
+                .fid_size = 5,
+                .name     = "oi.5"
+        },
+        [OSD_OI_FID_OTHER] = {
+                .fid_size = sizeof(struct lu_fid),
+                .name     = "oi.16"
+        }
 };
 
 int osd_oi_init(struct osd_thread_info *info,
                 struct osd_oi *oi, struct dt_device *dev)
 {
         int rc;
-        struct dt_object    *obj;
+        int i;
         const struct lu_env *env;
+
+        CLASSERT(ARRAY_SIZE(oi->oi_dir) == ARRAY_SIZE(oi_descr));
 
         env = info->oti_env;
 
-        obj = dt_store_open(env, dev, oi_dirname, &info->oti_fid);
-        if (!IS_ERR(obj)) {
-                rc = obj->do_ops->do_index_try(env, obj, &oi_index_features);
-                if (rc == 0) {
-                        LASSERT(obj->do_index_ops != NULL);
-                        oi->oi_dir = obj;
+        memset(oi, 0, sizeof *oi);
+
+        for (i = rc = 0; i < ARRAY_SIZE(oi->oi_dir) && rc == 0; ++i) {
+                const char       *name;
+                /*
+                 * Allocate on stack---this is initialization.
+                 */
+                const struct dt_index_features feat = {
+                        .dif_flags       = DT_IND_UPDATE,
+                        .dif_keysize_min = oi_descr[i].fid_size,
+                        .dif_keysize_max = oi_descr[i].fid_size,
+                        .dif_recsize_min = sizeof(struct osd_inode_id),
+                        .dif_recsize_max = sizeof(struct osd_inode_id)
+                };
+                struct dt_object *obj;
+
+                name = oi_descr[i].name;
+                obj = dt_store_open(env, dev, name, &info->oti_fid);
+                if (!IS_ERR(obj)) {
+                        rc = obj->do_ops->do_index_try(env, obj, &feat);
+                        if (rc == 0) {
+                                LASSERT(obj->do_index_ops != NULL);
+                                oi->oi_dir[i] = obj;
+                        } else {
+                                CERROR("Wrong index \"%s\": %d\n", name, rc);
+                                lu_object_put(env, &obj->do_lu);
+                        }
                 } else {
-                        CERROR("Wrong index \"%s\": %d\n", oi_dirname, rc);
-                        lu_object_put(env, &obj->do_lu);
+                        rc = PTR_ERR(obj);
+                        CERROR("Cannot open \"%s\": %d\n", name, rc);
                 }
-        } else {
-                rc = PTR_ERR(obj);
-                CERROR("Cannot open \"%s\": %d\n", oi_dirname, rc);
         }
+        if (rc != 0)
+                osd_oi_fini(info, oi);
         return rc;
 }
 
 void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi)
 {
-        if (oi->oi_dir != NULL) {
-                lu_object_put(info->oti_env, &oi->oi_dir->do_lu);
-                oi->oi_dir = NULL;
+        int i;
+        for (i = 0; i < ARRAY_SIZE(oi->oi_dir); ++i) {
+                if (oi->oi_dir[i] != NULL) {
+                        lu_object_put(info->oti_env, &oi->oi_dir[i]->do_lu);
+                        oi->oi_dir[i] = NULL;
+                }
         }
 }
 
 static const struct dt_key *oi_fid_key(struct osd_thread_info *info,
-                                       const struct lu_fid *fid)
+                                       struct osd_oi *oi,
+                                       const struct lu_fid *fid,
+                                       struct dt_object **idx)
 {
-        fid_cpu_to_be(&info->oti_fid, fid);
-        return (const struct dt_key *)&info->oti_fid;
+        int i;
+        struct lu_fid_pack *pack;
+
+        pack = &info->oti_pack;
+        fid_pack(pack, fid, &info->oti_fid);
+        for (i = 0; i < ARRAY_SIZE(oi->oi_dir); ++i) {
+                if (pack->fp_len == oi_descr[i].fid_size + sizeof pack->fp_len){
+                        *idx = oi->oi_dir[i];
+                        return (const struct dt_key *)&pack->fp_area;
+                }
+        }
+        CERROR("Unsupported packed fid size: %d ("DFID")\n",
+               pack->fp_len, PFID(fid));
+        LBUG();
+        return NULL;
 }
 
 enum {
         OI_TXN_INSERT_CREDITS = 20,
         OI_TXN_DELETE_CREDITS = 20
 };
-
-static inline void oid_lookup_init(struct osd_inode_id *id,
-                                   __u64 ino, __u32 gen)
-{
-        id->oii_ino = be64_to_cpu(ino);
-        id->oii_gen = be32_to_cpu(gen);
-}
-
-static inline void oid_insert_init(struct osd_inode_id *id,
-                                   __u64 ino, __u32 gen)
-{
-        id->oii_ino = cpu_to_be64(ino);
-        id->oii_gen = cpu_to_be32(gen);
-}
 
 int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, struct osd_inode_id *id)
@@ -140,11 +170,15 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                 lu_igif_to_id(fid, id);
                 rc = 0;
         } else {
-                rc = oi->oi_dir->do_index_ops->dio_lookup
-                        (info->oti_env, oi->oi_dir,
-                         (struct dt_rec *)id, oi_fid_key(info, fid),
-                         BYPASS_CAPA);
-                oid_lookup_init(id, id->oii_ino, id->oii_gen);
+                struct dt_object    *idx;
+                const struct dt_key *key;
+
+                key = oi_fid_key(info, oi, fid, &idx);
+                rc = idx->do_index_ops->dio_lookup(info->oti_env, idx,
+                                                   (struct dt_rec *)id, key,
+                                                   BYPASS_CAPA);
+                id->oii_ino = be32_to_cpu(id->oii_ino);
+                id->oii_gen = be32_to_cpu(id->oii_gen);
         }
         return rc;
 }
@@ -154,36 +188,33 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
                   struct thandle *th)
 {
         struct dt_object    *idx;
-        struct dt_device    *dev;
         struct osd_inode_id *id;
+        const struct dt_key *key;
 
         if (fid_is_igif(fid))
                 return 0;
 
-        idx = oi->oi_dir;
-        dev = lu2dt_dev(idx->do_lu.lo_dev);
-        id = &info->oti_id;
-        oid_insert_init(id, id0->oii_ino, id0->oii_gen);
+        key = oi_fid_key(info, oi, fid, &idx);
+        id  = &info->oti_id;
+        id->oii_ino = cpu_to_be32(id0->oii_ino);
+        id->oii_gen = cpu_to_be32(id0->oii_gen);
         return idx->do_index_ops->dio_insert(info->oti_env, idx,
                                              (const struct dt_rec *)id,
-                                             oi_fid_key(info, fid), th,
-                                             BYPASS_CAPA);
+                                             key, th, BYPASS_CAPA);
 }
 
 int osd_oi_delete(struct osd_thread_info *info,
                   struct osd_oi *oi, const struct lu_fid *fid,
                   struct thandle *th)
 {
-        struct dt_object *idx;
-        struct dt_device *dev;
+        struct dt_object    *idx;
+        const struct dt_key *key;
 
         if (fid_is_igif(fid))
                 return 0;
 
-        idx = oi->oi_dir;
-        dev = lu2dt_dev(idx->do_lu.lo_dev);
+        key = oi_fid_key(info, oi, fid, &idx);
         return idx->do_index_ops->dio_delete(info->oti_env, idx,
-                                             oi_fid_key(info, fid), th,
-                                             BYPASS_CAPA);
+                                             key, th, BYPASS_CAPA);
 }
 

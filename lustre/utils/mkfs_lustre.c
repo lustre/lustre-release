@@ -1299,8 +1299,14 @@ static int mkfs_mdt(struct mkfs_opts *mop)
                 goto out_umount;
         }
 
-        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "oi");
-        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 16, 16, 4);
+        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "oi.16");
+        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 16, 8, 4);
+        if (ret) {
+                goto out_umount;
+        }
+
+        snprintf(filepnm, sizeof(filepnm) - 1, "%s/%s", mntpt, "oi.5");
+        ret = iam_creat(filepnm, FMT_LFIX, L_BLOCK_SIZE, 5, 8, 4);
         if (ret) {
                 goto out_umount;
         }
