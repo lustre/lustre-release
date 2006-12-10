@@ -333,7 +333,7 @@ static void mdt_empty_transno(struct mdt_thread_info* info)
 }
 
 static int mdt_mfd_open(struct mdt_thread_info *info,
-                        struct mdt_object *o, int flags)
+                        struct mdt_object *o, int flags, int created)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_export_data  *med = &req->rq_export->exp_mdt_data;
@@ -356,7 +356,8 @@ static int mdt_mfd_open(struct mdt_thread_info *info,
         if (rc)
                 RETURN(rc);
 
-        rc = mo_open(info->mti_env, mdt_object_child(o), flags);
+        rc = mo_open(info->mti_env, mdt_object_child(o),
+                     created ? flags | MDS_OPEN_CREATED : flags);
         if (rc)
                 RETURN(rc);
 
@@ -564,8 +565,7 @@ static int mdt_finish_open(struct mdt_thread_info *info,
                 }
         }
 
-        rc = mdt_mfd_open(info, o,
-                          created ? flags | MDS_OPEN_CREATED : flags);
+        rc = mdt_mfd_open(info, o, flags, created);
 #if 0
         if (flags & FMODE_WRITE) {
                 rc = mdt_write_get(info->mti_mdt, o);
@@ -742,7 +742,7 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
 
                 rc = mo_attr_get(env, mdt_object_child(o), ma);
                 if (rc == 0)
-                        rc = mdt_mfd_open(info, o, flags);
+                        rc = mdt_mfd_open(info, o, flags, 0);
         } else if (rc == 0) {
                 rc = -ENOENT;
         } else  {
