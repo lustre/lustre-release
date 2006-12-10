@@ -207,15 +207,14 @@ lmv_find_export(struct lmv_obd *lmv, const struct lu_fid *fid)
 {
         struct lmv_tgt_desc *tgt = lmv_find_target(lmv, fid);
         if (IS_ERR(tgt))
-                return (struct obd_export*)tgt;
-        else
-                return tgt->ltd_exp;
+                return (struct obd_export *)tgt;
+        return tgt->ltd_exp;
 }
 
 static inline void lmv_update_body(struct mdt_body *body, 
                                    struct lmv_inode *lino)
 {
-        /* update size */
+        /* update object size */
         body->size += lino->li_size;
 }
 

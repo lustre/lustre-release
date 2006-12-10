@@ -2315,6 +2315,7 @@ ll_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
         op_data->op_cap = current->cap_effective;
         op_data->op_bias = MDS_CHECK_SPLIT;
         op_data->op_opc = opc;
+        op_data->op_mds = 0;
 
         return op_data;
 }

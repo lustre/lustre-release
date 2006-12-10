@@ -218,13 +218,18 @@ repeat:
 
                 rpid = obj->lo_inodes[mea_idx].li_fid;
 
-                tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
+                sop_data->op_mds = obj->lo_inodes[mea_idx].li_mds;
+                tgt_exp = lmv_get_export(lmv, sop_data->op_mds);
                 sop_data->op_bias &= ~MDS_CHECK_SPLIT;
                 lmv_obj_put(obj);
                 CDEBUG(D_OTHER, "Choose slave dir ("DFID")\n", PFID(&rpid));
         } else {
-                tgt_exp = lmv_find_export(lmv, &rpid);
+                struct lmv_tgt_desc *tgt;
+
                 sop_data->op_bias |= MDS_CHECK_SPLIT;
+                tgt = lmv_find_target(lmv, &rpid);
+                sop_data->op_mds = tgt->ltd_idx;
+                tgt_exp = tgt->ltd_exp;
         }
         if (IS_ERR(tgt_exp))
                 GOTO(out_free_sop_data, rc = PTR_ERR(tgt_exp));

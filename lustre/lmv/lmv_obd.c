@@ -806,13 +806,21 @@ static int lmv_placement_policy(struct obd_device *obd,
                 }
 
                 /*
-                 * Allocate new fid on same mds where parent fid is located. In
-                 * case of split dir, ->op_fid1 here will contain fid of slave
-                 * directory object (assgined by caller).
+                 * Allocate new fid on same mds where parent fid is located and
+                 * where operation will be sent. In case of split dir, ->op_fid1
+                 * and ->op_mds here will contain fid and mds of slave directory
+                 * object (assigned by caller).
                  */
+                *mds = op_data->op_mds;
+                rc = 0;
+
+#if 0
+                /* XXX: This should be removed later wehn we sure it is not
+                 * needed. */
                 rc = lmv_fld_lookup(lmv, &op_data->op_fid1, mds);
                 if (rc)
                         GOTO(out, rc);
+#endif
         } else {
                 /*
                  * Parent directory is not split and we want to create a
@@ -1340,11 +1348,16 @@ repeat:
                                        op_data->op_name, op_data->op_namelen);
                 op_data->op_fid1 = obj->lo_inodes[mea_idx].li_fid;
                 op_data->op_bias &= ~MDS_CHECK_SPLIT;
-                tgt_exp = lmv_get_export(lmv, obj->lo_inodes[mea_idx].li_mds);
+                op_data->op_mds = obj->lo_inodes[mea_idx].li_mds;
+                tgt_exp = lmv_get_export(lmv, op_data->op_mds);
                 lmv_obj_put(obj);
         } else {
-                tgt_exp = lmv_find_export(lmv, &op_data->op_fid1);
+                struct lmv_tgt_desc *tgt;
+
+                tgt = lmv_find_target(lmv, &op_data->op_fid1);
                 op_data->op_bias |= MDS_CHECK_SPLIT;
+                op_data->op_mds = tgt->ltd_idx;
+                tgt_exp = tgt->ltd_exp;
         }
 
         if (IS_ERR(tgt_exp))
