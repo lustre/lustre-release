@@ -658,8 +658,6 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                 memcpy(file_fh, &body->handle, sizeof(*file_fh));
         }
         close_req = mod->mod_close_req;
-/* XXX comment that out due to old_handle in mfd to solve the same issue */
-#if 0
         if (close_req != NULL) {
                 struct mdt_epoch *epoch;
 
@@ -674,7 +672,6 @@ static void mdc_replay_open(struct ptlrpc_request *req)
                 DEBUG_REQ(D_HA, close_req, "updating close body with new fh");
                 memcpy(&epoch->handle, &body->handle, sizeof(epoch->handle));
         }
-#endif
         EXIT;
 }
 
