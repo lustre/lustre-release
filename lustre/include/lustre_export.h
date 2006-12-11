@@ -54,7 +54,7 @@ struct osc_creator {
 };
 
 struct ldlm_export_data {
-        struct list_head       led_held_locks; /* protected by namespace lock */
+        struct list_head       led_held_locks; /* protected by led_lock */
         spinlock_t             led_lock;
 };
 

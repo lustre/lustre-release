@@ -327,17 +327,10 @@ static int qos_calc_rr(struct lov_obd *lov)
         int i;
         ENTRY;
 
-        /*
-         * Check for dirtiness first under read lock to make it as parallel as
-         * possible.
-         */
-        down_read(&lov->lov_qos.lq_rw_sem);
         if (!lov->lov_qos.lq_dirty_rr) {
                 LASSERT(lov->lov_qos.lq_rr_size);
-                up_read(&lov->lov_qos.lq_rw_sem);
                 RETURN(0);
         }
-        up_read(&lov->lov_qos.lq_rw_sem);
 
         /* Do actuall allocation. */
         down_write(&lov->lov_qos.lq_rw_sem);
@@ -591,16 +584,9 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
         
         lov_getref(exp->exp_obd);
 
-        /* 
-         * Quick check for dirtriness first, use read lock to make this parallel
-         * as much as possible.
-         */
-        down_read(&lov->lov_qos.lq_rw_sem);
-        if (!lov->lov_qos.lq_dirty) {
-                up_read(&lov->lov_qos.lq_rw_sem);
+        /* Detect -EAGAIN early, before expensive lock is taken. */
+        if (!lov->lov_qos.lq_dirty && lov->lov_qos.lq_same_space)
                 GOTO(out, rc = -EAGAIN);
-        }
-        up_read(&lov->lov_qos.lq_rw_sem);
         
         /* Do actuall allocation, use write lock here. */
         down_write(&lov->lov_qos.lq_rw_sem);
@@ -609,7 +595,7 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt)
          * Check again, while we were sleeping on @lq_rw_sem things could
          * change.
          */
-        if (!lov->lov_qos.lq_dirty) {
+        if (!lov->lov_qos.lq_dirty && lov->lov_qos.lq_same_space) {
                 up_write(&lov->lov_qos.lq_rw_sem);
                 GOTO(out, rc = -EAGAIN);
         }
