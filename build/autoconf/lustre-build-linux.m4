@@ -152,10 +152,19 @@ LB_CHECK_FILE([$LINUX_CONFIG],[],
 	[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult build/README.kernel-source])])
 
 # ----------- make dep run? ------------------
+# at 2.6.19 # $LINUX/include/linux/config.h is removed
+# and at more old has only one line
+# include <autoconf.h>
 LB_CHECK_FILES([$LINUX_OBJ/include/linux/autoconf.h
 		$LINUX_OBJ/include/linux/version.h
-		$LINUX/include/linux/config.h],[],
+		],[],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])
+#
+LB_CHECK_FILE([$LINUX_OBJ/include/linux/config.h],
+	[ AC_DEFINE(HAVE_KERNEL_CONFIG_H, 1,
+		[kernel modules need to include config.h])
+	]
+)
 
 # ------------ rhconfig.h includes runtime-generated bits --
 # red hat kernel-source checks
@@ -236,6 +245,21 @@ $1
 _ACEOF
 ])
 
+
+# LB_LANG_PROGRAM(C)([PROLOGUE], [BODY])
+# --------------------------------------
+m4_define([LB_LANG_PROGRAM],
+[$1
+int
+main (void)
+{
+dnl Do *not* indent the following line: there may be CPP directives.
+dnl Don't move the `;' right after for the same reason.
+$2
+  ;
+  return 0;
+}])
+
 #
 # LB_LINUX_COMPILE_IFELSE
 #
@@ -258,7 +282,7 @@ rm -f build/conftest.o build/conftest.mod.c build/conftest.mod.o build/conftest.
 #
 AC_DEFUN([LB_LINUX_TRY_COMPILE],
 [LB_LINUX_COMPILE_IFELSE(
-	[AC_LANG_PROGRAM([[$1]], [[$2]])],
+ 	[AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
 	[modules],
 	[test -s build/conftest.o],
 	[$3], [$4])])
@@ -270,7 +294,11 @@ AC_DEFUN([LB_LINUX_TRY_COMPILE],
 #
 AC_DEFUN([LB_LINUX_CONFIG],
 [AC_MSG_CHECKING([if Linux was built with CONFIG_$1])
-LB_LINUX_TRY_COMPILE([#include <linux/config.h>],[
+LB_LINUX_TRY_COMPILE([
+#ifdef HAVE_KERNEL_CONFIG_H
+#include <linux/config.h>
+#endif
+],[
 #ifndef CONFIG_$1
 #error CONFIG_$1 not #defined
 #endif
@@ -309,7 +337,7 @@ $3
 # like LB_LINUX_TRY_COMPILE, but with different arguments
 #
 AC_DEFUN([LB_LINUX_TRY_MAKE],
-[LB_LINUX_COMPILE_IFELSE([AC_LANG_PROGRAM([[$1]], [[$2]])], [$3], [$4], [$5], [$6])])
+[LB_LINUX_COMPILE_IFELSE([AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])], [$3], [$4], [$5], [$6])])
 
 #
 # LB_LINUX_CONFIG_BIG_STACK
