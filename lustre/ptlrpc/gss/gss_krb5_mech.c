@@ -777,6 +777,7 @@ __u32 gss_verify_mic_kerberos(struct gss_ctx *gctx,
         if (memcmp(khdr + 1, cksum.data + cksum.len - ke->ke_hash_size,
                    ke->ke_hash_size)) {
                 CERROR("checksum mismatch\n");
+                rc = GSS_S_BAD_SIG;
                 goto out;
         }
 
