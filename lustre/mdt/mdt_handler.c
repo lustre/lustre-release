@@ -3617,9 +3617,6 @@ static void fsoptions_to_mdt_flags(struct mdt_device *m, char *options)
 
 int mdt_postrecov(const struct lu_env *, struct mdt_device *);
 
-extern int try_to_wake_up_trace;
-extern int __find_get_block_trace;
-
 static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                      struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
@@ -3768,9 +3765,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 mdt_postrecov(env, m);
 
         mdt_init_capa_ctxt(env, m);
-
-        try_to_wake_up_trace = 1;
-        __find_get_block_trace = 1;
 
         RETURN(0);
 
