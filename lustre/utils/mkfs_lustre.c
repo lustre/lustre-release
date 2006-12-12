@@ -1496,7 +1496,7 @@ int main(int argc, char *argv[])
                 /* NB: Files created while extents are enabled cannot be read
                    if mounted with a kernel that doesn't include the CFS
                    patches! */
-                if (IS_OST(ldd) &&
+                if ((IS_OST(ldd) || IS_MDT(ldd)) &&
                     ldd->ldd_mount_type == LDD_MT_LDISKFS) {
                         strcat(default_mountopts, ",extents,mballoc");
                 }

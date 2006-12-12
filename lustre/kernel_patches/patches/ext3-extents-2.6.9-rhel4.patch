@@ -2379,7 +2379,7 @@ Index: linux-stage/fs/ext3/ialloc.c
  		DQUOT_FREE_INODE(inode);
  		goto fail2;
    	}
-+	if (test_opt(sb, EXTENTS) && S_ISREG(inode->i_mode)) {
++	if (test_opt(sb, EXTENTS) && (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode))) {
 +		EXT3_I(inode)->i_flags |= EXT3_EXTENTS_FL;
 +		ext3_extents_initialize_blockmap(handle, inode);
 +		if (!EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_EXTENTS)) {
