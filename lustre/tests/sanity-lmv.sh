@@ -51,11 +51,6 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/lmv.sh}
 
-if [ ! -z "$USING_KRB5" ]; then
-    $RUNAS krb5_login.sh || exit 1
-    $RUNAS -u $(($RUNAS_ID + 1)) krb5_login.sh || exit 1
-fi
-
 cleanup() {
 	echo -n "cln.."
 	cleanupall ${FORCE} $* || { echo "FAILed to clean up"; exit 20; }
