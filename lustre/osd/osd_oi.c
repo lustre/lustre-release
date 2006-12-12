@@ -60,8 +60,8 @@
 #include "dt_object.h"
 
 struct oi_descr {
-        int                      fid_size;
-        char                    *name;
+        int   fid_size;
+        char *name;
 };
 
 static const struct oi_descr oi_descr[OSD_OI_FID_NR] = {
@@ -155,11 +155,6 @@ static const struct dt_key *oi_fid_key(struct osd_thread_info *info,
         LBUG();
         return NULL;
 }
-
-enum {
-        OI_TXN_INSERT_CREDITS = 20,
-        OI_TXN_DELETE_CREDITS = 20
-};
 
 int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, struct osd_inode_id *id)
