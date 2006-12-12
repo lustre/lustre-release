@@ -110,7 +110,7 @@ void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
         ENTRY;
 
         spin_lock(&lli->lli_lock);
-        if (!(list_empty(&lli->lli_pending_write_llaps)) && 
+        if (!(list_empty(&lli->lli_pending_write_llaps)) &&
             !(lli->lli_flags & LLIF_EPOCH_PENDING)) {
                 LASSERT(*och != NULL);
                 LASSERT(lli->lli_pending_och == NULL);
@@ -119,7 +119,7 @@ void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
                 lli->lli_flags |= LLIF_EPOCH_PENDING;
                 lli->lli_pending_och = *och;
                 spin_unlock(&lli->lli_lock);
-                
+
                 inode = igrab(inode);
                 LASSERT(inode);
                 GOTO(out, 0);
@@ -133,8 +133,7 @@ void ll_epoch_close(struct inode *inode, struct md_op_data *op_data,
                 LASSERT(lli->lli_flags & LLIF_SOM_DIRTY);
                 *och = lli->lli_pending_och;
                 lli->lli_pending_och = NULL;
-                lli->lli_flags &= ~(LLIF_DONE_WRITING | LLIF_EPOCH_PENDING | 
-                                    LLIF_EPOCH_PENDING);
+                lli->lli_flags &= ~(LLIF_DONE_WRITING | LLIF_EPOCH_PENDING);
         } else {
                 /* Pack Size-on-MDS inode attributes only if they has changed */
                 if (!(lli->lli_flags & LLIF_SOM_DIRTY)) {

@@ -3590,7 +3590,7 @@ cleanup:
                             FSFILT_OP_UNLINK);
 
         CDEBUG(rc ? D_ERROR : D_QUOTA,
-               "filter adjust qunit! (rc:%d)\n", rc2);
+               "filter adjust qunit! (rc:%d)\n", rc? rc : rc2);
         return rc;
 }
 
