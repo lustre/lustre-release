@@ -879,7 +879,7 @@ again:
          *  2. Current context never be refreshed, then we are fine: we
          *     never really send request with old context before.
          */
-        if (test_bit(PTLRPC_CTX_UPTODATE, &ctx->cc_flags) &&
+        if (test_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags) &&
             req->rq_reqmsg &&
             lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
                 if (!list_empty(&req->rq_ctx_chain))
