@@ -416,7 +416,7 @@ extern TAILQ_HEAD(inodes_head, inode) _sysio_inodes;
 extern TAILQ_HEAD(pnodes_head, pnode) _sysio_pnodes;
 
 extern int _sysio_i_init(void);
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 extern void _sysio_i_shutdown(void);
 #endif
 extern struct inode *_sysio_i_new(struct filesys *fs,

@@ -112,7 +112,7 @@ struct intnl_stat;
 
 struct pnode;
 
-#if DEFER_INIT_CWD
+#ifdef DEFER_INIT_CWD
 extern const char *_sysio_init_cwd;
 #endif
 
@@ -151,7 +151,7 @@ extern char * _sysio_get_args(char *buf, struct option_value_info *vec);
 
 extern time_t _sysio_local_time(void);
 
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 extern void _sysio_cprintf(const char *fmt, ...);
 #endif
 

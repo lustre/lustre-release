@@ -167,6 +167,6 @@ extern struct filesys * _sysio_fs_new(struct filesys_ops *ops,
 				      unsigned mask,
 				      void *private);
 extern void _sysio_fs_gone(struct filesys *fs);
-#if ZERO_SUM_MEMORY
+#ifdef ZERO_SUM_MEMORY
 extern void _sysio_fssw_shutdown(void);
 #endif

@@ -151,7 +151,7 @@ struct iovec;
 	} while(0) 
 
 /* Interface enter/leave hook functions  */
-#if SYSIO_TRACING
+#ifdef SYSIO_TRACING
 extern void *_sysio_entry_trace_q;
 extern void *_sysio_exit_trace_q;
 
