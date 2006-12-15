@@ -14,15 +14,15 @@
 rslt=${rslt:-"/tmp/sgpdd_survey_`date +%F@%R`_`uname -n`"}
 
 # what to do (read or write)
-actions="write read"
+actions=${actions:-"write read"}
 
 # total size per device (MBytes)
 # NB bigger than device cache is good
 size=${size:-8192}
 
 # record size (KBytes)
-rszlo=1024
-rszhi=1024
+rszlo=${rszlo:-1024}
+rszhi=${rszhi:-1024}
 
 # Concurrent regions per device
 crglo=${crglo:-1}
