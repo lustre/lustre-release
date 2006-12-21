@@ -129,7 +129,11 @@ do {                                            \
 #define SYSIO_SYS_lseek		SYS_lseek
 #endif
 #if defined(SYS__llseek)
-#define SYSIO_SYS__llseek	SYS__llseek
+# if defined (__mips64__)
+#  define SYSIO_SYS__llseek     SYS_O32__llseek
+# else
+#  define SYSIO_SYS__llseek     SYS__llseek
+# endif
 #endif
 #if defined(SYS_read)
 #define SYSIO_SYS_read		SYS_read
@@ -195,9 +199,13 @@ do {                                            \
 #endif
 #endif
 #if _LARGEFILE64_SOURCE && defined(SYS_getdents64)
-#define SYSIO_SYS_getdents64	SYS_getdents64
+# define SYSIO_SYS_getdents64	SYS_getdents64
 #elif defined(SYS_getdents)
-#define SYSIO_SYS_getdents	SYS_getdents
+# if defined (__mips64__)
+#  define SYSIO_SYS_getdents64  SYS_getdents
+# else
+#  define SYSIO_SYS_getdents    SYS_getdents
+# endif
 #endif
 #if defined(SYS_link)
 #define SYSIO_SYS_link		SYS_link
@@ -221,7 +229,11 @@ do {                                            \
 #define SYSIO_SYS_utime		SYS_utime
 #endif
 #if defined(SYS_socketcall)
-#define SYSIO_SYS_socketcall	SYS_socketcall
+# if defined (__mips64__)
+#  define SYSIO_SYS_socketcall  SYS_O32_socketcall
+# else
+#  define SYSIO_SYS_socketcall  SYS_socketcall
+# endif
 #endif
 #if defined(SYS_socket)
 #define SYSIO_SYS_socket	SYS_socket
