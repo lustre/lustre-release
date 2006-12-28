@@ -247,11 +247,7 @@ extern int SYSIO_INTERFACE_NAME(ftruncate64)(int fd, off64_t length);
 #endif
 extern int SYSIO_INTERFACE_NAME(rmdir)(const char *path);
 extern int SYSIO_INTERFACE_NAME(symlink)(const char *path1, const char *path2);
-#ifdef HAVE_POSIX_1003_READLINK
-extern ssize_t SYSIO_INTERFACE_NAME(readlink)(const char *path,
-#else
 extern int SYSIO_INTERFACE_NAME(readlink)(const char *path,
-#endif
 				char *buf,
 				size_t bufsiz);
 extern int SYSIO_INTERFACE_NAME(link)(const char *oldpath, const char *newpath);

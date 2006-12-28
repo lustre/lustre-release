@@ -101,6 +101,17 @@ AC_ARG_WITH(zero-sum-memory,
   [with_zero_sum_memory=no])
 AC_SUBST(ZERO_SUM_MEMORY)
 
+AC_ARG_WITH(defer-init-cwd,
+  AC_HELP_STRING([--with-defer-init-cwd],
+    [defer initialization of current working directory]),
+  [	case "${withval}" in
+	 yes) DEFER_INIT_CWD=-DDEFER_INIT_CWD=1 ;;
+	 no) ;;
+	 *) AC_MSG_ERROR(bad value ${withval} for --with-defer-init-cwd) ;;
+	esac],
+  [with_defer_init_cwd=no])
+AC_SUBST(DEFER_INIT_CWD)
+
 AC_ARG_WITH(cplant_yod,
    AC_HELP_STRING([--with-cplant-yod],[build cplant yod I/O driver]),
    [	case "${withval}" in	
@@ -198,21 +209,6 @@ if test "$machine" = rs6000; then
 	machine="powerpc"
 fi
 
-AC_MSG_CHECKING(if readlink returns ssize_t)
-AC_TRY_COMPILE([
-  include <unistd.h>
-],[
-  ssize_t readlink(const char *, char *, size_t);
-],
-  readlink_returns_ssize_t="yes",
-  readlink_returns_ssize_t="yes"
-)
-AC_MSG_RESULT($readlink_returns_ssize_t)
-if test x$readlink_returns_ssize_t = xyes; then
-  AC_DEFINE(HAVE_POSIX_1003_READLINK, 1, [readlink returns ssize_t])
-fi
-
-
 # If we can't provoke the declaration of stat64 then we assume the
 # environment supports 64-bit file support naturally. Beware!
 AC_MSG_CHECKING(whether _LARGEFILE64_SOURCE definition is required)
@@ -250,61 +246,6 @@ fi
 AC_MSG_RESULT($alpha_linux_env)
 AM_CONDITIONAL(TEST_ALPHA_ARG, test x$alpha_linux_env = xyes)
 
-# check for 64 bit stat, fstat, truncate, ftruncate syscalls
-# 
-AC_MSG_CHECKING(for 64 bit stat and truncate syscalls)
-AC_TRY_COMPILE([
-#include <sys/stat.h>
-#include <syscall.h>
-extern int syscall();],
-[char path[] = "/";
-int fd = 0;
-struct stat buf;
-syscall(SYS_stat64,path,&buf);
-syscall(SYS_fstat64,fd,&buf);
-syscall(SYS_truncate64, path, buf.st_size);
-syscall(SYS_ftruncate64, fd, buf.st_size);
-],
-	sysstat64_exists=yes,
-	sysstat64_exists=no)
-AC_MSG_RESULT($sysstat64_exists)
-if test x$sysstat64_exists = xno; then
-	AC_DEFINE(USE_NATIVE_STAT)
-fi
-
-# Check for fdatasync syscall
-#
-AC_MSG_CHECKING(for fdatasync system call)
-if test x$alpha_linux_env = xyes; then
-	_syscallnum=SYS_osf_fdatasync
-else
-	_syscallnum=SYS_fdatasync
-fi
-AC_TRY_COMPILE([
-#include <syscall.h>
-extern int syscall();],
-[int fd = 0;
-syscall(SYS_fdatasync, fd);],
-	syscall_fdatasync_exists=yes,
-	syscall_fdatasync_exists=no)
-AC_MSG_RESULT($syscall_fdatasync_exists)
-if test x$syscall_fdatasync_exists = xyes; then
-	AC_DEFINE_UNQUOTED(NATIVE_FDATASYNC, $_syscallnum)
-fi
-
-# Check for SYS_utime
-#
-AC_MSG_CHECKING(for utime system call)
-AC_TRY_COMPILE([
-#include <syscall.h>
-extern int syscall();],
-[syscall(SYS_utime);],
-	syscall_utime_exists=yes,
-	syscall_utime_exists=no)
-AC_MSG_RESULT($syscall_utime_exists)
-if test x$syscall_utime_exists = xno; then
-	AC_DEFINE(USE_NATIVE_UTIME)
-fi
 # Check for __st_ino 
 #
 AC_MSG_CHECKING(for __st_ino)

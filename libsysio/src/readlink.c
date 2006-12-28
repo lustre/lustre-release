@@ -41,21 +41,21 @@
  * lee@sandia.gov
  */
 
+#if defined(__linux__)
+#define _BSD_SOURCE
+#endif
 #include <unistd.h>
 #include <errno.h>
 #include <assert.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/queue.h>
 
 #include "sysio.h"
 #include "inode.h"
 #include "sysio-symbols.h"
 
-#ifdef HAVE_POSIX_1003_READLINK
-ssize_t
-#else
 int
-#endif
 SYSIO_INTERFACE_NAME(readlink)(const char *path, char *buf, size_t bufsiz)
 {
 	struct intent intent;
@@ -70,14 +70,15 @@ SYSIO_INTERFACE_NAME(readlink)(const char *path, char *buf, size_t bufsiz)
 	if (err)
 		goto out;
 	ino = pno->p_base->pb_ino;
-	err = (*ino->i_ops.inop_readlink)(pno, buf, bufsiz);
-	if (err)
+	if (!S_ISLNK(ino->i_stbuf.st_mode)) {
+		err = -EINVAL;
 		goto error;
-
+	}
+	err = (*ino->i_ops.inop_readlink)(pno, buf, bufsiz);
 error:
 	P_RELE(pno);
 out:
-	SYSIO_INTERFACE_RETURN(err, err >= 0 ? 0 : err);
+	SYSIO_INTERFACE_RETURN(err < 0 ? -1 : err, err >= 0 ? 0 : err);
 }
 
 #ifdef REDSTORM
