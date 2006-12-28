@@ -51,7 +51,11 @@
 #include "inode.h"
 #include "sysio-symbols.h"
 
+#ifdef HAVE_POSIX_1003_READLINK
+ssize_t
+#else
 int
+#endif
 SYSIO_INTERFACE_NAME(readlink)(const char *path, char *buf, size_t bufsiz)
 {
 	struct intent intent;
