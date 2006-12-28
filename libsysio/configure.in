@@ -209,6 +209,20 @@ if test "$machine" = rs6000; then
 	machine="powerpc"
 fi
 
+AC_MSG_CHECKING(if readlink returns ssize_t)
+AC_TRY_COMPILE([
+	include <unistd.h>
+],[
+	ssize_t readlink(const char *, char *, size_t);
+],
+	readlink_returns_ssize_t="yes",
+	readlink_returns_ssize_t="no"
+)
+AC_MSG_RESULT($readlink_returns_ssize_t)
+if test x$readlink_returns_ssize_t = xyes; then
+	AC_DEFINE(HAVE_POSIX_1003_READLINK, 1, [readlink returns ssize_t])
+fi
+
 # If we can't provoke the declaration of stat64 then we assume the
 # environment supports 64-bit file support naturally. Beware!
 AC_MSG_CHECKING(whether _LARGEFILE64_SOURCE definition is required)
