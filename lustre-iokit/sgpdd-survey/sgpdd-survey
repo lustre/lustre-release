@@ -95,14 +95,7 @@ print_summary () {
     echo $minusn "$*"
 }
 
-time_v=`date`
-hostname=`hostname`
-if [ "$rawdevs" ]; then
-	print_summary "$time_v sgpdd-survey on $rawdevs from $hostname"
-fi
-if [ "$scsidevs" ]; then
-	print_summary "$time_v sgpdd-survey on $scsidevs from $hostname"
-fi
+print_summary "$(date) sgpdd-survey on $rawdevs$scsidevs from $(hostname)"
 
 for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
     for ((crg=$crglo;crg<=$crghi;crg*=2)); do 
