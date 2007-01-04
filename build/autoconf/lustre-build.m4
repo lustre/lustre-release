@@ -494,6 +494,8 @@ LB_CONFIG_DOCS
 LB_CONFIG_UTILS
 LB_CONFIG_TESTS
 LC_CONFIG_CLIENT_SERVER
+
+# two cmd3 macros, please define dummies for other branches 
 LC_CONFIG_SPLIT
 LC_CONFIG_LDISKFS
 
