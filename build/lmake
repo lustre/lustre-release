@@ -261,6 +261,25 @@ load_target()
     fi
 }
 
+# do these after load_target(), which maybe export CC
+setup_ccache_distcc()
+{
+    # distcc can't handle ".incbin"
+    if [ "$TARGET" == "2.6-suse" -o "$TARGET" == "2.6-rhel4" ]; then
+        if [ "$TARGET_ARCH" == "x86_64" ]; then
+            unset DISTCC
+        fi
+    fi
+    
+    CC=${CC:-gcc}
+    if [ "$CCACHE" ]; then
+        CC="$CCACHE $CC"
+        [ "$DISTCC" ] && export CCACHE_PREFIX="$DISTCC"
+    else
+        [ "$DISTCC" ] && CC="$DISTCC $CC"
+    fi
+}
+
 tarflags()
 {
     case "$1" in
@@ -787,6 +806,7 @@ done
 
 check_options
 load_target
+setup_ccache_distcc
 
 extract_kernel
 patch_kernel
