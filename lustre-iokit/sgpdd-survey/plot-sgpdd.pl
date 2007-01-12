@@ -71,24 +71,24 @@ close PFILE;
 print "@GraphTitle\n";
 # Open .csv file for writting required columns from log file.
 open ( DATAFILE, "> $file.dat" ) or die "Can't open csv file for writting";
-print DATAFILE "0  ";
+printf DATAFILE "%-6s", "0";
 for ($j = 1; $j <= $thread ; $j = $j + $j) {
-	print DATAFILE "  write$j  read$j";
+	printf DATAFILE "%-8s%-8s", "wr$j", "rd$j";
 }
 for ( $i = 1; $i <= $region; $i = $i + $i ) {
-	printf DATAFILE "\n%-4s", $i;
+	printf DATAFILE "\n%-6s", $i;
 	for ($j = 1; $j <= $thread ; $j = $j + $j) {
 		if ( $out{$i}{$j} ) {
-			print DATAFILE "  $out{$i}{$j}";
+			printf DATAFILE "%-8s", $out{$i}{$j};
 		    } else {
-			print DATAFILE "      -";
+			printf DATAFILE "%-8s", "-";
 		    }
 		if ( $j <= 1 && $out{$i}{$j - 1}) {
-		    print DATAFILE "  $out{$i}{$j - 1}";
+		    printf DATAFILE "%-8s", $out{$i}{$j - 1};
 		} elsif ($out{$i}{$j + 1}) {
-		    print DATAFILE "  $out{$i}{$j + 1}";
+		    printf DATAFILE "%-8s", $out{$i}{$j + 1};
 		} else {
-		    print DATAFILE "      -";
+		    printf DATAFILE "%-8s", "-";
 		}
 	}
 }
