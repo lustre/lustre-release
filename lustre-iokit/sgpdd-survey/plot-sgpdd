@@ -59,9 +59,6 @@ sub write_scr_file() {
 	$xrange = 1;
 	# generate instructions for gnuplot, with adjusting X-axes ranges
 	for ($j = 1; $j <= $thread ; $j = $j + $j) {
-		if ($j > 15 ) {
-			$xrange = 2;
-		}
 		if ($op eq "wr") {
 			printf SCRFILE "$plot \"$file-$rsz-$op.dat\" using 1:$i axes x%dy1 title \"write$j\" with line\n", $xrange;
 		}
