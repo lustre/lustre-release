@@ -71,7 +71,7 @@ sub write_scr_file() {
 		$i++;
 		$plot = "replot";
 	}
-	#print SCRFILE "set terminal png transparent\n";
+	print SCRFILE "set terminal png transparent\n";
 	print SCRFILE "set output \"$file-$rsz-$op.png\"\n";
 	print SCRFILE "replot\n";
 	close SCRFILE;
