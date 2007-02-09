@@ -89,18 +89,18 @@ fi
 echo "done"
 
 # Tag parent before merge
-echo -n "Tagging as ${PARENT}_${CHILD}_REPLACE_PARENT_$date ..."
-$CVS tag ${PARENT}_${CHILD}_REPLACE_PARENT_$date $dir
+echo -n "Create land-to point on $parent as ${PARENT}_${CHILD}_REPLACE_PARENT_$date ..."
+$CVS rtag -r $parent ${PARENT}_${CHILD}_REPLACE_PARENT_$date $module
 echo "done"
 
 # Tag child before merge
-echo -n "Create land point on ${child} ${PARENT}_${CHILD}_REPLACE_CHILD_$date ..."
-$CVS tag -r ${child} ${PARENT}_${CHILD}_REPLACE_CHILD_$date $dir
+echo -n "Create land-from point on ${child} ${PARENT}_${CHILD}_REPLACE_CHILD_$date ..."
+$CVS rtag -r ${child} ${PARENT}_${CHILD}_REPLACE_CHILD_$date $module
 echo "done"
 
 # In case someone tries to re-land later
-echo -n "Preserve old base tag ${CHILD}_BASE as ${CHILD}_BASE_PREV ..."
-$CVS tag -F -r ${CHILD}_BASE ${CHILD}_BASE_PREV $dir
+echo -n "Preserve old base tag on $parent ${CHILD}_BASE as ${CHILD}_BASE_PREV ..."
+$CVS rtag -F -r ${CHILD}_BASE ${CHILD}_BASE_PREV $module
 echo "done"
 
 # Apply all of the changes to your local tree:
@@ -115,7 +115,7 @@ if [ -s $CONFLICTS ] ; then
     cat $CONFLICTS
 fi
 
-$CVS diff --brief -r $CHILD $dir >> $CONFLICTS  
+$CVS diff --brief -r $child $dir >> $CONFLICTS  
 if [ -s $CONFLICTS ] ; then
     echo "Danger! The child branch $CHILD differs from the updated branch $dir"
     cat $CONFLICTS

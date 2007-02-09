@@ -9,7 +9,7 @@ fi
 
 . .mergeinfo
 
-if [ "$OPERATION" -ne "Land" ] ; then
+if [ "$OPERATION" != "Land" ] ; then
     echo "OPERATION must be Land - is $OPERATION"
     echo "You should probably be running ${OPERATION}2.sh"
     exit
@@ -24,10 +24,10 @@ fi
 cvs update $dir 2>&1 | grep "^M" && echo "uncommitted changes" && exit 1
 
 echo -n "Tagging as ${CHILD}_BASE_$date ..."
-$CVS tag -F ${CHILD}_BASE_$date $dir
+$CVS rtag -r $parent ${CHILD}_BASE_$date $module
 echo "done"
 echo -n "Tagging as ${CHILD}_BASE ..."
-$CVS tag -F ${CHILD}_BASE $dir
+$CVS rtag -F -r $parent ${CHILD}_BASE $module
 
 echo "saving .mergeinfo as .mergeinfo-$date"
 mv .mergeinfo .mergeinfo-$date

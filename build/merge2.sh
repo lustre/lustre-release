@@ -7,6 +7,12 @@ fi
 
 . .mergeinfo
 
+if [ "$OPERATION" != "Merge" ] ; then
+    echo "OPERATION must be Merge - is $OPERATION"
+    echo "You should probably be running ${OPERATION}2.sh"
+    exit
+fi
+
 if [ -f $CONFLICTS ] ; then
     echo "$CONFLICTS exists - clean up first"
     cat $CONFLICTS
