@@ -16,7 +16,7 @@ if [ -f $CONFLICTS ] ; then
 fi
 
 if [ $# -lt 2 -o $# -gt 3 ]; then
-    echo "This is phase 1 of merging branches. Usage: $0 parent child [dir]"
+    echo "This is phase 1 of replacing branches. Usage: $0 parent(old) child(new) [dir]"
     exit
 fi
 
@@ -72,7 +72,7 @@ date=$date
 module=$module
 dir=$dir
 CONFLICTS=$CONFLICTS
-OPERATION=Land
+OPERATION=Replace
 OPERWHERE=onto
 EOF
 
@@ -88,21 +88,24 @@ else
 fi
 echo "done"
 
-echo -n "Tagging as ${PARENT}_${CHILD}_LAND_PARENT_$date ..."
-$CVS tag ${PARENT}_${CHILD}_LAND_PARENT_$date $dir
+# Tag parent before merge
+echo -n "Tagging as ${PARENT}_${CHILD}_REPLACE_PARENT_$date ..."
+$CVS tag ${PARENT}_${CHILD}_REPLACE_PARENT_$date $dir
 echo "done"
 
-echo -n "Create land point on ${child} ${PARENT}_${CHILD}_LAND_CHILD_$date ..."
-$CVS tag -r ${child} ${PARENT}_${CHILD}_LAND_CHILD_$date $dir
+# Tag child before merge
+echo -n "Create land point on ${child} ${PARENT}_${CHILD}_REPLACE_CHILD_$date ..."
+$CVS tag -r ${child} ${PARENT}_${CHILD}_REPLACE_CHILD_$date $dir
 echo "done"
 
+# In case someone tries to re-land later
 echo -n "Preserve old base tag ${CHILD}_BASE as ${CHILD}_BASE_PREV ..."
 $CVS tag -F -r ${CHILD}_BASE ${CHILD}_BASE_PREV $dir
 echo "done"
 
 # Apply all of the changes to your local tree:
-echo -n "Updating as -j ${CHILD}_BASE -j ${PARENT}_${CHILD}_LAND_CHILD_$date ..."
-$CVS update -j ${CHILD}_BASE -j ${PARENT}_${CHILD}_LAND_CHILD_$date $dir
+echo -n "Updating as -j $parent -j $child ..."
+$CVS update -j $parent -j $child $dir
 echo "done"
 
 echo -n "Recording conflicts in $CONFLICTS ..."
@@ -110,10 +113,17 @@ $CVS update | awk '/^C/ { print $2 }' > $CONFLICTS
 if [ -s $CONFLICTS ] ; then
     echo "Conflicts found, fix before committing."
     cat $CONFLICTS
+fi
+
+$CVS diff --brief -r $CHILD $dir >> $CONFLICTS  
+if [ -s $CONFLICTS ] ; then
+    echo "Danger! The child branch $CHILD differs from the updated branch $dir"
+    cat $CONFLICTS
 else 
     echo "No conflicts found"
     rm -f $CONFLICTS
 fi
+
 echo "done"
 
-echo "Build, test, commit and then run land2.sh (no arguments)"
+echo "Build, test, commit and then run replace2.sh (no arguments)"
