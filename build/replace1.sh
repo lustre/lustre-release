@@ -109,12 +109,14 @@ $CVS update -j $parent -j $child $dir
 echo "done"
 
 echo -n "Recording conflicts in $CONFLICTS ..."
-$CVS update | awk '/^C/ { print $2 }' > $CONFLICTS
+$CVS update $dir | awk '/^C/ { print $2 }' > $CONFLICTS
 if [ -s $CONFLICTS ] ; then
     echo "Conflicts found, fix before committing."
     cat $CONFLICTS
 fi
+echo "done"
 
+echo -n "Verifying that there are no diffs from $child ..."
 $CVS diff --brief -r $child $dir >> $CONFLICTS  
 if [ -s $CONFLICTS ] ; then
     echo "Danger! The child branch $CHILD differs from the updated branch $dir"
@@ -123,7 +125,6 @@ else
     echo "No conflicts found"
     rm -f $CONFLICTS
 fi
-
 echo "done"
 
 echo "Build, test, commit and then run replace2.sh (no arguments)"
