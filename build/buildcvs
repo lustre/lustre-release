@@ -29,44 +29,27 @@ case "$lustretag" in
 
     b1_4_atime_update)
         portalstag="b_hd_newconfig"
-        lnettag="b_hd_newconfig"
         ;;
 
     b1_4_join)
         portalstag="b_hd_newconfig"
-        lnettag="b_hd_newconfig"
         ;;
 
     b1_4_lfs_df)
         portalstag="b_hd_newconfig"
-        lnettag="b_hd_newconfig"
         ;;
 
     b1_4_lov_lvb_cleanup)
         portalstag="b_hd_newconfig"
-        lnettag="b_hd_newconfig"
         ;;
 
     b1_4_next_recovery_transno)
         portalstag="b_hd_newconfig"
-        lnettag="b_hd_newconfig"
-        ;;
-
-    b1_4 | b1_4-patchless | b1_4_*)
-        lnettag="b_hd_newconfig"
         ;;
 
     b_new_cmd)
 	portalstag="b_new_portals"
         lnettag="b_lnet_tmp"
-        ;;
-
-    b1_5 | b1_5_*)
-        lnettag="b_hd_newconfig"
-        ;;
-
-    b1_8 | b1_8_*)
-        lnettag="b_hd_newconfig"
         ;;
 
     b_cmd*)
@@ -75,7 +58,6 @@ case "$lustretag" in
 
     b_iam*)
         portalstag="b_hd_newconfig"
-        lnettag="b_hd_newconfig"
         # XXX temorary tag until b_iam* is updated from b1_4 liblustre
         libsysiotag="HEAD_RELEASE_1_4_6_LAND_PARENT_20060223_1455"
         ;;
